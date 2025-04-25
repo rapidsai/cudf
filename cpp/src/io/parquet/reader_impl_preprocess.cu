@@ -21,6 +21,7 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/batched_memset.hpp>
+#include <cudf/detail/utilities/functional.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/utilities/memory_resource.hpp>
@@ -54,7 +55,7 @@ namespace {
 #if defined(PREPROCESS_DEBUG)
 void print_pages(cudf::detail::hostdevice_vector<PageInfo>& pages, rmm::cuda_stream_view _stream)
 {
-  pages.device_to_host_sync(_stream);
+  pages.device_to_host(_stream);
   for (size_t idx = 0; idx < pages.size(); idx++) {
     auto const& p = pages[idx];
     // skip dictionary pages
@@ -303,7 +304,7 @@ void generate_depth_remappings(
   kernel_error error_code(stream);
   chunks.host_to_device_async(stream);
   DecodePageHeaders(chunks.device_ptr(), nullptr, chunks.size(), error_code.data(), stream);
-  chunks.device_to_host_sync(stream);
+  chunks.device_to_host(stream);
 
   // It's required to ignore unsupported encodings in this function
   // so that we can actually compile a list of all the unsupported encodings found
@@ -468,8 +469,12 @@ std::string encoding_to_string(Encoding encoding)
   auto const to_mask = cuda::proclaim_return_type<uint32_t>([] __device__(auto const& page) {
     return is_supported_encoding(page.encoding) ? 0U : encoding_to_mask(page.encoding);
   });
-  uint32_t const unsupported = thrust::transform_reduce(
-    rmm::exec_policy(stream), pages.begin(), pages.end(), to_mask, 0U, thrust::bit_or<uint32_t>());
+  uint32_t const unsupported = thrust::transform_reduce(rmm::exec_policy(stream),
+                                                        pages.begin(),
+                                                        pages.end(),
+                                                        to_mask,
+                                                        0U,
+                                                        cuda::std::bit_or<uint32_t>());
   return encoding_bitmask_to_str(unsupported);
 }
 
@@ -526,7 +531,7 @@ cudf::detail::hostdevice_vector<PageInfo> sort_pages(device_span<PageInfo const>
                              page_keys.begin(),
                              page_keys.end(),
                              sort_indices.begin(),
-                             thrust::less<int>());
+                             cuda::std::less<int>());
   auto pass_pages =
     cudf::detail::hostdevice_vector<PageInfo>(unsorted_pages.size(), unsorted_pages.size(), stream);
   thrust::transform(
@@ -565,7 +570,7 @@ void decode_page_headers(pass_intermediate_data& pass,
           i >= num_chunks ? 0 : chunks[i].num_data_pages + chunks[i].num_dict_pages);
       }),
     size_t{0},
-    thrust::plus<size_t>{});
+    cuda::std::plus<size_t>{});
   rmm::device_uvector<chunk_page_info> d_chunk_page_info(pass.chunks.size(), stream);
   thrust::for_each(rmm::exec_policy_nosync(stream),
                    iter,
@@ -608,7 +613,7 @@ void decode_page_headers(pass_intermediate_data& pass,
                                             level_bit_size,
                                             level_bit_size + pass.chunks.size(),
                                             0,
-                                            thrust::maximum<int>());
+                                            cudf::detail::maximum<int>());
   pass.level_type_size     = std::max(1, cudf::util::div_rounding_up_safe(max_level_bits, 8));
 
   // sort the pages in chunk/schema order.
@@ -654,7 +659,7 @@ __device__ constexpr bool is_string_chunk(ColumnChunkDesc const& chunk)
   auto const is_decimal =
     chunk.logical_type.has_value() and chunk.logical_type->type == LogicalType::DECIMAL;
   auto const is_binary =
-    chunk.physical_type == BYTE_ARRAY or chunk.physical_type == FIXED_LEN_BYTE_ARRAY;
+    chunk.physical_type == Type::BYTE_ARRAY or chunk.physical_type == Type::FIXED_LEN_BYTE_ARRAY;
   return is_binary and not is_decimal;
 }
 
@@ -780,7 +785,7 @@ void reader::impl::build_string_dict_indices()
 
   // compute the indices
   BuildStringDictionaryIndex(pass.chunks.device_ptr(), pass.chunks.size(), _stream);
-  pass.chunks.device_to_host_sync(_stream);
+  pass.chunks.device_to_host(_stream);
 }
 
 void reader::impl::allocate_nesting_info()
@@ -923,7 +928,7 @@ void reader::impl::allocate_nesting_info()
           pni[cur_depth].size                   = 0;
           pni[cur_depth].type =
             to_type_id(actual_cur_schema, _strings_to_categorical, _options.timestamp_type.id());
-          pni[cur_depth].nullable = cur_schema.repetition_type == OPTIONAL;
+          pni[cur_depth].nullable = cur_schema.repetition_type == FieldRepetitionType::OPTIONAL;
         }
 
         // move up the hierarchy
@@ -1676,7 +1681,7 @@ void reader::impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num
       key_start += num_keys_this_iter;
     }
 
-    sizes.device_to_host_sync(_stream);
+    sizes.device_to_host(_stream);
     for (size_type idx = 0; idx < static_cast<size_type>(_input_columns.size()); idx++) {
       auto const& input_col = _input_columns[idx];
       auto* cols            = &_output_buffers;
@@ -1744,7 +1749,7 @@ cudf::detail::host_vector<size_t> reader::impl::calculate_page_string_offsets()
                         reduce_keys.begin(),
                         d_col_sizes.begin());
 
-  return cudf::detail::make_host_vector_sync(d_col_sizes, _stream);
+  return cudf::detail::make_host_vector(d_col_sizes, _stream);
 }
 
 }  // namespace cudf::io::parquet::detail

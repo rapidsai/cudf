@@ -24,6 +24,7 @@
 #include <cudf/detail/offsets_iterator_factory.cuh>
 #include <cudf/detail/sequence.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/utilities/functional.hpp>
 #include <cudf/hashing/detail/hashing.hpp>
 #include <cudf/hashing/detail/murmurhash3_x64_128.cuh>
 #include <cudf/hashing/detail/murmurhash3_x86_32.cuh>
@@ -41,6 +42,7 @@
 
 #include <cooperative_groups.h>
 #include <cuda/atomic>
+#include <cuda/std/iterator>
 #include <cuda/std/limits>
 #include <thrust/binary_search.h>
 #include <thrust/execution_policy.h>
@@ -128,7 +130,7 @@ CUDF_KERNEL void minhash_seed_kernel(cudf::column_device_view const d_strings,
       continue;
     }
     auto const check_str =  // used for counting 'width' characters
-      cudf::string_view(itr, static_cast<cudf::size_type>(thrust::distance(itr, end)));
+      cudf::string_view(itr, static_cast<cudf::size_type>(cuda::std::distance(itr, end)));
     auto const [bytes, left] = cudf::strings::detail::bytes_to_character_position(check_str, width);
     if ((itr != d_str.data()) && (left > 0)) {
       // true itr+width is past the end of the string
@@ -228,7 +230,7 @@ CUDF_KERNEL void minhash_ngrams_kernel(cudf::detail::lists_column_device_view co
     auto const last_str  = d_row.element<cudf::string_view>(next_idx);
     // build super-string since adjacent strings are contiguous in memory
     auto const size = static_cast<cudf::size_type>(
-      thrust::distance(first_str.data(), last_str.data()) + last_str.size_bytes());
+      cuda::std::distance(first_str.data(), last_str.data()) + last_str.size_bytes());
     auto const hash_str = cudf::string_view(first_str.data(), size);
     hash_value_type hv;
     if constexpr (std::is_same_v<hash_value_type, uint32_t>) {
@@ -368,7 +370,7 @@ CUDF_KERNEL void minhash_kernel(offsets_type offsets_itr,
       auto const values = block_values + (lane_idx * block_size);
       // cooperative groups does not have a min function and cub::BlockReduce was slower
       auto const minv =
-        thrust::reduce(thrust::seq, values, values + block_size, init, thrust::minimum{});
+        thrust::reduce(thrust::seq, values, values + block_size, init, cudf::detail::minimum{});
       if constexpr (blocks_per_row > 1) {
         // accumulates mins for each block into d_output
         cuda::atomic_ref<hash_value_type, cuda::thread_scope_block> ref{d_output[lane_idx + i]};
@@ -416,7 +418,7 @@ std::pair<cudf::size_type, rmm::device_uvector<cudf::size_type>> partition_input
       rmm::exec_policy_nosync(stream), sizes.begin(), sizes.end(), indices.begin());
     auto const lb = thrust::lower_bound(
       rmm::exec_policy_nosync(stream), sizes.begin(), sizes.end(), wide_row_threshold);
-    threshold_index = static_cast<cudf::size_type>(thrust::distance(sizes.begin(), lb));
+    threshold_index = static_cast<cudf::size_type>(cuda::std::distance(sizes.begin(), lb));
   }
   return {threshold_index, std::move(indices)};
 }

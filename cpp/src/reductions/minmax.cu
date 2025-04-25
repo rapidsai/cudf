@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,10 +30,10 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
-#include <thrust/extrema.h>
+#include <cuda/std/functional>
+#include <cuda/std/iterator>
 #include <thrust/functional.h>
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/iterator/iterator_traits.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/pair.h>
 #include <thrust/transform_reduce.h>
@@ -75,7 +75,7 @@ struct minmax_pair {
  */
 template <typename Op,
           typename InputIterator,
-          typename OutputType = typename thrust::iterator_value<InputIterator>::type>
+          typename OutputType = cuda::std::iter_value_t<InputIterator>>
 auto reduce_device(InputIterator d_in,
                    size_type num_items,
                    Op binary_op,
@@ -112,8 +112,8 @@ template <typename T>
 struct minmax_binary_op {
   __device__ minmax_pair<T> operator()(minmax_pair<T> const& lhs, minmax_pair<T> const& rhs) const
   {
-    return minmax_pair<T>{thrust::min(lhs.min_val, rhs.min_val),
-                          thrust::max(lhs.max_val, rhs.max_val)};
+    return minmax_pair<T>{cuda::std::min(lhs.min_val, rhs.min_val),
+                          cuda::std::max(lhs.max_val, rhs.max_val)};
   }
 };
 

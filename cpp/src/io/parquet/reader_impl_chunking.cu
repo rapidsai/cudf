@@ -15,9 +15,8 @@
  */
 
 #include "compact_protocol_reader.hpp"
-#include "io/comp/comp.hpp"
 #include "io/comp/gpuinflate.hpp"
-#include "io/comp/nvcomp_adapter.hpp"
+#include "io/comp/io_uncomp.hpp"
 #include "io/utilities/time_utils.cuh"
 #include "reader_impl.hpp"
 #include "reader_impl_chunking.hpp"
@@ -47,9 +46,9 @@ namespace cudf::io::parquet::detail {
 
 namespace {
 
-namespace nvcomp = cudf::io::detail::nvcomp;
 using cudf::io::detail::compression_result;
 using cudf::io::detail::compression_status;
+using cudf::io::detail::decompression_info;
 
 struct split_info {
   row_range rows;
@@ -85,9 +84,9 @@ void print_cumulative_page_info(device_span<PageInfo const> d_pages,
                                 device_span<cumulative_page_info const> d_c_info,
                                 rmm::cuda_stream_view stream)
 {
-  auto const pages  = cudf::detail::make_host_vector_sync(d_pages, stream);
-  auto const chunks = cudf::detail::make_host_vector_sync(d_chunks, stream);
-  auto const c_info = cudf::detail::make_host_vector_sync(d_c_info, stream);
+  auto const pages  = cudf::detail::make_host_vector(d_pages, stream);
+  auto const chunks = cudf::detail::make_host_vector(d_chunks, stream);
+  auto const c_info = cudf::detail::make_host_vector(d_c_info, stream);
 
   printf("------------\nCumulative sizes by page\n");
 
@@ -155,6 +154,51 @@ void print_cumulative_row_info(host_span<cumulative_page_info const> sizes,
   }
 }
 #endif  // CHUNKING_DEBUG
+
+/**
+ * @brief Returns the cudf compression type and whether it is supported by the parquet writer.
+ */
+__host__ __device__ cuda::std::pair<compression_type, bool> parquet_compression_support(
+  Compression compression)
+{
+  switch (compression) {
+    case Compression::BROTLI: return {compression_type::BROTLI, true};
+    case Compression::GZIP: return {compression_type::GZIP, true};
+    case Compression::LZ4_RAW: return {compression_type::LZ4, true};
+    case Compression::LZO: return {compression_type::LZO, false};
+    case Compression::SNAPPY: return {compression_type::SNAPPY, true};
+    case Compression::ZSTD: return {compression_type::ZSTD, true};
+    case Compression::UNCOMPRESSED: return {compression_type::NONE, true};
+    default: break;
+  }
+  return {compression_type::NONE, false};
+}
+
+/**
+ * @brief Returns the string name of the Parquet compression type.
+ */
+[[nodiscard]] std::string parquet_compression_name(Compression compression)
+{
+  switch (compression) {
+    case Compression::BROTLI: return "BROTLI";
+    case Compression::GZIP: return "GZIP";
+    case Compression::LZ4_RAW: return "LZ4_RAW";
+    case Compression::LZ4: return "LZ4";
+    case Compression::LZO: return "LZO";
+    case Compression::SNAPPY: return "SNAPPY";
+    case Compression::ZSTD: return "ZSTD";
+    case Compression::UNCOMPRESSED: return "UNCOMPRESSED";
+  }
+  CUDF_FAIL("Unsupported Parquet compression type");
+}
+
+compression_type from_parquet_compression(Compression compression)
+{
+  auto const [type, supported] = parquet_compression_support(compression);
+  CUDF_EXPECTS(supported,
+               "Unsupported Parquet compression type: " + parquet_compression_name(compression));
+  return type;
+}
 
 /**
  * @brief Functor which reduces two cumulative_page_info structs of the same key.
@@ -655,7 +699,7 @@ std::tuple<rmm::device_uvector<page_span>, size_t, size_t> compute_next_subpass(
   auto [aggregated_info, page_keys_by_split] = adjust_cumulative_sizes(c_info, pages, stream);
 
   // bring back to the cpu
-  auto const h_aggregated_info = cudf::detail::make_host_vector_sync(aggregated_info, stream);
+  auto const h_aggregated_info = cudf::detail::make_host_vector(aggregated_info, stream);
   // print_cumulative_row_info(h_aggregated_info, "adjusted");
 
   // TODO: if the user has explicitly specified skip_rows/num_rows we could be more intelligent
@@ -702,7 +746,7 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
   auto [aggregated_info, page_keys_by_split] = adjust_cumulative_sizes(c_info, pages, stream);
 
   // bring back to the cpu
-  auto const h_aggregated_info = cudf::detail::make_host_vector_sync(aggregated_info, stream);
+  auto const h_aggregated_info = cudf::detail::make_host_vector(aggregated_info, stream);
   // print_cumulative_row_info(h_aggregated_info, "adjusted");
 
   std::vector<row_range> splits;
@@ -711,13 +755,13 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
   size_t cur_pos             = find_start_index(h_aggregated_info, skip_rows);
   size_t cur_row_index       = skip_rows;
   size_t cur_cumulative_size = 0;
-  auto const max_row         = min(skip_rows + num_rows, h_aggregated_info.back().end_row_index);
+  auto const max_row = std::min(skip_rows + num_rows, h_aggregated_info.back().end_row_index);
   while (cur_row_index < max_row) {
     auto const split_pos = find_next_split(
       cur_pos, cur_row_index, cur_cumulative_size, h_aggregated_info, size_limit, 1);
 
     auto const start_row = cur_row_index;
-    cur_row_index        = min(max_row, h_aggregated_info[split_pos].end_row_index);
+    cur_row_index        = std::min(max_row, h_aggregated_info[split_pos].end_row_index);
     splits.push_back({start_row, cur_row_index - start_row});
     cur_pos             = split_pos;
     cur_cumulative_size = h_aggregated_info[split_pos].size_bytes;
@@ -728,89 +772,96 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
 }
 
 /**
- * @brief Decompresses a set of pages contained in the set of chunks.
+ * @brief Stores basic information about pages compressed with a specific codec.
+ */
+struct codec_stats {
+  Compression compression_type  = Compression::UNCOMPRESSED;
+  size_t num_pages              = 0;
+  int32_t max_decompressed_size = 0;
+  size_t total_decomp_size      = 0;
+
+  enum class page_selection { DICT_PAGES, NON_DICT_PAGES };
+
+  void add_pages(host_span<ColumnChunkDesc const> chunks,
+                 host_span<PageInfo> pages,
+                 page_selection selection)
+  {
+    for (auto& page : pages) {
+      if (chunks[page.chunk_idx].codec == compression_type &&
+          (page.flags & PAGEINFO_FLAGS_DICTIONARY) == (selection == page_selection::DICT_PAGES)) {
+        ++num_pages;
+        total_decomp_size += page.uncompressed_page_size;
+        max_decompressed_size = std::max(max_decompressed_size, page.uncompressed_page_size);
+      }
+    }
+  }
+};
+
+/**
+ * @brief Decompresses a mix of dictionary and non-dictionary pages from a set of column chunks.
  *
- * This function handles the case where `pages` is only a subset of all available
- * pages in `chunks`.
+ * To avoid multiple calls to the decompression kernel, we batch pages by codec type, where the
+ * batch can include both dictionary and non-dictionary pages. This allows us to decompress all
+ * pages of a given codec type in one go.
  *
  * @param chunks List of column chunk descriptors
- * @param pages List of page information
- * @param dict_pages If true, decompress dictionary pages only. Otherwise decompress non-dictionary
- * pages only.
+ * @param pass_pages List of page information for the pass
+ * @param subpass_pages List of page information for the subpass
  * @param stream CUDA stream used for device memory operations and kernel launches
  *
- * @return Device buffer to decompressed page data
+ * @return A pair of device buffers containing the decompressed data for dictionary and
+ * non-dictionary pages, respectively.
  */
-[[nodiscard]] rmm::device_buffer decompress_page_data(
-  cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
-  cudf::detail::hostdevice_span<PageInfo> pages,
-  bool dict_pages,
+[[nodiscard]] std::pair<rmm::device_buffer, rmm::device_buffer> decompress_page_data(
+  host_span<ColumnChunkDesc const> chunks,
+  host_span<PageInfo> pass_pages,
+  host_span<PageInfo> subpass_pages,
   rmm::cuda_stream_view stream)
 {
   CUDF_FUNC_RANGE();
 
-  auto for_each_codec_page = [&](Compression codec, std::function<void(size_t)> const& f) {
-    for (size_t p = 0; p < pages.size(); p++) {
-      if (chunks[pages[p].chunk_idx].codec == codec &&
-          ((dict_pages && (pages[p].flags & PAGEINFO_FLAGS_DICTIONARY)) ||
-           (!dict_pages && !(pages[p].flags & PAGEINFO_FLAGS_DICTIONARY)))) {
-        f(p);
-      }
-    }
-  };
+  std::array codecs{codec_stats{Compression::BROTLI},
+                    codec_stats{Compression::GZIP},
+                    codec_stats{Compression::LZ4_RAW},
+                    codec_stats{Compression::SNAPPY},
+                    codec_stats{Compression::ZSTD}};
 
-  // Brotli scratch memory for decompressing
-  rmm::device_buffer debrotli_scratch;
-
-  // Count the exact number of compressed pages
-  size_t num_comp_pages    = 0;
-  size_t total_decomp_size = 0;
-
-  struct codec_stats {
-    Compression compression_type  = UNCOMPRESSED;
-    size_t num_pages              = 0;
-    int32_t max_decompressed_size = 0;
-    size_t total_decomp_size      = 0;
-  };
-
-  std::array codecs{codec_stats{GZIP},
-                    codec_stats{SNAPPY},
-                    codec_stats{BROTLI},
-                    codec_stats{ZSTD},
-                    codec_stats{LZ4_RAW}};
-
-  auto is_codec_supported = [&codecs](int8_t codec) {
-    if (codec == UNCOMPRESSED) return true;
+  auto is_codec_supported = [&codecs](Compression codec) {
+    if (codec == Compression::UNCOMPRESSED) return true;
     return std::find_if(codecs.begin(), codecs.end(), [codec](auto& cstats) {
              return codec == cstats.compression_type;
            }) != codecs.end();
   };
-  CUDF_EXPECTS(std::all_of(chunks.host_begin(),
-                           chunks.host_end(),
-                           [&is_codec_supported](auto const& chunk) {
-                             return is_codec_supported(chunk.codec);
-                           }),
-               "Unsupported compression type");
 
+  for (auto const& chunk : chunks) {
+    CUDF_EXPECTS(is_codec_supported(chunk.codec),
+                 "Unsupported Parquet compression type: " + parquet_compression_name(chunk.codec));
+  }
+
+  size_t total_pass_decomp_size = 0;
   for (auto& codec : codecs) {
-    for_each_codec_page(codec.compression_type, [&](size_t page) {
-      auto page_uncomp_size = pages[page].uncompressed_page_size;
-      total_decomp_size += page_uncomp_size;
-      codec.total_decomp_size += page_uncomp_size;
-      codec.max_decompressed_size = std::max(codec.max_decompressed_size, page_uncomp_size);
-      codec.num_pages++;
-      num_comp_pages++;
-    });
-    if (codec.compression_type == BROTLI && codec.num_pages > 0) {
-      debrotli_scratch.resize(cudf::io::detail::get_gpu_debrotli_scratch_size(codec.num_pages),
-                              stream);
-    }
+    codec.add_pages(chunks, pass_pages, codec_stats::page_selection::DICT_PAGES);
+    total_pass_decomp_size += codec.total_decomp_size;
+  }
+
+  // Total number of pages to decompress, including both pass and subpass pages
+  size_t num_comp_pages    = 0;
+  size_t total_decomp_size = 0;
+  for (auto& codec : codecs) {
+    codec.add_pages(chunks, subpass_pages, codec_stats::page_selection::NON_DICT_PAGES);
+    // at this point, the codec contains info for both dictionary pass pages and data subpass pages
+    total_decomp_size += codec.total_decomp_size;
+    num_comp_pages += codec.num_pages;
   }
 
   // Dispatch batches of pages to decompress for each codec.
   // Buffer needs to be padded, required by `gpuDecodePageData`.
-  rmm::device_buffer decomp_pages(
-    cudf::util::round_up_safe(total_decomp_size, cudf::io::detail::BUFFER_PADDING_MULTIPLE),
+  rmm::device_buffer pass_decomp_pages(
+    cudf::util::round_up_safe(total_pass_decomp_size, cudf::io::detail::BUFFER_PADDING_MULTIPLE),
+    stream);
+  auto const total_subpass_decomp_size = total_decomp_size - total_pass_decomp_size;
+  rmm::device_buffer subpass_decomp_pages(
+    cudf::util::round_up_safe(total_subpass_decomp_size, cudf::io::detail::BUFFER_PADDING_MULTIPLE),
     stream);
 
   auto comp_in =
@@ -824,41 +875,60 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
   auto copy_out =
     cudf::detail::make_empty_host_vector<device_span<uint8_t>>(num_comp_pages, stream);
 
-  rmm::device_uvector<compression_result> comp_res(num_comp_pages, stream);
-  thrust::fill(rmm::exec_policy_nosync(stream),
-               comp_res.begin(),
-               comp_res.end(),
-               compression_result{0, compression_status::FAILURE});
-
-  size_t decomp_offset = 0;
-  for (auto const& codec : codecs) {
-    if (codec.num_pages == 0) { continue; }
-
-    for_each_codec_page(codec.compression_type, [&](size_t page_idx) {
-      auto const dst_base = static_cast<uint8_t*>(decomp_pages.data()) + decomp_offset;
-      auto& page          = pages[page_idx];
-      // offset will only be non-zero for V2 pages
-      auto const offset =
-        page.lvl_bytes[level_type::DEFINITION] + page.lvl_bytes[level_type::REPETITION];
-      // for V2 need to copy def and rep level info into place, and then offset the
-      // input and output buffers. otherwise we'd have to keep both the compressed
-      // and decompressed data.
-      if (offset != 0) {
-        copy_in.push_back({page.page_data, static_cast<size_t>(offset)});
-        copy_out.push_back({dst_base, static_cast<size_t>(offset)});
+  auto set_parameters = [&](codec_stats& codec,
+                            host_span<PageInfo> pages,
+                            void* decomp_data,
+                            bool select_dict_pages,
+                            size_t& decomp_offset) {
+    for (auto& page : pages) {
+      if (chunks[page.chunk_idx].codec == codec.compression_type &&
+          (page.flags & PAGEINFO_FLAGS_DICTIONARY) == select_dict_pages) {
+        auto const dst_base = static_cast<uint8_t*>(decomp_data) + decomp_offset;
+        // offset will only be non-zero for V2 pages
+        auto const offset =
+          page.lvl_bytes[level_type::DEFINITION] + page.lvl_bytes[level_type::REPETITION];
+        // for V2 need to copy def and rep level info into place, and then offset the
+        // input and output buffers. otherwise we'd have to keep both the compressed
+        // and decompressed data.
+        if (offset != 0) {
+          copy_in.push_back({page.page_data, static_cast<size_t>(offset)});
+          copy_out.push_back({dst_base, static_cast<size_t>(offset)});
+        }
+        // Only decompress if the page contains data after the def/rep levels
+        if (page.compressed_page_size > offset) {
+          comp_in.push_back(
+            {page.page_data + offset, static_cast<size_t>(page.compressed_page_size - offset)});
+          comp_out.push_back(
+            {dst_base + offset, static_cast<size_t>(page.uncompressed_page_size - offset)});
+        } else {
+          // If the page wasn't included in the decompression parameters, we need to adjust the
+          // page count to allocate results and perform decompression correctly
+          --codec.num_pages;
+          --num_comp_pages;
+        }
+        page.page_data = dst_base;
+        decomp_offset += page.uncompressed_page_size;
       }
-      comp_in.push_back(
-        {page.page_data + offset, static_cast<size_t>(page.compressed_page_size - offset)});
-      comp_out.push_back(
-        {dst_base + offset, static_cast<size_t>(page.uncompressed_page_size - offset)});
-      page.page_data = dst_base;
-      decomp_offset += page.uncompressed_page_size;
-    });
+    }
+  };
+
+  size_t pass_decomp_offset    = 0;
+  size_t subpass_decomp_offset = 0;
+  for (auto& codec : codecs) {
+    if (codec.num_pages == 0) { continue; }
+    set_parameters(codec, pass_pages, pass_decomp_pages.data(), true, pass_decomp_offset);
+    set_parameters(codec, subpass_pages, subpass_decomp_pages.data(), false, subpass_decomp_offset);
   }
-  auto d_comp_in = cudf::detail::make_device_uvector_async(
+
+  auto const d_comp_in = cudf::detail::make_device_uvector_async(
     comp_in, stream, cudf::get_current_device_resource_ref());
-  auto d_comp_out = cudf::detail::make_device_uvector_async(
+  auto const d_comp_out = cudf::detail::make_device_uvector_async(
     comp_out, stream, cudf::get_current_device_resource_ref());
+  rmm::device_uvector<compression_result> comp_res(num_comp_pages, stream);
+  thrust::uninitialized_fill(rmm::exec_policy_nosync(stream),
+                             comp_res.begin(),
+                             comp_res.end(),
+                             compression_result{0, compression_status::FAILURE});
 
   int32_t start_pos = 0;
   for (auto const& codec : codecs) {
@@ -866,82 +936,19 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
 
     device_span<device_span<uint8_t const> const> d_comp_in_view{d_comp_in.data() + start_pos,
                                                                  codec.num_pages};
-
     device_span<device_span<uint8_t> const> d_comp_out_view(d_comp_out.data() + start_pos,
                                                             codec.num_pages);
-
     device_span<compression_result> d_comp_res_view(comp_res.data() + start_pos, codec.num_pages);
+    cudf::io::detail::decompress(from_parquet_compression(codec.compression_type),
+                                 d_comp_in_view,
+                                 d_comp_out_view,
+                                 d_comp_res_view,
+                                 codec.max_decompressed_size,
+                                 codec.total_decomp_size,
+                                 stream);
 
-    switch (codec.compression_type) {
-      case GZIP:
-        if (cudf::io::nvcomp_integration::is_all_enabled()) {
-          nvcomp::batched_decompress(nvcomp::compression_type::GZIP,
-                                     d_comp_in_view,
-                                     d_comp_out_view,
-                                     d_comp_res_view,
-                                     codec.max_decompressed_size,
-                                     codec.total_decomp_size,
-                                     stream);
-        } else {
-          gpuinflate(d_comp_in_view,
-                     d_comp_out_view,
-                     d_comp_res_view,
-                     cudf::io::detail::gzip_header_included::YES,
-                     stream);
-        }
-        break;
-      case SNAPPY:
-        if (cudf::io::nvcomp_integration::is_stable_enabled()) {
-          nvcomp::batched_decompress(nvcomp::compression_type::SNAPPY,
-                                     d_comp_in_view,
-                                     d_comp_out_view,
-                                     d_comp_res_view,
-                                     codec.max_decompressed_size,
-                                     codec.total_decomp_size,
-                                     stream);
-        } else {
-          gpu_unsnap(d_comp_in_view, d_comp_out, d_comp_res_view, stream);
-        }
-        break;
-      case ZSTD:
-        nvcomp::batched_decompress(nvcomp::compression_type::ZSTD,
-                                   d_comp_in_view,
-                                   d_comp_out_view,
-                                   d_comp_res_view,
-                                   codec.max_decompressed_size,
-                                   codec.total_decomp_size,
-                                   stream);
-        break;
-      case BROTLI:
-        gpu_debrotli(d_comp_in_view,
-                     d_comp_out_view,
-                     d_comp_res_view,
-                     debrotli_scratch.data(),
-                     debrotli_scratch.size(),
-                     stream);
-        break;
-      case LZ4_RAW:
-        nvcomp::batched_decompress(nvcomp::compression_type::LZ4,
-                                   d_comp_in_view,
-                                   d_comp_out_view,
-                                   d_comp_res_view,
-                                   codec.max_decompressed_size,
-                                   codec.total_decomp_size,
-                                   stream);
-        break;
-      default: CUDF_FAIL("Unexpected decompression dispatch"); break;
-    }
     start_pos += codec.num_pages;
   }
-
-  CUDF_EXPECTS(thrust::all_of(rmm::exec_policy(stream),
-                              comp_res.begin(),
-                              comp_res.end(),
-                              cuda::proclaim_return_type<bool>([] __device__(auto const& res) {
-                                return res.status == compression_status::SUCCESS;
-                              })),
-               "Error during decompression");
-
   // now copy the uncompressed V2 def and rep level data
   if (not copy_in.empty()) {
     auto const d_copy_in = cudf::detail::make_device_uvector_async(
@@ -950,13 +957,17 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
       copy_out, stream, cudf::get_current_device_resource_ref());
 
     cudf::io::detail::gpu_copy_uncompressed_blocks(d_copy_in, d_copy_out, stream);
-    stream.synchronize();
   }
 
-  pages.host_to_device_async(stream);
+  CUDF_EXPECTS(thrust::all_of(rmm::exec_policy(stream),
+                              comp_res.begin(),
+                              comp_res.end(),
+                              [] __device__(auto const& res) {
+                                return res.status == compression_status::SUCCESS;
+                              }),
+               "Error during decompression");
 
-  stream.synchronize();
-  return decomp_pages;
+  return {std::move(pass_decomp_pages), std::move(subpass_decomp_pages)};
 }
 
 struct flat_column_num_rows {
@@ -1047,13 +1058,6 @@ void detect_malformed_pages(device_span<PageInfo const> pages,
   }
 }
 
-struct decompression_info {
-  Compression codec;
-  size_t num_pages;
-  size_t max_page_decompressed_size;
-  size_t total_decompressed_size;
-};
-
 /**
  * @brief Functor which retrieves per-page decompression information.
  *
@@ -1063,7 +1067,7 @@ struct get_decomp_info {
 
   __device__ decompression_info operator()(PageInfo const& p) const
   {
-    return {static_cast<Compression>(chunks[p.chunk_idx].codec),
+    return {parquet_compression_support(chunks[p.chunk_idx].codec).first,
             1,
             static_cast<size_t>(p.uncompressed_page_size),
             static_cast<size_t>(p.uncompressed_page_size)};
@@ -1078,51 +1082,10 @@ struct decomp_sum {
   __device__ decompression_info operator()(decompression_info const& a,
                                            decompression_info const& b) const
   {
-    return {a.codec,
+    return {a.type,
             a.num_pages + b.num_pages,
             cuda::std::max(a.max_page_decompressed_size, b.max_page_decompressed_size),
             a.total_decompressed_size + b.total_decompressed_size};
-  }
-};
-
-/**
- * @brief Functor which returns total scratch space required based on computed decompression_info
- * data.
- *
- */
-struct get_decomp_scratch {
-  size_t operator()(decompression_info const& di) const
-  {
-    switch (di.codec) {
-      case UNCOMPRESSED:
-      case GZIP: return 0;
-
-      case BROTLI: return cudf::io::detail::get_gpu_debrotli_scratch_size(di.num_pages);
-
-      case SNAPPY:
-        if (cudf::io::nvcomp_integration::is_stable_enabled()) {
-          return nvcomp::batched_decompress_temp_size(nvcomp::compression_type::SNAPPY,
-                                                      di.num_pages,
-                                                      di.max_page_decompressed_size,
-                                                      di.total_decompressed_size);
-        } else {
-          return 0;
-        }
-        break;
-
-      case ZSTD:
-        return nvcomp::batched_decompress_temp_size(nvcomp::compression_type::ZSTD,
-                                                    di.num_pages,
-                                                    di.max_page_decompressed_size,
-                                                    di.total_decompressed_size);
-      case LZ4_RAW:
-        return nvcomp::batched_decompress_temp_size(nvcomp::compression_type::LZ4,
-                                                    di.num_pages,
-                                                    di.max_page_decompressed_size,
-                                                    di.total_decompressed_size);
-
-      default: CUDF_FAIL("Invalid compression codec for parquet decompression");
-    }
   }
 };
 
@@ -1149,17 +1112,18 @@ void include_decompression_scratch_size(device_span<ColumnChunkDesc const> chunk
                                 page_keys + pages.size(),
                                 decomp_iter,
                                 decomp_info.begin(),
-                                thrust::equal_to<int32_t>{},
+                                cuda::std::equal_to<int32_t>{},
                                 decomp_sum{});
 
-  // retrieve to host so we can call nvcomp to get compression scratch sizes
-  auto h_decomp_info = cudf::detail::make_host_vector_sync(decomp_info, stream);
+  // retrieve to host so we can get compression scratch sizes
+  auto h_decomp_info = cudf::detail::make_host_vector(decomp_info, stream);
   auto temp_cost     = cudf::detail::make_host_vector<size_t>(pages.size(), stream);
-  thrust::transform(thrust::host,
-                    h_decomp_info.begin(),
-                    h_decomp_info.end(),
-                    temp_cost.begin(),
-                    get_decomp_scratch{});
+  std::transform(h_decomp_info.begin(),
+                 h_decomp_info.end(),
+                 temp_cost.begin(),
+                 [num_pages = pages.size()](auto const& d) {
+                   return cudf::io::detail::get_decompression_scratch_size(d, num_pages);
+                 });
 
   // add to the cumulative_page_info data
   rmm::device_uvector<size_t> d_temp_cost = cudf::detail::make_device_uvector_async(
@@ -1291,10 +1255,15 @@ void reader::impl::setup_next_pass(read_mode mode)
       uses_custom_row_bounds(mode) ? std::nullopt : std::make_optional(pass.num_rows),
       _stream);
 
-    // decompress dictionary data if applicable.
-    if (pass.has_compressed_data) {
-      pass.decomp_dict_data = decompress_page_data(pass.chunks, pass.pages, true, _stream);
-    }
+    // Get the decompressed size of dictionary pages to help estimate memory usage
+    auto const decomp_dict_data_size = std::accumulate(
+      pass.pages.begin(), pass.pages.end(), size_t{0}, [&pass](size_t acc, auto const& page) {
+        if (pass.chunks[page.chunk_idx].codec != Compression::UNCOMPRESSED &&
+            (page.flags & PAGEINFO_FLAGS_DICTIONARY)) {
+          return acc + page.uncompressed_page_size;
+        }
+        return acc;
+      });
 
     // store off how much memory we've used so far. This includes the compressed page data and the
     // decompressed dictionary data. we will subtract this from the available total memory for the
@@ -1302,12 +1271,8 @@ void reader::impl::setup_next_pass(read_mode mode)
     auto chunk_iter =
       thrust::make_transform_iterator(pass.chunks.d_begin(), get_chunk_compressed_size{});
     pass.base_mem_size =
-      pass.decomp_dict_data.size() +
+      decomp_dict_data_size +
       thrust::reduce(rmm::exec_policy(_stream), chunk_iter, chunk_iter + pass.chunks.size());
-
-    // since there is only ever 1 dictionary per chunk (the first page), do it at the
-    // pass level.
-    build_string_dict_indices();
 
     // if we are doing subpass reading, generate more accurate num_row estimates for list columns.
     // this helps us to generate more accurate subpass splits.
@@ -1324,7 +1289,7 @@ void reader::impl::setup_next_pass(read_mode mode)
     printf("\tnum_rows: %'lu\n", pass.num_rows);
     printf("\tbase mem usage: %'lu\n", pass.base_mem_size);
     auto const num_columns    = _input_columns.size();
-    auto const h_page_offsets = cudf::detail::make_host_vector_sync(pass.page_offsets, _stream);
+    auto const h_page_offsets = cudf::detail::make_host_vector(pass.page_offsets, _stream);
     for (size_t c_idx = 0; c_idx < num_columns; c_idx++) {
       printf("\t\tColumn %'lu: num_pages(%'d)\n",
              c_idx,
@@ -1388,7 +1353,7 @@ void reader::impl::setup_next_subpass(read_mode mode)
                                   page_keys + pass.pages.size(),
                                   page_size,
                                   c_info.begin(),
-                                  thrust::equal_to{},
+                                  cuda::std::equal_to{},
                                   cumulative_page_sum{});
 
     // include scratch space needed for decompression. for certain codecs (eg ZSTD) this
@@ -1434,7 +1399,7 @@ void reader::impl::setup_next_subpass(read_mode mode)
                                      dst_offsets.begin(),
                                      get_span_size_by_index{page_indices},
                                      0,
-                                     thrust::plus<size_t>{});
+                                     cuda::std::plus<size_t>{});
     thrust::for_each(
       rmm::exec_policy_nosync(_stream),
       iter,
@@ -1453,10 +1418,26 @@ void reader::impl::setup_next_subpass(read_mode mode)
   std::transform(
     h_spans.begin(), h_spans.end(), subpass.column_page_count.begin(), get_span_size{});
 
-  // decompress the data for the pages in this subpass.
+  auto const is_first_subpass = pass.processed_rows == 0;
+
+  // decompress the data pages in this subpass; also decompress the dictionary pages in this pass,
+  // if this is the first subpass in the pass
   if (pass.has_compressed_data) {
-    subpass.decomp_page_data = decompress_page_data(pass.chunks, subpass.pages, false, _stream);
+    auto [pass_data, subpass_data] = decompress_page_data(
+      pass.chunks, is_first_subpass ? pass.pages : host_span<PageInfo>{}, subpass.pages, _stream);
+
+    if (is_first_subpass) {
+      pass.decomp_dict_data = std::move(pass_data);
+      pass.pages.host_to_device(_stream);
+    }
+
+    subpass.decomp_page_data = std::move(subpass_data);
+    subpass.pages.host_to_device(_stream);
   }
+
+  // since there is only ever 1 dictionary per chunk (the first page), do it at the
+  // pass level.
+  if (is_first_subpass) { build_string_dict_indices(); }
 
   // buffers needed by the decode kernels
   {
@@ -1482,7 +1463,7 @@ void reader::impl::setup_next_subpass(read_mode mode)
   printf("\t\tTotal expected usage: %'lu\n",
          total_expected_size == 0 ? subpass.decomp_page_data.size() + pass.base_mem_size
                                   : total_expected_size + pass.base_mem_size);
-  auto const h_page_indices = cudf::detail::make_host_vector_sync(page_indices, _stream);
+  auto const h_page_indices = cudf::detail::make_host_vector(page_indices, _stream);
   for (size_t c_idx = 0; c_idx < num_columns; c_idx++) {
     printf("\t\tColumn %'lu: pages(%'lu - %'lu)\n",
            c_idx,
@@ -1587,7 +1568,7 @@ void reader::impl::create_global_chunk_info()
                                        col.schema_idx,
                                        chunk_info,
                                        list_bytes_per_row_est,
-                                       schema.type == BYTE_ARRAY and _strings_to_categorical,
+                                       schema.type == Type::BYTE_ARRAY and _strings_to_categorical,
                                        rg.source_index));
     }
     // Adjust for skip_rows when updating the remaining rows after the first group
@@ -1703,7 +1684,7 @@ void reader::impl::compute_output_chunks_for_subpass()
                                 page_keys + subpass.pages.size(),
                                 page_input,
                                 c_info.begin(),
-                                thrust::equal_to{},
+                                cuda::std::equal_to{},
                                 cumulative_page_sum{});
   auto iter = thrust::make_counting_iterator(0);
   // cap the max row in all pages by the max row we expect in the subpass. input chunking

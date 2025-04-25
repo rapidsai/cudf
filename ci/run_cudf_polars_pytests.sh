@@ -8,14 +8,14 @@ set -euo pipefail
 # Support invoking run_cudf_polars_pytests.sh outside the script directory
 cd "$(dirname "$(realpath "${BASH_SOURCE[0]}")")"/../python/cudf_polars/
 
-# Test the default "cudf" executor
+# Test the default "in-memory" executor
 python -m pytest --cache-clear "$@" tests
 
-# Test the "dask-experimental" executor
-python -m pytest --cache-clear "$@" tests --executor dask-experimental
+# Test the "streaming" executor
+python -m pytest --cache-clear "$@" tests --executor streaming
 
-# Test the "dask-experimental" executor with Distributed cluster
-# Not all tests pass yet, deselecting by name those that are failing.
-python -m pytest --cache-clear "$@" tests --executor dask-experimental --dask-cluster \
-    -k "not test_groupby_maintain_order_random and not test_scan_csv_multi and not test_select_literal_series" \
-    --cov-fail-under=89  # Override coverage, Distributed cluster coverage not yet 100%
+# Run experimental tests with Distributed cluster
+python -m pytest --cache-clear "$@" "tests/experimental" \
+    --executor streaming \
+    --scheduler distributed \
+    --cov-fail-under=0  # No code-coverage requirement for these tests.

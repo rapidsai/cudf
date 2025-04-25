@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/utilities/functional.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/detail/utilities/visitor_overload.hpp>
 #include <cudf/io/detail/json.hpp>
@@ -69,16 +70,13 @@ void print_tree(host_span<SymbolT const> input,
                 tree_meta_t const& d_gpu_tree,
                 rmm::cuda_stream_view stream)
 {
-  print_vec(cudf::detail::make_host_vector_sync(d_gpu_tree.node_categories, stream),
-            "node_categories",
-            to_cat);
-  print_vec(cudf::detail::make_host_vector_sync(d_gpu_tree.parent_node_ids, stream),
-            "parent_node_ids",
-            to_int);
   print_vec(
-    cudf::detail::make_host_vector_sync(d_gpu_tree.node_levels, stream), "node_levels", to_int);
-  auto node_range_begin = cudf::detail::make_host_vector_sync(d_gpu_tree.node_range_begin, stream);
-  auto node_range_end   = cudf::detail::make_host_vector_sync(d_gpu_tree.node_range_end, stream);
+    cudf::detail::make_host_vector(d_gpu_tree.node_categories, stream), "node_categories", to_cat);
+  print_vec(
+    cudf::detail::make_host_vector(d_gpu_tree.parent_node_ids, stream), "parent_node_ids", to_int);
+  print_vec(cudf::detail::make_host_vector(d_gpu_tree.node_levels, stream), "node_levels", to_int);
+  auto node_range_begin = cudf::detail::make_host_vector(d_gpu_tree.node_range_begin, stream);
+  auto node_range_end   = cudf::detail::make_host_vector(d_gpu_tree.node_range_end, stream);
   print_vec(node_range_begin, "node_range_begin", to_int);
   print_vec(node_range_end, "node_range_end", to_int);
   for (int i = 0; i < int(node_range_begin.size()); i++) {
@@ -130,8 +128,8 @@ reduce_to_column_tree(tree_meta_t const& tree,
                         ordered_row_offsets,
                         unique_col_ids.begin(),
                         max_row_offsets.begin(),
-                        thrust::equal_to<size_type>(),
-                        thrust::maximum<size_type>());
+                        cuda::std::equal_to<size_type>(),
+                        cudf::detail::maximum<size_type>());
 
   // 3. reduce_by_key {col_id}, {node_categories} - custom opp (*+v=*, v+v=v, *+#=E)
   rmm::device_uvector<NodeT> column_categories(num_columns, stream);
@@ -142,7 +140,7 @@ reduce_to_column_tree(tree_meta_t const& tree,
     thrust::make_permutation_iterator(tree.node_categories.begin(), ordered_node_ids.begin()),
     unique_col_ids.begin(),
     column_categories.begin(),
-    thrust::equal_to<size_type>(),
+    cuda::std::equal_to<size_type>(),
     [] __device__(NodeT type_a, NodeT type_b) -> NodeT {
       auto is_a_leaf = (type_a == NC_VAL || type_a == NC_STR);
       auto is_b_leaf = (type_b == NC_VAL || type_b == NC_STR);
@@ -543,7 +541,7 @@ table_with_metadata device_parse_nested_json(device_span<SymbolT const> d_input,
   bool const is_array_of_arrays = [&]() {
     auto const size_to_copy = std::min(size_t{2}, gpu_tree.node_categories.size());
     if (size_to_copy == 0) return false;
-    auto const h_node_categories = cudf::detail::make_host_vector_sync(
+    auto const h_node_categories = cudf::detail::make_host_vector(
       device_span<NodeT const>{gpu_tree.node_categories.data(), size_to_copy}, stream);
 
     if (options.is_enabled_lines()) return h_node_categories[0] == NC_LIST;

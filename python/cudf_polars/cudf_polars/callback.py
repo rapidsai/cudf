@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 """Callback for the polars collect function to execute on device."""
@@ -7,11 +7,13 @@ from __future__ import annotations
 
 import contextlib
 import os
+import time
 import warnings
 from functools import cache, partial
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Literal, overload
 
 import nvtx
+from typing_extensions import assert_never
 
 from polars.exceptions import ComputeError, PerformanceWarning
 
@@ -20,6 +22,8 @@ import rmm
 from rmm._cuda import gpu
 
 from cudf_polars.dsl.translate import Translator
+from cudf_polars.utils.timer import Timer
+from cudf_polars.utils.versions import POLARS_VERSION_LT_125
 
 if TYPE_CHECKING:
     from collections.abc import Generator
@@ -29,6 +33,7 @@ if TYPE_CHECKING:
 
     from cudf_polars.dsl.ir import IR
     from cudf_polars.typing import NodeTraverser
+    from cudf_polars.utils.config import ConfigOptions
 
 __all__: list[str] = ["execute_with_cudf"]
 
@@ -41,7 +46,7 @@ _SUPPORTED_PREFETCHES = {
 }
 
 
-def _env_get_int(name, default):
+def _env_get_int(name: str, default: int) -> int:
     try:
         return int(os.getenv(name, default))
     except (ValueError, TypeError):  # pragma: no cover
@@ -173,74 +178,72 @@ def set_device(device: int | None) -> Generator[int, None, None]:
         gpu.setDevice(previous)
 
 
+@overload
 def _callback(
     ir: IR,
     with_columns: list[str] | None,
     pyarrow_predicate: str | None,
     n_rows: int | None,
+    should_time: Literal[False],
     *,
-    device: int | None,
-    memory_resource: int | None,
-    executor: Literal["pylibcudf", "dask-experimental"] | None,
-) -> pl.DataFrame:
+    memory_resource: rmm.mr.DeviceMemoryResource | None,
+    config_options: ConfigOptions,
+    timer: Timer | None,
+) -> pl.DataFrame: ...
+
+
+@overload
+def _callback(
+    ir: IR,
+    with_columns: list[str] | None,
+    pyarrow_predicate: str | None,
+    n_rows: int | None,
+    should_time: Literal[True],
+    *,
+    memory_resource: rmm.mr.DeviceMemoryResource | None,
+    config_options: ConfigOptions,
+    timer: Timer | None,
+) -> tuple[pl.DataFrame, list[tuple[int, int, str]]]: ...
+
+
+def _callback(
+    ir: IR,
+    with_columns: list[str] | None,
+    pyarrow_predicate: str | None,
+    n_rows: int | None,
+    should_time: bool,  # noqa: FBT001
+    *,
+    memory_resource: rmm.mr.DeviceMemoryResource | None,
+    config_options: ConfigOptions,
+    timer: Timer | None,
+) -> pl.DataFrame | tuple[pl.DataFrame, list[tuple[int, int, str]]]:
     assert with_columns is None
     assert pyarrow_predicate is None
     assert n_rows is None
+    if timer is not None:
+        assert should_time
     with (
         nvtx.annotate(message="ExecuteIR", domain="cudf_polars"),
         # Device must be set before memory resource is obtained.
-        set_device(device),
+        set_device(config_options.device),
         set_memory_resource(memory_resource),
     ):
-        if executor is None or executor == "pylibcudf":
-            return ir.evaluate(cache={}).to_polars()
-        elif executor == "dask-experimental":
-            from cudf_polars.experimental.parallel import evaluate_dask
+        if config_options.executor.name == "in-memory":
+            df = ir.evaluate(cache={}, timer=timer).to_polars()
+            if timer is None:
+                return df
+            else:
+                return df, timer.timings
+        elif config_options.executor.name == "streaming":
+            from cudf_polars.experimental.parallel import evaluate_streaming
 
-            return evaluate_dask(ir).to_polars()
-        else:
-            raise ValueError(f"Unknown executor '{executor}'")
-
-
-def validate_config_options(config: dict) -> None:
-    """
-    Validate the configuration options for the GPU engine.
-
-    Parameters
-    ----------
-    config
-        Configuration options to validate.
-
-    Raises
-    ------
-    ValueError
-        If the configuration contains unsupported options.
-    """
-    if unsupported := (
-        config.keys()
-        - {"raise_on_fail", "parquet_options", "executor", "executor_options"}
-    ):
-        raise ValueError(
-            f"Engine configuration contains unsupported settings: {unsupported}"
-        )
-    assert {"chunked", "chunk_read_limit", "pass_read_limit"}.issuperset(
-        config.get("parquet_options", {})
-    )
-
-    # Validate executor_options
-    executor = config.get("executor", "pylibcudf")
-    if executor == "dask-experimental":
-        unsupported = config.get("executor_options", {}).keys() - {
-            "max_rows_per_partition",
-            "parquet_blocksize",
-        }
-    else:
-        unsupported = config.get("executor_options", {}).keys()
-    if unsupported:
-        raise ValueError(f"Unsupported executor_options for {executor}: {unsupported}")
+            return evaluate_streaming(ir, config_options).to_polars()
+        assert_never(f"Unknown executor '{config_options.executor}'")
 
 
-def execute_with_cudf(nt: NodeTraverser, *, config: GPUEngine) -> None:
+def execute_with_cudf(
+    nt: NodeTraverser, duration_since_start: int | None, *, config: GPUEngine
+) -> None:
     """
     A post optimization callback that attempts to execute the plan with cudf.
 
@@ -249,8 +252,12 @@ def execute_with_cudf(nt: NodeTraverser, *, config: GPUEngine) -> None:
     nt
         NodeTraverser
 
+    duration_since_start
+        Time since the user started executing the query (or None if no
+        profiling should occur).
+
     config
-        GPUEngine configuration object
+        GPUEngine object. Configuration is available as ``engine.config``.
 
     Raises
     ------
@@ -263,16 +270,27 @@ def execute_with_cudf(nt: NodeTraverser, *, config: GPUEngine) -> None:
     -----
     The NodeTraverser is mutated if the libcudf executor can handle the plan.
     """
-    device = config.device
+    if duration_since_start is None:
+        timer = None
+    else:
+        start = time.monotonic_ns()
+        timer = Timer(start - duration_since_start)
+
     memory_resource = config.memory_resource
-    raise_on_fail = config.config.get("raise_on_fail", False)
-    executor = config.config.get("executor", None)
-    validate_config_options(config.config)
 
     with nvtx.annotate(message="ConvertIR", domain="cudf_polars"):
         translator = Translator(nt, config)
         ir = translator.translate_ir()
         ir_translation_errors = translator.errors
+        if timer is not None:
+            timer.store(start, time.monotonic_ns(), "gpu-ir-translation")
+
+        if (
+            memory_resource is None
+            and translator.config_options.executor.name == "streaming"
+            and translator.config_options.executor.scheduler == "distributed"
+        ):  # pragma: no cover; Requires distributed cluster
+            memory_resource = rmm.mr.get_current_device_resource()
         if len(ir_translation_errors):
             # TODO: Display these errors in user-friendly way.
             # tracked in https://github.com/rapidsai/cudf/issues/17051
@@ -287,15 +305,31 @@ def execute_with_cudf(nt: NodeTraverser, *, config: GPUEngine) -> None:
             exception = NotImplementedError(error_message, unique_errors)
             if bool(int(os.environ.get("POLARS_VERBOSE", 0))):
                 warnings.warn(error_message, PerformanceWarning, stacklevel=2)
-            if raise_on_fail:
+            if translator.config_options.raise_on_fail:
                 raise exception
         else:
-            nt.set_udf(
-                partial(
-                    _callback,
-                    ir,
-                    device=device,
-                    memory_resource=memory_resource,
-                    executor=executor,
+            if POLARS_VERSION_LT_125:  # pragma: no cover
+                nt.set_udf(
+                    partial(
+                        _callback,
+                        ir,
+                        should_time=False,
+                        memory_resource=memory_resource,
+                        config_options=translator.config_options,
+                        timer=None,
+                    )
                 )
-            )
+            else:
+                nt.set_udf(
+                    partial(
+                        _callback,
+                        ir,
+                        memory_resource=memory_resource,
+                        config_options=translator.config_options,
+                        timer=timer,
+                    )
+                )
+
+
+if POLARS_VERSION_LT_125:  # pragma: no cover
+    execute_with_cudf = partial(execute_with_cudf, duration_since_start=None)

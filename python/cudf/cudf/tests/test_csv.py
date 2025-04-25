@@ -153,7 +153,7 @@ def make_all_numeric_extremes_dataframe():
 
     for gdf_dtype in gdf_dtypes:
         np_type = pdf_dtypes[gdf_dtype]
-        if np.issubdtype(np_type, np.integer):
+        if np.dtype(np_type).kind in "iu":
             itype = np.iinfo(np_type)
             extremes = [0, +1, -1, itype.min, itype.max]
             df[gdf_dtype] = np.array(extremes * 4).astype(np_type)[:20]
@@ -1183,7 +1183,7 @@ def test_csv_reader_byte_range_type_corner_case(tmpdir):
     ).to_csv(fname, chunksize=100000)
 
     byte_range = (2_147_483_648, 0)
-    with pytest.raises(OverflowError, match="Offset is past end of file"):
+    with pytest.raises(ValueError, match="Invalid byte range offset"):
         cudf.read_csv(fname, byte_range=byte_range, header=None)
 
 

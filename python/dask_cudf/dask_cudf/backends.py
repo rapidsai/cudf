@@ -9,7 +9,6 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 from packaging.version import Version
-from pandas.api.types import is_scalar
 
 from dask import config
 from dask.array.dispatch import percentile_lookup
@@ -43,7 +42,7 @@ from dask.sizeof import sizeof as sizeof_dispatch
 from dask.utils import Dispatch, is_arraylike
 
 import cudf
-from cudf.api.types import is_string_dtype
+from cudf.api.types import is_scalar, is_string_dtype
 from cudf.utils.performance_tracking import _dask_cudf_performance_tracking
 
 # Required for Arrow filesystem support in read_parquet
@@ -66,7 +65,9 @@ def _nonempty_index(idx):
             data=None,
             size=None,
             dtype=idx.dtype,
-            children=(cudf.core.column.as_column([0, 0], dtype=np.uint8),),
+            children=(
+                cudf.core.column.as_column([0, 0], dtype=np.dtype(np.uint8)),
+            ),
         )
         return cudf.CategoricalIndex(values, name=idx.name)
     elif isinstance(idx, cudf.MultiIndex):
@@ -106,7 +107,7 @@ def _get_non_empty_data(
         )
         codes = cudf.core.column.as_column(
             0,
-            dtype=np.uint8,
+            dtype=np.dtype(np.uint8),
             length=2,
         )
         return cudf.core.column.CategoricalColumn(
@@ -354,7 +355,8 @@ def percentile_cudf(a, q, interpolation="linear"):
             # https://github.com/dask/dask/issues/6864
             result[0] = min(result[0], a.min())
         return result.to_pandas(), n
-    if not np.issubdtype(a.dtype, np.number):
+    if a.dtype.kind not in "iufm":
+        # TODO: Do we want to include timedelta?
         interpolation = "nearest"
     return (
         a.quantile(

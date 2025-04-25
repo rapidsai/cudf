@@ -4,6 +4,7 @@ import math
 
 import numba
 import pyarrow as pa
+import pytest
 from numba import cuda
 from utils import assert_column_eq
 
@@ -45,7 +46,7 @@ def test_bools_to_mask_roundtrip():
 
     plc_output = plc.transform.mask_to_bools(mask.ptr, 0, len(pa_array))
     result_pa = plc.interop.to_arrow(plc_output)
-    expected_pa = pa.chunked_array([[True, False, False]])
+    expected_pa = pa.array([True, False, False])
     assert result_pa.equals(expected_pa)
 
 
@@ -67,7 +68,7 @@ def test_encode():
     )
     assert pa_table_result.equals(pa_table_expected)
 
-    pa_column_expected = pa.chunked_array([[0, 1, 2]], type=pa.int32())
+    pa_column_expected = pa.array([0, 1, 2], type=pa.int32())
     assert pa_column_result.equals(pa_column_expected)
 
 
@@ -89,6 +90,9 @@ def test_transform_udf():
     @cuda.jit(device=True)
     def op(a, b, c):
         return (a + b) * c
+
+    if not plc.jit.is_runtime_jit_supported():
+        pytest.skip("Skipping tests that require runtime JIT support")
 
     ptx, _ = cuda.compile_ptx_for_current_device(
         op, (numba.float64, numba.float64, numba.float64), device=True

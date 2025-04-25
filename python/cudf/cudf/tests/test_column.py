@@ -7,7 +7,7 @@ import pyarrow as pa
 import pytest
 
 import cudf
-from cudf.core.column.column import as_column
+from cudf.core.column.column import _can_values_be_equal, as_column
 from cudf.testing import assert_eq
 from cudf.testing._utils import assert_exceptions_equal
 from cudf.utils import dtypes as dtypeutils
@@ -251,8 +251,12 @@ def test_column_chunked_array_creation():
     pyarrow_array = pa.array([1, 2, 3] * 1000)
     chunked_array = pa.chunked_array(pyarrow_array)
 
-    actual_column = cudf.core.column.as_column(chunked_array, dtype="float")
-    expected_column = cudf.core.column.as_column(pyarrow_array, dtype="float")
+    actual_column = cudf.core.column.as_column(
+        chunked_array, dtype=np.dtype(np.float64)
+    )
+    expected_column = cudf.core.column.as_column(
+        pyarrow_array, dtype=np.dtype(np.float64)
+    )
 
     assert_eq(
         cudf.Series._from_column(actual_column),
@@ -565,3 +569,22 @@ def test_astype_with_aliases(alias, expect_dtype, data):
     gd_data = cudf.Series.from_pandas(pd_data)
 
     assert_eq(pd_data.astype(expect_dtype), gd_data.astype(alias))
+
+
+@pytest.mark.parametrize(
+    "left, right, expected",
+    [
+        (np.dtype(np.int64), np.dtype(np.int64), True),
+        (np.dtype(np.int64), np.dtype(np.float32), True),
+        (np.dtype(np.int64), cudf.Decimal64Dtype(10, 5), True),
+        (np.dtype(np.int64), np.dtype(object), False),
+        (np.dtype("datetime64[ns]"), np.dtype("datetime64[ms]"), True),
+        (np.dtype("timedelta64[ns]"), np.dtype("timedelta64[ms]"), True),
+        (np.dtype("timedelta64[ns]"), np.dtype("datetime64[ms]"), False),
+        (cudf.CategoricalDtype([1]), np.dtype(np.int64), True),
+        (cudf.CategoricalDtype([1]), np.dtype("datetime64[ms]"), False),
+    ],
+)
+def test__can_values_be_equal(left, right, expected):
+    assert _can_values_be_equal(left, right) is expected
+    assert _can_values_be_equal(right, left) is expected

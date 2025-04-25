@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -134,4 +134,210 @@ def test_date_extract(field):
 
     q = ldf.select(field(pl.col("dates").dt))
 
+    assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize("format", ["%Y-%m-%d", "%Y/%m/%d", "%Y.%m.%d"])
+def test_strftime_timestamp(format):
+    ldf = pl.LazyFrame(
+        {
+            "dates": [
+                datetime.date(2024, 1, 1),
+                datetime.date(2024, 10, 11),
+            ]
+        }
+    )
+
+    q = ldf.select(pl.col("dates").dt.strftime(format))
+
+    assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize("format", ["iso", "polars"])
+def test_strftime_duration(format):
+    ldf = pl.LazyFrame(
+        {
+            "durations": [
+                datetime.timedelta(days=1, seconds=3600),
+                datetime.timedelta(days=2, seconds=7200),
+            ]
+        }
+    )
+
+    q = ldf.select(pl.col("durations").dt.strftime(format))
+    assert_ir_translation_raises(q, NotImplementedError)
+
+
+@pytest.mark.parametrize(
+    "dtype", [pl.Date(), pl.Datetime("ms"), pl.Datetime("us"), pl.Datetime("ns")]
+)
+def test_datetime_month_start(dtype):
+    data = pl.DataFrame(
+        {
+            "dates": pl.Series(
+                [
+                    datetime.date(2024, 1, 1),
+                    datetime.date(2024, 10, 11),
+                    datetime.date(2024, 10, 31),
+                    datetime.date(2000, 2, 1),
+                    datetime.date(2000, 2, 29),
+                    datetime.date(2000, 3, 1),
+                ],
+                dtype=dtype,
+            )
+        }
+    ).lazy()
+
+    q = data.select(pl.col("dates").dt.month_start())
+    assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize(
+    "dtype", [pl.Date(), pl.Datetime("ms"), pl.Datetime("us"), pl.Datetime("ns")]
+)
+def test_datetime_month_end(dtype):
+    data = pl.DataFrame(
+        {
+            "dates": pl.Series(
+                [
+                    datetime.date(2024, 1, 1),
+                    datetime.date(2024, 10, 11),
+                    datetime.date(2024, 10, 31),
+                    datetime.date(2000, 2, 1),
+                    datetime.date(2000, 2, 29),
+                    datetime.date(2000, 3, 1),
+                ],
+                dtype=dtype,
+            )
+        }
+    ).lazy()
+
+    q = data.select(pl.col("dates").dt.month_end())
+    assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [
+            datetime.date(2000, 1, 1),
+            datetime.date(2001, 1, 1),
+            datetime.date(2004, 1, 1),
+        ],
+        [],
+    ],
+)
+@pytest.mark.parametrize(
+    "dtype", [pl.Date(), pl.Datetime("ms"), pl.Datetime("us"), pl.Datetime("ns")]
+)
+def test_is_leap_year(data, dtype):
+    ldf = pl.LazyFrame({"dates": pl.Series(data, dtype=dtype)})
+
+    q = ldf.select(pl.col("dates").dt.is_leap_year())
+    assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize(
+    "start_date, end_date",
+    [
+        (datetime.date(2001, 12, 22), datetime.date(2001, 12, 25)),
+        (datetime.date(2000, 2, 27), datetime.date(2000, 3, 1)),  # Leap year transition
+        (datetime.date(1999, 12, 31), datetime.date(2000, 1, 2)),
+        (datetime.date(2020, 2, 28), datetime.date(2020, 3, 1)),
+        (datetime.date(2021, 1, 1), datetime.date(2021, 1, 2)),
+    ],
+)
+def test_ordinal_day(start_date, end_date):
+    df = pl.DataFrame({"date": pl.date_range(start_date, end_date, eager=True)}).lazy()
+
+    q = df.with_columns(
+        pl.col("date").dt.ordinal_day().alias("day_of_year"),
+    )
+
+    assert_gpu_result_equal(q)
+
+
+def test_isoweek():
+    df = pl.DataFrame(
+        {
+            "date": [
+                datetime.date(1999, 12, 27),
+                datetime.date(2000, 1, 3),
+                datetime.date(2000, 6, 15),
+                datetime.date(2000, 12, 31),
+                datetime.date(2001, 1, 1),
+                datetime.date(2001, 12, 30),
+                datetime.date(2002, 1, 1),
+            ]
+        }
+    ).lazy()
+
+    q = df.with_columns(pl.col("date").dt.week().alias("isoweek"))
+
+    assert_gpu_result_equal(q)
+
+
+def test_isoyear():
+    df = pl.DataFrame(
+        {
+            "date": [
+                datetime.date(1999, 12, 27),
+                datetime.date(2000, 1, 3),
+                datetime.date(2000, 2, 29),
+                datetime.date(2000, 6, 15),
+                datetime.date(2000, 12, 31),
+                datetime.date(2001, 1, 1),
+                datetime.date(2001, 12, 30),
+                datetime.date(2002, 1, 1),
+            ]
+        }
+    ).lazy()
+
+    q = df.with_columns(pl.col("date").dt.iso_year().alias("isoyear"))
+
+    assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize(
+    "dtype", [pl.Date(), pl.Datetime("ms"), pl.Datetime("us"), pl.Datetime("ns")]
+)
+@pytest.mark.parametrize("time_unit", ["ms", "us", "ns"])
+def test_datetime_cast_time_unit_datetime(dtype, time_unit):
+    sr = pl.Series(
+        "date",
+        [
+            datetime.datetime(1970, 1, 1, 0, 0, 0),
+            datetime.datetime(1999, 12, 31, 23, 59, 59),
+            datetime.datetime(2001, 1, 1, 12, 0, 0),
+            datetime.datetime(2020, 2, 29, 23, 59, 59),
+            datetime.datetime(2024, 12, 31, 23, 59, 59, 999999),
+        ],
+        dtype=dtype,
+    )
+    df = pl.DataFrame({"date": sr}).lazy()
+
+    q = df.select(pl.col("date").dt.cast_time_unit(time_unit).alias("time_unit_ms"))
+
+    assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize(
+    "dtype", [pl.Duration("ms"), pl.Duration("us"), pl.Duration("ns")]
+)
+@pytest.mark.parametrize("time_unit", ["ms", "us", "ns"])
+def test_datetime_cast_time_unit_duration(dtype, time_unit):
+    sr = pl.Series(
+        "date",
+        [
+            datetime.timedelta(days=1),
+            datetime.timedelta(days=2),
+            datetime.timedelta(days=3),
+            datetime.timedelta(days=4),
+            datetime.timedelta(days=5),
+        ],
+        dtype=dtype,
+    )
+    df = pl.DataFrame({"date": sr}).lazy()
+
+    q = df.select(pl.col("date").dt.cast_time_unit(time_unit).alias("time_unit_ms"))
     assert_gpu_result_equal(q)

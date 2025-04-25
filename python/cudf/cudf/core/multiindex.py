@@ -17,7 +17,7 @@ import pylibcudf as plc
 
 import cudf
 from cudf.api.extensions import no_default
-from cudf.api.types import is_integer, is_list_like, is_object_dtype, is_scalar
+from cudf.api.types import is_integer, is_list_like, is_scalar
 from cudf.core import column
 from cudf.core._base_index import _return_get_indexer_result
 from cudf.core._internals import sorting
@@ -33,7 +33,11 @@ from cudf.core.index import (
     ensure_index,
 )
 from cudf.core.join._join_helpers import _match_join_keys
-from cudf.utils.dtypes import SIZE_TYPE_DTYPE, is_column_like
+from cudf.utils.dtypes import (
+    CUDF_STRING_DTYPE,
+    SIZE_TYPE_DTYPE,
+    is_column_like,
+)
 from cudf.utils.performance_tracking import _performance_tracking
 from cudf.utils.utils import NotIterable, _external_only_api, _is_same_name
 
@@ -42,7 +46,7 @@ if TYPE_CHECKING:
 
     from typing_extensions import Self
 
-    from cudf._typing import DataFrameOrSeries
+    from cudf._typing import DataFrameOrSeries, Dtype
 
 
 def _maybe_indices_to_slice(indices: cp.ndarray) -> slice | cp.ndarray:
@@ -233,8 +237,8 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         )
 
     @_performance_tracking
-    def astype(self, dtype, copy: bool = True) -> Self:
-        if not is_object_dtype(dtype):
+    def astype(self, dtype: Dtype, copy: bool = True) -> Self:
+        if cudf.dtype(dtype) != CUDF_STRING_DTYPE:
             raise TypeError(
                 "Setting a MultiIndex dtype to anything other than object is "
                 "not supported"
@@ -723,12 +727,13 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
     @_performance_tracking
     def _compute_validity_mask(self, index, row_tuple, max_length):
         """Computes the valid set of indices of values in the lookup"""
-        lookup_dict = {}
-        for i, row in enumerate(row_tuple):
-            if isinstance(row, slice) and row == slice(None):
-                continue
-            lookup_dict[i] = row
-        lookup = cudf.DataFrame(lookup_dict)
+        # TODO: A non-slice(None) will probably raise in as_column
+        lookup_dict = {
+            i: column.as_column(row)
+            for i, row in enumerate(row_tuple)
+            if not (isinstance(row, slice) and row == slice(None))
+        }
+        lookup = cudf.DataFrame._from_data(lookup_dict)
         frame = cudf.DataFrame._from_data(
             ColumnAccessor(
                 dict(enumerate(index._columns)),
@@ -1699,16 +1704,12 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             Returns True, if sorted as expected by ``ascending`` and
             ``null_position``, False otherwise.
         """
-        if ascending is not None and not cudf.api.types.is_list_like(
-            ascending
-        ):
+        if ascending is not None and not is_list_like(ascending):
             raise TypeError(
                 f"Expected a list-like or None for `ascending`, got "
                 f"{type(ascending)}"
             )
-        if null_position is not None and not cudf.api.types.is_list_like(
-            null_position
-        ):
+        if null_position is not None and not is_list_like(null_position):
             raise TypeError(
                 f"Expected a list-like or None for `null_position`, got "
                 f"{type(null_position)}"

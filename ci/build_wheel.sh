@@ -10,17 +10,18 @@ source rapids-configure-sccache
 source rapids-date-string
 
 rapids-generate-version > ./VERSION
+rapids-generate-version > ./python/cudf/cudf/VERSION
 
 cd "${package_dir}"
 
 sccache --zero-stats
 
 rapids-logger "Building '${package_name}' wheel"
-rapids-pip-retry wheel \
+rapids-telemetry-record build-${package_name}.log rapids-pip-retry wheel \
     -w dist \
     -v \
     --no-deps \
     --disable-pip-version-check \
     .
 
-sccache --show-adv-stats
+rapids-telemetry-record sccache-stats-${package_name}.txt sccache --show-adv-stats

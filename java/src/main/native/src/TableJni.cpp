@@ -36,7 +36,11 @@
 #include <cudf/io/json.hpp>
 #include <cudf/io/orc.hpp>
 #include <cudf/io/parquet.hpp>
-#include <cudf/join.hpp>
+#include <cudf/join/conditional_join.hpp>
+#include <cudf/join/distinct_hash_join.hpp>
+#include <cudf/join/hash_join.hpp>
+#include <cudf/join/join.hpp>
+#include <cudf/join/mixed_join.hpp>
 #include <cudf/lists/explode.hpp>
 #include <cudf/merge.hpp>
 #include <cudf/partitioning.hpp>
@@ -2905,13 +2909,15 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_leftJoinGatherMaps(
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_leftDistinctJoinGatherMap(
   JNIEnv* env, jclass, jlong j_left_keys, jlong j_right_keys, jboolean compare_nulls_equal)
 {
+  double const load_factor = 0.5;
   return cudf::jni::join_gather_single_map(
     env,
     j_left_keys,
     j_right_keys,
     compare_nulls_equal,
-    [](cudf::table_view const& left, cudf::table_view const& right, cudf::null_equality nulleq) {
-      cudf::distinct_hash_join hash(right, nulleq);
+    [load_factor](
+      cudf::table_view const& left, cudf::table_view const& right, cudf::null_equality nulleq) {
+      cudf::distinct_hash_join hash(right, nulleq, load_factor);
       return hash.left_join(left);
     });
 }
@@ -3115,13 +3121,15 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_innerJoinGatherMaps(
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_innerDistinctJoinGatherMaps(
   JNIEnv* env, jclass, jlong j_left_keys, jlong j_right_keys, jboolean compare_nulls_equal)
 {
+  double const load_factor = 0.5;
   return cudf::jni::join_gather_maps(
     env,
     j_left_keys,
     j_right_keys,
     compare_nulls_equal,
-    [](cudf::table_view const& left, cudf::table_view const& right, cudf::null_equality nulleq) {
-      cudf::distinct_hash_join hash(right, nulleq);
+    [load_factor](
+      cudf::table_view const& left, cudf::table_view const& right, cudf::null_equality nulleq) {
+      cudf::distinct_hash_join hash(right, nulleq, load_factor);
       return hash.inner_join(left);
     });
 }

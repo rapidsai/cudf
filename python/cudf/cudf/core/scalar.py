@@ -2,12 +2,15 @@
 from __future__ import annotations
 
 import copy
+import datetime
 import decimal
 import functools
 import operator
+import warnings
 from collections import OrderedDict
 from typing import TYPE_CHECKING, Any
 
+import cupy as cp
 import numpy as np
 import pandas as pd
 import pyarrow as pa
@@ -21,19 +24,253 @@ from cudf.core.dtypes import (
     Decimal64Dtype,
     ListDtype,
     StructDtype,
+    _BaseDtype,
 )
 from cudf.core.missing import NA, NaT
 from cudf.core.mixins import BinaryOperand
 from cudf.utils.dtypes import (
+    CUDF_STRING_DTYPE,
+    _maybe_convert_to_default_type,
     cudf_dtype_from_pa_type,
-    get_allowed_combinations_for_operator,
-    to_cudf_compatible_scalar,
+    find_common_type,
 )
 
 if TYPE_CHECKING:
     from typing_extensions import Self
 
     from cudf._typing import Dtype, ScalarLike
+
+
+# Type dispatch loops similar to what are found in `np.add.types`
+# In NumPy, whether or not an op can be performed between two
+# operands is determined by checking to see if NumPy has a c/c++
+# loop specifically for adding those two operands built in. If
+# not it will search lists like these for a loop for types that
+# the operands can be safely cast to. These are those lookups,
+# modified slightly for cuDF's rules
+_ADD_TYPES = [
+    "???",
+    "BBB",
+    "HHH",
+    "III",
+    "LLL",
+    "bbb",
+    "hhh",
+    "iii",
+    "lll",
+    "fff",
+    "ddd",
+    "mMM",
+    "MmM",
+    "mmm",
+    "LMM",
+    "MLM",
+    "Lmm",
+    "mLm",
+]
+_SUB_TYPES = [
+    "BBB",
+    "HHH",
+    "III",
+    "LLL",
+    "bbb",
+    "hhh",
+    "iii",
+    "lll",
+    "fff",
+    "ddd",
+    "???",
+    "MMm",
+    "mmm",
+    "MmM",
+    "MLM",
+    "mLm",
+    "Lmm",
+]
+_MUL_TYPES = [
+    "???",
+    "BBB",
+    "HHH",
+    "III",
+    "LLL",
+    "bbb",
+    "hhh",
+    "iii",
+    "lll",
+    "fff",
+    "ddd",
+    "mLm",
+    "Lmm",
+    "mlm",
+    "lmm",
+]
+_FLOORDIV_TYPES = [
+    "bbb",
+    "BBB",
+    "HHH",
+    "III",
+    "LLL",
+    "hhh",
+    "iii",
+    "lll",
+    "fff",
+    "ddd",
+    "???",
+    "mqm",
+    "mdm",
+    "mmq",
+]
+_TRUEDIV_TYPES = ["fff", "ddd", "mqm", "mmd", "mLm"]
+_MOD_TYPES = [
+    "bbb",
+    "BBB",
+    "hhh",
+    "HHH",
+    "iii",
+    "III",
+    "lll",
+    "LLL",
+    "fff",
+    "ddd",
+    "mmm",
+]
+_POW_TYPES = [
+    "bbb",
+    "BBB",
+    "hhh",
+    "HHH",
+    "iii",
+    "III",
+    "lll",
+    "LLL",
+    "fff",
+    "ddd",
+]
+
+
+def to_cudf_compatible_scalar(val, dtype=None):
+    """
+    Converts the value `val` to a numpy/Pandas scalar,
+    optionally casting to `dtype`.
+
+    If `val` is None, returns None.
+    """
+
+    if cudf.utils.utils._is_null_host_scalar(val) or isinstance(
+        val, cudf.Scalar
+    ):
+        return val
+
+    if not cudf.api.types._is_scalar_or_zero_d_array(val):
+        raise ValueError(
+            f"Cannot convert value of type {type(val).__name__} to cudf scalar"
+        )
+
+    if isinstance(val, decimal.Decimal):
+        return val
+
+    if isinstance(val, (np.ndarray, cp.ndarray)) and val.ndim == 0:
+        val = val.item()
+
+    if (
+        (dtype is None) and isinstance(val, str)
+    ) or cudf.api.types.is_string_dtype(dtype):
+        dtype = "str"
+
+        if isinstance(val, str) and val.endswith("\x00"):
+            # Numpy string dtypes are fixed width and use NULL to
+            # indicate the end of the string, so they cannot
+            # distinguish between "abc\x00" and "abc".
+            # https://github.com/numpy/numpy/issues/20118
+            # In this case, don't try going through numpy and just use
+            # the string value directly (cudf.DeviceScalar will DTRT)
+            return val
+
+    tz_error_msg = (
+        "Cannot covert a timezone-aware timestamp to timezone-naive scalar."
+    )
+    if isinstance(val, pd.Timestamp):
+        if val.tz is not None:
+            raise NotImplementedError(tz_error_msg)
+
+        val = val.to_datetime64()
+    elif isinstance(val, pd.Timedelta):
+        val = val.to_timedelta64()
+    elif isinstance(val, datetime.datetime):
+        if val.tzinfo is not None:
+            raise NotImplementedError(tz_error_msg)
+        val = np.datetime64(val)
+    elif isinstance(val, datetime.timedelta):
+        val = np.timedelta64(val)
+
+    if dtype is not None:
+        dtype = np.dtype(dtype)
+        if isinstance(val, str) and dtype.kind == "M":
+            # pd.Timestamp can handle str, but not np.str_
+            val = pd.Timestamp(str(val)).to_datetime64().astype(dtype)
+        else:
+            # At least datetimes cannot be converted to scalar via dtype.type:
+            val = np.array(val, dtype)[()]
+    else:
+        val = _maybe_convert_to_default_type(
+            cudf.api.types.pandas_dtype(type(val))
+        ).type(val)
+
+    if val.dtype.type is np.datetime64:
+        time_unit, _ = np.datetime_data(val.dtype)
+        if time_unit in ("D", "W", "M", "Y"):
+            val = val.astype("datetime64[s]")
+    elif val.dtype.type is np.timedelta64:
+        time_unit, _ = np.datetime_data(val.dtype)
+        if time_unit in ("D", "W", "M", "Y"):
+            val = val.astype("timedelta64[ns]")
+
+    return val
+
+
+def get_allowed_combinations_for_operator(
+    dtype_l: np.dtype, dtype_r: np.dtype, op: str
+) -> np.dtype:
+    error = TypeError(
+        f"{op} not supported between {dtype_l} and {dtype_r} scalars"
+    )
+
+    to_numpy_ops = {
+        "__add__": _ADD_TYPES,
+        "__radd__": _ADD_TYPES,
+        "__sub__": _SUB_TYPES,
+        "__rsub__": _SUB_TYPES,
+        "__mul__": _MUL_TYPES,
+        "__rmul__": _MUL_TYPES,
+        "__floordiv__": _FLOORDIV_TYPES,
+        "__rfloordiv__": _FLOORDIV_TYPES,
+        "__truediv__": _TRUEDIV_TYPES,
+        "__rtruediv__": _TRUEDIV_TYPES,
+        "__mod__": _MOD_TYPES,
+        "__rmod__": _MOD_TYPES,
+        "__pow__": _POW_TYPES,
+        "__rpow__": _POW_TYPES,
+    }
+    allowed = to_numpy_ops.get(op, op)
+
+    # special rules for string
+    if dtype_l == "object" or dtype_r == "object":
+        if (dtype_l == dtype_r == "object") and op == "__add__":
+            return CUDF_STRING_DTYPE
+        else:
+            raise error
+
+    # Check if we can directly operate
+
+    for valid_combo in allowed:
+        ltype, rtype, outtype = valid_combo  # type: ignore[misc]
+        if np.can_cast(dtype_l.char, ltype) and np.can_cast(  # type: ignore[has-type]  # noqa: TID251
+            dtype_r.char,
+            rtype,  # type: ignore[has-type]
+        ):
+            return np.dtype(outtype)  # type: ignore[has-type]
+
+    raise error
 
 
 def _preprocess_host_value(value, dtype) -> tuple[ScalarLike, Dtype]:
@@ -111,8 +348,10 @@ def _preprocess_host_value(value, dtype) -> tuple[ScalarLike, Dtype]:
         else:
             dtype = value.dtype
 
-    if not isinstance(dtype, cudf.core.dtypes.DecimalDtype):
+    if not isinstance(dtype, (np.dtype, _BaseDtype)):
         dtype = cudf.dtype(dtype)
+    elif dtype.kind == "U":
+        dtype = CUDF_STRING_DTYPE
 
     if not valid:
         value = NaT if dtype.kind in "mM" else NA
@@ -191,7 +430,7 @@ def _to_plc_scalar(value: ScalarLike, dtype: Dtype) -> plc.Scalar:
 
     if isinstance(dtype, cudf.core.dtypes._BaseDtype):
         pa_type = dtype.to_arrow()
-    elif pd.api.types.is_string_dtype(dtype):
+    elif dtype == CUDF_STRING_DTYPE:
         # Have to manually convert object types, which we use internally
         # for strings but pyarrow only supports as unicode 'U'
         pa_type = pa.string()
@@ -291,32 +530,6 @@ class Scalar(BinaryOperand, metaclass=CachedScalarInstanceMeta):
     May be used in binary operations against other scalars, cuDF
     Series, DataFrame, and Index objects.
 
-    Examples
-    --------
-    >>> import cudf
-    >>> cudf.Scalar(42, dtype='int64')
-    Scalar(42, dtype=int64)
-    >>> cudf.Scalar(42, dtype='int32') + cudf.Scalar(42, dtype='float64')
-    Scalar(84.0, dtype=float64)
-    >>> cudf.Scalar(42, dtype='int64') + np.int8(21)
-    Scalar(63, dtype=int64)
-    >>> x = cudf.Scalar(42, dtype='datetime64[s]')
-    >>> y = cudf.Scalar(21, dtype='timedelta64[ns]')
-    >>> x - y
-    Scalar(1970-01-01T00:00:41.999999979, dtype=datetime64[ns])
-    >>> cudf.Series([1,2,3]) + cudf.Scalar(1)
-    0    2
-    1    3
-    2    4
-    dtype: int64
-    >>> df = cudf.DataFrame({'a':[1,2,3], 'b':[4.5, 5.5, 6.5]})
-    >>> slr = cudf.Scalar(10, dtype='uint8')
-    >>> df - slr
-       a    b
-    0 -9 -5.5
-    1 -8 -4.5
-    2 -7 -3.5
-
     Parameters
     ----------
     value : Python Scalar, NumPy Scalar, or cuDF Scalar
@@ -328,6 +541,9 @@ class Scalar(BinaryOperand, metaclass=CachedScalarInstanceMeta):
     _VALID_BINARY_OPERATIONS = BinaryOperand._SUPPORTED_BINARY_OPERATIONS
 
     def __init__(self, value, dtype=None):
+        warnings.warn(
+            "Scalar is deprecated and will be removed in 25.08.", FutureWarning
+        )
         self._host_value = None
         self._host_dtype = None
         self._device_value: plc.Scalar | None = None
@@ -505,7 +721,7 @@ class Scalar(BinaryOperand, metaclass=CachedScalarInstanceMeta):
                 ):
                     res, _ = np.datetime_data(max(self.dtype, other.dtype))
                     return np.dtype(f"m8[{res}]")
-                return np.result_type(self.dtype, other.dtype)
+                return find_common_type((self.dtype, other.dtype))
 
         return out_dtype
 

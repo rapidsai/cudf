@@ -2,8 +2,6 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
-from contextlib import nullcontext
-
 import pytest
 
 import polars as pl
@@ -15,7 +13,7 @@ from cudf_polars.testing.asserts import (
 
 
 @pytest.fixture(params=[False, True], ids=["nulls_not_equal", "nulls_equal"])
-def join_nulls(request):
+def nulls_equal(request):
     return request.param
 
 
@@ -69,9 +67,9 @@ def test_join_maintain_order_param_unsupported(left, right, maintain_order):
         ["c", "a"],
     ],
 )
-def test_non_coalesce_join(left, right, how, join_nulls, join_expr):
+def test_non_coalesce_join(left, right, how, nulls_equal, join_expr):
     query = left.join(
-        right, on=join_expr, how=how, join_nulls=join_nulls, coalesce=False
+        right, on=join_expr, how=how, nulls_equal=nulls_equal, coalesce=False
     )
     assert_gpu_result_equal(query, check_row_order=how == "left")
 
@@ -83,21 +81,20 @@ def test_non_coalesce_join(left, right, how, join_nulls, join_expr):
         ["c", "a"],
     ],
 )
-def test_coalesce_join(left, right, how, join_nulls, join_expr):
+def test_coalesce_join(left, right, how, nulls_equal, join_expr):
     query = left.join(
-        right, on=join_expr, how=how, join_nulls=join_nulls, coalesce=True
+        right, on=join_expr, how=how, nulls_equal=nulls_equal, coalesce=True
     )
     assert_gpu_result_equal(query, check_row_order=how == "left")
 
 
-def test_left_join_with_slice(left, right, join_nulls, zlice):
-    q = left.join(right, on="a", how="left", join_nulls=join_nulls, coalesce=True)
-    ctx = nullcontext()
+def test_left_join_with_slice(left, right, nulls_equal, zlice):
+    q = left.join(right, on="a", how="left", nulls_equal=nulls_equal, coalesce=True)
+
     if zlice is not None:
         q = q.slice(*zlice)
 
-    with ctx:
-        assert_gpu_result_equal(q)
+    assert_gpu_result_equal(q)
 
 
 def test_cross_join(left, right, zlice):

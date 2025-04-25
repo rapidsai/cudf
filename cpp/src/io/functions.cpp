@@ -15,9 +15,11 @@
  */
 
 #include "io/orc/orc.hpp"
+#include "io/utilities/getenv_or.hpp"
 
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/utilities/host_worker_pool.hpp>
 #include <cudf/io/avro.hpp>
 #include <cudf/io/csv.hpp>
 #include <cudf/io/data_sink.hpp>
@@ -46,7 +48,12 @@ compression_type infer_compression_type(compression_type compression, source_inf
 {
   if (compression != compression_type::AUTO) { return compression; }
 
-  if (info.type() != io_type::FILEPATH) { return compression_type::NONE; }
+  if (info.type() != io_type::FILEPATH) {
+    CUDF_LOG_WARN(
+      "Auto detection of compression type is supported only for file type buffers. For other "
+      "buffer types, AUTO compression type assumes uncompressed input.");
+    return compression_type::NONE;
+  }
 
   auto filepath = info.filepaths()[0];
 
@@ -66,6 +73,8 @@ compression_type infer_compression_type(compression_type compression, source_inf
   if (ext == "gz") { return compression_type::GZIP; }
   if (ext == "zip") { return compression_type::ZIP; }
   if (ext == "bz2") { return compression_type::BZIP2; }
+  if (ext == "zstd") { return compression_type::ZSTD; }
+  if (ext == "sz") { return compression_type::SNAPPY; }
   if (ext == "xz") { return compression_type::XZ; }
 
   return compression_type::NONE;
@@ -158,9 +167,26 @@ std::vector<std::unique_ptr<cudf::io::datasource>> make_datasources(source_info 
 {
   switch (info.type()) {
     case io_type::FILEPATH: {
-      auto sources = std::vector<std::unique_ptr<cudf::io::datasource>>();
-      for (auto const& filepath : info.filepaths()) {
-        sources.emplace_back(cudf::io::datasource::create(filepath, offset, max_size_estimate));
+      std::vector<std::unique_ptr<cudf::io::datasource>> sources;
+      sources.reserve(info.filepaths().size());
+      // Creating sources in a single thread is faster for a small number of sources
+      auto const pool_use_threshold =
+        getenv_or("LIBCUDF_DATASOURCE_PARALLEL_CREATION_THRESHOLD", 8ul);
+      if (info.filepaths().size() >= pool_use_threshold) {
+        std::vector<std::future<std::unique_ptr<cudf::io::datasource>>> source_tasks;
+        source_tasks.reserve(info.filepaths().size());
+        for (auto const& path : info.filepaths()) {
+          source_tasks.emplace_back(cudf::detail::host_worker_pool().submit_task(
+            [=] { return cudf::io::datasource::create(path, offset, max_size_estimate); }));
+        }
+        std::transform(
+          source_tasks.begin(), source_tasks.end(), std::back_inserter(sources), [](auto& task) {
+            return task.get();
+          });
+      } else {
+        for (auto const& filepath : info.filepaths()) {
+          sources.emplace_back(cudf::io::datasource::create(filepath, offset, max_size_estimate));
+        }
       }
       return sources;
     }

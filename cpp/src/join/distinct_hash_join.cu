@@ -14,13 +14,12 @@
  * limitations under the License.
  */
 #include "join_common_utils.cuh"
-#include "join_common_utils.hpp"
 
 #include <cudf/detail/cuco_helpers.hpp>
-#include <cudf/detail/distinct_hash_join.cuh>
+#include <cudf/detail/join/distinct_hash_join.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
-#include <cudf/join.hpp>
+#include <cudf/join/distinct_hash_join.hpp>
 #include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
@@ -38,7 +37,6 @@
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/sequence.h>
 
-#include <cstddef>
 #include <limits>
 #include <memory>
 #include <utility>
@@ -86,13 +84,21 @@ struct output_fn {
 distinct_hash_join::distinct_hash_join(cudf::table_view const& build,
                                        cudf::null_equality compare_nulls,
                                        rmm::cuda_stream_view stream)
+  : distinct_hash_join{build, compare_nulls, CUCO_DESIRED_LOAD_FACTOR, stream}
+{
+}
+
+distinct_hash_join::distinct_hash_join(cudf::table_view const& build,
+                                       cudf::null_equality compare_nulls,
+                                       double load_factor,
+                                       rmm::cuda_stream_view stream)
   : _has_nested_columns{cudf::has_nested_columns(build)},
     _nulls_equal{compare_nulls},
     _build{build},
     _preprocessed_build{
       cudf::experimental::row::equality::preprocessed_table::create(_build, stream)},
     _hash_table{build.num_rows(),
-                CUCO_DESIRED_LOAD_FACTOR,
+                load_factor,
                 cuco::empty_key{cuco::pair{std::numeric_limits<hash_value_type>::max(),
                                            rhs_index_type{JoinNoneValue}}},
                 always_not_equal{},
@@ -104,6 +110,9 @@ distinct_hash_join::distinct_hash_join(cudf::table_view const& build,
 {
   CUDF_FUNC_RANGE();
   CUDF_EXPECTS(0 != this->_build.num_columns(), "Hash join build table is empty");
+  CUDF_EXPECTS(load_factor > 0 && load_factor <= 1,
+               "Invalid load factor: must be greater than 0 and less than or equal to 1.",
+               std::invalid_argument);
 
   if (this->_build.num_rows() == 0) { return; }
 
@@ -308,6 +317,14 @@ distinct_hash_join::distinct_hash_join(cudf::table_view const& build,
                                        null_equality compare_nulls,
                                        rmm::cuda_stream_view stream)
   : _impl{std::make_unique<impl_type>(build, compare_nulls, stream)}
+{
+}
+
+distinct_hash_join::distinct_hash_join(cudf::table_view const& build,
+                                       null_equality compare_nulls,
+                                       double load_factor,
+                                       rmm::cuda_stream_view stream)
+  : _impl{std::make_unique<impl_type>(build, compare_nulls, load_factor, stream)}
 {
 }
 

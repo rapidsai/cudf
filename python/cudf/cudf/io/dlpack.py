@@ -1,11 +1,13 @@
-# Copyright (c) 2019-2024, NVIDIA CORPORATION.
+# Copyright (c) 2019-2025, NVIDIA CORPORATION.
 from __future__ import annotations
 
 import pylibcudf as plc
 
 import cudf
 from cudf.core.column import ColumnBase
+from cudf.core.column_accessor import ColumnAccessor
 from cudf.utils import ioutils
+from cudf.utils.dtypes import find_common_type, is_dtype_obj_numeric
 
 
 def from_dlpack(pycapsule_obj) -> cudf.Series | cudf.DataFrame:
@@ -35,10 +37,14 @@ def from_dlpack(pycapsule_obj) -> cudf.Series | cudf.DataFrame:
     tensor is row-major, transpose it before passing it to this function.
     """
     plc_table = plc.interop.from_dlpack(pycapsule_obj)
-    data = dict(
-        enumerate(
-            (ColumnBase.from_pylibcudf(col) for col in plc_table.columns())
-        )
+    data = ColumnAccessor(
+        dict(
+            enumerate(
+                (ColumnBase.from_pylibcudf(col) for col in plc_table.columns())
+            )
+        ),
+        verify=False,
+        rangeindex=True,
     )
 
     if len(data) == 1:
@@ -83,12 +89,12 @@ def to_dlpack(cudf_obj: cudf.Series | cudf.DataFrame | cudf.BaseIndex):
         )
 
     if any(
-        not cudf.api.types._is_non_decimal_numeric_dtype(dtype)
+        not is_dtype_obj_numeric(dtype, include_decimal=False)
         for _, dtype in gdf._dtypes  # type: ignore[union-attr]
     ):
         raise TypeError("non-numeric data not yet supported")
 
-    dtype = cudf.utils.dtypes.find_common_type(
+    dtype = find_common_type(
         [dtype for _, dtype in gdf._dtypes]  # type: ignore[union-attr]
     )
     gdf = gdf.astype(dtype)

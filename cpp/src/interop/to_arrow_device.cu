@@ -17,6 +17,7 @@
 #include "arrow_utilities.hpp"
 
 #include <cudf/column/column.hpp>
+#include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/device_scalar.hpp>
 #include <cudf/detail/interop.hpp>
@@ -90,6 +91,21 @@ int set_buffer(std::unique_ptr<T> device_buf, int64_t i, ArrowArray* out)
   return NANOARROW_OK;
 }
 
+int set_null_mask(column::contents& contents, ArrowArray* out)
+{
+  if (contents.null_mask) {
+    NANOARROW_RETURN_NOT_OK(set_buffer(std::move(contents.null_mask), validity_buffer_idx, out));
+  }
+  return NANOARROW_OK;
+}
+
+int set_contents(column::contents& contents, ArrowArray* out)
+{
+  NANOARROW_RETURN_NOT_OK(set_null_mask(contents, out));
+  NANOARROW_RETURN_NOT_OK(set_buffer(std::move(contents.data), fixed_width_data_buffer_idx, out));
+  return NANOARROW_OK;
+}
+
 struct dispatch_to_arrow_device {
   template <typename T,
             CUDF_ENABLE_IF(not is_rep_layout_compatible<T>() and not is_fixed_point<T>())>
@@ -116,22 +132,15 @@ struct dispatch_to_arrow_device {
     ArrowArrayMove(tmp.get(), out);
     return NANOARROW_OK;
   }
-
-  int set_null_mask(column::contents& contents, ArrowArray* out)
-  {
-    if (contents.null_mask) {
-      NANOARROW_RETURN_NOT_OK(set_buffer(std::move(contents.null_mask), validity_buffer_idx, out));
-    }
-    return NANOARROW_OK;
-  }
-
-  int set_contents(column::contents& contents, ArrowArray* out)
-  {
-    NANOARROW_RETURN_NOT_OK(set_null_mask(contents, out));
-    NANOARROW_RETURN_NOT_OK(set_buffer(std::move(contents.data), fixed_width_data_buffer_idx, out));
-    return NANOARROW_OK;
-  }
 };
+
+int handle_empty_type_column(ArrowArray* array, cudf::column& column)
+{
+  NANOARROW_RETURN_NOT_OK(initialize_array(array, NANOARROW_TYPE_NA, column.view()));
+  auto child_contents = column.release();
+  NANOARROW_RETURN_NOT_OK(set_contents(child_contents, array));
+  return NANOARROW_OK;
+}
 
 template <>
 int dispatch_to_arrow_device::operator()<bool>(cudf::column&& column,
@@ -226,8 +235,12 @@ int dispatch_to_arrow_device::operator()<cudf::struct_view>(cudf::column&& colum
   for (size_t i = 0; i < size_t(tmp->n_children); ++i) {
     ArrowArray* child_ptr = tmp->children[i];
     auto& child           = contents.children[i];
-    NANOARROW_RETURN_NOT_OK(cudf::type_dispatcher(
-      child->type(), dispatch_to_arrow_device{}, std::move(*child), stream, mr, child_ptr));
+    if (child->type().id() == cudf::type_id::EMPTY) {
+      NANOARROW_RETURN_NOT_OK(handle_empty_type_column(child_ptr, *child));
+    } else {
+      NANOARROW_RETURN_NOT_OK(cudf::type_dispatcher(
+        child->type(), dispatch_to_arrow_device{}, std::move(*child), stream, mr, child_ptr));
+    }
   }
 
   ArrowArrayMove(tmp.get(), out);
@@ -252,8 +265,12 @@ int dispatch_to_arrow_device::operator()<cudf::list_view>(cudf::column&& column,
   NANOARROW_RETURN_NOT_OK(set_buffer(std::move(offsets_contents.data), 1, tmp.get()));
 
   auto& child = contents.children[cudf::lists_column_view::child_column_index];
-  NANOARROW_RETURN_NOT_OK(cudf::type_dispatcher(
-    child->type(), dispatch_to_arrow_device{}, std::move(*child), stream, mr, tmp->children[0]));
+  if (child->type().id() == cudf::type_id::EMPTY) {
+    NANOARROW_RETURN_NOT_OK(handle_empty_type_column(tmp->children[0], *child));
+  } else {
+    NANOARROW_RETURN_NOT_OK(cudf::type_dispatcher(
+      child->type(), dispatch_to_arrow_device{}, std::move(*child), stream, mr, tmp->children[0]));
+  }
 
   ArrowArrayMove(tmp.get(), out);
   return NANOARROW_OK;
@@ -266,9 +283,13 @@ int dispatch_to_arrow_device::operator()<cudf::dictionary32>(cudf::column&& colu
                                                              ArrowArray* out)
 {
   nanoarrow::UniqueArray tmp;
+
+  cudf::dictionary_column_view const dview{column.view()};
+  auto const is_empty = dview.is_empty();
+
   NANOARROW_RETURN_NOT_OK(initialize_array(
     tmp.get(),
-    id_to_arrow_type(column.child(cudf::dictionary_column_view::indices_column_index).type().id()),
+    is_empty ? NANOARROW_TYPE_INT32 : id_to_arrow_type(dview.indices().type().id()),
     column));
   NANOARROW_RETURN_NOT_OK(ArrowArrayAllocateDictionary(tmp.get()));
 
@@ -276,11 +297,14 @@ int dispatch_to_arrow_device::operator()<cudf::dictionary32>(cudf::column&& colu
   NANOARROW_RETURN_NOT_OK(set_null_mask(contents, tmp.get()));
 
   auto indices_contents =
-    contents.children[cudf::dictionary_column_view::indices_column_index]->release();
+    is_empty ? cudf::make_empty_column(cudf::type_id::INT32)->release()
+             : contents.children[cudf::dictionary_column_view::indices_column_index]->release();
   NANOARROW_RETURN_NOT_OK(
     set_buffer(std::move(indices_contents.data), fixed_width_data_buffer_idx, tmp.get()));
 
-  auto& keys = contents.children[cudf::dictionary_column_view::keys_column_index];
+  auto keys = is_empty
+                ? cudf::make_empty_column(cudf::type_id::INT64)
+                : std::move(contents.children[cudf::dictionary_column_view::keys_column_index]);
   NANOARROW_RETURN_NOT_OK(cudf::type_dispatcher(
     keys->type(), dispatch_to_arrow_device{}, std::move(*keys), stream, mr, tmp->dictionary));
 
@@ -452,17 +476,19 @@ int dispatch_to_arrow_device_view::operator()<cudf::dictionary32>(ArrowArray* ou
 {
   nanoarrow::UniqueArray tmp;
 
-  NANOARROW_RETURN_NOT_OK(initialize_array(
-    tmp.get(),
-    id_to_arrow_type(column.child(cudf::dictionary_column_view::indices_column_index).type().id()),
-    column));
+  auto const dcv     = cudf::dictionary_column_view(column);
+  auto const indices = dcv.is_empty() ? cudf::make_empty_column(cudf::type_id::INT32)->view()
+                                      : dcv.get_indices_annotated();
+  auto const keys =
+    dcv.is_empty() ? cudf::make_empty_column(cudf::type_id::INT64)->view() : dcv.keys();
+
+  NANOARROW_RETURN_NOT_OK(
+    initialize_array(tmp.get(), id_to_arrow_type(indices.type().id()), column));
   NANOARROW_RETURN_NOT_OK(ArrowArrayAllocateDictionary(tmp.get()));
   NANOARROW_RETURN_NOT_OK(set_null_mask(column, tmp.get()));
 
-  auto const dcv = cudf::dictionary_column_view(column);
-  NANOARROW_RETURN_NOT_OK(set_view_to_buffer(dcv.indices(), tmp.get()));
+  NANOARROW_RETURN_NOT_OK(set_view_to_buffer(indices, tmp.get()));
 
-  auto keys = dcv.keys();
   NANOARROW_RETURN_NOT_OK(cudf::type_dispatcher(
     keys.type(), dispatch_to_arrow_device_view{keys, stream, mr}, tmp->dictionary));
 
@@ -478,7 +504,7 @@ struct ArrowDeviceArrayPrivateData {
 void ArrowDeviceArrayRelease(ArrowArray* array)
 {
   auto private_data = reinterpret_cast<ArrowDeviceArrayPrivateData*>(array->private_data);
-  RMM_ASSERT_CUDA_SUCCESS(cudaEventDestroy(private_data->sync_event));
+  CUDF_CUDA_TRY(cudaEventDestroy(private_data->sync_event));
   ArrowArrayRelease(&private_data->parent);
   delete private_data;
   array->release = nullptr;
@@ -525,8 +551,12 @@ unique_device_array_t to_arrow_device(cudf::table&& table,
   for (size_t i = 0; i < cols.size(); ++i) {
     auto child = tmp->children[i];
     auto col   = cols[i].get();
-    NANOARROW_THROW_NOT_OK(cudf::type_dispatcher(
-      col->type(), detail::dispatch_to_arrow_device{}, std::move(*col), stream, mr, child));
+    if (col->type().id() == cudf::type_id::EMPTY) {
+      NANOARROW_THROW_NOT_OK(handle_empty_type_column(child, *col));
+    } else {
+      NANOARROW_THROW_NOT_OK(cudf::type_dispatcher(
+        col->type(), detail::dispatch_to_arrow_device{}, std::move(*col), stream, mr, child));
+    }
   }
 
   return create_device_array(std::move(tmp), stream);
@@ -538,8 +568,12 @@ unique_device_array_t to_arrow_device(cudf::column&& col,
 {
   nanoarrow::UniqueArray tmp;
 
-  NANOARROW_THROW_NOT_OK(cudf::type_dispatcher(
-    col.type(), detail::dispatch_to_arrow_device{}, std::move(col), stream, mr, tmp.get()));
+  if (col.type().id() == cudf::type_id::EMPTY) {
+    NANOARROW_THROW_NOT_OK(handle_empty_type_column(tmp.get(), col));
+  } else {
+    NANOARROW_THROW_NOT_OK(cudf::type_dispatcher(
+      col.type(), detail::dispatch_to_arrow_device{}, std::move(col), stream, mr, tmp.get()));
+  }
 
   return create_device_array(std::move(tmp), stream);
 }

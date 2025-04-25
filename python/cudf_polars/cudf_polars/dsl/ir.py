@@ -15,6 +15,8 @@ from __future__ import annotations
 
 import itertools
 import json
+import random
+import time
 from functools import cache
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar
@@ -33,12 +35,16 @@ from cudf_polars.dsl.to_ast import to_ast, to_parquet_filter
 from cudf_polars.utils import dtypes
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Hashable, Iterable, MutableMapping, Sequence
+    from collections.abc import Callable, Hashable, Iterable, Sequence
     from typing import Literal
+
+    from typing_extensions import Self
 
     from polars.polars import _expr_nodes as pl_expr
 
-    from cudf_polars.typing import Schema
+    from cudf_polars.typing import CSECache, Schema, Slice as Zlice
+    from cudf_polars.utils.config import ConfigOptions
+    from cudf_polars.utils.timer import Timer
 
 
 __all__ = [
@@ -181,7 +187,7 @@ class IR(Node["IR"]):
         translation phase should fail earlier.
     """
 
-    def evaluate(self, *, cache: MutableMapping[int, DataFrame]) -> DataFrame:
+    def evaluate(self, *, cache: CSECache, timer: Timer | None) -> DataFrame:
         """
         Evaluate the node (recursively) and return a dataframe.
 
@@ -190,6 +196,9 @@ class IR(Node["IR"]):
         cache
             Mapping from cached node ids to constructed DataFrames.
             Used to implement evaluation of the `Cache` node.
+        timer
+            If not None, a Timer object to record timings for the
+            evaluation of the node.
 
         Notes
         -----
@@ -208,10 +217,16 @@ class IR(Node["IR"]):
             If evaluation fails. Ideally this should not occur, since the
             translation phase should fail earlier.
         """
-        return self.do_evaluate(
-            *self._non_child_args,
-            *(child.evaluate(cache=cache) for child in self.children),
-        )
+        children = [child.evaluate(cache=cache, timer=timer) for child in self.children]
+        if timer is not None:
+            start = time.monotonic_ns()
+            result = self.do_evaluate(*self._non_child_args, *children)
+            end = time.monotonic_ns()
+            # TODO: Set better names on each class object.
+            timer.store(start, end, type(self).__name__)
+            return result
+        else:
+            return self.do_evaluate(*self._non_child_args, *children)
 
 
 class ErrorNode(IR):
@@ -256,6 +271,7 @@ class Scan(IR):
     __slots__ = (
         "cloud_options",
         "config_options",
+        "include_file_paths",
         "n_rows",
         "paths",
         "predicate",
@@ -276,6 +292,7 @@ class Scan(IR):
         "skip_rows",
         "n_rows",
         "row_index",
+        "include_file_paths",
         "predicate",
     )
     typ: str
@@ -284,7 +301,7 @@ class Scan(IR):
     """Reader-specific options, as dictionary."""
     cloud_options: dict[str, Any] | None
     """Cloud-related authentication options, currently ignored."""
-    config_options: dict[str, Any]
+    config_options: ConfigOptions
     """GPU-specific configuration options"""
     paths: list[str]
     """List of paths to read from."""
@@ -296,6 +313,8 @@ class Scan(IR):
     """Number of rows to read after skipping."""
     row_index: tuple[str, int] | None
     """If not None add an integer index column of the given name."""
+    include_file_paths: str | None
+    """Include the path of the source file(s) as a column with this name."""
     predicate: expr.NamedExpr | None
     """Mask to apply to the read dataframe."""
 
@@ -308,12 +327,13 @@ class Scan(IR):
         typ: str,
         reader_options: dict[str, Any],
         cloud_options: dict[str, Any] | None,
-        config_options: dict[str, Any],
+        config_options: ConfigOptions,
         paths: list[str],
         with_columns: list[str] | None,
         skip_rows: int,
         n_rows: int,
         row_index: tuple[str, int] | None,
+        include_file_paths: str | None,
         predicate: expr.NamedExpr | None,
     ):
         self.schema = schema
@@ -326,6 +346,7 @@ class Scan(IR):
         self.skip_rows = skip_rows
         self.n_rows = n_rows
         self.row_index = row_index
+        self.include_file_paths = include_file_paths
         self.predicate = predicate
         self._non_child_args = (
             schema,
@@ -337,6 +358,7 @@ class Scan(IR):
             skip_rows,
             n_rows,
             row_index,
+            include_file_paths,
             predicate,
         )
         self.children = ()
@@ -389,6 +411,9 @@ class Scan(IR):
                 raise NotImplementedError(
                     "ignore_errors is not supported in the JSON reader"
                 )
+            if include_file_paths is not None:
+                # TODO: Need to populate num_rows_per_source in read_json in libcudf
+                raise NotImplementedError("Including file paths in a json scan.")
         elif (
             self.typ == "parquet"
             and self.row_index is not None
@@ -413,14 +438,30 @@ class Scan(IR):
             self.typ,
             json.dumps(self.reader_options),
             json.dumps(self.cloud_options),
-            json.dumps(self.config_options),
+            self.config_options,
             tuple(self.paths),
             tuple(self.with_columns) if self.with_columns is not None else None,
             self.skip_rows,
             self.n_rows,
             self.row_index,
+            self.include_file_paths,
             self.predicate,
         )
+
+    @staticmethod
+    def add_file_paths(
+        name: str, paths: list[str], rows_per_path: list[int], df: DataFrame
+    ) -> DataFrame:
+        """
+        Add a Column of file paths to the DataFrame.
+
+        Each path is repeated according to the number of rows read from it.
+        """
+        (filepaths,) = plc.filling.repeat(
+            plc.Table([plc.interop.from_arrow(pa.array(paths))]),
+            plc.interop.from_arrow(pa.array(rows_per_path, type=pa.int32())),
+        ).columns()
+        return df.with_columns([Column(filepaths, name=name)])
 
     @classmethod
     def do_evaluate(
@@ -428,14 +469,15 @@ class Scan(IR):
         schema: Schema,
         typ: str,
         reader_options: dict[str, Any],
-        config_options: dict[str, Any],
+        config_options: ConfigOptions,
         paths: list[str],
         with_columns: list[str] | None,
         skip_rows: int,
         n_rows: int,
         row_index: tuple[str, int] | None,
+        include_file_paths: str | None,
         predicate: expr.NamedExpr | None,
-    ):
+    ) -> DataFrame:
         """Evaluate and return a dataframe."""
         if typ == "csv":
             parse_options = reader_options["parse_options"]
@@ -470,6 +512,7 @@ class Scan(IR):
 
             # polars skips blank lines at the beginning of the file
             pieces = []
+            seen_paths = []
             read_partial = n_rows != -1
             for p in paths:
                 skiprows = reader_options["skip_rows"]
@@ -500,6 +543,8 @@ class Scan(IR):
                     options.set_comment(comment)
                 tbl_w_meta = plc.io.csv.read_csv(options)
                 pieces.append(tbl_w_meta)
+                if include_file_paths is not None:
+                    seen_paths.append(p)
                 if read_partial:
                     n_rows -= tbl_w_meta.tbl.num_rows()
                     if n_rows <= 0:
@@ -515,12 +560,26 @@ class Scan(IR):
                 plc.concatenate.concatenate(list(tables)),
                 colnames[0],
             )
+            if include_file_paths is not None:
+                df = Scan.add_file_paths(
+                    include_file_paths,
+                    seen_paths,
+                    [t.num_rows() for t in tables],
+                    df,
+                )
         elif typ == "parquet":
-            parquet_options = config_options.get("parquet_options", {})
-            if parquet_options.get("chunked", True):
-                options = plc.io.parquet.ParquetReaderOptions.builder(
-                    plc.io.SourceInfo(paths)
-                ).build()
+            filters = None
+            if predicate is not None and row_index is None:
+                # Can't apply filters during read if we have a row index.
+                filters = to_parquet_filter(predicate.value)
+            options = plc.io.parquet.ParquetReaderOptions.builder(
+                plc.io.SourceInfo(paths)
+            ).build()
+            if with_columns is not None:
+                options.set_columns(with_columns)
+            if filters is not None:
+                options.set_filter(filters)
+            if config_options.parquet_options.chunked:
                 # We handle skip_rows != 0 by reading from the
                 # up to n_rows + skip_rows and slicing off the
                 # first skip_rows entries.
@@ -530,21 +589,15 @@ class Scan(IR):
                 nrows = n_rows + skip_rows
                 if nrows > -1:
                     options.set_num_rows(nrows)
-                if with_columns is not None:
-                    options.set_columns(with_columns)
                 reader = plc.io.parquet.ChunkedParquetReader(
                     options,
-                    chunk_read_limit=parquet_options.get(
-                        "chunk_read_limit", cls.PARQUET_DEFAULT_CHUNK_SIZE
-                    ),
-                    pass_read_limit=parquet_options.get(
-                        "pass_read_limit", cls.PARQUET_DEFAULT_PASS_LIMIT
-                    ),
+                    chunk_read_limit=config_options.parquet_options.chunk_read_limit,
+                    pass_read_limit=config_options.parquet_options.pass_read_limit,
                 )
-                chk = reader.read_chunk()
+                chunk = reader.read_chunk()
                 rows_left_to_skip = skip_rows
 
-                def slice_skip(tbl: plc.Table):
+                def slice_skip(tbl: plc.Table) -> plc.Table:
                     nonlocal rows_left_to_skip
                     if rows_left_to_skip > 0:
                         table_rows = tbl.num_rows()
@@ -556,12 +609,13 @@ class Scan(IR):
                         rows_left_to_skip -= chunk_skip
                     return tbl
 
-                tbl = slice_skip(chk.tbl)
+                tbl = slice_skip(chunk.tbl)
                 # TODO: Nested column names
-                names = chk.column_names(include_children=False)
+                names = chunk.column_names(include_children=False)
                 concatenated_columns = tbl.columns()
                 while reader.has_next():
-                    tbl = slice_skip(reader.read_chunk().tbl)
+                    chunk = reader.read_chunk()
+                    tbl = slice_skip(chunk.tbl)
 
                     for i in range(tbl.num_columns()):
                         concatenated_columns[i] = plc.concatenate.concatenate(
@@ -574,31 +628,28 @@ class Scan(IR):
                     plc.Table(concatenated_columns),
                     names=names,
                 )
+                if include_file_paths is not None:
+                    df = Scan.add_file_paths(
+                        include_file_paths, paths, chunk.num_rows_per_source, df
+                    )
             else:
-                filters = None
-                if predicate is not None and row_index is None:
-                    # Can't apply filters during read if we have a row index.
-                    filters = to_parquet_filter(predicate.value)
-                options = plc.io.parquet.ParquetReaderOptions.builder(
-                    plc.io.SourceInfo(paths)
-                ).build()
                 if n_rows != -1:
                     options.set_num_rows(n_rows)
                 if skip_rows != 0:
                     options.set_skip_rows(skip_rows)
-                if with_columns is not None:
-                    options.set_columns(with_columns)
-                if filters is not None:
-                    options.set_filter(filters)
                 tbl_w_meta = plc.io.parquet.read_parquet(options)
                 df = DataFrame.from_table(
                     tbl_w_meta.tbl,
                     # TODO: consider nested column names?
                     tbl_w_meta.column_names(include_children=False),
                 )
-                if filters is not None:
-                    # Mask must have been applied.
-                    return df
+                if include_file_paths is not None:
+                    df = Scan.add_file_paths(
+                        include_file_paths, paths, tbl_w_meta.num_rows_per_source, df
+                    )
+            if filters is not None:
+                # Mask must have been applied.
+                return df
 
         elif typ == "ndjson":
             json_schema: list[plc.io.json.NameAndType] = [
@@ -629,20 +680,16 @@ class Scan(IR):
             name, offset = row_index
             offset += skip_rows
             dtype = schema[name]
-            step = plc.interop.from_arrow(
-                pa.scalar(1, type=plc.interop.to_arrow(dtype))
-            )
-            init = plc.interop.from_arrow(
-                pa.scalar(offset, type=plc.interop.to_arrow(dtype))
-            )
-            index = Column(
+            step = plc.Scalar.from_py(1, dtype)
+            init = plc.Scalar.from_py(offset, dtype)
+            index_col = Column(
                 plc.filling.sequence(df.num_rows, init, step),
                 is_sorted=plc.types.Sorted.YES,
                 order=plc.types.Order.ASCENDING,
                 null_order=plc.types.NullOrder.AFTER,
                 name=name,
             )
-            df = DataFrame([index, *df.columns])
+            df = DataFrame([index_col, *df.columns])
         assert all(c.obj.type() == schema[name] for name, c in df.column_map.items())
         if predicate is None:
             return df
@@ -658,35 +705,59 @@ class Cache(IR):
     Used for CSE at the plan level.
     """
 
-    __slots__ = ("key",)
-    _non_child = ("schema", "key")
+    __slots__ = ("key", "refcount")
+    _non_child = ("schema", "key", "refcount")
     key: int
     """The cache key."""
+    refcount: int
+    """The number of cache hits."""
 
-    def __init__(self, schema: Schema, key: int, value: IR):
+    def __init__(self, schema: Schema, key: int, refcount: int, value: IR):
         self.schema = schema
         self.key = key
+        self.refcount = refcount
         self.children = (value,)
-        self._non_child_args = (key,)
+        self._non_child_args = (key, refcount)
+
+    def get_hashable(self) -> Hashable:  # noqa: D102
+        # Polars arranges that the keys are unique across all cache
+        # nodes that reference the same child, so we don't need to
+        # hash the child.
+        return (type(self), self.key, self.refcount)
+
+    def is_equal(self, other: Self) -> bool:  # noqa: D102
+        if self.key == other.key and self.refcount == other.refcount:
+            self.children = other.children
+            return True
+        return False
 
     @classmethod
     def do_evaluate(
-        cls, key: int, df: DataFrame
+        cls, key: int, refcount: int, df: DataFrame
     ) -> DataFrame:  # pragma: no cover; basic evaluation never calls this
         """Evaluate and return a dataframe."""
         # Our value has already been computed for us, so let's just
         # return it.
         return df
 
-    def evaluate(self, *, cache: MutableMapping[int, DataFrame]) -> DataFrame:
+    def evaluate(self, *, cache: CSECache, timer: Timer | None) -> DataFrame:
         """Evaluate and return a dataframe."""
         # We must override the recursion scheme because we don't want
         # to recurse if we're in the cache.
         try:
-            return cache[self.key]
+            (result, hits) = cache[self.key]
         except KeyError:
             (value,) = self.children
-            return cache.setdefault(self.key, value.evaluate(cache=cache))
+            result = value.evaluate(cache=cache, timer=timer)
+            cache[self.key] = (result, 0)
+            return result
+        else:
+            hits += 1
+            if hits == self.refcount:
+                del cache[self.key]
+            else:
+                cache[self.key] = (result, hits)
+            return result
 
 
 class DataFrameScan(IR):
@@ -696,13 +767,13 @@ class DataFrameScan(IR):
     This typically arises from ``q.collect().lazy()``
     """
 
-    __slots__ = ("config_options", "df", "projection")
+    __slots__ = ("_id_for_hash", "config_options", "df", "projection")
     _non_child = ("schema", "df", "projection", "config_options")
     df: Any
-    """Polars LazyFrame object."""
+    """Polars internal PyDataFrame object."""
     projection: tuple[str, ...] | None
     """List of columns to project out."""
-    config_options: dict[str, Any]
+    config_options: ConfigOptions
     """GPU-specific configuration options"""
 
     def __init__(
@@ -710,7 +781,7 @@ class DataFrameScan(IR):
         schema: Schema,
         df: Any,
         projection: Sequence[str] | None,
-        config_options: dict[str, Any],
+        config_options: ConfigOptions,
     ):
         self.schema = schema
         self.df = df
@@ -722,21 +793,23 @@ class DataFrameScan(IR):
             self.projection,
         )
         self.children = ()
+        self._id_for_hash = random.randint(0, 2**64 - 1)
 
     def get_hashable(self) -> Hashable:
         """
         Hashable representation of the node.
 
-        The (heavy) dataframe object is hashed as its id, so this is
-        not stable across runs, or repeat instances of the same equal dataframes.
+        The (heavy) dataframe object is not hashed. No two instances of
+        ``DataFrameScan`` will have the same hash, even if they have the
+        same schema, projection, and config options, and data.
         """
         schema_hash = tuple(self.schema.items())
         return (
             type(self),
             schema_hash,
-            id(self.df),
+            self._id_for_hash,
             self.projection,
-            json.dumps(self.config_options),
+            self.config_options,
         )
 
     @classmethod
@@ -840,7 +913,7 @@ class GroupBy(IR):
             self.agg_requests = tuple(agg_requests)
             self.agg_infos = [req.collect_agg(depth=0) for req in self.agg_requests]
 
-        def __reduce__(self):
+        def __reduce__(self) -> tuple[Any, ...]:
             """Pickle an AggInfos object."""
             return (type(self), (self.agg_requests,))
 
@@ -855,11 +928,19 @@ class GroupBy(IR):
     __slots__ = (
         "agg_infos",
         "agg_requests",
+        "config_options",
         "keys",
         "maintain_order",
         "options",
     )
-    _non_child = ("schema", "keys", "agg_requests", "maintain_order", "options")
+    _non_child = (
+        "schema",
+        "keys",
+        "agg_requests",
+        "maintain_order",
+        "options",
+        "config_options",
+    )
     keys: tuple[expr.NamedExpr, ...]
     """Grouping keys."""
     agg_requests: tuple[expr.NamedExpr, ...]
@@ -868,6 +949,8 @@ class GroupBy(IR):
     """Preserve order in groupby."""
     options: GroupbyOptions
     """Arbitrary options."""
+    config_options: ConfigOptions
+    """GPU-specific configuration options"""
 
     def __init__(
         self,
@@ -876,6 +959,7 @@ class GroupBy(IR):
         agg_requests: Sequence[expr.NamedExpr],
         maintain_order: bool,  # noqa: FBT001
         options: Any,
+        config_options: ConfigOptions,
         df: IR,
     ):
         self.schema = schema
@@ -883,6 +967,7 @@ class GroupBy(IR):
         self.agg_requests = tuple(agg_requests)
         self.maintain_order = maintain_order
         self.options = self.GroupbyOptions(options)
+        self.config_options = config_options
         self.children = (df,)
         if self.options.rolling:
             raise NotImplementedError(
@@ -937,7 +1022,7 @@ class GroupBy(IR):
         options: GroupbyOptions,
         agg_info_wrapper: AggInfos,
         df: DataFrame,
-    ):
+    ) -> DataFrame:
         """Evaluate and return a dataframe."""
         keys = broadcast(*(k.evaluate(df) for k in keys_in), target_length=df.num_rows)
         sorted = (
@@ -1036,7 +1121,7 @@ class ConditionalJoin(IR):
             self.predicate = predicate
             self.ast = to_ast(predicate)
 
-        def __reduce__(self):
+        def __reduce__(self) -> tuple[Any, ...]:
             """Pickle a Predicate object."""
             return (type(self), (self.predicate,))
 
@@ -1050,7 +1135,7 @@ class ConditionalJoin(IR):
             pl_expr.Operator | Iterable[pl_expr.Operator],
         ],
         bool,
-        tuple[int, int] | None,
+        Zlice | None,
         str,
         bool,
         Literal["none", "left", "right", "left_right", "right_left"],
@@ -1058,7 +1143,7 @@ class ConditionalJoin(IR):
     """
     tuple of options:
     - predicates: tuple of ir join type (eg. ie_join) and (In)Equality conditions
-    - join_nulls: do nulls compare equal?
+    - nulls_equal: do nulls compare equal?
     - slice: optional slice to perform after joining.
     - suffix: string suffix for right columns if names match
     - coalesce: should key columns be coalesced (only makes sense for outer joins)
@@ -1073,9 +1158,9 @@ class ConditionalJoin(IR):
         self.options = options
         self.children = (left, right)
         predicate_wrapper = self.Predicate(predicate)
-        _, join_nulls, zlice, suffix, coalesce, maintain_order = self.options
+        _, nulls_equal, zlice, suffix, coalesce, maintain_order = self.options
         # Preconditions from polars
-        assert not join_nulls
+        assert not nulls_equal
         assert not coalesce
         assert maintain_order == "none"
         if predicate_wrapper.ast is None:
@@ -1088,7 +1173,7 @@ class ConditionalJoin(IR):
     def do_evaluate(
         cls,
         predicate_wrapper: Predicate,
-        zlice: tuple[int, int] | None,
+        zlice: Zlice | None,
         suffix: str,
         maintain_order: Literal["none", "left", "right", "left_right", "right_left"],
         left: DataFrame,
@@ -1126,8 +1211,8 @@ class ConditionalJoin(IR):
 class Join(IR):
     """A join of two dataframes."""
 
-    __slots__ = ("left_on", "options", "right_on")
-    _non_child = ("schema", "left_on", "right_on", "options")
+    __slots__ = ("config_options", "left_on", "options", "right_on")
+    _non_child = ("schema", "left_on", "right_on", "options", "config_options")
     left_on: tuple[expr.NamedExpr, ...]
     """List of expressions used as keys in the left frame."""
     right_on: tuple[expr.NamedExpr, ...]
@@ -1135,7 +1220,7 @@ class Join(IR):
     options: tuple[
         Literal["Inner", "Left", "Right", "Full", "Semi", "Anti", "Cross"],
         bool,
-        tuple[int, int] | None,
+        Zlice | None,
         str,
         bool,
         Literal["none", "left", "right", "left_right", "right_left"],
@@ -1143,12 +1228,14 @@ class Join(IR):
     """
     tuple of options:
     - how: join type
-    - join_nulls: do nulls compare equal?
+    - nulls_equal: do nulls compare equal?
     - slice: optional slice to perform after joining.
     - suffix: string suffix for right columns if names match
     - coalesce: should key columns be coalesced (only makes sense for outer joins)
     - maintain_order: which DataFrame row order to preserve, if any
     """
+    config_options: ConfigOptions
+    """GPU-specific configuration options"""
 
     def __init__(
         self,
@@ -1156,6 +1243,7 @@ class Join(IR):
         left_on: Sequence[expr.NamedExpr],
         right_on: Sequence[expr.NamedExpr],
         options: Any,
+        config_options: ConfigOptions,
         left: IR,
         right: IR,
     ):
@@ -1163,6 +1251,7 @@ class Join(IR):
         self.left_on = tuple(left_on)
         self.right_on = tuple(right_on)
         self.options = options
+        self.config_options = config_options
         self.children = (left, right)
         self._non_child_args = (self.left_on, self.right_on, self.options)
         # TODO: Implement maintain_order
@@ -1245,9 +1334,8 @@ class Join(IR):
         left keys, and is stable wrt the right keys. For all other
         joins, there is no order obligation.
         """
-        dt = plc.interop.to_arrow(plc.types.SIZE_TYPE)
-        init = plc.interop.from_arrow(pa.scalar(0, type=dt))
-        step = plc.interop.from_arrow(pa.scalar(1, type=dt))
+        init = plc.Scalar.from_py(0, plc.types.SIZE_TYPE)
+        step = plc.Scalar.from_py(1, plc.types.SIZE_TYPE)
         left_order = plc.copying.gather(
             plc.Table([plc.filling.sequence(left_rows, init, step)]), lg, left_policy
         )
@@ -1269,7 +1357,7 @@ class Join(IR):
         options: tuple[
             Literal["Inner", "Left", "Right", "Full", "Semi", "Anti", "Cross"],
             bool,
-            tuple[int, int] | None,
+            Zlice | None,
             str,
             bool,
             Literal["none", "left", "right", "left_right", "right_left"],
@@ -1278,7 +1366,7 @@ class Join(IR):
         right: DataFrame,
     ) -> DataFrame:
         """Evaluate and return a dataframe."""
-        how, join_nulls, zlice, suffix, coalesce, _ = options
+        how, nulls_equal, zlice, suffix, coalesce, _ = options
         if how == "Cross":
             # Separate implementation, since cross_join returns the
             # result, not the gather maps
@@ -1306,7 +1394,7 @@ class Join(IR):
         right_on = DataFrame(broadcast(*(e.evaluate(right) for e in right_on_exprs)))
         null_equality = (
             plc.types.NullEquality.EQUAL
-            if join_nulls
+            if nulls_equal
             else plc.types.NullEquality.UNEQUAL
         )
         join_fn, left_policy, right_policy = cls._joiners(how)
@@ -1427,7 +1515,7 @@ class Distinct(IR):
     subset: frozenset[str] | None
     """Which columns should be used to define distinctness. If None,
     then all columns are used."""
-    zlice: tuple[int, int] | None
+    zlice: Zlice | None
     """Optional slice to apply to the result."""
     stable: bool
     """Should the result maintain ordering."""
@@ -1437,7 +1525,7 @@ class Distinct(IR):
         schema: Schema,
         keep: plc.stream_compaction.DuplicateKeepOption,
         subset: frozenset[str] | None,
-        zlice: tuple[int, int] | None,
+        zlice: Zlice | None,
         stable: bool,  # noqa: FBT001
         df: IR,
     ):
@@ -1461,10 +1549,10 @@ class Distinct(IR):
         cls,
         keep: plc.stream_compaction.DuplicateKeepOption,
         subset: frozenset[str] | None,
-        zlice: tuple[int, int] | None,
+        zlice: Zlice | None,
         stable: bool,  # noqa: FBT001
         df: DataFrame,
-    ):
+    ) -> DataFrame:
         """Evaluate and return a dataframe."""
         if subset is None:
             indices = list(range(df.num_columns))
@@ -1517,7 +1605,7 @@ class Sort(IR):
     """Null sorting location for each sort key."""
     stable: bool
     """Should the sort be stable?"""
-    zlice: tuple[int, int] | None
+    zlice: Zlice | None
     """Optional slice to apply to the result."""
 
     def __init__(
@@ -1527,7 +1615,7 @@ class Sort(IR):
         order: Sequence[plc.types.Order],
         null_order: Sequence[plc.types.NullOrder],
         stable: bool,  # noqa: FBT001
-        zlice: tuple[int, int] | None,
+        zlice: Zlice | None,
         df: IR,
     ):
         self.schema = schema
@@ -1552,7 +1640,7 @@ class Sort(IR):
         order: Sequence[plc.types.Order],
         null_order: Sequence[plc.types.NullOrder],
         stable: bool,  # noqa: FBT001
-        zlice: tuple[int, int] | None,
+        zlice: Zlice | None,
         df: DataFrame,
     ) -> DataFrame:
         """Evaluate and return a dataframe."""
@@ -1653,11 +1741,36 @@ class Projection(IR):
 class MergeSorted(IR):
     """Merge sorted operation."""
 
-    def __init__(self, schema: Schema, left: IR, right: IR, key: str):
-        # libcudf merge is not stable wrt order of inputs, since
-        # it uses a priority queue to manage the tables it produces.
-        # See: https://github.com/rapidsai/cudf/issues/16010
-        raise NotImplementedError("MergeSorted not yet implemented")
+    __slots__ = ("key",)
+    _non_child = ("schema", "key")
+    key: str
+    """Key that is sorted."""
+
+    def __init__(self, schema: Schema, key: str, left: IR, right: IR):
+        assert isinstance(left, Sort)
+        assert isinstance(right, Sort)
+        assert left.order == right.order
+        assert len(left.schema.keys()) <= len(right.schema.keys())
+        self.schema = schema
+        self.key = key
+        self.children = (left, right)
+        self._non_child_args = (key,)
+
+    @classmethod
+    def do_evaluate(cls, key: str, *dfs: DataFrame) -> DataFrame:
+        left, right = dfs
+        right = right.discard_columns(right.column_names_set - left.column_names_set)
+        on_col_left = left.select_columns({key})[0]
+        on_col_right = right.select_columns({key})[0]
+        return DataFrame.from_table(
+            plc.merge.merge(
+                [right.table, left.table],
+                [left.column_names.index(key), right.column_names.index(key)],
+                [on_col_left.order, on_col_right.order],
+                [on_col_left.null_order, on_col_right.null_order],
+            ),
+            left.column_names,
+        )
 
 
 class MapFunction(IR):
@@ -1798,12 +1911,8 @@ class MapFunction(IR):
         elif name == "row_index":
             col_name, offset = options
             dtype = schema[col_name]
-            step = plc.interop.from_arrow(
-                pa.scalar(1, type=plc.interop.to_arrow(dtype))
-            )
-            init = plc.interop.from_arrow(
-                pa.scalar(offset, type=plc.interop.to_arrow(dtype))
-            )
+            step = plc.Scalar.from_py(1, dtype)
+            init = plc.Scalar.from_py(offset, dtype)
             index_col = Column(
                 plc.filling.sequence(df.num_rows, init, step),
                 is_sorted=plc.types.Sorted.YES,
@@ -1821,10 +1930,10 @@ class Union(IR):
 
     __slots__ = ("zlice",)
     _non_child = ("schema", "zlice")
-    zlice: tuple[int, int] | None
+    zlice: Zlice | None
     """Optional slice to apply to the result."""
 
-    def __init__(self, schema: Schema, zlice: tuple[int, int] | None, *children: IR):
+    def __init__(self, schema: Schema, zlice: Zlice | None, *children: IR):
         self.schema = schema
         self.zlice = zlice
         self._non_child_args = (zlice,)
@@ -1832,7 +1941,7 @@ class Union(IR):
         schema = self.children[0].schema
 
     @classmethod
-    def do_evaluate(cls, zlice: tuple[int, int] | None, *dfs: DataFrame) -> DataFrame:
+    def do_evaluate(cls, zlice: Zlice | None, *dfs: DataFrame) -> DataFrame:
         """Evaluate and return a dataframe."""
         # TODO: only evaluate what we need if we have a slice?
         return DataFrame.from_table(
