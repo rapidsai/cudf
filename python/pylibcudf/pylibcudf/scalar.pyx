@@ -2,7 +2,7 @@
 
 from cpython cimport bool as py_bool, datetime
 from cython cimport no_gc_clear
-from libc.time cimport tm, mktime, time_t
+from libc.time cimport time_t
 from libc.stdint cimport (
     int8_t,
     int16_t,
@@ -30,13 +30,21 @@ from pylibcudf.libcudf.scalar.scalar_factories cimport (
     make_timestamp_scalar,
 )
 from pylibcudf.libcudf.types cimport type_id
-from pylibcudf.libcudf.wrappers.durations cimport duration_us
+from pylibcudf.libcudf.wrappers.durations cimport (
+    duration_us,
+    duration_ns,
+    duration_ms,
+    duration_s,
+)
 from pylibcudf.libcudf.wrappers.timestamps cimport (
+    microseconds,
     timestamp_us,
-    nanoseconds,
+    timestamp_ns,
+    timestamp_ms,
+    timestamp_s,
     time_point,
-    system_clock,
     time_point_cast,
+    system_clock,
 )
 
 
@@ -55,25 +63,6 @@ except ImportError as err:
     np_error = err
 
 __all__ = ["Scalar"]
-
-
-cdef time_point[system_clock, nanoseconds] _datetime_to_time_point(
-    datetime.datetime dt
-):
-    if dt.tzinfo is not None:
-        raise NotImplementedError("datetimes with timezones are not supported.")
-    if dt.microsecond != 0:
-        raise NotImplementedError("Non-zero microseconds are not supported.")
-    cdef tm time_struct
-    time_struct.tm_year = dt.year - 1900
-    time_struct.tm_mon = dt.month - 1
-    time_struct.tm_mday = dt.day
-    time_struct.tm_hour = dt.hour
-    time_struct.tm_min = dt.minute
-    time_struct.tm_sec = dt.second
-    cdef time_t time = mktime(&time_struct)
-    cdef time_point[system_clock, nanoseconds] tp = system_clock.from_time_t(time)
-    return tp
 
 
 # The DeviceMemoryResource attribute could be released prematurely
@@ -350,27 +339,39 @@ def _(py_val: str, dtype: DataType | None):
 
 @_from_py.register(datetime.datetime)
 def _(py_val, dtype: DataType | None):
+    cdef unique_ptr[scalar] c_obj
     cdef DataType c_dtype
+    cdef time_point[system_clock, duration_us] tp_us
+    cdef time_point[system_clock, duration_ns] tp_ns
+    cdef time_point[system_clock, duration_ms] tp_ms
+    cdef time_point[system_clock, duration_s] tp_s
     if dtype is None:
-        c_dtype = DataType(type_id.TIMESTAMP_MICROSECONDS)
-    elif dtype.id() not in {
-        type_id.TIMESTAMP_NANOSECONDS,
-        type_id.TIMESTAMP_MILLISECONDS,
-        type_id.TIMESTAMP_MICROSECONDS,
-        type_id.TIMESTAMP_SECONDS,
-    }:
-        tid = (<DataType>dtype).id()
-        raise TypeError(
-            f"Cannot convert datetime to Scalar with dtype {tid.name}"
-        )
+        c_dtype = DataType(type_id.DURATION_MICROSECONDS)
     else:
         c_dtype = <DataType>dtype
-    cdef unique_ptr[scalar] c_obj = make_timestamp_scalar(c_dtype.c_obj)
-    cdef time_point[system_clock, nanoseconds] tp = _datetime_to_time_point(py_val)
-    cdef time_point[system_clock, duration_us] tp_casted = (
-        time_point_cast[duration_us, system_clock, nanoseconds](tp)
+    tid = c_dtype.id()
+    cdef time_t epoch_microseconds = int(py_val.timestamp() * 1_000_000)
+    cdef time_point[system_clock, microseconds] tp_base = system_clock.from_time_t(
+        epoch_microseconds
     )
-    (<timestamp_scalar[timestamp_us]*>c_obj.get()).set_value(tp_casted)
+    if tid == type_id.TIMESTAMP_NANOSECONDS:
+        c_obj = make_timestamp_scalar(c_dtype.c_obj)
+        tp_ns = time_point_cast[duration_ns, system_clock, microseconds](tp_base)
+        (<timestamp_scalar[timestamp_ns]*>c_obj.get()).set_value(tp_ns)
+    elif tid == type_id.TIMESTAMP_MICROSECONDS:
+        c_obj = make_timestamp_scalar(c_dtype.c_obj)
+        tp_us = time_point_cast[duration_us, system_clock, microseconds](tp_base)
+        (<timestamp_scalar[timestamp_us]*>c_obj.get()).set_value(tp_us)
+    elif tid == type_id.TIMESTAMP_MILLISECONDS:
+        c_obj = make_timestamp_scalar(c_dtype.c_obj)
+        tp_ms = time_point_cast[duration_ms, system_clock, microseconds](tp_base)
+        (<timestamp_scalar[timestamp_ms]*>c_obj.get()).set_value(tp_ms)
+    elif tid == type_id.TIMESTAMP_SECONDS:
+        c_obj = make_timestamp_scalar(c_dtype.c_obj)
+        tp_s = time_point_cast[duration_s, system_clock, microseconds](tp_base)
+        (<timestamp_scalar[timestamp_s]*>c_obj.get()).set_value(tp_s)
+    else:
+        raise TypeError(f"Cannot convert datetime to Scalar with dtype {tid.name}")
     return _new_scalar(move(c_obj), dtype)
 
 
