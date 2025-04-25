@@ -144,7 +144,7 @@ merge<LargerIterator, SmallerIterator>::operator()(rmm::cuda_stream_view stream,
     }
     auto d_dremel_device_views = detail::make_device_uvector(
       dremel_device_views, stream, cudf::get_current_device_resource_ref());
-    return std::tuple(std::move(dremel_data), std::move(d_dremel_device_views));
+    return std::pair(std::move(dremel_data), std::move(d_dremel_device_views));
   };
   auto [smaller_dremel, smaller_dremel_dv] = list_lex_preprocess(smaller);
   auto [larger_dremel, larger_dremel_dv]   = list_lex_preprocess(larger);
@@ -163,25 +163,24 @@ merge<LargerIterator, SmallerIterator>::operator()(rmm::cuda_stream_view stream,
   thrust::upper_bound(rmm::exec_policy_nosync(stream),
                       sorted_smaller_order_begin,
                       sorted_smaller_order_end,
-                      thrust::make_counting_iterator(0),
-                      thrust::make_counting_iterator(0) + larger_numrows,
+                      thrust::counting_iterator(0),
+                      thrust::counting_iterator(0) + larger_numrows,
                       match_counts_it,
                       comp);
 
-  comp._d_ptr                 = d_lb_type.data();
-  auto match_counts_update_it = thrust::make_tabulate_output_iterator(
-    [match_counts = match_counts.begin()] __device__(size_type idx, size_type val) {
-      match_counts[idx] -= val;
-    });
+  comp._d_ptr = d_lb_type.data();
+  auto match_counts_update_it =
+    thrust::tabulate_output_iterator([match_counts = match_counts.begin()] __device__(
+                                       size_type idx, size_type val) { match_counts[idx] -= val; });
   thrust::lower_bound(rmm::exec_policy_nosync(stream),
                       sorted_smaller_order_begin,
                       sorted_smaller_order_end,
-                      thrust::make_counting_iterator(0),
-                      thrust::make_counting_iterator(0) + larger_numrows,
+                      thrust::counting_iterator(0),
+                      thrust::counting_iterator(0) + larger_numrows,
                       match_counts_update_it,
                       comp);
 
-  auto count_matches_it = thrust::make_transform_iterator(
+  auto count_matches_it = thrust::transform_iterator(
     match_counts.begin(),
     cuda::proclaim_return_type<size_type>([] __device__(auto c) { return c ? 1 : 0; }));
   auto const count_matches =
@@ -189,8 +188,8 @@ merge<LargerIterator, SmallerIterator>::operator()(rmm::cuda_stream_view stream,
   rmm::device_uvector<size_type> nonzero_matches(count_matches, stream, temp_mr);
   thrust::copy_if(
     rmm::exec_policy_nosync(stream),
-    thrust::make_counting_iterator(0),
-    thrust::make_counting_iterator(0) + larger_numrows,
+    thrust::counting_iterator(0),
+    thrust::counting_iterator(0) + larger_numrows,
     nonzero_matches.begin(),
     [match_counts = match_counts.begin()] __device__(auto idx) { return match_counts[idx]; });
 
@@ -204,7 +203,7 @@ merge<LargerIterator, SmallerIterator>::operator()(rmm::cuda_stream_view stream,
   thrust::scatter(rmm::exec_policy_nosync(stream),
                   nonzero_matches.begin(),
                   nonzero_matches.end(),
-                  thrust::make_permutation_iterator(match_counts.begin(), nonzero_matches.begin()),
+                  thrust::permutation_iterator(match_counts.begin(), nonzero_matches.begin()),
                   larger_indices.begin());
   thrust::inclusive_scan(rmm::exec_policy_nosync(stream),
                          larger_indices.begin(),
@@ -215,7 +214,7 @@ merge<LargerIterator, SmallerIterator>::operator()(rmm::cuda_stream_view stream,
   // populate smaller indices
   rmm::device_uvector<size_type> smaller_indices(total_matches, stream, mr);
   thrust::fill(rmm::exec_policy_nosync(stream), smaller_indices.begin(), smaller_indices.end(), 1);
-  auto smaller_tabulate_it = thrust::make_tabulate_output_iterator(
+  auto smaller_tabulate_it = thrust::tabulate_output_iterator(
     [nonzero_matches = nonzero_matches.begin(),
      match_counts    = match_counts.begin(),
      smaller_indices = smaller_indices.begin()] __device__(auto idx, auto lb) {
@@ -294,12 +293,12 @@ void sort_merge_join::preprocessed_table::populate_nonnull_filter(rmm::cuda_stre
       rmm::device_uvector<int32_t> child_positions(offsets.size(), stream, temp_mr);
       auto unique_end = thrust::unique_by_key_copy(
         rmm::exec_policy(stream),
-        thrust::make_reverse_iterator(lcv.offsets_end()),
-        thrust::make_reverse_iterator(lcv.offsets_end()) + offsets.size(),
-        thrust::make_reverse_iterator(thrust::make_counting_iterator(offsets.size())),
-        thrust::make_reverse_iterator(offsets_subset.end()),
-        thrust::make_reverse_iterator(child_positions.end()));
-      auto subset_size   = cuda::std::distance(thrust::make_reverse_iterator(offsets_subset.end()),
+        thrust::reverse_iterator(lcv.offsets_end()),
+        thrust::reverse_iterator(lcv.offsets_end()) + offsets.size(),
+        thrust::reverse_iterator(thrust::counting_iterator(offsets.size())),
+        thrust::reverse_iterator(offsets_subset.end()),
+        thrust::reverse_iterator(child_positions.end()));
+      auto subset_size   = cuda::std::distance(thrust::reverse_iterator(offsets_subset.end()),
                                              cuda::std::get<0>(unique_end));
       auto subset_offset = offsets.size() - subset_size;
 
@@ -315,8 +314,8 @@ void sort_merge_join::preprocessed_table::populate_nonnull_filter(rmm::cuda_stre
 
       thrust::for_each(
         rmm::exec_policy(stream),
-        thrust::make_counting_iterator(0),
-        thrust::make_counting_iterator(0) + subset_size,
+        thrust::counting_iterator(0),
+        thrust::counting_iterator(0) + subset_size,
         list_nonnull_filter{static_cast<bitmask_type*>(validity_mask.data()),
                             static_cast<bitmask_type const*>(reduced_validity_mask.data()),
                             child_positions,
@@ -501,11 +500,11 @@ sort_merge_join::inner_join(rmm::cuda_stream_view stream, rmm::device_async_reso
   }
   // we passed pre-sorted tables
   merge obj(smaller.tbl_view,
-            thrust::make_counting_iterator(0),
-            thrust::make_counting_iterator(smaller.tbl_view.num_rows()),
+            thrust::counting_iterator(0),
+            thrust::counting_iterator(smaller.tbl_view.num_rows()),
             larger.tbl_view,
-            thrust::make_counting_iterator(0),
-            thrust::make_counting_iterator(larger.tbl_view.num_rows()));
+            thrust::counting_iterator(0),
+            thrust::counting_iterator(larger.tbl_view.num_rows()));
   auto [smaller_indices, larger_indices] = obj(stream, mr);
   postprocess_indices(*smaller_indices, *larger_indices, stream);
   if (is_left_smaller) { return {std::move(smaller_indices), std::move(larger_indices)}; }
