@@ -27,6 +27,15 @@ namespace CUDF_EXPORT cudf {
 namespace io::detail {
 
 /**
+ * @brief Check if decompression is supported for the given compression type.
+ *
+ * @param compression Compression type
+ * @return true if supported
+ * @return false if not supported
+ */
+[[nodiscard]] bool is_decompression_supported(compression_type compression);
+
+/**
  * @brief Decompresses a system memory buffer.
  *
  * @param compression Type of compression of the input data

@@ -366,7 +366,7 @@ void host_compress(compression_type compression,
   cudf::detail::cuda_memcpy<compression_result>(results, h_results, stream);
 }
 
-[[nodiscard]] bool host_compression_supported(compression_type compression)
+[[nodiscard]] bool is_host_compression_supported(compression_type compression)
 {
   switch (compression) {
     case compression_type::GZIP:
@@ -377,7 +377,7 @@ void host_compress(compression_type compression,
   }
 }
 
-[[nodiscard]] bool device_compression_supported(compression_type compression)
+[[nodiscard]] bool is_device_compression_supported(compression_type compression)
 {
   auto const nvcomp_type = to_nvcomp_compression(compression);
   switch (compression) {
@@ -396,10 +396,12 @@ void host_compress(compression_type compression,
   [[maybe_unused]] device_span<device_span<uint8_t const> const> inputs,
   [[maybe_unused]] device_span<device_span<uint8_t> const> outputs)
 {
-  CUDF_EXPECTS(host_compression_supported(compression) or device_compression_supported(compression),
+  auto const h_support = is_host_compression_supported(compression);
+  auto const d_support = is_device_compression_supported(compression);
+  CUDF_EXPECTS(h_support or d_support,
                "Unsupported compression type: " + compression_type_name(compression));
-  if (not host_compression_supported(compression)) { return false; }
-  if (not device_compression_supported(compression)) { return true; }
+  if (not h_support) { return false; }
+  if (not d_support) { return true; }
   // If both host and device compression are supported, dispatch based on the environment variable
 
   auto const env_var = getenv_or("LIBCUDF_HOST_COMPRESSION", std::string{"OFF"});
@@ -467,6 +469,11 @@ void compress(compression_type compression,
   } else {
     return device_compress(compression, inputs, outputs, results, stream);
   }
+}
+
+[[nodiscard]] bool is_compression_supported(compression_type compression)
+{
+  return is_host_compression_supported(compression) or is_device_compression_supported(compression);
 }
 
 }  // namespace cudf::io::detail
