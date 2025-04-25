@@ -13,19 +13,24 @@ from polars.testing import assert_frame_equal
 
 from cudf_polars import Translator
 from cudf_polars.dsl.traversal import traversal
+from cudf_polars.testing.asserts import DEFAULT_SCHEDULER, assert_gpu_result_equal
 
 
-def test_evaluate_dask():
+def test_evaluate_streaming():
     df = pl.LazyFrame({"a": [1, 2, 3], "b": [3, 4, 5], "c": [5, 6, 7], "d": [7, 9, 8]})
     q = df.select(pl.col("a") - (pl.col("b") + pl.col("c") * 2), pl.col("d")).sort("d")
 
     expected = q.collect(engine="cpu")
     got_gpu = q.collect(engine=GPUEngine(raise_on_fail=True))
-    got_dask = q.collect(
-        engine=GPUEngine(raise_on_fail=True, executor="dask-experimental")
+    got_streaming = q.collect(
+        engine=GPUEngine(
+            raise_on_fail=True,
+            executor="streaming",
+            executor_options={"scheduler": DEFAULT_SCHEDULER},
+        )
     )
     assert_frame_equal(expected, got_gpu)
-    assert_frame_equal(expected, got_dask)
+    assert_frame_equal(expected, got_streaming)
 
 
 @pytest.mark.parametrize(
@@ -69,3 +74,37 @@ def test_pickle_conditional_join_args():
     ir = Translator(q._ldf.visit(), GPUEngine()).translate_ir()
     for node in traversal([ir]):
         pickle.loads(pickle.dumps(node._non_child_args))
+
+
+@pytest.fixture(scope="module")
+def engine():
+    return pl.GPUEngine(
+        raise_on_fail=True,
+        executor="streaming",
+        executor_options={
+            "max_rows_per_partition": 2,
+            "scheduler": DEFAULT_SCHEDULER,
+        },
+    )
+
+
+@pytest.mark.parametrize("column", ["a", "b"])
+def test_explode_multi(column, engine):
+    df = pl.LazyFrame(
+        {
+            "a": [[1, 2], [3, 4], None],
+            "b": [[5, 6], [7, 8], [9, 10]],
+            "c": [None, 11, 12],
+        }
+    )
+    q = df.explode(column)
+    assert_gpu_result_equal(q, engine=engine)
+
+
+@pytest.mark.parametrize(
+    "mapping", [{}, {"b": "c"}, {"b": "a", "a": "b"}, {"a": "c", "b": "d"}]
+)
+def test_rename_multi(mapping, engine):
+    df = pl.LazyFrame({"a": [1, 2, 3], "b": [3, 4, 5]})
+    q = df.rename(mapping)
+    assert_gpu_result_equal(q, engine=engine)

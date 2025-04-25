@@ -18,6 +18,7 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/detail/transform.hpp>
+#include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
@@ -314,7 +315,7 @@ class arrow_column {
    *
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource used for any allocations during conversion
-   * @return unique_column_view_t containing a view of the column data
+   * @return A view of the column data
    */
   [[nodiscard]] column_view view() const;
 
@@ -434,7 +435,7 @@ class arrow_table {
    *
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource used for any allocations during conversion
-   * @return unique_table_view_t containing a view of the table data
+   * @return A view of the table data
    */
   [[nodiscard]] table_view view() const;
 
@@ -635,6 +636,26 @@ unique_device_array_t to_arrow_host(
  */
 unique_device_array_t to_arrow_host(
   cudf::column_view const& col,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
+/**
+ * @brief Copy strings column data to host and create `ArrowDeviceArray` for it
+ * using the ArrowBinaryView format
+ *
+ * Populates the ArrowDeviceArray, copying the cudf data to the host. The
+ * returned ArrowDeviceArray will have a device_type of CPU and will have no ties
+ * to the memory referenced by the column view passed in. The deleter for the
+ * returned unique_ptr will call the release callback on the ArrowDeviceArray
+ * automatically.
+ *
+ * @param col Input strings column view
+ * @param stream CUDA stream used for the device memory operations and kernel launches
+ * @param mr Device memory resource used for any allocations during conversion
+ * @return ArrowDeviceArray generated from input column
+ */
+unique_device_array_t to_arrow_host_stringview(
+  cudf::strings_column_view const& col,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 

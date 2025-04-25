@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -42,8 +42,7 @@ CUDF_HOST_DEVICE constexpr bool is_product_supported()
 }
 
 /**
- * @brief Maps an `aggregation::Kind` value to it's corresponding binary
- * operator.
+ * @brief Maps an `aggregation::Kind` value to its corresponding binary operator
  *
  * @note Not all values of `aggregation::Kind` have a valid corresponding binary
  * operator. For these values `E`,

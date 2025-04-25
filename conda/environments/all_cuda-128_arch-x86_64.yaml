@@ -34,7 +34,7 @@ dependencies:
 - flatbuffers==24.3.25
 - fsspec>=0.6.0
 - gcc_linux-64=13.*
-- hypothesis
+- hypothesis>=6.131.7
 - identify>=2.5.20
 - ipython
 - jupyter_client
@@ -48,6 +48,7 @@ dependencies:
 - moto>=4.0.8
 - msgpack-python
 - myst-nb
+- nanoarrow
 - nbconvert
 - nbformat
 - nbsphinx
@@ -64,7 +65,7 @@ dependencies:
 - pandas
 - pandas>=2.0,<2.2.4dev0
 - pandoc
-- polars>=1.24,<1.27
+- polars>=1.24,<1.28
 - pre-commit
 - pyarrow>=14.0.0,<20.0.0a0
 - pydata-sphinx-theme>=0.15.4
@@ -73,6 +74,7 @@ dependencies:
 - pytest-benchmark
 - pytest-cases>=3.8.2
 - pytest-cov
+- pytest-rerunfailures
 - pytest-xdist
 - pytest<8
 - python-confluent-kafka>=2.8.0,<2.9.0a0
@@ -95,7 +97,7 @@ dependencies:
 - sphinxcontrib-websupport
 - streamz
 - sysroot_linux-64==2.28
-- tokenizers==0.15.2
 - typing_extensions>=4.0.0
 - zlib>=1.2.13
+- zstandard
 name: all_cuda-128_arch-x86_64

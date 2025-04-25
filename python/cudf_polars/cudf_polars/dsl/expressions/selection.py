@@ -8,8 +8,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-import pyarrow as pa
-
 import pylibcudf as plc
 
 from cudf_polars.containers import Column
@@ -54,9 +52,7 @@ class Gather(Expr):
             bounds_policy = plc.copying.OutOfBoundsPolicy.NULLIFY
             obj = plc.replace.replace_nulls(
                 indices.obj,
-                plc.interop.from_arrow(
-                    pa.scalar(n, type=plc.interop.to_arrow(indices.obj.type()))
-                ),
+                plc.Scalar.from_py(n, dtype=indices.obj.type()),
             )
         else:
             bounds_policy = plc.copying.OutOfBoundsPolicy.DONT_CHECK
