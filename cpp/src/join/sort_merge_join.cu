@@ -18,7 +18,6 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/null_mask.cuh>
-#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/join/sort_merge_join.hpp>
 #include <cudf/lists/contains.hpp>
@@ -53,8 +52,6 @@
 namespace cudf {
 
 namespace {
-
-#define SORT_MERGE_JOIN_DEBUG 0
 
 template <typename LargerIterator, typename SmallerIterator>
 class merge {
@@ -170,35 +167,9 @@ merge<LargerIterator, SmallerIterator>::operator()(rmm::cuda_stream_view stream,
   auto match_counts =
     cudf::detail::make_zeroed_device_uvector_async<size_type>(larger_numrows + 1, stream, temp_mr);
 
-#if SORT_MERGE_JOIN_DEBUG
-  rmm::device_uvector<size_type> lb1(larger_numrows, stream, temp_mr);
-  row_comparator comp_(
-    *larger_dv_ptr, *smaller_dv_ptr, larger_dremel_dv, smaller_dremel_dv, d_lb_type.data());
-  thrust::lower_bound(rmm::exec_policy(stream),
-                      sorted_smaller_order_begin,
-                      sorted_smaller_order_end,
-                      thrust::make_counting_iterator(0),
-                      thrust::make_counting_iterator(0) + larger_numrows,
-                      lb1.begin(),
-                      comp_);
-  debug_print<size_type>("h_lb1", cudf::detail::make_host_vector(lb1, stream));
-
-  rmm::device_uvector<size_type> ub1(larger_numrows, stream, temp_mr);
-  comp_._d_ptr = d_ub_type.data();
-  thrust::upper_bound(rmm::exec_policy(stream),
-                      sorted_smaller_order_begin,
-                      sorted_smaller_order_end,
-                      thrust::make_counting_iterator(0),
-                      thrust::make_counting_iterator(0) + larger_numrows,
-                      ub1.begin(),
-                      comp_);
-  debug_print<size_type>("h_ub1", cudf::detail::make_host_vector(ub1, stream));
-#endif
-
   row_comparator comp(
     *larger_dv_ptr, *smaller_dv_ptr, larger_dremel_dv, smaller_dremel_dv, d_ub_type.data());
   auto match_counts_it = match_counts.begin();
-  nvtxRangePushA("upper bound");
   thrust::upper_bound(rmm::exec_policy_nosync(stream),
                       sorted_smaller_order_begin,
                       sorted_smaller_order_end,
@@ -206,19 +177,12 @@ merge<LargerIterator, SmallerIterator>::operator()(rmm::cuda_stream_view stream,
                       thrust::make_counting_iterator(0) + larger_numrows,
                       match_counts_it,
                       comp);
-  nvtxRangePop();
-
-#if SORT_MERGE_JOIN_DEBUG
-  stream.synchronize();
-  debug_print<size_type>("h_match_counts", cudf::detail::make_host_vector(match_counts, stream));
-#endif
 
   comp._d_ptr                 = d_lb_type.data();
   auto match_counts_update_it = thrust::make_tabulate_output_iterator(
     [match_counts = match_counts.begin()] __device__(size_type idx, size_type val) {
       match_counts[idx] -= val;
     });
-  nvtxRangePushA("lower bound");
   thrust::lower_bound(rmm::exec_policy_nosync(stream),
                       sorted_smaller_order_begin,
                       sorted_smaller_order_end,
@@ -226,12 +190,6 @@ merge<LargerIterator, SmallerIterator>::operator()(rmm::cuda_stream_view stream,
                       thrust::make_counting_iterator(0) + larger_numrows,
                       match_counts_update_it,
                       comp);
-  nvtxRangePop();
-
-#if SORT_MERGE_JOIN_DEBUG
-  stream.synchronize();
-  debug_print<size_type>("h_match_counts", cudf::detail::make_host_vector(match_counts, stream));
-#endif
 
   auto count_matches_it = thrust::make_transform_iterator(
     match_counts.begin(),
@@ -246,13 +204,6 @@ merge<LargerIterator, SmallerIterator>::operator()(rmm::cuda_stream_view stream,
     nonzero_matches.begin(),
     [match_counts = match_counts.begin()] __device__(auto idx) { return match_counts[idx]; });
 
-#if SORT_MERGE_JOIN_DEBUG
-  std::printf("count_matches = %d\n", count_matches);
-  stream.synchronize();
-  debug_print<size_type>("h_nonzero_matches",
-                         cudf::detail::make_host_vector(nonzero_matches, stream));
-#endif
-
   thrust::exclusive_scan(
     rmm::exec_policy(stream), match_counts.begin(), match_counts.end(), match_counts.begin());
   auto const total_matches = match_counts.back_element(stream);
@@ -260,7 +211,6 @@ merge<LargerIterator, SmallerIterator>::operator()(rmm::cuda_stream_view stream,
   // populate larger indices
   auto larger_indices =
     cudf::detail::make_zeroed_device_uvector_async<size_type>(total_matches, stream, mr);
-  nvtxRangePushA("larger indices");
   thrust::scatter(rmm::exec_policy_nosync(stream),
                   nonzero_matches.begin(),
                   nonzero_matches.end(),
@@ -271,24 +221,9 @@ merge<LargerIterator, SmallerIterator>::operator()(rmm::cuda_stream_view stream,
                          larger_indices.end(),
                          larger_indices.begin(),
                          thrust::maximum<size_type>{});
-  nvtxRangePop();
-
-#if SORT_MERGE_JOIN_DEBUG
-  debug_print<size_type>("h_match_counts", cudf::detail::make_host_vector(match_counts, stream));
-  rmm::device_uvector<size_type> dlb(nonzero_matches.size(), stream, temp_mr);
-  thrust::lower_bound(rmm::exec_policy(stream),
-                      sorted_smaller_order_begin,
-                      sorted_smaller_order_end,
-                      nonzero_matches.begin(),
-                      nonzero_matches.end(),
-                      dlb.begin(),
-                      comp);
-  debug_print<size_type>("h_dlb", cudf::detail::make_host_vector(dlb, stream));
-#endif
 
   // populate smaller indices
   rmm::device_uvector<size_type> smaller_indices(total_matches, stream, mr);
-  nvtxRangePushA("smaller indices");
   thrust::fill(rmm::exec_policy_nosync(stream), smaller_indices.begin(), smaller_indices.end(), 1);
   auto smaller_tabulate_it = thrust::make_tabulate_output_iterator(
     [nonzero_matches = nonzero_matches.begin(),
@@ -317,15 +252,6 @@ merge<LargerIterator, SmallerIterator>::operator()(rmm::cuda_stream_view stream,
                     [sorted_smaller_order = sorted_smaller_order_begin] __device__(auto idx) {
                       return sorted_smaller_order[idx];
                     });
-  nvtxRangePop();
-
-#if SORT_MERGE_JOIN_DEBUG
-  stream.synchronize();
-  debug_print<size_type>("h_larger_indices",
-                         cudf::detail::make_host_vector(larger_indices, stream));
-  debug_print<size_type>("h_smaller_indices",
-                         cudf::detail::make_host_vector(smaller_indices, stream));
-#endif
 
   stream.synchronize();
   return {std::make_unique<rmm::device_uvector<size_type>>(std::move(smaller_indices)),
