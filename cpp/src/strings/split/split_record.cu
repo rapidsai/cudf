@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -43,9 +43,10 @@ namespace detail {
 
 namespace {
 
-template <typename Tokenizer>
+template <typename Tokenizer, typename DelimiterFn>
 std::unique_ptr<column> split_record_fn(strings_column_view const& input,
                                         Tokenizer tokenizer,
+                                        DelimiterFn delimiter_fn,
                                         rmm::cuda_stream_view stream,
                                         rmm::device_async_resource_ref mr)
 {
@@ -65,7 +66,7 @@ std::unique_ptr<column> split_record_fn(strings_column_view const& input,
   }
 
   // builds the offsets and the vector of all tokens
-  auto [offsets, tokens] = split_helper(input, tokenizer, stream, mr);
+  auto [offsets, tokens] = split_helper(input, tokenizer, delimiter_fn, stream, mr);
   CUDF_EXPECTS(tokens.size() < static_cast<std::size_t>(std::numeric_limits<size_type>::max()),
                "Size of output exceeds the column size limit",
                std::overflow_error);
@@ -172,8 +173,7 @@ std::unique_ptr<column> whitespace_split_record_fn(strings_column_view const& in
                            mr);
 }
 
-template <Direction direction>
-std::unique_ptr<column> split_record(strings_column_view const& strings,
+std::unique_ptr<column> split_record(strings_column_view const& input,
                                      string_scalar const& delimiter,
                                      size_type maxsplit,
                                      rmm::cuda_stream_view stream,
@@ -184,48 +184,65 @@ std::unique_ptr<column> split_record(strings_column_view const& strings,
   // makes consistent with Pandas
   size_type max_tokens = maxsplit > 0 ? maxsplit + 1 : std::numeric_limits<size_type>::max();
 
-  auto d_strings_column_ptr = column_device_view::create(strings.parent(), stream);
+  auto d_strings = column_device_view::create(input.parent(), stream);
   if (delimiter.size() == 0) {
     return whitespace_split_record_fn(
-      strings,
-      whitespace_token_reader_fn<direction>{*d_strings_column_ptr, max_tokens},
+      input,
+      whitespace_token_reader_fn<detail::Direction::FORWARD>{*d_strings, max_tokens},
       stream,
       mr);
-  } else {
-    string_view d_delimiter(delimiter.data(), delimiter.size());
-    if (direction == Direction::FORWARD) {
-      return split_record_fn(
-        strings, split_tokenizer_fn{*d_strings_column_ptr, d_delimiter, max_tokens}, stream, mr);
-    } else {
-      return split_record_fn(
-        strings, rsplit_tokenizer_fn{*d_strings_column_ptr, d_delimiter, max_tokens}, stream, mr);
-    }
   }
+  auto tokenizer    = split_tokenizer_fn{*d_strings, delimiter.size(), max_tokens};
+  auto delimiter_fn = string_delimiter_fn{delimiter.value(stream)};
+  return split_record_fn(input, tokenizer, delimiter_fn, stream, mr);
+}
+
+std::unique_ptr<column> rsplit_record(strings_column_view const& input,
+                                      string_scalar const& delimiter,
+                                      size_type maxsplit,
+                                      rmm::cuda_stream_view stream,
+                                      rmm::device_async_resource_ref mr)
+{
+  CUDF_EXPECTS(delimiter.is_valid(stream), "Parameter delimiter must be valid");
+
+  // makes consistent with Pandas
+  size_type max_tokens = maxsplit > 0 ? maxsplit + 1 : std::numeric_limits<size_type>::max();
+
+  auto d_strings = column_device_view::create(input.parent(), stream);
+  if (delimiter.size() == 0) {
+    return whitespace_split_record_fn(
+      input,
+      whitespace_token_reader_fn<detail::Direction::BACKWARD>{*d_strings, max_tokens},
+      stream,
+      mr);
+  }
+  auto tokenizer    = rsplit_tokenizer_fn{*d_strings, delimiter.size(), max_tokens};
+  auto delimiter_fn = string_delimiter_fn{delimiter.value(stream)};
+  return split_record_fn(input, tokenizer, delimiter_fn, stream, mr);
 }
 
 }  // namespace detail
 
 // external APIs
 
-std::unique_ptr<column> split_record(strings_column_view const& strings,
+std::unique_ptr<column> split_record(strings_column_view const& input,
                                      string_scalar const& delimiter,
                                      size_type maxsplit,
                                      rmm::cuda_stream_view stream,
                                      rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::split_record<detail::Direction::FORWARD>(strings, delimiter, maxsplit, stream, mr);
+  return detail::split_record(input, delimiter, maxsplit, stream, mr);
 }
 
-std::unique_ptr<column> rsplit_record(strings_column_view const& strings,
+std::unique_ptr<column> rsplit_record(strings_column_view const& input,
                                       string_scalar const& delimiter,
                                       size_type maxsplit,
                                       rmm::cuda_stream_view stream,
                                       rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::split_record<detail::Direction::BACKWARD>(
-    strings, delimiter, maxsplit, stream, mr);
+  return detail::rsplit_record(input, delimiter, maxsplit, stream, mr);
 }
 
 }  // namespace strings
