@@ -55,9 +55,7 @@ template <typename T>
 class GroupByBitwiseTypedTest : public GroupByBitwiseTest {};
 
 // Test types for bitwise operations - only integer types
-using GroupByBitwiseTypedTestTypes =
-  cudf::test::Types<int8_t, int16_t, int32_t, int64_t, uint8_t, uint16_t, uint32_t, uint64_t>;
-TYPED_TEST_SUITE(GroupByBitwiseTypedTest, GroupByBitwiseTypedTestTypes);
+TYPED_TEST_SUITE(GroupByBitwiseTypedTest, cudf::test::IntegralTypesNotBool);
 
 // Basic bitwise AND test
 TYPED_TEST(GroupByBitwiseTypedTest, BitwiseAND)

@@ -1249,11 +1249,13 @@ class bitwise_aggregation final : public groupby_aggregation, public reduce_aggr
   {
     return std::make_unique<bitwise_aggregation>(*this);
   }
+
   std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
     data_type col_type, simple_aggregations_collector& collector) const override
   {
     return collector.visit(col_type, *this);
   }
+
   void finalize(aggregation_finalizer& finalizer) const override { finalizer.visit(*this); }
 };
 

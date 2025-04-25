@@ -354,7 +354,7 @@ std::unique_ptr<scalar> merge_sets(lists_column_view const& col,
                                    rmm::device_async_resource_ref mr);
 
 /**
- * @brief Performs bitwise reduction on the input column.
+ * @brief Performs bitwise reduction on the input column, ignoring nulls.
  *
  * @param bit_op Bitwise operation to perform on the input
  * @param col input column to perform bitwise reduction on

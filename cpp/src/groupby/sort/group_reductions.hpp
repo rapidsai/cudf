@@ -540,7 +540,7 @@ std::unique_ptr<column> group_correlation(column_view const& covariance,
                                           rmm::device_async_resource_ref mr);
 
 /**
- * @brief Internal API to calculate bitwise operation on grouped values.
+ * @brief Internal API to calculate bitwise operation on grouped values ignoring nulls.
  *
  * @param bit_op Bitwise operation to perform on the input
  * @param grouped_values Grouped values to perform bitwise operation on
