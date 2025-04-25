@@ -27,8 +27,6 @@ void nvbench_inner_join(nvbench::state& state,
                  cudf::null_equality compare_nulls) {
     return cudf::inner_join(left_input, right_input, compare_nulls);
   };
-  state.set_throttle_threshold(0.9);
-  state.set_throttle_recovery_delay(0.05);
   BM_join<Key, Nullable>(state, join);
 }
 
@@ -57,7 +55,6 @@ void nvbench_full_join(nvbench::state& state, nvbench::type_list<Key, nvbench::e
 NVBENCH_BENCH_TYPES(nvbench_inner_join, NVBENCH_TYPE_AXES(JOIN_KEY_TYPE_RANGE, JOIN_NULLABLE_RANGE))
   .set_name("inner_join")
   .set_type_axes_names({"Key", "Nullable"})
-  .set_stopping_criterion("entropy")
   .add_int64_axis("left_size", JOIN_SIZE_RANGE)
   .add_int64_axis("right_size", JOIN_SIZE_RANGE);
 
