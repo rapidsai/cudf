@@ -4,8 +4,9 @@
 
 from __future__ import annotations
 
-from collections import defaultdict
+from collections import Counter
 from collections.abc import MutableMapping
+from itertools import chain
 from typing import TYPE_CHECKING, Any, TypeVar
 
 from typing_extensions import Unpack
@@ -38,7 +39,7 @@ def is_hashable(x: Any) -> bool:
     """Check if x is hashable."""
     try:
         hash(x)
-    except TypeError:
+    except BaseException:
         return False
     else:
         return True
@@ -84,15 +85,15 @@ def required_keys(key: Key, graph: Graph) -> list[Key]:
 def toposort(graph: Graph, dependencies: Mapping[Key, list[Key]]) -> list[Key]:
     """Return a list of task keys sorted in topological order."""
     # Stack-based depth-first search traversal. This is based on Tarjan's
-    # method for topological sorting (see wikipedia for pseudocode)
+    # algorithm for strongly-connected components
+    # (https://en.wikipedia.org/wiki/Tarjan%27s_strongly_connected_components_algorithm)
     ordered: list[Key] = []
     completed: set[Key] = set()
-    seen: set[Key] = set()
 
     for key in graph:
         if key in completed:
             continue
-        nodes: list[Key] = [key]
+        nodes = [key]
         while nodes:
             # Keep current node on the stack until all descendants are visited
             current = nodes[-1]
@@ -100,26 +101,15 @@ def toposort(graph: Graph, dependencies: Mapping[Key, list[Key]]) -> list[Key]:
                 # Already fully traversed descendants of current
                 nodes.pop()
                 continue
-            seen.add(current)
 
             # Add direct descendants of current to nodes stack
-            next_nodes = []
-            for nxt in dependencies[current]:
-                if nxt not in completed:
-                    if nxt in seen:  # pragma: no cover
-                        # Cycle detected!
-                        raise RuntimeError(
-                            f"Cycle detected in the task graph! Key: {nxt}"
-                        )
-                    next_nodes.append(nxt)
-
+            next_nodes = [dep for dep in dependencies[current] if dep not in completed]
             if next_nodes:
                 nodes.extend(next_nodes)
             else:
                 # Current has no more descendants to explore
                 ordered.append(current)
                 completed.add(current)
-                seen.remove(current)
                 nodes.pop()
 
     return ordered
@@ -152,17 +142,11 @@ def synchronous_scheduler(
     if cache is None:
         cache = {}
 
-    refcount: defaultdict[Key, int] = defaultdict(int)
-    dependencies: dict[Key, list] = {}
-    for k in graph:
-        dependencies[k] = required_keys(k, graph)
-        for dep in dependencies[k]:
-            refcount[dep] += 1
+    dependencies = {k: required_keys(k, graph) for k in graph}
+    refcount = Counter(chain.from_iterable(dependencies.values()))
 
     for k in toposort(graph, dependencies):
-        task = graph[k]
-        result = _execute_task(task, cache)
-        cache[k] = result
+        cache[k] = _execute_task(graph[k], cache)
         for dep in dependencies[k]:
             refcount[dep] -= 1
             if refcount[dep] == 0 and dep != key:
