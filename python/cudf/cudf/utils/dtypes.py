@@ -102,6 +102,7 @@ def cudf_dtype_to_pa_type(dtype: DtypeObj) -> pa.DataType:
     """Given a cudf pandas dtype, converts it into the equivalent cuDF
     Python dtype.
     """
+    dtype = getattr(dtype, "numpy_dtype", dtype)
     if isinstance(dtype, cudf.CategoricalDtype):
         raise NotImplementedError(
             "No conversion from Categorical to pyarrow type"
@@ -377,7 +378,32 @@ def is_dtype_obj_numeric(
         return is_non_decimal
 
 
+def pyarrow_dtype_to_cudf_dtype(dtype: pa.DataType) -> DtypeObj:
+    """Given a pyarrow dtype, converts it into the equivalent cudf pandas
+    dtype.
+    """
+
+    pyarrow_dtype = dtype.pyarrow_dtype
+    if isinstance(pyarrow_dtype, pa.Decimal128Type):
+        return cudf.Decimal128Dtype.from_arrow(pyarrow_dtype)
+    elif isinstance(pyarrow_dtype, pa.Decimal64Type):
+        return cudf.Decimal64Dtype.from_arrow(pyarrow_dtype)
+    elif isinstance(pyarrow_dtype, pa.Decimal32Type):
+        return cudf.Decimal32Dtype.from_arrow(pyarrow_dtype)
+    elif isinstance(pyarrow_dtype, pa.ListType):
+        return cudf.ListDtype.from_arrow(pyarrow_dtype)
+    elif isinstance(pyarrow_dtype, pa.StructType):
+        return cudf.StructDtype.from_arrow(pyarrow_dtype)
+    elif isinstance(pyarrow_dtype, pa.DataType):
+        return pyarrow_dtype.to_pandas_dtype()
+    else:
+        raise TypeError(f"Unsupported Arrow type: {pyarrow_dtype}")
+
+
 def dtype_to_pylibcudf_type(dtype) -> plc.DataType:
+    # if cudf.get_option("mode.pandas_compatible"):
+    if isinstance(dtype, pd.ArrowDtype):
+        dtype = pyarrow_dtype_to_cudf_dtype(dtype)
     if isinstance(dtype, cudf.ListDtype):
         return plc.DataType(plc.TypeId.LIST)
     elif isinstance(dtype, cudf.StructDtype):

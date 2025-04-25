@@ -781,9 +781,9 @@ class CategoricalColumn(column.ColumnBase):
         arrow_type: bool = False,
     ) -> pd.Index:
         # Check if dtype is a pandas extension dtype directly
-        if arrow_type or isinstance(self.dtype, pd.ArrowDtype):
-            return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
-        elif nullable:
+        # if arrow_type or isinstance(self.dtype, pd.ArrowDtype):
+        #     return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
+        if nullable:
             raise NotImplementedError(f"{arrow_type=} is not implemented.")
 
         if self.categories.dtype.kind == "f":
@@ -813,7 +813,10 @@ class CategoricalColumn(column.ColumnBase):
         data = pd.Categorical.from_codes(
             codes, categories=cats.to_pandas(), ordered=col.ordered
         )
-        return pd.Index(data)
+        res = pd.Index(data)
+        if isinstance(self.dtype, pd.ArrowDtype):
+            res = res.astype(self.dtype)
+        return res
 
     @property
     def values_host(self) -> np.ndarray:

@@ -674,11 +674,18 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         if arrow_type or isinstance(self.dtype, pd.ArrowDtype):
             return pd.Index(pd.arrays.ArrowExtensionArray(pa_array))
         elif (
-            nullable
-            or isinstance(self.dtype, pd.core.dtypes.dtypes.ExtensionDtype)
-        ) and (
-            pandas_nullable_dtype := np_dtypes_to_pandas_dtypes.get(self.dtype)
-        ) is not None:
+            (
+                nullable
+                or isinstance(self.dtype, pd.core.dtypes.dtypes.ExtensionDtype)
+            )
+            and isinstance(
+                pandas_nullable_dtype := np_dtypes_to_pandas_dtypes.get(
+                    self.dtype, self.dtype
+                ),
+                pd.core.dtypes.dtypes.ExtensionDtype,
+            )
+            and hasattr(pandas_nullable_dtype, "__from_arrow__")
+        ):
             pandas_array = pandas_nullable_dtype.__from_arrow__(pa_array)
             return pd.Index(pandas_array, copy=False)
         else:
@@ -2750,13 +2757,14 @@ def as_column(
                 dtype=dtype,
                 length=length,
             )
-            # Store pandas extension dtype directly in the column's dtype property
-            if isinstance(arbitrary.dtype, pd.ArrowDtype):
-                result._dtype = arbitrary.dtype
-            elif isinstance(
-                arbitrary.dtype, pd.core.dtypes.dtypes.ExtensionDtype
-            ):
-                result._dtype = arbitrary.dtype
+            if cudf.get_option("mode.pandas_compatible"):
+                # Store pandas extension dtype directly in the column's dtype property
+                if isinstance(arbitrary.dtype, pd.ArrowDtype):
+                    result._dtype = arbitrary.dtype
+                elif isinstance(
+                    arbitrary.dtype, pd.core.dtypes.dtypes.ExtensionDtype
+                ):
+                    result._dtype = arbitrary.dtype
             return result
         elif isinstance(
             arbitrary.dtype, pd.api.extensions.ExtensionDtype

@@ -582,19 +582,34 @@ class NumericalColumn(NumericalBaseColumn):
         Returns true if all the values in self can be
         safely cast to dtype
         """
-        if self.dtype.kind == to_dtype.kind:
-            if self.dtype <= to_dtype:
+        # Convert potential pandas extension dtypes to numpy dtypes
+        # For example, convert Int32Dtype to np.dtype('int32')
+        self_dtype_numpy = (
+            np.dtype(self.dtype.numpy_dtype)
+            if hasattr(self.dtype, "numpy_dtype")
+            else self.dtype
+        )
+        to_dtype_numpy = (
+            np.dtype(to_dtype.numpy_dtype)
+            if hasattr(to_dtype, "numpy_dtype")
+            else to_dtype
+        )
+
+        if self_dtype_numpy.kind == to_dtype_numpy.kind:
+            # Check if self dtype can be safely cast to to_dtype
+            # For same kinds, we can compare the sizes
+            if self_dtype_numpy <= to_dtype_numpy:
                 return True
             else:
                 # Kinds are the same but to_dtype is smaller
-                if "float" in to_dtype.name:
-                    finfo = np.finfo(to_dtype)
+                if "float" in to_dtype_numpy.name:
+                    finfo = np.finfo(to_dtype_numpy)
                     lower_, upper_ = finfo.min, finfo.max
-                elif "int" in to_dtype.name:
-                    iinfo = np.iinfo(to_dtype)
+                elif "int" in to_dtype_numpy.name:
+                    iinfo = np.iinfo(to_dtype_numpy)
                     lower_, upper_ = iinfo.min, iinfo.max
 
-                if self.dtype.kind == "f":
+                if self_dtype_numpy.kind == "f":
                     # Exclude 'np.inf', '-np.inf'
                     not_inf = (self != np.inf) & (self != -np.inf)
                     col = self.apply_boolean_mask(not_inf)
@@ -611,24 +626,26 @@ class NumericalColumn(NumericalBaseColumn):
                 return (min_ >= lower_) and (col.max() < upper_)
 
         # want to cast int to uint
-        elif self.dtype.kind == "i" and to_dtype.kind == "u":
-            i_max_ = np.iinfo(self.dtype).max
-            u_max_ = np.iinfo(to_dtype).max
+        elif self_dtype_numpy.kind == "i" and to_dtype_numpy.kind == "u":
+            i_max_ = np.iinfo(self_dtype_numpy).max
+            u_max_ = np.iinfo(to_dtype_numpy).max
 
             return (self.min() >= 0) and (
                 (i_max_ <= u_max_) or (self.max() < u_max_)
             )
 
         # want to cast uint to int
-        elif self.dtype.kind == "u" and to_dtype.kind == "i":
-            u_max_ = np.iinfo(self.dtype).max
-            i_max_ = np.iinfo(to_dtype).max
+        elif self_dtype_numpy.kind == "u" and to_dtype_numpy.kind == "i":
+            u_max_ = np.iinfo(self_dtype_numpy).max
+            i_max_ = np.iinfo(to_dtype_numpy).max
 
             return (u_max_ <= i_max_) or (self.max() < i_max_)
 
         # want to cast int to float
-        elif self.dtype.kind in {"i", "u"} and to_dtype.kind == "f":
-            info = np.finfo(to_dtype)
+        elif (
+            self_dtype_numpy.kind in {"i", "u"} and to_dtype_numpy.kind == "f"
+        ):
+            info = np.finfo(to_dtype_numpy)
             biggest_exact_int = 2 ** (info.nmant + 1)
             if (self.min() >= -biggest_exact_int) and (
                 self.max() <= biggest_exact_int
@@ -641,10 +658,13 @@ class NumericalColumn(NumericalBaseColumn):
                 ).all()
 
         # want to cast float to int:
-        elif self.dtype.kind == "f" and to_dtype.kind in {"i", "u"}:
+        elif self_dtype_numpy.kind == "f" and to_dtype_numpy.kind in {
+            "i",
+            "u",
+        }:
             if self.nan_count > 0:
                 return False
-            iinfo = np.iinfo(to_dtype)
+            iinfo = np.iinfo(to_dtype_numpy)
             min_, max_ = iinfo.min, iinfo.max
 
             # best we can do is hope to catch it here and avoid compare

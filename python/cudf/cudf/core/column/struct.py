@@ -211,8 +211,8 @@ class StructColumn(ColumnBase):
                 null_count=self.null_count,
             )
         # For pandas dtypes, store them directly in the column's dtype property
-        elif isinstance(
-            dtype, (pd.ArrowDtype, pd.core.dtypes.dtypes.ExtensionDtype)
+        elif isinstance(dtype, pd.ArrowDtype) and isinstance(
+            dtype.pyarrow_dtype, pa.StructType
         ):
             result = self.copy(deep=False)
             result._dtype = dtype

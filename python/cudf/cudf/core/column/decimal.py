@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 import cupy as cp
 import numpy as np
+import pandas as pd
 import pyarrow as pa
 
 import pylibcudf as plc
@@ -29,6 +30,7 @@ from cudf.core.scalar import _to_plc_scalar, pa_scalar_to_plc_scalar
 from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
     cudf_dtype_to_pa_type,
+    pyarrow_dtype_to_cudf_dtype,
 )
 from cudf.utils.utils import pa_mask_buffer_to_mask
 
@@ -372,7 +374,12 @@ class Decimal128Column(DecimalBaseColumn):
         return result
 
     def to_arrow(self) -> pa.Array:
-        return super().to_arrow().cast(self.dtype.to_arrow())
+        if isinstance(self.dtype, pd.ArrowDtype):
+            dtype = pyarrow_dtype_to_cudf_dtype(self.dtype)
+        else:
+            dtype = self.dtype
+
+        return super().to_arrow().cast(dtype.to_arrow())
 
     def _with_type_metadata(
         self: "cudf.core.column.Decimal128Column",

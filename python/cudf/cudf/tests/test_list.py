@@ -145,7 +145,9 @@ def nested_list(request, list_or_struct, leaf_value):
 
 def test_list_dtype_explode(nested_list):
     sr = cudf.Series([nested_list])
-    assert sr.dtype.element_type == sr.explode().dtype
+    ji = sr.explode()
+    # print(ji)
+    assert sr.dtype.element_type == ji.dtype
 
 
 @pytest.mark.parametrize(
