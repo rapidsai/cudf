@@ -30,7 +30,6 @@ def dask_client():
             yield dask_client
 
 
-# @pytest.mark.skip(reason="TODO: Fix these stumpy tests to work with dask")
 def test_1d_distributed(dask_client):
     rng = np.random.default_rng(seed=42)
     ts = pd.Series(rng.random(100))
@@ -38,7 +37,6 @@ def test_1d_distributed(dask_client):
     return stumpy.stumped(dask_client, ts, m)
 
 
-# @pytest.mark.skip(reason="TODO: Fix these stumpy tests to work with dask")
 def test_multidimensional_distributed_timeseries(dask_client):
     rng = np.random.default_rng(seed=42)
     # Each row represents data from a different dimension while each column represents
