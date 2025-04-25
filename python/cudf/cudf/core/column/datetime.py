@@ -859,25 +859,37 @@ class DatetimeColumn(column.ColumnBase):
     def _cast_setitem_value(self, value: Any) -> plc.Scalar | ColumnBase:
         if isinstance(value, (np.str_, np.datetime64)):
             value = pd.Timestamp(value.item())
+        elif isinstance(value, str):
+            value = pd.Timestamp(value)
+        elif value is cudf.NaT:
+            value = None
         return super()._cast_setitem_value(value)
-
-    def indices_of(
-        self, value: ScalarLike
-    ) -> cudf.core.column.NumericalColumn:
-        value = (
-            pd.to_datetime(value)
-            .to_numpy()
-            .astype(self.dtype)
-            .astype(np.dtype(np.int64))
-        )
-        return self.astype(np.dtype(np.int64)).indices_of(value)
 
     @property
     def is_unique(self) -> bool:
         return self.astype(np.dtype(np.int64)).is_unique
 
-    def isin(self, values: Sequence) -> ColumnBase:
-        return cudf.core.tools.datetimes._isin_datetimelike(self, values)
+    def _process_values_for_isin(
+        self, values: Sequence
+    ) -> tuple[ColumnBase, ColumnBase]:
+        lhs, rhs = super()._process_values_for_isin(values)
+        if len(rhs) and rhs.dtype.kind == "O":
+            try:
+                rhs = rhs.astype(lhs.dtype)
+            except ValueError:
+                pass
+            else:
+                warnings.warn(
+                    f"The behavior of 'isin' with dtype={lhs.dtype} and "
+                    "castable values (e.g. strings) is deprecated. In a "
+                    "future version, these will not be considered matching "
+                    "by isin. Explicitly cast to the appropriate dtype before "
+                    "calling isin instead.",
+                    FutureWarning,
+                )
+        elif isinstance(rhs, type(self)):
+            rhs = rhs.astype(lhs.dtype)
+        return lhs, rhs
 
     def can_cast_safely(self, to_dtype: DtypeObj) -> bool:
         if to_dtype.kind == "M":  # type: ignore[union-attr]

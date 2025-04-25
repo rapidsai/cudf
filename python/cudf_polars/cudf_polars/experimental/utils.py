@@ -55,16 +55,14 @@ def _lower_ir_fallback(
     if fallback and msg:
         # Warn/raise the user if any children were collapsed
         # and the "fallback_mode" configuration is not "silent"
-        match fallback_mode := rec.state["config_options"].get(
-            "executor_options.fallback_mode", default="warn"
-        ):
+        match fallback_mode := rec.state["config_options"].executor.fallback_mode:
             case "warn":
                 warnings.warn(msg, stacklevel=2)
             case "raise":
                 raise NotImplementedError(msg)
             case "silent":
                 pass
-            case _:
+            case _:  # pragma: no cover; Should never get here.
                 raise ValueError(
                     f"{fallback_mode} is not a supported 'fallback_mode' "
                     "option. Please use 'warn', 'raise', or 'silent'."

@@ -195,7 +195,7 @@ class TemporalFunction(Expr):
             # must subtract 1 to avoid rolling over to the previous month
             days_to_subtract = plc.binaryop.binary_operation(
                 days_to_subtract,
-                plc.interop.from_arrow(pa.scalar(1, type=pa.int32())),
+                plc.Scalar.from_py(1, plc.DataType(plc.TypeId.INT32)),
                 plc.binaryop.BinaryOperator.SUB,
                 plc.DataType(plc.TypeId.DURATION_DAYS),
             )
@@ -228,7 +228,7 @@ class TemporalFunction(Expr):
             )
             millis_as_micros = plc.binaryop.binary_operation(
                 millis,
-                plc.interop.from_arrow(pa.scalar(1_000, type=pa.int32())),
+                plc.Scalar.from_py(1_000, plc.DataType(plc.TypeId.INT32)),
                 plc.binaryop.BinaryOperator.MUL,
                 plc.DataType(plc.TypeId.INT32),
             )
@@ -251,15 +251,15 @@ class TemporalFunction(Expr):
             )
             millis_as_nanos = plc.binaryop.binary_operation(
                 millis,
-                plc.interop.from_arrow(pa.scalar(1_000_000, type=pa.int32())),
+                plc.Scalar.from_py(1_000_000, plc.DataType(plc.TypeId.INT32)),
                 plc.binaryop.BinaryOperator.MUL,
-                plc.types.DataType(plc.types.TypeId.INT32),
+                plc.DataType(plc.TypeId.INT32),
             )
             micros_as_nanos = plc.binaryop.binary_operation(
                 micros,
-                plc.interop.from_arrow(pa.scalar(1_000, type=pa.int32())),
+                plc.Scalar.from_py(1_000, plc.DataType(plc.TypeId.INT32)),
                 plc.binaryop.BinaryOperator.MUL,
-                plc.types.DataType(plc.types.TypeId.INT32),
+                plc.DataType(plc.TypeId.INT32),
             )
             total_nanos = plc.binaryop.binary_operation(
                 nanos,

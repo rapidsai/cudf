@@ -57,7 +57,6 @@ from cudf.core.indexed_frame import (
 from cudf.core.resample import SeriesResampler
 from cudf.core.single_column_frame import SingleColumnFrame
 from cudf.core.udf.scalar_function import _get_scalar_kernel
-from cudf.errors import MixedTypeError
 from cudf.utils import docutils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
@@ -66,7 +65,6 @@ from cudf.utils.dtypes import (
     find_common_type,
     is_dtype_obj_numeric,
     is_mixed_with_object_dtype,
-    to_cudf_compatible_scalar,
 )
 from cudf.utils.performance_tracking import _performance_tracking
 
@@ -197,78 +195,44 @@ class _SeriesIlocIndexer(_FrameIndexer):
         if isinstance(key, tuple):
             key = list(key)
 
-        # coerce value into a scalar or column
-        if is_scalar(value):
-            value = to_cudf_compatible_scalar(value)
-            if (
-                self._frame.dtype.kind not in "mM"
-                and cudf.utils.utils._isnat(value)
-                and not (
-                    self._frame.dtype == "object" and isinstance(value, str)
-                )
-            ):
-                raise MixedTypeError(
-                    f"Cannot assign {value=} to non-datetime/non-timedelta "
-                    "columns"
-                )
-            elif (
-                not (
-                    self._frame.dtype.kind == "f"
-                    or (
-                        isinstance(self._frame.dtype, cudf.CategoricalDtype)
-                        and self._frame.dtype.categories.dtype.kind == "f"
-                    )
-                )
-                and isinstance(value, np.floating)
-                and np.isnan(value)
-            ):
-                raise MixedTypeError(
-                    f"Cannot assign {value=} to "
-                    f"non-float dtype={self._frame.dtype}"
-                )
-            elif self._frame.dtype.kind == "b" and not (
-                value in {None, cudf.NA}
-                or isinstance(value, (np.bool_, bool))
-                or (isinstance(value, cudf.Scalar) and value.dtype.kind == "b")
-            ):
-                raise MixedTypeError(
-                    f"Cannot assign {value=} to bool dtype={self._frame.dtype}"
-                )
-        elif not (
-            isinstance(value, (list, dict))
-            and isinstance(
-                self._frame.dtype, (cudf.ListDtype, cudf.StructDtype)
-            )
-        ):
-            value = as_column(value)
-
         if (
-            (self._frame.dtype.kind in "uifb" or self._frame.dtype == "object")
-            and hasattr(value, "dtype")
-            and value.dtype.kind in "uifb"
+            self._frame.dtype.kind in "uifb"
+            or self._frame.dtype == CUDF_STRING_DTYPE
         ):
             # normalize types if necessary:
             # In contrast to Column.__setitem__ (which downcasts the value to
             # the dtype of the column) here we upcast the series to the
             # larger data type mimicking pandas
-            to_dtype = find_common_type((value.dtype, self._frame.dtype))
-            value = value.astype(to_dtype)
-            if to_dtype != self._frame.dtype:
-                # Do not remove until pandas-3.0 support is added.
-                assert PANDAS_LT_300, (
-                    "Need to drop after pandas-3.0 support is added."
-                )
-                warnings.warn(
-                    f"Setting an item of incompatible dtype is deprecated "
-                    "and will raise in a future error of pandas. "
-                    f"Value '{value}' has dtype incompatible with "
-                    f"{self._frame.dtype}, "
-                    "please explicitly cast to a compatible dtype first.",
-                    FutureWarning,
-                )
-                self._frame._column._mimic_inplace(
-                    self._frame._column.astype(to_dtype), inplace=True
-                )
+            if not (value is None or value is cudf.NA or value is np.nan):
+                tmp_value = as_column(value)
+                if tmp_value.dtype.kind in "uifb" and not (
+                    self._frame.dtype.kind == "b"
+                    and tmp_value.dtype.kind != "b"
+                    or self._frame.dtype.kind != "b"
+                    and tmp_value.dtype.kind == "b"
+                ):
+                    to_dtype = find_common_type(
+                        (tmp_value.dtype, self._frame.dtype)
+                    )
+                    tmp_value = tmp_value.astype(to_dtype)
+                    if to_dtype != self._frame.dtype:
+                        # Do not remove until pandas-3.0 support is added.
+                        assert PANDAS_LT_300, (
+                            "Need to drop after pandas-3.0 support is added."
+                        )
+                        warnings.warn(
+                            f"Setting an item of incompatible dtype is deprecated "
+                            "and will raise in a future error of pandas. "
+                            f"Value '{value}' has dtype incompatible with "
+                            f"{self._frame.dtype}, "
+                            "please explicitly cast to a compatible dtype first.",
+                            FutureWarning,
+                        )
+                        self._frame._column._mimic_inplace(
+                            self._frame._column.astype(to_dtype), inplace=True
+                        )
+                    if is_scalar(value):
+                        value = tmp_value.element_indexing(0)
 
         self._frame._column[key] = value
 
@@ -709,11 +673,9 @@ class Series(SingleColumnFrame, IndexedFrame):
 
         super().__init__({name: column}, index=first_index)
         if second_index is not None:
-            # TODO: This there a better way to do this?
             reindexed = self.reindex(index=second_index, copy=False)
             self._data = reindexed._data
             self._index = second_index
-        self._check_data_index_length_match()
 
     @classmethod
     @_performance_tracking
@@ -1257,7 +1219,7 @@ class Series(SingleColumnFrame, IndexedFrame):
 
             # 0D array (scalar)
             if out.ndim == 0:
-                return to_cudf_compatible_scalar(out)
+                return out.item()
             # 1D array
             elif (
                 # Only allow 1D arrays

@@ -28,6 +28,7 @@ set(cython_sources
     groupby.pyx
     hashing.pyx
     interop.pyx
+    _interop_helpers.pyx
     jit.pyx
     join.pyx
     json.pyx
@@ -53,6 +54,7 @@ set(cython_sources
     types.pyx
     unary.pyx
     utils.pyx
+    utilities.pyx
 )
 set(linked_libraries cudf::cudf)
 rapids_cython_create_modules(
@@ -61,11 +63,13 @@ rapids_cython_create_modules(
   LINKED_LIBRARIES "${linked_libraries}" MODULE_PREFIX pylibcudf_ ASSOCIATED_TARGETS cudf
 )
 
-target_include_directories(pylibcudf_interop PUBLIC "$<BUILD_INTERFACE:${DLPACK_INCLUDE_DIR}>")
-
 include(${rapids-cmake-dir}/export/find_package_root.cmake)
 include(../../../cpp/cmake/thirdparty/get_nanoarrow.cmake)
-target_link_libraries(pylibcudf_interop PUBLIC nanoarrow)
+
+foreach(source interop _interop_helpers table column)
+  target_include_directories(pylibcudf_${source} PUBLIC "$<BUILD_INTERFACE:${DLPACK_INCLUDE_DIR}>")
+  target_link_libraries(pylibcudf_${source} PUBLIC nanoarrow)
+endforeach()
 
 add_subdirectory(libcudf)
 add_subdirectory(strings)
