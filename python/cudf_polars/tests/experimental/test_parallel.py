@@ -139,7 +139,7 @@ def test_synchronous_scheduler():
     )
     q = left.join(right, on="y").group_by("y").agg(pl.col("zz").mean()).sort(by="y")
 
-    config_options = ConfigOptions(engine.config)
+    config_options = ConfigOptions.from_polars_engine(engine)
     ir = Translator(q._ldf.visit(), engine).translate_ir()
     ir, partition_info = lower_ir_graph(ir, config_options)
     graph, key = task_graph(ir, partition_info)

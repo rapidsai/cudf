@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -135,8 +135,8 @@ std::unique_ptr<column> count_re(
  * @endcode
  *
  * Specify an escape character to include either `%` or `_` in the search.
- * The `escape_character` is expected to be either 0 or 1 characters.
- * If more than one character is specified only the first character is used.
+ * The `escape_character` is expected to be either 0 or 1 characters and
+ * is expected to be an ASCII character.
  *
  * @code{.pseudo}
  * Example:
@@ -147,7 +147,8 @@ std::unique_ptr<column> count_re(
  *
  * Any null string entries return corresponding null output column entries.
  *
- * @throw cudf::logic_error if `pattern` or `escape_character` is invalid
+ * @throw std::invalid_argument if `pattern` or `escape_character` is invalid
+ * @throw std::invalid_argument if `escape_character` contains more than on byte
  *
  * @param input Strings instance for this operation
  * @param pattern Like pattern to match within each string
@@ -181,14 +182,13 @@ std::unique_ptr<column> like(
  * @endcode
  *
  * Specify an escape character to include either `%` or `_` in the search.
- * The `escape_character` is expected to be either 0 or 1 characters.
- * If more than one character is specified only the first character is used.
- * The escape character is applied to all patterns.
+ * The `escape_character` is expected to be either 0 or 1 characters and
+ * is expected to be an ASCII character.
  *
  * Any null string entries return corresponding null output column entries.
  *
- * @throw cudf::logic_error if `patterns` contains nulls or `escape_character` is invalid
- * @throw cudf::logic_error if `patterns.size() != input.size()`
+ * @throw std::invalid_argument if `patterns` contains nulls or `escape_character` is invalid
+ * @throw std::invalid_argument if `patterns.size() != input.size()`
  *
  * @param input Strings instance for this operation
  * @param patterns Like patterns to match within each corresponding string
