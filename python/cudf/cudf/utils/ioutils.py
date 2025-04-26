@@ -105,7 +105,7 @@ Examples
 doc_read_avro: Callable = docfmt_partial(docstring=_docstring_read_avro)
 
 _docstring_read_parquet_metadata = """
-Read metadata and schema of a list of Parquet files 
+Read metadata and schema of a list of Parquet files
 
 Parameters
 ----------
