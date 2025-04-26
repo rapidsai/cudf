@@ -2504,9 +2504,11 @@ TEST_F(ParquetMetadataReaderTest, TestBasic)
   EXPECT_EQ(meta.num_rows(), num_rows);
 
   auto const column_chunk_metadata = meta.columnchunk_metadata();
+  // Two leaf columns
   EXPECT_EQ(column_chunk_metadata.size(), 2);
-  EXPECT_EQ(column_chunk_metadata.at("int_col").size(), 1);
-  EXPECT_EQ(column_chunk_metadata.at("float_col").size(), 1);
+  // Check if all leaf columns have num_rowgroups
+  EXPECT_EQ(column_chunk_metadata.at("int_col").size(), meta.num_rowgroups());
+  EXPECT_EQ(column_chunk_metadata.at("float_col").size(), meta.num_rowgroups());
 
   EXPECT_EQ(meta.num_rowgroups_per_file().size(), 1);
   EXPECT_EQ(meta.num_rowgroups_per_file()[0], meta.num_rowgroups());
