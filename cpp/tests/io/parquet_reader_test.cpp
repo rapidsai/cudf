@@ -2503,6 +2503,14 @@ TEST_F(ParquetMetadataReaderTest, TestBasic)
   auto meta = read_parquet_metadata(cudf::io::source_info{filepath});
   EXPECT_EQ(meta.num_rows(), num_rows);
 
+  auto const column_chunk_metadata = meta.columnchunk_metadata();
+  EXPECT_EQ(column_chunk_metadata.size(), 2);
+  EXPECT_EQ(column_chunk_metadata.at("int_col").size(), 1);
+  EXPECT_EQ(column_chunk_metadata.at("float_col").size(), 1);
+
+  EXPECT_EQ(meta.num_rowgroups_per_file().size(), 1);
+  EXPECT_EQ(meta.num_rowgroups_per_file()[0], meta.num_rowgroups());
+
   std::string expected_schema = R"(schema
  int_col
  float_col
@@ -2555,6 +2563,20 @@ TEST_F(ParquetMetadataReaderTest, TestNested)
 
   auto meta = read_parquet_metadata(cudf::io::source_info{filepath});
   EXPECT_EQ(meta.num_rows(), num_rows);
+
+  auto const column_chunk_metadata = meta.columnchunk_metadata();
+  // Four leaf columns
+  EXPECT_EQ(column_chunk_metadata.size(), 4);
+  // Check if all leaf columns are present
+  EXPECT_TRUE(column_chunk_metadata.find("maps.key_value.key") != column_chunk_metadata.end());
+  EXPECT_TRUE(column_chunk_metadata.find("maps.key_value.value") != column_chunk_metadata.end());
+  EXPECT_TRUE(column_chunk_metadata.find("lists.list.element.int_field") !=
+              column_chunk_metadata.end());
+  EXPECT_TRUE(column_chunk_metadata.find("lists.list.element.float_field") !=
+              column_chunk_metadata.end());
+
+  EXPECT_EQ(meta.num_rowgroups_per_file().size(), 1);
+  EXPECT_EQ(meta.num_rowgroups_per_file()[0], meta.num_rowgroups());
 
   std::string expected_schema = R"(schema
  maps

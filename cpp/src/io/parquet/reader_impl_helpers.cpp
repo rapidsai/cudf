@@ -988,7 +988,6 @@ aggregate_reader_metadata::get_column_chunk_metadata() const
         for (auto const& child_idx : schema.children_idx) {
           populate_column_chunk_metadata(col_path, child_idx);
         }
-
         return;
       }
 
@@ -1017,6 +1016,10 @@ aggregate_reader_metadata::get_column_chunk_metadata() const
                                        return colchunk_meta_map;
                                      });
                     });
+      // Check if this column already exists in the map
+      CUDF_EXPECTS(column_chunk_metadata.find(col_path) == column_chunk_metadata.end(),
+                   "Encountered an already mapped leaf column in the schema tree",
+                   std::invalid_argument);
       // Map the collected `ColumnChunkMetaData` fields for this column to its path
       column_chunk_metadata[col_path] = col_chunk_metadatas;
     };
