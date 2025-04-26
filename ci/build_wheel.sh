@@ -10,6 +10,7 @@ source rapids-configure-sccache
 source rapids-date-string
 
 rapids-generate-version > ./VERSION
+rapids-generate-version > ./python/cudf/cudf/VERSION
 
 cd "${package_dir}"
 
