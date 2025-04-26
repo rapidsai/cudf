@@ -3125,6 +3125,10 @@ class DataFrameGroupBy(GroupBy, GetAttrGetItemMixin):
         Series or DataFrame
             Series if the groupby as_index is True, otherwise DataFrame.
 
+        See Also
+        --------
+        SeriesGroupBy.value_counts: Equivalent method on SeriesGroupBy.
+
         Notes
         -----
         - If the groupby as_index is True then the returned Series will have a

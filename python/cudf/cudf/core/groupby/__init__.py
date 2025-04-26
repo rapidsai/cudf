@@ -2,6 +2,7 @@
 
 from cudf.core.groupby.groupby import (
     DataFrameGroupBy,
+    GroupBy,
     Grouper,
     NamedAgg,
     SeriesGroupBy,
@@ -9,6 +10,7 @@ from cudf.core.groupby.groupby import (
 
 __all__ = [
     "DataFrameGroupBy",
+    "GroupBy",
     "Grouper",
     "NamedAgg",
     "SeriesGroupBy",
