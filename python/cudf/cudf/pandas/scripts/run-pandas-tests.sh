@@ -15,6 +15,8 @@
 #   run-pandas-tests.sh --tb=line --report-log=log.json
 #
 # This script creates a `pandas-testing` directory if it doesn't exist
+#
+# If running locally, it's recommended to pass '-m "not slow and not single_cpu and not db"'
 
 set -euo pipefail
 
@@ -22,18 +24,12 @@ set -euo pipefail
 # of Pandas installed.
 PANDAS_VERSION=$(python -c "import pandas; print(pandas.__version__)")
 
-# tests/io/test_clipboard.py::TestClipboard crashes pytest workers (possibly due to fixture patching clipboard functionality)
-PYTEST_IGNORES="--ignore=tests/io/parser/common/test_read_errors.py \
---ignore=tests/io/test_clipboard.py"
-
 mkdir -p pandas-testing
 cd pandas-testing
 
 if [ ! -d "pandas" ]; then
-    git clone https://github.com/pandas-dev/pandas
+    git clone https://github.com/pandas-dev/pandas --depth=1 -b "v${PANDAS_VERSION}" pandas
 fi
-cd pandas && git clean -fdx && git checkout v$PANDAS_VERSION && cd ../
-
 
 if [ ! -d "pandas-tests" ]; then
     # Copy just the tests out of the Pandas source tree.
@@ -134,11 +130,24 @@ and not test_interchange_from_corrected_buffer_dtypes \
 and not test_eof_states \
 and not test_array_tz"
 
-# TODO: Remove "not db" once a postgres & mysql container is set up on the CI
+
+# TODO: Add reason to skip these tests
+TEST_THAT_NEED_REASON_TO_SKIP="not test_groupby_raises_category_on_category \
+and not test_constructor_no_pandas_array \
+and not test_is_monotonic_na \
+and not test_index_contains \
+and not test_frame_op_subclass_nonclass_constructor \
+and not test_round_trip_current \
+and not test_pickle_frame_v124_unpickle_130"
+
+
+PYTEST_IGNORES="--ignore=tests/io/parser/common/test_read_errors.py \
+--ignore=tests/io/test_clipboard.py" # crashes pytest workers (possibly due to fixture patching clipboard functionality)
+
+
 PANDAS_CI="1" timeout 90m python -m pytest -p cudf.pandas \
-    -v -m "not single_cpu and not db" \
-    -k "$TEST_THAT_NEED_MOTO_SERVER and $TEST_THAT_CRASH_PYTEST_WORKERS and not test_groupby_raises_category_on_category and not test_constructor_no_pandas_array and not test_is_monotonic_na and not test_index_contains and not test_index_contains and not test_frame_op_subclass_nonclass_constructor and not test_round_trip_current and not test_pickle_frame_v124_unpickle_130" \
     --import-mode=importlib \
+    -k "$TEST_THAT_NEED_MOTO_SERVER and $TEST_THAT_CRASH_PYTEST_WORKERS and $TEST_THAT_NEED_REASON_TO_SKIP" \
     ${PYTEST_IGNORES} \
     "$@" || [ $? = 1 ]  # Exit success if exit code was 1 (permit test failures but not other errors)
 

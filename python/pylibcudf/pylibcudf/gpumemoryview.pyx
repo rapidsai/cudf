@@ -23,12 +23,13 @@ cdef class gpumemoryview:
                 "the CUDA array interface"
             )
         self.obj = obj
+        self.cai = cai
         # TODO: Need to respect readonly
         self.ptr = cai["data"][0]
 
     @property
     def __cuda_array_interface__(self):
-        return self.obj.__cuda_array_interface__
+        return self.cai
 
     def __len__(self):
         return self.obj.__cuda_array_interface__["shape"][0]

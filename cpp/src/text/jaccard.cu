@@ -37,6 +37,7 @@
 
 #include <cub/cub.cuh>
 #include <cuda/std/functional>
+#include <cuda/std/iterator>
 #include <thrust/binary_search.h>
 #include <thrust/execution_policy.h>
 #include <thrust/iterator/counting_iterator.h>
@@ -290,7 +291,7 @@ CUDF_KERNEL void substring_hash_kernel(cudf::column_device_view const d_strings,
     if (itr < end && cudf::strings::detail::is_begin_utf8_char(*itr)) {
       // resolve substring
       auto const sub_str =
-        cudf::string_view(itr, static_cast<cudf::size_type>(thrust::distance(itr, end)));
+        cudf::string_view(itr, static_cast<cudf::size_type>(cuda::std::distance(itr, end)));
       auto const [bytes, left] = cudf::strings::detail::bytes_to_character_position(sub_str, width);
       // hash only if we have the full width of characters or this is the beginning of the string
       if ((left == 0) || (itr == d_str.data())) { hash = hasher(cudf::string_view(itr, bytes)); }
@@ -377,7 +378,7 @@ std::pair<rmm::device_uvector<uint32_t>, rmm::device_uvector<int64_t>> hash_subs
                           sub_offsets.begin(),
                           sub_offsets.end(),
                           indices.begin());
-      return cudf::detail::make_host_vector_sync(indices, stream);
+      return cudf::detail::make_host_vector(indices, stream);
     }();
 
     // Call segmented sort with the sort sections

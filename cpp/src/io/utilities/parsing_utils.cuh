@@ -30,6 +30,7 @@
 
 #include <rmm/device_uvector.hpp>
 
+#include <cuda/std/iterator>
 #include <cuda/std/limits>
 #include <cuda/std/optional>
 #include <cuda/std/type_traits>
@@ -502,10 +503,10 @@ __inline__ __device__ cuda::std::pair<char const*, char const*> trim_quotes(char
                                                                             char const* end,
                                                                             char quotechar)
 {
-  if ((thrust::distance(begin, end) >= 2 && *begin == quotechar &&
-       *thrust::prev(end) == quotechar)) {
-    thrust::advance(begin, 1);
-    thrust::advance(end, -1);
+  if ((cuda::std::distance(begin, end) >= 2 && *begin == quotechar &&
+       *cuda::std::prev(end) == quotechar)) {
+    cuda::std::advance(begin, 1);
+    cuda::std::advance(end, -1);
   }
   return {begin, end};
 }

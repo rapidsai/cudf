@@ -176,12 +176,7 @@ def test_init_via_list_of_empty_tuples(rows):
     pdf = pd.DataFrame(data)
     gdf = cudf.DataFrame(data)
 
-    assert_eq(
-        pdf,
-        gdf,
-        check_like=True,
-        check_index_type=False,
-    )
+    assert_eq(pdf, gdf)
 
 
 @pytest.mark.parametrize(
@@ -10736,7 +10731,7 @@ def test_dataframe_constructor_unbounded_sequence():
 
 def test_dataframe_constructor_dataframe_list():
     df = cudf.DataFrame(range(2))
-    with pytest.raises(ValueError):
+    with pytest.raises(TypeError):
         cudf.DataFrame([df])
 
 
@@ -11248,7 +11243,7 @@ def test_dataframe_init_column():
     with pytest.raises(TypeError):
         cudf.DataFrame(s._column)
     expect = cudf.DataFrame({"a": s})
-    actual = cudf.DataFrame._from_arrays(s._column, columns=["a"])
+    actual = cudf.DataFrame([1, 2, 3], columns=["a"])
     assert_eq(expect, actual)
 
 
@@ -11315,3 +11310,58 @@ def test_dataframe_midx_columns_loc():
 
     assert_eq(expected, actual)
     assert_eq(df, pdf)
+
+
+@pytest.mark.parametrize(
+    "shape",
+    [
+        (0, 3),
+        (3, 0),
+        (0, 0),
+    ],
+)
+def test_construct_zero_axis_ndarray(shape):
+    arr = np.empty(shape, dtype=np.float64)
+    result = cudf.DataFrame(arr)
+    expected = pd.DataFrame(arr)
+    assert_eq(result, expected)
+
+
+def test_construct_dict_scalar_values_raises():
+    data = {"a": 1, "b": "2"}
+    with pytest.raises(ValueError):
+        pd.DataFrame(data)
+    with pytest.raises(ValueError):
+        cudf.DataFrame(data)
+
+
+@pytest.mark.parametrize("columns", [None, [3, 4]])
+@pytest.mark.parametrize("index", [None, [1, 2]])
+def test_construct_empty_listlike_index_and_columns(columns, index):
+    result = cudf.DataFrame([], columns=columns, index=index)
+    expected = pd.DataFrame([], columns=columns, index=index)
+    assert_eq(result, expected)
+
+
+def test_rename_reset_label_dtype():
+    data = {1: [2]}
+    col_mapping = {1: "a"}
+    result = cudf.DataFrame(data).rename(columns=col_mapping)
+    expected = pd.DataFrame(data).rename(columns=col_mapping)
+    assert_eq(result, expected)
+
+
+def test_insert_reset_label_dtype():
+    result = cudf.DataFrame({1: [2]})
+    expected = pd.DataFrame({1: [2]})
+    result.insert(1, "a", [2])
+    expected.insert(1, "a", [2])
+    assert_eq(result, expected)
+
+
+def test_setitem_reset_label_dtype():
+    result = cudf.DataFrame({1: [2]})
+    expected = pd.DataFrame({1: [2]})
+    result["a"] = [2]
+    expected["a"] = [2]
+    assert_eq(result, expected)

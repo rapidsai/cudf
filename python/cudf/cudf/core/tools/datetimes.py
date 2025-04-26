@@ -4,7 +4,7 @@ from __future__ import annotations
 import math
 import re
 import warnings
-from typing import TYPE_CHECKING, Literal
+from typing import Literal
 
 import numpy as np
 import pandas as pd
@@ -21,9 +21,6 @@ from cudf.core.buffer import acquire_spill_lock
 from cudf.core.index import ensure_index
 from cudf.core.scalar import pa_scalar_to_plc_scalar
 from cudf.utils.dtypes import CUDF_STRING_DTYPE
-
-if TYPE_CHECKING:
-    from collections.abc import Sequence
 
 # https://github.com/pandas-dev/pandas/blob/2.2.x/pandas/core/tools/datetimes.py#L1112
 _unit_map = {
@@ -725,56 +722,6 @@ class DateOffset:
             # the base offset for faster binary ops.
             return pd.tseries.frequencies.to_offset(pd.Timedelta(**self.kwds))
         return pd.DateOffset(**self.kwds, n=1)
-
-
-def _isin_datetimelike(
-    lhs: column.TimeDeltaColumn | column.DatetimeColumn, values: Sequence
-) -> column.ColumnBase:
-    """
-    Check whether values are contained in the
-    DateTimeColumn or TimeDeltaColumn.
-
-    Parameters
-    ----------
-    lhs : TimeDeltaColumn or DatetimeColumn
-        Column to check whether the `values` exist in.
-    values : set or list-like
-        The sequence of values to test. Passing in a single string will
-        raise a TypeError. Instead, turn a single string into a list
-        of one element.
-
-    Returns
-    -------
-    result: Column
-        Column of booleans indicating if each element is in values.
-    """
-    rhs = None
-    try:
-        rhs = cudf.core.column.as_column(values)
-        was_string = len(rhs) and rhs.dtype.kind == "O"
-
-        if rhs.dtype.kind in {"f", "i", "u"}:
-            return column.as_column(False, length=len(lhs), dtype="bool")
-        rhs = rhs.astype(lhs.dtype)
-        if was_string:
-            warnings.warn(
-                f"The behavior of 'isin' with dtype={lhs.dtype} and "
-                "castable values (e.g. strings) is deprecated. In a "
-                "future version, these will not be considered matching "
-                "by isin. Explicitly cast to the appropriate dtype before "
-                "calling isin instead.",
-                FutureWarning,
-            )
-        res = lhs._isin_earlystop(rhs)
-        if res is not None:
-            return res
-    except ValueError:
-        # pandas functionally returns all False when cleansing via
-        # typecasting fails
-        return column.as_column(False, length=len(lhs), dtype="bool")
-
-    res = lhs._obtain_isin_result(rhs)
-    return res
 
 
 def date_range(

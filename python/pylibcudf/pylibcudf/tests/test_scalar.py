@@ -5,6 +5,7 @@ import pyarrow as pa
 import pytest
 
 import pylibcudf as plc
+from pylibcudf.types import DataType, TypeId
 
 
 @pytest.fixture(scope="module")
@@ -22,6 +23,112 @@ def test_from_py(val):
 
 
 @pytest.mark.parametrize(
+    "val,tid",
+    [
+        (1, TypeId.INT8),
+        (1, TypeId.INT16),
+        (1, TypeId.INT32),
+        (1, TypeId.INT64),
+        (1, TypeId.UINT8),
+        (1, TypeId.UINT16),
+        (1, TypeId.UINT32),
+        (1, TypeId.UINT64),
+        (1, TypeId.FLOAT32),
+        (1.0, TypeId.FLOAT32),
+        (1.5, TypeId.FLOAT64),
+        ("str", TypeId.STRING),
+        (True, TypeId.BOOL8),
+    ],
+)
+def test_from_py_with_dtype(val, tid):
+    dtype = DataType(tid)
+    result = plc.Scalar.from_py(val, dtype)
+    expected = pa.scalar(val).cast(plc.interop.to_arrow(dtype))
+    assert plc.interop.to_arrow(result).equals(expected)
+
+
+@pytest.mark.parametrize(
+    "val,tid,error,msg",
+    [
+        (
+            -1,
+            TypeId.UINT8,
+            ValueError,
+            "Cannot assign negative value to UINT8 scalar",
+        ),
+        (
+            -1,
+            TypeId.UINT16,
+            ValueError,
+            "Cannot assign negative value to UINT16 scalar",
+        ),
+        (
+            -1,
+            TypeId.UINT32,
+            ValueError,
+            "Cannot assign negative value to UINT32 scalar",
+        ),
+        (
+            -1,
+            TypeId.UINT64,
+            ValueError,
+            "Cannot assign negative value to UINT64 scalar",
+        ),
+        (
+            1,
+            TypeId.BOOL8,
+            TypeError,
+            "Cannot convert int to Scalar with dtype BOOL8",
+        ),
+        (
+            "str",
+            TypeId.INT32,
+            TypeError,
+            "Cannot convert str to Scalar with dtype INT32",
+        ),
+        (
+            True,
+            TypeId.INT32,
+            TypeError,
+            "Cannot convert bool to Scalar with dtype INT32",
+        ),
+        (
+            1.5,
+            TypeId.INT32,
+            TypeError,
+            "Cannot convert float to Scalar with dtype INT32",
+        ),
+    ],
+)
+def test_from_py_with_dtype_errors(val, tid, error, msg):
+    dtype = DataType(tid)
+    with pytest.raises(error, match=msg):
+        plc.Scalar.from_py(val, dtype)
+
+
+@pytest.mark.parametrize(
+    "val, tid",
+    [
+        (-(2**7) - 1, TypeId.INT8),
+        (2**7, TypeId.INT8),
+        (2**15, TypeId.INT16),
+        (2**31, TypeId.INT32),
+        (2**63, TypeId.INT64),
+        (2**8, TypeId.UINT8),
+        (2**16, TypeId.UINT16),
+        (2**32, TypeId.UINT32),
+        (2**64, TypeId.UINT64),
+        (float(2**150), TypeId.FLOAT32),
+        (float(-(2**150)), TypeId.FLOAT32),
+    ],
+)
+def test_from_py_overflow_errors(val, tid):
+    dtype = DataType(tid)
+    with pytest.raises(OverflowError, match="out of range"):
+        plc.Scalar.from_py(val, dtype)
+
+
+@pytest.mark.parametrize(
     "val", [datetime.datetime(2020, 1, 1), datetime.timedelta(1), [1], {1: 1}]
 )
 def test_from_py_notimplemented(val):
@@ -29,10 +136,20 @@ def test_from_py_notimplemented(val):
         plc.Scalar.from_py(val)
 
 
-@pytest.mark.parametrize("val", [object, None])
-def test_from_py_typeerror(val):
+def test_from_py_typeerror():
     with pytest.raises(TypeError):
-        plc.Scalar.from_py(val)
+        plc.Scalar.from_py(object)
+
+
+def test_from_py_none_no_type_raises():
+    with pytest.raises(ValueError):
+        plc.Scalar.from_py(None)
+
+
+def test_from_py_none():
+    result = plc.Scalar.from_py(None, plc.DataType(plc.TypeId.STRING))
+    expected = pa.scalar(None, type=pa.string())
+    assert plc.interop.to_arrow(result).equals(expected)
 
 
 @pytest.mark.parametrize(

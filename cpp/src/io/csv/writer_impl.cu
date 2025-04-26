@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -406,7 +406,7 @@ void write_chunked(data_sink* out_sink,
     out_sink->device_write(ptr_all_bytes, total_num_bytes, stream);
   } else {
     // copy the bytes to host to write them out
-    auto const h_bytes = cudf::detail::make_host_vector_sync(
+    auto const h_bytes = cudf::detail::make_host_vector(
       device_span<char const>{ptr_all_bytes, total_num_bytes}, stream);
 
     out_sink->host_write(h_bytes.data(), total_num_bytes);

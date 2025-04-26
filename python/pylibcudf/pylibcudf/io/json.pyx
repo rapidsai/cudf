@@ -718,7 +718,7 @@ cpdef tuple chunked_read_json(
             )
         new_chunk = [
             col for col in TableWithMetadata.from_libcudf(
-                c_result).columns
+                c_result, s).columns
         ]
 
         if len(final_columns) == 0:
@@ -763,7 +763,7 @@ cpdef TableWithMetadata read_json(
     with nogil:
         c_result = move(cpp_read_json(options.c_obj, s.view()))
 
-    return TableWithMetadata.from_libcudf(c_result)
+    return TableWithMetadata.from_libcudf(c_result, s)
 
 
 cdef class JsonWriterOptions:
@@ -936,6 +936,23 @@ cdef class JsonWriterOptionsBuilder:
         Self
         """
         self.c_obj.compression(comptype)
+        return self
+
+    cpdef JsonWriterOptionsBuilder utf8_escaped(self, bool val):
+        """
+        Sets whether to write UTF-8 characters in string fields
+        without escaping them.
+
+        Parameters
+        ----------
+        val : bool
+            If False, disables escaping of UTF-8 characters in output
+
+        Returns
+        -------
+        Self
+        """
+        self.c_obj.utf8_escaped(val)
         return self
 
     cpdef JsonWriterOptions build(self):
