@@ -329,7 +329,7 @@ Timedelta properties
 .. _api.series.str:
 
 String handling
-~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~
 .. currentmodule:: cudf
 .. autosummary::
    :toctree: api/
@@ -462,7 +462,7 @@ the ``Series.cat`` accessor.
 .. _api.series.list:
 
 List handling
-~~~~~~~~~~~~
+~~~~~~~~~~~~~
 .. currentmodule:: cudf
 .. autosummary::
    :toctree: api/
@@ -488,7 +488,7 @@ List handling
 .. _api.series.struct:
 
 Struct handling
-~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~
 .. currentmodule:: cudf
 .. autosummary::
    :toctree: api/

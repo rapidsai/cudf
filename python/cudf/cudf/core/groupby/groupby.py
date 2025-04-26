@@ -11,7 +11,10 @@ from collections import abc
 from functools import cached_property, singledispatch
 from typing import TYPE_CHECKING, Any, Literal
 
+# Needed to make Sphinx happy for typing purposes
+import cupy
 import cupy as cp
+import numpy
 import numpy as np
 import pandas as pd
 import pyarrow as pa
@@ -50,7 +53,7 @@ from cudf.utils.performance_tracking import _performance_tracking
 from cudf.utils.utils import GetAttrGetItemMixin
 
 if TYPE_CHECKING:
-    from collections.abc import Generator, Hashable, Iterable
+    from collections.abc import Generator, Hashable, Iterable, Sequence
 
     from cudf._typing import (
         AggType,
@@ -569,7 +572,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         )
 
     @cached_property
-    def indices(self) -> dict[ScalarLike, cp.ndarray]:
+    def indices(self) -> dict[ScalarLike, cupy.ndarray]:
         """
         Dict {group name -> group indices}.
 
@@ -1435,8 +1438,8 @@ class GroupBy(Serializable, Reducible, Scannable):
         n: int | None = None,
         frac: float | None = None,
         replace: bool = False,
-        weights: abc.Sequence | "cudf.Series" | None = None,
-        random_state: np.random.RandomState | int | None = None,
+        weights: Sequence | "cudf.Series" | None = None,
+        random_state: numpy.random.RandomState | int | None = None,
     ):
         """Return a random sample of items in each group.
 
@@ -2262,7 +2265,7 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         See Also
         --------
-        cudf.core.window.Rolling
+        cudf.core.window.rolling.RollingGroupby
         """
         return cudf.core.window.rolling.RollingGroupby(self, *args, **kwargs)
 
@@ -3122,12 +3125,6 @@ class DataFrameGroupBy(GroupBy, GetAttrGetItemMixin):
         Series or DataFrame
             Series if the groupby as_index is True, otherwise DataFrame.
 
-        See Also
-        --------
-        Series.value_counts: Equivalent method on Series.
-        DataFrame.value_counts: Equivalent method on DataFrame.
-        SeriesGroupBy.value_counts: Equivalent method on SeriesGroupBy.
-
         Notes
         -----
         - If the groupby as_index is True then the returned Series will have a
@@ -3339,7 +3336,7 @@ class DataFrameGroupBy(GroupBy, GetAttrGetItemMixin):
         sharey: bool = False,
         figsize: tuple[float, float] | None = None,
         layout: tuple[int, int] | None = None,
-        bins: int | abc.Sequence[int] = 10,
+        bins: int | Sequence[int] = 10,
         backend: str | None = None,
         legend: bool = False,
         **kwargs,
@@ -3410,7 +3407,7 @@ class SeriesGroupBy(GroupBy):
         ylabelsize: int | None = None,
         yrot: float | None = None,
         figsize: tuple[float, float] | None = None,
-        bins: int | abc.Sequence[int] = 10,
+        bins: int | Sequence[int] = 10,
         backend: str | None = None,
         legend: bool = False,
         **kwargs,
