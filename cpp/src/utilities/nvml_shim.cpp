@@ -28,19 +28,19 @@
 namespace cudf {
 
 namespace {
-template <typename F>
-void get_symbol(std::function<F>& fp, void* lib_handle, char const* symbol)
-{
-  dlerror();  // Clear any previous error
-  fp           = reinterpret_cast<std::decay_t<F>>(dlsym(lib_handle, symbol));
-  auto err_msg = dlerror();  // Check if any error arises
-  CUDF_EXPECTS(err_msg == nullptr, "Failed to find symbol " + std::string(symbol));
-}
-
 template <typename Ret, typename... Args>
-void let_shim_throw(std::function<Ret(Args...)>& fp)
+void initialize_shim_function(std::function<Ret(Args...)>& fp, void* lib_handle, char const* symbol)
 {
-  fp = [](Args...) -> Ret { CUDF_FAIL("NVML shim failed as the shared library does not exist."); };
+  if (lib_handle == nullptr) {
+    fp = [](Args...) -> Ret {
+      CUDF_FAIL("NVML shim failed as the shared library does not exist.");
+    };
+  } else {
+    dlerror();  // Clear any previous error
+    fp           = reinterpret_cast<std::decay_t<Ret(Args...)>>(dlsym(lib_handle, symbol));
+    auto err_msg = dlerror();  // Check if any error arises
+    CUDF_EXPECTS(err_msg == nullptr, "Failed to find symbol " + std::string(symbol));
+  }
 }
 }  // namespace
 
@@ -51,21 +51,17 @@ nvml_shim::nvml_shim()
   if (lib_handle == nullptr) {
     CUDF_LOG_INFO("NVIDIA Management Library (NVML) libnvidia-ml.so.1 cannot be opened; reason: %s",
                   dlerror());
-    let_shim_throw(init);
-    let_shim_throw(shutdown);
-    let_shim_throw(error_string);
-    let_shim_throw(device_get_handle_by_index);
-    let_shim_throw(device_get_field_values);
-    return;
   }
 
-  _shared_library_exists = true;
-  get_symbol(init, lib_handle, "nvmlInit_v2");
-  get_symbol(shutdown, lib_handle, "nvmlShutdown");
-  get_symbol(error_string, lib_handle, "nvmlErrorString");
-  get_symbol(device_get_handle_by_index, lib_handle, "nvmlDeviceGetHandleByIndex_v2");
-  get_symbol(device_get_field_values, lib_handle, "nvmlDeviceGetFieldValues");
+  initialize_shim_function(init, lib_handle, "nvmlInit_v2");
+  initialize_shim_function(shutdown, lib_handle, "nvmlShutdown");
+  initialize_shim_function(error_string, lib_handle, "nvmlErrorString");
+  initialize_shim_function(device_get_handle_by_index, lib_handle, "nvmlDeviceGetHandleByIndex_v2");
+  initialize_shim_function(device_get_field_values, lib_handle, "nvmlDeviceGetFieldValues");
 
+  if (lib_handle == nullptr) { return; }
+
+  _shared_library_exists = true;
   CHECK_NVML(init());
 }
 
