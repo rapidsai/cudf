@@ -35,7 +35,7 @@ dependencies:
 - flatbuffers==24.3.25
 - fsspec>=0.6.0
 - gcc_linux-64=13.*
-- hypothesis<6.131.1
+- hypothesis>=6.131.7
 - identify>=2.5.20
 - ipython
 - jupyter_client
@@ -98,7 +98,6 @@ dependencies:
 - sphinxcontrib-websupport
 - streamz
 - sysroot_linux-64==2.28
-- tokenizers==0.15.2
 - typing_extensions>=4.0.0
 - zlib>=1.2.13
 - zstandard
