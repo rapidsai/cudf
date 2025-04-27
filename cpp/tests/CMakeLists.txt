@@ -58,6 +58,10 @@ function(ConfigureTest CMAKE_TEST_NAME)
                CUDA_STANDARD_REQUIRED ON
   )
 
+  target_compile_definitions(
+    ${CMAKE_TEST_NAME} PRIVATE THRUST_FORCE_32_BIT_OFFSET_TYPE=1 CCCL_AVOID_SORT_UNROLL=1
+  )
+
   target_link_libraries(
     ${CMAKE_TEST_NAME} PRIVATE cudf::cudftestutil_objects nvtx3::nvtx3-cpp
                                $<TARGET_NAME_IF_EXISTS:conda_env> "${_CUDF_TEST_EXTRA_LIBS}"
