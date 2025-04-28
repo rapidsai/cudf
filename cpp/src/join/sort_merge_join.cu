@@ -206,16 +206,16 @@ merge<LargerIterator, SmallerIterator>::operator()(rmm::cuda_stream_view stream,
 
   auto count_matches_it = thrust::transform_iterator(
     match_counts.begin(),
-    cuda::proclaim_return_type<size_type>([] __device__(auto c) { return c ? 1 : 0; }));
+    cuda::proclaim_return_type<size_type>([] __device__(auto c) { return c != 0; }));
   auto const count_matches =
     thrust::reduce(rmm::exec_policy(stream), count_matches_it, count_matches_it + larger_numrows);
   rmm::device_uvector<size_type> nonzero_matches(count_matches, stream, temp_mr);
-  thrust::copy_if(
-    rmm::exec_policy_nosync(stream),
-    thrust::counting_iterator(0),
-    thrust::counting_iterator(0) + larger_numrows,
-    nonzero_matches.begin(),
-    [match_counts = match_counts.begin()] __device__(auto idx) { return match_counts[idx]; });
+  thrust::copy_if(rmm::exec_policy_nosync(stream),
+                  thrust::counting_iterator(0),
+                  thrust::counting_iterator(0) + larger_numrows,
+                  match_counts.begin(),
+                  nonzero_matches.begin(),
+                  cuda::std::identity{});
 
   thrust::exclusive_scan(
     rmm::exec_policy(stream), match_counts.begin(), match_counts.end(), match_counts.begin());
@@ -350,20 +350,13 @@ void sort_merge_join::preprocess_tables(table_view const left,
                                         table_view const right,
                                         rmm::cuda_stream_view stream)
 {
-  // if a table has no nullable column, then there's no preprocessing to be done
-  auto is_nullable_table = [](table_view const& t) {
-    for (auto&& col : t) {
-      if (col.nullable()) { return true; }
-    }
-    return false;
-  };
-
   if (compare_nulls == null_equality::EQUAL) {
     preprocessed_left.tbl_view  = left;
     preprocessed_right.tbl_view = right;
   } else {
-    auto is_left_nullable  = is_nullable_table(left);
-    auto is_right_nullable = is_nullable_table(right);
+    // if a table has no nullable column, then there's no preprocessing to be done
+    auto is_left_nullable  = nullable(left);
+    auto is_right_nullable = nullable(right);
     if (is_left_nullable) {
       preprocessed_left.preprocess_raw_table(stream);
     } else {
