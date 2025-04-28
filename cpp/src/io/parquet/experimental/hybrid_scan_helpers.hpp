@@ -83,7 +83,7 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
    * @param filter AST expression to filter row groups based on bloom filter membership
    * @param stream CUDA stream used for device memory operations and kernel launches
    *
-   * @return Filtered row group indices, if any is filtered, an std::nullopt otherwise
+   * @return Surviving row group indices if any of them are filtered.
    */
   [[nodiscard]] std::optional<std::vector<std::vector<size_type>>> apply_dictionary_filter(
     cudf::host_span<rmm::device_buffer> dictionaries,
