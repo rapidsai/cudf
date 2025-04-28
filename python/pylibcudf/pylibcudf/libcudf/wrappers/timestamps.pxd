@@ -18,7 +18,7 @@ cdef extern from "<chrono>" namespace "cuda::std::chrono" nogil:
         time_point(duration_ms) except +libcudf_exception_handler
         time_point(duration_ns) except +libcudf_exception_handler
         time_point(duration_us) except +libcudf_exception_handler
-    
+
     cdef cppclass system_clock:
         pass
 

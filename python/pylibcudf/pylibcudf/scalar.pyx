@@ -2,7 +2,6 @@
 
 from cpython cimport bool as py_bool, datetime
 from cython cimport no_gc_clear
-from libc.time cimport time_t
 from libc.stdint cimport (
     int8_t,
     int16_t,
@@ -38,15 +37,12 @@ from pylibcudf.libcudf.wrappers.durations cimport (
     duration_us,
     duration_s,
 )
-<<<<<<< Updated upstream
-=======
 from pylibcudf.libcudf.wrappers.timestamps cimport (
     timestamp_s,
     timestamp_ms,
     timestamp_us,
     timestamp_ns,
 )
->>>>>>> Stashed changes
 
 from rmm.pylibrmm.memory_resource cimport get_current_device_resource
 
@@ -209,7 +205,7 @@ def _(py_val: float, dtype: DataType | None):
     else:
         c_dtype = <DataType>dtype
 
-    tid = c_dtype.id()
+    cdef type_id tid = c_dtype.id()
 
     if tid == type_id.FLOAT32:
         if abs(py_val) > numeric_limits[float].max():
@@ -220,7 +216,8 @@ def _(py_val: float, dtype: DataType | None):
         c_obj = make_numeric_scalar(c_dtype.c_obj)
         (<numeric_scalar[double]*>c_obj.get()).set_value(py_val)
     else:
-        raise TypeError(f"Cannot convert float to Scalar with dtype {tid.name}")
+        typ = c_dtype.id()
+        raise TypeError(f"Cannot convert float to Scalar with dtype {typ.name}")
 
     return _new_scalar(move(c_obj), dtype)
 
@@ -235,7 +232,7 @@ def _(py_val: int, dtype: DataType | None):
         return _from_py(float(py_val), dtype)
     else:
         c_dtype = <DataType>dtype
-    tid = c_dtype.id()
+    cdef type_id tid = c_dtype.id()
 
     if tid == type_id.INT8:
         if not (
@@ -302,7 +299,8 @@ def _(py_val: int, dtype: DataType | None):
         (<numeric_scalar[uint64_t]*>c_obj.get()).set_value(py_val)
 
     else:
-        raise TypeError(f"Cannot convert int to Scalar with dtype {tid.name}")
+        typ = c_dtype.id()
+        raise TypeError(f"Cannot convert int to Scalar with dtype {typ.name}")
 
     return _new_scalar(move(c_obj), dtype)
 
@@ -347,7 +345,7 @@ def _(py_val: datetime.timedelta, dtype: DataType | None):
         c_dtype = DataType(type_id.DURATION_MICROSECONDS)
     else:
         c_dtype = <DataType>dtype
-    tid = c_dtype.id()
+    cdef type_id tid = c_dtype.id()
     total_seconds = py_val.total_seconds()
     if tid == type_id.DURATION_NANOSECONDS:
         total_nanoseconds = int(total_seconds * 1_000_000_000)
@@ -386,7 +384,8 @@ def _(py_val: datetime.timedelta, dtype: DataType | None):
         c_duration_s = duration_s(<int64_t>total_seconds)
         (<duration_scalar[duration_s]*>c_obj.get()).set_value(c_duration_s)
     else:
-        raise TypeError(f"Cannot convert timedelta to Scalar with dtype {tid.name}")
+        typ = c_dtype.id()
+        raise TypeError(f"Cannot convert timedelta to Scalar with dtype {typ.name}")
     return _new_scalar(move(c_obj), dtype)
 
 
@@ -406,7 +405,7 @@ def _(py_val: datetime.datetime, dtype: DataType | None):
         c_dtype = DataType(type_id.TIMESTAMP_MICROSECONDS)
     else:
         c_dtype = <DataType>dtype
-    tid = c_dtype.id()
+    cdef type_id tid = c_dtype.id()
     epoch_seconds = py_val.timestamp()
     if tid == type_id.TIMESTAMP_NANOSECONDS:
         epoch_nanoseconds = int(epoch_seconds * 1_000_000_000)
@@ -449,7 +448,8 @@ def _(py_val: datetime.datetime, dtype: DataType | None):
         c_timestamp_s = timestamp_s(c_duration_s)
         (<timestamp_scalar[timestamp_s]*>c_obj.get()).set_value(c_timestamp_s)
     else:
-        raise TypeError(f"Cannot convert timedelta to Scalar with dtype {tid.name}")
+        typ = c_dtype.id()
+        raise TypeError(f"Cannot convert datetime to Scalar with dtype {typ.name}")
     return _new_scalar(move(c_obj), dtype)
 
 
