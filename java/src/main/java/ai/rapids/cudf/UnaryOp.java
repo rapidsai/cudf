@@ -39,8 +39,9 @@ public enum UnaryOp {
   FLOOR(17),
   ABS(18),
   RINT(19),
-  BIT_INVERT(20),
-  NOT(21);
+  BIT_COUNT(20),
+  BIT_INVERT(21),
+  NOT(22);
 
   private static final UnaryOp[] OPS = UnaryOp.values();
   final int nativeId;

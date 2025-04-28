@@ -1335,7 +1335,16 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   }
 
   /**
-   * invert the bits, output is the same type as input.
+   * Count the number of set bit for each integer value.
+   */
+  public final ColumnVector bitCount() {
+    return unaryOp(UnaryOp.BIT_COUNT);
+  }
+
+  /**
+   * Invert the bits, output is the same type as input.
+   * For BOOL8 type, this is equivalent to logical not (UnaryOp.NOT), but this does not
+   * matter since Spark does not support bitwise inverting on boolean type.
    */
   public final ColumnVector bitInvert() {
     return unaryOp(UnaryOp.BIT_INVERT);
