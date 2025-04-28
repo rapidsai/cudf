@@ -460,9 +460,8 @@ class user_datasource_wrapper : public datasource {
 class remote_file_source : public kvikio_source<kvikio::RemoteHandle> {
   static auto create_s3_handle(char const* filepath)
   {
-    auto bucket_and_object_names = kvikio::S3Endpoint::parse_s3_url(filepath);
     return kvikio::RemoteHandle{
-      std::make_unique<kvikio::S3Endpoint>(std::move(bucket_and_object_names))};
+      std::make_unique<kvikio::S3Endpoint>(kvikio::S3Endpoint::parse_s3_url(filepath))};
   }
 
  public:
