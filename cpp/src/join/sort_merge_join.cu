@@ -407,7 +407,7 @@ rmm::device_uvector<size_type> sort_merge_join::preprocessed_table::map_tbl_to_r
   rmm::device_uvector<size_type> tbl_mapping(
     raw_tbl_view.num_rows() - raw_num_nulls.value(), stream, temp_mr);
   thrust::copy_if(
-    rmm::exec_policy(stream),
+    rmm::exec_policy_nosync(stream),
     thrust::counting_iterator<cudf::size_type>(0),
     thrust::counting_iterator<cudf::size_type>(raw_tbl_view.num_rows()),
     tbl_mapping.begin(),
