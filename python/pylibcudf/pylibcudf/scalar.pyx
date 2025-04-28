@@ -38,6 +38,15 @@ from pylibcudf.libcudf.wrappers.durations cimport (
     duration_us,
     duration_s,
 )
+<<<<<<< Updated upstream
+=======
+from pylibcudf.libcudf.wrappers.timestamps cimport (
+    timestamp_s,
+    timestamp_ms,
+    timestamp_us,
+    timestamp_ns,
+)
+>>>>>>> Stashed changes
 
 from rmm.pylibrmm.memory_resource cimport get_current_device_resource
 
@@ -185,7 +194,6 @@ def _(py_val, dtype: DataType | None):
 
 @_from_py.register(dict)
 @_from_py.register(list)
-@_from_py.register(datetime.datetime)
 def _(py_val, dtype: DataType | None):
     raise NotImplementedError(
         f"Conversion from {type(py_val).__name__} is currently not supported."
@@ -377,6 +385,69 @@ def _(py_val: datetime.timedelta, dtype: DataType | None):
         c_obj = make_duration_scalar(c_dtype.c_obj)
         c_duration_s = duration_s(<int64_t>total_seconds)
         (<duration_scalar[duration_s]*>c_obj.get()).set_value(c_duration_s)
+    else:
+        raise TypeError(f"Cannot convert timedelta to Scalar with dtype {tid.name}")
+    return _new_scalar(move(c_obj), dtype)
+
+
+@_from_py.register(datetime.datetime)
+def _(py_val: datetime.datetime, dtype: DataType | None):
+    cdef unique_ptr[scalar] c_obj
+    cdef DataType c_dtype
+    cdef duration_us c_duration_us
+    cdef duration_ns c_duration_ns
+    cdef duration_ms c_duration_ms
+    cdef duration_s c_duration_s
+    cdef timestamp_s c_timestamp_s
+    cdef timestamp_ms c_timestamp_ms
+    cdef timestamp_us c_timestamp_us
+    cdef timestamp_ns c_timestamp_ns
+    if dtype is None:
+        c_dtype = DataType(type_id.TIMESTAMP_MICROSECONDS)
+    else:
+        c_dtype = <DataType>dtype
+    tid = c_dtype.id()
+    epoch_seconds = py_val.timestamp()
+    if tid == type_id.TIMESTAMP_NANOSECONDS:
+        epoch_nanoseconds = int(epoch_seconds * 1_000_000_000)
+        if epoch_nanoseconds > numeric_limits[int64_t].max():
+            raise OverflowError(
+                f"{epoch_nanoseconds} nanoseconds out of range for INT64 limit."
+            )
+        c_obj = make_timestamp_scalar(c_dtype.c_obj)
+        c_duration_ns = duration_ns(<int64_t>epoch_nanoseconds)
+        c_timestamp_ns = timestamp_ns(c_duration_ns)
+        (<timestamp_scalar[timestamp_ns]*>c_obj.get()).set_value(c_timestamp_ns)
+    elif tid == type_id.TIMESTAMP_MICROSECONDS:
+        epoch_microseconds = int(epoch_seconds * 1_000_000)
+        if epoch_microseconds > numeric_limits[int64_t].max():
+            raise OverflowError(
+                f"{epoch_microseconds} microseconds out of range for INT64 limit."
+            )
+        c_obj = make_timestamp_scalar(c_dtype.c_obj)
+        c_duration_us = duration_us(<int64_t>epoch_microseconds)
+        c_timestamp_us = timestamp_us(c_duration_us)
+        (<timestamp_scalar[timestamp_us]*>c_obj.get()).set_value(c_timestamp_us)
+    elif tid == type_id.TIMESTAMP_MILLISECONDS:
+        epoch_milliseconds = int(epoch_seconds * 1_000)
+        if epoch_milliseconds > numeric_limits[int64_t].max():
+            raise OverflowError(
+                f"{epoch_milliseconds} milliseconds out of range for INT64 limit."
+            )
+        c_obj = make_timestamp_scalar(c_dtype.c_obj)
+        c_duration_ms = duration_ms(<int64_t>epoch_milliseconds)
+        c_timestamp_ms = timestamp_ms(c_duration_ms)
+        (<timestamp_scalar[timestamp_ms]*>c_obj.get()).set_value(c_timestamp_ms)
+    elif tid == type_id.TIMESTAMP_SECONDS:
+        epoch_seconds = int(epoch_seconds)
+        if epoch_seconds > numeric_limits[int64_t].max():
+            raise OverflowError(
+                f"{epoch_seconds} seconds out of range for INT64 limit."
+            )
+        c_obj = make_timestamp_scalar(c_dtype.c_obj)
+        c_duration_s = duration_s(<int64_t>epoch_seconds)
+        c_timestamp_s = timestamp_s(c_duration_s)
+        (<timestamp_scalar[timestamp_s]*>c_obj.get()).set_value(c_timestamp_s)
     else:
         raise TypeError(f"Cannot convert timedelta to Scalar with dtype {tid.name}")
     return _new_scalar(move(c_obj), dtype)
