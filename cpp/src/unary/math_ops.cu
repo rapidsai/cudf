@@ -209,17 +209,31 @@ struct DeviceRInt {
   }
 };
 
-// bitwise op
+struct DeviceBitCount {
+  template <typename T>
+  __device__ int operator()(T data)
+  {
+    // Convert to unsigned of the same width to handle negative numbers correctly as right shift
+    // on unsigned types is always zero fill.
+    using UnsignedT = std::make_unsigned_t<T>;
+    auto x          = static_cast<UnsignedT>(data);
 
-struct DeviceInvert {
+    int32_t count = 0;
+    while (x) {
+      count += x & 1;
+      x >>= 1;
+    }
+    return count;
+  }
+};
+
+struct DeviceBitInvert {
   template <typename T>
   __device__ T operator()(T data)
   {
     return ~data;
   }
 };
-
-// logical op
 
 struct DeviceNot {
   template <typename T>
@@ -434,6 +448,46 @@ struct MathOpDispatcher {
 };
 
 template <typename UFN>
+struct BitwiseCountDispatcher {
+ private:
+  template <typename T>
+  static constexpr bool is_supported()
+  {
+    return std::is_integral_v<T>;
+  }
+
+ public:
+  template <typename T, std::enable_if_t<is_supported<T>()>* = nullptr>
+  std::unique_ptr<cudf::column> operator()(cudf::column_view const& input,
+                                           rmm::cuda_stream_view stream,
+                                           rmm::device_async_resource_ref mr)
+  {
+    if (input.type().id() == type_id::DICTIONARY32) {
+      auto dictionary_view = cudf::column_device_view::create(input, stream);
+      auto dictionary_itr  = dictionary::detail::make_dictionary_iterator<T>(*dictionary_view);
+      return transform_fn<int32_t, UFN>(dictionary_itr,
+                                        dictionary_itr + input.size(),
+                                        cudf::detail::copy_bitmask(input, stream, mr),
+                                        input.null_count(),
+                                        stream,
+                                        mr);
+    }
+    return transform_fn<int32_t, UFN>(input.begin<T>(),
+                                      input.end<T>(),
+                                      cudf::detail::copy_bitmask(input, stream, mr),
+                                      input.null_count(),
+                                      stream,
+                                      mr);
+  }
+
+  template <typename T, typename... Args>
+  std::enable_if_t<!is_supported<T>(), std::unique_ptr<cudf::column>> operator()(Args&&...)
+  {
+    CUDF_FAIL("Unsupported datatype for operation");
+  }
+};
+
+template <typename UFN>
 struct LogicalOpDispatcher {
  private:
   template <typename T>
@@ -579,9 +633,12 @@ std::unique_ptr<cudf::column> unary_operation(cudf::column_view const& input,
     case cudf::unary_operator::RINT:
       return cudf::type_dispatcher(
         dispatch_type, MathOpDispatcher<DeviceRInt, FloatOnlyOps>{}, input, stream, mr);
+    case cudf::unary_operator::BIT_COUNT:
+      return cudf::type_dispatcher(
+        dispatch_type, detail::BitwiseCountDispatcher<DeviceBitCount>{}, input, stream, mr);
     case cudf::unary_operator::BIT_INVERT:
       return cudf::type_dispatcher(
-        dispatch_type, MathOpDispatcher<DeviceInvert, BitWiseOps>{}, input, stream, mr);
+        dispatch_type, MathOpDispatcher<DeviceBitInvert, BitWiseOps>{}, input, stream, mr);
     case cudf::unary_operator::NOT:
       return cudf::type_dispatcher(
         dispatch_type, detail::LogicalOpDispatcher<DeviceNot>{}, input, stream, mr);
