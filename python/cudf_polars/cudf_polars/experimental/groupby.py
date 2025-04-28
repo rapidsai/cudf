@@ -153,9 +153,14 @@ def _(
     # Check if we are dealing with any high-cardinality columns
     post_aggregation_count = 1  # Default tree reduction
     groupby_key_columns = [ne.name for ne in ir.keys]
+
+    assert ir.config_options.executor.name == "streaming", (
+        "'in-memory' executor not supported in 'generate_ir_tasks'"
+    )
+
     cardinality_factor = {
         c: min(f, 1.0)
-        for c, f in ir.config_options.get("executor_options.cardinality_factor").items()
+        for c, f in ir.config_options.executor.cardinality_factor.items()
         if c in groupby_key_columns
     }
     if cardinality_factor:
@@ -223,7 +228,11 @@ def _(
         partition_info[gb_inter] = PartitionInfo(count=post_aggregation_count)
     else:
         # N-ary tree reduction
-        n_ary = ir.config_options.get("executor_options.groupby_n_ary", default=32)
+        assert ir.config_options.executor.name == "streaming", (
+            "'in-memory' executor not supported in 'generate_ir_tasks'"
+        )
+
+        n_ary = ir.config_options.executor.groupby_n_ary
         count = child_count
         gb_inter = gb_pwise
         while count > 1:
