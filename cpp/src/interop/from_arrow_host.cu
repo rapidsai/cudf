@@ -252,6 +252,10 @@ std::unique_ptr<column> dispatch_copy_from_arrow_host::operator()<cudf::list_vie
   ArrowSchemaView view;
   NANOARROW_THROW_NOT_OK(ArrowSchemaViewInit(&view, offset_schema.get(), nullptr));
 
+  CUDF_EXPECTS(input->length + input->offset + 1 <=
+                 static_cast<std::int64_t>(std::numeric_limits<cudf::size_type>::max()),
+               "Total number of rows in Arrow column exceeds the column size limit.",
+               std::overflow_error);
   size_type const physical_length = input->length + input->offset + 1;
 
   auto offsets_column = [&] {
