@@ -209,7 +209,7 @@ std::unique_ptr<cudf::column> resolve_duplicates_fn(
     dup_indices.begin(),
     [d_sizes = sizes.data()] __device__(cudf::size_type idx) -> bool { return d_sizes[idx] == 0; });
   auto end = thrust::remove(rmm::exec_policy(stream), sizes.begin(), sizes.end(), 0);
-  sizes.resize(thrust::distance(sizes.begin(), end), stream);
+  sizes.resize(cuda::std::distance(sizes.begin(), end), stream);
 
   // sort the resulting indices/sizes for overlap filtering
   thrust::sort_by_key(
@@ -226,7 +226,7 @@ std::unique_ptr<cudf::column> resolve_duplicates_fn(
 
   // filter out the remaining non-viable candidates
   duplicates.resize(
-    thrust::distance(
+    cuda::std::distance(
       duplicates.begin(),
       thrust::remove(
         rmm::exec_policy(stream), duplicates.begin(), duplicates.end(), string_index{nullptr, 0})),
@@ -240,14 +240,14 @@ std::unique_ptr<cudf::column> resolve_duplicates_fn(
 
   // ironically remove duplicates from the sorted list
   duplicates.resize(
-    thrust::distance(duplicates.begin(),
-                     thrust::unique(rmm::exec_policy(stream),
-                                    duplicates.begin(),
-                                    duplicates.end(),
-                                    [] __device__(auto lhs, auto rhs) -> bool {
-                                      return cudf::string_view(lhs.first, lhs.second) ==
-                                             cudf::string_view(rhs.first, rhs.second);
-                                    })),
+    cuda::std::distance(duplicates.begin(),
+                        thrust::unique(rmm::exec_policy(stream),
+                                       duplicates.begin(),
+                                       duplicates.end(),
+                                       [] __device__(auto lhs, auto rhs) -> bool {
+                                         return cudf::string_view(lhs.first, lhs.second) ==
+                                                cudf::string_view(rhs.first, rhs.second);
+                                       })),
     stream);
 
   return cudf::strings::detail::make_strings_column(
