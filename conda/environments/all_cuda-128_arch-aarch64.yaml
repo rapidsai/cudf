@@ -13,6 +13,7 @@ dependencies:
 - breathe>=4.35.0
 - c-compiler
 - cachetools
+- certifi
 - clang-tools=16.0.6
 - clang==16.0.6
 - cmake>=3.30.4
@@ -34,7 +35,7 @@ dependencies:
 - flatbuffers==24.3.25
 - fsspec>=0.6.0
 - gcc_linux-aarch64=13.*
-- hypothesis
+- hypothesis>=6.131.7
 - identify>=2.5.20
 - ipython
 - jupyter_client
@@ -47,6 +48,7 @@ dependencies:
 - moto>=4.0.8
 - msgpack-python
 - myst-nb
+- nanoarrow
 - nbconvert
 - nbformat
 - nbsphinx
@@ -95,7 +97,7 @@ dependencies:
 - sphinxcontrib-websupport
 - streamz
 - sysroot_linux-aarch64==2.28
-- tokenizers==0.15.2
 - typing_extensions>=4.0.0
 - zlib>=1.2.13
+- zstandard
 name: all_cuda-128_arch-aarch64

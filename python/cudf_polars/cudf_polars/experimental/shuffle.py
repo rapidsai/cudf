@@ -7,8 +7,6 @@ from __future__ import annotations
 import operator
 from typing import TYPE_CHECKING, Any
 
-import pyarrow as pa
-
 import pylibcudf as plc
 import rmm.mr
 from rmm.pylibrmm.stream import DEFAULT_STREAM
@@ -31,12 +29,12 @@ if TYPE_CHECKING:
 
 
 # Supported shuffle methods
-_SHUFFLE_METHODS = ("rapidsmp", "tasks")
+_SHUFFLE_METHODS = ("rapidsmpf", "tasks")
 
 
-# Experimental rapidsmp shuffler integration
-class RMPIntegration:  # pragma: no cover
-    """cuDF-Polars protocol for rapidsmp shuffler."""
+# Experimental rapidsmpf shuffler integration
+class RMPFIntegration:  # pragma: no cover
+    """cuDF-Polars protocol for rapidsmpf shuffler."""
 
     @staticmethod
     def insert_partition(
@@ -46,7 +44,7 @@ class RMPIntegration:  # pragma: no cover
         shuffler: Any,
     ) -> None:
         """Add cudf-polars DataFrame chunks to an RMP shuffler."""
-        from rapidsmp.shuffler import partition_and_pack
+        from rapidsmpf.shuffler import partition_and_pack
 
         columns_to_hash = tuple(df.column_names.index(val) for val in on)
         packed_inputs = partition_and_pack(
@@ -65,7 +63,7 @@ class RMPIntegration:  # pragma: no cover
         shuffler: Any,
     ) -> DataFrame:
         """Extract a finished partition from the RMP shuffler."""
-        from rapidsmp.shuffler import unpack_and_concat
+        from rapidsmpf.shuffler import unpack_and_concat
 
         shuffler.wait_on(partition_id)
         return DataFrame.from_table(
@@ -152,7 +150,7 @@ def _partition_dataframe(
         plc.hashing.murmurhash3_x86_32(
             DataFrame([expr.evaluate(df) for expr in keys]).table
         ),
-        plc.interop.from_arrow(pa.scalar(count, type="uint32")),
+        plc.Scalar.from_py(count, plc.DataType(plc.TypeId.UINT32)),
         plc.binaryop.BinaryOperator.PYMOD,
         plc.types.DataType(plc.types.TypeId.UINT32),
     )
@@ -235,45 +233,40 @@ def _(
     ir: Shuffle, partition_info: MutableMapping[IR, PartitionInfo]
 ) -> MutableMapping[Any, Any]:
     # Extract "shuffle_method" configuration
-    if (
-        shuffle_method := ir.config_options.get(
-            "executor_options.shuffle_method",
-            default=None,
-        )
-    ) not in (*_SHUFFLE_METHODS, None):  # pragma: no cover
-        raise ValueError(
-            f"{shuffle_method} is not a supported shuffle method. "
-            f"Expected one of: {_SHUFFLE_METHODS}."
-        )
+    assert ir.config_options.executor.name == "streaming", (
+        "'in-memory' executor not supported in 'generate_ir_tasks'"
+    )
 
-    # Try using rapidsmp shuffler if we have "simple" shuffle
-    # keys, and the "shuffle_method" config is set to "rapidsmp"
+    shuffle_method = ir.config_options.executor.shuffle_method
+
+    # Try using rapidsmpf shuffler if we have "simple" shuffle
+    # keys, and the "shuffle_method" config is set to "rapidsmpf"
     _keys: list[Col]
-    if shuffle_method in (None, "rapidsmp") and len(
+    if shuffle_method in (None, "rapidsmpf") and len(
         _keys := [ne.value for ne in ir.keys if isinstance(ne.value, Col)]
     ) == len(ir.keys):  # pragma: no cover
         shuffle_on = [k.name for k in _keys]
         try:
-            from rapidsmp.integrations.dask import rapidsmp_shuffle_graph
+            from rapidsmpf.integrations.dask import rapidsmpf_shuffle_graph
 
-            return rapidsmp_shuffle_graph(
+            return rapidsmpf_shuffle_graph(
                 get_key_name(ir.children[0]),
                 get_key_name(ir),
                 list(ir.schema.keys()),
                 shuffle_on,
                 partition_info[ir.children[0]].count,
                 partition_info[ir].count,
-                RMPIntegration,
+                RMPFIntegration,
             )
         except (ImportError, ValueError) as err:
-            # ImportError: rapidsmp is not installed
-            # ValueError: rapidsmp couldn't find a distributed client
-            if shuffle_method == "rapidsmp":
+            # ImportError: rapidsmpf is not installed
+            # ValueError: rapidsmpf couldn't find a distributed client
+            if shuffle_method == "rapidsmpf":
                 # Only raise an error if the user specifically
-                # set the shuffle method to "rapidsmp"
+                # set the shuffle method to "rapidsmpf"
                 raise ValueError(
                     "Rapidsmp is not installed correctly or the current "
-                    "Dask cluster does not support rapidsmp shuffling."
+                    "Dask cluster does not support rapidsmpf shuffling."
                 ) from err
 
     # Simple task-based fall-back

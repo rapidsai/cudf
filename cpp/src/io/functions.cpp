@@ -48,7 +48,12 @@ compression_type infer_compression_type(compression_type compression, source_inf
 {
   if (compression != compression_type::AUTO) { return compression; }
 
-  if (info.type() != io_type::FILEPATH) { return compression_type::NONE; }
+  if (info.type() != io_type::FILEPATH) {
+    CUDF_LOG_WARN(
+      "Auto detection of compression type is supported only for file type buffers. For other "
+      "buffer types, AUTO compression type assumes uncompressed input.");
+    return compression_type::NONE;
+  }
 
   auto filepath = info.filepaths()[0];
 
@@ -68,6 +73,8 @@ compression_type infer_compression_type(compression_type compression, source_inf
   if (ext == "gz") { return compression_type::GZIP; }
   if (ext == "zip") { return compression_type::ZIP; }
   if (ext == "bz2") { return compression_type::BZIP2; }
+  if (ext == "zstd") { return compression_type::ZSTD; }
+  if (ext == "sz") { return compression_type::SNAPPY; }
   if (ext == "xz") { return compression_type::XZ; }
 
   return compression_type::NONE;

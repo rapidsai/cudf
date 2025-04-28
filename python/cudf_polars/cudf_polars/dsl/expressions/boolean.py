@@ -160,9 +160,7 @@ class BooleanFunction(Expr):
             (child,) = self.children
             is_finite = self.name is BooleanFunction.Name.IsFinite
             if child.dtype.id() not in (plc.TypeId.FLOAT32, plc.TypeId.FLOAT64):
-                value = plc.interop.from_arrow(
-                    pa.scalar(value=is_finite, type=plc.interop.to_arrow(self.dtype))
-                )
+                value = plc.Scalar.from_py(is_finite)
                 return Column(plc.Column.from_scalar(value, df.num_rows))
             needles = child.evaluate(df, context=context, mapping=mapping)
             to_search = [-float("inf"), float("inf")]
@@ -233,48 +231,32 @@ class BooleanFunction(Expr):
             return self._distinct(
                 column,
                 keep=plc.stream_compaction.DuplicateKeepOption.KEEP_FIRST,
-                source_value=plc.interop.from_arrow(
-                    pa.scalar(value=True, type=plc.interop.to_arrow(self.dtype))
-                ),
-                target_value=plc.interop.from_arrow(
-                    pa.scalar(value=False, type=plc.interop.to_arrow(self.dtype))
-                ),
+                source_value=plc.Scalar.from_py(py_val=True, dtype=self.dtype),
+                target_value=plc.Scalar.from_py(py_val=False, dtype=self.dtype),
             )
         elif self.name is BooleanFunction.Name.IsLastDistinct:
             (column,) = columns
             return self._distinct(
                 column,
                 keep=plc.stream_compaction.DuplicateKeepOption.KEEP_LAST,
-                source_value=plc.interop.from_arrow(
-                    pa.scalar(value=True, type=plc.interop.to_arrow(self.dtype))
-                ),
-                target_value=plc.interop.from_arrow(
-                    pa.scalar(value=False, type=plc.interop.to_arrow(self.dtype))
-                ),
+                source_value=plc.Scalar.from_py(py_val=True, dtype=self.dtype),
+                target_value=plc.Scalar.from_py(py_val=False, dtype=self.dtype),
             )
         elif self.name is BooleanFunction.Name.IsUnique:
             (column,) = columns
             return self._distinct(
                 column,
                 keep=plc.stream_compaction.DuplicateKeepOption.KEEP_NONE,
-                source_value=plc.interop.from_arrow(
-                    pa.scalar(value=True, type=plc.interop.to_arrow(self.dtype))
-                ),
-                target_value=plc.interop.from_arrow(
-                    pa.scalar(value=False, type=plc.interop.to_arrow(self.dtype))
-                ),
+                source_value=plc.Scalar.from_py(py_val=True, dtype=self.dtype),
+                target_value=plc.Scalar.from_py(py_val=False, dtype=self.dtype),
             )
         elif self.name is BooleanFunction.Name.IsDuplicated:
             (column,) = columns
             return self._distinct(
                 column,
                 keep=plc.stream_compaction.DuplicateKeepOption.KEEP_NONE,
-                source_value=plc.interop.from_arrow(
-                    pa.scalar(value=False, type=plc.interop.to_arrow(self.dtype))
-                ),
-                target_value=plc.interop.from_arrow(
-                    pa.scalar(value=True, type=plc.interop.to_arrow(self.dtype))
-                ),
+                source_value=plc.Scalar.from_py(py_val=False, dtype=self.dtype),
+                target_value=plc.Scalar.from_py(py_val=True, dtype=self.dtype),
             )
         elif self.name is BooleanFunction.Name.AllHorizontal:
             return Column(
