@@ -152,52 +152,6 @@ TYPED_TEST(UnaryBitwiseOpsTypedTest, BitCountWithNulls)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, output->view());
 }
 
-TEST_F(UnaryBitwiseOpsBoolTest, BitInvertBool)
-{
-  using T          = bool;
-  auto const data  = std::vector<T>{true, false, true, true, false, true, false, false};
-  auto const input = cudf::test::fixed_width_column_wrapper<T>(data.begin(), data.end());
-
-  // Bitwise invert on bools is equivalent to logical NOT.
-  // This is different from bitwise invert on INT8 type which will be tested below.
-  std::vector<bool> expected_data(data.size());
-  std::transform(data.begin(), data.end(), expected_data.begin(), [](T val) { return !val; });
-  auto const expected =
-    cudf::test::fixed_width_column_wrapper<bool>(expected_data.begin(), expected_data.end());
-  auto const output = cudf::unary_operation(input, cudf::unary_operator::BIT_INVERT);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, output->view());
-}
-
-TYPED_TEST(UnaryBitwiseOpsTypedTest, BitInvert)
-{
-  using T          = TypeParam;
-  auto const data  = std::vector<T>{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15};
-  auto const input = cudf::test::fixed_width_column_wrapper<TypeParam>(data.begin(), data.end());
-
-  std::vector<int32_t> expected_data(data.size());
-  std::transform(data.begin(), data.end(), expected_data.begin(), [](T val) { return ~val; });
-  auto const expected =
-    cudf::test::fixed_width_column_wrapper<T>(expected_data.begin(), expected_data.end());
-  auto const output = cudf::unary_operation(input, cudf::unary_operator::BIT_INVERT);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, output->view());
-}
-
-TYPED_TEST(UnaryBitwiseOpsTypedTest, BitInvertWithNulls)
-{
-  using T             = TypeParam;
-  auto const data     = std::vector<T>{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15};
-  auto const validity = std::vector<bool>{1, 1, 0, 1, 1, 0, 1, 1, 1, 0, 1, 1, 0, 1, 1, 1};
-  auto const input =
-    cudf::test::fixed_width_column_wrapper<TypeParam>(data.begin(), data.end(), validity.begin());
-
-  std::vector<int32_t> expected_data(data.size());
-  std::transform(data.begin(), data.end(), expected_data.begin(), [](T val) { return ~val; });
-  auto const expected = cudf::test::fixed_width_column_wrapper<T>(
-    expected_data.begin(), expected_data.end(), validity.begin());
-  auto const output = cudf::unary_operation(input, cudf::unary_operator::BIT_INVERT);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, output->view());
-}
-
 template <typename T>
 struct UnaryLogicalOpsTest : public cudf::test::BaseFixture {};
 

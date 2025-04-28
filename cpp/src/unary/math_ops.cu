@@ -235,13 +235,7 @@ struct DeviceBitCount {
 
 struct DeviceBitInvert {
   template <typename T>
-  std::enable_if_t<std::is_same_v<T, bool>, int32_t> __device__ operator()(T data)
-  {
-    return !data;
-  }
-
-  template <typename T>
-  std::enable_if_t<!std::is_same_v<T, bool>, int32_t> __device__ operator()(T data)
+  __device__ T operator()(T data)
   {
     return ~data;
   }
