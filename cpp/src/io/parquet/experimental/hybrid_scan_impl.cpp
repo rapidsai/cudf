@@ -1137,14 +1137,28 @@ void hybrid_scan_reader_impl::set_page_mask(
   _page_mask             = cudf::detail::make_empty_host_vector<bool>(pass->pages.size(), _stream);
   auto const num_columns = _input_columns.size();
 
+  // Handle the empty page mask case
+  if (data_page_mask.empty()) {
+    std::fill(_page_mask.begin(), _page_mask.end(), true);
+    return;
+  }
+
   std::for_each(
     thrust::counting_iterator<size_t>(0),
     thrust::counting_iterator(_input_columns.size()),
     [&](auto col_idx) {
       auto const& col_page_mask = data_page_mask[col_idx];
       size_t num_inserted_pages = 0;
+
       for (size_t chunk_idx = col_idx; chunk_idx < chunks.size(); chunk_idx += num_columns) {
         if (chunks[chunk_idx].num_dict_pages > 0) { _page_mask.push_back(true); }
+        // If the page mask of a particular column is empty, require all its data pages
+        if (col_page_mask.empty()) {
+          _page_mask.insert(_page_mask.end(), chunks[chunk_idx].num_data_pages, true);
+          num_inserted_pages += chunks[chunk_idx].num_data_pages;
+          continue;
+        }
+        // Otherwise, sanity check the columnpage mask and insert
         CUDF_EXPECTS(col_page_mask.size() >= num_inserted_pages + chunks[chunk_idx].num_data_pages,
                      "Encountered unavailable mask for data pages");
         _page_mask.insert(
