@@ -206,7 +206,7 @@ merge<LargerIterator, SmallerIterator>::operator()(rmm::cuda_stream_view stream,
 
   auto count_matches_it = thrust::transform_iterator(
     match_counts.begin(),
-    cuda::proclaim_return_type<size_type>([] __device__(auto c) { return c != 0; }));
+    cuda::proclaim_return_type<size_type>([] __device__(auto c) -> size_type { return c != 0; }));
   auto const count_matches =
     thrust::reduce(rmm::exec_policy(stream), count_matches_it, count_matches_it + larger_numrows);
   rmm::device_uvector<size_type> nonzero_matches(count_matches, stream, temp_mr);
