@@ -43,6 +43,31 @@ namespace cudf {
 
 namespace {
 
+struct mapping_functor {
+  device_span<size_type> mapping;
+  __device__ size_type operator()(size_type idx) const noexcept { return mapping[idx]; }
+};
+
+struct list_nonnull_filter {
+  bitmask_type* const validity_mask;
+  bitmask_type const* const reduced_validity_mask;
+  device_span<size_type const> child_positions;
+  size_type const subset_offset;
+  __device__ void operator()(size_type idx) const noexcept
+  {
+    if (!bit_is_set(reduced_validity_mask, idx))
+      clear_bit(validity_mask, child_positions[idx + subset_offset]);
+  };
+};
+
+struct raw_tbl_mapper {
+  bitmask_type const* const raw_validity_mask;
+  __device__ auto operator()(size_type idx) const noexcept
+  {
+    return cudf::bit_is_set(raw_validity_mask, idx);
+  }
+};
+
 template <typename LargerIterator, typename SmallerIterator>
 class merge {
  private:
@@ -237,31 +262,6 @@ merge<LargerIterator, SmallerIterator>::operator()(rmm::cuda_stream_view stream,
           std::make_unique<rmm::device_uvector<size_type>>(std::move(larger_indices))};
 }
 
-struct mapping_functor {
-  device_span<size_type> mapping;
-  __device__ size_type operator()(size_type idx) const noexcept { return mapping[idx]; }
-};
-
-struct list_nonnull_filter {
-  bitmask_type* const validity_mask;
-  bitmask_type const* const reduced_validity_mask;
-  device_span<size_type const> child_positions;
-  size_type const subset_offset;
-  __device__ void operator()(size_type idx) const noexcept
-  {
-    if (!bit_is_set(reduced_validity_mask, idx))
-      clear_bit(validity_mask, child_positions[idx + subset_offset]);
-  };
-};
-
-struct raw_tbl_mapper {
-  bitmask_type const* const raw_validity_mask;
-  __device__ auto operator()(size_type idx) const noexcept
-  {
-    return cudf::bit_is_set(raw_validity_mask, idx);
-  }
-};
-
 }  // anonymous namespace
 
 void sort_merge_join::preprocessed_table::populate_nonnull_filter(rmm::cuda_stream_view stream)
@@ -303,7 +303,7 @@ void sort_merge_join::preprocessed_table::populate_nonnull_filter(rmm::cuda_stre
                                               temp_mr);
 
       thrust::for_each(
-        rmm::exec_policy(stream),
+        rmm::exec_policy_nosync(stream),
         thrust::counting_iterator(0),
         thrust::counting_iterator(0) + subset_size,
         list_nonnull_filter{static_cast<bitmask_type*>(validity_mask.data()),
@@ -321,7 +321,7 @@ void sort_merge_join::preprocessed_table::apply_nonnull_filter(rmm::cuda_stream_
 {
   auto temp_mr = cudf::get_current_device_resource_ref();
   // construct bool column to apply mask
-  cudf::scalar_type_t<bool> true_scalar(true);
+  cudf::scalar_type_t<bool> true_scalar(true, true, stream, temp_mr);
   auto bool_mask =
     cudf::make_column_from_scalar(true_scalar, raw_tbl_view.num_rows(), stream, temp_mr);
   CUDF_EXPECTS(raw_validity_mask.has_value() && raw_num_nulls.has_value(),
@@ -435,13 +435,13 @@ void sort_merge_join::postprocess_indices(device_span<size_type> smaller_indices
     if (is_left_nullable) {
       auto left_mapping = preprocessed_left.map_tbl_to_raw(stream);
       if (is_left_smaller) {
-        thrust::transform(rmm::exec_policy(stream),
+        thrust::transform(rmm::exec_policy_nosync(stream),
                           smaller_indices.begin(),
                           smaller_indices.end(),
                           smaller_indices.begin(),
                           mapping_functor{left_mapping});
       } else {
-        thrust::transform(rmm::exec_policy(stream),
+        thrust::transform(rmm::exec_policy_nosync(stream),
                           larger_indices.begin(),
                           larger_indices.end(),
                           larger_indices.begin(),
@@ -451,13 +451,13 @@ void sort_merge_join::postprocess_indices(device_span<size_type> smaller_indices
     if (is_right_nullable) {
       auto right_mapping = preprocessed_right.map_tbl_to_raw(stream);
       if (is_left_smaller) {
-        thrust::transform(rmm::exec_policy(stream),
+        thrust::transform(rmm::exec_policy_nosync(stream),
                           larger_indices.begin(),
                           larger_indices.end(),
                           larger_indices.begin(),
                           mapping_functor{right_mapping});
       } else {
-        thrust::transform(rmm::exec_policy(stream),
+        thrust::transform(rmm::exec_policy_nosync(stream),
                           smaller_indices.begin(),
                           smaller_indices.end(),
                           smaller_indices.begin(),
@@ -485,6 +485,7 @@ sort_merge_join::inner_join(rmm::cuda_stream_view stream, rmm::device_async_reso
               larger.tbl_sorted_order.value()->view().end<size_type>());
     auto [smaller_indices, larger_indices] = obj(stream, mr);
     postprocess_indices(*smaller_indices, *larger_indices, stream);
+    stream.synchronize();
     if (is_left_smaller) { return {std::move(smaller_indices), std::move(larger_indices)}; }
     return {std::move(larger_indices), std::move(smaller_indices)};
   }
@@ -497,6 +498,7 @@ sort_merge_join::inner_join(rmm::cuda_stream_view stream, rmm::device_async_reso
             thrust::counting_iterator(larger.tbl_view.num_rows()));
   auto [smaller_indices, larger_indices] = obj(stream, mr);
   postprocess_indices(*smaller_indices, *larger_indices, stream);
+  stream.synchronize();
   if (is_left_smaller) { return {std::move(smaller_indices), std::move(larger_indices)}; }
   return {std::move(larger_indices), std::move(smaller_indices)};
 }
