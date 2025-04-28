@@ -113,6 +113,7 @@ class TemporalFunction(Expr):
         Name.IsoYear,
         Name.MonthStart,
         Name.MonthEnd,
+        Name.CastTimeUnit,
     }
 
     def __init__(
@@ -148,6 +149,14 @@ class TemporalFunction(Expr):
             for child in self.children
         ]
         (column,) = columns
+        if self.name is TemporalFunction.Name.CastTimeUnit:
+            (unit,) = self.options
+            if plc.traits.is_timestamp(column.obj.type()):
+                dtype = plc.interop.from_arrow(pa.timestamp(unit))
+            elif plc.traits.is_duration(column.obj.type()):
+                dtype = plc.interop.from_arrow(pa.duration(unit))
+            result = plc.unary.cast(column.obj, dtype)
+            return Column(result)
         if self.name == TemporalFunction.Name.ToString:
             return Column(
                 plc.strings.convert.convert_datetime.from_timestamps(
