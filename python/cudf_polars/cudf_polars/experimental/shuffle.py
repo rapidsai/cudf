@@ -237,7 +237,11 @@ def _(
     ir: Shuffle, partition_info: MutableMapping[IR, PartitionInfo]
 ) -> MutableMapping[Any, Any]:
     # Extract "shuffle_method" configuration
-    shuffle_method = ir.config_options.get("executor_options.shuffle_method")
+    assert ir.config_options.executor.name == "streaming", (
+        "'in-memory' executor not supported in 'generate_ir_tasks'"
+    )
+
+    shuffle_method = ir.config_options.executor.shuffle_method
 
     # Try using rapidsmpf shuffler if we have "simple" shuffle
     # keys, and the "shuffle_method" config is set to "rapidsmpf"

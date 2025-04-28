@@ -133,7 +133,12 @@ def task_graph(
 
 def get_scheduler(config_options: ConfigOptions) -> Any:
     """Get appropriate task scheduler."""
-    scheduler = config_options.get("executor_options.scheduler")
+    assert config_options.executor.name == "streaming", (
+        "'in-memory' executor not supported in 'generate_ir_tasks'"
+    )
+
+    scheduler = config_options.executor.scheduler
+
     if (
         scheduler == "distributed"
     ):  # pragma: no cover; block depends on executor type and Distributed cluster
