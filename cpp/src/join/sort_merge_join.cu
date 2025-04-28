@@ -392,6 +392,8 @@ sort_merge_join::sort_merge_join(table_view const& left,
                                  rmm::cuda_stream_view stream)
 {
   // Sanity checks
+  CUDF_EXPECTS(left.num_columns() != 0 && right.num_columns() != 0,
+               "Number of columns must be non-zero for a join");
   CUDF_EXPECTS(left.num_columns() == right.num_columns(),
                "Number of columns must match for a join");
 

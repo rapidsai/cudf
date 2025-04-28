@@ -246,6 +246,26 @@ TEST_P(JoinParameterizedTestSortedInput, SortedKeys)
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*sorted_gold, *sorted_result);
 }
 
+TEST_P(JoinParameterizedTest, InvalidInput)
+{
+  auto algo                  = GetParam();
+  auto const left_first_col  = cudf::test::fixed_width_column_wrapper<int32_t>{1197};
+  auto const left_second_col = cudf::test::strings_column_wrapper{"201812"};
+
+  auto const right_first_col  = cudf::test::fixed_width_column_wrapper<int32_t>{1197};
+  auto const right_second_col = cudf::test::strings_column_wrapper{"201812"};
+  auto const right_third_col  = cudf::test::fixed_width_column_wrapper<int64_t>{2550000371};
+
+  cudf::table_view left({left_first_col, left_second_col});
+  cudf::table_view right({right_first_col, right_second_col, right_third_col});
+
+  EXPECT_THROW(inner_join(left, right, {0, 1}, {0, 1, 2}, cudf::null_equality::EQUAL, algo),
+               cudf::logic_error);
+
+  EXPECT_THROW(inner_join(left, right, {}, {0, 1, 2}, cudf::null_equality::EQUAL, algo),
+               cudf::logic_error);
+}
+
 TEST_P(JoinParameterizedTest, EmptySentinelRepro)
 {
   auto algo = GetParam();
