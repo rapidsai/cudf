@@ -64,7 +64,7 @@ else
         "$(echo "${PYLIBCUDF_WHEELHOUSE}"/pylibcudf_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)"
 fi
 
-python -m pip install ipykernel
+python -m pip install certifi ipykernel
 python -m ipykernel install --user --name python3
 
 # The third-party integration tests are ignored because they are run in a separate nightly CI job
