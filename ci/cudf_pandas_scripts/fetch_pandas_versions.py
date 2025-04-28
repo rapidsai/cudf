@@ -2,15 +2,18 @@
 
 import argparse
 import json
+import ssl
 import urllib.request
 
+import certifi
 from packaging.specifiers import SpecifierSet
 from packaging.version import Version
 
 
 def get_pandas_versions(pandas_range):
     url = "https://pypi.org/pypi/pandas/json"
-    with urllib.request.urlopen(url) as response:
+    ssl_context = ssl.create_default_context(cafile=certifi.where())
+    with urllib.request.urlopen(url, context=ssl_context) as response:
         data = json.loads(response.read())
     versions = [Version(v) for v in data["releases"]]
     specifier = SpecifierSet(pandas_range.lstrip("pandas"))
