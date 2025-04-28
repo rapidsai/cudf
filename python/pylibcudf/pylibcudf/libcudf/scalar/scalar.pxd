@@ -46,6 +46,7 @@ cdef extern from "cudf/scalar/scalar.hpp" namespace "cudf" nogil:
         duration_scalar(int64_t value, bool is_valid) except +libcudf_exception_handler
         duration_scalar(int32_t value) except +libcudf_exception_handler
         duration_scalar(int32_t value, bool is_valid) except +libcudf_exception_handler
+        void set_value(T value) except +libcudf_exception_handler
         int64_t ticks "count"() except +libcudf_exception_handler
         T value() except +libcudf_exception_handler
 

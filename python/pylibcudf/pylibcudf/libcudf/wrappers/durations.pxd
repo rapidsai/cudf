@@ -2,6 +2,8 @@
 
 from libc.stdint cimport int32_t, int64_t
 
+from pylibcudf.exception_handler cimport libcudf_exception_handler
+
 cdef extern from "<ratio>" namespace "std" nogil:
     cdef cppclass milli:
         pass
@@ -12,9 +14,12 @@ cdef extern from "<ratio>" namespace "std" nogil:
     cdef cppclass nano:
         pass
 
+
 cdef extern from "<chrono>" namespace "cuda::std::chrono" nogil:
     cdef cppclass duration[Rep, Period=*]:
-        pass
+        duration() except +libcudf_exception_handler
+        duration(int64_t) except +libcudf_exception_handler
+
 
 cdef extern from "cudf/wrappers/durations.hpp" namespace "cudf" nogil:
     ctypedef int32_t duration_D

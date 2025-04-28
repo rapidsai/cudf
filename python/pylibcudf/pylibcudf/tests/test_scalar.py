@@ -26,6 +26,8 @@ def np():
         "",
         "a1!",
         datetime.datetime(2020, 1, 1),
+        datetime.timedelta(1),
+        datetime.timedelta(days=1, microseconds=1),
     ],
 )
 def test_from_py(val):
@@ -50,6 +52,9 @@ def test_from_py(val):
         (1.5, TypeId.FLOAT64),
         ("str", TypeId.STRING),
         (True, TypeId.BOOL8),
+        (datetime.timedelta(1), TypeId.DURATION_SECONDS),
+        (datetime.timedelta(1), TypeId.DURATION_MILLISECONDS),
+        (datetime.timedelta(1), TypeId.DURATION_NANOSECONDS),
     ],
 )
 def test_from_py_with_dtype(val, tid):
@@ -115,6 +120,10 @@ def test_from_py_with_dtype(val, tid):
             TypeId.INT32,
             TypeError,
             "Cannot convert datetime to Scalar with dtype INT32",
+            datetime.timedelta(days=1, microseconds=1),
+            TypeId.INT32,
+            TypeError,
+            "Cannot convert timedelta to Scalar with dtype INT32",
         ),
     ],
 )
@@ -138,6 +147,8 @@ def test_from_py_with_dtype_errors(val, tid, error, msg):
         (2**64, TypeId.UINT64),
         (float(2**150), TypeId.FLOAT32),
         (float(-(2**150)), TypeId.FLOAT32),
+        (datetime.timedelta.max, TypeId.DURATION_NANOSECONDS),
+        (datetime.timedelta.max, TypeId.DURATION_MICROSECONDS),
     ],
 )
 def test_from_py_overflow_errors(val, tid):
@@ -146,7 +157,7 @@ def test_from_py_overflow_errors(val, tid):
         plc.Scalar.from_py(val, dtype)
 
 
-@pytest.mark.parametrize("val", [[1, 2], datetime.timedelta(1), [1], {1: 1}])
+@pytest.mark.parametrize("val", [[1], {1: 1}])
 def test_from_py_notimplemented(val):
     with pytest.raises(NotImplementedError):
         plc.Scalar.from_py(val)
