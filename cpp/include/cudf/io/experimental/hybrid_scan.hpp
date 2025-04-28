@@ -95,11 +95,11 @@ class hybrid_scan_reader {
   [[nodiscard]] byte_range_info page_index_byte_range() const;
 
   /**
-   * @brief Setup the page index within the Parquet file metadata (`FileMetaData`) for later use
+   * @brief Setup the page index within the Parquet file metadata (`FileMetaData`)
    *
    * Materialize the `ColumnIndex` and `OffsetIndex` structs (collectively called the page index)
-   * within the Parquet file metadata struct. The statistics contained in page index can be used to
-   * prune data pages before decoding
+   * within the Parquet file metadata struct (returned by `parquet_metadata()`). The statistics
+   * contained in page index can be used to prune data pages before decoding.
    *
    * @param page_index_bytes Host span of Parquet page index buffer bytes
    */
