@@ -18,16 +18,23 @@ from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 from pylibcudf.libcudf.scalar.scalar cimport (
     scalar,
+    duration_scalar,
     numeric_scalar,
 )
 from pylibcudf.libcudf.scalar.scalar_factories cimport (
     make_default_constructed_scalar,
+    make_duration_scalar,
     make_empty_scalar_like,
     make_string_scalar,
     make_numeric_scalar,
 )
 from pylibcudf.libcudf.types cimport type_id
-
+from pylibcudf.libcudf.wrappers.durations cimport (
+    duration_ms,
+    duration_ns,
+    duration_us,
+    duration_s,
+)
 
 from rmm.pylibrmm.memory_resource cimport get_current_device_resource
 
@@ -176,7 +183,6 @@ def _(py_val, dtype: DataType | None):
 @_from_py.register(dict)
 @_from_py.register(list)
 @_from_py.register(datetime.datetime)
-@_from_py.register(datetime.timedelta)
 def _(py_val, dtype: DataType | None):
     raise NotImplementedError(
         f"Conversion from {type(py_val).__name__} is currently not supported."
@@ -315,6 +321,61 @@ def _(py_val: str, dtype: DataType | None):
             f"Cannot convert str to Scalar with dtype {tid.name}"
         )
     cdef unique_ptr[scalar] c_obj = make_string_scalar(py_val.encode())
+    return _new_scalar(move(c_obj), dtype)
+
+
+@_from_py.register(datetime.timedelta)
+def _(py_val: datetime.timedelta, dtype: DataType | None):
+    cdef unique_ptr[scalar] c_obj
+    cdef DataType c_dtype
+    cdef duration_us c_duration_us
+    cdef duration_ns c_duration_ns
+    cdef duration_ms c_duration_ms
+    cdef duration_s c_duration_s
+    if dtype is None:
+        c_dtype = DataType(type_id.DURATION_MICROSECONDS)
+    else:
+        c_dtype = <DataType>dtype
+    tid = c_dtype.id()
+    total_seconds = py_val.total_seconds()
+    if tid == type_id.DURATION_NANOSECONDS:
+        total_nanoseconds = int(total_seconds * 1_000_000_000)
+        if total_nanoseconds > numeric_limits[int64_t].max():
+            raise OverflowError(
+                f"{total_nanoseconds} nanoseconds out of range for INT64 limit."
+            )
+        c_obj = make_duration_scalar(c_dtype.c_obj)
+        c_duration_ns = duration_ns(<int64_t>total_nanoseconds)
+        (<duration_scalar[duration_ns]*>c_obj.get()).set_value(c_duration_ns)
+    elif tid == type_id.DURATION_MICROSECONDS:
+        total_microseconds = int(total_seconds * 1_000_000)
+        if total_microseconds > numeric_limits[int64_t].max():
+            raise OverflowError(
+                f"{total_microseconds} microseconds out of range for INT64 limit."
+            )
+        c_obj = make_duration_scalar(c_dtype.c_obj)
+        c_duration_us = duration_us(<int64_t>total_microseconds)
+        (<duration_scalar[duration_us]*>c_obj.get()).set_value(c_duration_us)
+    elif tid == type_id.DURATION_MILLISECONDS:
+        total_milliseconds = int(total_seconds * 1_000)
+        if total_milliseconds > numeric_limits[int64_t].max():
+            raise OverflowError(
+                f"{total_milliseconds} milliseconds out of range for INT64 limit."
+            )
+        c_obj = make_duration_scalar(c_dtype.c_obj)
+        c_duration_ms = duration_ms(<int64_t>total_milliseconds)
+        (<duration_scalar[duration_ms]*>c_obj.get()).set_value(c_duration_ms)
+    elif tid == type_id.DURATION_SECONDS:
+        total_seconds = int(total_seconds)
+        if total_seconds > numeric_limits[int64_t].max():
+            raise OverflowError(
+                f"{total_seconds} seconds out of range for INT64 limit."
+            )
+        c_obj = make_duration_scalar(c_dtype.c_obj)
+        c_duration_s = duration_s(<int64_t>total_seconds)
+        (<duration_scalar[duration_s]*>c_obj.get()).set_value(c_duration_s)
+    else:
+        raise TypeError(f"Cannot convert timedelta to Scalar with dtype {tid.name}")
     return _new_scalar(move(c_obj), dtype)
 
 
