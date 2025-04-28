@@ -241,6 +241,8 @@ struct DeviceBitInvert {
   }
 };
 
+// logical op
+
 struct DeviceNot {
   template <typename T>
   __device__ bool operator()(T data)
@@ -462,6 +464,9 @@ struct BitwiseCountDispatcher {
     return std::is_integral_v<T>;
   }
 
+  // Always use int32_t as output type for bit count.
+  using OutputType = int32_t;
+
  public:
   template <typename T, std::enable_if_t<is_supported<T>()>* = nullptr>
   std::unique_ptr<cudf::column> operator()(cudf::column_view const& input,
@@ -471,19 +476,19 @@ struct BitwiseCountDispatcher {
     if (input.type().id() == type_id::DICTIONARY32) {
       auto dictionary_view = cudf::column_device_view::create(input, stream);
       auto dictionary_itr  = dictionary::detail::make_dictionary_iterator<T>(*dictionary_view);
-      return transform_fn<int32_t, UFN>(dictionary_itr,
-                                        dictionary_itr + input.size(),
-                                        cudf::detail::copy_bitmask(input, stream, mr),
-                                        input.null_count(),
-                                        stream,
-                                        mr);
+      return transform_fn<OutputType, UFN>(dictionary_itr,
+                                           dictionary_itr + input.size(),
+                                           cudf::detail::copy_bitmask(input, stream, mr),
+                                           input.null_count(),
+                                           stream,
+                                           mr);
     }
-    return transform_fn<int32_t, UFN>(input.begin<T>(),
-                                      input.end<T>(),
-                                      cudf::detail::copy_bitmask(input, stream, mr),
-                                      input.null_count(),
-                                      stream,
-                                      mr);
+    return transform_fn<OutputType, UFN>(input.begin<T>(),
+                                         input.end<T>(),
+                                         cudf::detail::copy_bitmask(input, stream, mr),
+                                         input.null_count(),
+                                         stream,
+                                         mr);
   }
 
   template <typename T, typename... Args>
