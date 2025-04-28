@@ -208,9 +208,10 @@ sort_merge_inner_join(cudf::table_view const& left_keys,
                       rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
- * @brief Assumes pre-sorted inputs and performs only the merge step. Returns a pair of row index
- * vectors corresponding to an inner join between the specified tables.
+ * @brief Returns a pair of row index vectors corresponding to an inner join between the specified
+ * tables.
  *
+ * Assumes pre-sorted inputs and performs only the merge step.
  * The first returned vector contains the row indices from the left
  * table that have a match in the right table (in unspecified order).
  * The corresponding values in the second returned vector are
