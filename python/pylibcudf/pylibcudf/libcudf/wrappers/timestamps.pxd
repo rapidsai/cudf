@@ -1,6 +1,4 @@
 # Copyright (c) 2020-2025, NVIDIA CORPORATION.
-from libc.time cimport time_t
-
 from libc.stdint cimport int32_t, int64_t
 from pylibcudf.exception_handler cimport libcudf_exception_handler
 from pylibcudf.libcudf.wrappers.durations cimport (
