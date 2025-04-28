@@ -55,9 +55,7 @@ def _lower_ir_fallback(
     if fallback and msg:
         # Warn/raise the user if any children were collapsed
         # and the "fallback_mode" configuration is not "silent"
-        match fallback_mode := rec.state["config_options"].get(
-            "executor_options.fallback_mode"
-        ):
+        match fallback_mode := rec.state["config_options"].executor.fallback_mode:
             case "warn":
                 warnings.warn(msg, stacklevel=2)
             case "raise":

@@ -40,13 +40,13 @@ def df():
     )
 
 
-def test_hash_shuffle(df, engine):
+def test_hash_shuffle(df: pl.LazyFrame, engine: pl.GPUEngine) -> None:
     # Extract translated IR
     qir = Translator(df._ldf.visit(), engine).translate_ir()
 
     # Add first Shuffle node
     keys = (NamedExpr("x", Col(qir.schema["x"], "x")),)
-    options = ConfigOptions(engine.config)
+    options = ConfigOptions.from_polars_engine(engine)
     qir1 = Shuffle(qir.schema, keys, options, qir)
 
     # Add second Shuffle node (on the same keys)
