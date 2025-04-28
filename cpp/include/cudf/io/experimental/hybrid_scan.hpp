@@ -200,7 +200,8 @@ class hybrid_scan_reader {
    * @brief Materialize filter columns, and updates the input row validity mask to only the rows
    *        that survive the row selection predicate at row level
    *
-   * @param page_mask Boolean vectors indicating data pages are not pruned, one per filter column
+   * @param page_mask Boolean vectors indicating which data pages are not pruned, one per filter
+   *                  column. All data pages considered not pruned if empty
    * @param row_group_indices Input row groups indices
    * @param column_chunk_buffers Device buffers containing column chunk data of filter columns
    * @param[in,out] row_mask Mutable boolean column indicating rows that survive page-pruning
@@ -232,7 +233,7 @@ class hybrid_scan_reader {
    *
    * @param row_group_indices Input row groups indices
    * @param column_chunk_buffers Device buffers containing column chunk data of payload columns
-   * @param row_mask Boolean column indicating which rows need to be read
+   * @param row_mask Boolean column indicating which rows need to be read. All rows read if empty
    * @param options Parquet reader options
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @return Table of materialized payload columns and metadata
