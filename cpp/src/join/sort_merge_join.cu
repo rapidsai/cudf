@@ -261,15 +261,7 @@ merge<LargerIterator, SmallerIterator>::operator()(rmm::cuda_stream_view stream,
                     smaller_indices.begin(),
                     smaller_indices.end(),
                     smaller_indices.begin(),
-                    [sorted_smaller_order = sorted_smaller_order_begin] __device__(auto idx) {
-                      return sorted_smaller_order[idx];
-                    });
-  thrust::transform(
-    rmm::exec_policy_nosync(stream),
-    smaller_indices.begin(),
-    smaller_indices.end(),
-    smaller_indices.begin(),
-    mapping_functor<thrust::counting_iterator<size_type>>{sorted_smaller_order_begin});
+                    mapping_functor<SmallerIterator>{sorted_smaller_order_begin});
 
   stream.synchronize();
   return {std::make_unique<rmm::device_uvector<size_type>>(std::move(smaller_indices)),
