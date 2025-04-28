@@ -211,7 +211,13 @@ struct DeviceRInt {
 
 struct DeviceBitCount {
   template <typename T>
-  __device__ int operator()(T data)
+  std::enable_if_t<std::is_same_v<T, bool>, int32_t> __device__ operator()(T data)
+  {
+    return data ? 1 : 0;
+  }
+
+  template <typename T>
+  std::enable_if_t<!std::is_same_v<T, bool>, int32_t> __device__ operator()(T data)
   {
     // Convert to unsigned of the same width to handle negative numbers correctly as right shift
     // on unsigned types is always zero fill.
@@ -229,7 +235,13 @@ struct DeviceBitCount {
 
 struct DeviceBitInvert {
   template <typename T>
-  __device__ T operator()(T data)
+  std::enable_if_t<std::is_same_v<T, bool>, int32_t> __device__ operator()(T data)
+  {
+    return !data;
+  }
+
+  template <typename T>
+  std::enable_if_t<!std::is_same_v<T, bool>, int32_t> __device__ operator()(T data)
   {
     return ~data;
   }
