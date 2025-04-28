@@ -5952,6 +5952,15 @@ def test_memory_usage_multi(rows):
     assert expect == gdf.index.memory_usage(deep=True)
 
 
+@pytest.mark.parametrize("index", [False, True])
+def test_memory_usage_index_preserve_types(index):
+    data = [[1, 2, 3]]
+    columns = pd.Index(np.array([1, 2, 3], dtype=np.int8), name="a")
+    result = cudf.DataFrame(data, columns=columns).memory_usage(index=index).index
+    expected = pd.DataFrame(data, columns=columns).memory_usage(index=index).index
+    assert_eq(result, expected)
+
+
 @pytest.mark.parametrize(
     "list_input",
     [

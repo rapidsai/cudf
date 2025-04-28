@@ -2753,7 +2753,7 @@ class IndexedFrame(Frame):
 
         return self._mimic_inplace(out, inplace=inplace)
 
-    def memory_usage(self, index=True, deep=False):
+    def memory_usage(self, index: bool = True, deep: bool = False) -> int:
         """Return the memory usage of an object.
 
         Parameters
