@@ -607,16 +607,17 @@ std::vector<thrust::host_vector<bool>> aggregate_reader_metadata::compute_data_p
     return all_valid_data_pages;
   };
 
-  CUDF_EXPECTS(row_mask.size() == total_rows, "Mismatch in total rows");
-  CUDF_EXPECTS(page_row_offsets.back().back() == total_rows, "Mismatch in total rows");
-
-  // Return if all pages are required or all are invalid.
-  if (row_mask.null_count() == row_mask.size() or thrust::all_of(rmm::exec_policy(stream),
-                                                                 row_mask.begin<bool>(),
-                                                                 row_mask.end<bool>(),
-                                                                 thrust::identity<bool>{})) {
+  // Return if row mask is empty or all pages are required or all are invalid.
+  if (row_mask.size() == 0 or row_mask.null_count() == row_mask.size() or
+      thrust::all_of(rmm::exec_policy(stream),
+                     row_mask.begin<bool>(),
+                     row_mask.end<bool>(),
+                     thrust::identity<bool>{})) {
     return all_valid_data_pages();
   }
+
+  CUDF_EXPECTS(page_row_offsets.back().back() == total_rows,
+               "Mismatch in total rows in input row mask and row groups");
 
   auto const total_pages =
     std::accumulate(page_row_offsets.cbegin(),
