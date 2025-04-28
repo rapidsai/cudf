@@ -18,20 +18,17 @@ from typing_extensions import Self
 import pylibcudf as plc
 
 import cudf
-from cudf import _lib as libcudf
 from cudf.api.extensions import no_default
 from cudf.api.types import (
-    _is_non_decimal_numeric_dtype,
     is_dtype_equal,
+    is_hashable,
     is_integer,
     is_list_like,
     is_scalar,
-    is_string_dtype,
 )
 from cudf.core._base_index import BaseIndex, _return_get_indexer_result
 from cudf.core._compat import PANDAS_LT_300
-from cudf.core._internals import copying
-from cudf.core._internals.search import search_sorted
+from cudf.core._internals import search
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import (
     CategoricalColumn,
@@ -49,12 +46,17 @@ from cudf.core.column.string import StringMethods as StringMethods
 from cudf.core.dtypes import IntervalDtype
 from cudf.core.join._join_helpers import _match_join_keys
 from cudf.core.mixins import BinaryOperand
+from cudf.core.scalar import pa_scalar_to_plc_scalar
 from cudf.core.single_column_frame import SingleColumnFrame
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
+    CUDF_STRING_DTYPE,
     SIZE_TYPE_DTYPE,
     _maybe_convert_to_default_type,
+    cudf_dtype_from_pa_type,
+    cudf_dtype_to_pa_type,
     find_common_type,
+    is_dtype_obj_numeric,
     is_mixed_with_object_dtype,
 )
 from cudf.utils.performance_tracking import _performance_tracking
@@ -64,6 +66,7 @@ if TYPE_CHECKING:
     from collections.abc import Generator, Iterable
     from datetime import tzinfo
 
+    from cudf._typing import ColumnLike, Dtype
     from cudf.core.frame import Frame
 
 
@@ -123,17 +126,21 @@ def _lexsorted_equal_range(
     else:
         sort_inds = None
         sort_vals = idx
-    lower_bound = search_sorted(
-        list(sort_vals._columns),
-        keys,
-        side="left",
-        ascending=sort_vals.is_monotonic_increasing,
+    lower_bound = ColumnBase.from_pylibcudf(
+        search.search_sorted(
+            list(sort_vals._columns),
+            keys,
+            side="left",
+            ascending=sort_vals.is_monotonic_increasing,
+        )
     ).element_indexing(0)
-    upper_bound = search_sorted(
-        list(sort_vals._columns),
-        keys,
-        side="right",
-        ascending=sort_vals.is_monotonic_increasing,
+    upper_bound = ColumnBase.from_pylibcudf(
+        search.search_sorted(
+            list(sort_vals._columns),
+            keys,
+            side="right",
+            ascending=sort_vals.is_monotonic_increasing,
+        )
     ).element_indexing(0)
 
     return lower_bound, upper_bound, sort_inds
@@ -226,7 +233,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
     def __init__(
         self, start, stop=None, step=1, dtype=None, copy=False, name=None
     ):
-        if not cudf.api.types.is_hashable(name):
+        if not is_hashable(name):
             raise ValueError("Name must be a hashable value.")
         self._name = name
         if dtype is not None and cudf.dtype(dtype).kind != "i":
@@ -262,9 +269,9 @@ class RangeIndex(BaseIndex, BinaryOperand):
         ascending: bool = True,
         na_position: Literal["first", "last"] = "last",
     ):
-        assert (len(self) <= 1) or (
-            ascending == (self.step > 0)
-        ), "Invalid ascending flag"
+        assert (len(self) <= 1) or (ascending == (self.step > 0)), (
+            "Invalid ascending flag"
+        )
         return search_range(value, self._range, side=side)
 
     def factorize(
@@ -481,6 +488,16 @@ class RangeIndex(BaseIndex, BinaryOperand):
     def equals(self, other) -> bool:
         if isinstance(other, RangeIndex):
             return self._range == other._range
+        elif not isinstance(other, BaseIndex) or len(self) != len(other):
+            return False
+        elif not (
+            is_dtype_obj_numeric(other.dtype)
+            or (
+                isinstance(other, CategoricalIndex)
+                and is_dtype_obj_numeric(other.categories.dtype)
+            )
+        ):
+            return False
         return self._as_int_index().equals(other)
 
     @_performance_tracking
@@ -586,9 +603,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
     @_performance_tracking
     def __mul__(self, other):
         # Multiplication by raw ints must return a RangeIndex to match pandas.
-        if isinstance(other, cudf.Scalar) and other.dtype.kind in "iu":
-            other = other.value
-        elif (
+        if (
             isinstance(other, (np.ndarray, cupy.ndarray))
             and other.ndim == 0
             and other.dtype.kind in "iu"
@@ -921,7 +936,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
             return cupy.arange(len(self))
 
     @_performance_tracking
-    def where(self, cond, other=None, inplace=False):
+    def where(self, cond, other=None, inplace: bool = False) -> Self | None:
         return self._as_int_index().where(cond, other, inplace)
 
     @_performance_tracking
@@ -1218,9 +1233,9 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
         non_empties = [index for index in objs if len(index)]
         if len(objs) != len(non_empties):
             # Do not remove until pandas-3.0 support is added.
-            assert (
-                PANDAS_LT_300
-            ), "Need to drop after pandas-3.0 support is added."
+            assert PANDAS_LT_300, (
+                "Need to drop after pandas-3.0 support is added."
+            )
             warning_msg = (
                 "The behavior of array concatenation with empty entries is "
                 "deprecated. In a future version, this will no longer exclude "
@@ -1280,6 +1295,15 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
         elif other_is_categorical and not self_is_categorical:
             self = self.astype(other.dtype)
             check_dtypes = True
+        elif (
+            not self_is_categorical
+            and not other_is_categorical
+            and not isinstance(other, RangeIndex)
+            and not isinstance(self, type(other))
+        ):
+            # Can compare Index to CategoricalIndex or RangeIndex
+            # Other comparisons are invalid
+            return False
 
         try:
             return self._column.equals(
@@ -1310,8 +1334,8 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
         return type(self)._from_column(col, name=name)
 
     @_performance_tracking
-    def astype(self, dtype, copy: bool = True) -> Index:
-        return super().astype({self.name: dtype}, copy)
+    def astype(self, dtype: Dtype, copy: bool = True) -> Index:
+        return super().astype({self.name: cudf.dtype(dtype)}, copy)
 
     @_performance_tracking
     def get_indexer(self, target, method=None, limit=None, tolerance=None):
@@ -1364,9 +1388,9 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
                 plc.Table([rcol.to_pylibcudf(mode="read")]),
                 plc.types.NullEquality.EQUAL,
             )
-            scatter_map = libcudf.column.Column.from_pylibcudf(left_plc)
-            indices = libcudf.column.Column.from_pylibcudf(right_plc)
-        result = copying.scatter([indices], scatter_map, [result])[0]
+            scatter_map = ColumnBase.from_pylibcudf(left_plc)
+            indices = ColumnBase.from_pylibcudf(right_plc)
+        result = result._scatter_by_column(scatter_map, indices)
         result_series = cudf.Series._from_column(result)
 
         if method in {"ffill", "bfill", "pad", "backfill"}:
@@ -1450,12 +1474,12 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
         if isinstance(preprocess, CategoricalIndex):
             if preprocess.categories.dtype.kind == "f":
                 output = repr(
-                    preprocess.astype("str")
+                    preprocess.astype(CUDF_STRING_DTYPE)
                     .to_pandas()
                     .astype(
                         dtype=pd.CategoricalDtype(
                             categories=preprocess.dtype.categories.astype(
-                                "str"
+                                CUDF_STRING_DTYPE
                             ).to_pandas(),
                             ordered=preprocess.dtype.ordered,
                         )
@@ -1628,14 +1652,6 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
         result = result._with_type_metadata(self.dtype)
         return type(self)._from_column(result, name=self.name)
 
-    @_performance_tracking
-    def where(self, cond, other=None, inplace=False) -> Index:
-        result_col = super().where(cond, other, inplace)
-        return self._mimic_inplace(
-            _index_from_data({self.name: result_col}),
-            inplace=inplace,
-        )
-
     @property
     def values(self) -> cupy.ndarray:
         return self._column.values
@@ -1726,12 +1742,12 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
                 if is_mixed_with_object_dtype(this, other):
                     got_dtype = (
                         other.dtype
-                        if this.dtype == cudf.dtype("object")
+                        if this.dtype == CUDF_STRING_DTYPE
                         else this.dtype
                     )
                     raise TypeError(
                         f"cudf does not support appending an Index of "
-                        f"dtype `{cudf.dtype('object')}` with an Index "
+                        f"dtype `{CUDF_STRING_DTYPE}` with an Index "
                         f"of dtype `{got_dtype}`, please type-cast "
                         f"either one of them to same dtypes."
                     )
@@ -1746,6 +1762,28 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
                 to_concat = [this, other]
 
         return self._concat(to_concat)
+
+    @_performance_tracking
+    def where(self, cond, other=None, inplace: bool = False) -> Self:
+        if getattr(other, "ndim", 1) > 1:
+            raise NotImplementedError(
+                "Only 1 dimensional other is currently supported"
+            )
+        cond = as_column(cond)
+        if len(cond) != len(self):
+            raise ValueError(
+                f"cond must be the same length as self ({len(self)})"
+            )
+
+        if not is_scalar(other):
+            other = as_column(other)
+
+        return self._mimic_inplace(
+            self._from_column(
+                self._column.where(cond, other, inplace), name=self.name
+            ),
+            inplace=inplace,
+        )
 
     def unique(self, level: int | None = None) -> Self:
         if level is not None and level > 0:
@@ -1771,7 +1809,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
     @property
     @_performance_tracking
     def str(self):
-        if is_string_dtype(self.dtype):
+        if self.dtype == CUDF_STRING_DTYPE:
             return StringMethods(parent=self)
         else:
             raise AttributeError(
@@ -2013,7 +2051,7 @@ class DatetimeIndex(Index):
 
     @property
     def asi8(self) -> cupy.ndarray:
-        return self._column.astype("int64").values
+        return self._column.astype(np.dtype(np.int64)).values
 
     @property
     def inferred_freq(self) -> cudf.DateOffset | None:
@@ -2327,7 +2365,8 @@ class DatetimeIndex(Index):
                 # Need to manually promote column to int32 because
                 # pandas-matching binop behaviour requires that this
                 # __mul__ returns an int16 column.
-                self._column.millisecond.astype("int32") * np.int32(1000)
+                self._column.millisecond.astype(np.dtype(np.int32))
+                * np.int32(1000)
             )
             + self._column.microsecond,
             name=self.name,
@@ -2487,7 +2526,9 @@ class DatetimeIndex(Index):
         >>> gIndex.quarter
         Index([2, 4], dtype='int8')
         """
-        return Index._from_column(self._column.quarter.astype("int8"))
+        return Index._from_column(
+            self._column.quarter.astype(np.dtype(np.int8))
+        )
 
     @_performance_tracking
     def day_name(self, locale: str | None = None) -> Index:
@@ -2929,7 +2970,7 @@ class TimedeltaIndex(Index):
 
     @property
     def asi8(self) -> cupy.ndarray:
-        return self._column.astype("int64").values
+        return self._column.astype(np.dtype(np.int64)).values
 
     def sum(self, *, skipna: bool = True, axis: int | None = 0):
         return self._column.sum(skipna=skipna)
@@ -2987,7 +3028,7 @@ class TimedeltaIndex(Index):
         """
         # Need to specifically return `int64` to avoid overflow.
         return Index._from_column(
-            self._column.days.astype("int64"), name=self.name
+            self._column.days.astype(np.dtype(np.int64)), name=self.name
         )
 
     @property  # type: ignore
@@ -2997,7 +3038,7 @@ class TimedeltaIndex(Index):
         Number of seconds (>= 0 and less than 1 day) for each element.
         """
         return Index._from_column(
-            self._column.seconds.astype("int32"), name=self.name
+            self._column.seconds.astype(np.dtype(np.int32)), name=self.name
         )
 
     @property  # type: ignore
@@ -3007,7 +3048,8 @@ class TimedeltaIndex(Index):
         Number of microseconds (>= 0 and less than 1 second) for each element.
         """
         return Index._from_column(
-            self._column.microseconds.astype("int32"), name=self.name
+            self._column.microseconds.astype(np.dtype(np.int32)),
+            name=self.name,
         )
 
     @property  # type: ignore
@@ -3018,7 +3060,7 @@ class TimedeltaIndex(Index):
         element.
         """
         return Index._from_column(
-            self._column.nanoseconds.astype("int32"), name=self.name
+            self._column.nanoseconds.astype(np.dtype(np.int32)), name=self.name
         )
 
     @property  # type: ignore
@@ -3117,15 +3159,15 @@ class CategoricalIndex(Index):
                     "`ordered` together with `dtype`."
                 )
         if copy:
-            data = column.as_column(data, dtype=dtype).copy(deep=True)
+            data = as_column(data, dtype=dtype).copy(deep=True)
         name = _getdefault_name(data, name=name)
         if isinstance(data, CategoricalColumn):
             data = data
         elif isinstance(getattr(data, "dtype", None), pd.CategoricalDtype):
-            data = column.as_column(data)
+            data = as_column(data)
         else:
-            data = column.as_column(
-                data, dtype="category" if dtype is None else dtype
+            data = as_column(
+                data, dtype=cudf.CategoricalDtype() if dtype is None else dtype
             )
             # dtype has already been taken care
             dtype = None
@@ -3148,6 +3190,44 @@ class CategoricalIndex(Index):
         if not isinstance(column.dtype, cudf.CategoricalDtype):
             raise ValueError("column must have a categorial type.")
         return super()._from_column(column, name=name)
+
+    @classmethod
+    def from_codes(
+        cls,
+        codes: ColumnLike,
+        categories: ColumnLike,
+        ordered: bool,
+        name: Hashable = None,
+    ) -> Self:
+        """
+        Construct a CategoricalIndex from codes and categories.
+
+        More performant that using the CategoricalIndex constructor.
+
+        Parameters
+        ----------
+        codes : array-like
+            The integer codes of the CategoricalIndex.
+        categories : array-like
+            The category labels of the CategoricalIndex.
+        ordered : bool
+            Whether the categories are ordered.
+        name : Hashable, optional
+            The name of the CategoricalIndex.
+        """
+        codes = as_column(codes, dtype=np.dtype(np.int32))
+        categories = as_column(categories)
+        cat_col = CategoricalColumn(
+            data=None,
+            size=len(codes),
+            dtype=cudf.CategoricalDtype(
+                categories=categories, ordered=ordered
+            ),
+            offset=0,
+            null_count=0,
+            children=(codes,),
+        )
+        return cls._from_column(cat_col, name=name)
 
     @property
     def ordered(self) -> bool:
@@ -3347,50 +3427,58 @@ def interval_range(
             "freq, exactly three must be specified"
         )
 
-    start = cudf.Scalar(start) if start is not None else start
-    end = cudf.Scalar(end) if end is not None else end
-    if periods is not None and not cudf.api.types.is_integer(periods):
+    if periods is not None and not is_integer(periods):
         warnings.warn(
             "Non-integer 'periods' in cudf.date_range, and cudf.interval_range"
             " are deprecated and will raise in a future version.",
             FutureWarning,
         )
-    periods = cudf.Scalar(int(periods)) if periods is not None else periods
-    freq = cudf.Scalar(freq) if freq is not None else freq
-
     if start is None:
         start = end - freq * periods
     elif freq is None:
-        quotient, remainder = divmod((end - start).value, periods.value)
+        quotient, remainder = divmod(end - start, periods)
         if remainder:
             freq = (end - start) / periods
         else:
-            freq = cudf.Scalar(int(quotient))
+            freq = int(quotient)
     elif periods is None:
-        periods = cudf.Scalar(int((end - start) / freq))
+        periods = int((end - start) / freq)
     elif end is None:
         end = start + periods * freq
 
+    pa_start = pa.scalar(start)
+    pa_end = pa.scalar(end)
+    pa_freq = pa.scalar(freq)
+
     if any(
-        not _is_non_decimal_numeric_dtype(x.dtype)
-        for x in (start, periods, freq, end)
+        not is_dtype_obj_numeric(
+            cudf_dtype_from_pa_type(x.type), include_decimal=False
+        )
+        for x in (pa_start, pa.scalar(periods), pa_freq, pa_end)
     ):
         raise ValueError("start, end, periods, freq must be numeric values.")
 
-    periods = periods.astype("int64")
-    common_dtype = find_common_type((start.dtype, freq.dtype, end.dtype))
-    start = start.astype(common_dtype)
-    freq = freq.astype(common_dtype)
+    common_dtype = find_common_type(
+        (
+            cudf_dtype_from_pa_type(pa_start.type),
+            cudf_dtype_from_pa_type(pa_freq.type),
+            cudf_dtype_from_pa_type(pa_end.type),
+        )
+    )
+    pa_start = pa_start.cast(cudf_dtype_to_pa_type(common_dtype))
+    pa_freq = pa_freq.cast(cudf_dtype_to_pa_type(common_dtype))
 
     with acquire_spill_lock():
-        bin_edges = libcudf.column.Column.from_pylibcudf(
+        bin_edges = ColumnBase.from_pylibcudf(
             plc.filling.sequence(
                 size=periods + 1,
-                init=start.device_value.c_value,
-                step=freq.device_value.c_value,
+                init=pa_scalar_to_plc_scalar(pa_start),
+                step=pa_scalar_to_plc_scalar(pa_freq),
             )
         )
-    return IntervalIndex.from_breaks(bin_edges, closed=closed, name=name)
+    return IntervalIndex.from_breaks(
+        bin_edges.astype(common_dtype), closed=closed, name=name
+    )
 
 
 class IntervalIndex(Index):
@@ -3501,7 +3589,7 @@ class IntervalIndex(Index):
     def from_breaks(
         cls,
         breaks,
-        closed: Literal["left", "right", "neither", "both"] | None = "right",
+        closed: Literal["left", "right", "neither", "both"] = "right",
         name=None,
         copy: bool = False,
         dtype=None,
@@ -3755,6 +3843,8 @@ def as_index(
 
     if name is no_default:
         name = getattr(arbitrary, "name", None)
+    if dtype is not None:
+        dtype = cudf.dtype(dtype)
 
     if isinstance(arbitrary, cudf.MultiIndex):
         if dtype is not None:

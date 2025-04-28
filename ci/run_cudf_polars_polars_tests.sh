@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 set -euo pipefail
 
@@ -38,14 +38,20 @@ else
     fi
 fi
 
-DESELECTED_TESTS=$(printf -- " --deselect %s" "${DESELECTED_TESTS[@]}")
+DESELECTED_TESTS_STR=$(printf -- " --deselect %s" "${DESELECTED_TESTS[@]}")
+
+# Don't quote the `DESELECTED_...` variable because `pytest` can't handle
+# multiple quoted arguments inline
+# shellcheck disable=SC2086
 python -m pytest \
        --import-mode=importlib \
        --cache-clear \
        -m "" \
        -p cudf_polars.testing.plugin \
-       -v \
+       -n 8 \
+       --dist=worksteal \
+       -vv \
        --tb=native \
-       ${DESELECTED_TESTS} \
+       $DESELECTED_TESTS_STR \
        "$@" \
        py-polars/tests

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -78,6 +78,7 @@ namespace {
 struct escape_strings_fn {
   column_device_view const d_column;
   bool const append_colon{false};
+  bool const escaped_utf8{true};
   size_type* d_sizes{};
   char* d_chars{};
   cudf::detail::input_offsetalator d_offsets;
@@ -140,6 +141,11 @@ struct escape_strings_fn {
     if (quote_row) write_char(quote, d_buffer, bytes);
     for (auto utf8_char : d_str) {
       if (utf8_char > 0x0000'00FF) {
+        if (!escaped_utf8) {
+          // write original utf8 character if unescaping is enabled
+          write_char(utf8_char, d_buffer, bytes);
+          continue;
+        }
         // multi-byte char
         uint32_t codepoint = cudf::strings::detail::utf8_to_codepoint(utf8_char);
         if (codepoint <= 0x0000'FFFF) {
@@ -333,8 +339,8 @@ std::unique_ptr<column> struct_to_strings(table_view const& strings_columns,
                                   validity_iterator,
                                   d_str_separator.begin(),
                                   false,
-                                  thrust::equal_to<size_type>{},
-                                  thrust::logical_or<bool>{});
+                                  cuda::std::equal_to<size_type>{},
+                                  cuda::std::logical_or<bool>{});
     thrust::for_each(rmm::exec_policy_nosync(stream),
                      thrust::make_counting_iterator<size_type>(0),
                      thrust::make_counting_iterator<size_type>(total_rows),
@@ -375,6 +381,48 @@ std::unique_ptr<column> struct_to_strings(table_view const& strings_columns,
     0,
     {});
 }
+
+struct scatter_fn {
+  column_device_view _col;
+  size_type* _d_strview_offsets;
+  string_view* _d_strviews;
+  size_type const* _labels;
+  size_type const* _list_offsets;
+  column_device_view _d_strings_children;
+  string_view _element_seperator;
+  string_view _element_narep;
+
+  scatter_fn(column_device_view col,
+             size_type* d_strview_offsets,
+             string_view* d_strviews,
+             size_type const* labels,
+             size_type const* list_offsets,
+             column_device_view d_strings_children,
+             string_view const element_separator,
+             string_view const element_narep) noexcept
+    : _col{col},
+      _d_strview_offsets{d_strview_offsets},
+      _d_strviews{d_strviews},
+      _labels{labels},
+      _list_offsets{list_offsets},
+      _d_strings_children{d_strings_children},
+      _element_seperator{element_separator},
+      _element_narep{element_narep}
+  {
+  }
+
+  __device__ void operator()(size_type idx) const
+  {
+    auto const label         = _labels[idx];
+    auto const sublist_index = idx - _list_offsets[label];
+    auto const strview_index = _d_strview_offsets[label] + sublist_index * 2 + 1;
+    // value or na_rep
+    auto const strview         = _d_strings_children.element<cudf::string_view>(idx);
+    _d_strviews[strview_index] = _d_strings_children.is_null(idx) ? _element_narep : strview;
+    // separator
+    if (sublist_index != 0) { _d_strviews[strview_index - 1] = _element_seperator; }
+  }
+};
 
 /**
  * @brief Concatenates a list of strings columns into a single strings column.
@@ -461,24 +509,14 @@ std::unique_ptr<column> join_list_of_strings(lists_column_view const& lists_stri
   thrust::for_each(rmm::exec_policy_nosync(stream),
                    thrust::make_counting_iterator<size_type>(0),
                    thrust::make_counting_iterator<size_type>(num_strings),
-                   [col                = *col_device_view,
-                    d_strview_offsets  = d_strview_offsets.begin(),
-                    d_strviews         = d_strviews.begin(),
-                    labels             = labels->view().begin<size_type>(),
-                    list_offsets       = offsets.begin<size_type>(),
-                    d_strings_children = *d_strings_children,
-                    element_separator,
-                    element_narep] __device__(auto idx) {
-                     auto const label         = labels[idx];
-                     auto const sublist_index = idx - list_offsets[label];
-                     auto const strview_index = d_strview_offsets[label] + sublist_index * 2 + 1;
-                     // value or na_rep
-                     auto const strview = d_strings_children.element<cudf::string_view>(idx);
-                     d_strviews[strview_index] =
-                       d_strings_children.is_null(idx) ? element_narep : strview;
-                     // separator
-                     if (sublist_index != 0) { d_strviews[strview_index - 1] = element_separator; }
-                   });
+                   scatter_fn{*col_device_view,
+                              d_strview_offsets.data(),
+                              d_strviews.data(),
+                              labels->view().data<size_type>(),
+                              offsets.data<size_type>(),
+                              *d_strings_children,
+                              element_separator,
+                              element_narep});
 
   auto joined_col = make_strings_column(d_strviews, string_view{nullptr, 0}, stream, mr);
 
@@ -565,7 +603,8 @@ struct column_to_strings_fn {
   operator()(column_view const& column_v) const
   {
     auto d_column = column_device_view::create(column_v, stream_);
-    return escape_strings_fn{*d_column}.get_escaped_strings(column_v, stream_, mr_);
+    return escape_strings_fn{*d_column, false, options_.is_enabled_utf8_escaped()}
+      .get_escaped_strings(column_v, stream_, mr_);
   }
 
   // ints:
@@ -794,11 +833,10 @@ std::unique_ptr<column> make_strings_column_from_host(host_span<std::string cons
                                 offsets.begin() + 1,
                                 std::plus<cudf::size_type>{},
                                 [](auto& str) { return str.size(); });
-  auto d_offsets =
-    std::make_unique<cudf::column>(cudf::detail::make_device_uvector_sync(
-                                     offsets, stream, cudf::get_current_device_resource_ref()),
-                                   rmm::device_buffer{},
-                                   0);
+  auto d_offsets = std::make_unique<cudf::column>(
+    cudf::detail::make_device_uvector(offsets, stream, cudf::get_current_device_resource_ref()),
+    rmm::device_buffer{},
+    0);
   return cudf::make_strings_column(
     host_strings.size(), std::move(d_offsets), d_chars.release(), 0, {});
 }
@@ -841,7 +879,7 @@ void write_chunked(data_sink* out_sink,
     out_sink->device_write(ptr_all_bytes, total_num_bytes, stream);
   } else {
     // copy the bytes to host to write them out
-    auto const h_bytes = cudf::detail::make_host_vector_sync(
+    auto const h_bytes = cudf::detail::make_host_vector(
       device_span<char const>(ptr_all_bytes, total_num_bytes), stream);
 
     out_sink->host_write(h_bytes.data(), total_num_bytes);
@@ -967,8 +1005,7 @@ void write_json(data_sink* out_sink,
     stream.synchronize();
     auto comp_hbuf = cudf::io::detail::compress(
       options.get_compression(),
-      host_span<uint8_t>(reinterpret_cast<uint8_t*>(hbuf.data()), hbuf.size()),
-      stream);
+      host_span<uint8_t>(reinterpret_cast<uint8_t*>(hbuf.data()), hbuf.size()));
     out_sink->host_write(comp_hbuf.data(), comp_hbuf.size());
     return;
   }

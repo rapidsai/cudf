@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -119,7 +119,6 @@ def test_rewrite_ir_node():
                 node.schema,
                 new_df._df,
                 node.projection,
-                node.predicate,
                 node.config_options,
             )
         return reuse_if_unchanged(node, rec)
@@ -128,7 +127,7 @@ def test_rewrite_ir_node():
 
     new = mapper(orig)
 
-    result = new.evaluate(cache={}).to_polars()
+    result = new.evaluate(cache={}, timer=None).to_polars()
 
     expect = pl.DataFrame({"a": [2, 1], "b": [-4, -3]})
 
@@ -151,7 +150,6 @@ def test_rewrite_scan_node(tmp_path):
                 node.schema,
                 right._df,
                 node.with_columns,
-                node.predicate,
                 node.config_options,
             )
         return reuse_if_unchanged(node, rec)
@@ -161,7 +159,7 @@ def test_rewrite_scan_node(tmp_path):
     orig = Translator(q._ldf.visit(), pl.GPUEngine()).translate_ir()
     new = mapper(orig)
 
-    result = new.evaluate(cache={}).to_polars()
+    result = new.evaluate(cache={}, timer=None).to_polars()
 
     expect = q.collect()
 
@@ -232,6 +230,6 @@ def test_rewrite_names_and_ops():
 
     new_ir = rewriter(qir)
 
-    got = new_ir.evaluate(cache={}).to_polars()
+    got = new_ir.evaluate(cache={}, timer=None).to_polars()
 
     assert_frame_equal(expect, got)

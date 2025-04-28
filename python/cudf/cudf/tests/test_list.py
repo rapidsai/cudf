@@ -13,7 +13,6 @@ from cudf import NA
 from cudf.api.types import is_scalar
 from cudf.core.column.column import column_empty
 from cudf.testing import assert_eq
-from cudf.testing._utils import DATETIME_TYPES, NUMERIC_TYPES, TIMEDELTA_TYPES
 from cudf.utils.dtypes import cudf_dtype_to_pa_type
 
 
@@ -686,42 +685,6 @@ def test_list_getitem(data):
         [[1.1, NA, 3.3], [4.4, 5.5, NA]],
     ],
 )
-def test_list_scalar_host_construction(data):
-    slr = cudf.Scalar(data)
-    assert slr.value == data
-    assert slr.device_value.value == data
-
-
-@pytest.mark.parametrize(
-    "elem_type", NUMERIC_TYPES + DATETIME_TYPES + TIMEDELTA_TYPES + ["str"]
-)
-@pytest.mark.parametrize("nesting_level", [1, 2, 3])
-def test_list_scalar_host_construction_null(elem_type, nesting_level):
-    dtype = cudf.ListDtype(elem_type)
-    for level in range(nesting_level - 1):
-        dtype = cudf.ListDtype(dtype)
-
-    slr = cudf.Scalar(None, dtype=dtype)
-    assert slr.value is (cudf.NaT if slr.dtype.kind in "mM" else cudf.NA)
-
-
-@pytest.mark.parametrize(
-    "data",
-    [
-        [1, 2, 3],
-        [[1, 2, 3], [4, 5, 6]],
-        ["a", "b", "c"],
-        [["a", "b", "c"], ["d", "e", "f"]],
-        [1.1, 2.2, 3.3],
-        [[1.1, 2.2, 3.3], [4.4, 5.5, 6.6]],
-        [1, NA, 3],
-        [[1, NA, 3], [4, 5, NA]],
-        ["a", NA, "c"],
-        [["a", NA, "c"], ["d", "e", NA]],
-        [1.1, NA, 3.3],
-        [[1.1, NA, 3.3], [4.4, 5.5, NA]],
-    ],
-)
 def test_list_scalar_device_construction(data):
     res = cudf.Series([data])._column.element_indexing(0)
     assert res == data
@@ -837,7 +800,7 @@ def test_listcol_as_string(data):
         (
             [[1, 2, 3], [4, 5, 6], [7, 8, 9]],
             [[1, 2, 3], [4, 5, 6]],
-            "list nesting level mismatch",
+            "Could not convert .* with type list: tried to convert to int64",
         ),
         (
             [[1, 2, 3], [4, 5, 6], [7, 8, 9]],
@@ -955,3 +918,34 @@ def test_empty_nested_list_uninitialized_offsets_memory_usage():
     )
     ser = cudf.Series._from_column(col_empty_offset)
     assert ser.memory_usage() == 8
+
+
+def test_list_methods_setattr():
+    ser = cudf.Series([["a", "b", "c"], ["d", "e", "f"]])
+
+    with pytest.raises(AttributeError):
+        ser.list.a = "b"
+
+
+def test_dataframe_list_round_trip():
+    data = [{"text": "hello", "list_col": np.asarray([1, 2], dtype="uint32")}]
+    cudf_arrow = cudf.DataFrame(data).to_arrow()
+    pdf_arrow = pa.Table.from_pandas(pd.DataFrame(data))
+
+    for metadata in [
+        None,
+        pdf_arrow.schema.metadata,
+        cudf_arrow.schema.metadata,
+    ]:
+        schema = pa.schema(
+            [
+                pa.field("text", pa.string()),
+                pa.field("list_col", pa.list_(pa.uint32())),
+            ],
+            metadata=metadata,
+        )
+
+        data = {"text": ["asd", "pqr"], "list_col": [[1, 2, 3], [4, 5]]}
+
+        table = pa.Table.from_pydict(data, schema=schema)
+        assert_eq(table.to_pandas(), pd.DataFrame(data))

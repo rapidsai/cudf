@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -601,7 +601,7 @@ std::unique_ptr<Base> make_udf_aggregation(udf_type type,
                                            data_type output_type);
 
 // Forward declaration of `host_udf_base` for the factory function of `HOST_UDF` aggregation.
-struct host_udf_base;
+class host_udf_base;
 
 /**
  * @brief Factory to create a HOST_UDF aggregation.

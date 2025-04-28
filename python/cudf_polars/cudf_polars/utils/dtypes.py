@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 """Datatype utilities."""
@@ -12,6 +12,7 @@ from typing_extensions import assert_never
 
 import polars as pl
 
+import pylibcudf as plc
 from pylibcudf.traits import (
     is_floating_point,
     is_integral_not_bool,
@@ -19,12 +20,18 @@ from pylibcudf.traits import (
 )
 
 __all__ = [
+    "TO_ARROW_COMPAT_LEVEL",
     "can_cast",
     "downcast_arrow_lists",
     "from_polars",
     "is_order_preserving_cast",
 ]
-import pylibcudf as plc
+
+TO_ARROW_COMPAT_LEVEL = (
+    pl.CompatLevel.newest()
+    if hasattr(pa.lib, "Type_STRING_VIEW")
+    else pl.CompatLevel.oldest()
+)
 
 
 def downcast_arrow_lists(typ: pa.DataType) -> pa.DataType:
@@ -71,7 +78,9 @@ def can_cast(from_: plc.DataType, to: plc.DataType) -> bool:
     -------
     True if casting is supported, False otherwise
     """
-    has_empty = from_.id() == plc.TypeId.EMPTY or to.id() == plc.TypeId.EMPTY
+    to_is_empty = to.id() == plc.TypeId.EMPTY
+    from_is_empty = from_.id() == plc.TypeId.EMPTY
+    has_empty = to_is_empty or from_is_empty
     return (
         (
             from_ == to
@@ -84,8 +93,16 @@ def can_cast(from_: plc.DataType, to: plc.DataType) -> bool:
                 )
             )
         )
-        or (from_.id() == plc.TypeId.STRING and is_numeric_not_bool(to))
-        or (to.id() == plc.TypeId.STRING and is_numeric_not_bool(from_))
+        or (
+            from_.id() == plc.TypeId.STRING
+            and not to_is_empty
+            and is_numeric_not_bool(to)
+        )
+        or (
+            to.id() == plc.TypeId.STRING
+            and not from_is_empty
+            and is_numeric_not_bool(from_)
+        )
     )
 
 

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2024, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION & AFFILIATES.
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
@@ -8,11 +8,22 @@ import warnings
 import pylibcudf
 import rmm.mr
 
-from .fast_slow_proxy import is_proxy_object
+from .fast_slow_proxy import (
+    as_proxy_object,
+    is_proxy_instance,
+    is_proxy_object,
+)
 from .magics import load_ipython_extension
 from .profiler import Profiler
 
-__all__ = ["Profiler", "install", "is_proxy_object", "load_ipython_extension"]
+__all__ = [
+    "Profiler",
+    "as_proxy_object",
+    "install",
+    "is_proxy_instance",
+    "is_proxy_object",
+    "load_ipython_extension",
+]
 
 
 LOADED = False
@@ -38,11 +49,20 @@ def install():
     loader = ModuleAccelerator.install("pandas", "cudf", "pandas")
     global LOADED
     LOADED = loader is not None
+    if (
+        "RAPIDS_NO_INITIALIZE" in os.environ
+        or "CUDF_NO_INITIALIZE" in os.environ
+    ):
+        return
 
-    # The default mode is "managed_pool" if UVM is supported, otherwise "pool"
-    managed_memory_is_supported = (
-        pylibcudf.utils._is_concurrent_managed_access_supported()
-    )
+    try:
+        # The default mode is "managed_pool" if UVM is supported, otherwise "pool"
+        managed_memory_is_supported = (
+            pylibcudf.utils._is_concurrent_managed_access_supported()
+        )
+    except RuntimeError as e:
+        warnings.warn(str(e))
+        return
     default_rmm_mode = (
         "managed_pool" if managed_memory_is_supported else "pool"
     )

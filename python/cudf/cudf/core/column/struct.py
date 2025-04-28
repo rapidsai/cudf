@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from functools import cached_property
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import pandas as pd
 import pyarrow as pa
@@ -11,14 +11,27 @@ import cudf
 from cudf.core.column.column import ColumnBase
 from cudf.core.column.methods import ColumnMethods
 from cudf.core.dtypes import StructDtype
-from cudf.core.missing import NA
+from cudf.core.scalar import pa_scalar_to_plc_scalar
+from cudf.utils.utils import _is_null_host_scalar
 
 if TYPE_CHECKING:
     from typing_extensions import Self
 
+    import pylibcudf as plc
+
     from cudf._typing import Dtype
     from cudf.core.buffer import Buffer
     from cudf.core.column.string import StringColumn
+
+
+def _maybe_na_to_none(value: Any) -> Any:
+    """
+    Convert NA-like values to None for pyarrow.
+    """
+    if _is_null_host_scalar(value):
+        return None
+    else:
+        return value
 
 
 class StructColumn(ColumnBase):
@@ -120,16 +133,25 @@ class StructColumn(ColumnBase):
 
     def element_indexing(self, index: int) -> dict:
         result = super().element_indexing(index)
-        return dict(zip(self.dtype.fields, result.values()))
+        return self.dtype._recursively_replace_fields(result)
 
-    def __setitem__(self, key, value):
+    def _cast_setitem_value(self, value: Any) -> plc.Scalar:
         if isinstance(value, dict):
-            # filling in fields not in dict
-            for field in self.dtype.fields:
-                value[field] = value.get(field, NA)
-
-            value = cudf.Scalar(value, self.dtype)
-        super().__setitem__(key, value)
+            new_value = {
+                field: _maybe_na_to_none(value.get(field, None))
+                for field in self.dtype.fields
+            }
+            return pa_scalar_to_plc_scalar(
+                pa.scalar(new_value, type=self.dtype.to_arrow())
+            )
+        elif value is None or value is cudf.NA:
+            return pa_scalar_to_plc_scalar(
+                pa.scalar(None, type=self.dtype.to_arrow())
+            )
+        else:
+            raise ValueError(
+                f"Can not set {type(value).__name__} into StructColumn"
+            )
 
     def copy(self, deep: bool = True) -> Self:
         # Since struct columns are immutable, both deep and
@@ -267,13 +289,15 @@ class StructMethods(ColumnMethods):
         2  3  z
         3  4  a
         """
+        data = {
+            name: col.copy(deep=True)
+            for name, col in zip(
+                self._column.dtype.fields, self._column.children
+            )
+        }
+        rangeindex = len(data) == 0
         return cudf.DataFrame._from_data(
             cudf.core.column_accessor.ColumnAccessor(
-                {
-                    name: col.copy(deep=True)
-                    for name, col in zip(
-                        self._column.dtype.fields, self._column.children
-                    )
-                }
+                data, rangeindex=rangeindex
             )
         )

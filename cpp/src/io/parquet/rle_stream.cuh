@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,7 +24,7 @@
 namespace cudf::io::parquet::detail {
 
 template <int num_threads>
-constexpr int rle_stream_required_run_buffer_size()
+__device__ constexpr int rle_stream_required_run_buffer_size()
 {
   constexpr int num_rle_stream_decode_warps = (num_threads / cudf::detail::warp_size) - 1;
   return (num_rle_stream_decode_warps * 2);

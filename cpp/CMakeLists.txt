@@ -12,9 +12,9 @@
 # the License.
 # =============================================================================
 
-cmake_minimum_required(VERSION 3.26.4 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.30.4 FATAL_ERROR)
 
-include(../rapids_config.cmake)
+include(../cmake/rapids_config.cmake)
 include(rapids-cmake)
 include(rapids-cpm)
 include(rapids-cuda)
@@ -79,7 +79,6 @@ option(CUDA_ENABLE_LINEINFO
 option(CUDA_WARNINGS_AS_ERRORS "Enable -Werror=all-warnings for all CUDA compilation" ON)
 # cudart can be statically linked or dynamically linked. The python ecosystem wants dynamic linking
 option(CUDA_STATIC_RUNTIME "Statically link the CUDA runtime" OFF)
-option(CUDA_STATIC_CUFILE "Statically link cuFile" OFF)
 
 set(DEFAULT_CUDF_BUILD_STREAMS_TEST_UTIL ON)
 if(CUDA_STATIC_RUNTIME OR NOT BUILD_SHARED_LIBS)
@@ -275,8 +274,8 @@ endif()
 rapids_cpm_init()
 
 include(${rapids-cmake-dir}/cpm/rapids_logger.cmake)
-rapids_cpm_rapids_logger()
-rapids_make_logger(cudf EXPORT_SET cudf-exports LOGGER_DEFAULT_LEVEL WARN)
+rapids_cpm_rapids_logger(BUILD_EXPORT_SET cudf-exports INSTALL_EXPORT_SET cudf-exports)
+create_logger_macros(CUDF "cudf::default_logger()" include/cudf)
 
 # find jitify
 include(cmake/thirdparty/get_jitify.cmake)
@@ -302,18 +301,18 @@ endif()
 include(cmake/Modules/JitifyPreprocessKernels.cmake)
 # find KvikIO
 include(cmake/thirdparty/get_kvikio.cmake)
-# find fmt
-include(cmake/thirdparty/get_fmt.cmake)
 # find nanoarrow
 include(cmake/thirdparty/get_nanoarrow.cmake)
 # find thread_pool
 include(cmake/thirdparty/get_thread_pool.cmake)
+# find zstd
+include(cmake/thirdparty/get_zstd.cmake)
 
 # Workaround until https://github.com/rapidsai/rapids-cmake/issues/176 is resolved
 if(NOT BUILD_SHARED_LIBS)
   include("${rapids-cmake-dir}/export/find_package_file.cmake")
   list(APPEND METADATA_KINDS BUILD INSTALL)
-  list(APPEND dependencies KvikIO ZLIB nvcomp nanoarrow)
+  list(APPEND dependencies KvikIO ZLIB nvcomp nanoarrow zstd)
 
   foreach(METADATA_KIND IN LISTS METADATA_KINDS)
     foreach(dep IN LISTS dependencies)
@@ -336,6 +335,7 @@ add_library(
   src/aggregation/result_cache.cpp
   src/ast/expression_parser.cpp
   src/ast/expressions.cpp
+  src/ast/operators.cpp
   src/binaryop/binaryop.cpp
   src/binaryop/compiled/ATan2.cu
   src/binaryop/compiled/Add.cu
@@ -465,11 +465,12 @@ add_library(
   src/hash/xxhash_64.cu
   src/interop/dlpack.cpp
   src/interop/arrow_utilities.cpp
-  src/interop/decimal_conversion_utilities.cu
+  src/interop/arrow_data_structures.cpp
   src/interop/to_arrow_device.cu
   src/interop/to_arrow_host.cu
   src/interop/from_arrow_device.cu
   src/interop/from_arrow_host.cu
+  src/interop/from_arrow_host_strings.cu
   src/interop/from_arrow_stream.cu
   src/interop/to_arrow_schema.cpp
   src/io/avro/avro.cpp
@@ -477,13 +478,14 @@ add_library(
   src/io/avro/reader_impl.cu
   src/io/comp/brotli_dict.cpp
   src/io/comp/comp.cpp
+  src/io/comp/comp.cu
+  src/io/comp/common.cpp
   src/io/comp/cpu_unbz2.cpp
   src/io/comp/debrotli.cu
   src/io/comp/gpuinflate.cu
   src/io/comp/nvcomp_adapter.cpp
   src/io/comp/nvcomp_adapter.cu
   src/io/comp/snap.cu
-  src/io/comp/statistics.cu
   src/io/comp/uncomp.cpp
   src/io/comp/unsnap.cu
   src/io/csv/csv_gpu.cu
@@ -515,6 +517,7 @@ add_library(
   src/datetime/timezone.cpp
   src/io/orc/writer_impl.cu
   src/io/parquet/arrow_schema_writer.cpp
+  src/io/parquet/bloom_filter_reader.cu
   src/io/parquet/compact_protocol_reader.cpp
   src/io/parquet/compact_protocol_writer.cpp
   src/io/parquet/decode_preprocess.cu
@@ -530,6 +533,7 @@ add_library(
   src/io/parquet/reader_impl_chunking.cu
   src/io/parquet/reader_impl_helpers.cpp
   src/io/parquet/reader_impl_preprocess.cu
+  src/io/parquet/stats_filter_helpers.cpp
   src/io/parquet/writer_impl.cu
   src/io/parquet/writer_impl_helpers.cpp
   src/io/parquet/decode_fixed.cu
@@ -547,12 +551,12 @@ add_library(
   src/io/utilities/data_casting.cu
   src/io/utilities/data_sink.cpp
   src/io/utilities/datasource.cpp
-  src/io/utilities/file_io_utilities.cpp
   src/io/utilities/row_selection.cpp
   src/io/utilities/type_inference.cu
   src/io/utilities/trie.cu
   src/jit/cache.cpp
   src/jit/parser.cpp
+  src/jit/runtime_support.cpp
   src/jit/util.cpp
   src/join/conditional_join.cu
   src/join/cross_join.cu
@@ -645,6 +649,7 @@ add_library(
   src/rolling/detail/rolling_fixed_window.cu
   src/rolling/detail/rolling_variable_window.cu
   src/rolling/grouped_rolling.cu
+  src/rolling/range_rolling.cu
   src/rolling/range_window_bounds.cpp
   src/rolling/rolling.cu
   src/round/round.cu
@@ -703,6 +708,7 @@ add_library(
   src/strings/like.cu
   src/strings/merge/merge.cu
   src/strings/padding.cu
+  src/strings/positions.cu
   src/strings/regex/regcomp.cpp
   src/strings/regex/regexec.cpp
   src/strings/regex/regex_program.cpp
@@ -759,6 +765,7 @@ add_library(
   src/text/subword/wordpiece_tokenizer.cu
   src/text/tokenize.cu
   src/text/vocabulary_tokenize.cu
+  src/text/wordpiece_tokenize.cu
   src/transform/bools_to_mask.cu
   src/transform/compute_column.cu
   src/transform/encode.cu
@@ -776,7 +783,9 @@ add_library(
   src/utilities/cuda_memcpy.cu
   src/utilities/default_stream.cpp
   src/utilities/host_memory.cpp
+  src/utilities/host_worker_pool.cpp
   src/utilities/linked_column.cpp
+  src/utilities/logger.cpp
   src/utilities/prefetch.cpp
   src/utilities/stacktrace.cpp
   src/utilities/stream_pool.cpp
@@ -819,6 +828,7 @@ set_target_properties(
              CUDA_VISIBILITY_PRESET hidden
              POSITION_INDEPENDENT_CODE ON
              INTERFACE_POSITION_INDEPENDENT_CODE ON
+             LINK_FLAGS "-Wl,--exclude-libs,libzstd.a"
 )
 
 # Note: This must come before the target_compile_options below so that the function can modify the
@@ -875,6 +885,7 @@ target_include_directories(
   PRIVATE "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/src>"
           "$<BUILD_INTERFACE:${nanoarrow_SOURCE_DIR}/src>"
           "$<BUILD_INTERFACE:${FlatBuffers_SOURCE_DIR}/include>"
+          "$<BUILD_INTERFACE:${ZSTD_INCLUDE_DIR}>"
   INTERFACE "$<INSTALL_INTERFACE:include>"
 )
 
@@ -916,24 +927,15 @@ endif()
 
 # Define logging level
 target_compile_definitions(
-  cudf PRIVATE "CUDF_LOG_ACTIVE_LEVEL=CUDF_LOG_LEVEL_${LIBCUDF_LOGGING_LEVEL}"
+  cudf PRIVATE "CUDF_LOG_ACTIVE_LEVEL=RAPIDS_LOGGER_LOG_LEVEL_${LIBCUDF_LOGGING_LEVEL}"
 )
 
 # Enable remote IO through KvikIO
 target_compile_definitions(cudf PRIVATE $<$<BOOL:${CUDF_KVIKIO_REMOTE_IO}>:CUDF_KVIKIO_REMOTE_IO>)
 
-# Enable cuFile support
-set(_cufile_suffix)
-if(CUDA_STATIC_CUFILE)
-  set(_cufile_suffix _static)
-endif()
-if(TARGET CUDA::cuFile${_cufile_suffix})
-  target_compile_definitions(cudf PRIVATE CUDF_CUFILE_FOUND)
-endif()
-
 # Remove this after upgrading to a CCCL that has a proper CMake option. See
 # https://github.com/NVIDIA/cccl/pull/2844
-target_compile_definitions(cudf PRIVATE THRUST_FORCE_32_BIT_OFFSET_TYPE=1)
+target_compile_definitions(cudf PRIVATE THRUST_FORCE_32_BIT_OFFSET_TYPE=1 CCCL_AVOID_SORT_UNROLL=1)
 
 # Compile stringified JIT sources first
 add_dependencies(cudf jitify_preprocess_run)
@@ -941,16 +943,9 @@ add_dependencies(cudf jitify_preprocess_run)
 # Specify the target module library dependencies
 target_link_libraries(
   cudf
-  PUBLIC CCCL::CCCL rmm::rmm rmm::rmm_logger $<BUILD_LOCAL_INTERFACE:BS::thread_pool> cudf_logger
-  PRIVATE $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp>
-          cuco::cuco
-          ZLIB::ZLIB
-          nvcomp::nvcomp
-          kvikio::kvikio
-          $<TARGET_NAME_IF_EXISTS:CUDA::cuFile${_cufile_suffix}>
-          nanoarrow
-          rmm::rmm_logger_impl
-          cudf_logger_impl
+  PUBLIC CCCL::CCCL rapids_logger::rapids_logger rmm::rmm $<BUILD_LOCAL_INTERFACE:BS::thread_pool>
+  PRIVATE $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp> cuco::cuco ZLIB::ZLIB nvcomp::nvcomp
+          kvikio::kvikio nanoarrow zstd
 )
 
 # Add Conda library, and include paths if specified
@@ -1059,6 +1054,17 @@ if(CUDF_BUILD_TESTUTIL)
   )
   target_link_libraries(cudftestutil_impl INTERFACE cudf::cudftestutil)
 
+  # Base library for linking to cudf::cudftestutil, Note that targets should not directly link to
+  # cudf::cudftestutil_impl and should instead link to an OBJECT library that contains the compiled
+  # test utilities first
+  add_library(cudftestutil_objects OBJECT)
+  target_link_libraries(
+    cudftestutil_objects
+    PUBLIC cudf::cudftestutil GTest::gmock GTest::gmock_main GTest::gtest GTest::gtest_main
+    PRIVATE cudf::cudftestutil_impl
+  )
+  add_library(cudf::cudftestutil_objects ALIAS cudftestutil_objects)
+
   install(FILES tests/io/metadata_utilities.cpp DESTINATION src/cudftestutil/io)
   install(
     FILES tests/utilities/column_utilities.cu
@@ -1106,7 +1112,7 @@ if(CUDF_BUILD_STREAMS_TEST_UTIL)
       ${_tgt} PRIVATE "$<BUILD_INTERFACE:$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_FLAGS}>>"
     )
     target_include_directories(${_tgt} PRIVATE "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/include>")
-    target_link_libraries(${_tgt} PUBLIC CUDA::cudart rmm::rmm rmm::rmm_logger rmm::rmm_logger_impl)
+    target_link_libraries(${_tgt} PUBLIC CUDA::cudart rmm::rmm)
     if(CUDF_BUILD_STACKTRACE_DEBUG)
       target_link_libraries(${_tgt} PRIVATE cudf_backtrace)
     endif()

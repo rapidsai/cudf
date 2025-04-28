@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 import pyarrow as pa
 import pytest
@@ -68,7 +68,65 @@ def iface_obj(input_column):
     return DataBuffer(data.view("uint8"), data.dtype)
 
 
-def test_from_cuda_array_interface(input_column, iface_obj):
-    col = plc.column.Column.from_cuda_array_interface_obj(iface_obj)
+@pytest.mark.parametrize("patch_cai", [True, False])
+def test_from_cuda_array_interface(
+    monkeypatch, input_column, iface_obj, patch_cai
+):
+    if patch_cai:
+        # patch strides to be None to test C-configuous layout
+        monkeypatch.setattr(iface_obj, "strides", None)
 
-    assert_column_eq(input_column, col)
+    res = plc.Column.from_cuda_array_interface(iface_obj)
+
+    assert_column_eq(input_column, res)
+
+
+def test_from_rmm_buffer():
+    result = pa.array([1, 2, 3], type=pa.int32())
+    expected = plc.Column.from_rmm_buffer(
+        rmm.DeviceBuffer.to_device(result.buffers()[1].to_pybytes()),
+        plc.interop.from_arrow(result.type),
+        len(result),
+        [],
+    )
+    assert_column_eq(result, expected)
+
+    result = pa.array(["a", "b", "c"], type=pa.string())
+    expected = plc.Column.from_rmm_buffer(
+        rmm.DeviceBuffer.to_device(result.buffers()[2].to_pybytes()),
+        plc.interop.from_arrow(result.type),
+        len(result),
+        [
+            plc.Column.from_rmm_buffer(
+                rmm.DeviceBuffer.to_device(result.buffers()[1].to_pybytes()),
+                plc.DataType(plc.TypeId.INT32),
+                4,
+                [],
+            )
+        ],
+    )
+    assert_column_eq(result, expected)
+
+
+@pytest.mark.parametrize(
+    "dtype, children_data",
+    [
+        (plc.DataType(plc.TypeId.INT32), [[0, 1, 2]]),
+        (plc.DataType(plc.TypeId.STRING), []),
+        (plc.DataType(plc.TypeId.STRING), [[0, 1], [0, 1]]),
+        (plc.DataType(plc.TypeId.LIST), []),
+    ],
+)
+def test_from_rmm_buffer_invalid(dtype, children_data):
+    buff = rmm.DeviceBuffer.to_device(b"")
+    children = [
+        plc.interop.from_arrow(pa.array(child_data))
+        for child_data in children_data
+    ]
+    with pytest.raises(ValueError):
+        plc.Column.from_rmm_buffer(
+            buff,
+            dtype,
+            0,
+            children,
+        )

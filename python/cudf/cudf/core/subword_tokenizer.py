@@ -1,10 +1,11 @@
-# Copyright (c) 2021-2024, NVIDIA CORPORATION.
+# Copyright (c) 2021-2025, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
 import warnings
 
 import cupy as cp
+import numpy as np
 
 import pylibcudf as plc
 
@@ -19,7 +20,7 @@ def _cast_to_appropriate_type(ar, cast_type):
     elif cast_type == "tf":
         from tensorflow.experimental.dlpack import from_dlpack
 
-    return from_dlpack(ar.astype("int32").toDlpack())
+    return from_dlpack(ar.astype(np.dtype(np.int32)).__dlpack__())
 
 
 class SubwordTokenizer:
@@ -49,6 +50,11 @@ class SubwordTokenizer:
         self.do_lower_case = do_lower_case
         self.vocab_file = plc.nvtext.subword_tokenize.HashedVocabulary(
             hash_file
+        )
+        warnings.warn(
+            "SubwordTokenizer is deprecated and will be removed in a future "
+            "version. Use WordPieceVocabulary instead.",
+            FutureWarning,
         )
 
     def __call__(
@@ -187,8 +193,7 @@ class SubwordTokenizer:
 
         if padding != "max_length":
             error_msg = (
-                "Only padding to the provided max_length"
-                "is currently supported"
+                "Only padding to the provided max_lengthis currently supported"
             )
             raise NotImplementedError(error_msg)
 

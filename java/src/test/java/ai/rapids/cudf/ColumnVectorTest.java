@@ -532,6 +532,102 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  public void testSha1HashStrings() {
+    try (ColumnVector v0 = ColumnVector.fromStrings("Hello", "World", "CuDF", "Rapids", "AI", "Spark", "不好darn");
+         ColumnVector result0 = ColumnVector.sha1Hash(v0);
+         ColumnVector expected = ColumnVector.fromStrings(
+          "f7ff9e8b7bb2e09b70935a5d785e0cc5d9d0abf0", "70c07ec18ef89c5309bbb0937f3a6342411e1fdd",
+          "f07e54a651cddad6e1a7bd5d61bb4327a5ca590c", "62ee80d2358be1ecfe498e4c2a4a2f1f50082973",
+          "560040c54a3bfeaf24c4a4096cee1de719cd87cd", "85f5955f4b27a9a4c2aab6ffe5d7189fc298b92c",
+          "fffc747d7f2c61f1bfb8ef6003fb51214fc23186"
+        )) {
+      assertColumnsAreEqual(result0, expected);
+    }
+  }
+
+  @Test
+  public void testSha1HashBooleans() {
+    try (ColumnVector v0 = ColumnVector.fromBooleans(true, false);
+         ColumnVector result0 = ColumnVector.sha1Hash(v0);
+         ColumnVector expected = ColumnVector.fromStrings(
+          "bf8b4530d8d246dd74ac53a13471bba17941dff7", "5ba93c9db0cff93f52b521d7420e43f6eda2784f"
+        )) {
+      assertColumnsAreEqual(result0, expected);
+    }
+  }
+
+  @Test
+  public void testSha1HashInts() {
+    try (ColumnVector v0 = ColumnVector.fromInts(1, 2, 3, 4, 5, 6);
+         ColumnVector result0 = ColumnVector.sha1Hash(v0);
+         ColumnVector expected = ColumnVector.fromStrings(
+          "3c585604e87f855973731fea83e21fab9392d2fc",
+          "0aaf76f425c6e0f43a36197de768e67d9e035abb",
+          "8e146c3c4e33449f95a49679795f74f7ae19ecc1",
+          "d6459ab29c7b9a9fbf0c7c15fa35faa30fbf8cc6",
+          "ddaf0ed54dfc227ce677b5c2b44e3edee7c7db77",
+          "8098e7dfb09adba3bf783794ba0db81985a814d7"
+        )) {
+      assertColumnsAreEqual(result0, expected);
+    }
+  }
+
+  @Test
+  public void testSha1HashFloats() {
+    try (ColumnVector v0 = ColumnVector.fromFloats(1.1f, 2.2f, 3.3f, 4.4f, 5.5f, 6.6f);
+         ColumnVector result0 = ColumnVector.sha1Hash(v0);
+         ColumnVector expected = ColumnVector.fromStrings(
+          "4f242e61cb6a9f8ee71a6201ca33128103e2536f",
+          "98f36f92103d792071127938da339e5b22571222",
+          "4af42fec81f89fd19e8c2b9894d622cb222e565f",
+          "f535265c240c537962e25794953c9249e4ac5f9f",
+          "9a59a633cafd9a273bf91b47dfffa16ed0a671f5",
+          "0740afaca195a4c635c3f647ba9102fbc5000138"
+        )) {
+      assertColumnsAreEqual(result0, expected);
+    }
+  }
+
+  @Test
+  void testSha1HashDoubles() {
+    try (ColumnVector v = ColumnVector.fromBoxedDoubles(
+          0.0, null, 100.0, -100.0, Double.MIN_NORMAL, Double.MAX_VALUE,
+          Double.POSITIVE_INFINITY, Double.NEGATIVE_INFINITY);
+         ColumnVector result = ColumnVector.sha1Hash(v);
+         ColumnVector expected = ColumnVector.fromStrings(
+          "05fe405753166f125559e7c9ac558654f107c7e9",
+          "da39a3ee5e6b4b0d3255bfef95601890afd80709",
+          "69d7849f2c39af0af7ce98105d114cc5e652f30e",
+          "d0946f10bc97d3cf982cb4b140bc0e8682f2822c",
+          "675e230119d58c1f052533069f716bae1b6dd9e5",
+          "3310c15f3a9c1d66fa53b0db868d8e640f8c46ae",
+          "8b5ed55927ff3d1e5b55b1eaef634dc83fe10595",
+          "90fa58cd46d1b892aa109b612c6dcbc5ab6bb144")) {
+      assertColumnsAreEqual(expected, result);
+    }
+  }
+
+  @Test
+  void testSha1HashMixed() {
+    try (ColumnVector strings = ColumnVector.fromStrings(
+          "a", "B\n", "dE\"\u0100\t\u0101 \ud720\ud721", null);
+         ColumnVector integers = ColumnVector.fromBoxedInts(0, 100, -100, null);
+         ColumnVector doubles = ColumnVector.fromBoxedDoubles(
+          0.0, 100.0, -100.0, null);
+         ColumnVector floats = ColumnVector.fromBoxedFloats(
+          0f, 100f, -100f, null);
+         ColumnVector bools = ColumnVector.fromBoxedBooleans(true, false, null, null);
+         ColumnVector result = ColumnVector.sha1Hash(strings, integers, doubles, floats, bools);
+         ColumnVector expected = ColumnVector.fromStrings(
+          "54f6c403af7ed477bb235bdd3370d6ef9ad27385",
+          "ac01fe9e11b7b226e08df8aa1aba5cab63133fa9",
+          "f1c68bf9f6d45e06bdae92b157be3c4bf488caa0",
+          "da39a3ee5e6b4b0d3255bfef95601890afd80709")) {
+      assertColumnsAreEqual(expected, result);
+    }
+  }
+
+  @Test
   void isNotNullTestEmptyColumn() {
     try (ColumnVector v = ColumnVector.fromBoxedInts();
          ColumnVector expected = ColumnVector.fromBoxedBooleans();
@@ -2983,7 +3079,7 @@ public class ColumnVectorTest extends CudfTestBase {
 
   @Test
   void testWindowDynamicNegative() {
-    try (ColumnVector precedingCol = ColumnVector.fromInts(3, 3, 3, 4, 4);
+    try (ColumnVector precedingCol = ColumnVector.fromInts(1, 2, 3, 4, 4);
          ColumnVector followingCol = ColumnVector.fromInts(-1, -1, -1, -1, 0)) {
       try (WindowOptions window = WindowOptions.builder()
           .minPeriods(2).window(precedingCol, followingCol).build()) {
@@ -3014,7 +3110,7 @@ public class ColumnVectorTest extends CudfTestBase {
   @Test
   void testWindowDynamic() {
     try (ColumnVector precedingCol = ColumnVector.fromInts(1, 2, 3, 1, 2);
-         ColumnVector followingCol = ColumnVector.fromInts(2, 2, 2, 2, 2)) {
+         ColumnVector followingCol = ColumnVector.fromInts(2, 2, 2, 1, 0)) {
       try (WindowOptions window = WindowOptions.builder().minPeriods(2)
           .window(precedingCol, followingCol).build()) {
         try (ColumnVector v1 = ColumnVector.fromInts(5, 4, 7, 6, 8);
@@ -4356,20 +4452,35 @@ void testExtractReWithMultiLineDelimiters() {
     List<Integer> list1 = Arrays.asList(1, 2);
     List<Integer> list2 = Arrays.asList(3, 4, 5);
     List<Integer> list3 = Arrays.asList(null, 0, 6, 6, 0);
-    List<Integer> dedupeList3 = Arrays.asList(0, 6, null);
+    List<Integer> keepAnyDedupeList3 = Arrays.asList(0, 6, null);
+    List<Integer> keepFirstDedupeList3 = Arrays.asList(null, 0, 6);
+    List<Integer> keepLastDedupeList3 = Arrays.asList(null, 6, 0);
+    List<Integer> keepNoneDedupeList3 = Collections.singletonList(null);
     List<Integer> list4 = Arrays.asList(null, 6, 7, null, 7);
-    List<Integer> dedupeList4 = Arrays.asList(6, 7, null);
+    List<Integer> keepAnyDedupeList4 = Arrays.asList(6, 7, null);
+    List<Integer> keepFirstDedupeList4 = Arrays.asList(null, 6, 7);
+    List<Integer> keepLastDedupeList4 = Arrays.asList(6, null, 7);
+    List<Integer> keepNoneDedupeList4 = Collections.singletonList(6);
     List<Integer> list5 = null;
 
     HostColumnVector.DataType listType = new HostColumnVector.ListType(true,
         new HostColumnVector.BasicType(true, DType.INT32));
     try (ColumnVector v = ColumnVector.fromLists(listType, list1, list2, list3, list4, list5);
-         ColumnVector expected = ColumnVector.fromLists(listType, list1, list2, dedupeList3, dedupeList4, list5);
-         ColumnVector tmp = v.dropListDuplicates();
-         // Note dropping duplicates does not have any ordering guarantee, so sort to make it all
+         ColumnVector keepAnyExpected = ColumnVector.fromLists(listType, list1, list2, keepAnyDedupeList3, keepAnyDedupeList4, list5);
+         ColumnVector keepFirstExpected = ColumnVector.fromLists(listType, list1, list2, keepFirstDedupeList3, keepFirstDedupeList4, list5);
+         ColumnVector keepLastExpected = ColumnVector.fromLists(listType, list1, list2, keepLastDedupeList3, keepLastDedupeList4, list5);
+         ColumnVector keepNoneExpected = ColumnVector.fromLists(listType, list1, list2, keepNoneDedupeList3, keepNoneDedupeList4, list5);
+         ColumnVector tmp = v.dropListDuplicates(DuplicateKeepOption.KEEP_ANY);
+         // Note dropping duplicates w/ KEEP_ANY does not have any ordering guarantee, so sort to make it all
          // consistent
-         ColumnVector result = tmp.listSortRows(false, false)) {
-      assertColumnsAreEqual(expected, result);
+         ColumnVector keepAnyResult = tmp.listSortRows(false, false);
+         ColumnVector keepFirstResult = v.dropListDuplicates(DuplicateKeepOption.KEEP_FIRST);
+         ColumnVector keepLastResult = v.dropListDuplicates(DuplicateKeepOption.KEEP_LAST);
+         ColumnVector keepNoneResult = v.dropListDuplicates(DuplicateKeepOption.KEEP_NONE)) {
+      assertColumnsAreEqual(keepAnyExpected, keepAnyResult);
+      assertColumnsAreEqual(keepFirstExpected, keepFirstResult);
+      assertColumnsAreEqual(keepLastExpected, keepLastResult);
+      assertColumnsAreEqual(keepNoneExpected, keepNoneResult);
     }
   }
 

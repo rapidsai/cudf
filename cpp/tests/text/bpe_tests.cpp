@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -83,7 +83,7 @@ TEST_F(TextBytePairEncoding, BytePairEncodingSeparator)
     {"Ġthe test sentence", "test Ġthe sentence", "Ġthetest sentence", "testĠthesentence"});
   auto sv = cudf::strings_column_view(input);
 
-  auto results = nvtext::byte_pair_encoding(sv, *merge_pairs, std::string("$"));
+  auto results = nvtext::byte_pair_encoding(sv, *merge_pairs, std::string_view("$"));
 
   auto expected = cudf::test::strings_column_wrapper({"Ġthe$ $test$ $sent$ence",
                                                       "test$ $Ġthe$ $sent$ence",

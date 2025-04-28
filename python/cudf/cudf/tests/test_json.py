@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2024, NVIDIA CORPORATION.
+# Copyright (c) 2018-2025, NVIDIA CORPORATION.
 
 import copy
 import gzip
@@ -84,7 +84,8 @@ def gdf_writer_types(request):
 
 
 index_params = [True, False]
-compression_params = ["gzip", "bz2", "zip", "xz", None]
+# tests limited to compressions formats supported by pandas and cudf: bz2, gzip, zip, zstd
+compression_params = ["bz2", "gzip", "zip", "zstd", None]
 orient_params = ["columns", "records", "table", "split"]
 params = itertools.product(index_params, compression_params, orient_params)
 
@@ -94,8 +95,7 @@ def json_files(request, tmp_path_factory, pdf):
     index, compression, orient = request.param
     if index is False and orient not in ("split", "table"):
         pytest.skip(
-            "'index=False' is only valid when 'orient' is 'split' or "
-            "'table'"
+            "'index=False' is only valid when 'orient' is 'split' or 'table'"
         )
     if index is False and orient == "table":
         pytest.skip("'index=False' isn't valid when 'orient' is 'table'")
@@ -218,7 +218,6 @@ def test_cudf_json_writer_read(gdf_writer_types):
     # Bug in pandas https://github.com/pandas-dev/pandas/issues/28558
     if pdf2.empty:
         pdf2.reset_index(drop=True, inplace=True)
-        pdf2.columns = pdf2.columns.astype("object")
 
     # Pandas moved to consistent datetimes parsing format:
     # https://pandas.pydata.org/docs/dev/whatsnew/v2.0.0.html#datetimes-are-now-parsed-with-a-consistent-format
@@ -718,7 +717,7 @@ def test_default_integer_bitwidth(default_integer_bitwidth, engine):
     buf.seek(0)
     df = cudf.read_json(buf, engine=engine, lines=True, orient="records")
 
-    assert df["a"].dtype == np.dtype(f"i{default_integer_bitwidth//8}")
+    assert df["a"].dtype == np.dtype(f"i{default_integer_bitwidth // 8}")
 
 
 @pytest.mark.filterwarnings("ignore:Using CPU")
@@ -739,7 +738,7 @@ def test_default_integer_bitwidth_partial(default_integer_bitwidth, engine):
         buf, engine=engine, lines=True, orient="records", dtype={"b": "i8"}
     )
 
-    assert df["a"].dtype == np.dtype(f"i{default_integer_bitwidth//8}")
+    assert df["a"].dtype == np.dtype(f"i{default_integer_bitwidth // 8}")
     assert df["b"].dtype == np.dtype("i8")
 
 
@@ -753,8 +752,8 @@ def test_default_integer_bitwidth_extremes(default_integer_bitwidth, engine):
     )
     df = cudf.read_json(buf, engine=engine, lines=True, orient="records")
 
-    assert df["u8"].dtype == np.dtype(f"u{default_integer_bitwidth//8}")
-    assert df["i8"].dtype == np.dtype(f"i{default_integer_bitwidth//8}")
+    assert df["u8"].dtype == np.dtype(f"u{default_integer_bitwidth // 8}")
+    assert df["i8"].dtype == np.dtype(f"i{default_integer_bitwidth // 8}")
 
 
 def test_default_float_bitwidth(default_float_bitwidth):
@@ -765,8 +764,8 @@ def test_default_float_bitwidth(default_float_bitwidth):
         lines=True,
         orient="records",
     )
-    assert df["a"].dtype == np.dtype(f"f{default_float_bitwidth//8}")
-    assert df["b"].dtype == np.dtype(f"f{default_float_bitwidth//8}")
+    assert df["a"].dtype == np.dtype(f"f{default_float_bitwidth // 8}")
+    assert df["b"].dtype == np.dtype(f"f{default_float_bitwidth // 8}")
 
 
 def test_json_nested_basic():
@@ -1455,9 +1454,10 @@ def test_chunked_json_reader():
     assert_eq(df, gdf)
 
 
-@pytest.mark.parametrize("compression", ["gzip", None])
+# compression formats limited to those supported by both reader and writer
+@pytest.mark.parametrize("compression", ["gzip", "snappy", "zstd"])
 def test_roundtrip_compression(compression, tmp_path):
-    expected = cudf.DataFrame({"a": 1, "b": "2"})
+    expected = cudf.DataFrame({"a": [1], "b": ["2"]})
     fle = BytesIO()
     expected.to_json(fle, engine="cudf", compression=compression)
     result = cudf.read_json(fle, engine="cudf", compression=compression)

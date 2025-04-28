@@ -1,11 +1,20 @@
-# Copyright (c) 2023-2024, NVIDIA CORPORATION.
+# Copyright (c) 2023-2025, NVIDIA CORPORATION.
 
 import numpy as np
 import pandas as pd
 import pytest
 import torch
 
-pytestmark = pytest.mark.assert_eq(fn=torch.testing.assert_close)
+pytestmark = pytest.mark.assert_eq(
+    fn=lambda expect, got, **kwargs: torch.testing.assert_close(
+        got, expect, **kwargs
+    )
+)
+
+
+def torch_ctor_assert_eq(expect, got, **kwargs):
+    assert got.is_cuda, "torch.Tensor should be on the device"
+    torch.testing.assert_close(got.to("cpu"), expect, **kwargs)
 
 
 @pytest.fixture
@@ -116,9 +125,7 @@ def test_torch_train(data):
     return model(test_x1, test_x2)
 
 
-@pytest.mark.skip(
-    reason="AssertionError: The values for attribute 'device' do not match: cpu != cuda:0."
-)
+@pytest.mark.assert_eq(fn=torch_ctor_assert_eq)
 def test_torch_tensor_ctor():
     s = pd.Series(range(5))
     return torch.tensor(s.values)

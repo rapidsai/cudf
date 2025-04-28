@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -92,6 +92,48 @@ void BM_parquet_read_data(nvbench::state& state,
   auto const run_length  = static_cast<cudf::size_type>(state.get_int64("run_length"));
   BM_parquet_read_data_common<DataType>(
     state, data_profile_builder().cardinality(cardinality).avg_run_length(run_length), type_list);
+}
+
+void BM_parquet_read_long_strings(nvbench::state& state)
+{
+  auto const cardinality = static_cast<cudf::size_type>(state.get_int64("cardinality"));
+
+  auto const d_type      = get_type_or_group(static_cast<int32_t>(data_type::STRING));
+  auto const source_type = retrieve_io_type_enum(state.get_string("io_type"));
+  auto const compression = cudf::io::compression_type::SNAPPY;
+  cuio_source_sink_pair source_sink(source_type);
+
+  auto const avg_string_length = static_cast<cudf::size_type>(state.get_int64("avg_string_length"));
+  // corresponds to 3 sigma (full width 6 sigma: 99.7% of range)
+  auto const half_width =
+    avg_string_length >> 3;  // 32 +/- 4, 128 +/- 16, 1024 +/- 128, 8k +/- 1k, etc.
+  auto const length_min = avg_string_length - half_width;
+  auto const length_max = avg_string_length + half_width;
+
+  data_profile profile =
+    data_profile_builder()
+      .cardinality(cardinality)
+      .avg_run_length(1)
+      .distribution(data_type::STRING, distribution_id::NORMAL, length_min, length_max);
+
+  auto const num_rows_written = [&]() {
+    auto const tbl = create_random_table(
+      cycle_dtypes(d_type, num_cols), table_size_bytes{data_size}, profile);  // THIS
+    auto const view = tbl->view();
+
+    // set smaller threshold to reduce file size and execution time
+    auto const threshold = 1;
+    setenv("LIBCUDF_LARGE_STRINGS_THRESHOLD", std::to_string(threshold).c_str(), 1);
+
+    cudf::io::parquet_writer_options write_opts =
+      cudf::io::parquet_writer_options::builder(source_sink.make_sink_info(), view)
+        .compression(compression);
+    cudf::io::write_parquet(write_opts);
+    return view.num_rows();
+  }();
+
+  parquet_read_common(num_rows_written, num_cols, source_sink, state);
+  unsetenv("LIBCUDF_LARGE_STRINGS_THRESHOLD");
 }
 
 template <data_type DataType>
@@ -366,3 +408,11 @@ NVBENCH_BENCH_TYPES(BM_parquet_read_fixed_width_struct, NVBENCH_TYPE_AXES(d_type
   .set_min_samples(4)
   .add_int64_axis("cardinality", {0, 1000})
   .add_int64_axis("run_length", {1, 32});
+
+NVBENCH_BENCH(BM_parquet_read_long_strings)
+  .set_name("parquet_read_long_strings")
+  .add_string_axis("io_type", {"DEVICE_BUFFER"})
+  .set_min_samples(4)
+  .add_int64_axis("cardinality", {0, 1000})
+  .add_int64_power_of_two_axis("avg_string_length",
+                               nvbench::range(4, 16, 2));  // 16, 64, ... -> 64k

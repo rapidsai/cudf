@@ -1,4 +1,4 @@
-# Copyright (c) 2023-2024, NVIDIA CORPORATION.
+# Copyright (c) 2023-2025, NVIDIA CORPORATION.
 import holoviews as hv
 import numpy as np
 import pandas as pd
@@ -71,9 +71,6 @@ def test_holoviews_heatmap(df):
     )
 
 
-@pytest.mark.skip(
-    reason="AttributeError: 'ndarray' object has no attribute '_fsproxy_wrapped'"
-)
 def test_holoviews_histogram(df):
     return get_plot_info(hv.Histogram(df.values))
 

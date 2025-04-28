@@ -19,6 +19,22 @@ As contributors and maintainers to this project, you are expected to abide by cu
 conduct. More information can be found at:
 [Contributor Code of Conduct](https://docs.rapids.ai/resources/conduct/).
 
+## Documentation contributions
+
+To make a contribution only to cuDF documentation:
+
+1. Create the `cudf_dev` conda environment following the steps in [Building with a conda environment](#building-with-a-conda-environment).
+2. Activate the environment and install a recent version of `cudf`
+
+```bash
+conda activate cudf_dev
+conda install cudf -c rapidsai-nightly -c conda-forge
+```
+
+3. Build and view the docs locally following the instructions in the [Building
+documentation docs](https://docs.rapids.ai/api/cudf/stable/developer_guide/documentation/#building-and-viewing-docs)
+4. Follow steps 7-10 in the section [Your first issue](#your-first-issue)
+
 ## Code contributions
 
 ### Your first issue
@@ -105,7 +121,7 @@ Instructions for a minimal build environment without conda are included below.
 # create the conda environment (assuming in base `cudf` directory)
 # note: RAPIDS currently doesn't support `channel_priority: strict`;
 # use `channel_priority: flexible` instead
-conda env create --name cudf_dev --file conda/environments/all_cuda-125_arch-x86_64.yaml
+conda env create --name cudf_dev --file conda/environments/all_cuda-128_arch-x86_64.yaml
 # activate the environment
 conda activate cudf_dev
 ```
@@ -154,7 +170,7 @@ cd $CUDF_HOME
 #### Building for development
 
 To build Python packages for development purposes, add the `--pydevelop` flag.
-To build C++ tests, you can also request that build.sh build the `test` target.
+To build C++ tests, you can also request that build.sh build the `tests` target.
 To build all libraries and tests, with Python packages in development mode, simply run
 
 ```bash

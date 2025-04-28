@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -250,13 +250,26 @@ struct dispatch_to_flatbuf {
   std::enable_if_t<cudf::is_fixed_point<T>(), void> operator()()
   {
     field_type_id = flatbuf::Type_Decimal;
-    field_offset  = flatbuf::CreateDecimal(fbb,
-                                          (col_meta.is_decimal_precision_set())
-                                             ? col_meta.get_decimal_precision()
-                                             : MAX_DECIMAL128_PRECISION,
-                                          col->type().scale(),
-                                          128)
-                     .Union();
+
+    auto const [max_precision, bitwidth] = []() constexpr -> std::pair<int32_t, int32_t> {
+      if constexpr (std::is_same_v<T, numeric::decimal32>) {
+        return {MAX_DECIMAL32_PRECISION, 32};
+      } else if constexpr (std::is_same_v<T, numeric::decimal64>) {
+        return {MAX_DECIMAL64_PRECISION, 64};
+      } else if constexpr (std::is_same_v<T, numeric::decimal128>) {
+        return {MAX_DECIMAL128_PRECISION, 128};
+      } else {
+        CUDF_FAIL("Unsupported fixed point type for arrow schema writer");
+      }
+    }();
+
+    field_offset =
+      flatbuf::CreateDecimal(
+        fbb,
+        (col_meta.is_decimal_precision_set()) ? col_meta.get_decimal_precision() : max_precision,
+        col->type().scale(),
+        bitwidth)
+        .Union();
   }
 
   template <typename T>

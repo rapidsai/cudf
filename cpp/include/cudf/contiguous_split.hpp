@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -114,6 +114,7 @@ struct packed_table {
  *
  * @param input View of a table to split
  * @param splits A vector of indices where the view will be split
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr An optional memory resource to use for all returned device allocations
  * @return The set of requested views of `input` indicated by the `splits` and the viewed memory
  * buffer
@@ -121,6 +122,7 @@ struct packed_table {
 std::vector<packed_table> contiguous_split(
   cudf::table_view const& input,
   std::vector<size_type> const& splits,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 namespace detail {
@@ -198,12 +200,14 @@ class chunked_pack {
    * @param input source `table_view` to pack
    * @param user_buffer_size buffer size (in bytes) that will be passed on `next`. Must be
    *                         at least 1MB
+   * @param stream CUDA stream used for device memory operations and kernel launches
    * @param temp_mr An optional memory resource to be used for temporary and scratch allocations
    * only
    */
   explicit chunked_pack(
     cudf::table_view const& input,
     std::size_t user_buffer_size,
+    rmm::cuda_stream_view stream           = cudf::get_default_stream(),
     rmm::device_async_resource_ref temp_mr = cudf::get_current_device_resource_ref());
 
   /**
@@ -263,12 +267,14 @@ class chunked_pack {
    * @param input source `table_view` to pack
    * @param user_buffer_size buffer size (in bytes) that will be passed on `next`. Must be
    *                         at least 1MB
+   * @param stream CUDA stream used for device memory operations and kernel launches
    * @param temp_mr RMM memory resource to be used for temporary and scratch allocations only
    * @return a unique_ptr of chunked_pack
    */
   [[nodiscard]] static std::unique_ptr<chunked_pack> create(
     cudf::table_view const& input,
     std::size_t user_buffer_size,
+    rmm::cuda_stream_view stream           = cudf::get_default_stream(),
     rmm::device_async_resource_ref temp_mr = cudf::get_current_device_resource_ref());
 
  private:
@@ -284,11 +290,13 @@ class chunked_pack {
  * `cudf::unpack` to deserialize.
  *
  * @param input View of the table to pack
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr An optional memory resource to use for all returned device allocations
  * @return packed_columns A struct containing the serialized metadata and data in contiguous host
  *         and device memory respectively
  */
 packed_columns pack(cudf::table_view const& input,
+                    rmm::cuda_stream_view stream      = cudf::get_default_stream(),
                     rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**

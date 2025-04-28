@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,6 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
+#include <cudf/aggregation/host_udf.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
@@ -98,6 +100,13 @@ struct segmented_reduce_dispatch_functor {
       }
       case segmented_reduce_aggregation::NUNIQUE:
         return segmented_nunique(col, offsets, null_handling, stream, mr);
+      case aggregation::HOST_UDF: {
+        auto const& udf_base_ptr =
+          dynamic_cast<cudf::detail::host_udf_aggregation const&>(agg).udf_ptr;
+        auto const udf_ptr = dynamic_cast<segmented_reduce_host_udf const*>(udf_base_ptr.get());
+        CUDF_EXPECTS(udf_ptr != nullptr, "Invalid HOST_UDF instance for segmented reduction.");
+        return (*udf_ptr)(col, offsets, output_dtype, null_handling, init, stream, mr);
+      }  // case aggregation::HOST_UDF
       default: CUDF_FAIL("Unsupported aggregation type.");
     }
   }
@@ -117,9 +126,11 @@ std::unique_ptr<column> segmented_reduce(column_view const& segmented_values,
                cudf::data_type_error);
   if (init.has_value() && !(agg.kind == aggregation::SUM || agg.kind == aggregation::PRODUCT ||
                             agg.kind == aggregation::MIN || agg.kind == aggregation::MAX ||
-                            agg.kind == aggregation::ANY || agg.kind == aggregation::ALL)) {
+                            agg.kind == aggregation::ANY || agg.kind == aggregation::ALL ||
+                            agg.kind == aggregation::HOST_UDF)) {
     CUDF_FAIL(
-      "Initial value is only supported for SUM, PRODUCT, MIN, MAX, ANY, and ALL aggregation types");
+      "Initial value is only supported for SUM, PRODUCT, MIN, MAX, ANY, ALL, and HOST_UDF "
+      "aggregation types");
   }
 
   if (segmented_values.is_empty() && offsets.empty()) {

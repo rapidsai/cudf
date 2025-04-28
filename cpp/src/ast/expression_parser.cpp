@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -161,6 +161,7 @@ cudf::size_type expression_parser::visit(operation const& expr)
   auto const op        = expr.get_operator();
   auto const data_type = cudf::ast::detail::ast_operator_return_type(op, operand_types);
   _operators.push_back(op);
+  _operator_arities.push_back(cudf::ast::detail::ast_operator_arity(op));
   // Push data reference
   auto const output = [&]() {
     if (expression_index == 0) {

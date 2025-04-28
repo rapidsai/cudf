@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -166,13 +166,13 @@ TEST_P(ParquetSizedTest, DictionaryTest)
 
   // make sure dictionary was used
   auto const source = cudf::io::datasource::create(filepath);
-  cudf::io::parquet::detail::FileMetaData fmd;
+  cudf::io::parquet::FileMetaData fmd;
 
   read_footer(source, &fmd);
   auto used_dict = [&fmd]() {
     for (auto enc : fmd.row_groups[0].columns[0].meta_data.encodings) {
-      if (enc == cudf::io::parquet::detail::Encoding::PLAIN_DICTIONARY or
-          enc == cudf::io::parquet::detail::Encoding::RLE_DICTIONARY) {
+      if (enc == cudf::io::parquet::Encoding::PLAIN_DICTIONARY or
+          enc == cudf::io::parquet::Encoding::RLE_DICTIONARY) {
         return true;
       }
     }
@@ -215,7 +215,7 @@ TYPED_TEST(ParquetWriterComparableTypeTest, ThreeColumnSorted)
   cudf::io::write_parquet(out_opts);
 
   auto const source = cudf::io::datasource::create(filepath);
-  cudf::io::parquet::detail::FileMetaData fmd;
+  cudf::io::parquet::FileMetaData fmd;
 
   read_footer(source, &fmd);
   ASSERT_GT(fmd.row_groups.size(), 0);
@@ -225,9 +225,9 @@ TYPED_TEST(ParquetWriterComparableTypeTest, ThreeColumnSorted)
 
   // now check that the boundary order for chunk 1 is ascending,
   // chunk 2 is descending, and chunk 3 is unordered
-  std::array expected_orders{cudf::io::parquet::detail::BoundaryOrder::ASCENDING,
-                             cudf::io::parquet::detail::BoundaryOrder::DESCENDING,
-                             cudf::io::parquet::detail::BoundaryOrder::UNORDERED};
+  std::array expected_orders{cudf::io::parquet::BoundaryOrder::ASCENDING,
+                             cudf::io::parquet::BoundaryOrder::DESCENDING,
+                             cudf::io::parquet::BoundaryOrder::UNORDERED};
 
   for (std::size_t i = 0; i < columns.size(); i++) {
     auto const ci = read_column_index(source, columns[i]);
@@ -268,6 +268,7 @@ TEST_P(ParquetCompressionTest, Basic)
 INSTANTIATE_TEST_CASE_P(ParquetCompressionTest,
                         ParquetCompressionTest,
                         ::testing::Values(cudf::io::compression_type::NONE,
+                                          cudf::io::compression_type::AUTO,
                                           cudf::io::compression_type::SNAPPY,
                                           cudf::io::compression_type::LZ4,
                                           cudf::io::compression_type::ZSTD));

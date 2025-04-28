@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 # TODO: remove need for this
 # ruff: noqa: D101
@@ -41,7 +41,7 @@ class StringFunction(Expr):
         ConcatHorizontal = auto()
         ConcatVertical = auto()
         Contains = auto()
-        ContainsMany = auto()
+        ContainsAny = auto()
         CountMatches = auto()
         EndsWith = auto()
         EscapeRegex = auto()
@@ -57,6 +57,7 @@ class StringFunction(Expr):
         LenBytes = auto()
         LenChars = auto()
         Lowercase = auto()
+        Normalize = auto()
         PadEnd = auto()
         PadStart = auto()
         Replace = auto()
@@ -109,8 +110,9 @@ class StringFunction(Expr):
         self.is_pointwise = True
         self._validate_input()
 
-    def _validate_input(self):
+    def _validate_input(self) -> None:
         if self.name not in (
+            StringFunction.Name.ConcatVertical,
             StringFunction.Name.Contains,
             StringFunction.Name.EndsWith,
             StringFunction.Name.Lowercase,
@@ -124,7 +126,7 @@ class StringFunction(Expr):
             StringFunction.Name.StripCharsEnd,
             StringFunction.Name.Uppercase,
         ):
-            raise NotImplementedError(f"String function {self.name}")
+            raise NotImplementedError(f"String function {self.name!r}")
         if self.name is StringFunction.Name.Contains:
             literal, strict = self.options
             if not literal:
@@ -153,7 +155,9 @@ class StringFunction(Expr):
             if not all(isinstance(expr, Literal) for expr in self.children[1:]):
                 raise NotImplementedError("replace only supports scalar target")
             target = self.children[1]
-            if target.value == pa.scalar("", type=pa.string()):
+            # Above, we raise NotImplementedError if the target is not a Literal,
+            # so we can safely access .value here.
+            if target.value == pa.scalar("", type=target.value.type):  # type: ignore[attr-defined]
                 raise NotImplementedError(
                     "libcudf replace does not support empty strings"
                 )
@@ -168,7 +172,9 @@ class StringFunction(Expr):
             ):
                 raise NotImplementedError("replace_many only supports literal inputs")
             target = self.children[1]
-            if pc.any(pc.equal(target.value, "")).as_py():
+            # Above, we raise NotImplementedError if the target is not a Literal,
+            # so we can safely access .value here.
+            if pc.any(pc.equal(target.value.cast(pa.string()), "")).as_py():  # type: ignore[attr-defined]
                 raise NotImplementedError(
                     "libcudf replace_many is implemented differently from polars "
                     "for empty strings"
@@ -204,7 +210,20 @@ class StringFunction(Expr):
         mapping: Mapping[Expr, Column] | None = None,
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
-        if self.name is StringFunction.Name.Contains:
+        if self.name is StringFunction.Name.ConcatVertical:
+            (child,) = self.children
+            column = child.evaluate(df, context=context, mapping=mapping)
+            delimiter, ignore_nulls = self.options
+            if column.null_count > 0 and not ignore_nulls:
+                return Column(plc.Column.all_null_like(column.obj, 1))
+            return Column(
+                plc.strings.combine.join_strings(
+                    column.obj,
+                    plc.Scalar.from_py(delimiter, plc.DataType(plc.TypeId.STRING)),
+                    plc.Scalar.from_py(None, plc.DataType(plc.TypeId.STRING)),
+                )
+            )
+        elif self.name is StringFunction.Name.Contains:
             child, arg = self.children
             column = child.evaluate(df, context=context, mapping=mapping)
 
@@ -213,7 +232,7 @@ class StringFunction(Expr):
                 pat = arg.evaluate(df, context=context, mapping=mapping)
                 pattern = (
                     pat.obj_scalar
-                    if pat.is_scalar and pat.obj.size() != column.obj.size()
+                    if pat.is_scalar and pat.size != column.size
                     else pat.obj
                 )
                 return Column(plc.strings.find.contains(column.obj, pattern))
@@ -247,8 +266,8 @@ class StringFunction(Expr):
             return Column(
                 plc.strings.slice.slice_strings(
                     column.obj,
-                    plc.interop.from_arrow(pa.scalar(start, type=pa.int32())),
-                    plc.interop.from_arrow(pa.scalar(stop, type=pa.int32())),
+                    plc.Scalar.from_py(start, plc.DataType(plc.TypeId.INT32)),
+                    plc.Scalar.from_py(stop, plc.DataType(plc.TypeId.INT32)),
                 )
             )
         elif self.name in {
@@ -283,7 +302,7 @@ class StringFunction(Expr):
                 plc.strings.find.ends_with(
                     column.obj,
                     suffix.obj_scalar
-                    if column.obj.size() != suffix.obj.size() and suffix.is_scalar
+                    if column.size != suffix.size and suffix.is_scalar
                     else suffix.obj,
                 )
             )
@@ -293,7 +312,7 @@ class StringFunction(Expr):
                 plc.strings.find.starts_with(
                     column.obj,
                     prefix.obj_scalar
-                    if column.obj.size() != prefix.obj.size() and prefix.is_scalar
+                    if column.size != prefix.size and prefix.is_scalar
                     else prefix.obj,
                 )
             )
@@ -319,8 +338,7 @@ class StringFunction(Expr):
                 not_timestamps = plc.unary.unary_operation(
                     is_timestamps, plc.unary.UnaryOperator.NOT
                 )
-
-                null = plc.interop.from_arrow(pa.scalar(None, type=pa.string()))
+                null = plc.Scalar.from_py(None, plc.DataType(plc.TypeId.STRING))
                 res = plc.copying.boolean_mask_scatter(
                     [null], plc.Table([col.obj]), not_timestamps
                 )

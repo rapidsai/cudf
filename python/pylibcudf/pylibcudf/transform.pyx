@@ -1,11 +1,15 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 from cython.operator cimport dereference
+
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
+from libcpp.vector cimport vector
 from libcpp.utility cimport move, pair
+
 from pylibcudf.libcudf cimport transform as cpp_transform
 from pylibcudf.libcudf.column.column cimport column
+from pylibcudf.libcudf.column.column_view cimport column_view
 from pylibcudf.libcudf.table.table cimport table
 from pylibcudf.libcudf.table.table_view cimport table_view
 from pylibcudf.libcudf.types cimport bitmask_type, size_type
@@ -16,7 +20,6 @@ from rmm.pylibrmm.device_buffer cimport DeviceBuffer
 from .column cimport Column
 from .gpumemoryview cimport gpumemoryview
 from .types cimport DataType
-from .utils cimport int_to_bitmask_ptr
 
 __all__ = [
     "bools_to_mask",
@@ -121,7 +124,7 @@ cpdef Column mask_to_bools(Py_ssize_t bitmask, int begin_bit, int end_bit):
         Boolean column of the bitmask from [begin_bit, end_bit]
     """
     cdef unique_ptr[column] c_result
-    cdef bitmask_type * bitmask_ptr = int_to_bitmask_ptr(bitmask)
+    cdef bitmask_type * bitmask_ptr = <bitmask_type*>bitmask
 
     with nogil:
         c_result = cpp_transform.mask_to_bools(bitmask_ptr, begin_bit, end_bit)
@@ -129,16 +132,19 @@ cpdef Column mask_to_bools(Py_ssize_t bitmask, int begin_bit, int end_bit):
     return Column.from_libcudf(move(c_result))
 
 
-cpdef Column transform(Column input, str unary_udf, DataType output_type, bool is_ptx):
-    """Create a new column by applying a unary function against every
-       element of an input column.
+cpdef Column transform(list[Column] inputs,
+                       str transform_udf,
+                       DataType output_type,
+                       bool is_ptx):
+    """Create a new column by applying a transform function against
+       multiple input columns.
 
     Parameters
     ----------
-    input : Column
-        Column to transform.
-    unary_udf : str
-        The PTX/CUDA string of the unary function to apply.
+    inputs : list[Column]
+        Columns to transform.
+    transform_udf : str
+        The PTX/CUDA string of the transform function to apply.
     output_type : DataType
         The output type that is compatible with the output type in the unary_udf.
     is_ptx : bool
@@ -150,13 +156,17 @@ cpdef Column transform(Column input, str unary_udf, DataType output_type, bool i
     Column
         The transformed column having the UDF applied to each element.
     """
+    cdef vector[column_view] c_inputs
     cdef unique_ptr[column] c_result
-    cdef string c_unary_udf = unary_udf.encode()
+    cdef string c_transform_udf = transform_udf.encode()
     cdef bool c_is_ptx = is_ptx
+
+    for input in inputs:
+        c_inputs.push_back((<Column?>input).view())
 
     with nogil:
         c_result = cpp_transform.transform(
-            input.view(), c_unary_udf, output_type.c_obj, c_is_ptx
+            c_inputs, c_transform_udf, output_type.c_obj, c_is_ptx
         )
 
     return Column.from_libcudf(move(c_result))

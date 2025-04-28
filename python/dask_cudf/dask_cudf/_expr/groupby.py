@@ -3,21 +3,22 @@ import functools
 
 import numpy as np
 import pandas as pd
-from dask_expr._collection import new_collection
-from dask_expr._groupby import (
-    DecomposableGroupbyAggregation,
-    GroupBy as DXGroupBy,
-    GroupbyAggregation,
-    SeriesGroupBy as DXSeriesGroupBy,
-    SingleAggregation,
-)
-from dask_expr._util import is_scalar
 
 from dask.dataframe.core import _concat
 from dask.dataframe.groupby import Aggregation
 
 from cudf.core.groupby.groupby import _deprecate_collect
 from cudf.utils.performance_tracking import _dask_cudf_performance_tracking
+
+from dask_cudf._expr import (
+    DecomposableGroupbyAggregation,
+    DXGroupBy,
+    DXSeriesGroupBy,
+    GroupbyAggregation,
+    SingleAggregation,
+    is_scalar,
+    new_collection,
+)
 
 ##
 ## Fused groupby aggregations

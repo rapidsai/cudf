@@ -24,7 +24,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
-namespace cudf::io::orc::gpu {
+namespace cudf::io::orc::detail {
 
 /**
  * @brief Counts the number of characters in each rowgroup of each string column.
@@ -35,10 +35,10 @@ CUDF_KERNEL void rowgroup_char_counts_kernel(device_2dspan<size_type> char_count
                                              device_span<uint32_t const> str_col_indexes)
 {
   // Index of the column in the `str_col_indexes` array
-  auto const str_col_idx = blockIdx.y;
+  auto const str_col_idx = blockIdx.x % str_col_indexes.size();
   // Index of the column in the `orc_columns` array
   auto const col_idx       = str_col_indexes[str_col_idx];
-  auto const row_group_idx = blockIdx.x * blockDim.x + threadIdx.x;
+  auto const row_group_idx = (blockIdx.x / str_col_indexes.size()) * blockDim.x + threadIdx.x;
   if (row_group_idx >= rowgroup_bounds.size().first) { return; }
 
   auto const& str_col  = orc_columns[col_idx];
@@ -63,18 +63,17 @@ void rowgroup_char_counts(device_2dspan<size_type> counts,
   if (rowgroup_bounds.count() == 0) { return; }
 
   auto const num_rowgroups = rowgroup_bounds.size().first;
-  auto const num_str_cols  = str_col_indexes.size();
-  if (num_str_cols == 0) { return; }
+  if (str_col_indexes.empty()) { return; }
 
   int block_size    = 0;  // suggested thread count to use
   int min_grid_size = 0;  // minimum block count required
   CUDF_CUDA_TRY(
     cudaOccupancyMaxPotentialBlockSize(&min_grid_size, &block_size, rowgroup_char_counts_kernel));
-  auto const grid_size =
-    dim3(cudf::util::div_rounding_up_unsafe<unsigned int>(num_rowgroups, block_size),
-         static_cast<unsigned int>(num_str_cols));
+  auto const num_blocks =
+    cudf::util::div_rounding_up_unsafe<unsigned int>(num_rowgroups, block_size) *
+    str_col_indexes.size();
 
-  rowgroup_char_counts_kernel<<<grid_size, block_size, 0, stream.value()>>>(
+  rowgroup_char_counts_kernel<<<num_blocks, block_size, 0, stream.value()>>>(
     counts, orc_columns, rowgroup_bounds, str_col_indexes);
 }
 
@@ -104,8 +103,8 @@ CUDF_KERNEL void __launch_bounds__(block_size)
   populate_dictionary_hash_maps_kernel(device_2dspan<stripe_dictionary> dictionaries,
                                        device_span<orc_column_device_view const> columns)
 {
-  auto const col_idx    = blockIdx.x;
-  auto const stripe_idx = blockIdx.y;
+  auto const col_idx    = blockIdx.x / dictionaries.size().second;
+  auto const stripe_idx = blockIdx.x % dictionaries.size().second;
   auto const t          = threadIdx.x;
   auto& dict            = dictionaries[col_idx][stripe_idx];
   auto const& col       = columns[dict.column_idx];
@@ -166,8 +165,8 @@ template <int block_size>
 CUDF_KERNEL void __launch_bounds__(block_size)
   collect_map_entries_kernel(device_2dspan<stripe_dictionary> dictionaries)
 {
-  auto const col_idx    = blockIdx.x;
-  auto const stripe_idx = blockIdx.y;
+  auto const col_idx    = blockIdx.x / dictionaries.size().second;
+  auto const stripe_idx = blockIdx.x % dictionaries.size().second;
   auto const& dict      = dictionaries[col_idx][stripe_idx];
 
   if (not dict.is_enabled) { return; }
@@ -200,8 +199,8 @@ CUDF_KERNEL void __launch_bounds__(block_size)
   get_dictionary_indices_kernel(device_2dspan<stripe_dictionary> dictionaries,
                                 device_span<orc_column_device_view const> columns)
 {
-  auto const col_idx    = blockIdx.x;
-  auto const stripe_idx = blockIdx.y;
+  auto const col_idx    = blockIdx.x / dictionaries.size().second;
+  auto const stripe_idx = blockIdx.x % dictionaries.size().second;
   auto const t          = threadIdx.x;
   auto const& dict      = dictionaries[col_idx][stripe_idx];
   auto const& col       = columns[dict.column_idx];
@@ -244,9 +243,8 @@ void populate_dictionary_hash_maps(device_2dspan<stripe_dictionary> dictionaries
 {
   if (dictionaries.count() == 0) { return; }
   constexpr int block_size = 256;
-  dim3 const dim_grid(dictionaries.size().first, dictionaries.size().second);
   populate_dictionary_hash_maps_kernel<block_size>
-    <<<dim_grid, block_size, 0, stream.value()>>>(dictionaries, columns);
+    <<<dictionaries.count(), block_size, 0, stream.value()>>>(dictionaries, columns);
 }
 
 void collect_map_entries(device_2dspan<stripe_dictionary> dictionaries,
@@ -254,8 +252,8 @@ void collect_map_entries(device_2dspan<stripe_dictionary> dictionaries,
 {
   if (dictionaries.count() == 0) { return; }
   constexpr int block_size = 1024;
-  dim3 const dim_grid(dictionaries.size().first, dictionaries.size().second);
-  collect_map_entries_kernel<block_size><<<dim_grid, block_size, 0, stream.value()>>>(dictionaries);
+  collect_map_entries_kernel<block_size>
+    <<<dictionaries.count(), block_size, 0, stream.value()>>>(dictionaries);
 }
 
 void get_dictionary_indices(device_2dspan<stripe_dictionary> dictionaries,
@@ -264,9 +262,8 @@ void get_dictionary_indices(device_2dspan<stripe_dictionary> dictionaries,
 {
   if (dictionaries.count() == 0) { return; }
   constexpr int block_size = 1024;
-  dim3 const dim_grid(dictionaries.size().first, dictionaries.size().second);
   get_dictionary_indices_kernel<block_size>
-    <<<dim_grid, block_size, 0, stream.value()>>>(dictionaries, columns);
+    <<<dictionaries.count(), block_size, 0, stream.value()>>>(dictionaries, columns);
 }
 
-}  // namespace cudf::io::orc::gpu
+}  // namespace cudf::io::orc::detail

@@ -1,19 +1,19 @@
-# Copyright (c) 2021-2024, NVIDIA CORPORATION.
+# Copyright (c) 2021-2025, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
 import itertools
 import sys
 from collections import abc
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from functools import cached_property, reduce
 from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
 import pandas as pd
-from pandas.api.types import is_bool
 
 import cudf
+from cudf.api.types import is_scalar
 from cudf.core import column
 
 if TYPE_CHECKING:
@@ -21,6 +21,10 @@ if TYPE_CHECKING:
 
     from cudf._typing import Dtype
     from cudf.core.column import ColumnBase
+
+
+def _is_bool(val: Any) -> bool:
+    return isinstance(val, (bool, np.bool_))
 
 
 class _NestedGetItemDict(dict):
@@ -368,9 +372,8 @@ class ColumnAccessor(abc.MutableMapping):
             new_values = self.columns[:loc] + (value,) + self.columns[loc:]
             self._data = dict(zip(new_keys, new_values))
         self._clear_cache(old_ncols, old_ncols + 1)
-        if old_ncols == 0:
-            # The type(name) may no longer match the prior label_dtype
-            self.label_dtype = None
+        # The type(name) may no longer match the prior label_dtype
+        self.label_dtype = None
 
     def copy(self, deep: bool = False) -> Self:
         """
@@ -404,7 +407,7 @@ class ColumnAccessor(abc.MutableMapping):
         """
         if isinstance(key, slice):
             return self._select_by_label_slice(key)
-        elif pd.api.types.is_list_like(key) and not isinstance(key, tuple):
+        elif not (isinstance(key, tuple) or is_scalar(key)):
             return self._select_by_label_list_like(tuple(key))
         else:
             if isinstance(key, tuple):
@@ -412,7 +415,9 @@ class ColumnAccessor(abc.MutableMapping):
                     return self._select_by_label_with_wildcard(key)
             return self._select_by_label_grouped(key)
 
-    def get_labels_by_index(self, index: Any) -> tuple:
+    def get_labels_by_index(
+        self, index: slice | int | Iterable[int | bool]
+    ) -> tuple:
         """Get the labels corresponding to the provided column indices.
 
         Parameters
@@ -428,9 +433,9 @@ class ColumnAccessor(abc.MutableMapping):
         if isinstance(index, slice):
             start, stop, step = index.indices(len(self))
             return self.names[start:stop:step]
-        elif pd.api.types.is_integer(index):
+        elif isinstance(index, int):
             return (self.names[index],)
-        elif (bn := len(index)) > 0 and all(map(is_bool, index)):
+        elif (bn := len(index)) > 0 and all(map(_is_bool, index)):  # type: ignore[arg-type]
             if bn != (n := len(self.names)):
                 raise IndexError(
                     f"Boolean mask has wrong length: {bn} not {n}"
@@ -443,7 +448,7 @@ class ColumnAccessor(abc.MutableMapping):
             # TODO: Doesn't handle on-device columns
             return tuple(n for n, keep in zip(self.names, index) if keep)
         else:
-            if len(set(index)) != len(index):
+            if len(set(index)) != len(index):  # type: ignore[arg-type]
                 raise NotImplementedError(
                     "Selecting duplicate column labels is not supported."
                 )
@@ -545,7 +550,7 @@ class ColumnAccessor(abc.MutableMapping):
 
     def _select_by_label_list_like(self, key: tuple) -> Self:
         # Special-casing for boolean mask
-        if (bn := len(key)) > 0 and all(map(is_bool, key)):
+        if (bn := len(key)) > 0 and all(map(_is_bool, key)):
             if bn != (n := len(self.names)):
                 raise IndexError(
                     f"Boolean mask has wrong length: {bn} not {n}"
@@ -595,6 +600,12 @@ class ColumnAccessor(abc.MutableMapping):
 
     def _select_by_label_slice(self, key: slice) -> Self:
         start, stop = key.start, key.stop
+
+        if len(self.names) == 0:
+            # https://github.com/rapidsai/cudf/issues/18376
+            # Any slice is valid when we have no columns
+            return self._from_columns_like_self([], verify=False)
+
         if key.step is not None:
             raise TypeError("Label slicing with step is not supported")
 
@@ -703,7 +714,7 @@ class ColumnAccessor(abc.MutableMapping):
                 level = 0
             if level != 0:
                 raise IndexError(
-                    f"Too many levels: Index has only 1 level, not {level+1}"
+                    f"Too many levels: Index has only 1 level, not {level + 1}"
                 )
 
             if isinstance(mapper, Mapping):
@@ -716,12 +727,18 @@ class ColumnAccessor(abc.MutableMapping):
             if len(new_col_names) != len(set(new_col_names)):
                 raise ValueError("Duplicate column names are not allowed")
 
+        label_dtype = self.label_dtype
+        if len(self) > 0 and label_dtype is not None:
+            old_type = type(next(iter(self.keys())))
+            if not all(isinstance(label, old_type) for label in new_col_names):
+                label_dtype = None
+
         data = dict(zip(new_col_names, self.values()))
         return type(self)(
             data=data,
             level_names=self.level_names,
             multiindex=self.multiindex,
-            label_dtype=self.label_dtype,
+            label_dtype=label_dtype,
             verify=False,
         )
 

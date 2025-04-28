@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,7 +29,7 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
-#include <thrust/functional.h>
+#include <cuda/std/functional>
 
 struct ApplyBooleanMask : public cudf::test::BaseFixture {};
 
@@ -208,13 +208,13 @@ TEST_F(ApplyBooleanMask, FixedPointLargeColumnTest)
                   dec32_data.cend(),
                   mask_data.cbegin(),
                   std::back_inserter(expect_dec32_data),
-                  thrust::identity{});
+                  cuda::std::identity{});
   thrust::copy_if(thrust::seq,
                   dec64_data.cbegin(),
                   dec64_data.cend(),
                   mask_data.cbegin(),
                   std::back_inserter(expect_dec64_data),
-                  thrust::identity{});
+                  cuda::std::identity{});
 
   decimal32_wrapper expect_col32(
     expect_dec32_data.begin(), expect_dec32_data.end(), numeric::scale_type{-3});

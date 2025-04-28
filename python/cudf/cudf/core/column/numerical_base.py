@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2024, NVIDIA CORPORATION.
+# Copyright (c) 2018-2025, NVIDIA CORPORATION.
 """Define an interface for columns that can perform numerical operations."""
 
 from __future__ import annotations
@@ -6,19 +6,30 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Literal, cast
 
 import numpy as np
+from numba.np import numpy_support
 
 import pylibcudf as plc
 
 import cudf
-from cudf.core._internals import sorting
 from cudf.core.buffer import Buffer, acquire_spill_lock
 from cudf.core.column.column import ColumnBase
 from cudf.core.missing import NA
 from cudf.core.mixins import Scannable
+from cudf.utils import cudautils
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from cudf._typing import ScalarLike
     from cudf.core.column.decimal import DecimalDtype
+
+
+_unaryop_map = {
+    "ASIN": "ARCSIN",
+    "ACOS": "ARCCOS",
+    "ATAN": "ARCTAN",
+    "INVERT": "BIT_INVERT",
+}
 
 
 class NumericalBaseColumn(ColumnBase, Scannable):
@@ -87,7 +98,7 @@ class NumericalBaseColumn(ColumnBase, Scannable):
 
         n = len(self)
         miu = self.mean()
-        m4_numerator = ((self - miu) ** self.normalize_binop_value(4)).sum()
+        m4_numerator = ((self - miu) ** 4).sum()
         V = self.var()
 
         if V == 0:
@@ -112,7 +123,7 @@ class NumericalBaseColumn(ColumnBase, Scannable):
 
         n = len(self)
         miu = self.mean()
-        m3 = (((self - miu) ** self.normalize_binop_value(3)).sum()) / n
+        m3 = (((self - miu) ** 3).sum()) / n
         m2 = self.var(ddof=0)
 
         if m2 == 0:
@@ -145,9 +156,11 @@ class NumericalBaseColumn(ColumnBase, Scannable):
         else:
             no_nans = self.nans_to_nulls()
             # get sorted indices and exclude nulls
-            indices = sorting.order_by(
-                [no_nans], [True], "first", stable=True
-            ).slice(no_nans.null_count, len(no_nans))
+            indices = (
+                no_nans.argsort(ascending=True, na_position="first")
+                .slice(no_nans.null_count, len(no_nans))
+                .astype(np.dtype(np.int32))
+            )
             with acquire_spill_lock():
                 plc_column = plc.quantiles.quantile(
                     no_nans.to_pylibcudf(mode="read"),
@@ -266,4 +279,27 @@ class NumericalBaseColumn(ColumnBase, Scannable):
     def _scan(self, op: str) -> ColumnBase:
         return self.scan(op.replace("cum", ""), True)._with_type_metadata(
             self.dtype
+        )
+
+    def unary_operator(self, unaryop: str | Callable) -> ColumnBase:
+        if callable(unaryop):
+            nb_type = numpy_support.from_dtype(self.dtype)
+            nb_signature = (nb_type,)
+            compiled_op = cudautils.compile_udf(unaryop, nb_signature)
+            np_dtype = np.dtype(compiled_op[1])
+            return self.transform(compiled_op, np_dtype)
+
+        unaryop = unaryop.upper()
+        unaryop = _unaryop_map.get(unaryop, unaryop)
+        unaryop = plc.unary.UnaryOperator[unaryop]
+        with acquire_spill_lock():
+            return type(self).from_pylibcudf(
+                plc.unary.unary_operation(
+                    self.to_pylibcudf(mode="read"), unaryop
+                )
+            )
+
+    def transform(self, compiled_op, np_dtype: np.dtype) -> ColumnBase:
+        raise NotImplementedError(
+            "transform is not implemented for NumericalBaseColumn"
         )

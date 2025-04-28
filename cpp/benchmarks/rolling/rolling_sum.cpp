@@ -66,13 +66,13 @@ void bench_row_variable_rolling_sum(nvbench::state& state, nvbench::type_list<Ty
   auto const preceding_size = static_cast<cudf::size_type>(state.get_int64("preceding_size"));
   auto const following_size = static_cast<cudf::size_type>(state.get_int64("following_size"));
 
-  auto vals = [&]() {
+  auto vals = [&] {
     data_profile const profile = data_profile_builder().cardinality(0).no_validity().distribution(
       cudf::type_to_id<Type>(), distribution_id::UNIFORM, 0, 100);
     return create_random_column(cudf::type_to_id<Type>(), row_count{num_rows}, profile);
   }();
 
-  auto preceding = [&]() {
+  auto preceding = [&] {
     auto data = std::vector<cudf::size_type>(num_rows);
     auto it   = thrust::make_counting_iterator<cudf::size_type>(0);
     std::transform(it, it + num_rows, data.begin(), [num_rows, preceding_size](auto i) {
@@ -88,7 +88,7 @@ void bench_row_variable_rolling_sum(nvbench::state& state, nvbench::type_list<Ty
                                           0);
   }();
 
-  auto following = [&]() {
+  auto following = [&] {
     auto data = std::vector<cudf::size_type>(num_rows);
     auto it   = thrust::make_counting_iterator<cudf::size_type>(0);
     std::transform(it, it + num_rows, data.begin(), [num_rows, following_size](auto i) {
@@ -132,3 +132,11 @@ NVBENCH_BENCH_TYPES(bench_row_variable_rolling_sum,
   .add_int64_power_of_two_axis("num_rows", {14, 22, 28})
   .add_int64_axis("preceding_size", {10, 100})
   .add_int64_axis("following_size", {2});
+
+NVBENCH_BENCH_TYPES(bench_row_fixed_rolling_sum,
+                    NVBENCH_TYPE_AXES(nvbench::type_list<std::int32_t>))
+  .set_name("row_fixed_rolling_sum_large_windows")
+  .add_int64_power_of_two_axis("num_rows", {28})
+  .add_int64_axis("preceding_size", {10'000, 40'000})
+  .add_int64_axis("following_size", {0})
+  .add_int64_axis("min_periods", {1});

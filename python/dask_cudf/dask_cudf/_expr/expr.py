@@ -1,12 +1,6 @@
 # Copyright (c) 2024-2025, NVIDIA CORPORATION.
 import functools
 
-import dask_expr._shuffle as _shuffle_module
-from dask_expr import new_collection
-from dask_expr._cumulative import CumulativeBlockwise
-from dask_expr._expr import Elemwise, Expr, RenameAxis, VarColumns
-from dask_expr._reductions import Reduction, Var
-
 from dask.dataframe.dispatch import (
     is_categorical_dtype,
     make_meta,
@@ -16,6 +10,19 @@ from dask.typing import no_default
 from dask.utils import is_dataframe_like
 
 import cudf
+
+from dask_cudf._expr import (
+    CumulativeBlockwise,
+    Elemwise,
+    EnforceRuntimeDivisions,
+    Expr,
+    Reduction,
+    RenameAxis,
+    Var,
+    VarColumns,
+    _shuffle_module,
+    new_collection,
+)
 
 ##
 ## Custom expressions
@@ -196,6 +203,20 @@ def _patched_get_divisions(frame, other, *args, **kwargs):
     return _original_get_divisions(frame, other, *args, **kwargs)
 
 
+_original_erd_divisions = EnforceRuntimeDivisions._divisions
+
+
+def _patched_erd_divisions(self):
+    # This patch is needed for upstream dask testing
+    # (dask/dataframe/tests/test_indexing.py::test_gpu_loc).
+    # Without this patch, an individual element of divisions
+    # may end up as a 0-dim cupy array.
+    # TODO: Find long-term fix.
+    # Maybe update `LocList._layer_information`?
+    divs = _original_erd_divisions(self)
+    return tuple(div.item() if hasattr(div, "item") else div for div in divs)
+
+
 _PATCHED = False
 
 
@@ -207,4 +228,5 @@ def _patch_dask_expr():
         CumulativeBlockwise._kwargs = PatchCumulativeBlockwise._kwargs
         Expr.var = _patched_var
         _shuffle_module._get_divisions = _patched_get_divisions
+        EnforceRuntimeDivisions._divisions = _patched_erd_divisions
         _PATCHED = True

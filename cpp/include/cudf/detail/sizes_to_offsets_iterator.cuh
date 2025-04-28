@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,7 +26,7 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
-#include <thrust/distance.h>
+#include <cuda/std/iterator>
 #include <thrust/scan.h>
 
 #include <stdexcept>
@@ -50,7 +50,7 @@ struct sizes_to_offsets_iterator {
   using reference         = sizes_to_offsets_iterator const&;
   using iterator_category = std::random_access_iterator_tag;
 
-  using ScanType = typename thrust::iterator_traits<ScanIterator>::value_type;
+  using ScanType = cuda::std::iter_value_t<ScanIterator>;
 
   CUDF_HOST_DEVICE inline sizes_to_offsets_iterator& operator++()
   {
@@ -187,7 +187,7 @@ struct sizes_to_offsets_iterator {
    * Use the make_sizes_to_offsets_iterator() to create an instance of this class
    */
   sizes_to_offsets_iterator(ScanIterator begin, ScanIterator end, LastType* last)
-    : itr_{begin}, end_{thrust::prev(end)}, last_{last}
+    : itr_{begin}, end_{cuda::std::prev(end)}, last_{last}
   {
   }
 
@@ -255,15 +255,17 @@ static sizes_to_offsets_iterator<ScanIterator, LastType> make_sizes_to_offsets_i
  * @param begin Input iterator for scan
  * @param end End of the input iterator
  * @param result Output iterator for scan result
+ * @param initial_offset Initial offset to add to scan
  * @return The last element of the scan
  */
 template <typename SizesIterator, typename OffsetsIterator>
 auto sizes_to_offsets(SizesIterator begin,
                       SizesIterator end,
                       OffsetsIterator result,
+                      int64_t initial_offset,
                       rmm::cuda_stream_view stream)
 {
-  using SizeType = typename thrust::iterator_traits<SizesIterator>::value_type;
+  using SizeType = cuda::std::iter_value_t<SizesIterator>;
   static_assert(std::is_integral_v<SizeType>,
                 "Only numeric types are supported by sizes_to_offsets");
 
@@ -273,7 +275,8 @@ auto sizes_to_offsets(SizesIterator begin,
     make_sizes_to_offsets_iterator(result, result + std::distance(begin, end), last_element.data());
   // This function uses the type of the initialization parameter as the accumulator type
   // when computing the individual scan output elements.
-  thrust::exclusive_scan(rmm::exec_policy(stream), begin, end, output_itr, LastType{0});
+  thrust::exclusive_scan(
+    rmm::exec_policy_nosync(stream), begin, end, output_itr, static_cast<LastType>(initial_offset));
   return last_element.value(stream);
 }
 
@@ -319,7 +322,8 @@ std::pair<std::unique_ptr<column>, size_type> make_offsets_child_column(
     });
   auto input_itr = cudf::detail::make_counting_transform_iterator(0, map_fn);
   // Use the sizes-to-offsets iterator to compute the total number of elements
-  auto const total_elements = sizes_to_offsets(input_itr, input_itr + count + 1, d_offsets, stream);
+  auto const total_elements =
+    sizes_to_offsets(input_itr, input_itr + count + 1, d_offsets, 0, stream);
   CUDF_EXPECTS(
     total_elements <= static_cast<decltype(total_elements)>(std::numeric_limits<size_type>::max()),
     "Size of output exceeds the column size limit",

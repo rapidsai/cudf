@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 # TODO: remove need for this
 # ruff: noqa: D101
@@ -7,8 +7,6 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
-
-import pyarrow as pa
 
 import pylibcudf as plc
 
@@ -50,13 +48,11 @@ class Gather(Expr):
         n = df.num_rows
         if hi >= n or lo < -n:
             raise ValueError("gather indices are out of bounds")
-        if indices.obj.null_count():
+        if indices.null_count:
             bounds_policy = plc.copying.OutOfBoundsPolicy.NULLIFY
             obj = plc.replace.replace_nulls(
                 indices.obj,
-                plc.interop.from_arrow(
-                    pa.scalar(n, type=plc.interop.to_arrow(indices.obj.type()))
-                ),
+                plc.Scalar.from_py(n, dtype=indices.obj.type()),
             )
         else:
             bounds_policy = plc.copying.OutOfBoundsPolicy.DONT_CHECK

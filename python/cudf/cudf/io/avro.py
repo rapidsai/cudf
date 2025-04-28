@@ -1,9 +1,8 @@
-# Copyright (c) 2019-2024, NVIDIA CORPORATION.
+# Copyright (c) 2019-2025, NVIDIA CORPORATION.
 
 import pylibcudf as plc
 
 import cudf
-from cudf._lib.column import Column
 from cudf.utils import ioutils
 
 
@@ -45,13 +44,4 @@ def read_avro(
     if columns is not None and len(columns) > 0:
         options.set_columns(columns)
 
-    plc_result = plc.io.avro.read_avro(options)
-    data = {
-        name: Column.from_pylibcudf(col)
-        for name, col in zip(
-            plc_result.column_names(include_children=False),
-            plc_result.columns,
-            strict=True,
-        )
-    }
-    return cudf.DataFrame._from_data(data)
+    return cudf.DataFrame.from_pylibcudf(plc.io.avro.read_avro(options))

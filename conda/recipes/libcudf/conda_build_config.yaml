@@ -1,38 +1,35 @@
 c_compiler_version:
-  - 11
+  - 13  # [not os.environ.get("RAPIDS_CUDA_VERSION", "").startswith("11")]
+  - 11  # [os.environ.get("RAPIDS_CUDA_VERSION", "").startswith("11")]
 
 cxx_compiler_version:
-  - 11
+  - 13  # [not os.environ.get("RAPIDS_CUDA_VERSION", "").startswith("11")]
+  - 11  # [os.environ.get("RAPIDS_CUDA_VERSION", "").startswith("11")]
 
 cuda_compiler:
-  - cuda-nvcc
-
-cuda11_compiler:
-  - nvcc
+  - cuda-nvcc  # [not os.environ.get("RAPIDS_CUDA_VERSION", "").startswith("11")]
+  - nvcc  # [os.environ.get("RAPIDS_CUDA_VERSION", "").startswith("11")]
 
 c_stdlib:
   - sysroot
 
 c_stdlib_version:
-  - "2.17"
+  - "2.28"
 
 cmake_version:
-  - ">=3.26.4,!=3.30.0"
+  - ">=3.30.4"
 
 dlpack_version:
   - ">=0.8,<1.0"
 
 librdkafka_version:
-  - ">=2.5.0,<2.6.0a0"
-
-fmt_version:
-  - ">=11.0.2,<12"
+  - ">=2.8.0,<2.9.0a0"
 
 flatbuffers_version:
   - "=24.3.25"
 
 nvcomp_version:
-  - "=4.1.0.6"
+  - "=4.2.0.11"
 
 zlib_version:
   - ">=1.2.13"

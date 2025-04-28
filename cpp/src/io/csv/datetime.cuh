@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -197,7 +197,7 @@ __inline__ __device__ cuda::std::chrono::hh_mm_ss<duration_ms> extract_time_of_d
 /**
  * @brief Checks whether `c` is decimal digit
  */
-constexpr bool is_digit(char c) { return c >= '0' and c <= '9'; }
+__device__ constexpr bool is_digit(char c) { return c >= '0' and c <= '9'; }
 
 /**
  * @brief Parses a datetime string and computes the corresponding timestamp.

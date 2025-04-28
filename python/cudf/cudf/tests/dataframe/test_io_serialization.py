@@ -1,5 +1,4 @@
-# Copyright (c) 2023-2024, NVIDIA CORPORATION.
-import contextlib
+# Copyright (c) 2023-2025, NVIDIA CORPORATION.
 from io import BytesIO
 
 import pandas as pd
@@ -35,18 +34,11 @@ def test_dataframe_parquet_roundtrip(index, write_index, empty):
     metadata_equal = (
         gpu_table.schema.pandas_metadata == cpu_table.schema.pandas_metadata
     )
-    if empty and write_index is not False:
-        # https://github.com/rapidsai/cudf/issues/15372
-        ctx = pytest.raises(AssertionError)
-    else:
-        ctx = contextlib.nullcontext()
-    with ctx:
-        assert metadata_equal
+    assert metadata_equal
 
     gpu_read = cudf.read_parquet(gpu_buf)
     cpu_read = cudf.read_parquet(cpu_buf)
-    with ctx:
-        assert_eq(gpu_read, cpu_read)
+    assert_eq(gpu_read, cpu_read)
 
 
 @pytest.mark.parametrize("preserve_index", [False, True, None])

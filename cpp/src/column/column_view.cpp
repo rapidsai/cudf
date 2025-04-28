@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,7 +37,10 @@ template <typename ColumnView>
 void prefetch_col_data(ColumnView& col, void const* data_ptr, std::string_view key) noexcept
 {
   if (cudf::experimental::prefetch::detail::prefetch_config::instance().get(key)) {
-    if (cudf::is_fixed_width(col.type())) {
+    if (col.type().id() == cudf::type_id::EMPTY) {
+      // Skip prefetching for empty columns
+      return;
+    } else if (cudf::is_fixed_width(col.type())) {
       cudf::experimental::prefetch::detail::prefetch_noexcept(
         key, data_ptr, col.size() * size_of(col.type()), cudf::get_default_stream());
     } else if (col.type().id() == type_id::STRING) {
@@ -141,13 +144,14 @@ column_view_base::column_view_base(data_type type,
   }
 }
 
-size_type column_view_base::null_count(size_type begin, size_type end) const
+size_type column_view_base::null_count(size_type begin,
+                                       size_type end,
+                                       rmm::cuda_stream_view stream) const
 {
   CUDF_EXPECTS((begin >= 0) && (end <= size()) && (begin <= end), "Range is out of bounds.");
   return (null_count() == 0)
            ? 0
-           : cudf::detail::null_count(
-               null_mask(), offset() + begin, offset() + end, cudf::get_default_stream());
+           : cudf::detail::null_count(null_mask(), offset() + begin, offset() + end, stream);
 }
 
 bool is_shallow_equivalent(column_view const& lhs, column_view const& rhs)

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,6 +30,23 @@
 
 namespace cudf {
 namespace detail {
+
+/**
+ * @brief Functor that casts a primitive input value to a specified type
+ */
+template <typename T>
+struct cast_fn {
+  template <typename U>
+  CUDF_HOST_DEVICE constexpr T operator()(U&& val) const
+  {
+    return static_cast<T>(cuda::std::forward<U>(val));
+  }
+
+  CUDF_HOST_DEVICE constexpr T&& operator()(T&& val) const noexcept
+  {
+    return cuda::std::forward<T>(val);
+  }
+};
 
 /**
  * @brief Functor that casts another functor's result to a specified type.

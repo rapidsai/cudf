@@ -280,3 +280,5 @@ Serialization / IO / conversion
    DataFrame.to_string
    DataFrame.values
    DataFrame.values_host
+   DataFrame.to_pylibcudf
+   DataFrame.from_pylibcudf

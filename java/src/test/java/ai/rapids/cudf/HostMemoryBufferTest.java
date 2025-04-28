@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -84,6 +84,20 @@ public class HostMemoryBufferTest extends CudfTestBase {
       long offset = 1;
       hostMemoryBuffer.setInt(offset * DType.INT32.getSizeInBytes(), 2);
       assertEquals(2, hostMemoryBuffer.getInt(offset * DType.INT32.getSizeInBytes()));
+    }
+  }
+
+  @Test
+  public void testGetInts() {
+    try (HostMemoryBuffer hostMemoryBuffer = HostMemoryBuffer.allocate(16)) {
+      hostMemoryBuffer.setInt(0, 1);
+      hostMemoryBuffer.setInt(4, 2);
+      hostMemoryBuffer.setInt(8, 3);
+      hostMemoryBuffer.setInt(12, 4);
+      int[] expectedInts = new int[] {1, 2, 3, 4};
+      int[] result = new int[expectedInts.length];
+      hostMemoryBuffer.getInts(result, 0, 0, 4);
+      assertArrayEquals(expectedInts, result);
     }
   }
 

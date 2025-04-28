@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,6 +25,15 @@
 #include <cuda/std/cstddef>
 
 namespace cudf::groupby::detail::hash {
+/// Functor used by type dispatcher returning the size of the underlying C++ type
+struct size_of_functor {
+  template <typename T>
+  CUDF_HOST_DEVICE constexpr cudf::size_type operator()()
+  {
+    return sizeof(T);
+  }
+};
+
 // TODO: TO BE REMOVED issue tracked via #17171
 template <typename T, cudf::aggregation::Kind k>
 __device__ constexpr bool is_supported()

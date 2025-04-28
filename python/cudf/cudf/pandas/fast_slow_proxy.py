@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2024, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION & AFFILIATES.
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
@@ -112,7 +112,7 @@ class _PickleConstructor:
         self._type = type_
 
     def __call__(self):
-        return object.__new__(self._type)
+        return object.__new__(get_final_type_map().get(self._type, self._type))
 
 
 _DELETE = object()
@@ -151,7 +151,7 @@ def make_final_proxy_type(
     additional_attributes
         Mapping of additional attributes to add to the class
        (optional), these will override any defaulted attributes (e.g.
-       ``__init__`). If you want to remove a defaulted attribute
+       ``__init__``). If you want to remove a defaulted attribute
        completely, pass the special sentinel ``_DELETE`` as a value.
     postprocess
         Optional function called to allow the proxy to postprocess
@@ -204,6 +204,12 @@ def make_final_proxy_type(
             return fast_to_slow(self._fsproxy_wrapped)
         return self._fsproxy_wrapped
 
+    def as_gpu_object(self):
+        return self._fsproxy_slow_to_fast()
+
+    def as_cpu_object(self):
+        return self._fsproxy_fast_to_slow()
+
     @property  # type: ignore
     def _fsproxy_state(self) -> _State:
         return (
@@ -221,13 +227,16 @@ def make_final_proxy_type(
         "_fsproxy_slow_type": slow_type,
         "_fsproxy_slow_to_fast": _fsproxy_slow_to_fast,
         "_fsproxy_fast_to_slow": _fsproxy_fast_to_slow,
+        "as_gpu_object": as_gpu_object,
+        "as_cpu_object": as_cpu_object,
         "_fsproxy_state": _fsproxy_state,
     }
 
     if additional_attributes is None:
         additional_attributes = {}
+    slow_type_dir = dir(slow_type)
     for method in _SPECIAL_METHODS:
-        if getattr(slow_type, method, False):
+        if method in slow_type_dir and getattr(slow_type, method, False):
             cls_dict[method] = _FastSlowAttribute(method)
     for k, v in additional_attributes.items():
         if v is _DELETE and k in cls_dict:
@@ -235,7 +244,7 @@ def make_final_proxy_type(
         elif v is not _DELETE:
             cls_dict[k] = v
 
-    for slow_name in dir(slow_type):
+    for slow_name in slow_type_dir:
         if slow_name in cls_dict or slow_name.startswith("__"):
             continue
         else:
@@ -344,7 +353,7 @@ def make_intermediate_proxy_type(
         "_fsproxy_state": _fsproxy_state,
     }
     for method in _SPECIAL_METHODS:
-        if getattr(slow_type, method, False):
+        if method in slow_dir and getattr(slow_type, method, False):
             cls_dict[method] = _FastSlowAttribute(method)
 
     for slow_name in dir(slow_type):
@@ -1325,6 +1334,35 @@ def _get_proxy_base_class(cls):
         if proxy_class in cls.__mro__:
             return proxy_class
     return object
+
+
+def as_proxy_object(obj: Any) -> Any:
+    """
+    Wraps a cudf or pandas object in a proxy object if applicable.
+
+    There will be no memory transfer, i.e., GPU objects stay on GPU and
+    CPU objects stay on CPU. The object will be wrapped in a
+    proxy object. This is useful for ensuring that the object is
+    compatible with the fast-slow proxy system.
+
+    Parameters
+    ----------
+    obj : Any
+        The object to wrap.
+
+    Returns
+    -------
+    Any
+        The wrapped proxy object if applicable, otherwise the original object.
+    """
+    if _is_final_type(obj):
+        typ = get_final_type_map()[type(obj)]
+        return typ._fsproxy_wrap(obj, None)
+    return obj
+
+
+def is_proxy_instance(obj, type):
+    return is_proxy_object(obj) and obj.__class__.__name__ == type.__name__
 
 
 PROXY_BASE_CLASSES: set[type] = {

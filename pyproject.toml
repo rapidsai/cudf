@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2024, NVIDIA CORPORATION.
+# Copyright (c) 2019-2025, NVIDIA CORPORATION.
 
 [tool.mypy]
 ignore_missing_imports = true
@@ -11,6 +11,10 @@ exclude = [
     "custreamz/custreamz/tests/",
     "dask_cudf/dask_cudf/tests/",
  ]
+
+[[tool.mypy.overrides]]
+module = ["cudf_polars.*"]
+disallow_untyped_defs = true
 
 [tool.codespell]
 # note: pre-commit passes explicit lists of files here, which this skip file list doesn't override -
@@ -97,6 +101,12 @@ select = [
     "NPY002",
     # Ruff-specific rules
     "RUF",
+    # banned-api
+    "TID251",
+    # flake8-debugger
+    "T10",
+    # #flake8-print
+    "T20"
 ]
 ignore = [
     # whitespace before :
@@ -116,18 +126,22 @@ ignore = [
 ]
 fixable = ["ALL"]
 exclude = [
-    # TODO: https://github.com/rapidsai/cudf/issues/17461
-    "**/*.ipynb",
+    "cpp/scripts/gdb-pretty-printers.py",
 ]
 
-[tool.ruff.format]
-exclude = [
-    # TODO: https://github.com/rapidsai/cudf/issues/17461
-    "**/*.ipynb",
-]
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"numpy.can_cast".msg = "Use find_common_dtype from cudf.utils.dtypes instead"
+"numpy.result_type".msg = "Use find_common_dtype from cudf.utils.dtypes instead"
+"numpy.issubdtype".msg = "Check the .kind attributes on dtype objects instead"
+"pandas.api.types".msg = "Use cudf.api.types instead"
 
 [tool.ruff.lint.per-file-ignores]
+# We use "== None" to demonstrate null handling in this notebook
+"docs/cudf/source/user_guide/missing-data.ipynb" = ["E711"]
 # Lots of pytest implicitly injected attributes in conftest-patch.py
 "python/cudf/cudf/pandas/scripts/conftest-patch.py" = ["F821"]
 "python/cudf/cudf/pandas/scripts/*" = ["D"]
 "python/cudf/cudf_pandas_tests/*" = ["D"]
+"ci/*" = ["T201"]
+"docs/*" = ["T201"]
+"cpp/*" = ["T201"]

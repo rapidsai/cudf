@@ -1,6 +1,7 @@
-# Copyright (c) 2019-2024, NVIDIA CORPORATION.
+# Copyright (c) 2019-2025, NVIDIA CORPORATION.
 
 import datetime
+import decimal
 import glob
 import hashlib
 import math
@@ -222,8 +223,7 @@ def parquet_path_or_buf(datadir):
     except Exception as excpr:
         if type(excpr).__name__ == "FileNotFoundError":
             pytest.skip(".parquet file is not found")
-        else:
-            print(type(excpr).__name__)
+        raise excpr
 
     def _make_parquet_path_or_buf(src):
         if src == "filepath":
@@ -471,8 +471,6 @@ def test_parquet_read_filtered(tmpdir):
     tbl_filtered = pq.read_table(fname, filters=[("1", ">", 60)])
 
     assert_eq(cudf.io.read_parquet_metadata(fname)[1], 2048 / 64)
-    print(len(df_filtered))
-    print(len(tbl_filtered))
     assert len(df_filtered) < len(df)
     assert len(tbl_filtered) <= len(df_filtered)
 
@@ -1723,9 +1721,6 @@ def test_parquet_writer_gpu_multi_index(tmpdir, simple_pdf, simple_gdf):
 
     assert_eq(simple_pdf, simple_gdf)
 
-    print("PDF Index Type: " + str(type(simple_pdf.index)))
-    print("GDF Index Type: " + str(type(simple_gdf.index)))
-
     # Write out the gdf using the GPU accelerated writer
     simple_gdf.to_parquet(gdf_fname.strpath, index=None)
     simple_pdf.to_parquet(pdf_fname.strpath, index=None)
@@ -2076,9 +2071,9 @@ def test_parquet_writer_chunked_max_file_size(
     for each_file in all_files:
         # Validate file sizes with some extra 1000
         # bytes buffer to spare
-        assert os.path.getsize(each_file) <= (
-            max_file_size_in_bytes
-        ), "File exceeded max_file_size"
+        assert os.path.getsize(each_file) <= (max_file_size_in_bytes), (
+            "File exceeded max_file_size"
+        )
 
 
 def test_parquet_writer_chunked_max_file_size_error():
@@ -2458,10 +2453,20 @@ def run_parquet_index(pdf, index):
     expected = pd.read_parquet(cudf_buffer)
     actual = cudf.read_parquet(pandas_buffer)
 
+    if expected.empty and actual.empty:
+        # We return RangeIndex columns compared
+        # to pandas' Index[object] columns
+        actual.columns = expected.columns
+
     assert_eq(expected, actual, check_index_type=True)
 
     expected = pd.read_parquet(pandas_buffer)
     actual = cudf.read_parquet(cudf_buffer)
+
+    if expected.empty and actual.empty:
+        # We return RangeIndex columns compared
+        # to pandas' Index[object] columns
+        actual.columns = expected.columns
 
     assert_eq(
         expected,
@@ -3172,6 +3177,10 @@ def test_parquet_columns_and_index_param(index, columns):
 
     expected = pd.read_parquet(buffer, columns=columns)
     got = cudf.read_parquet(buffer, columns=columns)
+    if columns == [] and index in {False, None}:
+        # cuDF returns RangeIndex columns compared
+        # to pandas' Index[object] columns
+        got.columns = expected.columns
 
     assert_eq(expected, got, check_index_type=True)
 
@@ -3619,13 +3628,14 @@ def test_parquet_writer_roundtrip_with_arrow_schema(index):
         }
     )
 
+    # Convert decimals32/64 to decimal128 if pyarrow version is < 19.0.0
+    if version.parse(pa.__version__) < version.parse("19.0.0"):
+        expected = expected.astype({"fixed32": cudf.Decimal128Dtype(9, 2)})
+        expected = expected.astype({"fixed64": cudf.Decimal128Dtype(18, 2)})
+
     # Write to Parquet with arrow schema for faithful roundtrip
     buffer = BytesIO()
     expected.to_parquet(buffer, store_schema=True, index=index)
-
-    # Convert decimal types to d128
-    expected = expected.astype({"fixed32": cudf.Decimal128Dtype(9, 2)})
-    expected = expected.astype({"fixed64": cudf.Decimal128Dtype(18, 2)})
 
     # Read parquet with pyarrow, pandas and cudf readers
     got = cudf.DataFrame.from_arrow(pq.read_table(buffer))
@@ -4165,11 +4175,15 @@ def test_parquet_reader_with_mismatched_schemas_error():
 def test_parquet_roundtrip_zero_rows_no_column_mask():
     expected = cudf.DataFrame._from_data(
         {
-            "int": cudf.core.column.column_empty(0, "int64"),
-            "float": cudf.core.column.column_empty(0, "float64"),
-            "datetime": cudf.core.column.column_empty(0, "datetime64[ns]"),
-            "timedelta": cudf.core.column.column_empty(0, "timedelta64[ns]"),
-            "bool": cudf.core.column.column_empty(0, "bool"),
+            "int": cudf.core.column.column_empty(0, np.dtype(np.int64)),
+            "float": cudf.core.column.column_empty(0, np.dtype(np.float64)),
+            "datetime": cudf.core.column.column_empty(
+                0, np.dtype("datetime64[ns]")
+            ),
+            "timedelta": cudf.core.column.column_empty(
+                0, np.dtype("timedelta64[ns]")
+            ),
+            "bool": cudf.core.column.column_empty(0, np.dtype(np.bool_)),
             "decimal": cudf.core.column.column_empty(
                 0, cudf.Decimal64Dtype(1)
             ),
@@ -4370,3 +4384,78 @@ def test_parquet_reader_mismatched_nullability_structs(tmpdir):
         cudf.read_parquet([buf2, buf1]),
         cudf.concat([df2, df1]).reset_index(drop=True),
     )
+
+
+@pytest.mark.skipif(
+    pa.__version__ == "19.0.0",
+    reason="https://github.com/rapidsai/cudf/issues/17806",
+)
+@pytest.mark.parametrize(
+    "stats_fname,bloom_filter_fname",
+    [
+        (
+            "mixed_card_ndv_100_chunk_stats.snappy.parquet",
+            "mixed_card_ndv_100_bf_fpp0.1_nostats.snappy.parquet",
+        ),
+        (
+            "mixed_card_ndv_500_chunk_stats.snappy.parquet",
+            "mixed_card_ndv_500_bf_fpp0.1_nostats.snappy.parquet",
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "predicate,expected_len",
+    [
+        ([[("str", "==", "FINDME")], [("fp64", "==", float(500))]], 2),
+        ([("fixed_pt", "==", decimal.Decimal(float(500)))], 2),
+        ([[("ui32", "==", np.uint32(500)), ("str", "==", "FINDME")]], 2),
+        ([[("str", "==", "FINDME")], [("ui32", ">=", np.uint32(0))]], 1000),
+        (
+            [
+                ("str", "!=", "FINDME"),
+                ("fixed_pt", "==", decimal.Decimal(float(500))),
+            ],
+            0,
+        ),
+    ],
+)
+def test_parquet_bloom_filters(
+    datadir, stats_fname, bloom_filter_fname, predicate, expected_len
+):
+    fname_stats = datadir / stats_fname
+    fname_bf = datadir / bloom_filter_fname
+    df_stats = cudf.read_parquet(fname_stats, filters=predicate).reset_index(
+        drop=True
+    )
+    df_bf = cudf.read_parquet(fname_bf, filters=predicate).reset_index(
+        drop=True
+    )
+
+    # Check if tables equal
+    assert_eq(
+        df_stats,
+        df_bf,
+    )
+
+    # Check for table length
+    assert_eq(
+        len(df_stats),
+        expected_len,
+    )
+
+
+def test_parquet_reader_unsupported_compression(datadir):
+    fname = datadir / "hadoop_lz4_compressed.parquet"
+
+    with pytest.raises(
+        RuntimeError,
+        match="Unsupported Parquet compression type: LZ4",
+    ):
+        cudf.read_parquet(fname)
+
+
+def test_parquet_reader_empty_compressed_page(datadir):
+    fname = datadir / "empty_datapage_v2.parquet"
+
+    df = cudf.DataFrame({"value": cudf.Series([None], dtype="float32")})
+    assert_eq(cudf.read_parquet(fname), df)

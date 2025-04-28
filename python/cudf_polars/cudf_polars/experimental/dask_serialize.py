@@ -1,9 +1,11 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 """Dask serialization."""
 
 from __future__ import annotations
+
+from typing import TYPE_CHECKING, ClassVar, overload
 
 from distributed.protocol import dask_deserialize, dask_serialize
 from distributed.protocol.cuda import cuda_deserialize, cuda_serialize
@@ -12,28 +14,89 @@ from distributed.utils import log_errors
 import pylibcudf as plc
 import rmm
 
-from cudf_polars.containers import DataFrame
+from cudf_polars.containers import Column, DataFrame
 
-__all__ = ["register"]
+if TYPE_CHECKING:
+    from distributed import Client
+
+    from cudf_polars.typing import ColumnHeader, DataFrameHeader
+
+__all__ = ["SerializerManager", "register"]
+
+
+class SerializerManager:  # pragma: no cover; Only used with Distributed scheduler
+    """Manager to ensure ensure serializer is only registered once."""
+
+    _serializer_registered: bool = False
+    _client_run_executed: ClassVar[set[str]] = set()
+
+    @classmethod
+    def register_serialize(cls) -> None:
+        """Register Dask/cudf-polars serializers in calling process."""
+        if not cls._serializer_registered:
+            from cudf_polars.experimental.dask_serialize import register
+
+            register()
+            cls._serializer_registered = True
+
+    @classmethod
+    def run_on_cluster(cls, client: Client) -> None:
+        """Run serializer registration on the workers and scheduler."""
+        if client.id not in cls._client_run_executed:
+            client.run(cls.register_serialize)
+            client.run_on_scheduler(cls.register_serialize)
+            cls._client_run_executed.add(client.id)
 
 
 def register() -> None:
     """Register dask serialization routines for DataFrames."""
 
-    @cuda_serialize.register(DataFrame)
-    def _(x: DataFrame):
+    @overload
+    def serialize_column_or_frame(
+        x: DataFrame,
+    ) -> tuple[DataFrameHeader, list[memoryview]]: ...
+
+    @overload
+    def serialize_column_or_frame(
+        x: Column,
+    ) -> tuple[ColumnHeader, list[memoryview]]: ...
+
+    @cuda_serialize.register((Column, DataFrame))
+    def serialize_column_or_frame(
+        x: DataFrame | Column,
+    ) -> tuple[DataFrameHeader | ColumnHeader, list[memoryview]]:
         with log_errors():
             header, frames = x.serialize()
             return header, list(frames)  # Dask expect a list of frames
 
     @cuda_deserialize.register(DataFrame)
-    def _(header, frames):
+    def _(
+        header: DataFrameHeader, frames: tuple[memoryview, plc.gpumemoryview]
+    ) -> DataFrame:
         with log_errors():
-            assert len(frames) == 2
-            return DataFrame.deserialize(header, tuple(frames))
+            metadata, gpudata = frames  # TODO: check if this is a length-2 list...
+            return DataFrame.deserialize(header, (metadata, plc.gpumemoryview(gpudata)))
 
-    @dask_serialize.register(DataFrame)
-    def _(x: DataFrame):
+    @cuda_deserialize.register(Column)
+    def _(header: ColumnHeader, frames: tuple[memoryview, plc.gpumemoryview]) -> Column:
+        with log_errors():
+            metadata, gpudata = frames
+            return Column.deserialize(header, (metadata, plc.gpumemoryview(gpudata)))
+
+    @overload
+    def dask_serialize_column_or_frame(
+        x: DataFrame,
+    ) -> tuple[DataFrameHeader, tuple[memoryview, memoryview]]: ...
+
+    @overload
+    def dask_serialize_column_or_frame(
+        x: Column,
+    ) -> tuple[ColumnHeader, tuple[memoryview, memoryview]]: ...
+
+    @dask_serialize.register((Column, DataFrame))
+    def dask_serialize_column_or_frame(
+        x: DataFrame | Column,
+    ) -> tuple[DataFrameHeader | ColumnHeader, tuple[memoryview, memoryview]]:
         with log_errors():
             header, (metadata, gpudata) = x.serialize()
 
@@ -51,9 +114,17 @@ def register() -> None:
             return header, (metadata, gpudata_on_host)
 
     @dask_deserialize.register(DataFrame)
-    def _(header, frames) -> DataFrame:
+    def _(header: DataFrameHeader, frames: tuple[memoryview, memoryview]) -> DataFrame:
         with log_errors():
             assert len(frames) == 2
             # Copy the second frame (the gpudata in host memory) back to the gpu
             frames = frames[0], plc.gpumemoryview(rmm.DeviceBuffer.to_device(frames[1]))
             return DataFrame.deserialize(header, frames)
+
+    @dask_deserialize.register(Column)
+    def _(header: ColumnHeader, frames: tuple[memoryview, memoryview]) -> Column:
+        with log_errors():
+            assert len(frames) == 2
+            # Copy the second frame (the gpudata in host memory) back to the gpu
+            frames = frames[0], plc.gpumemoryview(rmm.DeviceBuffer.to_device(frames[1]))
+            return Column.deserialize(header, frames)

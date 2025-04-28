@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,7 +28,7 @@
 namespace cudf::io::parquet::detail {
 
 struct page_state_s {
-  constexpr page_state_s() noexcept {}
+  CUDF_HOST_DEVICE constexpr page_state_s() noexcept {}
   uint8_t const* data_start{};
   uint8_t const* data_end{};
   uint8_t const* lvl_end{};
@@ -121,7 +121,8 @@ struct null_count_back_copier {
 /**
  * @brief Test if the given page is in a string column
  */
-constexpr bool is_string_col(PageInfo const& page, device_span<ColumnChunkDesc const> chunks)
+__device__ constexpr bool is_string_col(PageInfo const& page,
+                                        device_span<ColumnChunkDesc const> chunks)
 {
   if ((page.flags & PAGEINFO_FLAGS_DICTIONARY) != 0) { return false; }
   auto const& col = chunks[page.chunk_idx];
@@ -197,12 +198,11 @@ inline __device__ bool is_page_contained(page_state_s* const s, size_t start_row
  * @return A pair containing a pointer to the string and its length
  */
 template <typename state_buf>
-inline __device__ cuda::std::pair<char const*, size_t> gpuGetStringData(page_state_s* s,
-                                                                        state_buf* sb,
-                                                                        int src_pos)
+inline __device__ string_index_pair gpuGetStringData(page_state_s* s, state_buf* sb, int src_pos)
 {
   char const* ptr = nullptr;
-  size_t len      = 0;
+  using len_type  = std::tuple_element<1, string_index_pair>::type;
+  len_type len    = 0;
 
   if (s->dict_base) {
     // String dictionary
@@ -211,9 +211,7 @@ inline __device__ cuda::std::pair<char const*, size_t> gpuGetStringData(page_sta
         ? sb->dict_idx[rolling_index<state_buf::dict_buf_size>(src_pos)] * sizeof(string_index_pair)
         : 0;
     if (dict_pos < (uint32_t)s->dict_size) {
-      auto const* src = reinterpret_cast<string_index_pair const*>(s->dict_base + dict_pos);
-      ptr             = src->first;
-      len             = src->second;
+      return *reinterpret_cast<string_index_pair const*>(s->dict_base + dict_pos);
     }
   } else {
     // Plain encoding
@@ -452,7 +450,7 @@ __device__ size_type gpuInitStringDescriptors(page_state_s* s,
   int total_len       = 0;
 
   // All group threads can participate for fixed len byte arrays.
-  if (s->col.physical_type == FIXED_LEN_BYTE_ARRAY) {
+  if (s->col.physical_type == Type::FIXED_LEN_BYTE_ARRAY) {
     int const dtype_len_in = s->dtype_len_in;
     total_len              = min((target_pos - pos) * dtype_len_in, dict_size - s->dict_val);
     if constexpr (!sizes_only) {
@@ -688,6 +686,40 @@ inline __device__ void get_nesting_bounds(int& start_depth,
     else {
       start_depth = 0;
       end_depth   = s->col.max_nesting_depth - 1;
+    }
+  }
+}
+
+/**
+ * @brief Updates nesting level offsets for pruned pages of a list column
+ *
+ * This function iterates through the nesting levels of a column and updates the offsets for a list
+ * column. The offset for the current nesting level equals the length of the next nesting level
+ *
+ * @tparam decode_block_size The size of the block used for decoding.
+ * @param[in,out] state Pointer to page state containing column and nesting information.
+ */
+template <int block_size>
+static __device__ void update_list_offsets_for_pruned_pages(page_state_s* state)
+{
+  namespace cg = cooperative_groups;
+
+  int const max_depth          = state->col.max_nesting_depth - 1;
+  bool const in_nesting_bounds = max_depth >= 0;
+  auto const tid               = cg::this_thread_block().thread_rank();
+
+  // Iterate by depth and store offset(s) to the list location(s)
+  for (int depth = tid; depth <= max_depth; depth += block_size) {
+    auto& nesting_info = state->nesting_info[depth];
+    // If we're -not- at a leaf column and we're within nesting/row bounds and we have a valid
+    // data_out pointer, it implies this is a list column, so emit an offset for the current nesting
+    // level equal to current length of the next nesting level
+    if (in_nesting_bounds and nesting_info.data_out != nullptr) {
+      auto const& next_nesting_info = state->nesting_info[depth + 1];
+      int const idx                 = nesting_info.value_count;
+      cudf::size_type const offset =
+        next_nesting_info.value_count + next_nesting_info.page_start_value;
+      (reinterpret_cast<cudf::size_type*>(nesting_info.data_out))[idx] = offset;
     }
   }
 }
@@ -1178,12 +1210,12 @@ inline __device__ bool setupLocalPageInfo(page_state_s* const s,
       auto const is_decimal =
         s->col.logical_type.has_value() and s->col.logical_type->type == LogicalType::DECIMAL;
       switch (data_type) {
-        case BOOLEAN:
+        case Type::BOOLEAN:
           s->dtype_len = 1;  // Boolean are stored as 1 byte on the output
           break;
-        case INT32: [[fallthrough]];
-        case FLOAT: s->dtype_len = 4; break;
-        case INT64:
+        case Type::INT32: [[fallthrough]];
+        case Type::FLOAT: s->dtype_len = 4; break;
+        case Type::INT64:
           if (s->col.ts_clock_rate) {
             int32_t units = 0;
             // Duration types are not included because no scaling is done when reading
@@ -1203,9 +1235,9 @@ inline __device__ bool setupLocalPageInfo(page_state_s* const s,
             }
           }
           [[fallthrough]];
-        case DOUBLE: s->dtype_len = 8; break;
-        case INT96: s->dtype_len = 12; break;
-        case BYTE_ARRAY:
+        case Type::DOUBLE: s->dtype_len = 8; break;
+        case Type::INT96: s->dtype_len = 12; break;
+        case Type::BYTE_ARRAY:
           if (is_decimal) {
             auto const decimal_precision = s->col.logical_type->precision();
             s->dtype_len                 = [decimal_precision]() {
@@ -1228,7 +1260,7 @@ inline __device__ bool setupLocalPageInfo(page_state_s* const s,
       }
       // Special check for downconversions
       s->dtype_len_in = s->dtype_len;
-      if (data_type == FIXED_LEN_BYTE_ARRAY) {
+      if (data_type == Type::FIXED_LEN_BYTE_ARRAY) {
         if (is_decimal) {
           s->dtype_len = [dtype_len = s->dtype_len]() {
             if (dtype_len <= sizeof(int32_t)) {
@@ -1242,7 +1274,7 @@ inline __device__ bool setupLocalPageInfo(page_state_s* const s,
         } else {
           s->dtype_len = sizeof(string_index_pair);
         }
-      } else if (data_type == INT32) {
+      } else if (data_type == Type::INT32) {
         // check for smaller bitwidths
         if (s->col.logical_type.has_value()) {
           auto const& lt = *s->col.logical_type;
@@ -1253,9 +1285,9 @@ inline __device__ bool setupLocalPageInfo(page_state_s* const s,
             s->dtype_len = 8;
           }
         }
-      } else if (data_type == BYTE_ARRAY && s->col.is_strings_to_cat) {
+      } else if (data_type == Type::BYTE_ARRAY && s->col.is_strings_to_cat) {
         s->dtype_len = 4;  // HASH32 output
-      } else if (data_type == INT96) {
+      } else if (data_type == Type::INT96) {
         s->dtype_len = 8;  // Convert to 64-bit timestamp
       }
 
@@ -1330,8 +1362,8 @@ inline __device__ bool setupLocalPageInfo(page_state_s* const s,
           // RLE-packed dictionary indices, first byte indicates index length in bits
           auto const is_decimal =
             s->col.logical_type.has_value() and s->col.logical_type->type == LogicalType::DECIMAL;
-          if ((s->col.physical_type == BYTE_ARRAY or
-               s->col.physical_type == FIXED_LEN_BYTE_ARRAY) and
+          if ((s->col.physical_type == Type::BYTE_ARRAY or
+               s->col.physical_type == Type::FIXED_LEN_BYTE_ARRAY) and
               not is_decimal and s->col.str_dict_index != nullptr) {
             // String dictionary: use index
             s->dict_base = reinterpret_cast<uint8_t const*>(s->col.str_dict_index);
@@ -1351,7 +1383,7 @@ inline __device__ bool setupLocalPageInfo(page_state_s* const s,
         case Encoding::BYTE_STREAM_SPLIT:
           s->dict_size = static_cast<int32_t>(end - cur);
           s->dict_val  = 0;
-          if (s->col.physical_type == BOOLEAN) { s->dict_run = s->dict_size * 2 + 1; }
+          if (s->col.physical_type == Type::BOOLEAN) { s->dict_run = s->dict_size * 2 + 1; }
           break;
         case Encoding::RLE: {
           // first 4 bytes are length of RLE data

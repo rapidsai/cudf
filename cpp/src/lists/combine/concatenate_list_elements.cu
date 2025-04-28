@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,7 +35,6 @@
 #include <cuda/functional>
 #include <thrust/execution_policy.h>
 #include <thrust/for_each.h>
-#include <thrust/functional.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/logical.h>
 #include <thrust/scan.h>
@@ -227,7 +226,7 @@ std::unique_ptr<column> concatenate_lists_nullifying_rows(column_view const& inp
   auto list_entries =
     gather_list_entries(input, offsets_view, num_rows, num_output_entries, stream, mr);
   auto [null_mask, null_count] = cudf::detail::valid_if(
-    list_validities.begin(), list_validities.end(), thrust::identity{}, stream, mr);
+    list_validities.begin(), list_validities.end(), cuda::std::identity{}, stream, mr);
 
   return make_lists_column(num_rows,
                            std::move(list_offsets),

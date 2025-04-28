@@ -1,5 +1,5 @@
 # =============================================================================
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License. You may obtain a copy of the License at
@@ -23,11 +23,11 @@ function(find_and_configure_nanoarrow)
   # Currently we need to always build nanoarrow so we don't pickup a previous installed version
   set(CPM_DOWNLOAD_nanoarrow ON)
   rapids_cpm_find(
-    nanoarrow 0.6.0.dev
+    nanoarrow 0.7.0.dev
     GLOBAL_TARGETS nanoarrow
     CPM_ARGS
     GIT_REPOSITORY https://github.com/apache/arrow-nanoarrow.git
-    GIT_TAG 1e2664a70ec14907409cadcceb14d79b9670bcdb
+    GIT_TAG 4bf5a9322626e95e3717e43de7616c0a256179eb
     GIT_SHALLOW FALSE
     OPTIONS "BUILD_SHARED_LIBS OFF" "NANOARROW_NAMESPACE cudf" ${_exclude_from_all}
   )

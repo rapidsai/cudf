@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -660,13 +660,40 @@ TEST_P(JsonReaderParamTest, JsonLinesFileInput)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(1), float64_wrapper{{1.1, 2.2}});
 }
 
-TEST_F(JsonReaderTest, JsonLinesByteRange)
+TEST_F(JsonReaderTest, JsonLinesByteRangeCompleteRecord)
 {
   const std::string fname = temp_env->get_temp_dir() + "JsonLinesByteRangeTest.json";
   std::ofstream outfile(fname, std::ofstream::out);
   outfile << "[1000]\n[2000]\n[3000]\n[4000]\n[5000]\n[6000]\n[7000]\n[8000]\n[9000]\n";
   outfile.close();
 
+  // Requesting 0]\n[3000]\n[4000]\n[5000]\n but reading 0]\n[3000]\n[4000]\n[5000]\n[6000]\n
+  cudf::io::json_reader_options in_options =
+    cudf::io::json_reader_options::builder(cudf::io::source_info{fname})
+      .lines(true)
+      .byte_range_offset(11)
+      .byte_range_size(24);
+
+  cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
+
+  EXPECT_EQ(result.tbl->num_columns(), 1);
+  EXPECT_EQ(result.tbl->num_rows(), 4);
+
+  EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::INT64);
+  EXPECT_EQ(result.metadata.schema_info[0].name, "0");
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0),
+                                 int64_wrapper{{3000, 4000, 5000, 6000}});
+}
+
+TEST_F(JsonReaderTest, JsonLinesByteRangeIncompleteRecord)
+{
+  const std::string fname = temp_env->get_temp_dir() + "JsonLinesByteRangeTest.json";
+  std::ofstream outfile(fname, std::ofstream::out);
+  outfile << "[1000]\n[2000]\n[3000]\n[4000]\n[5000]\n[6000]\n[7000]\n[8000]\n[9000]\n";
+  outfile.close();
+
+  // Reading 0]\n[3000]\n[4000]\n[50
   cudf::io::json_reader_options in_options =
     cudf::io::json_reader_options::builder(cudf::io::source_info{fname})
       .lines(true)
@@ -3403,6 +3430,7 @@ INSTANTIATE_TEST_SUITE_P(JsonCompressedIOTest,
                          JsonCompressedIOTest,
                          ::testing::Values(cudf::io::compression_type::GZIP,
                                            cudf::io::compression_type::SNAPPY,
+                                           cudf::io::compression_type::ZSTD,
                                            cudf::io::compression_type::NONE));
 
 TEST_P(JsonCompressedIOTest, BasicJsonLines)
@@ -3415,8 +3443,7 @@ TEST_P(JsonCompressedIOTest, BasicJsonLines)
   if (comptype != cudf::io::compression_type::NONE) {
     cdata = cudf::io::detail::compress(
       comptype,
-      cudf::host_span<uint8_t const>(reinterpret_cast<uint8_t const*>(data.data()), data.size()),
-      cudf::get_default_stream());
+      cudf::host_span<uint8_t const>(reinterpret_cast<uint8_t const*>(data.data()), data.size()));
     auto decomp_out_buffer = cudf::io::detail::decompress(
       comptype, cudf::host_span<uint8_t const>(cdata.data(), cdata.size()));
     std::string const expected = R"({"0":1, "1":1.1}
@@ -3459,6 +3486,48 @@ TEST_F(JsonReaderTest, MismatchedBeginEndTokens)
       .recovery_mode(cudf::io::json_recovery_mode_t::FAIL)
       .build();
   EXPECT_THROW(cudf::io::read_json(opts), cudf::logic_error);
+}
+
+/**
+ * @brief Base test fixture for JSON batched reader tests
+ */
+struct JsonBatchedReaderTest : public cudf::test::BaseFixture {
+ public:
+  void set_batch_size(size_t batch_size_upper_bound)
+  {
+    setenv("LIBCUDF_JSON_BATCH_SIZE", std::to_string(batch_size_upper_bound).c_str(), 1);
+  }
+
+  ~JsonBatchedReaderTest() { unsetenv("LIBCUDF_JSON_BATCH_SIZE"); }
+};
+
+TEST_F(JsonBatchedReaderTest, EmptyLastBatch)
+{
+  std::string data          = R"(
+  {"a": "b"}
+  {"a": "b"}
+  {"a": "b"}
+  {"a": "b"}
+  )";
+  size_t size_of_last_batch = 5;
+  // This test constructs two batches by setting the batch size such that the last batch is an
+  // incomplete line. The JSON string corresponding to the first batch is
+  // '\n{"a": "b"}\n{"a": "b"}\n{"a": "b"}\n{"a": '
+  // The JSON string corresponding to the second batch is
+  // '"b"}\n'
+  this->set_batch_size(data.size() - size_of_last_batch);
+  auto opts =
+    cudf::io::json_reader_options::builder(cudf::io::source_info{data.data(), data.size()})
+      .lines(true)
+      .build();
+  auto result = cudf::io::read_json(opts);
+
+  EXPECT_EQ(result.tbl->num_columns(), 1);
+  EXPECT_EQ(result.tbl->num_rows(), 4);
+  EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::STRING);
+  EXPECT_EQ(result.metadata.schema_info[0].name, "a");
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0),
+                                 cudf::test::strings_column_wrapper{{"b", "b", "b", "b"}});
 }
 
 CUDF_TEST_PROGRAM_MAIN()

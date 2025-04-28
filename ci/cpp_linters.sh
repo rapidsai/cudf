@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 set -euo pipefail
 
@@ -19,8 +19,6 @@ rapids-mamba-retry env create --yes -f "${ENV_YAML_DIR}/env.yaml" -n clang_tidy
 set +u
 conda activate clang_tidy
 set -u
-
-RAPIDS_VERSION_MAJOR_MINOR="$(rapids-version-major-minor)"
 
 source rapids-configure-sccache
 

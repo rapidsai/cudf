@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,8 @@
 
 #include "large_strings_fixture.hpp"
 
+#include <cudf_test/column_utilities.hpp>
+#include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/table_utilities.hpp>
 
 #include <cudf/concatenate.hpp>
@@ -142,4 +144,97 @@ TEST_F(ParquetStringsTest, DISABLED_ChunkedReadLargeStrings)
 
   // Verify that we read exactly two table chunks
   EXPECT_EQ(tables.size(), 2);
+}
+
+TEST_F(ParquetStringsTest, ChunkedReadNestedLargeStrings)
+{
+  using int32s_col  = cudf::test::fixed_width_column_wrapper<int32_t>;
+  using strings_col = cudf::test::strings_column_wrapper;
+  using structs_col = cudf::test::structs_column_wrapper;
+
+  auto constexpr num_rows = 100'000;
+
+  std::vector<std::unique_ptr<cudf::column>> input_columns;
+  auto const int_iter = thrust::make_counting_iterator(0);
+  input_columns.emplace_back(int32s_col(int_iter, int_iter + num_rows).release());
+
+  auto const str_iter = cudf::detail::make_counting_transform_iterator(
+    0, [&](int32_t i) { return std::to_string(i) + std::to_string(i) + std::to_string(i); });
+  input_columns.emplace_back(strings_col{str_iter, str_iter + num_rows}.release());
+
+  auto offsets = std::vector<cudf::size_type>{};
+  offsets.reserve(num_rows * 2);
+  cudf::size_type num_structs = 0;
+  for (int i = 0; i < num_rows; ++i) {
+    offsets.push_back(num_structs);
+    auto const new_list_size = i % 4;
+    num_structs += new_list_size;
+  }
+  offsets.push_back(num_structs);
+
+  auto const make_structs_col = [=] {
+    auto child1 = int32s_col(int_iter, int_iter + num_structs);
+    auto child2 = int32s_col(int_iter + num_structs, int_iter + num_structs * 2);
+    auto child3 = strings_col{str_iter, str_iter + num_structs};
+
+    return structs_col{{child1, child2, child3}}.release();
+  };
+
+  input_columns.emplace_back(
+    cudf::make_lists_column(static_cast<cudf::size_type>(offsets.size() - 1),
+                            int32s_col(offsets.begin(), offsets.end()).release(),
+                            make_structs_col(),
+                            0,
+                            rmm::device_buffer{}));
+
+  // Input table
+  auto const table    = cudf::table{std::move(input_columns)};
+  auto const expected = table.view();
+
+  auto const child3_view = expected.column(2).child(1).child(2);  // list<struct<int,int,string>>
+  auto const column_size =
+    cudf::strings_column_view(child3_view).chars_size(cudf::get_default_stream());
+  // set smaller threshold to reduce file size and execution time
+  auto const threshold =
+    column_size / 16;  // Empirically set to get a mix of 32 and 64 bit string col chunks.
+  setenv("LIBCUDF_LARGE_STRINGS_THRESHOLD", std::to_string(threshold).c_str(), 1);
+
+  // Host buffer to write Parquet
+  auto buffer = std::vector<char>{};
+  // Writer options
+  cudf::io::parquet_writer_options out_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{&buffer}, expected)
+      .max_page_size_bytes(512 * 1024)
+      .max_page_size_rows(20000)
+      .dictionary_policy(cudf::io::dictionary_policy::ALWAYS)
+      .write_v2_headers(false);
+
+  // Write to Parquet
+  cudf::io::write_parquet(out_opts);
+
+  // Reader options
+  cudf::io::parquet_reader_options in_opts =
+    cudf::io::parquet_reader_options::builder(cudf::io::source_info(buffer.data(), buffer.size()));
+
+  auto constexpr chunk_read_limit = size_t{1} * 1024 * 1024;
+  auto constexpr pass_read_limit  = 0;
+  // Chunked parquet reader
+  auto reader = cudf::io::chunked_parquet_reader(chunk_read_limit, pass_read_limit, in_opts);
+
+  // Read chunked
+  auto tables = std::vector<std::unique_ptr<cudf::table>>{};
+  while (reader.has_next()) {
+    tables.emplace_back(reader.read_chunk().tbl);
+  }
+  auto table_views = std::vector<cudf::table_view>{};
+  std::transform(tables.begin(), tables.end(), std::back_inserter(table_views), [](auto& tbl) {
+    return tbl->view();
+  });
+  auto result = cudf::concatenate(table_views);
+
+  // Verify tables to be equal
+  CUDF_TEST_EXPECT_TABLES_EQUAL(result->view(), expected);
+
+  // go back to normal threshold
+  unsetenv("LIBCUDF_LARGE_STRINGS_THRESHOLD");
 }

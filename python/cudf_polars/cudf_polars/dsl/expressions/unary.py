@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 # TODO: remove need for this
 """DSL nodes for unary operations."""
@@ -6,8 +6,6 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, ClassVar
-
-import pyarrow as pa
 
 import pylibcudf as plc
 
@@ -76,9 +74,7 @@ class Len(Expr):
         """Evaluate this expression given a dataframe for context."""
         return Column(
             plc.Column.from_scalar(
-                plc.interop.from_arrow(
-                    pa.scalar(df.num_rows, type=plc.interop.to_arrow(self.dtype))
-                ),
+                plc.Scalar.from_py(df.num_rows, self.dtype),
                 1,
             )
         )
@@ -119,6 +115,7 @@ class UnaryFunction(Expr):
         "abs": plc.unary.UnaryOperator.ABS,
         "bit_invert": plc.unary.UnaryOperator.BIT_INVERT,
         "not": plc.unary.UnaryOperator.NOT,
+        "negate": plc.unary.UnaryOperator.NEGATE,
     }
     _supported_misc_fns = frozenset(
         {
@@ -235,7 +232,7 @@ class UnaryFunction(Expr):
                 else plc.types.Order.DESCENDING
             )
             null_order = plc.types.NullOrder.BEFORE
-            if column.obj.null_count() > 0 and (n := column.obj.size()) > 1:
+            if column.null_count > 0 and (n := column.size) > 1:
                 # PERF: This invokes four stream synchronisations!
                 has_nulls_first = not plc.copying.get_element(column.obj, 0).is_valid()
                 has_nulls_last = not plc.copying.get_element(

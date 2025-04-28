@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 from __future__ import annotations
 
 import warnings
@@ -6,20 +6,25 @@ from typing import TYPE_CHECKING
 
 import cupy as cp
 import numpy as np
+import pyarrow as pa
 
 import cudf
 from cudf.core.column import as_column
 from cudf.core.index import Index, RangeIndex
-from cudf.core.scalar import Scalar
 from cudf.options import get_option
-from cudf.utils.dtypes import can_convert_to_column
+from cudf.utils.dtypes import can_convert_to_column, cudf_dtype_to_pa_type
 
 if TYPE_CHECKING:
     from cudf.core.column.column import ColumnBase
     from cudf.core.index import BaseIndex
 
 
-def factorize(values, sort=False, use_na_sentinel=True, size_hint=None):
+def factorize(
+    values,
+    sort: bool = False,
+    use_na_sentinel: bool = True,
+    size_hint: int | None = None,
+) -> tuple[cp.ndarray, cp.ndarray | Index]:
     """Encode the input values as integer labels
 
     Parameters
@@ -96,10 +101,10 @@ def factorize(values, sort=False, use_na_sentinel=True, size_hint=None):
         warnings.warn("size_hint is not applicable for cudf.factorize")
 
     if use_na_sentinel:
-        na_sentinel = Scalar(-1)
+        na_sentinel = pa.scalar(-1)
         cats = values.dropna()
     else:
-        na_sentinel = Scalar(None, dtype=values.dtype)
+        na_sentinel = pa.scalar(None, type=cudf_dtype_to_pa_type(values.dtype))
         cats = values
 
     cats = cats.unique().astype(values.dtype)

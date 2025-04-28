@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -454,3 +454,10 @@ def test_string_to_numeric_invalid(numeric_type):
         polars_except=pl.exceptions.InvalidOperationError,
         cudf_except=pl.exceptions.ComputeError,
     )
+
+
+@pytest.mark.parametrize("ignore_nulls", [False, True])
+@pytest.mark.parametrize("delimiter", ["", "/"])
+def test_string_join(ldf, ignore_nulls, delimiter):
+    q = ldf.select(pl.col("a").str.join(delimiter, ignore_nulls=ignore_nulls))
+    assert_gpu_result_equal(q)

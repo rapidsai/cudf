@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2024, NVIDIA CORPORATION.
+# Copyright (c) 2018-2025, NVIDIA CORPORATION.
 
 import collections
 import datetime
@@ -2703,7 +2703,7 @@ def test_groupby_shift_row_mixed(nelem, shift_perc, direction):
             42,
             "fill",
             np.datetime64(123, "ns"),
-            cudf.Scalar(456, dtype="timedelta64[ns]"),
+            np.timedelta64(456, "ns"),
         ]
     ],
 )
@@ -4096,11 +4096,39 @@ def test_size_as_index_false():
     df = pd.DataFrame({"a": [1, 2, 1], "b": [1, 2, 3]}, columns=["a", "b"])
     expected = df.groupby("a", as_index=False).size()
     result = cudf.from_pandas(df).groupby("a", as_index=False).size()
-    assert_eq(result, expected)
+    assert_groupby_results_equal(result, expected, as_index=False, by="a")
 
 
 def test_size_series_with_name():
     ser = pd.Series(range(3), name="foo")
     expected = ser.groupby(ser).size()
     result = cudf.from_pandas(ser).groupby(ser).size()
+    assert_groupby_results_equal(result, expected)
+
+
+@pytest.mark.parametrize("op", ["cumsum", "cumprod", "cummin", "cummax"])
+def test_scan_int_null_pandas_compatible(op):
+    data = {"a": [1, 2, None, 3], "b": ["x"] * 4}
+    df_pd = pd.DataFrame(data)
+    df_cudf = cudf.DataFrame(data)
+    expected = getattr(df_pd.groupby("b")["a"], op)()
+    with cudf.option_context("mode.pandas_compatible", True):
+        result = getattr(df_cudf.groupby("b")["a"], op)()
     assert_eq(result, expected)
+
+
+def test_agg_duplicate_aggs_pandas_compat_raises():
+    agg = {"b": ["mean", "mean"]}
+    dfgb = cudf.DataFrame({"a": [1, 1, 2], "b": [4, 5, 6]}).groupby(["a"])
+    with cudf.option_context("mode.pandas_compatible", True):
+        with pytest.raises(NotImplementedError):
+            dfgb.agg(agg)
+
+    with pytest.warns(UserWarning):
+        result = dfgb.agg(agg)
+    expected = cudf.DataFrame(
+        [4.5, 6.0],
+        index=cudf.Index([1, 2], name="a"),
+        columns=pd.MultiIndex.from_tuples([("b", "mean")]),
+    )
+    assert_groupby_results_equal(result, expected)

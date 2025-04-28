@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/batched_memset.hpp>
+#include <cudf/detail/utilities/functional.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/utilities/memory_resource.hpp>
@@ -54,7 +55,7 @@ namespace {
 #if defined(PREPROCESS_DEBUG)
 void print_pages(cudf::detail::hostdevice_vector<PageInfo>& pages, rmm::cuda_stream_view _stream)
 {
-  pages.device_to_host_sync(_stream);
+  pages.device_to_host(_stream);
   for (size_t idx = 0; idx < pages.size(); idx++) {
     auto const& p = pages[idx];
     // skip dictionary pages
@@ -303,7 +304,7 @@ void generate_depth_remappings(
   kernel_error error_code(stream);
   chunks.host_to_device_async(stream);
   DecodePageHeaders(chunks.device_ptr(), nullptr, chunks.size(), error_code.data(), stream);
-  chunks.device_to_host_sync(stream);
+  chunks.device_to_host(stream);
 
   // It's required to ignore unsupported encodings in this function
   // so that we can actually compile a list of all the unsupported encodings found
@@ -468,8 +469,12 @@ std::string encoding_to_string(Encoding encoding)
   auto const to_mask = cuda::proclaim_return_type<uint32_t>([] __device__(auto const& page) {
     return is_supported_encoding(page.encoding) ? 0U : encoding_to_mask(page.encoding);
   });
-  uint32_t const unsupported = thrust::transform_reduce(
-    rmm::exec_policy(stream), pages.begin(), pages.end(), to_mask, 0U, thrust::bit_or<uint32_t>());
+  uint32_t const unsupported = thrust::transform_reduce(rmm::exec_policy(stream),
+                                                        pages.begin(),
+                                                        pages.end(),
+                                                        to_mask,
+                                                        0U,
+                                                        cuda::std::bit_or<uint32_t>());
   return encoding_bitmask_to_str(unsupported);
 }
 
@@ -526,7 +531,7 @@ cudf::detail::hostdevice_vector<PageInfo> sort_pages(device_span<PageInfo const>
                              page_keys.begin(),
                              page_keys.end(),
                              sort_indices.begin(),
-                             thrust::less<int>());
+                             cuda::std::less<int>());
   auto pass_pages =
     cudf::detail::hostdevice_vector<PageInfo>(unsorted_pages.size(), unsorted_pages.size(), stream);
   thrust::transform(
@@ -565,7 +570,7 @@ void decode_page_headers(pass_intermediate_data& pass,
           i >= num_chunks ? 0 : chunks[i].num_data_pages + chunks[i].num_dict_pages);
       }),
     size_t{0},
-    thrust::plus<size_t>{});
+    cuda::std::plus<size_t>{});
   rmm::device_uvector<chunk_page_info> d_chunk_page_info(pass.chunks.size(), stream);
   thrust::for_each(rmm::exec_policy_nosync(stream),
                    iter,
@@ -608,7 +613,7 @@ void decode_page_headers(pass_intermediate_data& pass,
                                             level_bit_size,
                                             level_bit_size + pass.chunks.size(),
                                             0,
-                                            thrust::maximum<int>());
+                                            cudf::detail::maximum<int>());
   pass.level_type_size     = std::max(1, cudf::util::div_rounding_up_safe(max_level_bits, 8));
 
   // sort the pages in chunk/schema order.
@@ -649,12 +654,12 @@ void decode_page_headers(pass_intermediate_data& pass,
   stream.synchronize();
 }
 
-constexpr bool is_string_chunk(ColumnChunkDesc const& chunk)
+__device__ constexpr bool is_string_chunk(ColumnChunkDesc const& chunk)
 {
   auto const is_decimal =
     chunk.logical_type.has_value() and chunk.logical_type->type == LogicalType::DECIMAL;
   auto const is_binary =
-    chunk.physical_type == BYTE_ARRAY or chunk.physical_type == FIXED_LEN_BYTE_ARRAY;
+    chunk.physical_type == Type::BYTE_ARRAY or chunk.physical_type == Type::FIXED_LEN_BYTE_ARRAY;
   return is_binary and not is_decimal;
 }
 
@@ -780,7 +785,7 @@ void reader::impl::build_string_dict_indices()
 
   // compute the indices
   BuildStringDictionaryIndex(pass.chunks.device_ptr(), pass.chunks.size(), _stream);
-  pass.chunks.device_to_host_sync(_stream);
+  pass.chunks.device_to_host(_stream);
 }
 
 void reader::impl::allocate_nesting_info()
@@ -923,7 +928,7 @@ void reader::impl::allocate_nesting_info()
           pni[cur_depth].size                   = 0;
           pni[cur_depth].type =
             to_type_id(actual_cur_schema, _strings_to_categorical, _options.timestamp_type.id());
-          pni[cur_depth].nullable = cur_schema.repetition_type == OPTIONAL;
+          pni[cur_depth].nullable = cur_schema.repetition_type == FieldRepetitionType::OPTIONAL;
         }
 
         // move up the hierarchy
@@ -1285,8 +1290,11 @@ void reader::impl::preprocess_file(read_mode mode)
   std::tie(_file_itm_data.global_skip_rows,
            _file_itm_data.global_num_rows,
            _file_itm_data.row_groups,
-           _file_itm_data.num_rows_per_source) =
-    _metadata->select_row_groups(_options.row_group_indices,
+           _file_itm_data.num_rows_per_source,
+           _file_itm_data.num_input_row_groups,
+           _file_itm_data.surviving_row_groups) =
+    _metadata->select_row_groups(_sources,
+                                 _options.row_group_indices,
                                  _options.skip_rows,
                                  _options.num_rows,
                                  output_dtypes,
@@ -1460,7 +1468,7 @@ void reader::impl::preprocess_subpass_pages(read_mode mode, size_t chunk_read_li
                                 page_input,
                                 chunk_row_output_iter{pass.pages.device_ptr()});
 
-  // copy chunk row into the subpass pages
+  // copy chunk_row into the subpass pages
   // only need to do this if we are not processing the whole pass in one subpass
   if (!subpass.single_subpass) {
     thrust::for_each(rmm::exec_policy_nosync(_stream),
@@ -1478,31 +1486,42 @@ void reader::impl::preprocess_subpass_pages(read_mode mode, size_t chunk_read_li
   // able to decode for this pass. we will have selected a set of pages for each column in the
   // row group, but not every page will have the same number of rows. so, we can only read as many
   // rows as the smallest batch (by column) we have decompressed.
-  size_t page_index = 0;
-  size_t max_row    = std::numeric_limits<size_t>::max();
+  size_t first_page_index = 0;
+  size_t max_row          = std::numeric_limits<size_t>::max();
   auto const last_pass_row =
     _file_itm_data.input_pass_start_row_count[_file_itm_data._current_input_pass + 1];
+  // for each column
   for (size_t idx = 0; idx < subpass.column_page_count.size(); idx++) {
-    auto const& last_page = subpass.pages[page_index + (subpass.column_page_count[idx] - 1)];
-    auto const& chunk     = pass.chunks[last_page.chunk_idx];
+    // compute max row for this column in the subpass
+    auto const& last_page  = subpass.pages[first_page_index + (subpass.column_page_count[idx] - 1)];
+    auto const& last_chunk = pass.chunks[last_page.chunk_idx];
+    auto max_col_row       = static_cast<size_t>(last_chunk.start_row) +
+                       static_cast<size_t>(last_page.chunk_row) +
+                       static_cast<size_t>(last_page.num_rows);
 
-    size_t max_col_row =
-      static_cast<size_t>(chunk.start_row + last_page.chunk_row + last_page.num_rows);
     // special case.  list rows can span page boundaries, but we can't tell if that is happening
     // here because we have not yet decoded the pages. the very last row starting in the page may
     // not terminate in the page. to handle this, only decode up to the second to last row in the
     // subpass since we know that will safely completed.
-    bool const is_list = chunk.max_level[level_type::REPETITION] > 0;
+    bool const is_list = last_chunk.max_level[level_type::REPETITION] > 0;
+    // corner case: only decode up to the second-to-last row, except if this is the last page in the
+    // entire pass. this handles the case where we only have 1 chunk, 1 page, and potentially even
+    // just 1 row.
     if (is_list && max_col_row < last_pass_row) {
-      auto const& first_page   = subpass.pages[page_index];
-      size_t const min_col_row = static_cast<size_t>(chunk.start_row + first_page.chunk_row);
+      // compute min row for this column in the subpass
+      auto const& first_page  = subpass.pages[first_page_index];
+      auto const& first_chunk = pass.chunks[first_page.chunk_idx];
+      auto const min_col_row =
+        static_cast<size_t>(first_chunk.start_row) + static_cast<size_t>(first_page.chunk_row);
+
+      // must have at least 2 rows in the subpass.
       CUDF_EXPECTS((max_col_row - min_col_row) > 1, "Unexpected short subpass");
       max_col_row--;
     }
 
     max_row = min(max_row, max_col_row);
 
-    page_index += subpass.column_page_count[idx];
+    first_page_index += subpass.column_page_count[idx];
   }
   subpass.skip_rows   = pass.skip_rows + pass.processed_rows;
   auto const pass_end = pass.skip_rows + pass.num_rows;
@@ -1662,7 +1681,7 @@ void reader::impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num
       key_start += num_keys_this_iter;
     }
 
-    sizes.device_to_host_sync(_stream);
+    sizes.device_to_host(_stream);
     for (size_type idx = 0; idx < static_cast<size_type>(_input_columns.size()); idx++) {
       auto const& input_col = _input_columns[idx];
       auto* cols            = &_output_buffers;
@@ -1730,7 +1749,7 @@ cudf::detail::host_vector<size_t> reader::impl::calculate_page_string_offsets()
                         reduce_keys.begin(),
                         d_col_sizes.begin());
 
-  return cudf::detail::make_host_vector_sync(d_col_sizes, _stream);
+  return cudf::detail::make_host_vector(d_col_sizes, _stream);
 }
 
 }  // namespace cudf::io::parquet::detail

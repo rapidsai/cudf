@@ -1,21 +1,23 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
+
+import contextlib
 
 import pytest
 
 import polars as pl
 
-from cudf_polars.testing.asserts import assert_gpu_result_equal
+from cudf_polars.testing.asserts import DEFAULT_SCHEDULER, assert_gpu_result_equal
 
 
 @pytest.fixture(scope="module")
 def engine():
     return pl.GPUEngine(
         raise_on_fail=True,
-        executor="dask-experimental",
-        executor_options={"max_rows_per_partition": 3},
+        executor="streaming",
+        executor_options={"max_rows_per_partition": 3, "scheduler": DEFAULT_SCHEDULER},
     )
 
 
@@ -36,15 +38,36 @@ def test_select(df, engine):
     assert_gpu_result_equal(query, engine=engine)
 
 
-def test_select_reduce_raises(df, engine):
+@pytest.mark.parametrize("fallback_mode", ["silent", "raise", "warn", "foo"])
+def test_select_reduce_fallback(df, fallback_mode):
+    engine = pl.GPUEngine(
+        raise_on_fail=True,
+        executor="streaming",
+        executor_options={
+            "fallback_mode": fallback_mode,
+            "max_rows_per_partition": 3,
+            "scheduler": DEFAULT_SCHEDULER,
+        },
+    )
+    match = "This selection not support for multiple partitions."
+
     query = df.select(
         (pl.col("a") + pl.col("b")).max(),
         (pl.col("a") * 2 + pl.col("b")).alias("d").mean(),
     )
-    with pytest.raises(
-        pl.exceptions.ComputeError,
-        match="NotImplementedError",
-    ):
+
+    if fallback_mode == "silent":
+        ctx = contextlib.nullcontext()
+    elif fallback_mode == "raise":
+        ctx = pytest.raises(pl.exceptions.ComputeError, match=match)
+    elif fallback_mode == "foo":
+        ctx = pytest.raises(
+            pl.exceptions.ComputeError,
+            match="'foo' is not a valid StreamingFallbackMode",
+        )
+    else:
+        ctx = pytest.warns(UserWarning, match=match)
+    with ctx:
         assert_gpu_result_equal(query, engine=engine)
 
 

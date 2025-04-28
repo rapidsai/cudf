@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -13,7 +13,6 @@ from typing_extensions import Self
 import pylibcudf
 import rmm
 
-import cudf
 from cudf.core.abc import Serializable
 from cudf.utils.string import format_bytes
 
@@ -397,7 +396,7 @@ class Buffer(Serializable):
             )
 
         # Otherwise, we create a new copy of the memory
-        owner = self._owner.from_device_memory(
+        owner = type(self._owner).from_device_memory(
             rmm.DeviceBuffer(
                 ptr=self._owner.get_ptr(mode="read") + self._offset,
                 size=self.size,
@@ -504,7 +503,7 @@ def get_ptr_and_size(array_interface: Mapping) -> tuple[int, int]:
 
     shape = array_interface["shape"] or (1,)
     strides = array_interface["strides"]
-    itemsize = cudf.dtype(array_interface["typestr"]).itemsize
+    itemsize = numpy.dtype(array_interface["typestr"]).itemsize
     if strides is None or pylibcudf.column.is_c_contiguous(
         shape, strides, itemsize
     ):

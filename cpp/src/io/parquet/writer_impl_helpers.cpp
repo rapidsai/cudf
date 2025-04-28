@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,58 +21,17 @@
 
 #include "writer_impl_helpers.hpp"
 
-#include "io/comp/nvcomp_adapter.hpp"
-
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/structs/structs_column_view.hpp>
 
+#include <functional>
+#include <string>
+
 namespace cudf::io::parquet::detail {
 
 using namespace cudf::io::detail;
-
-Compression to_parquet_compression(compression_type compression)
-{
-  switch (compression) {
-    case compression_type::AUTO:
-    case compression_type::SNAPPY: return Compression::SNAPPY;
-    case compression_type::ZSTD: return Compression::ZSTD;
-    case compression_type::LZ4:
-      // Parquet refers to LZ4 as "LZ4_RAW"; Parquet's "LZ4" is not standard LZ4
-      return Compression::LZ4_RAW;
-    case compression_type::NONE: return Compression::UNCOMPRESSED;
-    default: CUDF_FAIL("Unsupported compression type");
-  }
-}
-
-nvcomp::compression_type to_nvcomp_compression_type(Compression codec)
-{
-  switch (codec) {
-    case Compression::SNAPPY: return nvcomp::compression_type::SNAPPY;
-    case Compression::ZSTD: return nvcomp::compression_type::ZSTD;
-    // Parquet refers to LZ4 as "LZ4_RAW"; Parquet's "LZ4" is not standard LZ4
-    case Compression::LZ4_RAW: return nvcomp::compression_type::LZ4;
-    default: CUDF_FAIL("Unsupported compression type");
-  }
-}
-
-uint32_t page_alignment(Compression codec)
-{
-  if (codec == Compression::UNCOMPRESSED or
-      nvcomp::is_compression_disabled(to_nvcomp_compression_type(codec))) {
-    return 1u;
-  }
-
-  return nvcomp::required_alignment(to_nvcomp_compression_type(codec));
-}
-
-size_t max_compression_output_size(Compression codec, uint32_t compression_blocksize)
-{
-  if (codec == Compression::UNCOMPRESSED) return 0;
-
-  return compress_max_output_chunk_size(to_nvcomp_compression_type(codec), compression_blocksize);
-}
 
 void fill_table_meta(table_input_metadata& table_meta)
 {

@@ -404,3 +404,5 @@ Serialization / IO / conversion
    Series.from_masked_array
    Series.from_pandas
    Series.hash_values
+   Series.to_pylibcudf
+   Series.from_pylibcudf

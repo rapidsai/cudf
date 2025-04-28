@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -10,16 +10,15 @@ import pandas as pd
 from pandas import testing as tm
 
 import cudf
-from cudf.api.types import is_numeric_dtype, is_string_dtype
-from cudf.core._internals.unary import is_nan
 from cudf.core.missing import NA, NaT
+from cudf.utils.dtypes import CUDF_STRING_DTYPE, is_dtype_obj_numeric
 
 
 def dtype_can_compare_equal_to_other(dtype):
     # return True if values of this dtype can compare
     # as equal to equal values of a different dtype
     return not (
-        is_string_dtype(dtype)
+        dtype == CUDF_STRING_DTYPE
         or isinstance(
             dtype,
             (
@@ -219,10 +218,10 @@ def assert_column_equal(
     elif not (
         (
             not dtype_can_compare_equal_to_other(left.dtype)
-            and is_numeric_dtype(right.dtype)
+            and is_dtype_obj_numeric(right.dtype)
         )
         or (
-            is_numeric_dtype(left.dtype)
+            is_dtype_obj_numeric(left.dtype)
             and not dtype_can_compare_equal_to_other(right.dtype)
         )
     ):
@@ -235,7 +234,7 @@ def assert_column_equal(
             if (
                 columns_equal
                 and not check_exact
-                and is_numeric_dtype(left.dtype)
+                and is_dtype_obj_numeric(left.dtype)
             ):
                 # non-null values must be the same
                 columns_equal = cp.allclose(
@@ -250,7 +249,7 @@ def assert_column_equal(
                     left.dtype.kind == right.dtype.kind == "f"
                 ):
                     columns_equal = cp.all(
-                        is_nan(left).values == is_nan(right).values
+                        left.isnan().values == right.isnan().values
                     )
             else:
                 columns_equal = left.equals(right)
@@ -791,7 +790,7 @@ def assert_eq(left, right, **kwargs):
         # Use the overloaded __eq__ of the operands
         if left == right:
             return True
-        elif any(np.issubdtype(type(x), np.floating) for x in (left, right)):
+        elif any(np.issubdtype(type(x), np.floating) for x in (left, right)):  # noqa: TID251
             np.testing.assert_almost_equal(left, right)
         else:
             np.testing.assert_equal(left, right)

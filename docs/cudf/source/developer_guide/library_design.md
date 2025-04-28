@@ -1,5 +1,10 @@
 # Library Design
 
+```{note}
+This page is significantly outdated!
+It will be updated in 25.04 to reflect the current state of cuDF. Which includes libcudf, pylibcudf, cudf classic, cudf.pandas, and cudf.polars.
+```
+
 At a high level, cuDF is structured in three layers, each of which serves a distinct purpose:
 
 1. The Frame layer: The user-facing implementation of pandas-like data structures like `DataFrame` and `Series`.
@@ -272,6 +277,10 @@ To have each worker in dask print spill statistics, do something like:
 ```
 
 ## The Cython layer
+
+```{note}
+As of 25.02, most of the functionality in the Cython layer has been moved to pylibcudf. All that remains is the Column layer which will be removed in a future release.
+```
 
 The lowest level of cuDF is its interaction with `libcudf` via Cython.
 The Cython layer is composed of two components: C++ bindings and Cython wrappers.

@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -58,9 +58,9 @@ _dask_cudf_performance_tracking = functools.partial(
 )
 
 
-def get_memory_records() -> (
-    dict[str, rmm.statistics.ProfilerRecords.MemoryRecord]
-):
+def get_memory_records() -> dict[
+    str, rmm.statistics.ProfilerRecords.MemoryRecord
+]:
     """Get the memory records from the memory profiling
 
     Returns

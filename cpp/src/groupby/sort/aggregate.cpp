@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -470,11 +470,14 @@ void aggregate_result_functor::operator()<aggregation::COLLECT_SET>(aggregation 
     dynamic_cast<cudf::detail::collect_set_aggregation const&>(agg)._nulls_equal;
   auto const nans_equal =
     dynamic_cast<cudf::detail::collect_set_aggregation const&>(agg)._nans_equal;
-  cache.add_result(
-    values,
-    agg,
-    lists::detail::distinct(
-      lists_column_view{collect_result->view()}, nulls_equal, nans_equal, stream, mr));
+  cache.add_result(values,
+                   agg,
+                   lists::detail::distinct(lists_column_view{collect_result->view()},
+                                           nulls_equal,
+                                           nans_equal,
+                                           duplicate_keep_option::KEEP_ANY,
+                                           stream,
+                                           mr));
 }
 
 /**
@@ -544,6 +547,7 @@ void aggregate_result_functor::operator()<aggregation::MERGE_SETS>(aggregation c
                    lists::detail::distinct(lists_column_view{merged_result->view()},
                                            merge_sets_agg._nulls_equal,
                                            merge_sets_agg._nans_equal,
+                                           duplicate_keep_option::KEEP_ANY,
                                            stream,
                                            mr));
 }
@@ -795,58 +799,41 @@ void aggregate_result_functor::operator()<aggregation::HOST_UDF>(aggregation con
 {
   if (cache.has_result(values, agg)) { return; }
 
-  auto const& udf_ptr   = dynamic_cast<cudf::detail::host_udf_aggregation const&>(agg).udf_ptr;
-  auto const data_attrs = [&]() -> host_udf_base::data_attribute_set_t {
-    if (auto tmp = udf_ptr->get_required_data(); !tmp.empty()) { return tmp; }
-    // Empty attribute set means everything.
-    return {host_udf_base::groupby_data_attribute::INPUT_VALUES,
-            host_udf_base::groupby_data_attribute::GROUPED_VALUES,
-            host_udf_base::groupby_data_attribute::SORTED_GROUPED_VALUES,
-            host_udf_base::groupby_data_attribute::NUM_GROUPS,
-            host_udf_base::groupby_data_attribute::GROUP_OFFSETS,
-            host_udf_base::groupby_data_attribute::GROUP_LABELS};
-  }();
+  auto const& udf_base_ptr = dynamic_cast<cudf::detail::host_udf_aggregation const&>(agg).udf_ptr;
+  auto const udf_ptr       = dynamic_cast<groupby_host_udf*>(udf_base_ptr.get());
+  CUDF_EXPECTS(udf_ptr != nullptr, "Invalid HOST_UDF instance for groupby aggregation.");
 
-  // Do not cache udf_input, as the actual input data may change from run to run.
-  host_udf_base::input_map_t udf_input;
-  for (auto const& attr : data_attrs) {
-    CUDF_EXPECTS(std::holds_alternative<host_udf_base::groupby_data_attribute>(attr.value) ||
-                   std::holds_alternative<std::unique_ptr<aggregation>>(attr.value),
-                 "Invalid input data attribute for HOST_UDF groupby aggregation.");
-    if (std::holds_alternative<host_udf_base::groupby_data_attribute>(attr.value)) {
-      switch (std::get<host_udf_base::groupby_data_attribute>(attr.value)) {
-        case host_udf_base::groupby_data_attribute::INPUT_VALUES:
-          udf_input.emplace(attr, values);
-          break;
-        case host_udf_base::groupby_data_attribute::GROUPED_VALUES:
-          udf_input.emplace(attr, get_grouped_values());
-          break;
-        case host_udf_base::groupby_data_attribute::SORTED_GROUPED_VALUES:
-          udf_input.emplace(attr, get_sorted_values());
-          break;
-        case host_udf_base::groupby_data_attribute::NUM_GROUPS:
-          udf_input.emplace(attr, helper.num_groups(stream));
-          break;
-        case host_udf_base::groupby_data_attribute::GROUP_OFFSETS:
-          udf_input.emplace(attr, helper.group_offsets(stream));
-          break;
-        case host_udf_base::groupby_data_attribute::GROUP_LABELS:
-          udf_input.emplace(attr, helper.group_labels(stream));
-          break;
-        default: CUDF_UNREACHABLE("Invalid input data attribute for HOST_UDF groupby aggregation.");
-      }
-    } else {  // data is result from another aggregation
-      auto other_agg = std::get<std::unique_ptr<aggregation>>(attr.value)->clone();
+  if (!udf_ptr->callback_input_values) {
+    udf_ptr->callback_input_values = [&]() -> column_view { return values; };
+  }
+  if (!udf_ptr->callback_grouped_values) {
+    udf_ptr->callback_grouped_values = [&]() -> column_view { return get_grouped_values(); };
+  }
+  if (!udf_ptr->callback_sorted_grouped_values) {
+    udf_ptr->callback_sorted_grouped_values = [&]() -> column_view { return get_sorted_values(); };
+  }
+  if (!udf_ptr->callback_num_groups) {
+    udf_ptr->callback_num_groups = [&]() -> size_type { return helper.num_groups(stream); };
+  }
+  if (!udf_ptr->callback_group_offsets) {
+    udf_ptr->callback_group_offsets = [&]() -> device_span<size_type const> {
+      return helper.group_offsets(stream);
+    };
+  }
+  if (!udf_ptr->callback_group_labels) {
+    udf_ptr->callback_group_labels = [&]() -> device_span<size_type const> {
+      return helper.group_labels(stream);
+    };
+  }
+  if (!udf_ptr->callback_compute_aggregation) {
+    udf_ptr->callback_compute_aggregation =
+      [&](std::unique_ptr<aggregation> other_agg) -> column_view {
       cudf::detail::aggregation_dispatcher(other_agg->kind, *this, *other_agg);
-      auto result = cache.get_result(values, *other_agg);
-      udf_input.emplace(std::move(other_agg), std::move(result));
-    }
+      return cache.get_result(values, *other_agg);
+    };
   }
 
-  auto output = (*udf_ptr)(udf_input, stream, mr);
-  CUDF_EXPECTS(std::holds_alternative<std::unique_ptr<column>>(output),
-               "Invalid output type from HOST_UDF groupby aggregation.");
-  cache.add_result(values, agg, std::get<std::unique_ptr<column>>(std::move(output)));
+  cache.add_result(values, agg, (*udf_ptr)(stream, mr));
 }
 
 }  // namespace detail

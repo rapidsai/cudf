@@ -1,5 +1,5 @@
 # =============================================================================
-# Copyright (c) 2022-2024, NVIDIA CORPORATION.
+# Copyright (c) 2022-2025, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License. You may obtain a copy of the License at
@@ -12,9 +12,9 @@
 # the License.
 # =============================================================================
 
-cmake_minimum_required(VERSION 3.26.4 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.30.4 FATAL_ERROR)
 
-include(../../rapids_config.cmake)
+include(../../cmake/rapids_config.cmake)
 
 project(
   cudf-kafka-python
@@ -35,7 +35,3 @@ include(rapids-cython-core)
 rapids_cython_init()
 
 add_subdirectory(cudf_kafka/_lib)
-
-if(DEFINED cython_lib_dir)
-  rapids_cython_add_rpath_entries(TARGET cudf_kafka PATHS "${cython_lib_dir}")
-endif()

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,6 +26,7 @@
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
+#include <numeric>
 #include <type_traits>
 #include <vector>
 
@@ -350,7 +351,7 @@ TEST_F(SegmentedSortInt, UnbalancedOffsets)
   std::sort(h_input.begin(), h_input.end(), std::greater<int64_t>{});
   std::fill_n(h_input.begin(), 4, 0);
   std::fill(h_input.begin() + 3533, h_input.end(), 10000);
-  auto d_input = cudf::detail::make_device_uvector_sync(
+  auto d_input = cudf::detail::make_device_uvector(
     h_input, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
   auto input    = cudf::column_view(cudf::device_span<int64_t const>(d_input));
   auto segments = cudf::test::fixed_width_column_wrapper<int32_t>({0, 4, 3533, 3535});

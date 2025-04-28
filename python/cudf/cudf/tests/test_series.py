@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 import datetime
 import decimal
 import hashlib
@@ -1090,10 +1090,7 @@ def test_series_update(data, other):
     ps = gs.to_pandas()
 
     ps.update(p_other)
-    with expect_warning_if(
-        isinstance(other, cudf.Series) and other.isna().any(), UserWarning
-    ):
-        gs.update(g_other)
+    gs.update(g_other)
     assert_eq(gs, ps)
 
 
@@ -1794,6 +1791,7 @@ def test_series_truncate_datetimeindex():
         pd.Series([0.0, 1.0, None, 10.0]),
         [None, None, None, None],
         [np.nan, None, -1, 2, 3],
+        [1, 2],
     ],
 )
 @pytest.mark.parametrize(
@@ -1803,10 +1801,12 @@ def test_series_truncate_datetimeindex():
         [],
         [np.nan, None, -1, 2, 3],
         [1.0, 12.0, None, None, 120],
+        [0.1, 12.1, 14.1],
         [0, 14, 12, 12, 3, 10, 12, 14, None],
         [None, None, None],
         ["0", "12", "14"],
         ["0", "12", "14", "a"],
+        [1.0, 2.5],
     ],
 )
 def test_isin_numeric(data, values):
@@ -2094,13 +2094,13 @@ def test_default_construction():
 )
 def test_default_integer_bitwidth_construction(default_integer_bitwidth, data):
     s = cudf.Series(data)
-    assert s.dtype == np.dtype(f"i{default_integer_bitwidth//8}")
+    assert s.dtype == np.dtype(f"i{default_integer_bitwidth // 8}")
 
 
 @pytest.mark.parametrize("data", [[1.5, 2.5, 4.5], [1000, 2000, 4000, 3.14]])
 def test_default_float_bitwidth_construction(default_float_bitwidth, data):
     s = cudf.Series(data)
-    assert s.dtype == np.dtype(f"f{default_float_bitwidth//8}")
+    assert s.dtype == np.dtype(f"f{default_float_bitwidth // 8}")
 
 
 def test_series_ordered_dedup():
@@ -2130,7 +2130,6 @@ def test_set_bool_error(dtype, bool_scalar):
 def test_int64_equality():
     s = cudf.Series(np.asarray([2**63 - 10, 2**63 - 100], dtype=np.int64))
     assert (s != np.int64(2**63 - 1)).all()
-    assert (s != cudf.Scalar(2**63 - 1, dtype=np.int64)).all()
 
 
 @pytest.mark.parametrize("into", [dict, OrderedDict, defaultdict(list)])
@@ -3003,3 +3002,60 @@ def test_dtype_dtypes_equal():
     ser = cudf.Series([0])
     assert ser.dtype is ser.dtypes
     assert ser.dtypes is ser.to_pandas().dtypes
+
+
+def test_null_like_to_nan_pandas_compat():
+    with cudf.option_context("mode.pandas_compatible", True):
+        ser = cudf.Series([1, 2, np.nan, 10, None])
+        pser = pd.Series([1, 2, np.nan, 10, None])
+
+        assert pser.dtype == ser.dtype
+        assert_eq(ser, pser)
+
+
+@pytest.mark.parametrize("ps", _series_na_data())
+def test_roundtrip_series_plc_column(ps):
+    expect = cudf.Series(ps)
+    actual = cudf.Series.from_pylibcudf(*expect.to_pylibcudf())
+    assert_eq(expect, actual)
+
+
+def test_non_strings_dtype_object_pandas_compat_raises():
+    with cudf.option_context("mode.pandas_compatible", True):
+        with pytest.raises(ValueError):
+            cudf.Series([1], dtype=object)
+
+
+def test_series_dataframe_count_float():
+    gs = cudf.Series([1, 2, 3, None, np.nan, 10], nan_as_null=False)
+    ps = cudf.Series([1, 2, 3, None, np.nan, 10])
+
+    with cudf.option_context("mode.pandas_compatible", True):
+        assert_eq(ps.count(), gs.count())
+        assert_eq(ps.to_frame().count(), gs.to_frame().count())
+    with cudf.option_context("mode.pandas_compatible", False):
+        assert_eq(gs.count(), gs.to_pandas(nullable=True).count())
+        assert_eq(
+            gs.to_frame().count(),
+            gs.to_frame().to_pandas(nullable=True).count(),
+        )
+
+
+@pytest.mark.parametrize("arr", [np.array, cp.array, pd.Series])
+def test_construct_nonnative_array(arr):
+    data = [1, 2, 3.5, 4]
+    dtype = np.dtype("f4")
+    native = arr(data, dtype=dtype)
+    nonnative = arr(data, dtype=dtype.newbyteorder())
+    result = cudf.Series(nonnative)
+    expected = cudf.Series(native)
+    assert_eq(result, expected)
+
+
+@pytest.mark.parametrize("nan_as_null", [True, False])
+def test_construct_all_pd_NA_with_dtype(nan_as_null):
+    result = cudf.Series(
+        [pd.NA, pd.NA], dtype=np.dtype(np.float64), nan_as_null=nan_as_null
+    )
+    expected = cudf.Series(pa.array([None, None], type=pa.float64()))
+    assert_eq(result, expected)

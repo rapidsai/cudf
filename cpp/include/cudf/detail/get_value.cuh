@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -49,8 +49,8 @@ T get_value(column_view const& col_view, size_type element_index, rmm::cuda_stre
   CUDF_EXPECTS(data_type(type_to_id<T>()) == col_view.type(), "get_value data type mismatch");
   CUDF_EXPECTS(element_index >= 0 && element_index < col_view.size(),
                "invalid element_index value");
-  return cudf::detail::make_host_vector_sync(
-           device_span<T const>{col_view.data<T>() + element_index, 1}, stream)
+  return cudf::detail::make_host_vector(device_span<T const>{col_view.data<T>() + element_index, 1},
+                                        stream)
     .front();
 }
 

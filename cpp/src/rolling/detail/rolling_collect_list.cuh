@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -154,8 +154,8 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> purge_null_entries(
 template <typename PrecedingIter, typename FollowingIter>
 std::unique_ptr<column> rolling_collect_list(column_view const& input,
                                              column_view const& default_outputs,
-                                             PrecedingIter preceding_begin_raw,
-                                             FollowingIter following_begin_raw,
+                                             PrecedingIter preceding_begin,
+                                             FollowingIter following_begin,
                                              size_type min_periods,
                                              null_policy null_handling,
                                              rmm::cuda_stream_view stream,
@@ -165,23 +165,6 @@ std::unique_ptr<column> rolling_collect_list(column_view const& input,
                "COLLECT_LIST window function does not support default values.");
 
   if (input.is_empty()) return empty_like(input);
-
-  // Fix up preceding/following iterators to respect column boundaries,
-  // similar to gpu_rolling().
-  // `rolling_window()` does not fix up preceding/following so as not to read past
-  // column boundaries.
-  // `grouped_rolling_window()` and `time_range_based_grouped_rolling_window() do.
-  auto preceding_begin = thrust::make_transform_iterator(
-    thrust::make_counting_iterator<size_type>(0),
-    cuda::proclaim_return_type<size_type>([preceding_begin_raw] __device__(auto i) {
-      return thrust::min(preceding_begin_raw[i], i + 1);
-    }));
-  auto following_begin = thrust::make_transform_iterator(
-    thrust::make_counting_iterator<size_type>(0),
-    cuda::proclaim_return_type<size_type>(
-      [following_begin_raw, size = input.size()] __device__(auto i) {
-        return thrust::min(following_begin_raw[i], size - i - 1);
-      }));
 
   // Materialize collect list's offsets.
   auto offsets =

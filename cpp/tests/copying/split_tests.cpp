@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1394,7 +1394,8 @@ std::vector<cudf::packed_table> do_chunked_pack(cudf::table_view const& input)
   auto bounce_buff_span =
     cudf::device_span<uint8_t>(static_cast<uint8_t*>(bounce_buff.data()), bounce_buff.size());
 
-  auto chunked_pack = cudf::chunked_pack::create(input, bounce_buff_span.size(), mr);
+  auto chunked_pack =
+    cudf::chunked_pack::create(input, bounce_buff_span.size(), cudf::get_default_stream(), mr);
 
   // right size the final buffer
   rmm::device_buffer final_buff(
@@ -1724,6 +1725,60 @@ TEST_F(ContiguousSplitUntypedTest, DISABLED_VeryLargeColumnTestChunked)
     cudf::data_type{cudf::type_id::INT64}, 400 * 1024 * 1024, cudf::mask_state::UNALLOCATED);
   auto result = do_chunked_pack(cudf::table_view{{*col}});
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*col, result[0].table.column(0));
+}
+
+TEST_F(ContiguousSplitUntypedTest, OffsetAlignment)
+{
+  // test copying offsets starting a various alignments (0, 4, 8, 12 bytes) and with
+  // varying counts (1, 2, 3, 4 elements)
+  cudf::test::strings_column_wrapper str{
+    "aaaa", "bbbb", "cccc", "dddd", "eeee", "ffff", "gggg", "hhhh", "iiii", "jjjj", "kkkk", "llll"};
+
+  std::vector<int> row_index_start{4, 5, 6, 7};
+  std::vector<int> row_counts{1, 2, 3, 4};
+
+  // 32 bit offsets
+  {
+    cudf::table_view tbl({str});
+    for (size_t ridx = 0; ridx < row_index_start.size(); ridx++) {
+      for (size_t cidx = 0; cidx < row_counts.size(); cidx++) {
+        std::vector<int> splits{row_index_start[ridx], row_index_start[ridx] + row_counts[cidx]};
+
+        auto res      = cudf::contiguous_split(tbl, splits);
+        auto expected = cudf::split(tbl, splits);
+
+        for (size_t idx = 0; idx < expected.size(); idx++) {
+          CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected[idx], res[idx].table);
+        }
+      }
+    }
+  }
+
+  // 64 bit offsets
+  {
+    // reassemble with 64 bit offsets
+    auto contents = str.release()->release();
+    cudf::test::fixed_width_column_wrapper<int64_t> long_offsets{
+      0, 4, 8, 12, 16, 20, 24, 28, 32, 36, 40, 44, 48};
+    auto long_str =
+      cudf::make_strings_column(12, long_offsets.release(), std::move(*contents.data), 0, {});
+    cudf::strings_column_view scv(*long_str);
+    CUDF_EXPECTS(scv.offsets().type().id() == cudf::type_id::INT64, "Unexpected short offset type");
+
+    cudf::table_view tbl({*long_str});
+    for (size_t ridx = 0; ridx < row_index_start.size(); ridx++) {
+      for (size_t cidx = 0; cidx < row_counts.size(); cidx++) {
+        std::vector<int> splits{row_index_start[ridx], row_index_start[ridx] + row_counts[cidx]};
+
+        auto res      = cudf::contiguous_split(tbl, splits);
+        auto expected = cudf::split(tbl, splits);
+
+        for (size_t idx = 0; idx < expected.size(); idx++) {
+          CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected[idx], res[idx].table);
+        }
+      }
+    }
+  }
 }
 
 // contiguous split with strings
@@ -2605,4 +2660,81 @@ TEST_F(ContiguousSplitNestedTypesTest, ListOfStructChunked)
       CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, result.table.column(0));
     },
     /*split*/ false);
+}
+
+struct ContiguousSplitLongStrings : public cudf::test::BaseFixture {};
+
+TEST_F(ContiguousSplitLongStrings, LongOffsets)
+{
+  auto str = make_long_offsets_string_column();
+  cudf::table_view tbl({*str});
+
+  {
+    auto res      = cudf::contiguous_split(tbl, {});
+    auto expected = cudf::split(tbl, {});
+
+    for (size_t idx = 0; idx < expected.size(); idx++) {
+      CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected[idx], res[idx].table);
+    }
+  }
+
+  {
+    std::vector<int> splits{3, 7};
+    auto res      = cudf::contiguous_split(tbl, splits);
+    auto expected = cudf::split(tbl, splits);
+
+    for (size_t idx = 0; idx < expected.size(); idx++) {
+      CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected[idx], res[idx].table);
+    }
+  }
+}
+
+TEST_F(ContiguousSplitLongStrings, LongOffsetsNested)
+{
+  std::vector<std::unique_ptr<cudf::column>> children;
+  children.push_back(make_long_offsets_string_column());
+  children.push_back(make_long_offsets_string_column());
+  cudf::test::structs_column_wrapper st(std::move(children));
+
+  cudf::test::fixed_width_column_wrapper<int> offsets{0, 3, 5, 7, 9, 10};
+  auto list = make_lists_column(5, offsets.release(), st.release(), 0, {});
+
+  cudf::table_view tbl({*list});
+  std::vector<int> splits{2, 3};
+  auto res      = cudf::contiguous_split(tbl, splits);
+  auto expected = cudf::split(tbl, splits);
+
+  for (size_t idx = 0; idx < expected.size(); idx++) {
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected[idx], res[idx].table);
+  }
+}
+
+TEST_F(ContiguousSplitLongStrings, DISABLED_LongOffsetsAndChars)
+{
+  auto str = make_long_offsets_and_chars_string_column();
+
+  std::vector<int> splits{3, 7};
+  cudf::table_view tbl({*str});
+  auto res      = cudf::contiguous_split(tbl, splits);
+  auto expected = cudf::split(tbl, splits);
+
+  for (size_t idx = 0; idx < expected.size(); idx++) {
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected[idx], res[idx].table);
+  }
+}
+
+TEST_F(ContiguousSplitLongStrings, DISABLED_LongOffsetsAndCharsNested)
+{
+  cudf::test::fixed_width_column_wrapper<int> offsets{0, 3, 5, 7, 9, 10};
+  auto list =
+    make_lists_column(5, offsets.release(), make_long_offsets_and_chars_string_column(), 0, {});
+
+  cudf::table_view tbl({*list});
+  std::vector<int> splits{2, 3};
+  auto res      = cudf::contiguous_split(tbl, splits);
+  auto expected = cudf::split(tbl, splits);
+
+  for (size_t idx = 0; idx < expected.size(); idx++) {
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected[idx], res[idx].table);
+  }
 }

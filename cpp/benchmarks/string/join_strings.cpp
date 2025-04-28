@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -41,8 +41,8 @@ static void bench_join(nvbench::state& state)
   state.add_global_memory_reads<nvbench::int8_t>(chars_size);   // all bytes are read;
   state.add_global_memory_writes<nvbench::int8_t>(chars_size);  // all bytes are written
 
-  std::string separator(":");
-  std::string narep("null");
+  std::string_view separator(":");
+  std::string_view narep("null");
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
     auto result = cudf::strings::join_strings(input, separator, narep);
   });

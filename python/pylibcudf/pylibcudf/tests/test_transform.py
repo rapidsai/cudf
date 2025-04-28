@@ -1,8 +1,11 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 import math
 
+import numba
 import pyarrow as pa
+import pytest
+from numba import cuda
 from utils import assert_column_eq
 
 import pylibcudf as plc
@@ -43,7 +46,7 @@ def test_bools_to_mask_roundtrip():
 
     plc_output = plc.transform.mask_to_bools(mask.ptr, 0, len(pa_array))
     result_pa = plc.interop.to_arrow(plc_output)
-    expected_pa = pa.chunked_array([[True, False, False]])
+    expected_pa = pa.array([True, False, False])
     assert result_pa.equals(expected_pa)
 
 
@@ -65,7 +68,7 @@ def test_encode():
     )
     assert pa_table_result.equals(pa_table_expected)
 
-    pa_column_expected = pa.chunked_array([[0, 1, 2]], type=pa.int32())
+    pa_column_expected = pa.array([0, 1, 2], type=pa.int32())
     assert pa_column_result.equals(pa_column_expected)
 
 
@@ -81,3 +84,36 @@ def test_one_hot_encode():
         schema=pa.schema([pa.field("", pa.bool_(), nullable=False)] * 3),
     )
     assert result.equals(expected)
+
+
+def test_transform_udf():
+    @cuda.jit(device=True)
+    def op(a, b, c):
+        return (a + b) * c
+
+    if not plc.jit.is_runtime_jit_supported():
+        pytest.skip("Skipping tests that require runtime JIT support")
+
+    ptx, _ = cuda.compile_ptx_for_current_device(
+        op, (numba.float64, numba.float64, numba.float64), device=True
+    )
+
+    A = 5.0
+    B = 20.0
+    C = 0.5
+
+    a = pa.array([A] * 100)
+    b = pa.array([B] * 100)
+    c = pa.array([C])
+    expected = pa.array([(A + B) * C] * 100)
+    result = plc.transform.transform(
+        [
+            plc.interop.from_arrow(a),
+            plc.interop.from_arrow(b),
+            plc.interop.from_arrow(c),
+        ],
+        transform_udf=ptx,
+        output_type=plc.DataType(plc.TypeId.FLOAT64),
+        is_ptx=True,
+    )
+    assert_column_eq(expected, result)

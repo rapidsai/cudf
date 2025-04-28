@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,8 +16,9 @@
 
 #pragma once
 
-#include "parquet.hpp"
+#include "parquet_common.hpp"
 
+#include <cudf/io/parquet_schema.hpp>
 #include <cudf/utilities/export.hpp>
 
 #include <algorithm>
@@ -108,6 +109,10 @@ class CompactProtocolReader {
   void read(IntType* t);
   void read(RowGroup* r);
   void read(ColumnChunk* c);
+  void read(BloomFilterAlgorithm* bf);
+  void read(BloomFilterHash* bf);
+  void read(BloomFilterCompression* bf);
+  void read(BloomFilterHeader* bf);
   void read(ColumnChunkMetaData* c);
   void read(PageHeader* p);
   void read(DataPageHeader* d);
@@ -124,9 +129,10 @@ class CompactProtocolReader {
   void read(SortingColumn* s);
 
  public:
-  static int NumRequiredBits(uint32_t max_level) noexcept
+  static inline constexpr int NumRequiredBits(uint32_t max_level) noexcept
   {
-    return 32 - CountLeadingZeros32(max_level);
+    // TODO: Use `std::countl_zero` instead of `__builtin_clz` once we migrate to C++20
+    return max_level > 0 ? 32 - __builtin_clz(max_level) : 0;
   }
   bool InitSchema(FileMetaData* md);
 

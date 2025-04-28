@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 from __future__ import annotations
 
 import io
@@ -195,9 +195,9 @@ def assert_table_and_meta_eq(
     plc_table = plc_table_w_meta.tbl
 
     plc_shape = (plc_table.num_rows(), plc_table.num_columns())
-    assert (
-        plc_shape == pa_table.shape
-    ), f"{plc_shape} is not equal to {pa_table.shape}"
+    assert plc_shape == pa_table.shape, (
+        f"{plc_shape} is not equal to {pa_table.shape}"
+    )
 
     if not check_types_if_empty and plc_table.num_rows() == 0:
         return
@@ -207,9 +207,9 @@ def assert_table_and_meta_eq(
 
     # Check column name equality
     if check_names:
-        assert (
-            plc_table_w_meta.column_names() == pa_table.column_names
-        ), f"{plc_table_w_meta.column_names()} != {pa_table.column_names}"
+        assert plc_table_w_meta.column_names() == pa_table.column_names, (
+            f"{plc_table_w_meta.column_names()} != {pa_table.column_names}"
+        )
 
 
 def cudf_raises(expected_exception: BaseException, *args, **kwargs):
@@ -353,6 +353,16 @@ def make_source(path_or_buf, pa_table, format, **kwargs):
     if isinstance(path_or_buf, io.IOBase):
         path_or_buf.seek(0)
     return path_or_buf
+
+
+def get_bytes_from_source(source):
+    if isinstance(source, (str, os.PathLike)):
+        with open(source, "rb") as f:
+            return f.read()
+    elif isinstance(source, io.BytesIO):
+        return source.getbuffer()
+    else:
+        raise TypeError(f"Unsupported source type: {type(source)}")
 
 
 NUMERIC_PA_TYPES = [pa.int64(), pa.float64(), pa.uint64()]

@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 from cython.operator cimport dereference
 from libcpp.cast cimport dynamic_cast
@@ -20,9 +20,16 @@ from pylibcudf.libcudf.aggregation cimport (
     make_count_aggregation,
     make_covariance_aggregation,
     make_ewma_aggregation,
+    make_histogram_aggregation,
+    make_m2_aggregation,
     make_max_aggregation,
     make_mean_aggregation,
     make_median_aggregation,
+    make_merge_m2_aggregation,
+    make_merge_histogram_aggregation,
+    make_merge_lists_aggregation,
+    make_merge_sets_aggregation,
+    make_merge_tdigest_aggregation,
     make_min_aggregation,
     make_nth_element_aggregation,
     make_nunique_aggregation,
@@ -32,6 +39,7 @@ from pylibcudf.libcudf.aggregation cimport (
     make_std_aggregation,
     make_sum_aggregation,
     make_sum_of_squares_aggregation,
+    make_tdigest_aggregation,
     make_udf_aggregation,
     make_variance_aggregation,
     rank_method,
@@ -82,9 +90,16 @@ __all__ = [
     "count",
     "covariance",
     "ewma",
+    "histogram",
+    "m2",
     "max",
     "mean",
     "median",
+    "merge_histogram",
+    "merge_lists",
+    "merge_m2",
+    "merge_sets",
+    "merge_tdigest",
     "min",
     "nth_element",
     "nunique",
@@ -94,6 +109,7 @@ __all__ = [
     "std",
     "sum",
     "sum_of_squares",
+    "tdigest",
     "udf",
     "variance",
 ]
@@ -638,4 +654,151 @@ cpdef Aggregation rank(
                 percentage,
             )
         )
+    )
+
+
+cpdef Aggregation histogram():
+    """Create a histogram aggregation.
+
+    For details, see :cpp:func:`make_histogram_aggregation`.
+
+    Returns
+    -------
+    Aggregation
+        The histogram aggregation.
+    """
+    return Aggregation.from_libcudf(
+        move(make_histogram_aggregation[aggregation]())
+    )
+
+
+cpdef Aggregation m2():
+    """Create a M2 aggregation.
+
+    For details, see :cpp:func:`make_m2_aggregation`.
+
+    Returns
+    -------
+    Aggregation
+        The M2 aggregation.
+    """
+    return Aggregation.from_libcudf(
+        move(make_m2_aggregation[aggregation]())
+    )
+
+
+cpdef Aggregation merge_m2():
+    """Create a merge M2 aggregation.
+
+    For details, see :cpp:func:`make_merge_m2_aggregation`.
+
+    Returns
+    -------
+    Aggregation
+        The merge M2 aggregation.
+    """
+    return Aggregation.from_libcudf(
+        move(make_merge_m2_aggregation[aggregation]())
+    )
+
+
+cpdef Aggregation merge_histogram():
+    """Create a merge histogram aggregation.
+
+    For details, see :cpp:func:`make_merge_histogram_aggregation`.
+
+    Returns
+    -------
+    Aggregation
+        The merge histogram aggregation.
+    """
+    return Aggregation.from_libcudf(
+        move(make_merge_histogram_aggregation[aggregation]())
+    )
+
+
+cpdef Aggregation merge_lists():
+    """Create a merge lists aggregation.
+
+    For details, see :cpp:func:`make_merge_lists_aggregation`.
+
+    Returns
+    -------
+    Aggregation
+        The merge lists aggregation.
+    """
+    return Aggregation.from_libcudf(
+        move(make_merge_lists_aggregation[aggregation]())
+    )
+
+
+cpdef Aggregation merge_sets(
+    null_equality nulls_equal = null_equality.EQUAL,
+    nan_equality nans_equal = nan_equality.ALL_EQUAL,
+):
+    """Create a merge sets aggregation.
+
+    For details, see :cpp:func:`make_merge_sets_aggregation`.
+
+    Parameters
+    ----------
+    nulls_equal : null_equality, default EQUAL
+        Whether or not nulls should be considered equal.
+    nans_equal : nan_equality, default ALL_EQUAL
+        Whether or not NaNs should be considered equal.
+
+    Returns
+    -------
+    Aggregation
+        The merge sets aggregation.
+    """
+    return Aggregation.from_libcudf(
+        move(
+            make_merge_sets_aggregation[aggregation](
+                nulls_equal,
+                nans_equal,
+            )
+        )
+    )
+
+
+cpdef Aggregation merge_tdigest(int max_centroids):
+    """Create a merge TDIGEST aggregation.
+
+    For details, see :cpp:func:`make_merge_tdigest_aggregation`.
+
+    Parameters
+    ----------
+    max_centroids : int
+        Parameter controlling compression level and accuracy
+        on subsequent queries on the output tdigest data.
+
+    Returns
+    -------
+    Aggregation
+        The merge TDIGEST aggregation.
+    """
+    return Aggregation.from_libcudf(
+        move(make_merge_tdigest_aggregation[aggregation](max_centroids))
+    )
+
+
+cpdef Aggregation tdigest(int max_centroids):
+    """Create a TDIGEST aggregation.
+
+    For details, see :cpp:func:`make_tdigest_aggregation`.
+
+    Parameters
+    ----------
+    max_centroids : int
+        Parameter controlling compression level and accuracy
+        on subsequent queries on the output tdigest data.
+
+    Returns
+    -------
+    Aggregation
+        The TDIGEST aggregation.
+    """
+    return Aggregation.from_libcudf(
+        move(make_tdigest_aggregation[aggregation](max_centroids))
     )

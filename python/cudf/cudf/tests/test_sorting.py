@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2024, NVIDIA CORPORATION.
+# Copyright (c) 2018-2025, NVIDIA CORPORATION.
 
 import string
 from itertools import product
@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from cudf import DataFrame, Series
+from cudf import DataFrame, Series, option_context
 from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.core.column import NumericalColumn
 from cudf.testing import assert_eq
@@ -44,6 +44,14 @@ def test_dataframe_sort_values(nelem, dtype):
     assert_eq(sorted_df.index.values, sorted_index)
     assert_eq(sorted_df["a"].values, aa[sorted_index])
     assert_eq(sorted_df["b"].values, bb[sorted_index])
+
+
+def test_sort_values_nans_pandas_compat():
+    data = {"a": [0, 0, 2, -1], "b": [1, 3, 2, None]}
+    with option_context("mode.pandas_compatible", True):
+        result = DataFrame(data).sort_values("b", na_position="first")
+    expected = pd.DataFrame(data).sort_values("b", na_position="first")
+    assert_eq(result, expected)
 
 
 @pytest.mark.parametrize("ignore_index", [True, False])
@@ -321,7 +329,6 @@ def test_dataframe_scatter_by_map(map_size, nelem, keep):
     def _check_scatter_by_map(dfs, col):
         assert len(dfs) == map_size
         nrows = 0
-        # print(col._column)
         name = col.name
         for i, df in enumerate(dfs):
             nrows += len(df)

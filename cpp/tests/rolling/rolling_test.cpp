@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -38,6 +38,7 @@
 
 #include <src/rolling/detail/rolling.hpp>
 
+#include <algorithm>
 #include <limits>
 #include <type_traits>
 #include <vector>
@@ -660,7 +661,7 @@ TEST_F(RollingErrorTest, WindowArraySizeMismatch)
   cudf::test::fixed_width_column_wrapper<cudf::size_type> input(
     col_data.begin(), col_data.end(), col_valid.begin());
 
-  std::vector<cudf::size_type> five({2, 1, 2, 1, 4});
+  std::vector<cudf::size_type> five({1, 1, 2, 1, 0});
   std::vector<cudf::size_type> four({1, 2, 3, 4});
   cudf::test::fixed_width_column_wrapper<cudf::size_type> five_elements(five.begin(), five.end());
   cudf::test::fixed_width_column_wrapper<cudf::size_type> four_elements(four.begin(), four.end());
@@ -985,22 +986,7 @@ TYPED_TEST(RollingTest, SimpleDynamic)
   cudf::test::fixed_width_column_wrapper<TypeParam> input(
     col_data.begin(), col_data.end(), col_mask.begin());
   std::vector<cudf::size_type> preceding_window({1, 2, 3, 4, 2});
-  std::vector<cudf::size_type> following_window({2, 1, 2, 1, 2});
-
-  // dynamic sizes
-  this->run_test_col_agg(input, preceding_window, following_window, 1);
-}
-
-// this is a special test to check the volatile count variable issue (see rolling.cu for detail)
-TYPED_TEST(RollingTest, VolatileCount)
-{
-  auto const col_data = cudf::test::make_type_param_vector<TypeParam>({8, 70, 45, 20, 59, 80});
-  const std::vector<bool> col_mask = {1, 1, 0, 0, 1, 0};
-
-  cudf::test::fixed_width_column_wrapper<TypeParam> input(
-    col_data.begin(), col_data.end(), col_mask.begin());
-  std::vector<cudf::size_type> preceding_window({5, 9, 4, 8, 3, 3});
-  std::vector<cudf::size_type> following_window({1, 1, 9, 2, 8, 9});
+  std::vector<cudf::size_type> following_window({2, 1, 2, 1, 0});
 
   // dynamic sizes
   this->run_test_col_agg(input, preceding_window, following_window, 1);
@@ -1128,14 +1114,19 @@ TYPED_TEST(RollingTest, RandomDynamicAllValid)
 
   // random parameters
   cudf::test::UniformRandomGenerator<cudf::size_type> window_rng(0, max_window_size);
-  auto generator = [&]() { return window_rng.generate(); };
 
   std::vector<cudf::size_type> preceding_window(num_rows);
   std::vector<cudf::size_type> following_window(num_rows);
 
-  std::generate(preceding_window.begin(), preceding_window.end(), generator);
-  std::generate(following_window.begin(), following_window.end(), generator);
-
+  auto it = thrust::make_counting_iterator<cudf::size_type>(0);
+  std::transform(it, it + num_rows, preceding_window.begin(), [&window_rng, num_rows](auto i) {
+    auto p = window_rng.generate();
+    return std::min(i + 1, std::max(p, i + 1 - num_rows));
+  });
+  std::transform(it, it + num_rows, following_window.begin(), [&window_rng, num_rows](auto i) {
+    auto f = window_rng.generate();
+    return std::max(-i - 1, std::min(f, num_rows - i - 1));
+  });
   this->run_test_col_agg(input, preceding_window, following_window, max_window_size);
 }
 
@@ -1157,14 +1148,19 @@ TYPED_TEST(RollingTest, RandomDynamicWithInvalid)
 
   // random parameters
   cudf::test::UniformRandomGenerator<cudf::size_type> window_rng(0, max_window_size);
-  auto generator = [&]() { return window_rng.generate(); };
 
   std::vector<cudf::size_type> preceding_window(num_rows);
   std::vector<cudf::size_type> following_window(num_rows);
 
-  std::generate(preceding_window.begin(), preceding_window.end(), generator);
-  std::generate(following_window.begin(), following_window.end(), generator);
-
+  auto it = thrust::make_counting_iterator<cudf::size_type>(0);
+  std::transform(it, it + num_rows, preceding_window.begin(), [&window_rng, num_rows](auto i) {
+    auto p = window_rng.generate();
+    return std::min(i + 1, std::max(p, i + 1 - num_rows));
+  });
+  std::transform(it, it + num_rows, following_window.begin(), [&window_rng, num_rows](auto i) {
+    auto f = window_rng.generate();
+    return std::max(-i - 1, std::min(f, num_rows - i - 1));
+  });
   this->run_test_col_agg(input, preceding_window, following_window, max_window_size);
 }
 

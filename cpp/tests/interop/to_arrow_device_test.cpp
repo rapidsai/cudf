@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,10 +14,9 @@
  * limitations under the License.
  */
 
-#include "nanoarrow_utils.hpp"
-
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/nanoarrow_utils.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/column/column.hpp>
@@ -354,6 +353,24 @@ TEST_F(ToArrowDeviceTest, EmptyTable)
   ASSERT_CUDA_SUCCEEDED(
     cudaEventSynchronize(*reinterpret_cast<cudaEvent_t*>(got_arrow_device->sync_event)));
   compare_arrays(schema.get(), arr.get(), &got_arrow_device->array);
+}
+
+TEST_F(ToArrowDeviceTest, EmptyDictionary)
+{
+  auto empty = cudf::make_empty_column(cudf::type_id::DICTIONARY32);
+  auto meta  = std::vector<cudf::column_metadata>({cudf::column_metadata{"d"}});
+
+  auto got_arrow_schema = cudf::to_arrow_schema(cudf::table_view({empty->view()}), meta);
+  ASSERT_EQ(got_arrow_schema->n_children, 1);
+  auto dictionary_schema = got_arrow_schema->children[0]->dictionary;
+  ASSERT_NE(dictionary_schema, nullptr);
+  EXPECT_EQ(dictionary_schema->n_children, 0);
+
+  auto got_arrow_device = cudf::to_arrow_device(cudf::table_view({empty->view()}));
+  ASSERT_EQ(got_arrow_device->array.n_children, 1);
+  auto dictionary = got_arrow_device->array.children[0]->dictionary;
+  ASSERT_NE(dictionary, nullptr);
+  EXPECT_EQ(dictionary->n_children, 0);
 }
 
 TEST_F(ToArrowDeviceTest, DateTimeTable)
@@ -708,9 +725,7 @@ TEST_F(ToArrowDeviceTest, FixedPoint32Table)
   using namespace numeric;
 
   for (auto const scale : {6, 4, 2, 0, -1, -3, -5}) {
-    auto const expect_data =
-      std::vector<int32_t>{-1000, -1, -1, -1, 2400, 0, 0, 0, -3456, -1, -1, -1,
-                           4650,  0,  0,  0,  5154, 0, 0, 0, 6800,  0,  0,  0};
+    auto const expect_data = std::vector<int32_t>{-1000, 2400, -3456, 4650, 5154, 6800};
     auto col = fp_wrapper<int32_t>({-1000, 2400, -3456, 4650, 5154, 6800}, scale_type{scale});
     std::vector<std::unique_ptr<cudf::column>> table_cols;
     table_cols.emplace_back(col.release());
@@ -721,7 +736,7 @@ TEST_F(ToArrowDeviceTest, FixedPoint32Table)
     NANOARROW_THROW_NOT_OK(ArrowSchemaSetTypeStruct(expected_schema.get(), 1));
     ArrowSchemaInit(expected_schema->children[0]);
     NANOARROW_THROW_NOT_OK(ArrowSchemaSetTypeDecimal(expected_schema->children[0],
-                                                     NANOARROW_TYPE_DECIMAL128,
+                                                     NANOARROW_TYPE_DECIMAL32,
                                                      cudf::detail::max_precision<int32_t>(),
                                                      -scale));
     NANOARROW_THROW_NOT_OK(ArrowSchemaSetName(expected_schema->children[0], "a"));
@@ -731,36 +746,12 @@ TEST_F(ToArrowDeviceTest, FixedPoint32Table)
       cudf::to_arrow_schema(input.view(), std::vector<cudf::column_metadata>{{"a"}});
     compare_schemas(expected_schema.get(), got_arrow_schema.get());
 
-    auto result_dev_data = std::make_unique<rmm::device_uvector<int32_t>>(
-      expect_data.size(), cudf::get_default_stream());
-    cudaMemcpy(result_dev_data->data(),
-               expect_data.data(),
-               sizeof(int32_t) * expect_data.size(),
-               cudaMemcpyHostToDevice);
-
-    cudf::get_default_stream().synchronize();
     nanoarrow::UniqueArray expected_array;
     NANOARROW_THROW_NOT_OK(
       ArrowArrayInitFromSchema(expected_array.get(), expected_schema.get(), nullptr));
     expected_array->length = input.num_rows();
 
-    expected_array->children[0]->length = input.num_rows();
-    NANOARROW_THROW_NOT_OK(
-      ArrowBufferSetAllocator(ArrowArrayBuffer(expected_array->children[0], 0), noop_alloc));
-    ArrowArrayValidityBitmap(expected_array->children[0])->buffer.data =
-      const_cast<uint8_t*>(reinterpret_cast<uint8_t const*>(input.view().column(0).null_mask()));
-
-    auto data_ptr = reinterpret_cast<uint8_t*>(result_dev_data->data());
-    NANOARROW_THROW_NOT_OK(ArrowBufferSetAllocator(
-      ArrowArrayBuffer(expected_array->children[0], 1),
-      ArrowBufferDeallocator(
-        [](ArrowBufferAllocator* alloc, uint8_t*, int64_t) {
-          auto buf =
-            reinterpret_cast<std::unique_ptr<rmm::device_uvector<int32_t>>*>(alloc->private_data);
-          delete buf;
-        },
-        new std::unique_ptr<rmm::device_uvector<int32_t>>(std::move(result_dev_data)))));
-    ArrowArrayBuffer(expected_array->children[0], 1)->data = data_ptr;
+    populate_from_col<int64_t>(expected_array->children[0], input.view().column(0));
     NANOARROW_THROW_NOT_OK(
       ArrowArrayFinishBuilding(expected_array.get(), NANOARROW_VALIDATION_LEVEL_NONE, nullptr));
 
@@ -795,10 +786,8 @@ TEST_F(ToArrowDeviceTest, FixedPoint64Table)
     ArrowSchemaInit(expected_schema.get());
     NANOARROW_THROW_NOT_OK(ArrowSchemaSetTypeStruct(expected_schema.get(), 1));
     ArrowSchemaInit(expected_schema->children[0]);
-    NANOARROW_THROW_NOT_OK(ArrowSchemaSetTypeDecimal(expected_schema->children[0],
-                                                     NANOARROW_TYPE_DECIMAL128,
-                                                     cudf::detail::max_precision<int64_t>(),
-                                                     -scale));
+    NANOARROW_THROW_NOT_OK(ArrowSchemaSetTypeDecimal(
+      expected_schema->children[0], NANOARROW_TYPE_DECIMAL64, 18, -scale));
     NANOARROW_THROW_NOT_OK(ArrowSchemaSetName(expected_schema->children[0], "a"));
     expected_schema->children[0]->flags = 0;
 
@@ -806,36 +795,12 @@ TEST_F(ToArrowDeviceTest, FixedPoint64Table)
       cudf::to_arrow_schema(input.view(), std::vector<cudf::column_metadata>{{"a"}});
     compare_schemas(expected_schema.get(), got_arrow_schema.get());
 
-    auto result_dev_data = std::make_unique<rmm::device_uvector<int64_t>>(
-      expect_data.size(), cudf::get_default_stream());
-    cudaMemcpy(result_dev_data->data(),
-               expect_data.data(),
-               sizeof(int64_t) * expect_data.size(),
-               cudaMemcpyHostToDevice);
-
-    cudf::get_default_stream().synchronize();
     nanoarrow::UniqueArray expected_array;
     NANOARROW_THROW_NOT_OK(
       ArrowArrayInitFromSchema(expected_array.get(), expected_schema.get(), nullptr));
     expected_array->length = input.num_rows();
 
-    expected_array->children[0]->length = input.num_rows();
-    NANOARROW_THROW_NOT_OK(
-      ArrowBufferSetAllocator(ArrowArrayBuffer(expected_array->children[0], 0), noop_alloc));
-    ArrowArrayValidityBitmap(expected_array->children[0])->buffer.data =
-      const_cast<uint8_t*>(reinterpret_cast<uint8_t const*>(input.view().column(0).null_mask()));
-
-    auto data_ptr = reinterpret_cast<uint8_t*>(result_dev_data->data());
-    NANOARROW_THROW_NOT_OK(ArrowBufferSetAllocator(
-      ArrowArrayBuffer(expected_array->children[0], 1),
-      ArrowBufferDeallocator(
-        [](ArrowBufferAllocator* alloc, uint8_t*, int64_t) {
-          auto buf =
-            reinterpret_cast<std::unique_ptr<rmm::device_uvector<int64_t>>*>(alloc->private_data);
-          delete buf;
-        },
-        new std::unique_ptr<rmm::device_uvector<int64_t>>(std::move(result_dev_data)))));
-    ArrowArrayBuffer(expected_array->children[0], 1)->data = data_ptr;
+    populate_from_col<int32_t>(expected_array->children[0], input.view().column(0));
     NANOARROW_THROW_NOT_OK(
       ArrowArrayFinishBuilding(expected_array.get(), NANOARROW_VALIDATION_LEVEL_NONE, nullptr));
 

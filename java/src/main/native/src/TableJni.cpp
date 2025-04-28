@@ -36,7 +36,11 @@
 #include <cudf/io/json.hpp>
 #include <cudf/io/orc.hpp>
 #include <cudf/io/parquet.hpp>
-#include <cudf/join.hpp>
+#include <cudf/join/conditional_join.hpp>
+#include <cudf/join/distinct_hash_join.hpp>
+#include <cudf/join/hash_join.hpp>
+#include <cudf/join/join.hpp>
+#include <cudf/join/mixed_join.hpp>
 #include <cudf/lists/explode.hpp>
 #include <cudf/merge.hpp>
 #include <cudf/partitioning.hpp>
@@ -2480,6 +2484,7 @@ Java_ai_rapids_cudf_Table_writeORCBufferBegin(JNIEnv* env,
                                               jint j_compression,
                                               jintArray j_precisions,
                                               jbooleanArray j_is_map,
+                                              jint j_stripe_size_rows,
                                               jobject consumer,
                                               jobject host_memory_allocator)
 {
@@ -2535,6 +2540,7 @@ Java_ai_rapids_cudf_Table_writeORCBufferBegin(JNIEnv* env,
                                         .enable_statistics(ORC_STATISTICS_ROW_GROUP)
                                         .key_value_metadata(kv_metadata)
                                         .compression_statistics(stats)
+                                        .stripe_size_rows(j_stripe_size_rows)
                                         .build();
     auto writer_ptr                          = std::make_unique<cudf::io::orc_chunked_writer>(opts);
     cudf::jni::native_orc_writer_handle* ret = new cudf::jni::native_orc_writer_handle(
@@ -2555,6 +2561,7 @@ JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeORCFileBegin(JNIEnv* env,
                                                                    jint j_compression,
                                                                    jintArray j_precisions,
                                                                    jbooleanArray j_is_map,
+                                                                   jint j_stripe_size_rows,
                                                                    jstring j_output_path)
 {
   JNI_NULL_CHECK(env, j_col_names, "null columns", 0);
@@ -2606,6 +2613,7 @@ JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeORCFileBegin(JNIEnv* env,
                                         .enable_statistics(ORC_STATISTICS_ROW_GROUP)
                                         .key_value_metadata(kv_metadata)
                                         .compression_statistics(stats)
+                                        .stripe_size_rows(j_stripe_size_rows)
                                         .build();
     auto writer_ptr = std::make_unique<cudf::io::orc_chunked_writer>(opts);
     cudf::jni::native_orc_writer_handle* ret =
@@ -2901,13 +2909,15 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_leftJoinGatherMaps(
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_leftDistinctJoinGatherMap(
   JNIEnv* env, jclass, jlong j_left_keys, jlong j_right_keys, jboolean compare_nulls_equal)
 {
+  double const load_factor = 0.5;
   return cudf::jni::join_gather_single_map(
     env,
     j_left_keys,
     j_right_keys,
     compare_nulls_equal,
-    [](cudf::table_view const& left, cudf::table_view const& right, cudf::null_equality nulleq) {
-      cudf::distinct_hash_join hash(right, nulleq);
+    [load_factor](
+      cudf::table_view const& left, cudf::table_view const& right, cudf::null_equality nulleq) {
+      cudf::distinct_hash_join hash(right, nulleq, load_factor);
       return hash.left_join(left);
     });
 }
@@ -3111,13 +3121,15 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_innerJoinGatherMaps(
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_innerDistinctJoinGatherMaps(
   JNIEnv* env, jclass, jlong j_left_keys, jlong j_right_keys, jboolean compare_nulls_equal)
 {
+  double const load_factor = 0.5;
   return cudf::jni::join_gather_maps(
     env,
     j_left_keys,
     j_right_keys,
     compare_nulls_equal,
-    [](cudf::table_view const& left, cudf::table_view const& right, cudf::null_equality nulleq) {
-      cudf::distinct_hash_join hash(right, nulleq);
+    [load_factor](
+      cudf::table_view const& left, cudf::table_view const& right, cudf::null_equality nulleq) {
+      cudf::distinct_hash_join hash(right, nulleq, load_factor);
       return hash.inner_join(left);
     });
 }
@@ -4181,10 +4193,11 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_makeChunkedPack(
     cudf::table_view* n_table = reinterpret_cast<cudf::table_view*>(input_table);
     // `temp_mr` is the memory resource that `cudf::chunked_pack` will use to create temporary
     // and scratch memory only.
-    auto temp_mr      = memoryResourceHandle != 0
-                          ? reinterpret_cast<rmm::mr::device_memory_resource*>(memoryResourceHandle)
-                          : cudf::get_current_device_resource_ref();
-    auto chunked_pack = cudf::chunked_pack::create(*n_table, bounce_buffer_size, temp_mr);
+    auto temp_mr = memoryResourceHandle != 0
+                     ? reinterpret_cast<rmm::mr::device_memory_resource*>(memoryResourceHandle)
+                     : cudf::get_current_device_resource();
+    auto chunked_pack =
+      cudf::chunked_pack::create(*n_table, bounce_buffer_size, cudf::get_default_stream(), temp_mr);
     return reinterpret_cast<jlong>(chunked_pack.release());
   }
   CATCH_STD(env, 0);

@@ -1,5 +1,6 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
+from libc.stdint cimport uint32_t
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 from pylibcudf.column cimport Column
@@ -81,7 +82,8 @@ cpdef Column generate_character_ngrams(Column input, size_type ngrams = 2):
         )
     return Column.from_libcudf(move(c_result))
 
-cpdef Column hash_character_ngrams(Column input, size_type ngrams = 2):
+
+cpdef Column hash_character_ngrams(Column input, size_type ngrams, uint32_t seed):
     """
     Returns a lists column of hash values of the characters in each string
 
@@ -93,6 +95,8 @@ cpdef Column hash_character_ngrams(Column input, size_type ngrams = 2):
         Input strings
     ngram : size_type
         The ngram number to generate
+    seed : uint32_t
+        Seed used for the hash algorithm
 
     Returns
     -------
@@ -106,5 +110,6 @@ cpdef Column hash_character_ngrams(Column input, size_type ngrams = 2):
         c_result = cpp_hash_character_ngrams(
             c_strings,
             ngrams,
+            seed
         )
     return Column.from_libcudf(move(c_result))

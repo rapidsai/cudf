@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2024, NVIDIA CORPORATION.
+# Copyright (c) 2018-2025, NVIDIA CORPORATION.
 
 import codecs
 import gzip
@@ -153,7 +153,7 @@ def make_all_numeric_extremes_dataframe():
 
     for gdf_dtype in gdf_dtypes:
         np_type = pdf_dtypes[gdf_dtype]
-        if np.issubdtype(np_type, np.integer):
+        if np.dtype(np_type).kind in "iu":
             itype = np.iinfo(np_type)
             extremes = [0, +1, -1, itype.min, itype.max]
             df[gdf_dtype] = np.array(extremes * 4).astype(np_type)[:20]
@@ -1183,7 +1183,7 @@ def test_csv_reader_byte_range_type_corner_case(tmpdir):
     ).to_csv(fname, chunksize=100000)
 
     byte_range = (2_147_483_648, 0)
-    with pytest.raises(OverflowError, match="Offset is past end of file"):
+    with pytest.raises(ValueError, match="Invalid byte range offset"):
         cudf.read_csv(fname, byte_range=byte_range, header=None)
 
 
@@ -2165,9 +2165,11 @@ def test_default_integer_bitwidth(
     cudf_mixed_dataframe.to_csv(buf)
     buf.seek(0)
     read = cudf.read_csv(buf)
-    assert read["Integer"].dtype == np.dtype(f"i{default_integer_bitwidth//8}")
+    assert read["Integer"].dtype == np.dtype(
+        f"i{default_integer_bitwidth // 8}"
+    )
     assert read["Integer2"].dtype == np.dtype(
-        f"i{default_integer_bitwidth//8}"
+        f"i{default_integer_bitwidth // 8}"
     )
 
 
@@ -2182,7 +2184,7 @@ def test_default_integer_bitwidth_partial(
     read = cudf.read_csv(buf, dtype={"Integer": "int64"})
     assert read["Integer"].dtype == np.dtype("i8")
     assert read["Integer2"].dtype == np.dtype(
-        f"i{default_integer_bitwidth//8}"
+        f"i{default_integer_bitwidth // 8}"
     )
 
 
@@ -2197,9 +2199,11 @@ def test_default_integer_bitwidth_extremes(
     buf.seek(0)
     read = cudf.read_csv(buf)
 
-    assert read["int64"].dtype == np.dtype(f"i{default_integer_bitwidth//8}")
-    assert read["long"].dtype == np.dtype(f"i{default_integer_bitwidth//8}")
-    assert read["uint64"].dtype == np.dtype(f"u{default_integer_bitwidth//8}")
+    assert read["int64"].dtype == np.dtype(f"i{default_integer_bitwidth // 8}")
+    assert read["long"].dtype == np.dtype(f"i{default_integer_bitwidth // 8}")
+    assert read["uint64"].dtype == np.dtype(
+        f"u{default_integer_bitwidth // 8}"
+    )
 
 
 def test_default_float_bitwidth(cudf_mixed_dataframe, default_float_bitwidth):
@@ -2209,7 +2213,7 @@ def test_default_float_bitwidth(cudf_mixed_dataframe, default_float_bitwidth):
     cudf_mixed_dataframe.to_csv(buf)
     buf.seek(0)
     read = cudf.read_csv(buf)
-    assert read["Float"].dtype == np.dtype(f"f{default_float_bitwidth//8}")
+    assert read["Float"].dtype == np.dtype(f"f{default_float_bitwidth // 8}")
 
 
 def test_default_float_bitwidth_partial(default_float_bitwidth):
@@ -2219,7 +2223,7 @@ def test_default_float_bitwidth_partial(default_float_bitwidth):
         StringIO("float1,float2\n1.0,2.0\n3.0,4.0"),
         dtype={"float2": "float64"},
     )
-    assert read["float1"].dtype == np.dtype(f"f{default_float_bitwidth//8}")
+    assert read["float1"].dtype == np.dtype(f"f{default_float_bitwidth // 8}")
     assert read["float2"].dtype == np.dtype("f8")
 
 

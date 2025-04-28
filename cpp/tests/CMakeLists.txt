@@ -27,16 +27,20 @@ function(ConfigureTest CMAKE_TEST_NAME)
   set(one_value GPUS PERCENT STREAM_MODE)
   set(multi_value EXTRA_LIBS)
   cmake_parse_arguments(_CUDF_TEST "${options}" "${one_value}" "${multi_value}" ${ARGN})
+
   if(NOT DEFINED _CUDF_TEST_GPUS AND NOT DEFINED _CUDF_TEST_PERCENT)
     set(_CUDF_TEST_GPUS 1)
     set(_CUDF_TEST_PERCENT 15)
   endif()
+
   if(NOT DEFINED _CUDF_TEST_GPUS)
     set(_CUDF_TEST_GPUS 1)
   endif()
+
   if(NOT DEFINED _CUDF_TEST_PERCENT)
     set(_CUDF_TEST_PERCENT 100)
   endif()
+
   if(NOT DEFINED _CUDF_TEST_STREAM_MODE)
     set(_CUDF_TEST_STREAM_MODE cudf)
   endif()
@@ -54,17 +58,13 @@ function(ConfigureTest CMAKE_TEST_NAME)
                CUDA_STANDARD_REQUIRED ON
   )
 
+  target_compile_definitions(
+    ${CMAKE_TEST_NAME} PRIVATE THRUST_FORCE_32_BIT_OFFSET_TYPE=1 CCCL_AVOID_SORT_UNROLL=1
+  )
+
   target_link_libraries(
-    ${CMAKE_TEST_NAME}
-    PRIVATE cudf::cudftestutil
-            cudf::cudftestutil_impl
-            GTest::gmock
-            GTest::gmock_main
-            GTest::gtest
-            GTest::gtest_main
-            nvtx3::nvtx3-cpp
-            $<TARGET_NAME_IF_EXISTS:conda_env>
-            "${_CUDF_TEST_EXTRA_LIBS}"
+    ${CMAKE_TEST_NAME} PRIVATE cudf::cudftestutil_objects nvtx3::nvtx3-cpp
+                               $<TARGET_NAME_IF_EXISTS:conda_env> "${_CUDF_TEST_EXTRA_LIBS}"
   )
   rapids_cuda_set_runtime(${CMAKE_TEST_NAME} USE_STATIC ${CUDA_STATIC_RUNTIME})
   rapids_test_add(
@@ -220,11 +220,12 @@ ConfigureTest(
   REDUCTIONS_TEST
   reductions/collect_ops_tests.cpp
   reductions/ewm_tests.cpp
+  reductions/host_udf_example_tests.cu
+  reductions/list_rank_test.cpp
   reductions/rank_tests.cpp
   reductions/reduction_tests.cpp
   reductions/scan_tests.cpp
   reductions/segmented_reduction_tests.cpp
-  reductions/list_rank_test.cpp
   reductions/tdigest_tests.cu
   GPUS 1
   PERCENT 70
@@ -282,6 +283,7 @@ ConfigureTest(
 # * interop tests -------------------------------------------------------------------------
 ConfigureTest(
   INTEROP_TEST
+  interop/arrow_data_structures_test.cpp
   interop/to_arrow_device_test.cpp
   interop/to_arrow_test.cpp
   interop/to_arrow_host_test.cpp
@@ -297,7 +299,7 @@ ConfigureTest(
 
 # ##################################################################################################
 # * io tests --------------------------------------------------------------------------------------
-ConfigureTest(DECOMPRESSION_TEST io/comp/decomp_test.cpp)
+ConfigureTest(COMPRESSION_TEST io/comp/comp_test.cpp)
 ConfigureTest(ROW_SELECTION_TEST io/row_selection_test.cpp)
 
 ConfigureTest(
@@ -306,25 +308,21 @@ ConfigureTest(
   PERCENT 30 EXTRA_LIBS ${ARROW_LIBRARIES}
 )
 ConfigureTest(
-  FILE_IO_TEST io/file_io_test.cpp
-  GPUS 1
-  PERCENT 30
-)
-ConfigureTest(
   ORC_TEST io/orc_chunked_reader_test.cu io/orc_test.cpp
   GPUS 1
-  PERCENT 30
+  PERCENT 100
 )
 ConfigureTest(
   PARQUET_TEST
-  io/parquet_test.cpp
+  io/parquet_bloom_filter_test.cu
   io/parquet_chunked_reader_test.cu
   io/parquet_chunked_writer_test.cpp
   io/parquet_common.cpp
   io/parquet_misc_test.cpp
   io/parquet_reader_test.cpp
-  io/parquet_writer_test.cpp
+  io/parquet_test.cpp
   io/parquet_v2_test.cpp
+  io/parquet_writer_test.cpp
   GPUS 1
   PERCENT 30
 )
@@ -343,7 +341,7 @@ ConfigureTest(JSON_TREE_CSR io/json/json_tree_csr.cu)
 ConfigureTest(
   DATA_CHUNK_SOURCE_TEST io/text/data_chunk_source_test.cpp
   GPUS 1
-  PERCENT 30
+  PERCENT 100
 )
 target_link_libraries(DATA_CHUNK_SOURCE_TEST PRIVATE ZLIB::ZLIB)
 ConfigureTest(LOGICAL_STACK_TEST io/fst/logical_stack_test.cu)
@@ -403,7 +401,6 @@ ConfigureTest(
   utilities_tests/default_stream_tests.cpp
   utilities_tests/io_utilities_tests.cpp
   utilities_tests/lists_column_wrapper_tests.cpp
-  utilities_tests/logger_tests.cpp
   utilities_tests/pinned_memory_tests.cpp
   utilities_tests/type_check_tests.cpp
   utilities_tests/type_list_tests.cpp
@@ -504,6 +501,7 @@ ConfigureTest(
   rolling/range_comparator_test.cu
   rolling/range_rolling_window_test.cpp
   rolling/range_window_bounds_test.cpp
+  rolling/range_window_type_test.cpp
   rolling/rolling_test.cpp
   GPUS 1
   PERCENT 70
@@ -696,6 +694,7 @@ if(CUDF_BUILD_STREAMS_TEST_UTIL)
 endif()
 
 ConfigureTest(STREAM_BINARYOP_TEST streams/binaryop_test.cpp STREAM_MODE testing)
+ConfigureTest(STREAM_COLUMN_VIEW_TEST streams/column_view_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_CONCATENATE_TEST streams/concatenate_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_COPYING_TEST streams/copying_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_CSVIO_TEST streams/io/csv_test.cpp STREAM_MODE testing)
@@ -722,6 +721,7 @@ ConfigureTest(STREAM_REPLACE_TEST streams/replace_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_RESHAPE_TEST streams/reshape_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_ROLLING_TEST streams/rolling_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_ROUND_TEST streams/round_test.cpp STREAM_MODE testing)
+ConfigureTest(STREAM_SCALAR_TEST streams/scalar_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_SEARCH_TEST streams/search_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_SORTING_TEST streams/sorting_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_STREAM_COMPACTION_TEST streams/stream_compaction_test.cpp STREAM_MODE testing)
@@ -750,7 +750,6 @@ ConfigureTest(
   streams/text/ngrams_test.cpp
   streams/text/replace_test.cpp
   streams/text/stemmer_test.cpp
-  streams/text/subword_tokenize_test.cpp
   streams/text/tokenize_test.cpp
   STREAM_MODE
   testing

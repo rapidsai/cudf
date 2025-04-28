@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 
 import numpy as np
 import pandas as pd
@@ -6,7 +6,6 @@ import pyarrow as pa
 import pytest
 
 import cudf
-from cudf.core.dtypes import StructDtype
 from cudf.testing import assert_eq
 from cudf.testing._utils import DATETIME_TYPES, TIMEDELTA_TYPES
 
@@ -149,57 +148,6 @@ def test_struct_setitem(data, item):
     data[1] = item
     expected = cudf.Series(data)
     assert sr.to_arrow() == expected.to_arrow()
-
-
-@pytest.mark.parametrize(
-    "data",
-    [
-        {"a": 1, "b": "rapids", "c": [1, 2, 3, 4]},
-        {"a": "Hello"},
-    ],
-)
-def test_struct_scalar_host_construction(data):
-    slr = cudf.Scalar(data)
-    assert slr.value == data
-    assert list(slr.device_value.value.values()) == list(data.values())
-
-
-@pytest.mark.parametrize(
-    ("data", "dtype"),
-    [
-        (
-            {"a": 1, "b": "rapids", "c": [1, 2, 3, 4], "d": cudf.NA},
-            cudf.StructDtype(
-                {
-                    "a": np.dtype(np.int64),
-                    "b": np.dtype(np.str_),
-                    "c": cudf.ListDtype(np.dtype(np.int64)),
-                    "d": np.dtype(np.int64),
-                }
-            ),
-        ),
-        (
-            {"b": [], "c": [1, 2, 3]},
-            cudf.StructDtype(
-                {
-                    "b": cudf.ListDtype(np.dtype(np.int64)),
-                    "c": cudf.ListDtype(np.dtype(np.int64)),
-                }
-            ),
-        ),
-    ],
-)
-def test_struct_scalar_host_construction_no_dtype_inference(data, dtype):
-    # cudf cannot infer the dtype of the scalar when it contains only nulls or
-    # is empty.
-    slr = cudf.Scalar(data, dtype=dtype)
-    assert slr.value == data
-    assert list(slr.device_value.value.values()) == list(data.values())
-
-
-def test_struct_scalar_null():
-    slr = cudf.Scalar(cudf.NA, dtype=StructDtype)
-    assert slr.device_value.value is cudf.NA
 
 
 def test_struct_explode():

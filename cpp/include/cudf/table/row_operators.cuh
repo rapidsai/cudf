@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -257,7 +257,8 @@ class row_equality_comparator {
    */
   __device__ bool operator()(size_type lhs_row_index, size_type rhs_row_index) const noexcept
   {
-    auto equal_elements = [=](column_device_view l, column_device_view r) {
+    auto equal_elements = [lhs_row_index, rhs_row_index, this](column_device_view l,
+                                                               column_device_view r) {
       return cudf::type_dispatcher(l.type(),
                                    element_equality_comparator{nulls, l, r, nulls_are_equal},
                                    lhs_row_index,
@@ -608,7 +609,7 @@ class row_hasher {
         row_index));
 
     // Hashes an element in a column
-    auto hasher = [=](size_type column_index) {
+    auto hasher = [row_index, this](size_type column_index) {
       return cudf::type_dispatcher<dispatch_storage_type>(
         _table.column(column_index).type(),
         element_hasher<hash_function, Nullate>{_has_nulls},

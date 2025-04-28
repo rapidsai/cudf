@@ -1,4 +1,4 @@
-# Copyright (c) 2023-2024, NVIDIA CORPORATION.
+# Copyright (c) 2023-2025, NVIDIA CORPORATION.
 from __future__ import annotations
 
 import datetime
@@ -13,7 +13,6 @@ import pandas as pd
 import pylibcudf as plc
 
 import cudf
-from cudf._lib.column import Column
 
 if TYPE_CHECKING:
     from cudf.core.column.datetime import DatetimeColumn
@@ -116,17 +115,22 @@ def _read_tzfile_as_columns(
     plc_table = plc.io.timezone.make_timezone_transition_table(
         tzdir, zone_name
     )
-    transition_times_and_offsets = [
-        Column.from_pylibcudf(col) for col in plc_table.columns()
-    ]
+    transition_times_and_offsets = plc_table.columns()
 
     if not transition_times_and_offsets:
         from cudf.core.column.column import as_column
 
         # this happens for UTC-like zones
-        min_date = np.int64(np.iinfo("int64").min + 1).astype("M8[s]")
+        min_date = np.int64(np.iinfo("int64").min + 1).astype(
+            np.dtype("M8[s]")
+        )
         return (as_column([min_date]), as_column([np.timedelta64(0, "s")]))  # type: ignore[return-value]
-    return tuple(transition_times_and_offsets)  # type: ignore[return-value]
+
+    from cudf.core.column import ColumnBase
+
+    return tuple(
+        ColumnBase.from_pylibcudf(col) for col in transition_times_and_offsets
+    )  # type: ignore[return-value]
 
 
 def check_ambiguous_and_nonexistent(

@@ -19,16 +19,10 @@ import pyarrow as pa
 import pylibcudf as plc
 
 import cudf
-import cudf.core._internals
-from cudf import _lib as libcudf
 from cudf.api.extensions import no_default
-from cudf.api.types import (
-    is_list_like,
-    is_numeric_dtype,
-    is_string_dtype,
-)
+from cudf.api.types import is_list_like, is_scalar
 from cudf.core._compat import PANDAS_LT_300
-from cudf.core._internals import aggregation, sorting
+from cudf.core._internals import aggregation, sorting, stream_compaction
 from cudf.core.abc import Serializable
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column.column import ColumnBase, as_column, column_empty
@@ -44,8 +38,14 @@ from cudf.core.dtypes import (
 from cudf.core.join._join_helpers import _match_join_keys
 from cudf.core.mixins import Reducible, Scannable
 from cudf.core.multiindex import MultiIndex
+from cudf.core.scalar import pa_scalar_to_plc_scalar
 from cudf.core.udf.groupby_utils import _can_be_jitted, jit_groupby_apply
-from cudf.utils.dtypes import SIZE_TYPE_DTYPE, cudf_dtype_to_pa_type
+from cudf.utils.dtypes import (
+    CUDF_STRING_DTYPE,
+    SIZE_TYPE_DTYPE,
+    cudf_dtype_to_pa_type,
+    is_dtype_obj_numeric,
+)
 from cudf.utils.performance_tracking import _performance_tracking
 from cudf.utils.utils import GetAttrGetItemMixin
 
@@ -92,7 +92,7 @@ _DECIMAL_AGGS = {
 
 @singledispatch
 def get_valid_aggregation(dtype):
-    if is_string_dtype(dtype):
+    if dtype == CUDF_STRING_DTYPE:
         return _STRING_AGGS
     return "ALL"
 
@@ -259,7 +259,7 @@ Examples
 >>> df = cudf.DataFrame({"key": [1, 1, 2], "a": [-1, 0, 1], 1: [10, 11, 12]})
 >>> agg_a = cudf.NamedAgg(column="a", aggfunc="min")
 >>> agg_1 = cudf.NamedAgg(column=1, aggfunc=lambda x: x.mean())
->>> df.groupby("key").agg(result_a=agg_a, result_1=agg_1)
+>>> df.groupby("key", sort=True).agg(result_a=agg_a, result_1=agg_1)
         result_a  result_1
 key
 1          -1      10.5
@@ -473,6 +473,8 @@ class GroupBy(Serializable, Reducible, Scannable):
         dropna : bool, optional
             If True (default), do not include the "null" group.
         """
+        if cudf.get_option("mode.pandas_compatible"):
+            obj = obj.nans_to_nulls()
         self.obj = obj
         self._as_index = as_index
         self._by = by.copy(deep=True) if isinstance(by, _Grouping) else by
@@ -592,9 +594,10 @@ class GroupBy(Serializable, Reducible, Scannable):
             ]
         )
 
-        group_keys = cudf.core._internals.stream_compaction.drop_duplicates(
-            group_keys
-        )
+        group_keys = [
+            ColumnBase.from_pylibcudf(col)
+            for col in stream_compaction.drop_duplicates(group_keys)
+        ]
         if len(group_keys) > 1:
             index = cudf.MultiIndex.from_arrays(group_keys)
         else:
@@ -657,7 +660,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         """
         Return the size of each group.
         """
-        col = cudf.core.column.column_empty(len(self.obj), "int8")
+        col = column_empty(len(self.obj), np.dtype(np.int8))
         result = (
             cudf.Series._from_column(col, name=getattr(self.obj, "name", None))
             .groupby(self.grouping, sort=self._sort, dropna=self._dropna)
@@ -684,10 +687,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             )
         return (
             cudf.Series._from_column(
-                cudf.core.column.column_empty(
-                    len(self.obj),
-                    "int8",
-                ),
+                column_empty(len(self.obj), np.dtype(np.int8)),
                 index=self.obj.index,
             )
             .groupby(self.grouping, sort=self._sort)
@@ -738,7 +738,7 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         if cudf.get_option("mode.pandas_compatible"):
             # pandas always returns floats:
-            return result.astype("float64")
+            return result.astype(np.dtype(np.float64))
 
         return result
 
@@ -853,7 +853,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             plc.table.Table([col.to_pylibcudf(mode="read") for col in values]),
             [periods] * len(values),
             [
-                plc.interop.from_arrow(
+                pa_scalar_to_plc_scalar(
                     pa.scalar(val, type=cudf_dtype_to_pa_type(col.dtype))
                 )
                 for val, col in zip(fill_values, values)
@@ -1020,7 +1020,7 @@ class GroupBy(Serializable, Reducible, Scannable):
                     col = col._with_type_metadata(cudf.ListDtype(orig_dtype))
 
                 if agg_kind in {"COUNT", "SIZE", "ARGMIN", "ARGMAX"}:
-                    data[key] = col.astype("int64")
+                    data[key] = col.astype(np.dtype(np.int64))
                 elif (
                     self.obj.empty
                     and (
@@ -1076,24 +1076,24 @@ class GroupBy(Serializable, Reducible, Scannable):
                         plc_tables[1],
                         plc.types.NullEquality.EQUAL,
                     )
-                    left_order = libcudf.column.Column.from_pylibcudf(left_plc)
-                    right_order = libcudf.column.Column.from_pylibcudf(
-                        right_plc
-                    )
+                    left_order = ColumnBase.from_pylibcudf(left_plc)
+                    right_order = ColumnBase.from_pylibcudf(right_plc)
                 # left order is some permutation of the ordering we
                 # want, and right order is a matching gather map for
                 # the result table. Get the correct order by sorting
                 # the right gather map.
-                (right_order,) = sorting.sort_by_key(
+                right_order = sorting.sort_by_key(
                     [right_order],
                     [left_order],
                     [True],
                     ["first"],
                     stable=False,
-                )
+                )[0]
                 result = result._gather(
                     GatherMap.from_column_unchecked(
-                        right_order, len(result), nullify=False
+                        ColumnBase.from_pylibcudf(right_order),
+                        len(result),
+                        nullify=False,
                     )
                 )
 
@@ -1643,12 +1643,25 @@ class GroupBy(Serializable, Reducible, Scannable):
         the keys. The aggs are applied to the corresponding column in the tuple.
         Each agg can be string or lambda functions.
         """
-
         aggs_per_column: Iterable[AggType | Iterable[AggType]]
         # TODO: Remove isinstance condition when the legacy dask_cudf API is removed.
         # See https://github.com/rapidsai/cudf/pull/16528#discussion_r1715482302 for information.
         if aggs or isinstance(aggs, dict):
             if isinstance(aggs, dict):
+                if any(
+                    is_list_like(values) and len(set(values)) != len(values)  # type: ignore[arg-type]
+                    for values in aggs.values()
+                ):
+                    if cudf.get_option("mode.pandas_compatible"):
+                        raise NotImplementedError(
+                            "Duplicate aggregations per column are currently not supported."
+                        )
+                    else:
+                        warnings.warn(
+                            "Duplicate aggregations per column found. "
+                            "The resulting duplicate columns will be dropped.",
+                            UserWarning,
+                        )
                 column_names, aggs_per_column = aggs.keys(), aggs.values()
                 columns = tuple(self.obj._data[col] for col in column_names)
             else:
@@ -1776,7 +1789,7 @@ class GroupBy(Serializable, Reducible, Scannable):
     ):
         if not len(chunk_results):
             return self.obj.head(0)
-        if isinstance(chunk_results, ColumnBase) or cudf.api.types.is_scalar(
+        if isinstance(chunk_results, ColumnBase) or is_scalar(
             chunk_results[0]
         ):
             data = ColumnAccessor(
@@ -1956,7 +1969,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             )
         if self.obj.empty:
             if func in {"count", "size", "idxmin", "idxmax"}:
-                res = cudf.Series([], dtype="int64")
+                res = cudf.Series([], dtype=np.dtype(np.int64))
             else:
                 res = self.obj.copy(deep=True)
             res.index = self.grouping.keys
@@ -1965,7 +1978,7 @@ class GroupBy(Serializable, Reducible, Scannable):
                 # will need to result in `int64` type.
                 for name, col in res._column_labels_and_values:
                     if col.dtype.kind == "b":
-                        res._data[name] = col.astype("int")
+                        res._data[name] = col.astype(np.dtype(np.int64))
             return res
 
         if not callable(func):
@@ -2513,7 +2526,7 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         @acquire_spill_lock()
         def interleave_columns(source_columns):
-            return libcudf.column.Column.from_pylibcudf(
+            return ColumnBase.from_pylibcudf(
                 plc.reshape.interleave_columns(
                     plc.Table(
                         [c.to_pylibcudf(mode="read") for c in source_columns]
@@ -2917,15 +2930,13 @@ class GroupBy(Serializable, Reducible, Scannable):
         if freq is not None:
             raise NotImplementedError("freq parameter not supported yet.")
         elif fill_method not in {no_default, None, "ffill", "bfill"}:
-            raise ValueError(
-                "fill_method must be one of 'ffill', or" "'bfill'."
-            )
+            raise ValueError("fill_method must be one of 'ffill', or'bfill'.")
 
         if fill_method not in (no_default, None) or limit is not no_default:
             # Do not remove until pandas 3.0 support is added.
-            assert (
-                PANDAS_LT_300
-            ), "Need to drop after pandas-3.0 support is added."
+            assert PANDAS_LT_300, (
+                "Need to drop after pandas-3.0 support is added."
+            )
             warnings.warn(
                 "The 'fill_method' keyword being not None and the 'limit' "
                 f"keywords in {type(self).__name__}.pct_change are "
@@ -3067,7 +3078,9 @@ class DataFrameGroupBy(GroupBy, GetAttrGetItemMixin):
         columns = list(
             name
             for name, dtype in self.obj._dtypes
-            if (is_numeric_dtype(dtype) and name not in self.grouping.names)
+            if (
+                is_dtype_obj_numeric(dtype) and name not in self.grouping.names
+            )
         )
         return self[columns].agg(op)
 
@@ -3218,7 +3231,7 @@ class DataFrameGroupBy(GroupBy, GetAttrGetItemMixin):
             ]
             .count()
             .sort_index()
-            .astype(np.int64)
+            .astype(np.dtype(np.int64))
         )
 
         if normalize:

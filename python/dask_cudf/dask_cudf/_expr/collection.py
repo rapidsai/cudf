@@ -3,22 +3,22 @@
 import warnings
 from functools import cached_property
 
-from dask_expr import (
-    DataFrame as DXDataFrame,
-    FrameBase,
-    Index as DXIndex,
-    Series as DXSeries,
-    get_collection_type,
-)
-from dask_expr._collection import new_collection
-from dask_expr._util import _raise_if_object_series
-
 from dask import config
+from dask.dataframe import get_collection_type
 from dask.dataframe.core import is_dataframe_like
 from dask.dataframe.dispatch import get_parallel_type
 from dask.typing import no_default
 
 import cudf
+
+from dask_cudf._expr import (
+    DXDataFrame,
+    DXIndex,
+    DXSeries,
+    FrameBase,
+    _raise_if_object_series,
+    new_collection,
+)
 
 ##
 ## Custom collection classes
@@ -205,14 +205,12 @@ get_collection_type.register(cudf.BaseIndex, lambda _: Index)
 
 def _create_array_collection_with_meta(expr):
     # NOTE: This is the GPU compatible version of
-    # `new_dd_object` for DataFrame -> Array conversion.
-    # This can be removed if dask#11017 is resolved
-    # (See: https://github.com/dask/dask/issues/11017)
+    # `create_array_collection` for cupy arrays.
     import numpy as np
 
     import dask.array as da
-    from dask.blockwise import Blockwise
     from dask.highlevelgraph import HighLevelGraph
+    from dask.layers import Blockwise
 
     result = expr.optimize()
     dsk = result.__dask_graph__()
@@ -233,10 +231,15 @@ def _create_array_collection_with_meta(expr):
             layer.new_axes["j"] = chunks[1][0]
             layer.output_indices = (*layer.output_indices, "j")
         else:
+            from dask._task_spec import Alias, Task
+
             suffix = (0,) * (len(chunks) - 1)
             for i in range(len(chunks[0])):
-                layer[(name, i, *suffix)] = layer.pop((name, i))
-
+                task = layer.get((name, i))
+                new_key = (name, i, *suffix)
+                if isinstance(task, Task):
+                    task = Alias(new_key, task.key)
+                layer[new_key] = task
     return da.Array(dsk, name=name, chunks=chunks, meta=meta)
 
 

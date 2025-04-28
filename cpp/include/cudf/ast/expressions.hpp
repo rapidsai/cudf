@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -556,7 +556,7 @@ class column_name_reference : public expression {
 
 /**
  * @brief An AST expression tree. It owns and contains multiple dependent expressions. All the
- * expressions are destroyed when the tree is destructed.
+ * expressions are destroyed when the tree is destroyed.
  */
 class tree {
  public:
@@ -588,12 +588,11 @@ class tree {
    * @returns a reference to the added expression
    */
   template <typename Expr, typename... Args>
-  Expr const& emplace(Args&&... args)
+  std::enable_if_t<std::is_base_of_v<expression, Expr>, Expr const&> emplace(Args&&... args)
   {
-    static_assert(std::is_base_of_v<expression, Expr>);
-    auto expr            = std::make_shared<Expr>(std::forward<Args>(args)...);
+    auto expr            = std::make_unique<Expr>(std::forward<Args>(args)...);
     Expr const& expr_ref = *expr;
-    expressions.emplace_back(std::static_pointer_cast<expression>(std::move(expr)));
+    expressions.emplace_back(std::move(expr));
     return expr_ref;
   }
 
@@ -603,7 +602,7 @@ class tree {
    * @returns a reference to the added expression
    */
   template <typename Expr>
-  Expr const& push(Expr expr)
+  decltype(auto) push(Expr expr)
   {
     return emplace<Expr>(std::move(expr));
   }
@@ -641,9 +640,9 @@ class tree {
   expression const& operator[](size_t index) const { return *expressions[index]; }
 
  private:
-  // TODO: use better ownership semantics, the shared_ptr here is redundant. Consider using a bump
+  // TODO: use better ownership semantics, the unique_ptr here is redundant. Consider using a bump
   // allocator with type-erased deleters.
-  std::vector<std::shared_ptr<expression>> expressions;
+  std::vector<std::unique_ptr<expression>> expressions;
 };
 
 /** @} */  // end of group

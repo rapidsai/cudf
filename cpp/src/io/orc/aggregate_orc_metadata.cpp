@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@
 #include "io/utilities/row_selection.hpp"
 
 #include <algorithm>
+#include <functional>
 #include <numeric>
 
 namespace cudf::io::orc::detail {
@@ -259,8 +260,8 @@ aggregate_orc_metadata::select_stripes(
       auto const buffer =
         per_file_metadata[mapping.source_idx].source->host_read(sf_comp_offset, sf_comp_length);
       auto sf_data = per_file_metadata[mapping.source_idx].decompressor->decompress_blocks(
-        {buffer->data(), buffer->size()}, stream);
-      ProtobufReader(sf_data.data(), sf_data.size())
+        {buffer->data(), buffer->size()});
+      protobuf_reader(sf_data.data(), sf_data.size())
         .read(per_file_metadata[mapping.source_idx].stripefooters[i]);
       mapping.stripe_info[i].stripe_footer =
         &per_file_metadata[mapping.source_idx].stripefooters[i];

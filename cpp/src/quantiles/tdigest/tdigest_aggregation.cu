@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,6 +27,7 @@
 #include <cudf/detail/sorting.hpp>
 #include <cudf/detail/tdigest/tdigest.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/utilities/functional.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/unary.hpp>
 #include <cudf/utilities/memory_resource.hpp>
@@ -36,9 +37,8 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
-#include <thrust/advance.h>
+#include <cuda/std/iterator>
 #include <thrust/binary_search.h>
-#include <thrust/distance.h>
 #include <thrust/execution_policy.h>
 #include <thrust/functional.h>
 #include <thrust/iterator/constant_iterator.h>
@@ -793,7 +793,7 @@ std::unique_ptr<column> compute_tdigests(int delta,
                         centroids_begin,                  // values
                         thrust::make_discard_iterator(),  // key output
                         output,                           // output
-                        thrust::equal_to{},               // key equality check
+                        cuda::std::equal_to{},            // key equality check
                         merge_centroids{});
 
   // create final tdigest column
@@ -1038,9 +1038,9 @@ struct group_key_func {
   __device__ size_type operator()(size_type index)
   {
     // what -original- tdigest index this absolute index corresponds to
-    auto const iter          = thrust::prev(thrust::upper_bound(
+    auto const iter          = cuda::std::prev(thrust::upper_bound(
       thrust::seq, tdigest_offsets, tdigest_offsets + num_tdigest_offsets, index));
-    auto const tdigest_index = thrust::distance(tdigest_offsets, iter);
+    auto const tdigest_index = cuda::std::distance(tdigest_offsets, iter);
 
     // what group index the original tdigest belongs to
     return group_labels[tdigest_index];
@@ -1088,7 +1088,7 @@ std::pair<rmm::device_uvector<double>, rmm::device_uvector<double>> generate_mer
         size_type i) { return tdigest_offsets[group_offsets[i]]; }));
 
   // perform the sort using the means as the key
-  size_t temp_size;
+  size_t temp_size = 0;
   CUDF_CUDA_TRY(cub::DeviceSegmentedSort::SortPairs(nullptr,
                                                     temp_size,
                                                     tdv.means().begin<double>(),
@@ -1161,8 +1161,8 @@ std::unique_ptr<column> merge_tdigests(tdigest_column_view const& tdv,
                         min_iter,
                         thrust::make_discard_iterator(),
                         merged_min_col->mutable_view().begin<double>(),
-                        thrust::equal_to{},  // key equality check
-                        thrust::minimum{});
+                        cuda::std::equal_to{},  // key equality check
+                        cudf::detail::minimum{});
 
   auto merged_max_col = cudf::make_numeric_column(
     data_type{type_id::FLOAT64}, num_groups, mask_state::UNALLOCATED, stream, mr);
@@ -1176,8 +1176,8 @@ std::unique_ptr<column> merge_tdigests(tdigest_column_view const& tdv,
                         max_iter,
                         thrust::make_discard_iterator(),
                         merged_max_col->mutable_view().begin<double>(),
-                        thrust::equal_to{},  // key equality check
-                        thrust::maximum{});
+                        cuda::std::equal_to{},  // key equality check
+                        cudf::detail::maximum{});
 
   auto tdigest_offsets = tdv.centroids().offsets();
 

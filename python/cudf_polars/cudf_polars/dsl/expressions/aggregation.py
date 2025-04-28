@@ -9,8 +9,6 @@ from __future__ import annotations
 from functools import partial
 from typing import TYPE_CHECKING, Any, ClassVar
 
-import pyarrow as pa
-
 import pylibcudf as plc
 
 from cudf_polars.containers import Column
@@ -170,23 +168,16 @@ class Agg(Expr):
     def _count(self, column: Column) -> Column:
         return Column(
             plc.Column.from_scalar(
-                plc.interop.from_arrow(
-                    pa.scalar(
-                        column.obj.size() - column.obj.null_count(),
-                        type=plc.interop.to_arrow(self.dtype),
-                    ),
-                ),
+                plc.Scalar.from_py(column.size - column.null_count, self.dtype),
                 1,
             )
         )
 
     def _sum(self, column: Column) -> Column:
-        if column.obj.size() == 0:
+        if column.size == 0 or column.null_count == column.size:
             return Column(
                 plc.Column.from_scalar(
-                    plc.interop.from_arrow(
-                        pa.scalar(0, type=plc.interop.to_arrow(self.dtype))
-                    ),
+                    plc.Scalar.from_py(0, self.dtype),
                     1,
                 )
             )
@@ -196,9 +187,7 @@ class Agg(Expr):
         if propagate_nans and column.nan_count > 0:
             return Column(
                 plc.Column.from_scalar(
-                    plc.interop.from_arrow(
-                        pa.scalar(float("nan"), type=plc.interop.to_arrow(self.dtype))
-                    ),
+                    plc.Scalar.from_py(float("nan"), self.dtype),
                     1,
                 )
             )
@@ -210,9 +199,7 @@ class Agg(Expr):
         if propagate_nans and column.nan_count > 0:
             return Column(
                 plc.Column.from_scalar(
-                    plc.interop.from_arrow(
-                        pa.scalar(float("nan"), type=plc.interop.to_arrow(self.dtype))
-                    ),
+                    plc.Scalar.from_py(float("nan"), self.dtype),
                     1,
                 )
             )
@@ -224,7 +211,7 @@ class Agg(Expr):
         return Column(plc.copying.slice(column.obj, [0, 1])[0])
 
     def _last(self, column: Column) -> Column:
-        n = column.obj.size()
+        n = column.size
         return Column(plc.copying.slice(column.obj, [n - 1, n])[0])
 
     def do_evaluate(

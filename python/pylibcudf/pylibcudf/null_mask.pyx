@@ -1,10 +1,10 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
-
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 from libcpp.memory cimport make_unique
 from libcpp.pair cimport pair
 from libcpp.utility cimport move
 from pylibcudf.libcudf cimport null_mask as cpp_null_mask
-from pylibcudf.libcudf.types cimport mask_state, size_type
+from pylibcudf.libcudf.types cimport mask_state, size_type, bitmask_type
+from pylibcudf.gpumemoryview cimport gpumemoryview
 
 from rmm.librmm.device_buffer cimport device_buffer
 from rmm.pylibrmm.device_buffer cimport DeviceBuffer
@@ -20,6 +20,7 @@ __all__ = [
     "bitmask_or",
     "copy_bitmask",
     "create_null_mask",
+    "null_count",
 ]
 
 cdef DeviceBuffer buffer_to_python(device_buffer buf):
@@ -148,3 +149,26 @@ cpdef tuple bitmask_or(list columns):
         c_result = cpp_null_mask.bitmask_or(c_table.view())
 
     return buffer_to_python(move(c_result.first)), c_result.second
+
+
+cpdef size_type null_count(gpumemoryview bitmask, size_type start, size_type stop):
+    """Given a validity bitmask, counts the number of null elements.
+
+    For details, see :cpp:func:`null_count`.
+
+    Parameters
+    ----------
+    bitmask : int
+        Integer pointer to the bitmask.
+    start : int
+        Index of the first bit to count (inclusive).
+    stop : int
+        Index of the last bit to count (exclusive).
+
+    Returns
+    -------
+    int
+        The number of null elements in the specified range.
+    """
+    with nogil:
+        return cpp_null_mask.null_count(<bitmask_type*>(bitmask.ptr), start, stop)

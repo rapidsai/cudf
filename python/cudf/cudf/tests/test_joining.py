@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2024, NVIDIA CORPORATION.
+# Copyright (c) 2018-2025, NVIDIA CORPORATION.
 
 from itertools import combinations, product, repeat
 
@@ -17,8 +17,17 @@ from cudf.testing._utils import (
     assert_exceptions_equal,
     expect_warning_if,
 )
+from cudf.utils.dtypes import find_common_type
 
-_JOIN_TYPES = ("left", "inner", "outer", "right", "leftanti", "leftsemi")
+_JOIN_TYPES = (
+    "left",
+    "inner",
+    "outer",
+    "right",
+    "leftanti",
+    "leftsemi",
+    "cross",
+)
 
 
 def make_params():
@@ -981,7 +990,7 @@ def test_typecast_on_join_int_to_int(dtype_l, dtype_r):
     gdf_l = cudf.DataFrame({"join_col": join_data_l, "B": other_data})
     gdf_r = cudf.DataFrame({"join_col": join_data_r, "B": other_data})
 
-    exp_dtype = np.result_type(np.dtype(dtype_l), np.dtype(dtype_r))
+    exp_dtype = find_common_type((np.dtype(dtype_l), np.dtype(dtype_r)))
 
     exp_join_data = [1, 2]
     exp_other_data = ["a", "b"]
@@ -1011,7 +1020,7 @@ def test_typecast_on_join_float_to_float(dtype_l, dtype_r):
     gdf_l = cudf.DataFrame({"join_col": join_data_l, "B": other_data})
     gdf_r = cudf.DataFrame({"join_col": join_data_r, "B": other_data})
 
-    exp_dtype = np.result_type(np.dtype(dtype_l), np.dtype(dtype_r))
+    exp_dtype = find_common_type((np.dtype(dtype_l), np.dtype(dtype_r)))
 
     if dtype_l != dtype_r:
         exp_join_data = [1, 2, 3, 4.5]
@@ -1052,7 +1061,7 @@ def test_typecast_on_join_mixed_int_float(dtype_l, dtype_r):
     gdf_l = cudf.DataFrame({"join_col": join_data_l, "B": other_data})
     gdf_r = cudf.DataFrame({"join_col": join_data_r, "B": other_data})
 
-    exp_dtype = np.result_type(np.dtype(dtype_l), np.dtype(dtype_r))
+    exp_dtype = find_common_type((np.dtype(dtype_l), np.dtype(dtype_r)))
 
     exp_join_data = [1, 2, 3]
     exp_other_data = ["a", "b", "c"]
@@ -2275,3 +2284,109 @@ def test_merge_timedelta_types(dtype1, dtype2):
         else True,
         check_dtype=len(actual) > 0,
     )
+
+
+def test_merge_index_on_opposite_how_column_reset_index():
+    df = pd.DataFrame({"a": [1, 2, 3, 4, 5]}, index=[1, 3, 5, 7, 9])
+    ser = pd.Series([1, 2], index=pd.Index([1, 2], name="a"), name="b")
+    df_cudf = cudf.DataFrame.from_pandas(df)
+    ser_cudf = cudf.Series.from_pandas(ser)
+
+    expected = pd.merge(df, ser, on="a", how="left")
+    result = cudf.merge(df_cudf, ser_cudf, on="a", how="left")
+    assert_eq(result, expected)
+
+    expected = pd.merge(ser, df, on="a", how="right")
+    result = cudf.merge(ser_cudf, df_cudf, on="a", how="right")
+    assert_eq(result, expected)
+
+
+def test_merge_suffixes_duplicate_label_raises():
+    data = {"a": [1, 2, 3, 4, 5], "b": [6, 6, 6, 6, 6]}
+    df_cudf = cudf.DataFrame(data)
+    df_pd = pd.DataFrame(data)
+    result = df_cudf.merge(df_cudf, on=["a"], suffixes=("", "_right"))
+    expected = df_pd.merge(df_pd, on=["a"], suffixes=("", "_right"))
+    assert_eq(result, expected)
+
+    with pytest.raises(NotImplementedError):
+        result.merge(df_cudf, on=["a"], suffixes=("", "_right"))
+
+
+def test_merge_left_on_right_index_sort():
+    ser = cudf.Series(range(10), name="left_ser")
+    ser2 = cudf.Series(
+        range(10), index=[4, 5, 6, 3, 2, 1, 8, 9, 0, 7], name="right_ser"
+    )
+    ser_pd = ser.to_pandas()
+    ser2_pd = ser2.to_pandas()
+    result = cudf.merge(
+        ser, ser2, how="left", left_on="left_ser", right_index=True, sort=True
+    )
+    expected = pd.merge(
+        ser_pd,
+        ser2_pd,
+        how="left",
+        left_on="left_ser",
+        right_index=True,
+        sort=True,
+    )
+    assert_eq(result, expected)
+
+
+@pytest.mark.parametrize(
+    "left_data",
+    [
+        {"lkey": ["foo", "bar", "baz", "foo"], "value": [1, 2, 3, 5]},
+        {"lkey": ["foo", "bar", "baz", "foo"], "value": [5, 3, 2, 1]},
+        {
+            "lkey": ["foo", "bar", "baz", "foo"],
+            "value": [5, 3, 2, 1],
+            "extra_left": [1, 2, 3, 4],
+        },
+    ],
+)
+@pytest.mark.parametrize(
+    "right_data",
+    [
+        {"rkey": ["foo", "bar", "baz", "foo"], "value": [5, 6, 7, 8]},
+        {"rkey": ["foo", "bar", "baz", "foo"], "value": [8, 7, 6, 5]},
+        {
+            "rkey": ["foo", "bar", "baz", "foo"],
+            "value": [8, 7, 6, 5],
+            "extra_right": [10, 2, 30, 4],
+        },
+    ],
+)
+@pytest.mark.parametrize("sort", [True, False])
+def test_cross_join_overlapping(left_data, right_data, sort):
+    df1 = cudf.DataFrame(left_data)
+    df2 = cudf.DataFrame(right_data)
+
+    pdf1 = df1.to_pandas()
+    pdf2 = df2.to_pandas()
+    expected = pdf1.join(
+        pdf2, how="cross", lsuffix="_x", rsuffix="_y", sort=sort
+    )
+    result = df1.join(df2, how="cross", lsuffix="_x", rsuffix="_y", sort=sort)
+    assert_eq(result, expected)
+
+
+@pytest.mark.parametrize(
+    "suffixes",
+    [
+        ("_left", "_right"),
+        ("", "_right"),
+        ("_left", ""),
+    ],
+)
+def test_cross_merge(suffixes):
+    df1 = cudf.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
+    pdf1 = df1.to_pandas()
+
+    df2 = cudf.DataFrame({"a": [11, 12, 13], "d": [40, 50, 60]})
+    pdf2 = df2.to_pandas()
+
+    expected = pdf1.merge(pdf2, how="cross", suffixes=suffixes)
+    result = df1.merge(df2, how="cross", suffixes=suffixes)
+    assert_eq(result, expected)

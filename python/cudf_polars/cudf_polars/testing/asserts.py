@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 """Device-aware assertions."""
@@ -21,8 +21,9 @@ __all__: list[str] = ["assert_gpu_result_equal", "assert_ir_translation_raises"]
 
 
 # Will be overriden by `conftest.py` with the value from the `--executor`
-# command-line argument
-Executor = None
+# and `--scheduler` command-line arguments
+DEFAULT_EXECUTOR = "in-memory"
+DEFAULT_SCHEDULER = "synchronous"
 
 
 def assert_gpu_result_equal(
@@ -89,7 +90,14 @@ def assert_gpu_result_equal(
         If GPU collection failed in some way.
     """
     if engine is None:
-        engine = GPUEngine(raise_on_fail=True, executor=executor or Executor)
+        executor = executor or DEFAULT_EXECUTOR
+        engine = GPUEngine(
+            raise_on_fail=True,
+            executor=executor,
+            executor_options=(
+                {"scheduler": DEFAULT_SCHEDULER} if executor == "streaming" else {}
+            ),
+        )
 
     final_polars_collect_kwargs, final_cudf_collect_kwargs = _process_kwargs(
         collect_kwargs, polars_collect_kwargs, cudf_collect_kwargs
@@ -135,9 +143,9 @@ def assert_ir_translation_raises(q: pl.LazyFrame, *exceptions: type[Exception]) 
     translator.translate_ir()
     if errors := translator.errors:
         for err in errors:
-            assert any(
-                isinstance(err, err_type) for err_type in exceptions
-            ), f"Translation DID NOT RAISE {exceptions}"
+            assert any(isinstance(err, err_type) for err_type in exceptions), (
+                f"Translation DID NOT RAISE {exceptions}"
+            )
         return
     else:
         raise AssertionError(f"Translation DID NOT RAISE {exceptions}")

@@ -26,6 +26,5 @@ documentation
 testing
 benchmarking
 options
-pylibcudf
 cudf_pandas
 ```

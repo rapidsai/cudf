@@ -49,6 +49,7 @@
 #include <algorithm>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
@@ -104,17 +105,31 @@ class selected_rows_offsets {
 };
 
 /**
- * @brief Removes the first and Last quote in the string
+ * @brief Discards any other characters found before the first quotechar and after the last
+ * quotechar in the string (if any quotechar exists)
+ *
+ * ```
+ * Example:
+ * "column" => column
+ * \t"column"\t => column
+ *     "column"     => column
+ * ```
+ *
  */
-string removeQuotes(string str, char quotechar)
+std::string_view remove_quotes(std::string_view str, char quotechar)
 {
   // Exclude first and last quotation char
-  size_t const first_quote = str.find(quotechar);
-  if (first_quote != string::npos) { str.erase(first_quote, 1); }
-  size_t const last_quote = str.rfind(quotechar);
-  if (last_quote != string::npos) { str.erase(last_quote, 1); }
+  auto const first_quote = str.find(quotechar);
 
-  return str;
+  if (first_quote == string::npos) { return str; }
+
+  str = str.substr(first_quote + 1);
+
+  auto const last_quote = str.rfind(quotechar);
+
+  if (last_quote == string::npos) { return str; }
+
+  return str.substr(0, last_quote);
 }
 
 /**
@@ -152,8 +167,9 @@ std::vector<std::string> get_column_names(std::vector<char> const& row,
           --col_name_len;
         }
 
-        string const new_col_name(row.data() + prev, col_name_len);
-        col_names.push_back(removeQuotes(new_col_name, parse_opts.quotechar));
+        col_names.emplace_back(
+          remove_quotes(std::string_view{row.data() + prev, static_cast<std::size_t>(col_name_len)},
+                        parse_opts.quotechar));
       } else {
         // This is the first data row, add the automatically generated name
         col_names.push_back(prefix + std::to_string(col_names.size()));
@@ -431,6 +447,9 @@ std::pair<rmm::device_uvector<char>, selected_rows_offsets> select_data_and_row_
     CUDF_EXPECTS(reader_opts.get_compression() == compression_type::NONE,
                  "Reading compressed data using `byte range` is unsupported");
   }
+
+  CUDF_EXPECTS(range_offset <= source->size(), "Invalid byte range offset", std::invalid_argument);
+
   // TODO: Allow parsing the header outside the mapped range
   CUDF_EXPECTS((range_offset == 0 || reader_opts.get_header() < 0),
                "byte_range offset with header not supported");
@@ -654,7 +673,7 @@ std::vector<column_buffer> decode_data(parse_options const& parse_opts,
     d_valid_counts,
     stream);
 
-  auto const h_valid_counts = cudf::detail::make_host_vector_sync(d_valid_counts, stream);
+  auto const h_valid_counts = cudf::detail::make_host_vector(d_valid_counts, stream);
   for (int i = 0; i < num_active_columns; ++i) {
     out_buffers[i].null_count() = num_records - h_valid_counts[i];
   }

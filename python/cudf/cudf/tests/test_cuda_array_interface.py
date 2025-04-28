@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2024, NVIDIA CORPORATION.
+# Copyright (c) 2019-2025, NVIDIA CORPORATION.
 
 import types
 from contextlib import ExitStack as does_not_raise
@@ -84,8 +84,7 @@ def test_cuda_array_interface_interop_out_masked(dtype, module):
     expectation = does_not_raise()
     if module == "cupy":
         pytest.skip(
-            "cupy doesn't support version 1 of "
-            "`__cuda_array_interface__` yet"
+            "cupy doesn't support version 1 of `__cuda_array_interface__` yet"
         )
         module_constructor = cupy.asarray
 

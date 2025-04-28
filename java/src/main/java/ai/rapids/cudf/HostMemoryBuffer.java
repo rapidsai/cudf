@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -366,6 +366,23 @@ public class HostMemoryBuffer extends MemoryBuffer {
     addressOutOfBoundsCheck(requestedAddress, 4, "getInt");
     return UnsafeMemoryAccessor.getInt(requestedAddress);
   }
+
+  /**
+   * Copy a set of ints to an array from the buffer starting at offset.
+   * @param dst       destination int array
+   * @param dstIndex  starting index within the destination array
+   * @param srcOffset starting offset within this buffer
+   * @param count     number of ints to copy
+   */
+  public final void getInts(int[] dst, long dstIndex, long srcOffset, int count) {
+    assert count >= 0;
+    assert count <= dst.length - dstIndex;
+    assert srcOffset >= 0;
+    long requestedAddress = this.address + srcOffset;
+    addressOutOfBoundsCheck(requestedAddress, count * 4L, "getInts");
+    UnsafeMemoryAccessor.getInts(dst, dstIndex, requestedAddress, count);
+  }
+
 
   /**
    * Sets the Integer value at that offset

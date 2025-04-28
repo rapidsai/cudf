@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,7 +34,8 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <thrust/distance.h>
+#include <cuda/std/functional>
+#include <cuda/std/iterator>
 #include <thrust/functional.h>
 #include <thrust/reduce.h>
 #include <thrust/scatter.h>
@@ -103,9 +104,9 @@ std::unique_ptr<column> have_overlap(lists_column_view const& lhs,
                                          contained.begin(),  // values to reduce
                                          list_indices.begin(),     // out keys
                                          overlap_results.begin(),  // out values
-                                         thrust::equal_to{},  // comp for keys
-                                         thrust::logical_or{});  // reduction op for values
-  auto const num_non_empty_segments = thrust::distance(overlap_results.begin(), end.second);
+                                         cuda::std::equal_to{},  // comp for keys
+                                         cuda::std::logical_or{});  // reduction op for values
+  auto const num_non_empty_segments = cuda::std::distance(overlap_results.begin(), end.second);
 
   auto [null_mask, null_count] =
     cudf::detail::bitmask_and(table_view{{lhs.parent(), rhs.parent()}}, stream, mr);
@@ -207,8 +208,12 @@ std::unique_ptr<column> union_distinct(lists_column_view const& lhs,
                                     stream,
                                     cudf::get_current_device_resource_ref());
 
-  return cudf::lists::detail::distinct(
-    lists_column_view{union_col->view()}, nulls_equal, nans_equal, stream, mr);
+  return cudf::lists::detail::distinct(lists_column_view{union_col->view()},
+                                       nulls_equal,
+                                       nans_equal,
+                                       duplicate_keep_option::KEEP_ANY,
+                                       stream,
+                                       mr);
 }
 
 std::unique_ptr<column> difference_distinct(lists_column_view const& lhs,

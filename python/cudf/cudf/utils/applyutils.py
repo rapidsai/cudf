@@ -1,10 +1,11 @@
-# Copyright (c) 2018-2024, NVIDIA CORPORATION.
+# Copyright (c) 2018-2025, NVIDIA CORPORATION.
 from __future__ import annotations
 
 import functools
 from typing import Any
 
 import cupy as cp
+import numpy as np
 from numba import cuda
 from numba.core.utils import pysignature
 
@@ -159,7 +160,7 @@ class ApplyKernelCompilerBase:
         outputs = {}
         for k, dt in self.outcols.items():
             outputs[k] = column.column_empty(
-                len(df), dt, False
+                len(df), np.dtype(dt), False
             ).data_array_view(mode="write")
         # Bind argument
         args = {}
@@ -350,10 +351,8 @@ def _load_cache_or_make_row_wise_kernel(cache_key, func, *args, **kwargs):
         cache_key = func
     try:
         out = _cache[cache_key]
-        # print("apply cache loaded", cache_key)
         return out
     except KeyError:
-        # print("apply cache NOT loaded", cache_key)
         kernel = _make_row_wise_kernel(func, *args, **kwargs)
         _cache[cache_key] = kernel
         return kernel

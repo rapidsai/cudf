@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2024, NVIDIA CORPORATION.
+# Copyright (c) 2018-2025, NVIDIA CORPORATION.
 
 import decimal
 import operator
@@ -20,7 +20,6 @@ from cudf.core._compat import (
 from cudf.core.buffer.spill_manager import get_global_manager
 from cudf.testing import _utils as utils, assert_eq
 from cudf.utils.dtypes import (
-    BOOL_TYPES,
     DATETIME_TYPES,
     FLOAT_TYPES,
     INTEGER_TYPES,
@@ -122,37 +121,6 @@ _operators_arithmetic = [
 _operators_comparison = ["eq", "ne", "lt", "le", "gt", "ge"]
 
 
-_cudf_scalar_reflected_ops = [
-    lambda x: cudf.Scalar(1) + x,
-    lambda x: cudf.Scalar(2) * x,
-    lambda x: cudf.Scalar(2) - x,
-    lambda x: cudf.Scalar(2) // x,
-    lambda x: cudf.Scalar(2) / x,
-    lambda x: cudf.Scalar(3) + x,
-    lambda x: cudf.Scalar(3) * x,
-    lambda x: cudf.Scalar(3) - x,
-    lambda x: cudf.Scalar(3) // x,
-    lambda x: cudf.Scalar(3) / x,
-    lambda x: cudf.Scalar(3) % x,
-    lambda x: cudf.Scalar(-1) + x,
-    lambda x: cudf.Scalar(-2) * x,
-    lambda x: cudf.Scalar(-2) - x,
-    lambda x: cudf.Scalar(-2) // x,
-    lambda x: cudf.Scalar(-2) / x,
-    lambda x: cudf.Scalar(-3) + x,
-    lambda x: cudf.Scalar(-3) * x,
-    lambda x: cudf.Scalar(-3) - x,
-    lambda x: cudf.Scalar(-3) // x,
-    lambda x: cudf.Scalar(-3) / x,
-    lambda x: cudf.Scalar(-3) % x,
-    lambda x: cudf.Scalar(0) + x,
-    lambda x: cudf.Scalar(0) * x,
-    lambda x: cudf.Scalar(0) - x,
-    lambda x: cudf.Scalar(0) // x,
-    lambda x: cudf.Scalar(0) / x,
-]
-
-
 pytest_xfail = pytest.mark.xfail
 pytestmark = pytest.mark.spilling
 
@@ -166,7 +134,6 @@ if get_global_manager() is not None:
     _reflected_ops = _reflected_ops[:1]
     _operators_arithmetic = _operators_arithmetic[:1]
     _operators_comparison = _operators_comparison[:1]
-    _cudf_scalar_reflected_ops = _cudf_scalar_reflected_ops[:1]
     DATETIME_TYPES = {"datetime64[ms]"}
     NUMERIC_TYPES = {"float32"}
     FLOAT_TYPES = {"float64"}
@@ -227,10 +194,9 @@ def test_series_binop_concurrent(binop):
         list(e.map(func, indices))
 
 
-@pytest.mark.parametrize("use_cudf_scalar", [False, True])
 @pytest.mark.parametrize("obj_class", ["Series", "Index"])
 @pytest.mark.parametrize("nelem,binop", list(product([1, 2, 100], _binops)))
-def test_series_binop_scalar(nelem, binop, obj_class, use_cudf_scalar):
+def test_series_binop_scalar(nelem, binop, obj_class):
     rng = np.random.default_rng(seed=0)
     arr = rng.random(nelem)
     rhs = rng.choice(arr).item()
@@ -239,10 +205,7 @@ def test_series_binop_scalar(nelem, binop, obj_class, use_cudf_scalar):
     if obj_class == "Index":
         sr = Index(sr)
 
-    if use_cudf_scalar:
-        result = binop(sr, rhs)
-    else:
-        result = binop(sr, cudf.Scalar(rhs))
+    result = binop(sr, rhs)
 
     if obj_class == "Index":
         result = Series(result)
@@ -445,17 +408,11 @@ def test_str_series_compare_num_reflected(
 @pytest.mark.parametrize("nelem", [1, 2, 100])
 @pytest.mark.parametrize("cmpop", _cmpops)
 @pytest.mark.parametrize("dtype", [*utils.NUMERIC_TYPES, "datetime64[ms]"])
-@pytest.mark.parametrize("use_cudf_scalar", [True, False])
-def test_series_compare_scalar(
-    nelem, cmpop, obj_class, dtype, use_cudf_scalar
-):
+def test_series_compare_scalar(nelem, cmpop, obj_class, dtype):
     rng = np.random.default_rng(seed=0)
     arr1 = rng.integers(0, 100, 100).astype(dtype)
     sr1 = Series(arr1)
     rhs = rng.choice(arr1).item()
-
-    if use_cudf_scalar:
-        rhs = cudf.Scalar(rhs)
 
     if obj_class == "Index":
         sr1 = Index(sr1)
@@ -617,62 +574,6 @@ def test_series_reflected_ops_scalar(func, dtype, obj_class):
     np.testing.assert_allclose(ps_result, gs_result.to_numpy())
 
 
-@pytest.mark.parametrize(
-    "func, dtype", list(product(_reflected_ops, utils.NUMERIC_TYPES))
-)
-def test_cudf_scalar_reflected_ops_scalar(func, dtype):
-    value = 42
-    scalar = cudf.Scalar(42)
-
-    expected = func(value)
-    actual = func(scalar).value
-
-    assert np.isclose(expected, actual)
-
-
-@pytest.mark.parametrize("obj_class", ["Series", "Index"])
-@pytest.mark.parametrize(
-    "funcs, dtype",
-    list(
-        product(
-            list(zip(_reflected_ops, _cudf_scalar_reflected_ops)),
-            utils.NUMERIC_TYPES,
-        )
-    ),
-)
-def test_series_reflected_ops_cudf_scalar(funcs, dtype, obj_class):
-    cpu_func, gpu_func = funcs
-
-    # create random series
-    random_series = utils.gen_rand(dtype, 100, low=10, seed=12)
-
-    # gpu series
-    gs = Series(random_series)
-
-    # class typing
-    if obj_class == "Index":
-        gs = Index(gs)
-
-    try:
-        gs_result = gpu_func(gs)
-    except OverflowError:
-        # An error is fine, if pandas raises the same error:
-        with pytest.raises(OverflowError):
-            cpu_func(random_series)
-
-        return
-
-    # class typing
-    if obj_class == "Index":
-        gs = Series(gs)
-
-    # pandas
-    ps_result = cpu_func(random_series)
-
-    # verify
-    np.testing.assert_allclose(ps_result, gs_result.to_numpy())
-
-
 @pytest.mark.parametrize("binop", _binops)
 def test_different_shapes_and_columns(binop):
     # TODO: support `pow()` on NaN values. Particularly, the cases:
@@ -792,10 +693,6 @@ def test_boolean_scalar_binop(op):
     assert_eq(op(psr, True), op(gsr, True))
     assert_eq(op(psr, False), op(gsr, False))
 
-    # cuDF scalar
-    assert_eq(op(psr, True), op(gsr, cudf.Scalar(True)))
-    assert_eq(op(psr, False), op(gsr, cudf.Scalar(False)))
-
 
 @pytest.mark.parametrize("func", _operators_arithmetic)
 @pytest.mark.parametrize("has_nulls", [True, False])
@@ -826,10 +723,7 @@ def test_operator_func_between_series(dtype, func, has_nulls, fill_value):
 @pytest.mark.parametrize("has_nulls", [True, False])
 @pytest.mark.parametrize("fill_value", [None, 27])
 @pytest.mark.parametrize("dtype", ["float32", "float64"])
-@pytest.mark.parametrize("use_cudf_scalar", [False, True])
-def test_operator_func_series_and_scalar(
-    dtype, func, has_nulls, fill_value, use_cudf_scalar
-):
+def test_operator_func_series_and_scalar(dtype, func, has_nulls, fill_value):
     count = 1000
     scalar = 59
     gdf_series = utils.gen_rand_series(
@@ -838,11 +732,11 @@ def test_operator_func_series_and_scalar(
     pdf_series = gdf_series.to_pandas()
 
     gdf_series_result = getattr(gdf_series, func)(
-        cudf.Scalar(scalar) if use_cudf_scalar else scalar,
+        scalar,
         fill_value=fill_value,
     )
     pdf_series_result = getattr(pdf_series, func)(
-        np.array(scalar)[()] if use_cudf_scalar else scalar,
+        scalar,
         fill_value=fill_value,
     )
 
@@ -895,9 +789,8 @@ def test_operator_func_between_series_logical(
 @pytest.mark.parametrize("has_nulls", [True, False])
 @pytest.mark.parametrize("scalar", [-59.0, np.nan, 0, 59.0])
 @pytest.mark.parametrize("fill_value", [None, 1.0])
-@pytest.mark.parametrize("use_cudf_scalar", [False, True])
 def test_operator_func_series_and_scalar_logical(
-    request, dtype, func, has_nulls, scalar, fill_value, use_cudf_scalar
+    request, dtype, func, has_nulls, scalar, fill_value
 ):
     request.applymarker(
         pytest.mark.xfail(
@@ -914,7 +807,7 @@ def test_operator_func_series_and_scalar_logical(
         gdf_series = cudf.Series([-1.0, 0, 10.5, 1.1], dtype=dtype)
     pdf_series = gdf_series.to_pandas(nullable=True)
     gdf_series_result = getattr(gdf_series, func)(
-        cudf.Scalar(scalar) if use_cudf_scalar else scalar,
+        scalar,
         fill_value=fill_value,
     )
     pdf_series_result = getattr(pdf_series, func)(
@@ -1051,7 +944,7 @@ def test_floordiv_zero_float64(series_dtype, divisor_dtype, scalar_divisor):
 
     if scalar_divisor:
         pd_div = divisor_dtype(0)
-        cudf_div = cudf.Scalar(0, dtype=divisor_dtype)
+        cudf_div = pd_div
     else:
         pd_div = pd.Series([0], dtype=divisor_dtype)
         cudf_div = cudf.from_pandas(pd_div)
@@ -1066,16 +959,14 @@ def test_floordiv_zero_bool(scalar_divisor):
 
     if scalar_divisor:
         pd_div = np.bool_(0)
-        cudf_div = cudf.Scalar(0, dtype=np.bool_)
+        cudf_div = pd_div
     else:
         pd_div = pd.Series([0], dtype=np.bool_)
         cudf_div = cudf.from_pandas(pd_div)
 
     with pytest.raises((NotImplementedError, ZeroDivisionError)):
-        # Pandas does raise
         sr // pd_div
     with pytest.raises((NotImplementedError, ZeroDivisionError)):
-        # Cudf does not
         cr // cudf_div
 
 
@@ -1140,631 +1031,6 @@ def test_vector_to_none_binops(dtype):
     got = data + None
 
     assert_eq(expect, got)
-
-
-def dtype_scalar(val, dtype):
-    if dtype == "str":
-        return str(val)
-    dtype = cudf.dtype(dtype)
-    if dtype.type in {np.datetime64, np.timedelta64}:
-        res, _ = np.datetime_data(dtype)
-        return dtype.type(val, res)
-    else:
-        return dtype.type(val)
-
-
-def make_scalar_add_data():
-    valid = set()
-
-    # to any int, we may add any kind of
-    # other int, float, datetime timedelta, or bool
-    valid |= set(
-        product(
-            INTEGER_TYPES,
-            FLOAT_TYPES | DATETIME_TYPES | TIMEDELTA_TYPES | BOOL_TYPES,
-        )
-    )
-
-    # to any float, we may add any int, float, or bool
-    valid |= set(
-        product(FLOAT_TYPES, INTEGER_TYPES | FLOAT_TYPES | BOOL_TYPES)
-    )
-
-    # to any datetime, we may add any int, timedelta, or bool
-    valid |= set(
-        product(DATETIME_TYPES, INTEGER_TYPES | TIMEDELTA_TYPES | BOOL_TYPES)
-    )
-
-    # to any timedelta, we may add any int, datetime, other timedelta, or bool
-    valid |= set(
-        product(TIMEDELTA_TYPES, INTEGER_TYPES | DATETIME_TYPES | BOOL_TYPES)
-    )
-
-    # to any bool, we may add any int, float, datetime, timedelta, or bool
-    valid |= set(
-        product(
-            BOOL_TYPES,
-            INTEGER_TYPES
-            | FLOAT_TYPES
-            | DATETIME_TYPES
-            | TIMEDELTA_TYPES
-            | BOOL_TYPES,
-        )
-    )
-
-    # to any string, we may add any other string
-    valid |= {("str", "str")}
-
-    return sorted(list(valid))
-
-
-def make_invalid_scalar_add_data():
-    invalid = set()
-
-    # we can not add a datetime to a float
-    invalid |= set(product(FLOAT_TYPES, DATETIME_TYPES))
-
-    # We can not add a timedelta to a float
-    invalid |= set(product(FLOAT_TYPES, TIMEDELTA_TYPES))
-
-    # we can not add a float to any datetime
-    invalid |= set(product(DATETIME_TYPES, FLOAT_TYPES))
-
-    # can can not add a datetime to a datetime
-    invalid |= set(product(DATETIME_TYPES, DATETIME_TYPES))
-
-    # can not add a timedelta to a float
-    invalid |= set(product(FLOAT_TYPES, TIMEDELTA_TYPES))
-
-    return sorted(list(invalid))
-
-
-@pytest.mark.parametrize("dtype_l,dtype_r", make_scalar_add_data())
-def test_scalar_add(dtype_l, dtype_r):
-    test_value = 1
-
-    lval_host = dtype_scalar(test_value, dtype=dtype_l)
-    rval_host = dtype_scalar(test_value, dtype=dtype_r)
-
-    lval_gpu = cudf.Scalar(test_value, dtype=dtype_l)
-    rval_gpu = cudf.Scalar(test_value, dtype=dtype_r)
-
-    # expect = np.add(lval_host, rval_host)
-    expect = lval_host + rval_host
-    got = lval_gpu + rval_gpu
-
-    assert expect == got.value
-    if not dtype_l == dtype_r == "str":
-        assert expect.dtype == got.dtype
-
-
-@pytest.mark.parametrize("dtype_l,dtype_r", make_invalid_scalar_add_data())
-def test_scalar_add_invalid(dtype_l, dtype_r):
-    test_value = 1
-
-    lval_gpu = cudf.Scalar(test_value, dtype=dtype_l)
-    rval_gpu = cudf.Scalar(test_value, dtype=dtype_r)
-
-    with pytest.raises(TypeError):
-        lval_gpu + rval_gpu
-
-
-def make_scalar_difference_data():
-    valid = set()
-
-    # from an int, we may subtract any int, float, timedelta,
-    # or boolean value
-    valid |= set(
-        product(
-            INTEGER_TYPES,
-            INTEGER_TYPES | FLOAT_TYPES | TIMEDELTA_TYPES | BOOL_TYPES,
-        )
-    )
-
-    # from any float, we may subtract any int, float, or bool
-    valid |= set(
-        product(FLOAT_TYPES, INTEGER_TYPES | FLOAT_TYPES | BOOL_TYPES)
-    )
-
-    # from any datetime we may subtract any int, datetime, timedelta, or bool
-    valid |= set(
-        product(
-            DATETIME_TYPES,
-            INTEGER_TYPES | DATETIME_TYPES | TIMEDELTA_TYPES | BOOL_TYPES,
-        )
-    )
-
-    # from any timedelta we may subtract any int, timedelta, or bool
-    valid |= set(
-        product(TIMEDELTA_TYPES, INTEGER_TYPES | TIMEDELTA_TYPES | BOOL_TYPES)
-    )
-
-    # from any bool we may subtract any int, float or timedelta
-    valid |= set(
-        product(BOOL_TYPES, INTEGER_TYPES | FLOAT_TYPES | TIMEDELTA_TYPES)
-    )
-
-    return sorted(list(valid))
-
-
-def make_scalar_difference_data_invalid():
-    invalid = set()
-
-    # we can't subtract a datetime from an int
-    invalid |= set(product(INTEGER_TYPES, DATETIME_TYPES))
-
-    # we can't subtract a datetime or timedelta from a float
-    invalid |= set(product(FLOAT_TYPES, DATETIME_TYPES | TIMEDELTA_TYPES))
-
-    # we can't subtract a float from a datetime or timedelta
-    invalid |= set(product(DATETIME_TYPES | TIMEDELTA_TYPES, FLOAT_TYPES))
-
-    # We can't subtract a datetime from a timedelta
-    invalid |= set(product(TIMEDELTA_TYPES, DATETIME_TYPES))
-
-    # we can't subtract a datetime or bool from a bool
-    invalid |= set(product(BOOL_TYPES, BOOL_TYPES | DATETIME_TYPES))
-
-    return sorted(list(invalid))
-
-
-@pytest.mark.parametrize("dtype_l,dtype_r", make_scalar_difference_data())
-def test_scalar_difference(dtype_l, dtype_r):
-    test_value = 1
-
-    lval_host = dtype_scalar(test_value, dtype=dtype_l)
-    rval_host = dtype_scalar(test_value, dtype=dtype_r)
-
-    lval_gpu = cudf.Scalar(test_value, dtype=dtype_l)
-    rval_gpu = cudf.Scalar(test_value, dtype=dtype_r)
-
-    expect = lval_host - rval_host
-    got = lval_gpu - rval_gpu
-
-    assert expect == got.value
-    assert expect.dtype == got.dtype
-
-
-@pytest.mark.parametrize(
-    "dtype_l,dtype_r", make_scalar_difference_data_invalid()
-)
-def test_scalar_difference_invalid(dtype_l, dtype_r):
-    test_value = 1
-
-    lval_gpu = cudf.Scalar(test_value, dtype=dtype_l)
-    rval_gpu = cudf.Scalar(test_value, dtype=dtype_r)
-
-    with pytest.raises(TypeError):
-        lval_gpu - rval_gpu
-
-
-def make_scalar_product_data():
-    valid = set()
-
-    # we can multiply an int, or bool by any int, float, timedelta, or bool
-    valid |= set(
-        product(
-            INTEGER_TYPES | BOOL_TYPES,
-            INTEGER_TYPES | FLOAT_TYPES | TIMEDELTA_TYPES | BOOL_TYPES,
-        )
-    )
-
-    # we can multiply any timedelta by any int, or bool
-    valid |= set(product(TIMEDELTA_TYPES, INTEGER_TYPES | BOOL_TYPES))
-
-    # we can multiply a float by any int, float, or bool
-    valid |= set(
-        product(FLOAT_TYPES, INTEGER_TYPES | FLOAT_TYPES | BOOL_TYPES)
-    )
-
-    return sorted(list(valid))
-
-
-def make_scalar_product_data_invalid():
-    invalid = set()
-
-    # can't multiply a ints, floats, datetimes, timedeltas,
-    # or bools by datetimes
-    invalid |= set(
-        product(
-            INTEGER_TYPES
-            | FLOAT_TYPES
-            | DATETIME_TYPES
-            | TIMEDELTA_TYPES
-            | BOOL_TYPES,
-            DATETIME_TYPES,
-        )
-    )
-
-    # can't multiply datetimes with anything really
-    invalid |= set(
-        product(
-            DATETIME_TYPES,
-            INTEGER_TYPES
-            | FLOAT_TYPES
-            | DATETIME_TYPES
-            | TIMEDELTA_TYPES
-            | BOOL_TYPES,
-        )
-    )
-
-    # can't multiply timedeltas by timedeltas
-    invalid |= set(product(TIMEDELTA_TYPES, TIMEDELTA_TYPES))
-
-    return sorted(list(invalid))
-
-
-@pytest.mark.parametrize("dtype_l,dtype_r", make_scalar_product_data())
-def test_scalar_product(dtype_l, dtype_r):
-    test_value = 1
-
-    lval_host = dtype_scalar(test_value, dtype=dtype_l)
-    rval_host = dtype_scalar(test_value, dtype=dtype_r)
-
-    lval_gpu = cudf.Scalar(test_value, dtype=dtype_l)
-    rval_gpu = cudf.Scalar(test_value, dtype=dtype_r)
-
-    expect = lval_host * rval_host
-    got = lval_gpu * rval_gpu
-
-    assert expect == got.value
-    assert expect.dtype == got.dtype
-
-
-@pytest.mark.parametrize("dtype_l,dtype_r", make_scalar_product_data_invalid())
-def test_scalar_product_invalid(dtype_l, dtype_r):
-    test_value = 1
-
-    lval_gpu = cudf.Scalar(test_value, dtype=dtype_l)
-    rval_gpu = cudf.Scalar(test_value, dtype=dtype_r)
-
-    with pytest.raises(TypeError):
-        lval_gpu * rval_gpu
-
-
-def make_scalar_floordiv_data():
-    valid = set()
-
-    # we can divide ints and floats by other ints, floats, or bools
-    valid |= set(
-        product(
-            INTEGER_TYPES | FLOAT_TYPES,
-            INTEGER_TYPES | FLOAT_TYPES | BOOL_TYPES,
-        )
-    )
-
-    # we can divide timedeltas by ints, floats or other timedeltas
-    valid |= set(
-        product(TIMEDELTA_TYPES, INTEGER_TYPES | FLOAT_TYPES | TIMEDELTA_TYPES)
-    )
-
-    # we can divide bools by ints, floats or bools
-    valid |= set(product(BOOL_TYPES, INTEGER_TYPES | FLOAT_TYPES | BOOL_TYPES))
-
-    return sorted(list(valid))
-
-
-def make_scalar_floordiv_data_invalid():
-    invalid = set()
-
-    # we can't numeric types into datelike types
-    invalid |= set(
-        product(
-            INTEGER_TYPES | FLOAT_TYPES | BOOL_TYPES,
-            DATETIME_TYPES | TIMEDELTA_TYPES,
-        )
-    )
-
-    # we can't divide datetime types into anything
-    invalid |= set(
-        product(
-            DATETIME_TYPES,
-            INTEGER_TYPES
-            | FLOAT_TYPES
-            | DATETIME_TYPES
-            | TIMEDELTA_TYPES
-            | BOOL_TYPES,
-        )
-    )
-
-    # we can't divide timedeltas into bools, or datetimes
-    invalid |= set(product(TIMEDELTA_TYPES, BOOL_TYPES | DATETIME_TYPES))
-
-    return sorted(list(invalid))
-
-
-@pytest.mark.parametrize("dtype_l,dtype_r", make_scalar_floordiv_data())
-def test_scalar_floordiv(dtype_l, dtype_r):
-    test_value = 1
-
-    lval_host = dtype_scalar(test_value, dtype=dtype_l)
-    rval_host = dtype_scalar(test_value, dtype=dtype_r)
-
-    lval_gpu = cudf.Scalar(test_value, dtype=dtype_l)
-    rval_gpu = cudf.Scalar(test_value, dtype=dtype_r)
-
-    expect = lval_host // rval_host
-    got = lval_gpu // rval_gpu
-
-    assert expect == got.value
-    assert expect.dtype == got.dtype
-
-
-@pytest.mark.parametrize(
-    "dtype_l,dtype_r", make_scalar_floordiv_data_invalid()
-)
-def test_scalar_floordiv_invalid(dtype_l, dtype_r):
-    test_value = 1
-
-    lval_gpu = cudf.Scalar(test_value, dtype=dtype_l)
-    rval_gpu = cudf.Scalar(test_value, dtype=dtype_r)
-
-    with pytest.raises(TypeError):
-        lval_gpu // rval_gpu
-
-
-def make_scalar_truediv_data():
-    valid = set()
-
-    # we can true divide ints, floats, or bools by other
-    # ints, floats or bools
-    valid |= set(
-        product(
-            INTEGER_TYPES | FLOAT_TYPES | BOOL_TYPES,
-            INTEGER_TYPES | FLOAT_TYPES | BOOL_TYPES,
-        )
-    )
-
-    # we can true divide timedeltas by ints floats or timedeltas
-    valid |= set(product(TIMEDELTA_TYPES, INTEGER_TYPES | TIMEDELTA_TYPES))
-
-    return sorted(list(valid))
-
-
-def make_scalar_truediv_data_invalid():
-    invalid = set()
-
-    # we can't divide ints, floats or bools by datetimes
-    # or timedeltas
-    invalid |= set(
-        product(
-            INTEGER_TYPES | FLOAT_TYPES | BOOL_TYPES,
-            DATETIME_TYPES | TIMEDELTA_TYPES,
-        )
-    )
-
-    # we cant true divide datetime types by anything
-    invalid |= set(
-        product(
-            DATETIME_TYPES,
-            INTEGER_TYPES
-            | FLOAT_TYPES
-            | DATETIME_TYPES
-            | TIMEDELTA_TYPES
-            | BOOL_TYPES,
-        )
-    )
-
-    # we cant true divide timedeltas by datetimes or bools or floats
-    invalid |= set(
-        product(TIMEDELTA_TYPES, DATETIME_TYPES | BOOL_TYPES | FLOAT_TYPES)
-    )
-
-    return sorted(list(invalid))
-
-
-@pytest.mark.parametrize("dtype_l,dtype_r", make_scalar_truediv_data())
-def test_scalar_truediv(dtype_l, dtype_r):
-    test_value = 1
-
-    lval_host = dtype_scalar(test_value, dtype=dtype_l)
-    rval_host = dtype_scalar(test_value, dtype=dtype_r)
-
-    lval_gpu = cudf.Scalar(test_value, dtype=dtype_l)
-    rval_gpu = cudf.Scalar(test_value, dtype=dtype_r)
-
-    expect = np.true_divide(lval_host, rval_host)
-    got = lval_gpu / rval_gpu
-
-    assert expect == got.value
-
-    # numpy bug
-
-    if np.dtype(dtype_l).itemsize <= 2 and np.dtype(dtype_r).itemsize <= 2:
-        assert expect.dtype == "float64" and got.dtype == "float32"
-    else:
-        assert expect.dtype == got.dtype
-    # assert expect.dtype == got.dtype
-
-
-@pytest.mark.parametrize("dtype_l,dtype_r", make_scalar_truediv_data_invalid())
-def test_scalar_truediv_invalid(dtype_l, dtype_r):
-    test_value = 1
-
-    lval_gpu = cudf.Scalar(test_value, dtype=dtype_l)
-    rval_gpu = cudf.Scalar(test_value, dtype=dtype_r)
-
-    with pytest.raises(TypeError):
-        lval_gpu / rval_gpu
-
-
-def make_scalar_remainder_data():
-    valid = set()
-
-    # can mod numeric types with each other
-    valid |= set(
-        product(
-            INTEGER_TYPES | FLOAT_TYPES | BOOL_TYPES,
-            INTEGER_TYPES | FLOAT_TYPES | BOOL_TYPES,
-        )
-    )
-
-    # can mod timedeltas by other timedeltas
-    valid |= set(product(TIMEDELTA_TYPES, TIMEDELTA_TYPES))
-
-    return sorted(list(valid))
-
-
-def make_scalar_remainder_data_invalid():
-    invalid = set()
-
-    # numeric types cant be modded against timedeltas
-    # or datetimes. Also, datetimes can't be modded
-    # against datetimes or timedeltas
-    invalid |= set(
-        product(
-            INTEGER_TYPES | FLOAT_TYPES | BOOL_TYPES | DATETIME_TYPES,
-            DATETIME_TYPES | TIMEDELTA_TYPES,
-        )
-    )
-
-    # datetime and timedelta types cant be modded against
-    # any numeric types
-    invalid |= set(
-        product(
-            DATETIME_TYPES | TIMEDELTA_TYPES,
-            INTEGER_TYPES | FLOAT_TYPES | BOOL_TYPES,
-        )
-    )
-
-    # timedeltas cant mod with datetimes
-    invalid |= set(product(TIMEDELTA_TYPES, DATETIME_TYPES))
-
-    return sorted(list(invalid))
-
-
-@pytest.mark.parametrize("dtype_l,dtype_r", make_scalar_remainder_data())
-def test_scalar_remainder(dtype_l, dtype_r):
-    test_value = 1
-
-    lval_host = dtype_scalar(test_value, dtype=dtype_l)
-    rval_host = dtype_scalar(test_value, dtype=dtype_r)
-
-    lval_gpu = cudf.Scalar(test_value, dtype=dtype_l)
-    rval_gpu = cudf.Scalar(test_value, dtype=dtype_r)
-
-    expect = lval_host % rval_host
-    got = lval_gpu % rval_gpu
-
-    assert expect == got.value
-    assert expect.dtype == got.dtype
-
-
-@pytest.mark.parametrize(
-    "dtype_l,dtype_r", make_scalar_remainder_data_invalid()
-)
-def test_scalar_remainder_invalid(dtype_l, dtype_r):
-    test_value = 1
-
-    lval_gpu = cudf.Scalar(test_value, dtype=dtype_l)
-    rval_gpu = cudf.Scalar(test_value, dtype=dtype_r)
-
-    with pytest.raises(TypeError):
-        lval_gpu % rval_gpu
-
-
-def make_scalar_power_data():
-    # only numeric values form valid operands for power
-    return sorted(
-        product(
-            INTEGER_TYPES | FLOAT_TYPES | BOOL_TYPES,
-            INTEGER_TYPES | FLOAT_TYPES | BOOL_TYPES,
-        )
-    )
-
-
-def make_scalar_power_data_invalid():
-    invalid = set()
-
-    # datetimes and timedeltas cant go in exponents
-    invalid |= set(
-        product(
-            INTEGER_TYPES
-            | FLOAT_TYPES
-            | TIMEDELTA_TYPES
-            | DATETIME_TYPES
-            | BOOL_TYPES,
-            DATETIME_TYPES | TIMEDELTA_TYPES,
-        )
-    )
-
-    # datetimes and timedeltas may not be raised to
-    # any exponent of any dtype
-    invalid |= set(
-        product(
-            DATETIME_TYPES | TIMEDELTA_TYPES,
-            DATETIME_TYPES
-            | TIMEDELTA_TYPES
-            | INTEGER_TYPES
-            | FLOAT_TYPES
-            | BOOL_TYPES,
-        )
-    )
-
-    return sorted(list(invalid))
-
-
-@pytest.mark.parametrize("dtype_l,dtype_r", make_scalar_power_data())
-def test_scalar_power(dtype_l, dtype_r):
-    test_value = 1
-
-    lval_host = dtype_scalar(test_value, dtype=dtype_l)
-    rval_host = dtype_scalar(test_value, dtype=dtype_r)
-
-    lval_gpu = cudf.Scalar(test_value, dtype=dtype_l)
-    rval_gpu = cudf.Scalar(test_value, dtype=dtype_r)
-
-    expect = lval_host**rval_host
-    got = lval_gpu**rval_gpu
-
-    assert expect == got.value
-    assert expect.dtype == got.dtype
-
-
-@pytest.mark.parametrize("dtype_l,dtype_r", make_scalar_power_data_invalid())
-def test_scalar_power_invalid(dtype_l, dtype_r):
-    test_value = 1
-
-    lval_gpu = cudf.Scalar(test_value, dtype=dtype_l)
-    rval_gpu = cudf.Scalar(test_value, dtype=dtype_r)
-
-    with pytest.raises(TypeError):
-        lval_gpu**rval_gpu
-
-
-def make_scalar_null_binops_data():
-    return (
-        [(operator.add, *dtypes) for dtypes in make_scalar_add_data()]
-        + [(operator.sub, *dtypes) for dtypes in make_scalar_difference_data()]
-        + [(operator.mul, *dtypes) for dtypes in make_scalar_product_data()]
-        + [(operator.add, *dtypes) for dtypes in make_scalar_add_data()]
-        + [
-            (operator.floordiv, *dtypes)
-            for dtypes in make_scalar_floordiv_data()
-        ]
-        + [
-            (operator.truediv, *dtypes)
-            for dtypes in make_scalar_truediv_data()
-        ]
-        + [(operator.mod, *dtypes) for dtypes in make_scalar_remainder_data()]
-        + [(operator.pow, *dtypes) for dtypes in make_scalar_power_data()]
-    )
-
-
-@pytest.mark.parametrize("op,dtype_l,dtype_r", make_scalar_null_binops_data())
-def test_scalar_null_binops(op, dtype_l, dtype_r):
-    lhs = cudf.Scalar(cudf.NA, dtype=dtype_l)
-    rhs = cudf.Scalar(cudf.NA, dtype=dtype_r)
-
-    result = op(lhs, rhs)
-    assert result.value is (cudf.NaT if result.dtype.kind in "mM" else cudf.NA)
-
-    # make sure dtype is the same as had there been a valid scalar
-    valid_lhs = cudf.Scalar(1, dtype=dtype_l)
-    valid_rhs = cudf.Scalar(1, dtype=dtype_r)
-
-    valid_result = op(valid_lhs, valid_rhs)
-    assert result.dtype == valid_result.dtype
 
 
 @pytest.mark.parametrize("n_periods", [0, 1, -1, 12, -12])
@@ -2135,7 +1401,7 @@ def test_binops_with_NA_consistent(dtype, op):
             ["0.343", "0.500"],
             cudf.Decimal64Dtype(scale=3, precision=6),
             ["68.60", "100.0"],
-            cudf.Decimal64Dtype(scale=6, precision=13),
+            cudf.Decimal64Dtype(scale=3, precision=10),
         ),
         (
             operator.truediv,
@@ -2166,7 +1432,7 @@ def test_binops_with_NA_consistent(dtype, op):
         ),
         (
             operator.truediv,
-            20,
+            ["20", "20"],
             cudf.Decimal128Dtype(scale=2, precision=6),
             ["20", "20"],
             cudf.Decimal128Dtype(scale=2, precision=6),
@@ -2393,7 +1659,7 @@ def test_binops_with_NA_consistent(dtype, op):
 )
 def test_binops_decimal(op, lhs, l_dtype, rhs, r_dtype, expect, expect_dtype):
     if isinstance(lhs, (int, float)):
-        a = cudf.Scalar(lhs, l_dtype)
+        a = lhs
     else:
         a = utils._decimal_series(lhs, l_dtype)
     b = utils._decimal_series(rhs, r_dtype)
@@ -2933,14 +2199,6 @@ def test_binops_decimal_scalar(args):
             cudf.Series([True, False, None], dtype=bool),
         ),
         (
-            operator.eq,
-            ["100.123", "41", None],
-            cudf.Decimal64Dtype(scale=3, precision=6),
-            cudf.Scalar(decimal.Decimal("100.123")),
-            cudf.Series([True, False, None], dtype=bool),
-            cudf.Series([True, False, None], dtype=bool),
-        ),
-        (
             operator.ne,
             ["100.00", "41", None],
             cudf.Decimal64Dtype(scale=2, precision=5),
@@ -2957,14 +2215,6 @@ def test_binops_decimal_scalar(args):
             cudf.Series([False, True, None], dtype=bool),
         ),
         (
-            operator.ne,
-            ["100.123", "41", "120.21", None],
-            cudf.Decimal64Dtype(scale=3, precision=6),
-            cudf.Scalar(decimal.Decimal("100.123")),
-            cudf.Series([False, True, True, None], dtype=bool),
-            cudf.Series([False, True, True, None], dtype=bool),
-        ),
-        (
             operator.gt,
             ["100.00", "41", "120.21", None],
             cudf.Decimal64Dtype(scale=2, precision=5),
@@ -2977,14 +2227,6 @@ def test_binops_decimal_scalar(args):
             ["100.123", "41", "120.21", None],
             cudf.Decimal64Dtype(scale=3, precision=6),
             decimal.Decimal("100.123"),
-            cudf.Series([False, False, True, None], dtype=bool),
-            cudf.Series([False, True, False, None], dtype=bool),
-        ),
-        (
-            operator.gt,
-            ["100.123", "41", "120.21", None],
-            cudf.Decimal64Dtype(scale=3, precision=6),
-            cudf.Scalar(decimal.Decimal("100.123")),
             cudf.Series([False, False, True, None], dtype=bool),
             cudf.Series([False, True, False, None], dtype=bool),
         ),
@@ -3005,14 +2247,6 @@ def test_binops_decimal_scalar(args):
             cudf.Series([True, True, False, None], dtype=bool),
         ),
         (
-            operator.ge,
-            ["100.123", "41", "120.21", None],
-            cudf.Decimal64Dtype(scale=3, precision=6),
-            cudf.Scalar(decimal.Decimal("100.123")),
-            cudf.Series([True, False, True, None], dtype=bool),
-            cudf.Series([True, True, False, None], dtype=bool),
-        ),
-        (
             operator.lt,
             ["100.00", "41", "120.21", None],
             cudf.Decimal64Dtype(scale=2, precision=5),
@@ -3029,14 +2263,6 @@ def test_binops_decimal_scalar(args):
             cudf.Series([False, False, True, None], dtype=bool),
         ),
         (
-            operator.lt,
-            ["100.123", "41", "120.21", None],
-            cudf.Decimal64Dtype(scale=3, precision=6),
-            cudf.Scalar(decimal.Decimal("100.123")),
-            cudf.Series([False, True, False, None], dtype=bool),
-            cudf.Series([False, False, True, None], dtype=bool),
-        ),
-        (
             operator.le,
             ["100.00", "41", "120.21", None],
             cudf.Decimal64Dtype(scale=2, precision=5),
@@ -3049,14 +2275,6 @@ def test_binops_decimal_scalar(args):
             ["100.123", "41", "120.21", None],
             cudf.Decimal64Dtype(scale=3, precision=6),
             decimal.Decimal("100.123"),
-            cudf.Series([True, True, False, None], dtype=bool),
-            cudf.Series([True, False, True, None], dtype=bool),
-        ),
-        (
-            operator.le,
-            ["100.123", "41", "120.21", None],
-            cudf.Decimal64Dtype(scale=3, precision=6),
-            cudf.Scalar(decimal.Decimal("100.123")),
             cudf.Series([True, True, False, None], dtype=bool),
             cudf.Series([True, False, True, None], dtype=bool),
         ),
@@ -3200,7 +2418,7 @@ def generate_test_null_equals_columnops_data():
     "lcol,rcol,ans,case", generate_test_null_equals_columnops_data()
 )
 def test_null_equals_columnops(lcol, rcol, ans, case):
-    assert lcol.equals(rcol).all() == ans
+    assert lcol.equals(rcol) == ans
 
 
 def test_add_series_to_dataframe():
@@ -3318,16 +2536,6 @@ def test_binop_integer_power_series_series():
     assert_eq(expected, got)
 
 
-def test_binop_integer_power_series_scalar():
-    # GH: #10178
-    gs_base = cudf.Series([3, -3, 8, -8])
-    exponent = cudf.Scalar(1)
-    ps_base = gs_base.to_pandas()
-    expected = ps_base**exponent.value
-    got = gs_base**exponent
-    assert_eq(expected, got)
-
-
 def test_binop_integer_power_series_int():
     # GH: #10178
     gs_base = cudf.Series([3, -3, 8, -8])
@@ -3335,34 +2543,6 @@ def test_binop_integer_power_series_int():
     ps_base = gs_base.to_pandas()
     expected = ps_base**exponent
     got = gs_base**exponent
-    assert_eq(expected, got)
-
-
-def test_binop_integer_power_scalar_series():
-    # GH: #10178
-    base = cudf.Scalar(3)
-    gs_exponent = cudf.Series([1, 1, 7, 7])
-    ps_exponent = gs_exponent.to_pandas()
-    expected = base.value**ps_exponent
-    got = base**gs_exponent
-    assert_eq(expected, got)
-
-
-def test_binop_integer_power_scalar_scalar():
-    # GH: #10178
-    base = cudf.Scalar(3)
-    exponent = cudf.Scalar(1)
-    expected = base.value**exponent.value
-    got = base**exponent
-    assert_eq(expected, got)
-
-
-def test_binop_integer_power_scalar_int():
-    # GH: #10178
-    base = cudf.Scalar(3)
-    exponent = 1
-    expected = base.value**exponent
-    got = base**exponent
     assert_eq(expected, got)
 
 
@@ -3374,19 +2554,6 @@ def test_binop_integer_power_int_series():
     expected = base**ps_exponent
     got = base**gs_exponent
     assert_eq(expected, got)
-
-
-def test_binop_integer_power_int_scalar():
-    # GH: #10178
-    base = 3
-    exponent = cudf.Scalar(1)
-    expected = base**exponent.value
-    got = base**exponent
-    assert_eq(expected, got)
-
-
-def test_numpy_int_scalar_binop():
-    assert (np.float32(1.0) - cudf.Scalar(1)) == 0.0
 
 
 @pytest.mark.parametrize("op", _binops)
@@ -3444,3 +2611,35 @@ def test_binop_lhs_numpy_datetimelike_scalar(scalar):
     result = slr2 < cudf.Series([slr1])
     expected = slr2 < pd.Series([slr1])
     assert_eq(result, expected)
+
+
+@pytest.mark.parametrize("comp_op", _cmpops)
+@pytest.mark.parametrize("ordered", [True, False])
+@pytest.mark.parametrize(
+    "data_left, data_right",
+    [
+        [[1, 2], [1, 2]],
+        [[1, 2], [1, 3]],
+    ],
+)
+def test_cat_non_cat_compare_ops(comp_op, data_left, data_right, ordered):
+    pd_non_cat = pd.Series(data_left)
+    pd_cat = pd.Series(
+        data_right,
+        dtype=pd.CategoricalDtype(categories=data_right, ordered=ordered),
+    )
+
+    cudf_non_cat = cudf.Series.from_pandas(pd_non_cat)
+    cudf_cat = cudf.Series.from_pandas(pd_cat)
+
+    if (
+        not ordered and comp_op not in {operator.eq, operator.ne}
+    ) or comp_op in {operator.gt, operator.lt, operator.le, operator.ge}:
+        with pytest.raises(TypeError):
+            comp_op(pd_non_cat, pd_cat)
+        with pytest.raises(TypeError):
+            comp_op(cudf_non_cat, cudf_cat)
+    else:
+        expected = comp_op(pd_non_cat, pd_cat)
+        result = comp_op(cudf_non_cat, cudf_cat)
+        assert_eq(result, expected)

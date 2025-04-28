@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -356,7 +356,7 @@ struct expression_evaluator {
     IntermediateDataType<has_nulls>* thread_intermediate_storage) const
   {
     auto const typed_input =
-      resolve_input<Input>(input, thread_intermediate_storage, input_row_index);
+      resolve_input<Input>(input, thread_intermediate_storage, input_row_index, input_row_index);
     ast_operator_dispatcher(op,
                             unary_expression_output_handler<Input>{},
                             output_object,
@@ -452,7 +452,7 @@ struct expression_evaluator {
          ++operator_index) {
       // Execute operator
       auto const op    = plan.operators[operator_index];
-      auto const arity = ast_operator_arity(op);
+      auto const arity = plan.operator_arities[operator_index];
       if (arity == 1) {
         // Unary operator
         auto const& input =

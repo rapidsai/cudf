@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -249,6 +249,8 @@ class inline_column_buffer : public column_buffer_base<inline_column_buffer> {
   void create_string_data(size_t num_bytes,
                           bool is_large_strings_col,
                           rmm::cuda_stream_view stream);
+  void set_initial_string_offset(size_t offset) { initial_string_offset = offset; }
+
   void* string_data() { return _string_data.data(); }
   [[nodiscard]] void const* string_data() const { return _string_data.data(); }
   [[nodiscard]] size_t string_size() const { return _string_data.size(); }
@@ -257,6 +259,7 @@ class inline_column_buffer : public column_buffer_base<inline_column_buffer> {
  private:
   rmm::device_buffer _string_data{};
   bool _is_large_strings_col{};
+  size_t initial_string_offset{0};
 };
 
 using column_buffer = gather_column_buffer;

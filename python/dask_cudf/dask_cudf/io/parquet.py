@@ -11,31 +11,25 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import pandas as pd
-from dask_expr._expr import Elemwise
-from dask_expr._util import _convert_to_list
-from dask_expr.io.io import FusedIO, FusedParquetIO
-from dask_expr.io.parquet import (
-    FragmentWrapper,
-    ReadParquetFSSpec,
-    ReadParquetPyarrowFS,
-)
 
-from dask._task_spec import Task
+from dask._task_spec import List as TaskList, Task
 from dask.dataframe.io.parquet.arrow import _filters_to_expression
 from dask.dataframe.io.parquet.core import ParquetFunctionWrapper
 from dask.tokenize import tokenize
 from dask.utils import parse_bytes
 
-try:
-    # TODO: Remove try/except when dask>2024.11.2
-    from dask._task_spec import List as TaskList
-except ImportError:
-
-    def TaskList(*x):
-        return list(x)
-
-
 import cudf
+
+from dask_cudf._expr import (
+    Elemwise,
+    FragmentWrapper,
+    FusedIO,
+    FusedParquetIO,
+    ReadParquetFSSpec,
+    ReadParquetPyarrowFS,
+    _convert_to_list,
+    new_collection,
+)
 
 # Dask-expr imports CudfEngine from this module
 from dask_cudf._legacy.io.parquet import CudfEngine
@@ -698,7 +692,6 @@ def read_parquet_expr(
         using the ``read`` key-word argument.
     """
 
-    import dask_expr as dx
     from fsspec.utils import stringify_path
     from pyarrow import fs as pa_fs
 
@@ -785,7 +778,7 @@ def read_parquet_expr(
                 "parquet_file_extension is not supported when using the pyarrow filesystem."
             )
 
-        return dx.new_collection(
+        return new_collection(
             NoOp(
                 CudfReadParquetPyarrowFS(
                     path,
@@ -806,7 +799,7 @@ def read_parquet_expr(
             )
         )
 
-    return dx.new_collection(
+    return new_collection(
         NoOp(
             CudfReadParquetFSSpec(
                 path,

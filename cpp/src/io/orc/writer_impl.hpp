@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -40,37 +40,12 @@
 
 namespace cudf::io::orc::detail {
 // Forward internal classes
-class orc_column_view;
+class orc_table_view;
 
 using namespace cudf::io::detail;
 using cudf::detail::device_2dspan;
 using cudf::detail::host_2dspan;
 using cudf::detail::hostdevice_2dvector;
-
-/**
- * Non-owning view of a cuDF table that includes ORC-related information.
- *
- * Columns hierarchy is flattened and stored in pre-order.
- */
-struct orc_table_view {
-  std::vector<orc_column_view> columns;
-  rmm::device_uvector<orc_column_device_view> d_columns;
-  std::vector<uint32_t> string_column_indices;
-  rmm::device_uvector<uint32_t> d_string_column_indices;
-
-  auto num_columns() const noexcept { return columns.size(); }
-  [[nodiscard]] size_type num_rows() const noexcept;
-  auto num_string_columns() const noexcept { return string_column_indices.size(); }
-
-  auto& column(uint32_t idx) { return columns.at(idx); }
-  [[nodiscard]] auto const& column(uint32_t idx) const { return columns.at(idx); }
-
-  auto& string_column(uint32_t idx) { return columns.at(string_column_indices.at(idx)); }
-  [[nodiscard]] auto const& string_column(uint32_t idx) const
-  {
-    return columns.at(string_column_indices.at(idx));
-  }
-};
 
 /**
  * @brief Indices of rowgroups contained in a stripe.
@@ -136,7 +111,7 @@ struct file_segmentation {
  */
 struct encoded_data {
   std::vector<std::vector<rmm::device_uvector<uint8_t>>> data;  // Owning array of the encoded data
-  hostdevice_2dvector<gpu::encoder_chunk_streams> streams;  // streams of encoded data, per chunk
+  hostdevice_2dvector<encoder_chunk_streams> streams;  // streams of encoded data, per chunk
 };
 
 /**
@@ -168,7 +143,7 @@ struct intermediate_statistics {
 
   intermediate_statistics(orc_table_view const& table, rmm::cuda_stream_view stream);
 
-  intermediate_statistics(std::vector<ColStatsBlob> rb,
+  intermediate_statistics(std::vector<col_stats_blob> rb,
                           rmm::device_uvector<statistics_chunk> sc,
                           cudf::detail::hostdevice_vector<statistics_merge_group> smg,
                           std::vector<statistics_dtype> sdt,
@@ -182,7 +157,7 @@ struct intermediate_statistics {
   }
 
   // blobs for the rowgroups. Not persisted
-  std::vector<ColStatsBlob> rowgroup_blobs;
+  std::vector<col_stats_blob> rowgroup_blobs;
 
   rmm::device_uvector<statistics_chunk> stripe_stat_chunks;
   cudf::detail::hostdevice_vector<statistics_merge_group> stripe_stat_merge;
@@ -223,8 +198,8 @@ struct persisted_statistics {
  *
  */
 struct encoded_footer_statistics {
-  std::vector<ColStatsBlob> stripe_level;
-  std::vector<ColStatsBlob> file_level;
+  std::vector<col_stats_blob> stripe_level;
+  std::vector<col_stats_blob> file_level;
 };
 
 enum class writer_state {
@@ -309,8 +284,8 @@ class writer::impl {
                               orc_table_view const& orc_table,
                               device_span<uint8_t const> compressed_data,
                               host_span<compression_result const> comp_results,
-                              host_2dspan<gpu::StripeStream const> strm_descs,
-                              host_span<ColStatsBlob const> rg_stats,
+                              host_2dspan<stripe_stream const> strm_descs,
+                              host_span<col_stats_blob const> rg_stats,
                               orc_streams& streams,
                               host_span<StripeInformation> stripes,
                               host_span<uint8_t> bounce_buffer);
@@ -342,7 +317,7 @@ class writer::impl {
   // Writer options.
   stripe_size_limits const _max_stripe_size;
   size_type const _row_index_stride;
-  CompressionKind const _compression_kind;
+  compression_type const _compression;
   size_t const _compression_blocksize;
   std::shared_ptr<writer_compression_statistics> _compression_statistics;  // Optional output
   statistics_freq const _stats_freq;

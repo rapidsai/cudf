@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,6 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
+#include "strings/positions.hpp"
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
@@ -31,6 +33,8 @@
 #include <rmm/cuda_stream_view.hpp>
 
 #include <cuda/atomic>
+#include <cuda/std/functional>
+#include <cuda/std/iterator>
 #include <thrust/copy.h>
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
@@ -201,7 +205,7 @@ struct split_tokenizer_fn : base_split_tokenizer<split_tokenizer_fn> {
 
       // store the token into the output vector
       d_tokens[token_idx++] =
-        string_index_pair{str_ptr, static_cast<size_type>(thrust::distance(str_ptr, end_ptr))};
+        string_index_pair{str_ptr, static_cast<size_type>(cuda::std::distance(str_ptr, end_ptr))};
 
       // setup for next token
       str_ptr = end_ptr + delim_size;
@@ -209,7 +213,7 @@ struct split_tokenizer_fn : base_split_tokenizer<split_tokenizer_fn> {
     // include anything leftover
     if (token_idx < token_count) {
       d_tokens[token_idx] =
-        string_index_pair{str_ptr, static_cast<size_type>(thrust::distance(str_ptr, str_end))};
+        string_index_pair{str_ptr, static_cast<size_type>(cuda::std::distance(str_ptr, str_end))};
     }
   }
 
@@ -256,8 +260,8 @@ struct rsplit_tokenizer_fn : base_split_tokenizer<rsplit_tokenizer_fn> {
       auto const start_ptr = (token_idx + 1 < token_count) ? prev_delim : str_begin;
 
       // store the token into the output vector right-to-left
-      d_tokens[token_count - token_idx - 1] =
-        string_index_pair{start_ptr, static_cast<size_type>(thrust::distance(start_ptr, str_ptr))};
+      d_tokens[token_count - token_idx - 1] = string_index_pair{
+        start_ptr, static_cast<size_type>(cuda::std::distance(start_ptr, str_ptr))};
 
       // setup for next token
       str_ptr = start_ptr - delim_size;
@@ -265,8 +269,8 @@ struct rsplit_tokenizer_fn : base_split_tokenizer<rsplit_tokenizer_fn> {
     }
     // include anything leftover (rightover?)
     if (token_idx < token_count) {
-      d_tokens[0] =
-        string_index_pair{str_begin, static_cast<size_type>(thrust::distance(str_begin, str_ptr))};
+      d_tokens[0] = string_index_pair{
+        str_begin, static_cast<size_type>(cuda::std::distance(str_begin, str_ptr))};
     }
   }
 
@@ -277,23 +281,6 @@ struct rsplit_tokenizer_fn : base_split_tokenizer<rsplit_tokenizer_fn> {
   {
   }
 };
-
-/**
- * @brief Create offsets for position values within a strings column
- *
- * The positions usually identify target sub-strings in the input column.
- * The offsets identify the set of positions for each string row.
- *
- * @param input Strings column corresponding to the input positions
- * @param positions Indices of target bytes within the input column
- * @param stream CUDA stream used for device memory operations and kernel launches
- * @param mr Device memory resource used to allocate the returned objects' device memory
- * @return Offsets of the position values for each string in input
- */
-std::unique_ptr<column> create_offsets_from_positions(strings_column_view const& input,
-                                                      device_span<int64_t const> const& positions,
-                                                      rmm::cuda_stream_view stream,
-                                                      rmm::device_async_resource_ref mr);
 
 /**
  * @brief Count the number of delimiters in a strings column
@@ -325,7 +312,7 @@ CUDF_KERNEL void count_delimiters_kernel(Tokenizer tokenizer,
   for (auto i = byte_idx; (i < (byte_idx + bytes_per_thread)) && (i < chars_bytes); ++i) {
     count += tokenizer.is_delimiter(i, d_offsets, chars_bytes);
   }
-  auto const total = block_reduce(temp_storage).Reduce(count, cub::Sum());
+  auto const total = block_reduce(temp_storage).Reduce(count, cuda::std::plus());
 
   if ((lane_idx == 0) && (total > 0)) {
     cuda::atomic_ref<int64_t, cuda::thread_scope_device> ref{*d_output};
