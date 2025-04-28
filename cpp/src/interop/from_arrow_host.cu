@@ -279,10 +279,10 @@ std::unique_ptr<column> dispatch_copy_from_arrow_host::operator()<cudf::list_vie
                  "Large list offsets exceed 32-bit integer bounds",
                  std::overflow_error);
 
-    std::transform(large_offsets,
-                   large_offsets + physical_length,
-                   int32_offsets.begin(),
-                   [max_offset](int64_t offset) { return static_cast<int32_t>(offset); });
+    std::transform(
+      large_offsets, large_offsets + physical_length, int32_offsets.begin(), [](int64_t offset) {
+        return static_cast<int32_t>(offset);
+      });
 
     offsets_buffers[1] = int32_offsets.data();
 
