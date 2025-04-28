@@ -43,8 +43,16 @@ namespace cudf {
 
 namespace {
 
+/*
 struct mapping_functor {
   device_span<size_type> mapping;
+  __device__ size_type operator()(size_type idx) const noexcept { return mapping[idx]; }
+};
+*/
+
+template <typename T>
+struct mapping_functor {
+  T mapping;
   __device__ size_type operator()(size_type idx) const noexcept { return mapping[idx]; }
 };
 
@@ -256,6 +264,12 @@ merge<LargerIterator, SmallerIterator>::operator()(rmm::cuda_stream_view stream,
                     [sorted_smaller_order = sorted_smaller_order_begin] __device__(auto idx) {
                       return sorted_smaller_order[idx];
                     });
+  thrust::transform(
+    rmm::exec_policy_nosync(stream),
+    smaller_indices.begin(),
+    smaller_indices.end(),
+    smaller_indices.begin(),
+    mapping_functor<thrust::counting_iterator<size_type>>{sorted_smaller_order_begin});
 
   stream.synchronize();
   return {std::make_unique<rmm::device_uvector<size_type>>(std::move(smaller_indices)),
@@ -439,13 +453,13 @@ void sort_merge_join::postprocess_indices(device_span<size_type> smaller_indices
                           smaller_indices.begin(),
                           smaller_indices.end(),
                           smaller_indices.begin(),
-                          mapping_functor{left_mapping});
+                          mapping_functor<device_span<size_type>>{left_mapping});
       } else {
         thrust::transform(rmm::exec_policy_nosync(stream),
                           larger_indices.begin(),
                           larger_indices.end(),
                           larger_indices.begin(),
-                          mapping_functor{left_mapping});
+                          mapping_functor<device_span<size_type>>{left_mapping});
       }
     }
     if (is_right_nullable) {
@@ -455,13 +469,13 @@ void sort_merge_join::postprocess_indices(device_span<size_type> smaller_indices
                           larger_indices.begin(),
                           larger_indices.end(),
                           larger_indices.begin(),
-                          mapping_functor{right_mapping});
+                          mapping_functor<device_span<size_type>>{right_mapping});
       } else {
         thrust::transform(rmm::exec_policy_nosync(stream),
                           smaller_indices.begin(),
                           smaller_indices.end(),
                           smaller_indices.begin(),
-                          mapping_functor{right_mapping});
+                          mapping_functor<device_span<size_type>>{right_mapping});
       }
     }
   }
