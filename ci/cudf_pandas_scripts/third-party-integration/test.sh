@@ -23,6 +23,7 @@ main() {
 
     if [ "$RAPIDS_BUILD_TYPE" == "pull-request" ]; then
         rapids-logger "Downloading artifacts from this pr jobs"
+        source ./ci/use_conda_packages_from_prs.sh
         CPP_CHANNEL=$(rapids-download-conda-from-github cpp)
         PYTHON_CHANNEL=$(rapids-download-conda-from-github python)
     fi
@@ -42,9 +43,11 @@ main() {
                 --config "$dependencies_yaml" \
                 --output conda \
                 --file-key "test_${lib}" \
-                --matrix "cuda=${CUDA_VERSION};arch=$(arch);py=${RAPIDS_PY_VERSION}" \
                 --prepend-channel "${CPP_CHANNEL}" \
-                --prepend-channel "${PYTHON_CHANNEL}" | tee env.yaml
+                --prepend-channel "${PYTHON_CHANNEL}" \
+                --prepend-channel "${LIBRMM_CHANNEL}" \
+                --prepend-channel "${RMM_CHANNEL}" \
+                --matrix "cuda=${CUDA_VERSION};arch=$(arch);py=${RAPIDS_PY_VERSION}" | tee env.yaml
         else
             rapids-logger "Generate Python testing dependencies"
             rapids-dependency-file-generator \

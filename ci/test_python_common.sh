@@ -8,6 +8,7 @@ set -euo pipefail
 . /opt/conda/etc/profile.d/conda.sh
 
 rapids-logger "Downloading artifacts from previous jobs"
+source ./ci/use_conda_packages_from_prs.sh
 CPP_CHANNEL=$(rapids-download-conda-from-github cpp)
 PYTHON_CHANNEL=$(rapids-download-conda-from-github python)
 
@@ -25,6 +26,8 @@ done
 CMD="${CMD} \
   --prepend-channel \"${CPP_CHANNEL}\" \
   --prepend-channel \"${PYTHON_CHANNEL}\" \
+  --prepend-channel \"${LIBRMM_CHANNEL}\" \
+  --prepend-channel \"${RMM_CHANNEL}\" \
   --matrix \"cuda=${RAPIDS_CUDA_VERSION%.*};arch=$(arch);py=${RAPIDS_PY_VERSION};dependencies=${RAPIDS_DEPENDENCIES}\""
 
 eval ${CMD} | tee "${ENV_YAML_DIR}/env.yaml"

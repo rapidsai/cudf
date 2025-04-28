@@ -6,6 +6,7 @@ set -euo pipefail
 . /opt/conda/etc/profile.d/conda.sh
 
 rapids-logger "Downloading artifacts from previous jobs"
+source ./ci/use_conda_packages_from_prs.sh
 CPP_CHANNEL=$(rapids-download-conda-from-github cpp)
 
 rapids-logger "Generate Java testing dependencies"
@@ -16,6 +17,8 @@ rapids-dependency-file-generator \
   --output conda \
   --file-key test_java \
   --prepend-channel "${CPP_CHANNEL}" \
+  --prepend-channel "${LIBRMM_CHANNEL}" \
+  --prepend-channel "${RMM_CHANNEL}" \
   --matrix "cuda=${RAPIDS_CUDA_VERSION%.*};arch=$(arch)" | tee "${ENV_YAML_DIR}/env.yaml"
 
 rapids-mamba-retry env create --yes -f "${ENV_YAML_DIR}/env.yaml" -n test

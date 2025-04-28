@@ -15,7 +15,7 @@ rapids-generate-version > ./VERSION
 rapids-generate-version > ./python/cudf/cudf/VERSION
 
 rapids-logger "Begin py build"
-
+source ./ci/use_conda_packages_from_prs.sh
 CPP_CHANNEL=$(rapids-download-conda-from-github cpp)
 
 RAPIDS_PACKAGE_VERSION=$(head -1 ./VERSION)
@@ -24,8 +24,9 @@ export RAPIDS_PACKAGE_VERSION
 # populates `RATTLER_CHANNELS` array and `RATTLER_ARGS` array
 source rapids-rattler-channel-string
 
-rapids-logger "Prepending channel ${CPP_CHANNEL} to RATTLER_CHANNELS"
-
+rapids-logger "Prepending channel ${LIBRMM_CHANNEL}, ${RMM_CHANNEL}, ${CPP_CHANNEL} to RATTLER_CHANNELS"
+RATTLER_CHANNELS=("--channel" "${LIBRMM_CHANNEL}" "${RATTLER_CHANNELS[@]}")
+RATTLER_CHANNELS=("--channel" "${RMM_CHANNEL}" "${RATTLER_CHANNELS[@]}")
 RATTLER_CHANNELS=("--channel" "${CPP_CHANNEL}" "${RATTLER_CHANNELS[@]}")
 
 sccache --zero-stats

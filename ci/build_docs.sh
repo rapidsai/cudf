@@ -14,6 +14,7 @@ rapids-logger "Create test conda environment"
 ENV_YAML_DIR="$(mktemp -d)"
 
 rapids-logger "Downloading artifacts from previous jobs"
+source ./ci/use_conda_packages_from_prs.sh
 CPP_CHANNEL=$(rapids-download-conda-from-github cpp)
 PYTHON_CHANNEL=$(rapids-download-conda-from-github python)
 
@@ -22,6 +23,8 @@ rapids-dependency-file-generator \
   --file-key docs \
   --prepend-channel "${CPP_CHANNEL}" \
   --prepend-channel "${PYTHON_CHANNEL}" \
+  --prepend-channel "${LIBRMM_CHANNEL}" \
+  --prepend-channel "${RMM_CHANNEL}" \
   --matrix "cuda=${RAPIDS_CUDA_VERSION%.*};arch=$(arch);py=${RAPIDS_PY_VERSION}" | tee "${ENV_YAML_DIR}/env.yaml"
 
 rapids-mamba-retry env create --yes -f "${ENV_YAML_DIR}/env.yaml" -n docs
