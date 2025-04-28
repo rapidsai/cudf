@@ -35,6 +35,7 @@
 #include <thrust/iterator/transform_output_iterator.h>
 #include <thrust/sort.h>
 #include <thrust/transform.h>
+#include <thrust/uninitialized_fill.h>
 #include <thrust/unique.h>
 
 #include <utility>
@@ -236,7 +237,8 @@ merge<LargerIterator, SmallerIterator>::operator()(rmm::cuda_stream_view stream,
 
   // populate smaller indices
   rmm::device_uvector<size_type> smaller_indices(total_matches, stream, mr);
-  thrust::fill(rmm::exec_policy_nosync(stream), smaller_indices.begin(), smaller_indices.end(), 1);
+  thrust::uninitialized_fill(
+    rmm::exec_policy_nosync(stream), smaller_indices.begin(), smaller_indices.end(), 1);
   auto smaller_tabulate_it = thrust::tabulate_output_iterator(
     [nonzero_matches = nonzero_matches.begin(),
      match_counts    = match_counts.begin(),
