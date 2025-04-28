@@ -42,7 +42,7 @@ def _(
             # Use rough 1m-row heuristic to set n_ary
             n_ary = max(int(1_000_000 / ir.zlice[1]), 2)
             output_count = 1
-        else:
+        else:  # pragma: no cover
             # Slice is not head or tail - Can this happen?
             return _lower_ir_fallback(
                 ir, rec, msg="Unsupported slice for multiple partitions."
