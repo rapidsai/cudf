@@ -7,8 +7,6 @@ from __future__ import annotations
 import operator
 from typing import TYPE_CHECKING, Any
 
-import pyarrow as pa
-
 import pylibcudf as plc
 import rmm.mr
 from rmm.pylibrmm.stream import DEFAULT_STREAM
@@ -152,7 +150,7 @@ def _partition_dataframe(
         plc.hashing.murmurhash3_x86_32(
             DataFrame([expr.evaluate(df) for expr in keys]).table
         ),
-        plc.interop.from_arrow(pa.scalar(count, type="uint32")),
+        plc.Scalar.from_py(count, plc.DataType(plc.TypeId.UINT32)),
         plc.binaryop.BinaryOperator.PYMOD,
         plc.types.DataType(plc.types.TypeId.UINT32),
     )
@@ -235,7 +233,11 @@ def _(
     ir: Shuffle, partition_info: MutableMapping[IR, PartitionInfo]
 ) -> MutableMapping[Any, Any]:
     # Extract "shuffle_method" configuration
-    shuffle_method = ir.config_options.get("executor_options.shuffle_method")
+    assert ir.config_options.executor.name == "streaming", (
+        "'in-memory' executor not supported in 'generate_ir_tasks'"
+    )
+
+    shuffle_method = ir.config_options.executor.shuffle_method
 
     # Try using rapidsmpf shuffler if we have "simple" shuffle
     # keys, and the "shuffle_method" config is set to "rapidsmpf"
