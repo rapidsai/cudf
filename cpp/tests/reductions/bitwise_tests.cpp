@@ -31,7 +31,7 @@ template <typename T>
 class BitwiseAggTypedTest : public BitwiseAggregationTest {};
 
 // Test types for bitwise operations - only integer types
-TYPED_TEST_SUITE(BitwiseAggTypedTest, cudf::test::IntegralTypesNotBool);
+TYPED_TEST_SUITE(BitwiseAggTypedTest, cudf::test::IntegralTypes);
 
 // Basic bitwise AND test
 TYPED_TEST(BitwiseAggTypedTest, BitwiseAND)
@@ -39,10 +39,18 @@ TYPED_TEST(BitwiseAggTypedTest, BitwiseAND)
   using T = TypeParam;
 
   // Test data
-  auto const input_col = column<T>{0x1F, 0x0F, 0x33, 0x55, 0x2F, 0x3F};
+  auto const input_data = [] {
+    if constexpr (std::is_same_v<T, bool>) {
+      return std::vector<T>{true, false, true, true, true, true};
+    } else {
+      return std::vector<T>{0x1F, 0x0F, 0x33, 0x55, 0x2F, 0x3F};
+    }
+  }();
+  auto const input_col = column<T>(input_data.begin(), input_data.end());
 
   // Expected result - bitwise AND of all values
-  auto const expected = T{0x1F & 0x0F & 0x33 & 0x55 & 0x2F & 0x3F};
+  auto const expected = static_cast<T>(input_data[0] & input_data[1] & input_data[2] &
+                                       input_data[3] & input_data[4] & input_data[5]);
 
   // Create and execute aggregation
   auto const agg = cudf::make_bitwise_aggregation<cudf::reduce_aggregation>(cudf::bitwise_op::AND);
@@ -58,10 +66,18 @@ TYPED_TEST(BitwiseAggTypedTest, BitwiseOR)
   using T = TypeParam;
 
   // Test data
-  auto const input_col = column<T>{0x10, 0x0F, 0x33, 0x40, 0x4F, 0x01};
+  auto const input_data = [] {
+    if constexpr (std::is_same_v<T, bool>) {
+      return std::vector<T>{true, false, true, true, true, true};
+    } else {
+      return std::vector<T>{0x10, 0x0F, 0x33, 0x40, 0x4F, 0x01};
+    }
+  }();
+  auto const input_col = column<T>(input_data.begin(), input_data.end());
 
   // Expected result - bitwise OR of all values
-  auto const expected = T{0x10 | 0x0F | 0x33 | 0x40 | 0x4F | 0x01};
+  auto const expected = static_cast<T>(input_data[0] | input_data[1] | input_data[2] |
+                                       input_data[3] | input_data[4] | input_data[5]);
 
   // Create and execute aggregation
   auto const agg = cudf::make_bitwise_aggregation<cudf::reduce_aggregation>(cudf::bitwise_op::OR);
@@ -77,10 +93,18 @@ TYPED_TEST(BitwiseAggTypedTest, BitwiseXOR)
   using T = TypeParam;
 
   // Test data
-  auto const input_col = column<T>{0x10, 0x0F, 0x33, 0x40, 0x4F, 0x01};
+  auto const input_data = [] {
+    if constexpr (std::is_same_v<T, bool>) {
+      return std::vector<T>{true, false, true, true, true, true};
+    } else {
+      return std::vector<T>{0x10, 0x0F, 0x33, 0x40, 0x4F, 0x01};
+    }
+  }();
+  auto const input_col = column<T>(input_data.begin(), input_data.end());
 
   // Expected result - bitwise XOR of all values
-  auto const expected = T{0x10 ^ 0x0F ^ 0x33 ^ 0x40 ^ 0x4F ^ 0x01};
+  auto const expected = static_cast<T>(input_data[0] ^ input_data[1] ^ input_data[2] ^
+                                       input_data[3] ^ input_data[4] ^ input_data[5]);
 
   // Create and execute aggregation
   auto const agg = cudf::make_bitwise_aggregation<cudf::reduce_aggregation>(cudf::bitwise_op::XOR);
@@ -96,14 +120,24 @@ TYPED_TEST(BitwiseAggTypedTest, WithNulls)
   using T = TypeParam;
 
   // Test data with nulls
-  auto const input_data = std::vector<T>{0x1F, 0x0F, 0x33, 0x55, 0x2F, 0x3F};
-  auto const validity   = std::vector<bool>{true, true, false, true, true, true};
-  auto const input_col  = column<T>{input_data.begin(), input_data.end(), validity.begin()};
+  auto const input_data = [] {
+    if constexpr (std::is_same_v<T, bool>) {
+      return std::vector<T>{true, true, false, true, true, true};
+    } else {
+      return std::vector<T>{0x1F, 0x0F, 0x33, 0x55, 0x2F, 0x3F};
+    }
+  }();
+  // If T is bool, null is at the position of a false value.
+  auto const validity  = std::vector<bool>{true, true, false, true, true, true};
+  auto const input_col = column<T>(input_data.begin(), input_data.end(), validity.begin());
 
   // Expected results - null values should be excluded
-  auto const expected_and = T{0x1F & 0x0F & 0x55 & 0x2F & 0x3F};
-  auto const expected_or  = T{0x1F | 0x0F | 0x55 | 0x2F | 0x3F};
-  auto const expected_xor = T{0x1F ^ 0x0F ^ 0x55 ^ 0x2F ^ 0x3F};
+  auto const expected_and =
+    static_cast<T>(input_data[0] & input_data[1] & input_data[3] & input_data[4] & input_data[5]);
+  auto const expected_or =
+    static_cast<T>(input_data[0] | input_data[1] | input_data[3] | input_data[4] | input_data[5]);
+  auto const expected_xor =
+    static_cast<T>(input_data[0] ^ input_data[1] ^ input_data[3] ^ input_data[4] ^ input_data[5]);
 
   // Create and execute aggregations
   auto const agg_and =
@@ -195,9 +229,9 @@ TYPED_TEST(BitwiseAggTypedTest, AllNulls)
 {
   using T = TypeParam;
 
-  auto const input_data = std::vector<T>{0x1F, 0x0F, 0x33};
+  auto const input_data = std::vector<T>{0, 0, 0};
   auto const validity   = std::vector<bool>{false, false, false};
-  auto const input_col  = column<T>{input_data.begin(), input_data.end(), validity.begin()};
+  auto const input_col  = column<T>(input_data.begin(), input_data.end(), validity.begin());
 
   // Create aggregations
   auto const agg_and =
@@ -224,7 +258,7 @@ TYPED_TEST(BitwiseAggTypedTest, SingleRow)
   using T = TypeParam;
 
   // Column with a single value
-  auto const single_value = T{0x42};
+  auto const single_value = static_cast<T>(0x42);
   auto const single_col   = column<T>{single_value};
 
   // Create aggregations
