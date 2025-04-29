@@ -18,22 +18,13 @@ echo "libcudf-${RAPIDS_PY_CUDA_SUFFIX} @ file://$(echo ${LIBCUDF_WHEELHOUSE}/lib
 echo "pylibcudf-${RAPIDS_PY_CUDA_SUFFIX} @ file://$(echo ${PYLIBCUDF_WHEELHOUSE}/pylibcudf_*.whl)" >> /tmp/constraints.txt
 export PIP_CONSTRAINT="/tmp/constraints.txt"
 
-# ci/use_wheels_from_prs.sh
-RAPIDS_PY_CUDA_SUFFIX=$(rapids-wheel-ctk-name-gen "${RAPIDS_CUDA_VERSION}")
-
-# download wheels, store the directories holding them in variables
-LIBKVIKIO_WHEELHOUSE=$(
-  RAPIDS_PY_WHEEL_NAME="libkvikio_${RAPIDS_PY_CUDA_SUFFIX}" rapids-get-pr-wheel-artifact-github kvikio 702 cpp
-)
-KVIKIO_WHEELHOUSE=$(
-  RAPIDS_PY_WHEEL_NAME="kvikio_${RAPIDS_PY_CUDA_SUFFIX}" rapids-get-pr-wheel-artifact-github kvikio 702 python
-)
-
-# write a pip constraints file saying e.g. "whenever you encounter a requirement for 'librmm-cu12', use this wheel"
-cat >> /tmp/constraints.txt <<EOF
-libkvikio-${RAPIDS_PY_CUDA_SUFFIX} @ file://$(echo ${LIBKVIKIO_WHEELHOUSE}/libkvikio_*.whl)
-kvikio-${RAPIDS_PY_CUDA_SUFFIX} @ file://$(echo ${KVIKIO_WHEELHOUSE}/kvikio_*.whl)
-EOF
+set -x
+#kvikio_wheel_cpp_libkvikio_cu11_aarch64.tar.gz
+LIBKVIKIO_WHL="libkvikio_${RAPIDS_PY_CUDA_SUFFIX}-25.6.0a32-py3-none-${AUDITWHEEL_PLAT}.whl"
+LIBKVIKIO_TARBALL="kvikio_wheel_cpp_libkvikio_${RAPIDS_PY_CUDA_SUFFIX}_${AUDITWHEEL_ARCH}.tar.gz"
+LIBKVIKIO_DIR=$(rapids-get-artifact "ci/kvikio/pull-request/702/7f957eb/${LIBKVIKIO_TARBALL}")
+echo "libkvikio-${RAPIDS_PY_CUDA_SUFFIX} @ file://${LIBKVIKIO_DIR}/${LIBKVIKIO_WHL}" >> /tmp/constraints.txt
+set +x
 
 ./ci/build_wheel.sh cudf ${package_dir}
 
