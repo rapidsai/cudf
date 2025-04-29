@@ -68,7 +68,7 @@ def decompose_single_agg(
     if isinstance(agg, expr.Col):
         return [named_expr], named_expr, False
     if isinstance(agg, expr.Len):
-        return [named_expr], expr.NamedExpr(name, expr.Col(agg.dtype, name)), True
+        return [named_expr], named_expr.reconstruct(expr.Col(agg.dtype, name)), True
     if isinstance(agg, (expr.Literal, expr.LiteralColumn)):
         return [], named_expr, False
     if isinstance(agg, expr.Agg):
@@ -90,8 +90,8 @@ def decompose_single_agg(
             # (potentially masked) child. This is safe because we recursed
             # to ensure there are no nested aggregations.
             return (
-                [expr.NamedExpr(name, agg.reconstruct([child]))],
-                expr.NamedExpr(name, expr.Col(agg.dtype, name)),
+                [named_expr.reconstruct(agg.reconstruct([child]))],
+                named_expr.reconstruct(expr.Col(agg.dtype, name)),
                 True,
             )
         elif agg.name == "sum":
@@ -111,16 +111,15 @@ def decompose_single_agg(
                 )
                 return (
                     [named_expr],
-                    expr.NamedExpr(
-                        name,
-                        expr.UnaryFunction(agg.dtype, "fill_null", (), col, rep),
+                    named_expr.reconstruct(
+                        expr.UnaryFunction(agg.dtype, "fill_null", (), col, rep)
                     ),
                     True,
                 )
             else:
                 return [named_expr], expr.NamedExpr(name, col), True
         else:
-            return [named_expr], expr.NamedExpr(name, expr.Col(agg.dtype, name)), True
+            return [named_expr], named_expr.reconstruct(expr.Col(agg.dtype, name)), True
     if isinstance(agg, expr.Ternary):
         raise NotImplementedError("Ternary inside groupby")
     if agg.is_pointwise:
@@ -134,12 +133,16 @@ def decompose_single_agg(
             # post-evaluation (if outside an aggregation).
             return (
                 aggs,
-                expr.NamedExpr(name, agg.reconstruct([p.value for p in posts])),
+                named_expr.reconstruct(agg.reconstruct([p.value for p in posts])),
                 True,
             )
         else:
             # Or pre-evaluation if inside an aggregation.
-            return [named_expr], expr.NamedExpr(name, expr.Col(agg.dtype, name)), False
+            return (
+                [named_expr],
+                named_expr.reconstruct(expr.Col(agg.dtype, name)),
+                False,
+            )
     raise NotImplementedError(f"No support for {type(agg)} in groupby")
 
 
@@ -248,10 +251,7 @@ def apply_pre_evaluation(
     aggs = list(dict.fromkeys(aggs).keys())
     if any(not isinstance(e.value, expr.Col) for e in post):
         selection = [
-            *(
-                expr.NamedExpr(key.name, expr.Col(key.value.dtype, key.name))
-                for key in keys
-            ),
+            *(key.reconstruct(expr.Col(key.value.dtype, key.name)) for key in keys),
             *extra_columns,
             *post,
         ]
