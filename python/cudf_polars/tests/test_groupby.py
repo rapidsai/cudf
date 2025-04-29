@@ -66,6 +66,7 @@ def keys(request):
         ["int"],
         ["float", "int"],
         [pl.col("float") + pl.col("int")],
+        [pl.col("float").is_not_null()],
         [pl.col("int32").sum()],
         [pl.col("int32").mean()],
         [
