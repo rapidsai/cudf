@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -95,6 +95,8 @@ std::unique_ptr<column> rolling_window(column_view const& input,
                                        rolling_aggregation const& agg,
                                        rmm::cuda_stream_view stream,
                                        rmm::device_async_resource_ref mr);
+
+bool is_valid_rolling_aggregation(data_type input_type, aggregation::Kind kind);
 }  // namespace detail
 
 }  // namespace cudf
