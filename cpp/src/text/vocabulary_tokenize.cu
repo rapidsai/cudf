@@ -373,7 +373,7 @@ std::unique_ptr<cudf::column> tokenize_with_vocabulary(cudf::strings_column_view
   if ((input.chars_size(stream) / (input.size() - input.null_count())) < AVG_CHAR_BYTES_THRESHOLD) {
     auto const zero_itr = thrust::make_counting_iterator<cudf::size_type>(0);
     auto d_sizes        = rmm::device_uvector<cudf::size_type>(input.size(), stream);
-    thrust::transform(rmm::exec_policy(stream),
+    thrust::transform(rmm::exec_policy_nosync(stream),
                       zero_itr,
                       zero_itr + input.size(),
                       d_sizes.begin(),
