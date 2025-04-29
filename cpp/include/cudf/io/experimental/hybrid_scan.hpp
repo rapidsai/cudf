@@ -72,7 +72,7 @@ class hybrid_scan_reader {
    *
    * Start with an instance of the experimental reader with a span of parquet file footer
    * bytes and parquet reader options.
-   * @code
+   * @code{.pseudo}
    *   // Example filter expression `A < 100`
    *   auto filter_expression = cudf::ast::operation(cudf::ast::ast_operator::LESS,
    *                              column_name_reference{"A"}, literal{100});
@@ -81,19 +81,32 @@ class hybrid_scan_reader {
    *                    .filter(filter_expression);
    *
    *  // Create an instance of the reader using parquet footer bytes and parquet reader options
+   *  cudf::host_span<uint8_t const> footer_bytes = fetch_parquet_footer_bytes();
    *  auto reader =
    * std::make_unique<cudf::io::parquet::experimental::hybrid_scan_reader>(footer_bytes, options);
    * @endcode
    *
-   * Metadata handling (OPTIONAL): get a materialized parquet file footer metadata struct
-   * (`FileMetaData`) from the reader to get insights into the parquet data as needed.
-   * @code
+   * Metadata handling (OPTIONAL): Get a materialized parquet file footer metadata struct
+   * (`FileMetaData`) from the reader to get insights into the parquet data as needed. Optionally,
+   * set up the page index to materialize page level stats used for data page pruning.
+   * @code{.psuedo}
    * // Get Parquet file metadata from the reader
    * auto parquet_metadata = reader->parquet_metadata();
    *
    * // Example metadata use: Calculate the number of rows in the file
    * auto total_rows = std::accumulate(parquet_metadata.row_groups.begin(),
    *                parquet_metadata.row_groups.end(), [](auto const& rg) { return rg.num_rows; });
+   *
+   * // Get the page index byte range from the reader
+   * auto page_index_byte_range = reader->page_index_byte_range();
+   *
+   * // Fetch the page index bytes from the parquet file and setup page index
+   * cudf::host_span<uint8_t const> page_index_bytes = fetch_parquet_bytes(page_index_byte_range);
+   * fetch_bytes_from_parquet(page_index_byte_range); reader->setup_page_index(page_index_bytes);
+   *
+   * // A new `FileMetaData` struct with the page index structs also materialized may be obtained at
+   * // this point using the `reader->parquet_metadata()` Page index may be set up at any time.
+   * auto parquet_metadata_with_page_index = reader->parquet_metadata();
    * @endcode
    *
    * Row group pruning (OPTIONAL): Start with either a list of custom or all row group indices in
@@ -102,7 +115,7 @@ class hybrid_scan_reader {
    * bloom filters within parquet file may be obtained via `secondary_filters_byte_ranges()`
    * function. The byte ranges may be read into a corresponding vector of device buffers and passed
    * to the corresponding row group filtration function.
-   * @code
+   * @code{.pseudo}
    * // Get a list of all parquet row group indices from the file footer
    * auto all_row_group_indices = reader->all_row_groups(options);
    *
@@ -125,12 +138,11 @@ class hybrid_scan_reader {
    * auto dictionary_page_filtered_row_group_indices = std::vector<cudf::size_type>{};
    * if (dict_page_byte_ranges.size()) {
    *   std::vector<rmm::device_buffer> dictionary_page_data =
-   *     fetch_byte_ranges(dict_page_byte_ranges);
-   *
+   *     fetch_device_buffers(dict_page_byte_ranges);
    *   dictionary_page_filtered_row_group_indices = reader->filter_row_groups_with_dictionary_pages(
    *     dictionary_page_data, current_row_group_indices, options, stream);
    *
-   *   // Update current row group indices
+   *   // Update current row group indices to dictionary page filtered row group indices
    *   current_row_group_indices = dictionary_page_filtered_row_group_indices;
    * }
    *
@@ -138,12 +150,11 @@ class hybrid_scan_reader {
    * auto bloom_filtered_row_group_indices = std::vector<cudf::size_type>{};
    * if (bloom_filter_byte_ranges.size()) {
    *   std::vector<rmm::device_buffer> bloom_filter_data =
-   *     fetch_byte_ranges(bloom_filter_byte_ranges);
-   *
+   *     fetch_device_buffers(bloom_filter_byte_ranges);
    *   bloom_filtered_row_group_indices = reader->filter_row_groups_with_bloom_filters(
    *     bloom_filter_data, current_row_group_indices, options, stream);
    *
-   *   // Update current row group indices
+   *   // Update current row group indices to bloom filtered row group indices
    *   current_row_group_indices = bloom_filtered_row_group_indices;
    * }
    * @endcode
@@ -151,21 +162,16 @@ class hybrid_scan_reader {
    * Filter column page pruning (OPTIONAL): Once the row groups are filtered, the next step is to
    * optionally prune the data pages within the current span of row groups subject to the same
    * filter expression using page statistics contained in the page index of the parquet file. To
-   * get started, first set up the page index using the `set_page_index()` function and then filter
-   * the data pages using the `filter_data_pages_with_stats()` function. This function returns a row
-   * mask. i.e. BOOL8 column indicating which rows may survive in the materialized table of filter
-   * columns (first reader pass), and a data page mask. i.e. a vector of boolean host vectors
-   * indicating which data pages for each filter column need to be processed to materialize the
-   * table filter columns (first reader pass).
-   * @code
-   * // Get the page index byte range from the reader
+   * get started, first set up the page index using the `set_page_index()` function if not
+   * previously done and then filter the data pages using the `filter_data_pages_with_stats()`
+   * function. This function returns a row mask. i.e. BOOL8 column indicating which rows may survive
+   * in the materialized table of filter columns (first reader pass), and a data page mask. i.e. a
+   * vector of boolean host vectors indicating which data pages for each filter column need to be
+   * processed to materialize the table filter columns (first reader pass).
+   * @code{.pseudo}
+   * // If not already done, fetch page index bytes and set up the page index
    * auto page_index_byte_range = reader->page_index_byte_range();
-   *
-   * // Note: Calling `reader->parquet_metadata()` after calling `setup_page_index()` will return a
-   * // new `FileMetaData` struct with the page index structs also materialized. Also note that the
-   * // page index may be set up at any time during the read process.
-   *
-   * // Fetch the byte range in a host span and setup the page index
+   * cudf::host_span<uint8_t const> page_index_bytes = fetch_parquet_bytes(page_index_byte_range);
    * reader->setup_page_index(page_index_bytes);
    *
    * // Filter data pages with statistics in page index
@@ -186,14 +192,14 @@ class hybrid_scan_reader {
    * containing all `true` values as row mask. Further, the byte ranges for the required column
    * chunk data may be obtained using the `filter_column_chunks_byte_ranges()` function and read
    * into a corresponding vector of vectors of device buffers.
-   * @code
+   * @code{.pseudo}
    * // Get byte ranges of column chunk byte ranges from the reader
    * auto const filter_column_chunk_byte_ranges =
    *   reader->filter_column_chunks_byte_ranges(current_row_group_indices, options);
    *
    * // Fetch column chunk device buffers from the input buffer
    * auto filter_column_chunk_buffers =
-   *   fetch_byte_ranges(filter_column_chunk_byte_ranges);
+   *   fetch_device_buffers(filter_column_chunk_byte_ranges);
    *
    * // Materialize the table with only the filter columns
    * auto [filter_table, filter_metadata] =
@@ -214,16 +220,16 @@ class hybrid_scan_reader {
    * columns. Similar to filter columns materialization, the byte ranges for the required column
    * chunk data may be obtained using the `payload_column_chunks_byte_ranges()` function, read into
    * a vector of device buffers and read into a corresponding vector of vectors of device buffers.
-   * @code
-   * // Get column chunk byte ranges from the reader - API # 12
+   * @code{.pseudo}
+   * // Get column chunk byte ranges from the reader
    * auto const payload_column_chunk_byte_ranges =
    *   reader->payload_column_chunks_byte_ranges(current_row_group_indices, options);
    *
    * // Fetch column chunk device buffers from the input buffer
    * auto payload_column_chunk_buffers =
-   *   fetch_byte_ranges(file_buffer_span, payload_column_chunk_byte_ranges, stream, mr);
+   *   fetch_device_buffers(file_buffer_span, payload_column_chunk_byte_ranges, stream, mr);
    *
-   * // Materialize the table with only the payload columns - API # 13
+   * // Materialize the table with only the payload columns
    * auto [payload_table, payload_metadata] =
    *   reader->materialize_payload_columns(current_row_group_indices,
    *                                       std::move(payload_column_chunk_buffers),
