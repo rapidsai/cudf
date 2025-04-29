@@ -150,9 +150,9 @@ def get_scheduler(config_options: ConfigOptions) -> Any:
         SerializerManager.run_on_cluster(client)
         return client.get
     elif scheduler == "synchronous":
-        from dask import get
+        from cudf_polars.experimental.scheduler import synchronous_scheduler
 
-        return get
+        return synchronous_scheduler
     else:  # pragma: no cover
         raise ValueError(f"{scheduler} not a supported scheduler option.")
 
