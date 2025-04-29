@@ -602,6 +602,12 @@ std::vector<size_type> hybrid_scan_reader_impl::all_row_groups(
   return row_groups_indices;
 }
 
+size_type hybrid_scan_reader_impl::num_rows_in_row_groups(
+  cudf::host_span<std::vector<size_type> const> row_group_indices) const
+{
+  return _metadata->num_rows_in_row_groups(row_group_indices);
+}
+
 std::vector<std::vector<size_type>> hybrid_scan_reader_impl::filter_row_groups_with_stats(
   cudf::host_span<std::vector<size_type> const> row_group_indices,
   parquet_reader_options const& options,
@@ -815,6 +821,11 @@ table_with_metadata hybrid_scan_reader_impl::materialize_filter_columns(
   initialize_options(row_group_indices, options, stream);
 
   CUDF_EXPECTS(_expr_conv.get_converted_expr().has_value(), "Filter expression must not be empty");
+
+  // If the data page mask is empty, reset the row mask to all valid
+  if (data_page_mask.empty()) {
+    cudf::set_null_mask(row_mask.data<bitmask_type>(), 0, row_mask.size(), true);
+  }
 
   prepare_data(row_group_indices, std::move(column_chunk_buffers), data_page_mask, options);
 
@@ -1152,15 +1163,9 @@ void hybrid_scan_reader_impl::set_page_mask(
 
       for (size_t chunk_idx = col_idx; chunk_idx < chunks.size(); chunk_idx += num_columns) {
         if (chunks[chunk_idx].num_dict_pages > 0) { _page_mask.push_back(true); }
-        // If the page mask of a particular column is empty, require all its data pages
-        if (col_page_mask.empty()) {
-          _page_mask.insert(_page_mask.end(), chunks[chunk_idx].num_data_pages, true);
-          num_inserted_pages += chunks[chunk_idx].num_data_pages;
-          continue;
-        }
-        // Otherwise, sanity check the columnpage mask and insert
+        // Sanitize the column's page mask and insert
         CUDF_EXPECTS(col_page_mask.size() >= num_inserted_pages + chunks[chunk_idx].num_data_pages,
-                     "Encountered unavailable mask for data pages");
+                     "Encountered invalid data page mask size");
         _page_mask.insert(
           _page_mask.end(),
           col_page_mask.begin() + num_inserted_pages,
@@ -1168,7 +1173,7 @@ void hybrid_scan_reader_impl::set_page_mask(
         num_inserted_pages += chunks[chunk_idx].num_data_pages;
       }
       CUDF_EXPECTS(num_inserted_pages == col_page_mask.size(),
-                   "Encountered mismatch in data pages and mask sizes");
+                   "Encountered mismatch in number of data pages and page mask size");
     });
 }
 

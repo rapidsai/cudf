@@ -112,6 +112,15 @@ class hybrid_scan_reader {
     cudf::io::parquet_reader_options const& options) const;
 
   /**
+   * @brief Get the total number of rows in the row groups
+   *
+   * @param row_group_indices Input row groups indices
+   * @return Total number of rows in the row groups
+   */
+  [[nodiscard]] size_type num_rows_in_row_groups(
+    cudf::host_span<size_type const> row_group_indices) const;
+
+  /**
    * @brief Filter the row groups with statistics
    *
    * @param row_group_indices Input row groups indices
@@ -167,7 +176,7 @@ class hybrid_scan_reader {
     rmm::cuda_stream_view stream) const;
 
   /**
-   * @brief Filter data pages of filter columns using statistics containing in `PageIndex` metadata
+   * @brief Filter data pages of filter columns using statistics containing in page index metadata
    *
    * @param row_group_indices Input row groups indices
    * @param options Parquet reader options
@@ -195,13 +204,13 @@ class hybrid_scan_reader {
     cudf::io::parquet_reader_options const& options) const;
 
   /**
-   * @brief Materializes filter columns, and updates the input row validity mask to only the rows
-   *        that survive the row selection predicate at row level
+   * @brief Materializes filter columns and updates the input row mask to only the rows
+   *        that exist in the output table
    *
-   * @param page_mask Boolean vectors indicating data pages are not pruned, one per filter column
+   * @param page_mask Boolean vectors indicating surviving data pages, one per filter column
    * @param row_group_indices Input row groups indices
    * @param column_chunk_buffers Device buffers containing column chunk data of filter columns
-   * @param[in,out] row_mask Mutable boolean column indicating rows that survive page-pruning
+   * @param[in,out] row_mask Mutable boolean column indicating surviving rows so far
    * @param options Parquet reader options
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @return Table of materialized filter columns and metadata
@@ -226,7 +235,7 @@ class hybrid_scan_reader {
     parquet_reader_options const& options) const;
 
   /**
-   * @brief Materializes payload columns
+   * @brief Materializes payload columns and applies the row mask to the output table
    *
    * @param row_group_indices Input row groups indices
    * @param column_chunk_buffers Device buffers containing column chunk data of payload columns
