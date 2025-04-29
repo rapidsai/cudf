@@ -270,7 +270,11 @@ struct DeviceBitAnd {
   template <typename T, std::enable_if_t<std::is_integral_v<T>>* = nullptr>
   CUDF_HOST_DEVICE static constexpr T identity()
   {
-    return ~T{0};
+    if constexpr (std::is_same_v<T, bool>) {
+      return true;
+    } else {
+      return ~T{0};
+    }
   }
 
   template <typename T, std::enable_if_t<!std::is_integral_v<T>>* = nullptr>
