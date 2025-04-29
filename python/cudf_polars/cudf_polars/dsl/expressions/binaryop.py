@@ -16,8 +16,6 @@ from cudf_polars.containers import Column
 from cudf_polars.dsl.expressions.base import ExecutionContext, Expr
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
-
     from cudf_polars.containers import DataFrame
 
 __all__ = ["BinOp"]
@@ -85,17 +83,10 @@ class BinOp(Expr):
     }
 
     def do_evaluate(
-        self,
-        df: DataFrame,
-        *,
-        context: ExecutionContext = ExecutionContext.FRAME,
-        mapping: Mapping[Expr, Column] | None = None,
+        self, df: DataFrame, *, context: ExecutionContext = ExecutionContext.FRAME
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
-        left, right = (
-            child.evaluate(df, context=context, mapping=mapping)
-            for child in self.children
-        )
+        left, right = (child.evaluate(df, context=context) for child in self.children)
         lop = left.obj
         rop = right.obj
         if left.size != right.size:
