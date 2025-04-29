@@ -37,11 +37,6 @@ class SingleColumnFrame(Frame, NotIterable):
     share certain logic that is encoded in this class.
     """
 
-    _SUPPORT_AXIS_LOOKUP = {
-        0: 0,
-        "index": 0,
-    }
-
     @_performance_tracking
     def _reduce(
         self,

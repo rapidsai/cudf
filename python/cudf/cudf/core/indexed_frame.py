@@ -2026,6 +2026,16 @@ class IndexedFrame(Frame):
             )
         )
 
+    _SUPPORT_AXIS_LOOKUP = {0: 0, "index": 0}
+
+    @classmethod
+    @_performance_tracking
+    def _get_axis_from_axis_arg(cls, axis: int | str) -> int:
+        try:
+            return cls._SUPPORT_AXIS_LOOKUP[axis]
+        except KeyError:
+            raise ValueError(f"No axis named {axis} for object type {cls}")
+
     @_performance_tracking
     def shift(
         self,
@@ -5149,6 +5159,17 @@ class IndexedFrame(Frame):
             if errors == "raise":
                 raise e
             return self
+
+    @_performance_tracking
+    def _drop_column(
+        self, name: abc.Hashable, errors: Literal["ignore", "raise"] = "raise"
+    ) -> None:
+        """Drop a column by *name* inplace."""
+        try:
+            del self._data[name]
+        except KeyError as err:
+            if errors != "ignore":
+                raise KeyError(f"column '{name}' does not exist") from err
 
     @_performance_tracking
     def drop(
