@@ -40,6 +40,10 @@ namespace CUDF_EXPORT nvtext {
  * The output includes any strings of at least `min_width` bytes that
  * appear more than once in the entire input.
  *
+ * @throw If `min_width` <= 8
+ * @throw If `min_width` is greater than the input chars size
+ * @throw If the `input` chars size is greater than 2GB
+ *
  * @param input Strings column to identify duplicates
  * @param min_width Minimum number of bytes that must match to identify a duplicate
  * @param stream CUDA stream used for device memory operations and kernel launches
@@ -58,6 +62,9 @@ std::unique_ptr<cudf::column> substring_duplicates(
  * The internal implementation creates a suffix array of the input which
  * requires ~4x the input size for temporary memory. The output is an additional
  * 4x of the input size.
+ *
+ * @throw If `min_width` is greater than the input chars size
+ * @throw If the `input` chars size is greater than 2GB
  *
  * @param input Strings column to build suffix array for
  * @param min_width Minimum number of bytes that must match to identify a duplicate
