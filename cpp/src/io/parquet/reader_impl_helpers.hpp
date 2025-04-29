@@ -322,10 +322,11 @@ class aggregate_reader_metadata {
   [[nodiscard]] std::vector<std::unordered_map<std::string, int64_t>> get_rowgroup_metadata() const;
 
   /**
-   * @brief Extracts uncompressed size fields for all leaf column chunks
+   * @brief Maps leaf column names to vectors of `total_uncompressed_size` fields from their all
+   *        column chunks
    *
-   * @return A map of column name to a list of `total_uncompressed_size` fields from all column
-   *         chunks
+   * @return Map of leaf column names to vectors of `total_uncompressed_size` fields from all their
+   *         column chunks
    */
   [[nodiscard]] std::unordered_map<std::string, std::vector<int64_t>> get_column_chunk_metadata()
     const;

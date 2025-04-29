@@ -198,13 +198,14 @@ cdef class ParquetMetadata:
 
     cpdef dict columnchunk_metadata(self):
         """
-        Returns `total_uncompressed_size` fields from all column chunks in the file footer for each
-        leaf column.
+        Returns a map of leaf column names to lists of `total_uncompressed_size`
+        metadata from all column chunks in the file footer.
 
         Returns
         -------
         dict[str, list[int]]
-            Map of column name to a list of `total_uncompressed_size` fields from all column chunks.
+            Map of leaf column names to lists of `total_uncompressed_size` metadata
+            from all their column chunks.
         """
         return {
             col_name.decode(): uncompressed_sizes

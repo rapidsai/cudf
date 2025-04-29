@@ -201,8 +201,8 @@ class parquet_metadata {
    * @param num_rowgroups_per_file number of row groups per file
    * @param file_metadata key-value metadata in the file footer
    * @param rg_metadata vector of maps containing metadata for each row group
-   * @param column_chunk_metadata Map of vectors containing each column's `total_uncompressed_size`
-   *                              across row groups
+   * @param column_chunk_metadata map of column names to vectors of `total_uncompressed_size`
+   *                              metadata from all their column chunks
    */
   parquet_metadata(parquet_schema schema,
                    int64_t num_rows,
@@ -261,16 +261,16 @@ class parquet_metadata {
   /**
    * @brief Returns the row group metadata in the file footer.
    *
-   * @return vector of row group metadata as maps
+   * @return Vector of row group metadata as maps
    */
   [[nodiscard]] auto const& rowgroup_metadata() const { return _rowgroup_metadata; }
 
   /**
-   * @brief Returns a map of column name to a vector of `total_uncompressed_size` fields from all
-   *        column chunks
+   * @brief Returns a map of column names to vectors of `total_uncompressed_size` metadata from
+   *        all their column chunks
    *
-   * @return A map of column name to a list of `total_uncompressed_size` fields from all column
-   *         chunks
+   * @return Map of column names to vectors of `total_uncompressed_size` metadata from all their
+   *         column chunks
    */
   [[nodiscard]] auto const& columnchunk_metadata() const { return _column_chunk_metadata; }
 

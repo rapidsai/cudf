@@ -990,8 +990,8 @@ aggregate_reader_metadata::get_column_chunk_metadata() const
         return;
       }
 
-      // Otherwise, if this is a leaf column, collect its `ColumnChunkMetaData` fields from all row
-      // groups and add to the `column_chunk_metadata` map.
+      // Otherwise, if this is a leaf column, collect its `total_uncompressed_size` fields from
+      // all column chunks and add to the `column_chunk_metadata` map.
       auto total_uncompressed_sizes = std::vector<int64_t>{};
       // For each input source
       std::for_each(thrust::counting_iterator<size_t>(0),
@@ -1013,7 +1013,7 @@ aggregate_reader_metadata::get_column_chunk_metadata() const
       CUDF_EXPECTS(column_chunk_metadata.find(col_path) == column_chunk_metadata.end(),
                    "Encountered an already mapped leaf column in the schema tree",
                    std::invalid_argument);
-      // Map the collected `total_uncompressed_size` fields for this column to its path
+      // Map the collected metadata fields for this column to its named path
       column_chunk_metadata[col_path] = total_uncompressed_sizes;
     };
 
