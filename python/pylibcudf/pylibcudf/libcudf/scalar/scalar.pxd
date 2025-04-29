@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 from libc.stdint cimport int32_t, int64_t
 from libcpp cimport bool
 from libcpp.string cimport string
@@ -45,6 +45,7 @@ cdef extern from "cudf/scalar/scalar.hpp" namespace "cudf" nogil:
         duration_scalar(int64_t value, bool is_valid) except +libcudf_exception_handler
         duration_scalar(int32_t value) except +libcudf_exception_handler
         duration_scalar(int32_t value, bool is_valid) except +libcudf_exception_handler
+        void set_value(T value) except +libcudf_exception_handler
         int64_t ticks "count"() except +libcudf_exception_handler
         T value() except +libcudf_exception_handler
 
