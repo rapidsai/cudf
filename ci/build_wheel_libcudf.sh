@@ -19,7 +19,7 @@ rapids-dependency-file-generator \
 
 
 set -x
-LIBKVIKIO_WHEEL=$(rapids-get-artifact "libkvikio_${RAPIDS_PY_CUDA_SUFFIX}-25.6.0a28-py3-none-${AUDITWHEEL_PLAT}.whl")
+LIBKVIKIO_WHEEL=$(rapids-get-artifact "ci/kvikio/pull-request/702/5437fca/libkvikio_${RAPIDS_PY_CUDA_SUFFIX}-25.6.0a28-py3-none-${AUDITWHEEL_PLAT}.whl")
 echo "libkvikio-${RAPIDS_PY_CUDA_SUFFIX} @ file://${LIBKVIKIO_WHEEL}" > /tmp/constraints.txt
 export PIP_CONSTRAINT="/tmp/constraints.txt"
 set +x
