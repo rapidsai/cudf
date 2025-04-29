@@ -1174,7 +1174,7 @@ class Series(SingleColumnFrame, IndexedFrame):
         return self._to_frame(name=name, index=self.index)
 
     @_performance_tracking
-    def memory_usage(self, index=True, deep=False):
+    def memory_usage(self, index: bool = True, deep: bool = False) -> int:
         return self._column.memory_usage + (
             self.index.memory_usage() if index else 0
         )
