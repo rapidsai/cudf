@@ -64,6 +64,24 @@ class sort_merge_join {
                   rmm::cuda_stream_view stream = cudf::get_default_stream());
 
   /**
+   * @brief Construct a sort-merge join object that pre-processes the right table
+   * on creation, and can be used on subsequent join operations with multiple
+   * left tables.
+   *
+   * @note The `sort_merge_join` object must not outlive the table viewed by `right`,
+   * else behavior is undefined.
+   *
+   * @param right The right table
+   * @param is_right_sorted Enum to indicate if right table is pre-sorted
+   * @param compare_nulls Controls whether null join-key values should match or not
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   */
+  sort_merge_join(table_view const& right,
+                  sorted is_right_sorted,
+                  null_equality compare_nulls  = null_equality::EQUAL,
+                  rmm::cuda_stream_view stream = cudf::get_default_stream());
+
+  /**
    * Returns the row indices that can be used to construct the result of performing
    * an inner join between two tables. @see cudf::inner_join().
    *
@@ -79,26 +97,48 @@ class sort_merge_join {
   inner_join(rmm::cuda_stream_view stream      = cudf::get_default_stream(),
              rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
+  /**
+   * Returns the row indices that can be used to construct the result of performing
+   * an inner join between the right table passed while creating the sort_merge_join object, and the
+   * left table.
+   * @see cudf::inner_join().
+   *
+   * @param left The left table
+   * @param is_left_sorted Enum to indicate if left table is pre-sorted
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource used to allocate the join indices' device
+   * memory.
+   *
+   * @return A pair of device vectors [`left_indices`, `right_indices`] that can be used to
+   * construct the result of performing an inner join between two tables
+   */
+  std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+            std::unique_ptr<rmm::device_uvector<size_type>>>
+  inner_join(table_view const& left,
+             sorted is_left_sorted,
+             rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+             rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
  private:
   /**
    * @brief Helper struct to pre-process tables before join operations
    */
   struct preprocessed_table {
-    table_view _tbl_view;  ///< Unprocessed table view before pre-processing
+    table_view _table_view;  ///< Unprocessed table view before pre-processing
 
     table_view
-      _null_processed_tbl_view;  ///< Processed table view which is the null-free subset of the rows
-                                 ///< of the unprocessed table view if null equality is set to
-                                 ///< false, otherwise equal to the unprocessed table view
+      _null_processed_table_view;  ///< Processed table view which is the null-free subset of the
+                                   ///< rows of the unprocessed table view if null equality is set
+                                   ///< to false, otherwise equal to the unprocessed table view
 
     std::optional<rmm::device_buffer> _validity_mask =
       std::nullopt;  ///< Optional validity mask for null_equality::UNEQUAL case
     std::optional<size_type> _num_nulls =
       std::nullopt;  ///< Optional count of nulls for null_equality::UNEQUAL case
-    std::optional<std::unique_ptr<table>> _null_processed_tbl =
+    std::optional<std::unique_ptr<table>> _null_processed_table =
       std::nullopt;  ///< Optional filtered table for null_equality::UNEQUAL case
 
-    std::optional<std::unique_ptr<column>> _null_processed_tbl_sorted_order =
+    std::optional<std::unique_ptr<column>> _null_processed_table_sorted_order =
       std::nullopt;  ///< Optional sort ordering for pre-sorted tables
 
     /**
@@ -110,7 +150,7 @@ class sort_merge_join {
     void populate_nonnull_filter(rmm::cuda_stream_view stream);
 
     /**
-     * @brief Apply _validity_mask to the _tbl_view to create a null-free table
+     * @brief Apply _validity_mask to the _table_view to create a null-free table
      *
      * @param stream CUDA stream used for device memory operations and kernel launches
      */
@@ -137,7 +177,7 @@ class sort_merge_join {
      * @return A device vector containing the mapping from processed table indices to unprocessed
      * table indices
      */
-    rmm::device_uvector<size_type> map_tbl_to_unprocessed(rmm::cuda_stream_view stream);
+    rmm::device_uvector<size_type> map_table_to_unprocessed(rmm::cuda_stream_view stream);
   };
   preprocessed_table preprocessed_left;
   preprocessed_table preprocessed_right;
@@ -154,6 +194,7 @@ class sort_merge_join {
   void preprocess_tables(table_view const left,
                          table_view const right,
                          rmm::cuda_stream_view stream);
+
   /**
    * @brief Post-process left and right tables after the merge operation
    *
