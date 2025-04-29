@@ -5,7 +5,6 @@
 
 from __future__ import annotations
 
-import copy
 import functools
 import json
 from contextlib import AbstractContextManager, nullcontext
@@ -48,7 +47,7 @@ class Translator:
 
     def __init__(self, visitor: NodeTraverser, engine: GPUEngine):
         self.visitor = visitor
-        self.config_options = config.ConfigOptions(copy.deepcopy(engine.config))
+        self.config_options = config.ConfigOptions.from_polars_engine(engine)
         self.errors: list[Exception] = []
 
     def translate_ir(self, *, n: int | None = None) -> ir.IR:
@@ -492,7 +491,11 @@ def _(
 def _(
     node: pl_ir.HConcat, translator: Translator, schema: dict[str, plc.DataType]
 ) -> ir.IR:
-    return ir.HConcat(schema, *(translator.translate_ir(n=n) for n in node.inputs))
+    return ir.HConcat(
+        schema,
+        False,  # noqa: FBT003
+        *(translator.translate_ir(n=n) for n in node.inputs),
+    )
 
 
 def translate_named_expr(
