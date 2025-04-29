@@ -30,8 +30,7 @@ namespace io::detail {
  * @brief Check if compression is supported for the given compression type.
  *
  * @param compression Compression type
- * @return true if supported
- * @return false if not supported
+ * @return Boolean indicating if the compression type is supported
  */
 [[nodiscard]] bool is_compression_supported(compression_type compression);
 

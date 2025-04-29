@@ -396,12 +396,12 @@ void host_compress(compression_type compression,
   [[maybe_unused]] device_span<device_span<uint8_t const> const> inputs,
   [[maybe_unused]] device_span<device_span<uint8_t> const> outputs)
 {
-  auto const h_support = is_host_compression_supported(compression);
-  auto const d_support = is_device_compression_supported(compression);
-  CUDF_EXPECTS(h_support or d_support,
+  auto const has_host_support   = is_host_compression_supported(compression);
+  auto const has_device_support = is_device_compression_supported(compression);
+  CUDF_EXPECTS(has_host_support or has_device_support,
                "Unsupported compression type: " + compression_type_name(compression));
-  if (not h_support) { return false; }
-  if (not d_support) { return true; }
+  if (not has_host_support) { return false; }
+  if (not has_device_support) { return true; }
   // If both host and device compression are supported, dispatch based on the environment variable
 
   auto const env_var = getenv_or("LIBCUDF_HOST_COMPRESSION", std::string{"OFF"});

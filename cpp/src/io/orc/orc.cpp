@@ -419,8 +419,7 @@ orc_decompressor::orc_decompressor(CompressionKind kind, uint64_t block_size)
       break;
     default: CUDF_FAIL("Invalid compression type");
   }
-  CUDF_EXPECTS(is_compressed_read_orc_supported(_compression),
-               "Unsupported compression type for ORC decompression");
+  CUDF_EXPECTS(is_supported_read_orc(_compression), "Unsupported compression type for ORC reader");
 }
 
 host_span<uint8_t const> orc_decompressor::decompress_blocks(host_span<uint8_t const> src)

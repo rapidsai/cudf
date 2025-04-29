@@ -2460,7 +2460,7 @@ writer::impl::impl(std::unique_ptr<data_sink> sink,
   if (options.get_metadata()) {
     _table_meta = std::make_unique<table_input_metadata>(*options.get_metadata());
   }
-  CUDF_EXPECTS(is_compressed_write_orc_supported(_compression),
+  CUDF_EXPECTS(is_supported_write_orc(_compression),
                "Compression type not supported for ORC writer");
 }
 
@@ -2483,7 +2483,7 @@ writer::impl::impl(std::unique_ptr<data_sink> sink,
   if (options.get_metadata()) {
     _table_meta = std::make_unique<table_input_metadata>(*options.get_metadata());
   }
-  CUDF_EXPECTS(is_compressed_write_orc_supported(_compression),
+  CUDF_EXPECTS(is_supported_write_orc(_compression),
                "Compression type not supported for ORC writer");
 }
 

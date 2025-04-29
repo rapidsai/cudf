@@ -49,10 +49,9 @@ constexpr size_type default_row_index_stride = 10000;    ///< 10K rows default o
  * system configuration.
  *
  * @param compression Compression type
- * @return true if supported
- * @return false if not supported
+ * @return Boolean indicating if the compression type is supported
  */
-[[nodiscard]] bool is_compressed_read_orc_supported(compression_type compression);
+[[nodiscard]] bool is_supported_read_orc(compression_type compression);
 
 /**
  * @brief Check if the compression type is supported for writing ORC files.
@@ -61,10 +60,9 @@ constexpr size_type default_row_index_stride = 10000;    ///< 10K rows default o
  * system configuration.
  *
  * @param compression Compression type
- * @return true if supported
- * @return false if not supported
+ * @return Boolean indicating if the compression type is supported
  */
-[[nodiscard]] bool is_compressed_write_orc_supported(compression_type compression);
+[[nodiscard]] bool is_supported_write_orc(compression_type compression);
 
 /**
  * @brief Builds settings to use for `read_orc()`.

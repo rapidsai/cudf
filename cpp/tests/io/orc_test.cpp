@@ -2029,8 +2029,8 @@ TEST_P(OrcCompressionTest, Basic)
   constexpr auto num_rows     = 12000;
   auto const compression_type = GetParam();
 
-  if (not cudf::io::is_compressed_read_orc_supported(compression_type) or
-      not cudf::io::is_compressed_write_orc_supported(compression_type)) {
+  if (not cudf::io::is_supported_read_orc(compression_type) or
+      not cudf::io::is_supported_write_orc(compression_type)) {
     GTEST_SKIP() << "Compression not supported with the current configuration";
   }
 

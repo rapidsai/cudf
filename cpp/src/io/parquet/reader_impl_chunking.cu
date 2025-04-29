@@ -933,9 +933,8 @@ struct codec_stats {
   int32_t start_pos = 0;
   for (auto const& codec : codecs) {
     if (codec.num_pages == 0) { continue; }
-    CUDF_EXPECTS(
-      is_compressed_read_parquet_supported(from_parquet_compression(codec.compression_type)),
-      "Unsupported compression type for Parquet reading");
+    CUDF_EXPECTS(is_supported_read_parquet(from_parquet_compression(codec.compression_type)),
+                 "Unsupported compression type for Parquet reading");
 
     device_span<device_span<uint8_t const> const> d_comp_in_view{d_comp_in.data() + start_pos,
                                                                  codec.num_pages};

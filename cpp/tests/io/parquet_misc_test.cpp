@@ -240,8 +240,8 @@ TEST_P(ParquetCompressionTest, Basic)
   constexpr auto num_rows     = 12000;
   auto const compression_type = GetParam();
 
-  if (not cudf::io::is_compressed_read_parquet_supported(compression_type) or
-      not cudf::io::is_compressed_write_parquet_supported(compression_type)) {
+  if (not cudf::io::is_supported_read_parquet(compression_type) or
+      not cudf::io::is_supported_write_parquet(compression_type)) {
     GTEST_SKIP() << "Compression not supported with the current configuration";
   }
 

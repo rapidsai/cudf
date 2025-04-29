@@ -55,10 +55,9 @@ constexpr size_type default_max_page_fragment_size     = 5000;  ///< 5000 rows p
  * system configuration.
  *
  * @param compression Compression type
- * @return true if supported
- * @return false if not supported
+ * @return Boolean indicating if the compression type is supported
  */
-[[nodiscard]] bool is_compressed_read_parquet_supported(compression_type compression);
+[[nodiscard]] bool is_supported_read_parquet(compression_type compression);
 
 /**
  * @brief Check if the compression type is supported for writing Parquet files.
@@ -67,10 +66,9 @@ constexpr size_type default_max_page_fragment_size     = 5000;  ///< 5000 rows p
  * system configuration.
  *
  * @param compression Compression type
- * @return true if supported
- * @return false if not supported
+ * @return Boolean indicating if the compression type is supported
  */
-[[nodiscard]] bool is_compressed_write_parquet_supported(compression_type compression);
+[[nodiscard]] bool is_supported_write_parquet(compression_type compression);
 
 class parquet_reader_options_builder;
 
