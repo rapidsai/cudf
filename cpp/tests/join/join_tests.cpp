@@ -2263,9 +2263,8 @@ struct JoinParameterizedTestLists : public JoinTestLists,
                           cudf::null_equality compare_nulls,
                           rmm::cuda_stream_view stream,
                           rmm::device_async_resource_ref mr) -> JoinResult {
-      cudf::sort_merge_join obj(
-        left, cudf::sorted::NO, right, cudf::sorted::NO, compare_nulls, stream);
-      return obj.inner_join(stream, mr);
+      cudf::sort_merge_join obj(right, cudf::sorted::NO, compare_nulls, stream);
+      return obj.inner_join(left, cudf::sorted::NO, stream, mr);
     };
     join(left_gold_map,
          right_gold_map,
