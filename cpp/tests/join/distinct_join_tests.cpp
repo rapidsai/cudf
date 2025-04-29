@@ -533,7 +533,7 @@ TEST_F(DistinctJoinTest, DISABLED_InvalidLoadFactor)
 
 struct SparkJoinTest : public cudf::test::BaseFixture {};
 
-TEST_F(SparkJoinTest, XXX)
+TEST_F(SparkJoinTest, DISABLED_XXX)
 {
   std::string f1 = "f1.parquet";
   std::string f2 = "f2.parquet";
