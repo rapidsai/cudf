@@ -5956,8 +5956,15 @@ def test_memory_usage_multi(rows):
 def test_memory_usage_index_preserve_types(index):
     data = [[1, 2, 3]]
     columns = pd.Index(np.array([1, 2, 3], dtype=np.int8), name="a")
-    result = cudf.DataFrame(data, columns=columns).memory_usage(index=index).index
-    expected = pd.DataFrame(data, columns=columns).memory_usage(index=index).index
+    result = (
+        cudf.DataFrame(data, columns=columns).memory_usage(index=index).index
+    )
+    expected = (
+        pd.DataFrame(data, columns=columns).memory_usage(index=index).index
+    )
+    if index:
+        # pandas returns an Index[object] with int and string elements
+        expected = expected.astype(str)
     assert_eq(result, expected)
 
 
