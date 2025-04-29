@@ -89,7 +89,7 @@ class hybrid_scan_reader {
    * Metadata handling (OPTIONAL): Get a materialized parquet file footer metadata struct
    * (`FileMetaData`) from the reader to get insights into the parquet data as needed. Optionally,
    * set up the page index to materialize page level stats used for data page pruning.
-   * @code{.psuedo}
+   * @code{.pseudo}
    * // Get Parquet file metadata from the reader
    * auto parquet_metadata = reader->parquet_metadata();
    *
@@ -116,13 +116,13 @@ class hybrid_scan_reader {
    * function. The byte ranges may be read into a corresponding vector of device buffers and passed
    * to the corresponding row group filtration function.
    * @code{.pseudo}
-   * // Get a list of all parquet row group indices from the file footer
+   * // Start with a list of all parquet row group indices from the file footer
    * auto all_row_group_indices = reader->all_row_groups(options);
    *
    * // Span to track the indices of row groups currently at hand
    * auto current_row_group_indices = cudf::host_span<cudf::size_type>(all_row_group_indices);
    *
-   * // Filter row group indices subject to filter expression using row group statistics
+   * // Optional: Filter row group indices subject to filter expression using row group statistics
    * auto stats_filtered_row_group_indices =
    *   reader->filter_row_groups_with_stats(current_row_group_indices, options, stream);
    *
@@ -134,7 +134,7 @@ class hybrid_scan_reader {
    * auto [bloom_filter_byte_ranges, dict_page_byte_ranges] =
    *   reader->secondary_filters_byte_ranges(current_row_group_indices, options);
    *
-   * // If we have valid dictionary pages, filter row group indices with them
+   * // Optional: If we have valid dictionary pages, filter row group indices with them
    * auto dictionary_page_filtered_row_group_indices = std::vector<cudf::size_type>{};
    * if (dict_page_byte_ranges.size()) {
    *   std::vector<rmm::device_buffer> dictionary_page_data =
@@ -146,7 +146,7 @@ class hybrid_scan_reader {
    *   current_row_group_indices = dictionary_page_filtered_row_group_indices;
    * }
    *
-   * // If we have valid bloom filters, filter row group indices with them
+   * // Optional: If we have valid bloom filters, filter row group indices with them
    * auto bloom_filtered_row_group_indices = std::vector<cudf::size_type>{};
    * if (bloom_filter_byte_ranges.size()) {
    *   std::vector<rmm::device_buffer> bloom_filter_data =
