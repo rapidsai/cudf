@@ -117,7 +117,7 @@ class BaseIndex(Serializable):
         """Return if the index has unique values."""
         raise NotImplementedError
 
-    def memory_usage(self, deep=False):
+    def memory_usage(self, deep: bool = False) -> int:
         """Return the memory usage of an object.
 
         Parameters
