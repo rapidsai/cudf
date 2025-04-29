@@ -122,7 +122,7 @@ class hybrid_scan_reader {
    * // Span to track the indices of row groups currently at hand
    * auto current_row_group_indices = cudf::host_span<cudf::size_type>(all_row_group_indices);
    *
-   * // Optional: Filter row group indices subject to filter expression using row group statistics
+   * // Optional: Prune row group indices subject to filter expression using row group statistics
    * auto stats_filtered_row_group_indices =
    *   reader->filter_row_groups_with_stats(current_row_group_indices, options, stream);
    *
@@ -134,7 +134,7 @@ class hybrid_scan_reader {
    * auto [bloom_filter_byte_ranges, dict_page_byte_ranges] =
    *   reader->secondary_filters_byte_ranges(current_row_group_indices, options);
    *
-   * // Optional: If we have valid dictionary pages, filter row group indices with them
+   * // Optional: If we have valid dictionary pages, prune row group indices with them
    * auto dictionary_page_filtered_row_group_indices = std::vector<cudf::size_type>{};
    * if (dict_page_byte_ranges.size()) {
    *   std::vector<rmm::device_buffer> dictionary_page_data =
@@ -146,7 +146,7 @@ class hybrid_scan_reader {
    *   current_row_group_indices = dictionary_page_filtered_row_group_indices;
    * }
    *
-   * // Optional: If we have valid bloom filters, filter row group indices with them
+   * // Optional: If we have valid bloom filters, prune row group indices with them
    * auto bloom_filtered_row_group_indices = std::vector<cudf::size_type>{};
    * if (bloom_filter_byte_ranges.size()) {
    *   std::vector<rmm::device_buffer> bloom_filter_data =
@@ -174,7 +174,7 @@ class hybrid_scan_reader {
    * cudf::host_span<uint8_t const> page_index_bytes = fetch_parquet_bytes(page_index_byte_range);
    * reader->setup_page_index(page_index_bytes);
    *
-   * // Filter data pages with statistics in page index
+   * // Optional: Prune filter column data pages with statistics in page index
    * auto [row_mask, data_page_mask] =
    *   reader->filter_data_pages_with_stats(current_row_group_indices, options, stream, mr);
    * @endcode
@@ -216,10 +216,10 @@ class hybrid_scan_reader {
    * the `materialize_payload_columns()` function. This function requires a vector of
    * device buffers containing column chunk data for the current list of row groups, and the updated
    * row mask from the `materialize_filter_columns()` step. The function uses the `row mask` to
-   * internally prune payload column data pages as well as the materialized table of payload
-   * columns. Similar to filter columns materialization, the byte ranges for the required column
-   * chunk data may be obtained using the `payload_column_chunks_byte_ranges()` function, read into
-   * a vector of device buffers and read into a corresponding vector of vectors of device buffers.
+   * internally prune payload column data pages and mask the materialized payload columns to the
+   * desired rows. Similar to the first reader pass, the byte ranges for the required column chunk
+   * data may be obtained using the `payload_column_chunks_byte_ranges()` function, read into a
+   * vector of device buffers and read into a corresponding vector of vectors of device buffers.
    * @code{.pseudo}
    * // Get column chunk byte ranges from the reader
    * auto const payload_column_chunk_byte_ranges =
