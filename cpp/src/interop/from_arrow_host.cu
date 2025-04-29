@@ -259,17 +259,16 @@ std::unique_ptr<column> dispatch_copy_from_arrow_host::operator()<cudf::list_vie
   size_type const physical_length = input->length + input->offset + 1;
 
   auto offsets_column = [&] {
-    void const* offsets_buffers[2] = {nullptr, input->buffers[fixed_width_data_buffer_idx]};
-    ArrowArray offsets_array       = {
-            .length     = physical_length,
-            .null_count = 0,
-            .offset     = 0,
-            .n_buffers  = 2,
-            .n_children = 0,
-            .buffers    = offsets_buffers,
-    };
-
     if (schema->type != NANOARROW_TYPE_LARGE_LIST) {
+      void const* offsets_buffers[2] = {nullptr, input->buffers[fixed_width_data_buffer_idx]};
+      ArrowArray offsets_array       = {
+              .length     = physical_length,
+              .null_count = 0,
+              .offset     = 0,
+              .n_buffers  = 2,
+              .n_children = 0,
+              .buffers    = offsets_buffers,
+      };
       return this->operator()<int32_t>(&view, &offsets_array, data_type(type_id::INT32), true);
     }
 
@@ -277,30 +276,26 @@ std::unique_ptr<column> dispatch_copy_from_arrow_host::operator()<cudf::list_vie
     int64_t const* large_offsets =
       reinterpret_cast<int64_t const*>(input->buffers[fixed_width_data_buffer_idx]);
 
-    std::vector<int32_t> int32_offsets(physical_length);
     constexpr auto max_offset = static_cast<int64_t>(std::numeric_limits<int32_t>::max());
     CUDF_EXPECTS(large_offsets[physical_length - 1] <= max_offset,
                  "Large list offsets exceed 32-bit integer bounds",
                  std::overflow_error);
 
-    std::transform(
-      large_offsets, large_offsets + physical_length, int32_offsets.begin(), [](int64_t offset) {
-        return static_cast<int32_t>(offset);
-      });
-
-    offsets_buffers[1] = int32_offsets.data();
-
     // The below code is a simplified adaptation of the default operator. This
     // code specializes for non-nullable int32, but also uses a 2D memcpy to
-    // slice off the unnecessary bytes.
+    // slice off the unnecessary bytes, saving us the need to allocate an
+    // intermediate buffer with the casted results.
     auto col = make_fixed_width_column(
       data_type(type_id::INT32), physical_length, mask_state::UNALLOCATED, stream, mr);
     using DeviceType = device_storage_type_t<int32_t>;
-    CUDF_CUDA_TRY(cudaMemcpyAsync(col->mutable_view().data<DeviceType>(),
-                                  reinterpret_cast<uint8_t const*>(int32_offsets.data()),
-                                  sizeof(DeviceType) * physical_length,
-                                  cudaMemcpyDefault,
-                                  stream.value()));
+    CUDF_CUDA_TRY(cudaMemcpy2DAsync(col->mutable_view().data<DeviceType>(),
+                                    4,
+                                    large_offsets,
+                                    8,
+                                    4,
+                                    physical_length,
+                                    cudaMemcpyDefault,
+                                    stream.value()));
 
     return col;
   }();
