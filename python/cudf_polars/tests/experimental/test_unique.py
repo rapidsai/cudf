@@ -11,11 +11,22 @@ from polars.testing import assert_frame_equal
 from cudf_polars.testing.asserts import DEFAULT_SCHEDULER, assert_gpu_result_equal
 
 
+@pytest.fixture(scope="module")
+def df():
+    return pl.LazyFrame(
+        {
+            "x": range(150),
+            "y": [1, 2, 3] * 50,
+            "z": [1.0, 2.0, 3.0, 4.0, 5.0] * 30,
+        }
+    )
+
+
 @pytest.mark.parametrize("subset", [None, ("y",), ("y", "z")])
 @pytest.mark.parametrize("keep", ["first", "last", "any", "none"])
 @pytest.mark.parametrize("maintain_order", [True, False])
 @pytest.mark.parametrize("cardinality", [{}, {"y": 0.5}])
-def test_unique(keep, subset, maintain_order, cardinality):
+def test_unique(df, keep, subset, maintain_order, cardinality):
     engine = pl.GPUEngine(
         raise_on_fail=True,
         executor="streaming",
@@ -26,14 +37,6 @@ def test_unique(keep, subset, maintain_order, cardinality):
         },
     )
 
-    df = pl.LazyFrame(
-        {
-            "x": range(150),
-            "y": [1, 2, 3] * 50,
-            "z": [1.0, 2.0, 3.0, 4.0, 5.0] * 30,
-        }
-    )
-
     q = df.unique(subset=subset, keep=keep, maintain_order=maintain_order)
     if keep == "any" and subset:
         q = q.select(*(pl.col(col) for col in subset))
@@ -42,6 +45,23 @@ def test_unique(keep, subset, maintain_order, cardinality):
         check_row_order = maintain_order
 
     assert_gpu_result_equal(q, engine=engine, check_row_order=check_row_order)
+
+
+@pytest.mark.parametrize("maintain_order", [True, False])
+@pytest.mark.parametrize("cardinality", [{}, {"y": 0.5}])
+def test_unique_select(df, maintain_order, cardinality):
+    engine = pl.GPUEngine(
+        raise_on_fail=True,
+        executor="streaming",
+        executor_options={
+            "max_rows_per_partition": 4,
+            "scheduler": DEFAULT_SCHEDULER,
+            "cardinality_factor": cardinality,
+        },
+    )
+
+    q = df.select(pl.col("y").unique(maintain_order=maintain_order))
+    assert_gpu_result_equal(q, engine=engine, check_row_order=maintain_order)
 
 
 @pytest.mark.parametrize("keep", ["first", "last", "any"])
