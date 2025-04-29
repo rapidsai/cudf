@@ -607,12 +607,11 @@ std::vector<thrust::host_vector<bool>> aggregate_reader_metadata::compute_data_p
     return all_valid_data_pages;
   };
 
-  // Return if row mask is empty or all pages are required or all are invalid.
-  if (row_mask.size() == 0 or row_mask.null_count() == row_mask.size() or
-      thrust::all_of(rmm::exec_policy(stream),
-                     row_mask.begin<bool>(),
-                     row_mask.end<bool>(),
-                     thrust::identity<bool>{})) {
+  // Return if all rows are required or all are invalid.
+  if (row_mask.null_count() == row_mask.size() or thrust::all_of(rmm::exec_policy(stream),
+                                                                 row_mask.begin<bool>(),
+                                                                 row_mask.end<bool>(),
+                                                                 thrust::identity<bool>{})) {
     return all_valid_data_pages();
   }
 
