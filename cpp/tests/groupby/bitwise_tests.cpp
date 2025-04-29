@@ -55,7 +55,7 @@ template <typename T>
 class GroupByBitwiseTypedTest : public GroupByBitwiseTest {};
 
 // Test types for bitwise operations - only integer types
-TYPED_TEST_SUITE(GroupByBitwiseTypedTest, cudf::test::IntegralTypesNotBool);
+TYPED_TEST_SUITE(GroupByBitwiseTypedTest, cudf::test::IntegralTypes);
 
 // Basic bitwise AND test
 TYPED_TEST(GroupByBitwiseTypedTest, BitwiseAND)
@@ -63,16 +63,23 @@ TYPED_TEST(GroupByBitwiseTypedTest, BitwiseAND)
   using T = TypeParam;
 
   // Keys and values
-  auto const keys = keys_column{1, 1, 2, 2, 2, 3, 3, 4};
-  auto const vals = column<T>{0x1F, 0x0F, 0x33, 0x55, 0x3F, 0x2F, 0x0F, 0x42};
+  auto const keys      = keys_column{1, 1, 2, 2, 2, 3, 3, 4};
+  auto const vals_data = [] {
+    if constexpr (std::is_same_v<T, bool>) {
+      return std::vector<T>{true, false, true, true, true, false, true, true};
+    } else {
+      return std::vector<T>{0x1F, 0x0F, 0x33, 0x55, 0x3F, 0x2F, 0x0F, 0x42};
+    }
+  }();
+  auto const vals = column<T>(vals_data.begin(), vals_data.end());
 
   // Expected output
   auto const expected_keys = keys_column{1, 2, 3, 4};
   auto const expected_vals = column<T>{
-    0x1F & 0x0F,         // key = 1
-    0x33 & 0x55 & 0x3F,  // key = 2
-    0x2F & 0x0F,         // key = 3
-    0x42                 // key = 4
+    static_cast<T>(vals_data[0] & vals_data[1]),                 // key = 1
+    static_cast<T>(vals_data[2] & vals_data[3] & vals_data[4]),  // key = 2
+    static_cast<T>(vals_data[5] & vals_data[6]),                 // key = 3
+    static_cast<T>(vals_data[7])                                 // key = 4
   };
 
   auto constexpr bit_op           = cudf::bitwise_op::AND;
@@ -87,16 +94,23 @@ TYPED_TEST(GroupByBitwiseTypedTest, BitwiseOR)
   using T = TypeParam;
 
   // Keys and values
-  auto const keys = keys_column{1, 1, 2, 2, 2, 3, 3, 4};
-  auto const vals = column<T>{0x10, 0x01, 0x20, 0x04, 0x08, 0x40, 0x4F, 0x42};
+  auto const keys      = keys_column{1, 1, 2, 2, 2, 3, 3, 4};
+  auto const vals_data = [] {
+    if constexpr (std::is_same_v<T, bool>) {
+      return std::vector<T>{true, false, true, true, true, false, true, true};
+    } else {
+      return std::vector<T>{0x10, 0x01, 0x20, 0x04, 0x08, 0x40, 0x4F, 0x42};
+    }
+  }();
+  auto const vals = column<T>(vals_data.begin(), vals_data.end());
 
   // Expected output
   auto const expected_keys = keys_column{1, 2, 3, 4};
   auto const expected_vals = column<T>{
-    0x10 | 0x01,         // key = 1
-    0x20 | 0x04 | 0x08,  // key = 2
-    0x40 | 0x4F,         // key = 3
-    0x42                 // key = 4
+    static_cast<T>(vals_data[0] | vals_data[1]),                 // key = 1
+    static_cast<T>(vals_data[2] | vals_data[3] | vals_data[4]),  // key = 2
+    static_cast<T>(vals_data[5] | vals_data[6]),                 // key = 3
+    static_cast<T>(vals_data[7])                                 // key = 4
   };
 
   auto constexpr bit_op           = cudf::bitwise_op::OR;
@@ -111,16 +125,23 @@ TYPED_TEST(GroupByBitwiseTypedTest, BitwiseXOR)
   using T = TypeParam;
 
   // Keys and values
-  auto const keys = keys_column{1, 1, 2, 2, 2, 3, 3, 4};
-  auto const vals = column<T>{0x10, 0x01, 0x20, 0x04, 0x08, 0x40, 0x4F, 0x42};
+  auto const keys      = keys_column{1, 1, 2, 2, 2, 3, 3, 4};
+  auto const vals_data = [] {
+    if constexpr (std::is_same_v<T, bool>) {
+      return std::vector<T>{true, false, true, true, true, false, true, true};
+    } else {
+      return std::vector<T>{0x10, 0x01, 0x20, 0x04, 0x08, 0x40, 0x4F, 0x42};
+    }
+  }();
+  auto const vals = column<T>(vals_data.begin(), vals_data.end());
 
   // Expected output
   auto const expected_keys = keys_column{1, 2, 3, 4};
   auto const expected_vals = column<T>{
-    0x10 ^ 0x01,         // key = 1
-    0x20 ^ 0x04 ^ 0x08,  // key = 2
-    0x40 ^ 0x4F,         // key = 3
-    0x42                 // key = 4
+    static_cast<T>(vals_data[0] ^ vals_data[1]),                 // key = 1
+    static_cast<T>(vals_data[2] ^ vals_data[3] ^ vals_data[4]),  // key = 2
+    static_cast<T>(vals_data[5] ^ vals_data[6]),                 // key = 3
+    static_cast<T>(vals_data[7])                                 // key = 4
   };
 
   auto constexpr bit_op           = cudf::bitwise_op::XOR;
@@ -138,19 +159,25 @@ TYPED_TEST(GroupByBitwiseTypedTest, NullValues)
   auto const keys = keys_column{1, 1, 2, 2, 2, 3, 3, 4};
 
   // Create values with some nulls
-  auto const vals_data  = std::vector<T>{0x1F, 0x0F, 0x33, 0x55, 0x3F, 0x2F, 0x0F, 0x42};
+  auto const vals_data = [] {
+    if constexpr (std::is_same_v<T, bool>) {
+      return std::vector<T>{true, false, true, true, true, false, true, true};
+    } else {
+      return std::vector<T>{0x1F, 0x0F, 0x33, 0x55, 0x3F, 0x2F, 0x0F, 0x42};
+    }
+  }();
   auto const vals_valid = std::vector<bool>{true, true, false, true, true, true, false, true};
-  auto const vals       = column<T>{vals_data.begin(), vals_data.end(), vals_valid.begin()};
+  auto const vals       = column<T>(vals_data.begin(), vals_data.end(), vals_valid.begin());
 
   // Expected output - null values are excluded from aggregation
   auto const expected_keys = keys_column{1, 2, 3, 4};
 
   {
     auto const expected_vals = column<T>{
-      0x1F & 0x0F,  // key = 1
-      0x55 & 0x3F,  // key = 2 (0x33 is null and excluded)
-      0x2F,         // key = 3 (0x0F is null and excluded)
-      0x42          // key = 4
+      static_cast<T>(vals_data[0] & vals_data[1]),  // key = 1
+      static_cast<T>(vals_data[3] & vals_data[4]),  // key = 2 (vals_data[2] is null and excluded)
+      static_cast<T>(vals_data[5]),                 // key = 3 (vals_data[6] is null and excluded)
+      static_cast<T>(vals_data[7])                  // key = 4
     };
 
     auto constexpr bit_op           = cudf::bitwise_op::AND;
@@ -161,10 +188,10 @@ TYPED_TEST(GroupByBitwiseTypedTest, NullValues)
 
   {
     auto const expected_vals = column<T>{
-      0x1F | 0x0F,  // key = 1
-      0x55 | 0x3F,  // key = 2 (0x33 is null and excluded)
-      0x2F,         // key = 3 (0x0F is null and excluded)
-      0x42          // key = 4
+      static_cast<T>(vals_data[0] | vals_data[1]),  // key = 1
+      static_cast<T>(vals_data[3] | vals_data[4]),  // key = 2 (vals_data[2] is null and excluded)
+      static_cast<T>(vals_data[5]),                 // key = 3 (vals_data[6] is null and excluded)
+      static_cast<T>(vals_data[7])                  // key = 4
     };
 
     auto constexpr bit_op           = cudf::bitwise_op::OR;
@@ -175,10 +202,10 @@ TYPED_TEST(GroupByBitwiseTypedTest, NullValues)
 
   {
     auto const expected_vals = column<T>{
-      0x1F ^ 0x0F,  // key = 1
-      0x55 ^ 0x3F,  // key = 2 (0x33 is null and excluded)
-      0x2F,         // key = 3 (0x0F is null and excluded)
-      0x42          // key = 4
+      static_cast<T>(vals_data[0] ^ vals_data[1]),  // key = 1
+      static_cast<T>(vals_data[3] ^ vals_data[4]),  // key = 2 (vals_data[2] is null and excluded)
+      static_cast<T>(vals_data[5]),                 // key = 3 (vals_data[6] is null and excluded)
+      static_cast<T>(vals_data[7])                  // key = 4
     };
 
     auto constexpr bit_op           = cudf::bitwise_op::XOR;
@@ -197,22 +224,28 @@ TYPED_TEST(GroupByBitwiseTypedTest, AllNullValuesInGroup)
   auto const keys = keys_column{1, 1, 2, 2, 3, 3, 4};
 
   // Create values with group 3 having all nulls
-  auto const vals_data  = std::vector<T>{0x1F, 0x0F, 0x33, 0x55, 0x2F, 0x0F, 0x42};
+  auto const vals_data = [] {
+    if constexpr (std::is_same_v<T, bool>) {
+      return std::vector<T>{true, false, true, false, false, false, true};
+    } else {
+      return std::vector<T>{0x1F, 0x0F, 0x33, 0x55, 0x2F, 0x0F, 0x42};
+    }
+  }();
   auto const vals_valid = std::vector<bool>{true, true, true, true, false, false, true};
-  auto const vals       = column<T>{vals_data.begin(), vals_data.end(), vals_valid.begin()};
+  auto const vals       = column<T>(vals_data.begin(), vals_data.end(), vals_valid.begin());
 
   // Expected output - groups with all null values get a null result
   auto const expected_keys = keys_column{1, 2, 3, 4};
   {
     auto const expected_vals_data = std::vector<T>{
-      0x1F & 0x0F,  // key = 1
-      0x33 & 0x55,  // key = 2
-      0,            // key = 3 (all nulls)
-      0x42          // key = 4
+      static_cast<T>(vals_data[0] & vals_data[1]),  // key = 1
+      static_cast<T>(vals_data[2] & vals_data[3]),  // key = 2
+      static_cast<T>(0),                            // key = 3 (all nulls)
+      static_cast<T>(vals_data[6])                  // key = 4
     };
     auto const expected_vals_valid = std::vector<bool>{true, true, false, true};
     auto const expected_vals =
-      column<T>{expected_vals_data.begin(), expected_vals_data.end(), expected_vals_valid.begin()};
+      column<T>(expected_vals_data.begin(), expected_vals_data.end(), expected_vals_valid.begin());
 
     auto constexpr bit_op           = cudf::bitwise_op::AND;
     auto const [out_keys, out_vals] = bitwise_aggregate(keys, vals, bit_op);
@@ -222,14 +255,14 @@ TYPED_TEST(GroupByBitwiseTypedTest, AllNullValuesInGroup)
 
   {
     auto const expected_vals_data = std::vector<T>{
-      0x1F | 0x0F,  // key = 1
-      0x33 | 0x55,  // key = 2
-      0,            // key = 3 (all nulls)
-      0x42          // key = 4
+      static_cast<T>(vals_data[0] | vals_data[1]),  // key = 1
+      static_cast<T>(vals_data[2] | vals_data[3]),  // key = 2
+      static_cast<T>(0),                            // key = 3 (all nulls)
+      static_cast<T>(vals_data[6])                  // key = 4
     };
     auto const expected_vals_valid = std::vector<bool>{true, true, false, true};
     auto const expected_vals =
-      column<T>{expected_vals_data.begin(), expected_vals_data.end(), expected_vals_valid.begin()};
+      column<T>(expected_vals_data.begin(), expected_vals_data.end(), expected_vals_valid.begin());
 
     auto constexpr bit_op           = cudf::bitwise_op::OR;
     auto const [out_keys, out_vals] = bitwise_aggregate(keys, vals, bit_op);
@@ -239,14 +272,14 @@ TYPED_TEST(GroupByBitwiseTypedTest, AllNullValuesInGroup)
 
   {
     auto const expected_vals_data = std::vector<T>{
-      0x1F ^ 0x0F,  // key = 1
-      0x33 ^ 0x55,  // key = 2
-      0,            // key = 3 (all nulls)
-      0x42          // key = 4
+      static_cast<T>(vals_data[0] ^ vals_data[1]),  // key = 1
+      static_cast<T>(vals_data[2] ^ vals_data[3]),  // key = 2
+      static_cast<T>(0),                            // key = 3 (all nulls)
+      static_cast<T>(vals_data[6])                  // key = 4
     };
     auto const expected_vals_valid = std::vector<bool>{true, true, false, true};
     auto const expected_vals =
-      column<T>{expected_vals_data.begin(), expected_vals_data.end(), expected_vals_valid.begin()};
+      column<T>(expected_vals_data.begin(), expected_vals_data.end(), expected_vals_valid.begin());
 
     auto constexpr bit_op           = cudf::bitwise_op::XOR;
     auto const [out_keys, out_vals] = bitwise_aggregate(keys, vals, bit_op);
@@ -277,31 +310,38 @@ TYPED_TEST(GroupByBitwiseTypedTest, MultipleAggs)
   using T = TypeParam;
 
   // Keys and values
-  auto const keys = keys_column{1, 1, 2, 2, 2, 3, 3, 4};
-  auto const vals = column<T>{0x1F, 0x0F, 0x33, 0x55, 0x3F, 0x2F, 0x0F, 0x42};
+  auto const keys      = keys_column{1, 1, 2, 2, 2, 3, 3, 4};
+  auto const vals_data = [] {
+    if constexpr (std::is_same_v<T, bool>) {
+      return std::vector<T>{true, false, true, true, true, false, true, true};
+    } else {
+      return std::vector<T>{0x1F, 0x0F, 0x33, 0x55, 0x3F, 0x2F, 0x0F, 0x42};
+    }
+  }();
+  auto const vals = column<T>(vals_data.begin(), vals_data.end());
 
   // Expected output
   auto const expected_keys = keys_column{1, 2, 3, 4};
 
   auto const expected_and_vals = column<T>{
-    0x1F & 0x0F,         // key = 1
-    0x33 & 0x55 & 0x3F,  // key = 2
-    0x2F & 0x0F,         // key = 3
-    0x42                 // key = 4
+    static_cast<T>(vals_data[0] & vals_data[1]),                 // key = 1
+    static_cast<T>(vals_data[2] & vals_data[3] & vals_data[4]),  // key = 2
+    static_cast<T>(vals_data[5] & vals_data[6]),                 // key = 3
+    static_cast<T>(vals_data[7])                                 // key = 4
   };
 
   auto const expected_or_vals = column<T>{
-    0x1F | 0x0F,         // key = 1
-    0x33 | 0x55 | 0x3F,  // key = 2
-    0x2F | 0x0F,         // key = 3
-    0x42                 // key = 4
+    static_cast<T>(vals_data[0] | vals_data[1]),                 // key = 1
+    static_cast<T>(vals_data[2] | vals_data[3] | vals_data[4]),  // key = 2
+    static_cast<T>(vals_data[5] | vals_data[6]),                 // key = 3
+    static_cast<T>(vals_data[7])                                 // key = 4
   };
 
   auto const expected_xor_vals = column<T>{
-    0x1F ^ 0x0F,         // key = 1
-    0x33 ^ 0x55 ^ 0x3F,  // key = 2
-    0x2F ^ 0x0F,         // key = 3
-    0x42                 // key = 4
+    static_cast<T>(vals_data[0] ^ vals_data[1]),                 // key = 1
+    static_cast<T>(vals_data[2] ^ vals_data[3] ^ vals_data[4]),  // key = 2
+    static_cast<T>(vals_data[5] ^ vals_data[6]),                 // key = 3
+    static_cast<T>(vals_data[7])                                 // key = 4
   };
 
   std::vector<cudf::groupby::aggregation_request> requests;
@@ -361,8 +401,15 @@ TYPED_TEST(GroupByBitwiseTypedTest, SingleEntryGroups)
   using T = TypeParam;
 
   // Keys and values - single value per key
-  auto const keys = keys_column{1, 2, 3, 4, 5};
-  auto const vals = column<T>{0x1F, 0x0F, 0x33, 0x55, 0x3F};
+  auto const keys      = keys_column{1, 2, 3, 4, 5};
+  auto const vals_data = [] {
+    if constexpr (std::is_same_v<T, bool>) {
+      return std::vector<T>{true, false, true, true, true};
+    } else {
+      return std::vector<T>{0x1F, 0x0F, 0x33, 0x55, 0x3F};
+    }
+  }();
+  auto const vals = column<T>(vals_data.begin(), vals_data.end());
 
   // Expected output - values should be unchanged
   // Test all three bitwise ops
