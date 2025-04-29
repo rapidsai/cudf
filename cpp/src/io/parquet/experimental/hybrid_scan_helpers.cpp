@@ -83,9 +83,9 @@ text::byte_range_info aggregate_reader_metadata::page_index_byte_range() const
   auto& row_groups = schema.row_groups;
 
   if (row_groups.size() and row_groups.front().columns.size()) {
-    int64_t const min_offset = schema.row_groups.front().columns.front().column_index_offset;
-    auto const& last_col     = schema.row_groups.back().columns.back();
-    int64_t const max_offset = last_col.offset_index_offset + last_col.offset_index_length;
+    auto const min_offset = schema.row_groups.front().columns.front().column_index_offset;
+    auto const& last_col  = schema.row_groups.back().columns.back();
+    auto const max_offset = last_col.offset_index_offset + last_col.offset_index_length;
     return {min_offset, (max_offset - min_offset)};
   }
 
