@@ -59,6 +59,8 @@ def test_unique_head_tail(keep, zlice):
     df = pl.LazyFrame({"x": data})
     q = df.unique(subset=None, keep=keep, maintain_order=True)
     expect = pl.LazyFrame({"x": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]})
+    # Cannot use assert_gpu_result_equal until CPU bug is fixed
+    # See: https://github.com/pola-rs/polars/issues/22470
     assert_frame_equal(
         getattr(q, zlice)().collect(engine=engine),
         getattr(expect, zlice)().collect(),
