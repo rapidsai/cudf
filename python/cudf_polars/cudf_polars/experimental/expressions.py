@@ -1,6 +1,33 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
-"""Multi-partition Expr classes and utilities."""
+"""
+Multi-partition Expr classes and utilities.
+
+This module includes the necessary functionality to
+decompose a non-pointwise expression graph into stages
+that can each be mapped onto a simple partition-wise
+task graph at execution time.
+
+For example, if ``Select.exprs`` contains an ``expr.Agg``
+node, ``decompose_expr_graph`` will decompose the complex
+NamedExpr node into a sequence of three new IR nodes::
+
+ - Select: Partition-wise aggregation logic.
+ - Repartition: Concatenate the results of each partition.
+ - Select: Final aggregation on the combined results.
+
+In this example, the Select stages are mapped onto a simple
+partition-wise task graph at execution time, and the Repartition
+stage is used to capture the data-movement required for a global
+aggregation. At the moment, data movement is always introduced
+by either repartitioning or shuffling the data.
+
+Since we are introducing intermediate IR nodes, we are also
+introducing a temporary column for each intermediate result.
+In order to avoid column-name collisions with the original
+input-IR node, we generate unique names for temporary columns
+and concatenate them to the input-IR node using ``HConcat``.
+"""
 
 from __future__ import annotations
 
@@ -371,7 +398,7 @@ def decompose_expr_graph(
     config_options: ConfigOptions,
 ) -> tuple[NamedExpr, IR, MutableMapping[IR, PartitionInfo]]:
     """
-    Decompose a NamedExpr into multiple IR nodes.
+    Decompose a NamedExpr into stages.
 
     Parameters
     ----------
