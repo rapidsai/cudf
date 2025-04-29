@@ -270,16 +270,13 @@ def _sample_pq_statistics(ir: Scan) -> dict[str, np.floating[T]]:
     rowgroup_offsets_per_file = np.insert(rowgroup_offsets_per_file, 0, 0)
 
     # For each column, calculate the `total_uncompressed_size` for each file
-    for name, colchunk_metadata in metadata.columnchunk_metadata().items():
+    for name, uncompressed_sizes in metadata.columnchunk_metadata().items():
         column_sizes[name] = np.zeros(n_sample, dtype="int64")
         for file_idx in range(n_sample):
             column_sizes[name][file_idx] = np.sum(
-                [
-                    item["total_uncompressed_size"]
-                    for item in colchunk_metadata[
-                        rowgroup_offsets_per_file[file_idx] : rowgroup_offsets_per_file[
-                            file_idx + 1
-                        ]
+                uncompressed_sizes[
+                    rowgroup_offsets_per_file[file_idx] : rowgroup_offsets_per_file[
+                        file_idx + 1
                     ]
                 ]
             )

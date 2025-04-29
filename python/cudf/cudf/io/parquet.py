@@ -546,15 +546,7 @@ def _parse_metadata(meta) -> tuple[bool, Any, None | np.dtype]:
 @_performance_tracking
 def read_parquet_metadata(
     filepath_or_buffer,
-) -> tuple[
-    int,
-    int,
-    list[int],
-    list[Hashable],
-    int,
-    list[dict[str, int]],
-    dict[str, list[dict[str, int]]],
-]:
+) -> tuple[int, int, list[Hashable], int, list[dict[str, int]]]:
     """{docstring}"""
 
     # List of filepaths or buffers
@@ -592,11 +584,9 @@ def read_parquet_metadata(
     return (
         parquet_metadata.num_rows(),
         parquet_metadata.num_rowgroups(),
-        parquet_metadata.num_rowgroups_per_file(),
         col_names,
         len(col_names),
         parquet_metadata.rowgroup_metadata(),
-        parquet_metadata.columnchunk_metadata(),
     )
 
 

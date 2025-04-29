@@ -29,7 +29,7 @@ cdef extern from "cudf/io/parquet_metadata.hpp" namespace "cudf::io" nogil:
         unordered_map[string, string] metadata() except +libcudf_exception_handler
         vector[unordered_map[string, int64_t]] rowgroup_metadata()\
             except +libcudf_exception_handler
-        unordered_map[string, vector[unordered_map[string, int64_t]]] \
+        unordered_map[string, vector[int64_t]] \
             columnchunk_metadata() except +libcudf_exception_handler
 
     cdef parquet_metadata read_parquet_metadata(

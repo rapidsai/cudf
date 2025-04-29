@@ -972,11 +972,10 @@ aggregate_reader_metadata::get_rowgroup_metadata() const
   return rg_metadata;
 }
 
-std::unordered_map<std::string, std::vector<std::unordered_map<std::string, int64_t>>>
+std::unordered_map<std::string, std::vector<int64_t>>
 aggregate_reader_metadata::get_column_chunk_metadata() const
 {
-  std::unordered_map<std::string, std::vector<std::unordered_map<std::string, int64_t>>>
-    column_chunk_metadata;
+  std::unordered_map<std::string, std::vector<int64_t>> column_chunk_metadata;
 
   std::function<void(std::string const&, int)> const populate_column_chunk_metadata =
     [&](std::string const& path_till_now, int schema_idx) {
@@ -993,7 +992,7 @@ aggregate_reader_metadata::get_column_chunk_metadata() const
 
       // Otherwise, if this is a leaf column, collect its `ColumnChunkMetaData` fields from all row
       // groups and add to the `column_chunk_metadata` map.
-      auto col_chunk_metadatas = std::vector<std::unordered_map<std::string, int64_t>>{};
+      auto total_uncompressed_sizes = std::vector<int64_t>{};
       // For each input source
       std::for_each(thrust::counting_iterator<size_t>(0),
                     thrust::counting_iterator(per_file_metadata.size()),
@@ -1002,26 +1001,20 @@ aggregate_reader_metadata::get_column_chunk_metadata() const
                       // For each row group in this source
                       std::transform(thrust::counting_iterator<size_t>(0),
                                      thrust::counting_iterator(file_metadata.row_groups.size()),
-                                     std::back_inserter(col_chunk_metadatas),
+                                     std::back_inserter(total_uncompressed_sizes),
                                      [&](auto const& row_group_idx) {
-                                       // Get `ColumnChunkMetaData` for this row group
-                                       auto const& colchunk_meta =
-                                         get_column_metadata(row_group_idx, src_idx, schema_idx);
-                                       // Add compressed and uncompressed size fields to the map
-                                       std::unordered_map<std::string, int64_t> colchunk_meta_map;
-                                       colchunk_meta_map["total_compressed_size"] =
-                                         colchunk_meta.total_compressed_size;
-                                       colchunk_meta_map["total_uncompressed_size"] =
-                                         colchunk_meta.total_uncompressed_size;
-                                       return colchunk_meta_map;
+                                       // Return `total_uncompressed_size` of this column's chunk
+                                       return get_column_metadata(
+                                                row_group_idx, src_idx, schema_idx)
+                                         .total_uncompressed_size;
                                      });
                     });
       // Check if this column already exists in the map
       CUDF_EXPECTS(column_chunk_metadata.find(col_path) == column_chunk_metadata.end(),
                    "Encountered an already mapped leaf column in the schema tree",
                    std::invalid_argument);
-      // Map the collected `ColumnChunkMetaData` fields for this column to its path
-      column_chunk_metadata[col_path] = col_chunk_metadatas;
+      // Map the collected `total_uncompressed_size` fields for this column to its path
+      column_chunk_metadata[col_path] = total_uncompressed_sizes;
     };
 
   // Traverse the schema tree and populate `ColumnChunkMetaData`s for all leaf columns.

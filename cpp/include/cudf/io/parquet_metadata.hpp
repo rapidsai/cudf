@@ -183,8 +183,7 @@ class parquet_metadata {
   /// Row group metadata from each RowGroup element.
   using row_group_metadata = std::unordered_map<std::string, int64_t>;
   /// Column chunk metadata from each ColumnChunkMetaData element.
-  using column_chunk_metadata =
-    std::unordered_map<std::string, std::vector<std::unordered_map<std::string, int64_t>>>;
+  using column_chunk_metadata = std::unordered_map<std::string, std::vector<int64_t>>;
 
   /**
    * @brief Default constructor.
@@ -202,7 +201,8 @@ class parquet_metadata {
    * @param num_rowgroups_per_file number of row groups per file
    * @param file_metadata key-value metadata in the file footer
    * @param rg_metadata vector of maps containing metadata for each row group
-   * @param column_chunk_metadata Map of vectors containing each column's metadata across row groups
+   * @param column_chunk_metadata Map of vectors containing each column's `total_uncompressed_size`
+   *                              across row groups
    */
   parquet_metadata(parquet_schema schema,
                    int64_t num_rows,
@@ -266,9 +266,11 @@ class parquet_metadata {
   [[nodiscard]] auto const& rowgroup_metadata() const { return _rowgroup_metadata; }
 
   /**
-   * @brief Returns a vector of column chunk metadata for each named column.
+   * @brief Returns a map of column name to a vector of `total_uncompressed_size` fields from all
+   *        column chunks
    *
-   * @return A vector of column chunk metadata for each named column
+   * @return A map of column name to a list of `total_uncompressed_size` fields from all column
+   *         chunks
    */
   [[nodiscard]] auto const& columnchunk_metadata() const { return _column_chunk_metadata; }
 
