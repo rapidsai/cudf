@@ -19,6 +19,7 @@ from cudf_polars.dsl.ir import (
     IR,
     Cache,
     Filter,
+    HConcat,
     HStack,
     MapFunction,
     Projection,
@@ -185,11 +186,15 @@ def _(
 ) -> MutableMapping[Any, Any]:
     # Generate pointwise (embarrassingly-parallel) tasks by default
     child_names = [get_key_name(c) for c in ir.children]
+    bcast_child = [partition_info[c].count == 1 for c in ir.children]
     return {
         key: (
             ir.do_evaluate,
             *ir._non_child_args,
-            *[(child_name, i) for child_name in child_names],
+            *[
+                (child_name, 0 if bcast_child[j] else i)
+                for j, child_name in enumerate(child_names)
+            ],
         )
         for i, key in enumerate(partition_info[ir].keys(ir))
     }
@@ -274,3 +279,4 @@ lower_ir_node.register(Projection, _lower_ir_pwise)
 lower_ir_node.register(Cache, _lower_ir_pwise)
 lower_ir_node.register(Filter, _lower_ir_pwise)
 lower_ir_node.register(HStack, _lower_ir_pwise)
+lower_ir_node.register(HConcat, _lower_ir_pwise)
