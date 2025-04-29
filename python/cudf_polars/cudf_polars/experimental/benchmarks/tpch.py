@@ -1,7 +1,14 @@
+# pragma: no cover
 # SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Experimental TPC-H benchmarks."""
+"""
+Experimental TPC-H benchmark.
+
+WARNING: This is an experimental (and unofficial)
+benchmark script. It is not intended for public use
+and may be modified or removed at any time.
+"""
 
 from __future__ import annotations
 
@@ -207,27 +214,7 @@ def get_data(
 
 
 class TPCHQueries:
-    """
-    TPCH query definitions.
-
-    Notes
-    -----
-    Query 8:
-     - Needs modified (but equivalent) groupby agg
-       (e.g. `agg((pl.sum("_tmp") / pl.sum("volume"))`)
-    Query 11:
-      - Multi-partition NOT supported (conditional join)
-    Query 16:
-      - Multi-partition NOT supported (n_unique)
-    Query 17:
-      - Needs modified (but equivalent) groupby agg
-       (e.g. `agg((0.2 * pl.col("l_quantity").mean())`)
-    Query 20:
-      - Needs modified (but equivalent) groupby agg
-      - Multi-partition NOT supported (unique)
-    Query 22:
-      - Multi-partition NOT supported (unique)
-    """
+    """TPCH query definitions."""
 
     @staticmethod
     def q0(run_config: RunConfig) -> pl.LazyFrame:
