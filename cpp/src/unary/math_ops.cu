@@ -219,17 +219,23 @@ struct DeviceBitCount {
   template <typename T>
   std::enable_if_t<!std::is_same_v<T, bool>, int32_t> __device__ operator()(T data)
   {
-    // Convert to unsigned of the same width to handle negative numbers correctly as right shift
-    // on unsigned types is always zero fill.
-    using UnsignedT = std::make_unsigned_t<T>;
-    auto x          = static_cast<UnsignedT>(data);
-
-    int32_t count = 0;
-    while (x) {
-      count += x & 1;
-      x >>= 1;
+    auto constexpr nbits = CHAR_BIT * sizeof(T);
+    if constexpr (nbits <= 32) {
+      return __popc(static_cast<unsigned int>(data));
+    } else if constexpr (nbits <= 64) {
+      return __popcll(static_cast<unsigned long long>(data));
+    } else {
+      // Convert to unsigned of the same width to handle negative numbers correctly as right shift
+      // on unsigned types is always zero fill.
+      using UnsignedT = std::make_unsigned_t<T>;
+      auto x          = static_cast<UnsignedT>(data);
+      int32_t count   = 0;
+      while (x) {
+        count += x & 1;
+        x >>= 1;
+      }
+      return count;
     }
-    return count;
   }
 };
 

@@ -121,8 +121,8 @@ TYPED_TEST(UnaryBitwiseOpsTypedTest, BitCount)
   std::vector<int32_t> expected_data(data.size());
   std::transform(data.begin(), data.end(), expected_data.begin(), [](T val) {
     using UnsignedT      = std::conditional_t<std::is_same_v<T, bool>, T, std::make_unsigned_t<T>>;
-    auto constexpr width = std::numeric_limits<UnsignedT>::digits;
-    auto const b         = std::bitset<width>(static_cast<UnsignedT>(val));
+    auto constexpr nbits = CHAR_BIT * sizeof(T);
+    auto const b         = std::bitset<nbits>(static_cast<UnsignedT>(val));
     return b.count();
   });
   auto const expected =
@@ -142,8 +142,8 @@ TYPED_TEST(UnaryBitwiseOpsTypedTest, BitCountWithNulls)
   std::vector<int32_t> expected_data(data.size());
   std::transform(data.begin(), data.end(), expected_data.begin(), [](T val) {
     using UnsignedT      = std::conditional_t<std::is_same_v<T, bool>, T, std::make_unsigned_t<T>>;
-    auto constexpr width = std::numeric_limits<UnsignedT>::digits;
-    auto const b         = std::bitset<width>(static_cast<UnsignedT>(val));
+    auto constexpr nbits = CHAR_BIT * sizeof(T);
+    auto const b         = std::bitset<nbits>(static_cast<UnsignedT>(val));
     return b.count();
   });
   auto const expected = cudf::test::fixed_width_column_wrapper<int32_t>(
