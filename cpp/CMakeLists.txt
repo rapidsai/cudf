@@ -935,7 +935,13 @@ target_compile_definitions(cudf PRIVATE $<$<BOOL:${CUDF_KVIKIO_REMOTE_IO}>:CUDF_
 
 # Remove this after upgrading to a CCCL that has a proper CMake option. See
 # https://github.com/NVIDIA/cccl/pull/2844
-target_compile_definitions(cudf PRIVATE THRUST_FORCE_32_BIT_OFFSET_TYPE=1 CCCL_AVOID_SORT_UNROLL=1)
+target_compile_definitions(
+  cudf
+  PRIVATE THRUST_FORCE_32_BIT_OFFSET_TYPE=1
+          CCCL_AVOID_SORT_UNROLL=1
+          _LIBCUDACXX_ATOMIC_UNSAFE_AUTOMATIC_STORAGE=1
+          _LIBCUDACXX_FORCE_PTX_AUTOMATIC_STORAGE_PATH=0
+)
 
 # Compile stringified JIT sources first
 add_dependencies(cudf jitify_preprocess_run)
