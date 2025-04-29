@@ -273,6 +273,7 @@ def _(
         out_name = get_key_name(ir)
         out_size = partition_info[ir].count
         split_name = f"split-{out_name}"
+        getit_name = f"getit-{out_name}"
         inter_name = f"inter-{out_name}"
 
         for part_out in range(out_size):
@@ -286,18 +287,13 @@ def _(
 
             _concat_list = []
             for j in range(small_size):
-                join_children = [
-                    (
-                        (
-                            operator.getitem,
-                            (split_name, part_out),
-                            j,
-                        )
-                        if ir.options[0] != "Inner"
-                        else (large_name, part_out)
-                    ),
-                    (small_name, j),
-                ]
+                left_key: tuple[str, int] | tuple[str, int, int]
+                if ir.options[0] != "Inner":
+                    left_key = (getit_name, part_out, j)
+                    graph[left_key] = (operator.getitem, (split_name, part_out), j)
+                else:
+                    left_key = (large_name, part_out)
+                join_children = [left_key, (small_name, j)]
                 if small_side == "Left":
                     join_children.reverse()
 
