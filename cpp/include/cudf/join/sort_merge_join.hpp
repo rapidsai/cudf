@@ -84,43 +84,44 @@ class sort_merge_join {
    * @brief Helper struct to pre-process tables before join operations
    */
   struct preprocessed_table {
-    table_view raw_tbl_view;  ///< Raw table view before pre-processing
+    table_view _tbl_view;  ///< Unprocessed table view before pre-processing
 
-    table_view tbl_view;  ///< Processed table view which is the null-free subset of the rows of the
-                          ///< raw table view if null equality is set to false, otherwise equal to
-                          ///< the raw table view
+    table_view
+      _null_processed_tbl_view;  ///< Processed table view which is the null-free subset of the rows
+                                 ///< of the unprocessed table view if null equality is set to
+                                 ///< false, otherwise equal to the unprocessed table view
 
-    std::optional<rmm::device_buffer> raw_validity_mask =
+    std::optional<rmm::device_buffer> _validity_mask =
       std::nullopt;  ///< Optional validity mask for null_equality::UNEQUAL case
-    std::optional<size_type> raw_num_nulls =
+    std::optional<size_type> _num_nulls =
       std::nullopt;  ///< Optional count of nulls for null_equality::UNEQUAL case
-    std::optional<std::unique_ptr<table>> tbl =
+    std::optional<std::unique_ptr<table>> _null_processed_tbl =
       std::nullopt;  ///< Optional filtered table for null_equality::UNEQUAL case
 
-    std::optional<std::unique_ptr<column>> tbl_sorted_order =
+    std::optional<std::unique_ptr<column>> _null_processed_tbl_sorted_order =
       std::nullopt;  ///< Optional sort ordering for pre-sorted tables
 
     /**
-     * @brief Mark rows in raw table with nulls at root or child levels by populating the
-     * raw_validity_mask
+     * @brief Mark rows in unprocessed table with nulls at root or child levels by populating the
+     * _validity_mask
      *
      * @param stream CUDA stream used for device memory operations and kernel launches
      */
     void populate_nonnull_filter(rmm::cuda_stream_view stream);
 
     /**
-     * @brief Apply raw_validity_mask to the raw_tbl_view to create a null-free table
+     * @brief Apply _validity_mask to the _tbl_view to create a null-free table
      *
      * @param stream CUDA stream used for device memory operations and kernel launches
      */
     void apply_nonnull_filter(rmm::cuda_stream_view stream);
 
     /**
-     * @brief Pre-process the raw table when null equality is set to unequal
+     * @brief Pre-process the unprocessed table when null equality is set to unequal
      *
      * @param stream CUDA stream used for device memory operations and kernel launches
      */
-    void preprocess_raw_table(rmm::cuda_stream_view stream);
+    void preprocess_unprocessed_table(rmm::cuda_stream_view stream);
 
     /**
      * @brief Compute sorted ordering of the processed table
@@ -130,13 +131,13 @@ class sort_merge_join {
     void get_sorted_order(rmm::cuda_stream_view stream);
 
     /**
-     * @brief Create mapping from processed table indices to raw table indices
+     * @brief Create mapping from processed table indices to unprocessed table indices
      *
      * @param stream CUDA stream used for device memory operations and kernel launches
-     * @return A device vector containing the mapping from processed table indices to raw table
-     * indices
+     * @return A device vector containing the mapping from processed table indices to unprocessed
+     * table indices
      */
-    rmm::device_uvector<size_type> map_tbl_to_raw(rmm::cuda_stream_view stream);
+    rmm::device_uvector<size_type> map_tbl_to_unprocessed(rmm::cuda_stream_view stream);
   };
   preprocessed_table preprocessed_left;
   preprocessed_table preprocessed_right;

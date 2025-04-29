@@ -69,11 +69,11 @@ struct list_nonnull_filter {
   };
 };
 
-struct raw_tbl_mapper {
-  bitmask_type const* const raw_validity_mask;
+struct unprocessed_tbl_mapper {
+  bitmask_type const* const _validity_mask;
   __device__ auto operator()(size_type idx) const noexcept
   {
-    return cudf::bit_is_set(raw_validity_mask, idx);
+    return cudf::bit_is_set(_validity_mask, idx);
   }
 };
 
@@ -274,7 +274,7 @@ merge<LargerIterator, SmallerIterator>::operator()(rmm::cuda_stream_view stream,
 
 void sort_merge_join::preprocessed_table::populate_nonnull_filter(rmm::cuda_stream_view stream)
 {
-  auto tbl     = this->raw_tbl_view;
+  auto tbl     = this->_tbl_view;
   auto temp_mr = cudf::get_current_device_resource_ref();
   // remove rows that have nulls at any nesting level
   // step 1: identify nulls at root level
@@ -320,9 +320,9 @@ void sort_merge_join::preprocessed_table::populate_nonnull_filter(rmm::cuda_stre
                             static_cast<size_type>(subset_offset)});
     }
   }
-  this->raw_num_nulls =
+  this->_num_nulls =
     null_count(static_cast<bitmask_type*>(validity_mask.data()), 0, tbl.num_rows(), stream);
-  this->raw_validity_mask = std::move(validity_mask);
+  this->_validity_mask = std::move(validity_mask);
 }
 
 void sort_merge_join::preprocessed_table::apply_nonnull_filter(rmm::cuda_stream_view stream)
@@ -331,16 +331,16 @@ void sort_merge_join::preprocessed_table::apply_nonnull_filter(rmm::cuda_stream_
   // construct bool column to apply mask
   cudf::scalar_type_t<bool> true_scalar(true, true, stream, temp_mr);
   auto bool_mask =
-    cudf::make_column_from_scalar(true_scalar, raw_tbl_view.num_rows(), stream, temp_mr);
-  CUDF_EXPECTS(raw_validity_mask.has_value() && raw_num_nulls.has_value(),
-               "Something went wrong while dropping nulls in the raw tables");
-  bool_mask->set_null_mask(raw_validity_mask.value(), raw_num_nulls.value(), stream);
+    cudf::make_column_from_scalar(true_scalar, _tbl_view.num_rows(), stream, temp_mr);
+  CUDF_EXPECTS(_validity_mask.has_value() && _num_nulls.has_value(),
+               "Something went wrong while dropping nulls in the unprocessed tables");
+  bool_mask->set_null_mask(_validity_mask.value(), _num_nulls.value(), stream);
 
-  tbl      = apply_boolean_mask(raw_tbl_view, *bool_mask, stream, temp_mr);
-  tbl_view = tbl.value()->view();
+  _null_processed_tbl      = apply_boolean_mask(_tbl_view, *bool_mask, stream, temp_mr);
+  _null_processed_tbl_view = _null_processed_tbl.value()->view();
 }
 
-void sort_merge_join::preprocessed_table::preprocess_raw_table(rmm::cuda_stream_view stream)
+void sort_merge_join::preprocessed_table::preprocess_unprocessed_table(rmm::cuda_stream_view stream)
 {
   populate_nonnull_filter(stream);
   apply_nonnull_filter(stream);
@@ -351,21 +351,21 @@ void sort_merge_join::preprocess_tables(table_view const left,
                                         rmm::cuda_stream_view stream)
 {
   if (compare_nulls == null_equality::EQUAL) {
-    preprocessed_left.tbl_view  = left;
-    preprocessed_right.tbl_view = right;
+    preprocessed_left._null_processed_tbl_view  = left;
+    preprocessed_right._null_processed_tbl_view = right;
   } else {
     // if a table has no nullable column, then there's no preprocessing to be done
     auto is_left_nullable  = nullable(left);
     auto is_right_nullable = nullable(right);
     if (is_left_nullable) {
-      preprocessed_left.preprocess_raw_table(stream);
+      preprocessed_left.preprocess_unprocessed_table(stream);
     } else {
-      preprocessed_left.tbl_view = left;
+      preprocessed_left._null_processed_tbl_view = left;
     }
     if (is_right_nullable) {
-      preprocessed_right.preprocess_raw_table(stream);
+      preprocessed_right.preprocess_unprocessed_table(stream);
     } else {
-      preprocessed_right.tbl_view = right;
+      preprocessed_right._null_processed_tbl_view = right;
     }
   }
 }
@@ -373,10 +373,12 @@ void sort_merge_join::preprocess_tables(table_view const left,
 void sort_merge_join::preprocessed_table::get_sorted_order(rmm::cuda_stream_view stream)
 {
   auto temp_mr = cudf::get_current_device_resource_ref();
-  std::vector<cudf::order> column_order(tbl_view.num_columns(), cudf::order::ASCENDING);
-  std::vector<cudf::null_order> null_precedence(tbl_view.num_columns(), cudf::null_order::BEFORE);
-  this->tbl_sorted_order =
-    cudf::sorted_order(tbl_view, column_order, null_precedence, stream, temp_mr);
+  std::vector<cudf::order> column_order(_null_processed_tbl_view.num_columns(),
+                                        cudf::order::ASCENDING);
+  std::vector<cudf::null_order> null_precedence(_null_processed_tbl_view.num_columns(),
+                                                cudf::null_order::BEFORE);
+  this->_null_processed_tbl_sorted_order =
+    cudf::sorted_order(_null_processed_tbl_view, column_order, null_precedence, stream, temp_mr);
 }
 
 sort_merge_join::sort_merge_join(table_view const& left,
@@ -392,29 +394,28 @@ sort_merge_join::sort_merge_join(table_view const& left,
   CUDF_EXPECTS(left.num_columns() == right.num_columns(),
                "Number of columns must match for a join");
 
-  preprocessed_left.raw_tbl_view  = left;
-  preprocessed_right.raw_tbl_view = right;
-  this->compare_nulls             = compare_nulls;
+  preprocessed_left._tbl_view  = left;
+  preprocessed_right._tbl_view = right;
+  this->compare_nulls          = compare_nulls;
   preprocess_tables(left, right, stream);
 
   if (is_left_sorted == cudf::sorted::NO) { preprocessed_left.get_sorted_order(stream); }
   if (is_right_sorted == cudf::sorted::NO) { preprocessed_right.get_sorted_order(stream); }
 }
 
-rmm::device_uvector<size_type> sort_merge_join::preprocessed_table::map_tbl_to_raw(
+rmm::device_uvector<size_type> sort_merge_join::preprocessed_table::map_tbl_to_unprocessed(
   rmm::cuda_stream_view stream)
 {
-  CUDF_EXPECTS(raw_validity_mask.has_value() && raw_num_nulls.has_value(),
-               "Mapping is not possible");
+  CUDF_EXPECTS(_validity_mask.has_value() && _num_nulls.has_value(), "Mapping is not possible");
   auto temp_mr = cudf::get_current_device_resource_ref();
   rmm::device_uvector<size_type> tbl_mapping(
-    raw_tbl_view.num_rows() - raw_num_nulls.value(), stream, temp_mr);
+    _tbl_view.num_rows() - _num_nulls.value(), stream, temp_mr);
   thrust::copy_if(
     rmm::exec_policy_nosync(stream),
     thrust::counting_iterator<cudf::size_type>(0),
-    thrust::counting_iterator<cudf::size_type>(raw_tbl_view.num_rows()),
+    thrust::counting_iterator<cudf::size_type>(_tbl_view.num_rows()),
     tbl_mapping.begin(),
-    raw_tbl_mapper{static_cast<bitmask_type const*>(raw_validity_mask.value().data())});
+    unprocessed_tbl_mapper{static_cast<bitmask_type const*>(_validity_mask.value().data())});
   return tbl_mapping;
 }
 
@@ -422,21 +423,14 @@ void sort_merge_join::postprocess_indices(device_span<size_type> smaller_indices
                                           device_span<size_type> larger_indices,
                                           rmm::cuda_stream_view stream)
 {
-  bool is_left_smaller =
-    preprocessed_left.tbl_view.num_rows() < preprocessed_right.tbl_view.num_rows();
-  // if a table has no nullable column, then there's no postprocessing to be done
-  auto is_nullable_table = [](table_view const& t) {
-    for (auto&& col : t) {
-      if (col.nullable()) { return true; }
-    }
-    return false;
-  };
-
+  bool is_left_smaller = preprocessed_left._null_processed_tbl_view.num_rows() <
+                         preprocessed_right._null_processed_tbl_view.num_rows();
   if (compare_nulls == null_equality::UNEQUAL) {
-    auto is_left_nullable  = is_nullable_table(preprocessed_left.tbl_view);
-    auto is_right_nullable = is_nullable_table(preprocessed_right.tbl_view);
+    // if a table has no nullable column, then there's no postprocessing to be done
+    auto is_left_nullable  = nullable(preprocessed_left._null_processed_tbl_view);
+    auto is_right_nullable = nullable(preprocessed_right._null_processed_tbl_view);
     if (is_left_nullable) {
-      auto left_mapping = preprocessed_left.map_tbl_to_raw(stream);
+      auto left_mapping = preprocessed_left.map_tbl_to_unprocessed(stream);
       if (is_left_smaller) {
         thrust::transform(rmm::exec_policy_nosync(stream),
                           smaller_indices.begin(),
@@ -452,7 +446,7 @@ void sort_merge_join::postprocess_indices(device_span<size_type> smaller_indices
       }
     }
     if (is_right_nullable) {
-      auto right_mapping = preprocessed_right.map_tbl_to_raw(stream);
+      auto right_mapping = preprocessed_right.map_tbl_to_unprocessed(stream);
       if (is_left_smaller) {
         thrust::transform(rmm::exec_policy_nosync(stream),
                           larger_indices.begin(),
@@ -475,17 +469,18 @@ std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
 sort_merge_join::inner_join(rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
 {
   // TODO: what if one is sorted but not the other?
-  bool is_left_smaller =
-    preprocessed_left.tbl_view.num_rows() < preprocessed_right.tbl_view.num_rows();
+  bool is_left_smaller = preprocessed_left._null_processed_tbl_view.num_rows() <
+                         preprocessed_right._null_processed_tbl_view.num_rows();
   auto& smaller = is_left_smaller ? preprocessed_left : preprocessed_right;
   auto& larger  = is_left_smaller ? preprocessed_right : preprocessed_left;
-  if (smaller.tbl_sorted_order.has_value() && larger.tbl_sorted_order.has_value()) {
-    merge obj(smaller.tbl_view,
-              smaller.tbl_sorted_order.value()->view().begin<size_type>(),
-              smaller.tbl_sorted_order.value()->view().end<size_type>(),
-              larger.tbl_view,
-              larger.tbl_sorted_order.value()->view().begin<size_type>(),
-              larger.tbl_sorted_order.value()->view().end<size_type>());
+  if (smaller._null_processed_tbl_sorted_order.has_value() &&
+      larger._null_processed_tbl_sorted_order.has_value()) {
+    merge obj(smaller._null_processed_tbl_view,
+              smaller._null_processed_tbl_sorted_order.value()->view().begin<size_type>(),
+              smaller._null_processed_tbl_sorted_order.value()->view().end<size_type>(),
+              larger._null_processed_tbl_view,
+              larger._null_processed_tbl_sorted_order.value()->view().begin<size_type>(),
+              larger._null_processed_tbl_sorted_order.value()->view().end<size_type>());
     auto [smaller_indices, larger_indices] = obj(stream, mr);
     postprocess_indices(*smaller_indices, *larger_indices, stream);
     stream.synchronize();
@@ -493,12 +488,12 @@ sort_merge_join::inner_join(rmm::cuda_stream_view stream, rmm::device_async_reso
     return {std::move(larger_indices), std::move(smaller_indices)};
   }
   // we passed pre-sorted tables
-  merge obj(smaller.tbl_view,
+  merge obj(smaller._null_processed_tbl_view,
             thrust::counting_iterator(0),
-            thrust::counting_iterator(smaller.tbl_view.num_rows()),
-            larger.tbl_view,
+            thrust::counting_iterator(smaller._null_processed_tbl_view.num_rows()),
+            larger._null_processed_tbl_view,
             thrust::counting_iterator(0),
-            thrust::counting_iterator(larger.tbl_view.num_rows()));
+            thrust::counting_iterator(larger._null_processed_tbl_view.num_rows()));
   auto [smaller_indices, larger_indices] = obj(stream, mr);
   postprocess_indices(*smaller_indices, *larger_indices, stream);
   stream.synchronize();
