@@ -278,7 +278,7 @@ std::unique_ptr<column> dispatch_copy_from_arrow_host::operator()<cudf::list_vie
       reinterpret_cast<int64_t const*>(input->buffers[fixed_width_data_buffer_idx]);
 
     std::vector<int32_t> int32_offsets(physical_length);
-    auto const max_offset = static_cast<int64_t>(std::numeric_limits<int32_t>::max());
+    constexpr auto max_offset = static_cast<int64_t>(std::numeric_limits<int32_t>::max());
     CUDF_EXPECTS(large_offsets[physical_length - 1] <= max_offset,
                  "Large list offsets exceed 32-bit integer bounds",
                  std::overflow_error);
