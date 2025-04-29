@@ -1432,6 +1432,17 @@ void hybrid_scan_reader_impl::update_row_mask(cudf::column_view in_row_mask,
   // to correctly assess if a payload column data page can be pruned. An invalid row in the row mask
   // column means the corresponding data page cannot be pruned.
   cudf::set_null_mask(out_row_mask.null_mask(), 0, total_rows, true, stream);
+  out_row_mask.set_null_count(0);
+}
+
+void hybrid_scan_reader_impl::sanitize_row_mask(
+  cudf::host_span<thrust::host_vector<bool> const> data_page_mask,
+  cudf::mutable_column_view row_mask)
+{
+  if (data_page_mask.empty()) {
+    thrust::fill(
+      rmm::exec_policy_nosync(_stream), row_mask.begin<bool>(), row_mask.end<bool>(), true);
+  }
 }
 
 }  // namespace cudf::io::parquet::experimental::detail

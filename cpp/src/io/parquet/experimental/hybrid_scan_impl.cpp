@@ -822,10 +822,8 @@ table_with_metadata hybrid_scan_reader_impl::materialize_filter_columns(
 
   CUDF_EXPECTS(_expr_conv.get_converted_expr().has_value(), "Filter expression must not be empty");
 
-  // If the data page mask is empty, reset the row mask to all valid
-  if (data_page_mask.empty()) {
-    cudf::set_null_mask(row_mask.data<bitmask_type>(), 0, row_mask.size(), true);
-  }
+  // If the data page mask is empty, ensure the row mask is all valid
+  sanitize_row_mask(data_page_mask, row_mask);
 
   prepare_data(row_group_indices, std::move(column_chunk_buffers), data_page_mask, options);
 

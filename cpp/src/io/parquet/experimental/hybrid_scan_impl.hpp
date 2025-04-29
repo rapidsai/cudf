@@ -208,6 +208,15 @@ class hybrid_scan_reader_impl {
   void set_page_mask(cudf::host_span<thrust::host_vector<bool> const> data_page_mask);
 
   /**
+   * @brief Ensure the row mask is all valid if data page mask is empty
+   *
+   * @param data_page_mask Input data page mask
+   * @param row_mask The row mask to sanitize
+   */
+  void sanitize_row_mask(cudf::host_span<thrust::host_vector<bool> const> data_page_mask,
+                         cudf::mutable_column_view row_mask);
+
+  /**
    * @brief Select the columns to be read.
    *
    * @param read_mode Read mode
@@ -235,7 +244,10 @@ class hybrid_scan_reader_impl {
   /**
    * @brief Perform the necessary data preprocessing for parsing file later on.
    *
-   * @param read_mode Value indicating if the data sources are read all at once or chunk by chunk
+   * @param row_group_indices The row groups to read
+   * @param column_chunk_buffers Device buffers containing column chunk data
+   * @param data_page_mask Input data page mask from page-pruning step for the current pass
+   * @param options Parquet reader options
    */
   void prepare_data(cudf::host_span<std::vector<size_type> const> row_group_indices,
                     std::vector<rmm::device_buffer> column_chunk_buffers,
@@ -256,7 +268,9 @@ class hybrid_scan_reader_impl {
   /**
    * @brief Ratchet the pass/subpass/chunk process forward.
    *
-   * @param read_mode Value indicating if the data sources are read all at once or chunk by chunk
+   * @param column_chunk_buffers Device buffers containing column chunk data
+   * @param data_page_mask Input data page mask from page-pruning step for the current pass
+   * @param options Parquet reader options
    */
   void handle_chunking(std::vector<rmm::device_buffer> column_chunk_buffers,
                        cudf::host_span<thrust::host_vector<bool> const> data_page_mask,
@@ -268,7 +282,8 @@ class hybrid_scan_reader_impl {
    * A 'pass' is defined as a subset of row groups read out of the globally
    * requested set of all row groups.
    *
-   * @param read_mode Value indicating if the data sources are read all at once or chunk by chunk
+   * @param column_chunk_buffers Device buffers containing column chunk data
+   * @param options Parquet reader options
    */
   void setup_next_pass(std::vector<rmm::device_buffer> column_chunk_buffers,
                        parquet_reader_options const& options);
@@ -280,8 +295,7 @@ class hybrid_scan_reader_impl {
    * decompressed and decoded as a batch. Subpasses may be further subdivided
    * into output chunks.
    *
-   * @param read_mode Value indicating if the data sources are read all at once or chunk by chunk
-   *
+   * @param options Parquet reader options
    */
   void setup_next_subpass(parquet_reader_options const& options);
 
