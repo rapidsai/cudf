@@ -78,7 +78,7 @@ exclude_also = [
 ]
 # The cudf_polars test suite doesn't exercise the plugin, so we omit
 # it from coverage checks.
-omit = ["cudf_polars/testing/plugin.py"]
+omit = ["cudf_polars/testing/plugin.py", "cudf_polars/experimental/benchmarks/tpch.py"]
 
 [tool.ruff]
 line-length = 88
