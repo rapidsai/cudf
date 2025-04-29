@@ -211,13 +211,7 @@ struct DeviceRInt {
 
 struct DeviceBitCount {
   template <typename T>
-  std::enable_if_t<std::is_same_v<T, bool>, int32_t> __device__ operator()(T data)
-  {
-    return data ? 1 : 0;
-  }
-
-  template <typename T>
-  std::enable_if_t<!std::is_same_v<T, bool>, int32_t> __device__ operator()(T data)
+  int32_t __device__ operator()(T data)
   {
     auto constexpr nbits = CHAR_BIT * sizeof(T);
     if constexpr (nbits <= 32) {
