@@ -1,5 +1,6 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
+from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 from pylibcudf.libcudf.aggregation cimport (
     Kind as kind_t,
@@ -42,6 +43,7 @@ cdef class Aggregation:
     cdef unique_ptr[groupby_scan_aggregation] clone_underlying_as_groupby_scan(
         self
     ) except *
+    cdef unique_ptr[rolling_aggregation] clone_underlying_as_rolling(self) except *
     cdef const reduce_aggregation* view_underlying_as_reduce(self) except *
     cdef const scan_aggregation* view_underlying_as_scan(self) except *
     cdef const rolling_aggregation* view_underlying_as_rolling(self) except *
@@ -103,3 +105,5 @@ cpdef Aggregation rank(
     null_order null_precedence = *,
     rank_percentage percentage = *,
 )
+
+cpdef bool is_valid_aggregation(DataType source, Aggregation agg)
