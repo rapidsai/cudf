@@ -47,12 +47,15 @@ def decompose_single_agg(
 
     Returns
     -------
-    tuple
-        Three-tuple of list of expressions to apply as grouped
-        aggregations (whose children may be evaluated pointwise),
-        single expression to apply to post-process the grouped
-        aggregations, and a boolean indicating whether processing in
-        the inner expression requires aggregations.
+    aggregations
+        Expressions to apply as grouped aggregations (whose children
+        may be evaluated pointwise).
+    post_aggregate
+        Single expression to apply to post-process the grouped
+        aggregations.
+    is_nested
+        Flag indicating whether processing in the inner expression
+        itself requires aggregations.
 
     Raises
     ------
@@ -172,9 +175,10 @@ def decompose_aggs(
 
     Returns
     -------
-    tuple
-        Of aggregation expressions for the ``GroupBy`` node, and
-        expressions to evaluate after the aggregation (as a ``Select``).
+    aggregations
+        Aggregations to apply in the groupby node.
+    post_aggregations
+        Expressions to apply after aggregating (as a ``Select``).
 
     Notes
     -----
@@ -221,11 +225,15 @@ def apply_pre_evaluation(
 
     Returns
     -------
-    tuple
-        Rewritten input, suitable as input to the aggregation
-        node; the requested decomposed aggregations; the new schema of
-        the aggregation node; a callable to apply to the aggregation
-        node to apply any post-processing.
+    new_input
+        Rewritten input, suitable as input to the aggregation node
+    aggregations
+        The required aggregations.
+    schema
+        The new schema of the aggregation node
+    post_process
+        Function to apply to the aggregation node to apply any
+        post-processing.
 
     Raises
     ------
