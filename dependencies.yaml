@@ -216,7 +216,7 @@ files:
     includes:
       - depends_on_libkvikio
       - depends_on_librmm
-      - depends_on_nvcomp
+      # - depends_on_nvcomp
       - depends_on_rapids_logger
   py_build_pylibcudf:
     output: pyproject

@@ -17,6 +17,14 @@ rapids-dependency-file-generator \
   --matrix "cuda=${RAPIDS_CUDA_VERSION%.*};arch=$(arch);py=${RAPIDS_PY_VERSION};cuda_suffixed=true" \
 | tee /tmp/requirements-build.txt
 
+
+set -x
+LIBKVIKIO_WHEEL=$(rapids-get-artifact "libkvikio_${RAPIDS_PY_CUDA_SUFFIX}-25.6.0a28-py3-none-${AUDITWHEEL_PLAT}.whl")
+echo "libkvikio-${RAPIDS_PY_CUDA_SUFFIX} @ file://${LIBKVIKIO_WHEEL}" > /tmp/constraints.txt
+export PIP_CONSTRAINT="/tmp/constraints.txt"
+set +x
+
+
 rapids-logger "Installing build requirements"
 rapids-pip-retry install \
     -v \
