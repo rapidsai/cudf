@@ -258,7 +258,7 @@ struct DeviceLeadLag {
 };
 
 /**
- * @brief Binary bitwise `AND` operator.
+ * @brief Binary bitwise `AND` operator
  */
 struct DeviceBitAnd {
   template <typename T, std::enable_if_t<std::is_integral_v<T>>* = nullptr>
@@ -286,7 +286,7 @@ struct DeviceBitAnd {
 };
 
 /**
- * @brief Binary bitwise `OR` operator.
+ * @brief Binary bitwise `OR` operator
  */
 struct DeviceBitOr {
   template <typename T, std::enable_if_t<std::is_integral_v<T>>* = nullptr>
@@ -314,7 +314,7 @@ struct DeviceBitOr {
 };
 
 /**
- * @brief Binary bitwise `XOR` operator.
+ * @brief Binary bitwise `XOR` operator
  */
 struct DeviceBitXor {
   template <typename T, std::enable_if_t<std::is_integral_v<T>>* = nullptr>
