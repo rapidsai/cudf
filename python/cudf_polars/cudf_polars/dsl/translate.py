@@ -456,7 +456,11 @@ def _(node: pl_ir.Union, translator: Translator, schema: Schema) -> ir.IR:
 
 @_translate_ir.register
 def _(node: pl_ir.HConcat, translator: Translator, schema: Schema) -> ir.IR:
-    return ir.HConcat(schema, *(translator.translate_ir(n=n) for n in node.inputs))
+    return ir.HConcat(
+        schema,
+        False,  # noqa: FBT003
+        *(translator.translate_ir(n=n) for n in node.inputs),
+    )
 
 
 def translate_named_expr(
