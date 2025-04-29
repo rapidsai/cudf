@@ -44,26 +44,6 @@ namespace CUDF_EXPORT cudf {
 class sort_merge_join {
  public:
   /**
-   * @brief Construct a sort-merge join object
-   *
-   * @note The `sort_merge_join` object must not outlive the tables viewed by `left` and `right`,
-   * else behavior is undefined.
-   *
-   * @param left The left table
-   * @param is_left_sorted Enum to indicate if left table is pre-sorted
-   * @param right The right table
-   * @param is_right_sorted Enum to indicate if right table is pre-sorted
-   * @param compare_nulls Controls whether null join-key values should match or not
-   * @param stream CUDA stream used for device memory operations and kernel launches
-   */
-  sort_merge_join(table_view const& left,
-                  sorted is_left_sorted,
-                  table_view const& right,
-                  sorted is_right_sorted,
-                  null_equality compare_nulls  = null_equality::EQUAL,
-                  rmm::cuda_stream_view stream = cudf::get_default_stream());
-
-  /**
    * @brief Construct a sort-merge join object that pre-processes the right table
    * on creation, and can be used on subsequent join operations with multiple
    * left tables.
@@ -80,22 +60,6 @@ class sort_merge_join {
                   sorted is_right_sorted,
                   null_equality compare_nulls  = null_equality::EQUAL,
                   rmm::cuda_stream_view stream = cudf::get_default_stream());
-
-  /**
-   * Returns the row indices that can be used to construct the result of performing
-   * an inner join between two tables. @see cudf::inner_join().
-   *
-   * @param stream CUDA stream used for device memory operations and kernel launches
-   * @param mr Device memory resource used to allocate the table and columns' device
-   * memory.
-   *
-   * @return A pair of columns [`left_indices`, `right_indices`] that can be used to construct
-   * the result of performing an inner join between two tables
-   */
-  std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
-            std::unique_ptr<rmm::device_uvector<size_type>>>
-  inner_join(rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-             rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
   /**
    * Returns the row indices that can be used to construct the result of performing
@@ -182,18 +146,6 @@ class sort_merge_join {
   preprocessed_table preprocessed_left;
   preprocessed_table preprocessed_right;
   null_equality compare_nulls;
-
-  /**
-   * @brief Preprocess left and right tables before the merge operation
-   *
-   * @param left The left table
-   * @param right The right table
-   * @param stream CUDA stream used for device memory operations and kernel launches
-   * memory.
-   */
-  void preprocess_tables(table_view const left,
-                         table_view const right,
-                         rmm::cuda_stream_view stream);
 
   /**
    * @brief Post-process left and right tables after the merge operation
