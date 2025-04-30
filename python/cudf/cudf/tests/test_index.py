@@ -1629,10 +1629,8 @@ def test_index_rangeindex_searchsorted():
     # step > 0
     ridx = RangeIndex(-13, 17, 4)
     for i in range(len(ridx)):
-        assert i == ridx.searchsorted(ridx[i], ascending=False, side="left")
-        assert i + 1 == ridx.searchsorted(
-            ridx[i], ascending=False, side="right"
-        )
+        assert i == ridx.searchsorted(ridx[i], side="left")
+        assert i + 1 == ridx.searchsorted(ridx[i], side="right")
 
 
 @pytest.mark.parametrize(

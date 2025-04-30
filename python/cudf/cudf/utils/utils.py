@@ -6,22 +6,13 @@ import functools
 import os
 import traceback
 import warnings
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import numpy as np
 import pandas as pd
 
-import pylibcudf as plc
-import rmm
-
 import cudf
 from cudf.core import column
-from cudf.core.buffer import as_buffer
-
-if TYPE_CHECKING:
-    import pyarrow as pa
-
-    from cudf.core.buffer import Buffer
 
 # Mapping from ufuncs to the corresponding binary operators.
 _ufunc_binary_operations = {
@@ -172,23 +163,6 @@ def _external_only_api(func, alternative=""):
         return func(*args, **kwargs)
 
     return wrapper
-
-
-def clear_cache() -> None:
-    """Clear all internal caches"""
-    cudf.Scalar._clear_instance_cache()
-
-
-def pa_mask_buffer_to_mask(mask_buf: pa.Buffer, size: int) -> Buffer:
-    """
-    Convert PyArrow mask buffer to cuDF mask buffer
-    """
-    mask_size = plc.null_mask.bitmask_allocation_size_bytes(size)
-    if mask_buf.size < mask_size:
-        dbuf = rmm.DeviceBuffer(size=mask_size)
-        dbuf.copy_from_host(np.asarray(mask_buf).view("u1"))
-        return as_buffer(dbuf)
-    return as_buffer(mask_buf)
 
 
 def is_na_like(obj: Any) -> bool:
