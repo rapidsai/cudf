@@ -45,6 +45,7 @@ using parquet::detail::PageNestingDecodeInfo;
 using text::byte_range_info;
 
 namespace {
+
 // Tests the passed in logical type for a FIXED_LENGTH_BYTE_ARRAY column to see if it should
 // be treated as a string. Currently the only logical type that has special handling is DECIMAL.
 // Other valid types in the future would be UUID (still treated as string) and FLOAT16 (which

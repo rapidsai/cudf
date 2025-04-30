@@ -43,7 +43,8 @@ using parquet::detail::row_group_info;
 
 namespace {
 
-auto all_row_group_indices(host_span<std::vector<cudf::size_type> const> row_group_indices)
+[[nodiscard]] auto all_row_group_indices(
+  host_span<std::vector<cudf::size_type> const> row_group_indices)
 {
   std::vector<std::vector<cudf::size_type>> all_row_group_indices;
   std::transform(row_group_indices.begin(),
