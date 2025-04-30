@@ -41,6 +41,20 @@ using parquet::detail::equality_literals_collector;
 using parquet::detail::input_column_info;
 using parquet::detail::row_group_info;
 
+namespace {
+
+auto all_row_group_indices(host_span<std::vector<cudf::size_type> const> row_group_indices)
+{
+  std::vector<std::vector<cudf::size_type>> all_row_group_indices;
+  std::transform(row_group_indices.begin(),
+                 row_group_indices.end(),
+                 std::back_inserter(all_row_group_indices),
+                 [](auto rg_indices) { return rg_indices; });
+  return all_row_group_indices;
+}
+
+}  // namespace
+
 metadata::metadata(cudf::host_span<uint8_t const> footer_bytes)
 {
   CompactProtocolReader cp(footer_bytes.data(), footer_bytes.size());
@@ -212,17 +226,8 @@ std::vector<std::vector<cudf::size_type>> aggregate_reader_metadata::filter_row_
   std::optional<std::reference_wrapper<ast::expression const>> filter,
   rmm::cuda_stream_view stream) const
 {
-  auto all_row_group_indices = [&]() {
-    std::vector<std::vector<cudf::size_type>> all_row_group_indices;
-    std::transform(row_group_indices.begin(),
-                   row_group_indices.end(),
-                   std::back_inserter(all_row_group_indices),
-                   [](auto rg_indices) { return rg_indices; });
-    return all_row_group_indices;
-  };
-
-  // No converted filter expression, return all row groups
-  if (not filter.has_value()) { return all_row_group_indices(); }
+  // Return all row groups if no filter expression
+  if (not filter.has_value()) { return all_row_group_indices(row_group_indices); }
 
   // Compute total number of input row groups
   cudf::size_type total_row_groups = [&]() {
@@ -250,7 +255,7 @@ std::vector<std::vector<cudf::size_type>> aggregate_reader_metadata::filter_row_
                                                                     filter.value(),
                                                                     stream);
 
-  return stats_filtered_row_group_indices.value_or(all_row_group_indices());
+  return stats_filtered_row_group_indices.value_or(all_row_group_indices(row_group_indices);
 }
 
 }  // namespace cudf::io::parquet::experimental::detail
