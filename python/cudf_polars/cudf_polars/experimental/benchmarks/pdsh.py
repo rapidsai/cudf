@@ -1124,15 +1124,9 @@ def run(args: argparse.Namespace) -> None:
             except ImportError as err:
                 if run_config.shuffle == "rapidsmpf":
                     raise ImportError from err
-        broadcast_join_limit = run_config.broadcast_join_limit
-    else:
-        # Use UVM with synchronous scheduler
-        broadcast_join_limit = run_config.broadcast_join_limit
 
-    query_ids = run_config.queries
     records: defaultdict[int, list[Record]] = defaultdict(list)
-
-    for q_id in query_ids:
+    for q_id in run_config.queries:
         try:
             q = getattr(PDSHQueries, f"q{q_id}")(run_config)
         except AttributeError as err:
@@ -1152,7 +1146,7 @@ def run(args: argparse.Namespace) -> None:
                     executor_options = {
                         "parquet_blocksize": run_config.blocksize,
                         "shuffle_method": run_config.shuffle,
-                        "broadcast_join_limit": broadcast_join_limit,
+                        "broadcast_join_limit": run_config.broadcast_join_limit,
                         "cardinality_factor": {
                             "c_custkey": 0.05,  # Q10
                             "l_orderkey": 1.0,  # Q18
