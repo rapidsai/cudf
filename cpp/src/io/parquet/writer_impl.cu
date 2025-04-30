@@ -2267,6 +2267,10 @@ writer::impl::impl(std::vector<std::unique_ptr<data_sink>> sinks,
   if (options.get_metadata()) {
     _table_meta = std::make_unique<table_input_metadata>(*options.get_metadata());
   }
+
+  CUDF_EXPECTS(is_supported_write_parquet(_compression),
+               "Compression type not supported for Parquet writer");
+
   init_state();
 }
 
@@ -2298,6 +2302,10 @@ writer::impl::impl(std::vector<std::unique_ptr<data_sink>> sinks,
   if (options.get_metadata()) {
     _table_meta = std::make_unique<table_input_metadata>(*options.get_metadata());
   }
+
+  CUDF_EXPECTS(is_supported_write_parquet(_compression),
+               "Compression type not supported for Parquet writer");
+
   init_state();
 }
 
