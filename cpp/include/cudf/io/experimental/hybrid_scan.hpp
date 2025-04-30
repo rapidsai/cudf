@@ -95,7 +95,7 @@ namespace io::parquet::experimental {
  * // Example metadata use: Calculate the number of rows in the file
  * auto total_rows = std::accumulate(parquet_metadata.row_groups.begin(),
  *                                   parquet_metadata.row_groups.end(),
-                                     [](auto const& rg) { return rg.num_rows; });
+ *                                   [](auto const& rg) { return rg.num_rows; });
  *
  * // Get the page index byte range from the reader
  * auto page_index_byte_range = reader->page_index_byte_range();
@@ -130,8 +130,7 @@ namespace io::parquet::experimental {
  * // Update current row group indices to now track the stats-filtered row group indices
  * current_row_group_indices = stats_filtered_row_group_indices;
  *
- * // Get byte ranges of bloom filters and dictionaries for the current row groups using the
- *    reader
+ * // Get byte ranges of bloom filters and dictionaries for the current row groups
  * auto [bloom_filter_byte_ranges, dict_page_byte_ranges] =
  *   reader->secondary_filters_byte_ranges(current_row_group_indices, options);
  *
