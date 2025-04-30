@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -962,4 +962,8 @@ bool is_valid_aggregation(data_type source, aggregation::Kind k)
   return dispatch_type_and_aggregation(source, k, is_valid_aggregation_impl{});
 }
 }  // namespace detail
+bool is_valid_aggregation(data_type source, aggregation::Kind k)
+{
+  return detail::is_valid_aggregation(source, k);
+}
 }  // namespace cudf
