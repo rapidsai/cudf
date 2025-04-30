@@ -39,7 +39,7 @@ def test_parallel_dataframescan(df, max_rows_per_partition):
 
     # Check partitioning
     qir = Translator(df._ldf.visit(), engine).translate_ir()
-    ir, info = lower_ir_graph(qir, ConfigOptions(engine.config))
+    ir, info = lower_ir_graph(qir, ConfigOptions.from_polars_engine(engine))
     count = info[ir].count
     if max_rows_per_partition < total_row_count:
         assert count > 1
