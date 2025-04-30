@@ -607,10 +607,6 @@ class DatetimeColumn(TemporalBaseColumn):
         else:
             return result_col
 
-    # @property
-    # def is_unique(self) -> bool:
-    #     return self.astype(np.dtype(np.int64)).is_unique
-
     def _with_type_metadata(self, dtype) -> DatetimeColumn:
         if isinstance(dtype, pd.DatetimeTZDtype):
             return DatetimeTZColumn(
