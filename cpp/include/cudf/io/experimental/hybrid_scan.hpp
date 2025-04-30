@@ -221,7 +221,7 @@ namespace io::parquet::experimental {
  * auto [filter_table, filter_metadata] =
  *   reader->materialize_filter_columns(data_page_mask,
  *                                      current_row_group_indices,
- *                                      std::move(filter_column_chunk_buffers),
+ *                                      filter_column_chunk_buffers,
  *                                      row_mask->mutable_view(),
  *                                      options,
  *                                      stream);
@@ -248,7 +248,7 @@ namespace io::parquet::experimental {
  * // Materialize the table with only the payload columns
  * auto [payload_table, payload_metadata] =
  *   reader->materialize_payload_columns(current_row_group_indices,
- *                                       std::move(payload_column_chunk_buffers),
+ *                                       payload_column_chunk_buffers,
  *                                       row_mask->view(),
  *                                       options,
  *                                       stream);
