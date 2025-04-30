@@ -62,10 +62,10 @@ namespace io::parquet::experimental {
  * the filter expression) are optimally read by applying the surviving row mask from the first pass
  * to prune payload column data pages.
  *
- * Note that the performance advantage of this reader is most pronounced when the filter expression
- * is highly selective, i.e. when the filter column data are partially ordered and the number of
- * rows that survive the filter expression is small compared to the total number of rows in the
- * parquet file. Otherwise, this reader performs identical to the `cudf::io::read_parquet()`
+ * @note that the performance advantage of this reader is most pronounced when the filter expression
+ * is highly selective, i.e. when the filter column data are at least partially ordered and the
+ * number of rows that survive the filter expression is small compared to the total number of rows
+ * in the parquet file. Otherwise, the performance is identical to the `cudf::io::read_parquet()`
  * function.
  *
  * The following code snippets demonstrate how to use the experimental parquet reader.
@@ -240,13 +240,13 @@ namespace io::parquet::experimental {
  *
  * Once both reader passes are complete, the filter and payload column tables may be trivially
  * combined by releasing the columns from both tables and moving them into a new cudf table.
+ *
  */
 class hybrid_scan_reader {
  public:
   /**
    * @brief Constructor for the experimental parquet reader class to optimally read Parquet files
    * subject to highly selective filters
-   *
    *
    * @param footer_bytes Host span of parquet file footer bytes
    * @param options Parquet reader options
