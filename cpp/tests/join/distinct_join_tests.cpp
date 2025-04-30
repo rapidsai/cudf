@@ -527,32 +527,3 @@ TEST_F(DistinctJoinTest, DISABLED_InvalidLoadFactor)
   // Test load factor > 1
   EXPECT_THROW(cudf::distinct_hash_join(t0, cudf::null_equality::EQUAL, 1.1), cuco::logic_error);
 }
-
-#include <cudf/io/parquet.hpp>
-#include <cudf/join/join.hpp>
-
-struct SparkJoinTest : public cudf::test::BaseFixture {};
-
-TEST_F(SparkJoinTest, DISABLED_XXX)
-{
-  std::string f1 = "f1.parquet";
-  std::string f2 = "f2.parquet";
-
-  cudf::io::parquet_reader_options opts1 =
-    cudf::io::parquet_reader_options::builder(cudf::io::source_info{f1});
-  cudf::io::parquet_reader_options opts2 =
-    cudf::io::parquet_reader_options::builder(cudf::io::source_info{f2});
-
-  auto out1 = cudf::io::read_parquet(opts1);
-  auto out2 = cudf::io::read_parquet(opts2);
-  auto t1   = std::move(out1.tbl);
-  auto t2   = std::move(out2.tbl);
-
-  double const load_factor = 0.5;
-  cudf::distinct_hash_join hash(t2->view(), cudf::null_equality::EQUAL, load_factor);
-  auto const [left_indices, right_indices] = hash.inner_join(t1->view());
-
-  auto const gold = t2->num_rows();
-
-  EXPECT_EQ(gold, left_indices->size());
-}
