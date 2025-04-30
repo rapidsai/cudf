@@ -57,13 +57,9 @@ struct sort_comparator_fn {
   cudf::device_span<char const> chars_span;
   __device__ bool operator()(cudf::size_type lhs, cudf::size_type rhs) const
   {
-    constexpr auto max_size = cuda::std::numeric_limits<cudf::size_type>::max();
-    auto const chars_size   = static_cast<cudf::size_type>(chars_span.size());
-
-    auto const lhs_size = cuda::std::min(max_size, chars_size - lhs);
-    auto const rhs_size = cuda::std::min(max_size, chars_size - rhs);
-    auto const lh_str   = cudf::string_view(chars_span.data() + lhs, lhs_size);
-    auto const rh_str   = cudf::string_view(chars_span.data() + rhs, rhs_size);
+    auto const chars_size = static_cast<cudf::size_type>(chars_span.size());
+    auto const lh_str     = cudf::string_view(chars_span.data() + lhs, chars_size - lhs);
+    auto const rh_str     = cudf::string_view(chars_span.data() + rhs, chars_size - rhs);
     return lh_str < rh_str;
   }
 };
@@ -96,16 +92,12 @@ struct find_adjacent_duplicates_fn {
   __device__ int16_t operator()(cudf::size_type idx) const
   {
     if (idx == 0) { return 0; }
-    constexpr auto max_size = cuda::std::numeric_limits<cudf::size_type>::max();
-    auto const chars_size   = static_cast<cudf::size_type>(chars_span.size());
+    auto const chars_size = static_cast<cudf::size_type>(chars_span.size());
 
-    auto const lhs      = d_indices[idx - 1];
-    auto const rhs      = d_indices[idx];
-    auto const lhs_size = cuda::std::min(max_size, chars_size - lhs);
-    auto const rhs_size = cuda::std::min(max_size, chars_size - rhs);
-
-    auto const lh_str = cudf::string_view(chars_span.data() + lhs, lhs_size);
-    auto const rh_str = cudf::string_view(chars_span.data() + rhs, rhs_size);
+    auto const lhs    = d_indices[idx - 1];
+    auto const rhs    = d_indices[idx];
+    auto const lh_str = cudf::string_view(chars_span.data() + lhs, chars_size - lhs);
+    auto const rh_str = cudf::string_view(chars_span.data() + rhs, chars_size - rhs);
 
     constexpr auto max_run_length =
       static_cast<cudf::size_type>(cuda::std::numeric_limits<int16_t>::max());
@@ -191,8 +183,8 @@ std::unique_ptr<cudf::column> resolve_duplicates_fn(
 
   // locate candidate duplicates within the suffix array
   thrust::transform(rmm::exec_policy_nosync(stream),
-                    thrust::counting_iterator<int64_t>(0),
-                    thrust::counting_iterator<int64_t>(indices.size()),
+                    thrust::counting_iterator<cudf::size_type>(0),
+                    thrust::counting_iterator<cudf::size_type>(indices.size()),
                     sizes.begin(),
                     find_adjacent_duplicates_fn{chars_span, min_width, indices.data()});
 
@@ -269,7 +261,7 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> build_suffix_array(
   auto const chars_size    = last_offset - first_offset;
   CUDF_EXPECTS(min_width < chars_size, "min_width value cannot exceed the input size");
   CUDF_EXPECTS(chars_size < std::numeric_limits<cudf::size_type>::max(),
-               "input size cannot exceed the 2GB");
+               "Input size cannot exceed the maximum integer size limit of 2GB");
 
   auto const chars_span = cudf::device_span<char const>(d_input_chars, chars_size);
   return build_suffix_array_fn(chars_span, min_width, stream, mr);
@@ -288,6 +280,8 @@ std::unique_ptr<cudf::column> substring_duplicates(cudf::strings_column_view con
   auto const d_input_chars = input.chars_begin(stream) + first_offset;
   auto const chars_size    = last_offset - first_offset;
   CUDF_EXPECTS(min_width < chars_size, "min_width value cannot exceed the input size");
+  CUDF_EXPECTS(chars_size < std::numeric_limits<cudf::size_type>::max(),
+               "Input size cannot exceed the maximum integer size limit of 2GB");
 
   auto const chars_span = cudf::device_span<char const>(d_input_chars, chars_size);
 

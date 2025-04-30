@@ -5344,14 +5344,14 @@ class StringMethods(ColumnMethods):
             self._column.is_letter(True, position)  # type: ignore[arg-type]
         )
 
-    def substring_duplicates(self, min_width) -> SeriesOrIndex:
+    def substring_duplicates(self, min_width: int) -> SeriesOrIndex:
         """
         Returns duplicate strings found anywhere in the input column
         with min_width minimum number of bytes.
 
         Parameters
         ----------
-        min_width : int32
+        min_width : int
             The minimum number of bytes to determine duplicates
 
         Returns
@@ -5381,6 +5381,8 @@ class StringMethods(ColumnMethods):
         ----------
         input : Column
              Strings column of text
+        min_width : int
+            The minimum number of bytes to determine duplicates
 
         Returns
         -------
