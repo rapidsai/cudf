@@ -316,7 +316,7 @@ bool is_supported_write_orc(compression_type compression)
 
   return ((compression == compression_type::ZLIB or compression == compression_type::SNAPPY or
            compression == compression_type::ZSTD or compression == compression_type::LZ4) and
-          not detail::is_compression_supported(compression));
+          detail::is_compression_supported(compression));
 }
 
 raw_orc_statistics read_raw_orc_statistics(source_info const& src_info,
