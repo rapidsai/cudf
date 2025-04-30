@@ -44,6 +44,33 @@ using parquet::detail::PageInfo;
 using parquet::detail::PageNestingDecodeInfo;
 using text::byte_range_info;
 
+namespace {
+
+// Tests the passed in logical type for a FIXED_LENGTH_BYTE_ARRAY column to see if it should
+// be treated as a string. Currently the only logical type that has special handling is DECIMAL.
+// Other valid types in the future would be UUID (still treated as string) and FLOAT16 (which
+// for now would also be treated as a string).
+[[maybe_unused]] inline bool is_treat_fixed_length_as_string(
+  std::optional<LogicalType> const& logical_type)
+{
+  if (!logical_type.has_value()) { return true; }
+  return logical_type->type != LogicalType::DECIMAL;
+}
+
+[[nodiscard]] std::vector<cudf::data_type> get_output_types(
+  cudf::host_span<inline_column_buffer const> output_buffer_template)
+{
+  std::vector<cudf::data_type> output_dtypes;
+  output_dtypes.reserve(output_buffer_template.size());
+  std::transform(output_buffer_template.begin(),
+                 output_buffer_template.end(),
+                 std::back_inserter(output_dtypes),
+                 [](auto const& col) { return col.type; });
+  return output_dtypes;
+}
+
+}  // namespace
+
 hybrid_scan_reader_impl::hybrid_scan_reader_impl(cudf::host_span<uint8_t const> footer_bytes,
                                                  parquet_reader_options const& options)
 {
@@ -146,7 +173,8 @@ hybrid_scan_reader_impl::filter_row_groups_with_dictionary_pages(
   parquet_reader_options const& options,
   rmm::cuda_stream_view stream)
 {
-  CUDF_EXPECTS(options.get_filter().has_value(), "Filter expression must not be empty");
+  CUDF_EXPECTS(not row_group_indices.empty(), "Empty input row group indices encountered");
+  CUDF_EXPECTS(options.get_filter().has_value(), "Encountered empty converted filter expression");
 
   select_columns(read_mode::FILTER_COLUMNS, options);
 
@@ -165,13 +193,14 @@ hybrid_scan_reader_impl::filter_row_groups_with_dictionary_pages(
                                                             stream);
 }
 
-std::vector<std::vector<size_type>> impl::filter_row_groups_with_bloom_filters(
-  std::vector<rmm::device_buffer>& bloom_filter_data,
+std::vector<std::vector<size_type>> hybrid_scan_reader_impl::filter_row_groups_with_bloom_filters(
+  cudf::host_span<rmm::device_buffer> bloom_filter_data,
   cudf::host_span<std::vector<size_type> const> row_group_indices,
   parquet_reader_options const& options,
   rmm::cuda_stream_view stream)
 {
-  CUDF_EXPECTS(options.get_filter().has_value(), "Filter expression must not be empty");
+  CUDF_EXPECTS(not row_group_indices.empty(), "Empty input row group indices encountered");
+  CUDF_EXPECTS(options.get_filter().has_value(), "Encountered empty converted filter expression");
 
   select_columns(read_mode::FILTER_COLUMNS, options);
 
