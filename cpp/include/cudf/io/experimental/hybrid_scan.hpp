@@ -62,28 +62,27 @@ namespace io::parquet::experimental {
  * the filter expression) are optimally read by applying the surviving row mask from the first pass
  * to prune payload column data pages.
  *
- * @note that the performance advantage of this reader is most pronounced when the filter expression
- * is highly selective, i.e. when the filter column data are at least partially ordered and the
- * number of rows that survive the filter expression is small compared to the total number of rows
- * in the parquet file. Otherwise, the performance is identical to the `cudf::io::read_parquet()`
- * function.
- *
  * The following code snippets demonstrate how to use the experimental parquet reader.
  *
  * Start with an instance of the experimental reader with a span of parquet file footer
  * bytes and parquet reader options.
  * @code{.cpp}
- *   // Example filter expression `A < 100`
- *   auto filter_expression = cudf::ast::operation(cudf::ast::ast_operator::LESS,
- *                              column_name_reference{"A"}, literal{100});
- *   // Parquet reader options with empty source info
- *   auto options = cudf::io::parquet_reader_options::builder(cudf::io::source_info(nullptr, 0))
- *                    .filter(filter_expression);
+ * // Example filter expression `A < 100`
+ * auto filter_expression = cudf::ast::operation(cudf::ast::ast_operator::LESS,
+ *                            column_name_reference{"A"}, literal{100});
  *
- *  // Create an instance of the reader using parquet footer bytes and parquet reader options
+ * using namespace cudf::io;
+ *
+ * // Parquet reader options with empty source info
+ * auto options = parquet_reader_options::builder(source_info(nullptr, 0))
+ *                  .filter(filter_expression);
+ *
+ *  // Fetch parquet file footer bytes from the file
  *  cudf::host_span<uint8_t const> footer_bytes = fetch_parquet_footer_bytes();
+ *
+ * // Create the reader
  *  auto reader =
- * std::make_unique<cudf::io::parquet::experimental::hybrid_scan_reader>(footer_bytes, options);
+ *    std::make_unique<parquet::experimental::hybrid_scan_reader>(footer_bytes, options);
  * @endcode
  *
  * Metadata handling (OPTIONAL): Get a materialized parquet file footer metadata struct
@@ -95,17 +94,19 @@ namespace io::parquet::experimental {
  *
  * // Example metadata use: Calculate the number of rows in the file
  * auto total_rows = std::accumulate(parquet_metadata.row_groups.begin(),
- *                parquet_metadata.row_groups.end(), [](auto const& rg) { return rg.num_rows; });
+ *                                   parquet_metadata.row_groups.end(),
+                                     [](auto const& rg) { return rg.num_rows; });
  *
  * // Get the page index byte range from the reader
  * auto page_index_byte_range = reader->page_index_byte_range();
  *
  * // Fetch the page index bytes from the parquet file and setup page index
  * cudf::host_span<uint8_t const> page_index_bytes = fetch_parquet_bytes(page_index_byte_range);
- * fetch_bytes_from_parquet(page_index_byte_range); reader->setup_page_index(page_index_bytes);
  *
- * // A new `FileMetaData` struct with the page index structs also materialized may be obtained at
- * // this point using the `reader->parquet_metadata()` Page index may be set up at any time.
+ * reader->setup_page_index(page_index_bytes);
+ *
+ * // A new `FileMetaData` struct with the page index structs also populated can be obtained
+ * using `reader->parquet_metadata()` now. Page index may be set up at any time.
  * auto parquet_metadata_with_page_index = reader->parquet_metadata();
  * @endcode
  *
@@ -134,11 +135,14 @@ namespace io::parquet::experimental {
  * auto [bloom_filter_byte_ranges, dict_page_byte_ranges] =
  *   reader->secondary_filters_byte_ranges(current_row_group_indices, options);
  *
- * // Optional: If we have valid dictionary pages, prune row group indices with them
+ * // Optional: Prune row groups if we have valid dictionary pages
  * auto dictionary_page_filtered_row_group_indices = std::vector<cudf::size_type>{};
  * if (dict_page_byte_ranges.size()) {
+ *   // Fetch dictionary page byte ranges into device buffers
  *   std::vector<rmm::device_buffer> dictionary_page_data =
  *     fetch_device_buffers(dict_page_byte_ranges);
+ *
+ *   // Prune row groups using dictionaries
  *   dictionary_page_filtered_row_group_indices = reader->filter_row_groups_with_dictionary_pages(
  *     dictionary_page_data, current_row_group_indices, options, stream);
  *
@@ -146,11 +150,14 @@ namespace io::parquet::experimental {
  *   current_row_group_indices = dictionary_page_filtered_row_group_indices;
  * }
  *
- * // Optional: If we have valid bloom filters, prune row group indices with them
+ * // Optional: Prune row groups if we have valid bloom filters
  * auto bloom_filtered_row_group_indices = std::vector<cudf::size_type>{};
  * if (bloom_filter_byte_ranges.size()) {
+ *   // Fetch bloom filter byte ranges into device buffers
  *   std::vector<rmm::device_buffer> bloom_filter_data =
  *     fetch_device_buffers(bloom_filter_byte_ranges);
+ *
+ *  // Prune row groups using bloom filters
  *   bloom_filtered_row_group_indices = reader->filter_row_groups_with_bloom_filters(
  *     bloom_filter_data, current_row_group_indices, options, stream);
  *
@@ -169,9 +176,11 @@ namespace io::parquet::experimental {
  * vector of boolean host vectors indicating which data pages for each filter column need to be
  * processed to materialize the table filter columns (first reader pass).
  * @code{.cpp}
- * // If not already done, fetch page index bytes and set up the page index
+ * // If not already done, fetch page index bytes and set up the page index now
  * auto page_index_byte_range = reader->page_index_byte_range();
+ *
  * cudf::host_span<uint8_t const> page_index_bytes = fetch_parquet_bytes(page_index_byte_range);
+ *
  * reader->setup_page_index(page_index_bytes);
  *
  * // Optional: Prune filter column data pages with statistics in page index
@@ -241,6 +250,10 @@ namespace io::parquet::experimental {
  * Once both reader passes are complete, the filter and payload column tables may be trivially
  * combined by releasing the columns from both tables and moving them into a new cudf table.
  *
+ * @note The performance advantage of this reader is most pronounced when the filter expression
+ * is highly selective, i.e. when the data in filter columns are at least partially ordered and the
+ * number of rows that survive the filter is small compared to the total number of rows in the
+ * parquet file. Otherwise, the performance is identical to the `cudf::io::read_parquet()` function.
  */
 class hybrid_scan_reader {
  public:
