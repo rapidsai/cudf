@@ -37,11 +37,38 @@
 
 namespace cudf::io::parquet::experimental::detail {
 
+using io::detail::inline_column_buffer;
 using parquet::detail::ColumnChunkDesc;
 using parquet::detail::decode_kernel_mask;
 using parquet::detail::PageInfo;
 using parquet::detail::PageNestingDecodeInfo;
 using text::byte_range_info;
+
+namespace {
+// Tests the passed in logical type for a FIXED_LENGTH_BYTE_ARRAY column to see if it should
+// be treated as a string. Currently the only logical type that has special handling is DECIMAL.
+// Other valid types in the future would be UUID (still treated as string) and FLOAT16 (which
+// for now would also be treated as a string).
+[[maybe_unused]] inline bool is_treat_fixed_length_as_string(
+  std::optional<LogicalType> const& logical_type)
+{
+  if (!logical_type.has_value()) { return true; }
+  return logical_type->type != LogicalType::DECIMAL;
+}
+
+[[nodiscard]] std::vector<cudf::data_type> get_output_types(
+  cudf::host_span<inline_column_buffer const> output_buffer_template)
+{
+  std::vector<cudf::data_type> output_dtypes;
+  output_dtypes.reserve(output_buffer_template.size());
+  std::transform(output_buffer_template.begin(),
+                 output_buffer_template.end(),
+                 std::back_inserter(output_dtypes),
+                 [](auto const& col) { return col.type; });
+  return output_dtypes;
+}
+
+}  // namespace
 
 hybrid_scan_reader_impl::hybrid_scan_reader_impl(cudf::host_span<uint8_t const> footer_bytes,
                                                  parquet_reader_options const& options)
@@ -146,7 +173,8 @@ std::vector<std::vector<size_type>> hybrid_scan_reader_impl::filter_row_groups_w
                                                  stream);
 }
 
-std::pair<std::vector<byte_range_info>, std::vector<byte_range_info>> impl::get_secondary_filters(
+std::pair<std::vector<byte_range_info>, std::vector<byte_range_info>>
+hybrid_scan_reader_impl::secondary_filters_byte_ranges(
   cudf::host_span<std::vector<size_type> const> row_group_indices,
   parquet_reader_options const& options)
 {

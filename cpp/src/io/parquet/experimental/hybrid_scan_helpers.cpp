@@ -35,6 +35,7 @@ namespace cudf::io::parquet::experimental::detail {
 using aggregate_reader_metadata_base = parquet::detail::aggregate_reader_metadata;
 using metadata_base                  = parquet::detail::metadata;
 
+using io::detail::inline_column_buffer;
 using parquet::detail::CompactProtocolReader;
 using parquet::detail::equality_literals_collector;
 using parquet::detail::input_column_info;
