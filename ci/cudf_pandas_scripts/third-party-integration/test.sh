@@ -32,7 +32,7 @@ main() {
     for lib in ${LIBS//,/ }; do
         lib=$(echo "$lib" | tr -d '""')
         echo "Running tests for library $lib"
-        find / -type d -name nvvm 2>/dev/null
+        # find / -type d -name nvvm 2>/dev/null
         CUDA_VERSION=$(if [ "$lib" = "tensorflow" ]; then echo "${RAPIDS_CUDA_VERSION%.*}"; else echo "${RAPIDS_CUDA_VERSION%.*}"; fi)
 
         . /opt/conda/etc/profile.d/conda.sh
