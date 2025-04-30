@@ -187,11 +187,13 @@ struct split_tokenizer_fn : base_split_tokenizer<split_tokenizer_fn> {
   {
     auto const base_ptr = d_strings.head<char>();  // d_delimiters, pos_begin/end based on this ptr
     auto const token_count = static_cast<size_type>(d_tokens.size());
+    auto const delim_count = static_cast<size_type>(d_delimiters.size());
 
     // build the index-pair of each token for this string
     size_type token_idx = 0;
     auto last_pos       = pos_begin - delimiter_size;
-    for (auto d_pos : d_delimiters) {
+    for (auto di = 0; di < delim_count && token_idx < token_count; ++di) {
+      auto const d_pos = d_delimiters[di];
       if (((d_pos + delimiter_size) > pos_end) || ((d_pos - last_pos) < delimiter_size)) {
         continue;
       }
@@ -199,10 +201,10 @@ struct split_tokenizer_fn : base_split_tokenizer<split_tokenizer_fn> {
 
       // store the token into the output vector
       last_pos += delimiter_size;
-      d_tokens[token_idx++] = string_index_pair{base_ptr + last_pos, end_pos - last_pos};
+      d_tokens[token_idx] = string_index_pair{base_ptr + last_pos, end_pos - last_pos};
 
       last_pos = d_pos;
-      if (token_idx >= token_count) { break; }
+      ++token_idx;
     }
     // include anything leftover
     if (token_idx < token_count) {
