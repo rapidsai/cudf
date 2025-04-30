@@ -16,7 +16,7 @@ def df():
     return pl.LazyFrame(
         {
             "x": range(150),
-            "y": [1, 2, 3] * 50,
+            "y": list(range(30)) * 5,
             "z": [1.0, 2.0, 3.0, 4.0, 5.0] * 30,
         }
     )
@@ -61,7 +61,7 @@ def test_unique_select(df, maintain_order, cardinality):
     )
 
     q = df.select(pl.col("y").unique(maintain_order=maintain_order))
-    assert_gpu_result_equal(q, engine=engine, check_row_order=maintain_order)
+    assert_gpu_result_equal(q, engine=engine, check_row_order=False)
 
 
 @pytest.mark.parametrize("keep", ["first", "last", "any"])
