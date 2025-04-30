@@ -1858,7 +1858,7 @@ def test_error_values():
     s = cudf.Series([1, 2, 3], dtype="datetime64[ns]")
     with pytest.raises(
         NotImplementedError,
-        match="DateTime Arrays is not yet implemented in cudf",
+        match="DateTime Arrays is not yet implemented in cupy",
     ):
         s.values
 
