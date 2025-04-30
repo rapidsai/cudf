@@ -57,7 +57,7 @@ struct input_column_reflection {
 jitify2::StringVec build_jit_typenames(std::vector<std::string> const& span_outputs,
                                        std::vector<std::string> const& column_outputs,
                                        std::vector<input_column_reflection> const& column_inputs,
-                                       int32_t num_user_data)
+                                       bool has_user_data)
 {
   jitify2::StringVec typenames;
 
@@ -83,21 +83,18 @@ jitify2::StringVec build_jit_typenames(std::vector<std::string> const& span_outp
                  std::back_inserter(typenames),
                  [&](auto i) { return column_inputs[i].accessor(i); });
 
-  std::transform(
-    thrust::make_counting_iterator(0),
-    thrust::make_counting_iterator(num_user_data),
-    std::back_inserter(typenames),
-    [&](auto i) {
-      return jitify2::reflection::Template("cudf::transformation::jit::user_data_accessor")
-        .instantiate(i);
-    });
+  if (has_user_data) {
+    typenames.push_back(
+      jitify2::reflection::Template("cudf::transformation::jit::user_data_accessor")
+        .instantiate(0));
+  }
 
   return typenames;
 }
 
 std::map<uint32_t, std::string> build_ptx_params(std::vector<std::string> const& output_typenames,
                                                  std::vector<std::string> const& input_typenames,
-                                                 int32_t num_user_data)
+                                                 bool has_user_data)
 {
   std::map<uint32_t, std::string> params;
   uint32_t index = 0;
@@ -110,9 +107,7 @@ std::map<uint32_t, std::string> build_ptx_params(std::vector<std::string> const&
     params.emplace(index++, name);
   }
 
-  std::for_each(thrust::make_counting_iterator(0),
-                thrust::make_counting_iterator(num_user_data),
-                [&](auto) { params.emplace(index++, "void *"); });
+  if (has_user_data) { params.emplace(index++, "void *"); }
 
   return params;
 }
@@ -202,7 +197,7 @@ jitify2::ConfiguredKernel build_transform_kernel(
   size_type base_column_size,
   std::vector<mutable_column_view> const& output_columns,
   std::vector<column_view> const& input_columns,
-  int32_t num_user_data,
+  bool has_user_data,
   std::string const& udf,
   bool is_ptx,
   rmm::cuda_stream_view stream,
@@ -214,7 +209,7 @@ jitify2::ConfiguredKernel build_transform_kernel(
           udf,
           "GENERIC_TRANSFORM_OP",
           build_ptx_params(
-            column_type_names(output_columns), column_type_names(input_columns), num_user_data))
+            column_type_names(output_columns), column_type_names(input_columns), has_user_data))
       : cudf::jit::parse_single_function_cuda(udf, "GENERIC_TRANSFORM_OP");
 
   return get_kernel(jitify2::reflection::Template(kernel_name)
@@ -222,7 +217,7 @@ jitify2::ConfiguredKernel build_transform_kernel(
                         build_jit_typenames({},
                                             column_type_names(output_columns),
                                             reflect_input_columns(base_column_size, input_columns),
-                                            num_user_data)),
+                                            has_user_data)),
                     cuda_source)
     ->configure_1d_max_occupancy(0, 0, nullptr, stream.value());
 }
@@ -231,7 +226,7 @@ jitify2::ConfiguredKernel build_span_kernel(std::string const& kernel_name,
                                             size_type base_column_size,
                                             std::vector<std::string> const& span_outputs,
                                             std::vector<column_view> const& input_columns,
-                                            int32_t num_user_data,
+                                            bool has_user_data,
                                             std::string const& udf,
                                             bool is_ptx,
                                             rmm::cuda_stream_view stream,
@@ -241,7 +236,7 @@ jitify2::ConfiguredKernel build_span_kernel(std::string const& kernel_name,
     is_ptx ? cudf::jit::parse_single_function_ptx(
                udf,
                "GENERIC_TRANSFORM_OP",
-               build_ptx_params(span_outputs, column_type_names(input_columns), num_user_data))
+               build_ptx_params(span_outputs, column_type_names(input_columns), has_user_data))
            : cudf::jit::parse_single_function_cuda(udf, "GENERIC_TRANSFORM_OP");
 
   return get_kernel(jitify2::reflection::Template(kernel_name)
@@ -249,7 +244,7 @@ jitify2::ConfiguredKernel build_span_kernel(std::string const& kernel_name,
                         build_jit_typenames(span_outputs,
                                             {},
                                             reflect_input_columns(base_column_size, input_columns),
-                                            num_user_data)),
+                                            has_user_data)),
                     cuda_source)
     ->configure_1d_max_occupancy(0, 0, nullptr, stream.value());
 }
@@ -328,7 +323,7 @@ std::unique_ptr<column> transform_operation(column_view base_column,
                                        base_column.size(),
                                        {*output},
                                        inputs,
-                                       user_data.has_value() ? 1 : 0,
+                                       user_data.has_value(),
                                        udf,
                                        is_ptx,
                                        stream,
@@ -353,7 +348,7 @@ std::unique_ptr<column> string_view_operation(column_view base_column,
                                   base_column.size(),
                                   {"cudf::string_view"},
                                   inputs,
-                                  user_data.has_value() ? 1 : 0,
+                                  user_data.has_value(),
                                   udf,
                                   is_ptx,
                                   stream,
