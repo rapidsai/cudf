@@ -256,7 +256,7 @@ std::vector<std::vector<cudf::size_type>> aggregate_reader_metadata::filter_row_
                                                                     filter.value(),
                                                                     stream);
 
-  return stats_filtered_row_group_indices.value_or(all_row_group_indices(row_group_indices);
+  return stats_filtered_row_group_indices.value_or(all_row_group_indices(row_group_indices));
 }
 
 }  // namespace cudf::io::parquet::experimental::detail
