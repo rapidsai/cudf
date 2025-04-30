@@ -170,7 +170,7 @@ def is_na_like(obj: Any) -> bool:
     Check if `obj` is a cudf NA value,
     i.e., None, cudf.NA or cudf.NaT
     """
-    return obj is None or obj is cudf.NA or obj is cudf.NaT
+    return obj is None or obj is pd.NA or obj is pd.NaT
 
 
 def _is_null_host_scalar(slr: Any) -> bool:
