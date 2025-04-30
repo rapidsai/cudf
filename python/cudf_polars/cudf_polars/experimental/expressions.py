@@ -157,7 +157,7 @@ def _decompose_unique(
         A mapping from unique nodes in the new graph to associated
         partitioning information.
     """
-    from cudf_polars.experimental.parallel import lower_ir_graph
+    from cudf_polars.experimental.distinct import lower_distinct
 
     (child,) = unique.children
     (maintain_order,) = unique.options
@@ -168,8 +168,7 @@ def _decompose_unique(
         names=names,
     )
     (column,) = columns
-    # TODO: Can we avoid re-lowering the IR graph here?
-    input_ir, pi = lower_ir_graph(
+    input_ir, partition_info = lower_distinct(
         Distinct(
             {column.name: column.dtype},
             plc.stream_compaction.DuplicateKeepOption.KEEP_ANY,
@@ -178,9 +177,10 @@ def _decompose_unique(
             maintain_order,
             input_ir,
         ),
+        input_ir,
+        partition_info,
         config_options,
     )
-    partition_info.update(pi)
     return column, input_ir, partition_info
 
 

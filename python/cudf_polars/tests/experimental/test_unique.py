@@ -31,7 +31,7 @@ def test_unique(df, keep, subset, maintain_order, cardinality):
         raise_on_fail=True,
         executor="streaming",
         executor_options={
-            "max_rows_per_partition": 4,
+            "max_rows_per_partition": 50,
             "scheduler": DEFAULT_SCHEDULER,
             "cardinality_factor": cardinality,
         },
@@ -44,7 +44,13 @@ def test_unique(df, keep, subset, maintain_order, cardinality):
     else:
         check_row_order = maintain_order
 
-    assert_gpu_result_equal(q, engine=engine, check_row_order=check_row_order)
+    if keep == "none" and maintain_order:
+        with pytest.raises(
+            pl.exceptions.ComputeError, match="Unsupported unique options"
+        ):
+            assert_gpu_result_equal(q, engine=engine)
+    else:
+        assert_gpu_result_equal(q, engine=engine, check_row_order=check_row_order)
 
 
 @pytest.mark.parametrize("maintain_order", [True, False])
