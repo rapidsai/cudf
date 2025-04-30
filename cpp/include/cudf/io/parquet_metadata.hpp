@@ -80,7 +80,7 @@ struct parquet_column_schema {
   [[nodiscard]] auto type() const { return _type; }
 
   /**
-   * @brief Returns parquet physical type of the column.
+   * @copydoc type
    *
    * @deprecated in branch-25.06 and to be removed in a future release; Use `type()` instead.
    */
