@@ -2,9 +2,9 @@
 # SPDX-License-Identifier: Apache-2.0
 
 """
-Experimental NDS-H benchmarks.
+Experimental PDS benchmarks.
 
-Based on the TPC-H benchmarks.
+Based on https://github.com/pola-rs/polars-benchmark.
 
 WARNING: This is an experimental (and unofficial)
 benchmark script. It is not intended for public use
@@ -43,7 +43,7 @@ os.environ["KVIKIO_NTHREADS"] = os.environ.get("KVIKIO_NTHREADS", "8")
 
 @dataclasses.dataclass
 class Record:
-    """Results for a single run of a single NDS-H query."""
+    """Results for a single run of a single PDS query."""
 
     query: int
     duration: float
@@ -121,7 +121,7 @@ class HardwareInfo:
 
 @dataclasses.dataclass(kw_only=True)
 class RunConfig:
-    """Results for a NDS-H query run."""
+    """Results for a PDS query run."""
 
     queries: list[int]
     suffix: str
@@ -207,8 +207,8 @@ def get_data(
     return pl.scan_parquet(f"{path}/{table_name}{suffix}")
 
 
-class NDSHQueries:
-    """NDS-H query definitions."""
+class PDSQueries:
+    """PDS query definitions."""
 
     @staticmethod
     def q0(run_config: RunConfig) -> pl.LazyFrame:
@@ -989,7 +989,7 @@ def _query_type(query: int | str) -> list[int]:
 
 
 parser = argparse.ArgumentParser(
-    prog="Cudf-Polars NDS-H Benchmarks",
+    prog="Cudf-Polars PDS Benchmarks",
     description="Experimental streaming-executor benchmarks.",
 )
 parser.add_argument(
@@ -1000,8 +1000,8 @@ parser.add_argument(
 parser.add_argument(
     "--path",
     type=str,
-    default=os.environ.get("NDSH_DATASET_PATH"),
-    help="Root NDSH-dataset directory path.",
+    default=os.environ.get("PDS_DATASET_PATH"),
+    help="Root PDS-dataset directory path.",
 )
 parser.add_argument(
     "--suffix",
@@ -1078,7 +1078,7 @@ parser.add_argument(
     "-o",
     "--output",
     type=argparse.FileType("at"),
-    default="ndsh_results.jsonl",
+    default="pds_results.jsonl",
     help="Output file path.",
 )
 parser.add_argument(
@@ -1134,7 +1134,7 @@ def run(args: argparse.Namespace) -> None:
 
     for q_id in query_ids:
         try:
-            q = getattr(NDSHQueries, f"q{q_id}")(run_config)
+            q = getattr(PDSQueries, f"q{q_id}")(run_config)
         except AttributeError as err:
             raise NotImplementedError(f"Query {q_id} not implemented.") from err
 
