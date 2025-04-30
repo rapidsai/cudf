@@ -190,7 +190,7 @@ namespace io::parquet::experimental {
  * // If not already done, Set up the page index now
  * reader->setup_page_index(page_index_bytes);
  *
- * // Optional: Prune filter column data pages with statistics in page index
+ * // Optional: Prune filter column data pages using statistics in page index
  * auto [row_mask, data_page_mask] =
  *   reader->filter_data_pages_with_stats(current_row_group_indices, options, stream, mr);
  * @endcode
