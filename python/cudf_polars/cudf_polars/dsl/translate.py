@@ -641,7 +641,11 @@ def _(node: pl_expr.Literal, translator: Translator, dtype: plc.DataType) -> exp
         return expr.LiteralColumn(
             dtype, data.cast(dtypes.downcast_arrow_lists(data.type))
         )
-    value = pa.scalar(node.value, type=plc.interop.to_arrow(dtype))
+    if dtype.id() == plc.TypeId.LIST:
+        data = plc.interop.to_arrow(dtype, value_type=pa.int64())
+        return expr.LiteralColumn(plc.DataType(plc.TypeId.INT64), pa.array(node.value))
+    else:
+        value = pa.scalar(node.value, type=plc.interop.to_arrow(dtype))
     return expr.Literal(dtype, value)
 
 

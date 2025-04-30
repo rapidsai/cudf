@@ -87,12 +87,6 @@ class BooleanFunction(Expr):
             BooleanFunction.Name.IsLastDistinct,
             BooleanFunction.Name.IsUnique,
         )
-        if self.name is BooleanFunction.Name.IsIn and not all(
-            c.dtype == self.children[0].dtype for c in self.children
-        ):
-            # TODO: If polars IR doesn't put the casts in, we need to
-            # mimic the supertype promotion rules.
-            raise NotImplementedError("IsIn doesn't support supertype casting")
 
     @staticmethod
     def _distinct(

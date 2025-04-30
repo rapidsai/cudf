@@ -478,6 +478,15 @@ class Scan(IR):
     ) -> DataFrame:
         """Evaluate and return a dataframe."""
         if typ == "csv":
+
+            def read_csv_header(path: Path | str, sep: str) -> list[str]:
+                with Path(path).open() as f:
+                    for line in f:
+                        stripped = line.strip()
+                        if stripped:
+                            return stripped.split(sep)
+                return []
+
             parse_options = reader_options["parse_options"]
             sep = chr(parse_options["separator"])
             quote = chr(parse_options["quote_char"])
@@ -532,6 +541,9 @@ class Scan(IR):
                 options.set_delimiter(str(sep))
                 if column_names is not None:
                     options.set_names([str(name) for name in column_names])
+                else:
+                    column_names = read_csv_header(path, str(sep))
+                    options.set_names(column_names)
                 options.set_header(header)
                 options.set_dtypes(schema)
                 if usecols is not None:
@@ -558,14 +570,10 @@ class Scan(IR):
                 plc.concatenate.concatenate(list(tables)),
                 colnames[0],
             )
-
-            def read_csv_header(path: str) -> list[str]:
-                with Path(path).open() as f:
-                    header_line = f.readline().strip()
-                return header_line.split(",")
-
-            if skip_rows + skiprows > header and df.column_map.keys() != schema.keys():
-                column_names = read_csv_header(str(paths[0]))
+            if skip_rows + skiprows > header and not set(df.column_map.keys()).issubset(
+                schema.keys()
+            ):
+                column_names = read_csv_header(str(paths[0]), str(sep))
                 df = df.rename_columns(
                     dict(zip(df.column_names, column_names, strict=False))
                 )
@@ -664,7 +672,6 @@ class Scan(IR):
             if filters is not None:
                 # Mask must have been applied.
                 return df
-
         elif typ == "ndjson":
             json_schema: list[plc.io.json.NameAndType] = [
                 (name, typ, []) for name, typ in schema.items()
@@ -703,12 +710,10 @@ class Scan(IR):
                 null_order=plc.types.NullOrder.AFTER,
                 name=name,
             )
+            # TODO: Preserve the selection order eg. col then index col
+            # which we currently do not do
             df = DataFrame([index_col, *df.columns])
-        assert all(
-            c.obj.type() == schema[name]
-            or plc.unary.is_supported_cast(c.obj.type(), schema[name])
-            for name, c in df.column_map.items()
-        )
+        assert all(c.obj.type() == schema[name] for name, c in df.column_map.items())
         if predicate is None:
             return df
         else:

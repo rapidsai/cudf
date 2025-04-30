@@ -97,6 +97,12 @@ def test_scan(
             reason="libcudf does not support n_rows",
         )
     )
+    request.applymarker(
+        pytest.mark.xfail(
+            condition=(slice is not None and scan_fn is pl.scan_ndjson),
+            reason="slice pushdown not supported in the libcudf JSON reader",
+        )
+    )
     q = scan_fn(
         tmp_path / "file",
         row_index_name=name,
@@ -112,9 +118,6 @@ def test_scan(
     if columns is not None:
         q = q.select(*columns)
     assert_gpu_result_equal(q, engine=engine)
-
-    # print("EXPECT", q.collect())
-    # print("GOT", q.collect(engine=engine))
 
 
 def test_negative_slice_pushdown_raises(tmp_path):
@@ -190,8 +193,14 @@ def test_scan_csv_column_renames_projection_schema(tmp_path):
         (4, 2),
     ],
 )
-def test_scan_csv_multi(tmp_path, filename, glob, nrows_skiprows):
+def test_scan_csv_multi(request, tmp_path, filename, glob, nrows_skiprows):
     n_rows, skiprows = nrows_skiprows
+    request.applymarker(
+        pytest.mark.xfail(
+            condition=skiprows > 0,
+            reason="bug in polars, incorrect schema passed",
+        )
+    )
     with (tmp_path / "test1.csv").open("w") as f:
         f.write("""foo,bar,baz\n1,2,3\n3,4,5""")
     with (tmp_path / "test2.csv").open("w") as f:
@@ -274,17 +283,27 @@ def test_scan_csv_decimal_comma(tmp_path):
     assert_gpu_result_equal(q)
 
 
-def test_scan_csv_skip_initial_empty_rows(tmp_path):
-    with (tmp_path / "test.csv").open("w") as f:
-        f.write("""\n\n\n\nfoo|bar|baz\n1|2|3\n1""")
+@pytest.mark.parametrize("skip_rows, has_header", [(0, True), (1, True), (1, False)])
+def test_scan_csv_skip_initial_empty_rows(request, tmp_path, skip_rows, has_header):
+    if skip_rows > 0 and has_header:
+        request.applymarker(
+            pytest.mark.xfail(
+                reason="bug in polars, incorrect schema passed when skipping rows with header"
+            )
+        )
 
-    q = pl.scan_csv(tmp_path / "test.csv", separator="|", skip_rows=1, has_header=False)
+    path = tmp_path / "test.csv"
+    path.write_text("\n\n\n\nfoo|bar|baz\n1|2|3\n1")
 
-    assert_ir_translation_raises(q, NotImplementedError)
+    q = pl.scan_csv(path, separator="|", skip_rows=skip_rows, has_header=has_header)
 
-    q = pl.scan_csv(tmp_path / "test.csv", separator="|", skip_rows=1)
+    if not has_header:
+        assert_ir_translation_raises(q, NotImplementedError)
+    else:
+        assert_gpu_result_equal(q)
 
-    assert_gpu_result_equal(q)
+    # print("EXPECT", q.collect())
+    # print("GOT", q.collect(engine=pl.GPUEngine(raise_on_fail=True)))
 
 
 @pytest.mark.parametrize(

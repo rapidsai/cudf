@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -150,9 +150,10 @@ def test_boolean_horizontal(expr, has_nulls, wide):
 @pytest.mark.parametrize(
     "expr",
     [
-        pl.col("a").is_in(pl.col("b")),
-        pl.col("a").is_in(pl.col("c")),
-        pl.col("c").is_in(pl.col("d")),
+        # TODO: Need to support pl.col("b").implode()
+        pl.col("a").is_in([1, 2, 3]),
+        pl.col("a").is_in([3, 4, 2]),
+        pl.col("c").is_in([10, None, 11]),
     ],
 )
 def test_boolean_is_in(expr):
