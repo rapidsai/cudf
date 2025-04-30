@@ -209,17 +209,19 @@ std::vector<std::vector<cudf::size_type>> aggregate_reader_metadata::filter_row_
   std::optional<std::reference_wrapper<ast::expression const>> filter,
   rmm::cuda_stream_view stream) const
 {
-  std::vector<std::vector<cudf::size_type>> all_row_group_indices;
-  std::transform(per_file_metadata.cbegin(),
-                 per_file_metadata.cend(),
-                 std::back_inserter(all_row_group_indices),
-                 [](auto const& file_meta) {
-                   std::vector<cudf::size_type> rg_idx(file_meta.row_groups.size());
-                   std::iota(rg_idx.begin(), rg_idx.end(), 0);
-                   return rg_idx;
-                 });
+  CUDF_EXPECTS(not row_group_indices.empty(), "Input row group indices must not be empty");
 
-  if (not filter.has_value()) { return all_row_group_indices; }
+  auto all_row_group_indices = [&]() {
+    std::vector<std::vector<cudf::size_type>> all_row_group_indices;
+    std::transform(row_group_indices.begin(),
+                   row_group_indices.end(),
+                   std::back_inserter(all_row_group_indices),
+                   [](auto rg_indices) { return rg_indices; });
+    return all_row_group_indices;
+  };
+
+  // No filter expression, return all row groups
+  if (not filter.has_value()) { return all_row_group_indices(); }
 
   // Compute total number of input row groups
   cudf::size_type total_row_groups = [&]() {
@@ -239,31 +241,15 @@ std::vector<std::vector<cudf::size_type>> aggregate_reader_metadata::filter_row_
     }
   }();
 
-  // Span of input row group indices for predicate pushdown
-  host_span<std::vector<cudf::size_type> const> input_row_group_indices;
-  if (row_group_indices.empty()) {
-    std::transform(per_file_metadata.cbegin(),
-                   per_file_metadata.cend(),
-                   std::back_inserter(all_row_group_indices),
-                   [](auto const& file_meta) {
-                     std::vector<cudf::size_type> rg_idx(file_meta.row_groups.size());
-                     std::iota(rg_idx.begin(), rg_idx.end(), 0);
-                     return rg_idx;
-                   });
-    input_row_group_indices = host_span<std::vector<cudf::size_type> const>(all_row_group_indices);
-  } else {
-    input_row_group_indices = row_group_indices;
-  }
-
   // Filter stats table with StatsAST expression and collect filtered row group indices
-  auto const stats_filtered_row_group_indices = apply_stats_filters(input_row_group_indices,
+  auto const stats_filtered_row_group_indices = apply_stats_filters(row_group_indices,
                                                                     total_row_groups,
                                                                     output_dtypes,
                                                                     output_column_schemas,
                                                                     filter.value(),
                                                                     stream);
 
-  return stats_filtered_row_group_indices.value_or(all_row_group_indices);
+  return stats_filtered_row_group_indices.value_or(all_row_group_indices());
 }
 
 }  // namespace cudf::io::parquet::experimental::detail
