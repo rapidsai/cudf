@@ -52,11 +52,11 @@ from cudf_polars.experimental.repartition import Repartition
 
 if TYPE_CHECKING:
     from collections.abc import Generator, MutableMapping, Sequence
-    from typing import Any, TypeAlias
+    from typing import TypeAlias
 
     from cudf_polars.dsl.expressions.base import Expr
     from cudf_polars.dsl.ir import IR
-    from cudf_polars.typing import GenericTransformer
+    from cudf_polars.typing import GenericTransformer, Schema
     from cudf_polars.utils.config import ConfigOptions
 
 
@@ -435,7 +435,7 @@ def _decompose(
         # TODO: Check that we aren't concatenating misaligned
         # columns that cannot be broadcasted. For example, what
         # if one of the columns is sorted?
-        schema: MutableMapping[str, Any] = {}
+        schema: Schema = {}
         for ir in unique_input_irs:
             schema.update(ir.schema)
         input_ir = HConcat(
