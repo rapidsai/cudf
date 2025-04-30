@@ -52,7 +52,7 @@ def test_groupby_single_partitions(df, op, keys):
             raise_on_fail=True,
             executor="streaming",
             executor_options={
-                "max_rows_per_partition": 1e9,
+                "max_rows_per_partition": int(1e9),
                 "scheduler": DEFAULT_SCHEDULER,
             },
         ),
@@ -111,7 +111,8 @@ def test_groupby_fallback(df, engine, fallback_mode):
         ctx = pytest.raises(pl.exceptions.ComputeError, match=match)
     elif fallback_mode == "foo":
         ctx = pytest.raises(
-            pl.exceptions.ComputeError, match="Unsupported fallback_mode option"
+            pl.exceptions.ComputeError,
+            match="'foo' is not a valid StreamingFallbackMode",
         )
     else:
         ctx = pytest.warns(UserWarning, match=match)

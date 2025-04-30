@@ -17,8 +17,6 @@ from cudf_polars.containers import Column
 from cudf_polars.dsl.expressions.base import ExecutionContext, Expr
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
-
     from typing_extensions import Self
 
     from polars.polars import _expr_nodes as pl_expr
@@ -113,6 +111,7 @@ class TemporalFunction(Expr):
         Name.IsoYear,
         Name.MonthStart,
         Name.MonthEnd,
+        Name.CastTimeUnit,
     }
 
     def __init__(
@@ -136,18 +135,19 @@ class TemporalFunction(Expr):
             raise NotImplementedError("ToString is not supported on duration types")
 
     def do_evaluate(
-        self,
-        df: DataFrame,
-        *,
-        context: ExecutionContext = ExecutionContext.FRAME,
-        mapping: Mapping[Expr, Column] | None = None,
+        self, df: DataFrame, *, context: ExecutionContext = ExecutionContext.FRAME
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
-        columns = [
-            child.evaluate(df, context=context, mapping=mapping)
-            for child in self.children
-        ]
+        columns = [child.evaluate(df, context=context) for child in self.children]
         (column,) = columns
+        if self.name is TemporalFunction.Name.CastTimeUnit:
+            (unit,) = self.options
+            if plc.traits.is_timestamp(column.obj.type()):
+                dtype = plc.interop.from_arrow(pa.timestamp(unit))
+            elif plc.traits.is_duration(column.obj.type()):
+                dtype = plc.interop.from_arrow(pa.duration(unit))
+            result = plc.unary.cast(column.obj, dtype)
+            return Column(result)
         if self.name == TemporalFunction.Name.ToString:
             return Column(
                 plc.strings.convert.convert_datetime.from_timestamps(

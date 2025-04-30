@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 # TODO: remove need for this
 # ruff: noqa: D101
@@ -17,8 +17,6 @@ from cudf_polars.dsl.expressions.base import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
-
     from cudf_polars.containers import DataFrame
 
 
@@ -37,16 +35,11 @@ class Ternary(Expr):
         self.is_pointwise = True
 
     def do_evaluate(
-        self,
-        df: DataFrame,
-        *,
-        context: ExecutionContext = ExecutionContext.FRAME,
-        mapping: Mapping[Expr, Column] | None = None,
+        self, df: DataFrame, *, context: ExecutionContext = ExecutionContext.FRAME
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
         when, then, otherwise = (
-            child.evaluate(df, context=context, mapping=mapping)
-            for child in self.children
+            child.evaluate(df, context=context) for child in self.children
         )
         then_obj = then.obj_scalar if then.is_scalar else then.obj
         otherwise_obj = otherwise.obj_scalar if otherwise.is_scalar else otherwise.obj

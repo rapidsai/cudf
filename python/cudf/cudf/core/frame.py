@@ -297,7 +297,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
         """
         return self._num_columns * self._num_rows
 
-    def memory_usage(self, deep=False):
+    def memory_usage(self, deep: bool = False) -> int:
         """Return the memory usage of an object.
 
         Parameters
