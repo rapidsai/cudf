@@ -44,6 +44,7 @@ from cudf.testing._utils import (
     expect_warning_if,
     gen_rand,
 )
+from cudf.utils.dtypes import SIZE_TYPE_DTYPE
 
 pytest_xfail = pytest.mark.xfail
 pytestmark = pytest.mark.spilling
@@ -1063,7 +1064,7 @@ def test_dataframe_to_string_with_masked_data():
     )
 
     data = np.arange(6)
-    mask = np.zeros(1, dtype=cudf.utils.utils.mask_dtype)
+    mask = np.zeros(1, dtype=SIZE_TYPE_DTYPE)
     mask[0] = 0b00101101
 
     masked = cudf.Series.from_masked_array(data, mask)

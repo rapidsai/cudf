@@ -39,7 +39,7 @@ from cudf.core.dtypes import (
     StructDtype,
 )
 from cudf.core.join._join_helpers import _match_join_keys
-from cudf.core.mixins import Reducible, Scannable
+from cudf.core.mixins import GetAttrGetItemMixin, Reducible, Scannable
 from cudf.core.multiindex import MultiIndex
 from cudf.core.scalar import pa_scalar_to_plc_scalar
 from cudf.core.udf.groupby_utils import _can_be_jitted, jit_groupby_apply
@@ -50,7 +50,6 @@ from cudf.utils.dtypes import (
     is_dtype_obj_numeric,
 )
 from cudf.utils.performance_tracking import _performance_tracking
-from cudf.utils.utils import GetAttrGetItemMixin
 
 if TYPE_CHECKING:
     from collections.abc import Generator, Hashable, Iterable, Sequence

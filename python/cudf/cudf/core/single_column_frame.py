@@ -17,9 +17,9 @@ from cudf.api.types import (
 from cudf.core.column import ColumnBase, as_column
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.frame import Frame
+from cudf.core.mixins import NotIterable
 from cudf.utils.dtypes import SIZE_TYPE_DTYPE, is_dtype_obj_numeric
 from cudf.utils.performance_tracking import _performance_tracking
-from cudf.utils.utils import NotIterable
 
 if TYPE_CHECKING:
     from collections.abc import Hashable

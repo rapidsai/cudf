@@ -16,10 +16,9 @@ from cudf.api.types import is_integer, is_number
 from cudf.core._internals import aggregation
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column.column import ColumnBase, as_column
-from cudf.core.mixins import Reducible
+from cudf.core.mixins import GetAttrGetItemMixin, Reducible
 from cudf.utils import cudautils
 from cudf.utils.dtypes import SIZE_TYPE_DTYPE
-from cudf.utils.utils import GetAttrGetItemMixin
 
 if TYPE_CHECKING:
     from cudf.core.indexed_frame import IndexedFrame

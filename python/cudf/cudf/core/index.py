@@ -60,7 +60,7 @@ from cudf.utils.dtypes import (
     is_mixed_with_object_dtype,
 )
 from cudf.utils.performance_tracking import _performance_tracking
-from cudf.utils.utils import _warn_no_dask_cudf, search_range
+from cudf.utils.utils import _warn_no_dask_cudf
 
 if TYPE_CHECKING:
     from collections.abc import Generator, Iterable
@@ -272,7 +272,19 @@ class RangeIndex(BaseIndex, BinaryOperand):
         assert (len(self) <= 1) or (ascending == (self.step > 0)), (
             "Invalid ascending flag"
         )
-        return search_range(value, self._range, side=side)
+        if side not in {"left", "right"}:
+            raise ValueError("side must be 'left' or 'right'")
+        ri = self._range
+        if flip := (ri.step < 0):
+            ri = ri[::-1]
+            shift = int(side == "right")
+        else:
+            shift = int(side == "left")
+
+        offset = (value - ri.start - shift) // ri.step + 1
+        if flip:
+            offset = len(ri) - offset
+        return max(min(len(ri), offset), 0)
 
     def factorize(
         self, sort: bool = False, use_na_sentinel: bool = True
