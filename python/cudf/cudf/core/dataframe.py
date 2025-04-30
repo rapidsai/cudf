@@ -1618,15 +1618,19 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         self._drop_column(name)
 
     @_performance_tracking
-    def memory_usage(self, index=True, deep=False) -> cudf.Series:
-        mem_usage = [col.memory_usage for col in self._columns]
-        names = [str(name) for name in self._column_names]
+    def memory_usage(
+        self, index: bool = True, deep: bool = False
+    ) -> cudf.Series:
+        mem_usage: abc.Iterable[int] = (
+            col.memory_usage for col in self._columns
+        )
+        result_index = self._data.to_pandas_index
         if index:
-            mem_usage.append(self.index.memory_usage())
-            names.append("Index")
+            mem_usage = itertools.chain([self.index.memory_usage()], mem_usage)
+            result_index = pd.Index(["Index"]).append(result_index.astype(str))
         return Series._from_column(
-            as_column(mem_usage),
-            index=cudf.Index(names),
+            as_column(list(mem_usage)),
+            index=cudf.Index(result_index),
         )
 
     @_performance_tracking
