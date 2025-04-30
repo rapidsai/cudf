@@ -521,6 +521,13 @@ add_library(
   src/io/parquet/compact_protocol_reader.cpp
   src/io/parquet/compact_protocol_writer.cpp
   src/io/parquet/decode_preprocess.cu
+  src/io/parquet/experimental/dictionary_page_filter.cu
+  src/io/parquet/experimental/hybrid_scan.cpp
+  src/io/parquet/experimental/hybrid_scan_impl.cpp
+  src/io/parquet/experimental/hybrid_scan_helpers.cpp
+  src/io/parquet/experimental/hybrid_scan_preprocess.cu
+  src/io/parquet/experimental/hybrid_scan_chunking.cu
+  src/io/parquet/experimental/page_index_filter.cu
   src/io/parquet/page_data.cu
   src/io/parquet/chunk_dict.cu
   src/io/parquet/page_enc.cu
@@ -807,6 +814,7 @@ set_source_files_properties(
   src/transform/transform.cpp
   PROPERTIES COMPILE_DEFINITIONS "_FILE_OFFSET_BITS=64"
 )
+
 
 set_property(
   SOURCE src/io/parquet/writer_impl.cu
