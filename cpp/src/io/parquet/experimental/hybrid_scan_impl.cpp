@@ -27,6 +27,7 @@
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
+#include <thrust/host_vector.h>
 #include <thrust/iterator/counting_iterator.h>
 
 #include <bitset>
@@ -36,34 +37,15 @@
 
 namespace cudf::io::parquet::experimental::detail {
 
-using ColumnChunkDesc       = parquet::detail::ColumnChunkDesc;
-using decode_kernel_mask    = parquet::detail::decode_kernel_mask;
-using PageInfo              = parquet::detail::PageInfo;
-using PageNestingDecodeInfo = parquet::detail::PageNestingDecodeInfo;
-using byte_range_info       = text::byte_range_info;
+using io::detail::inline_column_buffer;
+using parquet::detail::ColumnChunkDesc;
+using parquet::detail::decode_kernel_mask;
+using parquet::detail::PageInfo;
+using parquet::detail::PageNestingDecodeInfo;
+using text::byte_range_info;
 
-namespace {
-
-/**
- * @brief Populate and return a vector of data types of output columns
- *
- * @param output_buffer_template `inline_column_buffers` to extract output column data types from
- * @return A vector of output column data types
- */
-[[nodiscard]] std::vector<cudf::data_type> get_output_types(
-  cudf::host_span<inline_column_buffer const> output_buffer_template)
-{
-  std::vector<cudf::data_type> output_dtypes;
-  std::transform(output_buffer_template.begin(),
-                 output_buffer_template.end(),
-                 std::back_inserter(output_dtypes),
-                 [](auto const& col) { return col.type; });
-  return output_dtypes;
-}
-
-}  // namespace
-
-impl::impl(cudf::host_span<uint8_t const> footer_bytes, parquet_reader_options const& options)
+hybrid_scan_reader_impl::hybrid_scan_reader_impl(cudf::host_span<uint8_t const> footer_bytes,
+                                                 parquet_reader_options const& options)
 {
   // Open and parse the source dataset metadata
   _metadata = std::make_unique<aggregate_reader_metadata>(
@@ -72,11 +54,18 @@ impl::impl(cudf::host_span<uint8_t const> footer_bytes, parquet_reader_options c
     options.get_columns().has_value() and options.is_enabled_allow_mismatched_pq_schemas());
 }
 
-FileMetaData const& impl::get_parquet_metadata() const { return _metadata->get_parquet_metadata(); }
+FileMetaData hybrid_scan_reader_impl::parquet_metadata() const
+{
+  return _metadata->parquet_metadata();
+}
 
-byte_range_info impl::get_page_index_bytes() const { return _metadata->get_page_index_bytes(); }
+byte_range_info hybrid_scan_reader_impl::page_index_byte_range() const
+{
+  return _metadata->page_index_byte_range();
+}
 
-void impl::setup_page_index(cudf::host_span<uint8_t const> page_index_bytes) const
+void hybrid_scan_reader_impl::setup_page_index(
+  cudf::host_span<uint8_t const> page_index_bytes) const
 {
   _metadata->setup_page_index(page_index_bytes);
 }
@@ -125,7 +114,8 @@ void impl::select_columns(read_mode read_mode, parquet_reader_options const& opt
   }
 }
 
-std::vector<size_type> impl::get_all_row_groups(parquet_reader_options const& options) const
+std::vector<size_type> hybrid_scan_reader_impl::all_row_groups(
+  parquet_reader_options const& options) const
 {
   auto const num_row_groups = _metadata->get_num_row_groups();
   auto row_groups_indices   = std::vector<size_type>(num_row_groups);
@@ -133,54 +123,25 @@ std::vector<size_type> impl::get_all_row_groups(parquet_reader_options const& op
   return row_groups_indices;
 }
 
-std::vector<std::vector<size_type>> impl::filter_row_groups_with_stats(
+std::vector<std::vector<size_type>> hybrid_scan_reader_impl::filter_row_groups_with_stats(
   cudf::host_span<std::vector<size_type> const> row_group_indices,
   parquet_reader_options const& options,
   rmm::cuda_stream_view stream)
 {
-  CUDF_EXPECTS(options.get_filter().has_value(), "Filter expression must not be empty");
-
-  select_columns(read_mode::FILTER_COLUMNS, options);
-
-  table_metadata metadata;
-  populate_metadata(metadata);
-  auto expr_conv = named_to_reference_converter(options.get_filter(), metadata);
-  CUDF_EXPECTS(expr_conv.get_converted_expr().has_value(),
-               "Columns names in filter expression must be convertible to index references");
-  auto output_dtypes = get_output_types(_output_buffers_template);
-
-  return _metadata->filter_row_groups_with_stats(row_group_indices,
-                                                 output_dtypes,
-                                                 _output_column_schemas,
-                                                 expr_conv.get_converted_expr(),
-                                                 stream);
+  return {};
 }
 
-std::pair<std::vector<byte_range_info>, std::vector<byte_range_info>> impl::get_secondary_filters(
+std::pair<std::vector<byte_range_info>, std::vector<byte_range_info>>
+hybrid_scan_reader_impl::secondary_filters_byte_ranges(
   cudf::host_span<std::vector<size_type> const> row_group_indices,
   parquet_reader_options const& options)
 {
-  CUDF_EXPECTS(options.get_filter().has_value(), "Filter expression must not be empty");
-
-  select_columns(read_mode::FILTER_COLUMNS, options);
-
-  table_metadata metadata;
-  populate_metadata(metadata);
-  auto expr_conv = named_to_reference_converter(options.get_filter(), metadata);
-  CUDF_EXPECTS(expr_conv.get_converted_expr().has_value(),
-               "Columns names in filter expression must be convertible to index references");
-  auto output_dtypes = get_output_types(_output_buffers_template);
-
-  auto const bloom_filter_bytes = _metadata->get_bloom_filter_bytes(
-    row_group_indices, output_dtypes, _output_column_schemas, expr_conv.get_converted_expr());
-  auto const dictionary_page_bytes = _metadata->get_dictionary_page_bytes(
-    row_group_indices, output_dtypes, _output_column_schemas, expr_conv.get_converted_expr());
-
-  return {bloom_filter_bytes, dictionary_page_bytes};
+  return {};
 }
 
-std::vector<std::vector<size_type>> impl::filter_row_groups_with_dictionary_pages(
-  std::vector<rmm::device_buffer>& dictionary_page_data,
+std::vector<std::vector<size_type>>
+hybrid_scan_reader_impl::filter_row_groups_with_dictionary_pages(
+  cudf::host_span<rmm::device_buffer> dictionary_page_data,
   cudf::host_span<std::vector<size_type> const> row_group_indices,
   parquet_reader_options const& options,
   rmm::cuda_stream_view stream)
@@ -239,14 +200,14 @@ impl::filter_data_pages_with_stats(cudf::host_span<std::vector<size_type> const>
 }
 
 std::pair<std::vector<byte_range_info>, std::vector<cudf::size_type>>
-impl::get_input_column_chunk_byte_ranges(
+hybrid_scan_reader_impl::get_input_column_chunk_byte_ranges(
   cudf::host_span<std::vector<size_type> const> row_group_indices) const
 {
   return {};
 }
 
 std::pair<std::vector<byte_range_info>, std::vector<cudf::size_type>>
-impl::get_filter_column_chunk_byte_ranges(
+hybrid_scan_reader_impl::filter_column_chunks_byte_ranges(
   cudf::host_span<std::vector<size_type> const> row_group_indices,
   parquet_reader_options const& options)
 {
@@ -254,15 +215,15 @@ impl::get_filter_column_chunk_byte_ranges(
 }
 
 std::pair<std::vector<byte_range_info>, std::vector<cudf::size_type>>
-impl::get_payload_column_chunk_byte_ranges(
+hybrid_scan_reader_impl::payload_column_chunks_byte_ranges(
   cudf::host_span<std::vector<size_type> const> row_group_indices,
   parquet_reader_options const& options)
 {
   return {};
 }
 
-table_with_metadata impl::materialize_filter_columns(
-  cudf::host_span<std::vector<bool> const> data_page_mask,
+table_with_metadata hybrid_scan_reader_impl::materialize_filter_columns(
+  cudf::host_span<thrust::host_vector<bool> const> data_page_mask,
   cudf::host_span<std::vector<size_type> const> row_group_indices,
   std::vector<rmm::device_buffer> column_chunk_buffers,
   cudf::mutable_column_view row_mask,
@@ -272,7 +233,7 @@ table_with_metadata impl::materialize_filter_columns(
   return {};
 }
 
-table_with_metadata impl::materialize_payload_columns(
+table_with_metadata hybrid_scan_reader_impl::materialize_payload_columns(
   cudf::host_span<std::vector<size_type> const> row_group_indices,
   std::vector<rmm::device_buffer> column_chunk_buffers,
   cudf::column_view row_mask,
@@ -299,12 +260,15 @@ void impl::populate_metadata(table_metadata& out_metadata) const
                                      out_metadata.per_file_user_data[0].end()};
 }
 
-bool impl::has_more_work() const
+bool hybrid_scan_reader_impl::has_more_work() const
 {
   return _file_itm_data.num_passes() > 0 &&
          _file_itm_data._current_input_pass < _file_itm_data.num_passes();
 }
 
-bool impl::is_first_output_chunk() const { return _file_itm_data._output_chunk_count == 0; }
+bool hybrid_scan_reader_impl::is_first_output_chunk() const
+{
+  return _file_itm_data._output_chunk_count == 0;
+}
 
 }  // namespace cudf::io::parquet::experimental::detail

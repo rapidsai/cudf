@@ -33,12 +33,13 @@
 namespace cudf::io::parquet::experimental::detail {
 
 using aggregate_reader_metadata_base = parquet::detail::aggregate_reader_metadata;
-using CompactProtocolReader          = parquet::detail::CompactProtocolReader;
-using equality_literals_collector    = parquet::detail::equality_literals_collector;
-using inline_column_buffer           = detail::inline_column_buffer;
-using input_column_info              = parquet::detail::input_column_info;
 using metadata_base                  = parquet::detail::metadata;
-using row_group_info                 = parquet::detail::row_group_info;
+
+using io::detail::inline_column_buffer;
+using parquet::detail::CompactProtocolReader;
+using parquet::detail::equality_literals_collector;
+using parquet::detail::input_column_info;
+using parquet::detail::row_group_info;
 
 metadata::metadata(cudf::host_span<uint8_t const> footer_bytes)
 {
@@ -77,22 +78,22 @@ aggregate_reader_metadata::aggregate_reader_metadata(cudf::host_span<uint8_t con
   }
 }
 
-cudf::io::text::byte_range_info aggregate_reader_metadata::get_page_index_bytes() const
+text::byte_range_info aggregate_reader_metadata::page_index_byte_range() const
 {
   auto& schema     = per_file_metadata.front();
   auto& row_groups = schema.row_groups;
 
   if (row_groups.size() and row_groups.front().columns.size()) {
-    int64_t const min_offset = schema.row_groups.front().columns.front().column_index_offset;
-    auto const& last_col     = schema.row_groups.back().columns.back();
-    int64_t const max_offset = last_col.offset_index_offset + last_col.offset_index_length;
+    auto const min_offset = schema.row_groups.front().columns.front().column_index_offset;
+    auto const& last_col  = schema.row_groups.back().columns.back();
+    auto const max_offset = last_col.offset_index_offset + last_col.offset_index_length;
     return {min_offset, (max_offset - min_offset)};
   }
 
   return {};
 }
 
-FileMetaData const& aggregate_reader_metadata::get_parquet_metadata() const
+FileMetaData aggregate_reader_metadata::parquet_metadata() const
 {
   return per_file_metadata.front();
 }
@@ -100,16 +101,15 @@ FileMetaData const& aggregate_reader_metadata::get_parquet_metadata() const
 void aggregate_reader_metadata::setup_page_index(cudf::host_span<uint8_t const> page_index_bytes)
 {
   // Return early if empty page index buffer span
-  if (not page_index_bytes.size()) {
-    CUDF_LOG_WARN("Hybrid scan reader encountered empty `PageIndex` buffer");
+  if (page_index_bytes.empty()) {
+    CUDF_LOG_WARN("Hybrid scan reader encountered empty page index buffer");
     return;
   }
 
-  auto& schema     = per_file_metadata.front();
-  auto& row_groups = schema.row_groups;
+  auto& row_groups = per_file_metadata.front().row_groups;
 
-  CUDF_EXPECTS(row_groups.size() and row_groups.front().columns.size(),
-               "No column chunks in Parquet schema to read PageIndex for");
+  CUDF_EXPECTS(not row_groups.empty() and not row_groups.front().columns.empty(),
+               "No column chunks in Parquet schema to read page index for");
 
   CompactProtocolReader cp(page_index_bytes.data(), page_index_bytes.size());
 
@@ -200,70 +200,6 @@ aggregate_reader_metadata::select_payload_columns(
   // Select valid payload columns using the base `select_columns` method
   return select_columns(
     valid_payload_columns, {}, include_index, strings_to_categorical, timestamp_type_id);
-}
-
-std::vector<std::vector<cudf::size_type>> aggregate_reader_metadata::filter_row_groups_with_stats(
-  host_span<std::vector<cudf::size_type> const> row_group_indices,
-  host_span<data_type const> output_dtypes,
-  host_span<int const> output_column_schemas,
-  std::optional<std::reference_wrapper<ast::expression const>> filter,
-  rmm::cuda_stream_view stream) const
-{
-  std::vector<std::vector<cudf::size_type>> all_row_group_indices;
-  std::transform(per_file_metadata.cbegin(),
-                 per_file_metadata.cend(),
-                 std::back_inserter(all_row_group_indices),
-                 [](auto const& file_meta) {
-                   std::vector<cudf::size_type> rg_idx(file_meta.row_groups.size());
-                   std::iota(rg_idx.begin(), rg_idx.end(), 0);
-                   return rg_idx;
-                 });
-
-  if (not filter.has_value()) { return all_row_group_indices; }
-
-  // Compute total number of input row groups
-  cudf::size_type total_row_groups = [&]() {
-    if (not row_group_indices.empty()) {
-      size_t const total_row_groups =
-        std::accumulate(row_group_indices.begin(),
-                        row_group_indices.end(),
-                        size_t{0},
-                        [](auto sum, auto const& pfm) { return sum + pfm.size(); });
-
-      // Check if we have less than 2B total row groups.
-      CUDF_EXPECTS(total_row_groups <= std::numeric_limits<cudf::size_type>::max(),
-                   "Total number of row groups exceed the cudf::size_type's limit");
-      return static_cast<cudf::size_type>(total_row_groups);
-    } else {
-      return num_row_groups;
-    }
-  }();
-
-  // Span of input row group indices for predicate pushdown
-  host_span<std::vector<cudf::size_type> const> input_row_group_indices;
-  if (row_group_indices.empty()) {
-    std::transform(per_file_metadata.cbegin(),
-                   per_file_metadata.cend(),
-                   std::back_inserter(all_row_group_indices),
-                   [](auto const& file_meta) {
-                     std::vector<cudf::size_type> rg_idx(file_meta.row_groups.size());
-                     std::iota(rg_idx.begin(), rg_idx.end(), 0);
-                     return rg_idx;
-                   });
-    input_row_group_indices = host_span<std::vector<cudf::size_type> const>(all_row_group_indices);
-  } else {
-    input_row_group_indices = row_group_indices;
-  }
-
-  // Filter stats table with StatsAST expression and collect filtered row group indices
-  auto const stats_filtered_row_group_indices = apply_stats_filters(input_row_group_indices,
-                                                                    total_row_groups,
-                                                                    output_dtypes,
-                                                                    output_column_schemas,
-                                                                    filter.value(),
-                                                                    stream);
-
-  return stats_filtered_row_group_indices.value_or(all_row_group_indices);
 }
 
 std::vector<cudf::io::text::byte_range_info> aggregate_reader_metadata::get_bloom_filter_bytes(
