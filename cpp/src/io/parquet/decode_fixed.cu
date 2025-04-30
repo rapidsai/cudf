@@ -943,6 +943,7 @@ constexpr bool is_split_decode()
  * @param chunks List of column chunks
  * @param min_row Row index to start reading at
  * @param num_rows Maximum number of rows to read
+ * @param page_mask Boolean vector indicating which pages need to be decoded
  * @param initial_str_offsets Vector to store the initial offsets for large nested string cols
  * @param error_code Error code to set if an error is encountered
  */
@@ -952,6 +953,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
                            device_span<ColumnChunkDesc const> chunks,
                            size_t min_row,
                            size_t num_rows,
+                           cudf::device_span<bool const> page_mask,
                            cudf::device_span<size_t> initial_str_offsets,
                            kernel_error::pointer error_code)
 {
@@ -984,6 +986,16 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
   // must come after the kernel mask check
   [[maybe_unused]] null_count_back_copier _{s, t};
 
+  // Exit super early for simple types if the page does not need to be decoded
+  if constexpr (not has_lists_t and not has_strings_t and not has_nesting_t) {
+    if (not page_mask[page_idx]) {
+      pp->num_nulls  = pp->num_rows;
+      pp->num_valids = 0;
+      return;
+    }
+  }
+
+  // Setup local page info
   if (!setupLocalPageInfo(s,
                           pp,
                           chunks,
@@ -991,6 +1003,20 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
                           num_rows,
                           mask_filter{kernel_mask_t},
                           page_processing_stage::DECODE)) {
+    return;
+  }
+
+  // Write list and/or string offsets and exit if the page does not need to be decoded
+  if (not page_mask[page_idx]) {
+    pp->num_nulls  = pp->num_rows;
+    pp->num_valids = 0;
+    // Update offsets for all list depth levels
+    if constexpr (has_lists_t) { update_list_offsets_for_pruned_pages<decode_block_size_t>(s); }
+    // Update string offsets or write string sizes for small and large strings respectively
+    if constexpr (has_strings_t) {
+      update_string_offsets_for_pruned_pages<decode_block_size_t, has_lists_t>(
+        s, initial_str_offsets, pages[page_idx]);
+    }
     return;
   }
 
@@ -1171,9 +1197,9 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
       // page.chunk_idx are ordered by input_col_idx and row_group_idx respectively.
       auto const chunks_per_rowgroup = initial_str_offsets.size();
       auto const input_col_idx       = pages[page_idx].chunk_idx % chunks_per_rowgroup;
-      compute_initial_large_strings_offset(s, initial_str_offsets[input_col_idx], has_lists_t);
+      compute_initial_large_strings_offset<has_lists_t>(s, initial_str_offsets[input_col_idx]);
     } else {
-      convert_small_string_lengths_to_offsets<decode_block_size_t>(s, has_lists_t);
+      convert_small_string_lengths_to_offsets<decode_block_size_t, has_lists_t>(s);
     }
   }
   if (t == 0 and s->error != 0) { set_error(s->error, error_code); }
@@ -1193,6 +1219,7 @@ void __host__ DecodePageData(cudf::detail::hostdevice_span<PageInfo> pages,
                              size_t min_row,
                              int level_type_size,
                              decode_kernel_mask kernel_mask,
+                             cudf::device_span<bool const> page_mask,
                              cudf::device_span<size_t> initial_str_offsets,
                              kernel_error::pointer error_code,
                              rmm::cuda_stream_view stream)
@@ -1207,12 +1234,22 @@ void __host__ DecodePageData(cudf::detail::hostdevice_span<PageInfo> pages,
 
     if (level_type_size == 1) {
       gpuDecodePageDataGeneric<uint8_t, decode_block_size, mask>
-        <<<dim_grid, dim_block, 0, stream.value()>>>(
-          pages.device_ptr(), chunks, min_row, num_rows, initial_str_offsets, error_code);
+        <<<dim_grid, dim_block, 0, stream.value()>>>(pages.device_ptr(),
+                                                     chunks,
+                                                     min_row,
+                                                     num_rows,
+                                                     page_mask,
+                                                     initial_str_offsets,
+                                                     error_code);
     } else {
       gpuDecodePageDataGeneric<uint16_t, decode_block_size, mask>
-        <<<dim_grid, dim_block, 0, stream.value()>>>(
-          pages.device_ptr(), chunks, min_row, num_rows, initial_str_offsets, error_code);
+        <<<dim_grid, dim_block, 0, stream.value()>>>(pages.device_ptr(),
+                                                     chunks,
+                                                     min_row,
+                                                     num_rows,
+                                                     page_mask,
+                                                     initial_str_offsets,
+                                                     error_code);
     }
   };
 

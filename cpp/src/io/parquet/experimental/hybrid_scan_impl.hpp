@@ -33,16 +33,20 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/mr/device/device_memory_resource.hpp>
 
+#include <thrust/host_vector.h>
+
 #include <memory>
 #include <optional>
 #include <vector>
 
 namespace cudf::io::parquet::experimental::detail {
 
+using text::byte_range_info;
+
 /**
- * @brief Implementation for Parquet reader
+ * @brief Implementation of the experimental Parquet reader optimized for Hybrid Scan operation
  */
-class impl {
+class hybrid_scan_reader_impl {
  public:
   /**
    * @brief Constructor for the experimental parquet reader implementation to optimally read
@@ -51,17 +55,18 @@ class impl {
    * @param footer_bytes Host span of parquet file footer bytes
    * @param options Parquet reader options
    */
-  explicit impl(cudf::host_span<uint8_t const> footer_bytes, parquet_reader_options const& options);
+  explicit hybrid_scan_reader_impl(cudf::host_span<uint8_t const> footer_bytes,
+                                   parquet_reader_options const& options);
 
   /**
-   * @copydoc cudf::io::experimental::hybrid_scan::get_parquet_metadata
+   * @copydoc cudf::io::experimental::hybrid_scan::parquet_metadata
    */
-  [[nodiscard]] cudf::io::parquet::FileMetaData const& get_parquet_metadata() const;
+  [[nodiscard]] FileMetaData parquet_metadata() const;
 
   /**
-   * @copydoc cudf::io::experimental::hybrid_scan::get_page_index_bytes
+   * @copydoc cudf::io::experimental::hybrid_scan::page_index_byte_range
    */
-  [[nodiscard]] cudf::io::text::byte_range_info get_page_index_bytes() const;
+  [[nodiscard]] byte_range_info page_index_byte_range() const;
 
   /**
    * @copydoc cudf::io::experimental::hybrid_scan::setup_page_index
@@ -69,10 +74,9 @@ class impl {
   void setup_page_index(cudf::host_span<uint8_t const> page_index_bytes) const;
 
   /**
-   * @copydoc cudf::io::experimental::hybrid_scan::get_all_row_groups
+   * @copydoc cudf::io::experimental::hybrid_scan::all_row_groups
    */
-  [[nodiscard]] std::vector<size_type> get_all_row_groups(
-    parquet_reader_options const& options) const;
+  [[nodiscard]] std::vector<size_type> all_row_groups(parquet_reader_options const& options) const;
 
   /**
    * @copydoc cudf::io::experimental::hybrid_scan::filter_row_groups_with_stats
@@ -83,18 +87,17 @@ class impl {
     rmm::cuda_stream_view stream);
 
   /**
-   * @copydoc cudf::io::experimental::hybrid_scan::get_secondary_filters
+   * @copydoc cudf::io::experimental::hybrid_scan::secondary_filters_byte_ranges
    */
-  [[nodiscard]] std::pair<std::vector<cudf::io::text::byte_range_info>,
-                          std::vector<cudf::io::text::byte_range_info>>
-  get_secondary_filters(cudf::host_span<std::vector<size_type> const> row_group_indices,
-                        parquet_reader_options const& options);
+  [[nodiscard]] std::pair<std::vector<byte_range_info>, std::vector<byte_range_info>>
+  secondary_filters_byte_ranges(cudf::host_span<std::vector<size_type> const> row_group_indices,
+                                parquet_reader_options const& options);
 
   /**
    * @copydoc cudf::io::experimental::hybrid_scan::filter_row_groups_with_dictionary_pages
    */
   [[nodiscard]] std::vector<std::vector<size_type>> filter_row_groups_with_dictionary_pages(
-    std::vector<rmm::device_buffer>& dictionary_page_data,
+    cudf::host_span<rmm::device_buffer> dictionary_page_data,
     cudf::host_span<std::vector<size_type> const> row_group_indices,
     parquet_reader_options const& options,
     rmm::cuda_stream_view stream);
@@ -103,7 +106,7 @@ class impl {
    * @copydoc cudf::io::experimental::hybrid_scan::filter_row_groups_with_bloom_filters
    */
   [[nodiscard]] std::vector<std::vector<size_type>> filter_row_groups_with_bloom_filters(
-    std::vector<rmm::device_buffer>& bloom_filter_data,
+    cudf::host_span<rmm::device_buffer> bloom_filter_data,
     cudf::host_span<std::vector<size_type> const> row_group_indices,
     parquet_reader_options const& options,
     rmm::cuda_stream_view stream);
@@ -111,7 +114,7 @@ class impl {
   /**
    * @copydoc cudf::io::experimental::hybrid_scan::filter_data_pages_with_stats
    */
-  [[nodiscard]] std::pair<std::unique_ptr<cudf::column>, std::vector<std::vector<bool>>>
+  [[nodiscard]] std::pair<std::unique_ptr<cudf::column>, std::vector<thrust::host_vector<bool>>>
   filter_data_pages_with_stats(cudf::host_span<std::vector<size_type> const> row_group_indices,
                                parquet_reader_options const& options,
                                rmm::cuda_stream_view stream,
@@ -125,17 +128,15 @@ class impl {
    * @return Pair of a vector of byte ranges to column chunks of filter columns and a vector of
    *         their corresponding input source file indices
    */
-  [[nodiscard]] std::pair<std::vector<cudf::io::text::byte_range_info>,
-                          std::vector<cudf::size_type>>
-  get_filter_column_chunk_byte_ranges(
-    cudf::host_span<std::vector<size_type> const> row_group_indices,
-    parquet_reader_options const& options);
+  [[nodiscard]] std::pair<std::vector<byte_range_info>, std::vector<cudf::size_type>>
+  filter_column_chunks_byte_ranges(cudf::host_span<std::vector<size_type> const> row_group_indices,
+                                   parquet_reader_options const& options);
 
   /**
    * @copydoc cudf::io::experimental::hybrid_scan::materialize_filter_columns
    */
   [[nodiscard]] table_with_metadata materialize_filter_columns(
-    cudf::host_span<std::vector<bool> const> data_page_pask,
+    cudf::host_span<thrust::host_vector<bool> const> data_page_pask,
     cudf::host_span<std::vector<size_type> const> row_group_indices,
     std::vector<rmm::device_buffer> column_chunk_buffers,
     cudf::mutable_column_view row_mask,
@@ -150,11 +151,9 @@ class impl {
    * @return Pair of a vector of byte ranges to column chunks of payload columns and a vector of
    * their corresponding input source file indices
    */
-  [[nodiscard]] std::pair<std::vector<cudf::io::text::byte_range_info>,
-                          std::vector<cudf::size_type>>
-  get_payload_column_chunk_byte_ranges(
-    cudf::host_span<std::vector<size_type> const> row_group_indices,
-    parquet_reader_options const& options);
+  [[nodiscard]] std::pair<std::vector<byte_range_info>, std::vector<cudf::size_type>>
+  payload_column_chunks_byte_ranges(cudf::host_span<std::vector<size_type> const> row_group_indices,
+                                    parquet_reader_options const& options);
 
   /**
    * @copydoc cudf::io::experimental::hybrid_scan::materialize_payload_columns
@@ -182,8 +181,6 @@ class impl {
                               rmm::cuda_stream_view stream);
 
  private:
-  using table_metadata = cudf::io::table_metadata;
-
   /**
    * @brief The enum indicating whether we are reading the filter columns or the payload columns
    */
@@ -205,7 +202,7 @@ class impl {
    *
    * @param data_page_mask Input data page mask from page-pruning step
    */
-  void set_page_mask(cudf::host_span<std::vector<bool> const> data_page_mask);
+  void set_page_mask(cudf::host_span<thrust::host_vector<bool> const> data_page_mask);
 
   /**
    * @brief Select the columns to be read based on the read mode
@@ -221,8 +218,7 @@ class impl {
    * @param row_group_indices The row groups indices to read
    * @return A pair of vectors containing the byte ranges and the source indices
    */
-  [[nodiscard]] std::pair<std::vector<cudf::io::text::byte_range_info>,
-                          std::vector<cudf::size_type>>
+  [[nodiscard]] std::pair<std::vector<byte_range_info>, std::vector<cudf::size_type>>
   get_input_column_chunk_byte_ranges(
     cudf::host_span<std::vector<size_type> const> row_group_indices) const;
 
@@ -470,7 +466,7 @@ class impl {
   std::unique_ptr<aggregate_reader_metadata> _metadata;
 
   // name to reference converter to extract AST output filter
-  named_to_reference_converter _expr_conv{std::nullopt, cudf::io::table_metadata{}};
+  named_to_reference_converter _expr_conv{std::nullopt, table_metadata{}};
 
   // input columns to be processed
   std::vector<input_column_info> _input_columns;
@@ -498,7 +494,7 @@ class impl {
 
   std::optional<std::vector<reader_column_schema>> _reader_column_schema;
 
-  std::vector<bool> _page_mask;
+  thrust::host_vector<bool> _page_mask;
 
   file_intermediate_data _file_itm_data;
   bool _file_preprocessed{false};

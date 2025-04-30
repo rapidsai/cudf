@@ -9,15 +9,18 @@ import pytest
 
 import polars as pl
 
-from cudf_polars.testing.asserts import assert_gpu_result_equal
+from cudf_polars.testing.asserts import DEFAULT_SCHEDULER, assert_gpu_result_equal
 
 
 @pytest.fixture(scope="module")
 def engine():
     return pl.GPUEngine(
         raise_on_fail=True,
-        executor="dask-experimental",
-        executor_options={"max_rows_per_partition": 4},
+        executor="streaming",
+        executor_options={
+            "max_rows_per_partition": 4,
+            "scheduler": DEFAULT_SCHEDULER,
+        },
     )
 
 
@@ -47,8 +50,11 @@ def test_groupby_single_partitions(df, op, keys):
         q,
         engine=pl.GPUEngine(
             raise_on_fail=True,
-            executor="dask-experimental",
-            executor_options={"max_rows_per_partition": 1e9},
+            executor="streaming",
+            executor_options={
+                "max_rows_per_partition": int(1e9),
+                "scheduler": DEFAULT_SCHEDULER,
+            },
         ),
         check_row_order=False,
     )
@@ -66,13 +72,15 @@ def test_groupby_agg(df, engine, op, keys):
 def test_groupby_agg_config_options(df, op, keys):
     engine = pl.GPUEngine(
         raise_on_fail=True,
-        executor="dask-experimental",
+        executor="streaming",
         executor_options={
             "max_rows_per_partition": 4,
             # Trigger shuffle-based groupby
             "cardinality_factor": {"z": 0.5},
             # Check that we can change the n-ary factor
             "groupby_n_ary": 8,
+            "scheduler": DEFAULT_SCHEDULER,
+            "shuffle_method": "tasks",
         },
     )
     agg = getattr(pl.col("x"), op)()
@@ -86,10 +94,11 @@ def test_groupby_agg_config_options(df, op, keys):
 def test_groupby_fallback(df, engine, fallback_mode):
     engine = pl.GPUEngine(
         raise_on_fail=True,
-        executor="dask-experimental",
+        executor="streaming",
         executor_options={
             "fallback_mode": fallback_mode,
             "max_rows_per_partition": 4,
+            "scheduler": DEFAULT_SCHEDULER,
         },
     )
     match = "Failed to decompose groupby aggs"
@@ -102,7 +111,8 @@ def test_groupby_fallback(df, engine, fallback_mode):
         ctx = pytest.raises(pl.exceptions.ComputeError, match=match)
     elif fallback_mode == "foo":
         ctx = pytest.raises(
-            pl.exceptions.ComputeError, match="not a supported 'fallback_mode' option"
+            pl.exceptions.ComputeError,
+            match="'foo' is not a valid StreamingFallbackMode",
         )
     else:
         ctx = pytest.warns(UserWarning, match=match)

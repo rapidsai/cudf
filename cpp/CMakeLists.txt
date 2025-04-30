@@ -14,7 +14,7 @@
 
 cmake_minimum_required(VERSION 3.30.4 FATAL_ERROR)
 
-include(../rapids_config.cmake)
+include(../cmake/rapids_config.cmake)
 include(rapids-cmake)
 include(rapids-cpm)
 include(rapids-cuda)
@@ -650,11 +650,12 @@ add_library(
   src/rolling/detail/optimized_unbounded_window.cpp
   src/rolling/detail/rolling_collect_list.cu
   src/rolling/detail/rolling_fixed_window.cu
+  src/rolling/detail/rolling_utils.cu
   src/rolling/detail/rolling_variable_window.cu
   src/rolling/grouped_rolling.cu
   src/rolling/range_rolling.cu
   src/rolling/range_window_bounds.cpp
-  src/rolling/rolling.cu
+  src/rolling/rolling.cpp
   src/round/round.cu
   src/scalar/scalar.cpp
   src/scalar/scalar_factories.cpp
@@ -711,6 +712,7 @@ add_library(
   src/strings/like.cu
   src/strings/merge/merge.cu
   src/strings/padding.cu
+  src/strings/positions.cu
   src/strings/regex/regcomp.cpp
   src/strings/regex/regexec.cpp
   src/strings/regex/regex_program.cpp
@@ -937,7 +939,7 @@ target_compile_definitions(cudf PRIVATE $<$<BOOL:${CUDF_KVIKIO_REMOTE_IO}>:CUDF_
 
 # Remove this after upgrading to a CCCL that has a proper CMake option. See
 # https://github.com/NVIDIA/cccl/pull/2844
-target_compile_definitions(cudf PRIVATE THRUST_FORCE_32_BIT_OFFSET_TYPE=1)
+target_compile_definitions(cudf PRIVATE THRUST_FORCE_32_BIT_OFFSET_TYPE=1 CCCL_AVOID_SORT_UNROLL=1)
 
 # Compile stringified JIT sources first
 add_dependencies(cudf jitify_preprocess_run)

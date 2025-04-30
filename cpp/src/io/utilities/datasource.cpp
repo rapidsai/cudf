@@ -59,7 +59,8 @@ class kvikio_source : public datasource {
     // Clamp length to available data
     auto const read_size = std::min(size, this->size() - offset);
     std::vector<uint8_t> v(read_size);
-    return {std::move(v), _kvikio_handle.pread(v.data(), read_size, offset)};
+    auto v_data = v.data();
+    return {std::move(v), _kvikio_handle.pread(v_data, read_size, offset)};
   }
 
  public:
@@ -110,7 +111,18 @@ class kvikio_source : public datasource {
     CUDF_EXPECTS(supports_device_read(), "Device reads are not supported for this file.");
 
     auto const read_size = std::min(size, this->size() - offset);
-    return _kvikio_handle.pread(dst, read_size, offset);
+
+    if constexpr (std::is_same_v<HandleT, kvikio::FileHandle>) {
+      return _kvikio_handle.pread(dst,
+                                  read_size,
+                                  offset,
+                                  kvikio::defaults::task_size(),
+                                  kvikio::defaults::gds_threshold(),
+                                  false /* not to sync_default_stream */);
+    } else {
+      // HandleT is kvikio::RemoteHandle
+      return _kvikio_handle.pread(dst, read_size, offset);
+    }
   }
 
   size_t device_read(size_t offset,
@@ -448,8 +460,8 @@ class user_datasource_wrapper : public datasource {
 class remote_file_source : public kvikio_source<kvikio::RemoteHandle> {
   static auto create_s3_handle(char const* filepath)
   {
-    auto [bucket_name, bucket_object] = kvikio::S3Endpoint::parse_s3_url(filepath);
-    return kvikio::RemoteHandle{std::make_unique<kvikio::S3Endpoint>(bucket_name, bucket_object)};
+    return kvikio::RemoteHandle{
+      std::make_unique<kvikio::S3Endpoint>(kvikio::S3Endpoint::parse_s3_url(filepath))};
   }
 
  public:
