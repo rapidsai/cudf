@@ -5379,8 +5379,6 @@ class StringMethods(ColumnMethods):
 
         Parameters
         ----------
-        input : Column
-             Strings column of text
         min_width : int
             The minimum number of bytes to determine duplicates
 
