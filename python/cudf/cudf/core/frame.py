@@ -521,12 +521,6 @@ class Frame(BinaryOperand, Scannable, Serializable):
                 matrix[:, i] = to_array(col, dtype)
             return matrix
 
-    # TODO: As of now, calling cupy.asarray is _much_ faster than calling
-    # to_cupy. We should investigate the reasons why and whether we can provide
-    # a more efficient method here by exploiting __cuda_array_interface__. In
-    # particular, we need to benchmark how much of the overhead is coming from
-    # (potentially unavoidable) local copies in to_cupy and how much comes from
-    # inefficiencies in the implementation.
     @_performance_tracking
     def to_cupy(
         self,
