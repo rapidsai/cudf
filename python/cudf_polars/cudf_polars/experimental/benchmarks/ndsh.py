@@ -2,7 +2,9 @@
 # SPDX-License-Identifier: Apache-2.0
 
 """
-Experimental TPC-H benchmark.
+Experimental NDS-H benchmarks.
+
+Based on the TPC-H benchmarks.
 
 WARNING: This is an experimental (and unofficial)
 benchmark script. It is not intended for public use
@@ -41,7 +43,7 @@ os.environ["KVIKIO_NTHREADS"] = os.environ.get("KVIKIO_NTHREADS", "8")
 
 @dataclasses.dataclass
 class Record:
-    """Results for a single run of a single TPCH query."""
+    """Results for a single run of a single NDS-H query."""
 
     query: int
     duration: float
@@ -69,10 +71,10 @@ class PackageVersions:
             versions[name] = package.__version__
         versions["python"] = ".".join(str(v) for v in sys.version_info[:3])
         try:
-            import rapidsmp
+            import rapidsmpf
 
-            versions["rapidsmpf"] = rapidsmp.__version__
-        except ImportError:
+            versions["rapidsmpf"] = rapidsmpf.__version__
+        except (AttributeError, ImportError):
             versions["rapidsmpf"] = None
         return cls(**versions)
 
@@ -119,7 +121,7 @@ class HardwareInfo:
 
 @dataclasses.dataclass(kw_only=True)
 class RunConfig:
-    """Results for a TPCH query run."""
+    """Results for a NDS-H query run."""
 
     queries: list[int]
     suffix: str
@@ -135,7 +137,7 @@ class RunConfig:
     broadcast_join_limit: int
     blocksize: int
     threads: int
-    trials: int
+    iterations: int
     timestamp: str = dataclasses.field(
         default_factory=lambda: datetime.now(timezone.utc).isoformat()
     )
@@ -165,7 +167,7 @@ class RunConfig:
             dataset_path=args.path,
             blocksize=args.blocksize,
             threads=args.threads,
-            trials=args.trials,
+            iterations=args.iterations,
             suffix=args.suffix,
         )
 
@@ -175,19 +177,22 @@ class RunConfig:
 
     def summarize(self) -> None:
         """Print a summary of the results."""
-        print("Trial Summary")
+        print("Iteration Summary")
         print("=======================================")
 
         for query, records in self.records.items():
             print(f"query: {query}")
             print(f"path: {self.dataset_path}")
             print(f"executor: {self.executor}")
-            print(f"blocksize: {self.blocksize}")
-            print(f"shuffle_method: {self.shuffle}")
-            print(f"broadcast_join_limit: {self.broadcast_join_limit}")
-            print(f"n_workers: {self.n_workers}")
-            print(f"threads: {self.threads}")
-            print(f"n_trials: {self.trials}")
+            if self.executor == "streaming":
+                print(f"scheduler: {self.scheduler}")
+                print(f"blocksize: {self.blocksize}")
+                print(f"shuffle_method: {self.shuffle}")
+                print(f"broadcast_join_limit: {self.broadcast_join_limit}")
+                if self.scheduler == "distributed":
+                    print(f"n_workers: {self.n_workers}")
+                    print(f"threads: {self.threads}")
+            print(f"iterations: {self.iterations}")
             print("---------------------------------------")
             print(f"min time : {min([record.duration for record in records]):0.4f}")
             print(f"max time : {max(record.duration for record in records):0.4f}")
@@ -202,8 +207,8 @@ def get_data(
     return pl.scan_parquet(f"{path}/{table_name}{suffix}")
 
 
-class TPCHQueries:
-    """TPCH query definitions."""
+class NDSHQueries:
+    """NDS-H query definitions."""
 
     @staticmethod
     def q0(run_config: RunConfig) -> pl.LazyFrame:
@@ -984,8 +989,8 @@ def _query_type(query: int | str) -> list[int]:
 
 
 parser = argparse.ArgumentParser(
-    prog="Cudf-Polars TPC-H Benchmarks",
-    description="Experimental Streaming-Executor benchmarks.",
+    prog="Cudf-Polars NDS-H Benchmarks",
+    description="Experimental streaming-executor benchmarks.",
 )
 parser.add_argument(
     "query",
@@ -995,8 +1000,8 @@ parser.add_argument(
 parser.add_argument(
     "--path",
     type=str,
-    default=os.environ.get("TPCH_DATASET_PATH"),
-    help="Root TPCH-dataset directory path.",
+    default=os.environ.get("NDSH_DATASET_PATH"),
+    help="Root NDSH-dataset directory path.",
 )
 parser.add_argument(
     "--suffix",
@@ -1033,10 +1038,10 @@ parser.add_argument(
     help="Approx. partition size.",
 )
 parser.add_argument(
-    "--trials",
+    "--iterations",
     default=1,
     type=int,
-    help="Number of times to run the query.",
+    help="Number of times to run the same query.",
 )
 parser.add_argument(
     "--debug",
@@ -1073,7 +1078,7 @@ parser.add_argument(
     "-o",
     "--output",
     type=argparse.FileType("at"),
-    default="tpch_results.jsonl",
+    default="ndsh_results.jsonl",
     help="Output file path.",
 )
 parser.add_argument(
@@ -1092,7 +1097,7 @@ args = parser.parse_args()
 
 
 def run(args: argparse.Namespace) -> None:
-    """Run the benchmark once."""
+    """Run the benchmark."""
     client = None
     run_config = RunConfig.from_args(args)
 
@@ -1129,13 +1134,13 @@ def run(args: argparse.Namespace) -> None:
 
     for q_id in query_ids:
         try:
-            q = getattr(TPCHQueries, f"q{q_id}")(run_config)
+            q = getattr(NDSHQueries, f"q{q_id}")(run_config)
         except AttributeError as err:
             raise NotImplementedError(f"Query {q_id} not implemented.") from err
 
         records[q_id] = []
 
-        for _ in range(args.trials):
+        for _ in range(args.iterations):
             t0 = time.monotonic()
 
             if run_config.executor == "cpu":
