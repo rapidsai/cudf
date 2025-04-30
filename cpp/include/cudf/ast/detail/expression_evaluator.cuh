@@ -41,16 +41,12 @@ CUDF_HOST_DEVICE constexpr bool is_complex_type(cudf::type_id type)
 }
 
 /**
- * @brief Maps primitive types to their corresponding C++ types
+ * @brief Maps void for string and decimal types
  *
- * This template provides a mapping from cudf::type_id to concrete C++ types for
- * common numeric types (integers, floating point, boolean) and temporal types
- * (timestamps, durations).
- *
- * @tparam t The cudf::type_id to map to a C++ type
+ * @tparam t The cudf::type_id to map to a C++ type or void
  */
 template <cudf::type_id t>
-struct id_to_primitive_type {
+struct dispatch_void_if_complex {
   // Default to void for non-primitive types
   using type = cuda::std::conditional_t<is_complex_type(t), void, id_to_type<t>>;
 };
@@ -538,15 +534,15 @@ struct expression_evaluator {
                           op,
                           thread_intermediate_storage);
         } else {
-          type_dispatcher<id_to_primitive_type>(input.data_type,
-                                                *this,
-                                                output_object,
-                                                input_row_index,
-                                                input,
-                                                output,
-                                                output_row_index,
-                                                op,
-                                                thread_intermediate_storage);
+          type_dispatcher<dispatch_void_if_complex>(input.data_type,
+                                                    *this,
+                                                    output_object,
+                                                    input_row_index,
+                                                    input,
+                                                    output,
+                                                    output_row_index,
+                                                    op,
+                                                    thread_intermediate_storage);
         }
       } else if (arity == 2) {
         // Binary operator
@@ -570,18 +566,18 @@ struct expression_evaluator {
                           op,
                           thread_intermediate_storage);
         } else {
-          type_dispatcher<id_to_primitive_type>(lhs.data_type,
-                                                detail::single_dispatch_binary_operator{},
-                                                *this,
-                                                output_object,
-                                                left_row_index,
-                                                right_row_index,
-                                                lhs,
-                                                rhs,
-                                                output,
-                                                output_row_index,
-                                                op,
-                                                thread_intermediate_storage);
+          type_dispatcher<dispatch_void_if_complex>(lhs.data_type,
+                                                    detail::single_dispatch_binary_operator{},
+                                                    *this,
+                                                    output_object,
+                                                    left_row_index,
+                                                    right_row_index,
+                                                    lhs,
+                                                    rhs,
+                                                    output,
+                                                    output_row_index,
+                                                    op,
+                                                    thread_intermediate_storage);
         }
       }
     }
