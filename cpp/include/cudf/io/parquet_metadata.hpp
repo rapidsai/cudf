@@ -84,7 +84,7 @@ struct parquet_column_schema {
    *
    * @deprecated in branch-25.06 and to be removed in a future release; Use `type()` instead.
    */
-  [[deprecated]] [[nodiscard]] auto type_kind() const { return _type; }
+  [[deprecated]] [[nodiscard]] auto type_kind() const { return type(); }
 
   /**
    * @brief Returns schemas of all child columns.
