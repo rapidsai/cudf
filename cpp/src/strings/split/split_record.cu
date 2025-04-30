@@ -147,12 +147,15 @@ std::unique_ptr<column> whitespace_split_record_fn(strings_column_view const& in
                                                    rmm::device_async_resource_ref mr)
 {
   // create offsets column by counting the number of tokens per string
-  auto sizes_itr = cudf::detail::make_counting_transform_iterator(
-    0, cuda::proclaim_return_type<size_type>([reader] __device__(auto idx) {
-      return reader.count_tokens(idx);
-    }));
+  auto token_counts = rmm::device_uvector<size_type>(input.size(), stream);
+  thrust::transform(rmm::exec_policy_nosync(stream),
+                    thrust::make_counting_iterator<size_type>(0),
+                    thrust::make_counting_iterator<size_type>(input.size()),
+                    token_counts.begin(),
+                    cuda::proclaim_return_type<size_type>(
+                      [reader] __device__(auto idx) { return reader.count_tokens(idx); }));
   auto [offsets, total_tokens] =
-    cudf::detail::make_offsets_child_column(sizes_itr, sizes_itr + input.size(), stream, mr);
+    cudf::detail::make_offsets_child_column(token_counts.begin(), token_counts.end(), stream, mr);
   auto d_offsets = offsets->view().template data<cudf::size_type>();
 
   // split each string into an array of index-pair values
