@@ -21,8 +21,6 @@ from cudf_polars.dsl.expressions.base import ExecutionContext, Expr
 from cudf_polars.dsl.expressions.literal import Literal, LiteralColumn
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
-
     from typing_extensions import Self
 
     from polars.polars import _expr_nodes as pl_expr
@@ -107,7 +105,7 @@ class StringFunction(Expr):
         self.options = options
         self.name = name
         self.children = children
-        self.is_pointwise = True
+        self.is_pointwise = self.name != StringFunction.Name.ConcatVertical
         self._validate_input()
 
     def _validate_input(self) -> None:
@@ -203,16 +201,12 @@ class StringFunction(Expr):
                 )
 
     def do_evaluate(
-        self,
-        df: DataFrame,
-        *,
-        context: ExecutionContext = ExecutionContext.FRAME,
-        mapping: Mapping[Expr, Column] | None = None,
+        self, df: DataFrame, *, context: ExecutionContext = ExecutionContext.FRAME
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
         if self.name is StringFunction.Name.ConcatVertical:
             (child,) = self.children
-            column = child.evaluate(df, context=context, mapping=mapping)
+            column = child.evaluate(df, context=context)
             delimiter, ignore_nulls = self.options
             if column.null_count > 0 and not ignore_nulls:
                 return Column(plc.Column.all_null_like(column.obj, 1))
@@ -225,11 +219,11 @@ class StringFunction(Expr):
             )
         elif self.name is StringFunction.Name.Contains:
             child, arg = self.children
-            column = child.evaluate(df, context=context, mapping=mapping)
+            column = child.evaluate(df, context=context)
 
             literal, _ = self.options
             if literal:
-                pat = arg.evaluate(df, context=context, mapping=mapping)
+                pat = arg.evaluate(df, context=context)
                 pattern = (
                     pat.obj_scalar
                     if pat.is_scalar and pat.size != column.size
@@ -245,7 +239,7 @@ class StringFunction(Expr):
             assert isinstance(expr_offset, Literal)
             assert isinstance(expr_length, Literal)
 
-            column = child.evaluate(df, context=context, mapping=mapping)
+            column = child.evaluate(df, context=context)
             # libcudf slices via [start,stop).
             # polars slices with offset + length where start == offset
             # stop = start + length. Negative values for start look backward
@@ -275,9 +269,7 @@ class StringFunction(Expr):
             StringFunction.Name.StripCharsStart,
             StringFunction.Name.StripCharsEnd,
         }:
-            column, chars = (
-                c.evaluate(df, context=context, mapping=mapping) for c in self.children
-            )
+            column, chars = (c.evaluate(df, context=context) for c in self.children)
             if self.name is StringFunction.Name.StripCharsStart:
                 side = plc.strings.SideType.LEFT
             elif self.name is StringFunction.Name.StripCharsEnd:
@@ -286,10 +278,7 @@ class StringFunction(Expr):
                 side = plc.strings.SideType.BOTH
             return Column(plc.strings.strip.strip(column.obj, side, chars.obj_scalar))
 
-        columns = [
-            child.evaluate(df, context=context, mapping=mapping)
-            for child in self.children
-        ]
+        columns = [child.evaluate(df, context=context) for child in self.children]
         if self.name is StringFunction.Name.Lowercase:
             (column,) = columns
             return Column(plc.strings.case.to_lower(column.obj))
@@ -319,7 +308,7 @@ class StringFunction(Expr):
         elif self.name is StringFunction.Name.Strptime:
             # TODO: ignores ambiguous
             format, strict, exact, cache = self.options
-            col = self.children[0].evaluate(df, context=context, mapping=mapping)
+            col = self.children[0].evaluate(df, context=context)
 
             is_timestamps = plc.strings.convert.convert_datetime.is_timestamp(
                 col.obj, format
