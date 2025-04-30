@@ -13,11 +13,9 @@ from polars.polars import _expr_nodes as pl_expr
 import pylibcudf as plc
 
 from cudf_polars.containers import Column
-from cudf_polars.dsl.expressions.base import AggInfo, ExecutionContext, Expr
+from cudf_polars.dsl.expressions.base import ExecutionContext, Expr
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
-
     from cudf_polars.containers import DataFrame
 
 __all__ = ["BinOp"]
@@ -85,17 +83,10 @@ class BinOp(Expr):
     }
 
     def do_evaluate(
-        self,
-        df: DataFrame,
-        *,
-        context: ExecutionContext = ExecutionContext.FRAME,
-        mapping: Mapping[Expr, Column] | None = None,
+        self, df: DataFrame, *, context: ExecutionContext = ExecutionContext.FRAME
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
-        left, right = (
-            child.evaluate(df, context=context, mapping=mapping)
-            for child in self.children
-        )
+        left, right = (child.evaluate(df, context=context) for child in self.children)
         lop = left.obj
         rop = right.obj
         if left.size != right.size:
@@ -106,30 +97,3 @@ class BinOp(Expr):
         return Column(
             plc.binaryop.binary_operation(lop, rop, self.op, self.dtype),
         )
-
-    def collect_agg(self, *, depth: int) -> AggInfo:
-        """Collect information about aggregations in groupbys."""
-        if depth == 1:
-            # inside aggregation, need to pre-evaluate,
-            # groupby construction has checked that we don't have
-            # nested aggs, so stop the recursion and return ourselves
-            # for pre-eval
-            return AggInfo([(self, plc.aggregation.collect_list(), self)])
-        else:
-            left_info, right_info = (
-                child.collect_agg(depth=depth) for child in self.children
-            )
-            requests = [*left_info.requests, *right_info.requests]
-            # TODO: Hack, if there were no reductions inside this
-            # binary expression then we want to pre-evaluate and
-            # collect ourselves. Otherwise we want to collect the
-            # aggregations inside and post-evaluate. This is a bad way
-            # of checking that we are in case 1.
-            if all(
-                agg.kind() == plc.aggregation.Kind.COLLECT_LIST
-                for _, agg, _ in requests
-            ):
-                return AggInfo([(self, plc.aggregation.collect_list(), self)])
-            return AggInfo(
-                [*left_info.requests, *right_info.requests],
-            )

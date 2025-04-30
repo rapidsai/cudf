@@ -142,7 +142,6 @@ __all__ = [
     "dtype",  # TODO: dtype should not be a public function
     "errors",
     "factorize",
-    "from_dataframe",
     "from_dlpack",
     "from_pandas",
     "get_dummies",

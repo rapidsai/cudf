@@ -139,6 +139,21 @@ class TimeDeltaColumn(ColumnBase):
             children=children,
         )
 
+    def _clear_cache(self) -> None:
+        super()._clear_cache()
+        attrs = (
+            "days",
+            "seconds",
+            "microseconds",
+            "nanoseconds",
+            "time_unit",
+        )
+        for attr in attrs:
+            try:
+                delattr(self, attr)
+            except AttributeError:
+                pass
+
     def __contains__(self, item: DatetimeLikeScalar) -> bool:
         try:
             item = np.timedelta64(item, self.time_unit)
@@ -170,7 +185,7 @@ class TimeDeltaColumn(ColumnBase):
         Return a CuPy representation of the TimeDeltaColumn.
         """
         raise NotImplementedError(
-            "TimeDelta Arrays is not yet implemented in cudf"
+            "TimeDelta Arrays is not yet implemented in cupy"
         )
 
     def element_indexing(self, index: int):
@@ -610,7 +625,7 @@ class TimeDeltaColumn(ColumnBase):
             data[result_key] = res_col
         return data
 
-    @property
+    @functools.cached_property
     def days(self) -> cudf.core.column.NumericalColumn:
         """
         Number of days for each element.
@@ -621,7 +636,7 @@ class TimeDeltaColumn(ColumnBase):
         """
         return self // get_np_td_unit_conversion("D", self.dtype)
 
-    @property
+    @functools.cached_property
     def seconds(self) -> cudf.core.column.NumericalColumn:
         """
         Number of seconds (>= 0 and less than 1 day).
@@ -639,7 +654,7 @@ class TimeDeltaColumn(ColumnBase):
             self % get_np_td_unit_conversion("D", self.dtype)
         ) // get_np_td_unit_conversion("s", None)
 
-    @property
+    @functools.cached_property
     def microseconds(self) -> cudf.core.column.NumericalColumn:
         """
         Number of microseconds (>= 0 and less than 1 second).
@@ -657,7 +672,7 @@ class TimeDeltaColumn(ColumnBase):
             self % get_np_td_unit_conversion("s", self.dtype)
         ) // get_np_td_unit_conversion("us", None)
 
-    @property
+    @functools.cached_property
     def nanoseconds(self) -> cudf.core.column.NumericalColumn:
         """
         Return the number of nanoseconds (n), where 0 <= n < 1 microsecond.
