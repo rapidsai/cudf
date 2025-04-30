@@ -152,12 +152,27 @@ class TemporalBaseColumn(ColumnBase):
     def _normalize_binop_operand(self, other: Any) -> pa.Scalar | ColumnBase:
         if isinstance(other, ColumnBase):
             return other
+        elif self.dtype.kind == "M" and isinstance(other, cudf.DateOffset):
+            return other
         elif isinstance(other, (cp.ndarray, np.ndarray)) and other.ndim == 0:
             other = other[()]
 
         if is_scalar(other):
             if is_na_like(other):
                 return super()._normalize_binop_operand(other)
+            elif self.dtype.kind == "M" and isinstance(other, pd.Timestamp):
+                if other.tz is not None:
+                    raise NotImplementedError(
+                        "Binary operations with timezone aware operands is not supported."
+                    )
+                other = other.to_numpy()
+            elif self.dtype.kind == "M" and isinstance(other, str):
+                try:
+                    other = pd.Timestamp(other)
+                except ValueError:
+                    return NotImplemented
+            elif self.dtype.kind == "m" and isinstance(other, pd.Timedelta):
+                other = other.to_numpy()
             elif isinstance(other, (np.datetime64, np.timedelta64)):
                 unit = np.datetime_data(other)[0]
                 if unit not in {"s", "ms", "us", "ns"}:
@@ -175,19 +190,23 @@ class TemporalBaseColumn(ColumnBase):
                             np.dtype(f"{other.dtype.kind}8[{to_unit}]")
                         )
             scalar = pa.scalar(other)
-            if (
-                pa.types.is_timestamp(scalar.type)
-                and scalar.type.tz is not None
-            ):
-                raise NotImplementedError(
-                    "Binary operations with timezone aware operands is not supported."
-                )
+            if pa.types.is_timestamp(scalar.type):
+                if scalar.type.tz is not None:
+                    raise NotImplementedError(
+                        "Binary operations with timezone aware operands is not supported."
+                    )
+                return scalar
             elif pa.types.is_duration(scalar.type):
-                common_dtype = find_common_type(
-                    (self.dtype, cudf_dtype_from_pa_type(scalar.type))
-                )
-                scalar = scalar.cast(cudf_dtype_to_pa_type(common_dtype))
-            return scalar
+                if self.dtype.kind == "m":
+                    common_dtype = find_common_type(
+                        (self.dtype, cudf_dtype_from_pa_type(scalar.type))
+                    )
+                    scalar = scalar.cast(cudf_dtype_to_pa_type(common_dtype))
+                return scalar
+            elif self.dtype.kind == "m":
+                return scalar
+            else:
+                return NotImplemented
         return NotImplemented
 
     @functools.cached_property
@@ -295,7 +314,7 @@ class TemporalBaseColumn(ColumnBase):
             max_to_res = np.timedelta64(
                 np.iinfo(self._UNDERLYING_DTYPE).max, to_res
             ).astype(f"m8[{self.time_unit}]", copy=False)
-            return max_dist <= max_to_res and min_dist <= max_to_res
+            return bool(max_dist <= max_to_res and min_dist <= max_to_res)
         elif (
             to_dtype == self._UNDERLYING_DTYPE or to_dtype == CUDF_STRING_DTYPE
         ):
@@ -316,8 +335,8 @@ class TemporalBaseColumn(ColumnBase):
 
     def std(
         self, skipna: bool | None = None, min_count: int = 0, ddof: int = 1
-    ) -> pd.Timestamp | pd.Timedelta:
-        return self._PD_SCALAR(
+    ) -> pd.Timedelta:
+        return pd.Timedelta(
             self.astype(self._UNDERLYING_DTYPE).std(  # type:ignore[call-arg]
                 skipna=skipna, min_count=min_count, ddof=ddof
             ),

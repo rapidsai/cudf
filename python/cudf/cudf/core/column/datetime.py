@@ -7,7 +7,7 @@ import functools
 import locale
 import warnings
 from locale import nl_langinfo
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Literal
 
 import numpy as np
 import pandas as pd
@@ -436,11 +436,6 @@ class DatetimeColumn(TemporalBaseColumn):
                 ["year", "week", "day"], ["%G", "%V", "%u"]
             )
         }
-
-    def _normalize_binop_operand(self, other: Any) -> pa.Scalar | ColumnBase:
-        if isinstance(other, cudf.DateOffset):
-            return other
-        return super()._normalize_binop_operand(other)
 
     def as_datetime_column(self, dtype: np.dtype) -> DatetimeColumn:
         if dtype == self.dtype:
