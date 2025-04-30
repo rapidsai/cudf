@@ -155,6 +155,7 @@ std::vector<std::vector<size_type>> hybrid_scan_reader_impl::filter_row_groups_w
   parquet_reader_options const& options,
   rmm::cuda_stream_view stream)
 {
+  CUDF_EXPECTS(not row_group_indices.empty(), "Input row group indices must not be empty");
   CUDF_EXPECTS(options.get_filter().has_value(), "Filter expression must not be empty");
 
   select_columns(read_mode::FILTER_COLUMNS, options);

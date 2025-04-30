@@ -212,8 +212,6 @@ std::vector<std::vector<cudf::size_type>> aggregate_reader_metadata::filter_row_
   std::optional<std::reference_wrapper<ast::expression const>> filter,
   rmm::cuda_stream_view stream) const
 {
-  CUDF_EXPECTS(not row_group_indices.empty(), "Input row group indices must not be empty");
-
   auto all_row_group_indices = [&]() {
     std::vector<std::vector<cudf::size_type>> all_row_group_indices;
     std::transform(row_group_indices.begin(),
@@ -223,7 +221,7 @@ std::vector<std::vector<cudf::size_type>> aggregate_reader_metadata::filter_row_
     return all_row_group_indices;
   };
 
-  // No filter expression, return all row groups
+  // No converted filter expression, return all row groups
   if (not filter.has_value()) { return all_row_group_indices(); }
 
   // Compute total number of input row groups
