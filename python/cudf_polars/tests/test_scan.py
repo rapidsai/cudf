@@ -47,7 +47,7 @@ def df():
 def columns(request, row_index):
     name, _ = row_index
     if name is not None and request.param is not None:
-        return [*request.param, name]
+        return [name, *request.param]
     return request.param
 
 
@@ -112,6 +112,9 @@ def test_scan(
     if columns is not None:
         q = q.select(*columns)
     assert_gpu_result_equal(q, engine=engine)
+
+    # print("EXPECT", q.collect())
+    # print("GOT", q.collect(engine=engine))
 
 
 def test_negative_slice_pushdown_raises(tmp_path):

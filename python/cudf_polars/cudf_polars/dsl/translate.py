@@ -84,7 +84,7 @@ class Translator:
         # IR is versioned with major.minor, minor is bumped for backwards
         # compatible changes (e.g. adding new nodes), major is bumped for
         # incompatible changes (e.g. renaming nodes).
-        if (version := self.visitor.version()) >= (6, 1):
+        if (version := self.visitor.version()) >= (7, 1):
             e = NotImplementedError(
                 f"No support for polars IR {version=}"
             )  # pragma: no cover; no such version for now.
@@ -219,16 +219,16 @@ def _(
         reader_options, cloud_options = map(json.loads, options)
     file_options = node.file_options
     with_columns = file_options.with_columns
-    n_rows = file_options.n_rows
-    if n_rows is None:
-        n_rows = -1  # All rows
-        skip_rows = 0  # Don't skip
-    else:
-        # TODO: with versioning, rename on the rust side
-        skip_rows, n_rows = n_rows
-
     row_index = file_options.row_index
     include_file_paths = file_options.include_file_paths
+
+    pre_slice = file_options.n_rows
+    if pre_slice is None:
+        n_rows = -1
+        skip_rows = 0
+    else:
+        skip_rows, n_rows = pre_slice
+
     return ir.Scan(
         schema,
         typ,

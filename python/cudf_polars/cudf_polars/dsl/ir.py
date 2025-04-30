@@ -373,17 +373,13 @@ class Scan(IR):
             # TODO: polars has this implemented for parquet,
             # maybe we can do this too?
             raise NotImplementedError("slice pushdown for negative slices")
-        if self.typ in {"csv"} and self.skip_rows != 0:  # pragma: no cover
-            # This comes from slice pushdown, but that
-            # optimization doesn't happen right now
-            raise NotImplementedError("skipping rows in CSV reader")
         if self.cloud_options is not None and any(
             self.cloud_options.get(k) is not None for k in ("aws", "azure", "gcp")
         ):
             raise NotImplementedError(
                 "Read from cloud storage"
             )  # pragma: no cover; no test yet
-        if any(p.startswith("https://") for p in self.paths):
+        if any(str(p).startswith("https:/") for p in self.paths):
             raise NotImplementedError("Read from https")
         if self.typ == "csv":
             if self.reader_options["skip_rows_after_header"] != 0:
@@ -459,7 +455,8 @@ class Scan(IR):
         Each path is repeated according to the number of rows read from it.
         """
         (filepaths,) = plc.filling.repeat(
-            plc.Table([plc.interop.from_arrow(pa.array(paths))]),
+            # TODO: Remove call from_arrow when we support python list to Column
+            plc.Table([plc.interop.from_arrow(pa.array(map(str, paths)))]),
             plc.interop.from_arrow(pa.array(rows_per_path, type=pa.int32())),
         ).columns()
         return df.with_columns([Column(filepaths, name=name)])
@@ -524,7 +521,7 @@ class Scan(IR):
                 options = (
                     plc.io.csv.CsvReaderOptions.builder(plc.io.SourceInfo([path]))
                     .nrows(n_rows)
-                    .skiprows(skiprows)
+                    .skiprows(skiprows + skip_rows)
                     .lineterminator(str(eol))
                     .quotechar(str(quote))
                     .decimal(decimal)
@@ -561,6 +558,22 @@ class Scan(IR):
                 plc.concatenate.concatenate(list(tables)),
                 colnames[0],
             )
+
+            def read_csv_header(path: str) -> list[str]:
+                with Path(path).open() as f:
+                    header_line = f.readline().strip()
+                return header_line.split(",")
+
+            if skip_rows + skiprows > header and df.column_map.keys() != schema.keys():
+                column_names = read_csv_header(str(paths[0]))
+                df = df.rename_columns(
+                    dict(zip(df.column_names, column_names, strict=False))
+                )
+            casted_columns = []
+            for name, c in df.column_map.items():
+                if c.obj.type() != schema[name]:
+                    casted_columns.append(c.astype(schema[name]).rename(name))
+            df = df.with_columns(casted_columns, replace_only=True)
             if include_file_paths is not None:
                 df = Scan.add_file_paths(
                     include_file_paths,
@@ -691,7 +704,11 @@ class Scan(IR):
                 name=name,
             )
             df = DataFrame([index_col, *df.columns])
-        assert all(c.obj.type() == schema[name] for name, c in df.column_map.items())
+        assert all(
+            c.obj.type() == schema[name]
+            or plc.unary.is_supported_cast(c.obj.type(), schema[name])
+            for name, c in df.column_map.items()
+        )
         if predicate is None:
             return df
         else:
