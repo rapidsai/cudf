@@ -148,14 +148,16 @@ aggregate_reader_metadata::select_payload_columns(
   bool strings_to_categorical,
   type_id timestamp_type_id)
 {
-  // Select all columns if no payload or filter columns are specified
+  // If neither payload nor filter columns are specified, select all columns
   if (not payload_column_names.has_value() and not filter_column_names.has_value()) {
+    // Call the base `select_columns()` method without specifying any columns
     return select_columns({}, {}, include_index, strings_to_categorical, timestamp_type_id);
   }
 
+  std::vector<std::string> valid_payload_columns;
+
   // If payload columns are specified, only select payload columns that do not appear in the filter
   // expression
-  std::vector<std::string> valid_payload_columns;
   if (payload_column_names.has_value()) {
     valid_payload_columns = *payload_column_names;
     // Remove filter columns from the provided payload column names
@@ -170,12 +172,13 @@ aggregate_reader_metadata::select_payload_columns(
                                                  }),
                                   valid_payload_columns.end());
     }
-    // Select valid payload columns using the base `select_columns` method
+    // Call the base `select_columns()` method with valid payload columns
     return select_columns(
       valid_payload_columns, {}, include_index, strings_to_categorical, timestamp_type_id);
   }
 
-  // Otherwise, select all columns that do not appear in the filter expression
+  // Else if only filter columns are specified, select all columns that do not appear in the
+  // filter expression
   std::function<void(std::string, int)> add_column_path = [&](std::string path_till_now,
                                                               int schema_idx) {
     auto const& schema_elem     = get_schema(schema_idx);
@@ -197,7 +200,7 @@ aggregate_reader_metadata::select_payload_columns(
     add_column_path("", child_idx);
   }
 
-  // Select valid payload columns using the base `select_columns` method
+  // Call the base `select_columns()` method with all but filter columns
   return select_columns(
     valid_payload_columns, {}, include_index, strings_to_categorical, timestamp_type_id);
 }

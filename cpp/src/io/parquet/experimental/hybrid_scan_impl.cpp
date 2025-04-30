@@ -254,6 +254,23 @@ table_with_metadata hybrid_scan_reader_impl::materialize_payload_columns(
   return {};
 }
 
+void hybrid_scan_reader_impl::populate_metadata(table_metadata& out_metadata) const
+{
+  // Return column names
+  out_metadata.schema_info.resize(_output_buffers.size());
+  for (size_t i = 0; i < _output_column_schemas.size(); i++) {
+    auto const& schema               = _metadata->get_schema(_output_column_schemas[i]);
+    out_metadata.schema_info[i].name = schema.name;
+    out_metadata.schema_info[i].is_nullable =
+      schema.repetition_type != cudf::io::parquet::FieldRepetitionType::REQUIRED;
+  }
+
+  // Return user metadata
+  out_metadata.per_file_user_data = _metadata->get_key_value_metadata();
+  out_metadata.user_data          = {out_metadata.per_file_user_data[0].begin(),
+                                     out_metadata.per_file_user_data[0].end()};
+}
+
 bool hybrid_scan_reader_impl::has_more_work() const
 {
   return _file_itm_data.num_passes() > 0 &&
