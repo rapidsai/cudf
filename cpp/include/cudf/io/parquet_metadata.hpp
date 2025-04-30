@@ -28,9 +28,6 @@
 #include <string_view>
 #include <vector>
 
-//! Parquet physical `Type`
-using cudf::io::parquet::Type;
-
 namespace CUDF_EXPORT cudf {
 namespace io {
 /**
@@ -38,6 +35,9 @@ namespace io {
  * @{
  * @file
  */
+
+//! Parquet physical `Type`
+using cudf::io::parquet::Type;
 
 /**
  * @brief Schema of a parquet column, including the nested columns.
