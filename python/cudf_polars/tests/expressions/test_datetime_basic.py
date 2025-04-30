@@ -296,3 +296,48 @@ def test_isoyear():
     q = df.with_columns(pl.col("date").dt.iso_year().alias("isoyear"))
 
     assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize(
+    "dtype", [pl.Date(), pl.Datetime("ms"), pl.Datetime("us"), pl.Datetime("ns")]
+)
+@pytest.mark.parametrize("time_unit", ["ms", "us", "ns"])
+def test_datetime_cast_time_unit_datetime(dtype, time_unit):
+    sr = pl.Series(
+        "date",
+        [
+            datetime.datetime(1970, 1, 1, 0, 0, 0),
+            datetime.datetime(1999, 12, 31, 23, 59, 59),
+            datetime.datetime(2001, 1, 1, 12, 0, 0),
+            datetime.datetime(2020, 2, 29, 23, 59, 59),
+            datetime.datetime(2024, 12, 31, 23, 59, 59, 999999),
+        ],
+        dtype=dtype,
+    )
+    df = pl.DataFrame({"date": sr}).lazy()
+
+    q = df.select(pl.col("date").dt.cast_time_unit(time_unit).alias("time_unit_ms"))
+
+    assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize(
+    "dtype", [pl.Duration("ms"), pl.Duration("us"), pl.Duration("ns")]
+)
+@pytest.mark.parametrize("time_unit", ["ms", "us", "ns"])
+def test_datetime_cast_time_unit_duration(dtype, time_unit):
+    sr = pl.Series(
+        "date",
+        [
+            datetime.timedelta(days=1),
+            datetime.timedelta(days=2),
+            datetime.timedelta(days=3),
+            datetime.timedelta(days=4),
+            datetime.timedelta(days=5),
+        ],
+        dtype=dtype,
+    )
+    df = pl.DataFrame({"date": sr}).lazy()
+
+    q = df.select(pl.col("date").dt.cast_time_unit(time_unit).alias("time_unit_ms"))
+    assert_gpu_result_equal(q)
