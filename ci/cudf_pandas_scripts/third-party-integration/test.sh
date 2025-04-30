@@ -37,6 +37,7 @@ main() {
 
         . /opt/conda/etc/profile.d/conda.sh
         # Check the value of RAPIDS_BUILD_TYPE
+        
         if [ "$RAPIDS_BUILD_TYPE" == "pull-request" ]; then
             rapids-logger "Generate Python testing dependencies"
             rapids-dependency-file-generator \
@@ -61,7 +62,11 @@ main() {
         set +u
         conda activate test
         set -u
-
+        if [ "$lib" = "tensorflow" ]; then
+            ls -al /opt/conda/envs/test
+            ls -al /opt/conda/envs/test/nvvm/
+            ls -al /opt/conda/envs/test/nvvm/libdevice/
+        fi
         repo_root=$(git rev-parse --show-toplevel)
         TEST_DIR=${repo_root}/python/cudf/cudf_pandas_tests/third_party_integration_tests/tests
 
