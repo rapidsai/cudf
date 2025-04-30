@@ -125,7 +125,7 @@ namespace io::parquet::experimental {
  * auto all_row_group_indices = reader->all_row_groups(options);
  *
  * // Span to track the indices of row groups currently at hand
- * auto current_row_group_indices = cudf::host_span<cudf::size_type>(all_row_group_indices);
+ * auto current_row_group_indices = cudf::host_span<size_type>(all_row_group_indices);
  *
  * // Optional: Prune row group indices subject to filter expression using row group statistics
  * auto stats_filtered_row_group_indices =
@@ -139,7 +139,7 @@ namespace io::parquet::experimental {
  *   reader->secondary_filters_byte_ranges(current_row_group_indices, options);
  *
  * // Optional: Prune row groups if we have valid dictionary pages
- * auto dictionary_page_filtered_row_group_indices = std::vector<cudf::size_type>{};
+ * auto dictionary_page_filtered_row_group_indices = std::vector<size_type>{};
  *
  * if (dict_page_byte_ranges.size()) {
  *   // Fetch dictionary page byte ranges into device buffers
@@ -155,7 +155,7 @@ namespace io::parquet::experimental {
  * }
  *
  * // Optional: Prune row groups if we have valid bloom filters
- * auto bloom_filtered_row_group_indices = std::vector<cudf::size_type>{};
+ * auto bloom_filtered_row_group_indices = std::vector<size_type>{};
  *
  * if (bloom_filter_byte_ranges.size()) {
  *   // Fetch bloom filter byte ranges into device buffers
@@ -323,7 +323,7 @@ class hybrid_scan_reader {
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @return Filtered row group indices
    */
-  [[nodiscard]] std::vector<cudf::size_type> filter_row_groups_with_stats(
+  [[nodiscard]] std::vector<size_type> filter_row_groups_with_stats(
     cudf::host_span<size_type const> row_group_indices,
     parquet_reader_options const& options,
     rmm::cuda_stream_view stream) const;
@@ -349,7 +349,7 @@ class hybrid_scan_reader {
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @return Filtered row group indices
    */
-  [[nodiscard]] std::vector<cudf::size_type> filter_row_groups_with_dictionary_pages(
+  [[nodiscard]] std::vector<size_type> filter_row_groups_with_dictionary_pages(
     cudf::host_span<rmm::device_buffer> dictionary_page_data,
     cudf::host_span<size_type const> row_group_indices,
     parquet_reader_options const& options,
@@ -364,7 +364,7 @@ class hybrid_scan_reader {
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @return Filtered row group indices
    */
-  [[nodiscard]] std::vector<cudf::size_type> filter_row_groups_with_bloom_filters(
+  [[nodiscard]] std::vector<size_type> filter_row_groups_with_bloom_filters(
     cudf::host_span<rmm::device_buffer> bloom_filter_data,
     cudf::host_span<size_type const> row_group_indices,
     parquet_reader_options const& options,
