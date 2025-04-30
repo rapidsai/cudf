@@ -34,10 +34,11 @@
 namespace cudf::io::parquet::experimental::detail {
 
 using aggregate_reader_metadata_base = parquet::detail::aggregate_reader_metadata;
-using equality_literals_collector    = parquet::detail::equality_literals_collector;
-using input_column_info              = parquet::detail::input_column_info;
 using metadata_base                  = parquet::detail::metadata;
-using row_group_info                 = parquet::detail::row_group_info;
+
+using parquet::detail::equality_literals_collector;
+using parquet::detail::input_column_info;
+using parquet::detail::row_group_info;
 
 /**
  * @brief Class for parsing dataset metadata
@@ -82,7 +83,7 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
    * @param filter AST expression to filter row groups based on bloom filter membership
    * @param stream CUDA stream used for device memory operations and kernel launches
    *
-   * @return A pair of filtered row group indices if any is filtered.
+   * @return Surviving row group indices if any of them are filtered.
    */
   [[nodiscard]] std::optional<std::vector<std::vector<size_type>>> apply_dictionary_filter(
     cudf::host_span<rmm::device_buffer> dictionaries,
@@ -108,19 +109,19 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
                             bool has_cols_from_mismatched_srcs);
 
   /**
-   * @brief Fetch the byte range of the `PageIndex` in the Parquet file
+   * @brief Fetch the byte range of the page index in the Parquet file
    */
-  [[nodiscard]] cudf::io::text::byte_range_info get_page_index_bytes() const;
+  [[nodiscard]] text::byte_range_info page_index_byte_range() const;
 
   /**
    * @brief Get the Parquet file metadata
    */
-  [[nodiscard]] FileMetaData const& get_parquet_metadata() const;
+  [[nodiscard]] FileMetaData parquet_metadata() const;
 
   /**
-   * @brief Setup the PageIndex
+   * @brief Setup and populate the page index structs in `FileMetaData`
    *
-   * @param page_index_bytes Host span of Parquet `PageIndex` buffer bytes
+   * @param page_index_bytes Host span of Parquet page index buffer bytes
    */
   void setup_page_index(cudf::host_span<uint8_t const> page_index_bytes);
 };

@@ -33,11 +33,12 @@
 namespace cudf::io::parquet::experimental::detail {
 
 using aggregate_reader_metadata_base = parquet::detail::aggregate_reader_metadata;
-using CompactProtocolReader          = parquet::detail::CompactProtocolReader;
-using equality_literals_collector    = parquet::detail::equality_literals_collector;
-using input_column_info              = parquet::detail::input_column_info;
 using metadata_base                  = parquet::detail::metadata;
-using row_group_info                 = parquet::detail::row_group_info;
+
+using parquet::detail::CompactProtocolReader;
+using parquet::detail::equality_literals_collector;
+using parquet::detail::input_column_info;
+using parquet::detail::row_group_info;
 
 metadata::metadata(cudf::host_span<uint8_t const> footer_bytes)
 {
@@ -76,22 +77,22 @@ aggregate_reader_metadata::aggregate_reader_metadata(cudf::host_span<uint8_t con
   }
 }
 
-cudf::io::text::byte_range_info aggregate_reader_metadata::get_page_index_bytes() const
+text::byte_range_info aggregate_reader_metadata::page_index_byte_range() const
 {
   auto& schema     = per_file_metadata.front();
   auto& row_groups = schema.row_groups;
 
   if (row_groups.size() and row_groups.front().columns.size()) {
-    int64_t const min_offset = schema.row_groups.front().columns.front().column_index_offset;
-    auto const& last_col     = schema.row_groups.back().columns.back();
-    int64_t const max_offset = last_col.offset_index_offset + last_col.offset_index_length;
+    auto const min_offset = schema.row_groups.front().columns.front().column_index_offset;
+    auto const& last_col  = schema.row_groups.back().columns.back();
+    auto const max_offset = last_col.offset_index_offset + last_col.offset_index_length;
     return {min_offset, (max_offset - min_offset)};
   }
 
   return {};
 }
 
-FileMetaData const& aggregate_reader_metadata::get_parquet_metadata() const
+FileMetaData aggregate_reader_metadata::parquet_metadata() const
 {
   return per_file_metadata.front();
 }
@@ -99,16 +100,15 @@ FileMetaData const& aggregate_reader_metadata::get_parquet_metadata() const
 void aggregate_reader_metadata::setup_page_index(cudf::host_span<uint8_t const> page_index_bytes)
 {
   // Return early if empty page index buffer span
-  if (not page_index_bytes.size()) {
-    CUDF_LOG_WARN("Hybrid scan reader encountered empty `PageIndex` buffer");
+  if (page_index_bytes.empty()) {
+    CUDF_LOG_WARN("Hybrid scan reader encountered empty page index buffer");
     return;
   }
 
-  auto& schema     = per_file_metadata.front();
-  auto& row_groups = schema.row_groups;
+  auto& row_groups = per_file_metadata.front().row_groups;
 
-  CUDF_EXPECTS(row_groups.size() and row_groups.front().columns.size(),
-               "No column chunks in Parquet schema to read PageIndex for");
+  CUDF_EXPECTS(not row_groups.empty() and not row_groups.front().columns.empty(),
+               "No column chunks in Parquet schema to read page index for");
 
   CompactProtocolReader cp(page_index_bytes.data(), page_index_bytes.size());
 

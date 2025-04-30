@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023-2025, NVIDIA CORPORATION.
+ * Copyright (c) 2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -134,15 +134,7 @@ auto create_parquet_with_stats()
 
   cudf::io::write_parquet(out_opts);
 
-  auto columns = std::vector<std::unique_ptr<column>>{};
-  if constexpr (NumTableConcats == 1) {
-    columns.push_back(col0.release());
-    columns.push_back(col1.release());
-    columns.push_back(col2.release());
-  } else {
-    columns = table->release();
-  }
-  return std::pair{cudf::table{std::move(columns)}, buffer};
+  return std::pair{std::move(table), buffer};
 }
 
 }  // namespace
@@ -150,8 +142,8 @@ auto create_parquet_with_stats()
 TEST_F(ParquetExperimentalReaderTest, TestMetadata)
 {
   // Create a table with several row groups each with a single page.
-  auto constexpr num_concat    = 1;
-  auto [written_table, buffer] = create_parquet_with_stats<num_concat>();
+  auto constexpr num_concat = 1;
+  auto [_, buffer]          = create_parquet_with_stats<num_concat>();
 
   // Filtering AST - table[0] < 100
   auto literal_value     = cudf::numeric_scalar<uint32_t>(100);
@@ -176,14 +168,14 @@ TEST_F(ParquetExperimentalReaderTest, TestMetadata)
     std::make_unique<cudf::io::parquet::experimental::hybrid_scan_reader>(footer_buffer, options);
 
   // Get Parquet file metadata from the reader - API # 1
-  auto parquet_metadata = reader->get_parquet_metadata();
+  auto parquet_metadata = reader->parquet_metadata();
 
   // Check that the offset and column indices are not present
-  ASSERT_TRUE(not parquet_metadata.row_groups[0].columns[0].offset_index.has_value());
-  ASSERT_TRUE(not parquet_metadata.row_groups[0].columns[0].column_index.has_value());
+  ASSERT_FALSE(parquet_metadata.row_groups[0].columns[0].offset_index.has_value());
+  ASSERT_FALSE(parquet_metadata.row_groups[0].columns[0].column_index.has_value());
 
   // Get page index byte range from the reader - API # 2
-  auto const page_index_byte_range = reader->get_page_index_bytes();
+  auto const page_index_byte_range = reader->page_index_byte_range();
 
   // Fetch page index bytes from the input buffer
   auto const page_index_buffer = fetch_page_index_bytes(file_buffer_span, page_index_byte_range);
@@ -192,14 +184,14 @@ TEST_F(ParquetExperimentalReaderTest, TestMetadata)
   reader->setup_page_index(page_index_buffer);
 
   // Get Parquet file metadata from the reader again
-  parquet_metadata = reader->get_parquet_metadata();
+  parquet_metadata = reader->parquet_metadata();
 
   // Check that the offset and column indices are now present
   ASSERT_TRUE(parquet_metadata.row_groups[0].columns[0].offset_index.has_value());
   ASSERT_TRUE(parquet_metadata.row_groups[0].columns[0].column_index.has_value());
 
   // Get all row groups from the reader - API # 4
-  auto input_row_group_indices = reader->get_all_row_groups(options);
+  auto input_row_group_indices = reader->all_row_groups(options);
   // Expect 4 = 20000 rows / 5000 rows per row group
   ASSERT_EQ(input_row_group_indices.size(), 4);
 
@@ -207,7 +199,7 @@ TEST_F(ParquetExperimentalReaderTest, TestMetadata)
   options.set_row_groups({{0, 1}});
 
   // Get all row groups from the reader again
-  input_row_group_indices = reader->get_all_row_groups(options);
+  input_row_group_indices = reader->all_row_groups(options);
   // Expect only 2 row groups now
-  ASSERT_EQ(reader->get_all_row_groups(options).size(), 2);
+  ASSERT_EQ(reader->all_row_groups(options).size(), 2);
 }
