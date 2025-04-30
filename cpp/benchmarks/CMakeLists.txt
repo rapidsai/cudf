@@ -98,7 +98,9 @@ function(ConfigureBench CMAKE_BENCH_NAME)
                CUDA_STANDARD_REQUIRED ON
   )
   target_compile_definitions(
-    ${CMAKE_BENCH_NAME} PRIVATE THRUST_FORCE_32_BIT_OFFSET_TYPE=1 CCCL_AVOID_SORT_UNROLL=1
+    ${CMAKE_BENCH_NAME}
+    PUBLIC _LIBCUDACXX_ATOMIC_UNSAFE_AUTOMATIC_STORAGE=1
+    PRIVATE THRUST_FORCE_32_BIT_OFFSET_TYPE=1 CCCL_AVOID_SORT_UNROLL=1
   )
   target_link_libraries(
     ${CMAKE_BENCH_NAME} PRIVATE cudf_benchmark_common cudf_datagen benchmark::benchmark_main
