@@ -258,6 +258,7 @@ class SplitScan(IR):
 
 
 def _sample_pq_statistics(ir: Scan) -> dict[str, np.floating[T]]:
+    import itertools
     import numpy as np
 
     # Use average total_uncompressed_size of three files
@@ -266,20 +267,17 @@ def _sample_pq_statistics(ir: Scan) -> dict[str, np.floating[T]]:
         plc.io.SourceInfo(random.sample(ir.paths, n_sample))
     )
     column_sizes = {}
-    rowgroup_offsets_per_file = np.cumsum(metadata.num_rowgroups_per_file())
-    rowgroup_offsets_per_file = np.insert(rowgroup_offsets_per_file, 0, 0)
+    rowgroup_offsets_per_file = np.insert(
+        np.cumsum(metadata.num_rowgroups_per_file()), 0, 0
+    )
 
     # For each column, calculate the `total_uncompressed_size` for each file
     for name, uncompressed_sizes in metadata.columnchunk_metadata().items():
         column_sizes[name] = np.zeros(n_sample, dtype="int64")
-        for file_idx in range(n_sample):
-            column_sizes[name][file_idx] = np.sum(
-                uncompressed_sizes[
-                    rowgroup_offsets_per_file[file_idx] : rowgroup_offsets_per_file[
-                        file_idx + 1
-                    ]
-                ]
-            )
+        for file_idx, (start, end) in enumerate(
+            itertools.pairwise(rowgroup_offsets_per_file)
+        ):
+            column_sizes[name][file_idx] = np.sum(uncompressed_sizes[start:end])
 
     # Return the mean per-file `total_uncompressed_size` for each column
     return {name: np.mean(sizes) for name, sizes in column_sizes.items()}

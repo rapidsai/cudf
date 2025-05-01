@@ -61,7 +61,7 @@ enum class TypeKind : int8_t {
 struct parquet_column_schema {
  public:
   /**
-   * @brief Default constructor.
+   * @brief Default constructor
    *
    * This has been added since Cython requires a default constructor to create objects on stack.
    */
@@ -82,34 +82,34 @@ struct parquet_column_schema {
   }
 
   /**
-   * @brief Returns parquet column name; can be empty.
+   * @brief Returns parquet column name; can be empty
    *
    * @return Column name
    */
   [[nodiscard]] auto name() const { return _name; }
 
   /**
-   * @brief Returns parquet type of the column.
+   * @brief Returns parquet type of the column
    *
    * @return Column parquet type
    */
   [[nodiscard]] auto type_kind() const { return _type_kind; }
 
   /**
-   * @brief Returns schemas of all child columns.
+   * @brief Returns schemas of all child columns
    *
    * @return Children schemas
    */
   [[nodiscard]] auto const& children() const& { return _children; }
 
   /** @copydoc children
-   * Children array is moved out of the object (rvalues only).
+   * Children array is moved out of the object (rvalues only)
    *
    */
   [[nodiscard]] auto children() && { return std::move(_children); }
 
   /**
-   * @brief Returns schema of the child with the given index.
+   * @brief Returns schema of the child with the given index
    *
    * @param idx child index
    *
@@ -118,13 +118,13 @@ struct parquet_column_schema {
   [[nodiscard]] auto const& child(int idx) const& { return children().at(idx); }
 
   /** @copydoc child
-   * Child is moved out of the object (rvalues only).
+   * Child is moved out of the object (rvalues only)
    *
    */
   [[nodiscard]] auto child(int idx) && { return std::move(children().at(idx)); }
 
   /**
-   * @brief Returns the number of child columns.
+   * @brief Returns the number of child columns
    *
    * @return Children count
    */
@@ -132,20 +132,20 @@ struct parquet_column_schema {
 
  private:
   std::string _name;
-  // 3 types available: Physical, Converted, Logical.
+  // 3 types available: Physical, Converted, Logical
   parquet::TypeKind _type_kind;  // Physical
   std::vector<parquet_column_schema> _children;
 };
 
 /**
- * @brief Schema of a parquet file.
+ * @brief Schema of a parquet file
  */
 struct parquet_schema {
  public:
   /**
-   * @brief Default constructor.
+   * @brief Default constructor
    *
-   * This has been added since Cython requires a default constructor to create objects on stack.
+   * This has been added since Cython requires a default constructor to create objects on stack
    */
   explicit parquet_schema() = default;
 
@@ -157,14 +157,14 @@ struct parquet_schema {
   parquet_schema(parquet_column_schema root_column_schema) : _root{std::move(root_column_schema)} {}
 
   /**
-   * @brief Returns the schema of the struct column that contains all columns as fields.
+   * @brief Returns the schema of the struct column that contains all columns as fields
    *
    * @return Root column schema
    */
   [[nodiscard]] auto const& root() const& { return _root; }
 
   /** @copydoc root
-   * Root column schema is moved out of the object (rvalues only).
+   * Root column schema is moved out of the object (rvalues only)
    *
    */
   [[nodiscard]] auto root() && { return std::move(_root); }
@@ -174,19 +174,19 @@ struct parquet_schema {
 };
 
 /**
- * @brief Information about content of a parquet file.
+ * @brief Information about content of a parquet file
  */
 class parquet_metadata {
  public:
-  /// Key-value metadata in the file footer.
+  /// Key-value metadata in the file footer
   using key_value_metadata = std::unordered_map<std::string, std::string>;
-  /// Row group metadata from each RowGroup element.
+  /// Row group metadata from each RowGroup element
   using row_group_metadata = std::unordered_map<std::string, int64_t>;
-  /// Column chunk metadata from each ColumnChunkMetaData element.
+  /// Column chunk metadata from each ColumnChunkMetaData element
   using column_chunk_metadata = std::unordered_map<std::string, std::vector<int64_t>>;
 
   /**
-   * @brief Default constructor.
+   * @brief Default constructor
    *
    * This has been added since Cython requires a default constructor to create objects on stack.
    */
@@ -222,14 +222,14 @@ class parquet_metadata {
   }
 
   /**
-   * @brief Returns the parquet schema.
+   * @brief Returns the parquet schema
    *
    * @return parquet schema
    */
   [[nodiscard]] auto const& schema() const { return _schema; }
 
   /**
-   * @brief Returns the number of rows of the root column.
+   * @brief Returns the number of rows of the root column
    *
    * If a file contains list columns, nested columns can have a different number of rows.
    *
@@ -245,21 +245,21 @@ class parquet_metadata {
   [[nodiscard]] auto num_rowgroups() const { return _num_rowgroups; }
 
   /**
-   * @brief Returns the number of rowgroups in each file.
+   * @brief Returns the number of rowgroups in each file
    *
    * @return Number of row groups per file
    */
   [[nodiscard]] auto const& num_rowgroups_per_file() const { return _num_rowgroups_per_file; }
 
   /**
-   * @brief Returns the Key value metadata in the file footer.
+   * @brief Returns the Key value metadata in the file footer
    *
    * @return Key value metadata as a map
    */
   [[nodiscard]] auto const& metadata() const { return _file_metadata; }
 
   /**
-   * @brief Returns the row group metadata in the file footer.
+   * @brief Returns the row group metadata in the file footer
    *
    * @return Vector of row group metadata as maps
    */
@@ -285,14 +285,14 @@ class parquet_metadata {
 };
 
 /**
- * @brief Reads metadata of parquet dataset.
+ * @brief Reads metadata of parquet dataset
  *
  * @ingroup io_readers
  *
  * @param src_info Dataset source
  *
  * @return parquet_metadata with parquet schema, number of rows, number of row groups and key-value
- * metadata.
+ * metadata
  */
 parquet_metadata read_parquet_metadata(source_info const& src_info);
 

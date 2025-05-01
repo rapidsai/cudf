@@ -979,13 +979,14 @@ aggregate_reader_metadata::get_column_chunk_metadata() const
 
   std::function<void(std::string const&, int)> const populate_column_chunk_metadata =
     [&](std::string const& path_till_now, int schema_idx) {
-      auto const& schema  = get_schema(schema_idx);
-      auto const col_path = path_till_now.empty() ? schema.name : path_till_now + "." + schema.name;
+      auto const& schema = get_schema(schema_idx);
+      auto const path_in_schema =
+        path_till_now.empty() ? schema.name : path_till_now + "." + schema.name;
 
       // If this is not a leaf column, keep traversing the schema tree
       if (not schema.children_idx.empty()) {
         for (auto const& child_idx : schema.children_idx) {
-          populate_column_chunk_metadata(col_path, child_idx);
+          populate_column_chunk_metadata(path_in_schema, child_idx);
         }
         return;
       }
@@ -993,6 +994,7 @@ aggregate_reader_metadata::get_column_chunk_metadata() const
       // Otherwise, if this is a leaf column, collect its `total_uncompressed_size` fields from
       // all column chunks and add to the `column_chunk_metadata` map.
       auto total_uncompressed_sizes = std::vector<int64_t>{};
+      total_uncompressed_sizes.reserve(num_row_groups);
       // For each input source
       std::for_each(thrust::counting_iterator<size_t>(0),
                     thrust::counting_iterator(per_file_metadata.size()),
@@ -1010,11 +1012,11 @@ aggregate_reader_metadata::get_column_chunk_metadata() const
                                      });
                     });
       // Check if this column already exists in the map
-      CUDF_EXPECTS(column_chunk_metadata.find(col_path) == column_chunk_metadata.end(),
-                   "Encountered an already mapped leaf column in the schema tree",
+      CUDF_EXPECTS(column_chunk_metadata.find(path_in_schema) == column_chunk_metadata.end(),
+                   "Encountered an already mapped leaf column in the schema tree" + path_in_schema,
                    std::invalid_argument);
       // Map the collected metadata fields for this column to its named path
-      column_chunk_metadata[col_path] = total_uncompressed_sizes;
+      column_chunk_metadata[path_in_schema] = total_uncompressed_sizes;
     };
 
   // Traverse the schema tree and populate `ColumnChunkMetaData`s for all leaf columns.
