@@ -17,6 +17,7 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/default_stream.hpp>
+#include <cudf_test/testing_main.hpp>
 
 #include <cudf/ast/expressions.hpp>
 #include <cudf/column/column.hpp>
@@ -225,3 +226,5 @@ TEST_F(JoinTest, ConditionalLeftAntiJoinSize)
   cudf::conditional_left_anti_join_size(
     table0, table1, left_zero_eq_right_zero, cudf::test::get_default_stream());
 }
+
+CUDF_TEST_PROGRAM_MAIN()
