@@ -272,7 +272,7 @@ table_with_metadata hybrid_scan_reader_impl::materialize_payload_columns(
   return {};
 }
 
-void impl::populate_metadata(table_metadata& out_metadata) const
+void hybrid_scan_reader_impl::populate_metadata(table_metadata& out_metadata) const
 {
   // Return column names
   out_metadata.schema_info.resize(_output_buffers.size());
