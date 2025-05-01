@@ -33,6 +33,7 @@
 #include <iostream>
 #include <memory>
 #include <string>
+#include <vector>
 
 /**
  * @brief Main example function returns transformed string table.
@@ -112,7 +113,10 @@ int main(int argc, char const** argv)
   std::chrono::duration<double> elapsed = std::chrono::steady_clock::now() - st;
   std::cout << "Wall time: " << elapsed.count() << " seconds\n";
 
-  auto out_table = cudf::table(std::vector{std::move(result)});
+  std::vector<std::unique_ptr<cudf::column>> table_columns;
+  table_columns.push_back(std::move(result));
+
+  auto out_table = cudf::table(std::move(table_columns));
 
   write_csv(out_table, out_csv);
 

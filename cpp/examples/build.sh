@@ -58,6 +58,7 @@ build_example() {
 
 build_example basic
 build_example strings
+build_example string_transforms
 build_example nested_types
 build_example parquet_io
 build_example billion_rows
