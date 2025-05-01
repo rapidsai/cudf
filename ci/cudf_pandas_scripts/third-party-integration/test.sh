@@ -35,7 +35,6 @@ main() {
 
         . /opt/conda/etc/profile.d/conda.sh
         # Check the value of RAPIDS_BUILD_TYPE
-
         if [ "$RAPIDS_BUILD_TYPE" == "pull-request" ]; then
             rapids-logger "Generate Python testing dependencies"
             rapids-dependency-file-generator \
