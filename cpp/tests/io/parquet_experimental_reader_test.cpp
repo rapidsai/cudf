@@ -193,7 +193,7 @@ TEST_F(ParquetExperimentalReaderTest, TestMetadata)
   // Get all row groups from the reader - API # 4
   auto input_row_group_indices = reader->all_row_groups(options);
   // Expect 4 = 20000 rows / 5000 rows per row group
-  ASSERT_EQ(input_row_group_indices.size(), 4);
+  EXPECT_EQ(input_row_group_indices.size(), 4);
 
   // Explicitly set the row groups to read
   options.set_row_groups({{0, 1}});
@@ -201,7 +201,7 @@ TEST_F(ParquetExperimentalReaderTest, TestMetadata)
   // Get all row groups from the reader again
   input_row_group_indices = reader->all_row_groups(options);
   // Expect only 2 row groups now
-  ASSERT_EQ(reader->all_row_groups(options).size(), 2);
+  EXPECT_EQ(reader->all_row_groups(options).size(), 2);
 }
 
 TEST_F(ParquetExperimentalReaderTest, TestFilterRowGroupWithStats)
@@ -232,9 +232,9 @@ TEST_F(ParquetExperimentalReaderTest, TestFilterRowGroupWithStats)
   // Get all row groups from the reader - API # 4
   auto input_row_group_indices = reader->all_row_groups(options);
   // Expect 4 = 20000 rows / 5000 rows per row group
-  ASSERT_EQ(input_row_group_indices.size(), 4);
+  EXPECT_EQ(input_row_group_indices.size(), 4);
   // Expect 3 row groups to be filtered out with stats
-  ASSERT_EQ(
+  EXPECT_EQ(
     reader
       ->filter_row_groups_with_stats(input_row_group_indices, options, cudf::get_default_stream())
       .size(),
@@ -243,7 +243,7 @@ TEST_F(ParquetExperimentalReaderTest, TestFilterRowGroupWithStats)
   // Use custom input row group indices
   input_row_group_indices = {1, 2};
   // Expect all row groups to be filtered out with stats
-  ASSERT_EQ(
+  EXPECT_EQ(
     reader
       ->filter_row_groups_with_stats(input_row_group_indices, options, cudf::get_default_stream())
       .size(),
