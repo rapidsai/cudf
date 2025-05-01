@@ -215,7 +215,7 @@ class _ResampleGrouping(_Grouping):
 
         key_column = self._key_columns[0]
 
-        if not isinstance(key_column, cudf.core.column.DatetimeColumn):
+        if not key_column.dtype.kind == "M":
             raise TypeError(
                 f"Can only resample on a DatetimeIndex or datetime column, "
                 f"got column of type {key_column.dtype}"
