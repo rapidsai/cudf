@@ -258,12 +258,11 @@ struct dispatch_unary_cast_to {
                                      rmm::device_async_resource_ref mr)
   {
     auto const size = input.size();
-    auto output =
-      std::make_unique<column>(type,
-                               size,
-                               rmm::device_buffer{size * cudf::size_of(type), stream, mr},
-                               detail::copy_bitmask(input, stream, mr),
-                               input.null_count());
+    auto output     = std::make_unique<column>(type,
+                                           size,
+                                           rmm::device_buffer{size * sizeof(TargetT), stream, mr},
+                                           detail::copy_bitmask(input, stream, mr),
+                                           input.null_count());
 
     mutable_column_view output_mutable = *output;
 
@@ -285,12 +284,11 @@ struct dispatch_unary_cast_to {
                                      rmm::device_async_resource_ref mr)
   {
     auto const size = input.size();
-    auto output =
-      std::make_unique<column>(type,
-                               size,
-                               rmm::device_buffer{size * cudf::size_of(type), stream, mr},
-                               detail::copy_bitmask(input, stream, mr),
-                               input.null_count());
+    auto output     = std::make_unique<column>(type,
+                                           size,
+                                           rmm::device_buffer{size * sizeof(TargetT), stream, mr},
+                                           detail::copy_bitmask(input, stream, mr),
+                                           input.null_count());
 
     mutable_column_view output_mutable = *output;
 

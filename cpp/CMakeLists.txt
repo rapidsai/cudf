@@ -772,6 +772,10 @@ add_library(
   src/text/wordpiece_tokenize.cu
   src/transform/bools_to_mask.cu
   src/transform/compute_column.cu
+  src/transform/compute_column_kernel_complex.cu
+  src/transform/compute_column_kernel_null_complex.cu
+  src/transform/compute_column_kernel_null_primitive.cu
+  src/transform/compute_column_kernel_primitive.cu
   src/transform/encode.cu
   src/transform/mask_to_bools.cu
   src/transform/nans_to_nulls.cu
@@ -833,6 +837,18 @@ set_target_properties(
              POSITION_INDEPENDENT_CODE ON
              INTERFACE_POSITION_INDEPENDENT_CODE ON
              LINK_FLAGS "-Wl,--exclude-libs,libzstd.a"
+)
+
+# Export the compiler flags and definitions so the downstream applications can optionally retrieve
+# and use them.
+set_target_properties(
+  cudf
+  PROPERTIES EXPORT_PROPERTIES
+             "CUDF_CXX_FLAGS;CUDF_CUDA_FLAGS;CUDF_CXX_DEFINITIONS;CUDF_CUDA_DEFINITIONS"
+             CUDF_CXX_FLAGS "${CUDF_CXX_FLAGS}"
+             CUDF_CUDA_FLAGS "${CUDF_CUDA_FLAGS}"
+             CUDF_CXX_DEFINITIONS "${CUDF_CXX_DEFINITIONS}"
+             CUDF_CUDA_DEFINITIONS "${CUDF_CUDA_DEFINITIONS}"
 )
 
 # Note: This must come before the target_compile_options below so that the function can modify the
