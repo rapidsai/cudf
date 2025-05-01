@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include "io/comp/comp.hpp"
+#include "io/comp/io_uncomp.hpp"
 #include "io/orc/orc.hpp"
 #include "io/utilities/getenv_or.hpp"
 
@@ -295,6 +297,28 @@ void write_csv(csv_writer_options const& options, rmm::cuda_stream_view stream)
     stream);
 }
 
+bool is_supported_read_orc(compression_type compression)
+{
+  if (compression == compression_type::AUTO or compression == compression_type::NONE) {
+    return true;
+  }
+
+  return ((compression == compression_type::ZLIB or compression == compression_type::SNAPPY or
+           compression == compression_type::ZSTD or compression == compression_type::LZ4) and
+          detail::is_decompression_supported(compression));
+}
+
+bool is_supported_write_orc(compression_type compression)
+{
+  if (compression == compression_type::AUTO or compression == compression_type::NONE) {
+    return true;
+  }
+
+  return ((compression == compression_type::ZLIB or compression == compression_type::SNAPPY or
+           compression == compression_type::ZSTD or compression == compression_type::LZ4) and
+          detail::is_compression_supported(compression));
+}
+
 raw_orc_statistics read_raw_orc_statistics(source_info const& src_info,
                                            rmm::cuda_stream_view stream)
 {
@@ -568,6 +592,29 @@ void orc_chunked_writer::close()
 
 using namespace cudf::io::parquet::detail;
 namespace detail_parquet = cudf::io::parquet::detail;
+
+bool is_supported_read_parquet(compression_type compression)
+{
+  if (compression == compression_type::AUTO or compression == compression_type::NONE) {
+    return true;
+  }
+
+  return ((compression == compression_type::BROTLI or compression == compression_type::GZIP or
+           compression == compression_type::LZ4 or compression == compression_type::SNAPPY or
+           compression == compression_type::ZSTD) and
+          detail::is_decompression_supported(compression));
+}
+
+bool is_supported_write_parquet(compression_type compression)
+{
+  if (compression == compression_type::AUTO or compression == compression_type::NONE) {
+    return true;
+  }
+
+  return ((compression == compression_type::LZ4 or compression == compression_type::SNAPPY or
+           compression == compression_type::ZSTD) and
+          detail::is_compression_supported(compression));
+}
 
 table_with_metadata read_parquet(parquet_reader_options const& options,
                                  rmm::cuda_stream_view stream,
