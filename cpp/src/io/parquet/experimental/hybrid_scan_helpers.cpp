@@ -40,6 +40,21 @@ using input_column_info              = parquet::detail::input_column_info;
 using metadata_base                  = parquet::detail::metadata;
 using row_group_info                 = parquet::detail::row_group_info;
 
+namespace {
+
+[[nodiscard]] auto all_row_group_indices(
+  host_span<std::vector<cudf::size_type> const> row_group_indices)
+{
+  std::vector<std::vector<cudf::size_type>> all_row_group_indices;
+  std::transform(row_group_indices.begin(),
+                 row_group_indices.end(),
+                 std::back_inserter(all_row_group_indices),
+                 [](auto rg_indices) { return rg_indices; });
+  return all_row_group_indices;
+}
+
+}  // namespace
+
 metadata::metadata(cudf::host_span<uint8_t const> footer_bytes)
 {
   CompactProtocolReader cp(footer_bytes.data(), footer_bytes.size());
@@ -280,17 +295,8 @@ std::vector<std::vector<cudf::size_type>> aggregate_reader_metadata::filter_row_
   std::optional<std::reference_wrapper<ast::expression const>> filter,
   rmm::cuda_stream_view stream) const
 {
-  std::vector<std::vector<cudf::size_type>> all_row_group_indices;
-  std::transform(per_file_metadata.cbegin(),
-                 per_file_metadata.cend(),
-                 std::back_inserter(all_row_group_indices),
-                 [](auto const& file_meta) {
-                   std::vector<cudf::size_type> rg_idx(file_meta.row_groups.size());
-                   std::iota(rg_idx.begin(), rg_idx.end(), 0);
-                   return rg_idx;
-                 });
-
-  if (not filter.has_value()) { return all_row_group_indices; }
+  // Return all row groups if no filter expression
+  if (not filter.has_value()) { return all_row_group_indices(row_group_indices); }
 
   // Compute total number of input row groups
   cudf::size_type total_row_groups = [&]() {
@@ -310,31 +316,15 @@ std::vector<std::vector<cudf::size_type>> aggregate_reader_metadata::filter_row_
     }
   }();
 
-  // Span of input row group indices for predicate pushdown
-  host_span<std::vector<cudf::size_type> const> input_row_group_indices;
-  if (row_group_indices.empty()) {
-    std::transform(per_file_metadata.cbegin(),
-                   per_file_metadata.cend(),
-                   std::back_inserter(all_row_group_indices),
-                   [](auto const& file_meta) {
-                     std::vector<cudf::size_type> rg_idx(file_meta.row_groups.size());
-                     std::iota(rg_idx.begin(), rg_idx.end(), 0);
-                     return rg_idx;
-                   });
-    input_row_group_indices = host_span<std::vector<cudf::size_type> const>(all_row_group_indices);
-  } else {
-    input_row_group_indices = row_group_indices;
-  }
-
   // Filter stats table with StatsAST expression and collect filtered row group indices
-  auto const stats_filtered_row_group_indices = apply_stats_filters(input_row_group_indices,
+  auto const stats_filtered_row_group_indices = apply_stats_filters(row_group_indices,
                                                                     total_row_groups,
                                                                     output_dtypes,
                                                                     output_column_schemas,
                                                                     filter.value(),
                                                                     stream);
 
-  return stats_filtered_row_group_indices.value_or(all_row_group_indices);
+  return stats_filtered_row_group_indices.value_or(all_row_group_indices(row_group_indices));
 }
 
 std::vector<text::byte_range_info> aggregate_reader_metadata::get_bloom_filter_bytes(
@@ -509,22 +499,12 @@ aggregate_reader_metadata::filter_row_groups_with_dictionary_pages(
   std::optional<std::reference_wrapper<ast::expression const>> filter,
   rmm::cuda_stream_view stream) const
 {
-  std::vector<std::vector<cudf::size_type>> all_row_group_indices;
-  std::transform(row_group_indices.begin(),
-                 row_group_indices.end(),
-                 std::back_inserter(all_row_group_indices),
-                 [](auto const& row_group) {
-                   std::vector<cudf::size_type> rg_idx(row_group.size());
-                   std::iota(rg_idx.begin(), rg_idx.end(), 0);
-                   return rg_idx;
-                 });
+  return all_row_group_indices(row_group_indices);
 
-  // Number of surviving row groups after applying stats filter
-  auto const total_row_groups = std::accumulate(
-    row_group_indices.begin(),
-    row_group_indices.end(),
-    cudf::size_type{0},
-    [](auto sum, auto const& per_file_row_groups) { return sum + per_file_row_groups.size(); });
+  // Enable when dictionary filtering is implemented
+#if 0
+  // Return all row groups if no filter expression
+  if (not filter.has_value()) { return all_row_group_indices(row_group_indices); }
 
   // Collect literals and operators for dictionary page filtering for each input table column
   auto const [literals, operators] =
@@ -542,13 +522,20 @@ aggregate_reader_metadata::filter_row_groups_with_dictionary_pages(
                   [](auto& dict_literals) { return not dict_literals.empty(); });
 
   // Return early if no column with equality predicate(s)
-  if (dictionary_col_schemas.empty()) { return all_row_group_indices; }
+  if (dictionary_col_schemas.empty()) { return all_row_group_indices(row_group_indices); }
 
-  // TODO: Decode dictionary pages and filter row groups based on dictionary pages
+  // Number of input row groups
+  auto const total_row_groups = std::accumulate(
+    row_group_indices.begin(),
+    row_group_indices.end(),
+    cudf::size_type{0},
+    [](auto sum, auto const& per_file_row_groups) { return sum + per_file_row_groups.size(); });
+
+  // NYI: Decode dictionary pages into `cuco::static_set_ref`
   auto dictionaries = materialize_dictionaries(
     dictionary_page_data, row_group_indices, output_dtypes, dictionary_col_schemas, stream);
 
-  // TODO: Probe the dictionaries to get surviving row groups
+  // NYI: Filter row groups using dictionaries
   auto const dictionary_filtered_row_groups = apply_dictionary_filter(dictionaries,
                                                                       row_group_indices,
                                                                       literals,
@@ -559,8 +546,9 @@ aggregate_reader_metadata::filter_row_groups_with_dictionary_pages(
                                                                       filter.value(),
                                                                       stream);
 
-  // return dictionary_filtered_row_groups.value_or(all_row_group_indices);
-  return dictionary_filtered_row_groups.value_or(all_row_group_indices);
+  // Return all_row_group_indices as dictionary filtering not yet implemented
+  return dictionary_filtered_row_groups.value_or(all_row_group_indices(row_group_indices));
+#endif
 }
 
 std::vector<std::vector<cudf::size_type>>
@@ -572,22 +560,8 @@ aggregate_reader_metadata::filter_row_groups_with_bloom_filters(
   std::optional<std::reference_wrapper<ast::expression const>> filter,
   rmm::cuda_stream_view stream) const
 {
-  std::vector<std::vector<cudf::size_type>> all_row_group_indices;
-  std::transform(row_group_indices.begin(),
-                 row_group_indices.end(),
-                 std::back_inserter(all_row_group_indices),
-                 [](auto const& row_group) {
-                   std::vector<cudf::size_type> rg_idx(row_group.size());
-                   std::iota(rg_idx.begin(), rg_idx.end(), 0);
-                   return rg_idx;
-                 });
-
-  // Number of surviving row groups after applying stats filter
-  auto const total_row_groups = std::accumulate(
-    row_group_indices.begin(),
-    row_group_indices.end(),
-    cudf::size_type{0},
-    [](auto sum, auto const& per_file_row_groups) { return sum + per_file_row_groups.size(); });
+  // Return all row groups if no filter expression
+  if (not filter.has_value()) { return all_row_group_indices(row_group_indices); }
 
   // Collect equality literals for each input table column
   auto const equality_literals =
@@ -604,8 +578,15 @@ aggregate_reader_metadata::filter_row_groups_with_bloom_filters(
                   std::back_inserter(equality_col_schemas),
                   [](auto& eq_literals) { return not eq_literals.empty(); });
 
-  // Return early if no column with equality predicate(s)
-  if (equality_col_schemas.empty()) { return all_row_group_indices; }
+  // Return all row groups if no column with equality predicate(s)
+  if (equality_col_schemas.empty()) { return all_row_group_indices(row_group_indices); }
+
+  // Number of input row groups
+  auto const total_row_groups = std::accumulate(
+    row_group_indices.begin(),
+    row_group_indices.end(),
+    cudf::size_type{0},
+    [](auto sum, auto const& per_file_row_groups) { return sum + per_file_row_groups.size(); });
 
   auto const bloom_filtered_row_groups = apply_bloom_filters(bloom_filter_data,
                                                              row_group_indices,
@@ -616,7 +597,7 @@ aggregate_reader_metadata::filter_row_groups_with_bloom_filters(
                                                              filter.value(),
                                                              stream);
 
-  return bloom_filtered_row_groups.value_or(all_row_group_indices);
+  return bloom_filtered_row_groups.value_or(all_row_group_indices(row_group_indices));
 }
 
 }  // namespace cudf::io::parquet::experimental::detail
