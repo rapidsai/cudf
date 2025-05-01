@@ -16,7 +16,6 @@ from pandas.api.extensions import ExtensionDtype
 from pandas.core.arrays.arrow.extension_types import ArrowIntervalType
 
 import cudf
-from cudf.api.types import _is_pandas_nullable_extension_dtype
 from cudf.core._compat import PANDAS_GE_210, PANDAS_LT_300
 from cudf.core.abc import Serializable
 from cudf.utils.docutils import doc_apply
@@ -25,6 +24,7 @@ from cudf.utils.dtypes import (
     SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES,
     cudf_dtype_from_pa_type,
     cudf_dtype_to_pa_type,
+    is_pandas_nullable_extension_dtype,
 )
 
 if PANDAS_GE_210:
@@ -82,7 +82,7 @@ def dtype(arbitrary: Any) -> DtypeObj:
     # `arbitrary` as a Pandas extension type.
     #  Return the corresponding NumPy/cuDF type.
     pd_dtype = pd.api.types.pandas_dtype(arbitrary)  # noqa: TID251
-    if _is_pandas_nullable_extension_dtype(pd_dtype):
+    if is_pandas_nullable_extension_dtype(pd_dtype):
         if cudf.get_option("mode.pandas_compatible"):
             raise NotImplementedError(
                 "Nullable types not supported in pandas compatibility mode"

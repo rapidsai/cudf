@@ -25,7 +25,6 @@ import rmm
 import cudf
 from cudf.api.types import (
     _is_categorical_dtype,
-    _is_pandas_nullable_extension_dtype,
     infer_dtype,
     is_dtype_equal,
     is_scalar,
@@ -70,6 +69,7 @@ from cudf.utils.dtypes import (
     is_column_like,
     is_dtype_obj_numeric,
     is_mixed_with_object_dtype,
+    is_pandas_nullable_extension_dtype,
     min_signed_type,
     min_unsigned_type,
 )
@@ -2719,7 +2719,7 @@ def as_column(
             raise NotImplementedError(
                 "cuDF does not yet support Intervals with timezone-aware datetimes"
             )
-        elif _is_pandas_nullable_extension_dtype(arbitrary.dtype):
+        elif is_pandas_nullable_extension_dtype(arbitrary.dtype):
             if cudf.get_option("mode.pandas_compatible"):
                 raise NotImplementedError("not supported")
             if isinstance(arbitrary, (pd.Series, pd.Index)):
