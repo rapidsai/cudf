@@ -46,12 +46,8 @@ namespace {
 [[nodiscard]] auto all_row_group_indices(
   host_span<std::vector<cudf::size_type> const> row_group_indices)
 {
-  std::vector<std::vector<cudf::size_type>> all_row_group_indices;
-  std::transform(row_group_indices.begin(),
-                 row_group_indices.end(),
-                 std::back_inserter(all_row_group_indices),
-                 [](auto rg_indices) { return rg_indices; });
-  return all_row_group_indices;
+  return std::vector<std::vector<cudf::size_type>>(row_group_indices.begin(),
+                                                   row_group_indices.end());
 }
 
 }  // namespace
