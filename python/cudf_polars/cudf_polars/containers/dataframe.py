@@ -53,7 +53,7 @@ class DataFrame:
     @functools.cached_property
     def device_buffer_size(self) -> int:
         """
-        The total size of the device buffers used by the Table.
+        The total size of the device buffers used by the DataFrame.
 
         Returns
         -------
