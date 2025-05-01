@@ -52,8 +52,8 @@ cudf::test::strings_column_wrapper build_input()
 
 TEST_F(TextDedupTest, StringDedup)
 {
-  auto input = build_input();
-  auto sv    = cudf::strings_column_view(input);
+  auto const input = build_input();
+  auto sv          = cudf::strings_column_view(input);
 
   auto results  = nvtext::substring_duplicates(sv, 20);
   auto expected = cudf::test::strings_column_wrapper({" 01234567890123456789 "});
@@ -75,14 +75,14 @@ TEST_F(TextDedupTest, StringDedup)
 
 TEST_F(TextDedupTest, SuffixArray)
 {
-  auto input = cudf::test::strings_column_wrapper({
+  auto const input = cudf::test::strings_column_wrapper({
     "cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum. ",
     "quis est fuga tempore qui dignissimos aliquam et sint repellendus ut autem voluptas quo",
   });
 
-  auto sv = cudf::strings_column_view(input);
+  auto const sv = cudf::strings_column_view(input);
 
-  auto expected = cudf::test::fixed_width_column_wrapper<cudf::size_type>(
+  auto const expected = cudf::test::fixed_width_column_wrapper<cudf::size_type>(
     {124, 65,  155, 31,  49,  112, 91,  73,  132, 95,  70,  28,  77,  58,  9,   41,  13,  108, 37,
      86,  140, 135, 23,  100, 152, 161, 22,  85,  48,  36,  99,  79,  125, 130, 66,  7,   5,   156,
      80,  46,  32,  0,   72,  4,   18,  50,  113, 149, 107, 144, 159, 102, 147, 19,  142, 53,  51,
@@ -93,16 +93,16 @@ TEST_F(TextDedupTest, SuffixArray)
      119, 136, 118, 93,  75,  24,  64,  154, 94,  27,  76,  57,  8,   139, 134, 21,  6,   158, 101,
      129, 97,  110, 39,  88,  33,  83,  25,  55,  1,   165, 150, 153, 157, 162});
 
-  auto results = nvtext::build_suffix_array(sv, 8);
-  auto col_view =
+  auto const results = nvtext::build_suffix_array(sv, 8);
+  auto const col_view =
     cudf::column_view(cudf::device_span<cudf::size_type const>(results->data(), results->size()));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, col_view);
 }
 
 TEST_F(TextDedupTest, Errors)
 {
-  auto input = cudf::test::strings_column_wrapper({"0123456789"});
-  auto sv    = cudf::strings_column_view(input);
+  auto const input = cudf::test::strings_column_wrapper({"0123456789"});
+  auto const sv    = cudf::strings_column_view(input);
 
   EXPECT_THROW(nvtext::substring_duplicates(sv, 50), std::invalid_argument);
   EXPECT_THROW(nvtext::substring_duplicates(sv, 5), std::invalid_argument);
