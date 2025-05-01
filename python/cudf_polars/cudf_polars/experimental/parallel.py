@@ -144,11 +144,11 @@ def get_scheduler(config_options: ConfigOptions) -> Any:
     ):  # pragma: no cover; block depends on executor type and Distributed cluster
         from distributed import get_client
 
-        from cudf_polars.experimental.dask_registers import SerializerManager
+        from cudf_polars.experimental.dask_registers import DaskRegisterManager
 
         client = get_client()
-        SerializerManager.register_serialize()
-        SerializerManager.run_on_cluster(client)
+        DaskRegisterManager.register_once()
+        DaskRegisterManager.run_on_cluster(client)
         return client.get
     elif scheduler == "synchronous":
         from cudf_polars.experimental.scheduler import synchronous_scheduler
