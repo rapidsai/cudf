@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import functools
 from functools import cached_property
 from typing import TYPE_CHECKING, cast
 
@@ -48,6 +49,17 @@ class DataFrame:
         self.columns = [cast(NamedColumn, c) for c in columns]
         self.column_map = {c.name: c for c in self.columns}
         self.table = plc.Table([c.obj for c in self.columns])
+
+    @functools.cached_property
+    def device_buffer_size(self) -> int:
+        """
+        The total size of the device buffers used by the Table.
+
+        Returns
+        -------
+        Number of bytes.
+        """
+        return sum(c.device_buffer_size for c in self.columns)
 
     def copy(self) -> Self:
         """Return a shallow copy of self."""

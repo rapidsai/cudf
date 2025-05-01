@@ -130,19 +130,7 @@ def register() -> None:
             frames = frames[0], plc.gpumemoryview(rmm.DeviceBuffer.to_device(frames[1]))
             return Column.deserialize(header, frames)
 
-    @sizeof_dispatch.register(Column)
-    def _(x: Column) -> int:
-        """The total size of the device buffers used by the Column."""
-        ret = 0
-        if x.obj.data() is not None:
-            ret += x.obj.data().nbytes
-        if x.obj.null_mask() is not None:
-            ret += x.obj.null_mask().nbytes
-        if x.obj.children() is not None:
-            ret += sum(sizeof_dispatch(c) for c in x.obj.children())
-        return ret
-
-    @sizeof_dispatch.register(DataFrame)
-    def _(x: DataFrame) -> int:
-        """The total size of the device buffers used by the DataFrame."""
-        return sum(sizeof_dispatch(c) for c in x.columns)
+    @sizeof_dispatch.register((Column, DataFrame))
+    def _(x: Column | DataFrame) -> int:
+        """The total size of the device buffers used by the DataFrame or Column."""
+        return x.device_buffer_size

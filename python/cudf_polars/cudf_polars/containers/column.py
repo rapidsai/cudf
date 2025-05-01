@@ -58,6 +58,28 @@ class Column:
         self.name = name
         self.set_sorted(is_sorted=is_sorted, order=order, null_order=null_order)
 
+    @functools.cached_property
+    def device_buffer_size(self) -> int:
+        """
+        The total size of the device buffers used by the Column.
+
+        Returns
+        -------
+        Number of bytes.
+        """
+
+        def _pylibcudf_device_size(col: plc.Column) -> int:
+            ret = 0
+            if col.data() is not None:
+                ret += col.data().nbytes
+            if col.null_mask() is not None:
+                ret += col.null_mask().nbytes
+            if col.children() is not None:
+                ret += sum(_pylibcudf_device_size(c) for c in col.children())
+            return ret
+
+        return _pylibcudf_device_size(self.obj)
+
     @classmethod
     def deserialize(
         cls, header: ColumnHeader, frames: tuple[memoryview, plc.gpumemoryview]
