@@ -836,6 +836,18 @@ set_target_properties(
              LINK_FLAGS "-Wl,--exclude-libs,libzstd.a"
 )
 
+# Export the compiler flags and definitions so the downstream applications can optionally retrieve
+# and use them.
+set_target_properties(
+  cudf
+  PROPERTIES EXPORT_PROPERTIES
+             "CUDF_CXX_FLAGS;CUDF_CUDA_FLAGS;CUDF_CXX_DEFINITIONS;CUDF_CUDA_DEFINITIONS"
+             CUDF_CXX_FLAGS "${CUDF_CXX_FLAGS}"
+             CUDF_CUDA_FLAGS "${CUDF_CUDA_FLAGS}"
+             CUDF_CXX_DEFINITIONS "${CUDF_CXX_DEFINITIONS}"
+             CUDF_CUDA_DEFINITIONS "${CUDF_CUDA_DEFINITIONS}"
+)
+
 # Note: This must come before the target_compile_options below so that the function can modify the
 # flags if necessary.
 if(CUDF_CLANG_TIDY OR CUDF_IWYU)
