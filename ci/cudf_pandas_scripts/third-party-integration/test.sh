@@ -66,6 +66,7 @@ main() {
             ls -al /opt/conda/envs/test
             ls -al /opt/conda/envs/test/nvvm/
             ls -al /opt/conda/envs/test/nvvm/libdevice/
+            export XLA_FLAGS=--xla_gpu_cuda_data_dir=${CONDA_PREFIX}/nvvm/libdevice
         fi
         repo_root=$(git rev-parse --show-toplevel)
         TEST_DIR=${repo_root}/python/cudf/cudf_pandas_tests/third_party_integration_tests/tests
