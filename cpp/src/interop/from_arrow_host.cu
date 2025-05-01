@@ -290,19 +290,7 @@ std::unique_ptr<column> dispatch_copy_from_arrow_host::operator()<cudf::list_vie
 
     offsets_buffers[1] = int32_offsets.data();
 
-    // The below code is a simplified adaptation of the default operator. This
-    // code specializes for non-nullable int32, but also uses a 2D memcpy to
-    // slice off the unnecessary bytes.
-    auto col = make_fixed_width_column(
-      data_type(type_id::INT32), physical_length, mask_state::UNALLOCATED, stream, mr);
-    using DeviceType = device_storage_type_t<int32_t>;
-    CUDF_CUDA_TRY(cudaMemcpyAsync(col->mutable_view().data<DeviceType>(),
-                                  reinterpret_cast<uint8_t const*>(int32_offsets.data()),
-                                  sizeof(DeviceType) * physical_length,
-                                  cudaMemcpyDefault,
-                                  stream.value()));
-
-    return col;
+    return this->operator()<int32_t>(&view, &offsets_array, data_type(type_id::INT32), true);
   }();
 
   NANOARROW_THROW_NOT_OK(ArrowSchemaViewInit(&view, schema->schema->children[0], nullptr));
