@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import numpy as np
 import pyarrow as pa
 import pytest
 from distributed.protocol import deserialize, serialize
@@ -38,17 +39,23 @@ def convert_to_rmm(frame):
         pa.table({"a": [1], "b": [2], "c": [3]}),
         pa.table({"a": ["a", "bb", "ccc"]}),
         pa.table({"a": [1, 2, None], "b": [None, 3, 4]}),
+        pa.table({"a": pa.array(np.arange(1e7))}),
     ],
 )
 @pytest.mark.parametrize("protocol", ["cuda", "cuda_rmm", "dask"])
-def test_dask_serialization_roundtrip(arrow_tbl, protocol):
+@pytest.mark.parametrize(
+    "context", [None, {}, {"staging_device_buffer": rmm.DeviceBuffer(size=2**20)}]
+)
+def test_dask_serialization_roundtrip(arrow_tbl, protocol, context):
     plc_tbl = plc.interop.from_arrow(arrow_tbl)
     df = DataFrame.from_table(plc_tbl, names=arrow_tbl.column_names)
 
     cuda_rmm = protocol == "cuda_rmm"
     protocol = "cuda" if protocol == "cuda_rmm" else protocol
 
-    header, frames = serialize(df, on_error="raise", serializers=[protocol])
+    header, frames = serialize(
+        df, on_error="raise", serializers=[protocol], context=context
+    )
     if cuda_rmm:
         # Simulate Dask UCX transfers
         frames = [convert_to_rmm(f) for f in frames]
@@ -60,7 +67,9 @@ def test_dask_serialization_roundtrip(arrow_tbl, protocol):
     for column in df.columns:
         expect = DataFrame([column])
 
-        header, frames = serialize(column, on_error="raise", serializers=[protocol])
+        header, frames = serialize(
+            column, on_error="raise", serializers=[protocol], context=context
+        )
         if cuda_rmm:
             # Simulate Dask UCX transfers
             frames = [convert_to_rmm(f) for f in frames]

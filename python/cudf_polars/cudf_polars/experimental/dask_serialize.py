@@ -129,7 +129,6 @@ def register() -> None:
     def _(
         x: DataFrame, context: Mapping[str, Any] | None = None
     ) -> tuple[DataFrameHeader, tuple[memoryview, memoryview]]:
-
         # Do regular serialization if no staging buffer is provided.
         if context is None or "staging_device_buffer" not in context:
             return dask_serialize_column_or_frame(x)
