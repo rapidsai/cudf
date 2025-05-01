@@ -35,7 +35,11 @@ from cudf.core.column.categorical import CategoricalColumn, as_unsigned_codes
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.mixins import BinaryOperand, Scannable
 from cudf.utils import ioutils
-from cudf.utils.dtypes import CUDF_STRING_DTYPE, find_common_type
+from cudf.utils.dtypes import (
+    CUDF_STRING_DTYPE,
+    cudf_dtype_from_pa_type,
+    find_common_type,
+)
 from cudf.utils.performance_tracking import _performance_tracking
 from cudf.utils.utils import _array_ufunc, _warn_no_dask_cudf
 
@@ -1040,7 +1044,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
                 # All of these cases are handled by calling the
                 # _with_type_metadata method on the column.
                 result[name] = result[name]._with_type_metadata(
-                    cudf.utils.dtypes.cudf_dtype_from_pa_type(data[name].type)
+                    cudf_dtype_from_pa_type(data[name].type)
                 )
 
         return cls._from_data({name: result[name] for name in column_names})

@@ -23,6 +23,7 @@ import pandas as pd
 
 import cudf
 from cudf.core.abc import Serializable
+from cudf.core.column.column import deserialize_columns
 from cudf.core.groupby.groupby import (
     DataFrameGroupBy,
     GroupBy,
@@ -161,7 +162,7 @@ class _ResampleGrouping(_Grouping):
     def deserialize(cls, header, frames):
         names = header["names"]
         _named_columns = header["_named_columns"]
-        key_columns = cudf.core.column.deserialize_columns(
+        key_columns = deserialize_columns(
             header["columns"], frames[: -header["__bin_labels_count"]]
         )
         out = _ResampleGrouping.__new__(_ResampleGrouping)

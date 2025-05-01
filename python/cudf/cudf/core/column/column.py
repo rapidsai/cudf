@@ -24,6 +24,7 @@ import rmm
 
 import cudf
 from cudf.api.types import (
+    _is_categorical_dtype,
     _is_pandas_nullable_extension_dtype,
     infer_dtype,
     is_dtype_equal,
@@ -59,6 +60,7 @@ from cudf.errors import MixedTypeError
 from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
     SIZE_TYPE_DTYPE,
+    _get_nan_for_dtype,
     _maybe_convert_to_default_type,
     cudf_dtype_from_pa_type,
     cudf_dtype_to_pa_type,
@@ -82,6 +84,7 @@ if TYPE_CHECKING:
     import builtins
 
     from cudf._typing import ColumnLike, Dtype, DtypeObj, ScalarLike
+    from cudf.core.column.categorical import CategoricalColumn
     from cudf.core.column.numerical import NumericalColumn
     from cudf.core.column.strings import StringColumn
     from cudf.core.index import BaseIndex
@@ -358,7 +361,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 dbuf.copy_from_host(value)
                 mask = as_buffer(dbuf)
 
-        return cudf.core.column.build_column(  # type: ignore[return-value]
+        return build_column(  # type: ignore[return-value]
             data=self.data,
             dtype=self.dtype,
             mask=mask,
@@ -553,7 +556,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
         dtype = dtype_from_pylibcudf_column(col)
 
-        return cudf.core.column.build_column(  # type: ignore[return-value]
+        return build_column(  # type: ignore[return-value]
             data=as_buffer(col.data().obj, exposed=data_ptr_exposed)
             if col.data() is not None
             else None,
@@ -1409,9 +1412,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         result[:first_nan_idx] = np.nan
         return as_column(result)
 
-    def indices_of(
-        self, value: ScalarLike
-    ) -> cudf.core.column.NumericalColumn:
+    def indices_of(self, value: ScalarLike) -> NumericalColumn:
         """
         Find locations of value in the column
 
@@ -1702,7 +1703,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
     def as_categorical_column(
         self, dtype: cudf.CategoricalDtype
-    ) -> cudf.core.column.categorical.CategoricalColumn:
+    ) -> CategoricalColumn:
         ordered = dtype.ordered
 
         # Re-label self w.r.t. the provided categories
@@ -1761,7 +1762,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     ) -> cudf.core.column.TimeDeltaColumn:
         raise NotImplementedError
 
-    def as_string_column(self) -> cudf.core.column.StringColumn:
+    def as_string_column(self) -> StringColumn:
         raise NotImplementedError
 
     def as_decimal_column(
@@ -1993,14 +1994,14 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         skipna = True if skipna is None else skipna
 
         if self._can_return_nan(skipna=skipna):
-            return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
+            return _get_nan_for_dtype(self.dtype)
 
         col = self.nans_to_nulls() if skipna else self
         if col.has_nulls():
             if skipna:
                 col = col.dropna()
             else:
-                return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
+                return _get_nan_for_dtype(self.dtype)
 
         # TODO: If and when pandas decides to validate that `min_count` >= 0 we
         # should insert comparable behavior.
@@ -2008,7 +2009,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         if min_count > 0:
             valid_count = len(col) - col.null_count
             if valid_count < min_count:
-                return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
+                return _get_nan_for_dtype(self.dtype)
         return col
 
     def _reduction_result_dtype(self, reduction_op: str) -> Dtype:
@@ -2156,7 +2157,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             if reduction_op == "any":
                 return False
 
-            return cudf.utils.dtypes._get_nan_for_dtype(col_dtype)
+            return _get_nan_for_dtype(col_dtype)
 
         with acquire_spill_lock():
             plc_scalar = plc.reduce.reduce(
@@ -2238,7 +2239,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         left_inclusive: bool,
         right_edge: Self,
         right_inclusive: bool,
-    ) -> cudf.core.column.NumericalColumn:
+    ) -> NumericalColumn:
         return type(self).from_pylibcudf(  # type: ignore[return-value]
             plc.labeling.label_bins(
                 self.to_pylibcudf(mode="read"),
@@ -2843,9 +2844,7 @@ def as_column(
             raise ValueError(f"{length=} must be >=0.")
 
         pa_type = None
-        if isinstance(
-            arbitrary, pd.Interval
-        ) or cudf.api.types._is_categorical_dtype(dtype):
+        if isinstance(arbitrary, pd.Interval) or _is_categorical_dtype(dtype):
             return as_column(
                 pd.Series([arbitrary] * length),
                 nan_as_null=nan_as_null,

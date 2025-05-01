@@ -60,7 +60,7 @@ from cudf.utils.dtypes import (
     is_mixed_with_object_dtype,
 )
 from cudf.utils.performance_tracking import _performance_tracking
-from cudf.utils.utils import _warn_no_dask_cudf, search_range
+from cudf.utils.utils import _is_same_name, _warn_no_dask_cudf, search_range
 
 if TYPE_CHECKING:
     from collections.abc import Generator, Iterable
@@ -1202,11 +1202,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
             ret = _index_from_data(binop_result)
             other_name = getattr(other, "name", self.name)
 
-        ret.name = (
-            self.name
-            if cudf.utils.utils._is_same_name(self.name, other_name)
-            else None
-        )
+        ret.name = self.name if _is_same_name(self.name, other_name) else None
 
         # pandas returns numpy arrays when the outputs are boolean. We
         # explicitly _do not_ use isinstance here: we want only boolean

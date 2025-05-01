@@ -21,7 +21,9 @@ from cudf.errors import MixedTypeError
 from cudf.utils import ioutils
 from cudf.utils.dtypes import (
     SIZE_TYPE_DTYPE,
+    _dtype_pandas_compatible,
     can_convert_to_column,
+    find_common_type,
     is_mixed_with_object_dtype,
 )
 from cudf.utils.utils import _is_same_name
@@ -615,17 +617,13 @@ class BaseIndex(Serializable):
                 raise MixedTypeError("Cannot perform union with mixed types")
 
         if not len(other) or self.equals(other):
-            common_dtype = cudf.utils.dtypes.find_common_type(
-                [self.dtype, other.dtype]
-            )
+            common_dtype = find_common_type([self.dtype, other.dtype])
             res = self._get_reconciled_name_object(other).astype(common_dtype)
             if sort:
                 return res.sort_values()
             return res
         elif not len(self):
-            common_dtype = cudf.utils.dtypes.find_common_type(
-                [self.dtype, other.dtype]
-            )
+            common_dtype = find_common_type([self.dtype, other.dtype])
             res = other._get_reconciled_name_object(self).astype(common_dtype)
             if sort:
                 return res.sort_values()
@@ -714,8 +712,8 @@ class BaseIndex(Serializable):
             )
 
         if not len(self) or not len(other) or self.equals(other):
-            common_dtype = cudf.utils.dtypes._dtype_pandas_compatible(
-                cudf.utils.dtypes.find_common_type([self.dtype, other.dtype])
+            common_dtype = _dtype_pandas_compatible(
+                find_common_type([self.dtype, other.dtype])
             )
 
             lhs = self.unique() if self.has_duplicates else self
