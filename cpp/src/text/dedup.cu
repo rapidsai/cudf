@@ -57,13 +57,9 @@ struct sort_comparator_fn {
   cudf::device_span<char const> chars_span;
   __device__ bool operator()(cudf::size_type lhs, cudf::size_type rhs) const
   {
-    constexpr auto max_size = cuda::std::numeric_limits<cudf::size_type>::max();
-    auto const chars_size   = static_cast<cudf::size_type>(chars_span.size());
-
-    auto const lhs_size = cuda::std::min(max_size, chars_size - lhs);
-    auto const rhs_size = cuda::std::min(max_size, chars_size - rhs);
-    auto const lh_str   = cudf::string_view(chars_span.data() + lhs, lhs_size);
-    auto const rh_str   = cudf::string_view(chars_span.data() + rhs, rhs_size);
+    auto const chars_size = static_cast<cudf::size_type>(chars_span.size());
+    auto const lh_str     = cudf::string_view(chars_span.data() + lhs, chars_size - lhs);
+    auto const rh_str     = cudf::string_view(chars_span.data() + rhs, chars_size - rhs);
     return lh_str < rh_str;
   }
 };
@@ -96,16 +92,12 @@ struct find_adjacent_duplicates_fn {
   __device__ int16_t operator()(cudf::size_type idx) const
   {
     if (idx == 0) { return 0; }
-    constexpr auto max_size = cuda::std::numeric_limits<cudf::size_type>::max();
-    auto const chars_size   = static_cast<cudf::size_type>(chars_span.size());
+    auto const chars_size = static_cast<cudf::size_type>(chars_span.size());
 
-    auto const lhs      = d_indices[idx - 1];
-    auto const rhs      = d_indices[idx];
-    auto const lhs_size = cuda::std::min(max_size, chars_size - lhs);
-    auto const rhs_size = cuda::std::min(max_size, chars_size - rhs);
-
-    auto const lh_str = cudf::string_view(chars_span.data() + lhs, lhs_size);
-    auto const rh_str = cudf::string_view(chars_span.data() + rhs, rhs_size);
+    auto const lhs    = d_indices[idx - 1];
+    auto const rhs    = d_indices[idx];
+    auto const lh_str = cudf::string_view(chars_span.data() + lhs, chars_size - lhs);
+    auto const rh_str = cudf::string_view(chars_span.data() + rhs, chars_size - rhs);
 
     constexpr auto max_run_length =
       static_cast<cudf::size_type>(cuda::std::numeric_limits<int16_t>::max());
@@ -275,24 +267,6 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> build_suffix_array(
   return build_suffix_array_fn(chars_span, min_width, stream, mr);
 }
 
-std::unique_ptr<cudf::column> resolve_duplicates(cudf::strings_column_view const& input,
-                                                 cudf::device_span<cudf::size_type const> indices,
-                                                 cudf::size_type min_width,
-                                                 rmm::cuda_stream_view stream,
-                                                 rmm::device_async_resource_ref mr)
-{
-  CUDF_EXPECTS(min_width > 8, "min_width should be at least 8");
-
-  auto d_strings = cudf::column_device_view::create(input.parent(), stream);
-  auto [first_offset, last_offset] =
-    cudf::strings::detail::get_first_and_last_offset(input, stream);
-  auto const d_input_chars = input.chars_begin(stream) + first_offset;
-  auto const chars_size    = last_offset - first_offset;
-  auto const chars_span    = cudf::device_span<char const>(d_input_chars, chars_size);
-
-  return resolve_duplicates_fn(chars_span, indices, min_width, stream, mr);
-}
-
 std::unique_ptr<cudf::column> substring_duplicates(cudf::strings_column_view const& input,
                                                    cudf::size_type min_width,
                                                    rmm::cuda_stream_view stream,
@@ -312,6 +286,24 @@ std::unique_ptr<cudf::column> substring_duplicates(cudf::strings_column_view con
   auto indices = build_suffix_array_fn(chars_span, min_width, stream, mr);
 
   return resolve_duplicates_fn(chars_span, *indices, min_width, stream, mr);
+}
+
+std::unique_ptr<cudf::column> resolve_duplicates(cudf::strings_column_view const& input,
+                                                 cudf::device_span<cudf::size_type const> indices,
+                                                 cudf::size_type min_width,
+                                                 rmm::cuda_stream_view stream,
+                                                 rmm::device_async_resource_ref mr)
+{
+  CUDF_EXPECTS(min_width > 8, "min_width should be at least 8");
+
+  auto d_strings = cudf::column_device_view::create(input.parent(), stream);
+  auto [first_offset, last_offset] =
+    cudf::strings::detail::get_first_and_last_offset(input, stream);
+  auto const d_input_chars = input.chars_begin(stream) + first_offset;
+  auto const chars_size    = last_offset - first_offset;
+  auto const chars_span    = cudf::device_span<char const>(d_input_chars, chars_size);
+
+  return resolve_duplicates_fn(chars_span, indices, min_width, stream, mr);
 }
 
 namespace {

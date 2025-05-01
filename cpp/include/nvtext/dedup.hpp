@@ -40,6 +40,10 @@ namespace CUDF_EXPORT nvtext {
  * The output includes any strings of at least `min_width` bytes that
  * appear more than once in the entire input.
  *
+ * @throw If `min_width` <= 8
+ * @throw If `min_width` is greater than the input chars size
+ * @throw If the `input` chars size is greater than 2GB
+ *
  * @param input Strings column to identify duplicates
  * @param min_width Minimum number of bytes that must match to identify a duplicate
  * @param stream CUDA stream used for device memory operations and kernel launches
@@ -58,6 +62,9 @@ std::unique_ptr<cudf::column> substring_duplicates(
  * The internal implementation creates a suffix array of the input which
  * requires ~4x the input size for temporary memory. The output is an additional
  * 4x of the input size.
+ *
+ * @throw If `min_width` is greater than the input chars size
+ * @throw If the `input` chars size is greater than 2GB
  *
  * @param input Strings column to build suffix array for
  * @param min_width Minimum number of bytes that must match to identify a duplicate
@@ -79,6 +86,10 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> build_suffix_array(
  *
  * The result is undefined if the indices were not created on the same input
  * provided here.
+ *
+ * @throw If `min_width` <= 8
+ * @throw If `min_width` is greater than the input chars size
+ * @throw If the `input` chars size is greater than 2GB
  *
  * @param input Strings column for indices
  * @param indices Suffix array from nvtext::build_suffix_array
@@ -102,6 +113,10 @@ std::unique_ptr<cudf::column> resolve_duplicates(
  *
  * The result is undefined if the indices1 were not created on the input1 and
  * indices2 were not created on input2.
+ *
+ * @throw If `min_width` <= 8
+ * @throw If `min_width` is greater than the input chars size
+ * @throw If the `input` chars size is greater than 2GB
  *
  * @param input1 Strings column for indices1
  * @param indices1 Suffix array from nvtext::build_suffix_array for input1
