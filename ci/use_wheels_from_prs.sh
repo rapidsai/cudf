@@ -12,7 +12,7 @@ RMM_WHEELHOUSE=$(
 )
 
 # write a pip constraints file saying e.g. "whenever you encounter a requirement for 'librmm-cu12', use this wheel"
-cat > /tmp/constraints.txt <<EOF
+cat >> /tmp/constraints.txt <<EOF
 librmm-${RAPIDS_PY_CUDA_SUFFIX} @ file://$(echo ${LIBRMM_WHEELHOUSE}/librmm_*.whl)
 rmm-${RAPIDS_PY_CUDA_SUFFIX} @ file://$(echo ${RMM_WHEELHOUSE}/rmm_*.whl)
 EOF

@@ -8,6 +8,8 @@ package_dir="python/libcudf"
 
 RAPIDS_PY_CUDA_SUFFIX="$(rapids-wheel-ctk-name-gen "${RAPIDS_CUDA_VERSION}")"
 
+source ./ci/use_wheels_from_prs.sh
+
 rapids-logger "Generating build requirements"
 
 rapids-dependency-file-generator \
@@ -22,8 +24,6 @@ rapids-pip-retry install \
     -v \
     --prefer-binary \
     -r /tmp/requirements-build.txt
-
-source ./ci/use_wheels_from_prs.sh
 
 # build with '--no-build-isolation', for better sccache hit rate
 # 0 really means "add --no-build-isolation" (ref: https://github.com/pypa/pip/issues/5735)
