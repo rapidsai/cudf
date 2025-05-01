@@ -84,6 +84,7 @@ if TYPE_CHECKING:
     from cudf._typing import ColumnLike, Dtype, DtypeObj, ScalarLike
     from cudf.core.column.numerical import NumericalColumn
     from cudf.core.column.strings import StringColumn
+    from cudf.core.index import BaseIndex
 
 if PANDAS_GE_210:
     NumpyExtensionArray = pd.arrays.NumpyExtensionArray
@@ -1383,6 +1384,30 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     @cached_property
     def nan_count(self) -> int:
         return 0
+
+    def interpolate(self, index: BaseIndex) -> ColumnBase:
+        # figure out where the nans are
+        mask = self.isnull()
+
+        # trivial cases, all nan or no nans
+        if not mask.any() or mask.all():
+            return self.copy()
+
+        from cudf.core.index import RangeIndex
+
+        valid_locs = ~mask
+        if isinstance(index, RangeIndex):
+            # Each point is evenly spaced, index values don't matter
+            known_x = cupy.flatnonzero(valid_locs.values)
+        else:
+            known_x = index._column.apply_boolean_mask(valid_locs).values  # type: ignore[attr-defined]
+        known_y = self.apply_boolean_mask(valid_locs).values
+
+        result = cupy.interp(index.to_cupy(), known_x, known_y)
+
+        first_nan_idx = valid_locs.values.argmax().item()
+        result[:first_nan_idx] = np.nan
+        return as_column(result)
 
     def indices_of(
         self, value: ScalarLike

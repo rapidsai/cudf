@@ -26,8 +26,6 @@ from typing_extensions import Self
 import pylibcudf as plc
 
 import cudf
-import cudf.core.algorithms
-import cudf.core.common
 from cudf.api.extensions import no_default
 from cudf.api.types import (
     is_dict_like,
@@ -40,6 +38,7 @@ from cudf.core._internals import copying, stream_compaction
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import ColumnBase, NumericalColumn, as_column
 from cudf.core.column_accessor import ColumnAccessor
+from cudf.core.common import pipe
 from cudf.core.copy_types import BooleanMask, GatherMap
 from cudf.core.dtypes import ListDtype
 from cudf.core.frame import Frame
@@ -1322,7 +1321,7 @@ class IndexedFrame(Frame):
         ...    .pipe((func, 'arg2'), arg1=a, arg3=c)
         ...  )
         """
-        return cudf.core.common.pipe(self, func, *args, **kwargs)
+        return pipe(self, func, *args, **kwargs)
 
     @_performance_tracking
     def sum(
@@ -2004,9 +2003,7 @@ class IndexedFrame(Frame):
             if col.nullable:
                 col = col.astype(np.dtype(np.float64)).fillna(np.nan)
 
-            columns.append(
-                cudf.core.algorithms._interpolation(col, index=interp_index)
-            )
+            columns.append(col.interpolate(col, index=interp_index))
 
         result = self._from_data_like_self(
             self._data._from_columns_like_self(columns)
@@ -4176,7 +4173,7 @@ class IndexedFrame(Frame):
             nanoseconds to milliseconds, the index will be of dtype
             'datetime64[ms]'.
         """
-        import cudf.core.resample
+        from cudf.core.resample import DataFrameResampler, SeriesResampler
 
         if kind is not None:
             warnings.warn(
@@ -4209,9 +4206,9 @@ class IndexedFrame(Frame):
             key=on, freq=rule, closed=closed, label=label, level=level
         )
         return (
-            cudf.core.resample.SeriesResampler(self, by=by)
+            SeriesResampler(self, by=by)
             if isinstance(self, cudf.Series)
-            else cudf.core.resample.DataFrameResampler(self, by=by)
+            else DataFrameResampler(self, by=by)
         )
 
     def dropna(
