@@ -40,8 +40,9 @@ std::unique_ptr<cudf::column> transform(cudf::table_view const& table)
                             [[maybe_unused]] int32_t scratch_size,
                             void* scratch)
 {
-  auto it        = static_cast<char*>(scratch) + scratch_offset;
-  auto const end = static_cast<char*>(scratch) + scratch_offset + scratch_size;
+  auto const begin = static_cast<char*>(scratch) + scratch_offset;
+  auto const end = begin + scratch_size;
+  auto it = begin;
 
   auto push = [&](cudf::string_view str) {
     auto const size = str.size_bytes();
@@ -59,8 +60,7 @@ std::unique_ptr<cudf::column> transform(cudf::table_view const& table)
   push(cudf::string_view{"-", 1});
   push(phone_number);
 
-  *out = cudf::string_view{static_cast<char*>(scratch),
-                           static_cast<cudf::size_type>(it - static_cast<char*>(scratch))};
+  *out = cudf::string_view{begin, static_cast<cudf::size_type>(it - static_cast<char*>(begin))};
 }
   )***";
 

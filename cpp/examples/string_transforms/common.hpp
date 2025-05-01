@@ -69,7 +69,7 @@ std::shared_ptr<rmm::mr::device_memory_resource> create_memory_resource(std::str
 void write_csv(cudf::table_view const& tbl_view, std::string const& file_path)
 {
   auto sink_info = cudf::io::sink_info(file_path);
-  auto builder   = cudf::io::csv_writer_options::builder(sink_info, tbl_view);
+  auto builder   = cudf::io::csv_writer_options::builder(sink_info, tbl_view).include_header(false);
   auto options   = builder.build();
   cudf::io::write_csv(options);
 }

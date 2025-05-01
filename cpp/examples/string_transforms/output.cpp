@@ -40,7 +40,7 @@ std::unique_ptr<cudf::column> transform(cudf::table_view const& table)
     }
   
     auto provider_begin = pos + 1;
-    auto provider       = email.substr(provider_begin, email.size_bytes() - provider_begin);
+    auto provider       = email.substr(provider_begin, email.length() - provider_begin);
   
     *out = provider;
   }
