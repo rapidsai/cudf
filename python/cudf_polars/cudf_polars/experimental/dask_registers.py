@@ -1,12 +1,13 @@
 # SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Dask serialization."""
+"""Dask function registrations such as serializers and dispatch implementations."""
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, ClassVar, overload
 
+from dask.sizeof import sizeof as sizeof_dispatch
 from distributed.protocol import dask_deserialize, dask_serialize
 from distributed.protocol.cuda import cuda_deserialize, cuda_serialize
 from distributed.utils import log_errors
@@ -34,7 +35,7 @@ class SerializerManager:  # pragma: no cover; Only used with Distributed schedul
     def register_serialize(cls) -> None:
         """Register Dask/cudf-polars serializers in calling process."""
         if not cls._serializer_registered:
-            from cudf_polars.experimental.dask_serialize import register
+            from cudf_polars.experimental.dask_registers import register
 
             register()
             cls._serializer_registered = True
@@ -49,7 +50,7 @@ class SerializerManager:  # pragma: no cover; Only used with Distributed schedul
 
 
 def register() -> None:
-    """Register dask serialization routines for DataFrames."""
+    """Register dask serialization and dispatch functions."""
 
     @overload
     def serialize_column_or_frame(
@@ -128,3 +129,18 @@ def register() -> None:
             # Copy the second frame (the gpudata in host memory) back to the gpu
             frames = frames[0], plc.gpumemoryview(rmm.DeviceBuffer.to_device(frames[1]))
             return Column.deserialize(header, frames)
+
+    @sizeof_dispatch.register(Column)
+    def _(x: Column) -> int:
+        ret = 0
+        if x.obj.data() is not None:
+            ret += x.obj.data().nbytes
+        if x.obj.null_mask() is not None:
+            ret += x.obj.null_mask().nbytes
+        if x.obj.children() is not None:
+            ret += sum(sizeof_dispatch(c) for c in x.obj.children())
+        return ret
+
+    @sizeof_dispatch.register(DataFrame)
+    def _(x: DataFrame) -> int:
+        return sum(sizeof_dispatch(c) for c in x.columns)
