@@ -13,7 +13,7 @@ from cudf_polars.dsl.expressions.base import Col, NamedExpr
 from cudf_polars.dsl.ir import Distinct
 from cudf_polars.experimental.base import PartitionInfo
 from cudf_polars.experimental.dispatch import lower_ir_node
-from cudf_polars.experimental.utils import _lower_ir_fallback
+from cudf_polars.experimental.utils import _fallback_inform, _lower_ir_fallback
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
@@ -48,7 +48,7 @@ def lower_distinct(
     Returns
     -------
     new_node
-        The lowered node (usually Distinct).
+        The lowered Distinct node.
     partition_info
         A mapping from unique nodes in the new graph to associated
         partitioning information.
@@ -59,7 +59,8 @@ def lower_distinct(
     # Extract child partitioning
     child_count = partition_info[child].count
 
-    # Assume shuffle is not stable for now
+    # Assume shuffle is not stable for now. Therefore, we
+    # require a tree reduction if row order matters.
     require_tree_reduction = ir.stable or ir.keep in (
         plc.stream_compaction.DuplicateKeepOption.KEEP_FIRST,
         plc.stream_compaction.DuplicateKeepOption.KEEP_LAST,
@@ -71,6 +72,11 @@ def lower_distinct(
     if ir.keep == plc.stream_compaction.DuplicateKeepOption.KEEP_NONE:
         # Need to shuffle the original data for keep == "none"
         if require_tree_reduction:
+            # TODO: We cannot drop all duplicates without
+            # shuffling the data up front, and we assume
+            # shuffling is unstable for now. Note that the
+            # task-based shuffle should be stable, but it
+            # its performance is very poor.
             raise NotImplementedError(
                 "Unsupported unique options for multiple partitions."
             )
@@ -90,7 +96,9 @@ def lower_distinct(
             # Use rough 1m-row heuristic to set n_ary
             n_ary = max(int(1_000_000 / ir.zlice[1]), 2)
         else:  # pragma: no cover
-            # Slice is not head or tail - Can this happen?
+            # TODO: General slicing is not supported for multiple
+            # partitions. For now, we raise an error to fall back
+            # to one partition.
             raise NotImplementedError("Unsupported slice for multiple partitions.")
     else:
         # Use cardinality to determine partitioning
@@ -104,12 +112,17 @@ def lower_distinct(
         }
         if cardinality_factor:
             cardinality = max(cardinality_factor.values())
-            n_ary = max(int(1.0 / cardinality), 2)
+            n_ary = min(max(int(1.0 / cardinality), 2), child_count)
             output_count = max(int(cardinality * child_count), 1)
 
     if output_count > 1 and require_tree_reduction:
-        # TODO: Use fallback config to warn or raise?
+        # Need to reduce down to a single partition even
+        # if the cardinality is large.
         output_count = 1
+        _fallback_inform(
+            "Unsupported unique options for multiple partitions.",
+            config_options,
+        )
 
     # Partition-wise unique
     count = child_count

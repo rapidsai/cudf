@@ -25,7 +25,7 @@ def df():
 @pytest.mark.parametrize("subset", [None, ("y",), ("y", "z")])
 @pytest.mark.parametrize("keep", ["first", "last", "any", "none"])
 @pytest.mark.parametrize("maintain_order", [True, False])
-@pytest.mark.parametrize("cardinality", [{}, {"y": 0.5}])
+@pytest.mark.parametrize("cardinality", [{}, {"y": 0.7}])
 def test_unique(df, keep, subset, maintain_order, cardinality):
     engine = pl.GPUEngine(
         raise_on_fail=True,
@@ -34,23 +34,33 @@ def test_unique(df, keep, subset, maintain_order, cardinality):
             "max_rows_per_partition": 50,
             "scheduler": DEFAULT_SCHEDULER,
             "cardinality_factor": cardinality,
+            "fallback_mode": "silent",
         },
     )
 
     q = df.unique(subset=subset, keep=keep, maintain_order=maintain_order)
+    check_row_order = maintain_order
     if keep == "any" and subset:
         q = q.select(*(pl.col(col) for col in subset))
         check_row_order = False
-    else:
-        check_row_order = maintain_order
 
-    if keep == "none" and maintain_order:
-        with pytest.raises(
-            pl.exceptions.ComputeError, match="Unsupported unique options"
-        ):
-            assert_gpu_result_equal(q, engine=engine)
-    else:
-        assert_gpu_result_equal(q, engine=engine, check_row_order=check_row_order)
+    assert_gpu_result_equal(q, engine=engine, check_row_order=check_row_order)
+
+
+def test_unique_fallback(df):
+    engine = pl.GPUEngine(
+        raise_on_fail=True,
+        executor="streaming",
+        executor_options={
+            "max_rows_per_partition": 50,
+            "scheduler": DEFAULT_SCHEDULER,
+            "cardinality_factor": {"y": 1.0},
+            "fallback_mode": "raise",
+        },
+    )
+    q = df.unique(keep="first", maintain_order=True)
+    with pytest.raises(pl.exceptions.ComputeError, match="Unsupported unique options"):
+        assert_gpu_result_equal(q, engine=engine)
 
 
 @pytest.mark.parametrize("maintain_order", [True, False])
