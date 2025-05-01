@@ -32,8 +32,6 @@ main() {
     for lib in ${LIBS//,/ }; do
         lib=$(echo "$lib" | tr -d '""')
         echo "Running tests for library $lib"
-        # find / -type d -name nvvm 2>/dev/null
-        CUDA_VERSION=$(if [ "$lib" = "tensorflow" ]; then echo "${RAPIDS_CUDA_VERSION%.*}"; else echo "${RAPIDS_CUDA_VERSION%.*}"; fi)
 
         . /opt/conda/etc/profile.d/conda.sh
         # Check the value of RAPIDS_BUILD_TYPE
@@ -44,7 +42,7 @@ main() {
                 --config "$dependencies_yaml" \
                 --output conda \
                 --file-key "test_${lib}" \
-                --matrix "cuda=${CUDA_VERSION};arch=$(arch);py=${RAPIDS_PY_VERSION}" \
+                --matrix "cuda=${RAPIDS_CUDA_VERSION%.*};arch=$(arch);py=${RAPIDS_PY_VERSION}" \
                 --prepend-channel "${CPP_CHANNEL}" \
                 --prepend-channel "${PYTHON_CHANNEL}" | tee env.yaml
         else
@@ -53,17 +51,11 @@ main() {
                 --config "$dependencies_yaml" \
                 --output conda \
                 --file-key "test_${lib}" \
-                --matrix "cuda=${CUDA_VERSION};arch=$(arch);py=${RAPIDS_PY_VERSION}" | tee env.yaml
+                --matrix "cuda=${RAPIDS_CUDA_VERSION%.*};arch=$(arch);py=${RAPIDS_PY_VERSION}" | tee env.yaml
         fi
 
         rapids-mamba-retry env create --yes -f env.yaml -n test
 
-        if [ "$lib" = "tensorflow" ]; then
-            ls -al /opt/conda/envs/test
-            ls -al /opt/conda/envs/test/nvvm/
-            ls -al /opt/conda/envs/test/nvvm/libdevice/
-            export XLA_FLAGS=--xla_gpu_cuda_data_dir=${CONDA_PREFIX}/nvvm/libdevice
-        fi
         # Temporarily allow unbound variables for conda activation.
         set +u
         conda activate test
