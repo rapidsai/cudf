@@ -68,7 +68,7 @@ main() {
         set +u
         conda activate test
         set -u
-        
+
         repo_root=$(git rev-parse --show-toplevel)
         TEST_DIR=${repo_root}/python/cudf/cudf_pandas_tests/third_party_integration_tests/tests
 
