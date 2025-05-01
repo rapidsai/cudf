@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -258,12 +258,11 @@ struct dispatch_unary_cast_to {
                                      rmm::device_async_resource_ref mr)
   {
     auto const size = input.size();
-    auto output =
-      std::make_unique<column>(type,
-                               size,
-                               rmm::device_buffer{size * cudf::size_of(type), stream, mr},
-                               detail::copy_bitmask(input, stream, mr),
-                               input.null_count());
+    auto output     = std::make_unique<column>(type,
+                                           size,
+                                           rmm::device_buffer{size * sizeof(TargetT), stream, mr},
+                                           detail::copy_bitmask(input, stream, mr),
+                                           input.null_count());
 
     mutable_column_view output_mutable = *output;
 
@@ -285,12 +284,11 @@ struct dispatch_unary_cast_to {
                                      rmm::device_async_resource_ref mr)
   {
     auto const size = input.size();
-    auto output =
-      std::make_unique<column>(type,
-                               size,
-                               rmm::device_buffer{size * cudf::size_of(type), stream, mr},
-                               detail::copy_bitmask(input, stream, mr),
-                               input.null_count());
+    auto output     = std::make_unique<column>(type,
+                                           size,
+                                           rmm::device_buffer{size * sizeof(TargetT), stream, mr},
+                                           detail::copy_bitmask(input, stream, mr),
+                                           input.null_count());
 
     mutable_column_view output_mutable = *output;
 
