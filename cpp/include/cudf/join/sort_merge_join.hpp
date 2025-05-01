@@ -62,7 +62,7 @@ class sort_merge_join {
                   rmm::cuda_stream_view stream = cudf::get_default_stream());
 
   /**
-   * Returns the row indices that can be used to construct the result of performing
+   * @brief Returns the row indices that can be used to construct the result of performing
    * an inner join between the right table passed while creating the sort_merge_join object, and the
    * left table.
    * @see cudf::inner_join().

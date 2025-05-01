@@ -57,8 +57,9 @@ struct list_nonnull_filter {
   size_type const subset_offset;
   __device__ void operator()(size_type idx) const noexcept
   {
-    if (!bit_is_set(reduced_validity_mask, idx))
+    if (!bit_is_set(reduced_validity_mask, idx)) {
       clear_bit(validity_mask, child_positions[idx + subset_offset]);
+    }
   };
 };
 
@@ -367,7 +368,7 @@ sort_merge_join::sort_merge_join(table_view const& right,
     preprocessed_right._null_processed_table_view = right;
   } else {
     // if a table has no nullable column, then there's no preprocessing to be done
-    auto is_right_nullable = nullable(right);
+    auto is_right_nullable = has_nested_nulls(right);
     if (is_right_nullable) {
       preprocessed_right.preprocess_unprocessed_table(stream);
     } else {
@@ -401,39 +402,25 @@ void sort_merge_join::postprocess_indices(device_span<size_type> smaller_indices
                          preprocessed_right._null_processed_table_view.num_rows();
   if (compare_nulls == null_equality::UNEQUAL) {
     // if a table has no nullable column, then there's no postprocessing to be done
-    auto is_left_nullable  = nullable(preprocessed_left._null_processed_table_view);
-    auto is_right_nullable = nullable(preprocessed_right._null_processed_table_view);
+    auto is_left_nullable  = has_nested_nulls(preprocessed_left._null_processed_table_view);
+    auto is_right_nullable = has_nested_nulls(preprocessed_right._null_processed_table_view);
     if (is_left_nullable) {
-      auto left_mapping = preprocessed_left.map_table_to_unprocessed(stream);
-      if (is_left_smaller) {
-        thrust::transform(rmm::exec_policy_nosync(stream),
-                          smaller_indices.begin(),
-                          smaller_indices.end(),
-                          smaller_indices.begin(),
-                          mapping_functor<device_span<size_type>>{left_mapping});
-      } else {
-        thrust::transform(rmm::exec_policy_nosync(stream),
-                          larger_indices.begin(),
-                          larger_indices.end(),
-                          larger_indices.begin(),
-                          mapping_functor<device_span<size_type>>{left_mapping});
-      }
+      auto left_mapping       = preprocessed_left.map_table_to_unprocessed(stream);
+      auto& transform_indices = is_left_smaller ? smaller_indices : larger_indices;
+      thrust::transform(rmm::exec_policy_nosync(stream),
+                        transform_indices.begin(),
+                        transform_indices.end(),
+                        transform_indices.begin(),
+                        mapping_functor<device_span<size_type>>{left_mapping});
     }
     if (is_right_nullable) {
-      auto right_mapping = preprocessed_right.map_table_to_unprocessed(stream);
-      if (is_left_smaller) {
-        thrust::transform(rmm::exec_policy_nosync(stream),
-                          larger_indices.begin(),
-                          larger_indices.end(),
-                          larger_indices.begin(),
-                          mapping_functor<device_span<size_type>>{right_mapping});
-      } else {
-        thrust::transform(rmm::exec_policy_nosync(stream),
-                          smaller_indices.begin(),
-                          smaller_indices.end(),
-                          smaller_indices.begin(),
-                          mapping_functor<device_span<size_type>>{right_mapping});
-      }
+      auto right_mapping      = preprocessed_right.map_table_to_unprocessed(stream);
+      auto& transform_indices = is_left_smaller ? larger_indices : smaller_indices;
+      thrust::transform(rmm::exec_policy_nosync(stream),
+                        transform_indices.begin(),
+                        transform_indices.end(),
+                        transform_indices.begin(),
+                        mapping_functor<device_span<size_type>>{right_mapping});
     }
   }
 }
@@ -457,7 +444,7 @@ sort_merge_join::inner_join(table_view const& left,
     preprocessed_left._null_processed_table_view = left;
   } else {
     // if a table has no nullable column, then there's no preprocessing to be done
-    auto is_left_nullable = nullable(left);
+    auto is_left_nullable = has_nested_nulls(left);
     if (is_left_nullable) {
       preprocessed_left.preprocess_unprocessed_table(stream);
     } else {
@@ -475,12 +462,14 @@ sort_merge_join::inner_join(table_view const& left,
   // Neither table was pre-sorted
   if (smaller._null_processed_table_sorted_order.has_value() &&
       larger._null_processed_table_sorted_order.has_value()) {
+    auto smaller_sorted_order = smaller._null_processed_table_sorted_order.value()->view();
+    auto larger_sorted_order  = larger._null_processed_table_sorted_order.value()->view();
     merge obj(smaller._null_processed_table_view,
-              smaller._null_processed_table_sorted_order.value()->view().begin<size_type>(),
-              smaller._null_processed_table_sorted_order.value()->view().end<size_type>(),
+              smaller_sorted_order.begin<size_type>(),
+              smaller_sorted_order.end<size_type>(),
               larger._null_processed_table_view,
-              larger._null_processed_table_sorted_order.value()->view().begin<size_type>(),
-              larger._null_processed_table_sorted_order.value()->view().end<size_type>());
+              larger_sorted_order.begin<size_type>(),
+              larger_sorted_order.end<size_type>());
     auto [smaller_indices, larger_indices] = obj(stream, mr);
     postprocess_indices(*smaller_indices, *larger_indices, stream);
     stream.synchronize();
@@ -490,9 +479,10 @@ sort_merge_join::inner_join(table_view const& left,
   // Only the larger table was pre-sorted
   if (smaller._null_processed_table_sorted_order.has_value() &&
       !larger._null_processed_table_sorted_order.has_value()) {
+    auto smaller_sorted_order = smaller._null_processed_table_sorted_order.value()->view();
     merge obj(smaller._null_processed_table_view,
-              smaller._null_processed_table_sorted_order.value()->view().begin<size_type>(),
-              smaller._null_processed_table_sorted_order.value()->view().end<size_type>(),
+              smaller_sorted_order.begin<size_type>(),
+              smaller_sorted_order.end<size_type>(),
               larger._null_processed_table_view,
               thrust::counting_iterator(0),
               thrust::counting_iterator(larger._null_processed_table_view.num_rows()));
@@ -505,12 +495,13 @@ sort_merge_join::inner_join(table_view const& left,
   // Only the smaller table was pre-sorted
   if (!smaller._null_processed_table_sorted_order.has_value() &&
       larger._null_processed_table_sorted_order.has_value()) {
+    auto larger_sorted_order = larger._null_processed_table_sorted_order.value()->view();
     merge obj(smaller._null_processed_table_view,
               thrust::counting_iterator(0),
               thrust::counting_iterator(smaller._null_processed_table_view.num_rows()),
               larger._null_processed_table_view,
-              larger._null_processed_table_sorted_order.value()->view().begin<size_type>(),
-              larger._null_processed_table_sorted_order.value()->view().end<size_type>());
+              larger_sorted_order.begin<size_type>(),
+              larger_sorted_order.end<size_type>());
     auto [smaller_indices, larger_indices] = obj(stream, mr);
     postprocess_indices(*smaller_indices, *larger_indices, stream);
     stream.synchronize();
