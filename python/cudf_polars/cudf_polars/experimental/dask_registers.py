@@ -132,6 +132,7 @@ def register() -> None:
 
     @sizeof_dispatch.register(Column)
     def _(x: Column) -> int:
+        """The total size of the device buffers used by the Column."""
         ret = 0
         if x.obj.data() is not None:
             ret += x.obj.data().nbytes
@@ -143,4 +144,5 @@ def register() -> None:
 
     @sizeof_dispatch.register(DataFrame)
     def _(x: DataFrame) -> int:
+        """The total size of the device buffers used by the DataFrame."""
         return sum(sizeof_dispatch(c) for c in x.columns)
