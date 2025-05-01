@@ -713,7 +713,7 @@ class Scan(IR):
             # TODO: Preserve the selection order eg. col then index col
             # which we currently do not do
             df = DataFrame([index_col, *df.columns])
-        # assert all(c.obj.type() == schema[name] for name, c in df.column_map.items())
+        assert all(c.obj.type() == schema[name] for name, c in df.column_map.items())
         if predicate is None:
             return df
         else:
