@@ -36,7 +36,12 @@ from cudf.core._base_index import BaseIndex
 from cudf.core._compat import PANDAS_LT_300
 from cudf.core._internals import copying, stream_compaction
 from cudf.core.buffer import acquire_spill_lock
-from cudf.core.column import ColumnBase, NumericalColumn, as_column
+from cudf.core.column import (
+    ColumnBase,
+    NumericalColumn,
+    as_column,
+    column_empty,
+)
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.common import pipe
 from cudf.core.copy_types import BooleanMask, GatherMap
@@ -59,7 +64,9 @@ from cudf.utils import docutils, ioutils
 from cudf.utils._numba import _CUDFNumbaConfig
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
+    CUDF_STRING_DTYPE,
     SIZE_TYPE_DTYPE,
+    can_convert_to_column,
     is_column_like,
     is_dtype_obj_numeric,
 )
@@ -168,7 +175,7 @@ def _get_unique_drop_labels(array):
 
 def _indices_from_labels(obj, labels):
     if not isinstance(labels, cudf.MultiIndex):
-        labels = cudf.core.column.as_column(labels)
+        labels = as_column(labels)
         labels = labels.astype(obj.index.dtype)
         idx_labels = cudf.Index._from_column(labels)
     else:
@@ -185,9 +192,8 @@ def _indices_from_labels(obj, labels):
 
 
 def _get_label_range_or_mask(index, start, stop, step):
-    if (
-        not (start is None and stop is None)
-        and type(index) is cudf.core.index.DatetimeIndex
+    if not (start is None and stop is None) and isinstance(
+        index, cudf.DatetimeIndex
     ):
         start = pd.to_datetime(start)
         stop = pd.to_datetime(stop)
@@ -1127,7 +1133,7 @@ class IndexedFrame(Frame):
 
         elif isinstance(
             other, (cp.ndarray, np.ndarray)
-        ) or cudf.utils.dtypes.can_convert_to_column(other):
+        ) or can_convert_to_column(other):
             rhs = cp.asarray(other)
         else:
             # TODO: This should raise an exception, not return NotImplemented,
@@ -1982,7 +1988,7 @@ class IndexedFrame(Frame):
             perm_sort = data.index.argsort()
             data = data._gather(
                 GatherMap.from_column_unchecked(
-                    cudf.core.column.as_column(perm_sort),
+                    as_column(perm_sort),
                     len(data),
                     nullify=False,
                 )
@@ -1994,7 +2000,7 @@ class IndexedFrame(Frame):
             interp_index = data.index
         columns = []
         for col in data._columns:
-            if isinstance(col, cudf.core.column.StringColumn):
+            if col.dtype == CUDF_STRING_DTYPE:
                 warnings.warn(
                     f"{type(self).__name__}.interpolate with object dtype is "
                     "deprecated and will raise in a future version.",
@@ -2003,7 +2009,7 @@ class IndexedFrame(Frame):
             if col.nullable:
                 col = col.astype(np.dtype(np.float64)).fillna(np.nan)
 
-            columns.append(col.interpolate(col, index=interp_index))
+            columns.append(col.interpolate(index=interp_index))
 
         result = self._from_data_like_self(
             self._data._from_columns_like_self(columns)
@@ -2016,7 +2022,7 @@ class IndexedFrame(Frame):
             # TODO: This should be a scatter, avoiding an argsort.
             else result._gather(
                 GatherMap.from_column_unchecked(
-                    cudf.core.column.as_column(perm_sort.argsort()),
+                    as_column(perm_sort.argsort()),
                     len(result),
                     nullify=False,
                 )
@@ -2238,7 +2244,7 @@ class IndexedFrame(Frame):
         if not ax.is_monotonic_increasing and not ax.is_monotonic_decreasing:
             raise ValueError("truncate requires a sorted index")
 
-        if type(ax) is cudf.core.index.DatetimeIndex:
+        if isinstance(ax, cudf.DatetimeIndex):
             before = pd.to_datetime(before)
             after = pd.to_datetime(after)
 
@@ -2701,10 +2707,7 @@ class IndexedFrame(Frame):
                 )
                 # TODO: frame factory function should handle multilevel column
                 # names
-                if (
-                    isinstance(self, cudf.core.dataframe.DataFrame)
-                    and self._data.multiindex
-                ):
+                if isinstance(self, cudf.DataFrame) and self._data.multiindex:
                     out._set_columns_like(self._data)
             elif (ascending and idx.is_monotonic_increasing) or (
                 not ascending and idx.is_monotonic_decreasing
@@ -2716,15 +2719,12 @@ class IndexedFrame(Frame):
                 )
                 out = self._gather(
                     GatherMap.from_column_unchecked(
-                        cudf.core.column.as_column(inds),
+                        as_column(inds),
                         len(self),
                         nullify=False,
                     )
                 )
-                if (
-                    isinstance(self, cudf.core.dataframe.DataFrame)
-                    and self._data.multiindex
-                ):
+                if isinstance(self, cudf.DataFrame) and self._data.multiindex:
                     out._set_columns_like(self._data)
             if ignore_index:
                 out = out.reset_index(drop=True)
@@ -3684,7 +3684,7 @@ class IndexedFrame(Frame):
 
         method = "nlargest" if largest else "nsmallest"
         for col in columns:
-            if isinstance(self._data[col], cudf.core.column.StringColumn):
+            if self._data[col].dtype == CUDF_STRING_DTYPE:
                 if isinstance(self, cudf.DataFrame):
                     error_msg = (
                         f"Column '{col}' has dtype {self._data[col].dtype}, "
@@ -3897,7 +3897,7 @@ class IndexedFrame(Frame):
             name: (
                 df._data[name].copy(deep=deep)
                 if name in df._data
-                else cudf.core.column.column.column_empty(
+                else column_empty(
                     dtype=dtypes.get(name, np.dtype(np.float64)),
                     row_count=len(index),
                 )
@@ -4533,7 +4533,7 @@ class IndexedFrame(Frame):
         self, offset, idx: int, op: Callable, side: str, slice_func: Callable
     ) -> "IndexedFrame":
         """Shared code path for ``first`` and ``last``."""
-        if not isinstance(self.index, cudf.core.index.DatetimeIndex):
+        if not isinstance(self.index, cudf.DatetimeIndex):
             raise TypeError("'first' only supports a DatetimeIndex index.")
         if not isinstance(offset, str):
             raise NotImplementedError(
@@ -4845,7 +4845,7 @@ class IndexedFrame(Frame):
             gather_map = GatherMap.from_column_unchecked(
                 cast(
                     NumericalColumn,
-                    cudf.core.column.as_column(
+                    as_column(
                         random_state.choice(
                             len(self), size=n, replace=replace, p=weights
                         )
@@ -6728,7 +6728,7 @@ def _drop_rows_by_labels(
     if isinstance(level, int) and level >= obj.index.nlevels:
         raise ValueError("Param level out of bounds.")
 
-    if not isinstance(labels, cudf.core.single_column_frame.SingleColumnFrame):
+    if not isinstance(labels, (cudf.Series, cudf.Index)):
         labels = as_column(labels)
 
     if isinstance(obj.index, cudf.MultiIndex):
