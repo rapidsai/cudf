@@ -48,6 +48,28 @@ constexpr int32_t default_column_index_truncate_length = 64;   ///< truncate to 
 constexpr size_t default_max_dictionary_size           = 1024 * 1024;  ///< 1MB dictionary size
 constexpr size_type default_max_page_fragment_size     = 5000;  ///< 5000 rows per page fragment
 
+/**
+ * @brief Check if the compression type is supported for reading Parquet files.
+ *
+ * @note This is a runtime check. Some compression types may not be supported because of the current
+ * system configuration.
+ *
+ * @param compression Compression type
+ * @return Boolean indicating if the compression type is supported
+ */
+[[nodiscard]] bool is_supported_read_parquet(compression_type compression);
+
+/**
+ * @brief Check if the compression type is supported for writing Parquet files.
+ *
+ * @note This is a runtime check. Some compression types may not be supported because of the current
+ * system configuration.
+ *
+ * @param compression Compression type
+ * @return Boolean indicating if the compression type is supported
+ */
+[[nodiscard]] bool is_supported_write_parquet(compression_type compression);
+
 class parquet_reader_options_builder;
 
 /**
