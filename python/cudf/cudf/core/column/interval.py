@@ -196,9 +196,8 @@ class IntervalColumn(StructColumn):
         # types into pandas (trying to convert the underlying numerical columns
         # directly is problematic), so we're stuck with this for now.
         if (
-            nullable
-            or isinstance(self.dtype, pd.ArrowDtype)
-            or isinstance(self.dtype, pd.core.dtypes.dtypes.ExtensionDtype)
+            nullable or isinstance(self.dtype, pd.ArrowDtype)
+            # or isinstance(self.dtype, pd.core.dtypes.dtypes.ExtensionDtype)
         ):
             return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
         elif arrow_type:

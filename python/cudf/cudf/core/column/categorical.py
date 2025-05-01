@@ -818,6 +818,20 @@ class CategoricalColumn(column.ColumnBase):
             res = res.astype(self.dtype)
         return res
 
+    def to_arrow(self) -> pa.Array:
+        """Convert to PyArrow Array."""
+        # pyarrow.Table doesn't support unsigned codes
+        signed_type = (
+            min_signed_type(self.codes.max())
+            if self.codes.size > 0
+            else np.dtype(np.int8)
+        )
+        return pa.DictionaryArray.from_arrays(
+            self.codes.astype(signed_type).to_arrow(),
+            self.categories.to_arrow(),
+            ordered=self.ordered,
+        )
+
     @property
     def values_host(self) -> np.ndarray:
         """
@@ -1231,7 +1245,7 @@ class CategoricalColumn(column.ColumnBase):
             (
                 CategoricalDtype,
                 pd.ArrowDtype,
-                pd.core.dtypes.dtypes.ExtensionDtype,
+                # pd.core.dtypes.dtypes.ExtensionDtype,
             ),
         ):
             result = type(self)(

@@ -208,9 +208,8 @@ class TimeDeltaColumn(ColumnBase):
             raise NotImplementedError(f"{nullable=} is not implemented.")
         pa_array = self.to_arrow()
         if (
-            arrow_type
-            or isinstance(self.dtype, pd.ArrowDtype)
-            or isinstance(self.dtype, pd.core.dtypes.dtypes.ExtensionDtype)
+            arrow_type or isinstance(self.dtype, pd.ArrowDtype)
+            # or isinstance(self.dtype, pd.core.dtypes.dtypes.ExtensionDtype)
         ):
             return pd.Index(pd.arrays.ArrowExtensionArray(pa_array))
         else:
