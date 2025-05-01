@@ -106,4 +106,29 @@ dictionary_literals_and_operators_collector::get_literals_and_operators() &&
   return {std::move(_literals), std::move(_operators)};
 }
 
+std::optional<std::vector<std::vector<size_type>>>
+aggregate_reader_metadata::apply_dictionary_filter(
+  cudf::host_span<rmm::device_buffer> dictionaries,
+  host_span<std::vector<size_type> const> input_row_group_indices,
+  host_span<std::vector<ast::literal*> const> literals,
+  host_span<std::vector<ast::ast_operator> const> operators,
+  size_type total_row_groups,
+  host_span<data_type const> output_dtypes,
+  host_span<int const> dictionary_col_schemas,
+  std::reference_wrapper<ast::expression const> filter,
+  rmm::cuda_stream_view stream) const
+{
+  return {};
+}
+
+std::vector<rmm::device_buffer> aggregate_reader_metadata::materialize_dictionaries(
+  cudf::host_span<rmm::device_buffer> dictionary_page_data,
+  host_span<std::vector<size_type> const> input_row_group_indices,
+  host_span<data_type const> output_dtypes,
+  host_span<int const> dictionary_col_schemas,
+  rmm::cuda_stream_view stream) const
+{
+  return {};
+}
+
 }  // namespace cudf::io::parquet::experimental::detail

@@ -388,8 +388,56 @@ aggregate_reader_metadata::filter_row_groups_with_dictionary_pages(
   std::optional<std::reference_wrapper<ast::expression const>> filter,
   rmm::cuda_stream_view stream) const
 {
-  // Not yet implemented so just return all row group indices
   return all_row_group_indices(row_group_indices);
+
+  // Enable when dictionary filtering is implemented
+#if 0
+  // Return all row groups if no filter expression
+  if (not filter.has_value()) { return all_row_group_indices(row_group_indices); }
+
+  // Collect literals and operators for dictionary page filtering for each input table column
+  auto const [literals, operators] =
+    dictionary_literals_and_operators_collector{filter.value().get(),
+                                                static_cast<cudf::size_type>(output_dtypes.size())}
+      .get_literals_and_operators();
+
+  // Collect schema indices of columns with equality predicate(s)
+  std::vector<cudf::size_type> dictionary_col_schemas;
+  thrust::copy_if(thrust::host,
+                  output_column_schemas.begin(),
+                  output_column_schemas.end(),
+                  literals.begin(),
+                  std::back_inserter(dictionary_col_schemas),
+                  [](auto& dict_literals) { return not dict_literals.empty(); });
+
+  // Return early if no column with equality predicate(s)
+  if (dictionary_col_schemas.empty()) { return all_row_group_indices(row_group_indices); }
+
+  // Number of input row groups
+  auto const total_row_groups = std::accumulate(
+    row_group_indices.begin(),
+    row_group_indices.end(),
+    cudf::size_type{0},
+    [](auto sum, auto const& per_file_row_groups) { return sum + per_file_row_groups.size(); });
+
+  // NYI: Decode dictionary pages into `cuco::static_set_ref`
+  auto dictionaries = materialize_dictionaries(
+    dictionary_page_data, row_group_indices, output_dtypes, dictionary_col_schemas, stream);
+
+  // NYI: Filter row groups using dictionaries
+  auto const dictionary_filtered_row_groups = apply_dictionary_filter(dictionaries,
+                                                                      row_group_indices,
+                                                                      literals,
+                                                                      operators,
+                                                                      total_row_groups,
+                                                                      output_dtypes,
+                                                                      dictionary_col_schemas,
+                                                                      filter.value(),
+                                                                      stream);
+
+  // Return all_row_group_indices as dictionary filtering not yet implemented
+  return dictionary_filtered_row_groups.value_or(all_row_group_indices(row_group_indices));
+#endif
 }
 
 std::vector<std::vector<cudf::size_type>>
