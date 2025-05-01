@@ -353,8 +353,8 @@ TEST_F(ParquetExperimentalReaderTest, TestMetadata)
   auto parquet_metadata = reader->parquet_metadata();
 
   // Check that the offset and column indices are not present
-  ASSERT_FALSE(parquet_metadata.row_groups[0].columns[0].offset_index.has_value());
-  ASSERT_FALSE(parquet_metadata.row_groups[0].columns[0].column_index.has_value());
+  EXPECT_FALSE(parquet_metadata.row_groups[0].columns[0].offset_index.has_value());
+  EXPECT_FALSE(parquet_metadata.row_groups[0].columns[0].column_index.has_value());
 
   // Get page index byte range from the reader - API # 2
   auto const page_index_byte_range = reader->get_page_index_bytes();
@@ -369,13 +369,13 @@ TEST_F(ParquetExperimentalReaderTest, TestMetadata)
   parquet_metadata = reader->parquet_metadata();
 
   // Check that the offset and column indices are now present
-  ASSERT_TRUE(parquet_metadata.row_groups[0].columns[0].offset_index.has_value());
-  ASSERT_TRUE(parquet_metadata.row_groups[0].columns[0].column_index.has_value());
+  EXPECT_TRUE(parquet_metadata.row_groups[0].columns[0].offset_index.has_value());
+  EXPECT_TRUE(parquet_metadata.row_groups[0].columns[0].column_index.has_value());
 
   // Get all row groups from the reader - API # 4
   auto input_row_group_indices = reader->all_row_groups(options);
   // Expect 4 = 20000 rows / 5000 rows per row group
-  ASSERT_EQ(input_row_group_indices.size(), 4);
+  EXPECT_EQ(input_row_group_indices.size(), 4);
 
   // Explicitly set the row groups to read
   options.set_row_groups({{0, 1}});
@@ -383,7 +383,7 @@ TEST_F(ParquetExperimentalReaderTest, TestMetadata)
   // Get all row groups from the reader again
   input_row_group_indices = reader->all_row_groups(options);
   // Expect only 2 row groups now
-  ASSERT_EQ(reader->all_row_groups(options).size(), 2);
+  EXPECT_EQ(reader->all_row_groups(options).size(), 2);
 }
 
 TEST_F(ParquetExperimentalReaderTest, PruneRowGroupsOnly)
