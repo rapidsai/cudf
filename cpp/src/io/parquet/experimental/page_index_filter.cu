@@ -626,7 +626,7 @@ std::vector<thrust::host_vector<bool>> aggregate_reader_metadata::compute_data_p
 
   auto mr = cudf::get_current_device_resource_ref();
 
-  // Vector to hold vectors of byte ranges of filtered pages for each column
+  // Vector to hold validity of filtered pages for each column
   auto data_page_mask = std::vector<thrust::host_vector<bool>>();
   data_page_mask.reserve(num_columns);
   auto total_filtered_pages = size_t{0};

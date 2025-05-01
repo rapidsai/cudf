@@ -1017,9 +1017,18 @@ table_with_metadata hybrid_scan_reader_impl::finalize_output(
     CUDF_EXPECTS(read_mode == read_mode::PAYLOAD_COLUMNS, "Invalid read mode");
     CUDF_EXPECTS(row_mask.type().id() == type_id::BOOL8,
                  "Predicate filter should return a boolean");
-    auto output_table =
-      cudf::detail::apply_boolean_mask(read_table->view(), row_mask, _stream, _mr);
-    return {std::move(output_table), std::move(out_metadata)};
+    CUDF_EXPECTS(row_mask.size() == read_table->num_rows(),
+                 "Encountered invalid sized row mask to apply");
+    // If we have at least one non-null row in the row mask, apply the boolean mask.
+    if (row_mask.null_count() < row_mask.size()) {
+      auto output_table =
+        cudf::detail::apply_boolean_mask(read_table->view(), row_mask, _stream, _mr);
+      return {std::move(output_table), std::move(out_metadata)};
+    }
+    // Otherwise, return the input table as is.
+    else {
+      return {std::move(read_table), std::move(out_metadata)};
+    }
   }
 }
 
