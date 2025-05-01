@@ -27,6 +27,7 @@ def df():
         {
             "a": [1, 2, 3, 4, 5, 6, 7],
             "b": [1, 1, 1, 1, 1, 1, 1],
+            "c": [2, 4, 6, 8, 10, 12, 14],
         }
     )
 
@@ -49,11 +50,12 @@ def test_select_reduce_fallback(df, fallback_mode):
             "scheduler": DEFAULT_SCHEDULER,
         },
     )
-    match = "This selection not support for multiple partitions."
+    match = "This selection is not supported for multiple partitions."
 
     query = df.select(
         (pl.col("a") + pl.col("b")).max(),
-        (pl.col("a") * 2 + pl.col("b")).alias("d").mean(),
+        # NOTE: We don't support `median` yet
+        (pl.col("a") * 2 + pl.col("b")).alias("d").median(),
     )
 
     if fallback_mode == "silent":
@@ -62,12 +64,41 @@ def test_select_reduce_fallback(df, fallback_mode):
         ctx = pytest.raises(pl.exceptions.ComputeError, match=match)
     elif fallback_mode == "foo":
         ctx = pytest.raises(
-            pl.exceptions.ComputeError, match="Unsupported fallback_mode option"
+            pl.exceptions.ComputeError,
+            match="'foo' is not a valid StreamingFallbackMode",
         )
     else:
         ctx = pytest.warns(UserWarning, match=match)
     with ctx:
         assert_gpu_result_equal(query, engine=engine)
+
+
+@pytest.mark.parametrize(
+    "aggs",
+    [
+        (pl.col("a").sum(),),
+        (
+            (pl.col("a") + pl.col("b")).sum(),
+            (pl.col("a") * 2 + pl.col("b")).alias("d").min(),
+        ),
+        (pl.col("a").min() + pl.col("b").max(),),
+        (pl.col("a") - (pl.col("b") + pl.col("c").max()).sum(),),
+        (pl.col("b").len(),),
+        (pl.col("a") - (pl.col("b") + pl.col("c").max()).mean(),),
+        (
+            pl.col("b").sum(),
+            (pl.col("c").sum() + 1),
+        ),
+        (
+            pl.col("b").n_unique(),
+            (pl.col("c").n_unique() + 1),
+        ),
+    ],
+)
+def test_select_aggs(df, engine, aggs):
+    # Test supported aggs (e.g. "min", "max", "mean", "n_unique")
+    query = df.select(*aggs)
+    assert_gpu_result_equal(query, engine=engine)
 
 
 def test_select_with_cse_no_agg(df, engine):

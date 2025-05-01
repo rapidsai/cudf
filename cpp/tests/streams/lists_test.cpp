@@ -17,6 +17,7 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/default_stream.hpp>
+#include <cudf_test/testing_main.hpp>
 
 #include <cudf/lists/combine.hpp>
 #include <cudf/lists/contains.hpp>
@@ -269,3 +270,5 @@ TEST_F(ListTest, ExplodeOuterPosition)
   cudf::table_view lists_table({list_col_a, list_col_b});
   cudf::explode_outer_position(lists_table, 0, cudf::test::get_default_stream());
 }
+
+CUDF_TEST_PROGRAM_MAIN()

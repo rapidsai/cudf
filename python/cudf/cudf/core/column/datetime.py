@@ -249,6 +249,38 @@ class DatetimeColumn(column.ColumnBase):
             children=children,
         )
 
+    def _clear_cache(self) -> None:
+        super()._clear_cache()
+        attrs = (
+            "days_in_month",
+            "is_year_start",
+            "is_leap_year",
+            "is_year_end",
+            "is_quarter_start",
+            "is_quarter_end",
+            "is_month_start",
+            "is_month_end",
+            "day_of_year",
+            "weekday",
+            "nanosecond",
+            "microsecond",
+            "millisecond",
+            "second",
+            "minute",
+            "hour",
+            "day",
+            "month",
+            "year",
+            "quarter",
+            "time_unit",
+        )
+        for attr in attrs:
+            try:
+                delattr(self, attr)
+            except AttributeError:
+                # attr was not called yet, so ignore.
+                pass
+
     @staticmethod
     def _validate_dtype_instance(dtype: np.dtype) -> np.dtype:
         if not (isinstance(dtype, np.dtype) and dtype.kind == "M"):
@@ -287,68 +319,68 @@ class DatetimeColumn(column.ColumnBase):
     def time_unit(self) -> str:
         return np.datetime_data(self.dtype)[0]
 
-    @property
+    @functools.cached_property
     @acquire_spill_lock()
     def quarter(self) -> ColumnBase:
         return type(self).from_pylibcudf(
             plc.datetime.extract_quarter(self.to_pylibcudf(mode="read"))
         )
 
-    @property
+    @functools.cached_property
     def year(self) -> ColumnBase:
         return self._get_dt_field(plc.datetime.DatetimeComponent.YEAR)
 
-    @property
+    @functools.cached_property
     def month(self) -> ColumnBase:
         return self._get_dt_field(plc.datetime.DatetimeComponent.MONTH)
 
-    @property
+    @functools.cached_property
     def day(self) -> ColumnBase:
         return self._get_dt_field(plc.datetime.DatetimeComponent.DAY)
 
-    @property
+    @functools.cached_property
     def hour(self) -> ColumnBase:
         return self._get_dt_field(plc.datetime.DatetimeComponent.HOUR)
 
-    @property
+    @functools.cached_property
     def minute(self) -> ColumnBase:
         return self._get_dt_field(plc.datetime.DatetimeComponent.MINUTE)
 
-    @property
+    @functools.cached_property
     def second(self) -> ColumnBase:
         return self._get_dt_field(plc.datetime.DatetimeComponent.SECOND)
 
-    @property
+    @functools.cached_property
     def millisecond(self) -> ColumnBase:
         return self._get_dt_field(plc.datetime.DatetimeComponent.MILLISECOND)
 
-    @property
+    @functools.cached_property
     def microsecond(self) -> ColumnBase:
         return self._get_dt_field(plc.datetime.DatetimeComponent.MICROSECOND)
 
-    @property
+    @functools.cached_property
     def nanosecond(self) -> ColumnBase:
         return self._get_dt_field(plc.datetime.DatetimeComponent.NANOSECOND)
 
-    @property
+    @functools.cached_property
     def weekday(self) -> ColumnBase:
         # pandas counts Monday-Sunday as 0-6
         # while libcudf counts Monday-Sunday as 1-7
         result = self._get_dt_field(plc.datetime.DatetimeComponent.WEEKDAY)
         return result - result.dtype.type(1)
 
-    @property
+    @functools.cached_property
     @acquire_spill_lock()
     def day_of_year(self) -> ColumnBase:
         return type(self).from_pylibcudf(
             plc.datetime.day_of_year(self.to_pylibcudf(mode="read"))
         )
 
-    @property
+    @functools.cached_property
     def is_month_start(self) -> ColumnBase:
         return (self.day == 1).fillna(False)
 
-    @property
+    @functools.cached_property
     def is_month_end(self) -> ColumnBase:
         with acquire_spill_lock():
             last_day_col = type(self).from_pylibcudf(
@@ -356,17 +388,17 @@ class DatetimeColumn(column.ColumnBase):
             )
         return (self.day == last_day_col.day).fillna(False)  # type: ignore[attr-defined]
 
-    @property
+    @functools.cached_property
     def is_quarter_end(self) -> ColumnBase:
         last_month = self.month.isin([3, 6, 9, 12])
         return (self.is_month_end & last_month).fillna(False)
 
-    @property
+    @functools.cached_property
     def is_quarter_start(self) -> ColumnBase:
         first_month = self.month.isin([1, 4, 7, 10])
         return (self.is_month_start & first_month).fillna(False)
 
-    @property
+    @functools.cached_property
     def is_year_end(self) -> ColumnBase:
         day_of_year = self.day_of_year
         leap_dates = self.is_leap_year
@@ -375,18 +407,18 @@ class DatetimeColumn(column.ColumnBase):
         non_leap = day_of_year == 365
         return leap.copy_if_else(non_leap, leap_dates).fillna(False)
 
-    @property
+    @functools.cached_property
     @acquire_spill_lock()
     def is_leap_year(self) -> ColumnBase:
         return type(self).from_pylibcudf(
             plc.datetime.is_leap_year(self.to_pylibcudf(mode="read"))
         )
 
-    @property
+    @functools.cached_property
     def is_year_start(self) -> ColumnBase:
         return (self.day_of_year == 1).fillna(False)
 
-    @property
+    @functools.cached_property
     @acquire_spill_lock()
     def days_in_month(self) -> ColumnBase:
         return type(self).from_pylibcudf(
@@ -417,7 +449,7 @@ class DatetimeColumn(column.ColumnBase):
         Return a CuPy representation of the DateTimeColumn.
         """
         raise NotImplementedError(
-            "DateTime Arrays is not yet implemented in cudf"
+            "DateTime Arrays is not yet implemented in cupy"
         )
 
     def element_indexing(self, index: int):
@@ -922,12 +954,12 @@ class DatetimeColumn(column.ColumnBase):
         else:
             return False
 
-    def _with_type_metadata(self, dtype):
+    def _with_type_metadata(self, dtype) -> DatetimeColumn:
         if isinstance(dtype, pd.DatetimeTZDtype):
             return DatetimeTZColumn(
                 data=self.base_data,  # type: ignore[arg-type]
                 dtype=dtype,
-                mask=self.base_mask,
+                mask=self.base_mask,  # type: ignore[arg-type]
                 size=self.size,
                 offset=self.offset,
                 null_count=self.null_count,
@@ -1003,7 +1035,7 @@ class DatetimeColumn(column.ColumnBase):
         tz: str | None,
         ambiguous: Literal["NaT"] = "NaT",
         nonexistent: Literal["NaT"] = "NaT",
-    ):
+    ) -> DatetimeColumn:
         if tz is None:
             return self.copy()
         ambiguous, nonexistent = check_ambiguous_and_nonexistent(
@@ -1090,6 +1122,13 @@ class DatetimeTZColumn(DatetimeColumn):
             children=children,
         )
 
+    def _clear_cache(self) -> None:
+        super()._clear_cache()
+        try:
+            del self._local_time
+        except AttributeError:
+            pass
+
     @staticmethod
     def _validate_dtype_instance(
         dtype: pd.DatetimeTZDtype,
@@ -1121,25 +1160,24 @@ class DatetimeTZColumn(DatetimeColumn):
         return self.dtype.unit
 
     @property
-    def _utc_time(self):
+    def _utc_time(self) -> DatetimeColumn:
         """Return UTC time as naive timestamps."""
         return DatetimeColumn(
-            data=self.base_data,
+            data=self.base_data,  # type: ignore[arg-type]
             dtype=_get_base_dtype(self.dtype),
-            mask=self.base_mask,
+            mask=self.base_mask,  # type: ignore[arg-type]
             size=self.size,
             offset=self.offset,
             null_count=self.null_count,
         )
 
-    @property
-    def _local_time(self):
+    @functools.cached_property
+    def _local_time(self) -> DatetimeColumn:
         """Return the local time as naive timestamps."""
         transition_times, offsets = get_tz_data(str(self.dtype.tz))
         base_dtype = _get_base_dtype(self.dtype)
-        transition_times = transition_times.astype(base_dtype)
         indices = (
-            transition_times.searchsorted(
+            transition_times.astype(base_dtype).searchsorted(
                 self.astype(base_dtype), side="right"
             )
             - 1
@@ -1176,7 +1214,7 @@ class DatetimeTZColumn(DatetimeColumn):
             )
         )
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         # Arrow prints the UTC timestamps, but we want to print the
         # local timestamps:
         arr = self._local_time.to_arrow().cast(
@@ -1186,7 +1224,9 @@ class DatetimeTZColumn(DatetimeColumn):
             f"{object.__repr__(self)}\n{arr.to_string()}\ndtype: {self.dtype}"
         )
 
-    def tz_localize(self, tz: str | None, ambiguous="NaT", nonexistent="NaT"):
+    def tz_localize(
+        self, tz: str | None, ambiguous="NaT", nonexistent="NaT"
+    ) -> DatetimeColumn:
         if tz is None:
             return self._local_time
         ambiguous, nonexistent = check_ambiguous_and_nonexistent(
@@ -1197,14 +1237,14 @@ class DatetimeTZColumn(DatetimeColumn):
             "Use `tz_convert` to convert between time zones."
         )
 
-    def tz_convert(self, tz: str | None):
+    def tz_convert(self, tz: str | None) -> DatetimeColumn:
         if tz is None:
             return self._utc_time
         elif tz == str(self.dtype.tz):
             return self.copy()
         utc_time = self._utc_time
         return type(self)(
-            data=utc_time.base_data,
+            data=utc_time.base_data,  # type: ignore[arg-type]
             dtype=pd.DatetimeTZDtype(self.time_unit, tz),
             mask=utc_time.base_mask,
             size=utc_time.size,

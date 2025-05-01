@@ -3068,3 +3068,51 @@ def test_construct_all_pd_NA_with_dtype(nan_as_null):
     )
     expected = cudf.Series(pa.array([None, None], type=pa.float64()))
     assert_eq(result, expected)
+
+
+@pytest.mark.parametrize(
+    "dtype",
+    [
+        "int8",
+        "int16",
+        "int32",
+        "int64",
+        "uint8",
+        "uint16",
+        "uint32",
+        "uint64",
+        "float32",
+        "float64",
+        "bool",
+    ],
+)
+@pytest.mark.parametrize("has_nulls", [False, True])
+@pytest.mark.parametrize("use_na_value", [False, True])
+def test_series_to_cupy(dtype, has_nulls, use_na_value):
+    size = 10
+    if dtype == "bool":
+        np_data = np.array([True, False] * (size // 2), dtype=bool)
+    else:
+        np_data = np.arange(size, dtype=dtype)
+
+    if has_nulls:
+        np_data = np_data.astype("object")
+        np_data[::2] = None
+
+    sr = cudf.Series(np_data, dtype=dtype)
+
+    if not has_nulls:
+        assert_eq(sr.values, cp.asarray(sr))
+
+    if has_nulls and not use_na_value:
+        with pytest.raises(ValueError, match="Column must have no nulls"):
+            sr.to_cupy()
+        return
+
+    na_value = {
+        "bool": False,
+        "float32": 0.0,
+        "float64": 0.0,
+    }.get(dtype, 0)
+    expected = cp.asarray(sr.fillna(na_value)) if has_nulls else cp.asarray(sr)
+    assert_eq(sr.to_cupy(na_value=na_value), expected)
