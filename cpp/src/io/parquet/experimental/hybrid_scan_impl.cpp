@@ -97,7 +97,8 @@ void hybrid_scan_reader_impl::setup_page_index(
   _metadata->setup_page_index(page_index_bytes);
 }
 
-void impl::select_columns(read_mode read_mode, parquet_reader_options const& options)
+void hybrid_scan_reader_impl::select_columns(read_mode read_mode,
+                                             parquet_reader_options const& options)
 {
   // Strings may be returned as either string or categorical columns
   auto const strings_to_categorical = options.is_enabled_convert_strings_to_categories();
@@ -219,11 +220,12 @@ std::vector<std::vector<size_type>> hybrid_scan_reader_impl::filter_row_groups_w
                                                          stream);
 }
 
-std::pair<std::unique_ptr<cudf::column>, std::vector<std::vector<bool>>>
-impl::filter_data_pages_with_stats(cudf::host_span<std::vector<size_type> const> row_group_indices,
-                                   parquet_reader_options const& options,
-                                   rmm::cuda_stream_view stream,
-                                   rmm::device_async_resource_ref mr)
+std::pair<std::unique_ptr<cudf::column>, std::vector<thrust::host_vector<bool>>>
+hybrid_scan_reader_impl::filter_data_pages_with_stats(
+  cudf::host_span<std::vector<size_type> const> row_group_indices,
+  parquet_reader_options const& options,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
 {
   return {};
 }
