@@ -5399,7 +5399,7 @@ def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
     4           19.9
     5           <NA>
     dtype: float64
-    >>> cudf.isclose(s1, s2)
+    >>> cudf.isclose(s1, s2)  # doctest: +SKIP
     0     True
     1     True
     2     True
@@ -5407,7 +5407,7 @@ def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
     4    False
     5    False
     dtype: bool
-    >>> cudf.isclose(s1, s2, equal_nan=True)
+    >>> cudf.isclose(s1, s2, equal_nan=True)  # doctest: +SKIP
     0     True
     1     True
     2     True
@@ -5415,7 +5415,7 @@ def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
     4    False
     5    False
     dtype: bool
-    >>> cudf.isclose(s1, s2, equal_nan=False)
+    >>> cudf.isclose(s1, s2, equal_nan=False)  # doctest: +SKIP
     0     True
     1     True
     2     True
@@ -5424,7 +5424,10 @@ def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
     5    False
     dtype: bool
     """
-
+    warnings.warn(
+        "cudf.isclose is deprecated. Use cupy.isclose instead.",
+        FutureWarning,
+    )
     if not can_convert_to_column(a):
         raise TypeError(
             f"Parameter `a` is expected to be a "
