@@ -8,6 +8,7 @@ from __future__ import annotations
 import dataclasses
 import enum
 import json
+import os
 from typing import TYPE_CHECKING, Literal
 
 if TYPE_CHECKING:
@@ -99,6 +100,38 @@ class ParquetOptions:
             raise TypeError("pass_read_limit must be an int")
 
 
+def default_blocksize(scheduler: str) -> int:
+    """Return the default blocksize."""
+    try:
+        # Use PyNVML to find the worker device size.
+        import pynvml
+
+        pynvml.nvmlInit()
+        index = os.environ.get("CUDA_VISIBLE_DEVICES", "0").split(",")[0]
+        if index and not index.isnumeric():  # pragma: no cover
+            # This means index is UUID. This works for both MIG and non-MIG device UUIDs.
+            handle = pynvml.nvmlDeviceGetHandleByUUID(str.encode(index))
+        else:
+            # This is a device index
+            handle = pynvml.nvmlDeviceGetHandleByIndex(int(index))
+        device_size = pynvml.nvmlDeviceGetMemoryInfo(handle).total
+
+    except ValueError:  # pragma: no cover
+        # Fall back to a conservative 8GiB default
+        device_size = 8 * 1024**3
+
+    if scheduler == "distributed":
+        # Distributed execution requires a conservative
+        # blocksize for now.
+        blocksize = int(device_size * 0.025)
+    else:
+        # Single-GPU execution can lean on UVM to
+        # support a much larger blocksize.
+        blocksize = int(device_size * 0.0625)
+
+    return max(blocksize, 1_000_000_000)
+
+
 @dataclasses.dataclass(frozen=True, eq=True)
 class StreamingExecutor:
     """
@@ -149,9 +182,9 @@ class StreamingExecutor:
     fallback_mode: StreamingFallbackMode = StreamingFallbackMode.WARN
     max_rows_per_partition: int = 1_000_000
     cardinality_factor: dict[str, float] = dataclasses.field(default_factory=dict)
-    parquet_blocksize: int = 1_000_000_000
+    parquet_blocksize: int = 0
     groupby_n_ary: int = 32
-    broadcast_join_limit: int = 4
+    broadcast_join_limit: int = 0
     shuffle_method: ShuffleMethod | None = None
 
     def __post_init__(self) -> None:
@@ -164,6 +197,17 @@ class StreamingExecutor:
         object.__setattr__(
             self, "fallback_mode", StreamingFallbackMode(self.fallback_mode)
         )
+        if self.parquet_blocksize == 0:
+            object.__setattr__(
+                self, "parquet_blocksize", default_blocksize(self.scheduler)
+            )
+        if self.broadcast_join_limit == 0:
+            object.__setattr__(
+                self,
+                "broadcast_join_limit",
+                # Usually better to avoid shuffling for single gpu
+                2 if self.scheduler == "distributed" else 32,
+            )
         object.__setattr__(self, "scheduler", Scheduler(self.scheduler))
         if self.shuffle_method is not None:
             object.__setattr__(
