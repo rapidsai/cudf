@@ -839,6 +839,9 @@ table_with_metadata hybrid_scan_reader_impl::materialize_payload_columns(
   parquet_reader_options const& options,
   rmm::cuda_stream_view stream)
 {
+  CUDF_EXPECTS(row_mask.null_count() == 0,
+               "Row mask must not have any nulls when materializing payload column");
+
   reset_internal_state();
   select_columns(read_mode::PAYLOAD_COLUMNS, options);
 
@@ -1019,16 +1022,9 @@ table_with_metadata hybrid_scan_reader_impl::finalize_output(
                  "Predicate filter should return a boolean");
     CUDF_EXPECTS(row_mask.size() == read_table->num_rows(),
                  "Encountered invalid sized row mask to apply");
-    // If we have at least one non-null row in the row mask, apply the boolean mask.
-    if (row_mask.null_count() < row_mask.size()) {
-      auto output_table =
-        cudf::detail::apply_boolean_mask(read_table->view(), row_mask, _stream, _mr);
-      return {std::move(output_table), std::move(out_metadata)};
-    }
-    // Otherwise, return the input table as is.
-    else {
-      return {std::move(read_table), std::move(out_metadata)};
-    }
+    auto output_table =
+      cudf::detail::apply_boolean_mask(read_table->view(), row_mask, _stream, _mr);
+    return {std::move(output_table), std::move(out_metadata)};
   }
 }
 
