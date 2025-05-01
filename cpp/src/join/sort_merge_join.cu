@@ -84,8 +84,8 @@ class merge {
   enum class bound_type { UPPER, LOWER };
 
   struct row_comparator {
-    row_comparator(table_device_view const lhs,
-                   table_device_view const rhs,
+    row_comparator(table_device_view const& lhs,
+                   table_device_view const& rhs,
                    device_span<detail::dremel_device_view const> lhs_dremel,
                    device_span<detail::dremel_device_view const> rhs_dremel,
                    bound_type* d_ptr)
@@ -236,8 +236,8 @@ merge<LargerIterator, SmallerIterator>::operator()(rmm::cuda_stream_view stream,
     [nonzero_matches = nonzero_matches.begin(),
      match_counts    = match_counts.begin(),
      smaller_indices = smaller_indices.begin()] __device__(auto idx, auto lb) {
-      auto lhsidx          = nonzero_matches[idx];
-      auto pos             = match_counts[lhsidx];
+      auto const lhs_idx   = nonzero_matches[idx];
+      auto const pos       = match_counts[lhs_idx];
       smaller_indices[pos] = lb;
     });
   thrust::lower_bound(rmm::exec_policy_nosync(stream),
