@@ -87,10 +87,20 @@ def register() -> None:
             metadata, gpudata = frames
             return Column.deserialize(header, (metadata, plc.gpumemoryview(gpudata)))
 
-    @dask_serialize.register(Column)
-    def _(
+    @overload
+    def dask_serialize_column_or_frame(
+        x: DataFrame,
+    ) -> tuple[DataFrameHeader, tuple[memoryview, memoryview]]: ...
+
+    @overload
+    def dask_serialize_column_or_frame(
         x: Column,
-    ) -> tuple[ColumnHeader, tuple[memoryview, memoryview]]:
+    ) -> tuple[ColumnHeader, tuple[memoryview, memoryview]]: ...
+
+    @dask_serialize.register(Column)
+    def dask_serialize_column_or_frame(
+        x: DataFrame | Column,
+    ) -> tuple[DataFrameHeader | ColumnHeader, tuple[memoryview, memoryview]]:
         with log_errors():
             header, (metadata, gpudata) = x.serialize()
 
@@ -119,6 +129,13 @@ def register() -> None:
     def _(
         x: DataFrame, context: Mapping[str, Any] | None = None
     ) -> tuple[DataFrameHeader, tuple[memoryview, memoryview]]:
+
+        # Do regular serialization if no staging buffer is provided.
+        if context is None or "staging_device_buffer" not in context:
+            return dask_serialize_column_or_frame(x)
+
+        # If a staging buffer is provided, we use `ChunkedPack` to
+        # serialize the dataframe using the provided staging buffer.
         with log_errors():
             # Keyword arguments for `Column.__init__`.
             columns_kwargs: list[ColumnOptions] = [
@@ -134,32 +151,12 @@ def register() -> None:
                 "columns_kwargs": columns_kwargs,
                 "frame_count": 2,
             }
-
             stream = DEFAULT_STREAM
             device_mr = rmm.mr.get_current_device_resource()
-            default_staging_size = 2**25  # default 32 MiB
-
-            if context is not None and "staging_device_buffer" in context:
-                buf: rmm.DeviceBuffer = context["staging_device_buffer"]
-                frame = plc.contiguous_split.ChunkedPack.create(
-                    x.table, buf.nbytes, stream, device_mr
-                ).pack_to_host(buf)
-                return header, frame
-
-            staging_buf: rmm.DeviceBuffer
-            try:
-                staging_buf = rmm.DeviceBuffer(
-                    size=default_staging_size, stream=stream, mr=device_mr
-                )
-            except MemoryError:
-                staging_buf = rmm.DeviceBuffer(
-                    size=default_staging_size,
-                    stream=stream,
-                    mr=rmm.mr.ManagedMemoryResource(),
-                )
+            buf: rmm.DeviceBuffer = context["staging_device_buffer"]
             frame = plc.contiguous_split.ChunkedPack.create(
-                x.table, default_staging_size, stream, device_mr
-            ).pack_to_host(staging_buf)
+                x.table, buf.nbytes, stream, device_mr
+            ).pack_to_host(buf)
             return header, frame
 
     @dask_deserialize.register(DataFrame)
