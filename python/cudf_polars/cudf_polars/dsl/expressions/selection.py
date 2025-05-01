@@ -14,8 +14,6 @@ from cudf_polars.containers import Column
 from cudf_polars.dsl.expressions.base import ExecutionContext, Expr
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
-
     from cudf_polars.containers import DataFrame
 
 __all__ = ["Filter", "Gather"]
@@ -31,16 +29,11 @@ class Gather(Expr):
         self.is_pointwise = False
 
     def do_evaluate(
-        self,
-        df: DataFrame,
-        *,
-        context: ExecutionContext = ExecutionContext.FRAME,
-        mapping: Mapping[Expr, Column] | None = None,
+        self, df: DataFrame, *, context: ExecutionContext = ExecutionContext.FRAME
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
         values, indices = (
-            child.evaluate(df, context=context, mapping=mapping)
-            for child in self.children
+            child.evaluate(df, context=context) for child in self.children
         )
         lo, hi = plc.reduce.minmax(indices.obj)
         lo = plc.interop.to_arrow(lo).as_py()
@@ -68,20 +61,13 @@ class Filter(Expr):
     def __init__(self, dtype: plc.DataType, values: Expr, indices: Expr):
         self.dtype = dtype
         self.children = (values, indices)
-        self.is_pointwise = True
+        self.is_pointwise = False
 
     def do_evaluate(
-        self,
-        df: DataFrame,
-        *,
-        context: ExecutionContext = ExecutionContext.FRAME,
-        mapping: Mapping[Expr, Column] | None = None,
+        self, df: DataFrame, *, context: ExecutionContext = ExecutionContext.FRAME
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
-        values, mask = (
-            child.evaluate(df, context=context, mapping=mapping)
-            for child in self.children
-        )
+        values, mask = (child.evaluate(df, context=context) for child in self.children)
         table = plc.stream_compaction.apply_boolean_mask(
             plc.Table([values.obj]), mask.obj
         )
