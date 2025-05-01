@@ -772,6 +772,10 @@ add_library(
   src/text/wordpiece_tokenize.cu
   src/transform/bools_to_mask.cu
   src/transform/compute_column.cu
+  src/transform/compute_column_kernel_complex.cu
+  src/transform/compute_column_kernel_null_complex.cu
+  src/transform/compute_column_kernel_null_primitive.cu
+  src/transform/compute_column_kernel_primitive.cu
   src/transform/encode.cu
   src/transform/mask_to_bools.cu
   src/transform/nans_to_nulls.cu
@@ -833,6 +837,18 @@ set_target_properties(
              POSITION_INDEPENDENT_CODE ON
              INTERFACE_POSITION_INDEPENDENT_CODE ON
              LINK_FLAGS "-Wl,--exclude-libs,libzstd.a"
+)
+
+# Export the compiler flags and definitions so the downstream applications can optionally retrieve
+# and use them.
+set_target_properties(
+  cudf
+  PROPERTIES EXPORT_PROPERTIES
+             "CUDF_CXX_FLAGS;CUDF_CUDA_FLAGS;CUDF_CXX_DEFINITIONS;CUDF_CUDA_DEFINITIONS"
+             CUDF_CXX_FLAGS "${CUDF_CXX_FLAGS}"
+             CUDF_CUDA_FLAGS "${CUDF_CUDA_FLAGS}"
+             CUDF_CXX_DEFINITIONS "${CUDF_CXX_DEFINITIONS}"
+             CUDF_CUDA_DEFINITIONS "${CUDF_CUDA_DEFINITIONS}"
 )
 
 # Note: This must come before the target_compile_options below so that the function can modify the
@@ -939,7 +955,11 @@ target_compile_definitions(cudf PRIVATE $<$<BOOL:${CUDF_KVIKIO_REMOTE_IO}>:CUDF_
 
 # Remove this after upgrading to a CCCL that has a proper CMake option. See
 # https://github.com/NVIDIA/cccl/pull/2844
-target_compile_definitions(cudf PRIVATE THRUST_FORCE_32_BIT_OFFSET_TYPE=1 CCCL_AVOID_SORT_UNROLL=1)
+target_compile_definitions(
+  cudf
+  PUBLIC _LIBCUDACXX_ATOMIC_UNSAFE_AUTOMATIC_STORAGE=1
+  PRIVATE THRUST_FORCE_32_BIT_OFFSET_TYPE=1 CCCL_AVOID_SORT_UNROLL=1
+)
 
 # Compile stringified JIT sources first
 add_dependencies(cudf jitify_preprocess_run)
