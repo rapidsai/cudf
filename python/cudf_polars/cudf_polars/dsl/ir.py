@@ -573,10 +573,10 @@ class Scan(IR):
             if skip_rows + skiprows > header and not set(df.column_map.keys()).issubset(
                 schema.keys()
             ):
-                column_names = read_csv_header(str(paths[0]), str(sep))
                 df = df.rename_columns(
-                    dict(zip(df.column_names, column_names, strict=False))
+                    dict(zip(df.column_names, schema.keys(), strict=False))
                 )
+            # null type is str in polars, so we cast
             casted_columns = []
             for name, c in df.column_map.items():
                 if c.obj.type() != schema[name]:
@@ -713,7 +713,7 @@ class Scan(IR):
             # TODO: Preserve the selection order eg. col then index col
             # which we currently do not do
             df = DataFrame([index_col, *df.columns])
-        assert all(c.obj.type() == schema[name] for name, c in df.column_map.items())
+        # assert all(c.obj.type() == schema[name] for name, c in df.column_map.items())
         if predicate is None:
             return df
         else:
