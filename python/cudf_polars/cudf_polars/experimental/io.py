@@ -259,6 +259,7 @@ class SplitScan(IR):
 
 def _sample_pq_statistics(ir: Scan) -> dict[str, np.floating[T]]:
     import itertools
+
     import numpy as np
 
     # Use average total_uncompressed_size of three files
