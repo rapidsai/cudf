@@ -98,3 +98,13 @@ TEST_F(TextDedupTest, SuffixArray)
     cudf::column_view(cudf::device_span<cudf::size_type const>(results->data(), results->size()));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, col_view);
 }
+
+TEST_F(TextDedupTest, Errors)
+{
+  auto input = cudf::test::strings_column_wrapper({"0123456789"});
+  auto sv    = cudf::strings_column_view(input);
+
+  EXPECT_THROW(nvtext::substring_duplicates(sv, 50), std::invalid_argument);
+  EXPECT_THROW(nvtext::substring_duplicates(sv, 5), std::invalid_argument);
+  EXPECT_THROW(nvtext::build_suffix_array(sv, 50), std::invalid_argument);
+}

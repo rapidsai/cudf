@@ -259,9 +259,11 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> build_suffix_array(
 
   auto const d_input_chars = input.chars_begin(stream) + first_offset;
   auto const chars_size    = last_offset - first_offset;
-  CUDF_EXPECTS(min_width < chars_size, "min_width value cannot exceed the input size");
+  CUDF_EXPECTS(
+    min_width < chars_size, "min_width value cannot exceed the input size", std::invalid_argument);
   CUDF_EXPECTS(chars_size < std::numeric_limits<cudf::size_type>::max(),
-               "Input size cannot exceed the maximum integer size limit of 2GB");
+               "Input size cannot exceed the maximum integer size limit of 2GB",
+               std::invalid_argument);
 
   auto const chars_span = cudf::device_span<char const>(d_input_chars, chars_size);
   return build_suffix_array_fn(chars_span, min_width, stream, mr);
@@ -272,16 +274,18 @@ std::unique_ptr<cudf::column> substring_duplicates(cudf::strings_column_view con
                                                    rmm::cuda_stream_view stream,
                                                    rmm::device_async_resource_ref mr)
 {
-  CUDF_EXPECTS(min_width > 8, "min_width should be at least 8");
+  CUDF_EXPECTS(min_width > 8, "min_width should be at least 8", std::invalid_argument);
 
   auto d_strings = cudf::column_device_view::create(input.parent(), stream);
   auto [first_offset, last_offset] =
     cudf::strings::detail::get_first_and_last_offset(input, stream);
   auto const d_input_chars = input.chars_begin(stream) + first_offset;
   auto const chars_size    = last_offset - first_offset;
-  CUDF_EXPECTS(min_width < chars_size, "min_width value cannot exceed the input size");
+  CUDF_EXPECTS(
+    min_width < chars_size, "min_width value cannot exceed the input size", std::invalid_argument);
   CUDF_EXPECTS(chars_size < std::numeric_limits<cudf::size_type>::max(),
-               "Input size cannot exceed the maximum integer size limit of 2GB");
+               "Input size cannot exceed the maximum integer size limit of 2GB",
+               std::invalid_argument);
 
   auto const chars_span = cudf::device_span<char const>(d_input_chars, chars_size);
 
