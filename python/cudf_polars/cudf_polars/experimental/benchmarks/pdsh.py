@@ -29,7 +29,6 @@ import pynvml
 
 import polars as pl
 
-from cudf_polars.dsl.ir import Union
 from cudf_polars.dsl.translate import Translator
 from cudf_polars.experimental.parallel import evaluate_streaming, lower_ir_graph
 from cudf_polars.utils.config import ConfigOptions
@@ -220,13 +219,40 @@ def _explain(
     offset: str = "",
 ) -> str:
     """Print the physical plan for an IR node."""
+    from cudf_polars.dsl.ir import GroupBy, Join, Projection, Scan, Select, Sort, Union
+    from cudf_polars.experimental.io import SplitScan
+
     val = offset
     count = partition_info[ir].count
-    if isinstance(ir, Union):
-        child_type = type(ir.children[0]).__name__.upper()
-        val += f"UNION ({count} x {child_type})\n"
+    if isinstance(ir, Union) and isinstance(ir.children[0], (Scan, SplitScan)):
+        scan = ir.children[0]
+        if isinstance(scan, SplitScan):
+            name = "SPLITSCAN"
+            scan = scan.base_scan
+        else:
+            name = "SCAN"
+        schema = tuple(ir.schema)
+        path = "/".join(scan.paths[0].split("/")[-2:])
+        val += f"UNION [{count} x {name} {schema} {path} ...]\n"
     else:
-        val += f"{type(ir).__name__.upper()} ({count})\n"
+        if isinstance(ir, GroupBy):
+            keys = tuple(ne.name for ne in ir.keys)
+            val += f"GROUPBY {keys} [{count}]\n"
+        elif isinstance(ir, Join):
+            left_on = tuple(ne.name for ne in ir.left_on)
+            right_on = tuple(ne.name for ne in ir.right_on)
+            val += f"JOIN {ir.options[0]} {left_on} {right_on} [{count}]\n"
+        elif isinstance(ir, Projection):
+            schema = tuple(ir.schema)
+            val += f"PROJECTION {schema} [{count}]\n"
+        elif isinstance(ir, Select):
+            schema = tuple(ir.schema)
+            val += f"SELECT {schema} [{count}]\n"
+        elif isinstance(ir, Sort):
+            by = tuple(ne.name for ne in ir.by)
+            val += f"SORT {by} [{count}]\n"
+        else:
+            val += f"{type(ir).__name__.upper()} [{count}]\n"
         for child in ir.children:
             val += _explain(child, partition_info, offset=offset + "  ")
     return val
@@ -1216,7 +1242,7 @@ def run(args: argparse.Namespace) -> None:
             if args.print_results:
                 print(result)
             if args.explain:
-                print(f"Query {q_id} - Physical plan")
+                print(f"\nQuery {q_id} - Physical plan\n")
                 print(explain_query(q, engine))
             print(f"Ran query={q_id} in {record.duration:0.4f}s", flush=True)
             records[q_id].append(record)
