@@ -767,7 +767,7 @@ cdef class Column:
             c_result = make_unique[column](self.view())
         return Column.from_libcudf(move(c_result))
 
-    cpdef size_type device_buffer_size(self):
+    cpdef uint64_t device_buffer_size(self):
         """
         The total size of the device buffers used by the Column.
 
