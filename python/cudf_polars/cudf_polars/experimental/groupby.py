@@ -29,7 +29,7 @@ if TYPE_CHECKING:
 
 
 # Supported multi-partition aggregations
-_GB_AGG_SUPPORTED = ("sum", "count", "mean", "min", "max")
+_GB_AGG_SUPPORTED = ("sum", "count", "mean", "min", "max", "n_unique")
 
 
 def combine(
@@ -90,8 +90,8 @@ def decompose(
         reduction = [NamedExpr(name, Agg(dtype, "sum", None, Col(dtype, name)))]
         return selection, aggregation, reduction
     if isinstance(expr, Agg):
-        if expr.name in ("sum", "count", "min", "max"):
-            if expr.name in ("sum", "count"):
+        if expr.name in ("sum", "count", "min", "max", "n_unique"):
+            if expr.name in ("sum", "count", "n_unique"):
                 aggfunc = "sum"
             else:
                 aggfunc = expr.name
