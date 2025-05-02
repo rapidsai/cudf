@@ -546,6 +546,31 @@ cdef class Column:
             c_result = make_column_from_scalar(dereference(c_scalar), size)
         return Column.from_libcudf(move(c_result))
 
+    cpdef Scalar to_scalar(self):
+        """
+        Return the first value of 1-element column as a Scalar.
+
+        Raises
+        ------
+        ValueError
+            If the column has more than one row.
+
+        Returns
+        -------
+        Scalar
+            A Scalar representing the only value in the column, including nulls.
+        """
+        if self._size != 1:
+            raise ValueError("to_scalar only works for columns of size 1")
+
+        cdef column_view cv = self.view()
+        cdef unique_ptr[scalar] result
+
+        with nogil:
+            result = get_element(cv, 0)
+
+        return Scalar.from_libcudf(move(result))
+
     @staticmethod
     def all_null_like(Column like, size_type size):
         """Create an all null column from a template.

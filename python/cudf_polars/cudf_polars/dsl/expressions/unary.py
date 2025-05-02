@@ -236,10 +236,9 @@ class UnaryFunction(Expr):
             if isinstance(arg, plc.Scalar) and dtypes.can_cast(
                 column.obj.type(), arg.type()
             ):
-                # TODO: Do the cast without arrow
-                arg = plc.Scalar.from_py(
-                    plc.interop.to_arrow(arg).as_py(), column.obj.type()
-                )
+                arg = plc.unary.cast(
+                    plc.Column.from_scalar(arg, 1), column.obj.type()
+                ).to_scalar()
             return Column(plc.replace.replace_nulls(column.obj, arg))
         elif self.name in self._OP_MAPPING:
             column = self.children[0].evaluate(df, context=context)
