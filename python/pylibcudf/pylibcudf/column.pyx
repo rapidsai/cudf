@@ -781,7 +781,7 @@ cdef class Column:
         -------
         Number of bytes.
         """
-        cdef size_type ret = 0
+        cdef uint64_t ret = 0
         if self.data() is not None:
             ret += self.data().nbytes
         if self.null_mask() is not None:
