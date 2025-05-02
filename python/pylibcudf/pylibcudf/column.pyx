@@ -783,9 +783,9 @@ cdef class Column:
         """
         cdef uint64_t ret = 0
         if self.data() is not None:
-            ret += self.data().nbytes
+            ret += self.data().buffer_size
         if self.null_mask() is not None:
-            ret += self.null_mask().nbytes
+            ret += self.null_mask().buffer_size
         if self.children() is not None:
             for child in self.children():
                 ret += (<Column?>child).device_buffer_size()

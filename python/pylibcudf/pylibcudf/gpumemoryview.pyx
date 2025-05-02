@@ -27,6 +27,14 @@ cdef class gpumemoryview:
         # TODO: Need to respect readonly
         self.ptr = cai["data"][0]
 
+        # Compute and save the buffer size.
+        shape, typestr = cai["shape"], cai["typestr"]
+        # Get element size from typestr, format is two character specifying
+        # the type and the latter part is the number of bytes. E.g., '<f4' for
+        # 32-bit (4-byte) float.
+        element_size = int(typestr[2:])
+        self.buffer_size = functools.reduce(operator.mul, shape) * element_size
+
     @property
     def __cuda_array_interface__(self):
         return self.cai
@@ -36,14 +44,6 @@ cdef class gpumemoryview:
 
     @property
     def nbytes(self):
-        cai = self.obj.__cuda_array_interface__
-        shape, typestr = cai["shape"], cai["typestr"]
-
-        # Get element size from typestr, format is two character specifying
-        # the type and the latter part is the number of bytes. E.g., '<f4' for
-        # 32-bit (4-byte) float.
-        element_size = int(typestr[2:])
-
-        return functools.reduce(operator.mul, shape) * element_size
+        return self.buffer_size
 
     __hash__ = None
