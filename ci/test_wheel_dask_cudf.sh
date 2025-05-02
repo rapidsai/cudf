@@ -16,17 +16,6 @@ rapids-logger "Install dask_cudf, cudf, pylibcudf, and test requirements"
 # generate constraints (possibly pinning to oldest support versions of dependencies)
 rapids-generate-pip-constraints py_test_dask_cudf ./constraints.txt
 
-set -x
-AUDITWHEEL_ARCH="$(arch)"
-export AUDITWHEEL_ARCH
-AUDITWHEEL_PLAT="manylinux_2_28_$(arch)"
-export AUDITWHEEL_PLAT
-LIBKVIKIO_WHL="libkvikio_${RAPIDS_PY_CUDA_SUFFIX}-25.6.0a32-py3-none-${AUDITWHEEL_PLAT}.whl"
-LIBKVIKIO_TARBALL="kvikio_wheel_cpp_libkvikio_${RAPIDS_PY_CUDA_SUFFIX}_${AUDITWHEEL_ARCH}.tar.gz"
-LIBKVIKIO_DIR=$(rapids-get-artifact "ci/kvikio/pull-request/702/7f957eb/${LIBKVIKIO_TARBALL}")
-echo "libkvikio-${RAPIDS_PY_CUDA_SUFFIX} @ file://${LIBKVIKIO_DIR}/${LIBKVIKIO_WHL}" >> ./constraints.txt
-set +x
-
 # echo to expand wildcard before adding `[extra]` requires for pip
 rapids-pip-retry install \
   -v \

@@ -17,16 +17,6 @@ rapids-dependency-file-generator \
   --matrix "cuda=${RAPIDS_CUDA_VERSION%.*};arch=$(arch);py=${RAPIDS_PY_VERSION};cuda_suffixed=true" \
 | tee /tmp/requirements-build.txt
 
-
-set -x
-#kvikio_wheel_cpp_libkvikio_cu11_aarch64.tar.gz
-LIBKVIKIO_WHL="libkvikio_${RAPIDS_PY_CUDA_SUFFIX}-25.6.0a32-py3-none-${AUDITWHEEL_PLAT}.whl"
-LIBKVIKIO_TARBALL="kvikio_wheel_cpp_libkvikio_${RAPIDS_PY_CUDA_SUFFIX}_${AUDITWHEEL_ARCH}.tar.gz"
-LIBKVIKIO_DIR=$(rapids-get-artifact "ci/kvikio/pull-request/702/7f957eb/${LIBKVIKIO_TARBALL}")
-echo "libkvikio-${RAPIDS_PY_CUDA_SUFFIX} @ file://${LIBKVIKIO_DIR}/${LIBKVIKIO_WHL}" > /tmp/constraints.txt
-export PIP_CONSTRAINT="/tmp/constraints.txt"
-set +x
-
 rapids-logger "Installing build requirements"
 rapids-pip-retry install \
     -v \
@@ -37,6 +27,10 @@ rapids-pip-retry install \
 # 0 really means "add --no-build-isolation" (ref: https://github.com/pypa/pip/issues/5735)
 export PIP_NO_BUILD_ISOLATION=0
 
+# TODO(nvcomp): when `nvcomp` supports Python 3.13 and we de-vendor `nvcomp` from `kvikio`
+# this should be switched back to using the nvcomp runtime wheel
+# https://github.com/rapidsai/build-planning/issues/171
+# export SKBUILD_CMAKE_ARGS="-DUSE_NVCOMP_RUNTIME_WHEEL=ON"
 export SKBUILD_CMAKE_ARGS="-DUSE_NVCOMP_FROM_LIBKVIKIO_WHEEL=ON"
 ./ci/build_wheel.sh "${package_name}" "${package_dir}"
 

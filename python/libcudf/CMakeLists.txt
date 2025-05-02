@@ -23,6 +23,9 @@ project(
 )
 
 option(USE_NVCOMP_RUNTIME_WHEEL "Use the nvcomp wheel at runtime instead of the system library" OFF)
+
+# TODO(nvcomp): when `nvcomp` supports Python 3.13 and we de-vendor `nvcomp` from `kvikio` this
+# option should be removed https://github.com/rapidsai/build-planning/issues/171
 option(USE_NVCOMP_FROM_LIBKVIKIO_WHEEL "Use nvcomp bundled with libkvikio" OFF)
 
 # Check if cudf is already available. If so, it is the user's responsibility to ensure that the
@@ -39,6 +42,9 @@ set(BUILD_TESTS OFF)
 set(BUILD_BENCHMARKS OFF)
 set(CUDF_BUILD_TESTUTIL OFF)
 set(CUDF_BUILD_STREAMS_TEST_UTIL OFF)
+
+# TODO(nvcomp): when `nvcomp` supports Python 3.13 and we de-vendor `nvcomp` from `kvikio` the
+# libkvikio branch should be removed
 if(USE_NVCOMP_RUNTIME_WHEEL OR USE_NVCOMP_FROM_LIBKVIKIO_WHEEL)
   set(CUDF_EXPORT_NVCOMP OFF)
 endif()
@@ -57,6 +63,8 @@ if(USE_NVCOMP_RUNTIME_WHEEL)
   )
 endif()
 
+# TODO(nvcomp): when `nvcomp` supports Python 3.13 and we de-vendor `nvcomp` from `kvikio` this
+# block should be removed
 if(USE_NVCOMP_FROM_LIBKVIKIO_WHEEL)
   set(rpaths "$ORIGIN/../../libkvikio/lib64")
   set_property(
