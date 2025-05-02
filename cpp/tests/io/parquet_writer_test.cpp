@@ -37,6 +37,22 @@
 
 using cudf::test::iterators::no_nulls;
 
+struct CompressionImplsTest : public ParquetWriterTest,
+                              public ::testing::WithParamInterface<std::string> {
+  CompressionImplsTest()
+  {
+    auto const val_to_set = GetParam();
+
+    setenv("LIBCUDF_HOST_COMPRESSION", "OFF", 1);
+    setenv("LIBCUDF_NVCOMP_POLICY", val_to_set.c_str(), 1);
+  }
+  ~CompressionImplsTest() override
+  {
+    unsetenv("LIBCUDF_HOST_COMPRESSION");
+    unsetenv("LIBCUDF_NVCOMP_POLICY");
+  }
+};
+
 template <typename mask_op_t>
 void test_durations(mask_op_t mask_op, bool use_byte_stream_split, bool arrow_schema)
 {
@@ -1334,15 +1350,15 @@ TEST_F(ParquetWriterTest, UserNullabilityInvalid)
   EXPECT_THROW(cudf::io::write_parquet(write_opts), cudf::logic_error);
 }
 
-TEST_F(ParquetWriterTest, CompStats)
+TEST_P(CompressionImplsTest, CompStats)
 {
-  auto table = create_random_fixed_table<int>(1, 100000, true);
+  auto table = create_random_fixed_table<int>(1, 55000, true);
 
   auto const stats = std::make_shared<cudf::io::writer_compression_statistics>();
 
-  std::vector<char> unused_buffer;
+  std::vector<char> buffer;
   cudf::io::parquet_writer_options opts =
-    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{&unused_buffer}, table->view())
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{&buffer}, table->view())
       .compression_statistics(stats);
   cudf::io::write_parquet(opts);
 
@@ -1350,9 +1366,15 @@ TEST_F(ParquetWriterTest, CompStats)
   EXPECT_EQ(stats->num_failed_bytes(), 0);
   EXPECT_EQ(stats->num_skipped_bytes(), 0);
   EXPECT_FALSE(std::isnan(stats->compression_ratio()));
+
+  cudf::io::parquet_reader_options in_opts =
+    cudf::io::parquet_reader_options::builder(cudf::io::source_info{buffer.data(), buffer.size()});
+  auto result = cudf::io::read_parquet(in_opts);
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, table->view());
 }
 
-TEST_F(ParquetWriterTest, CompStatsEmptyTable)
+TEST_P(CompressionImplsTest, CompStatsEmptyTable)
 {
   auto table_no_rows = create_random_fixed_table<int>(20, 0, false);
 
@@ -1367,6 +1389,10 @@ TEST_F(ParquetWriterTest, CompStatsEmptyTable)
 
   expect_compression_stats_empty(stats);
 }
+
+INSTANTIATE_TEST_CASE_P(BasicCompressionImplsTest,
+                        CompressionImplsTest,
+                        ::testing::Values("ALWAYS", "OFF"));
 
 TEST_F(ParquetWriterTest, SkipCompression)
 {
