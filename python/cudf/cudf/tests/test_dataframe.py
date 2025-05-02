@@ -32,7 +32,7 @@ from cudf.core._compat import (
     PANDAS_VERSION,
 )
 from cudf.core.buffer.spill_manager import get_global_manager
-from cudf.core.column import column
+from cudf.core.column.column import as_column
 from cudf.errors import MixedTypeError
 from cudf.testing import _utils as utils, assert_eq, assert_neq
 from cudf.testing._utils import (
@@ -1066,7 +1066,7 @@ def test_dataframe_to_string_with_masked_data():
     mask = np.zeros(1, dtype=cudf.utils.utils.mask_dtype)
     mask[0] = 0b00101101
 
-    masked = cudf.Series.from_masked_array(data, mask)
+    masked = cudf.Series._from_column(as_column(data).set_mask(mask))
     assert masked.null_count == 2
     df["c"] = masked
 
@@ -1339,7 +1339,6 @@ def test_dataframe_setitem_from_masked_object():
     ary[mask] = np.nan
 
     test1_null = cudf.Series(ary, nan_as_null=True)
-    assert test1_null.nullable
     assert test1_null.null_count == 20
     test1_nan = cudf.Series(ary, nan_as_null=False)
     assert test1_nan.null_count == 0
@@ -1347,7 +1346,6 @@ def test_dataframe_setitem_from_masked_object():
     test2_null = cudf.DataFrame.from_pandas(
         pd.DataFrame({"a": ary}), nan_as_null=True
     )
-    assert test2_null["a"].nullable
     assert test2_null["a"].null_count == 20
     test2_nan = cudf.DataFrame.from_pandas(
         pd.DataFrame({"a": ary}), nan_as_null=False
@@ -1356,7 +1354,6 @@ def test_dataframe_setitem_from_masked_object():
 
     gpu_ary = cupy.asarray(ary)
     test3_null = cudf.Series(gpu_ary, nan_as_null=True)
-    assert test3_null.nullable
     assert test3_null.null_count == 20
     test3_nan = cudf.Series(gpu_ary, nan_as_null=False)
     assert test3_nan.null_count == 0
@@ -1364,7 +1361,6 @@ def test_dataframe_setitem_from_masked_object():
     test4 = cudf.DataFrame()
     lst = [1, 2, None, 4, 5, 6, None, 8, 9]
     test4["lst"] = lst
-    assert test4["lst"].nullable
     assert test4["lst"].null_count == 2
 
 
@@ -2408,7 +2404,7 @@ def test_dataframe_reductions(data, axis, func, skipna):
         elif func not in cudf.core.dataframe._cupy_nan_methods_map:
             if skipna is False:
                 expected_exception = NotImplementedError
-            elif any(col.nullable for name, col in gdf.items()):
+            elif any(col._column.nullable for name, col in gdf.items()):
                 expected_exception = ValueError
             elif func in ("cummin", "cummax"):
                 expected_exception = AttributeError
@@ -4331,14 +4327,14 @@ def test_empty_dataframe_describe():
 
 
 def test_as_column_types():
-    col = column.as_column(cudf.Series([], dtype="float64"))
+    col = as_column(cudf.Series([], dtype="float64"))
     assert_eq(col.dtype, np.dtype("float64"))
     gds = cudf.Series._from_column(col)
     pds = pd.Series(pd.Series([], dtype="float64"))
 
     assert_eq(pds, gds)
 
-    col = column.as_column(
+    col = as_column(
         cudf.Series([], dtype="float64"), dtype=np.dtype(np.float32)
     )
     assert_eq(col.dtype, np.dtype("float32"))
@@ -4347,18 +4343,14 @@ def test_as_column_types():
 
     assert_eq(pds, gds)
 
-    col = column.as_column(
-        cudf.Series([], dtype="float64"), dtype=cudf.dtype("str")
-    )
+    col = as_column(cudf.Series([], dtype="float64"), dtype=cudf.dtype("str"))
     assert_eq(col.dtype, np.dtype("object"))
     gds = cudf.Series._from_column(col)
     pds = pd.Series(pd.Series([], dtype="str"))
 
     assert_eq(pds, gds)
 
-    col = column.as_column(
-        cudf.Series([], dtype="float64"), dtype=cudf.dtype("str")
-    )
+    col = as_column(cudf.Series([], dtype="float64"), dtype=cudf.dtype("str"))
     assert_eq(col.dtype, np.dtype("object"))
     gds = cudf.Series._from_column(col)
     pds = pd.Series(pd.Series([], dtype="object"))
@@ -4367,7 +4359,7 @@ def test_as_column_types():
 
     pds = pd.Series(np.array([1, 2, 3]), dtype="float32")
     gds = cudf.Series._from_column(
-        column.as_column(np.array([1, 2, 3]), dtype=np.dtype(np.float32))
+        as_column(np.array([1, 2, 3]), dtype=np.dtype(np.float32))
     )
 
     assert_eq(pds, gds)
@@ -4378,30 +4370,26 @@ def test_as_column_types():
     assert_eq(pds, gds)
 
     pds = pd.Series([], dtype="float64")
-    gds = cudf.Series._from_column(column.as_column(pds))
+    gds = cudf.Series._from_column(as_column(pds))
     assert_eq(pds, gds)
 
     pds = pd.Series([1, 2, 4], dtype="int64")
     gds = cudf.Series._from_column(
-        column.as_column(cudf.Series([1, 2, 4]), dtype="int64")
+        as_column(cudf.Series([1, 2, 4]), dtype="int64")
     )
 
     assert_eq(pds, gds)
 
     pds = pd.Series([1.2, 18.0, 9.0], dtype="float32")
     gds = cudf.Series._from_column(
-        column.as_column(
-            cudf.Series([1.2, 18.0, 9.0]), dtype=np.dtype(np.float32)
-        )
+        as_column(cudf.Series([1.2, 18.0, 9.0]), dtype=np.dtype(np.float32))
     )
 
     assert_eq(pds, gds)
 
     pds = pd.Series([1.2, 18.0, 9.0], dtype="str")
     gds = cudf.Series._from_column(
-        column.as_column(
-            cudf.Series([1.2, 18.0, 9.0]), dtype=cudf.dtype("str")
-        )
+        as_column(cudf.Series([1.2, 18.0, 9.0]), dtype=cudf.dtype("str"))
     )
 
     assert_eq(pds, gds)
@@ -6593,22 +6581,22 @@ def test_from_pandas_nan_as_null(nan_as_null, index):
         pdf = pd.DataFrame({"a": data, "b": data})
         expected = cudf.DataFrame(
             {
-                "a": column.as_column(data, nan_as_null=nan_as_null),
-                "b": column.as_column(data, nan_as_null=nan_as_null),
+                "a": as_column(data, nan_as_null=nan_as_null),
+                "b": as_column(data, nan_as_null=nan_as_null),
             }
         )
     else:
         pdf = pd.DataFrame({"a": data, "b": data}).set_index(index)
         expected = cudf.DataFrame(
             {
-                "a": column.as_column(data, nan_as_null=nan_as_null),
-                "b": column.as_column(data, nan_as_null=nan_as_null),
+                "a": as_column(data, nan_as_null=nan_as_null),
+                "b": as_column(data, nan_as_null=nan_as_null),
             }
         )
         expected = cudf.DataFrame(
             {
-                "a": column.as_column(data, nan_as_null=nan_as_null),
-                "b": column.as_column(data, nan_as_null=nan_as_null),
+                "a": as_column(data, nan_as_null=nan_as_null),
+                "b": as_column(data, nan_as_null=nan_as_null),
             }
         )
         expected = expected.set_index(index)
@@ -6624,7 +6612,7 @@ def test_from_pandas_for_series_nan_as_null(nan_as_null):
     psr = pd.Series(data)
 
     expected = cudf.Series._from_column(
-        column.as_column(data, nan_as_null=nan_as_null)
+        as_column(data, nan_as_null=nan_as_null)
     )
     got = cudf.from_pandas(psr, nan_as_null=nan_as_null)
 
