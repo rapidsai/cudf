@@ -7,4 +7,4 @@ cdef class gpumemoryview:
     cdef readonly uintptr_t ptr
     cdef readonly object obj
     cdef readonly dict cai
-    cdef readonly uint64_t buffer_size
+    cdef readonly uint64_t nbytes

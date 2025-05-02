@@ -3,7 +3,41 @@
 import functools
 import operator
 
+from .types cimport DataType, size_of, type_id
+
+from pylibcudf.libcudf.types cimport size_type
+
+
 __all__ = ["gpumemoryview"]
+
+
+@functools.cache
+def _datatype_from_dtype_desc(desc):
+    mapping = {
+        'u1': type_id.UINT8,
+        'u2': type_id.UINT16,
+        'u4': type_id.UINT32,
+        'u8': type_id.UINT64,
+        'i1': type_id.INT8,
+        'i2': type_id.INT16,
+        'i4': type_id.INT32,
+        'i8': type_id.INT64,
+        'f4': type_id.FLOAT32,
+        'f8': type_id.FLOAT64,
+        'b1': type_id.BOOL8,
+        'M8[s]': type_id.TIMESTAMP_SECONDS,
+        'M8[ms]': type_id.TIMESTAMP_MILLISECONDS,
+        'M8[us]': type_id.TIMESTAMP_MICROSECONDS,
+        'M8[ns]': type_id.TIMESTAMP_NANOSECONDS,
+        'm8[s]': type_id.DURATION_SECONDS,
+        'm8[ms]': type_id.DURATION_MILLISECONDS,
+        'm8[us]': type_id.DURATION_MICROSECONDS,
+        'm8[ns]': type_id.DURATION_NANOSECONDS,
+    }
+    if desc not in mapping:
+        raise ValueError(f"Unsupported dtype: {desc}")
+    return DataType(mapping[desc])
+
 
 cdef class gpumemoryview:
     """Minimal representation of a memory buffer.
@@ -28,12 +62,10 @@ cdef class gpumemoryview:
         self.ptr = cai["data"][0]
 
         # Compute and save the buffer size.
-        shape, typestr = cai["shape"], cai["typestr"]
-        # Get element size from typestr, format is two character specifying
-        # the type and the latter part is the number of bytes. E.g., '<f4' for
-        # 32-bit (4-byte) float.
-        element_size = int(typestr[2:])
-        self.buffer_size = functools.reduce(operator.mul, shape) * element_size
+        cdef size_type itemsize = size_of(_datatype_from_dtype_desc(
+            cai["typestr"][1:])
+        )
+        self.nbytes = functools.reduce(operator.mul, cai["shape"]) * itemsize
 
     @property
     def __cuda_array_interface__(self):
@@ -41,9 +73,5 @@ cdef class gpumemoryview:
 
     def __len__(self):
         return self.obj.__cuda_array_interface__["shape"][0]
-
-    @property
-    def nbytes(self):
-        return self.buffer_size
 
     __hash__ = None
