@@ -69,6 +69,8 @@ class Agg(Expr):
             _, quantile = self.children
             if not isinstance(quantile, Literal):
                 raise NotImplementedError("Only support literal quantile values")
+            if options == "equiprobable":
+                raise NotImplementedError("Quantile with equiprobable interpolation")
             req = plc.aggregation.quantile(
                 quantiles=[quantile.value.as_py()], interp=Agg.interp_mapping[options]
             )

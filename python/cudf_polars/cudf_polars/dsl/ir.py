@@ -986,7 +986,10 @@ class GroupBy(IR):
                 # A count aggregation, we need a column so use a key column
                 col = keys[0].obj
             elif isinstance(value, expr.Agg):
-                (child,) = value.children
+                if value.name == "quantile":
+                    child = value.children[0]
+                else:
+                    (child,) = value.children
                 col = child.evaluate(df).obj
             else:
                 # Anything else, we pre-evaluate

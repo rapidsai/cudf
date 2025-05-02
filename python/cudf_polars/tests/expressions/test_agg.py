@@ -125,6 +125,12 @@ def test_quantile_invalid_q(df):
     assert_ir_translation_raises(q, NotImplementedError)
 
 
+def test_quantile_equiprobable_unsupported(df):
+    expr = pl.col("a").quantile(0.5, interpolation="equiprobable")
+    q = df.select(expr)
+    assert_ir_translation_raises(q, NotImplementedError)
+
+
 @pytest.mark.parametrize(
     "op", [pl.Expr.min, pl.Expr.nan_min, pl.Expr.max, pl.Expr.nan_max]
 )
