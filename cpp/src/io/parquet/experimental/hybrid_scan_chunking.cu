@@ -875,10 +875,6 @@ void hybrid_scan_reader_impl::setup_next_pass(std::vector<rmm::device_buffer> co
       decomp_dict_data_size +
       thrust::reduce(rmm::exec_policy(_stream), chunk_iter, chunk_iter + pass.chunks.size());
 
-    // since there is only ever 1 dictionary per chunk (the first page), do it at the
-    // pass level.
-    build_string_dict_indices();
-
     _stream.synchronize();
   }
 }
