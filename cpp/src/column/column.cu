@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -83,6 +83,15 @@ column::contents column::release() noexcept
   return column::contents{std::make_unique<rmm::device_buffer>(std::move(_data)),
                           std::make_unique<rmm::device_buffer>(std::move(_null_mask)),
                           std::move(_children)};
+}
+
+std::size_t column::alloc_size() const
+{
+  return _data.size() + _null_mask.size() +
+         std::accumulate(
+           _children.begin(), _children.end(), 0, [](auto const& sum, auto const& child) {
+             return sum + child->alloc_size();
+           });
 }
 
 // Create immutable view
