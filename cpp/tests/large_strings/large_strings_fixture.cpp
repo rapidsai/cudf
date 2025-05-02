@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -127,5 +127,13 @@ int main(int argc, char** argv)
   // create object to automatically be destroyed at the end of main()
   auto lsd = cudf::test::StringsLargeTest::get_ls_data();
 
+  if (std::getenv("GTEST_CUDF_MEMORY_PEAK")) {
+    auto mr = rmm::mr::statistics_resource_adaptor<rmm::mr::device_memory_resource>(
+      cudf::get_current_device_resource());
+    cudf::set_current_device_resource(&mr);
+    auto rc = RUN_ALL_TESTS();
+    std::cout << "Peak memory usage " << mr.get_bytes_counter().peak << " bytes" << std::endl;
+    return rc;
+  }
   return RUN_ALL_TESTS();
 }
