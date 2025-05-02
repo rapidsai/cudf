@@ -64,7 +64,7 @@ cdef class gpumemoryview:
         # Compute the buffer size.
         cdef size_type itemsize = size_of(
             _datatype_from_dtype_desc(
-                cai["typestr"][1:]  # ignore the byteorder (the first letter).
+                cai["typestr"][1:]  # ignore the byteorder (the first char).
             )
         )
         self.nbytes = functools.reduce(operator.mul, cai["shape"]) * itemsize
