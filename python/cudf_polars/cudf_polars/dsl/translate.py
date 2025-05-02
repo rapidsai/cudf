@@ -642,10 +642,10 @@ def _(node: pl_expr.Literal, translator: Translator, dtype: plc.DataType) -> exp
             dtype, data.cast(dtypes.downcast_arrow_lists(data.type))
         )
     if dtype.id() == plc.TypeId.LIST:  # pragma: no cover
-        data = plc.interop.to_arrow(dtype, value_type=pa.int64())
-        return expr.LiteralColumn(plc.DataType(plc.TypeId.INT64), pa.array(node.value))
-    else:
-        value = pa.scalar(node.value, type=plc.interop.to_arrow(dtype))
+        # TODO: Find an alternative to pa.infer_type
+        data = pa.array(node.value, type=pa.infer_type(node.value))
+        return expr.LiteralColumn(dtype, data)
+    value = pa.scalar(node.value, type=plc.interop.to_arrow(dtype))
     return expr.Literal(dtype, value)
 
 
