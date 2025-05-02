@@ -5,7 +5,6 @@
 
 from __future__ import annotations
 
-import copy
 import functools
 import json
 from contextlib import AbstractContextManager, nullcontext
@@ -23,7 +22,8 @@ import pylibcudf as plc
 
 from cudf_polars.dsl import expr, ir
 from cudf_polars.dsl.to_ast import insert_colrefs
-from cudf_polars.typing import NodeTraverser
+from cudf_polars.dsl.utils.groupby import rewrite_groupby
+from cudf_polars.typing import Schema
 from cudf_polars.utils import config, dtypes, sorting
 
 if TYPE_CHECKING:
@@ -48,7 +48,7 @@ class Translator:
 
     def __init__(self, visitor: NodeTraverser, engine: GPUEngine):
         self.visitor = visitor
-        self.config_options = config.ConfigOptions(copy.deepcopy(engine.config))
+        self.config_options = config.ConfigOptions.from_polars_engine(engine)
         self.errors: list[Exception] = []
 
     def translate_ir(self, *, n: int | None = None) -> ir.IR:
@@ -169,6 +169,7 @@ class set_node(AbstractContextManager[None]):
 
     __slots__ = ("n", "visitor")
     visitor: NodeTraverser
+
     n: int
 
     def __init__(self, visitor: NodeTraverser, n: int) -> None:
@@ -188,18 +189,14 @@ noop_context: nullcontext[None] = nullcontext()
 
 
 @singledispatch
-def _translate_ir(
-    node: Any, translator: Translator, schema: dict[str, plc.DataType]
-) -> ir.IR:
+def _translate_ir(node: Any, translator: Translator, schema: Schema) -> ir.IR:
     raise NotImplementedError(
         f"Translation for {type(node).__name__}"
     )  # pragma: no cover
 
 
 @_translate_ir.register
-def _(
-    node: pl_ir.PythonScan, translator: Translator, schema: dict[str, plc.DataType]
-) -> ir.IR:
+def _(node: pl_ir.PythonScan, translator: Translator, schema: Schema) -> ir.IR:
     scan_fn, with_columns, source_type, predicate, nrows = node.options
     options = (scan_fn, with_columns, source_type, nrows)
     predicate = (
@@ -209,9 +206,7 @@ def _(
 
 
 @_translate_ir.register
-def _(
-    node: pl_ir.Scan, translator: Translator, schema: dict[str, plc.DataType]
-) -> ir.IR:
+def _(node: pl_ir.Scan, translator: Translator, schema: Schema) -> ir.IR:
     typ, *options = node.scan_type
     if typ == "ndjson":
         (reader_options,) = map(json.loads, options)
@@ -249,18 +244,14 @@ def _(
 
 
 @_translate_ir.register
-def _(
-    node: pl_ir.Cache, translator: Translator, schema: dict[str, plc.DataType]
-) -> ir.IR:
+def _(node: pl_ir.Cache, translator: Translator, schema: Schema) -> ir.IR:
     return ir.Cache(
         schema, node.id_, node.cache_hits, translator.translate_ir(n=node.input)
     )
 
 
 @_translate_ir.register
-def _(
-    node: pl_ir.DataFrameScan, translator: Translator, schema: dict[str, plc.DataType]
-) -> ir.IR:
+def _(node: pl_ir.DataFrameScan, translator: Translator, schema: Schema) -> ir.IR:
     return ir.DataFrameScan(
         schema,
         node.df,
@@ -270,9 +261,7 @@ def _(
 
 
 @_translate_ir.register
-def _(
-    node: pl_ir.Select, translator: Translator, schema: dict[str, plc.DataType]
-) -> ir.IR:
+def _(node: pl_ir.Select, translator: Translator, schema: Schema) -> ir.IR:
     with set_node(translator.visitor, node.input):
         inp = translator.translate_ir(n=None)
         exprs = [translate_named_expr(translator, n=e) for e in node.expr]
@@ -280,28 +269,25 @@ def _(
 
 
 @_translate_ir.register
-def _(
-    node: pl_ir.GroupBy, translator: Translator, schema: dict[str, plc.DataType]
-) -> ir.IR:
+def _(node: pl_ir.GroupBy, translator: Translator, schema: Schema) -> ir.IR:
     with set_node(translator.visitor, node.input):
         inp = translator.translate_ir(n=None)
-        aggs = [translate_named_expr(translator, n=e) for e in node.aggs]
         keys = [translate_named_expr(translator, n=e) for e in node.keys]
-    return ir.GroupBy(
-        schema,
-        keys,
-        aggs,
-        node.maintain_order,
-        node.options,
-        translator.config_options,
-        inp,
-    )
+        original_aggs = [translate_named_expr(translator, n=e) for e in node.aggs]
+    is_rolling = node.options.rolling is not None
+    is_dynamic = node.options.dynamic is not None
+    if is_dynamic:
+        raise NotImplementedError("group_by_dynamic")
+    elif is_rolling:
+        raise NotImplementedError("group_by_rolling")
+    else:
+        return rewrite_groupby(
+            node, schema, keys, original_aggs, translator.config_options, inp
+        )
 
 
 @_translate_ir.register
-def _(
-    node: pl_ir.Join, translator: Translator, schema: dict[str, plc.DataType]
-) -> ir.IR:
+def _(node: pl_ir.Join, translator: Translator, schema: Schema) -> ir.IR:
     # Join key dtypes are dependent on the schema of the left and
     # right inputs, so these must be translated with the relevant
     # input active.
@@ -373,9 +359,7 @@ def _(
 
 
 @_translate_ir.register
-def _(
-    node: pl_ir.HStack, translator: Translator, schema: dict[str, plc.DataType]
-) -> ir.IR:
+def _(node: pl_ir.HStack, translator: Translator, schema: Schema) -> ir.IR:
     with set_node(translator.visitor, node.input):
         inp = translator.translate_ir(n=None)
         exprs = [translate_named_expr(translator, n=e) for e in node.exprs]
@@ -384,7 +368,7 @@ def _(
 
 @_translate_ir.register
 def _(
-    node: pl_ir.Reduce, translator: Translator, schema: dict[str, plc.DataType]
+    node: pl_ir.Reduce, translator: Translator, schema: Schema
 ) -> ir.IR:  # pragma: no cover; polars doesn't emit this node yet
     with set_node(translator.visitor, node.input):
         inp = translator.translate_ir(n=None)
@@ -393,9 +377,7 @@ def _(
 
 
 @_translate_ir.register
-def _(
-    node: pl_ir.Distinct, translator: Translator, schema: dict[str, plc.DataType]
-) -> ir.IR:
+def _(node: pl_ir.Distinct, translator: Translator, schema: Schema) -> ir.IR:
     (keep, subset, maintain_order, zlice) = node.options
     keep = ir.Distinct._KEEP_MAP[keep]
     subset = frozenset(subset) if subset is not None else None
@@ -410,9 +392,7 @@ def _(
 
 
 @_translate_ir.register
-def _(
-    node: pl_ir.Sort, translator: Translator, schema: dict[str, plc.DataType]
-) -> ir.IR:
+def _(node: pl_ir.Sort, translator: Translator, schema: Schema) -> ir.IR:
     with set_node(translator.visitor, node.input):
         inp = translator.translate_ir(n=None)
         by = [translate_named_expr(translator, n=e) for e in node.by_column]
@@ -424,18 +404,14 @@ def _(
 
 
 @_translate_ir.register
-def _(
-    node: pl_ir.Slice, translator: Translator, schema: dict[str, plc.DataType]
-) -> ir.IR:
+def _(node: pl_ir.Slice, translator: Translator, schema: Schema) -> ir.IR:
     return ir.Slice(
         schema, node.offset, node.len, translator.translate_ir(n=node.input)
     )
 
 
 @_translate_ir.register
-def _(
-    node: pl_ir.Filter, translator: Translator, schema: dict[str, plc.DataType]
-) -> ir.IR:
+def _(node: pl_ir.Filter, translator: Translator, schema: Schema) -> ir.IR:
     with set_node(translator.visitor, node.input):
         inp = translator.translate_ir(n=None)
         mask = translate_named_expr(translator, n=node.predicate)
@@ -443,18 +419,12 @@ def _(
 
 
 @_translate_ir.register
-def _(
-    node: pl_ir.SimpleProjection,
-    translator: Translator,
-    schema: dict[str, plc.DataType],
-) -> ir.IR:
+def _(node: pl_ir.SimpleProjection, translator: Translator, schema: Schema) -> ir.IR:
     return ir.Projection(schema, translator.translate_ir(n=node.input))
 
 
 @_translate_ir.register
-def _(
-    node: pl_ir.MergeSorted, translator: Translator, schema: dict[str, plc.DataType]
-) -> ir.IR:
+def _(node: pl_ir.MergeSorted, translator: Translator, schema: Schema) -> ir.IR:
     key = node.key
     inp_left = translator.translate_ir(n=node.input_left)
     inp_right = translator.translate_ir(n=node.input_right)
@@ -467,9 +437,7 @@ def _(
 
 
 @_translate_ir.register
-def _(
-    node: pl_ir.MapFunction, translator: Translator, schema: dict[str, plc.DataType]
-) -> ir.IR:
+def _(node: pl_ir.MapFunction, translator: Translator, schema: Schema) -> ir.IR:
     name, *options = node.function
     return ir.MapFunction(
         schema,
@@ -480,19 +448,19 @@ def _(
 
 
 @_translate_ir.register
-def _(
-    node: pl_ir.Union, translator: Translator, schema: dict[str, plc.DataType]
-) -> ir.IR:
+def _(node: pl_ir.Union, translator: Translator, schema: Schema) -> ir.IR:
     return ir.Union(
         schema, node.options, *(translator.translate_ir(n=n) for n in node.inputs)
     )
 
 
 @_translate_ir.register
-def _(
-    node: pl_ir.HConcat, translator: Translator, schema: dict[str, plc.DataType]
-) -> ir.IR:
-    return ir.HConcat(schema, *(translator.translate_ir(n=n) for n in node.inputs))
+def _(node: pl_ir.HConcat, translator: Translator, schema: Schema) -> ir.IR:
+    return ir.HConcat(
+        schema,
+        False,  # noqa: FBT003
+        *(translator.translate_ir(n=n) for n in node.inputs),
+    )
 
 
 def translate_named_expr(

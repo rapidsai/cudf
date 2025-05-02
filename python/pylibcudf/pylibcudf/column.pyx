@@ -15,31 +15,37 @@ from libcpp.utility cimport move
 
 from pylibcudf.libcudf.column.column cimport column, column_contents
 from pylibcudf.libcudf.column.column_factories cimport make_column_from_scalar
-from pylibcudf.libcudf.interop cimport ArrowArray, ArrowSchema, arrow_column
+from pylibcudf.libcudf.interop cimport (
+    ArrowArray,
+    ArrowSchema,
+    ArrowDeviceArray,
+    arrow_column,
+    column_metadata,
+    to_arrow_host_raw,
+    to_arrow_device_raw,
+    to_arrow_schema_raw,
+)
 from pylibcudf.libcudf.scalar.scalar cimport scalar, numeric_scalar
 from pylibcudf.libcudf.types cimport size_type, size_of as cpp_size_of, bitmask_type
 from pylibcudf.libcudf.utilities.traits cimport is_fixed_width
 from pylibcudf.libcudf.copying cimport get_element
 
-from pylibcudf.libcudf.interop cimport (
-    ArrowArray,
-    ArrowSchema,
-    column_metadata,
-    to_arrow_host_raw,
-    to_arrow_schema_raw,
-)
 
-from rmm.librmm.device_buffer cimport device_buffer
 from rmm.pylibrmm.device_buffer cimport DeviceBuffer
 from rmm.pylibrmm.stream cimport Stream
 
 from .gpumemoryview cimport gpumemoryview
 from .filling cimport sequence
 from .scalar cimport Scalar
+from .traits cimport (
+    is_fixed_width as plc_is_fixed_width,
+    is_nested,
+)
 from .types cimport DataType, size_of, type_id
 from ._interop_helpers cimport (
     _release_schema,
     _release_array,
+    _release_device_array,
     _metadata_to_libcudf,
 )
 from .null_mask cimport bitmask_allocation_size_bytes
@@ -55,7 +61,12 @@ __all__ = ["Column", "ListColumnView", "is_c_contiguous"]
 
 class _ArrowLikeMeta(type):
     def __subclasscheck__(cls, other):
-        return hasattr(other, "__arrow_c_array__")
+        # We cannot separate these types via singledispatch because the dispatch
+        # will often be ambiguous when objects expose multiple protocols.
+        return (
+            hasattr(other, "__arrow_c_array__")
+            or hasattr(other, "__arrow_c_device_array__")
+        )
 
 
 class _ArrowLike(metaclass=_ArrowLikeMeta):
@@ -207,32 +218,59 @@ cdef class Column:
 
     @_init.register(_ArrowLike)
     def _(self, arrow_like):
-        schema, array = arrow_like.__arrow_c_array__()
-        cdef ArrowSchema* c_schema = (
-            <ArrowSchema*>PyCapsule_GetPointer(schema, "arrow_schema")
-        )
-        cdef ArrowArray* c_array = (
-            <ArrowArray*>PyCapsule_GetPointer(array, "arrow_array")
-        )
-
-        cdef _ArrowColumnHolder result = _ArrowColumnHolder()
+        cdef ArrowSchema* c_schema
+        cdef ArrowArray* c_array
+        cdef ArrowDeviceArray* c_device_array
+        cdef _ArrowColumnHolder result
         cdef unique_ptr[arrow_column] c_result
-        with nogil:
-            c_result = make_unique[arrow_column](
-                move(dereference(c_schema)), move(dereference(c_array))
+        if hasattr(arrow_like, "__arrow_c_device_array__"):
+            schema, array = arrow_like.__arrow_c_device_array__()
+            c_schema = <ArrowSchema*>PyCapsule_GetPointer(schema, "arrow_schema")
+            c_device_array = (
+                <ArrowDeviceArray*>PyCapsule_GetPointer(array, "arrow_device_array")
             )
+
+            result = _ArrowColumnHolder()
+            with nogil:
+                c_result = make_unique[arrow_column](
+                    move(dereference(c_schema)), move(dereference(c_device_array))
+                )
             result.col.swap(c_result)
 
-        tmp = Column.from_column_view_of_arbitrary(result.col.get().view(), result)
-        self._init(
-            tmp.type(),
-            tmp.size(),
-            tmp.data(),
-            tmp.null_mask(),
-            tmp.null_count(),
-            tmp.offset(),
-            tmp.children(),
-        )
+            tmp = Column.from_column_view_of_arbitrary(result.col.get().view(), result)
+            self._init(
+                tmp.type(),
+                tmp.size(),
+                tmp.data(),
+                tmp.null_mask(),
+                tmp.null_count(),
+                tmp.offset(),
+                tmp.children(),
+            )
+        elif hasattr(arrow_like, "__arrow_c_array__"):
+            schema, array = arrow_like.__arrow_c_array__()
+            c_schema = <ArrowSchema*>PyCapsule_GetPointer(schema, "arrow_schema")
+            c_array = <ArrowArray*>PyCapsule_GetPointer(array, "arrow_array")
+
+            result = _ArrowColumnHolder()
+            with nogil:
+                c_result = make_unique[arrow_column](
+                    move(dereference(c_schema)), move(dereference(c_array))
+                )
+            result.col.swap(c_result)
+
+            tmp = Column.from_column_view_of_arbitrary(result.col.get().view(), result)
+            self._init(
+                tmp.type(),
+                tmp.size(),
+                tmp.data(),
+                tmp.null_mask(),
+                tmp.null_count(),
+                tmp.offset(),
+                tmp.children(),
+            )
+        else:
+            raise ValueError("Invalid Arrow-like object")
 
     cdef column_view view(self) nogil:
         """Generate a libcudf column_view to pass to libcudf algorithms.
@@ -299,40 +337,41 @@ cdef class Column:
         )
 
     @staticmethod
-    cdef Column from_rmm_buffer(
-        unique_ptr[device_buffer] buff,
+    def from_rmm_buffer(
+        DeviceBuffer buff,
         DataType dtype,
         size_type size,
         list children,
-        Stream stream=None,
     ):
         """
         Create a Column from an RMM DeviceBuffer.
 
         Parameters
         ----------
-        buff : unique_ptr[DeviceBuffer]
-            Pointer to the data rmm.DeviceBuffer.
+        buff : DeviceBuffer
+            The data rmm.DeviceBuffer.
         size : size_type
             The number of rows in the column.
         dtype : DataType
             The type of the data in the buffer.
         children : list
             List of child columns.
-        stream : Stream, default None
-            The stream to use for the operation.
 
         Notes
         -----
         To provide a mask and null count, use `Column.with_mask` after
         this method.
         """
-        stream = _get_stream(stream)
-        cdef DeviceBuffer rmm_buff = DeviceBuffer.c_from_unique_ptr(
-            move(buff), stream
-        )
-        cdef gpumemoryview data = gpumemoryview(rmm_buff)
+        if plc_is_fixed_width(dtype) and len(children) != 0:
+            raise ValueError("Fixed-width types must have zero children.")
+        elif dtype.id() == type_id.STRING and len(children) != 1:
+            raise ValueError("String columns have have 1 child column of offsets.")
+        elif is_nested(dtype) and len(children) == 0:
+            raise ValueError(
+                "List and struct columns must have at least one child column."
+            )
 
+        cdef gpumemoryview data = gpumemoryview(buff)
         return Column(
             dtype,
             size,
@@ -360,6 +399,17 @@ cdef class Column:
         cdef column_contents contents = libcudf_col.get().release()
 
         stream = _get_stream(stream)
+        # Note that when converting to cudf Column objects we'll need to pull
+        # out the base object.
+        cdef gpumemoryview data = gpumemoryview(
+            DeviceBuffer.c_from_unique_ptr(move(contents.data), stream)
+        )
+
+        cdef gpumemoryview mask = None
+        if null_count > 0:
+            mask = gpumemoryview(
+                DeviceBuffer.c_from_unique_ptr(move(contents.null_mask))
+            )
 
         children = []
         if contents.children.size() != 0:
@@ -368,22 +418,16 @@ cdef class Column:
                     Column.from_libcudf(move(contents.children[i]), stream)
                 )
 
-        cdef Column result = Column.from_rmm_buffer(
-            # Note that when converting to cudf Column objects
-            # we'll need to pull  out the base object.
-            move(contents.data),
+        return Column(
             dtype,
             size,
+            data,
+            mask,
+            null_count,
+            # Initial offset when capturing a C++ column is always 0.
+            0,
             children,
-            stream,
         )
-        cdef gpumemoryview mask = None
-        if null_count > 0:
-            mask = gpumemoryview(
-                DeviceBuffer.c_from_unique_ptr(move(contents.null_mask), stream)
-            )
-            result = result.with_mask(mask, null_count)
-        return result
 
     cpdef Column with_mask(self, gpumemoryview mask, size_type null_count):
         """Augment this column with a new null mask.
@@ -752,11 +796,36 @@ cdef class Column:
 
         return PyCapsule_New(<void*>raw_host_array_ptr, "arrow_array", _release_array)
 
+    def _to_device_array(self):
+        cdef ArrowDeviceArray* raw_device_array_ptr
+        with nogil:
+            raw_device_array_ptr = to_arrow_device_raw(self.view(), self)
+
+        return PyCapsule_New(
+            <void*>raw_device_array_ptr,
+            "arrow_device_array",
+            _release_device_array
+        )
+
     def __arrow_c_array__(self, requested_schema=None):
         if requested_schema is not None:
             raise ValueError("pylibcudf.Column does not support alternative schema")
 
         return self._to_schema(), self._to_host_array()
+
+    def __arrow_c_device_array__(self, requested_schema=None, **kwargs):
+        if requested_schema is not None:
+            raise ValueError("pylibcudf.Column does not support alternative schema")
+
+        non_default_kwargs = [
+            name for name, value in kwargs.items() if value is not None
+        ]
+        if non_default_kwargs:
+            raise NotImplementedError(
+                f"Received unsupported keyword argument(s): {non_default_kwargs}"
+            )
+
+        return self._to_schema(), self._to_device_array()
 
 
 cdef class ListColumnView:

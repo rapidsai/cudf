@@ -97,6 +97,11 @@ function(ConfigureBench CMAKE_BENCH_NAME)
                CUDA_STANDARD 17
                CUDA_STANDARD_REQUIRED ON
   )
+  target_compile_definitions(
+    ${CMAKE_BENCH_NAME}
+    PUBLIC _LIBCUDACXX_ATOMIC_UNSAFE_AUTOMATIC_STORAGE=1
+    PRIVATE THRUST_FORCE_32_BIT_OFFSET_TYPE=1 CCCL_AVOID_SORT_UNROLL=1
+  )
   target_link_libraries(
     ${CMAKE_BENCH_NAME} PRIVATE cudf_benchmark_common cudf_datagen benchmark::benchmark_main
                                 cudf::cudftestutil_objects $<TARGET_NAME_IF_EXISTS:conda_env>
@@ -202,7 +207,7 @@ ConfigureNVBench(
 # * join benchmark --------------------------------------------------------------------------------
 ConfigureNVBench(
   JOIN_NVBENCH join/left_join.cu join/conditional_join.cu join/join.cu join/mixed_join.cu
-  join/distinct_join.cu
+  join/distinct_join.cu join/multiplicity_join.cu
 )
 
 # ##################################################################################################
@@ -301,7 +306,7 @@ ConfigureNVBench(
 
 # ##################################################################################################
 # * null_mask benchmark ---------------------------------------------------------------------------
-ConfigureBench(NULLMASK_BENCH null_mask/set_null_mask.cpp)
+ConfigureNVBench(NULLMASK_NVBENCH null_mask/set_null_mask.cpp)
 
 # ##################################################################################################
 # * parquet writer benchmark ----------------------------------------------------------------------

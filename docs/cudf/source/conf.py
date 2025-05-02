@@ -393,6 +393,10 @@ _all_namespaces = _generate_namespaces(
 )
 
 
+_names_to_skip_in_cudf = {
+    "cudf.core.window.rolling.RollingGroupby",
+}
+
 _names_to_skip_in_pylibcudf = {
     # Cython types that don't alias cleanly because of
     # https://github.com/cython/cython/issues/5609
@@ -411,6 +415,7 @@ _names_to_skip_in_cpp = {
     "cuda",
     "arrow",
     "DLManagedTensor",
+    "ARROW_DEVICE_CUDA",
     # Unknown types
     "int8_t",
     "int16_t",
@@ -500,6 +505,9 @@ def on_missing_reference(app, env, node, contnode):
     if any(toskip in reftarget for toskip in _names_to_skip_in_pylibcudf):
         return contnode
 
+    if any(toskip in reftarget for toskip in _names_to_skip_in_cudf):
+        return contnode
+
     if (refid := node.get("refid")) is not None and "hpp" in refid:
         # We don't want to link to C++ header files directly from the
         # Sphinx docs, those are pages that doxygen automatically
@@ -572,6 +580,7 @@ nitpick_ignore = [
     # Erroneously warned in ParquetColumnSchema.name
     ("py:class", "unicode"),
     ("py:class", "SeriesOrIndex"),
+    ("py:class", "DataFrameOrSeries"),
     ("py:class", "Dtype"),
     # The following are erroneously warned due to
     # https://github.com/sphinx-doc/sphinx/issues/11225
