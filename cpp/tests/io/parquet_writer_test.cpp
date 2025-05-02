@@ -41,10 +41,19 @@ struct CompressionImplsTest : public ParquetWriterTest,
                               public ::testing::WithParamInterface<std::string> {
   CompressionImplsTest()
   {
-    auto const val_to_set = GetParam();
+    auto const comp_impl = GetParam();
 
-    setenv("LIBCUDF_HOST_COMPRESSION", "OFF", 1);
-    setenv("LIBCUDF_NVCOMP_POLICY", val_to_set.c_str(), 1);
+    if (comp_impl == "NVCOMP") {
+      setenv("LIBCUDF_HOST_COMPRESSION", "OFF", 1);
+      setenv("LIBCUDF_NVCOMP_POLICY", "ALWAYS", 1);
+    } else if (comp_impl == "DEVICE_INTERNAL") {
+      setenv("LIBCUDF_HOST_COMPRESSION", "OFF", 1);
+      setenv("LIBCUDF_NVCOMP_POLICY", "OFF", 1);
+    } else if (comp_impl == "HOST") {
+      setenv("LIBCUDF_HOST_COMPRESSION", "ON", 1);
+    } else {
+      CUDF_FAIL("Invalid test parameter");
+    }
   }
   ~CompressionImplsTest() override
   {
@@ -1392,7 +1401,7 @@ TEST_P(CompressionImplsTest, CompStatsEmptyTable)
 
 INSTANTIATE_TEST_CASE_P(BasicCompressionImplsTest,
                         CompressionImplsTest,
-                        ::testing::Values("ALWAYS", "OFF"));
+                        ::testing::Values("NVCOMP", "DEVICE_INTERNAL", "HOST"));
 
 TEST_F(ParquetWriterTest, SkipCompression)
 {
