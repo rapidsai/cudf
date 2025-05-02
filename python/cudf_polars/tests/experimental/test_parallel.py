@@ -121,6 +121,7 @@ def test_preserve_partitioning():
             "max_rows_per_partition": 2,
             "scheduler": DEFAULT_SCHEDULER,
             "broadcast_join_limit": 2,
+            "cardinality_factor": {"a": 1.0},
         },
     )
     left = pl.LazyFrame({"a": [1, 2, 3, 4] * 5, "b": range(20)})
@@ -128,6 +129,8 @@ def test_preserve_partitioning():
     q = (
         left.join(right, on="a")
         .filter(pl.col("a") == 2)
+        .group_by(pl.col("a"))
+        .mean()
         .select(pl.col("a"), pl.col("c"))
     )
     config_options = ConfigOptions.from_polars_engine(engine)
