@@ -29,6 +29,7 @@ import pynvml
 
 import polars as pl
 
+from cudf_polars.dsl.ir import Union
 from cudf_polars.dsl.translate import Translator
 from cudf_polars.experimental.parallel import evaluate_streaming, lower_ir_graph
 from cudf_polars.utils.config import ConfigOptions
@@ -221,9 +222,13 @@ def _explain(
     """Print the physical plan for an IR node."""
     val = offset
     count = partition_info[ir].count
-    val += f"{type(ir).__name__.upper()} ({count})\n"
-    for child in ir.children:
-        val += _explain(child, partition_info, offset=offset + "  ")
+    if isinstance(ir, Union):
+        child_type = type(ir.children[0]).__name__.upper()
+        val += f"UNION ({count} x {child_type})\n"
+    else:
+        val += f"{type(ir).__name__.upper()} ({count})\n"
+        for child in ir.children:
+            val += _explain(child, partition_info, offset=offset + "  ")
     return val
 
 
@@ -1211,7 +1216,7 @@ def run(args: argparse.Namespace) -> None:
             if args.print_results:
                 print(result)
             if args.explain:
-                print(f"Query {q_id} physical plan:")
+                print(f"Query {q_id} - Physical plan")
                 print(explain_query(q, engine))
             print(f"Ran query={q_id} in {record.duration:0.4f}s", flush=True)
             records[q_id].append(record)
