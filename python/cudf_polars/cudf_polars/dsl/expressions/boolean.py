@@ -92,7 +92,7 @@ class BooleanFunction(Expr):
             POLARS_VERSION_LT_128
             and self.name is BooleanFunction.Name.IsIn
             and not all(c.dtype == self.children[0].dtype for c in self.children)
-        ):
+        ):  # pragma: no cover
             # TODO: If polars IR doesn't put the casts in, we need to
             # mimic the supertype promotion rules.
             raise NotImplementedError("IsIn doesn't support supertype casting")
