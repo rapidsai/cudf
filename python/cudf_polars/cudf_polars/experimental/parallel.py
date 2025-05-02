@@ -9,6 +9,7 @@ import operator
 from functools import partial, reduce
 from typing import TYPE_CHECKING, Any
 
+import cudf_polars.experimental.distinct
 import cudf_polars.experimental.groupby
 import cudf_polars.experimental.io
 import cudf_polars.experimental.join
