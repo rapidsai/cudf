@@ -7,8 +7,6 @@ from __future__ import annotations
 import operator
 from typing import TYPE_CHECKING, Any
 
-import pyarrow as pa
-
 import pylibcudf as plc
 import rmm.mr
 from rmm.pylibrmm.stream import DEFAULT_STREAM
@@ -146,13 +144,17 @@ def _partition_dataframe(
     A dictionary mapping between int partition indices and
     DataFrame fragments.
     """
+    if df.num_rows == 0:
+        # Fast path for empty DataFrame
+        return {i: df for i in range(count)}
+
     # Hash the specified keys to calculate the output
     # partition for each row
     partition_map = plc.binaryop.binary_operation(
         plc.hashing.murmurhash3_x86_32(
             DataFrame([expr.evaluate(df) for expr in keys]).table
         ),
-        plc.interop.from_arrow(pa.scalar(count, type="uint32")),
+        plc.Scalar.from_py(count, plc.DataType(plc.TypeId.UINT32)),
         plc.binaryop.BinaryOperator.PYMOD,
         plc.types.DataType(plc.types.TypeId.UINT32),
     )
@@ -235,16 +237,11 @@ def _(
     ir: Shuffle, partition_info: MutableMapping[IR, PartitionInfo]
 ) -> MutableMapping[Any, Any]:
     # Extract "shuffle_method" configuration
-    if (
-        shuffle_method := ir.config_options.get(
-            "executor_options.shuffle_method",
-            default=None,
-        )
-    ) not in (*_SHUFFLE_METHODS, None):  # pragma: no cover
-        raise ValueError(
-            f"{shuffle_method} is not a supported shuffle method. "
-            f"Expected one of: {_SHUFFLE_METHODS}."
-        )
+    assert ir.config_options.executor.name == "streaming", (
+        "'in-memory' executor not supported in 'generate_ir_tasks'"
+    )
+
+    shuffle_method = ir.config_options.executor.shuffle_method
 
     # Try using rapidsmpf shuffler if we have "simple" shuffle
     # keys, and the "shuffle_method" config is set to "rapidsmpf"
