@@ -30,3 +30,4 @@ def test_dask_sizeof(arrow_tbl, size):
     plc_tbl = plc.interop.from_arrow(arrow_tbl)
     df = DataFrame.from_table(plc_tbl, names=arrow_tbl.column_names)
     assert sizeof(df) == size
+    assert sum(sizeof(c) for c in df.columns) == size
