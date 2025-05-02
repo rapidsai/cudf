@@ -61,9 +61,11 @@ cdef class gpumemoryview:
         # TODO: Need to respect readonly
         self.ptr = cai["data"][0]
 
-        # Compute and save the buffer size.
-        cdef size_type itemsize = size_of(_datatype_from_dtype_desc(
-            cai["typestr"][1:])
+        # Compute the buffer size.
+        cdef size_type itemsize = size_of(
+            _datatype_from_dtype_desc(
+                cai["typestr"][1:]  # ignore the byteorder (the first letter).
+            )
         )
         self.nbytes = functools.reduce(operator.mul, cai["shape"]) * itemsize
 
