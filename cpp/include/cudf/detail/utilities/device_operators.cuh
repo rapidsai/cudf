@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,7 +23,6 @@
 
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/fixed_point/temporary.hpp>
-#include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
@@ -129,15 +128,10 @@ struct DeviceMin {
   }
 
   template <typename T,
-            std::enable_if_t<!std::is_same_v<T, cudf::string_view> && !cudf::is_dictionary<T>() &&
-                             !cudf::is_fixed_point<T>()>* = nullptr>
+            std::enable_if_t<cudf::is_numeric<T>() && !cudf::is_fixed_point<T>()>* = nullptr>
   CUDF_HOST_DEVICE static constexpr T identity()
   {
-    // chrono types do not have std::numeric_limits specializations and should use T::max()
-    // https://eel.is/c++draft/numeric.limits.general#6
-    if constexpr (cudf::is_chrono<T>()) {
-      return T::max();
-    } else if constexpr (cuda::std::numeric_limits<T>::has_infinity) {
+    if constexpr (cuda::std::numeric_limits<T>::has_infinity) {
       return cuda::std::numeric_limits<T>::infinity();
     } else {
       return cuda::std::numeric_limits<T>::max();
@@ -155,11 +149,15 @@ struct DeviceMin {
     return cuda::std::numeric_limits<T>::max();
   }
 
-  // @brief identity specialized for string_view
-  template <typename T, std::enable_if_t<std::is_same_v<T, cudf::string_view>>* = nullptr>
+  // identity specialized for string_view and chrono types
+  // chrono types do not have std::numeric_limits specializations and should use T::max()
+  // https://eel.is/c++draft/numeric.limits.general#6
+  template <
+    typename T,
+    std::enable_if_t<std::is_same_v<T, cudf::string_view> || cudf::is_chrono<T>()>* = nullptr>
   CUDF_HOST_DEVICE inline static constexpr T identity()
   {
-    return string_view::max();
+    return T::max();
   }
 
   template <typename T, std::enable_if_t<cudf::is_dictionary<T>()>* = nullptr>
@@ -181,15 +179,10 @@ struct DeviceMax {
   }
 
   template <typename T,
-            std::enable_if_t<!std::is_same_v<T, cudf::string_view> && !cudf::is_dictionary<T>() &&
-                             !cudf::is_fixed_point<T>()>* = nullptr>
+            std::enable_if_t<cudf::is_numeric<T>() && !cudf::is_fixed_point<T>()>* = nullptr>
   CUDF_HOST_DEVICE static constexpr T identity()
   {
-    // chrono types do not have std::numeric_limits specializations and should use T::min()
-    // https://eel.is/c++draft/numeric.limits.general#6
-    if constexpr (cudf::is_chrono<T>()) {
-      return T::min();
-    } else if constexpr (cuda::std::numeric_limits<T>::has_infinity) {
+    if constexpr (cuda::std::numeric_limits<T>::has_infinity) {
       return -cuda::std::numeric_limits<T>::infinity();
     } else {
       return cuda::std::numeric_limits<T>::lowest();
@@ -207,10 +200,15 @@ struct DeviceMax {
     return cuda::std::numeric_limits<T>::lowest();
   }
 
-  template <typename T, std::enable_if_t<std::is_same_v<T, cudf::string_view>>* = nullptr>
+  // identity specialized for string_view and chrono types
+  // chrono types do not have std::numeric_limits specializations and should use T::min()
+  // https://eel.is/c++draft/numeric.limits.general#6
+  template <
+    typename T,
+    std::enable_if_t<std::is_same_v<T, cudf::string_view> || cudf::is_chrono<T>()>* = nullptr>
   CUDF_HOST_DEVICE inline static constexpr T identity()
   {
-    return string_view::min();
+    return T::min();
   }
 
   template <typename T, std::enable_if_t<cudf::is_dictionary<T>()>* = nullptr>
