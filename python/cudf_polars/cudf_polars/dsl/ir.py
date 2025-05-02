@@ -33,6 +33,7 @@ from cudf_polars.containers import Column, DataFrame
 from cudf_polars.dsl.nodebase import Node
 from cudf_polars.dsl.to_ast import to_ast, to_parquet_filter
 from cudf_polars.utils import dtypes
+from cudf_polars.utils.versions import POLARS_VERSION_LT_128
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Hashable, Iterable, Sequence
@@ -373,6 +374,12 @@ class Scan(IR):
             # TODO: polars has this implemented for parquet,
             # maybe we can do this too?
             raise NotImplementedError("slice pushdown for negative slices")
+        if (
+            POLARS_VERSION_LT_128 and self.typ in {"csv"} and self.skip_rows != 0
+        ):  # pragma: no cover
+            # This comes from slice pushdown, but that
+            # optimization doesn't happen right now
+            raise NotImplementedError("skipping rows in CSV reader")
         if self.cloud_options is not None and any(
             self.cloud_options.get(k) is not None for k in ("aws", "azure", "gcp")
         ):
@@ -479,13 +486,15 @@ class Scan(IR):
         """Evaluate and return a dataframe."""
         if typ == "csv":
 
-            def read_csv_header(path: Path | str, sep: str) -> list[str]:
+            def read_csv_header(
+                path: Path | str, sep: str
+            ) -> list[str]:  # pragma: no cover
                 with Path(path).open() as f:
                     for line in f:
                         stripped = line.strip()
                         if stripped:
                             return stripped.split(sep)
-                return []  # pragma: no cover
+                return []
 
             parse_options = reader_options["parse_options"]
             sep = chr(parse_options["separator"])
@@ -530,7 +539,9 @@ class Scan(IR):
                 options = (
                     plc.io.csv.CsvReaderOptions.builder(plc.io.SourceInfo([path]))
                     .nrows(n_rows)
-                    .skiprows(skiprows + skip_rows)
+                    .skiprows(
+                        skiprows if POLARS_VERSION_LT_128 else skiprows + skip_rows
+                    )  # pragma: no cover
                     .lineterminator(str(eol))
                     .quotechar(str(quote))
                     .decimal(decimal)
@@ -542,8 +553,9 @@ class Scan(IR):
                 if column_names is not None:
                     options.set_names([str(name) for name in column_names])
                 else:
-                    column_names = read_csv_header(path, str(sep))
-                    options.set_names(column_names)
+                    if not POLARS_VERSION_LT_128:  # pragma: no cover
+                        column_names = read_csv_header(path, str(sep))
+                        options.set_names(column_names)
                 options.set_header(header)
                 options.set_dtypes(schema)
                 if usecols is not None:
@@ -570,18 +582,19 @@ class Scan(IR):
                 plc.concatenate.concatenate(list(tables)),
                 colnames[0],
             )
-            if skip_rows + skiprows > header and not set(df.column_map.keys()).issubset(
-                schema.keys()
-            ):
-                df = df.rename_columns(
-                    dict(zip(df.column_names, schema.keys(), strict=False))
-                )
-            # null type is str in polars, so we cast
-            casted_columns = []
-            for name, c in df.column_map.items():
-                if c.obj.type() != schema[name]:
-                    casted_columns.append(c.astype(schema[name]).rename(name))
-            df = df.with_columns(casted_columns, replace_only=True)
+            if not POLARS_VERSION_LT_128:  # pragma: no cover
+                if skip_rows + skiprows > header and not set(
+                    df.column_map.keys()
+                ).issubset(schema.keys()):
+                    df = df.rename_columns(
+                        dict(zip(df.column_names, schema.keys(), strict=False))
+                    )
+                # null type is str in polars, so we cast
+                casted_columns = []
+                for name, c in df.column_map.items():
+                    if c.obj.type() != schema[name]:
+                        casted_columns.append(c.astype(schema[name]).rename(name))
+                df = df.with_columns(casted_columns, replace_only=True)
             if include_file_paths is not None:
                 df = Scan.add_file_paths(
                     include_file_paths,
@@ -672,6 +685,7 @@ class Scan(IR):
             if filters is not None:
                 # Mask must have been applied.
                 return df
+
         elif typ == "ndjson":
             json_schema: list[plc.io.json.NameAndType] = [
                 (name, typ, []) for name, typ in schema.items()

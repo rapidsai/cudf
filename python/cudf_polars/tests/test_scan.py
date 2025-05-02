@@ -11,6 +11,7 @@ from cudf_polars.testing.asserts import (
     assert_ir_translation_raises,
 )
 from cudf_polars.testing.io import make_partitioned_source
+from cudf_polars.utils.versions import POLARS_VERSION_LT_128
 
 NO_CHUNK_ENGINE = pl.GPUEngine(raise_on_fail=True, parquet_options={"chunked": False})
 
@@ -99,7 +100,11 @@ def test_scan(
     )
     request.applymarker(
         pytest.mark.xfail(
-            condition=(slice is not None and scan_fn is pl.scan_ndjson),
+            condition=(
+                not POLARS_VERSION_LT_128
+                and slice is not None
+                and scan_fn is pl.scan_ndjson
+            ),
             reason="slice pushdown not supported in the libcudf JSON reader",
         )
     )

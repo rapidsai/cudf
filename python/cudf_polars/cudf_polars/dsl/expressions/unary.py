@@ -13,6 +13,7 @@ from cudf_polars.containers import Column
 from cudf_polars.dsl.expressions.base import ExecutionContext, Expr
 from cudf_polars.dsl.expressions.literal import Literal
 from cudf_polars.utils import dtypes
+from cudf_polars.utils.versions import POLARS_VERSION_LT_128
 
 if TYPE_CHECKING:
     from cudf_polars.containers import DataFrame
@@ -233,9 +234,11 @@ class UnaryFunction(Expr):
             else:
                 evaluated = self.children[1].evaluate(df, context=context)
                 arg = evaluated.obj_scalar if evaluated.is_scalar else evaluated.obj
-            if isinstance(arg, plc.Scalar) and dtypes.can_cast(
-                column.obj.type(), arg.type()
-            ):
+            if (
+                not POLARS_VERSION_LT_128
+                and isinstance(arg, plc.Scalar)
+                and dtypes.can_cast(column.obj.type(), arg.type())
+            ):  # pragma: no cover
                 arg = plc.unary.cast(
                     plc.Column.from_scalar(arg, 1), column.obj.type()
                 ).to_scalar()
