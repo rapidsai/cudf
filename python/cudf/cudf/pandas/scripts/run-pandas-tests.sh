@@ -20,6 +20,10 @@
 
 set -euo pipefail
 
+EXITCODE=0
+trap "EXITCODE=1" ERR
+set +e
+
 # Grab the Pandas source corresponding to the version
 # of Pandas installed.
 PANDAS_VERSION=$(python -c "import pandas; print(pandas.__version__)")
@@ -650,3 +654,5 @@ PANDAS_CI="1" timeout 90m python -m pytest -p cudf.pandas \
 mv *.json ..
 cd ..
 rm -rf pandas-testing/pandas-tests/
+rapids-logger "Test script exiting with value: $EXITCODE"
+exit ${EXITCODE}
