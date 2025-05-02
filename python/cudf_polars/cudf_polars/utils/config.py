@@ -108,12 +108,17 @@ def default_blocksize(scheduler: str) -> int:
 
         pynvml.nvmlInit()
         index = os.environ.get("CUDA_VISIBLE_DEVICES", "0").split(",")[0]
-        if index and not index.isnumeric():  # pragma: no cover
-            # This means index is UUID. This works for both MIG and non-MIG device UUIDs.
+        if index and not str(index).isnumeric():  # pragma: no cover
+            # This means device_index is UUID.
+            # This works for both MIG and non-MIG device UUIDs.
             handle = pynvml.nvmlDeviceGetHandleByUUID(str.encode(index))
+            if pynvml.nvmlDeviceIsMigDeviceHandle(handle):
+                # Additionally get parent device handle
+                # if the device itself is a MIG instance
+                handle = pynvml.nvmlDeviceGetDeviceHandleFromMigDeviceHandle(handle)
         else:
-            # This is a device index
-            handle = pynvml.nvmlDeviceGetHandleByIndex(int(index))
+            handle = pynvml.nvmlDeviceGetHandleByIndex(index)
+
         device_size = pynvml.nvmlDeviceGetMemoryInfo(handle).total
 
     except ValueError:  # pragma: no cover
@@ -129,7 +134,7 @@ def default_blocksize(scheduler: str) -> int:
         # support a much larger blocksize.
         blocksize = int(device_size * 0.0625)
 
-    return max(blocksize, 1_000_000_000)
+    return max(blocksize, 256_000_000)
 
 
 @dataclasses.dataclass(frozen=True, eq=True)
