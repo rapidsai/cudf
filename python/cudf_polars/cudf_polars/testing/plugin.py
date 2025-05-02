@@ -195,7 +195,6 @@ EXPECTED_FAILURES: Mapping[str, str | tuple[str, bool]] = {
     "tests/unit/io/test_scan.py::test_async_read_21945[scan_type2]": "Debug output on stderr doesn't match",
     "tests/unit/io/test_scan.py::test_async_read_21945[scan_type3]": "Debug output on stderr doesn't match",
     "tests/unit/io/test_multiscan.py::test_multiscan_row_index[scan_csv-write_csv-csv]": "Debug output on stderr doesn't match",
-    "tests/unit/operations/test_group_by.py::test_group_by_22328": "Schema mismatch, need https://github.com/rapidsai/cudf/issues/18615",
 }
 
 

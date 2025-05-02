@@ -485,7 +485,7 @@ class Scan(IR):
                         stripped = line.strip()
                         if stripped:
                             return stripped.split(sep)
-                return []
+                return []  # pragma: no cover
 
             parse_options = reader_options["parse_options"]
             sep = chr(parse_options["separator"])
