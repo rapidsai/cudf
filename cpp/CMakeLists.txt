@@ -802,6 +802,21 @@ add_library(
   src/utilities/type_dispatcher.cpp
 )
 
+set_property(
+    SOURCE
+    src/io/orc/dict_enc.cu
+    src/io/orc/reader_impl.cu
+    src/io/orc/reader_impl_chunking.cu
+    src/io/orc/reader_impl_decode.cu
+    src/io/orc/stats_enc.cu
+    src/io/orc/stripe_data.cu
+    src/io/orc/stripe_enc.cu
+    src/io/orc/stripe_init.cu
+    src/io/orc/writer_impl.cu
+    APPEND
+    PROPERTY COMPILE_OPTIONS "-g;-G"
+)
+
 # Anything that includes jitify needs to be compiled with _FILE_OFFSET_BITS=64 due to a limitation
 # in how conda builds glibc
 set_source_files_properties(
