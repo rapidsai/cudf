@@ -20,6 +20,15 @@ if TYPE_CHECKING:
     from cudf_polars.experimental.dispatch import LowerIRTransformer
 
 
+def _print_tree(ir: IR, _offset: str = "") -> str:
+    """Print the tree representation of ``ir``."""
+    val = _offset
+    val += f"{type(ir).__name__.upper()}\n"
+    for child in ir.children:
+        val += _print_tree(child, _offset + "  ")
+    return val
+
+
 def _concat(*dfs: DataFrame) -> DataFrame:
     # Concatenate a sequence of DataFrames vertically
     return Union.do_evaluate(None, *dfs)

@@ -30,10 +30,15 @@ import pynvml
 import polars as pl
 
 from cudf_polars.dsl.translate import Translator
-from cudf_polars.experimental.parallel import evaluate_streaming
+from cudf_polars.experimental.parallel import evaluate_streaming, lower_ir_graph
+from cudf_polars.utils.config import ConfigOptions
 
 if TYPE_CHECKING:
     import pathlib
+    from collections.abc import MutableMapping
+
+    from cudf_polars.dsl.ir import IR
+    from cudf_polars.experimental.base import PartitionInfo
 
 # Without this setting, the first IO task to run
 # on each worker takes ~15 sec extra
@@ -205,6 +210,29 @@ def get_data(
 ) -> pl.LazyFrame:
     """Get table from dataset."""
     return pl.scan_parquet(f"{path}/{table_name}{suffix}")
+
+
+def _explain(
+    ir: IR,
+    partition_info: MutableMapping[IR, PartitionInfo],
+    *,
+    offset: str = "",
+) -> str:
+    """Print the physical plan for an IR node."""
+    val = offset
+    count = partition_info[ir].count
+    val += f"{type(ir).__name__.upper()} ({count})\n"
+    for child in ir.children:
+        val += _explain(child, partition_info, offset=offset + "  ")
+    return val
+
+
+def explain_query(q: pl.LazyFrame, engine: pl.GPUEngine) -> str:
+    """Print the physical plan for a query."""
+    config_options = ConfigOptions.from_polars_engine(engine)
+    ir = Translator(q._ldf.visit(), engine).translate_ir()
+    ir, partition_info = lower_ir_graph(ir, config_options)
+    return _explain(ir, partition_info)
 
 
 class PDSHQueries:
@@ -1093,6 +1121,12 @@ parser.add_argument(
     help="Print the query results",
     default=True,
 )
+parser.add_argument(
+    "--explain",
+    action=argparse.BooleanOptionalAction,
+    help="Print an outline of the physical plan",
+    default=False,
+)
 args = parser.parse_args()
 
 
@@ -1176,6 +1210,9 @@ def run(args: argparse.Namespace) -> None:
             record = Record(query=q_id, duration=t1 - t0)
             if args.print_results:
                 print(result)
+            if args.explain:
+                print(f"Query {q_id} physical plan:")
+                print(explain_query(q, engine))
             print(f"Ran query={q_id} in {record.duration:0.4f}s", flush=True)
             records[q_id].append(record)
 
