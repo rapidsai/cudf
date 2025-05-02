@@ -773,7 +773,7 @@ cdef class Column:
 
         Notes
         -----
-        Since Columns relies on Python memoryview-like semantics to maintain
+        Since Columns rely on Python memoryview-like semantics to maintain
         shared ownership of the data, the device buffers underlying this column
         might be shared between other data structures including other columns.
 
