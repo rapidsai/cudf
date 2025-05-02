@@ -402,8 +402,8 @@ void sort_merge_join::postprocess_indices(device_span<size_type> smaller_indices
                          preprocessed_right._null_processed_table_view.num_rows();
   if (compare_nulls == null_equality::UNEQUAL) {
     // if a table has no nullable column, then there's no postprocessing to be done
-    auto is_left_nullable  = has_nested_nulls(preprocessed_left._null_processed_table_view);
-    auto is_right_nullable = has_nested_nulls(preprocessed_right._null_processed_table_view);
+    auto is_left_nullable  = has_nested_nulls(preprocessed_left._table_view);
+    auto is_right_nullable = has_nested_nulls(preprocessed_right._table_view);
     if (is_left_nullable) {
       auto left_mapping       = preprocessed_left.map_table_to_unprocessed(stream);
       auto& transform_indices = is_left_smaller ? smaller_indices : larger_indices;
