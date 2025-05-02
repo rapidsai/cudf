@@ -1007,7 +1007,7 @@ parser.add_argument(
 parser.add_argument(
     "-e",
     "--executor",
-    default="dask",
+    default="streaming",
     type=str,
     choices=["in-memory", "streaming", "cpu"],
     help="Executor.",
