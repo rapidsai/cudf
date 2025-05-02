@@ -767,6 +767,30 @@ cdef class Column:
             c_result = make_unique[column](self.view())
         return Column.from_libcudf(move(c_result))
 
+    cpdef size_type device_buffer_size(self):
+        """
+        The total size of the device buffers used by the Column.
+
+        Notes
+        -----
+        Since Columns relies on Python memoryview-like semantics to maintain
+        shared ownership of the data, the device buffers underlying this Column
+        might be shared between other data structures.
+
+        Returns
+        -------
+        Number of bytes.
+        """
+        cdef size_type ret = 0
+        if self.data() is not None:
+            ret += self.data().nbytes
+        if self.null_mask() is not None:
+            ret += self.null_mask().nbytes
+        if self.children() is not None:
+            for child in self.children():
+                ret += (<Column?>child).device_buffer_size()
+        return ret
+
     def _create_nested_column_metadata(self):
         return ColumnMetadata(
             children_meta=[
