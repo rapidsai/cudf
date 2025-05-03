@@ -2525,7 +2525,7 @@ TEST_F(ParquetMetadataReaderTest, TestBasic)
 )";
     EXPECT_EQ(expected_schema, print(meta.schema().root()));
     EXPECT_EQ(meta.schema().root().name(), "schema");
-  EXPECT_EQ(meta.schema().root().type(), cudf::io::parquet::Type::UNDEFINED);
+    EXPECT_EQ(meta.schema().root().type(), cudf::io::parquet::Type::UNDEFINED);
     ASSERT_EQ(meta.schema().root().num_children(), 2);
 
     EXPECT_EQ(meta.schema().root().child(0).name(), "int_col");
