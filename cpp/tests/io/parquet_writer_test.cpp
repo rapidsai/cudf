@@ -52,6 +52,7 @@ struct CompressionTest
       setenv("LIBCUDF_NVCOMP_POLICY", "OFF", 1);
     } else if (comp_impl == "HOST") {
       setenv("LIBCUDF_HOST_COMPRESSION", "ON", 1);
+      setenv("LIBCUDF_NVCOMP_POLICY", "OFF", 1);
     } else {
       CUDF_FAIL("Invalid test parameter");
     }
@@ -1363,15 +1364,6 @@ TEST_F(ParquetWriterTest, UserNullabilityInvalid)
 TEST_P(CompressionTest, CompStats)
 {
   auto const compression_type = std::get<1>(GetParam());
-  if (compression_type == cudf::io::compression_type::NONE) {
-    GTEST_SKIP() << "No stats for NONE compression";
-  }
-
-  if (not cudf::io::is_supported_read_parquet(compression_type) or
-      not cudf::io::is_supported_write_parquet(compression_type)) {
-    std::cout << (int)compression_type << std::endl;
-    GTEST_SKIP() << "Compression not supported with the current configuration";
-  }
 
   auto table = create_random_fixed_table<int>(1, 55000, true);
 
@@ -1380,6 +1372,7 @@ TEST_P(CompressionTest, CompStats)
   std::vector<char> buffer;
   cudf::io::parquet_writer_options opts =
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{&buffer}, table->view())
+      .compression(compression_type)
       .compression_statistics(stats);
   cudf::io::write_parquet(opts);
 
@@ -1398,11 +1391,7 @@ TEST_P(CompressionTest, CompStats)
 TEST_P(CompressionTest, CompStatsEmptyTable)
 {
   auto const compression_type = std::get<1>(GetParam());
-  if (not cudf::io::is_supported_read_parquet(compression_type) or
-      not cudf::io::is_supported_write_parquet(compression_type)) {
-    std::cout << (int)compression_type << std::endl;
-    GTEST_SKIP() << "Compression not supported with the current configuration";
-  }
+
   auto table_no_rows = create_random_fixed_table<int>(20, 0, false);
 
   auto const stats = std::make_shared<cudf::io::writer_compression_statistics>();
@@ -1411,19 +1400,26 @@ TEST_P(CompressionTest, CompStatsEmptyTable)
   cudf::io::parquet_writer_options opts =
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{&unused_buffer},
                                               table_no_rows->view())
+      .compression(compression_type)
       .compression_statistics(stats);
   cudf::io::write_parquet(opts);
 
   expect_compression_stats_empty(stats);
 }
 
-INSTANTIATE_TEST_CASE_P(ParquetWriterTest,
+INSTANTIATE_TEST_CASE_P(NvcompCompressionTest,
                         CompressionTest,
-                        ::testing::Combine(::testing::Values("NVCOMP", "DEVICE_INTERNAL", "HOST"),
-                                           ::testing::Values(cudf::io::compression_type::NONE,
-                                                             cudf::io::compression_type::AUTO,
+                        ::testing::Combine(::testing::Values("NVCOMP"),
+                                           ::testing::Values(cudf::io::compression_type::AUTO,
                                                              cudf::io::compression_type::SNAPPY,
                                                              cudf::io::compression_type::LZ4,
+                                                             cudf::io::compression_type::ZSTD)));
+
+INSTANTIATE_TEST_CASE_P(OtherCompressionTest,
+                        CompressionTest,
+                        ::testing::Combine(::testing::Values("DEVICE_INTERNAL", "HOST"),
+                                           ::testing::Values(cudf::io::compression_type::AUTO,
+                                                             cudf::io::compression_type::SNAPPY,
                                                              cudf::io::compression_type::ZSTD)));
 
 TEST_F(ParquetWriterTest, SkipCompression)
