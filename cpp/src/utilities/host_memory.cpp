@@ -26,6 +26,8 @@
 #include <rmm/mr/device/pool_memory_resource.hpp>
 #include <rmm/mr/pinned_host_memory_resource.hpp>
 
+#include <atomic>
+
 namespace cudf {
 
 namespace {
