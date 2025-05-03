@@ -239,7 +239,9 @@ dependencies:
     common:
       - output_types: conda
         packages:
-          - tensorflow
+          - pip
+          - pip:
+              - tensorflow[and-cuda]
   test_xgboost:
     common:
       - output_types: conda

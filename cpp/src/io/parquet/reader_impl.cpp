@@ -848,8 +848,7 @@ parquet_column_schema walk_schema(aggregate_reader_metadata const* mt, int idx)
   for (auto const& child_idx : sch.children_idx) {
     children.push_back(walk_schema(mt, child_idx));
   }
-  return parquet_column_schema{
-    sch.name, static_cast<parquet::TypeKind>(sch.type), std::move(children)};
+  return parquet_column_schema{sch.name, static_cast<parquet::Type>(sch.type), std::move(children)};
 }
 }  // namespace
 

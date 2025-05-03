@@ -2524,9 +2524,8 @@ TEST_F(ParquetMetadataReaderTest, TestBasic)
  float_col
 )";
     EXPECT_EQ(expected_schema, print(meta.schema().root()));
-
     EXPECT_EQ(meta.schema().root().name(), "schema");
-    EXPECT_EQ(meta.schema().root().type_kind(), cudf::io::parquet::TypeKind::UNDEFINED_TYPE);
+  EXPECT_EQ(meta.schema().root().type(), cudf::io::parquet::Type::UNDEFINED);
     ASSERT_EQ(meta.schema().root().num_children(), 2);
 
     EXPECT_EQ(meta.schema().root().child(0).name(), "int_col");
@@ -2606,27 +2605,26 @@ TEST_F(ParquetMetadataReaderTest, TestNested)
   EXPECT_EQ(expected_schema, print(meta.schema().root()));
 
   EXPECT_EQ(meta.schema().root().name(), "schema");
-  EXPECT_EQ(meta.schema().root().type_kind(),
-            cudf::io::parquet::TypeKind::UNDEFINED_TYPE);  // struct
+  EXPECT_EQ(meta.schema().root().type(),
+            cudf::io::parquet::Type::UNDEFINED);  // struct
   ASSERT_EQ(meta.schema().root().num_children(), 2);
 
   auto const& out_map_col = meta.schema().root().child(0);
   EXPECT_EQ(out_map_col.name(), "maps");
-  EXPECT_EQ(out_map_col.type_kind(), cudf::io::parquet::TypeKind::UNDEFINED_TYPE);  // map
+  EXPECT_EQ(out_map_col.type(), cudf::io::parquet::Type::UNDEFINED);  // map
 
   ASSERT_EQ(out_map_col.num_children(), 1);
   EXPECT_EQ(out_map_col.child(0).name(), "key_value");  // key_value (named in parquet writer)
   ASSERT_EQ(out_map_col.child(0).num_children(), 2);
   EXPECT_EQ(out_map_col.child(0).child(0).name(), "key");    // key (named in parquet writer)
   EXPECT_EQ(out_map_col.child(0).child(1).name(), "value");  // value (named in parquet writer)
-  EXPECT_EQ(out_map_col.child(0).child(0).type_kind(),
-            cudf::io::parquet::TypeKind::INT32);  // int
-  EXPECT_EQ(out_map_col.child(0).child(1).type_kind(),
-            cudf::io::parquet::TypeKind::FLOAT);  // float
+  EXPECT_EQ(out_map_col.child(0).child(0).type(), cudf::io::parquet::Type::INT32);  // int
+  EXPECT_EQ(out_map_col.child(0).child(1).type(),
+            cudf::io::parquet::Type::FLOAT);  // float
 
   auto const& out_list_col = meta.schema().root().child(1);
   EXPECT_EQ(out_list_col.name(), "lists");
-  EXPECT_EQ(out_list_col.type_kind(), cudf::io::parquet::TypeKind::UNDEFINED_TYPE);  // list
+  EXPECT_EQ(out_list_col.type(), cudf::io::parquet::Type::UNDEFINED);  // list
   // TODO repetition type?
   ASSERT_EQ(out_list_col.num_children(), 1);
   EXPECT_EQ(out_list_col.child(0).name(), "list");  // list (named in parquet writer)
@@ -2634,17 +2632,17 @@ TEST_F(ParquetMetadataReaderTest, TestNested)
 
   auto const& out_list_struct_col = out_list_col.child(0).child(0);
   EXPECT_EQ(out_list_struct_col.name(), "element");  // elements (named in parquet writer)
-  EXPECT_EQ(out_list_struct_col.type_kind(),
-            cudf::io::parquet::TypeKind::UNDEFINED_TYPE);  // struct
+  EXPECT_EQ(out_list_struct_col.type(),
+            cudf::io::parquet::Type::UNDEFINED);  // struct
   ASSERT_EQ(out_list_struct_col.num_children(), 2);
 
   auto const& out_int_col = out_list_struct_col.child(0);
   EXPECT_EQ(out_int_col.name(), "int_field");
-  EXPECT_EQ(out_int_col.type_kind(), cudf::io::parquet::TypeKind::INT32);
+  EXPECT_EQ(out_int_col.type(), cudf::io::parquet::Type::INT32);
 
   auto const& out_float_col = out_list_struct_col.child(1);
   EXPECT_EQ(out_float_col.name(), "float_field");
-  EXPECT_EQ(out_float_col.type_kind(), cudf::io::parquet::TypeKind::FLOAT);
+  EXPECT_EQ(out_float_col.type(), cudf::io::parquet::Type::FLOAT);
 }
 
 ///////////////////////
