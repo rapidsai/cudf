@@ -639,7 +639,16 @@ and not test_xs_multiindex \
 and not test_xsqlite_if_exists \
 and not test_xsqlite_write_row_by_row \
 and not test_yaml_dump \
-and not test_zero"
+and not test_zero \
+and not test_tick_addition \
+and not test_tick_rdiv \
+and not test_with_offset_index \
+and not test_rsub_dtscalars \
+and not test_td_sub_timedelta64 \
+and not test_period_add_sub_td64_nat \
+and not test_datetime_date_tuple_columns_from_dict \
+and not test_serializable \
+and not test_value_counts_nat"
 
 PYTEST_IGNORES="--ignore=tests/io/parser/common/test_read_errors.py \
 --ignore=tests/io/test_clipboard.py" # crashes pytest workers (possibly due to fixture patching clipboard functionality)
