@@ -683,8 +683,9 @@ std::vector<thrust::host_vector<bool>> aggregate_reader_metadata::compute_data_p
     data_page_mask.emplace_back(std::move(valid_pages));
   }
 
-  CUDF_EXPECTS(total_filtered_pages < total_pages,
-               "Number of filtered pages must be smaller than total number of input pages");
+  CUDF_EXPECTS(
+    total_filtered_pages <= total_pages,
+    "Number of filtered pages must be less than or equal to the total number of input pages");
 
   return data_page_mask;
 }
