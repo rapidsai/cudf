@@ -123,14 +123,14 @@ def default_blocksize(scheduler: str) -> int:
         device_size = pynvml.nvmlDeviceGetMemoryInfo(handle).total
 
     except (ImportError, ValueError, pynvml.NVMLError):  # pragma: no cover
-        # Fall back to a conservative 8GiB default
+        # Fall back to a conservative 12GiB default
         warnings.warn(
             "Failed to query the device size with NVML. Please "
             "set 'parquet_blocksize' to a literal byte size to "
             "silence this warning.",
             stacklevel=1,
         )
-        device_size = 8 * 1024**3
+        device_size = 12 * 1024**3
 
     if scheduler == "distributed":
         # Distributed execution requires a conservative
