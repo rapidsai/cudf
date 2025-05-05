@@ -12,6 +12,7 @@ from io import BufferedWriter, BytesIO, IOBase, TextIOWrapper
 from threading import Thread
 from typing import TYPE_CHECKING, Any
 
+# import fsspec locally for performance
 import numpy as np
 import pandas as pd
 import pyarrow as pa
