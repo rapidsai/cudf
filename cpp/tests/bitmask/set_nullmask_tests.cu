@@ -85,6 +85,44 @@ struct SetBitmaskTest : public cudf::test::BaseFixture {
     cudf::set_null_mask(static_cast<cudf::bitmask_type*>(mask.data()), middle, size, !valid);
     expect_bitmask_equal(static_cast<cudf::bitmask_type*>(mask.data()), 0, expected);
   }
+
+  void test_null_partition_bulk(cudf::size_type size, cudf::size_type middle, bool valid)
+  {
+    thrust::host_vector<bool> expected1(size);
+    thrust::host_vector<bool> expected2(size);
+    std::for_each(thrust::counting_iterator<cudf::size_type>{0},
+                  thrust::counting_iterator<cudf::size_type>{size},
+                  [&](auto i) {
+                    expected1[i] = (!valid) ^ (i < middle);
+                    expected2[i] = (valid) ^ (i < middle);
+                  });
+    // TEST
+    rmm::device_buffer mask1 = create_null_mask(size, cudf::mask_state::UNINITIALIZED);
+    rmm::device_buffer mask2 = create_null_mask(size, cudf::mask_state::UNINITIALIZED);
+
+    std::vector<cudf::bitmask_type*> masks{static_cast<cudf::bitmask_type*>(mask1.data()),
+                                           static_cast<cudf::bitmask_type*>(mask2.data())};
+
+    // Set first halves of bitmasks
+    std::vector<cudf::size_type> begins{0, 0};
+    std::vector<cudf::size_type> ends{middle, middle};
+    auto valids = cudf::detail::make_host_vector<bool>(begins.size(), cudf::get_default_stream());
+    valids[0]   = valid;
+    valids[1]   = !valid;
+    cudf::set_null_masks(masks, begins, ends, valids);
+
+    // Set second halves of bitmasks
+    begins    = {middle, middle};
+    ends      = {size, size};
+    valids[0] = !valid;
+    valids[1] = valid;
+    cudf::set_null_masks(
+      masks, begins, ends, cudf::host_span<bool const>{valids.data(), valids.size()});
+
+    // Verify bitmasks
+    expect_bitmask_equal(static_cast<cudf::bitmask_type*>(mask1.data()), 0, expected1);
+    expect_bitmask_equal(static_cast<cudf::bitmask_type*>(mask2.data()), 0, expected2);
+  }
 };
 
 // tests for set_null_mask
@@ -105,6 +143,22 @@ TEST_F(SetBitmaskTest, null_mask_partition)
     this->test_null_partition(size, middle, true);
     this->test_null_partition(size, middle, false);
   }
+}
+
+TEST_F(SetBitmaskTest, null_mask_partition_bulk)
+{
+  auto const sizes = std::vector<cudf::size_type>{64, 121};
+  for (auto size : sizes) {
+    for (auto middle = 1; middle < size; middle++) {
+      this->test_null_partition_bulk(size, middle, true);
+      this->test_null_partition_bulk(size, middle, false);
+    }
+  }
+}
+
+TEST_F(SetBitmaskTest, null_mask_bulk_empty)
+{
+  EXPECT_NO_THROW(cudf::set_null_masks({}, {}, {}, {}));
 }
 
 TEST_F(SetBitmaskTest, error_range)
