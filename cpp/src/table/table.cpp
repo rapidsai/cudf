@@ -65,9 +65,10 @@ table::table(table_view view, rmm::cuda_stream_view stream, rmm::device_async_re
 
 std::size_t table::alloc_size() const
 {
-  return std::accumulate(_columns.begin(), _columns.end(), 0, [](auto const& sum, auto const& c) {
-    return sum + c->alloc_size();
-  });
+  return std::transform_reduce(
+    _columns.begin(), _columns.end(), size_t{0}, std::plus{}, [](auto const& c) {
+      return c->alloc_size();
+    });
 }
 
 // Create immutable view

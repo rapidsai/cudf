@@ -88,11 +88,10 @@ column::contents column::release() noexcept
 std::size_t column::alloc_size() const
 {
   return _data.size() + _null_mask.size() +
-         std::accumulate(
-           _children.begin(),
-           _children.end(),
-           std::size_t{0},
-           [](auto const& sum, auto const& child) { return sum + child->alloc_size(); });
+         std::transform_reduce(
+           _children.begin(), _children.end(), std::size_t{0}, std::plus{}, [](auto const& c) {
+             return c->alloc_size();
+           });
 }
 
 // Create immutable view
