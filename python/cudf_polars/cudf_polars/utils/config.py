@@ -9,6 +9,7 @@ import dataclasses
 import enum
 import json
 import os
+import warnings
 from typing import TYPE_CHECKING, Literal
 
 if TYPE_CHECKING:
@@ -123,6 +124,12 @@ def default_blocksize(scheduler: str) -> int:
 
     except (ValueError, pynvml.NVMLError):  # pragma: no cover
         # Fall back to a conservative 8GiB default
+        warnings.warn(
+            "Failed to query the device size with NVML. Please "
+            "set 'parquet_blocksize' to a literal byte size to "
+            "silence this warning.",
+            stacklevel=1,
+        )
         device_size = 8 * 1024**3
 
     if scheduler == "distributed":
@@ -202,11 +209,11 @@ class StreamingExecutor:
         object.__setattr__(
             self, "fallback_mode", StreamingFallbackMode(self.fallback_mode)
         )
-        if self.parquet_blocksize == 0:
+        if self.parquet_blocksize < 1:
             object.__setattr__(
                 self, "parquet_blocksize", default_blocksize(self.scheduler)
             )
-        if self.broadcast_join_limit == 0:
+        if self.broadcast_join_limit < 1:
             object.__setattr__(
                 self,
                 "broadcast_join_limit",
