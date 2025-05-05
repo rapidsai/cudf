@@ -198,7 +198,7 @@ def test_scan_csv_column_renames_projection_schema(tmp_path):
         (4, 2),
     ],
 )
-def test_scan_csv_multi(request, tmp_path, filename, glob, nrows_skiprows):
+def test_scan_csv_multi(tmp_path, filename, glob, nrows_skiprows):
     n_rows, skiprows = nrows_skiprows
     with (tmp_path / "test1.csv").open("w") as f:
         f.write("""foo,bar,baz\n1,2,3\n3,4,5""")
@@ -282,17 +282,17 @@ def test_scan_csv_decimal_comma(tmp_path):
     assert_gpu_result_equal(q)
 
 
-@pytest.mark.parametrize("skip_rows, has_header", [(0, True), (1, True), (1, False)])
-def test_scan_csv_skip_initial_empty_rows(request, tmp_path, skip_rows, has_header):
-    path = tmp_path / "test.csv"
-    path.write_text("\n\n\n\nfoo|bar|baz\n1|2|3\n1")
+def test_scan_csv_skip_initial_empty_rows(tmp_path):
+    with (tmp_path / "test.csv").open("w") as f:
+        f.write("""\n\n\n\nfoo|bar|baz\n1|2|3\n1""")
 
-    q = pl.scan_csv(path, separator="|", skip_rows=skip_rows, has_header=has_header)
+    q = pl.scan_csv(tmp_path / "test.csv", separator="|", skip_rows=1, has_header=False)
 
-    if not has_header:
-        assert_ir_translation_raises(q, NotImplementedError)
-    else:
-        assert_gpu_result_equal(q)
+    assert_ir_translation_raises(q, NotImplementedError)
+
+    q = pl.scan_csv(tmp_path / "test.csv", separator="|", skip_rows=1)
+
+    assert_gpu_result_equal(q)
 
 
 @pytest.mark.parametrize(
