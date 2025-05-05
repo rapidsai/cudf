@@ -209,11 +209,11 @@ class StreamingExecutor:
         object.__setattr__(
             self, "fallback_mode", StreamingFallbackMode(self.fallback_mode)
         )
-        if self.parquet_blocksize < 1:
+        if self.parquet_blocksize == 0:
             object.__setattr__(
                 self, "parquet_blocksize", default_blocksize(self.scheduler)
             )
-        if self.broadcast_join_limit < 1:
+        if self.broadcast_join_limit == 0:
             object.__setattr__(
                 self,
                 "broadcast_join_limit",
