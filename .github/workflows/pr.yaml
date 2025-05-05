@@ -245,7 +245,7 @@ jobs:
       package-name: cudf
       package-type: python
   wheel-tests-cudf:
-    needs: [changed-files]
+    needs: [wheel-build-cudf, changed-files]
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@branch-25.06
     if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_python
