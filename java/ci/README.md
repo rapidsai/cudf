@@ -11,14 +11,14 @@
 
 In the root path of cuDF repo, run below command to build the docker image.
 ```bash
-docker build -f java/ci/Dockerfile.rocky --build-arg CUDA_VERSION=11.8.0 -t cudf-build:11.8.0-devel-rocky8 .
+docker build -f java/ci/Dockerfile.rocky --build-arg CUDA_VERSION=12.8.0 -t cudf-build:12.8.0-devel-rocky8 .
 ```
 
 The following CUDA versions are supported w/ CUDA Enhanced Compatibility:
-* CUDA 11.0+
+* CUDA 12.0+
 
 Change the --build-arg CUDA_VERSION to what you need.
-You can replace the tag "cudf-build:11.8.0-devel-rocky8" with another name you like.
+You can replace the tag "cudf-build:12.8.0-devel-rocky8" with another name you like.
 
 ## Start the docker then build
 
@@ -26,7 +26,7 @@ You can replace the tag "cudf-build:11.8.0-devel-rocky8" with another name you l
 
 Run below command to start a docker container with GPU.
 ```bash
-nvidia-docker run -it cudf-build:11.8.0-devel-rocky8 bash
+nvidia-docker run -it cudf-build:12.8.0-devel-rocky8 bash
 ```
 
 ### Download the cuDF source code
@@ -47,4 +47,4 @@ scl enable gcc-toolset-11 "java/ci/build-in-docker.sh"
 
 ### The output
 
-You can find the cuDF jar in java/target/ like cudf-25.08.0-SNAPSHOT-cuda11.jar.
+You can find the cuDF jar in java/target/ like cudf-25.08.0-SNAPSHOT-cuda12.jar.
