@@ -1,7 +1,5 @@
 # Copyright (c) 2023-2025, NVIDIA CORPORATION.
 
-import operator
-
 from cython.operator cimport dereference
 
 from cpython.pycapsule cimport (
@@ -184,10 +182,14 @@ def _prepare_array_metadata(
     if not is_c_contiguous(shape, strides, itemsize):
         raise ValueError("Data must be C-contiguous")
     if shape[0] >= numeric_limits[size_type].max():
-        raise ValueError("Number of rows exceeds size_type limit for offsets column construction.")
+        raise ValueError(
+            "Number of rows exceeds size_type limit for offsets column construction."
+        )
+    flat_size = shape[0] if len(shape) == 1 else shape[0] * shape[1]
+    if flat_size > numeric_limits[size_type].max():
+        raise ValueError("Flat size exceeds size_type limit")
     data_ptr = data[0]
-    nbytes = functools.reduce(operator.mul, shape, 1) * itemsize
-
+    nbytes = shape[0] * itemsize if len(shape) == 1 else shape[0] * shape[1] * itemsize
     return data_ptr, nbytes, shape, strides, dtype
 
 

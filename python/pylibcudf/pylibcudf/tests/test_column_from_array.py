@@ -9,6 +9,8 @@ import pylibcudf as plc
 np = pytest.importorskip("numpy")
 cp = pytest.importorskip("cupy")
 
+SIZE_TYPE_LIMIT = 2**31 - 1
+
 CUPY_DTYPES = [
     np.int8,
     np.int16,
@@ -105,7 +107,20 @@ def test_row_limit_exceed_raises():
         ValueError,
         match="Number of rows exceeds size_type limit",
     ):
-        plc.Column.from_array(cp.zeros((2**31-1, 1)))
+        plc.Column.from_array(cp.zeros((SIZE_TYPE_LIMIT, 1)))
+
+
+def test_flat_size_exceeds_size_type_limit():
+    nrows = 2**16
+    ncols = (SIZE_TYPE_LIMIT // nrows) + 1
+
+    arr = cp.zeros((nrows, ncols), dtype=np.int32)
+
+    with pytest.raises(
+        ValueError,
+        match="Flat size exceeds size_type limit",
+    ):
+        plc.Column.from_array(arr)
 
 
 @pytest.mark.parametrize("obj", [None, "str"])
