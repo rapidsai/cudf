@@ -227,3 +227,27 @@ TEST(TableToDeviceArrayTest, NoColumns)
                          cudf::data_type{cudf::type_id::INT8},
                          stream));
 }
+
+TEST(TableToDeviceArrayTest, FlatSizeExceedsSizeTypeLimit)
+{
+  auto stream      = cudf::get_default_stream();
+  auto size_limit  = static_cast<size_t>(std::numeric_limits<cudf::size_type>::max());
+  auto num_rows    = size_limit * 0.6;
+  auto num_cols    = 2;
+  auto flat_size   = num_rows * num_cols;
+  auto total_bytes = flat_size * sizeof(int8_t);
+
+  std::vector<int8_t> data(num_rows, 1);
+  auto col = cudf::test::fixed_width_column_wrapper<int8_t>(data.begin(), data.end());
+
+  cudf::table_view input_table({col, col});
+
+  rmm::device_buffer output(total_bytes, stream);
+
+  EXPECT_NO_THROW(
+    cudf::table_to_array(input_table,
+                         cudf::device_span<cuda::std::byte>(
+                           reinterpret_cast<cuda::std::byte*>(output.data()), total_bytes),
+                         cudf::data_type{cudf::type_id::INT8},
+                         stream));
+}

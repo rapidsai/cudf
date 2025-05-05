@@ -48,7 +48,7 @@ void table_to_array_impl(table_view const& input,
   auto const num_columns = input.num_columns();
   auto const num_rows    = input.num_rows();
   auto const item_size   = sizeof(T);
-  auto const total_bytes = num_columns * num_rows * item_size;
+  auto const total_bytes = static_cast<size_t>(num_columns) * num_rows * item_size;
 
   CUDF_EXPECTS(output.size() >= total_bytes, "Output span is too small", std::invalid_argument);
   CUDF_EXPECTS(cudf::all_have_same_types(input.begin(), input.end()),
