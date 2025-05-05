@@ -353,4 +353,10 @@ TEST(TextSubwordTest, WordPieceErrors)
   auto nulls = cudf::test::strings_column_wrapper({"", "", ""}, {false, false, false});
   EXPECT_THROW(nvtext::load_wordpiece_vocabulary(cudf::strings_column_view(nulls)),
                std::invalid_argument);
+
+  auto vocabulary = cudf::test::strings_column_wrapper({"x"});
+  auto vocab      = nvtext::load_wordpiece_vocabulary(cudf::strings_column_view(vocabulary));
+  auto input      = cudf::test::strings_column_wrapper({"  "});
+  EXPECT_THROW(nvtext::wordpiece_tokenize(cudf::strings_column_view(input), *vocab, -1),
+               std::invalid_argument);
 }
