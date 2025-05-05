@@ -137,9 +137,10 @@ void hybrid_scan_reader_impl::select_columns(read_mode read_mode,
   _output_buffers_template.clear();
 
   // Save the states of the output buffers for reuse.
-  for (auto const& buff : _output_buffers) {
-    _output_buffers_template.emplace_back(inline_column_buffer::empty_like(buff));
-  }
+  std::transform(_output_buffers.begin(),
+                 _output_buffers.end(),
+                 std::back_inserter(_output_buffers_template),
+                 [](auto const& buff) { return inline_column_buffer::empty_like(buff); });
 }
 
 std::vector<size_type> hybrid_scan_reader_impl::all_row_groups(
