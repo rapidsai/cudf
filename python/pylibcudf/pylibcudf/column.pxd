@@ -62,7 +62,6 @@ cdef class Column:
     cdef Column _from_gpumemoryview(
         gpumemoryview data,
         tuple shape,
-        tuple strides,
         DataType dtype,
     )
 

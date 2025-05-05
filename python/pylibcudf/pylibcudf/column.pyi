@@ -10,7 +10,7 @@ from pylibcudf.scalar import Scalar
 from pylibcudf.types import DataType
 
 class ArrayInterface(TypedDict):
-    shape: tuple[int, ...] | None | object
+    shape: tuple[int, ...]
     typestr: str
     data: tuple[int, bool]
     version: int

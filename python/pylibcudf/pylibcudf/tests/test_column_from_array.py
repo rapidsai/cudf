@@ -103,7 +103,7 @@ def test_non_c_contiguous_raises(cp_2darray):
 def test_row_limit_exceed_raises():
     with pytest.raises(
         ValueError,
-        match="Number of rows exceeds size_type limit for offsets column.",
+        match="Number of rows exceeds size_type limit",
     ):
         plc.Column.from_array(cp.zeros((2**31, 1)))
 
