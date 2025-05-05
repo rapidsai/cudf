@@ -139,7 +139,7 @@ class parquet_reader_options {
   [[nodiscard]] source_info const& get_source() const { return _source; }
 
   /**
-   * @brief Returns boolean depending on whether strings should be converted to categories or not.
+   * @brief Returns boolean depending on whether strings should be converted to categories.
    *
    * @return `true` if strings should be converted to categories
    */
@@ -149,7 +149,7 @@ class parquet_reader_options {
   }
 
   /**
-   * @brief Returns boolean depending on whether to use pandas metadata or not while reading.
+   * @brief Returns boolean depending on whether to use pandas metadata while reading.
    *
    * @return `true` if pandas metadata is used while reading
    */
@@ -309,14 +309,14 @@ class parquet_reader_options {
   /**
    * @brief Sets to enable/disable use of pandas metadata to read.
    *
-   * @param val Boolean value whether to use pandas metadata
+   * @param val Boolean indicating whether to use pandas metadata
    */
   void enable_use_pandas_metadata(bool val) { _use_pandas_metadata = val; }
 
   /**
    * @brief Sets to enable/disable use of arrow schema to read.
    *
-   * @param val Boolean value whether to use arrow schema
+   * @param val Boolean indicating whether to use arrow schema
    */
   void enable_use_arrow_schema(bool val) { _use_arrow_schema = val; }
 
@@ -324,8 +324,8 @@ class parquet_reader_options {
    * @brief Sets to enable/disable reading of matching projected and filter columns from mismatched
    * Parquet sources.
    *
-   * @param val Boolean value whether to read matching projected and filter columns from mismatched
-   * Parquet sources.
+   * @param val Boolean indicating whether to read matching projected and filter columns from
+   * mismatched Parquet sources.
    */
   void enable_allow_mismatched_pq_schemas(bool val) { _allow_mismatched_pq_schemas = val; }
 
