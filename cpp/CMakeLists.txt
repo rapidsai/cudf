@@ -575,6 +575,7 @@ add_library(
   src/join/mixed_join_size_kernel.cu
   src/join/mixed_join_size_kernel_nulls.cu
   src/join/semi_join.cu
+  src/join/sort_merge_join.cu
   src/json/json_path.cu
   src/lists/contains.cu
   src/lists/combine/concatenate_list_elements.cu
@@ -773,6 +774,10 @@ add_library(
   src/text/wordpiece_tokenize.cu
   src/transform/bools_to_mask.cu
   src/transform/compute_column.cu
+  src/transform/compute_column_kernel_complex.cu
+  src/transform/compute_column_kernel_null_complex.cu
+  src/transform/compute_column_kernel_null_primitive.cu
+  src/transform/compute_column_kernel_primitive.cu
   src/transform/encode.cu
   src/transform/mask_to_bools.cu
   src/transform/nans_to_nulls.cu
