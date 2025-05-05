@@ -1367,15 +1367,15 @@ def dec(num):
     ],
 )
 def test_orc_writer_lists(data):
-    pdf_in = pd.DataFrame(data)
-
     buffer = BytesIO()
-    cudf.from_pandas(pdf_in).to_orc(
+    cudf.DataFrame(data).to_orc(
         buffer, stripe_size_rows=2048, row_index_stride=512
     )
-
-    pdf_out = pd.read_orc(buffer)
-    assert_eq(pdf_out, pdf_in)
+    # Read in as pandas but compare with pyarrow
+    # since pandas doesn't have a list type
+    pa_out = pa.Table.from_pandas(pd.read_orc(buffer))
+    pa_in = pa.table(data)
+    assert pa_out.equals(pa_in)
 
 
 def test_chunked_orc_writer_lists():
