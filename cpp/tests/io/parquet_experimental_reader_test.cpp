@@ -213,8 +213,7 @@ TEST_F(ParquetExperimentalReaderTest, TestFilterRowGroupWithStats)
 
   // Create reader options with empty source info
   cudf::io::parquet_reader_options options =
-    cudf::io::parquet_reader_options::builder(cudf::io::source_info(nullptr, 0))
-      .filter(filter_expression);
+    cudf::io::parquet_reader_options::builder().filter(filter_expression);
 
   // Fetch footer and page index bytes from the buffer.
   auto const footer_buffer = fetch_footer_bytes(file_buffer);
