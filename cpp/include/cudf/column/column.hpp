@@ -283,8 +283,8 @@ class column {
    * @brief Returns the total device allocation size of the column in bytes
    *
    * This includes the size of the data buffer, null mask, and any child columns.
-   * It also includes any padding bytes and is not guaranteed to be the same as
-   * the size()*sizeof(T) for the column's logical type.
+   * It also includes any padding bytes and is at least as large as
+   * `size()*sizeof(T)` for the column's logical type.
    *
    * @return The total allocation size in bytes
    */
