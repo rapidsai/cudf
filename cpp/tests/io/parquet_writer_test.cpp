@@ -1361,7 +1361,7 @@ TEST_F(ParquetWriterTest, UserNullabilityInvalid)
   EXPECT_THROW(cudf::io::write_parquet(write_opts), cudf::logic_error);
 }
 
-TEST_P(CompressionTest, CompStats)
+TEST_P(CompressionTest, ParquetCompStats)
 {
   auto const compression_type = std::get<1>(GetParam());
 
@@ -1388,7 +1388,7 @@ TEST_P(CompressionTest, CompStats)
   CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, table->view());
 }
 
-TEST_P(CompressionTest, CompStatsEmptyTable)
+TEST_P(CompressionTest, ParquetCompStatsEmptyTable)
 {
   auto const compression_type = std::get<1>(GetParam());
 
@@ -1407,7 +1407,7 @@ TEST_P(CompressionTest, CompStatsEmptyTable)
   expect_compression_stats_empty(stats);
 }
 
-INSTANTIATE_TEST_CASE_P(NvcompCompressionTest,
+INSTANTIATE_TEST_CASE_P(Nvcomp,
                         CompressionTest,
                         ::testing::Combine(::testing::Values("NVCOMP"),
                                            ::testing::Values(cudf::io::compression_type::AUTO,
@@ -1415,7 +1415,7 @@ INSTANTIATE_TEST_CASE_P(NvcompCompressionTest,
                                                              cudf::io::compression_type::LZ4,
                                                              cudf::io::compression_type::ZSTD)));
 
-INSTANTIATE_TEST_CASE_P(OtherCompressionTest,
+INSTANTIATE_TEST_CASE_P(Other,
                         CompressionTest,
                         ::testing::Combine(::testing::Values("DEVICE_INTERNAL", "HOST"),
                                            ::testing::Values(cudf::io::compression_type::AUTO,
