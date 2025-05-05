@@ -24,6 +24,7 @@
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
+#include <cudf/table/experimental/row_operators.cuh>
 
 #include <cuda/std/limits>
 #include <cuda/std/type_traits>
@@ -48,6 +49,7 @@ struct dispatch_primitive_type {
 /**
  * @brief Performs an equality comparison between two elements in two columns.
  */
+
 class element_equality_comparator {
  public:
   /**
@@ -75,6 +77,7 @@ class element_equality_comparator {
   __device__ bool operator()(size_type lhs_element_index,
                              size_type rhs_element_index) const noexcept
   {
+
     return cudf::equality_compare(_lhs.element<Element>(lhs_element_index),
                                   _rhs.element<Element>(rhs_element_index));
   }
@@ -111,8 +114,26 @@ class row_equality_comparator {
                           null_equality nulls_are_equal)
     : _has_nulls{has_nulls}, _lhs{lhs}, _rhs{rhs}, _nulls_are_equal{nulls_are_equal}
   {
-    CUDF_EXPECTS(lhs.num_columns() == rhs.num_columns(), "Mismatched number of columns.");
+    CUDF_EXPECTS(_lhs.num_columns() == _rhs.num_columns(), "Mismatched number of columns.");
   }
+
+  /**
+   * @brief Construct a new row equality comparator object
+   *
+   * @param has_nulls Indicates if either input column contains nulls
+   * @param lhs Preprocessed table containing the first element
+   * @param rhs Preprocessed table containing the second element (may be the same as lhs)
+   * @param nulls_are_equal Indicates if two null elements are treated as equivalent
+   */
+  row_equality_comparator(cudf::nullate::DYNAMIC const& has_nulls,
+                          std::shared_ptr<cudf::experimental::row::equality::preprocessed_table> lhs,
+                          std::shared_ptr<cudf::experimental::row::equality::preprocessed_table> rhs,
+                          null_equality nulls_are_equal)
+    : _has_nulls{has_nulls}, _lhs{*lhs}, _rhs{*rhs}, _nulls_are_equal{nulls_are_equal}
+  {
+    CUDF_EXPECTS(_lhs.num_columns() == _rhs.num_columns(), "Mismatched number of columns.");
+  }
+
 
   /**
    * @brief Compares the specified rows for equality.
@@ -288,7 +309,7 @@ class element_hasher {
    * @return The hash value of the given element
    */
   template <typename T, CUDF_ENABLE_IF(column_device_view::has_element_accessor<T>())>
-  __device__ hash_value_type operator()(column_device_view col, size_type row_index) const
+  __device__ hash_value_type operator()(column_device_view const& col, size_type row_index) const
   {
     return Hash<T>{_seed}(col.element<T>(row_index));
   }
@@ -302,7 +323,7 @@ class element_hasher {
    * @return The hash value of the given element
    */
   template <typename T, CUDF_ENABLE_IF(not column_device_view::has_element_accessor<T>())>
-  __device__ hash_value_type operator()(column_device_view col, size_type row_index) const
+  __device__ hash_value_type operator()(column_device_view const& col, size_type row_index) const
   {
     CUDF_UNREACHABLE("Unsupported type in hash.");
   }
@@ -334,6 +355,18 @@ class row_hasher {
   }
 
   /**
+   * @brief Constructs a row_hasher object with a seed value.
+   *
+   * @param has_nulls Indicates if the input column contains nulls
+   * @param t Preprocessed table to hash
+   * @param seed A seed value to use for hashing
+   */
+  row_hasher(cudf::nullate::DYNAMIC const& has_nulls, std::shared_ptr<cudf::experimental::row::equality::preprocessed_table> t, hash_value_type seed)
+    : _has_nulls{has_nulls}, _table{*t}, _seed{seed}
+  {
+  }
+
+  /**
    * @brief Computes the hash value of the row at `row_index` in the `table`
    *
    * @param row_index The index of the row in the `table` to hash
@@ -341,10 +374,10 @@ class row_hasher {
    */
   __device__ auto operator()(size_type row_index) const
   {
-    /*
-    if (_has_nulls && _table.column(0).is_null(row_index)) { return
-    cuda::std::numeric_limits<hash_value_type>::max(); }
-    */
+
+    if (_has_nulls && _table.column(0).is_null(row_index)) { 
+      return cuda::std::numeric_limits<hash_value_type>::max(); 
+    }
     return cudf::type_dispatcher<dispatch_primitive_type>(
       _table.column(0).type(), element_hasher<Hash>{_seed}, _table.column(0), row_index);
   }
