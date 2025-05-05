@@ -150,7 +150,10 @@ def test_boolean_horizontal(expr, has_nulls, wide):
 @pytest.mark.parametrize(
     "expr",
     [
-        # TODO: Need to support pl.col("b").implode()
+        pytest.param(
+            pl.col("a").is_in(pl.col("b").implode()),
+            marks=pytest.mark.xfail(reason="Need to support implode agg"),
+        ),
         pl.col("a").is_in([1, 2, 3]),
         pl.col("a").is_in([3, 4, 2]),
         pl.col("c").is_in([10, None, 11]),
