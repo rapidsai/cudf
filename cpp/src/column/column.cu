@@ -89,9 +89,10 @@ std::size_t column::alloc_size() const
 {
   return _data.size() + _null_mask.size() +
          std::accumulate(
-           _children.begin(), _children.end(), 0, [](auto const& sum, auto const& child) {
-             return sum + child->alloc_size();
-           });
+           _children.begin(),
+           _children.end(),
+           std::size_t{0},
+           [](auto const& sum, auto const& child) { return sum + child->alloc_size(); });
 }
 
 // Create immutable view
