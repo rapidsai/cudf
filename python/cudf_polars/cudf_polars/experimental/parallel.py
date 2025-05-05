@@ -9,20 +9,21 @@ import operator
 from functools import reduce
 from typing import TYPE_CHECKING, Any
 
+import cudf_polars.experimental.distinct
 import cudf_polars.experimental.groupby
 import cudf_polars.experimental.io
 import cudf_polars.experimental.join
 import cudf_polars.experimental.select
-import cudf_polars.experimental.shuffle  # noqa: F401
+import cudf_polars.experimental.shuffle
+import cudf_polars.experimental.sort  # noqa: F401
 from cudf_polars.dsl.ir import (
     IR,
     Cache,
     Filter,
-    GroupBy,
+    HConcat,
     HStack,
     MapFunction,
     Projection,
-    Select,
     Union,
 )
 from cudf_polars.dsl.traversal import CachingVisitor, traversal
@@ -43,15 +44,10 @@ if TYPE_CHECKING:
 
 
 @lower_ir_node.register(IR)
-def _(ir: IR, rec: LowerIRTransformer) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+def _(
+    ir: IR, rec: LowerIRTransformer
+) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:  # pragma: no cover
     # Default logic - Requires single partition
-
-    if len(ir.children) == 0:
-        # Default leaf node has single partition
-        return ir, {
-            ir: PartitionInfo(count=1)
-        }  # pragma: no cover; Missed by pylibcudf executor
-
     return _lower_ir_fallback(
         ir, rec, msg=f"Class {type(ir)} does not support multiple partitions."
     )
@@ -138,7 +134,12 @@ def task_graph(
 
 def get_scheduler(config_options: ConfigOptions) -> Any:
     """Get appropriate task scheduler."""
-    scheduler = config_options.get("executor_options.scheduler")
+    assert config_options.executor.name == "streaming", (
+        "'in-memory' executor not supported in 'generate_ir_tasks'"
+    )
+
+    scheduler = config_options.executor.scheduler
+
     if (
         scheduler == "distributed"
     ):  # pragma: no cover; block depends on executor type and Distributed cluster
@@ -151,9 +152,9 @@ def get_scheduler(config_options: ConfigOptions) -> Any:
         SerializerManager.run_on_cluster(client)
         return client.get
     elif scheduler == "synchronous":
-        from dask import get
+        from cudf_polars.experimental.scheduler import synchronous_scheduler
 
-        return get
+        return synchronous_scheduler
     else:  # pragma: no cover
         raise ValueError(f"{scheduler} not a supported scheduler option.")
 
@@ -184,28 +185,19 @@ def evaluate_streaming(ir: IR, config_options: ConfigOptions) -> DataFrame:
 def _(
     ir: IR, partition_info: MutableMapping[IR, PartitionInfo]
 ) -> MutableMapping[Any, Any]:
-    # Single-partition default behavior.
-    # This is used by `generate_ir_tasks` for all unregistered IR sub-types.
-    if partition_info[ir].count > 1:
-        raise NotImplementedError(
-            f"Failed to generate multiple output tasks for {ir}."
-        )  # pragma: no cover
-
-    child_names = []
-    for child in ir.children:
-        child_names.append(get_key_name(child))
-        if partition_info[child].count > 1:
-            raise NotImplementedError(
-                f"Failed to generate tasks for {ir} with child {child}."
-            )  # pragma: no cover
-
-    key_name = get_key_name(ir)
+    # Generate pointwise (embarrassingly-parallel) tasks by default
+    child_names = [get_key_name(c) for c in ir.children]
+    bcast_child = [partition_info[c].count == 1 for c in ir.children]
     return {
-        (key_name, 0): (
+        key: (
             ir.do_evaluate,
             *ir._non_child_args,
-            *((child_name, 0) for child_name in child_names),
+            *[
+                (child_name, 0 if bcast_child[j] else i)
+                for j, child_name in enumerate(child_names)
+            ],
         )
+        for i, key in enumerate(partition_info[ir].keys(ir))
     }
 
 
@@ -288,27 +280,4 @@ lower_ir_node.register(Projection, _lower_ir_pwise)
 lower_ir_node.register(Cache, _lower_ir_pwise)
 lower_ir_node.register(Filter, _lower_ir_pwise)
 lower_ir_node.register(HStack, _lower_ir_pwise)
-
-
-def _generate_ir_tasks_pwise(
-    ir: IR, partition_info: MutableMapping[IR, PartitionInfo]
-) -> MutableMapping[Any, Any]:
-    # Generate partition-wise (i.e. embarrassingly-parallel) tasks
-    child_names = [get_key_name(c) for c in ir.children]
-    return {
-        key: (
-            ir.do_evaluate,
-            *ir._non_child_args,
-            *[(child_name, i) for child_name in child_names],
-        )
-        for i, key in enumerate(partition_info[ir].keys(ir))
-    }
-
-
-generate_ir_tasks.register(Projection, _generate_ir_tasks_pwise)
-generate_ir_tasks.register(Cache, _generate_ir_tasks_pwise)
-generate_ir_tasks.register(Filter, _generate_ir_tasks_pwise)
-generate_ir_tasks.register(GroupBy, _generate_ir_tasks_pwise)
-generate_ir_tasks.register(HStack, _generate_ir_tasks_pwise)
-generate_ir_tasks.register(MapFunction, _generate_ir_tasks_pwise)
-generate_ir_tasks.register(Select, _generate_ir_tasks_pwise)
+lower_ir_node.register(HConcat, _lower_ir_pwise)

@@ -33,7 +33,6 @@ from pylibcudf.libcudf.utilities.traits cimport is_fixed_width
 from pylibcudf.libcudf.copying cimport get_element
 
 
-from rmm.librmm.device_buffer cimport device_buffer
 from rmm.pylibrmm.device_buffer cimport DeviceBuffer
 from rmm.pylibrmm.stream cimport Stream
 
@@ -41,6 +40,10 @@ from .gpumemoryview cimport gpumemoryview
 from .filling cimport sequence
 from .gpumemoryview cimport gpumemoryview
 from .scalar cimport Scalar
+from .traits cimport (
+    is_fixed_width as plc_is_fixed_width,
+    is_nested,
+)
 from .types cimport DataType, size_of, type_id
 from ._interop_helpers cimport (
     _release_schema,
@@ -377,40 +380,41 @@ cdef class Column:
         )
 
     @staticmethod
-    cdef Column from_rmm_buffer(
-        unique_ptr[device_buffer] buff,
+    def from_rmm_buffer(
+        DeviceBuffer buff,
         DataType dtype,
         size_type size,
         list children,
-        Stream stream=None,
     ):
         """
         Create a Column from an RMM DeviceBuffer.
 
         Parameters
         ----------
-        buff : unique_ptr[DeviceBuffer]
-            Pointer to the data rmm.DeviceBuffer.
+        buff : DeviceBuffer
+            The data rmm.DeviceBuffer.
         size : size_type
             The number of rows in the column.
         dtype : DataType
             The type of the data in the buffer.
         children : list
             List of child columns.
-        stream : Stream, default None
-            The stream to use for the operation.
 
         Notes
         -----
         To provide a mask and null count, use `Column.with_mask` after
         this method.
         """
-        stream = _get_stream(stream)
-        cdef DeviceBuffer rmm_buff = DeviceBuffer.c_from_unique_ptr(
-            move(buff), stream
-        )
-        cdef gpumemoryview data = gpumemoryview(rmm_buff)
+        if plc_is_fixed_width(dtype) and len(children) != 0:
+            raise ValueError("Fixed-width types must have zero children.")
+        elif dtype.id() == type_id.STRING and len(children) != 1:
+            raise ValueError("String columns have have 1 child column of offsets.")
+        elif is_nested(dtype) and len(children) == 0:
+            raise ValueError(
+                "List and struct columns must have at least one child column."
+            )
 
+        cdef gpumemoryview data = gpumemoryview(buff)
         return Column(
             dtype,
             size,
@@ -438,6 +442,17 @@ cdef class Column:
         cdef column_contents contents = libcudf_col.get().release()
 
         stream = _get_stream(stream)
+        # Note that when converting to cudf Column objects we'll need to pull
+        # out the base object.
+        cdef gpumemoryview data = gpumemoryview(
+            DeviceBuffer.c_from_unique_ptr(move(contents.data), stream)
+        )
+
+        cdef gpumemoryview mask = None
+        if null_count > 0:
+            mask = gpumemoryview(
+                DeviceBuffer.c_from_unique_ptr(move(contents.null_mask))
+            )
 
         children = []
         if contents.children.size() != 0:
@@ -446,22 +461,16 @@ cdef class Column:
                     Column.from_libcudf(move(contents.children[i]), stream)
                 )
 
-        cdef Column result = Column.from_rmm_buffer(
-            # Note that when converting to cudf Column objects
-            # we'll need to pull  out the base object.
-            move(contents.data),
+        return Column(
             dtype,
             size,
+            data,
+            mask,
+            null_count,
+            # Initial offset when capturing a C++ column is always 0.
+            0,
             children,
-            stream,
         )
-        cdef gpumemoryview mask = None
-        if null_count > 0:
-            mask = gpumemoryview(
-                DeviceBuffer.c_from_unique_ptr(move(contents.null_mask), stream)
-            )
-            result = result.with_mask(mask, null_count)
-        return result
 
     cpdef Column with_mask(self, gpumemoryview mask, size_type null_count):
         """Augment this column with a new null mask.

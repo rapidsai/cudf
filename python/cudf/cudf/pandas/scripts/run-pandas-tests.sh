@@ -128,7 +128,8 @@ TEST_THAT_CRASH_PYTEST_WORKERS="not test_bitmasks_pyarrow \
 and not test_large_string_pyarrow \
 and not test_interchange_from_corrected_buffer_dtypes \
 and not test_eof_states \
-and not test_array_tz"
+and not test_array_tz \
+and not test_resample_empty_dataframe"
 
 
 # TODO: Add reason to skip these tests

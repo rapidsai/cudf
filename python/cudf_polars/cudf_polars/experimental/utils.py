@@ -18,11 +18,33 @@ if TYPE_CHECKING:
     from cudf_polars.containers import DataFrame
     from cudf_polars.dsl.ir import IR
     from cudf_polars.experimental.dispatch import LowerIRTransformer
+    from cudf_polars.utils.config import ConfigOptions
 
 
 def _concat(*dfs: DataFrame) -> DataFrame:
     # Concatenate a sequence of DataFrames vertically
     return Union.do_evaluate(None, *dfs)
+
+
+def _fallback_inform(msg: str, config_options: ConfigOptions) -> None:
+    """Inform the user of single-partition fallback."""
+    # Satisfy type checking
+    assert config_options.executor.name == "streaming", (
+        "'in-memory' executor not supported in '_fallback_inform'"
+    )
+
+    match fallback_mode := config_options.executor.fallback_mode:
+        case "warn":
+            warnings.warn(msg, stacklevel=2)
+        case "raise":
+            raise NotImplementedError(msg)
+        case "silent":
+            pass
+        case _:  # pragma: no cover; Should never get here.
+            raise ValueError(
+                f"{fallback_mode} is not a supported 'fallback_mode' "
+                "option. Please use 'warn', 'raise', or 'silent'."
+            )
 
 
 def _lower_ir_fallback(
@@ -55,20 +77,7 @@ def _lower_ir_fallback(
     if fallback and msg:
         # Warn/raise the user if any children were collapsed
         # and the "fallback_mode" configuration is not "silent"
-        match fallback_mode := rec.state["config_options"].get(
-            "executor_options.fallback_mode"
-        ):
-            case "warn":
-                warnings.warn(msg, stacklevel=2)
-            case "raise":
-                raise NotImplementedError(msg)
-            case "silent":
-                pass
-            case _:  # pragma: no cover; Should never get here.
-                raise ValueError(
-                    f"{fallback_mode} is not a supported 'fallback_mode' "
-                    "option. Please use 'warn', 'raise', or 'silent'."
-                )
+        _fallback_inform(msg, rec.state["config_options"])
 
     # Reconstruct and return
     new_node = ir.reconstruct(children)
