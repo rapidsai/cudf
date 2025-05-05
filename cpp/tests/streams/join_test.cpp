@@ -24,6 +24,7 @@
 #include <cudf/join/conditional_join.hpp>
 #include <cudf/join/join.hpp>
 #include <cudf/join/mixed_join.hpp>
+#include <cudf/join/sort_merge_join.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/types.hpp>
 
@@ -60,6 +61,12 @@ class JoinTest : public cudf::test::BaseFixture {
 TEST_F(JoinTest, InnerJoin)
 {
   cudf::inner_join(table0, table1, cudf::null_equality::EQUAL, cudf::test::get_default_stream());
+}
+
+TEST_F(JoinTest, SortMergeInnerJoin)
+{
+  cudf::sort_merge_inner_join(
+    table0, table1, cudf::null_equality::EQUAL, cudf::test::get_default_stream());
 }
 
 TEST_F(JoinTest, LeftJoin)
