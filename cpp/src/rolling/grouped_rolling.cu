@@ -32,6 +32,7 @@
 #include <cudf/unary.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/memory_resource.hpp>
+#include <cudf/utilities/span.hpp>
 #include <cudf/utilities/traits.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -220,49 +221,52 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
 
 namespace detail {
 
-std::unique_ptr<table> grouped_range_rolling_window(
-  table_view const& group_keys,
-  column_view const& orderby,
-  order order,
-  null_order null_order,
-  range_window_type preceding,
-  range_window_type following,
-  size_type min_periods,
-  std::vector<std::pair<column_view const&, rolling_aggregation const&>> requests,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
+std::unique_ptr<table> grouped_range_rolling_window(table_view const& group_keys,
+                                                    column_view const& orderby,
+                                                    order order,
+                                                    null_order null_order,
+                                                    range_window_type preceding,
+                                                    range_window_type following,
+                                                    host_span<rolling_request const> requests,
+                                                    rmm::cuda_stream_view stream,
+                                                    rmm::device_async_resource_ref mr)
 {
   std::vector<std::unique_ptr<column>> results;
   results.reserve(requests.size());
   // Can we avoid making the window bounds?
-  if (std::all_of(requests.begin(), requests.end(), [](auto const& req) {
-        return std::get<0>(req).is_empty();
+  if (std::all_of(requests.begin(), requests.end(), [](rolling_request const& req) {
+        return req.values.is_empty();
       })) {
-    std::transform(
-      requests.begin(), requests.end(), std::back_inserter(results), [](auto const& req) {
-        auto const& [value, agg] = req;
-        return cudf::detail::empty_output_for_rolling_aggregation(value, agg);
-      });
+    std::transform(requests.begin(),
+                   requests.end(),
+                   std::back_inserter(results),
+                   [](rolling_request const& req) {
+                     return cudf::detail::empty_output_for_rolling_aggregation(req.values,
+                                                                               *req.aggregation);
+                   });
     return std::make_unique<table>(std::move(results));
   }
-  CUDF_EXPECTS(
-    std::all_of(requests.begin(),
-                requests.end(),
-                [&orderby](auto const& req) { return std::get<0>(req).size() == orderby.size(); }),
-    "Size mismatch between request columns and orderby column.");
+  CUDF_EXPECTS(std::all_of(requests.begin(),
+                           requests.end(),
+                           [&orderby](rolling_request const& req) {
+                             return req.values.size() == orderby.size();
+                           }),
+               "Size mismatch between request columns and orderby column.");
 
   // Can we do an optimized fully unbounded aggregation in all cases?
-  if (std::all_of(requests.begin(), requests.end(), [&](auto const& req) {
+  if (std::all_of(requests.begin(), requests.end(), [&](rolling_request const& req) {
         return can_optimize_unbounded_window(std::holds_alternative<unbounded>(preceding),
                                              std::holds_alternative<unbounded>(following),
-                                             min_periods,
-                                             std::get<1>(req));
+                                             req.min_periods,
+                                             *req.aggregation);
       })) {
-    std::transform(
-      requests.begin(), requests.end(), std::back_inserter(results), [&](auto const& req) {
-        auto const& [value, agg] = req;
-        return optimized_unbounded_window(group_keys, value, agg, stream, mr);
-      });
+    std::transform(requests.begin(),
+                   requests.end(),
+                   std::back_inserter(results),
+                   [&](rolling_request const& req) {
+                     return optimized_unbounded_window(
+                       group_keys, req.values, *req.aggregation, stream, mr);
+                   });
     return std::make_unique<table>(std::move(results));
   }
   // OK, need to do the more complicated thing
@@ -278,16 +282,20 @@ std::unique_ptr<table> grouped_range_rolling_window(
   auto const& preceding_view = preceding_column->view();
   auto const& following_view = following_column->view();
   std::transform(
-    requests.begin(), requests.end(), std::back_inserter(results), [&](auto const& req) {
-      auto const& [value, agg] = req;
+    requests.begin(), requests.end(), std::back_inserter(results), [&](rolling_request const& req) {
       if (can_optimize_unbounded_window(std::holds_alternative<unbounded>(preceding),
                                         std::holds_alternative<unbounded>(following),
-                                        min_periods,
-                                        agg)) {
-        return optimized_unbounded_window(group_keys, value, agg, stream, mr);
+                                        req.min_periods,
+                                        *req.aggregation)) {
+        return optimized_unbounded_window(group_keys, req.values, *req.aggregation, stream, mr);
       } else {
-        return detail::rolling_window(
-          value, preceding_view, following_view, min_periods, agg, stream, mr);
+        return detail::rolling_window(req.values,
+                                      preceding_view,
+                                      following_view,
+                                      req.min_periods,
+                                      *req.aggregation,
+                                      stream,
+                                      mr);
       }
     });
   return std::make_unique<table>(std::move(results));
@@ -483,6 +491,25 @@ std::unique_ptr<column> grouped_range_rolling_window(table_view const& group_key
                                               aggr,
                                               stream,
                                               mr);
+}
+
+std::unique_ptr<table> grouped_range_rolling_window(table_view const& group_keys,
+                                                    column_view const& orderby,
+                                                    order order,
+                                                    null_order null_order,
+                                                    range_window_type preceding,
+                                                    range_window_type following,
+                                                    host_span<rolling_request const> requests,
+                                                    rmm::cuda_stream_view stream,
+                                                    rmm::device_async_resource_ref mr)
+{
+  CUDF_FUNC_RANGE();
+  CUDF_EXPECTS(std::all_of(requests.begin(),
+                           requests.end(),
+                           [](rolling_request const& req) { return req.min_periods > 0; }),
+               "All min_periods must be positive");
+  return detail::grouped_range_rolling_window(
+    group_keys, orderby, order, null_order, preceding, following, requests, stream, mr);
 }
 
 }  // namespace cudf

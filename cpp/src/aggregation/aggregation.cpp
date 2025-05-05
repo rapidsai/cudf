@@ -985,4 +985,8 @@ bool is_valid_aggregation(data_type source, aggregation::Kind k)
   return dispatch_type_and_aggregation(source, k, is_valid_aggregation_impl{});
 }
 }  // namespace detail
+bool is_valid_aggregation(data_type source, aggregation::Kind k)
+{
+  return detail::is_valid_aggregation(source, k);
+}
 }  // namespace cudf

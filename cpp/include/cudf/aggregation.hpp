@@ -796,11 +796,20 @@ std::unique_ptr<Base> make_merge_tdigest_aggregation(int max_centroids = 1000);
 /**
  * @brief Factory to create a BITWISE_AGG aggregation.
  *
- * @param op The bitwise operation to perform on the input column.
+ * @param op The bitwise operation to perform on the input column
  * @return A BITWISE_AGG aggregation object
  */
 template <typename Base>
 std::unique_ptr<Base> make_bitwise_aggregation(bitwise_op op);
+
+/**
+ * @brief Indicate if an aggregation is supported for a source datatype.
+ *
+ * @param source Type of the column to perform the aggregation on
+ * @param kind The kind of the aggregation
+ * @returns true if the aggregation is supported
+ */
+bool is_valid_aggregation(data_type source, aggregation::Kind kind);
 
 /** @} */  // end of group
 }  // namespace CUDF_EXPORT cudf
