@@ -105,7 +105,7 @@ def test_row_limit_exceed_raises():
         ValueError,
         match="Number of rows exceeds size_type limit",
     ):
-        plc.Column.from_array(cp.zeros((2**31, 1)))
+        plc.Column.from_array(cp.zeros((2**31-1, 1)))
 
 
 @pytest.mark.parametrize("obj", [None, "str"])

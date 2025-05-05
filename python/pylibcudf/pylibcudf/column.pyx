@@ -183,9 +183,8 @@ def _prepare_array_metadata(
     itemsize = size_of(dtype)
     if not is_c_contiguous(shape, strides, itemsize):
         raise ValueError("Data must be C-contiguous")
-    if shape[0] > numeric_limits[size_type].max():
-        raise ValueError("Number of rows exceeds size_type limit")
-
+    if shape[0] >= numeric_limits[size_type].max():
+        raise ValueError("Number of rows exceeds size_type limit for offsets column construction.")
     data_ptr = data[0]
     nbytes = functools.reduce(operator.mul, shape, 1) * itemsize
 
