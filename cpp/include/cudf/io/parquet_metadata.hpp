@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,12 +21,11 @@
 
 #pragma once
 
+#include <cudf/io/parquet_schema.hpp>
 #include <cudf/io/types.hpp>
 #include <cudf/utilities/export.hpp>
 
-#include <optional>
 #include <string_view>
-#include <variant>
 #include <vector>
 
 namespace CUDF_EXPORT cudf {
@@ -37,23 +36,8 @@ namespace io {
  * @file
  */
 
-//! Parquet I/O interfaces
-namespace parquet {
-/**
- * @brief Basic data types in Parquet, determines how data is physically stored
- */
-enum class TypeKind : int8_t {
-  UNDEFINED_TYPE       = -1,  // Undefined for non-leaf nodes
-  BOOLEAN              = 0,
-  INT32                = 1,
-  INT64                = 2,
-  INT96                = 3,  // Deprecated
-  FLOAT                = 4,
-  DOUBLE               = 5,
-  BYTE_ARRAY           = 6,
-  FIXED_LEN_BYTE_ARRAY = 7,
-};
-}  // namespace parquet
+//! Parquet physical `Type`
+using cudf::io::parquet::Type;
 
 /**
  * @brief Schema of a parquet column, including the nested columns.
@@ -75,9 +59,9 @@ struct parquet_column_schema {
    * @param children child columns (empty for non-nested types)
    */
   parquet_column_schema(std::string_view name,
-                        parquet::TypeKind type,
+                        Type type,
                         std::vector<parquet_column_schema> children)
-    : _name{name}, _type_kind{type}, _children{std::move(children)}
+    : _name{name}, _type{type}, _children{std::move(children)}
   {
   }
 
@@ -89,11 +73,11 @@ struct parquet_column_schema {
   [[nodiscard]] auto name() const { return _name; }
 
   /**
-   * @brief Returns parquet type of the column.
+   * @brief Returns parquet physical type of the column.
    *
-   * @return Column parquet type
+   * @return Column parquet physical type
    */
-  [[nodiscard]] auto type_kind() const { return _type_kind; }
+  [[nodiscard]] auto type() const { return _type; }
 
   /**
    * @brief Returns schemas of all child columns.
@@ -133,7 +117,7 @@ struct parquet_column_schema {
  private:
   std::string _name;
   // 3 types available: Physical, Converted, Logical.
-  parquet::TypeKind _type_kind;  // Physical
+  Type _type;  // Physical type
   std::vector<parquet_column_schema> _children;
 };
 
