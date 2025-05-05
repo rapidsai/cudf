@@ -122,7 +122,7 @@ def default_blocksize(scheduler: str) -> int:
 
         device_size = pynvml.nvmlDeviceGetMemoryInfo(handle).total
 
-    except (ValueError, pynvml.NVMLError):  # pragma: no cover
+    except (ImportError, ValueError, pynvml.NVMLError):  # pragma: no cover
         # Fall back to a conservative 8GiB default
         warnings.warn(
             "Failed to query the device size with NVML. Please "
