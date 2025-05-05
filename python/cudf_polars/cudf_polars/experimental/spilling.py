@@ -4,33 +4,18 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Literal, Protocol, TypeVar, overload
+from typing import TYPE_CHECKING, Any
 
 from rapidsmpf.integrations.dask.spilling import SpillableWrapper
 
 from cudf_polars.containers import DataFrame
 
 if TYPE_CHECKING:
-    from collections.abc import MutableMapping
+    from collections.abc import Callable, MutableMapping
     from typing import Any
 
 
-T = TypeVar("T")
-
-
-class _Callable[T](Protocol):
-    def __call__(self, *args: Any) -> T: ...
-
-
-@overload
-def wrap_arg(obj: DataFrame) -> SpillableWrapper[DataFrame]: ...
-
-
-@overload
-def wrap_arg(obj: T) -> T: ...
-
-
-def wrap_arg(obj: DataFrame | T) -> SpillableWrapper[DataFrame] | T:
+def wrap_arg(obj: Any) -> Any:
     """
     Make `obj` spillable if it is a DataFrame.
 
@@ -48,7 +33,7 @@ def wrap_arg(obj: DataFrame | T) -> SpillableWrapper[DataFrame] | T:
     return obj
 
 
-def unwrap_arg(obj: SpillableWrapper[T] | T) -> T:
+def unwrap_arg(obj: Any) -> Any:
     """
     Unwraps a SpillableWrapper to retrieve the original object.
 
@@ -66,23 +51,11 @@ def unwrap_arg(obj: SpillableWrapper[T] | T) -> T:
     return obj
 
 
-@overload
 def wrap_func_spillable(
-    func: _Callable[DataFrame], *, make_func_output_spillable: Literal[True]
-) -> _Callable[SpillableWrapper[DataFrame]]: ...
-
-
-@overload
-def wrap_func_spillable(
-    func: _Callable[T], *, make_func_output_spillable: bool
-) -> _Callable[T]: ...
-
-
-def wrap_func_spillable(
-    func: _Callable[T] | _Callable[DataFrame],
+    func: Callable,
     *,
     make_func_output_spillable: bool,
-) -> _Callable[T] | _Callable[SpillableWrapper[DataFrame]]:
+) -> Callable:
     """
     Wraps a function to handle spillable DataFrames.
 
@@ -98,7 +71,7 @@ def wrap_func_spillable(
     A wrapped function that processes spillable DataFrames.
     """
 
-    def wrapper(*args: Any) -> T:
+    def wrapper(*args: Any) -> Any:
         ret: Any = func(*(unwrap_arg(arg) for arg in args))
         if make_func_output_spillable:
             ret = wrap_arg(ret)
@@ -119,7 +92,7 @@ def wrap_dataframe_in_spillable(
     Parameters
     ----------
     graph
-        Dask graph.
+        Task graph.
     ignore_key
         The key to ignore when wrapping function, typically the key of the
         output node.
