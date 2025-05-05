@@ -29,11 +29,6 @@ static void bench_table_to_array(nvbench::state& state)
   auto const num_rows = static_cast<cudf::size_type>(state.get_int64("num_rows"));
   auto const num_cols = static_cast<cudf::size_type>(state.get_int64("columns"));
 
-  if (static_cast<std::size_t>(num_rows) * num_cols >=
-      static_cast<std::size_t>(std::numeric_limits<cudf::size_type>::max())) {
-    state.skip("Input size exceeds cudf::size_type limit");
-  }
-
   data_profile profile = data_profile_builder()
                            .distribution(cudf::type_id::INT32, distribution_id::UNIFORM, 0, 1000)
                            .no_validity();

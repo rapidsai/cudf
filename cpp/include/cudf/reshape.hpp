@@ -118,7 +118,7 @@ std::unique_ptr<column> byte_cast(
  *
  * The output buffer must be preallocated and passed as a `device_span` using
  * a `device_span<cuda::std::byte>`. It must be large enough to hold
- * `num_rows * num_columns * size_of(output_dtype)` bytes.
+ * `num_rows * num_columns * sizeof(output_dtype)` bytes.
  *
  * @throws cudf::logic_error if columns do not all have the same type as `output_dtype`
  * @throws cudf::logic_error if `output_dtype` is not a fixed-width type

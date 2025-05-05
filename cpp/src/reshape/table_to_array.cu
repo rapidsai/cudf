@@ -58,15 +58,15 @@ void table_to_array_impl(table_view const& input,
 
   auto* base_ptr = output.data();
 
-  auto h_srcs = make_host_vector<void*>(num_columns, stream);
-  auto h_dsts = make_host_vector<void*>(num_columns, stream);
+  auto h_srcs = make_host_vector<T const*>(num_columns, stream);
+  auto h_dsts = make_host_vector<T*>(num_columns, stream);
 
   std::transform(input.begin(), input.end(), h_srcs.begin(), [](auto& col) {
-    return const_cast<void*>(static_cast<void const*>(col.template data<T>()));
+    return const_cast<T*>(col.template data<T>());
   });
 
   for (int i = 0; i < num_columns; ++i) {
-    h_dsts[i] = static_cast<void*>(base_ptr + i * item_size * num_rows);
+    h_dsts[i] = reinterpret_cast<T*>(base_ptr + i * item_size * num_rows);
   }
 
   auto const mr = cudf::get_current_device_resource_ref();
@@ -76,16 +76,14 @@ void table_to_array_impl(table_view const& input,
 
   thrust::constant_iterator<size_t> sizes(static_cast<size_t>(item_size * num_rows));
 
-  void* d_temp_storage      = nullptr;
   size_t temp_storage_bytes = 0;
-  cub::DeviceMemcpy::Batched(d_temp_storage,
+  cub::DeviceMemcpy::Batched(nullptr,
                              temp_storage_bytes,
                              d_srcs.begin(),
                              d_dsts.begin(),
                              sizes,
                              num_columns,
                              stream.value());
-
   rmm::device_buffer temp_storage(temp_storage_bytes, stream);
   cub::DeviceMemcpy::Batched(temp_storage.data(),
                              temp_storage_bytes,
@@ -121,8 +119,7 @@ void table_to_array(table_view const& input,
                     data_type output_dtype,
                     rmm::cuda_stream_view stream)
 {
-  CUDF_EXPECTS(
-    input.num_columns() > 0, "Input must have at least one column.", std::invalid_argument);
+  if (input.num_columns() == 0) { return; }
 
   cudf::type_dispatcher<cudf::dispatch_storage_type>(
     output_dtype, table_to_array_dispatcher{input, output, stream});

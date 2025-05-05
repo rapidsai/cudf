@@ -194,3 +194,36 @@ TEST(TableToDeviceArrayTest, FailsWhenOutputSpanTooSmall)
                          stream),
     std::invalid_argument);
 }
+
+TEST(TableToDeviceArrayTest, NoRows)
+{
+  auto stream = cudf::get_default_stream();
+
+  cudf::test::fixed_width_column_wrapper<int32_t> col({});
+  cudf::table_view input_table({col});
+
+  rmm::device_buffer output(0, stream);
+
+  EXPECT_NO_THROW(
+    cudf::table_to_array(input_table,
+                         cudf::device_span<cuda::std::byte>(
+                           reinterpret_cast<cuda::std::byte*>(output.data()), output.size()),
+                         cudf::data_type{cudf::type_id::INT32},
+                         stream));
+}
+
+TEST(TableToDeviceArrayTest, NoColumns)
+{
+  auto stream = cudf::get_default_stream();
+
+  cudf::table_view input_table{std::vector<cudf::column_view>{}};
+
+  rmm::device_buffer output(0, stream);
+
+  EXPECT_NO_THROW(
+    cudf::table_to_array(input_table,
+                         cudf::device_span<cuda::std::byte>(
+                           reinterpret_cast<cuda::std::byte*>(output.data()), output.size()),
+                         cudf::data_type{cudf::type_id::INT8},
+                         stream));
+}
