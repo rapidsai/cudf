@@ -175,13 +175,13 @@ aggregate_reader_metadata::select_payload_columns(
     // Remove filter columns from the provided payload column names
     if (filter_column_names.has_value() and not filter_column_names->empty()) {
       // Add filter column names to a hash set for faster lookup
-      std::unordered_set<std::string> filter_columns(filter_column_names->begin(),
-                                                     filter_column_names->end());
+      std::unordered_set<std::string> filter_columns_set(filter_column_names->begin(),
+                                                         filter_column_names->end());
       // Remove a payload column name if it is also present in the hash set
       valid_payload_columns.erase(std::remove_if(valid_payload_columns.begin(),
                                                  valid_payload_columns.end(),
-                                                 [&filter_columns](std::string const& col) {
-                                                   return filter_columns.count(col) > 0;
+                                                 [&filter_columns_set](auto const& col) {
+                                                   return filter_columns_set.count(col) > 0;
                                                  }),
                                   valid_payload_columns.end());
     }
