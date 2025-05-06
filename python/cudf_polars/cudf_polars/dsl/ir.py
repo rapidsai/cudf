@@ -714,12 +714,9 @@ class Scan(IR):
                 null_order=plc.types.NullOrder.AFTER,
                 name=name,
             )
+            df = DataFrame([index_col, *df.columns])
             if next(iter(schema)) != name:
-                name_col_map = {col.name: col for col in [index_col, *df.columns]}
-                columns = [name_col_map[name] for name in schema]
-            else:
-                columns = [index_col, *df.columns]
-            df = DataFrame(columns)
+                df = df.select(schema)
         assert all(c.obj.type() == schema[name] for name, c in df.column_map.items())
         if predicate is None:
             return df
