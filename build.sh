@@ -159,7 +159,8 @@ function buildLibCudfJniInDocker {
                 -DCUDF_USE_PER_THREAD_DEFAULT_STREAM=ON \
                 -DCUDF_LARGE_STRINGS_DISABLED=ON \
                 -DRMM_LOGGING_LEVEL=OFF \
-                -DBUILD_SHARED_LIBS=OFF && \
+                -DBUILD_SHARED_LIBS=OFF \
+                -DCUDF_EXPORT_NVCOMP=ON && \
              cmake --build . --parallel ${PARALLEL_LEVEL} && \
              cd $workspaceRepoDir/java && \
              mvn ${MVN_PHASES:-"package"} \
