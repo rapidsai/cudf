@@ -54,19 +54,21 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
   /**
    * @brief Materializes column chunk dictionary pages into `cuco::static_set`s
    *
-   * @param dictionary_page_data Dictionary page data device buffers for each input row group
-   * @param input_row_group_indices Lists of input row groups, one per source
+   * @param chunks Host device span of column chunk descriptors, one per input column chunk
+   * @param pages Host device span of decoded page headers, one per input column chunk
    * @param total_row_groups Total number of row groups in `input_row_group_indices`
    * @param output_dtypes Datatypes of output columns
    * @param dictionary_col_schemas schema indices of dictionary columns only
    * @param stream CUDA stream used for device memory operations and kernel launches
    *
-   * @return A flattened list of `cuco::static_set_ref` device buffers for each filter column
-   * across row groups
+   * @return A pair of vectors containing `cuco::static_set_ref` buffers and offsets within
+   * buffers for each column chunk's static set, one per filter column.
    */
-  [[nodiscard]] std::vector<rmm::device_buffer> materialize_dictionaries(
-    cudf::host_span<rmm::device_buffer> dictionary_page_data,
-    host_span<std::vector<size_type> const> input_row_group_indices,
+  [[nodiscard]] std::pair<std::vector<rmm::device_buffer>, std::vector<std::vector<size_type>>>
+  materialize_dictionaries(
+    cudf::detail::hostdevice_span<parquet::detail::ColumnChunkDesc const> chunks,
+    cudf::detail::hostdevice_span<parquet::detail::PageInfo const> pages,
+    cudf::size_type total_row_groups,
     host_span<data_type const> output_dtypes,
     host_span<int const> dictionary_col_schemas,
     rmm::cuda_stream_view stream) const;
@@ -74,7 +76,8 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
   /**
    * @brief Filters the row groups using dictionary pages
    *
-   * @param dictionaries `cuco::static_set_ref` device buffers for column chunk dictionary
+   * @param hash_set_storage Hash set device buffers for column chunk dictionaries, one per column
+   * @param hash_set_offsets Offsets within `hash_set_storage` for each column chunk, one per column
    * @param input_row_group_indices Lists of input row groups, one per source
    * @param literals Lists of literals, one per input column
    * @param operators Lists of operators, one per input column
@@ -84,10 +87,11 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
    * @param filter AST expression to filter row groups based on bloom filter membership
    * @param stream CUDA stream used for device memory operations and kernel launches
    *
-   * @return Surviving row group indices if any of them are filtered.
+   * @return A pair of filtered row group indices if any is filtered.
    */
   [[nodiscard]] std::optional<std::vector<std::vector<size_type>>> apply_dictionary_filter(
-    cudf::host_span<rmm::device_buffer> dictionaries,
+    cudf::host_span<rmm::device_buffer> hash_set_storage,
+    cudf::host_span<std::vector<size_type> const> hash_set_offsets,
     host_span<std::vector<size_type> const> input_row_group_indices,
     host_span<std::vector<ast::literal*> const> literals,
     host_span<std::vector<ast::ast_operator> const> operators,
@@ -199,20 +203,26 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
   /**
    * @brief Filter the row groups using dictionaries based on predicate filter
    *
-   * @param dictionary_page_data Device buffers of dictionary pages, one per input column chunk
+   * @param chunks Host device span of column chunk descriptors, one per input column chunk
+   * @param pages Host device span of decoded page headers, one per input column chunk
    * @param row_group_indices Input row groups indices
+   * @param literals Lists of literals, one per input column
+   * @param operators Lists of operators, one per input column
    * @param output_dtypes Datatypes of output columns
-   * @param output_column_schemas schema indices of output columns
+   * @param dictionary_col_schemas schema indices of dictionary columns only
    * @param filter Optional AST expression to filter row groups based on dictionary pages
    * @param stream CUDA stream used for device memory operations and kernel launches
    *
    * @return Filtered row group indices, if any are filtered
    */
-  [[nodiscard]] std::vector<std::vector<size_type>> filter_row_groups_with_dictionary_pages(
-    cudf::host_span<rmm::device_buffer> dictionary_page_data,
-    host_span<std::vector<size_type> const> row_group_indices,
-    host_span<data_type const> output_dtypes,
-    host_span<int const> output_column_schemas,
+  [[nodiscard]] std::vector<std::vector<cudf::size_type>> filter_row_groups_with_dictionary_pages(
+    cudf::detail::hostdevice_span<parquet::detail::ColumnChunkDesc const> chunks,
+    cudf::detail::hostdevice_span<parquet::detail::PageInfo const> pages,
+    cudf::host_span<std::vector<cudf::size_type> const> row_group_indices,
+    cudf::host_span<std::vector<ast::literal*> const> literals,
+    cudf::host_span<std::vector<ast::ast_operator> const> operators,
+    cudf::host_span<data_type const> output_dtypes,
+    cudf::host_span<int const> output_column_schemas,
     std::optional<std::reference_wrapper<ast::expression const>> filter,
     rmm::cuda_stream_view stream) const;
 

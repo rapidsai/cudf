@@ -181,7 +181,24 @@ hybrid_scan_reader_impl::secondary_filters_byte_ranges(
   cudf::host_span<std::vector<size_type> const> row_group_indices,
   parquet_reader_options const& options)
 {
-  return {};
+  CUDF_EXPECTS(not row_group_indices.empty(), "Empty input row group indices encountered");
+  CUDF_EXPECTS(options.get_filter().has_value(), "Filter expression must not be empty");
+
+  select_columns(read_mode::FILTER_COLUMNS, options);
+
+  table_metadata metadata;
+  populate_metadata(metadata);
+  auto expr_conv = named_to_reference_converter(options.get_filter(), metadata);
+  CUDF_EXPECTS(expr_conv.get_converted_expr().has_value(),
+               "Columns names in filter expression must be convertible to index references");
+  auto output_dtypes = get_output_types(_output_buffers_template);
+
+  auto const bloom_filter_bytes = _metadata->get_bloom_filter_bytes(
+    row_group_indices, output_dtypes, _output_column_schemas, expr_conv.get_converted_expr());
+  auto const dictionary_page_bytes = _metadata->get_dictionary_page_bytes(
+    row_group_indices, output_dtypes, _output_column_schemas, expr_conv.get_converted_expr());
+
+  return {bloom_filter_bytes, dictionary_page_bytes};
 }
 
 std::vector<std::vector<size_type>>
@@ -196,19 +213,9 @@ hybrid_scan_reader_impl::filter_row_groups_with_dictionary_pages(
 
   select_columns(read_mode::FILTER_COLUMNS, options);
 
-  table_metadata metadata;
-  populate_metadata(metadata);
-  auto expr_conv = named_to_reference_converter(options.get_filter(), metadata);
-  CUDF_EXPECTS(expr_conv.get_converted_expr().has_value(),
-               "Columns names in filter expression must be convertible to index references");
-  auto output_dtypes = get_output_types(_output_buffers_template);
-
-  return _metadata->filter_row_groups_with_dictionary_pages(dictionary_page_data,
-                                                            row_group_indices,
-                                                            output_dtypes,
-                                                            _output_column_schemas,
-                                                            expr_conv.get_converted_expr(),
-                                                            stream);
+  // Not yet implemented
+  return _metadata->filter_row_groups_with_dictionary_pages(
+    {}, {}, row_group_indices, {}, {}, {}, {}, {}, stream);
 }
 
 std::vector<std::vector<size_type>> hybrid_scan_reader_impl::filter_row_groups_with_bloom_filters(
