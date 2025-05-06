@@ -51,10 +51,10 @@ from ._interop_helpers cimport (
 from .null_mask cimport bitmask_allocation_size_bytes
 from .utils cimport _get_stream
 
+from .gpumemoryview import _datatype_from_dtype_desc
 from ._interop_helpers import ColumnMetadata
 
 import functools
-
 
 __all__ = ["Column", "ListColumnView", "is_c_contiguous"]
 
@@ -792,6 +792,30 @@ cdef class Column:
             c_result = make_unique[column](self.view())
         return Column.from_libcudf(move(c_result))
 
+    cpdef uint64_t device_buffer_size(self):
+        """
+        The total size of the device buffers used by the Column.
+
+        Notes
+        -----
+        Since Columns rely on Python memoryview-like semantics to maintain
+        shared ownership of the data, the device buffers underlying this column
+        might be shared between other data structures including other columns.
+
+        Returns
+        -------
+        Number of bytes.
+        """
+        cdef uint64_t ret = 0
+        if self.data() is not None:
+            ret += self.data().nbytes
+        if self.null_mask() is not None:
+            ret += self.null_mask().nbytes
+        if self.children() is not None:
+            for child in self.children():
+                ret += (<Column?>child).device_buffer_size()
+        return ret
+
     def _create_nested_column_metadata(self):
         return ColumnMetadata(
             children_meta=[
@@ -878,34 +902,6 @@ cdef class ListColumnView:
         (even direct pylibcudf Cython users).
         """
         return lists_column_view(self._column.view())
-
-
-@functools.cache
-def _datatype_from_dtype_desc(desc):
-    mapping = {
-        'u1': type_id.UINT8,
-        'u2': type_id.UINT16,
-        'u4': type_id.UINT32,
-        'u8': type_id.UINT64,
-        'i1': type_id.INT8,
-        'i2': type_id.INT16,
-        'i4': type_id.INT32,
-        'i8': type_id.INT64,
-        'f4': type_id.FLOAT32,
-        'f8': type_id.FLOAT64,
-        'b1': type_id.BOOL8,
-        'M8[s]': type_id.TIMESTAMP_SECONDS,
-        'M8[ms]': type_id.TIMESTAMP_MILLISECONDS,
-        'M8[us]': type_id.TIMESTAMP_MICROSECONDS,
-        'M8[ns]': type_id.TIMESTAMP_NANOSECONDS,
-        'm8[s]': type_id.DURATION_SECONDS,
-        'm8[ms]': type_id.DURATION_MILLISECONDS,
-        'm8[us]': type_id.DURATION_MICROSECONDS,
-        'm8[ns]': type_id.DURATION_NANOSECONDS,
-    }
-    if desc not in mapping:
-        raise ValueError(f"Unsupported dtype: {desc}")
-    return DataType(mapping[desc])
 
 
 def is_c_contiguous(
