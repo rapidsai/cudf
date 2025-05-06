@@ -27,7 +27,8 @@ rapids-logger "pytest pylibcudf"
 rapids-logger "pytest cudf"
 ./ci/run_cudf_pytests.sh \
   --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf.xml" \
-  --numprocesses=8 \
+  --numprocesses=1 \
+  -v \
   --dist=worksteal \
   --cov-config=../.coveragerc \
   --cov=cudf \
