@@ -83,11 +83,7 @@ jitify2::StringVec build_jit_typenames(std::vector<std::string> const& span_outp
                  std::back_inserter(typenames),
                  [&](auto i) { return column_inputs[i].accessor(i); });
 
-  if (has_user_data) {
-    typenames.push_back(
-      jitify2::reflection::Template("cudf::transformation::jit::user_data_accessor")
-        .instantiate(0));
-  }
+  if (has_user_data) { typenames.push_back("cudf::transformation::jit::user_data_accessor"); }
 
   return typenames;
 }
@@ -261,15 +257,12 @@ void launch_column_output_kernel(jitify2::ConfiguredKernel& kernel,
       output_columns, stream, mr);
   auto [input_handles, inputs] =
     column_views_to_device<column_device_view, column_view>(input_columns, stream, mr);
-  auto user_data_host =
-    user_data.has_value() ? std::vector<void*>{user_data.value()} : std::vector<void*>{};
-  auto device_user_data = to_device_vector(user_data_host, stream, mr);
 
   mutable_column_device_view const* outputs_ptr = outputs.data();
   column_device_view const* inputs_ptr          = inputs.data();
-  void* const* user_data_ptr                    = device_user_data.data();
+  void* p_user_data                             = user_data.value_or(nullptr);
 
-  std::array<void*, 3> args{&outputs_ptr, &inputs_ptr, &user_data_ptr};
+  std::array<void*, 3> args{&outputs_ptr, &inputs_ptr, &p_user_data};
 
   kernel->launch(args.data());
 }
@@ -286,15 +279,12 @@ void launch_span_kernel(jitify2::ConfiguredKernel& kernel,
     std::vector{cudf::jit::device_span<T>{output.data(), output.size()}}, stream, mr);
   auto [input_handles, inputs] =
     column_views_to_device<column_device_view, column_view>(input_cols, stream, mr);
-  auto user_data_host =
-    user_data.has_value() ? std::vector<void*>{user_data.value()} : std::vector<void*>{};
-  auto device_user_data = to_device_vector(user_data_host, stream, mr);
 
   cudf::jit::device_span<T> const* outputs_ptr = outputs.data();
   column_device_view const* inputs_ptr         = inputs.data();
-  void* const* user_data_ptr                   = device_user_data.data();
+  void* p_user_data                            = user_data.value_or(nullptr);
 
-  std::array<void*, 3> args{&outputs_ptr, &inputs_ptr, &user_data_ptr};
+  std::array<void*, 3> args{&outputs_ptr, &inputs_ptr, &p_user_data};
 
   kernel->launch(args.data());
 }
