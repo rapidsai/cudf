@@ -1227,7 +1227,7 @@ def run(args: argparse.Namespace) -> None:
                     executor_options = {}
                 else:
                     executor_options = {
-                        "parquet_blocksize": run_config.blocksize,
+                        "target_partition_size": run_config.blocksize,
                         "shuffle_method": run_config.shuffle,
                         "broadcast_join_limit": run_config.broadcast_join_limit,
                         "cardinality_factor": {
