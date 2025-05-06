@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include "compression_common.hpp"
 #include "parquet_common.hpp"
 
 #include <cudf_test/base_fixture.hpp>
@@ -37,32 +38,7 @@
 
 using cudf::test::iterators::no_nulls;
 
-struct CompressionTest
-  : public ParquetWriterTest,
-    public ::testing::WithParamInterface<std::tuple<std::string, cudf::io::compression_type>> {
-  CompressionTest()
-  {
-    auto const comp_impl = std::get<0>(GetParam());
-
-    if (comp_impl == "NVCOMP") {
-      setenv("LIBCUDF_HOST_COMPRESSION", "OFF", 1);
-      setenv("LIBCUDF_NVCOMP_POLICY", "ALWAYS", 1);
-    } else if (comp_impl == "DEVICE_INTERNAL") {
-      setenv("LIBCUDF_HOST_COMPRESSION", "OFF", 1);
-      setenv("LIBCUDF_NVCOMP_POLICY", "OFF", 1);
-    } else if (comp_impl == "HOST") {
-      setenv("LIBCUDF_HOST_COMPRESSION", "ON", 1);
-      setenv("LIBCUDF_NVCOMP_POLICY", "OFF", 1);
-    } else {
-      CUDF_FAIL("Invalid test parameter");
-    }
-  }
-  ~CompressionTest() override
-  {
-    unsetenv("LIBCUDF_HOST_COMPRESSION");
-    unsetenv("LIBCUDF_NVCOMP_POLICY");
-  }
-};
+using ParquetCompressionTest = CompressionTest<ParquetWriterTest>;
 
 template <typename mask_op_t>
 void test_durations(mask_op_t mask_op, bool use_byte_stream_split, bool arrow_schema)
@@ -1361,7 +1337,7 @@ TEST_F(ParquetWriterTest, UserNullabilityInvalid)
   EXPECT_THROW(cudf::io::write_parquet(write_opts), cudf::logic_error);
 }
 
-TEST_P(CompressionTest, ParquetCompStats)
+TEST_P(ParquetCompressionTest, CompStats)
 {
   auto const compression_type = std::get<1>(GetParam());
 
@@ -1388,7 +1364,7 @@ TEST_P(CompressionTest, ParquetCompStats)
   CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, table->view());
 }
 
-TEST_P(CompressionTest, ParquetCompStatsEmptyTable)
+TEST_P(ParquetCompressionTest, CompStatsEmptyTable)
 {
   auto const compression_type = std::get<1>(GetParam());
 
@@ -1407,17 +1383,55 @@ TEST_P(CompressionTest, ParquetCompStatsEmptyTable)
   expect_compression_stats_empty(stats);
 }
 
+TEST_P(ParquetCompressionTest, RoundtripBasic)
+{
+  constexpr auto num_rows     = 12000;
+  auto const compression_type = std::get<1>(GetParam());
+
+  // Generate compressible data
+  auto int_sequence =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 100; });
+  auto float_sequence =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i / 32; });
+
+  cudf::test::fixed_width_column_wrapper<int> int_col(int_sequence, int_sequence + num_rows);
+  cudf::test::fixed_width_column_wrapper<float> float_col(float_sequence,
+                                                          float_sequence + num_rows);
+
+  table_view expected({int_col, float_col});
+
+  std::vector<char> out_buffer;
+  cudf::io::parquet_writer_options out_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{&out_buffer}, expected)
+      .compression(compression_type);
+  // TODO: add compression statistics
+  cudf::io::write_parquet(out_opts);
+
+  cudf::io::parquet_reader_options in_opts = cudf::io::parquet_reader_options::builder(
+    cudf::io::source_info{out_buffer.data(), out_buffer.size()});
+  auto result = cudf::io::read_parquet(in_opts);
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
+}
+
 INSTANTIATE_TEST_CASE_P(Nvcomp,
-                        CompressionTest,
+                        ParquetCompressionTest,
                         ::testing::Combine(::testing::Values("NVCOMP"),
                                            ::testing::Values(cudf::io::compression_type::AUTO,
                                                              cudf::io::compression_type::SNAPPY,
                                                              cudf::io::compression_type::LZ4,
                                                              cudf::io::compression_type::ZSTD)));
 
-INSTANTIATE_TEST_CASE_P(Other,
-                        CompressionTest,
-                        ::testing::Combine(::testing::Values("DEVICE_INTERNAL", "HOST"),
+INSTANTIATE_TEST_CASE_P(DeviceInternal,
+                        ParquetCompressionTest,
+                        ::testing::Combine(::testing::Values("DEVICE_INTERNAL"),
+                                           ::testing::Values(cudf::io::compression_type::AUTO,
+                                                             cudf::io::compression_type::SNAPPY,
+                                                             cudf::io::compression_type::ZSTD)));
+
+INSTANTIATE_TEST_CASE_P(Host,
+                        ParquetCompressionTest,
+                        ::testing::Combine(::testing::Values("HOST"),
                                            ::testing::Values(cudf::io::compression_type::AUTO,
                                                              cudf::io::compression_type::SNAPPY,
                                                              cudf::io::compression_type::ZSTD)));

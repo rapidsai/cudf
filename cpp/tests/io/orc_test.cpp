@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include "compression_common.hpp"
+
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
@@ -140,31 +142,7 @@ struct OrcStatisticsTest : public cudf::test::BaseFixture {};
 struct OrcMetadataReaderTest : public cudf::test::BaseFixture {};
 
 // TODO: can this be in a common header?
-struct CompressionTest
-  : public cudf::test::BaseFixture,
-    public ::testing::WithParamInterface<std::tuple<std::string, cudf::io::compression_type>> {
-  CompressionTest()
-  {
-    auto const comp_impl = std::get<0>(GetParam());
-
-    if (comp_impl == "NVCOMP") {
-      setenv("LIBCUDF_HOST_COMPRESSION", "OFF", 1);
-      setenv("LIBCUDF_NVCOMP_POLICY", "ALWAYS", 1);
-    } else if (comp_impl == "DEVICE_INTERNAL") {
-      setenv("LIBCUDF_HOST_COMPRESSION", "OFF", 1);
-      setenv("LIBCUDF_NVCOMP_POLICY", "OFF", 1);
-    } else if (comp_impl == "HOST") {
-      setenv("LIBCUDF_HOST_COMPRESSION", "ON", 1);
-    } else {
-      CUDF_FAIL("Invalid test parameter");
-    }
-  }
-  ~CompressionTest() override
-  {
-    unsetenv("LIBCUDF_HOST_COMPRESSION");
-    unsetenv("LIBCUDF_NVCOMP_POLICY");
-  }
-};
+using OrcCompressionTest = CompressionTest<OrcWriterTest>;
 
 namespace {
 // Generates a vector of uniform random values of type T
@@ -1755,7 +1733,7 @@ TEST_F(OrcWriterTest, CompStats)
   EXPECT_FALSE(std::isnan(stats->compression_ratio()));
 }
 
-TEST_P(CompressionTest, OrcCompStats)
+TEST_P(OrcCompressionTest, CompStats)
 {
   auto const compression_type = std::get<1>(GetParam());
 
@@ -1793,7 +1771,7 @@ void expect_compression_stats_empty(cudf::io::writer_compression_statistics cons
   EXPECT_TRUE(std::isnan(stats->compression_ratio()));
 }
 
-TEST_P(CompressionTest, OrcCCompStatsEmptyTable)
+TEST_P(OrcCompressionTest, CompStatsEmptyTable)
 {
   auto const compression_type = std::get<1>(GetParam());
 
@@ -1811,7 +1789,7 @@ TEST_P(CompressionTest, OrcCCompStatsEmptyTable)
   expect_compression_stats_empty(stats.get());
 }
 
-TEST_P(CompressionTest, OrcCChunkedCompStatsEmptyTable)
+TEST_P(OrcCompressionTest, ChunkedCompStatsEmptyTable)
 {
   auto const compression_type = std::get<1>(GetParam());
 
@@ -2057,7 +2035,7 @@ TEST_F(OrcStatisticsTest, Empty)
   EXPECT_EQ(ts6.count[0], 0);
 }
 
-TEST_P(CompressionTest, OrcRoundtripBasic)
+TEST_P(OrcCompressionTest, RoundtripBasic)
 {
   constexpr auto num_rows     = 12000;
   auto const compression_type = std::get<1>(GetParam());
@@ -2093,18 +2071,24 @@ TEST_P(CompressionTest, OrcRoundtripBasic)
   EXPECT_EQ(stats->num_skipped_bytes(), 0);
   EXPECT_FALSE(std::isnan(stats->compression_ratio()));
 }
-
 INSTANTIATE_TEST_CASE_P(Nvcomp,
-                        CompressionTest,
+                        OrcCompressionTest,
                         ::testing::Combine(::testing::Values("NVCOMP"),
                                            ::testing::Values(cudf::io::compression_type::AUTO,
                                                              cudf::io::compression_type::SNAPPY,
                                                              cudf::io::compression_type::LZ4,
                                                              cudf::io::compression_type::ZSTD)));
 
-INSTANTIATE_TEST_CASE_P(Other,
-                        CompressionTest,
-                        ::testing::Combine(::testing::Values("DEVICE_INTERNAL", "HOST"),
+INSTANTIATE_TEST_CASE_P(DeviceInternal,
+                        OrcCompressionTest,
+                        ::testing::Combine(::testing::Values("DEVICE_INTERNAL"),
+                                           ::testing::Values(cudf::io::compression_type::AUTO,
+                                                             cudf::io::compression_type::SNAPPY,
+                                                             cudf::io::compression_type::ZSTD)));
+
+INSTANTIATE_TEST_CASE_P(Host,
+                        OrcCompressionTest,
+                        ::testing::Combine(::testing::Values("HOST"),
                                            ::testing::Values(cudf::io::compression_type::AUTO,
                                                              cudf::io::compression_type::SNAPPY,
                                                              cudf::io::compression_type::ZSTD)));
