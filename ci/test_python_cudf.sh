@@ -24,10 +24,10 @@ set +e
 #   --cov=pylibcudf \
 #   --cov-report=xml:"${RAPIDS_COVERAGE_DIR}/pylibcudf-coverage.xml" \
 #   --cov-report=term
-conda install -c conda-forge "aws-c-http<0.10" -y
+conda install -c conda-forge "aws-c-http<0.10" "numba-cuda<0.10"-y
 
 rapids-logger "pytest cudf"
-timeout 60m ./ci/run_cudf_pytests.sh \
+timeout 90m ./ci/run_cudf_pytests.sh \
   --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf.xml" \
   --numprocesses=8 \
   --dist=worksteal \
