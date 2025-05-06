@@ -142,6 +142,9 @@ class StreamingExecutor:
         The method to use for shuffling data between workers. ``None``
         by default, which will use 'rapidsmpf' if installed and fall back to
         'tasks' if not.
+    rapidsmpf_spill
+        Whether to wrap task arguments and output in objects that are
+        spillable by 'rapidsmpf'.
     """
 
     name: Literal["streaming"] = dataclasses.field(default="streaming", init=False)
@@ -153,6 +156,7 @@ class StreamingExecutor:
     groupby_n_ary: int = 32
     broadcast_join_limit: int = 4
     shuffle_method: ShuffleMethod | None = None
+    rapidsmpf_spill: bool = False
 
     def __post_init__(self) -> None:
         if self.scheduler == "synchronous" and self.shuffle_method == "rapidsmpf":
@@ -181,6 +185,8 @@ class StreamingExecutor:
             raise TypeError("groupby_n_ary must be an int")
         if not isinstance(self.broadcast_join_limit, int):
             raise TypeError("broadcast_join_limit must be an int")
+        if not isinstance(self.rapidsmpf_spill, bool):
+            raise TypeError("rapidsmpf_spill must be bool")
 
     def __hash__(self) -> int:
         # cardinality factory, a dict, isn't natively hashable. We'll dump it
