@@ -86,8 +86,9 @@ def wrap_func_spillable(
             headroom = 0
             probable_io_task = True
             for arg in args:
-                if isinstance(arg, SpillableWrapper) and arg._on_host is not None:
-                    headroom += sizeof(arg._on_host)
+                if isinstance(arg, SpillableWrapper):
+                    if arg._on_host is not None:
+                        headroom += sizeof(arg._on_host)
                     probable_io_task = False
             if probable_io_task:
                 # Likely an IO task - Assume we need target_partition_size
