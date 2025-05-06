@@ -2072,9 +2072,9 @@ void round_trip_basic(cudf::io::compression_type compression_type)
   EXPECT_FALSE(std::isnan(stats->compression_ratio()));
 }
 
-TEST_P(OrcCompressionTest, RoundtripBasic) { round_trip_basic(std::get<1>(GetParam())); }
+TEST_P(OrcCompressionTest, RoundTripBasic) { round_trip_basic(std::get<1>(GetParam())); }
 
-TEST_P(OrcDecompressionTest, RoundtripBasic) { round_trip_basic(std::get<1>(GetParam())); }
+TEST_P(OrcDecompressionTest, RoundTripBasic) { round_trip_basic(std::get<1>(GetParam())); }
 
 TEST_F(OrcWriterTest, BounceBufferBug)
 {

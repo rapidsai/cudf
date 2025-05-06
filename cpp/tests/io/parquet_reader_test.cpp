@@ -2802,7 +2802,7 @@ TYPED_TEST(ParquetReaderPredicatePushdownTest, FilterTyped)
   }
 }
 
-TEST_P(ParquetDecompressionTest, BasicRoundTrip)
+TEST_P(ParquetDecompressionTest, RoundTripBasic)
 {
   auto const compression_type = std::get<1>(GetParam());
 

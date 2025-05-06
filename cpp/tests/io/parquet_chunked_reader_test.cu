@@ -1886,7 +1886,7 @@ TEST_F(ParquetChunkedReaderTest, TestNumRowsPerSourceEmptyTable)
     std::equal(expected_counts.cbegin(), expected_counts.cend(), num_rows_per_source.cbegin()));
 }
 
-TEST_P(ParquetChunkedDecompressionTest, BasicRoundTrip)
+TEST_P(ParquetChunkedDecompressionTest, RoundTripBasic)
 {
   auto const compression_type = std::get<1>(GetParam());
 

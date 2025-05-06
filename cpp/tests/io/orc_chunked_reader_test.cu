@@ -1482,7 +1482,7 @@ TEST_F(OrcChunkedReaderInputLimitTest, SizeTypeRowsOverflow)
 #endif  // LOCAL_TEST
 }
 
-TEST_P(OrcChunkedDecompressionTest, BasicRoundTrip)
+TEST_P(OrcChunkedDecompressionTest, RoundTripBasic)
 {
   auto const compression_type = std::get<1>(GetParam());
 

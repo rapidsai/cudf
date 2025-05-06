@@ -1383,7 +1383,7 @@ TEST_P(ParquetCompressionTest, CompStatsEmptyTable)
   expect_compression_stats_empty(stats);
 }
 
-TEST_P(ParquetCompressionTest, RoundtripBasic)
+TEST_P(ParquetCompressionTest, RoundTripBasic)
 {
   constexpr auto num_rows     = 12000;
   auto const compression_type = std::get<1>(GetParam());
