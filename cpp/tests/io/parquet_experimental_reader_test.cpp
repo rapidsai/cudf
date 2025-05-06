@@ -134,7 +134,7 @@ auto create_parquet_with_stats()
 
   cudf::io::write_parquet(out_opts);
 
-  return std::pair{std::move(table), std::vector<uint8_t>(buffer.begin(), buffer.end())};
+  return std::pair{std::move(table), std::move(buffer)};
 }
 
 }  // namespace
@@ -155,8 +155,12 @@ TEST_F(ParquetExperimentalReaderTest, TestMetadata)
   cudf::io::parquet_reader_options options =
     cudf::io::parquet_reader_options::builder().filter(filter_expression);
 
+  // Input file buffer span
+  auto const file_buffer_span = cudf::host_span<uint8_t const>(
+    reinterpret_cast<uint8_t const*>(file_buffer.data()), file_buffer.size());
+
   // Fetch footer and page index bytes from the buffer.
-  auto const footer_buffer = fetch_footer_bytes(file_buffer);
+  auto const footer_buffer = fetch_footer_bytes(file_buffer_span);
 
   // Create hybrid scan reader with footer bytes
   auto const reader =
@@ -173,9 +177,9 @@ TEST_F(ParquetExperimentalReaderTest, TestMetadata)
   auto const page_index_byte_range = reader->page_index_byte_range();
 
   // Fetch page index bytes from the input buffer
-  auto const page_index_buffer = fetch_page_index_bytes(file_buffer, page_index_byte_range);
+  auto const page_index_buffer = fetch_page_index_bytes(file_buffer_span, page_index_byte_range);
 
-  // Setup page index - API # 3
+  // Setup page index
   reader->setup_page_index(page_index_buffer);
 
   // Get Parquet file metadata from the reader again
@@ -215,8 +219,12 @@ TEST_F(ParquetExperimentalReaderTest, TestFilterRowGroupWithStats)
   cudf::io::parquet_reader_options options =
     cudf::io::parquet_reader_options::builder().filter(filter_expression);
 
+  // Input file buffer span
+  auto const file_buffer_span = cudf::host_span<uint8_t const>(
+    reinterpret_cast<uint8_t const*>(file_buffer.data()), file_buffer.size());
+
   // Fetch footer and page index bytes from the buffer.
-  auto const footer_buffer = fetch_footer_bytes(file_buffer);
+  auto const footer_buffer = fetch_footer_bytes(file_buffer_span);
 
   // Create hybrid scan reader with footer bytes
   auto const reader =
