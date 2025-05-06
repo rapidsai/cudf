@@ -21,11 +21,11 @@
 #include <cudf/column/column.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 
-#include <nvtext/dedup.hpp>
+#include <nvtext/deduplicate.hpp>
 
 #include <vector>
 
-struct TextDedupTest : public cudf::test::BaseFixture {};
+struct TextDeduplicateTest : public cudf::test::BaseFixture {};
 
 namespace {
 cudf::test::strings_column_wrapper build_input()
@@ -50,7 +50,7 @@ cudf::test::strings_column_wrapper build_input()
 }
 }  // namespace
 
-TEST_F(TextDedupTest, StringDedup)
+TEST_F(TextDeduplicateTest, StringDuplicates)
 {
   auto const input = build_input();
   auto sv          = cudf::strings_column_view(input);
@@ -59,7 +59,8 @@ TEST_F(TextDedupTest, StringDedup)
   auto expected = cudf::test::strings_column_wrapper({" 01234567890123456789 "});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
 
-  results  = nvtext::substring_duplicates(sv, 15);
+  results = nvtext::substring_duplicates(sv, 15);
+  // we take advantage of the fact that the results are currently sorted
   expected = cudf::test::strings_column_wrapper(
     {" 01234567890123456789 ", ". 012345678901234", " reprehenderit "});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
@@ -73,7 +74,7 @@ TEST_F(TextDedupTest, StringDedup)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
 }
 
-TEST_F(TextDedupTest, SuffixArray)
+TEST_F(TextDeduplicateTest, SuffixArray)
 {
   auto const input = cudf::test::strings_column_wrapper({
     "cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum. ",
@@ -99,7 +100,7 @@ TEST_F(TextDedupTest, SuffixArray)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, col_view);
 }
 
-TEST_F(TextDedupTest, Errors)
+TEST_F(TextDeduplicateTest, Errors)
 {
   auto const input = cudf::test::strings_column_wrapper({"0123456789"});
   auto const sv    = cudf::strings_column_view(input);

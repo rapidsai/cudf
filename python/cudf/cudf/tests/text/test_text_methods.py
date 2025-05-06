@@ -1083,7 +1083,7 @@ def test_byte_pair_encoding(separator, input, results):
 
 @pytest.fixture
 def duplicate_input():
-    text = [
+    return [
         " 01234567890123456789 magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation    ",
         "laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit   ",
         "voluptate velit esse cillum dolore eu fugiat nulla pariatur. 01234567890123456789         ",
@@ -1091,7 +1091,6 @@ def duplicate_input():
         "dolorem sit voluptatum numquam in iure placeat vel laudantium molestiae? Ad reprehenderit ",
         "quia aut minima deleniti id consequatur sapiente est dolores cupiditate. 012345678901234  ",
     ]
-    return text
 
 
 def test_substring_duplicates(duplicate_input):

@@ -9,11 +9,7 @@ import pylibcudf as plc
 
 @pytest.fixture(scope="module")
 def input_col():
-    arr = [
-        "01234567890123456789",
-        "01234567890123456789",
-        "01234567890123456789",
-    ]
+    arr = ["0123456789"] * 6
     return pa.array(arr)
 
 

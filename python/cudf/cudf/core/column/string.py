@@ -5373,7 +5373,7 @@ class StringMethods(ColumnMethods):
         of the input column as: [ input[0:], input[1:], ... input[bytes-1:] ]
         where bytes is the total number of bytes in input.
         The returned array represent the sorted strings such that
-        result[i] = input[result[i]:]
+        result[i] = input[suffix_array[i]:]
 
         For details, see :cpp:func:`build_suffix_array`
 
