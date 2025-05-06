@@ -159,6 +159,39 @@ def get_scheduler(config_options: ConfigOptions) -> Any:
         raise ValueError(f"{scheduler} not a supported scheduler option.")
 
 
+def post_process_task_graph(
+    graph: MutableMapping[Any, Any],
+    key: str | tuple[str, int],
+    config_options: ConfigOptions,
+) -> MutableMapping[Any, Any]:
+    """
+    Post-process the task graph.
+
+    Parameters
+    ----------
+    graph
+        Task graph to post-process.
+    key
+        Output key for the graph.
+    config_options
+        GPUEngine configuration options.
+
+    Returns
+    -------
+    graph
+        A Dask-compatible task graph.
+    """
+    assert config_options.executor.name == "streaming", (
+        "'in-memory' executor not supported in 'post_process_task_graph'"
+    )
+
+    if config_options.executor.rapidsmpf_spill:  # pragma: no cover
+        from cudf_polars.experimental.spilling import wrap_dataframe_in_spillable
+
+        return wrap_dataframe_in_spillable(graph, ignore_key=key)
+    return graph
+
+
 def evaluate_streaming(ir: IR, config_options: ConfigOptions) -> DataFrame:
     """
     Evaluate an IR graph with partitioning.
@@ -177,6 +210,8 @@ def evaluate_streaming(ir: IR, config_options: ConfigOptions) -> DataFrame:
     ir, partition_info = lower_ir_graph(ir, config_options)
 
     graph, key = task_graph(ir, partition_info)
+
+    graph = post_process_task_graph(graph, key, config_options)
 
     return get_scheduler(config_options)(graph, key)
 
