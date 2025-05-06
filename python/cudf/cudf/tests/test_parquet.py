@@ -2410,15 +2410,15 @@ def test_parquet_writer_list_chunked(tmpdir, store_schema):
     expect = cudf.concat([table1, table2])
     expect = expect.reset_index(drop=True)
 
-    writer = ParquetWriter(fname, store_schema=store_schema)
-    writer.write_table(table1)
-    writer.write_table(table2)
-    writer.close()
+    with ParquetWriter(fname, store_schema=store_schema) as writer:
+        writer.write_table(table1)
+        writer.write_table(table2)
 
     assert os.path.exists(fname)
-
-    got = pd.read_parquet(fname)
-    assert_eq(expect, got)
+    got = pq.read_table(fname)
+    # compare with pyarrow since pandas doesn't
+    # have a list or struct dtype
+    assert expect.to_arrow().equals(got)
 
 
 @pytest.mark.parametrize("engine", ["cudf", "pyarrow"])
