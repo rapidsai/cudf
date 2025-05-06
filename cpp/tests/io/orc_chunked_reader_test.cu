@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include "compression_common.hpp"
+
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
@@ -160,6 +162,8 @@ auto chunked_read(std::string const& filepath,
 }  // namespace
 
 struct OrcChunkedReaderTest : public cudf::test::BaseFixture {};
+
+using OrcChunkedDecompressionTest = DecompressionTest<OrcChunkedReaderTest>;
 
 TEST_F(OrcChunkedReaderTest, TestChunkedReadNoData)
 {
@@ -1477,3 +1481,63 @@ TEST_F(OrcChunkedReaderInputLimitTest, SizeTypeRowsOverflow)
 
 #endif  // LOCAL_TEST
 }
+
+TEST_P(OrcChunkedDecompressionTest, BasicRoundTrip)
+{
+  auto const compression_type = std::get<1>(GetParam());
+
+  auto const num_rows = 12'345;
+
+  std::vector<std::unique_ptr<cudf::column>> input_columns;
+  auto value_iter = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i / 4; });
+  input_columns.emplace_back(int32s_col(value_iter, value_iter + num_rows).release());
+  input_columns.emplace_back(int64s_col(value_iter, value_iter + num_rows).release());
+  auto expected = std::make_unique<cudf::table>(std::move(input_columns));
+
+  auto const filepath = temp_env->get_temp_filepath("chunked_read_compressions.orc");
+  auto const write_opts =
+    cudf::io::orc_writer_options::builder(cudf::io::sink_info{filepath}, *expected)
+      .compression(compression_type)
+      .stripe_size_rows(2'000)
+      .row_index_stride(1'000)
+      .build();
+  cudf::io::write_orc(write_opts);
+
+  {
+    auto const [result, num_chunks] =
+      chunked_read(filepath, output_limit{0}, input_limit{2'400'000});
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
+  }
+
+  {
+    auto const [result, num_chunks] = chunked_read(filepath, output_limit{0}, input_limit{240'000});
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
+  }
+
+  {
+    auto const [result, num_chunks] = chunked_read(filepath, output_limit{0}, input_limit{24'000});
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
+  }
+}
+
+INSTANTIATE_TEST_CASE_P(Nvcomp,
+                        OrcChunkedDecompressionTest,
+                        ::testing::Combine(::testing::Values("NVCOMP"),
+                                           ::testing::Values(cudf::io::compression_type::AUTO,
+                                                             cudf::io::compression_type::SNAPPY,
+                                                             cudf::io::compression_type::LZ4,
+                                                             cudf::io::compression_type::ZSTD)));
+
+INSTANTIATE_TEST_CASE_P(DeviceInternal,
+                        OrcChunkedDecompressionTest,
+                        ::testing::Combine(::testing::Values("DEVICE_INTERNAL"),
+                                           ::testing::Values(cudf::io::compression_type::AUTO,
+                                                             cudf::io::compression_type::SNAPPY,
+                                                             cudf::io::compression_type::ZSTD)));
+
+INSTANTIATE_TEST_CASE_P(Host,
+                        OrcChunkedDecompressionTest,
+                        ::testing::Combine(::testing::Values("HOST"),
+                                           ::testing::Values(cudf::io::compression_type::AUTO,
+                                                             cudf::io::compression_type::SNAPPY,
+                                                             cudf::io::compression_type::ZSTD)));

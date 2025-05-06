@@ -1901,7 +1901,8 @@ TEST_P(ParquetChunkedDecompressionTest, BasicRoundTrip)
   cudf::io::write_parquet(args);
 
   {
-    auto const [result, num_chunks] = chunked_read(filepath, 0, 2400'000);
+    auto const [result, num_chunks] = chunked_read(filepath, 0, 2'400'000);
+    EXPECT_EQ(num_chunks, 1);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
   }
 
