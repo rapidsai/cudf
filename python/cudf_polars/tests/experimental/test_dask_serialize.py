@@ -13,7 +13,7 @@ import pylibcudf as plc
 import rmm
 
 from cudf_polars.containers import DataFrame
-from cudf_polars.experimental.dask_serialize import register
+from cudf_polars.experimental.dask_registers import register
 
 # Must register serializers before running tests
 register()
