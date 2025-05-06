@@ -407,3 +407,18 @@ def test_scan_parquet_chunked(
 def test_scan_hf_url_raises():
     q = pl.scan_csv("hf://datasets/scikit-learn/iris/Iris.csv")
     assert_ir_translation_raises(q, NotImplementedError)
+
+
+def test_select_arbitrary_order_with_row_index_column(request, tmp_path):
+    request.applymarker(
+        pytest.mark.xfail(
+            condition=POLARS_VERSION_LT_128,
+            reason="unsupported until polars 1.28",
+        )
+    )
+    df = pl.DataFrame({"a": [1, 2, 3]})
+    df.write_parquet(tmp_path / "df.parquet")
+    q = pl.scan_parquet(tmp_path / "df.parquet", row_index_name="foo").select(
+        [pl.col("a"), pl.col("foo")]
+    )
+    assert_gpu_result_equal(q)

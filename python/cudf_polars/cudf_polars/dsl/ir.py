@@ -553,7 +553,10 @@ class Scan(IR):
                 if column_names is not None:
                     options.set_names([str(name) for name in column_names])
                 else:
-                    if not POLARS_VERSION_LT_128:  # pragma: no cover
+                    if (
+                        not POLARS_VERSION_LT_128 and skip_rows > header
+                    ):  # pragma: no cover
+                        # We need to read the header otherwise we would skip it
                         column_names = read_csv_header(path, str(sep))
                         options.set_names(column_names)
                 options.set_header(header)
@@ -582,19 +585,6 @@ class Scan(IR):
                 plc.concatenate.concatenate(list(tables)),
                 colnames[0],
             )
-            if not POLARS_VERSION_LT_128:  # pragma: no cover
-                if skip_rows + skiprows > header and not set(
-                    df.column_map.keys()
-                ).issubset(schema.keys()):
-                    df = df.rename_columns(
-                        dict(zip(df.column_names, schema.keys(), strict=False))
-                    )
-                # null type is str in polars, so we cast
-                casted_columns = []
-                for name, c in df.column_map.items():
-                    if c.obj.type() != schema[name]:
-                        casted_columns.append(c.astype(schema[name]).rename(name))
-                df = df.with_columns(casted_columns, replace_only=True)
             if include_file_paths is not None:
                 df = Scan.add_file_paths(
                     include_file_paths,
@@ -724,9 +714,12 @@ class Scan(IR):
                 null_order=plc.types.NullOrder.AFTER,
                 name=name,
             )
-            # TODO: Preserve the selection order eg. col then index col
-            # which we currently do not do
-            df = DataFrame([index_col, *df.columns])
+            if next(iter(schema)) != name:
+                name_col_map = {col.name: col for col in [index_col, *df.columns]}
+                columns = [name_col_map[name] for name in schema]
+            else:
+                columns = [index_col, *df.columns]
+            df = DataFrame(columns)
         assert all(c.obj.type() == schema[name] for name, c in df.column_map.items())
         if predicate is None:
             return df
