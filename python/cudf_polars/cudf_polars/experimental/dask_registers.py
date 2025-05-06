@@ -14,7 +14,6 @@ from distributed.utils import log_errors
 
 import pylibcudf as plc
 import rmm
-from rmm.pylibrmm.stream import DEFAULT_STREAM
 
 from cudf_polars.containers import Column, DataFrame
 
@@ -22,6 +21,9 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
 
     from distributed import Client
+
+    from rmm.pylibrmm.memory_resource import DeviceMemoryResource
+    from rmm.pylibrmm.stream import Stream
 
     from cudf_polars.typing import ColumnHeader, ColumnOptions, DataFrameHeader
 
@@ -151,8 +153,8 @@ def register() -> None:
                 "columns_kwargs": columns_kwargs,
                 "frame_count": 2,
             }
-            stream = DEFAULT_STREAM
-            device_mr = rmm.mr.get_current_device_resource()
+            stream: Stream = context["stream"]
+            device_mr: DeviceMemoryResource = context["device_mr"]
             buf: rmm.DeviceBuffer = context["staging_device_buffer"]
             frame = plc.contiguous_split.ChunkedPack.create(
                 x.table, buf.nbytes, stream, device_mr

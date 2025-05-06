@@ -12,6 +12,7 @@ from polars.testing.asserts import assert_frame_equal
 
 import pylibcudf as plc
 import rmm
+from rmm.pylibrmm.stream import DEFAULT_STREAM
 
 from cudf_polars.containers import DataFrame
 from cudf_polars.experimental.dask_registers import register
@@ -44,7 +45,16 @@ def convert_to_rmm(frame):
 )
 @pytest.mark.parametrize("protocol", ["cuda", "cuda_rmm", "dask"])
 @pytest.mark.parametrize(
-    "context", [None, {}, {"staging_device_buffer": rmm.DeviceBuffer(size=2**20)}]
+    "context",
+    [
+        None,
+        {},
+        {
+            "stream": DEFAULT_STREAM,
+            "device_mr": rmm.mr.get_current_device_resource(),
+            "staging_device_buffer": rmm.DeviceBuffer(size=2**20),
+        },
+    ],
 )
 def test_dask_serialization_roundtrip(arrow_tbl, protocol, context):
     plc_tbl = plc.interop.from_arrow(arrow_tbl)
