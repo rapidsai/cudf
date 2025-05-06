@@ -32,6 +32,7 @@ import cudf_polars.dsl.expr as expr
 from cudf_polars.containers import Column, DataFrame
 from cudf_polars.dsl.nodebase import Node
 from cudf_polars.dsl.to_ast import to_ast, to_parquet_filter
+from cudf_polars.dsl.utils.windows import range_window_bounds
 from cudf_polars.utils import dtypes
 from cudf_polars.utils.versions import POLARS_VERSION_LT_128
 
@@ -43,7 +44,7 @@ if TYPE_CHECKING:
 
     from polars.polars import _expr_nodes as pl_expr
 
-    from cudf_polars.typing import CSECache, Schema, Slice as Zlice
+    from cudf_polars.typing import CSECache, ClosedInterval, Schema, Slice as Zlice
     from cudf_polars.utils.config import ConfigOptions
     from cudf_polars.utils.timer import Timer
 
@@ -925,6 +926,144 @@ class Reduce(IR):
         columns = broadcast(*(e.evaluate(df) for e in exprs))
         assert all(column.size == 1 for column in columns)
         return DataFrame(columns)
+
+
+class Rolling(IR):
+    """Perform a (possibly grouped) rolling aggregation."""
+
+    __slots__ = (
+        "agg_requests",
+        "closed_window",
+        "following",
+        "index",
+        "keys",
+        "preceding",
+        "zlice",
+    )
+    _non_child = (
+        "schema",
+        "index",
+        "preceding",
+        "following",
+        "closed_window",
+        "keys",
+        "agg_requests",
+        "zlice",
+    )
+    index: expr.NamedExpr
+    """Column being rolled over."""
+    preceding: pa.Scalar
+    """Preceding window extent defining start of window."""
+    following: pa.Scalar
+    """Following window extent defining end of window."""
+    closed_window: ClosedInterval
+    """Treatment of window endpoints."""
+    keys: tuple[expr.NamedExpr, ...]
+    """Grouping keys."""
+    agg_requests: tuple[expr.NamedExpr, ...]
+    """Aggregation expressions."""
+    zlice: Zlice | None
+    """Optional slice"""
+
+    def __init__(
+        self,
+        schema: Schema,
+        index: expr.NamedExpr,
+        preceding: pa.Scalar,
+        following: pa.Scalar,
+        closed_window: ClosedInterval,
+        keys: Sequence[expr.NamedExpr],
+        agg_requests: Sequence[expr.NamedExpr],
+        zlice: Zlice | None,
+        df: IR,
+    ):
+        self.schema = schema
+        self.index = index
+        self.preceding = preceding
+        self.following = following
+        self.closed_window = closed_window
+        self.keys = tuple(keys)
+        self.agg_requests = tuple(agg_requests)
+        if not all(
+            plc.rolling.is_valid_rolling_aggregation(
+                agg.value.dtype, agg.value.agg_request
+            )
+            for agg in self.agg_requests
+        ):
+            raise NotImplementedError("Unsupported rolling aggregation")
+        self.zlice = zlice
+        self.children = (df,)
+        self._non_child_args = (
+            index,
+            preceding,
+            following,
+            closed_window,
+            keys,
+            agg_requests,
+            zlice,
+        )
+
+    @classmethod
+    def do_evaluate(
+        cls,
+        index: expr.NamedExpr,
+        preceding: pa.Scalar,
+        following: pa.Scalar,
+        closed_window: ClosedInterval,
+        keys_in: Sequence[expr.NamedExpr],
+        aggs: Sequence[expr.NamedExpr],
+        zlice: Zlice | None,
+        df: DataFrame,
+    ) -> DataFrame:
+        keys = broadcast(*(k.evaluate(df) for k in keys_in), target_length=df.num_rows)
+        requests: list[plc.rolling.RollingRequest] = []
+        names: list[str] = []
+        orderby = index.evaluate(df)
+        for request in aggs:
+            name = request.name
+            value = request.value
+            if isinstance(value, expr.Len):
+                # A count aggregation, we need a column so use the orderby column
+                col = orderby.obj
+            elif isinstance(value, expr.Agg):
+                (child,) = value.children
+                col = child.evaluate(df).obj
+            else:
+                col = value.evaluate(df).obj
+            requests.append(plc.rolling.RollingRequest(col, 1, value.agg_request))
+            names.append(name)
+        preceding_window, following_window = range_window_bounds(
+            preceding, following, closed_window
+        )
+        if orderby.obj.null_count() != 0:
+            raise RuntimeError(
+                f"Index column '{index.name}' in rolling may not contain nulls"
+            )
+        if not orderby.check_sorted(
+            order=plc.types.Order.ASCENDING, null_order=plc.types.NullOrder.AFTER
+        ):
+            raise RuntimeError(
+                f"Index column '{index.name}' in rolling is not sorted, please sort first"
+            )
+        values = plc.rolling.grouped_range_rolling_window(
+            plc.Table([k.obj for k in keys]),
+            orderby.obj,
+            orderby.order,
+            plc.types.NullOrder.AFTER,  # Doesn't matter, polars doesn't allow nulls
+            preceding_window,
+            following_window,
+            requests,
+        )
+        return DataFrame(
+            itertools.chain(
+                keys,
+                [orderby],
+                (
+                    Column(col, name=name)
+                    for col, name in zip(values.columns(), names, strict=True)
+                ),
+            )
+        ).slice(zlice)
 
 
 class GroupBy(IR):

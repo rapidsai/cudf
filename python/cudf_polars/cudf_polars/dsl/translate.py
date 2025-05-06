@@ -23,6 +23,7 @@ import pylibcudf as plc
 from cudf_polars.dsl import expr, ir
 from cudf_polars.dsl.to_ast import insert_colrefs
 from cudf_polars.dsl.utils.groupby import rewrite_groupby
+from cudf_polars.dsl.utils.rolling import rewrite_rolling
 from cudf_polars.typing import Schema
 from cudf_polars.utils import config, dtypes, sorting
 
@@ -279,7 +280,9 @@ def _(node: pl_ir.GroupBy, translator: Translator, schema: Schema) -> ir.IR:
     if is_dynamic:
         raise NotImplementedError("group_by_dynamic")
     elif is_rolling:
-        raise NotImplementedError("group_by_rolling")
+        return rewrite_rolling(
+            node.options, schema, keys, original_aggs, translator.config_options, inp
+        )
     else:
         return rewrite_groupby(
             node, schema, keys, original_aggs, translator.config_options, inp
