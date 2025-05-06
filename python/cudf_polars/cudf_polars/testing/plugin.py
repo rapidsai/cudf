@@ -63,7 +63,6 @@ EXPECTED_FAILURES: Mapping[str, str | tuple[str, bool]] = {
     "tests/unit/io/test_lazy_count_star.py::test_count_ndjson[foods*.ndjson-54]": "Need fast count for JSON scan",
     "tests/unit/io/test_lazy_count_star.py::test_count_compressed_ndjson": "Need fast count for JSON scan",
     "tests/unit/io/test_lazy_csv.py::test_scan_csv_slice_offset_zero": "Integer overflow in sliced read",
-    "tests/unit/io/test_lazy_csv.py::test_glob_skip_rows": "Debug output on stderr doesn't match",
     "tests/unit/io/test_lazy_parquet.py::test_parquet_is_in_statistics": "Debug output on stderr doesn't match",
     "tests/unit/io/test_lazy_parquet.py::test_parquet_statistics": "Debug output on stderr doesn't match",
     "tests/unit/io/test_partition.py::test_partition_to_memory[io_type0]": "partition sinks not yet supported in standard engine.",
