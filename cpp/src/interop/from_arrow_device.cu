@@ -280,6 +280,9 @@ dispatch_tuple_t dispatch_from_arrow_device::operator()<cudf::list_view>(
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
+  CUDF_EXPECTS(schema->type != NANOARROW_TYPE_LARGE_LIST,
+               "Large list types are not supported",
+               cudf::data_type_error);
   size_type const num_rows   = input->length;
   size_type const offset     = input->offset;
   size_type const null_count = input->null_count;

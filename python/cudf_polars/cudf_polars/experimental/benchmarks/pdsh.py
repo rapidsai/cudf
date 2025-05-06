@@ -22,7 +22,7 @@ import sys
 import time
 from collections import defaultdict
 from datetime import date, datetime, timezone
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import pynvml
@@ -139,8 +139,8 @@ class RunConfig:
     records: dict[int, list[Record]] = dataclasses.field(default_factory=dict)
     dataset_path: pathlib.Path
     shuffle: str | None = None
-    broadcast_join_limit: int
-    blocksize: int
+    broadcast_join_limit: int | None = None
+    blocksize: int | None = None
     threads: int
     iterations: int
     timestamp: str = dataclasses.field(
@@ -159,18 +159,13 @@ class RunConfig:
         if executor == "in-memory" or executor == "cpu":
             scheduler = None
 
-        if scheduler == "distributed":
-            broadcast_join_limit = args.broadcast_join_limit or 2
-        else:
-            broadcast_join_limit = args.broadcast_join_limit or 32
-
         return cls(
             queries=args.query,
             executor=executor,
             scheduler=scheduler,
             n_workers=args.n_workers,
             shuffle=args.shuffle,
-            broadcast_join_limit=broadcast_join_limit,
+            broadcast_join_limit=args.broadcast_join_limit,
             dataset_path=args.path,
             blocksize=args.blocksize,
             threads=args.threads,
@@ -1098,7 +1093,7 @@ parser.add_argument(
 )
 parser.add_argument(
     "--blocksize",
-    default=1000**3,
+    default=None,
     type=int,
     help="Approx. partition size.",
 )
@@ -1223,19 +1218,23 @@ def run(args: argparse.Namespace) -> None:
             if run_config.executor == "cpu":
                 result = q.collect(new_streaming=True)
             else:
-                if run_config.executor == "in-memory":
-                    executor_options = {}
-                else:
+                executor_options: dict[str, Any] = {}
+                if run_config.executor == "streaming":
                     executor_options = {
-                        "target_partition_size": run_config.blocksize,
-                        "shuffle_method": run_config.shuffle,
-                        "broadcast_join_limit": run_config.broadcast_join_limit,
                         "cardinality_factor": {
                             "c_custkey": 0.05,  # Q10
                             "l_orderkey": 1.0,  # Q18
                             "l_partkey": 0.1,  # Q20
                         },
                     }
+                    if run_config.blocksize:
+                        executor_options["target_partition_size"] = run_config.blocksize
+                    if run_config.shuffle:
+                        executor_options["shuffle_method"] = run_config.shuffle
+                    if run_config.broadcast_join_limit:
+                        executor_options["broadcast_join_limit"] = (
+                            run_config.broadcast_join_limit
+                        )
                     if run_config.rapidsmpf_spill:
                         executor_options["rapidsmpf_spill"] = run_config.rapidsmpf_spill
                     if run_config.scheduler == "distributed":
