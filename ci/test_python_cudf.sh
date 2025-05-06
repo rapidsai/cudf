@@ -2,8 +2,6 @@
 # Copyright (c) 2022-2025, NVIDIA CORPORATION.
 
 # Support invoking test_python_cudf.sh outside the script directory
-# TODO: Fix shellcheck error
-# shellcheck disable=SC2164
 cd "$(dirname "$(realpath "${BASH_SOURCE[0]}")")"/../;
 
 # Common setup steps shared by Python test jobs
