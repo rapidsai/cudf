@@ -1233,6 +1233,7 @@ def run(args: argparse.Namespace) -> None:
                         "cardinality_factor": {
                             "c_custkey": 0.05,  # Q10
                             "l_orderkey": 1.0,  # Q18
+                            "l_partkey": 0.1,  # Q20
                         },
                     }
                     if run_config.rapidsmpf_spill:
