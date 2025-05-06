@@ -324,8 +324,7 @@ std::vector<text::byte_range_info> aggregate_reader_metadata::get_bloom_filter_b
       });
     });
 
-  // Clear vectors if found nothing
-  if (not have_bloom_filters) { bloom_filter_bytes.clear(); }
+  if (not have_bloom_filters) { return {}; }
 
   return bloom_filter_bytes;
 }
@@ -344,10 +343,13 @@ std::vector<cudf::io::text::byte_range_info> aggregate_reader_metadata::get_dict
     [](auto sum, auto const& per_file_row_groups) { return sum + per_file_row_groups.size(); });
 
   // Collect equality literals for each input table column
-  auto const [literals, _] =
+  auto const [literals, operators] =
     dictionary_literals_and_operators_collector{filter.value().get(),
                                                 static_cast<cudf::size_type>(output_dtypes.size())}
       .get_literals_and_operators();
+
+  CUDF_EXPECTS(literals.size() == operators.size(),
+               "Literals and operators must have the same size");
 
   // Collect schema indices of columns with equality predicate(s)
   std::vector<cudf::size_type> dictionary_col_schemas;
@@ -421,6 +423,7 @@ std::vector<cudf::io::text::byte_range_info> aggregate_reader_metadata::get_dict
     });
 
   if (not have_dictionary_pages) { return {}; }
+
   return dictionary_page_bytes;
 }
 
