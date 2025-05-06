@@ -29,6 +29,7 @@ from cudf.core.frame import Frame
 from cudf.core.index import (
     BaseIndex,
     _get_indexer_basic,
+    _index_from_data,
     _lexsorted_equal_range,
     ensure_index,
 )
@@ -1603,7 +1604,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             new_data.pop(self._data.names[i])
 
         if len(new_data) == 1:
-            return cudf.core.index._index_from_data(new_data)
+            return _index_from_data(new_data)
         else:
             mi = type(self)._from_data(new_data)
             mi.names = new_names
@@ -2182,7 +2183,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             # None is caught later to return RangeIndex
             return None
 
-        index = cudf.core.index._index_from_data(
+        index = _index_from_data(
             dict(enumerate(index_columns)),
             name=name,
         )
