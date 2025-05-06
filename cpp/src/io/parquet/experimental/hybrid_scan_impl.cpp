@@ -213,7 +213,6 @@ hybrid_scan_reader_impl::filter_row_groups_with_dictionary_pages(
 
   select_columns(read_mode::FILTER_COLUMNS, options);
 
-  // Not yet implemented
   return _metadata->filter_row_groups_with_dictionary_pages(
     {}, {}, row_group_indices, {}, {}, {}, {}, {}, stream);
 }
