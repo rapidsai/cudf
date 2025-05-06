@@ -22,6 +22,7 @@ if TYPE_CHECKING:
     from cudf_polars.dsl import expr, ir, nodebase
 
 __all__: list[str] = [
+    "ClosedInterval",
     "ColumnHeader",
     "ColumnOptions",
     "DataFrameHeader",
@@ -77,6 +78,8 @@ Schema: TypeAlias = dict[str, plc.DataType]
 Slice: TypeAlias = tuple[int, int | None]
 
 CSECache: TypeAlias = MutableMapping[int, tuple["DataFrame", int]]
+
+ClosedInterval: TypeAlias = Literal["left", "right", "both", "none"]
 
 
 class NodeTraverser(Protocol):
