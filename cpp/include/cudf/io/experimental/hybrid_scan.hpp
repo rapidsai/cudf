@@ -360,8 +360,8 @@ class hybrid_scan_reader {
   /**
    * @brief Filter the row groups using column chunk bloom filters
    *
-   * @param dictionary_page_data Device buffers containing bloom filter data of column chunks
-   *                             with equality predicate
+   * @param bloom_filter_data Device buffers containing bloom filter data of column chunks
+   *                          with equality predicate
    * @param row_group_indices Input row groups indices
    * @param options Parquet reader options
    * @param stream CUDA stream used for device memory operations and kernel launches
