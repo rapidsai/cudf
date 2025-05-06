@@ -174,7 +174,7 @@ function buildLibCudfJniInDocker {
                 -DCUDA_STATIC_RUNTIME=ON \
                 -DCUDF_USE_PER_THREAD_DEFAULT_STREAM=ON \
                 -DUSE_GDS=ON \
-                -DGPU_ARCHS=${CUDF_CMAKE_CUDA_ARCHITECTURES} \
+                -DCMAKE_CUDA_ARCHITECTURES=${CUDF_CMAKE_CUDA_ARCHITECTURES} \
                 -DCUDF_JNI_LIBCUDF_STATIC=ON \
                 -Dtest=*,!CuFileTest,!CudaFatalTest,!ColumnViewNonEmptyNullsTest"
 }
