@@ -135,7 +135,7 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
    * @param strings_to_categorical Type conversion parameter
    * @param timestamp_type_id Type conversion parameter
    *
-   * @return input column information, output column information, list of output column schema
+   * @return input column information, output column buffers, list of output column schema
    * indices
    */
   [[nodiscard]] std::

@@ -29,6 +29,7 @@
 #include <functional>
 #include <numeric>
 #include <optional>
+#include <unordered_set>
 
 namespace cudf::io::parquet::experimental::detail {
 
@@ -46,12 +47,8 @@ namespace {
 [[nodiscard]] auto all_row_group_indices(
   host_span<std::vector<cudf::size_type> const> row_group_indices)
 {
-  std::vector<std::vector<cudf::size_type>> all_row_group_indices;
-  std::transform(row_group_indices.begin(),
-                 row_group_indices.end(),
-                 std::back_inserter(all_row_group_indices),
-                 [](auto rg_indices) { return rg_indices; });
-  return all_row_group_indices;
+  return std::vector<std::vector<cudf::size_type>>(row_group_indices.begin(),
+                                                   row_group_indices.end());
 }
 
 }  // namespace
@@ -176,14 +173,15 @@ aggregate_reader_metadata::select_payload_columns(
   if (payload_column_names.has_value()) {
     valid_payload_columns = *payload_column_names;
     // Remove filter columns from the provided payload column names
-    if (filter_column_names.has_value()) {
+    if (filter_column_names.has_value() and not filter_column_names->empty()) {
+      // Add filter column names to a hash set for faster lookup
+      std::unordered_set<std::string> filter_columns_set(filter_column_names->begin(),
+                                                         filter_column_names->end());
+      // Remove a payload column name if it is also present in the hash set
       valid_payload_columns.erase(std::remove_if(valid_payload_columns.begin(),
                                                  valid_payload_columns.end(),
-                                                 [&](std::string const& col) {
-                                                   return std::find(filter_column_names->begin(),
-                                                                    filter_column_names->end(),
-                                                                    col) !=
-                                                          filter_column_names->end();
+                                                 [&filter_columns_set](auto const& col) {
+                                                   return filter_columns_set.count(col) > 0;
                                                  }),
                                   valid_payload_columns.end());
     }
@@ -194,15 +192,18 @@ aggregate_reader_metadata::select_payload_columns(
 
   // Else if only filter columns are specified, select all columns that do not appear in the
   // filter expression
+
+  // Add filter column names to a hash set for faster lookup
+  std::unordered_set<std::string> filter_columns_set(filter_column_names->begin(),
+                                                     filter_column_names->end());
+
   std::function<void(std::string, int)> add_column_path = [&](std::string path_till_now,
                                                               int schema_idx) {
     auto const& schema_elem     = get_schema(schema_idx);
     std::string const curr_path = path_till_now + schema_elem.name;
     // If the current path is not a filter column, then add it and its children to the list of valid
     // payload columns
-    if (std::find(filter_column_names.value().cbegin(),
-                  filter_column_names.value().cend(),
-                  curr_path) == filter_column_names.value().cend()) {
+    if (filter_columns_set.count(curr_path) == 0) {
       valid_payload_columns.push_back(curr_path);
       // Add all children as well
       for (auto const& child_idx : schema_elem.children_idx) {
@@ -210,9 +211,12 @@ aggregate_reader_metadata::select_payload_columns(
       }
     }
   };
-  // Add all base level columns to valid payload columns
-  for (auto const& child_idx : get_schema(0).children_idx) {
-    add_column_path("", child_idx);
+
+  // Add all but filter columns to valid payload columns
+  if (not filter_column_names->empty()) {
+    for (auto const& child_idx : get_schema(0).children_idx) {
+      add_column_path("", child_idx);
+    }
   }
 
   // Call the base `select_columns()` method with all but filter columns
@@ -220,69 +224,43 @@ aggregate_reader_metadata::select_payload_columns(
     valid_payload_columns, {}, include_index, strings_to_categorical, timestamp_type_id);
 }
 
-std::vector<cudf::io::text::byte_range_info> aggregate_reader_metadata::get_bloom_filter_bytes(
-  cudf::host_span<std::vector<cudf::size_type> const> row_group_indices,
+std::vector<std::vector<cudf::size_type>> aggregate_reader_metadata::filter_row_groups_with_stats(
+  host_span<std::vector<cudf::size_type> const> row_group_indices,
   host_span<data_type const> output_dtypes,
   host_span<int const> output_column_schemas,
-  std::optional<std::reference_wrapper<ast::expression const>> filter)
+  std::optional<std::reference_wrapper<ast::expression const>> filter,
+  rmm::cuda_stream_view stream) const
 {
-  // Number of surviving row groups after applying stats filter
-  auto const total_row_groups = std::accumulate(
-    row_group_indices.begin(),
-    row_group_indices.end(),
-    cudf::size_type{0},
-    [](auto sum, auto const& per_file_row_groups) { return sum + per_file_row_groups.size(); });
+  // Return all row groups if no filter expression
+  if (not filter.has_value()) { return all_row_group_indices(row_group_indices); }
 
-  // Collect equality literals for each input table column
-  auto const equality_literals =
-    equality_literals_collector{filter.value().get(),
-                                static_cast<cudf::size_type>(output_dtypes.size())}
-      .get_literals();
+  // Compute total number of input row groups
+  cudf::size_type total_row_groups = [&]() {
+    if (not row_group_indices.empty()) {
+      size_t const total_row_groups =
+        std::accumulate(row_group_indices.begin(),
+                        row_group_indices.end(),
+                        size_t{0},
+                        [](auto sum, auto const& pfm) { return sum + pfm.size(); });
 
-  // Collect schema indices of columns with equality predicate(s)
-  std::vector<cudf::size_type> equality_col_schemas;
-  thrust::copy_if(thrust::host,
-                  output_column_schemas.begin(),
-                  output_column_schemas.end(),
-                  equality_literals.begin(),
-                  std::back_inserter(equality_col_schemas),
-                  [](auto& eq_literals) { return not eq_literals.empty(); });
+      // Check if we have less than 2B total row groups.
+      CUDF_EXPECTS(total_row_groups <= std::numeric_limits<cudf::size_type>::max(),
+                   "Total number of row groups exceed the cudf::size_type's limit");
+      return static_cast<cudf::size_type>(total_row_groups);
+    } else {
+      return num_row_groups;
+    }
+  }();
 
-  // Descriptors for all the chunks that make up the selected columns
-  auto const num_equality_columns = equality_col_schemas.size();
-  auto const num_chunks           = total_row_groups * num_equality_columns;
+  // Filter stats table with StatsAST expression and collect filtered row group indices
+  auto const stats_filtered_row_group_indices = apply_stats_filters(row_group_indices,
+                                                                    total_row_groups,
+                                                                    output_dtypes,
+                                                                    output_column_schemas,
+                                                                    filter.value(),
+                                                                    stream);
 
-  std::vector<cudf::io::text::byte_range_info> bloom_filter_bytes;
-  bloom_filter_bytes.reserve(num_chunks);
-
-  // Flag to check if we have at least one valid bloom filter offset
-  auto have_bloom_filters = false;
-
-  // For all sources
-  std::for_each(
-    thrust::counting_iterator<size_t>(0),
-    thrust::counting_iterator(row_group_indices.size()),
-    [&](auto const src_index) {
-      // Get all row group indices in the data source
-      auto const& rg_indices = row_group_indices[src_index];
-      // For all row groups
-      std::for_each(rg_indices.cbegin(), rg_indices.cend(), [&](auto const rg_index) {
-        // For all column chunks
-        std::for_each(
-          equality_col_schemas.begin(), equality_col_schemas.end(), [&](auto const schema_idx) {
-            auto& col_meta = get_column_metadata(rg_index, src_index, schema_idx);
-            // Get bloom filter offsets and sizes
-            bloom_filter_bytes.emplace_back(col_meta.bloom_filter_offset.value_or(0),
-                                            col_meta.bloom_filter_length.value_or(0));
-
-            // Set `have_bloom_filters` if `bloom_filter_offset` is valid
-            if (col_meta.bloom_filter_offset.has_value()) { have_bloom_filters = true; }
-          });
-      });
-    });
-
-  if (not have_bloom_filters) { return {}; }
-  return bloom_filter_bytes;
+  return stats_filtered_row_group_indices.value_or(all_row_group_indices(row_group_indices));
 }
 
 std::vector<cudf::io::text::byte_range_info> aggregate_reader_metadata::get_dictionary_page_bytes(
