@@ -62,7 +62,7 @@ if(CUDF_USE_PER_THREAD_DEFAULT_STREAM)
   add_compile_definitions(CUDA_API_PER_THREAD_DEFAULT_STREAM CUDF_USE_PER_THREAD_DEFAULT_STREAM)
 endif()
 
-#   Set a default build type if none was specified
+# Set a default build type if none was specified
 rapids_cmake_build_type("Release")
 
 # ##################################################################################################
@@ -70,11 +70,12 @@ rapids_cmake_build_type("Release")
 
 set(CUDF_SOURCE_DIR "${PROJECT_SOURCE_DIR}/../../../../cpp")
 
-# Search for libcudf in CUDF_INSTALL_DIR if it is specified.
-# Otherwise, search in CUDF_CPP_BUILD_DIR.
+# Search for libcudf in CUDF_INSTALL_DIR if it is specified. Otherwise, search in
+# CUDF_CPP_BUILD_DIR.
 if(DEFINED ENV{CUDF_INSTALL_DIR})
-  set(CUDF_INSTALL_DIR "$ENV{CUDF_INSTALL_DIR}"
-    CACHE STRING "path to libcudf install root"
+  set(CUDF_INSTALL_DIR
+      "$ENV{CUDF_INSTALL_DIR}"
+      CACHE STRING "path to libcudf install root"
   )
   set(CMAKE_PREFIX_PATH ${CUDF_INSTALL_DIR} "${CUDF_INSTALL_DIR}/lib64/cmake")
   message(STATUS "Using dependencies from libcudf installed path: ${CUDF_INSTALL_DIR}")
@@ -83,8 +84,9 @@ else()
     message(FATAL_ERROR "Either CUDF_INSTALL_DIR or CUDF_CPP_BUILD_DIR must be defined.")
   endif()
 
-  set(CUDF_CPP_BUILD_DIR "$ENV{CUDF_CPP_BUILD_DIR}"
-    CACHE STRING "path to libcudf build root"
+  set(CUDF_CPP_BUILD_DIR
+      "$ENV{CUDF_CPP_BUILD_DIR}"
+      CACHE STRING "path to libcudf build root"
   )
   set(cudf_ROOT ${CUDF_CPP_BUILD_DIR})
   message(STATUS "Using pre-configured libcudf from build path: ${CUDF_CPP_BUILD_DIR}")
@@ -99,9 +101,9 @@ get_target_property(CUDF_CUDA_DEFINITIONS cudf::cudf CUDF_CUDA_DEFINITIONS)
 
 # ##################################################################################################
 # * nvtx3 and nvcomp-------------------------------------------------------------------------------
-# Reuse any cached package that is already available after configuring/installing libcudf.
-# Only fetch (and install) from source if the target does not exist to avoid name conflict when
-# the same target is exported multiple times.
+#   Reuse any cached package that is already available after configuring/installing libcudf. Only
+#   fetch (and install) from source if the target does not exist to avoid name conflict when the
+#   same target is exported multiple times.
 
 if(NOT TARGET nvtx3::nvtx3-cpp AND NOT DEFINED ENV{CUDF_INSTALL_DIR})
   message(STATUS "Fetch package nvtx3 from source.")
@@ -109,7 +111,10 @@ if(NOT TARGET nvtx3::nvtx3-cpp AND NOT DEFINED ENV{CUDF_INSTALL_DIR})
 endif()
 find_package(nvtx3 REQUIRED)
 
-if(NOT TARGET nvcomp AND NOT TARGET nvcomp::nvcomp AND NOT DEFINED ENV{CUDF_INSTALL_DIR})
+if(NOT TARGET nvcomp
+   AND NOT TARGET nvcomp::nvcomp
+   AND NOT DEFINED ENV{CUDF_INSTALL_DIR}
+)
   include(${CUDF_SOURCE_DIR}/cmake/thirdparty/get_nvcomp.cmake)
 endif()
 find_package(nvcomp REQUIRED)
