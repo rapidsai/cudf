@@ -1,12 +1,13 @@
 # SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Dask serialization."""
+"""Dask function registrations such as serializers and dispatch implementations."""
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, ClassVar, overload
 
+from dask.sizeof import sizeof as sizeof_dispatch
 from distributed.protocol import dask_deserialize, dask_serialize
 from distributed.protocol.cuda import cuda_deserialize, cuda_serialize
 from distributed.utils import log_errors
@@ -21,35 +22,35 @@ if TYPE_CHECKING:
 
     from cudf_polars.typing import ColumnHeader, DataFrameHeader
 
-__all__ = ["SerializerManager", "register"]
+__all__ = ["DaskRegisterManager", "register"]
 
 
-class SerializerManager:  # pragma: no cover; Only used with Distributed scheduler
+class DaskRegisterManager:  # pragma: no cover; Only used with Distributed scheduler
     """Manager to ensure ensure serializer is only registered once."""
 
-    _serializer_registered: bool = False
+    _registered: bool = False
     _client_run_executed: ClassVar[set[str]] = set()
 
     @classmethod
-    def register_serialize(cls) -> None:
+    def register_once(cls) -> None:
         """Register Dask/cudf-polars serializers in calling process."""
-        if not cls._serializer_registered:
-            from cudf_polars.experimental.dask_serialize import register
+        if not cls._registered:
+            from cudf_polars.experimental.dask_registers import register
 
             register()
-            cls._serializer_registered = True
+            cls._registered = True
 
     @classmethod
     def run_on_cluster(cls, client: Client) -> None:
-        """Run serializer registration on the workers and scheduler."""
+        """Run register on the workers and scheduler once."""
         if client.id not in cls._client_run_executed:
-            client.run(cls.register_serialize)
-            client.run_on_scheduler(cls.register_serialize)
+            client.run(cls.register_once)
+            client.run_on_scheduler(cls.register_once)
             cls._client_run_executed.add(client.id)
 
 
 def register() -> None:
-    """Register dask serialization routines for DataFrames."""
+    """Register dask serialization and dispatch functions."""
 
     @overload
     def serialize_column_or_frame(
@@ -128,3 +129,21 @@ def register() -> None:
             # Copy the second frame (the gpudata in host memory) back to the gpu
             frames = frames[0], plc.gpumemoryview(rmm.DeviceBuffer.to_device(frames[1]))
             return Column.deserialize(header, frames)
+
+    @sizeof_dispatch.register(Column)
+    def _(x: Column) -> int:
+        """The total size of the device buffers used by the DataFrame or Column."""
+        return x.obj.device_buffer_size()
+
+    @sizeof_dispatch.register(DataFrame)
+    def _(x: DataFrame) -> int:
+        """The total size of the device buffers used by the DataFrame or Column."""
+        return sum(c.obj.device_buffer_size() for c in x.columns)
+
+    # Register rapidsmpf serializer if it's installed.
+    try:
+        from rapidsmpf.integrations.dask.spilling import register_dask_serialize
+
+        register_dask_serialize()  # pragma: no cover; rapidsmpf dependency not included yet
+    except ImportError:
+        pass
