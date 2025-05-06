@@ -17,6 +17,7 @@ from pylibcudf.libcudf.column.column cimport column, column_contents
 from pylibcudf.libcudf.column.column_factories cimport make_column_from_scalar
 from pylibcudf.libcudf.interop cimport (
     ArrowArray,
+    ArrowArrayStream,
     ArrowSchema,
     ArrowDeviceArray,
     arrow_column,
@@ -256,10 +257,31 @@ cdef class Column:
                 tmp.children(),
             )
         elif hasattr(arrow_like, "__arrow_c_stream__"):
-            raise NotImplementedError("Arrow host streams not yet supported")
+            stream = arrow_like.__arrow_c_stream__()
+            c_stream = (
+                <ArrowArrayStream*>PyCapsule_GetPointer(stream, "arrow_array_stream")
+            )
+
+            result = _ArrowColumnHolder()
+            with nogil:
+                c_result = make_unique[arrow_column](
+                    move(dereference(c_stream))
+                )
+            result.col.swap(c_result)
+
+            tmp = Column.from_column_view_of_arbitrary(result.col.get().view(), result)
+            self._init(
+                tmp.type(),
+                tmp.size(),
+                tmp.data(),
+                tmp.null_mask(),
+                tmp.null_count(),
+                tmp.offset(),
+                tmp.children(),
+            )
         elif hasattr(arrow_like, "__arrow_c_device_stream__"):
             # TODO: When we add support for this case, it should be moved above
-            # the __arrow_c_stream__ case since we should prioritize device
+            # the __arrow_c_array__ case since we should prioritize device
             # data if possible.
             raise NotImplementedError("Device streams not yet supported")
         else:
