@@ -147,8 +147,6 @@ class RunConfig:
         default_factory=lambda: datetime.now(timezone.utc).isoformat()
     )
     hardware: HardwareInfo = dataclasses.field(default_factory=HardwareInfo.collect)
-    rapidsmpf_spill: bool
-    spill_device: float
 
     @classmethod
     def from_args(cls, args: argparse.Namespace) -> RunConfig:
@@ -176,8 +174,6 @@ class RunConfig:
             threads=args.threads,
             iterations=args.iterations,
             suffix=args.suffix,
-            spill_device=args.spill_device,
-            rapidsmpf_spill=args.rapidsmpf_spill,
         )
 
     def serialize(self) -> dict:
@@ -201,8 +197,6 @@ class RunConfig:
                 if self.scheduler == "distributed":
                     print(f"n_workers: {self.n_workers}")
                     print(f"threads: {self.threads}")
-                    print(f"spill_device: {self.spill_device}")
-                    print(f"rapidsmpf_spill: {self.rapidsmpf_spill}")
             print(f"iterations: {self.iterations}")
             print("---------------------------------------")
             print(f"min time : {min([record.duration for record in records]):0.4f}")
@@ -1140,18 +1134,6 @@ parser.add_argument(
     help="RMM pool size (fractional).",
 )
 parser.add_argument(
-    "--rapidsmpf-spill",
-    action=argparse.BooleanOptionalAction,
-    default=False,
-    help="Use rapidsmpf for general spilling.",
-)
-parser.add_argument(
-    "--spill-device",
-    default=0.5,
-    type=float,
-    help="Rapdsimpf device spill threshold.",
-)
-parser.add_argument(
     "-o",
     "--output",
     type=argparse.FileType("at"),
@@ -1203,7 +1185,7 @@ def run(args: argparse.Namespace) -> None:
             try:
                 from rapidsmpf.integrations.dask import bootstrap_dask_cluster
 
-                bootstrap_dask_cluster(client, spill_device=run_config.spill_device)
+                bootstrap_dask_cluster(client, spill_device=0.5)
             except ImportError as err:
                 if run_config.shuffle == "rapidsmpf":
                     raise ImportError from err
@@ -1235,8 +1217,6 @@ def run(args: argparse.Namespace) -> None:
                             "l_orderkey": 1.0,  # Q18
                         },
                     }
-                    if run_config.rapidsmpf_spill:
-                        executor_options["rapidsmpf_spill"] = run_config.rapidsmpf_spill
                     if run_config.scheduler == "distributed":
                         executor_options["scheduler"] = "distributed"
 

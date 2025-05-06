@@ -225,7 +225,6 @@ def test_validate_shuffle_method() -> None:
         "parquet_blocksize",
         "groupby_n_ary",
         "broadcast_join_limit",
-        "rapidsmpf_spill",
     ],
 )
 def test_validate_max_rows_per_partition(option: str) -> None:
