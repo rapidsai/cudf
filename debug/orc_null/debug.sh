@@ -3,23 +3,21 @@
 # my_debugger=gdb
 my_debugger=cuda-gdb
 
-root_dir=/home/coder/cudf/cpp/examples/orc_io
+my_program=/home/coder/cudf/cpp/build/latest/gtests/ORC_TEST
 
-example_bin=$root_dir/build/orc_io
-# input_file=$root_dir/first_27000_rows.orc
-input_file=$root_dir/col_b_only.orc
-output_file=$root_dir/debug/test_output.orc
+# my_args="--gtest_filter=OrcWriterTest.EmptyRowGroup"
+my_args="--gtest_filter=OrcWriterTestDebug.DebugReadOrc"
 
-# DEFAULT, DICTIONARY, PLAIN, DELTA_BINARY_PACKED, DELTA_LENGTH_BYTE_ARRAY, DELTA_BYTE_ARRAY
-encoding_type=DEFAULT
+# $my_debugger -ex start --ex 'source breakpoints.txt' --args $my_program $my_args
 
-# NONE, AUTO, SNAPPY, LZ4, ZSTD
-compression_type=NONE
+$my_program $my_args
 
-write_page_stats=yes
 
-export LIBCUDF_LOGGING_LEVEL=INFO
-
-$my_debugger -ex start --ex 'source breakpoints.txt' --args $example_bin $input_file $output_file $encoding_type $compression_type
-
-# $example_bin $input_file $output_file $encoding_type $compression_type $write_page_stats
+# Debug this test in orc_test.cpp
+# TEST(OrcWriterTestDebug, DebugReadOrc)
+# {
+#   std::string filepath = "/home/coder/cudf/debug/orc_null/data/bad_OrcEmptyRowGroup.orc";
+#   cudf::io::orc_reader_options in_opts =
+#     cudf::io::orc_reader_options::builder(cudf::io::source_info{filepath});
+#   [[maybe_unused]] auto result = cudf::io::read_orc(in_opts);
+# }
