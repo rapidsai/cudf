@@ -169,8 +169,6 @@ jobs:
     uses: rapidsai/shared-workflows/.github/workflows/conda-python-tests.yaml@branch-25.06
     if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_python
     with:
-      # This selects "ARCH=amd64".
-      matrix_filter: map(select(.ARCH == "amd64"))
       build_type: pull-request
       script: "ci/test_python_cudf.sh"
   conda-python-other-tests:
@@ -250,8 +248,6 @@ jobs:
     uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@branch-25.06
     if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_python
     with:
-      # This selects "ARCH=amd64".
-      matrix_filter: map(select(.ARCH == "amd64"))
       build_type: pull-request
       script: ci/test_wheel_cudf.sh
   wheel-build-cudf-polars:
