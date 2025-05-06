@@ -153,7 +153,6 @@ def _(
     # Check if we are dealing with any high-cardinality columns
     post_aggregation_count = 1  # Default tree reduction
     groupby_key_columns = [ne.name for ne in ir.keys]
-    shuffled = partition_info[child].partitioned_on == ir.keys
 
     assert ir.config_options.executor.name == "streaming", (
         "'in-memory' executor not supported in 'generate_ir_tasks'"
@@ -176,7 +175,6 @@ def _(
             1,
         )
 
-    new_node: IR
     name_generator = unique_names(ir.schema.keys())
     # Decompose the aggregation requests into three distinct phases
     try:
@@ -187,12 +185,6 @@ def _(
             )
         )
     except NotImplementedError:
-        if shuffled:  # pragma: no cover
-            # Don't fallback if we are already shuffled.
-            # We can just preserve the child's partitioning
-            new_node = ir.reconstruct([child])
-            partition_info[new_node] = partition_info[child]
-            return new_node, partition_info
         return _lower_ir_fallback(
             ir, rec, msg="Failed to decompose groupby aggs for multiple partitions."
         )
@@ -218,7 +210,7 @@ def _(
     reduction_schema = {k.name: k.value.dtype for k in ir.keys} | {
         k.name: k.value.dtype for k in reduction_exprs
     }
-    if not shuffled and post_aggregation_count > 1:
+    if post_aggregation_count > 1:
         # Shuffle reduction
         if ir.maintain_order:  # pragma: no cover
             return _lower_ir_fallback(
@@ -243,11 +235,11 @@ def _(
         n_ary = ir.config_options.executor.groupby_n_ary
         count = child_count
         gb_inter = gb_pwise
-        while count > post_aggregation_count:
+        while count > 1:
             gb_inter = Repartition(gb_inter.schema, gb_inter)
-            count = max(math.ceil(count / n_ary), post_aggregation_count)
+            count = max(math.ceil(count / n_ary), 1)
             partition_info[gb_inter] = PartitionInfo(count=count)
-            if count > post_aggregation_count:
+            if count > 1:
                 gb_inter = GroupBy(
                     reduction_schema,
                     ir.keys,
@@ -281,8 +273,5 @@ def _(
         False,  # noqa: FBT003
         gb_reduce,
     )
-    partition_info[new_node] = PartitionInfo(
-        count=post_aggregation_count,
-        partitioned_on=ir.keys,
-    )
+    partition_info[new_node] = PartitionInfo(count=post_aggregation_count)
     return new_node, partition_info
