@@ -27,6 +27,7 @@
 #include <cudf/dictionary/encode.hpp>
 #include <cudf/join/hash_join.hpp>
 #include <cudf/join/join.hpp>
+#include <cudf/join/sort_merge_join.hpp>
 #include <cudf/sorting.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
@@ -39,6 +40,7 @@
 
 #include <limits>
 
+namespace {
 template <typename T>
 using column_wrapper = cudf::test::fixed_width_column_wrapper<T>;
 using strcol_wrapper = cudf::test::strings_column_wrapper;
@@ -46,13 +48,11 @@ using CVector        = std::vector<std::unique_ptr<cudf::column>>;
 using Table          = cudf::table;
 constexpr cudf::size_type NoneValue =
   std::numeric_limits<cudf::size_type>::min();  // TODO: how to test if this isn't public?
+enum class algorithm { HASH, SORT_MERGE, MERGE };
 
-// This function is a wrapper around cudf's join APIs that takes the gather map
-// from join APIs and materializes the table that would be created by gathering
-// from the joined tables. Join APIs originally returned tables like this, but
-// they were modified in https://github.com/rapidsai/cudf/pull/7454. This
-// helper function allows us to avoid rewriting all our tests in terms of
-// gather maps.
+using JoinResult = std::pair<std::unique_ptr<rmm::device_uvector<cudf::size_type>>,
+                             std::unique_ptr<rmm::device_uvector<cudf::size_type>>>;
+
 template <std::pair<std::unique_ptr<rmm::device_uvector<cudf::size_type>>,
                     std::unique_ptr<rmm::device_uvector<cudf::size_type>>> (*join_impl)(
             cudf::table_view const& left_keys,
@@ -97,8 +97,16 @@ std::unique_ptr<cudf::table> inner_join(
   cudf::table_view const& right_input,
   std::vector<cudf::size_type> const& left_on,
   std::vector<cudf::size_type> const& right_on,
-  cudf::null_equality compare_nulls = cudf::null_equality::EQUAL)
+  cudf::null_equality compare_nulls = cudf::null_equality::EQUAL,
+  algorithm algo                    = algorithm::HASH)
 {
+  if (algo == algorithm::SORT_MERGE) {
+    return join_and_gather<cudf::sort_merge_inner_join>(
+      left_input, right_input, left_on, right_on, compare_nulls);
+  } else if (algo == algorithm::MERGE) {
+    return join_and_gather<cudf::merge_inner_join>(
+      left_input, right_input, left_on, right_on, compare_nulls);
+  }
   return join_and_gather<cudf::inner_join>(
     left_input, right_input, left_on, right_on, compare_nulls);
 }
@@ -124,6 +132,8 @@ std::unique_ptr<cudf::table> full_join(
   return join_and_gather<cudf::full_join, cudf::out_of_bounds_policy::NULLIFY>(
     full_input, right_input, full_on, right_on, compare_nulls);
 }
+
+}  // anonymous namespace
 
 struct JoinTest : public cudf::test::BaseFixture {
   std::pair<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::table>> gather_maps_as_tables(
@@ -177,8 +187,88 @@ TEST_F(JoinTest, DISABLED_InvalidLoadFactor)
                std::invalid_argument);
 }
 
-TEST_F(JoinTest, EmptySentinelRepro)
+struct JoinParameterizedTest : public JoinTest, public testing::WithParamInterface<algorithm> {};
+struct JoinParameterizedTestSortedInput : public JoinTest,
+                                          public testing::WithParamInterface<algorithm> {};
+
+// Parametrize qualifying join tests for supported algorithms
+INSTANTIATE_TEST_CASE_P(InnerJoinParameterizedTest,
+                        JoinParameterizedTest,
+                        ::testing::Values(algorithm::HASH, algorithm::SORT_MERGE));
+
+INSTANTIATE_TEST_CASE_P(InnerJoinParameterizedTestSortedInput,
+                        JoinParameterizedTestSortedInput,
+                        ::testing::Values(algorithm::HASH, algorithm::MERGE));
+
+TEST_P(JoinParameterizedTestSortedInput, SortedKeys)
 {
+  auto algo = GetParam();
+  column_wrapper<int32_t> col0_0{{0, 1, 2, 2, 3}};
+  strcol_wrapper col0_1({"s4", "s1", "s0", "s0", "s1"});
+  column_wrapper<int32_t> col0_2{{4, 1, 2, 1, 0}};
+
+  column_wrapper<int32_t> col1_0{{0, 2, 2, 3, 4}};
+  strcol_wrapper col1_1({"s1", "s1", "s0", "s1", "s2"});
+  column_wrapper<int32_t> col1_2{{1, 1, 0, 1, 2}};
+
+  CVector cols0, cols1;
+  cols0.push_back(col0_0.release());
+  cols0.push_back(col0_1.release());
+  cols0.push_back(col0_2.release());
+  cols1.push_back(col1_0.release());
+  cols1.push_back(col1_1.release());
+  cols1.push_back(col1_2.release());
+
+  Table t0(std::move(cols0));
+  Table t1(std::move(cols1));
+
+  auto result            = inner_join(t0, t1, {0}, {0}, cudf::null_equality::EQUAL, algo);
+  auto result_sort_order = cudf::sorted_order(result->view());
+  auto sorted_result     = cudf::gather(result->view(), *result_sort_order);
+
+  column_wrapper<int32_t> col_gold_0{{3, 2, 2, 0, 2, 2}};
+  strcol_wrapper col_gold_1({"s1", "s0", "s0", "s4", "s0", "s0"});
+  column_wrapper<int32_t> col_gold_2{{0, 2, 2, 4, 1, 1}};
+  column_wrapper<int32_t> col_gold_3{{3, 2, 2, 0, 2, 2}};
+  strcol_wrapper col_gold_4({"s1", "s1", "s0", "s1", "s1", "s0"});
+  column_wrapper<int32_t> col_gold_5{{1, 1, 0, 1, 1, 0}};
+  CVector cols_gold;
+  cols_gold.push_back(col_gold_0.release());
+  cols_gold.push_back(col_gold_1.release());
+  cols_gold.push_back(col_gold_2.release());
+  cols_gold.push_back(col_gold_3.release());
+  cols_gold.push_back(col_gold_4.release());
+  cols_gold.push_back(col_gold_5.release());
+  Table gold(std::move(cols_gold));
+
+  auto gold_sort_order = cudf::sorted_order(gold.view());
+  auto sorted_gold     = cudf::gather(gold.view(), *gold_sort_order);
+  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*sorted_gold, *sorted_result);
+}
+
+TEST_P(JoinParameterizedTest, InvalidInput)
+{
+  auto algo                  = GetParam();
+  auto const left_first_col  = cudf::test::fixed_width_column_wrapper<int32_t>{1197};
+  auto const left_second_col = cudf::test::strings_column_wrapper{"201812"};
+
+  auto const right_first_col  = cudf::test::fixed_width_column_wrapper<int32_t>{1197};
+  auto const right_second_col = cudf::test::strings_column_wrapper{"201812"};
+  auto const right_third_col  = cudf::test::fixed_width_column_wrapper<int64_t>{2550000371};
+
+  cudf::table_view left({left_first_col, left_second_col});
+  cudf::table_view right({right_first_col, right_second_col, right_third_col});
+
+  EXPECT_THROW(inner_join(left, right, {0, 1}, {0, 1, 2}, cudf::null_equality::EQUAL, algo),
+               cudf::logic_error);
+
+  EXPECT_THROW(inner_join(left, right, {}, {0, 1, 2}, cudf::null_equality::EQUAL, algo),
+               cudf::logic_error);
+}
+
+TEST_P(JoinParameterizedTest, EmptySentinelRepro)
+{
+  auto algo = GetParam();
   // This test reproduced an implementation specific behavior where the combination of these
   // particular values ended up hashing to the empty key sentinel value used by the hash join
   // This test may no longer be relevant if the implementation ever changes.
@@ -193,7 +283,7 @@ TEST_F(JoinTest, EmptySentinelRepro)
   cudf::table_view left({left_first_col, left_second_col, left_third_col});
   cudf::table_view right({right_first_col, right_second_col, right_third_col});
 
-  auto result = inner_join(left, right, {0, 1, 2}, {0, 1, 2});
+  auto result = inner_join(left, right, {0, 1, 2}, {0, 1, 2}, cudf::null_equality::EQUAL, algo);
 
   EXPECT_EQ(result->num_rows(), 1);
 }
@@ -720,8 +810,9 @@ TEST_F(JoinTest, LeftJoinOnNulls)
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*sorted_gold, *sorted_result);
 }
 
-TEST_F(JoinTest, InnerJoinNoNulls)
+TEST_P(JoinParameterizedTest, InnerJoinNoNulls)
 {
+  auto algo = GetParam();
   column_wrapper<int32_t> col0_0{{3, 1, 2, 0, 2}};
   strcol_wrapper col0_1({"s1", "s1", "s0", "s4", "s0"});
   column_wrapper<int32_t> col0_2{{0, 1, 2, 4, 1}};
@@ -741,32 +832,63 @@ TEST_F(JoinTest, InnerJoinNoNulls)
   Table t0(std::move(cols0));
   Table t1(std::move(cols1));
 
-  auto result            = inner_join(t0, t1, {0, 1}, {0, 1});
-  auto result_sort_order = cudf::sorted_order(result->view());
-  auto sorted_result     = cudf::gather(result->view(), *result_sort_order);
+  for (const auto eq : {cudf::null_equality::EQUAL, cudf::null_equality::UNEQUAL}) {
+    // single column
+    {
+      auto result            = inner_join(t0, t1, {0}, {0}, eq, algo);
+      auto result_sort_order = cudf::sorted_order(result->view());
+      auto sorted_result     = cudf::gather(result->view(), *result_sort_order);
 
-  column_wrapper<int32_t> col_gold_0{{3, 2, 2}};
-  strcol_wrapper col_gold_1({"s1", "s0", "s0"});
-  column_wrapper<int32_t> col_gold_2{{0, 2, 1}};
-  column_wrapper<int32_t> col_gold_3{{3, 2, 2}};
-  strcol_wrapper col_gold_4({"s1", "s0", "s0"});
-  column_wrapper<int32_t> col_gold_5{{1, 0, 0}};
-  CVector cols_gold;
-  cols_gold.push_back(col_gold_0.release());
-  cols_gold.push_back(col_gold_1.release());
-  cols_gold.push_back(col_gold_2.release());
-  cols_gold.push_back(col_gold_3.release());
-  cols_gold.push_back(col_gold_4.release());
-  cols_gold.push_back(col_gold_5.release());
-  Table gold(std::move(cols_gold));
+      column_wrapper<int32_t> col_gold_0{{3, 2, 2, 0, 2, 2}};
+      strcol_wrapper col_gold_1({"s1", "s0", "s0", "s4", "s0", "s0"});
+      column_wrapper<int32_t> col_gold_2{{0, 2, 2, 4, 1, 1}};
+      column_wrapper<int32_t> col_gold_3{{3, 2, 2, 0, 2, 2}};
+      strcol_wrapper col_gold_4({"s1", "s1", "s0", "s1", "s1", "s0"});
+      column_wrapper<int32_t> col_gold_5{{1, 1, 0, 1, 1, 0}};
+      CVector cols_gold;
+      cols_gold.push_back(col_gold_0.release());
+      cols_gold.push_back(col_gold_1.release());
+      cols_gold.push_back(col_gold_2.release());
+      cols_gold.push_back(col_gold_3.release());
+      cols_gold.push_back(col_gold_4.release());
+      cols_gold.push_back(col_gold_5.release());
+      Table gold(std::move(cols_gold));
 
-  auto gold_sort_order = cudf::sorted_order(gold.view());
-  auto sorted_gold     = cudf::gather(gold.view(), *gold_sort_order);
-  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*sorted_gold, *sorted_result);
+      auto gold_sort_order = cudf::sorted_order(gold.view());
+      auto sorted_gold     = cudf::gather(gold.view(), *gold_sort_order);
+      CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*sorted_gold, *sorted_result);
+    }
+    // multi column
+    {
+      auto result            = inner_join(t0, t1, {0, 1}, {0, 1}, eq, algo);
+      auto result_sort_order = cudf::sorted_order(result->view());
+      auto sorted_result     = cudf::gather(result->view(), *result_sort_order);
+
+      column_wrapper<int32_t> col_gold_0{{3, 2, 2}};
+      strcol_wrapper col_gold_1({"s1", "s0", "s0"});
+      column_wrapper<int32_t> col_gold_2{{0, 2, 1}};
+      column_wrapper<int32_t> col_gold_3{{3, 2, 2}};
+      strcol_wrapper col_gold_4({"s1", "s0", "s0"});
+      column_wrapper<int32_t> col_gold_5{{1, 0, 0}};
+      CVector cols_gold;
+      cols_gold.push_back(col_gold_0.release());
+      cols_gold.push_back(col_gold_1.release());
+      cols_gold.push_back(col_gold_2.release());
+      cols_gold.push_back(col_gold_3.release());
+      cols_gold.push_back(col_gold_4.release());
+      cols_gold.push_back(col_gold_5.release());
+      Table gold(std::move(cols_gold));
+
+      auto gold_sort_order = cudf::sorted_order(gold.view());
+      auto sorted_gold     = cudf::gather(gold.view(), *gold_sort_order);
+      CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*sorted_gold, *sorted_result);
+    }
+  }
 }
 
-TEST_F(JoinTest, InnerJoinWithNulls)
+TEST_P(JoinParameterizedTest, InnerJoinWithNulls)
 {
+  auto algo = GetParam();
   column_wrapper<int32_t> col0_0{{3, 1, 2, 0, 2}};
   strcol_wrapper col0_1({"s1", "s1", "s0", "s4", "s0"}, {true, true, false, true, true});
   column_wrapper<int32_t> col0_2{{0, 1, 2, 4, 1}};
@@ -786,7 +908,7 @@ TEST_F(JoinTest, InnerJoinWithNulls)
   Table t0(std::move(cols0));
   Table t1(std::move(cols1));
 
-  auto result            = inner_join(t0, t1, {0, 1}, {0, 1});
+  auto result            = inner_join(t0, t1, {0, 1}, {0, 1}, cudf::null_equality::EQUAL, algo);
   auto result_sort_order = cudf::sorted_order(result->view());
   auto sorted_result     = cudf::gather(result->view(), *result_sort_order);
 
@@ -810,8 +932,10 @@ TEST_F(JoinTest, InnerJoinWithNulls)
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*sorted_gold, *sorted_result);
 }
 
-TEST_F(JoinTest, InnerJoinWithStructsAndNulls)
+// TODO: add unequal nulls case here
+TEST_P(JoinParameterizedTest, InnerJoinWithStructsAndNulls)
 {
+  auto algo = GetParam();
   column_wrapper<int32_t> col0_0{{3, 1, 2, 0, 2}};
   strcol_wrapper col0_1({"s1", "s1", "s0", "s4", "s0"}, {true, true, false, true, true});
   column_wrapper<int32_t> col0_2{{0, 1, 2, 4, 1}};
@@ -856,7 +980,7 @@ TEST_F(JoinTest, InnerJoinWithStructsAndNulls)
   Table t0(std::move(cols0));
   Table t1(std::move(cols1));
 
-  auto result            = inner_join(t0, t1, {0, 1, 3}, {0, 1, 3});
+  auto result = inner_join(t0, t1, {0, 1, 3}, {0, 1, 3}, cudf::null_equality::EQUAL, algo);
   auto result_sort_order = cudf::sorted_order(result->view());
   auto sorted_result     = cudf::gather(result->view(), *result_sort_order);
 
@@ -898,8 +1022,9 @@ TEST_F(JoinTest, InnerJoinWithStructsAndNulls)
 }
 
 // // Test to check join behavior when join keys are null.
-TEST_F(JoinTest, InnerJoinOnNulls)
+TEST_P(JoinParameterizedTest, InnerJoinOnNulls)
 {
+  auto algo = GetParam();
   // clang-format off
   column_wrapper<int32_t> col0_0{{  3,    1,    2,    0,    2}};
   strcol_wrapper          col0_1({"s1", "s1", "s8", "s4", "s0"},
@@ -922,7 +1047,7 @@ TEST_F(JoinTest, InnerJoinOnNulls)
   Table t0(std::move(cols0));
   Table t1(std::move(cols1));
 
-  auto result            = inner_join(t0, t1, {0, 1}, {0, 1});
+  auto result            = inner_join(t0, t1, {0, 1}, {0, 1}, cudf::null_equality::EQUAL, algo);
   auto result_sort_order = cudf::sorted_order(result->view());
   auto sorted_result     = cudf::gather(result->view(), *result_sort_order);
 
@@ -951,7 +1076,7 @@ TEST_F(JoinTest, InnerJoinOnNulls)
   // Repeat test with compare_nulls_equal=false,
   // as per SQL standard.
 
-  result            = inner_join(t0, t1, {0, 1}, {0, 1},  cudf::null_equality::UNEQUAL);
+  result            = inner_join(t0, t1, {0, 1}, {0, 1}, cudf::null_equality::UNEQUAL, algo);
   result_sort_order = cudf::sorted_order(result->view());
   sorted_result     = cudf::gather(result->view(), *result_sort_order);
 
@@ -981,8 +1106,9 @@ TEST_F(JoinTest, InnerJoinOnNulls)
 }
 
 // Empty Left Table
-TEST_F(JoinTest, EmptyLeftTableInnerJoin)
+TEST_P(JoinParameterizedTest, EmptyLeftTableInnerJoin)
 {
+  auto algo = GetParam();
   column_wrapper<int32_t> col0_0;
   column_wrapper<int32_t> col0_1;
 
@@ -998,7 +1124,7 @@ TEST_F(JoinTest, EmptyLeftTableInnerJoin)
   Table empty0(std::move(cols0));
   Table t1(std::move(cols1));
 
-  auto result = inner_join(empty0, t1, {0, 1}, {0, 1});
+  auto result = inner_join(empty0, t1, {0, 1}, {0, 1}, cudf::null_equality::EQUAL, algo);
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(empty0, *result);
 }
 
@@ -1063,8 +1189,9 @@ TEST_F(JoinTest, EmptyLeftTableFullJoin)
 }
 
 // Empty Right Table
-TEST_F(JoinTest, EmptyRightTableInnerJoin)
+TEST_P(JoinParameterizedTest, EmptyRightTableInnerJoin)
 {
+  auto algo = GetParam();
   column_wrapper<int32_t> col0_0{{2, 2, 0, 4, 3}};
   column_wrapper<int32_t> col0_1{{1, 0, 1, 2, 1}, {true, false, true, true, true}};
 
@@ -1081,7 +1208,7 @@ TEST_F(JoinTest, EmptyRightTableInnerJoin)
   Table empty1(std::move(cols1));
 
   {
-    auto result = inner_join(t0, empty1, {0, 1}, {0, 1});
+    auto result = inner_join(t0, empty1, {0, 1}, {0, 1}, cudf::null_equality::EQUAL, algo);
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(empty1, *result);
   }
 
@@ -1181,8 +1308,9 @@ TEST_F(JoinTest, EmptyRightTableFullJoin)
 }
 
 // Both tables empty
-TEST_F(JoinTest, BothEmptyInnerJoin)
+TEST_P(JoinParameterizedTest, BothEmptyInnerJoin)
 {
+  auto algo = GetParam();
   column_wrapper<int32_t> col0_0;
   column_wrapper<int32_t> col0_1;
 
@@ -1198,7 +1326,7 @@ TEST_F(JoinTest, BothEmptyInnerJoin)
   Table t0(std::move(cols0));
   Table empty1(std::move(cols1));
 
-  auto result = inner_join(t0, empty1, {0, 1}, {0, 1});
+  auto result = inner_join(t0, empty1, {0, 1}, {0, 1}, cudf::null_equality::EQUAL, algo);
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(empty1, *result);
 }
 
@@ -1246,8 +1374,9 @@ TEST_F(JoinTest, BothEmptyFullJoin)
 
 // // EqualValues X Inner,Left,Full
 
-TEST_F(JoinTest, EqualValuesInnerJoin)
+TEST_P(JoinParameterizedTest, EqualValuesInnerJoin)
 {
+  auto algo = GetParam();
   column_wrapper<int32_t> col0_0{{0, 0}};
   strcol_wrapper col0_1({"s0", "s0"});
 
@@ -1263,7 +1392,7 @@ TEST_F(JoinTest, EqualValuesInnerJoin)
   Table t0(std::move(cols0));
   Table t1(std::move(cols1));
 
-  auto result = inner_join(t0, t1, {0, 1}, {0, 1});
+  auto result = inner_join(t0, t1, {0, 1}, {0, 1}, cudf::null_equality::EQUAL, algo);
 
   column_wrapper<int32_t> col_gold_0{{0, 0, 0, 0}};
   strcol_wrapper col_gold_1({"s0", "s0", "s0", "s0"});
@@ -1349,8 +1478,9 @@ TEST_F(JoinTest, EqualValuesFullJoin)
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(gold, *result);
 }
 
-TEST_F(JoinTest, InnerJoinCornerCase)
+TEST_P(JoinParameterizedTest, InnerJoinCornerCase)
 {
+  auto algo = GetParam();
   column_wrapper<int64_t> col0_0{{4, 1, 3, 2, 2, 2, 2}};
   column_wrapper<int64_t> col1_0{{2}};
 
@@ -1361,7 +1491,7 @@ TEST_F(JoinTest, InnerJoinCornerCase)
   Table t0(std::move(cols0));
   Table t1(std::move(cols1));
 
-  auto result            = inner_join(t0, t1, {0}, {0});
+  auto result            = inner_join(t0, t1, {0}, {0}, cudf::null_equality::EQUAL, algo);
   auto result_sort_order = cudf::sorted_order(result->view());
   auto sorted_result     = cudf::gather(result->view(), *result_sort_order);
 
@@ -1729,8 +1859,9 @@ TEST_F(JoinDictionaryTest, LeftJoinWithNulls)
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*sorted_gold, *sorted_result);
 }
 
-TEST_F(JoinDictionaryTest, InnerJoinNoNulls)
+TEST_P(JoinParameterizedTest, DictionaryInnerJoinNoNulls)
 {
+  auto algo = GetParam();
   column_wrapper<int32_t> col0_0{{3, 1, 2, 0, 2}};
   strcol_wrapper col0_1_w({"s1", "s1", "s0", "s4", "s0"});
   auto col0_1 = cudf::dictionary::encode(col0_1_w);
@@ -1744,7 +1875,7 @@ TEST_F(JoinDictionaryTest, InnerJoinNoNulls)
   auto t0 = cudf::table_view({col0_0, col0_1->view(), col0_2});
   auto t1 = cudf::table_view({col1_0, col1_1->view(), col1_2});
 
-  auto result      = inner_join(t0, t1, {0, 1}, {0, 1});
+  auto result      = inner_join(t0, t1, {0, 1}, {0, 1}, cudf::null_equality::EQUAL, algo);
   auto result_view = result->view();
   auto decoded1    = cudf::dictionary::decode(result_view.column(1));
   auto decoded4    = cudf::dictionary::decode(result_view.column(4));
@@ -1766,8 +1897,9 @@ TEST_F(JoinDictionaryTest, InnerJoinNoNulls)
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*sorted_gold, *sorted_result);
 }
 
-TEST_F(JoinDictionaryTest, InnerJoinWithNulls)
+TEST_P(JoinParameterizedTest, DictionaryInnerJoinWithNulls)
 {
+  auto algo = GetParam();
   column_wrapper<int32_t> col0_0{{3, 1, 2, 0, 2}};
   strcol_wrapper col0_1({"s1", "s1", "s0", "s4", "s0"}, {true, true, false, true, true});
   column_wrapper<int32_t> col0_2_w{{0, 1, 2, 4, 1}};
@@ -1781,7 +1913,7 @@ TEST_F(JoinDictionaryTest, InnerJoinWithNulls)
   auto t0 = cudf::table_view({col0_0, col0_1, col0_2->view()});
   auto t1 = cudf::table_view({col1_0, col1_1, col1_2->view()});
 
-  auto result      = inner_join(t0, t1, {0, 1}, {0, 1});
+  auto result      = inner_join(t0, t1, {0, 1}, {0, 1}, cudf::null_equality::EQUAL, algo);
   auto result_view = result->view();
   auto decoded2    = cudf::dictionary::decode(result_view.column(2));
   auto decoded5    = cudf::dictionary::decode(result_view.column(5));
@@ -2119,18 +2251,47 @@ struct JoinTestLists : public cudf::test::BaseFixture {
   }
 };
 
-TEST_F(JoinTestLists, ListWithNullsEqualInnerJoin)
+struct JoinParameterizedTestLists : public JoinTestLists,
+                                    public testing::WithParamInterface<algorithm> {
+  void inner_join(cudf::column_view left_gold_map,
+                  cudf::column_view right_gold_map,
+                  cudf::null_equality nulls_equal,
+                  algorithm algo)
+  {
+    auto join_lambda = [](cudf::table_view const& left,
+                          cudf::table_view const& right,
+                          cudf::null_equality compare_nulls,
+                          rmm::cuda_stream_view stream,
+                          rmm::device_async_resource_ref mr) -> JoinResult {
+      cudf::sort_merge_join obj(right, cudf::sorted::NO, compare_nulls, stream);
+      return obj.inner_join(left, cudf::sorted::NO, stream, mr);
+    };
+    join(left_gold_map,
+         right_gold_map,
+         nulls_equal,
+         algo == algorithm::HASH ? cudf::inner_join : join_lambda,
+         cudf::out_of_bounds_policy::DONT_CHECK);
+  }
+};
+// Parametrize qualifying join tests for supported algorithms
+INSTANTIATE_TEST_CASE_P(InnerJoinParameterizedTestLists,
+                        JoinParameterizedTestLists,
+                        ::testing::Values(algorithm::HASH, algorithm::SORT_MERGE));
+
+TEST_P(JoinParameterizedTestLists, ListWithNullsEqualInnerJoin)
 {
+  auto algo                 = GetParam();
   auto const left_gold_map  = column_wrapper<int32_t>({0, 1, 2, 3});
   auto const right_gold_map = column_wrapper<int32_t>({0, 2, 3, 4});
-  this->inner_join(left_gold_map, right_gold_map, cudf::null_equality::EQUAL);
+  this->inner_join(left_gold_map, right_gold_map, cudf::null_equality::EQUAL, algo);
 }
 
-TEST_F(JoinTestLists, ListWithNullsUnequalInnerJoin)
+TEST_P(JoinParameterizedTestLists, ListWithNullsUnequalInnerJoin)
 {
+  auto algo                 = GetParam();
   auto const left_gold_map  = column_wrapper<int32_t>({1, 3});
   auto const right_gold_map = column_wrapper<int32_t>({0, 3});
-  this->inner_join(left_gold_map, right_gold_map, cudf::null_equality::UNEQUAL);
+  this->inner_join(left_gold_map, right_gold_map, cudf::null_equality::UNEQUAL, algo);
 }
 
 TEST_F(JoinTestLists, ListWithNullsEqualFullJoin)
