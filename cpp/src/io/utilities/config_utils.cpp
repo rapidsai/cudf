@@ -58,7 +58,7 @@ enum class usage_policy : uint8_t { OFF, STABLE, ALWAYS };
  */
 usage_policy get_env_policy()
 {
-  static auto const env_val = getenv_or<std::string>("LIBCUDF_NVCOMP_POLICY", "STABLE");
+  auto const env_val = getenv_or<std::string>("LIBCUDF_NVCOMP_POLICY", "STABLE");
   if (env_val == "OFF") return usage_policy::OFF;
   if (env_val == "STABLE") return usage_policy::STABLE;
   if (env_val == "ALWAYS") return usage_policy::ALWAYS;
