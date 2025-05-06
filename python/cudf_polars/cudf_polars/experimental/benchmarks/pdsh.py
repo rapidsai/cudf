@@ -30,10 +30,15 @@ import pynvml
 import polars as pl
 
 from cudf_polars.dsl.translate import Translator
-from cudf_polars.experimental.parallel import evaluate_streaming
+from cudf_polars.experimental.parallel import evaluate_streaming, lower_ir_graph
+from cudf_polars.utils.config import ConfigOptions
 
 if TYPE_CHECKING:
     import pathlib
+    from collections.abc import MutableMapping
+
+    from cudf_polars.dsl.ir import IR
+    from cudf_polars.experimental.base import PartitionInfo
 
 # Without this setting, the first IO task to run
 # on each worker takes ~15 sec extra
@@ -142,6 +147,8 @@ class RunConfig:
         default_factory=lambda: datetime.now(timezone.utc).isoformat()
     )
     hardware: HardwareInfo = dataclasses.field(default_factory=HardwareInfo.collect)
+    rapidsmpf_spill: bool
+    spill_device: float
 
     @classmethod
     def from_args(cls, args: argparse.Namespace) -> RunConfig:
@@ -169,6 +176,8 @@ class RunConfig:
             threads=args.threads,
             iterations=args.iterations,
             suffix=args.suffix,
+            spill_device=args.spill_device,
+            rapidsmpf_spill=args.rapidsmpf_spill,
         )
 
     def serialize(self) -> dict:
@@ -192,6 +201,8 @@ class RunConfig:
                 if self.scheduler == "distributed":
                     print(f"n_workers: {self.n_workers}")
                     print(f"threads: {self.threads}")
+                    print(f"spill_device: {self.spill_device}")
+                    print(f"rapidsmpf_spill: {self.rapidsmpf_spill}")
             print(f"iterations: {self.iterations}")
             print("---------------------------------------")
             print(f"min time : {min([record.duration for record in records]):0.4f}")
@@ -205,6 +216,60 @@ def get_data(
 ) -> pl.LazyFrame:
     """Get table from dataset."""
     return pl.scan_parquet(f"{path}/{table_name}{suffix}")
+
+
+def _explain(
+    ir: IR,
+    partition_info: MutableMapping[IR, PartitionInfo],
+    *,
+    offset: str = "",
+) -> str:
+    """Print the physical plan for an IR node."""
+    from cudf_polars.dsl.ir import GroupBy, Join, Projection, Scan, Select, Sort, Union
+    from cudf_polars.experimental.io import SplitScan
+
+    val = offset
+    count = partition_info[ir].count
+    if isinstance(ir, Union) and isinstance(ir.children[0], (Scan, SplitScan)):
+        scan = ir.children[0]
+        if isinstance(scan, SplitScan):
+            name = "SPLITSCAN"
+            scan = scan.base_scan
+        else:
+            name = "SCAN"
+        schema = tuple(ir.schema)
+        path = "/".join(scan.paths[0].split("/")[-2:])
+        val += f"UNION [{count} x {name} {schema} {path} ...]\n"
+    else:
+        if isinstance(ir, GroupBy):
+            keys = tuple(ne.name for ne in ir.keys)
+            val += f"GROUPBY {keys} [{count}]\n"
+        elif isinstance(ir, Join):
+            left_on = tuple(ne.name for ne in ir.left_on)
+            right_on = tuple(ne.name for ne in ir.right_on)
+            val += f"JOIN {ir.options[0]} {left_on} {right_on} [{count}]\n"
+        elif isinstance(ir, Projection):
+            schema = tuple(ir.schema)
+            val += f"PROJECTION {schema} [{count}]\n"
+        elif isinstance(ir, Select):
+            schema = tuple(ir.schema)
+            val += f"SELECT {schema} [{count}]\n"
+        elif isinstance(ir, Sort):
+            by = tuple(ne.name for ne in ir.by)
+            val += f"SORT {by} [{count}]\n"
+        else:
+            val += f"{type(ir).__name__.upper()} [{count}]\n"
+        for child in ir.children:
+            val += _explain(child, partition_info, offset=offset + "  ")
+    return val
+
+
+def explain_query(q: pl.LazyFrame, engine: pl.GPUEngine) -> str:
+    """Print the physical plan for a query."""
+    config_options = ConfigOptions.from_polars_engine(engine)
+    ir = Translator(q._ldf.visit(), engine).translate_ir()
+    ir, partition_info = lower_ir_graph(ir, config_options)
+    return _explain(ir, partition_info)
 
 
 class PDSHQueries:
@@ -1012,7 +1077,7 @@ parser.add_argument(
 parser.add_argument(
     "-e",
     "--executor",
-    default="dask",
+    default="streaming",
     type=str,
     choices=["in-memory", "streaming", "cpu"],
     help="Executor.",
@@ -1075,6 +1140,18 @@ parser.add_argument(
     help="RMM pool size (fractional).",
 )
 parser.add_argument(
+    "--rapidsmpf-spill",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help="Use rapidsmpf for general spilling.",
+)
+parser.add_argument(
+    "--spill-device",
+    default=0.5,
+    type=float,
+    help="Rapdsimpf device spill threshold.",
+)
+parser.add_argument(
     "-o",
     "--output",
     type=argparse.FileType("at"),
@@ -1092,6 +1169,12 @@ parser.add_argument(
     action=argparse.BooleanOptionalAction,
     help="Print the query results",
     default=True,
+)
+parser.add_argument(
+    "--explain",
+    action=argparse.BooleanOptionalAction,
+    help="Print an outline of the physical plan",
+    default=False,
 )
 args = parser.parse_args()
 
@@ -1120,7 +1203,7 @@ def run(args: argparse.Namespace) -> None:
             try:
                 from rapidsmpf.integrations.dask import bootstrap_dask_cluster
 
-                bootstrap_dask_cluster(client, spill_device=0.5)
+                bootstrap_dask_cluster(client, spill_device=run_config.spill_device)
             except ImportError as err:
                 if run_config.shuffle == "rapidsmpf":
                     raise ImportError from err
@@ -1152,6 +1235,8 @@ def run(args: argparse.Namespace) -> None:
                             "l_orderkey": 1.0,  # Q18
                         },
                     }
+                    if run_config.rapidsmpf_spill:
+                        executor_options["rapidsmpf_spill"] = run_config.rapidsmpf_spill
                     if run_config.scheduler == "distributed":
                         executor_options["scheduler"] = "distributed"
 
@@ -1176,6 +1261,9 @@ def run(args: argparse.Namespace) -> None:
             record = Record(query=q_id, duration=t1 - t0)
             if args.print_results:
                 print(result)
+            if args.explain:
+                print(f"\nQuery {q_id} - Physical plan\n")
+                print(explain_query(q, engine))
             print(f"Ran query={q_id} in {record.duration:0.4f}s", flush=True)
             records[q_id].append(record)
 
