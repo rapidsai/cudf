@@ -263,6 +263,73 @@ std::vector<std::vector<cudf::size_type>> aggregate_reader_metadata::filter_row_
   return stats_filtered_row_group_indices.value_or(all_row_group_indices(row_group_indices));
 }
 
+std::vector<text::byte_range_info> aggregate_reader_metadata::get_bloom_filter_bytes(
+  cudf::host_span<std::vector<cudf::size_type> const> row_group_indices,
+  host_span<data_type const> output_dtypes,
+  host_span<int const> output_column_schemas,
+  std::optional<std::reference_wrapper<ast::expression const>> filter)
+{
+  // Number of surviving row groups after applying stats filter
+  auto const total_row_groups = std::accumulate(
+    row_group_indices.begin(),
+    row_group_indices.end(),
+    cudf::size_type{0},
+    [](auto sum, auto const& per_file_row_groups) { return sum + per_file_row_groups.size(); });
+
+  // Collect equality literals for each input table column
+  auto const equality_literals =
+    equality_literals_collector{filter.value().get(),
+                                static_cast<cudf::size_type>(output_dtypes.size())}
+      .get_literals();
+
+  // Collect schema indices of columns with equality predicate(s)
+  std::vector<cudf::size_type> equality_col_schemas;
+  thrust::copy_if(thrust::host,
+                  output_column_schemas.begin(),
+                  output_column_schemas.end(),
+                  equality_literals.begin(),
+                  std::back_inserter(equality_col_schemas),
+                  [](auto& eq_literals) { return not eq_literals.empty(); });
+
+  // Descriptors for all the chunks that make up the selected columns
+  auto const num_equality_columns = equality_col_schemas.size();
+  auto const num_chunks           = total_row_groups * num_equality_columns;
+
+  std::vector<text::byte_range_info> bloom_filter_bytes;
+  bloom_filter_bytes.reserve(num_chunks);
+
+  // Flag to check if we have at least one valid bloom filter offset
+  auto have_bloom_filters = false;
+
+  // For all sources
+  std::for_each(
+    thrust::counting_iterator<size_t>(0),
+    thrust::counting_iterator(row_group_indices.size()),
+    [&](auto const src_index) {
+      // Get all row group indices in the data source
+      auto const& rg_indices = row_group_indices[src_index];
+      // For all row groups
+      std::for_each(rg_indices.cbegin(), rg_indices.cend(), [&](auto const rg_index) {
+        // For all column chunks
+        std::for_each(
+          equality_col_schemas.begin(), equality_col_schemas.end(), [&](auto const schema_idx) {
+            auto& col_meta = get_column_metadata(rg_index, src_index, schema_idx);
+            // Get bloom filter offsets and sizes
+            bloom_filter_bytes.emplace_back(col_meta.bloom_filter_offset.value_or(0),
+                                            col_meta.bloom_filter_length.value_or(0));
+
+            // Set `have_bloom_filters` if `bloom_filter_offset` is valid
+            if (col_meta.bloom_filter_offset.has_value()) { have_bloom_filters = true; }
+          });
+      });
+    });
+
+  // Clear vectors if found nothing
+  if (not have_bloom_filters) { bloom_filter_bytes.clear(); }
+
+  return bloom_filter_bytes;
+}
+
 std::vector<cudf::io::text::byte_range_info> aggregate_reader_metadata::get_dictionary_page_bytes(
   cudf::host_span<std::vector<cudf::size_type> const> row_group_indices,
   host_span<data_type const> output_dtypes,
