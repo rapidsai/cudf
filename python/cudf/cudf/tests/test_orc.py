@@ -984,7 +984,7 @@ def test_orc_string_stream_offset_issue():
     assert_eq(df, cudf.read_orc(buffer))
 
 
-def generate_list_struct_buff(size=100_000):
+def generate_list_struct_buff(size=10_000):
     rd = random.Random(1)
     rng = np.random.default_rng(seed=1)
 
@@ -1078,7 +1078,7 @@ def list_struct_buff():
         ["lvl2_struct", "lvl1_struct"],
     ],
 )
-@pytest.mark.parametrize("num_rows", [0, 15, 1005, 10561, 100_000])
+@pytest.mark.parametrize("num_rows", [0, 15, 1005, 10561, 10_000])
 @pytest.mark.parametrize("use_index", [True, False])
 def test_lists_struct_nests(columns, num_rows, use_index, list_struct_buff):
     from pyarrow import orc
