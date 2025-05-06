@@ -611,7 +611,7 @@ std::vector<thrust::host_vector<bool>> aggregate_reader_metadata::compute_data_p
   if (row_mask.null_count() == row_mask.size() or thrust::all_of(rmm::exec_policy(stream),
                                                                  row_mask.begin<bool>(),
                                                                  row_mask.end<bool>(),
-                                                                 thrust::identity<bool>{})) {
+                                                                 cuda::std::identity{})) {
     return all_valid_data_pages();
   }
 
