@@ -481,8 +481,8 @@ class Series(SingleColumnFrame, IndexedFrame):
         >>> pd_categorical
         ['a', 'b', 'c', 'a']
         Categories (3, object): ['a', 'b', 'c']
-        >>> series = cudf.Series.from_categorical(pd_categorical)
-        >>> series
+        >>> series = cudf.Series.from_categorical(pd_categorical)  # doctest: +SKIP
+        >>> series  # doctest: +SKIP
         0    a
         1    b
         2    c
@@ -490,6 +490,10 @@ class Series(SingleColumnFrame, IndexedFrame):
         dtype: category
         Categories (3, object): ['a', 'b', 'c']
         """
+        warnings.warn(
+            "Series.from_categorical is deprecated and will be removed in 25.08.",
+            FutureWarning,
+        )
         col = as_column(categorical)
         if codes is not None:
             codes = as_column(codes)
@@ -577,7 +581,7 @@ class Series(SingleColumnFrame, IndexedFrame):
         5    <NA>
         dtype: int64
         >>> b = cudf.Series([10, 11, 12, 13, 14])
-        >>> cudf.Series.from_masked_array(data=b, mask=a._column.mask)
+        >>> cudf.Series.from_masked_array(data=b, mask=a._column.mask)  # doctest: +SKIP
         0      10
         1      11
         2      12
@@ -585,6 +589,10 @@ class Series(SingleColumnFrame, IndexedFrame):
         4      14
         dtype: int64
         """
+        warnings.warn(
+            "Series.from_masked_array is deprecated and will be removed in 25.08.",
+            FutureWarning,
+        )
         return cls._from_column(as_column(data).set_mask(mask))
 
     @_performance_tracking
@@ -1644,6 +1652,10 @@ class Series(SingleColumnFrame, IndexedFrame):
     @_performance_tracking
     def nullable(self):
         """A boolean indicating whether a null-mask is needed"""
+        warnings.warn(
+            "Series.nullable is deprecated and will be removed in 25.08.",
+            FutureWarning,
+        )
         return self._column.nullable
 
     @property  # type: ignore
@@ -2080,6 +2092,10 @@ class Series(SingleColumnFrame, IndexedFrame):
     @_performance_tracking
     def nullmask(self):
         """The gpu buffer for the null-mask"""
+        warnings.warn(
+            "Series.nullmask is deprecated and will be removed in 25.08.",
+            FutureWarning,
+        )
         return cudf.Series(self._column.nullmask)
 
     @_performance_tracking
@@ -5395,7 +5411,7 @@ def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
     4           19.9
     5           <NA>
     dtype: float64
-    >>> cudf.isclose(s1, s2)
+    >>> cudf.isclose(s1, s2)  # doctest: +SKIP
     0     True
     1     True
     2     True
@@ -5403,7 +5419,7 @@ def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
     4    False
     5    False
     dtype: bool
-    >>> cudf.isclose(s1, s2, equal_nan=True)
+    >>> cudf.isclose(s1, s2, equal_nan=True)  # doctest: +SKIP
     0     True
     1     True
     2     True
@@ -5411,7 +5427,7 @@ def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
     4    False
     5    False
     dtype: bool
-    >>> cudf.isclose(s1, s2, equal_nan=False)
+    >>> cudf.isclose(s1, s2, equal_nan=False)  # doctest: +SKIP
     0     True
     1     True
     2     True
@@ -5420,7 +5436,10 @@ def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
     5    False
     dtype: bool
     """
-
+    warnings.warn(
+        "cudf.isclose is deprecated and will be removed in 25.08.",
+        FutureWarning,
+    )
     if not can_convert_to_column(a):
         raise TypeError(
             f"Parameter `a` is expected to be a "
