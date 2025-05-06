@@ -44,11 +44,27 @@ using parquet::detail::row_group_info;
 
 namespace {
 
+// Construct a vector of all row group indices from the input vectors
 [[nodiscard]] auto all_row_group_indices(
   host_span<std::vector<cudf::size_type> const> row_group_indices)
 {
   return std::vector<std::vector<cudf::size_type>>(row_group_indices.begin(),
                                                    row_group_indices.end());
+}
+
+// Compute total number of input row groups
+[[nodiscard]] cudf::size_type compute_total_row_groups(
+  host_span<std::vector<cudf::size_type> const> row_group_indices)
+{
+  auto const total_row_groups = std::accumulate(
+    row_group_indices.begin(), row_group_indices.end(), size_t{0}, [](auto sum, auto const& pfm) {
+      return sum + pfm.size();
+    });
+
+  // Check if we have less than 2B total row groups.
+  CUDF_EXPECTS(total_row_groups <= std::numeric_limits<cudf::size_type>::max(),
+               "Total number of row groups exceed the cudf::size_type's limit");
+  return static_cast<cudf::size_type>(total_row_groups);
 }
 
 }  // namespace
@@ -231,26 +247,11 @@ std::vector<std::vector<cudf::size_type>> aggregate_reader_metadata::filter_row_
   std::optional<std::reference_wrapper<ast::expression const>> filter,
   rmm::cuda_stream_view stream) const
 {
-  // Return all row groups if no filter expression
+  // Return all row groups if no converted filter expression
   if (not filter.has_value()) { return all_row_group_indices(row_group_indices); }
 
   // Compute total number of input row groups
-  cudf::size_type total_row_groups = [&]() {
-    if (not row_group_indices.empty()) {
-      size_t const total_row_groups =
-        std::accumulate(row_group_indices.begin(),
-                        row_group_indices.end(),
-                        size_t{0},
-                        [](auto sum, auto const& pfm) { return sum + pfm.size(); });
-
-      // Check if we have less than 2B total row groups.
-      CUDF_EXPECTS(total_row_groups <= std::numeric_limits<cudf::size_type>::max(),
-                   "Total number of row groups exceed the cudf::size_type's limit");
-      return static_cast<cudf::size_type>(total_row_groups);
-    } else {
-      return num_row_groups;
-    }
-  }();
+  auto const total_row_groups = compute_total_row_groups(row_group_indices);
 
   // Filter stats table with StatsAST expression and collect filtered row group indices
   auto const stats_filtered_row_group_indices = apply_stats_filters(row_group_indices,
@@ -269,12 +270,8 @@ std::vector<text::byte_range_info> aggregate_reader_metadata::get_bloom_filter_b
   host_span<int const> output_column_schemas,
   std::optional<std::reference_wrapper<ast::expression const>> filter)
 {
-  // Number of surviving row groups after applying stats filter
-  auto const total_row_groups = std::accumulate(
-    row_group_indices.begin(),
-    row_group_indices.end(),
-    cudf::size_type{0},
-    [](auto sum, auto const& per_file_row_groups) { return sum + per_file_row_groups.size(); });
+  // Return early if no converted filter expression
+  if (not filter.has_value()) { return {}; }
 
   // Collect equality literals for each input table column
   auto const equality_literals =
@@ -290,6 +287,9 @@ std::vector<text::byte_range_info> aggregate_reader_metadata::get_bloom_filter_b
                   equality_literals.begin(),
                   std::back_inserter(equality_col_schemas),
                   [](auto& eq_literals) { return not eq_literals.empty(); });
+
+  // Compute total number of input row groups
+  auto const total_row_groups = compute_total_row_groups(row_group_indices);
 
   // Descriptors for all the chunks that make up the selected columns
   auto const num_equality_columns = equality_col_schemas.size();
@@ -335,12 +335,8 @@ std::vector<cudf::io::text::byte_range_info> aggregate_reader_metadata::get_dict
   host_span<int const> output_column_schemas,
   std::optional<std::reference_wrapper<ast::expression const>> filter)
 {
-  // Number of surviving row groups after applying stats filter
-  auto const total_row_groups = std::accumulate(
-    row_group_indices.begin(),
-    row_group_indices.end(),
-    cudf::size_type{0},
-    [](auto sum, auto const& per_file_row_groups) { return sum + per_file_row_groups.size(); });
+  // Return early if no converted filter expression
+  if (not filter.has_value()) { return {}; }
 
   // Collect equality literals for each input table column
   auto const [literals, operators] =
@@ -359,6 +355,9 @@ std::vector<cudf::io::text::byte_range_info> aggregate_reader_metadata::get_dict
                   literals.begin(),
                   std::back_inserter(dictionary_col_schemas),
                   [](auto& dict_literals) { return not dict_literals.empty(); });
+
+  // Compute total number of input row groups
+  auto const total_row_groups = compute_total_row_groups(row_group_indices);
 
   // Descriptors for all the chunks that make up the selected columns
   auto const num_equality_columns = dictionary_col_schemas.size();
@@ -452,7 +451,7 @@ aggregate_reader_metadata::filter_row_groups_with_bloom_filters(
   std::optional<std::reference_wrapper<ast::expression const>> filter,
   rmm::cuda_stream_view stream) const
 {
-  // Return all row groups if no filter expression
+  // Return all row groups if no converted filter expression
   if (not filter.has_value()) { return all_row_group_indices(row_group_indices); }
 
   // Collect equality literals for each input table column
@@ -473,12 +472,8 @@ aggregate_reader_metadata::filter_row_groups_with_bloom_filters(
   // Return all row groups if no column with equality predicate(s)
   if (equality_col_schemas.empty()) { return all_row_group_indices(row_group_indices); }
 
-  // Number of input row groups
-  auto const total_row_groups = std::accumulate(
-    row_group_indices.begin(),
-    row_group_indices.end(),
-    cudf::size_type{0},
-    [](auto sum, auto const& per_file_row_groups) { return sum + per_file_row_groups.size(); });
+  // Compute total number of input row groups
+  auto const total_row_groups = compute_total_row_groups(row_group_indices);
 
   auto const bloom_filtered_row_groups = apply_bloom_filters(bloom_filter_data,
                                                              row_group_indices,
