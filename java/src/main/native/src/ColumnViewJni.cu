@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,7 +34,7 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <cuda/std/functional>
+#include <thrust/functional.h>
 #include <thrust/logical.h>
 #include <thrust/scan.h>
 #include <thrust/tabulate.h>
@@ -132,7 +132,7 @@ void post_process_list_overlap(cudf::column_view const& lhs,
   auto [new_null_mask, new_null_count] =
     cudf::detail::valid_if(validity.begin(),
                            validity.end(),
-                           cuda::std::identity{},
+                           thrust::identity{},
                            cudf::get_default_stream(),
                            cudf::get_current_device_resource_ref());
 
