@@ -42,7 +42,7 @@ from cudf_polars.dsl.expressions.base import Col, Expr, NamedExpr
 from cudf_polars.dsl.expressions.binaryop import BinOp
 from cudf_polars.dsl.expressions.literal import Literal
 from cudf_polars.dsl.expressions.unary import Cast, UnaryFunction
-from cudf_polars.dsl.ir import Empty, HConcat, Select
+from cudf_polars.dsl.ir import Distinct, Empty, HConcat, Select
 from cudf_polars.dsl.traversal import (
     CachingVisitor,
 )
@@ -120,6 +120,68 @@ def select(
 
     columns = [Col(ne.value.dtype, ne.name) for ne in named_exprs]
     return columns, new_ir, partition_info
+
+
+def _decompose_unique(
+    unique: UnaryFunction,
+    input_ir: IR,
+    partition_info: MutableMapping[IR, PartitionInfo],
+    config_options: ConfigOptions,
+    *,
+    names: Generator[str, None, None],
+) -> tuple[Expr, IR, MutableMapping[IR, PartitionInfo]]:
+    """
+    Decompose a 'unique' UnaryFunction into partition-wise stages.
+
+    Parameters
+    ----------
+    unique
+        The expression node to decompose.
+    input_ir
+        The original input-IR node that ``unique`` will evaluate.
+    partition_info
+        A mapping from all unique IR nodes to the
+        associated partitioning information.
+    config_options
+        GPUEngine configuration options.
+    names
+        Generator of unique names for temporaries.
+
+    Returns
+    -------
+    expr
+        Decomposed expression node.
+    input_ir
+        The rewritten ``input_ir`` to be evaluated by ``expr``.
+    partition_info
+        A mapping from unique nodes in the new graph to associated
+        partitioning information.
+    """
+    from cudf_polars.experimental.distinct import lower_distinct
+
+    (child,) = unique.children
+    (maintain_order,) = unique.options
+    columns, input_ir, partition_info = select(
+        [child],
+        input_ir,
+        partition_info,
+        names=names,
+    )
+    (column,) = columns
+    input_ir, partition_info = lower_distinct(
+        Distinct(
+            {column.name: column.dtype},
+            plc.stream_compaction.DuplicateKeepOption.KEEP_ANY,
+            None,
+            None,
+            maintain_order,
+            input_ir,
+        ),
+        input_ir,
+        partition_info,
+        config_options,
+    )
+    return column, input_ir, partition_info
 
 
 def _decompose_agg_node(
@@ -331,6 +393,10 @@ def _decompose_expr_node(
         return _decompose_agg_node(
             expr, input_ir, partition_info, config_options, names=names
         )
+    elif isinstance(expr, UnaryFunction) and expr.name == "unique":
+        return _decompose_unique(
+            expr, input_ir, partition_info, config_options, names=names
+        )
     else:
         # This is an un-supported expression - raise.
         raise NotImplementedError(
@@ -363,7 +429,7 @@ def _decompose(
     input_ir: IR
     assert len(input_irs) > 0  # Must have at least one input IR
     partition_count = max(partition_info[ir].count for ir in input_irs)
-    unique_input_irs = list(dict.fromkeys(input_irs))
+    unique_input_irs = [k for k in dict.fromkeys(input_irs) if not isinstance(k, Empty)]
     if len(unique_input_irs) > 1:
         # Need to make sure we only have a single input IR
         # TODO: Check that we aren't concatenating misaligned
@@ -379,7 +445,7 @@ def _decompose(
         )
         partition_info[input_ir] = PartitionInfo(count=partition_count)
     else:
-        input_ir = input_irs[0]
+        input_ir = unique_input_irs[0]
 
     # Call into class-specific logic to decompose ``expr``
     return _decompose_expr_node(
