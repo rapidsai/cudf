@@ -19,4 +19,4 @@ jobs:
       - name: "Build spark-rapids-jni"
         run: |
           mkdir target
-          GPU_ARCHS=90 LIBCUDF_DEPENDENCY_MODE=latest USE_GDS=on scl enable gcc-toolset-11 build/buildcpp.sh
+          CMAKE_CUDA_ARCHITECTURES=90 LIBCUDF_DEPENDENCY_MODE=latest USE_GDS=on scl enable gcc-toolset-11 build/buildcpp.sh
