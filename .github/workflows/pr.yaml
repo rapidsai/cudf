@@ -129,7 +129,7 @@ jobs:
       enable_check_generated_files: false
       ignored_pr_jobs: "telemetry-summarize spark-rapids-jni"
   conda-cpp-build:
-    needs: checks
+    # needs: checks
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/conda-cpp-build.yaml@branch-25.06
     with:
@@ -137,7 +137,7 @@ jobs:
       node_type: "cpu16"
   cpp-linters:
     secrets: inherit
-    needs: checks
+    # needs: checks
     uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@branch-25.06
     with:
       build_type: pull-request
@@ -213,7 +213,7 @@ jobs:
       container_image: "rapidsai/ci-conda:latest"
       run_script: "ci/build_docs.sh"
   wheel-build-libcudf:
-    needs: checks
+    # needs: checks
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@branch-25.06
     with:
@@ -225,7 +225,7 @@ jobs:
       package-name: libcudf
       package-type: cpp
   wheel-build-pylibcudf:
-    needs: [checks, wheel-build-libcudf]
+    needs: [wheel-build-libcudf]
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@branch-25.06
     with:
