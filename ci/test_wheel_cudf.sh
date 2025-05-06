@@ -19,7 +19,6 @@ rapids-generate-pip-constraints py_test_cudf ./constraints.txt
 rapids-pip-retry install \
     -v \
     --constraint ./constraints.txt \
-    numba-cuda=="0.9.0" \
     "$(echo "${CUDF_WHEELHOUSE}"/cudf_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)[test]" \
     "$(echo "${LIBCUDF_WHEELHOUSE}"/libcudf_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)" \
     "$(echo "${PYLIBCUDF_WHEELHOUSE}"/pylibcudf_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)[test]"

@@ -2,6 +2,7 @@
 # Copyright (c) 2022-2025, NVIDIA CORPORATION.
 
 # Support invoking test_python_cudf.sh outside the script directory
+# TODO: Fix shellcheck error
 # shellcheck disable=SC2164
 cd "$(dirname "$(realpath "${BASH_SOURCE[0]}")")"/../;
 
@@ -15,24 +16,22 @@ EXITCODE=0
 trap "EXITCODE=1" ERR
 set +e
 
-# rapids-logger "pytest pylibcudf"
-# ./ci/run_pylibcudf_pytests.sh \
-#   --junitxml="${RAPIDS_TESTS_DIR}/junit-pylibcudf.xml" \
-#   --numprocesses=8 \
-#   --dist=worksteal \
-#   --cov-config=../.coveragerc \
-#   --cov=pylibcudf \
-#   --cov-report=xml:"${RAPIDS_COVERAGE_DIR}/pylibcudf-coverage.xml" \
-#   --cov-report=term
-conda install -c conda-forge "aws-c-http<0.10" "numba-cuda<0.10" "pytorch<2.7" -y
+rapids-logger "pytest pylibcudf"
+./ci/run_pylibcudf_pytests.sh \
+  --junitxml="${RAPIDS_TESTS_DIR}/junit-pylibcudf.xml" \
+  --numprocesses=8 \
+  --dist=worksteal \
+  --cov-config=../.coveragerc \
+  --cov=pylibcudf \
+  --cov-report=xml:"${RAPIDS_COVERAGE_DIR}/pylibcudf-coverage.xml" \
+  --cov-report=term
 
 rapids-logger "pytest cudf"
-timeout 90m ./ci/run_cudf_pytests.sh \
+./ci/run_cudf_pytests.sh \
   --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf.xml" \
   --numprocesses=8 \
   --dist=worksteal \
   --cov-config=../.coveragerc \
-  -v \
   --cov=cudf \
   --cov-report=xml:"${RAPIDS_COVERAGE_DIR}/cudf-coverage.xml" \
   --cov-report=term
@@ -42,23 +41,23 @@ timeout 90m ./ci/run_cudf_pytests.sh \
 # Therefore, these runs only verify that benchmarks are valid.
 # They do not generate meaningful performance measurements.
 
-# rapids-logger "pytest for cudf benchmarks"
-# ./ci/run_cudf_pytest_benchmarks.sh \
-#   --numprocesses=8 \
-#   --dist=worksteal \
-#   --cov-config=.coveragerc \
-#   --cov=cudf \
-#   --cov-report=xml:"${RAPIDS_COVERAGE_DIR}/cudf-benchmark-coverage.xml" \
-#   --cov-report=term
+rapids-logger "pytest for cudf benchmarks"
+./ci/run_cudf_pytest_benchmarks.sh \
+  --numprocesses=8 \
+  --dist=worksteal \
+  --cov-config=.coveragerc \
+  --cov=cudf \
+  --cov-report=xml:"${RAPIDS_COVERAGE_DIR}/cudf-benchmark-coverage.xml" \
+  --cov-report=term
 
-# rapids-logger "pytest for cudf benchmarks using pandas"
-# ./ci/run_cudf_pandas_pytest_benchmarks.sh \
-#   --numprocesses=8 \
-#   --dist=worksteal \
-#   --cov-config=.coveragerc \
-#   --cov=cudf \
-#   --cov-report=xml:"${RAPIDS_COVERAGE_DIR}/cudf-benchmark-pandas-coverage.xml" \
-#   --cov-report=term
+rapids-logger "pytest for cudf benchmarks using pandas"
+./ci/run_cudf_pandas_pytest_benchmarks.sh \
+  --numprocesses=8 \
+  --dist=worksteal \
+  --cov-config=.coveragerc \
+  --cov=cudf \
+  --cov-report=xml:"${RAPIDS_COVERAGE_DIR}/cudf-benchmark-pandas-coverage.xml" \
+  --cov-report=term
 
 rapids-logger "Test script exiting with value: $EXITCODE"
 exit ${EXITCODE}
