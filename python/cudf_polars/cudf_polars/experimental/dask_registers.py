@@ -153,6 +153,14 @@ def register() -> None:
                 "columns_kwargs": columns_kwargs,
                 "frame_count": 2,
             }
+            if "stream" not in context:
+                raise ValueError(
+                    "context: stream must be given when staging_device_buffer is"
+                )
+            if "device_mr" not in context:
+                raise ValueError(
+                    "context: device_mr must be given when staging_device_buffer is"
+                )
             stream: Stream = context["stream"]
             device_mr: DeviceMemoryResource = context["device_mr"]
             buf: rmm.DeviceBuffer = context["staging_device_buffer"]
