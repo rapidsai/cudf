@@ -247,9 +247,6 @@ std::vector<std::vector<cudf::size_type>> aggregate_reader_metadata::filter_row_
   std::optional<std::reference_wrapper<ast::expression const>> filter,
   rmm::cuda_stream_view stream) const
 {
-  // Return all row groups if no converted filter expression
-  if (not filter.has_value()) { return all_row_group_indices(row_group_indices); }
-
   // Compute total number of input row groups
   auto const total_row_groups = compute_total_row_groups(row_group_indices);
 
@@ -270,9 +267,6 @@ std::vector<text::byte_range_info> aggregate_reader_metadata::get_bloom_filter_b
   host_span<int const> output_column_schemas,
   std::optional<std::reference_wrapper<ast::expression const>> filter)
 {
-  // Return early if no converted filter expression
-  if (not filter.has_value()) { return {}; }
-
   // Collect equality literals for each input table column
   auto const equality_literals =
     equality_literals_collector{filter.value().get(),
@@ -335,9 +329,6 @@ std::vector<cudf::io::text::byte_range_info> aggregate_reader_metadata::get_dict
   host_span<int const> output_column_schemas,
   std::optional<std::reference_wrapper<ast::expression const>> filter)
 {
-  // Return early if no converted filter expression
-  if (not filter.has_value()) { return {}; }
-
   // Collect equality literals for each input table column
   auto const [literals, operators] =
     dictionary_literals_and_operators_collector{filter.value().get(),
@@ -451,9 +442,6 @@ aggregate_reader_metadata::filter_row_groups_with_bloom_filters(
   std::optional<std::reference_wrapper<ast::expression const>> filter,
   rmm::cuda_stream_view stream) const
 {
-  // Return all row groups if no converted filter expression
-  if (not filter.has_value()) { return all_row_group_indices(row_group_indices); }
-
   // Collect equality literals for each input table column
   auto const equality_literals =
     equality_literals_collector{filter.value().get(),
