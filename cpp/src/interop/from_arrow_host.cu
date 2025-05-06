@@ -245,22 +245,53 @@ template <>
 std::unique_ptr<column> dispatch_copy_from_arrow_host::operator()<cudf::list_view>(
   ArrowSchemaView* schema, ArrowArray const* input, data_type type, bool skip_mask)
 {
-  void const* offset_buffers[2] = {nullptr, input->buffers[fixed_width_data_buffer_idx]};
-  ArrowArray offsets_array      = {
-         .length     = input->offset + input->length + 1,
-         .null_count = 0,
-         .offset     = 0,
-         .n_buffers  = 2,
-         .n_children = 0,
-         .buffers    = offset_buffers,
-  };
+  // Initialize schema for 32-bit ints regardless of list type
   nanoarrow::UniqueSchema offset_schema;
   NANOARROW_THROW_NOT_OK(ArrowSchemaInitFromType(offset_schema.get(), NANOARROW_TYPE_INT32));
 
   ArrowSchemaView view;
   NANOARROW_THROW_NOT_OK(ArrowSchemaViewInit(&view, offset_schema.get(), nullptr));
-  auto offsets_column =
-    this->operator()<int32_t>(&view, &offsets_array, data_type(type_id::INT32), true);
+
+  CUDF_EXPECTS(input->length + input->offset + 1 <=
+                 static_cast<std::int64_t>(std::numeric_limits<cudf::size_type>::max()),
+               "Total number of rows in Arrow column exceeds the column size limit.",
+               std::overflow_error);
+  size_type const physical_length = input->length + input->offset + 1;
+
+  auto offsets_column = [&] {
+    void const* offsets_buffers[2] = {nullptr, input->buffers[fixed_width_data_buffer_idx]};
+    ArrowArray offsets_array       = {
+            .length     = physical_length,
+            .null_count = 0,
+            .offset     = 0,
+            .n_buffers  = 2,
+            .n_children = 0,
+            .buffers    = offsets_buffers,
+    };
+
+    if (schema->type != NANOARROW_TYPE_LARGE_LIST) {
+      return this->operator()<int32_t>(&view, &offsets_array, data_type(type_id::INT32), true);
+    }
+
+    // For large lists, convert 64-bit offsets to 32-bit on host with bounds checking
+    int64_t const* large_offsets =
+      reinterpret_cast<int64_t const*>(input->buffers[fixed_width_data_buffer_idx]);
+
+    std::vector<int32_t> int32_offsets(physical_length);
+    constexpr auto max_offset = static_cast<int64_t>(std::numeric_limits<int32_t>::max());
+    CUDF_EXPECTS(large_offsets[physical_length - 1] <= max_offset,
+                 "Large list offsets exceed 32-bit integer bounds",
+                 std::overflow_error);
+
+    std::transform(
+      large_offsets, large_offsets + physical_length, int32_offsets.begin(), [](int64_t offset) {
+        return static_cast<int32_t>(offset);
+      });
+
+    offsets_buffers[1] = int32_offsets.data();
+
+    return this->operator()<int32_t>(&view, &offsets_array, data_type(type_id::INT32), true);
+  }();
 
   NANOARROW_THROW_NOT_OK(ArrowSchemaViewInit(&view, schema->schema->children[0], nullptr));
   auto child_type   = arrow_to_cudf_type(&view);

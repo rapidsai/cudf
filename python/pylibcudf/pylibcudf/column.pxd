@@ -2,6 +2,8 @@
 
 from libcpp.memory cimport unique_ptr
 from libcpp.vector cimport vector
+from libc.stdint cimport uint64_t
+
 from rmm.librmm.device_buffer cimport device_buffer
 from rmm.pylibrmm.stream cimport Stream
 from pylibcudf.libcudf.column.column cimport column
@@ -68,6 +70,7 @@ cdef class Column:
     cpdef gpumemoryview null_mask(self)
     cpdef list children(self)
     cpdef Column copy(self)
+    cpdef uint64_t device_buffer_size(self)
     cpdef Column with_mask(self, gpumemoryview, size_type)
 
     cpdef ListColumnView list_view(self)

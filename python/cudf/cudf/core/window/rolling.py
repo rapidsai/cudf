@@ -496,7 +496,7 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
                 self.min_periods = min_periods
                 return
 
-            if not isinstance(self.obj.index, cudf.core.index.DatetimeIndex):
+            if not isinstance(self.obj.index, cudf.DatetimeIndex):
                 raise ValueError(
                     "window must be an integer for non datetime index"
                 )

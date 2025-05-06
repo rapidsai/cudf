@@ -145,11 +145,11 @@ def get_scheduler(config_options: ConfigOptions) -> Any:
     ):  # pragma: no cover; block depends on executor type and Distributed cluster
         from distributed import get_client
 
-        from cudf_polars.experimental.dask_serialize import SerializerManager
+        from cudf_polars.experimental.dask_registers import DaskRegisterManager
 
         client = get_client()
-        SerializerManager.register_serialize()
-        SerializerManager.run_on_cluster(client)
+        DaskRegisterManager.register_once()
+        DaskRegisterManager.run_on_cluster(client)
         return client.get
     elif scheduler == "synchronous":
         from cudf_polars.experimental.scheduler import synchronous_scheduler
@@ -157,6 +157,39 @@ def get_scheduler(config_options: ConfigOptions) -> Any:
         return synchronous_scheduler
     else:  # pragma: no cover
         raise ValueError(f"{scheduler} not a supported scheduler option.")
+
+
+def post_process_task_graph(
+    graph: MutableMapping[Any, Any],
+    key: str | tuple[str, int],
+    config_options: ConfigOptions,
+) -> MutableMapping[Any, Any]:
+    """
+    Post-process the task graph.
+
+    Parameters
+    ----------
+    graph
+        Task graph to post-process.
+    key
+        Output key for the graph.
+    config_options
+        GPUEngine configuration options.
+
+    Returns
+    -------
+    graph
+        A Dask-compatible task graph.
+    """
+    assert config_options.executor.name == "streaming", (
+        "'in-memory' executor not supported in 'post_process_task_graph'"
+    )
+
+    if config_options.executor.rapidsmpf_spill:  # pragma: no cover
+        from cudf_polars.experimental.spilling import wrap_dataframe_in_spillable
+
+        return wrap_dataframe_in_spillable(graph, ignore_key=key)
+    return graph
 
 
 def evaluate_streaming(ir: IR, config_options: ConfigOptions) -> DataFrame:
@@ -177,6 +210,8 @@ def evaluate_streaming(ir: IR, config_options: ConfigOptions) -> DataFrame:
     ir, partition_info = lower_ir_graph(ir, config_options)
 
     graph, key = task_graph(ir, partition_info)
+
+    graph = post_process_task_graph(graph, key, config_options)
 
     return get_scheduler(config_options)(graph, key)
 
