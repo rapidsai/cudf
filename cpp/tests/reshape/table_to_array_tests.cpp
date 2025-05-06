@@ -64,8 +64,6 @@ TYPED_TEST(TableToDeviceArrayTypedTest, SupportedTypes)
   auto stream = cudf::get_default_stream();
   auto mr     = rmm::mr::get_current_device_resource();
 
-  auto const dtype = cudf::data_type{cudf::type_to_id<T>()};
-
   int nrows = 3;
   int ncols = 4;
 
@@ -98,7 +96,6 @@ TYPED_TEST(TableToDeviceArrayTypedTest, SupportedTypes)
     input,
     cudf::device_span<cuda::std::byte>(reinterpret_cast<cuda::std::byte*>(output.data()),
                                        output.size() * sizeof(T)),
-    dtype,
     stream);
 
   auto host_result = cudf::detail::make_std_vector(output, stream);
@@ -119,7 +116,6 @@ TYPED_TEST(FixedPointTableToDeviceArrayTest, SupportedFixedPointTypes)
   auto stream = cudf::get_default_stream();
   auto mr     = rmm::mr::get_current_device_resource();
   auto scale  = numeric::scale_type{-2};
-  auto dtype  = cudf::data_type{cudf::type_to_id<decimalXX>(), scale};
 
   fp_wrapper col0({123, 456, 789}, scale);
   fp_wrapper col1({321, 654, 987}, scale);
@@ -133,7 +129,6 @@ TYPED_TEST(FixedPointTableToDeviceArrayTest, SupportedFixedPointTypes)
     input,
     cudf::device_span<cuda::std::byte>(reinterpret_cast<cuda::std::byte*>(output.data()),
                                        output.size() * sizeof(RepType)),
-    dtype,
     stream);
 
   auto host_result = cudf::detail::make_std_vector(output, stream);
@@ -155,7 +150,6 @@ TEST(TableToDeviceArrayTest, UnsupportedStringType)
     cudf::table_to_array(input_table,
                          cudf::device_span<cuda::std::byte>(
                            reinterpret_cast<cuda::std::byte*>(output.data()), output.size()),
-                         cudf::data_type{cudf::type_id::STRING},
                          stream),
     cudf::logic_error);
 }
@@ -172,7 +166,6 @@ TEST(TableToDeviceArrayTest, FailsWithNullValues)
     cudf::table_to_array(input_table,
                          cudf::device_span<cuda::std::byte>(
                            reinterpret_cast<cuda::std::byte*>(output.data()), output.size()),
-                         cudf::data_type{cudf::type_id::INT32},
                          stream),
     std::invalid_argument);
 }
@@ -190,7 +183,6 @@ TEST(TableToDeviceArrayTest, FailsWhenOutputSpanTooSmall)
     cudf::table_to_array(input_table,
                          cudf::device_span<cuda::std::byte>(
                            reinterpret_cast<cuda::std::byte*>(output.data()), output.size()),
-                         cudf::data_type{cudf::type_id::INT32},
                          stream),
     std::invalid_argument);
 }
@@ -208,7 +200,6 @@ TEST(TableToDeviceArrayTest, NoRows)
     cudf::table_to_array(input_table,
                          cudf::device_span<cuda::std::byte>(
                            reinterpret_cast<cuda::std::byte*>(output.data()), output.size()),
-                         cudf::data_type{cudf::type_id::INT32},
                          stream));
 }
 
@@ -224,7 +215,6 @@ TEST(TableToDeviceArrayTest, NoColumns)
     cudf::table_to_array(input_table,
                          cudf::device_span<cuda::std::byte>(
                            reinterpret_cast<cuda::std::byte*>(output.data()), output.size()),
-                         cudf::data_type{cudf::type_id::INT8},
                          stream));
 }
 
@@ -248,6 +238,5 @@ TEST(TableToDeviceArrayTest, FlatSizeExceedsSizeTypeLimit)
     cudf::table_to_array(input_table,
                          cudf::device_span<cuda::std::byte>(
                            reinterpret_cast<cuda::std::byte*>(output.data()), total_bytes),
-                         cudf::data_type{cudf::type_id::INT8},
                          stream));
 }

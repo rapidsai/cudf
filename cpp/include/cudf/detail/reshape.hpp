@@ -19,6 +19,7 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/memory_resource.hpp>
+#include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -45,9 +46,8 @@ std::unique_ptr<column> interleave_columns(table_view const& input,
  * @copydoc cudf::table_to_array
  */
 void table_to_array(table_view const& input,
-                    void* output,
-                    data_type output_dtype,
-                    rmm::cuda_stream_view stream);
+                    device_span<cuda::std::byte> output,
+                    rmm::cuda_stream_view stream = cudf::get_default_stream());
 
 }  // namespace detail
 }  // namespace CUDF_EXPORT cudf

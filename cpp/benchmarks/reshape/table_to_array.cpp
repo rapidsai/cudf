@@ -37,7 +37,6 @@ static void bench_table_to_array(nvbench::state& state)
 
   auto input_view = input_table->view();
   auto stream     = cudf::get_default_stream();
-  auto dtype      = cudf::data_type{cudf::type_id::INT32};
 
   rmm::device_buffer output(num_rows * num_cols * sizeof(int32_t), stream);
   auto span = cudf::device_span<cuda::std::byte>(reinterpret_cast<cuda::std::byte*>(output.data()),
@@ -47,9 +46,8 @@ static void bench_table_to_array(nvbench::state& state)
   state.add_global_memory_reads<int32_t>(num_rows * num_cols);   // all bytes are read
   state.add_global_memory_writes<int32_t>(num_rows * num_cols);  // all bytes are written
 
-  state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
-    cudf::table_to_array(input_view, span, dtype, stream);
-  });
+  state.exec(nvbench::exec_tag::sync,
+             [&](nvbench::launch& launch) { cudf::table_to_array(input_view, span, stream); });
 }
 
 NVBENCH_BENCH(bench_table_to_array)

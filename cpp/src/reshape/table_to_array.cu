@@ -16,6 +16,7 @@
 
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/reshape.hpp>
+#include <cudf/detail/utilities/batched_memcpy.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/reshape.hpp>
 #include <cudf/types.hpp>
@@ -76,22 +77,8 @@ void table_to_array_impl(table_view const& input,
 
   thrust::constant_iterator<size_t> sizes(static_cast<size_t>(item_size * num_rows));
 
-  size_t temp_storage_bytes = 0;
-  cub::DeviceMemcpy::Batched(nullptr,
-                             temp_storage_bytes,
-                             d_srcs.begin(),
-                             d_dsts.begin(),
-                             sizes,
-                             num_columns,
-                             stream.value());
-  rmm::device_buffer temp_storage(temp_storage_bytes, stream);
-  cub::DeviceMemcpy::Batched(temp_storage.data(),
-                             temp_storage_bytes,
-                             d_srcs.begin(),
-                             d_dsts.begin(),
-                             sizes,
-                             num_columns,
-                             stream.value());
+  cudf::detail::batched_memcpy_async(
+    d_srcs.begin(), d_dsts.begin(), sizes, num_columns, stream.value());
 }
 
 struct table_to_array_dispatcher {
@@ -116,24 +103,24 @@ struct table_to_array_dispatcher {
 
 void table_to_array(table_view const& input,
                     device_span<cuda::std::byte> output,
-                    data_type output_dtype,
                     rmm::cuda_stream_view stream)
 {
-  if (input.num_columns() == 0) { return; }
+  if (input.num_columns() == 0) return;
+
+  auto const dtype = input.column(0).type();
 
   cudf::type_dispatcher<cudf::dispatch_storage_type>(
-    output_dtype, table_to_array_dispatcher{input, output, stream});
+    dtype, table_to_array_dispatcher{input, output, stream});
 }
 
 }  // namespace detail
 
 void table_to_array(table_view const& input,
                     device_span<cuda::std::byte> output,
-                    data_type output_dtype,
                     rmm::cuda_stream_view stream)
 {
   CUDF_FUNC_RANGE();
-  cudf::detail::table_to_array(input, output, output_dtype, stream);
+  cudf::detail::table_to_array(input, output, stream);
 }
 
 }  // namespace cudf
