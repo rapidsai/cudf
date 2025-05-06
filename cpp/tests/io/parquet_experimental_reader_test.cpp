@@ -170,7 +170,7 @@ auto create_parquet_with_stats()
 
   cudf::io::write_parquet(out_opts);
 
-  return std::pair{std::move(table), buffer};
+  return std::pair{std::move(table), std::move(buffer)};
 }
 
 /**
@@ -195,8 +195,7 @@ auto hybrid_scan(std::vector<char>& buffer,
 {
   // Create reader options with empty source info
   cudf::io::parquet_reader_options options =
-    cudf::io::parquet_reader_options::builder(cudf::io::source_info(nullptr, 0))
-      .filter(filter_expression);
+    cudf::io::parquet_reader_options::builder().filter(filter_expression);
 
   // Set payload column names if provided
   if (payload_column_names.has_value()) { options.set_columns(payload_column_names.value()); }
@@ -335,8 +334,7 @@ TEST_F(ParquetExperimentalReaderTest, TestMetadata)
 
   // Create reader options with empty source info
   cudf::io::parquet_reader_options options =
-    cudf::io::parquet_reader_options::builder(cudf::io::source_info(nullptr, 0))
-      .filter(filter_expression);
+    cudf::io::parquet_reader_options::builder().filter(filter_expression);
 
   // Input file buffer span
   auto const file_buffer_span =

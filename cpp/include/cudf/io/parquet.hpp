@@ -100,12 +100,13 @@ class parquet_reader_options {
   explicit parquet_reader_options() = default;
 
   /**
-   * @brief Creates a parquet_reader_options_builder which will build parquet_reader_options.
+   * @brief Creates a `parquet_reader_options_builder` to build `parquet_reader_options`.
+   *        By default, build with empty data source info.
    *
    * @param src Source information to read parquet file
    * @return Builder to build reader options
    */
-  static parquet_reader_options_builder builder(source_info src);
+  static parquet_reader_options_builder builder(source_info src = source_info{});
 
   /**
    * @brief Returns source info.

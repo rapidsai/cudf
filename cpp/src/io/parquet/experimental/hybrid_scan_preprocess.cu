@@ -60,15 +60,15 @@ namespace cudf::io::parquet::experimental::detail {
 
 namespace {
 
-using chunk_page_info        = parquet::detail::chunk_page_info;
-using ColumnChunkDesc        = parquet::detail::ColumnChunkDesc;
-using decode_error           = parquet::detail::decode_error;
-using level_type             = parquet::detail::level_type;
-using PageInfo               = parquet::detail::PageInfo;
-using PageNestingDecodeInfo  = parquet::detail::PageNestingDecodeInfo;
-using PageNestingInfo        = parquet::detail::PageNestingInfo;
-using pass_intermediate_data = parquet::detail::pass_intermediate_data;
-using string_index_pair      = parquet::detail::string_index_pair;
+using parquet::detail::chunk_page_info;
+using parquet::detail::ColumnChunkDesc;
+using parquet::detail::decode_error;
+using parquet::detail::level_type;
+using parquet::detail::PageInfo;
+using parquet::detail::PageNestingDecodeInfo;
+using parquet::detail::PageNestingInfo;
+using parquet::detail::pass_intermediate_data;
+using parquet::detail::string_index_pair;
 
 struct cumulative_row_info {
   size_t row_count;   // cumulative row count

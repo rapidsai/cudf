@@ -29,6 +29,7 @@
 #include <functional>
 #include <numeric>
 #include <optional>
+#include <unordered_set>
 
 namespace cudf::io::parquet::experimental::detail {
 
@@ -182,43 +183,50 @@ aggregate_reader_metadata::select_payload_columns(
   bool strings_to_categorical,
   type_id timestamp_type_id)
 {
-  // Select all columns if no payload or filter columns are specified
+  // If neither payload nor filter columns are specified, select all columns
   if (not payload_column_names.has_value() and not filter_column_names.has_value()) {
+    // Call the base `select_columns()` method without specifying any columns
     return select_columns({}, {}, include_index, strings_to_categorical, timestamp_type_id);
   }
 
+  std::vector<std::string> valid_payload_columns;
+
   // If payload columns are specified, only select payload columns that do not appear in the filter
   // expression
-  std::vector<std::string> valid_payload_columns;
   if (payload_column_names.has_value()) {
     valid_payload_columns = *payload_column_names;
     // Remove filter columns from the provided payload column names
-    if (filter_column_names.has_value()) {
+    if (filter_column_names.has_value() and not filter_column_names->empty()) {
+      // Add filter column names to a hash set for faster lookup
+      std::unordered_set<std::string> filter_columns_set(filter_column_names->begin(),
+                                                         filter_column_names->end());
+      // Remove a payload column name if it is also present in the hash set
       valid_payload_columns.erase(std::remove_if(valid_payload_columns.begin(),
                                                  valid_payload_columns.end(),
-                                                 [&](std::string const& col) {
-                                                   return std::find(filter_column_names->begin(),
-                                                                    filter_column_names->end(),
-                                                                    col) !=
-                                                          filter_column_names->end();
+                                                 [&filter_columns_set](auto const& col) {
+                                                   return filter_columns_set.count(col) > 0;
                                                  }),
                                   valid_payload_columns.end());
     }
-    // Select valid payload columns using the base `select_columns` method
+    // Call the base `select_columns()` method with valid payload columns
     return select_columns(
       valid_payload_columns, {}, include_index, strings_to_categorical, timestamp_type_id);
   }
 
-  // Otherwise, select all columns that do not appear in the filter expression
+  // Else if only filter columns are specified, select all columns that do not appear in the
+  // filter expression
+
+  // Add filter column names to a hash set for faster lookup
+  std::unordered_set<std::string> filter_columns_set(filter_column_names->begin(),
+                                                     filter_column_names->end());
+
   std::function<void(std::string, int)> add_column_path = [&](std::string path_till_now,
                                                               int schema_idx) {
     auto const& schema_elem     = get_schema(schema_idx);
     std::string const curr_path = path_till_now + schema_elem.name;
     // If the current path is not a filter column, then add it and its children to the list of valid
     // payload columns
-    if (std::find(filter_column_names.value().cbegin(),
-                  filter_column_names.value().cend(),
-                  curr_path) == filter_column_names.value().cend()) {
+    if (filter_columns_set.count(curr_path) == 0) {
       valid_payload_columns.push_back(curr_path);
       // Add all children as well
       for (auto const& child_idx : schema_elem.children_idx) {
@@ -226,12 +234,15 @@ aggregate_reader_metadata::select_payload_columns(
       }
     }
   };
-  // Add all base level columns to valid payload columns
-  for (auto const& child_idx : get_schema(0).children_idx) {
-    add_column_path("", child_idx);
+
+  // Add all but filter columns to valid payload columns
+  if (not filter_column_names->empty()) {
+    for (auto const& child_idx : get_schema(0).children_idx) {
+      add_column_path("", child_idx);
+    }
   }
 
-  // Select valid payload columns using the base `select_columns` method
+  // Call the base `select_columns()` method with all but filter columns
   return select_columns(
     valid_payload_columns, {}, include_index, strings_to_categorical, timestamp_type_id);
 }
