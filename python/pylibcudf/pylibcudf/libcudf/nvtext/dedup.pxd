@@ -11,7 +11,7 @@ from rmm.librmm.device_uvector cimport device_uvector
 
 ctypedef unique_ptr[device_uvector[size_type]] suffix_array_type
 
-cdef extern from "nvtext/dedup.hpp" namespace "nvtext" nogil:
+cdef extern from "nvtext/deduplicate.hpp" namespace "nvtext" nogil:
 
     cdef unique_ptr[column] substring_duplicates(
         column_view source_strings,
