@@ -134,7 +134,7 @@ auto create_parquet_with_stats()
 
   cudf::io::write_parquet(out_opts);
 
-  return std::pair{std::move(table), buffer};
+  return std::pair{std::move(table), std::move(buffer)};
 }
 
 }  // namespace
@@ -143,7 +143,7 @@ TEST_F(ParquetExperimentalReaderTest, TestMetadata)
 {
   // Create a table with several row groups each with a single page.
   auto constexpr num_concat = 1;
-  auto [_, buffer]          = create_parquet_with_stats<num_concat>();
+  auto [_, file_buffer]     = create_parquet_with_stats<num_concat>();
 
   // Filtering AST - table[0] < 100
   auto literal_value     = cudf::numeric_scalar<uint32_t>(100);
@@ -153,12 +153,11 @@ TEST_F(ParquetExperimentalReaderTest, TestMetadata)
 
   // Create reader options with empty source info
   cudf::io::parquet_reader_options options =
-    cudf::io::parquet_reader_options::builder(cudf::io::source_info(nullptr, 0))
-      .filter(filter_expression);
+    cudf::io::parquet_reader_options::builder().filter(filter_expression);
 
   // Input file buffer span
-  auto const file_buffer_span =
-    cudf::host_span<uint8_t const>(reinterpret_cast<uint8_t const*>(buffer.data()), buffer.size());
+  auto const file_buffer_span = cudf::host_span<uint8_t const>(
+    reinterpret_cast<uint8_t const*>(file_buffer.data()), file_buffer.size());
 
   // Fetch footer and page index bytes from the buffer.
   auto const footer_buffer = fetch_footer_bytes(file_buffer_span);
@@ -167,20 +166,20 @@ TEST_F(ParquetExperimentalReaderTest, TestMetadata)
   auto const reader =
     std::make_unique<cudf::io::parquet::experimental::hybrid_scan_reader>(footer_buffer, options);
 
-  // Get Parquet file metadata from the reader - API # 1
+  // Get Parquet file metadata from the reader
   auto parquet_metadata = reader->parquet_metadata();
 
   // Check that the offset and column indices are not present
   ASSERT_FALSE(parquet_metadata.row_groups[0].columns[0].offset_index.has_value());
   ASSERT_FALSE(parquet_metadata.row_groups[0].columns[0].column_index.has_value());
 
-  // Get page index byte range from the reader - API # 2
+  // Get page index byte range from the reader
   auto const page_index_byte_range = reader->page_index_byte_range();
 
   // Fetch page index bytes from the input buffer
   auto const page_index_buffer = fetch_page_index_bytes(file_buffer_span, page_index_byte_range);
 
-  // Setup page index - API # 3
+  // Setup page index
   reader->setup_page_index(page_index_buffer);
 
   // Get Parquet file metadata from the reader again
@@ -190,10 +189,10 @@ TEST_F(ParquetExperimentalReaderTest, TestMetadata)
   ASSERT_TRUE(parquet_metadata.row_groups[0].columns[0].offset_index.has_value());
   ASSERT_TRUE(parquet_metadata.row_groups[0].columns[0].column_index.has_value());
 
-  // Get all row groups from the reader - API # 4
+  // Get all row groups from the reader
   auto input_row_group_indices = reader->all_row_groups(options);
   // Expect 4 = 20000 rows / 5000 rows per row group
-  ASSERT_EQ(input_row_group_indices.size(), 4);
+  EXPECT_EQ(input_row_group_indices.size(), 4);
 
   // Explicitly set the row groups to read
   options.set_row_groups({{0, 1}});
@@ -201,5 +200,49 @@ TEST_F(ParquetExperimentalReaderTest, TestMetadata)
   // Get all row groups from the reader again
   input_row_group_indices = reader->all_row_groups(options);
   // Expect only 2 row groups now
-  ASSERT_EQ(reader->all_row_groups(options).size(), 2);
+  EXPECT_EQ(reader->all_row_groups(options).size(), 2);
+}
+
+TEST_F(ParquetExperimentalReaderTest, TestFilterRowGroupWithStats)
+{
+  // Create a table with 4 row groups each with a single page.
+  auto constexpr num_concat         = 1;
+  auto [written_table, file_buffer] = create_parquet_with_stats<num_concat>();
+
+  // Filtering AST - table[0] < 50
+  auto literal_value     = cudf::numeric_scalar<uint32_t>(50);
+  auto literal           = cudf::ast::literal(literal_value);
+  auto col_ref_0         = cudf::ast::column_name_reference("col_uint32");
+  auto filter_expression = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_0, literal);
+
+  // Create reader options with empty source info
+  cudf::io::parquet_reader_options options =
+    cudf::io::parquet_reader_options::builder().filter(filter_expression);
+
+  // Input file buffer span
+  auto const file_buffer_span = cudf::host_span<uint8_t const>(
+    reinterpret_cast<uint8_t const*>(file_buffer.data()), file_buffer.size());
+
+  // Fetch footer and page index bytes from the buffer.
+  auto const footer_buffer = fetch_footer_bytes(file_buffer_span);
+
+  // Create hybrid scan reader with footer bytes
+  auto const reader =
+    std::make_unique<cudf::io::parquet::experimental::hybrid_scan_reader>(footer_buffer, options);
+
+  // Get all row groups from the reader
+  auto input_row_group_indices = reader->all_row_groups(options);
+  // Expect 4 = 20000 rows / 5000 rows per row group
+  EXPECT_EQ(input_row_group_indices.size(), 4);
+  auto stats_filtered_row_groups = reader->filter_row_groups_with_stats(
+    input_row_group_indices, options, cudf::get_default_stream());
+  // Expect 3 row groups to be filtered out with stats
+  EXPECT_EQ(stats_filtered_row_groups.size(), 1);
+
+  // Use custom input row group indices
+  input_row_group_indices   = {1, 2};
+  stats_filtered_row_groups = reader->filter_row_groups_with_stats(
+    input_row_group_indices, options, cudf::get_default_stream());
+  // Expect all row groups to be filtered out with stats
+  EXPECT_EQ(stats_filtered_row_groups.size(), 0);
 }
