@@ -163,7 +163,7 @@ function buildLibCudfJniInDocker {
                 -DCUDF_EXPORT_NVCOMP=ON && \
              cmake --build . --parallel ${PARALLEL_LEVEL} && \
              cd $workspaceRepoDir/java && \
-             CUDF_CPP_BUILD_DIR=$workspaceRepoDir/java/target/libcudf-cmake-build \
+             export CUDF_CPP_BUILD_DIR=$workspaceRepoDir/java/target/libcudf-cmake-build && \
              mvn ${MVN_PHASES:-"package"} \
                 -Dmaven.repo.local=$workspaceMavenRepoDir \
                 -DskipTests=${SKIP_TESTS:-false} \
