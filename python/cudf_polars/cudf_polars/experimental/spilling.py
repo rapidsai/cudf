@@ -77,19 +77,27 @@ def wrap_func_spillable(
     """
 
     def wrapper(*args: Any) -> Any:
-        if not any(isinstance(arg, SpillableWrapper) for arg in args):
-            # Likely an IO task - Make headroom before executing
-            try:
-                from distributed import get_worker
-                from rapidsmpf.integrations.dask.core import get_worker_context
+        # Make headroom before executing the task
+        try:
+            from dask.sizeof import sizeof
+            from distributed import get_worker
+            from rapidsmpf.integrations.dask.core import get_worker_context
 
+            headroom = 0
+            probable_io_task = True
+            for arg in args:
+                if isinstance(arg, SpillableWrapper) and arg._on_host is not None:
+                    headroom += sizeof(arg._on_host)
+                    probable_io_task = False
+            if probable_io_task:
+                # Likely an IO task - Assume we need target_partition_size
+                headroom = target_partition_size
+            if headroom > 128_000_000:  # Don't waste time on smaller data
                 ctx = get_worker_context(get_worker())
                 with ctx.lock:
-                    ctx.br.spill_manager.spill_to_make_headroom(
-                        headroom=target_partition_size
-                    )
-            except (ImportError, ValueError):
-                pass
+                    ctx.br.spill_manager.spill_to_make_headroom(headroom=headroom)
+        except (ImportError, ValueError):
+            pass
 
         ret: Any = func(*(unwrap_arg(arg) for arg in args))
         if make_func_output_spillable:
