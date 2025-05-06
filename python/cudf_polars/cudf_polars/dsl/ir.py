@@ -1982,6 +1982,6 @@ class Empty(IR):
         self.children = ()
 
     @classmethod
-    def do_evaluate(cls) -> DataFrame:
+    def do_evaluate(cls) -> DataFrame:  # pragma: no cover
         """Evaluate and return a dataframe."""
         return DataFrame([])
