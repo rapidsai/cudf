@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -140,9 +140,9 @@ std::enable_if_t<cudf::is_fixed_width<T>(), std::unique_ptr<cudf::column>> clamp
         } else if (hi_optional.has_value() and (*element_optional > *hi_optional)) {
           return *(thrust::get<3>(scalar_tuple));
         }
+        return *element_optional;
       }
-
-      return *element_optional;
+      return T{};  // null entry so value is ignored
     });
 
   auto input_pair_iterator =
