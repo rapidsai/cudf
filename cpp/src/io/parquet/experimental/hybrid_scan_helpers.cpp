@@ -192,14 +192,18 @@ aggregate_reader_metadata::select_payload_columns(
 
   // Else if only filter columns are specified, select all columns that do not appear in the
   // filter expression
+
+  // Add filter column names to a hash set for faster lookup
+  std::unordered_set<std::string> filter_columns_set(filter_column_names->begin(),
+                                                     filter_column_names->end());
+
   std::function<void(std::string, int)> add_column_path = [&](std::string path_till_now,
                                                               int schema_idx) {
     auto const& schema_elem     = get_schema(schema_idx);
     std::string const curr_path = path_till_now + schema_elem.name;
     // If the current path is not a filter column, then add it and its children to the list of valid
     // payload columns
-    if (std::find(filter_column_names->begin(), filter_column_names->end(), curr_path) ==
-        filter_column_names->end()) {
+    if (filter_columns_set.count(curr_path) == 0) {
       valid_payload_columns.push_back(curr_path);
       // Add all children as well
       for (auto const& child_idx : schema_elem.children_idx) {
