@@ -9,7 +9,10 @@ import pytest
 
 import polars as pl
 
-from cudf_polars.testing.asserts import assert_ir_translation_raises
+from cudf_polars.testing.asserts import (
+    assert_gpu_result_equal,
+    assert_ir_translation_raises,
+)
 
 
 @pytest.fixture
@@ -46,10 +49,10 @@ def test_datetime_rolling(df, closed, period):
         max_a=pl.max("values"),
     )
 
-    assert_ir_translation_raises(q, NotImplementedError)
+    assert_gpu_result_equal(q)
 
 
 def test_calendrical_period_unsupported(df):
-    q = df.rolling("dt", period="1m", closed="right").agg(sum=pl.sum("values"))
+    q = df.rolling("dt", period="1mo", closed="right").agg(sum=pl.sum("values"))
 
     assert_ir_translation_raises(q, NotImplementedError)
