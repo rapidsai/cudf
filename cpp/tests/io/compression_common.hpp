@@ -6,8 +6,37 @@
 #include <gtest/gtest.h>
 
 #include <cstdlib>  // for setenv/unsetenv
+#include <list>
 #include <string>
 #include <tuple>
+
+class tmp_env_var {
+ public:
+  explicit tmp_env_var(std::string const& name, std::string const& value) : name_(name)
+  {
+    auto const previous_value = std::getenv(name.c_str());
+    if (previous_value != nullptr) { previous_value_ = std::string(previous_value); }
+
+    setenv(name.c_str(), value.c_str(), 1);
+  }
+
+  ~tmp_env_var()
+  {
+    if (previous_value_.has_value()) {
+      setenv(name_.c_str(), previous_value_->c_str(), 1);
+    } else {
+      unsetenv(name_.c_str());
+    }
+  }
+
+ private:
+  std::string name_;
+  std::optional<std::string> previous_value_;
+};
+
+static constexpr char const* host_comp_env_var     = "LIBCUDF_HOST_COMPRESSION";
+static constexpr char const* host_decomp_env_var   = "LIBCUDF_HOST_DECOMPRESSION";
+static constexpr char const* nvcomp_policy_env_var = "LIBCUDF_NVCOMP_POLICY";
 
 template <typename Base>
 struct CompressionTest
@@ -18,23 +47,20 @@ struct CompressionTest
     auto const comp_impl = std::get<0>(GetParam());
 
     if (comp_impl == "NVCOMP") {
-      setenv("LIBCUDF_HOST_COMPRESSION", "OFF", 1);
-      setenv("LIBCUDF_NVCOMP_POLICY", "ALWAYS", 1);
+      env_vars.emplace_back(host_comp_env_var, "OFF");
+      env_vars.emplace_back(nvcomp_policy_env_var, "ALWAYS");
     } else if (comp_impl == "DEVICE_INTERNAL") {
-      setenv("LIBCUDF_HOST_COMPRESSION", "OFF", 1);
-      setenv("LIBCUDF_NVCOMP_POLICY", "OFF", 1);
+      env_vars.emplace_back(host_comp_env_var, "OFF");
+      env_vars.emplace_back(nvcomp_policy_env_var, "OFF");
     } else if (comp_impl == "HOST") {
-      setenv("LIBCUDF_HOST_COMPRESSION", "ON", 1);
-      setenv("LIBCUDF_NVCOMP_POLICY", "OFF", 1);
+      env_vars.emplace_back(host_comp_env_var, "ON");
     } else {
       CUDF_FAIL("Invalid test parameter");
     }
   }
-  ~CompressionTest() override
-  {
-    unsetenv("LIBCUDF_HOST_COMPRESSION");
-    unsetenv("LIBCUDF_NVCOMP_POLICY");
-  }
+
+ private:
+  std::vector<tmp_env_var> env_vars;
 };
 
 template <typename Base>
@@ -46,21 +72,18 @@ struct DecompressionTest
     auto const comp_impl = std::get<0>(GetParam());
 
     if (comp_impl == "NVCOMP") {
-      setenv("LIBCUDF_HOST_DECOMPRESSION", "OFF", 1);
-      setenv("LIBCUDF_NVCOMP_POLICY", "ALWAYS", 1);
+      env_vars.emplace_back(host_decomp_env_var, "OFF");
+      env_vars.emplace_back(nvcomp_policy_env_var, "ALWAYS");
     } else if (comp_impl == "DEVICE_INTERNAL") {
-      setenv("LIBCUDF_HOST_DECOMPRESSION", "OFF", 1);
-      setenv("LIBCUDF_NVCOMP_POLICY", "OFF", 1);
+      env_vars.emplace_back(host_decomp_env_var, "OFF");
+      env_vars.emplace_back(nvcomp_policy_env_var, "OFF");
     } else if (comp_impl == "HOST") {
-      setenv("LIBCUDF_HOST_DECOMPRESSION", "ON", 1);
-      setenv("LIBCUDF_NVCOMP_POLICY", "OFF", 1);
+      env_vars.emplace_back(host_decomp_env_var, "ON");
     } else {
       CUDF_FAIL("Invalid test parameter");
     }
   }
-  ~DecompressionTest() override
-  {
-    unsetenv("LIBCUDF_HOST_DECOMPRESSION");
-    unsetenv("LIBCUDF_NVCOMP_POLICY");
-  }
+
+ private:
+  std::list<tmp_env_var> env_vars;
 };

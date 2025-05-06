@@ -141,8 +141,9 @@ struct OrcStatisticsTest : public cudf::test::BaseFixture {};
 // Test fixture for metadata tests
 struct OrcMetadataReaderTest : public cudf::test::BaseFixture {};
 
-// TODO: can this be in a common header?
 using OrcCompressionTest = CompressionTest<OrcWriterTest>;
+
+using OrcDecompressionTest = DecompressionTest<OrcReaderTest>;
 
 namespace {
 // Generates a vector of uniform random values of type T
@@ -2035,10 +2036,9 @@ TEST_F(OrcStatisticsTest, Empty)
   EXPECT_EQ(ts6.count[0], 0);
 }
 
-TEST_P(OrcCompressionTest, RoundtripBasic)
+void round_trip_basic(cudf::io::compression_type compression_type)
 {
-  constexpr auto num_rows     = 12000;
-  auto const compression_type = std::get<1>(GetParam());
+  constexpr auto num_rows = 12345;
 
   // Generate compressible data
   auto int_sequence =
@@ -2072,27 +2072,9 @@ TEST_P(OrcCompressionTest, RoundtripBasic)
   EXPECT_FALSE(std::isnan(stats->compression_ratio()));
 }
 
-INSTANTIATE_TEST_CASE_P(Nvcomp,
-                        OrcCompressionTest,
-                        ::testing::Combine(::testing::Values("NVCOMP"),
-                                           ::testing::Values(cudf::io::compression_type::AUTO,
-                                                             cudf::io::compression_type::SNAPPY,
-                                                             cudf::io::compression_type::LZ4,
-                                                             cudf::io::compression_type::ZSTD)));
+TEST_P(OrcCompressionTest, RoundtripBasic) { round_trip_basic(std::get<1>(GetParam())); }
 
-INSTANTIATE_TEST_CASE_P(DeviceInternal,
-                        OrcCompressionTest,
-                        ::testing::Combine(::testing::Values("DEVICE_INTERNAL"),
-                                           ::testing::Values(cudf::io::compression_type::AUTO,
-                                                             cudf::io::compression_type::SNAPPY,
-                                                             cudf::io::compression_type::ZSTD)));
-
-INSTANTIATE_TEST_CASE_P(Host,
-                        OrcCompressionTest,
-                        ::testing::Combine(::testing::Values("HOST"),
-                                           ::testing::Values(cudf::io::compression_type::AUTO,
-                                                             cudf::io::compression_type::SNAPPY,
-                                                             cudf::io::compression_type::ZSTD)));
+TEST_P(OrcDecompressionTest, RoundtripBasic) { round_trip_basic(std::get<1>(GetParam())); }
 
 TEST_F(OrcWriterTest, BounceBufferBug)
 {
@@ -2305,5 +2287,49 @@ TEST_F(OrcWriterTest, MultipleBlocksInStripeFooter)
   auto result = cudf::io::read_orc(in_opts);
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
 }
+
+INSTANTIATE_TEST_CASE_P(Nvcomp,
+                        OrcCompressionTest,
+                        ::testing::Combine(::testing::Values("NVCOMP"),
+                                           ::testing::Values(cudf::io::compression_type::AUTO,
+                                                             cudf::io::compression_type::SNAPPY,
+                                                             cudf::io::compression_type::LZ4,
+                                                             cudf::io::compression_type::ZSTD)));
+
+INSTANTIATE_TEST_CASE_P(DeviceInternal,
+                        OrcCompressionTest,
+                        ::testing::Combine(::testing::Values("DEVICE_INTERNAL"),
+                                           ::testing::Values(cudf::io::compression_type::AUTO,
+                                                             cudf::io::compression_type::SNAPPY,
+                                                             cudf::io::compression_type::ZSTD)));
+
+INSTANTIATE_TEST_CASE_P(Host,
+                        OrcCompressionTest,
+                        ::testing::Combine(::testing::Values("HOST"),
+                                           ::testing::Values(cudf::io::compression_type::AUTO,
+                                                             cudf::io::compression_type::SNAPPY,
+                                                             cudf::io::compression_type::ZSTD)));
+
+INSTANTIATE_TEST_CASE_P(Nvcomp,
+                        OrcDecompressionTest,
+                        ::testing::Combine(::testing::Values("NVCOMP"),
+                                           ::testing::Values(cudf::io::compression_type::AUTO,
+                                                             cudf::io::compression_type::SNAPPY,
+                                                             cudf::io::compression_type::LZ4,
+                                                             cudf::io::compression_type::ZSTD)));
+
+INSTANTIATE_TEST_CASE_P(DeviceInternal,
+                        OrcDecompressionTest,
+                        ::testing::Combine(::testing::Values("DEVICE_INTERNAL"),
+                                           ::testing::Values(cudf::io::compression_type::AUTO,
+                                                             cudf::io::compression_type::SNAPPY,
+                                                             cudf::io::compression_type::ZSTD)));
+
+INSTANTIATE_TEST_CASE_P(Host,
+                        OrcDecompressionTest,
+                        ::testing::Combine(::testing::Values("HOST"),
+                                           ::testing::Values(cudf::io::compression_type::AUTO,
+                                                             cudf::io::compression_type::SNAPPY,
+                                                             cudf::io::compression_type::ZSTD)));
 
 CUDF_TEST_PROGRAM_MAIN()
