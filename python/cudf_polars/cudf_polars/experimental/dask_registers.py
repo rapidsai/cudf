@@ -139,3 +139,11 @@ def register() -> None:
     def _(x: DataFrame) -> int:
         """The total size of the device buffers used by the DataFrame or Column."""
         return sum(c.obj.device_buffer_size() for c in x.columns)
+
+    # Register rapidsmpf serializer if it's installed.
+    try:
+        from rapidsmpf.integrations.dask.spilling import register_dask_serialize
+
+        register_dask_serialize()  # pragma: no cover; rapidsmpf dependency not included yet
+    except ImportError:
+        pass
