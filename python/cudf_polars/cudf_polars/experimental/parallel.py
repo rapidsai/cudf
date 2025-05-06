@@ -6,9 +6,10 @@ from __future__ import annotations
 
 import itertools
 import operator
-from functools import reduce
+from functools import partial, reduce
 from typing import TYPE_CHECKING, Any
 
+import cudf_polars.experimental.distinct
 import cudf_polars.experimental.groupby
 import cudf_polars.experimental.io
 import cudf_polars.experimental.join
@@ -144,11 +145,11 @@ def get_scheduler(config_options: ConfigOptions) -> Any:
     ):  # pragma: no cover; block depends on executor type and Distributed cluster
         from distributed import get_client
 
-        from cudf_polars.experimental.dask_serialize import SerializerManager
+        from cudf_polars.experimental.dask_registers import DaskRegisterManager
 
         client = get_client()
-        SerializerManager.register_serialize()
-        SerializerManager.run_on_cluster(client)
+        DaskRegisterManager.register_once()
+        DaskRegisterManager.run_on_cluster(client)
         return client.get
     elif scheduler == "synchronous":
         from cudf_polars.experimental.scheduler import synchronous_scheduler
@@ -251,7 +252,7 @@ def _(
 
 
 def _lower_ir_pwise(
-    ir: IR, rec: LowerIRTransformer
+    ir: IR, rec: LowerIRTransformer, *, preserve_partitioning: bool = False
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     # Lower a partition-wise (i.e. embarrassingly-parallel) IR node
 
@@ -268,15 +269,21 @@ def _lower_ir_pwise(
             msg=f"Class {type(ir)} does not support children with mismatched partition counts.",
         )
 
+    # Preserve child partition_info if possible
+    if preserve_partitioning and len(children) == 1:
+        partition = partition_info[children[0]]
+    else:
+        partition = PartitionInfo(count=max(counts))
+
     # Return reconstructed node and partition-info dict
-    partition = PartitionInfo(count=max(counts))
     new_node = ir.reconstruct(children)
     partition_info[new_node] = partition
     return new_node, partition_info
 
 
-lower_ir_node.register(Projection, _lower_ir_pwise)
+_lower_ir_pwise_preserve = partial(_lower_ir_pwise, preserve_partitioning=True)
+lower_ir_node.register(Projection, _lower_ir_pwise_preserve)
+lower_ir_node.register(Filter, _lower_ir_pwise_preserve)
 lower_ir_node.register(Cache, _lower_ir_pwise)
-lower_ir_node.register(Filter, _lower_ir_pwise)
 lower_ir_node.register(HStack, _lower_ir_pwise)
 lower_ir_node.register(HConcat, _lower_ir_pwise)
