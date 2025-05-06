@@ -52,25 +52,11 @@ from .null_mask cimport bitmask_allocation_size_bytes
 from .utils cimport _get_stream
 
 from .gpumemoryview import _datatype_from_dtype_desc
-from ._interop_helpers import ColumnMetadata
+from ._interop_helpers import ArrowLike, ColumnMetadata
 
 import functools
 
 __all__ = ["Column", "ListColumnView", "is_c_contiguous"]
-
-
-class _ArrowLikeMeta(type):
-    def __subclasscheck__(cls, other):
-        # We cannot separate these types via singledispatch because the dispatch
-        # will often be ambiguous when objects expose multiple protocols.
-        return (
-            hasattr(other, "__arrow_c_array__")
-            or hasattr(other, "__arrow_c_device_array__")
-        )
-
-
-class _ArrowLike(metaclass=_ArrowLikeMeta):
-    pass
 
 
 cdef class _ArrowColumnHolder:
@@ -216,7 +202,7 @@ cdef class Column:
         self._children = children
         self._num_children = len(children)
 
-    @_init.register(_ArrowLike)
+    @_init.register(ArrowLike)
     def _(self, arrow_like):
         cdef ArrowSchema* c_schema
         cdef ArrowArray* c_array
@@ -269,6 +255,13 @@ cdef class Column:
                 tmp.offset(),
                 tmp.children(),
             )
+        elif hasattr(arrow_like, "__arrow_c_stream__"):
+            raise NotImplementedError("Arrow host streams not yet supported")
+        elif hasattr(arrow_like, "__arrow_c_device_stream__"):
+            # TODO: When we add support for this case, it should be moved above
+            # the __arrow_c_stream__ case since we should prioritize device
+            # data if possible.
+            raise NotImplementedError("Device streams not yet supported")
         else:
             raise ValueError("Invalid Arrow-like object")
 
