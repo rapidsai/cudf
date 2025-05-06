@@ -83,7 +83,7 @@ jitify2::StringVec build_jit_typenames(std::vector<std::string> const& span_outp
                  std::back_inserter(typenames),
                  [&](auto i) { return column_inputs[i].accessor(i); });
 
-  if (has_user_data) { typenames.push_back("cudf::transformation::jit::user_data_accessor"); }
+  if (has_user_data) { typenames.emplace_back("cudf::transformation::jit::user_data_accessor"); }
 
   return typenames;
 }
