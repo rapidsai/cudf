@@ -2071,6 +2071,7 @@ TEST_P(OrcCompressionTest, RoundtripBasic)
   EXPECT_EQ(stats->num_skipped_bytes(), 0);
   EXPECT_FALSE(std::isnan(stats->compression_ratio()));
 }
+
 INSTANTIATE_TEST_CASE_P(Nvcomp,
                         OrcCompressionTest,
                         ::testing::Combine(::testing::Values("NVCOMP"),

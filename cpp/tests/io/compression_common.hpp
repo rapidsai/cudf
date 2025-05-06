@@ -36,3 +36,31 @@ struct CompressionTest
     unsetenv("LIBCUDF_NVCOMP_POLICY");
   }
 };
+
+template <typename Base>
+struct DecompressionTest
+  : public Base,
+    public ::testing::WithParamInterface<std::tuple<std::string, cudf::io::compression_type>> {
+  DecompressionTest()
+  {
+    auto const comp_impl = std::get<0>(GetParam());
+
+    if (comp_impl == "NVCOMP") {
+      setenv("LIBCUDF_HOST_DECOMPRESSION", "OFF", 1);
+      setenv("LIBCUDF_NVCOMP_POLICY", "ALWAYS", 1);
+    } else if (comp_impl == "DEVICE_INTERNAL") {
+      setenv("LIBCUDF_HOST_DECOMPRESSION", "OFF", 1);
+      setenv("LIBCUDF_NVCOMP_POLICY", "OFF", 1);
+    } else if (comp_impl == "HOST") {
+      setenv("LIBCUDF_HOST_DECOMPRESSION", "ON", 1);
+      setenv("LIBCUDF_NVCOMP_POLICY", "OFF", 1);
+    } else {
+      CUDF_FAIL("Invalid test parameter");
+    }
+  }
+  ~DecompressionTest() override
+  {
+    unsetenv("LIBCUDF_HOST_DECOMPRESSION");
+    unsetenv("LIBCUDF_NVCOMP_POLICY");
+  }
+};
