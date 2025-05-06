@@ -66,7 +66,7 @@ struct wordpiece_vocabulary {
  * @param input Strings for the vocabulary
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
- * @return Object to be used with nvtext::wordpiece_tokenize
+ * @return Object to be used with nvtext::tokenize_with_vocabulary
  */
 std::unique_ptr<wordpiece_vocabulary> load_wordpiece_vocabulary(
   cudf::strings_column_view const& input,
@@ -102,8 +102,6 @@ std::unique_ptr<wordpiece_vocabulary> load_wordpiece_vocabulary(
  * @endcode
  *
  * Any null row entry results in a corresponding null entry in the output.
- *
- * @throw std::invalid_argument If `max_words_per_row` is less than 0.
  *
  * @param input Strings column to tokenize
  * @param vocabulary Used to lookup tokens within `input`
