@@ -2353,16 +2353,14 @@ def test_parquet_writer_list_basic(tmpdir):
 
 
 def test_parquet_writer_list_large(tmpdir):
-    expect = pd.DataFrame({"a": list_gen(int_gen, 256, 80, 50)})
+    gdf = cudf.DataFrame({"a": list_gen(int_gen, 256, 80, 50)})
     fname = tmpdir.join("test_parquet_writer_list_large.parquet")
-
-    gdf = cudf.from_pandas(expect)
 
     gdf.to_parquet(fname)
     assert os.path.exists(fname)
 
     got = pd.read_parquet(fname)
-    assert_eq(expect, got)
+    assert gdf.to_arrow().equals(pa.Table.from_pandas(got))
 
 
 def test_parquet_writer_list_large_mixed(tmpdir):
