@@ -1400,11 +1400,13 @@ TEST_P(ParquetCompressionTest, RoundtripBasic)
 
   table_view expected({int_col, float_col});
 
+  auto const stats = std::make_shared<cudf::io::writer_compression_statistics>();
+
   std::vector<char> out_buffer;
   cudf::io::parquet_writer_options out_opts =
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{&out_buffer}, expected)
-      .compression(compression_type);
-  // TODO: add compression statistics
+      .compression(compression_type)
+      .compression_statistics(stats);
   cudf::io::write_parquet(out_opts);
 
   cudf::io::parquet_reader_options in_opts = cudf::io::parquet_reader_options::builder(
@@ -1412,6 +1414,11 @@ TEST_P(ParquetCompressionTest, RoundtripBasic)
   auto result = cudf::io::read_parquet(in_opts);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
+
+  EXPECT_NE(stats->num_compressed_bytes(), 0);
+  EXPECT_EQ(stats->num_failed_bytes(), 0);
+  EXPECT_EQ(stats->num_skipped_bytes(), 0);
+  EXPECT_FALSE(std::isnan(stats->compression_ratio()));
 }
 
 INSTANTIATE_TEST_CASE_P(Nvcomp,
