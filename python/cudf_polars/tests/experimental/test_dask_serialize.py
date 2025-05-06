@@ -86,3 +86,33 @@ def test_dask_serialization_roundtrip(arrow_tbl, protocol, context):
         res = deserialize(header, frames, deserializers=[protocol])
 
         assert_frame_equal(expect.to_polars(), DataFrame([res]).to_polars())
+
+
+def test_dask_serialization_error():
+    arrow_tbl = pa.table({"a": [1, 2, 3]})
+    plc_tbl = plc.interop.from_arrow(arrow_tbl)
+    df = DataFrame.from_table(plc_tbl, names=arrow_tbl.column_names)
+
+    header, frames = serialize(
+        df,
+        on_error="message",
+        serializers=["dask"],
+        context={
+            "device_mr": rmm.mr.get_current_device_resource(),
+            "staging_device_buffer": rmm.DeviceBuffer(size=2**20),
+        },
+    )
+    assert header == {"serializer": "error"}
+    assert "ValueError: " in str(frames)
+
+    header, frames = serialize(
+        df,
+        on_error="message",
+        serializers=["dask"],
+        context={
+            "stream": DEFAULT_STREAM,
+            "staging_device_buffer": rmm.DeviceBuffer(size=2**20),
+        },
+    )
+    assert header == {"serializer": "error"}
+    assert "ValueError: " in str(frames)
