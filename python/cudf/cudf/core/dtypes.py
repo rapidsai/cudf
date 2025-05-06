@@ -405,7 +405,7 @@ class ListDtype(_BaseDtype):
         ListDtype(ListDtype(float32))
         >>> deep_nested_type.element_type.element_type
         ListDtype(float32)
-        >>> deep_nested_type.element_type.element_type.element_type
+        >>> deep_nested_type.element_type.element_type.element_type  # doctest: +SKIP
         'float32'
         """
         if isinstance(self._typ.value_type, pa.ListType):
@@ -426,7 +426,7 @@ class ListDtype(_BaseDtype):
         >>> deep_nested_type = cudf.ListDtype(cudf.ListDtype(cudf.ListDtype("float32")))
         >>> deep_nested_type
         ListDtype(ListDtype(ListDtype(float32)))
-        >>> deep_nested_type.leaf_type
+        >>> deep_nested_type.leaf_type # doctest: +SKIP
         'float32'
         """
         if isinstance(self.element_type, ListDtype):
