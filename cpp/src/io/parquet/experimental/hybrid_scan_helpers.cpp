@@ -429,7 +429,7 @@ aggregate_reader_metadata::filter_row_groups_with_dictionary_pages(
   std::optional<std::reference_wrapper<ast::expression const>> filter,
   rmm::cuda_stream_view stream) const
 {
-  // Not yet implemented
+  // Not yet implemented so just return all row group indices
   return all_row_group_indices(row_group_indices);
 }
 

@@ -54,8 +54,10 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
   /**
    * @brief Materializes column chunk dictionary pages into `cuco::static_set`s
    *
-   * @param chunks Host device span of column chunk descriptors, one per input column chunk
-   * @param pages Host device span of decoded page headers, one per input column chunk
+   * @param chunks Host device span of column chunk descriptors, one per column chunk with
+   *               dictionary page and (in)equality predicate
+   * @param pages Host device span of decoded page headers, one per column chunk with dictionary
+   *              page and (in)equality predicate
    * @param total_row_groups Total number of row groups in `input_row_group_indices`
    * @param output_dtypes Datatypes of output columns
    * @param dictionary_col_schemas schema indices of dictionary columns only
@@ -169,14 +171,14 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
     rmm::cuda_stream_view stream) const;
 
   /**
-   * @brief Get the bloom filter byte ranges, one per input column chunk
+   * @brief Get the bloom filter byte ranges, one per column chunk with equality predicate
    *
    * @param row_group_indices Input row groups indices
    * @param output_dtypes Datatypes of output columns
    * @param output_column_schemas schema indices of output columns
    * @param filter Optional AST expression to filter row groups based on bloom filters
    *
-   * @return Byte ranges of bloom filters, one per input column chunk
+   * @return Byte ranges of bloom filters, one per column chunk with equality predicate
    */
   [[nodiscard]] std::vector<cudf::io::text::byte_range_info> get_bloom_filter_bytes(
     cudf::host_span<std::vector<size_type> const> row_group_indices,
@@ -185,14 +187,14 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
     std::optional<std::reference_wrapper<ast::expression const>> filter);
 
   /**
-   * @brief Get the dictionary page byte ranges, one per input column chunk
+   * @brief Get the dictionary page byte ranges, one per column chunk with (in)equality predicate
    *
    * @param row_group_indices Input row groups indices
    * @param output_dtypes Datatypes of output columns
    * @param output_column_schemas schema indices of output columns
    * @param filter Optional AST expression to filter row groups based on dictionary pages
    *
-   * @return Byte ranges of dictionary pages, one per input column chunk
+   * @return Byte ranges of dictionary pages, one input column chunk with (in)equality predicate
    */
   [[nodiscard]] std::vector<cudf::io::text::byte_range_info> get_dictionary_page_bytes(
     cudf::host_span<std::vector<size_type> const> row_group_indices,
@@ -203,8 +205,10 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
   /**
    * @brief Filter the row groups using dictionaries based on predicate filter
    *
-   * @param chunks Host device span of column chunk descriptors, one per input column chunk
-   * @param pages Host device span of decoded page headers, one per input column chunk
+   * @param chunks Host device span of column chunk descriptors, one per column chunk with
+   *               dictionary page and (in)equality predicate
+   * @param pages Host device span of decoded page headers, one per column chunk with dictionary
+   *              page and (in)equality predicate
    * @param row_group_indices Input row groups indices
    * @param literals Lists of literals, one per input column
    * @param operators Lists of operators, one per input column
