@@ -312,14 +312,17 @@ struct dispatch_unary_cast_to {
                                      rmm::cuda_stream_view stream,
                                      rmm::device_async_resource_ref mr)
   {
-    using DeviceT = device_storage_type_t<TargetT>;
-
     auto const size = input.size();
-    auto output     = std::make_unique<column>(
-      type, size, rmm::device_buffer{size * sizeof(DeviceT), stream, mr}, rmm::device_buffer{}, 0);
+    auto output =
+      std::make_unique<column>(type,
+                               size,
+                               rmm::device_buffer{size * cudf::size_of(type), stream, mr},
+                               rmm::device_buffer{},
+                               0);
 
     mutable_column_view output_mutable = *output;
 
+    using DeviceT    = device_storage_type_t<TargetT>;
     auto const scale = numeric::scale_type{type.scale()};
 
     thrust::transform(rmm::exec_policy(stream),
@@ -375,12 +378,11 @@ struct dispatch_unary_cast_to {
 
     auto casted = [&]() {
       auto const size = input.size();
-      auto output =
-        std::make_unique<column>(cudf::data_type{type.id(), input.type().scale()},
-                                 size,
-                                 rmm::device_buffer{size * sizeof(TargetDeviceT), stream},
-                                 detail::copy_bitmask(input, stream, mr),
-                                 input.null_count());
+      auto output     = std::make_unique<column>(cudf::data_type{type.id(), input.type().scale()},
+                                             size,
+                                             rmm::device_buffer{size * cudf::size_of(type), stream},
+                                             detail::copy_bitmask(input, stream, mr),
+                                             input.null_count());
 
       mutable_column_view output_mutable = *output;
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -54,7 +54,7 @@ struct TypedColumnTest : public cudf::test::BaseFixture {
   cudf::data_type type() { return cudf::data_type{cudf::type_to_id<T>()}; }
 
   TypedColumnTest(rmm::cuda_stream_view stream = cudf::get_default_stream())
-    : data{_num_elements * sizeof(T), stream},
+    : data{_num_elements * cudf::size_of(type()), stream},
       mask{cudf::bitmask_allocation_size_bytes(_num_elements), stream}
   {
     auto typed_data = static_cast<char*>(data.data());
