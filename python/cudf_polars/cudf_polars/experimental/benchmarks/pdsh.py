@@ -30,15 +30,12 @@ import pynvml
 import polars as pl
 
 from cudf_polars.dsl.translate import Translator
-from cudf_polars.experimental.parallel import evaluate_streaming, lower_ir_graph
-from cudf_polars.utils.config import ConfigOptions
+from cudf_polars.experimental.explain import explain_query
+from cudf_polars.experimental.parallel import evaluate_streaming
 
 if TYPE_CHECKING:
     import pathlib
-    from collections.abc import MutableMapping
 
-    from cudf_polars.dsl.ir import IR
-    from cudf_polars.experimental.base import PartitionInfo
 
 # Without this setting, the first IO task to run
 # on each worker takes ~15 sec extra
@@ -211,60 +208,6 @@ def get_data(
 ) -> pl.LazyFrame:
     """Get table from dataset."""
     return pl.scan_parquet(f"{path}/{table_name}{suffix}")
-
-
-def _explain(
-    ir: IR,
-    partition_info: MutableMapping[IR, PartitionInfo],
-    *,
-    offset: str = "",
-) -> str:
-    """Print the physical plan for an IR node."""
-    from cudf_polars.dsl.ir import GroupBy, Join, Projection, Scan, Select, Sort, Union
-    from cudf_polars.experimental.io import SplitScan
-
-    val = offset
-    count = partition_info[ir].count
-    if isinstance(ir, Union) and isinstance(ir.children[0], (Scan, SplitScan)):
-        scan = ir.children[0]
-        if isinstance(scan, SplitScan):
-            name = "SPLITSCAN"
-            scan = scan.base_scan
-        else:
-            name = "SCAN"
-        schema = tuple(ir.schema)
-        path = "/".join(scan.paths[0].split("/")[-2:])
-        val += f"UNION [{count} x {name} {schema} {path} ...]\n"
-    else:
-        if isinstance(ir, GroupBy):
-            keys = tuple(ne.name for ne in ir.keys)
-            val += f"GROUPBY {keys} [{count}]\n"
-        elif isinstance(ir, Join):
-            left_on = tuple(ne.name for ne in ir.left_on)
-            right_on = tuple(ne.name for ne in ir.right_on)
-            val += f"JOIN {ir.options[0]} {left_on} {right_on} [{count}]\n"
-        elif isinstance(ir, Projection):
-            schema = tuple(ir.schema)
-            val += f"PROJECTION {schema} [{count}]\n"
-        elif isinstance(ir, Select):
-            schema = tuple(ir.schema)
-            val += f"SELECT {schema} [{count}]\n"
-        elif isinstance(ir, Sort):
-            by = tuple(ne.name for ne in ir.by)
-            val += f"SORT {by} [{count}]\n"
-        else:
-            val += f"{type(ir).__name__.upper()} [{count}]\n"
-        for child in ir.children:
-            val += _explain(child, partition_info, offset=offset + "  ")
-    return val
-
-
-def explain_query(q: pl.LazyFrame, engine: pl.GPUEngine) -> str:
-    """Print the physical plan for a query."""
-    config_options = ConfigOptions.from_polars_engine(engine)
-    ir = Translator(q._ldf.visit(), engine).translate_ir()
-    ir, partition_info = lower_ir_graph(ir, config_options)
-    return _explain(ir, partition_info)
 
 
 class PDSHQueries:
