@@ -88,7 +88,7 @@ def non_nested_pdf():
             for typ in types
         },
     )
-    
+
     for t in [
         {
             "name": "datetime64[ns]",
@@ -2048,9 +2048,9 @@ def test_orc_reader_desynced_timestamp(datadir, inputfile):
 @pytest.mark.parametrize(
     "env_vars",
     [
-        {"LIBCUDF_HOST_DECOMPRESSION": "OFF", 
+        {"LIBCUDF_HOST_DECOMPRESSION": "OFF",
          "LIBCUDF_NVCOMP_POLICY": "ALWAYS"},
-        {"LIBCUDF_HOST_DECOMPRESSION": "OFF", 
+        {"LIBCUDF_HOST_DECOMPRESSION": "OFF",
          "LIBCUDF_NVCOMP_POLICY": "OFF"},
         {"LIBCUDF_HOST_DECOMPRESSION": "ON"},
     ],
