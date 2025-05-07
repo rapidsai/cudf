@@ -79,6 +79,7 @@ from cudf.core.indexed_frame import (
 )
 from cudf.core.join import Merge, MergeSemi
 from cudf.core.missing import NA
+from cudf.core.mixins import GetAttrGetItemMixin
 from cudf.core.multiindex import MultiIndex
 from cudf.core.resample import DataFrameResampler
 from cudf.core.series import Series
@@ -103,7 +104,6 @@ from cudf.utils.ioutils import (
 from cudf.utils.performance_tracking import _performance_tracking
 from cudf.utils.utils import (
     _EQUALITY_OPS,
-    GetAttrGetItemMixin,
     _external_only_api,
     _is_null_host_scalar,
 )
