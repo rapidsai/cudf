@@ -39,10 +39,10 @@ from cudf.core.column import (
     StringColumn,
     StructColumn,
     TimeDeltaColumn,
-    column,
 )
-from cudf.core.column.column import as_column, concat_columns
+from cudf.core.column.column import as_column, column_empty, concat_columns
 from cudf.core.column.string import StringMethods as StringMethods
+from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.dtypes import IntervalDtype
 from cudf.core.join._join_helpers import _match_join_keys
 from cudf.core.mixins import BinaryOperand
@@ -60,7 +60,7 @@ from cudf.utils.dtypes import (
     is_mixed_with_object_dtype,
 )
 from cudf.utils.performance_tracking import _performance_tracking
-from cudf.utils.utils import _warn_no_dask_cudf, search_range
+from cudf.utils.utils import _is_same_name, _warn_no_dask_cudf, search_range
 
 if TYPE_CHECKING:
     from collections.abc import Generator, Iterable
@@ -342,9 +342,9 @@ class RangeIndex(BaseIndex, BinaryOperand):
     @_performance_tracking
     def _values(self) -> ColumnBase:
         if len(self) > 0:
-            return column.as_column(self._range, dtype=self.dtype)
+            return as_column(self._range, dtype=self.dtype)
         else:
-            return column.column_empty(0, dtype=self.dtype)
+            return column_empty(0, dtype=self.dtype)
 
     def _pandas_repr_compatible(self) -> Self:
         return self
@@ -378,9 +378,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
     @property  # type: ignore
     @_performance_tracking
     def _data(self):
-        return cudf.core.column_accessor.ColumnAccessor(
-            {self.name: self._values}, verify=False
-        )
+        return ColumnAccessor({self.name: self._values}, verify=False)
 
     @_performance_tracking
     def __contains__(self, item):
@@ -634,9 +632,9 @@ class RangeIndex(BaseIndex, BinaryOperand):
 
     @_performance_tracking
     def get_indexer(self, target, limit=None, method=None, tolerance=None):
-        target_col = cudf.core.column.as_column(target)
-        if method is not None or not isinstance(
-            target_col, cudf.core.column.NumericalColumn
+        target_col = as_column(target)
+        if method is not None or not is_dtype_obj_numeric(
+            target_col.dtype, include_decimal=False
         ):
             # TODO: See if we can implement this without converting to
             # Integer index.
@@ -856,7 +854,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
 
     @_performance_tracking
     def _gather(self, gather_map, nullify=False, check_bounds=True):
-        gather_map = cudf.core.column.as_column(gather_map)
+        gather_map = as_column(gather_map)
         return Index._from_column(
             self._column.take(gather_map, nullify, check_bounds),
             name=self.name,
@@ -1007,7 +1005,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
         result = self._as_int_index().append(other)
         return self._try_reconstruct_range_index(result)
 
-    def _indices_of(self, value) -> cudf.core.column.NumericalColumn:
+    def _indices_of(self, value) -> NumericalColumn:
         if isinstance(value, (bool, np.bool_)):
             raise ValueError(
                 f"Cannot use {type(value).__name__} to get an index of a "
@@ -1127,9 +1125,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
         cls, column: ColumnBase, *, name: Hashable = None
     ) -> Self:
         if cls is Index:
-            ca = cudf.core.column_accessor.ColumnAccessor(
-                {name: column}, verify=False
-            )
+            ca = ColumnAccessor({name: column}, verify=False)
             return _index_from_data(ca)
         else:
             return super()._from_column(column, name=name)
@@ -1206,11 +1202,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
             ret = _index_from_data(binop_result)
             other_name = getattr(other, "name", self.name)
 
-        ret.name = (
-            self.name
-            if cudf.utils.utils._is_same_name(self.name, other_name)
-            else None
-        )
+        ret.name = self.name if _is_same_name(self.name, other_name) else None
 
         # pandas returns numpy arrays when the outputs are boolean. We
         # explicitly _do not_ use isinstance here: we want only boolean
@@ -1581,7 +1573,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
 
     def _is_numeric(self) -> bool:
         return (
-            isinstance(self._values, cudf.core.column.NumericalColumn)
+            is_dtype_obj_numeric(self._column.dtype, include_decimal=False)
             and self.dtype.kind != "b"
         )
 
@@ -1595,7 +1587,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
         return self.dtype.kind == "f"
 
     def _is_object(self) -> bool:
-        return isinstance(self._column, cudf.core.column.StringColumn)
+        return self._column.dtype == CUDF_STRING_DTYPE
 
     def _is_categorical(self) -> bool:
         return False
@@ -1753,7 +1745,9 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
                     )
 
                 if (
-                    isinstance(self._column, cudf.core.column.NumericalColumn)
+                    is_dtype_obj_numeric(
+                        self._column.dtype, include_decimal=False
+                    )
                     and self.dtype != other.dtype
                 ):
                     common_type = find_common_type((self.dtype, other.dtype))
@@ -1943,7 +1937,7 @@ class DatetimeIndex(Index):
             raise TypeError("dtype must be a datetime type")
 
         name = _getdefault_name(data, name=name)
-        data = column.as_column(data)
+        data = as_column(data)
 
         # TODO: if data.dtype.kind == "M" (i.e. data is already datetime type)
         # We probably shouldn't always astype to datetime64[ns]
@@ -2591,9 +2585,7 @@ class DatetimeIndex(Index):
         2020-05-31 08:00:00  2020    22    7
         1999-12-31 18:40:00  1999    52    5
         """
-        ca = cudf.core.column_accessor.ColumnAccessor(
-            self._column.isocalendar(), verify=False
-        )
+        ca = ColumnAccessor(self._column.isocalendar(), verify=False)
         return cudf.DataFrame._from_data(ca, index=self)
 
     @_performance_tracking
@@ -2900,7 +2892,7 @@ class TimedeltaIndex(Index):
             raise TypeError("dtype must be a timedelta type")
 
         name = _getdefault_name(data, name=name)
-        data = column.as_column(data, dtype=dtype)
+        data = as_column(data, dtype=dtype)
 
         if copy:
             data = data.copy()
@@ -3070,9 +3062,7 @@ class TimedeltaIndex(Index):
         Return a dataframe of the components (days, hours, minutes,
         seconds, milliseconds, microseconds, nanoseconds) of the Timedeltas.
         """
-        ca = cudf.core.column_accessor.ColumnAccessor(
-            self._column.components(), verify=False
-        )
+        ca = ColumnAccessor(self._column.components(), verify=False)
         return cudf.DataFrame._from_data(ca)
 
     @property
@@ -3877,7 +3867,7 @@ def as_index(
         raise ValueError("Index data must be 1-dimensional and list-like")
     else:
         return Index._from_column(
-            column.as_column(arbitrary, dtype=dtype, nan_as_null=nan_as_null),
+            as_column(arbitrary, dtype=dtype, nan_as_null=nan_as_null),
             name=name,
         )
     if dtype is not None:
@@ -3986,7 +3976,7 @@ def _get_indexer_basic(index, positions, method, target_col, tolerance):
 def _get_nearest_indexer(
     index: Index,
     positions: cudf.Series,
-    target_col: cudf.core.column.ColumnBase,
+    target_col: ColumnBase,
     tolerance: int | float,
 ):
     """
