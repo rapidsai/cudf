@@ -5,7 +5,7 @@ import decimal
 import os
 import random
 from io import BytesIO
-from string import ascii_lowercase, ascii_letters
+from string import ascii_letters, ascii_lowercase
 
 import numpy as np
 import pandas as pd
