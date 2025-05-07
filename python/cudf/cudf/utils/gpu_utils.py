@@ -70,7 +70,7 @@ def validate_setup():
             finally:
                 if status != cudaError_t.cudaSuccess:
                     # Error while getting the driver version
-                    raise CUDARuntimeError(status)
+                    raise CUDARuntimeError(status) from e
                 else:
                     # There is a driver but it is insufficient for the runtime,
                     # re-raise the original exception
