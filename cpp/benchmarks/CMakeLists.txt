@@ -433,7 +433,7 @@ ConfigureNVBench(DECIMAL_NVBENCH decimal/convert_floating.cpp)
 # ##################################################################################################
 # * reshape benchmark
 # ---------------------------------------------------------------------------------
-ConfigureNVBench(RESHAPE_NVBENCH reshape/interleave.cpp)
+ConfigureNVBench(RESHAPE_NVBENCH reshape/interleave.cpp reshape/table_to_array.cpp)
 
 # ##################################################################################################
 # * rolling benchmark
