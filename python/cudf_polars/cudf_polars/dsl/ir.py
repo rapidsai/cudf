@@ -33,6 +33,7 @@ from cudf_polars.containers import Column, DataFrame
 from cudf_polars.dsl.nodebase import Node
 from cudf_polars.dsl.to_ast import to_ast, to_parquet_filter
 from cudf_polars.utils import dtypes
+from cudf_polars.utils.versions import POLARS_VERSION_LT_128
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Hashable, Iterable, Sequence
@@ -373,7 +374,9 @@ class Scan(IR):
             # TODO: polars has this implemented for parquet,
             # maybe we can do this too?
             raise NotImplementedError("slice pushdown for negative slices")
-        if self.typ in {"csv"} and self.skip_rows != 0:  # pragma: no cover
+        if (
+            POLARS_VERSION_LT_128 and self.typ in {"csv"} and self.skip_rows != 0
+        ):  # pragma: no cover
             # This comes from slice pushdown, but that
             # optimization doesn't happen right now
             raise NotImplementedError("skipping rows in CSV reader")
@@ -383,7 +386,7 @@ class Scan(IR):
             raise NotImplementedError(
                 "Read from cloud storage"
             )  # pragma: no cover; no test yet
-        if any(p.startswith("https://") for p in self.paths):
+        if any(str(p).startswith("https:/") for p in self.paths):
             raise NotImplementedError("Read from https")
         if self.typ == "csv":
             if self.reader_options["skip_rows_after_header"] != 0:
@@ -459,7 +462,8 @@ class Scan(IR):
         Each path is repeated according to the number of rows read from it.
         """
         (filepaths,) = plc.filling.repeat(
-            plc.Table([plc.interop.from_arrow(pa.array(paths))]),
+            # TODO: Remove call from_arrow when we support python list to Column
+            plc.Table([plc.interop.from_arrow(pa.array(map(str, paths)))]),
             plc.interop.from_arrow(pa.array(rows_per_path, type=pa.int32())),
         ).columns()
         return df.with_columns([Column(filepaths, name=name)])
@@ -481,6 +485,17 @@ class Scan(IR):
     ) -> DataFrame:
         """Evaluate and return a dataframe."""
         if typ == "csv":
+
+            def read_csv_header(
+                path: Path | str, sep: str
+            ) -> list[str]:  # pragma: no cover
+                with Path(path).open() as f:
+                    for line in f:
+                        stripped = line.strip()
+                        if stripped:
+                            return stripped.split(sep)
+                return []
+
             parse_options = reader_options["parse_options"]
             sep = chr(parse_options["separator"])
             quote = chr(parse_options["quote_char"])
@@ -524,7 +539,9 @@ class Scan(IR):
                 options = (
                     plc.io.csv.CsvReaderOptions.builder(plc.io.SourceInfo([path]))
                     .nrows(n_rows)
-                    .skiprows(skiprows)
+                    .skiprows(
+                        skiprows if POLARS_VERSION_LT_128 else skiprows + skip_rows
+                    )  # pragma: no cover
                     .lineterminator(str(eol))
                     .quotechar(str(quote))
                     .decimal(decimal)
@@ -535,6 +552,13 @@ class Scan(IR):
                 options.set_delimiter(str(sep))
                 if column_names is not None:
                     options.set_names([str(name) for name in column_names])
+                else:
+                    if (
+                        not POLARS_VERSION_LT_128 and skip_rows > header
+                    ):  # pragma: no cover
+                        # We need to read the header otherwise we would skip it
+                        column_names = read_csv_header(path, str(sep))
+                        options.set_names(column_names)
                 options.set_header(header)
                 options.set_dtypes(schema)
                 if usecols is not None:
@@ -691,6 +715,8 @@ class Scan(IR):
                 name=name,
             )
             df = DataFrame([index_col, *df.columns])
+            if next(iter(schema)) != name:
+                df = df.select(schema)
         assert all(c.obj.type() == schema[name] for name, c in df.column_map.items())
         if predicate is None:
             return df
