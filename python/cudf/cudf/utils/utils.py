@@ -6,20 +6,12 @@ import functools
 import os
 import traceback
 import warnings
+from typing import Any
 
 import numpy as np
 import pandas as pd
 
-import pylibcudf as plc
-import rmm
-
 import cudf
-from cudf.core.buffer import as_buffer
-from cudf.utils.dtypes import SIZE_TYPE_DTYPE
-
-# The size of the mask in bytes
-mask_dtype = SIZE_TYPE_DTYPE
-mask_bitsize = mask_dtype.itemsize * 8
 
 # Mapping from ufuncs to the corresponding binary operators.
 _ufunc_binary_operations = {
@@ -172,174 +164,15 @@ def _external_only_api(func, alternative=""):
     return wrapper
 
 
-def initfunc(f):
-    """
-    Decorator for initialization functions that should
-    be run exactly once.
-    """
-
-    @functools.wraps(f)
-    def wrapper(*args, **kwargs):
-        if wrapper.initialized:
-            return
-        wrapper.initialized = True
-        return f(*args, **kwargs)
-
-    wrapper.initialized = False
-    return wrapper
-
-
-def clear_cache():
-    """Clear all internal caches"""
-    cudf.Scalar._clear_instance_cache()
-
-
-class GetAttrGetItemMixin:
-    """This mixin changes `__getattr__` to attempt a `__getitem__` call.
-
-    Classes that include this mixin gain enhanced functionality for the
-    behavior of attribute access like `obj.foo`: if `foo` is not an attribute
-    of `obj`, obj['foo'] will be attempted, and the result returned.  To make
-    this behavior safe, classes that include this mixin must define a class
-    attribute `_PROTECTED_KEYS` that defines the attributes that are accessed
-    within `__getitem__`. For example, if `__getitem__` is defined as
-    `return self._data[key]`, we must define `_PROTECTED_KEYS={'_data'}`.
-    """
-
-    # Tracking of protected keys by each subclass is necessary to make the
-    # `__getattr__`->`__getitem__` call safe. See
-    # https://nedbatchelder.com/blog/201010/surprising_getattr_recursion.html
-    # for an explanation. In brief, defining the `_PROTECTED_KEYS` allows this
-    # class to avoid calling `__getitem__` inside `__getattr__` when
-    # `__getitem__` will internally again call `__getattr__`, resulting in an
-    # infinite recursion.
-    # This problem only arises when the copy protocol is invoked (e.g. by
-    # `copy.copy` or `pickle.dumps`), and could also be avoided by redefining
-    # methods involved with the copy protocol such as `__reduce__` or
-    # `__setstate__`, but this class may be used in complex multiple
-    # inheritance hierarchies that might also override serialization.  The
-    # solution here is a minimally invasive change that avoids such conflicts.
-    _PROTECTED_KEYS: frozenset[str] | set[str] = frozenset()
-
-    def __getattr__(self, key):
-        if key in self._PROTECTED_KEYS:
-            raise AttributeError
-        try:
-            return self[key]
-        except KeyError:
-            raise AttributeError(
-                f"{type(self).__name__} object has no attribute {key}"
-            )
-
-
-class NotIterable:
-    def __iter__(self):
-        """
-        Iteration is unsupported.
-
-        See :ref:`iteration <pandas-comparison/iteration>` for more
-        information.
-        """
-        raise TypeError(
-            f"{self.__class__.__name__} object is not iterable. "
-            f"Consider using `.to_arrow()`, `.to_pandas()` or `.values_host` "
-            f"if you wish to iterate over the values."
-        )
-
-
-def pa_mask_buffer_to_mask(mask_buf, size):
-    """
-    Convert PyArrow mask buffer to cuDF mask buffer
-    """
-    mask_size = plc.null_mask.bitmask_allocation_size_bytes(size)
-    if mask_buf.size < mask_size:
-        dbuf = rmm.DeviceBuffer(size=mask_size)
-        dbuf.copy_from_host(np.asarray(mask_buf).view("u1"))
-        return as_buffer(dbuf)
-    return as_buffer(mask_buf)
-
-
-def _isnat(val):
-    """Wraps np.isnat to return False instead of error on invalid inputs."""
-    if val is pd.NaT:
-        return True
-    elif not isinstance(val, (np.datetime64, np.timedelta64, str)):
-        return False
-    else:
-        try:
-            return val in {"NaT", "NAT"} or np.isnat(val)
-        except TypeError:
-            return False
-
-
-def search_range(x: int, ri: range, *, side: str) -> int:
-    """
-
-    Find insertion point in a range to maintain sorted order
-
-    Parameters
-    ----------
-    x
-        Integer to insert
-    ri
-        Range to insert into
-    side
-        Tie-breaking decision for the case that `x` is a member of the
-        range. If `"left"` then the insertion point is before the
-        entry, otherwise it is after.
-
-    Returns
-    -------
-    int
-        The insertion point
-
-    See Also
-    --------
-    numpy.searchsorted
-
-    Notes
-    -----
-    Let ``p`` be the return value, then if ``side="left"`` the
-    following invariants are maintained::
-
-        all(x < n for n in ri[:p])
-        all(x >= n for n in ri[p:])
-
-    Conversely, if ``side="right"`` then we have::
-
-        all(x <= n for n in ri[:p])
-        all(x > n for n in ri[p:])
-
-    Examples
-    --------
-    For series: 1 4 7
-    >>> search_range(4, range(1, 10, 3), side="left")
-    1
-    >>> search_range(4, range(1, 10, 3), side="right")
-    2
-    """
-    assert side in {"left", "right"}
-    if flip := (ri.step < 0):
-        ri = ri[::-1]
-        shift = int(side == "right")
-    else:
-        shift = int(side == "left")
-
-    offset = (x - ri.start - shift) // ri.step + 1
-    if flip:
-        offset = len(ri) - offset
-    return max(min(len(ri), offset), 0)
-
-
-def is_na_like(obj):
+def is_na_like(obj: Any) -> bool:
     """
     Check if `obj` is a cudf NA value,
     i.e., None, cudf.NA or cudf.NaT
     """
-    return obj is None or obj is cudf.NA or obj is cudf.NaT
+    return obj is None or obj is pd.NA or obj is pd.NaT
 
 
-def _is_null_host_scalar(slr) -> bool:
+def _is_null_host_scalar(slr: Any) -> bool:
     # slr is NA like or NaT like
     return (
         is_na_like(slr)
@@ -368,7 +201,7 @@ def _warn_no_dask_cudf(fn):
     return wrapper
 
 
-def _is_same_name(left_name, right_name):
+def _is_same_name(left_name: Any, right_name: Any) -> bool:
     # Internal utility to compare if two names are same.
     with warnings.catch_warnings():
         # numpy throws warnings while comparing
