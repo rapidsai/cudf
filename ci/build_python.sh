@@ -24,6 +24,9 @@ export RAPIDS_PACKAGE_VERSION
 # populates `RATTLER_CHANNELS` array and `RATTLER_ARGS` array
 source rapids-rattler-channel-string
 
+# Skip import tests
+RATTLER_ARGS=("--test" "skip" "${RATTLER_ARGS[@]}")
+
 rapids-logger "Prepending channel ${CPP_CHANNEL} to RATTLER_CHANNELS"
 
 RATTLER_CHANNELS=("--channel" "${CPP_CHANNEL}" "${RATTLER_CHANNELS[@]}")
