@@ -2,7 +2,7 @@
 
 from . cimport (
     byte_pair_encode,
-    dedup,
+    deduplicate,
     edit_distance,
     generate_ngrams,
     jaccard,
@@ -18,7 +18,7 @@ from . cimport (
 
 __all__ = [
     "byte_pair_encode",
-    "dedup",
+    "deduplicate",
     "edit_distance",
     "generate_ngrams",
     "jaccard",

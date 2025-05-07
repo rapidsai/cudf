@@ -6413,14 +6413,14 @@ class StringColumn(ColumnBase):
 
     @acquire_spill_lock()
     def substring_duplicates(self, min_width: int) -> Self:
-        result = plc.nvtext.dedup.substring_duplicates(
+        result = plc.nvtext.deduplicate.substring_duplicates(
             self.to_pylibcudf(mode="read"), min_width
         )
         return type(self).from_pylibcudf(result)  # type: ignore[return-value]
 
     @acquire_spill_lock()
     def build_suffix_array(self, min_width: int) -> Self:
-        result = plc.nvtext.dedup.build_suffix_array(
+        result = plc.nvtext.deduplicate.build_suffix_array(
             self.to_pylibcudf(mode="read"), min_width
         )
         return type(self).from_pylibcudf(result)  # type: ignore[return-value]
