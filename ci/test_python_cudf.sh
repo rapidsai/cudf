@@ -29,7 +29,6 @@ rapids-logger "pytest cudf"
   --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf.xml" \
   --numprocesses=8 \
   --dist=worksteal \
-  -v \
   --cov-config=../.coveragerc \
   --cov=cudf \
   --cov-report=xml:"${RAPIDS_COVERAGE_DIR}/cudf-coverage.xml" \
