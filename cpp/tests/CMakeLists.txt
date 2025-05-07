@@ -525,7 +525,7 @@ ConfigureTest(
 # * reshape test ----------------------------------------------------------------------------------
 ConfigureTest(
   RESHAPE_TEST reshape/byte_cast_tests.cpp reshape/interleave_columns_tests.cpp
-  reshape/tile_tests.cpp
+  reshape/table_to_array_tests.cpp reshape/tile_tests.cpp
 )
 
 # ##################################################################################################
