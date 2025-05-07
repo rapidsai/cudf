@@ -77,7 +77,6 @@ from cudf.utils.utils import (
     _array_ufunc,
     _is_null_host_scalar,
     is_na_like,
-    mask_dtype,
 )
 
 if TYPE_CHECKING:
@@ -112,6 +111,18 @@ def _can_values_be_equal(left: DtypeObj, right: DtypeObj) -> bool:
     elif left.kind == right.kind and left.kind in "mM":
         return True
     return False
+
+
+def pa_mask_buffer_to_mask(mask_buf: pa.Buffer, size: int) -> Buffer:
+    """
+    Convert PyArrow mask buffer to cuDF mask buffer
+    """
+    mask_size = plc.null_mask.bitmask_allocation_size_bytes(size)
+    if mask_buf.size < mask_size:
+        dbuf = rmm.DeviceBuffer(size=mask_size)
+        dbuf.copy_from_host(np.asarray(mask_buf).view("u1"))
+        return as_buffer(dbuf)
+    return as_buffer(mask_buf)
 
 
 class ColumnBase(Serializable, BinaryOperand, Reducible):
@@ -651,7 +662,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 raise ValueError(f"Unsupported mode: {mode}")
         else:
             obj = None
-        return cuda.as_cuda_array(obj).view(mask_dtype)
+        return cuda.as_cuda_array(obj).view(SIZE_TYPE_DTYPE)
 
     def __len__(self) -> int:
         return self.size
