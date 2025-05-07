@@ -57,11 +57,11 @@
 namespace CUDF_EXPORT cudf {
 
 namespace row::primitive {
-    class row_equality_comparator; // Forward declaration
-    
-    template <template <typename> class Hash>
-    class row_hasher; // Forward declaration
-}
+class row_equality_comparator;  // Forward declaration
+
+template <template <typename> class Hash>
+class row_hasher;  // Forward declaration
+}  // namespace row::primitive
 
 namespace experimental {
 
