@@ -364,7 +364,7 @@ ConfigureNVBench(TRANSFORM_NVBENCH transform/polynomials.cpp transform/transform
 ConfigureNVBench(
   TEXT_NVBENCH
   text/byte_pair_encoding.cpp
-  text/dedup.cpp
+  text/deduplicate.cpp
   text/edit_distance.cpp
   text/hash_ngrams.cpp
   text/jaccard.cpp

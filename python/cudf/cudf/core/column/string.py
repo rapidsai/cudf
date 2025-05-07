@@ -5373,7 +5373,7 @@ class StringMethods(ColumnMethods):
         of the input column as: [ input[0:], input[1:], ... input[bytes-1:] ]
         where bytes is the total number of bytes in input.
         The returned array represent the sorted strings such that
-        result[i] = input[result[i]:]
+        result[i] = input[suffix_array[i]:]
 
         For details, see :cpp:func:`build_suffix_array`
 
@@ -6481,21 +6481,21 @@ class StringColumn(ColumnBase):
 
     @acquire_spill_lock()
     def substring_duplicates(self, min_width: int) -> Self:
-        result = plc.nvtext.dedup.substring_duplicates(
+        result = plc.nvtext.deduplicate.substring_duplicates(
             self.to_pylibcudf(mode="read"), min_width
         )
         return type(self).from_pylibcudf(result)  # type: ignore[return-value]
 
     @acquire_spill_lock()
     def build_suffix_array(self, min_width: int) -> Self:
-        result = plc.nvtext.dedup.build_suffix_array(
+        result = plc.nvtext.deduplicate.build_suffix_array(
             self.to_pylibcudf(mode="read"), min_width
         )
         return type(self).from_pylibcudf(result)  # type: ignore[return-value]
 
     @acquire_spill_lock()
     def resolve_duplicates(self, sa, min_width: int) -> Self:
-        result = plc.nvtext.dedup.resolve_duplicates(
+        result = plc.nvtext.deduplicate.resolve_duplicates(
             self.to_pylibcudf(mode="read"),
             sa.to_pylibcudf(mode="read"),
             min_width,
@@ -6506,7 +6506,7 @@ class StringColumn(ColumnBase):
     def resolve_duplicates_pair(
         self, sa1, input2, sa2, min_width: int
     ) -> Self:
-        result = plc.nvtext.dedup.resolve_duplicates_pair(
+        result = plc.nvtext.deduplicate.resolve_duplicates_pair(
             self.to_pylibcudf(mode="read"),
             sa1.to_pylibcudf(mode="read"),
             input2.to_pylibcudf(mode="read"),

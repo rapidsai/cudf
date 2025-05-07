@@ -753,7 +753,7 @@ add_library(
   src/table/table.cpp
   src/table/table_device_view.cu
   src/table/table_view.cpp
-  src/text/dedup.cu
+  src/text/deduplicate.cu
   src/text/detokenize.cu
   src/text/edit_distance.cu
   src/text/generate_ngrams.cu
