@@ -181,7 +181,7 @@ class SingleColumnFrame(Frame, NotIterable):
 
     @classmethod
     @_performance_tracking
-    def from_arrow(cls, array) -> Self:
+    def from_arrow(cls, array: pa.Array) -> Self:
         raise NotImplementedError
 
     @_performance_tracking

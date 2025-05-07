@@ -904,28 +904,19 @@ class Frame(BinaryOperand, Scannable, Serializable):
         1  2  5
         2  3  6
         """
-
-        if not isinstance(data, (pa.Table)):
+        if not isinstance(data, pa.Table):
             raise TypeError(
-                "To create a multicolumn cudf data, "
-                "the data should be an arrow Table"
+                f"data must be a pyarrow.Table, not {type(data).__name__}"
             )
 
         column_names = data.column_names
         pandas_dtypes = {}
         np_dtypes = {}
         if isinstance(data.schema.pandas_metadata, dict):
-            metadata = data.schema.pandas_metadata
-            pandas_dtypes = {
-                col["field_name"]: col["pandas_type"]
-                for col in metadata["columns"]
-                if "field_name" in col
-            }
-            np_dtypes = {
-                col["field_name"]: col["numpy_type"]
-                for col in metadata["columns"]
-                if "field_name" in col
-            }
+            for col in data.schema.pandas_metadata:
+                if "field_name" in col:
+                    pandas_dtypes[col["field_name"]] = col["pandas_type"]
+                    np_dtypes[col["field_name"]] = col["numpy_type"]
 
         # Currently we don't have support for
         # pyarrow.DictionaryArray -> cudf Categorical column,
@@ -1047,7 +1038,11 @@ class Frame(BinaryOperand, Scannable, Serializable):
                     cudf_dtype_from_pa_type(data[name].type)
                 )
 
-        return cls._from_data({name: result[name] for name in column_names})
+        return cls._from_data(
+            ColumnAccessor(
+                {name: result[name] for name in column_names}, verify=False
+            )
+        )
 
     @_performance_tracking
     def to_arrow(self) -> pa.Table:
