@@ -249,6 +249,38 @@ class DatetimeColumn(column.ColumnBase):
             children=children,
         )
 
+    def _clear_cache(self) -> None:
+        super()._clear_cache()
+        attrs = (
+            "days_in_month",
+            "is_year_start",
+            "is_leap_year",
+            "is_year_end",
+            "is_quarter_start",
+            "is_quarter_end",
+            "is_month_start",
+            "is_month_end",
+            "day_of_year",
+            "weekday",
+            "nanosecond",
+            "microsecond",
+            "millisecond",
+            "second",
+            "minute",
+            "hour",
+            "day",
+            "month",
+            "year",
+            "quarter",
+            "time_unit",
+        )
+        for attr in attrs:
+            try:
+                delattr(self, attr)
+            except AttributeError:
+                # attr was not called yet, so ignore.
+                pass
+
     @staticmethod
     def _validate_dtype_instance(dtype: np.dtype) -> np.dtype:
         if not (isinstance(dtype, np.dtype) and dtype.kind == "M"):
@@ -287,68 +319,68 @@ class DatetimeColumn(column.ColumnBase):
     def time_unit(self) -> str:
         return np.datetime_data(self.dtype)[0]
 
-    @property
+    @functools.cached_property
+    @acquire_spill_lock()
     def quarter(self) -> ColumnBase:
-        with acquire_spill_lock():
-            return type(self).from_pylibcudf(
-                plc.datetime.extract_quarter(self.to_pylibcudf(mode="read"))
-            )
+        return type(self).from_pylibcudf(
+            plc.datetime.extract_quarter(self.to_pylibcudf(mode="read"))
+        )
 
-    @property
+    @functools.cached_property
     def year(self) -> ColumnBase:
         return self._get_dt_field(plc.datetime.DatetimeComponent.YEAR)
 
-    @property
+    @functools.cached_property
     def month(self) -> ColumnBase:
         return self._get_dt_field(plc.datetime.DatetimeComponent.MONTH)
 
-    @property
+    @functools.cached_property
     def day(self) -> ColumnBase:
         return self._get_dt_field(plc.datetime.DatetimeComponent.DAY)
 
-    @property
+    @functools.cached_property
     def hour(self) -> ColumnBase:
         return self._get_dt_field(plc.datetime.DatetimeComponent.HOUR)
 
-    @property
+    @functools.cached_property
     def minute(self) -> ColumnBase:
         return self._get_dt_field(plc.datetime.DatetimeComponent.MINUTE)
 
-    @property
+    @functools.cached_property
     def second(self) -> ColumnBase:
         return self._get_dt_field(plc.datetime.DatetimeComponent.SECOND)
 
-    @property
+    @functools.cached_property
     def millisecond(self) -> ColumnBase:
         return self._get_dt_field(plc.datetime.DatetimeComponent.MILLISECOND)
 
-    @property
+    @functools.cached_property
     def microsecond(self) -> ColumnBase:
         return self._get_dt_field(plc.datetime.DatetimeComponent.MICROSECOND)
 
-    @property
+    @functools.cached_property
     def nanosecond(self) -> ColumnBase:
         return self._get_dt_field(plc.datetime.DatetimeComponent.NANOSECOND)
 
-    @property
+    @functools.cached_property
     def weekday(self) -> ColumnBase:
         # pandas counts Monday-Sunday as 0-6
         # while libcudf counts Monday-Sunday as 1-7
         result = self._get_dt_field(plc.datetime.DatetimeComponent.WEEKDAY)
         return result - result.dtype.type(1)
 
-    @property
+    @functools.cached_property
+    @acquire_spill_lock()
     def day_of_year(self) -> ColumnBase:
-        with acquire_spill_lock():
-            return type(self).from_pylibcudf(
-                plc.datetime.day_of_year(self.to_pylibcudf(mode="read"))
-            )
+        return type(self).from_pylibcudf(
+            plc.datetime.day_of_year(self.to_pylibcudf(mode="read"))
+        )
 
-    @property
+    @functools.cached_property
     def is_month_start(self) -> ColumnBase:
         return (self.day == 1).fillna(False)
 
-    @property
+    @functools.cached_property
     def is_month_end(self) -> ColumnBase:
         with acquire_spill_lock():
             last_day_col = type(self).from_pylibcudf(
@@ -356,17 +388,17 @@ class DatetimeColumn(column.ColumnBase):
             )
         return (self.day == last_day_col.day).fillna(False)  # type: ignore[attr-defined]
 
-    @property
+    @functools.cached_property
     def is_quarter_end(self) -> ColumnBase:
         last_month = self.month.isin([3, 6, 9, 12])
         return (self.is_month_end & last_month).fillna(False)
 
-    @property
+    @functools.cached_property
     def is_quarter_start(self) -> ColumnBase:
         first_month = self.month.isin([1, 4, 7, 10])
         return (self.is_month_start & first_month).fillna(False)
 
-    @property
+    @functools.cached_property
     def is_year_end(self) -> ColumnBase:
         day_of_year = self.day_of_year
         leap_dates = self.is_leap_year
@@ -375,23 +407,23 @@ class DatetimeColumn(column.ColumnBase):
         non_leap = day_of_year == 365
         return leap.copy_if_else(non_leap, leap_dates).fillna(False)
 
-    @property
+    @functools.cached_property
+    @acquire_spill_lock()
     def is_leap_year(self) -> ColumnBase:
-        with acquire_spill_lock():
-            return type(self).from_pylibcudf(
-                plc.datetime.is_leap_year(self.to_pylibcudf(mode="read"))
-            )
+        return type(self).from_pylibcudf(
+            plc.datetime.is_leap_year(self.to_pylibcudf(mode="read"))
+        )
 
-    @property
+    @functools.cached_property
     def is_year_start(self) -> ColumnBase:
         return (self.day_of_year == 1).fillna(False)
 
-    @property
+    @functools.cached_property
+    @acquire_spill_lock()
     def days_in_month(self) -> ColumnBase:
-        with acquire_spill_lock():
-            return type(self).from_pylibcudf(
-                plc.datetime.days_in_month(self.to_pylibcudf(mode="read"))
-            )
+        return type(self).from_pylibcudf(
+            plc.datetime.days_in_month(self.to_pylibcudf(mode="read"))
+        )
 
     @property
     def day_of_week(self) -> ColumnBase:
@@ -417,7 +449,7 @@ class DatetimeColumn(column.ColumnBase):
         Return a CuPy representation of the DateTimeColumn.
         """
         raise NotImplementedError(
-            "DateTime Arrays is not yet implemented in cudf"
+            "DateTime Arrays is not yet implemented in cupy"
         )
 
     def element_indexing(self, index: int):
@@ -426,16 +458,16 @@ class DatetimeColumn(column.ColumnBase):
             return pd.Timestamp(result)
         return result
 
+    @acquire_spill_lock()
     def _get_dt_field(
         self, field: plc.datetime.DatetimeComponent
     ) -> ColumnBase:
-        with acquire_spill_lock():
-            return type(self).from_pylibcudf(
-                plc.datetime.extract_datetime_component(
-                    self.to_pylibcudf(mode="read"),
-                    field,
-                )
+        return type(self).from_pylibcudf(
+            plc.datetime.extract_datetime_component(
+                self.to_pylibcudf(mode="read"),
+                field,
             )
+        )
 
     def _get_field_names(
         self,
@@ -859,25 +891,37 @@ class DatetimeColumn(column.ColumnBase):
     def _cast_setitem_value(self, value: Any) -> plc.Scalar | ColumnBase:
         if isinstance(value, (np.str_, np.datetime64)):
             value = pd.Timestamp(value.item())
+        elif isinstance(value, str):
+            value = pd.Timestamp(value)
+        elif value is cudf.NaT:
+            value = None
         return super()._cast_setitem_value(value)
-
-    def indices_of(
-        self, value: ScalarLike
-    ) -> cudf.core.column.NumericalColumn:
-        value = (
-            pd.to_datetime(value)
-            .to_numpy()
-            .astype(self.dtype)
-            .astype(np.dtype(np.int64))
-        )
-        return self.astype(np.dtype(np.int64)).indices_of(value)
 
     @property
     def is_unique(self) -> bool:
         return self.astype(np.dtype(np.int64)).is_unique
 
-    def isin(self, values: Sequence) -> ColumnBase:
-        return cudf.core.tools.datetimes._isin_datetimelike(self, values)
+    def _process_values_for_isin(
+        self, values: Sequence
+    ) -> tuple[ColumnBase, ColumnBase]:
+        lhs, rhs = super()._process_values_for_isin(values)
+        if len(rhs) and rhs.dtype.kind == "O":
+            try:
+                rhs = rhs.astype(lhs.dtype)
+            except ValueError:
+                pass
+            else:
+                warnings.warn(
+                    f"The behavior of 'isin' with dtype={lhs.dtype} and "
+                    "castable values (e.g. strings) is deprecated. In a "
+                    "future version, these will not be considered matching "
+                    "by isin. Explicitly cast to the appropriate dtype before "
+                    "calling isin instead.",
+                    FutureWarning,
+                )
+        elif isinstance(rhs, type(self)):
+            rhs = rhs.astype(lhs.dtype)
+        return lhs, rhs
 
     def can_cast_safely(self, to_dtype: DtypeObj) -> bool:
         if to_dtype.kind == "M":  # type: ignore[union-attr]
@@ -910,12 +954,12 @@ class DatetimeColumn(column.ColumnBase):
         else:
             return False
 
-    def _with_type_metadata(self, dtype):
+    def _with_type_metadata(self, dtype) -> DatetimeColumn:
         if isinstance(dtype, pd.DatetimeTZDtype):
             return DatetimeTZColumn(
-                data=self.base_data,
+                data=self.base_data,  # type: ignore[arg-type]
                 dtype=dtype,
-                mask=self.base_mask,
+                mask=self.base_mask,  # type: ignore[arg-type]
                 size=self.size,
                 offset=self.offset,
                 null_count=self.null_count,
@@ -962,16 +1006,12 @@ class DatetimeColumn(column.ColumnBase):
         # The end of an ambiguous time period is what Clock 2 reads at
         # the moment of transition:
         ambiguous_end = clock_2.apply_boolean_mask(cond)
-        with acquire_spill_lock():
-            plc_column = plc.labeling.label_bins(
-                self.to_pylibcudf(mode="read"),
-                ambiguous_begin.to_pylibcudf(mode="read"),
-                plc.labeling.Inclusive.YES,
-                ambiguous_end.to_pylibcudf(mode="read"),
-                plc.labeling.Inclusive.NO,
-            )
-            ambiguous = ColumnBase.from_pylibcudf(plc_column)
-        ambiguous = ambiguous.notnull()
+        ambiguous = self.label_bins(
+            left_edge=ambiguous_begin,
+            left_inclusive=True,
+            right_edge=ambiguous_end,
+            right_inclusive=False,
+        ).notnull()
 
         # At the start of a non-existent time period, Clock 2 reads less
         # than Clock 1 (which has been turned forward):
@@ -981,16 +1021,12 @@ class DatetimeColumn(column.ColumnBase):
         # The end of the non-existent time period is what Clock 1 reads
         # at the moment of transition:
         nonexistent_end = clock_1.apply_boolean_mask(cond)
-        with acquire_spill_lock():
-            plc_column = plc.labeling.label_bins(
-                self.to_pylibcudf(mode="read"),
-                nonexistent_begin.to_pylibcudf(mode="read"),
-                plc.labeling.Inclusive.YES,
-                nonexistent_end.to_pylibcudf(mode="read"),
-                plc.labeling.Inclusive.NO,
-            )
-            nonexistent = ColumnBase.from_pylibcudf(plc_column)
-        nonexistent = nonexistent.notnull()
+        nonexistent = self.label_bins(
+            left_edge=nonexistent_begin,
+            left_inclusive=True,
+            right_edge=nonexistent_end,
+            right_inclusive=False,
+        ).notnull()
 
         return ambiguous, nonexistent  # type: ignore[return-value]
 
@@ -999,7 +1035,7 @@ class DatetimeColumn(column.ColumnBase):
         tz: str | None,
         ambiguous: Literal["NaT"] = "NaT",
         nonexistent: Literal["NaT"] = "NaT",
-    ):
+    ) -> DatetimeColumn:
         if tz is None:
             return self.copy()
         ambiguous, nonexistent = check_ambiguous_and_nonexistent(
@@ -1083,6 +1119,13 @@ class DatetimeTZColumn(DatetimeColumn):
             children=children,
         )
 
+    def _clear_cache(self) -> None:
+        super()._clear_cache()
+        try:
+            del self._local_time
+        except AttributeError:
+            pass
+
     @staticmethod
     def _validate_dtype_instance(
         dtype: pd.DatetimeTZDtype,
@@ -1114,25 +1157,24 @@ class DatetimeTZColumn(DatetimeColumn):
         return self.dtype.unit
 
     @property
-    def _utc_time(self):
+    def _utc_time(self) -> DatetimeColumn:
         """Return UTC time as naive timestamps."""
         return DatetimeColumn(
-            data=self.base_data,
+            data=self.base_data,  # type: ignore[arg-type]
             dtype=_get_base_dtype(self.dtype),
-            mask=self.base_mask,
+            mask=self.base_mask,  # type: ignore[arg-type]
             size=self.size,
             offset=self.offset,
             null_count=self.null_count,
         )
 
-    @property
-    def _local_time(self):
+    @functools.cached_property
+    def _local_time(self) -> DatetimeColumn:
         """Return the local time as naive timestamps."""
         transition_times, offsets = get_tz_data(str(self.dtype.tz))
         base_dtype = _get_base_dtype(self.dtype)
-        transition_times = transition_times.astype(base_dtype)
         indices = (
-            transition_times.searchsorted(
+            transition_times.astype(base_dtype).searchsorted(
                 self.astype(base_dtype), side="right"
             )
             - 1
@@ -1158,18 +1200,18 @@ class DatetimeTZColumn(DatetimeColumn):
             return casted.tz_convert(str(dtype.tz))
         return super().as_datetime_column(dtype)
 
+    @acquire_spill_lock()
     def _get_dt_field(
         self, field: plc.datetime.DatetimeComponent
     ) -> ColumnBase:
-        with acquire_spill_lock():
-            return type(self).from_pylibcudf(
-                plc.datetime.extract_datetime_component(
-                    self._local_time.to_pylibcudf(mode="read"),
-                    field,
-                )
+        return type(self).from_pylibcudf(
+            plc.datetime.extract_datetime_component(
+                self._local_time.to_pylibcudf(mode="read"),
+                field,
             )
+        )
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         # Arrow prints the UTC timestamps, but we want to print the
         # local timestamps:
         arr = self._local_time.to_arrow().cast(
@@ -1179,7 +1221,9 @@ class DatetimeTZColumn(DatetimeColumn):
             f"{object.__repr__(self)}\n{arr.to_string()}\ndtype: {self.dtype}"
         )
 
-    def tz_localize(self, tz: str | None, ambiguous="NaT", nonexistent="NaT"):
+    def tz_localize(
+        self, tz: str | None, ambiguous="NaT", nonexistent="NaT"
+    ) -> DatetimeColumn:
         if tz is None:
             return self._local_time
         ambiguous, nonexistent = check_ambiguous_and_nonexistent(
@@ -1190,14 +1234,14 @@ class DatetimeTZColumn(DatetimeColumn):
             "Use `tz_convert` to convert between time zones."
         )
 
-    def tz_convert(self, tz: str | None):
+    def tz_convert(self, tz: str | None) -> DatetimeColumn:
         if tz is None:
             return self._utc_time
         elif tz == str(self.dtype.tz):
             return self.copy()
         utc_time = self._utc_time
         return type(self)(
-            data=utc_time.base_data,
+            data=utc_time.base_data,  # type: ignore[arg-type]
             dtype=pd.DatetimeTZDtype(self.time_unit, tz),
             mask=utc_time.base_mask,
             size=utc_time.size,

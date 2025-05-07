@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import itertools
 import json
+import random
 import time
 from functools import cache
 from pathlib import Path
@@ -34,12 +35,14 @@ from cudf_polars.dsl.to_ast import to_ast, to_parquet_filter
 from cudf_polars.utils import dtypes
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Hashable, Iterable, MutableMapping, Sequence
+    from collections.abc import Callable, Hashable, Iterable, Sequence
     from typing import Literal
+
+    from typing_extensions import Self
 
     from polars.polars import _expr_nodes as pl_expr
 
-    from cudf_polars.typing import Schema, Slice as Zlice
+    from cudf_polars.typing import CSECache, Schema, Slice as Zlice
     from cudf_polars.utils.config import ConfigOptions
     from cudf_polars.utils.timer import Timer
 
@@ -50,6 +53,7 @@ __all__ = [
     "ConditionalJoin",
     "DataFrameScan",
     "Distinct",
+    "Empty",
     "ErrorNode",
     "Filter",
     "GroupBy",
@@ -184,9 +188,7 @@ class IR(Node["IR"]):
         translation phase should fail earlier.
     """
 
-    def evaluate(
-        self, *, cache: MutableMapping[int, DataFrame], timer: Timer | None
-    ) -> DataFrame:
+    def evaluate(self, *, cache: CSECache, timer: Timer | None) -> DataFrame:
         """
         Evaluate the node (recursively) and return a dataframe.
 
@@ -270,6 +272,7 @@ class Scan(IR):
     __slots__ = (
         "cloud_options",
         "config_options",
+        "include_file_paths",
         "n_rows",
         "paths",
         "predicate",
@@ -290,6 +293,7 @@ class Scan(IR):
         "skip_rows",
         "n_rows",
         "row_index",
+        "include_file_paths",
         "predicate",
     )
     typ: str
@@ -310,6 +314,8 @@ class Scan(IR):
     """Number of rows to read after skipping."""
     row_index: tuple[str, int] | None
     """If not None add an integer index column of the given name."""
+    include_file_paths: str | None
+    """Include the path of the source file(s) as a column with this name."""
     predicate: expr.NamedExpr | None
     """Mask to apply to the read dataframe."""
 
@@ -328,6 +334,7 @@ class Scan(IR):
         skip_rows: int,
         n_rows: int,
         row_index: tuple[str, int] | None,
+        include_file_paths: str | None,
         predicate: expr.NamedExpr | None,
     ):
         self.schema = schema
@@ -340,6 +347,7 @@ class Scan(IR):
         self.skip_rows = skip_rows
         self.n_rows = n_rows
         self.row_index = row_index
+        self.include_file_paths = include_file_paths
         self.predicate = predicate
         self._non_child_args = (
             schema,
@@ -351,6 +359,7 @@ class Scan(IR):
             skip_rows,
             n_rows,
             row_index,
+            include_file_paths,
             predicate,
         )
         self.children = ()
@@ -403,6 +412,9 @@ class Scan(IR):
                 raise NotImplementedError(
                     "ignore_errors is not supported in the JSON reader"
                 )
+            if include_file_paths is not None:
+                # TODO: Need to populate num_rows_per_source in read_json in libcudf
+                raise NotImplementedError("Including file paths in a json scan.")
         elif (
             self.typ == "parquet"
             and self.row_index is not None
@@ -433,8 +445,24 @@ class Scan(IR):
             self.skip_rows,
             self.n_rows,
             self.row_index,
+            self.include_file_paths,
             self.predicate,
         )
+
+    @staticmethod
+    def add_file_paths(
+        name: str, paths: list[str], rows_per_path: list[int], df: DataFrame
+    ) -> DataFrame:
+        """
+        Add a Column of file paths to the DataFrame.
+
+        Each path is repeated according to the number of rows read from it.
+        """
+        (filepaths,) = plc.filling.repeat(
+            plc.Table([plc.interop.from_arrow(pa.array(paths))]),
+            plc.interop.from_arrow(pa.array(rows_per_path, type=pa.int32())),
+        ).columns()
+        return df.with_columns([Column(filepaths, name=name)])
 
     @classmethod
     def do_evaluate(
@@ -448,6 +476,7 @@ class Scan(IR):
         skip_rows: int,
         n_rows: int,
         row_index: tuple[str, int] | None,
+        include_file_paths: str | None,
         predicate: expr.NamedExpr | None,
     ) -> DataFrame:
         """Evaluate and return a dataframe."""
@@ -484,6 +513,7 @@ class Scan(IR):
 
             # polars skips blank lines at the beginning of the file
             pieces = []
+            seen_paths = []
             read_partial = n_rows != -1
             for p in paths:
                 skiprows = reader_options["skip_rows"]
@@ -514,6 +544,8 @@ class Scan(IR):
                     options.set_comment(comment)
                 tbl_w_meta = plc.io.csv.read_csv(options)
                 pieces.append(tbl_w_meta)
+                if include_file_paths is not None:
+                    seen_paths.append(p)
                 if read_partial:
                     n_rows -= tbl_w_meta.tbl.num_rows()
                     if n_rows <= 0:
@@ -529,6 +561,13 @@ class Scan(IR):
                 plc.concatenate.concatenate(list(tables)),
                 colnames[0],
             )
+            if include_file_paths is not None:
+                df = Scan.add_file_paths(
+                    include_file_paths,
+                    seen_paths,
+                    [t.num_rows() for t in tables],
+                    df,
+                )
         elif typ == "parquet":
             filters = None
             if predicate is not None and row_index is None:
@@ -541,7 +580,7 @@ class Scan(IR):
                 options.set_columns(with_columns)
             if filters is not None:
                 options.set_filter(filters)
-            if config_options.get("parquet_options.chunked", default=True):
+            if config_options.parquet_options.chunked:
                 # We handle skip_rows != 0 by reading from the
                 # up to n_rows + skip_rows and slicing off the
                 # first skip_rows entries.
@@ -553,16 +592,10 @@ class Scan(IR):
                     options.set_num_rows(nrows)
                 reader = plc.io.parquet.ChunkedParquetReader(
                     options,
-                    chunk_read_limit=config_options.get(
-                        "parquet_options.chunk_read_limit",
-                        default=cls.PARQUET_DEFAULT_CHUNK_SIZE,
-                    ),
-                    pass_read_limit=config_options.get(
-                        "parquet_options.pass_read_limit",
-                        default=cls.PARQUET_DEFAULT_PASS_LIMIT,
-                    ),
+                    chunk_read_limit=config_options.parquet_options.chunk_read_limit,
+                    pass_read_limit=config_options.parquet_options.pass_read_limit,
                 )
-                chk = reader.read_chunk()
+                chunk = reader.read_chunk()
                 rows_left_to_skip = skip_rows
 
                 def slice_skip(tbl: plc.Table) -> plc.Table:
@@ -577,12 +610,13 @@ class Scan(IR):
                         rows_left_to_skip -= chunk_skip
                     return tbl
 
-                tbl = slice_skip(chk.tbl)
+                tbl = slice_skip(chunk.tbl)
                 # TODO: Nested column names
-                names = chk.column_names(include_children=False)
+                names = chunk.column_names(include_children=False)
                 concatenated_columns = tbl.columns()
                 while reader.has_next():
-                    tbl = slice_skip(reader.read_chunk().tbl)
+                    chunk = reader.read_chunk()
+                    tbl = slice_skip(chunk.tbl)
 
                     for i in range(tbl.num_columns()):
                         concatenated_columns[i] = plc.concatenate.concatenate(
@@ -595,6 +629,10 @@ class Scan(IR):
                     plc.Table(concatenated_columns),
                     names=names,
                 )
+                if include_file_paths is not None:
+                    df = Scan.add_file_paths(
+                        include_file_paths, paths, chunk.num_rows_per_source, df
+                    )
             else:
                 if n_rows != -1:
                     options.set_num_rows(n_rows)
@@ -606,6 +644,10 @@ class Scan(IR):
                     # TODO: consider nested column names?
                     tbl_w_meta.column_names(include_children=False),
                 )
+                if include_file_paths is not None:
+                    df = Scan.add_file_paths(
+                        include_file_paths, paths, tbl_w_meta.num_rows_per_source, df
+                    )
             if filters is not None:
                 # Mask must have been applied.
                 return df
@@ -639,20 +681,16 @@ class Scan(IR):
             name, offset = row_index
             offset += skip_rows
             dtype = schema[name]
-            step = plc.interop.from_arrow(
-                pa.scalar(1, type=plc.interop.to_arrow(dtype))
-            )
-            init = plc.interop.from_arrow(
-                pa.scalar(offset, type=plc.interop.to_arrow(dtype))
-            )
-            index = Column(
+            step = plc.Scalar.from_py(1, dtype)
+            init = plc.Scalar.from_py(offset, dtype)
+            index_col = Column(
                 plc.filling.sequence(df.num_rows, init, step),
                 is_sorted=plc.types.Sorted.YES,
                 order=plc.types.Order.ASCENDING,
                 null_order=plc.types.NullOrder.AFTER,
                 name=name,
             )
-            df = DataFrame([index, *df.columns])
+            df = DataFrame([index_col, *df.columns])
         assert all(c.obj.type() == schema[name] for name, c in df.column_map.items())
         if predicate is None:
             return df
@@ -668,37 +706,59 @@ class Cache(IR):
     Used for CSE at the plan level.
     """
 
-    __slots__ = ("key",)
-    _non_child = ("schema", "key")
+    __slots__ = ("key", "refcount")
+    _non_child = ("schema", "key", "refcount")
     key: int
     """The cache key."""
+    refcount: int
+    """The number of cache hits."""
 
-    def __init__(self, schema: Schema, key: int, value: IR):
+    def __init__(self, schema: Schema, key: int, refcount: int, value: IR):
         self.schema = schema
         self.key = key
+        self.refcount = refcount
         self.children = (value,)
-        self._non_child_args = (key,)
+        self._non_child_args = (key, refcount)
+
+    def get_hashable(self) -> Hashable:  # noqa: D102
+        # Polars arranges that the keys are unique across all cache
+        # nodes that reference the same child, so we don't need to
+        # hash the child.
+        return (type(self), self.key, self.refcount)
+
+    def is_equal(self, other: Self) -> bool:  # noqa: D102
+        if self.key == other.key and self.refcount == other.refcount:
+            self.children = other.children
+            return True
+        return False
 
     @classmethod
     def do_evaluate(
-        cls, key: int, df: DataFrame
+        cls, key: int, refcount: int, df: DataFrame
     ) -> DataFrame:  # pragma: no cover; basic evaluation never calls this
         """Evaluate and return a dataframe."""
         # Our value has already been computed for us, so let's just
         # return it.
         return df
 
-    def evaluate(
-        self, *, cache: MutableMapping[int, DataFrame], timer: Timer | None
-    ) -> DataFrame:
+    def evaluate(self, *, cache: CSECache, timer: Timer | None) -> DataFrame:
         """Evaluate and return a dataframe."""
         # We must override the recursion scheme because we don't want
         # to recurse if we're in the cache.
         try:
-            return cache[self.key]
+            (result, hits) = cache[self.key]
         except KeyError:
             (value,) = self.children
-            return cache.setdefault(self.key, value.evaluate(cache=cache, timer=timer))
+            result = value.evaluate(cache=cache, timer=timer)
+            cache[self.key] = (result, 0)
+            return result
+        else:
+            hits += 1
+            if hits == self.refcount:
+                del cache[self.key]
+            else:
+                cache[self.key] = (result, hits)
+            return result
 
 
 class DataFrameScan(IR):
@@ -708,10 +768,10 @@ class DataFrameScan(IR):
     This typically arises from ``q.collect().lazy()``
     """
 
-    __slots__ = ("config_options", "df", "projection")
+    __slots__ = ("_id_for_hash", "config_options", "df", "projection")
     _non_child = ("schema", "df", "projection", "config_options")
     df: Any
-    """Polars LazyFrame object."""
+    """Polars internal PyDataFrame object."""
     projection: tuple[str, ...] | None
     """List of columns to project out."""
     config_options: ConfigOptions
@@ -734,19 +794,21 @@ class DataFrameScan(IR):
             self.projection,
         )
         self.children = ()
+        self._id_for_hash = random.randint(0, 2**64 - 1)
 
     def get_hashable(self) -> Hashable:
         """
         Hashable representation of the node.
 
-        The (heavy) dataframe object is hashed as its id, so this is
-        not stable across runs, or repeat instances of the same equal dataframes.
+        The (heavy) dataframe object is not hashed. No two instances of
+        ``DataFrameScan`` will have the same hash, even if they have the
+        same schema, projection, and config options, and data.
         """
         schema_hash = tuple(self.schema.items())
         return (
             type(self),
             schema_hash,
-            id(self.df),
+            self._id_for_hash,
             self.projection,
             self.config_options,
         )
@@ -842,42 +904,19 @@ class Reduce(IR):
 class GroupBy(IR):
     """Perform a groupby."""
 
-    class AggInfos:
-        """Serializable wrapper for GroupBy aggregation info."""
-
-        agg_requests: Sequence[expr.NamedExpr]
-        agg_infos: Sequence[expr.AggInfo]
-
-        def __init__(self, agg_requests: Sequence[expr.NamedExpr]):
-            self.agg_requests = tuple(agg_requests)
-            self.agg_infos = [req.collect_agg(depth=0) for req in self.agg_requests]
-
-        def __reduce__(self) -> tuple[Any, ...]:
-            """Pickle an AggInfos object."""
-            return (type(self), (self.agg_requests,))
-
-    class GroupbyOptions:
-        """Serializable wrapper for polars GroupbyOptions."""
-
-        def __init__(self, polars_groupby_options: Any):
-            self.dynamic = polars_groupby_options.dynamic
-            self.rolling = polars_groupby_options.rolling
-            self.slice = polars_groupby_options.slice
-
     __slots__ = (
-        "agg_infos",
         "agg_requests",
         "config_options",
         "keys",
         "maintain_order",
-        "options",
+        "zlice",
     )
     _non_child = (
         "schema",
         "keys",
         "agg_requests",
         "maintain_order",
-        "options",
+        "zlice",
         "config_options",
     )
     keys: tuple[expr.NamedExpr, ...]
@@ -886,8 +925,8 @@ class GroupBy(IR):
     """Aggregation expressions."""
     maintain_order: bool
     """Preserve order in groupby."""
-    options: GroupbyOptions
-    """Arbitrary options."""
+    zlice: Zlice | None
+    """Optional slice to apply after grouping."""
     config_options: ConfigOptions
     """GPU-specific configuration options"""
 
@@ -897,7 +936,7 @@ class GroupBy(IR):
         keys: Sequence[expr.NamedExpr],
         agg_requests: Sequence[expr.NamedExpr],
         maintain_order: bool,  # noqa: FBT001
-        options: Any,
+        zlice: Zlice | None,
         config_options: ConfigOptions,
         df: IR,
     ):
@@ -905,52 +944,15 @@ class GroupBy(IR):
         self.keys = tuple(keys)
         self.agg_requests = tuple(agg_requests)
         self.maintain_order = maintain_order
-        self.options = self.GroupbyOptions(options)
+        self.zlice = zlice
         self.config_options = config_options
         self.children = (df,)
-        if self.options.rolling:
-            raise NotImplementedError(
-                "rolling window/groupby"
-            )  # pragma: no cover; rollingwindow constructor has already raised
-        if self.options.dynamic:
-            raise NotImplementedError("dynamic group by")
-        if any(GroupBy.check_agg(a.value) > 1 for a in self.agg_requests):
-            raise NotImplementedError("Nested aggregations in groupby")
         self._non_child_args = (
             self.keys,
             self.agg_requests,
             maintain_order,
-            self.options,
-            self.AggInfos(self.agg_requests),
+            self.zlice,
         )
-
-    @staticmethod
-    def check_agg(agg: expr.Expr) -> int:
-        """
-        Determine if we can handle an aggregation expression.
-
-        Parameters
-        ----------
-        agg
-            Expression to check
-
-        Returns
-        -------
-        depth of nesting
-
-        Raises
-        ------
-        NotImplementedError
-            For unsupported expression nodes.
-        """
-        if isinstance(agg, (expr.BinOp, expr.Cast, expr.UnaryFunction)):
-            return max(GroupBy.check_agg(child) for child in agg.children)
-        elif isinstance(agg, expr.Agg):
-            return 1 + max(GroupBy.check_agg(child) for child in agg.children)
-        elif isinstance(agg, (expr.Len, expr.Col, expr.Literal, expr.LiteralColumn)):
-            return 0
-        else:
-            raise NotImplementedError(f"No handler for {agg=}")
 
     @classmethod
     def do_evaluate(
@@ -958,8 +960,7 @@ class GroupBy(IR):
         keys_in: Sequence[expr.NamedExpr],
         agg_requests: Sequence[expr.NamedExpr],
         maintain_order: bool,  # noqa: FBT001
-        options: GroupbyOptions,
-        agg_info_wrapper: AggInfos,
+        zlice: Zlice | None,
         df: DataFrame,
     ) -> DataFrame:
         """Evaluate and return a dataframe."""
@@ -976,32 +977,35 @@ class GroupBy(IR):
             column_order=[k.order for k in keys],
             null_precedence=[k.null_order for k in keys],
         )
-        # TODO: uniquify
         requests = []
-        replacements: list[expr.Expr] = []
-        for info in agg_info_wrapper.agg_infos:
-            for pre_eval, req, rep in info.requests:
-                if pre_eval is None:
-                    # A count aggregation, doesn't touch the column,
-                    # but we need to have one. Rather than evaluating
-                    # one, just use one of the key columns.
-                    col = keys[0].obj
-                else:
-                    col = pre_eval.evaluate(df).obj
-                requests.append(plc.groupby.GroupByRequest(col, [req]))
-                replacements.append(rep)
+        names = []
+        for request in agg_requests:
+            name = request.name
+            value = request.value
+            if isinstance(value, expr.Len):
+                # A count aggregation, we need a column so use a key column
+                col = keys[0].obj
+            elif isinstance(value, expr.Agg):
+                (child,) = value.children
+                col = child.evaluate(df).obj
+            else:
+                # Anything else, we pre-evaluate
+                col = value.evaluate(df).obj
+            requests.append(plc.groupby.GroupByRequest(col, [value.agg_request]))
+            names.append(name)
         group_keys, raw_tables = grouper.aggregate(requests)
-        raw_columns: list[Column] = []
-        for i, table in enumerate(raw_tables):
-            (column,) = table.columns()
-            raw_columns.append(Column(column, name=f"tmp{i}"))
-        mapping = dict(zip(replacements, raw_columns, strict=True))
+        results = [
+            Column(column, name=name)
+            for name, column in zip(
+                names,
+                itertools.chain.from_iterable(t.columns() for t in raw_tables),
+                strict=True,
+            )
+        ]
         result_keys = [
             Column(grouped_key, name=key.name)
             for key, grouped_key in zip(keys, group_keys.columns(), strict=True)
         ]
-        result_subs = DataFrame(raw_columns)
-        results = [req.evaluate(result_subs, mapping=mapping) for req in agg_requests]
         broadcasted = broadcast(*result_keys, *results)
         # Handle order preservation of groups
         if maintain_order and not sorted:
@@ -1044,7 +1048,7 @@ class GroupBy(IR):
                     ordered_table.columns(), broadcasted, strict=True
                 )
             ]
-        return DataFrame(broadcasted).slice(options.slice)
+        return DataFrame(broadcasted).slice(zlice)
 
 
 class ConditionalJoin(IR):
@@ -1273,9 +1277,8 @@ class Join(IR):
         left keys, and is stable wrt the right keys. For all other
         joins, there is no order obligation.
         """
-        dt = plc.interop.to_arrow(plc.types.SIZE_TYPE)
-        init = plc.interop.from_arrow(pa.scalar(0, type=dt))
-        step = plc.interop.from_arrow(pa.scalar(1, type=dt))
+        init = plc.Scalar.from_py(0, plc.types.SIZE_TYPE)
+        step = plc.Scalar.from_py(1, plc.types.SIZE_TYPE)
         left_order = plc.copying.gather(
             plc.Table([plc.filling.sequence(left_rows, init, step)]), lg, left_policy
         )
@@ -1851,12 +1854,8 @@ class MapFunction(IR):
         elif name == "row_index":
             col_name, offset = options
             dtype = schema[col_name]
-            step = plc.interop.from_arrow(
-                pa.scalar(1, type=plc.interop.to_arrow(dtype))
-            )
-            init = plc.interop.from_arrow(
-                pa.scalar(offset, type=plc.interop.to_arrow(dtype))
-            )
+            step = plc.Scalar.from_py(1, dtype)
+            init = plc.Scalar.from_py(offset, dtype)
             index_col = Column(
                 plc.filling.sequence(df.num_rows, init, step),
                 is_sorted=plc.types.Sorted.YES,
@@ -1897,12 +1896,18 @@ class Union(IR):
 class HConcat(IR):
     """Concatenate dataframes horizontally."""
 
-    __slots__ = ()
-    _non_child = ("schema",)
+    __slots__ = ("should_broadcast",)
+    _non_child = ("schema", "should_broadcast")
 
-    def __init__(self, schema: Schema, *children: IR):
+    def __init__(
+        self,
+        schema: Schema,
+        should_broadcast: bool,  # noqa: FBT001
+        *children: IR,
+    ):
         self.schema = schema
-        self._non_child_args = ()
+        self.should_broadcast = should_broadcast
+        self._non_child_args = (should_broadcast,)
         self.children = children
 
     @staticmethod
@@ -1934,8 +1939,19 @@ class HConcat(IR):
         )
 
     @classmethod
-    def do_evaluate(cls, *dfs: DataFrame) -> DataFrame:
+    def do_evaluate(
+        cls,
+        should_broadcast: bool,  # noqa: FBT001
+        *dfs: DataFrame,
+    ) -> DataFrame:
         """Evaluate and return a dataframe."""
+        # Special should_broadcast case.
+        # Used to recombine decomposed expressions
+        if should_broadcast:
+            return DataFrame(
+                broadcast(*itertools.chain.from_iterable(df.columns for df in dfs))
+            )
+
         max_rows = max(df.num_rows for df in dfs)
         # Horizontal concatenation extends shorter tables with nulls
         return DataFrame(
@@ -1952,3 +1968,20 @@ class HConcat(IR):
                 )
             )
         )
+
+
+class Empty(IR):
+    """Represents an empty DataFrame."""
+
+    __slots__ = ()
+    _non_child = ()
+
+    def __init__(self) -> None:
+        self.schema = {}
+        self._non_child_args = ()
+        self.children = ()
+
+    @classmethod
+    def do_evaluate(cls) -> DataFrame:
+        """Evaluate and return a dataframe."""
+        return DataFrame([])

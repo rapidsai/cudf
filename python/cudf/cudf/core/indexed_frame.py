@@ -278,9 +278,14 @@ class IndexedFrame(Frame):
         index: BaseIndex,
     ):
         super().__init__(data=data)
-        if not isinstance(index, cudf.core._base_index.BaseIndex):
+        if not isinstance(index, BaseIndex):
             raise ValueError(
                 f"index must be a cudf index not {type(index).__name__}"
+            )
+        elif self._data.nrows > 0 and self._data.nrows != len(index):
+            raise ValueError(
+                f"Length of values ({self._data.nrows}) does not "
+                f"match length of index ({len(index)})"
             )
         self._index = index
 
@@ -300,12 +305,14 @@ class IndexedFrame(Frame):
         index: BaseIndex | None = None,
     ):
         out = super()._from_data(data)
-        if not (index is None or isinstance(index, BaseIndex)):
+        if index is None:
+            # out._num_rows requires .index to be defined
+            index = RangeIndex(out._data.nrows)
+        elif not isinstance(index, BaseIndex):
             raise ValueError(
-                f"index must be None or a cudf.Index not {type(index).__name__}"
+                f"index must be a cudf.Index not {type(index).__name__}"
             )
-        # out._num_rows requires .index to be defined
-        out._index = RangeIndex(out._data.nrows) if index is None else index
+        out._index = index
         return out
 
     @_performance_tracking
@@ -434,16 +441,6 @@ class IndexedFrame(Frame):
         return self._from_data_like_self(
             self._data._from_columns_like_self(results)
         )
-
-    def _check_data_index_length_match(self) -> None:
-        # Validate that the number of rows in the data matches the index if the
-        # data is not empty. This is a helper for the constructor.
-        # TODO: Use self._num_rows once DataFrame.__init__ is cleaned up
-        if self._data.nrows > 0 and self._data.nrows != len(self.index):
-            raise ValueError(
-                f"Length of values ({self._data.nrows}) does not "
-                f"match length of index ({len(self.index)})"
-            )
 
     @property
     @_performance_tracking
@@ -2756,7 +2753,7 @@ class IndexedFrame(Frame):
 
         return self._mimic_inplace(out, inplace=inplace)
 
-    def memory_usage(self, index=True, deep=False):
+    def memory_usage(self, index: bool = True, deep: bool = False) -> int:  # type: ignore[override]
         """Return the memory usage of an object.
 
         Parameters
@@ -6455,28 +6452,24 @@ class IndexedFrame(Frame):
 
         if cudf.get_option("mode.pandas_compatible"):
             source = source.nans_to_nulls()
-        with acquire_spill_lock():
-            result_columns = [
-                ColumnBase.from_pylibcudf(
-                    plc.sorting.rank(
-                        col.to_pylibcudf(mode="read"),
-                        method_enum,
-                        column_order,
-                        c_null_handling,
-                        null_precedence,
-                        pct,
-                    )
-                )
-                for col in source._columns
-            ]
+        result_columns = [
+            col.rank(
+                method=method_enum,
+                column_order=column_order,
+                null_handling=c_null_handling,
+                null_precedence=null_precedence,
+                pct=pct,
+            )
+            for col in source._columns
+        ]
 
         if dropped_cols:
             result = type(source)._from_data(
                 ColumnAccessor(
                     dict(zip(source._column_names, result_columns)),
-                    multiindex=self._data.multiindex,
-                    level_names=self._data.level_names,
-                    label_dtype=self._data.label_dtype,
+                    multiindex=source._data.multiindex,
+                    level_names=source._data.level_names,
+                    label_dtype=source._data.label_dtype,
                     verify=False,
                 ),
             )

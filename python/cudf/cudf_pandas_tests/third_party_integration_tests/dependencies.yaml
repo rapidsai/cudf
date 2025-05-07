@@ -239,12 +239,15 @@ dependencies:
     common:
       - output_types: conda
         packages:
-          - tensorflow
+          - pip
+          - pip:
+              - tensorflow[and-cuda]
   test_xgboost:
     common:
       - output_types: conda
         packages:
-          - hypothesis
+        # TODO: Remove hypothesis pinning once https://github.com/HypothesisWorks/hypothesis/issues/4365 is resolved
+          - hypothesis>=6.131.7
           - numpy
           - scipy
           - scikit-learn

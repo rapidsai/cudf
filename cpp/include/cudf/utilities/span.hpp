@@ -200,7 +200,7 @@ struct host_span : public cudf::detail::span_base<T, Extent, host_span<T, Extent
   /**
    * @brief Constructor from pointer and size
    *
-   * @note This needs to be host-device , as it's used by a host-device function in base_2dspan
+   * @note This needs to be host-device, as it's used by a host-device function in base_2dspan
    *
    * @param data Pointer to the first element in the span
    * @param size The number of elements in the span

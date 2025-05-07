@@ -13,17 +13,13 @@
 # =============================================================================
 cmake_minimum_required(VERSION 3.30.4 FATAL_ERROR)
 
-include(../../../../rapids_config.cmake)
+include(../../../../cmake/rapids_config.cmake)
 include(rapids-cmake)
 include(rapids-cuda)
 include(rapids-find)
 include(rapids-cpm)
 rapids_cpm_init()
 
-# Use GPU_ARCHS if it is defined
-if(DEFINED GPU_ARCHS)
-  set(CMAKE_CUDA_ARCHITECTURES "${GPU_ARCHS}")
-endif()
 rapids_cuda_init_architectures(CUDF_JNI)
 
 project(
@@ -71,13 +67,7 @@ set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules/"
 # ##################################################################################################
 # * compiler options ------------------------------------------------------------------------------
 
-set(CUDF_CXX_FLAGS "")
-set(CUDF_CUDA_FLAGS "")
-set(CUDF_CXX_DEFINITIONS "")
-set(CUDF_CUDA_DEFINITIONS "")
-
 rapids_find_package(CUDAToolkit REQUIRED)
-include(ConfigureCUDA) # set other CUDA compilation flags
 
 if(CUDF_USE_PER_THREAD_DEFAULT_STREAM)
   message(STATUS "Using per-thread default stream")
@@ -94,6 +84,11 @@ rapids_cmake_build_type("Release")
 
 set(cudf_ROOT "${CUDF_CPP_BUILD_DIR}")
 rapids_find_package(cudf REQUIRED)
+
+get_target_property(CUDF_CXX_FLAGS cudf::cudf CUDF_CXX_FLAGS)
+get_target_property(CUDF_CUDA_FLAGS cudf::cudf CUDF_CUDA_FLAGS)
+get_target_property(CUDF_CXX_DEFINITIONS cudf::cudf CUDF_CXX_DEFINITIONS)
+get_target_property(CUDF_CUDA_DEFINITIONS cudf::cudf CUDF_CUDA_DEFINITIONS)
 
 # ##################################################################################################
 # * nvtx3-------------------------------------------------------------------------------------------

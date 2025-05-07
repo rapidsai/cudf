@@ -15,7 +15,6 @@
  */
 
 #include "compact_protocol_reader.hpp"
-#include "io/parquet/parquet.hpp"
 #include "reader_impl_helpers.hpp"
 
 #include <cudf/ast/detail/expression_transformer.hpp>
@@ -24,6 +23,7 @@
 #include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/detail/transform.hpp>
 #include <cudf/hashing/detail/xxhash_64.cuh>
+#include <cudf/io/parquet_schema.hpp>
 #include <cudf/logger.hpp>
 #include <cudf/utilities/span.hpp>
 #include <cudf/utilities/traits.hpp>
@@ -335,9 +335,9 @@ void read_bloom_filter_data(host_span<std::unique_ptr<datasource> const> sources
       // Check if the bloom filter header is valid.
       auto const is_header_valid =
         (header.num_bytes % words_per_block) == 0 and
-        header.compression.compression == BloomFilterCompression::Compression::UNCOMPRESSED and
-        header.algorithm.algorithm == BloomFilterAlgorithm::Algorithm::SPLIT_BLOCK and
-        header.hash.hash == BloomFilterHash::Hash::XXHASH;
+        header.compression.compression == BloomFilterCompression::UNCOMPRESSED and
+        header.algorithm.algorithm == BloomFilterAlgorithm::SPLIT_BLOCK and
+        header.hash.hash == BloomFilterHash::XXHASH;
 
       // Do not read if the bloom filter is invalid
       if (not is_header_valid) {
@@ -508,7 +508,7 @@ std::vector<Type> aggregate_reader_metadata::get_parquet_types(
 }
 
 std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::apply_bloom_filters(
-  std::vector<rmm::device_buffer>& bloom_filter_data,
+  cudf::host_span<rmm::device_buffer> bloom_filter_data,
   host_span<std::vector<size_type> const> input_row_group_indices,
   host_span<std::vector<ast::literal*> const> literals,
   size_type total_row_groups,

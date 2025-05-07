@@ -3,19 +3,24 @@
 
 from __future__ import annotations
 
+import contextlib
+
 import pytest
 
 import polars as pl
 
-from cudf_polars.testing.asserts import assert_gpu_result_equal
+from cudf_polars.testing.asserts import DEFAULT_SCHEDULER, assert_gpu_result_equal
 
 
 @pytest.fixture(scope="module")
 def engine():
     return pl.GPUEngine(
         raise_on_fail=True,
-        executor="dask-experimental",
-        executor_options={"max_rows_per_partition": 4},
+        executor="streaming",
+        executor_options={
+            "max_rows_per_partition": 4,
+            "scheduler": DEFAULT_SCHEDULER,
+        },
     )
 
 
@@ -45,17 +50,25 @@ def test_groupby_single_partitions(df, op, keys):
         q,
         engine=pl.GPUEngine(
             raise_on_fail=True,
-            executor="dask-experimental",
-            executor_options={"max_rows_per_partition": 1e9},
+            executor="streaming",
+            executor_options={
+                "max_rows_per_partition": int(1e9),
+                "scheduler": DEFAULT_SCHEDULER,
+            },
         ),
         check_row_order=False,
     )
 
 
-@pytest.mark.parametrize("op", ["sum", "mean", "len", "count", "min", "max"])
+@pytest.mark.parametrize(
+    "op", ["sum", "mean", "len", "count", "min", "max", "n_unique"]
+)
 @pytest.mark.parametrize("keys", [("y",), ("y", "z")])
 def test_groupby_agg(df, engine, op, keys):
-    q = df.group_by(*keys).agg(getattr(pl.col("x"), op)())
+    agg = getattr(pl.col("x"), op)()
+    if op == "n_unique":
+        agg = agg.cast(pl.Int64)
+    q = df.group_by(*keys).agg(agg)
     assert_gpu_result_equal(q, engine=engine, check_row_order=False)
 
 
@@ -64,13 +77,15 @@ def test_groupby_agg(df, engine, op, keys):
 def test_groupby_agg_config_options(df, op, keys):
     engine = pl.GPUEngine(
         raise_on_fail=True,
-        executor="dask-experimental",
+        executor="streaming",
         executor_options={
             "max_rows_per_partition": 4,
             # Trigger shuffle-based groupby
             "cardinality_factor": {"z": 0.5},
             # Check that we can change the n-ary factor
             "groupby_n_ary": 8,
+            "scheduler": DEFAULT_SCHEDULER,
+            "shuffle_method": "tasks",
         },
     )
     agg = getattr(pl.col("x"), op)()
@@ -80,12 +95,33 @@ def test_groupby_agg_config_options(df, op, keys):
     assert_gpu_result_equal(q, engine=engine, check_row_order=False)
 
 
-def test_groupby_raises(df, engine):
+@pytest.mark.parametrize("fallback_mode", ["silent", "raise", "warn", "foo"])
+def test_groupby_fallback(df, engine, fallback_mode):
+    engine = pl.GPUEngine(
+        raise_on_fail=True,
+        executor="streaming",
+        executor_options={
+            "fallback_mode": fallback_mode,
+            "max_rows_per_partition": 4,
+            "scheduler": DEFAULT_SCHEDULER,
+        },
+    )
+    match = "Failed to decompose groupby aggs"
+
     q = df.group_by("y").median()
-    with pytest.raises(
-        pl.exceptions.ComputeError,
-        match="NotImplementedError",
-    ):
+
+    if fallback_mode == "silent":
+        ctx = contextlib.nullcontext()
+    elif fallback_mode == "raise":
+        ctx = pytest.raises(pl.exceptions.ComputeError, match=match)
+    elif fallback_mode == "foo":
+        ctx = pytest.raises(
+            pl.exceptions.ComputeError,
+            match="'foo' is not a valid StreamingFallbackMode",
+        )
+    else:
+        ctx = pytest.warns(UserWarning, match=match)
+    with ctx:
         assert_gpu_result_equal(q, engine=engine, check_row_order=False)
 
 

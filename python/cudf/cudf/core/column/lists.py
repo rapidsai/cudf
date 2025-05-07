@@ -80,7 +80,7 @@ class ListColumn(ColumnBase):
         return self
 
     @cached_property
-    def memory_usage(self):
+    def memory_usage(self) -> int:
         n = super().memory_usage
         child0_size = (self.size + 1) * self.base_children[0].dtype.itemsize
         current_base_child = self.base_children[1]
@@ -123,7 +123,7 @@ class ListColumn(ColumnBase):
             return pa_scalar_to_plc_scalar(
                 pa.scalar(value, type=self.dtype.to_arrow())
             )
-        elif value is NA:
+        elif value is NA or value is None:
             return pa_scalar_to_plc_scalar(
                 pa.scalar(None, type=self.dtype.to_arrow())
             )

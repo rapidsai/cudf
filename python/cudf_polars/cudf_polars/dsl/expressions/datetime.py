@@ -17,8 +17,6 @@ from cudf_polars.containers import Column
 from cudf_polars.dsl.expressions.base import ExecutionContext, Expr
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
-
     from typing_extensions import Self
 
     from polars.polars import _expr_nodes as pl_expr
@@ -108,10 +106,12 @@ class TemporalFunction(Expr):
         *_COMPONENT_MAP.keys(),
         Name.IsLeapYear,
         Name.OrdinalDay,
+        Name.ToString,
         Name.Week,
         Name.IsoYear,
         Name.MonthStart,
         Name.MonthEnd,
+        Name.CastTimeUnit,
     }
 
     def __init__(
@@ -129,19 +129,33 @@ class TemporalFunction(Expr):
         if self.name not in self._valid_ops:
             raise NotImplementedError(f"Temporal function {self.name}")
 
+        if self.name is TemporalFunction.Name.ToString and plc.traits.is_duration(
+            self.children[0].dtype
+        ):
+            raise NotImplementedError("ToString is not supported on duration types")
+
     def do_evaluate(
-        self,
-        df: DataFrame,
-        *,
-        context: ExecutionContext = ExecutionContext.FRAME,
-        mapping: Mapping[Expr, Column] | None = None,
+        self, df: DataFrame, *, context: ExecutionContext = ExecutionContext.FRAME
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
-        columns = [
-            child.evaluate(df, context=context, mapping=mapping)
-            for child in self.children
-        ]
+        columns = [child.evaluate(df, context=context) for child in self.children]
         (column,) = columns
+        if self.name is TemporalFunction.Name.CastTimeUnit:
+            (unit,) = self.options
+            if plc.traits.is_timestamp(column.obj.type()):
+                dtype = plc.interop.from_arrow(pa.timestamp(unit))
+            elif plc.traits.is_duration(column.obj.type()):
+                dtype = plc.interop.from_arrow(pa.duration(unit))
+            result = plc.unary.cast(column.obj, dtype)
+            return Column(result)
+        if self.name == TemporalFunction.Name.ToString:
+            return Column(
+                plc.strings.convert.convert_datetime.from_timestamps(
+                    column.obj,
+                    self.options[0],
+                    plc.interop.from_arrow(pa.array([], type=pa.string())),
+                )
+            )
         if self.name is TemporalFunction.Name.Week:
             result = plc.strings.convert.convert_integers.to_integers(
                 plc.strings.convert.convert_datetime.from_timestamps(
@@ -172,7 +186,7 @@ class TemporalFunction(Expr):
             # must subtract 1 to avoid rolling over to the previous month
             days_to_subtract = plc.binaryop.binary_operation(
                 days_to_subtract,
-                plc.interop.from_arrow(pa.scalar(1, type=pa.int32())),
+                plc.Scalar.from_py(1, plc.DataType(plc.TypeId.INT32)),
                 plc.binaryop.BinaryOperator.SUB,
                 plc.DataType(plc.TypeId.DURATION_DAYS),
             )
@@ -205,7 +219,7 @@ class TemporalFunction(Expr):
             )
             millis_as_micros = plc.binaryop.binary_operation(
                 millis,
-                plc.interop.from_arrow(pa.scalar(1_000, type=pa.int32())),
+                plc.Scalar.from_py(1_000, plc.DataType(plc.TypeId.INT32)),
                 plc.binaryop.BinaryOperator.MUL,
                 plc.DataType(plc.TypeId.INT32),
             )
@@ -228,15 +242,15 @@ class TemporalFunction(Expr):
             )
             millis_as_nanos = plc.binaryop.binary_operation(
                 millis,
-                plc.interop.from_arrow(pa.scalar(1_000_000, type=pa.int32())),
+                plc.Scalar.from_py(1_000_000, plc.DataType(plc.TypeId.INT32)),
                 plc.binaryop.BinaryOperator.MUL,
-                plc.types.DataType(plc.types.TypeId.INT32),
+                plc.DataType(plc.TypeId.INT32),
             )
             micros_as_nanos = plc.binaryop.binary_operation(
                 micros,
-                plc.interop.from_arrow(pa.scalar(1_000, type=pa.int32())),
+                plc.Scalar.from_py(1_000, plc.DataType(plc.TypeId.INT32)),
                 plc.binaryop.BinaryOperator.MUL,
-                plc.types.DataType(plc.types.TypeId.INT32),
+                plc.DataType(plc.TypeId.INT32),
             )
             total_nanos = plc.binaryop.binary_operation(
                 nanos,

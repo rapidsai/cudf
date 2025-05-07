@@ -13,6 +13,7 @@ from functools import cache, partial
 from typing import TYPE_CHECKING, Literal, overload
 
 import nvtx
+from typing_extensions import assert_never
 
 from polars.exceptions import ComputeError, PerformanceWarning
 
@@ -32,6 +33,7 @@ if TYPE_CHECKING:
 
     from cudf_polars.dsl.ir import IR
     from cudf_polars.typing import NodeTraverser
+    from cudf_polars.utils.config import ConfigOptions
 
 __all__: list[str] = ["execute_with_cudf"]
 
@@ -184,9 +186,8 @@ def _callback(
     n_rows: int | None,
     should_time: Literal[False],
     *,
-    device: int | None,
-    memory_resource: int | None,
-    executor: Literal["pylibcudf", "dask-experimental"] | None,
+    memory_resource: rmm.mr.DeviceMemoryResource | None,
+    config_options: ConfigOptions,
     timer: Timer | None,
 ) -> pl.DataFrame: ...
 
@@ -199,9 +200,8 @@ def _callback(
     n_rows: int | None,
     should_time: Literal[True],
     *,
-    device: int | None,
-    memory_resource: int | None,
-    executor: Literal["pylibcudf", "dask-experimental"] | None,
+    memory_resource: rmm.mr.DeviceMemoryResource | None,
+    config_options: ConfigOptions,
     timer: Timer | None,
 ) -> tuple[pl.DataFrame, list[tuple[int, int, str]]]: ...
 
@@ -213,9 +213,8 @@ def _callback(
     n_rows: int | None,
     should_time: bool,  # noqa: FBT001
     *,
-    device: int | None,
-    memory_resource: int | None,
-    executor: Literal["pylibcudf", "dask-experimental"] | None,
+    memory_resource: rmm.mr.DeviceMemoryResource | None,
+    config_options: ConfigOptions,
     timer: Timer | None,
 ) -> pl.DataFrame | tuple[pl.DataFrame, list[tuple[int, int, str]]]:
     assert with_columns is None
@@ -226,21 +225,20 @@ def _callback(
     with (
         nvtx.annotate(message="ExecuteIR", domain="cudf_polars"),
         # Device must be set before memory resource is obtained.
-        set_device(device),
+        set_device(config_options.device),
         set_memory_resource(memory_resource),
     ):
-        if executor is None or executor == "pylibcudf":
+        if config_options.executor.name == "in-memory":
             df = ir.evaluate(cache={}, timer=timer).to_polars()
             if timer is None:
                 return df
             else:
                 return df, timer.timings
-        elif executor == "dask-experimental":
-            from cudf_polars.experimental.parallel import evaluate_dask
+        elif config_options.executor.name == "streaming":
+            from cudf_polars.experimental.parallel import evaluate_streaming
 
-            return evaluate_dask(ir).to_polars()
-        else:
-            raise ValueError(f"Unknown executor '{executor}'")
+            return evaluate_streaming(ir, config_options).to_polars()
+        assert_never(f"Unknown executor '{config_options.executor}'")
 
 
 def execute_with_cudf(
@@ -259,7 +257,7 @@ def execute_with_cudf(
         profiling should occur).
 
     config
-        GPUEngine configuration object
+        GPUEngine object. Configuration is available as ``engine.config``.
 
     Raises
     ------
@@ -277,16 +275,22 @@ def execute_with_cudf(
     else:
         start = time.monotonic_ns()
         timer = Timer(start - duration_since_start)
-    device = config.device
+
     memory_resource = config.memory_resource
-    raise_on_fail = config.config.get("raise_on_fail", False)
-    executor = config.config.get("executor", None)
+
     with nvtx.annotate(message="ConvertIR", domain="cudf_polars"):
         translator = Translator(nt, config)
         ir = translator.translate_ir()
         ir_translation_errors = translator.errors
         if timer is not None:
             timer.store(start, time.monotonic_ns(), "gpu-ir-translation")
+
+        if (
+            memory_resource is None
+            and translator.config_options.executor.name == "streaming"
+            and translator.config_options.executor.scheduler == "distributed"
+        ):  # pragma: no cover; Requires distributed cluster
+            memory_resource = rmm.mr.get_current_device_resource()
         if len(ir_translation_errors):
             # TODO: Display these errors in user-friendly way.
             # tracked in https://github.com/rapidsai/cudf/issues/17051
@@ -301,7 +305,7 @@ def execute_with_cudf(
             exception = NotImplementedError(error_message, unique_errors)
             if bool(int(os.environ.get("POLARS_VERBOSE", 0))):
                 warnings.warn(error_message, PerformanceWarning, stacklevel=2)
-            if raise_on_fail:
+            if translator.config_options.raise_on_fail:
                 raise exception
         else:
             if POLARS_VERSION_LT_125:  # pragma: no cover
@@ -310,9 +314,8 @@ def execute_with_cudf(
                         _callback,
                         ir,
                         should_time=False,
-                        device=device,
                         memory_resource=memory_resource,
-                        executor=executor,
+                        config_options=translator.config_options,
                         timer=None,
                     )
                 )
@@ -321,9 +324,8 @@ def execute_with_cudf(
                     partial(
                         _callback,
                         ir,
-                        device=device,
                         memory_resource=memory_resource,
-                        executor=executor,
+                        config_options=translator.config_options,
                         timer=timer,
                     )
                 )

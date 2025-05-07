@@ -84,9 +84,9 @@ void print_cumulative_page_info(device_span<PageInfo const> d_pages,
                                 device_span<cumulative_page_info const> d_c_info,
                                 rmm::cuda_stream_view stream)
 {
-  auto const pages  = cudf::detail::make_host_vector_sync(d_pages, stream);
-  auto const chunks = cudf::detail::make_host_vector_sync(d_chunks, stream);
-  auto const c_info = cudf::detail::make_host_vector_sync(d_c_info, stream);
+  auto const pages  = cudf::detail::make_host_vector(d_pages, stream);
+  auto const chunks = cudf::detail::make_host_vector(d_chunks, stream);
+  auto const c_info = cudf::detail::make_host_vector(d_c_info, stream);
 
   printf("------------\nCumulative sizes by page\n");
 
@@ -174,12 +174,29 @@ __host__ __device__ cuda::std::pair<compression_type, bool> parquet_compression_
   return {compression_type::NONE, false};
 }
 
+/**
+ * @brief Returns the string name of the Parquet compression type.
+ */
+[[nodiscard]] std::string parquet_compression_name(Compression compression)
+{
+  switch (compression) {
+    case Compression::BROTLI: return "BROTLI";
+    case Compression::GZIP: return "GZIP";
+    case Compression::LZ4_RAW: return "LZ4_RAW";
+    case Compression::LZ4: return "LZ4";
+    case Compression::LZO: return "LZO";
+    case Compression::SNAPPY: return "SNAPPY";
+    case Compression::ZSTD: return "ZSTD";
+    case Compression::UNCOMPRESSED: return "UNCOMPRESSED";
+  }
+  CUDF_FAIL("Unsupported Parquet compression type");
+}
+
 compression_type from_parquet_compression(Compression compression)
 {
   auto const [type, supported] = parquet_compression_support(compression);
   CUDF_EXPECTS(supported,
-               "Unsupported compression type: " +
-                 cudf::io::detail::compression_type_name(from_parquet_compression(compression)));
+               "Unsupported Parquet compression type: " + parquet_compression_name(compression));
   return type;
 }
 
@@ -682,7 +699,7 @@ std::tuple<rmm::device_uvector<page_span>, size_t, size_t> compute_next_subpass(
   auto [aggregated_info, page_keys_by_split] = adjust_cumulative_sizes(c_info, pages, stream);
 
   // bring back to the cpu
-  auto const h_aggregated_info = cudf::detail::make_host_vector_sync(aggregated_info, stream);
+  auto const h_aggregated_info = cudf::detail::make_host_vector(aggregated_info, stream);
   // print_cumulative_row_info(h_aggregated_info, "adjusted");
 
   // TODO: if the user has explicitly specified skip_rows/num_rows we could be more intelligent
@@ -729,7 +746,7 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
   auto [aggregated_info, page_keys_by_split] = adjust_cumulative_sizes(c_info, pages, stream);
 
   // bring back to the cpu
-  auto const h_aggregated_info = cudf::detail::make_host_vector_sync(aggregated_info, stream);
+  auto const h_aggregated_info = cudf::detail::make_host_vector(aggregated_info, stream);
   // print_cumulative_row_info(h_aggregated_info, "adjusted");
 
   std::vector<row_range> splits;
@@ -758,7 +775,7 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
  * @brief Stores basic information about pages compressed with a specific codec.
  */
 struct codec_stats {
-  Compression compression_type  = UNCOMPRESSED;
+  Compression compression_type  = Compression::UNCOMPRESSED;
   size_t num_pages              = 0;
   int32_t max_decompressed_size = 0;
   size_t total_decomp_size      = 0;
@@ -803,14 +820,14 @@ struct codec_stats {
 {
   CUDF_FUNC_RANGE();
 
-  std::array codecs{codec_stats{BROTLI},
-                    codec_stats{GZIP},
-                    codec_stats{LZ4_RAW},
-                    codec_stats{SNAPPY},
-                    codec_stats{ZSTD}};
+  std::array codecs{codec_stats{Compression::BROTLI},
+                    codec_stats{Compression::GZIP},
+                    codec_stats{Compression::LZ4_RAW},
+                    codec_stats{Compression::SNAPPY},
+                    codec_stats{Compression::ZSTD}};
 
-  auto is_codec_supported = [&codecs](int8_t codec) {
-    if (codec == UNCOMPRESSED) return true;
+  auto is_codec_supported = [&codecs](Compression codec) {
+    if (codec == Compression::UNCOMPRESSED) return true;
     return std::find_if(codecs.begin(), codecs.end(), [codec](auto& cstats) {
              return codec == cstats.compression_type;
            }) != codecs.end();
@@ -818,8 +835,7 @@ struct codec_stats {
 
   for (auto const& chunk : chunks) {
     CUDF_EXPECTS(is_codec_supported(chunk.codec),
-                 "Unsupported compression type: " +
-                   cudf::io::detail::compression_type_name(from_parquet_compression(chunk.codec)));
+                 "Unsupported Parquet compression type: " + parquet_compression_name(chunk.codec));
   }
 
   size_t total_pass_decomp_size = 0;
@@ -859,13 +875,7 @@ struct codec_stats {
   auto copy_out =
     cudf::detail::make_empty_host_vector<device_span<uint8_t>>(num_comp_pages, stream);
 
-  rmm::device_uvector<compression_result> comp_res(num_comp_pages, stream);
-  thrust::uninitialized_fill(rmm::exec_policy_nosync(stream),
-                             comp_res.begin(),
-                             comp_res.end(),
-                             compression_result{0, compression_status::FAILURE});
-
-  auto set_parameters = [&](codec_stats const& codec,
+  auto set_parameters = [&](codec_stats& codec,
                             host_span<PageInfo> pages,
                             void* decomp_data,
                             bool select_dict_pages,
@@ -884,10 +894,18 @@ struct codec_stats {
           copy_in.push_back({page.page_data, static_cast<size_t>(offset)});
           copy_out.push_back({dst_base, static_cast<size_t>(offset)});
         }
-        comp_in.push_back(
-          {page.page_data + offset, static_cast<size_t>(page.compressed_page_size - offset)});
-        comp_out.push_back(
-          {dst_base + offset, static_cast<size_t>(page.uncompressed_page_size - offset)});
+        // Only decompress if the page contains data after the def/rep levels
+        if (page.compressed_page_size > offset) {
+          comp_in.push_back(
+            {page.page_data + offset, static_cast<size_t>(page.compressed_page_size - offset)});
+          comp_out.push_back(
+            {dst_base + offset, static_cast<size_t>(page.uncompressed_page_size - offset)});
+        } else {
+          // If the page wasn't included in the decompression parameters, we need to adjust the
+          // page count to allocate results and perform decompression correctly
+          --codec.num_pages;
+          --num_comp_pages;
+        }
         page.page_data = dst_base;
         decomp_offset += page.uncompressed_page_size;
       }
@@ -896,20 +914,27 @@ struct codec_stats {
 
   size_t pass_decomp_offset    = 0;
   size_t subpass_decomp_offset = 0;
-  for (auto const& codec : codecs) {
+  for (auto& codec : codecs) {
     if (codec.num_pages == 0) { continue; }
     set_parameters(codec, pass_pages, pass_decomp_pages.data(), true, pass_decomp_offset);
     set_parameters(codec, subpass_pages, subpass_decomp_pages.data(), false, subpass_decomp_offset);
   }
 
-  auto d_comp_in = cudf::detail::make_device_uvector_async(
+  auto const d_comp_in = cudf::detail::make_device_uvector_async(
     comp_in, stream, cudf::get_current_device_resource_ref());
-  auto d_comp_out = cudf::detail::make_device_uvector_async(
+  auto const d_comp_out = cudf::detail::make_device_uvector_async(
     comp_out, stream, cudf::get_current_device_resource_ref());
+  rmm::device_uvector<compression_result> comp_res(num_comp_pages, stream);
+  thrust::uninitialized_fill(rmm::exec_policy_nosync(stream),
+                             comp_res.begin(),
+                             comp_res.end(),
+                             compression_result{0, compression_status::FAILURE});
 
   int32_t start_pos = 0;
   for (auto const& codec : codecs) {
     if (codec.num_pages == 0) { continue; }
+    CUDF_EXPECTS(is_supported_read_parquet(from_parquet_compression(codec.compression_type)),
+                 "Unsupported compression type for Parquet reading");
 
     device_span<device_span<uint8_t const> const> d_comp_in_view{d_comp_in.data() + start_pos,
                                                                  codec.num_pages};
@@ -1093,12 +1118,14 @@ void include_decompression_scratch_size(device_span<ColumnChunkDesc const> chunk
                                 decomp_sum{});
 
   // retrieve to host so we can get compression scratch sizes
-  auto h_decomp_info = cudf::detail::make_host_vector_sync(decomp_info, stream);
+  auto h_decomp_info = cudf::detail::make_host_vector(decomp_info, stream);
   auto temp_cost     = cudf::detail::make_host_vector<size_t>(pages.size(), stream);
   std::transform(h_decomp_info.begin(),
                  h_decomp_info.end(),
                  temp_cost.begin(),
-                 cudf::io::detail::get_decompression_scratch_size);
+                 [num_pages = pages.size()](auto const& d) {
+                   return cudf::io::detail::get_decompression_scratch_size(d, num_pages);
+                 });
 
   // add to the cumulative_page_info data
   rmm::device_uvector<size_t> d_temp_cost = cudf::detail::make_device_uvector_async(
@@ -1233,7 +1260,7 @@ void reader::impl::setup_next_pass(read_mode mode)
     // Get the decompressed size of dictionary pages to help estimate memory usage
     auto const decomp_dict_data_size = std::accumulate(
       pass.pages.begin(), pass.pages.end(), size_t{0}, [&pass](size_t acc, auto const& page) {
-        if (pass.chunks[page.chunk_idx].codec != UNCOMPRESSED &&
+        if (pass.chunks[page.chunk_idx].codec != Compression::UNCOMPRESSED &&
             (page.flags & PAGEINFO_FLAGS_DICTIONARY)) {
           return acc + page.uncompressed_page_size;
         }
@@ -1264,7 +1291,7 @@ void reader::impl::setup_next_pass(read_mode mode)
     printf("\tnum_rows: %'lu\n", pass.num_rows);
     printf("\tbase mem usage: %'lu\n", pass.base_mem_size);
     auto const num_columns    = _input_columns.size();
-    auto const h_page_offsets = cudf::detail::make_host_vector_sync(pass.page_offsets, _stream);
+    auto const h_page_offsets = cudf::detail::make_host_vector(pass.page_offsets, _stream);
     for (size_t c_idx = 0; c_idx < num_columns; c_idx++) {
       printf("\t\tColumn %'lu: num_pages(%'d)\n",
              c_idx,
@@ -1374,7 +1401,7 @@ void reader::impl::setup_next_subpass(read_mode mode)
                                      dst_offsets.begin(),
                                      get_span_size_by_index{page_indices},
                                      0,
-                                     thrust::plus<size_t>{});
+                                     cuda::std::plus<size_t>{});
     thrust::for_each(
       rmm::exec_policy_nosync(_stream),
       iter,
@@ -1403,11 +1430,11 @@ void reader::impl::setup_next_subpass(read_mode mode)
 
     if (is_first_subpass) {
       pass.decomp_dict_data = std::move(pass_data);
-      pass.pages.host_to_device_sync(_stream);
+      pass.pages.host_to_device(_stream);
     }
 
     subpass.decomp_page_data = std::move(subpass_data);
-    subpass.pages.host_to_device_sync(_stream);
+    subpass.pages.host_to_device(_stream);
   }
 
   // since there is only ever 1 dictionary per chunk (the first page), do it at the
@@ -1438,7 +1465,7 @@ void reader::impl::setup_next_subpass(read_mode mode)
   printf("\t\tTotal expected usage: %'lu\n",
          total_expected_size == 0 ? subpass.decomp_page_data.size() + pass.base_mem_size
                                   : total_expected_size + pass.base_mem_size);
-  auto const h_page_indices = cudf::detail::make_host_vector_sync(page_indices, _stream);
+  auto const h_page_indices = cudf::detail::make_host_vector(page_indices, _stream);
   for (size_t c_idx = 0; c_idx < num_columns; c_idx++) {
     printf("\t\tColumn %'lu: pages(%'lu - %'lu)\n",
            c_idx,
@@ -1543,7 +1570,7 @@ void reader::impl::create_global_chunk_info()
                                        col.schema_idx,
                                        chunk_info,
                                        list_bytes_per_row_est,
-                                       schema.type == BYTE_ARRAY and _strings_to_categorical,
+                                       schema.type == Type::BYTE_ARRAY and _strings_to_categorical,
                                        rg.source_index));
     }
     // Adjust for skip_rows when updating the remaining rows after the first group
