@@ -4463,14 +4463,16 @@ def test_parquet_reader_empty_compressed_page(datadir):
 def my_pdf(request):
     return build_pdf(request, True)
 
+
 @pytest.mark.parametrize("compression", ["brotli", "gzip", "snappy", "zstd"])
 @pytest.mark.parametrize(
     "env_vars",
     [
-        {"LIBCUDF_HOST_DECOMPRESSION": "OFF",
-         "LIBCUDF_NVCOMP_POLICY": "ALWAYS"},
-        {"LIBCUDF_HOST_DECOMPRESSION": "OFF",
-         "LIBCUDF_NVCOMP_POLICY": "OFF"},
+        {
+            "LIBCUDF_HOST_DECOMPRESSION": "OFF",
+            "LIBCUDF_NVCOMP_POLICY": "ALWAYS",
+        },
+        {"LIBCUDF_HOST_DECOMPRESSION": "OFF", "LIBCUDF_NVCOMP_POLICY": "OFF"},
         {"LIBCUDF_HOST_DECOMPRESSION": "ON"},
     ],
 )
