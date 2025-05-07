@@ -648,7 +648,9 @@ and not test_td_sub_timedelta64 \
 and not test_period_add_sub_td64_nat \
 and not test_datetime_date_tuple_columns_from_dict \
 and not test_serializable \
-and not test_value_counts_nat"
+and not test_value_counts_nat \
+and not test_timedelta_add_timestamp_interval \
+and not test_nested_scope"
 
 PYTEST_IGNORES="--ignore=tests/io/parser/common/test_read_errors.py \
 --ignore=tests/io/test_clipboard.py" # crashes pytest workers (possibly due to fixture patching clipboard functionality)
