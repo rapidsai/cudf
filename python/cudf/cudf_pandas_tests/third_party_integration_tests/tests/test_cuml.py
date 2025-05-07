@@ -86,7 +86,6 @@ def test_logistic_regression(binary_classification_data):
     return accuracy
 
 
-@pytest.mark.skip(reason="Disabled due to potential segfaults")
 def test_random_forest(binary_classification_data):
     X = binary_classification_data[["feature1", "feature2"]]
     y = binary_classification_data["target"]
