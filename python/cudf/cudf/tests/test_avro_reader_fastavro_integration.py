@@ -212,7 +212,21 @@ def test_can_parse_no_schema():
 
 @pytest.mark.parametrize("rows", [0, 1, 10, 1000])
 @pytest.mark.parametrize("codec", ["null", "deflate", "snappy"])
-def test_avro_compression(rows, codec):
+@pytest.mark.parametrize(
+    "env_vars",
+    [
+        {"LIBCUDF_HOST_DECOMPRESSION": "OFF", 
+         "LIBCUDF_NVCOMP_POLICY": "ALWAYS"},
+        {"LIBCUDF_HOST_DECOMPRESSION": "OFF", 
+         "LIBCUDF_NVCOMP_POLICY": "OFF"},
+        {"LIBCUDF_HOST_DECOMPRESSION": "ON"},
+    ],
+)
+def test_avro_compression(monkeypatch, rows, codec, env_vars):
+    # Set environment variables
+    for key, value in env_vars.items():
+        monkeypatch.setenv(key, value)
+
     schema = {
         "name": "root",
         "type": "record",
