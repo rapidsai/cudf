@@ -16,7 +16,6 @@ from typing_extensions import Self
 import pylibcudf as plc
 
 import cudf
-import cudf.core.column.datetime as datetime
 from cudf.api.types import is_integer, is_scalar
 from cudf.core._internals import binaryop
 from cudf.core.buffer import Buffer, acquire_spill_lock
@@ -31,6 +30,7 @@ from cudf.utils.dtypes import (
     can_convert_to_column,
     dtype_to_pylibcudf_type,
 )
+from cudf.utils.temporal import infer_format
 from cudf.utils.utils import is_na_like
 
 if TYPE_CHECKING:
@@ -6201,7 +6201,7 @@ class StringColumn(ColumnBase):
             format = ""
         else:
             # infer on host from the first not na element
-            format = datetime.infer_format(not_null.element_indexing(0))
+            format = infer_format(not_null.element_indexing(0))
         return self.strptime(dtype, format)  # type: ignore[return-value]
 
     def as_timedelta_column(self, dtype: np.dtype) -> TimeDeltaColumn:

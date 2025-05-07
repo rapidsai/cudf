@@ -36,7 +36,6 @@ from cudf.testing._utils import (
     assert_exceptions_equal,
     expect_warning_if,
 )
-from cudf.utils.utils import search_range
 
 
 def test_df_set_index_from_series():
@@ -1626,13 +1625,12 @@ def test_rangeindex_name_not_hashable():
         RangeIndex(range(2)).copy(name=["foo"])
 
 
-def test_index_rangeindex_search_range():
+def test_index_rangeindex_searchsorted():
     # step > 0
     ridx = RangeIndex(-13, 17, 4)
-    ri = ridx._range
     for i in range(len(ridx)):
-        assert i == search_range(ridx[i], ri, side="left")
-        assert i + 1 == search_range(ridx[i], ri, side="right")
+        assert i == ridx.searchsorted(ridx[i], side="left")
+        assert i + 1 == ridx.searchsorted(ridx[i], side="right")
 
 
 @pytest.mark.parametrize(

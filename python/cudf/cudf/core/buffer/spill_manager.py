@@ -17,9 +17,9 @@ from typing import TYPE_CHECKING
 
 import rmm.mr
 
+from cudf.core.buffer.string import format_bytes
 from cudf.options import get_option
 from cudf.utils.performance_tracking import _performance_tracking
-from cudf.utils.string import format_bytes
 
 if TYPE_CHECKING:
     from cudf.core.buffer.spillable_buffer import SpillableBufferOwner
