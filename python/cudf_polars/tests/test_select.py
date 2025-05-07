@@ -1,10 +1,16 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
+import pytest
+
 import polars as pl
 
-from cudf_polars.testing.asserts import assert_gpu_result_equal
+from cudf_polars.testing.asserts import (
+    assert_gpu_result_equal,
+    assert_ir_translation_raises,
+)
+from cudf_polars.utils.versions import POLARS_VERSION_LT_128
 
 
 def test_select():
@@ -57,3 +63,52 @@ def test_select_with_cse_with_agg():
     )
 
     assert_gpu_result_equal(query)
+
+
+@pytest.mark.parametrize("fmt", ["ndjson", "csv"])
+def test_select_fast_count_unsupported_formats(tmp_path, fmt):
+    df = pl.DataFrame({"a": [1, 2, 3]})
+    file = tmp_path / f"test.{fmt}"
+    if fmt == "csv":
+        df.write_csv(file)
+    elif fmt == "ndjson":
+        df.write_ndjson(file)
+
+    q = (
+        pl.scan_csv(file).select(pl.len())
+        if fmt == "csv"
+        else pl.scan_ndjson(file).select(pl.len())
+    )
+    assert_ir_translation_raises(q, NotImplementedError)
+
+
+def test_select_fast_count_parquet(request, tmp_path):
+    request.applymarker(
+        pytest.mark.xfail(
+            condition=POLARS_VERSION_LT_128,
+            reason="not supported by cudf-polars until polars>=1.28",
+        )
+    )
+    df = pl.DataFrame({"a": [1, 2, 3]})
+    file = tmp_path / "data.parquet"
+    df.write_parquet(file)
+
+    q = pl.scan_parquet(file).select(pl.len())
+    assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize(
+    "zlice",
+    [
+        (1,),
+        (1, 3),
+        (-1,),
+    ],
+)
+def test_select_fast_count_parquet_skip_rows(request, tmp_path, zlice):
+    df = pl.DataFrame({"a": [1, 2, 3]})
+    file = tmp_path / "data.parquet"
+    df.write_parquet(file)
+
+    q = pl.scan_parquet(file).slice(1, 5).select(pl.len())
+    assert_gpu_result_equal(q)

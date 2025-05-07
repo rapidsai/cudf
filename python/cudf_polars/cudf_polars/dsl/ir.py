@@ -468,6 +468,19 @@ class Scan(IR):
         ).columns()
         return df.with_columns([Column(filepaths, name=name)])
 
+    def fast_count(self) -> int:  # pragma: no cover
+        """Get the number of rows in a Parquet Scan."""
+        meta = plc.io.parquet_metadata.read_parquet_metadata(
+            plc.io.SourceInfo(self.paths)
+        )
+        total_rows = meta.num_rows()
+        if self.n_rows == -1:
+            rows = max(total_rows - self.skip_rows, 0)
+        else:
+            rows = max(min(total_rows - self.skip_rows, self.n_rows), 0)
+
+        return rows
+
     @classmethod
     def do_evaluate(
         cls,
@@ -879,6 +892,23 @@ class Select(IR):
         self.should_broadcast = should_broadcast
         self.children = (df,)
         self._non_child_args = (self.exprs, should_broadcast)
+        if (
+            not POLARS_VERSION_LT_128
+            and self._is_len_expr()
+            and isinstance(df, Scan)
+            and df.typ != "parquet"
+        ):  # pragma: no cover
+            raise NotImplementedError(f"Unsupported scan type: {df.typ}")
+
+    def _is_len_expr(self) -> bool:  # pragma: no cover
+        if len(self.exprs) == 1:
+            expr0 = self.exprs[0].value
+            return (
+                isinstance(expr0, expr.Cast)
+                and len(expr0.children) == 1
+                and isinstance(expr0.children[0], expr.Len)
+            )
+        return False
 
     @classmethod
     def do_evaluate(
@@ -893,6 +923,56 @@ class Select(IR):
         if should_broadcast:
             columns = broadcast(*columns)
         return DataFrame(columns)
+
+    if not POLARS_VERSION_LT_128:  # pragma: no cover
+
+        def evaluate(self, *, cache: CSECache, timer: Timer | None) -> DataFrame:
+            """
+            Evaluate the Select node with special handling for fast count queries.
+
+            Parameters
+            ----------
+            cache
+                Mapping from cached node ids to constructed DataFrames.
+                Used to implement evaluation of the `Cache` node.
+            timer
+                If not None, a Timer object to record timings for the
+                evaluation of the node.
+
+            Returns
+            -------
+            DataFrame
+                Result of evaluating this Select node. If the expression is a
+                count over a parquet scan, returns a constant row count directly
+                without evaluating the scan.
+
+            Raises
+            ------
+            NotImplementedError
+                If evaluation fails. Ideally this should not occur, since the
+                translation phase should fail earlier.
+            """
+            if (
+                isinstance(self.children[0], Scan)
+                and self._is_len_expr()
+                and self.children[0].typ == "parquet"
+                and self.children[0].predicate is None
+            ):
+                scan = self.children[0]
+                effective_rows = scan.fast_count()
+                col = Column(
+                    plc.Column.from_scalar(
+                        plc.Scalar.from_py(
+                            effective_rows,
+                            plc.types.DataType(plc.types.TypeId.UINT32),
+                        ),
+                        1,
+                    ),
+                    name=self.exprs[0].name or "len",
+                )
+                return DataFrame([col])
+
+            return super().evaluate(cache=cache, timer=timer)
 
 
 class Reduce(IR):
@@ -1813,11 +1893,13 @@ class MapFunction(IR):
         elif self.name == "row_index":
             col_name, offset = options
             self.options = (col_name, offset)
-        elif self.name == "fast_count":
-            _, scan_type, _ = options
-            typ = scan_type[0]
-            if typ != "parquet":
-                raise NotImplementedError(f"Unsupported scan type: {typ}")
+        elif self.name == "fast_count":  # pragma: no cover
+            # TODO: Remove this once all scan types support projections
+            # using Select + Len. Currently, CSV is the only format that
+            # uses the legacy MapFunction(FastCount) path because it is
+            # faster than the new-streaming path for large files.
+            # See https://github.com/pola-rs/polars/pull/22363#issue-3010224808
+            raise NotImplementedError(f"Unsupported scan type: {1}")
         self._non_child_args = (schema, name, self.options)
 
     def get_hashable(self) -> Hashable:
@@ -1910,25 +1992,6 @@ class MapFunction(IR):
                 name=col_name,
             )
             return DataFrame([index_col, *df.columns])
-        elif name == "fast_count":
-            paths, scan_type, alias = options
-            typ, _, _ = scan_type
-
-            if typ == "parquet":
-                meta = plc.io.parquet_metadata.read_parquet_metadata(
-                    plc.io.SourceInfo(paths)
-                )
-                nrows = meta.num_rows()
-            col = Column(
-                plc.Column.from_scalar(
-                    plc.Scalar.from_py(
-                        nrows, plc.types.DataType(plc.types.TypeId.UINT32)
-                    ),
-                    1,
-                ),
-                name=alias or "len",
-            )
-            return DataFrame([col])
         else:
             raise AssertionError("Should never be reached")  # pragma: no cover
 
