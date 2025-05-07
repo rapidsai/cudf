@@ -24,6 +24,7 @@ python -m auditwheel repair \
     --exclude libnvcomp.so \
     --exclude libkvikio.so \
     --exclude librapids_logger.so \
+    --exclude librmm.so \
     -w "${RAPIDS_WHEEL_BLD_OUTPUT_DIR}" \
     ${package_dir}/dist/*
 
