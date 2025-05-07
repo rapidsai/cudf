@@ -226,6 +226,7 @@ def _(py_val: float, dtype: DataType | None):
 def _(py_val: int, dtype: DataType | None):
     cdef unique_ptr[scalar] c_obj
     cdef DataType c_dtype
+    cdef duration_ns c_duration_ns
     if dtype is None:
         c_dtype = DataType(type_id.INT64)
     elif is_floating_point(dtype):
@@ -297,6 +298,24 @@ def _(py_val: int, dtype: DataType | None):
             raise OverflowError(f"{py_val} out of range for UINT64 scalar")
         c_obj = make_numeric_scalar(c_dtype.c_obj)
         (<numeric_scalar[uint64_t]*>c_obj.get()).set_value(py_val)
+
+    elif tid == type_id.DURATION_NANOSECONDS:
+        if py_val > numeric_limits[int64_t].max():
+            raise OverflowError(
+                f"{py_val} nanoseconds out of range for INT64 limit."
+            )
+        c_obj = make_duration_scalar(c_dtype.c_obj)
+        c_duration_ns = duration_ns(<int64_t>py_val)
+        (<duration_scalar[duration_ns]*>c_obj.get()).set_value(c_duration_ns)
+
+    elif tid == type_id.DURATION_MICROSECONDS:
+        return _from_py(datetime.timedelta(microseconds=py_val), dtype)
+
+    elif tid == type_id.DURATION_MILLISECONDS:
+        return _from_py(datetime.timedelta(milliseconds=py_val), dtype)
+
+    elif tid == type_id.DURATION_SECONDS:
+        return _from_py(datetime.timedelta(seconds=py_val), dtype)
 
     else:
         typ = c_dtype.id()
