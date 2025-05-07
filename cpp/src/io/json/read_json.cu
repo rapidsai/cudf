@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include "io/comp/common.hpp"
 #include "io/comp/io_uncomp.hpp"
 #include "io/json/nested_json.hpp"
 #include "io/utilities/getenv_or.hpp"
@@ -70,7 +71,9 @@ class compressed_host_buffer_source final : public datasource {
   {
     auto ch_buffer = host_span<uint8_t const>(reinterpret_cast<uint8_t const*>(_dbuf_ptr->data()),
                                               _dbuf_ptr->size());
-    _decompressed_ch_buffer_size = cudf::io::detail::get_uncompressed_size(_comptype, ch_buffer);
+    auto opt = cudf::io::detail::get_host_uncompressed_size(_comptype, ch_buffer);
+    CUDF_EXPECTS(opt.has_value(), "Unsupported compression type: " + cudf::io::detail::compression_type_name(_comptype));
+    _decompressed_ch_buffer_size = opt.value();
     if (_decompressed_ch_buffer_size == 0) {
       _decompressed_buffer         = cudf::io::detail::decompress(_comptype, ch_buffer);
       _decompressed_ch_buffer_size = _decompressed_buffer.size();
