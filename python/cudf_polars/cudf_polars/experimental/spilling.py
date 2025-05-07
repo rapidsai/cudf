@@ -6,6 +6,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from rapidsmpf.buffer.buffer import MemoryType
 from rapidsmpf.integrations.dask.spilling import SpillableWrapper
 
 from cudf_polars.containers import DataFrame
@@ -87,7 +88,7 @@ def wrap_func_spillable(
             probable_io_task = True
             for arg in args:
                 if isinstance(arg, SpillableWrapper):
-                    if arg._on_host is not None:
+                    if arg.mem_type() == MemoryType.HOST:
                         headroom += sizeof(arg._on_host)
                     probable_io_task = False
             if probable_io_task:
