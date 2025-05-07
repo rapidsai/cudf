@@ -11,6 +11,7 @@ from cudf_polars.testing.asserts import (
     assert_ir_translation_raises,
 )
 from cudf_polars.testing.io import make_partitioned_source
+from cudf_polars.utils.versions import POLARS_VERSION_LT_128
 
 NO_CHUNK_ENGINE = pl.GPUEngine(raise_on_fail=True, parquet_options={"chunked": False})
 
@@ -47,7 +48,7 @@ def df():
 def columns(request, row_index):
     name, _ = row_index
     if name is not None and request.param is not None:
-        return [*request.param, name]
+        return [name, *request.param]
     return request.param
 
 
@@ -95,6 +96,16 @@ def test_scan(
         pytest.mark.xfail(
             condition=(n_rows is not None and scan_fn is pl.scan_ndjson),
             reason="libcudf does not support n_rows",
+        )
+    )
+    request.applymarker(
+        pytest.mark.xfail(
+            condition=(
+                not POLARS_VERSION_LT_128
+                and slice is not None
+                and scan_fn is pl.scan_ndjson
+            ),
+            reason="slice pushdown not supported in the libcudf JSON reader",
         )
     )
     q = scan_fn(
@@ -396,3 +407,18 @@ def test_scan_parquet_chunked(
 def test_scan_hf_url_raises():
     q = pl.scan_csv("hf://datasets/scikit-learn/iris/Iris.csv")
     assert_ir_translation_raises(q, NotImplementedError)
+
+
+def test_select_arbitrary_order_with_row_index_column(request, tmp_path):
+    request.applymarker(
+        pytest.mark.xfail(
+            condition=POLARS_VERSION_LT_128,
+            reason="unsupported until polars 1.28",
+        )
+    )
+    df = pl.DataFrame({"a": [1, 2, 3]})
+    df.write_parquet(tmp_path / "df.parquet")
+    q = pl.scan_parquet(tmp_path / "df.parquet", row_index_name="foo").select(
+        [pl.col("a"), pl.col("foo")]
+    )
+    assert_gpu_result_equal(q)
