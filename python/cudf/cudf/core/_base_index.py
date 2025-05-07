@@ -15,13 +15,15 @@ from cudf.api.extensions import no_default
 from cudf.api.types import is_integer, is_list_like, is_scalar
 from cudf.core._internals import copying, stream_compaction
 from cudf.core.abc import Serializable
-from cudf.core.column import ColumnBase, column
+from cudf.core.column.column import ColumnBase, as_column
 from cudf.core.copy_types import GatherMap
 from cudf.errors import MixedTypeError
 from cudf.utils import ioutils
 from cudf.utils.dtypes import (
     SIZE_TYPE_DTYPE,
+    _dtype_pandas_compatible,
     can_convert_to_column,
+    find_common_type,
     is_mixed_with_object_dtype,
 )
 from cudf.utils.utils import _is_same_name
@@ -31,6 +33,7 @@ if TYPE_CHECKING:
 
     import cupy
 
+    from cudf.core.column.numerical import NumericalColumn
     from cudf.core.column_accessor import ColumnAccessor
 
 
@@ -614,17 +617,13 @@ class BaseIndex(Serializable):
                 raise MixedTypeError("Cannot perform union with mixed types")
 
         if not len(other) or self.equals(other):
-            common_dtype = cudf.utils.dtypes.find_common_type(
-                [self.dtype, other.dtype]
-            )
+            common_dtype = find_common_type([self.dtype, other.dtype])
             res = self._get_reconciled_name_object(other).astype(common_dtype)
             if sort:
                 return res.sort_values()
             return res
         elif not len(self):
-            common_dtype = cudf.utils.dtypes.find_common_type(
-                [self.dtype, other.dtype]
-            )
+            common_dtype = find_common_type([self.dtype, other.dtype])
             res = other._get_reconciled_name_object(self).astype(common_dtype)
             if sort:
                 return res.sort_values()
@@ -713,8 +712,8 @@ class BaseIndex(Serializable):
             )
 
         if not len(self) or not len(other) or self.equals(other):
-            common_dtype = cudf.utils.dtypes._dtype_pandas_compatible(
-                cudf.utils.dtypes.find_common_type([self.dtype, other.dtype])
+            common_dtype = _dtype_pandas_compatible(
+                find_common_type([self.dtype, other.dtype])
             )
 
             lhs = self.unique() if self.has_duplicates else self
@@ -1701,7 +1700,7 @@ class BaseIndex(Serializable):
             out.name = name
             return out
 
-    def _indices_of(self, value) -> cudf.core.column.NumericalColumn:
+    def _indices_of(self, value) -> NumericalColumn:
         """
         Return indices corresponding to value
 
@@ -1914,7 +1913,7 @@ class BaseIndex(Serializable):
             )
         else:
             return cudf.Index._from_column(
-                column.as_column(index, nan_as_null=nan_as_null),
+                as_column(index, nan_as_null=nan_as_null),
                 name=index.name,
             )
 
@@ -2047,7 +2046,7 @@ class BaseIndex(Serializable):
         Skip bounds checking if check_bounds is False.
         Set rows to null for all out of bound indices if nullify is `True`.
         """
-        gather_map = cudf.core.column.as_column(gather_map)
+        gather_map = as_column(gather_map)
 
         # TODO: For performance, the check and conversion of gather map should
         # be done by the caller. This check will be removed in future release.
@@ -2105,7 +2104,7 @@ class BaseIndex(Serializable):
 
         Rows corresponding to `False` is dropped.
         """
-        boolean_mask = cudf.core.column.as_column(boolean_mask)
+        boolean_mask = as_column(boolean_mask)
         if boolean_mask.dtype.kind != "b":
             raise ValueError("boolean_mask is not boolean type.")
 

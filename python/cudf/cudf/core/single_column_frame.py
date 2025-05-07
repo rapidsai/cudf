@@ -14,12 +14,13 @@ from cudf.api.types import (
     _is_scalar_or_zero_d_array,
     is_integer,
 )
-from cudf.core.column import ColumnBase, as_column
+from cudf.core.column import ColumnBase, as_column, column_empty
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.frame import Frame
+from cudf.core.mixins import NotIterable
 from cudf.utils.dtypes import SIZE_TYPE_DTYPE, is_dtype_obj_numeric
 from cudf.utils.performance_tracking import _performance_tracking
-from cudf.utils.utils import NotIterable
+from cudf.utils.utils import _is_same_name
 
 if TYPE_CHECKING:
     from collections.abc import Hashable
@@ -37,11 +38,6 @@ class SingleColumnFrame(Frame, NotIterable):
     Frames with only a single column (Index or Series)
     share certain logic that is encoded in this class.
     """
-
-    _SUPPORT_AXIS_LOOKUP = {
-        0: 0,
-        "index": 0,
-    }
 
     @_performance_tracking
     def _reduce(
@@ -180,7 +176,7 @@ class SingleColumnFrame(Frame, NotIterable):
 
     @classmethod
     @_performance_tracking
-    def from_arrow(cls, array) -> Self:
+    def from_arrow(cls, array: pa.Array) -> Self:
         raise NotImplementedError
 
     @_performance_tracking
@@ -344,9 +340,9 @@ class SingleColumnFrame(Frame, NotIterable):
         # Get the appropriate name for output operations involving two objects
         # that are Series-like objects. The output shares the lhs's name unless
         # the rhs is a _differently_ named Series-like object.
-        if isinstance(
-            other, SingleColumnFrame
-        ) and not cudf.utils.utils._is_same_name(self.name, other.name):
+        if isinstance(other, SingleColumnFrame) and not _is_same_name(
+            self.name, other.name
+        ):
             result_name = None
         else:
             result_name = self.name
@@ -402,7 +398,7 @@ class SingleColumnFrame(Frame, NotIterable):
         else:
             arg = as_column(arg)
             if len(arg) == 0:
-                arg = cudf.core.column.column_empty(0, dtype=SIZE_TYPE_DTYPE)
+                arg = column_empty(0, dtype=SIZE_TYPE_DTYPE)
             if arg.dtype.kind in "iu":
                 return self._column.take(arg)
             if arg.dtype.kind == "b":

@@ -92,7 +92,6 @@ from cudf.options import (
     option_context,
     set_option,
 )
-from cudf.utils.utils import clear_cache
 
 cuda.set_memory_manager(RMMNumbaManager)
 cupy.cuda.set_allocator(rmm_cupy_allocator)
@@ -102,9 +101,8 @@ del cupy
 del rmm_cupy_allocator
 del RMMNumbaManager
 
-rmm.register_reinitialize_hook(clear_cache)
+rmm.register_reinitialize_hook(lambda: Scalar._clear_instance_cache())
 
-del clear_cache
 del rmm
 
 __all__ = [

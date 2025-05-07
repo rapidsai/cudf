@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -91,6 +91,15 @@ class table {
    * @return  The number of rows
    */
   [[nodiscard]] size_type num_rows() const noexcept { return _num_rows; }
+
+  /**
+   * @brief Returns the total device allocation size of the table's columns in bytes
+   *
+   * @see cudf::column::alloc_size
+   *
+   * @return The total allocation size in bytes
+   */
+  [[nodiscard]] std::size_t alloc_size() const;
 
   /**
    * @brief Returns an immutable, non-owning `table_view` of the contents of

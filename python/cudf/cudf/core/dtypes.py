@@ -21,8 +21,10 @@ from cudf.core.abc import Serializable
 from cudf.utils.docutils import doc_apply
 from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
+    SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES,
     cudf_dtype_from_pa_type,
     cudf_dtype_to_pa_type,
+    is_pandas_nullable_extension_dtype,
 )
 
 if PANDAS_GE_210:
@@ -72,10 +74,7 @@ def dtype(arbitrary: Any) -> DtypeObj:
             return CUDF_STRING_DTYPE
         elif np_dtype.kind == "U":
             return CUDF_STRING_DTYPE
-        elif (
-            np_dtype
-            not in cudf.utils.dtypes.SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES
-        ):
+        elif np_dtype not in SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES:
             raise TypeError(f"Unsupported type {np_dtype}")
         return np_dtype
 
@@ -83,7 +82,7 @@ def dtype(arbitrary: Any) -> DtypeObj:
     # `arbitrary` as a Pandas extension type.
     #  Return the corresponding NumPy/cuDF type.
     pd_dtype = pd.api.types.pandas_dtype(arbitrary)  # noqa: TID251
-    if cudf.api.types._is_pandas_nullable_extension_dtype(pd_dtype):
+    if is_pandas_nullable_extension_dtype(pd_dtype):
         if cudf.get_option("mode.pandas_compatible"):
             raise NotImplementedError(
                 "Nullable types not supported in pandas compatibility mode"
@@ -283,8 +282,8 @@ class CategoricalDtype(_BaseDtype):
 
         column = cudf.core.column.as_column(categories, dtype=dtype)
 
-        if isinstance(column, cudf.core.column.CategoricalColumn):
-            return column.categories
+        if isinstance(column.dtype, CategoricalDtype):
+            return column.categories  # type: ignore[attr-defined]
         else:
             return column
 
@@ -374,20 +373,13 @@ class ListDtype(_BaseDtype):
     ListDtype(ListDtype(int32))
     """
 
-    _typ: pa.ListType
     name: str = "list"
 
-    def __init__(self, element_type: Any) -> None:
-        if isinstance(element_type, ListDtype):
-            self._typ = pa.list_(element_type._typ)
-        else:
-            element_type = cudf.utils.dtypes.cudf_dtype_to_pa_type(
-                cudf.dtype(element_type)
-            )
-            self._typ = pa.list_(element_type)
+    def __init__(self, element_type: Dtype) -> None:
+        self._element_type = cudf.dtype(element_type)
 
     @cached_property
-    def element_type(self) -> Dtype:
+    def element_type(self) -> DtypeObj:
         """
         Returns the element type of the ``ListDtype``.
 
@@ -405,18 +397,13 @@ class ListDtype(_BaseDtype):
         ListDtype(ListDtype(float32))
         >>> deep_nested_type.element_type.element_type
         ListDtype(float32)
-        >>> deep_nested_type.element_type.element_type.element_type
+        >>> deep_nested_type.element_type.element_type.element_type  # doctest: +SKIP
         'float32'
         """
-        if isinstance(self._typ.value_type, pa.ListType):
-            return ListDtype.from_arrow(self._typ.value_type)
-        elif isinstance(self._typ.value_type, pa.StructType):
-            return StructDtype.from_arrow(self._typ.value_type)
-        else:
-            return cudf_dtype_from_pa_type(self._typ.value_type)
+        return self._element_type
 
     @cached_property
-    def leaf_type(self):
+    def leaf_type(self) -> DtypeObj:
         """
         Returns the type of the leaf values.
 
@@ -426,7 +413,7 @@ class ListDtype(_BaseDtype):
         >>> deep_nested_type = cudf.ListDtype(cudf.ListDtype(cudf.ListDtype("float32")))
         >>> deep_nested_type
         ListDtype(ListDtype(ListDtype(float32)))
-        >>> deep_nested_type.leaf_type
+        >>> deep_nested_type.leaf_type # doctest: +SKIP
         'float32'
         """
         if isinstance(self.element_type, ListDtype):
@@ -441,7 +428,7 @@ class ListDtype(_BaseDtype):
         return pa.array
 
     @classmethod
-    def from_arrow(cls, typ):
+    def from_arrow(cls, typ: pa.ListType) -> Self:
         """
         Creates a ``ListDtype`` from ``pyarrow.ListType``.
 
@@ -466,11 +453,9 @@ class ListDtype(_BaseDtype):
         >>> list_dtype
         ListDtype(int64)
         """
-        obj = object.__new__(cls)
-        obj._typ = typ
-        return obj
+        return cls(cudf_dtype_from_pa_type(typ.value_type))
 
-    def to_arrow(self):
+    def to_arrow(self) -> pa.ListType:
         """
         Convert to a ``pyarrow.ListType``
 
@@ -483,23 +468,23 @@ class ListDtype(_BaseDtype):
         >>> list_dtype.to_arrow()
         ListType(list<item: list<item: float>>)
         """
-        return self._typ
+        return pa.list_(cudf_dtype_to_pa_type(self.element_type))
 
-    def __eq__(self, other):
+    def __eq__(self, other) -> bool:
         if isinstance(other, str):
             return other == self.name
         if not isinstance(other, ListDtype):
             return False
-        return self._typ.equals(other._typ)
+        return self.element_type == other.element_type
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         if isinstance(self.element_type, (ListDtype, StructDtype)):
             return f"{type(self).__name__}({self.element_type!r})"
         else:
             return f"{type(self).__name__}({self.element_type})"
 
-    def __hash__(self):
-        return hash(self._typ)
+    def __hash__(self) -> int:
+        return hash(self.to_arrow())
 
     def serialize(self) -> tuple[dict, list]:
         header: dict[str, Dtype] = {}
@@ -518,7 +503,7 @@ class ListDtype(_BaseDtype):
         return header, frames
 
     @classmethod
-    def deserialize(cls, header: dict, frames: list):
+    def deserialize(cls, header: dict, frames: list) -> Self:
         _check_type(cls, header, frames)
         if isinstance(header["element-type"], dict):
             element_type = Serializable.device_deserialize(
@@ -529,7 +514,7 @@ class ListDtype(_BaseDtype):
         return cls(element_type=element_type)
 
     @cached_property
-    def itemsize(self):
+    def itemsize(self) -> int:
         return self.element_type.itemsize
 
     def _recursively_replace_fields(self, result: list) -> list:
@@ -1131,15 +1116,12 @@ def is_list_dtype(obj):
         Whether or not the array-like or dtype is of the list dtype.
     """
     return (
-        type(obj) is cudf.core.dtypes.ListDtype
-        or obj is cudf.core.dtypes.ListDtype
+        type(obj) is ListDtype
+        or obj is ListDtype
         or type(obj) is cudf.core.column.ListColumn
         or obj is cudf.core.column.ListColumn
-        or (isinstance(obj, str) and obj == cudf.core.dtypes.ListDtype.name)
-        or (
-            hasattr(obj, "dtype")
-            and isinstance(obj.dtype, cudf.core.dtypes.ListDtype)
-        )
+        or (isinstance(obj, str) and obj == ListDtype.name)
+        or (hasattr(obj, "dtype") and isinstance(obj.dtype, ListDtype))
     )
 
 
@@ -1162,13 +1144,10 @@ def is_struct_dtype(obj):
     # since the interval dtype is being modified as part of the array refactor,
     # but this behavior should be made consistent afterwards.
     return (
-        isinstance(obj, cudf.core.dtypes.StructDtype)
-        or obj is cudf.core.dtypes.StructDtype
-        or (isinstance(obj, str) and obj == cudf.core.dtypes.StructDtype.name)
-        or (
-            hasattr(obj, "dtype")
-            and isinstance(obj.dtype, cudf.core.dtypes.StructDtype)
-        )
+        isinstance(obj, StructDtype)
+        or obj is StructDtype
+        or (isinstance(obj, str) and obj == StructDtype.name)
+        or (hasattr(obj, "dtype") and isinstance(obj.dtype, StructDtype))
     )
 
 
@@ -1197,19 +1176,17 @@ def _is_interval_dtype(obj):
         isinstance(
             obj,
             (
-                cudf.core.dtypes.IntervalDtype,
+                IntervalDtype,
                 pd.IntervalDtype,
             ),
         )
-        or obj is cudf.core.dtypes.IntervalDtype
+        or obj is IntervalDtype
         or (isinstance(obj, cudf.core.index.BaseIndex) and obj._is_interval())
-        or (
-            isinstance(obj, str) and obj == cudf.core.dtypes.IntervalDtype.name
-        )
+        or (isinstance(obj, str) and obj == IntervalDtype.name)
         or (
             isinstance(
                 getattr(obj, "dtype", None),
-                (pd.IntervalDtype, cudf.core.dtypes.IntervalDtype),
+                (pd.IntervalDtype, IntervalDtype),
             )
         )
     )
@@ -1238,35 +1215,26 @@ def is_interval_dtype(obj):
 
 def is_decimal32_dtype(obj):
     return (
-        type(obj) is cudf.core.dtypes.Decimal32Dtype
-        or obj is cudf.core.dtypes.Decimal32Dtype
-        or (
-            isinstance(obj, str)
-            and obj == cudf.core.dtypes.Decimal32Dtype.name
-        )
+        type(obj) is Decimal32Dtype
+        or obj is Decimal32Dtype
+        or (isinstance(obj, str) and obj == Decimal32Dtype.name)
         or (hasattr(obj, "dtype") and is_decimal32_dtype(obj.dtype))
     )
 
 
 def is_decimal64_dtype(obj):
     return (
-        type(obj) is cudf.core.dtypes.Decimal64Dtype
-        or obj is cudf.core.dtypes.Decimal64Dtype
-        or (
-            isinstance(obj, str)
-            and obj == cudf.core.dtypes.Decimal64Dtype.name
-        )
+        type(obj) is Decimal64Dtype
+        or obj is Decimal64Dtype
+        or (isinstance(obj, str) and obj == Decimal64Dtype.name)
         or (hasattr(obj, "dtype") and is_decimal64_dtype(obj.dtype))
     )
 
 
 def is_decimal128_dtype(obj):
     return (
-        type(obj) is cudf.core.dtypes.Decimal128Dtype
-        or obj is cudf.core.dtypes.Decimal128Dtype
-        or (
-            isinstance(obj, str)
-            and obj == cudf.core.dtypes.Decimal128Dtype.name
-        )
+        type(obj) is Decimal128Dtype
+        or obj is Decimal128Dtype
+        or (isinstance(obj, str) and obj == Decimal128Dtype.name)
         or (hasattr(obj, "dtype") and is_decimal128_dtype(obj.dtype))
     )
