@@ -13,7 +13,7 @@ import numpy as np
 import pandas as pd
 
 import cudf
-from cudf.api.types import is_scalar
+from cudf.api.types import infer_dtype, is_scalar
 from cudf.core import column
 
 if TYPE_CHECKING:
@@ -305,7 +305,7 @@ class ColumnAccessor(abc.MutableMapping):
                     return pd.RangeIndex(
                         start=0, stop=0, step=1, name=self.name
                     )
-                elif cudf.api.types.infer_dtype(self.names) == "integer":
+                elif infer_dtype(self.names) == "integer":
                     if len(self.names) == 1:
                         start = cast(int, self.names[0])
                         return pd.RangeIndex(

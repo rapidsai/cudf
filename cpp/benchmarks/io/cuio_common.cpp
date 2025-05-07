@@ -24,6 +24,7 @@
 
 #include <unistd.h>
 
+#include <array>
 #include <cstdio>
 #include <fstream>
 #include <numeric>
