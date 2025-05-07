@@ -806,7 +806,7 @@ class Sink(IR):
 
         if kind == "Csv":
             serialize = options["serialize_options"]
-            writer_opts = (
+            options = (
                 plc.io.csv.CsvWriterOptions.builder(target, df.table)
                 .include_header(options["include_header"])
                 .names(df.column_names if options["include_header"] else [])
@@ -815,7 +815,7 @@ class Sink(IR):
                 .inter_column_delimiter(chr(serialize["separator"]))
                 .build()
             )
-            plc.io.csv.write_csv(writer_opts)
+            plc.io.csv.write_csv(options)
 
         elif kind == "Parquet":
             metadata = plc.io.types.TableInputMetadata(df.table)
@@ -840,15 +840,16 @@ class Sink(IR):
             metadata = plc.io.TableWithMetadata(
                 df.table, [(col, []) for col in df.column_names]
             )
-            writer_opts = (
+            options = (
                 plc.io.json.JsonWriterOptions.builder(target, df.table)
                 .lines(val=True)
                 .na_rep("null")
                 .include_nulls(val=True)
                 .metadata(metadata)
+                .utf8_escaped(val=False)
                 .build()
             )
-            plc.io.json.write_json(writer_opts)
+            plc.io.json.write_json(options)
 
         return df
 
