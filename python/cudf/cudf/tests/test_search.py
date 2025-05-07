@@ -1,10 +1,11 @@
-# Copyright (c) 2018-2024, NVIDIA CORPORATION.
+# Copyright (c) 2018-2025, NVIDIA CORPORATION.
 import cupy
 import numpy as np
 import pandas as pd
 import pytest
 
 import cudf
+from cudf.core.column.column import as_column
 from cudf.testing import assert_eq
 from cudf.testing._utils import gen_rand, random_bitmask
 
@@ -20,8 +21,10 @@ def test_searchsorted(side, obj_class, vals_class):
     values_data = gen_rand("float64", nelem)
     values_mask = random_bitmask(nelem)
 
-    sr = cudf.Series.from_masked_array(column_data, column_mask)
-    vals = cudf.Series.from_masked_array(values_data, values_mask)
+    sr = cudf.Series._from_column(as_column(column_data).set_mask(column_mask))
+    vals = cudf.Series._from_column(
+        as_column(values_data).set_mask(values_mask)
+    )
 
     sr = sr.sort_values()
 

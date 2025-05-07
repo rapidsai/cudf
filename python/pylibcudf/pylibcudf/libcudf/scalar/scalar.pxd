@@ -32,6 +32,7 @@ cdef extern from "cudf/scalar/scalar.hpp" namespace "cudf" nogil:
         timestamp_scalar(int64_t value, bool is_valid) except +libcudf_exception_handler
         timestamp_scalar(int32_t value) except +libcudf_exception_handler
         timestamp_scalar(int32_t value, bool is_valid) except +libcudf_exception_handler
+        void set_value(T value) except +libcudf_exception_handler
         int64_t ticks_since_epoch_64 "ticks_since_epoch"()\
             except +libcudf_exception_handler
         int32_t ticks_since_epoch_32 "ticks_since_epoch"()\
