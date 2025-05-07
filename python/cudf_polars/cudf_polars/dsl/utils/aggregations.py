@@ -9,8 +9,6 @@ import itertools
 from functools import partial
 from typing import TYPE_CHECKING
 
-import pyarrow as pa
-
 import pylibcudf as plc
 
 from cudf_polars.dsl import expr, ir
@@ -106,9 +104,7 @@ def decompose_single_agg(
             if is_top:
                 # In polars sum(empty_group) => 0, but in libcudf sum(empty_group) => null
                 # So must post-process by replacing nulls, but only if we're a "top-level" agg.
-                rep = expr.Literal(
-                    agg.dtype, pa.scalar(0, type=plc.interop.to_arrow(agg.dtype))
-                )
+                rep = expr.Literal(agg.dtype, 0)
                 return (
                     [named_expr],
                     named_expr.reconstruct(
