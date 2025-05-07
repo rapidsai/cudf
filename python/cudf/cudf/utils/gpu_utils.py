@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 
 
 def validate_setup():
@@ -15,7 +15,11 @@ def validate_setup():
 
     import warnings
 
-    from cuda.bindings.runtime import cudaDeviceAttr, cudaError_t
+    from cuda.bindings.runtime import (
+        cudaDeviceAttr,
+        cudaDriverGetVersion,
+        cudaError_t,
+    )
 
     from rmm._cuda.gpu import (
         CUDARuntimeError,
@@ -30,7 +34,6 @@ def validate_setup():
 
     notify_caller_errors = {
         cudaError_t.cudaErrorInitializationError,
-        cudaError_t.cudaErrorInsufficientDriver,
         cudaError_t.cudaErrorInvalidDeviceFunction,
         cudaError_t.cudaErrorInvalidDevice,
         cudaError_t.cudaErrorStartupFailure,
@@ -53,12 +56,32 @@ def validate_setup():
     except CUDARuntimeError as e:
         if e.status in notify_caller_errors:
             raise e
+
+        # We must distinguish between "CPU only" and "the driver is
+        # insufficient for the runtime".
+        if e.status == cudaError_t.cudaErrorInsufficientDriver:
+            try:
+                status, _ = cudaDriverGetVersion()
+            except RuntimeError:
+                # cudaDriverGetVersion() can raise a RuntimeError
+                # when ``libcuda.so`` is missing.
+                # We don't want this to propagate up to the user.
+                warnings.warn(str(e))
+            finally:
+                if status != cudaError_t.cudaSuccess:
+                    # Error while getting the driver version
+                    raise CUDARuntimeError(status)
+                else:
+                    # There is a driver but it is insufficient for the runtime,
+                    # re-raise the original exception
+                    raise e
+
         # If there is no GPU detected, set `gpus_count` to -1
         gpus_count = -1
     except RuntimeError as e:
-        # getDeviceCount() can raise a RuntimeError
-        # when ``libcuda.so`` is missing.
-        # We don't want this to propagate up to the user.
+        # When using cuda-python < 12.9, getDeviceCount() can raise a
+        # RuntimeError if ``libcuda.so`` is missing. We don't want this to
+        # propagate up to the user.
         warnings.warn(str(e))
         return
 
