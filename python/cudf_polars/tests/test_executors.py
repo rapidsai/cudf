@@ -74,7 +74,7 @@ def test_unknown_executor_options(executor):
 
     with pytest.raises(
         pl.exceptions.ComputeError,
-        match="Unsupported executor_options",
+        match="unexpected keyword argument 'foo'",
     ):
         df.collect(
             engine=pl.GPUEngine(

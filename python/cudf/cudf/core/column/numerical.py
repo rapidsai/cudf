@@ -14,16 +14,14 @@ from typing_extensions import Self
 import pylibcudf as plc
 
 import cudf
-import cudf.core.column.column as column
-from cudf.api.types import infer_dtype, is_scalar
+from cudf.api.types import is_scalar
 from cudf.core._internals import binaryop
 from cudf.core.buffer import acquire_spill_lock, as_buffer
-from cudf.core.column.column import ColumnBase, as_column
+from cudf.core.column.column import ColumnBase, as_column, column_empty
 from cudf.core.column.numerical_base import NumericalBaseColumn
 from cudf.core.dtypes import CategoricalDtype
 from cudf.core.mixins import BinaryOperand
 from cudf.core.scalar import pa_scalar_to_plc_scalar
-from cudf.errors import MixedTypeError
 from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
     cudf_dtype_from_pa_type,
@@ -33,7 +31,7 @@ from cudf.utils.dtypes import (
     min_unsigned_type,
     np_dtypes_to_pandas_dtypes,
 )
-from cudf.utils.utils import is_na_like
+from cudf.utils.utils import _is_null_host_scalar, is_na_like
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -47,6 +45,9 @@ if TYPE_CHECKING:
     )
     from cudf.core.buffer import Buffer
     from cudf.core.column import DecimalBaseColumn
+    from cudf.core.column.datetime import DatetimeColumn
+    from cudf.core.column.string import StringColumn
+    from cudf.core.column.timedelta import TimeDeltaColumn
     from cudf.core.dtypes import DecimalDtype
 
 
@@ -113,9 +114,7 @@ class NumericalColumn(NumericalBaseColumn):
         except (TypeError, ValueError):
             return False
         # TODO: Use `scalar`-based `contains` wrapper
-        return self.contains(
-            column.as_column([search_item], dtype=self.dtype)
-        ).any()
+        return self.contains(as_column([search_item], dtype=self.dtype)).any()
 
     def indices_of(self, value: ScalarLike) -> NumericalColumn:
         if isinstance(value, (bool, np.bool_)) and self.dtype.kind != "b":
@@ -123,9 +122,9 @@ class NumericalColumn(NumericalBaseColumn):
                 f"Cannot use a {type(value).__name__} to find an index of "
                 f"a {self.dtype} Index."
             )
-        if (
-            value is not None
-            and self.dtype.kind in {"c", "f"}
+        elif (
+            self.dtype.kind in {"c", "f"}
+            and isinstance(value, (float, np.floating))
             and np.isnan(value)
         ):
             return self.isnan().indices_of(True)
@@ -335,7 +334,7 @@ class NumericalColumn(NumericalBaseColumn):
             return NotImplemented
 
     @acquire_spill_lock()
-    def int2ip(self) -> cudf.core.column.StringColumn:
+    def int2ip(self) -> StringColumn:
         if self.dtype != np.dtype(np.uint32):
             raise TypeError("Only uint32 type can be converted to ip")
         plc_column = plc.strings.convert.convert_ipv4.integers_to_ipv4(
@@ -343,11 +342,11 @@ class NumericalColumn(NumericalBaseColumn):
         )
         return type(self).from_pylibcudf(plc_column)  # type: ignore[return-value]
 
-    def as_string_column(self) -> cudf.core.column.StringColumn:
+    def as_string_column(self) -> StringColumn:
         if len(self) == 0:
             return cast(
                 cudf.core.column.StringColumn,
-                column.column_empty(0, dtype=CUDF_STRING_DTYPE),
+                column_empty(0, dtype=CUDF_STRING_DTYPE),
             )
         elif self.dtype.kind == "b":
             conv_func = functools.partial(
@@ -367,9 +366,7 @@ class NumericalColumn(NumericalBaseColumn):
                 conv_func(self.to_pylibcudf(mode="read"))
             )
 
-    def as_datetime_column(
-        self, dtype: np.dtype
-    ) -> cudf.core.column.DatetimeColumn:
+    def as_datetime_column(self, dtype: np.dtype) -> DatetimeColumn:
         return cudf.core.column.DatetimeColumn(
             data=self.astype(np.dtype(np.int64)).base_data,  # type: ignore[arg-type]
             dtype=dtype,
@@ -378,9 +375,7 @@ class NumericalColumn(NumericalBaseColumn):
             size=self.size,
         )
 
-    def as_timedelta_column(
-        self, dtype: np.dtype
-    ) -> cudf.core.column.TimeDeltaColumn:
+    def as_timedelta_column(self, dtype: np.dtype) -> TimeDeltaColumn:
         return cudf.core.column.TimeDeltaColumn(
             data=self.astype(np.dtype(np.int64)).base_data,  # type: ignore[arg-type]
             dtype=dtype,
@@ -417,37 +412,20 @@ class NumericalColumn(NumericalBaseColumn):
     def _process_values_for_isin(
         self, values: Sequence
     ) -> tuple[ColumnBase, ColumnBase]:
-        lhs = cast("cudf.core.column.ColumnBase", self)
         try:
-            rhs = as_column(values, nan_as_null=False)
-        except (MixedTypeError, TypeError) as e:
-            # There is a corner where `values` can be of `object` dtype
-            # but have values of homogeneous type.
-            inferred_dtype = infer_dtype(values)
-            if (
-                self.dtype.kind in {"i", "u"} and inferred_dtype == "integer"
-            ) or (
-                self.dtype.kind == "f"
-                and inferred_dtype in {"floating", "integer"}
-            ):
-                rhs = as_column(values, nan_as_null=False, dtype=self.dtype)
-            elif self.dtype.kind == "f" and inferred_dtype == "integer":
-                rhs = as_column(values, nan_as_null=False, dtype="int")
-            elif (
-                self.dtype.kind in {"i", "u"} and inferred_dtype == "floating"
-            ):
-                rhs = as_column(values, nan_as_null=False, dtype="float")
+            lhs, rhs = super()._process_values_for_isin(values)
+        except TypeError:
+            # Can remove once dask 25.04 is the minimum version
+            # https://github.com/dask/dask/pull/11869
+            if isinstance(values, np.ndarray) and values.dtype.kind == "O":
+                return super()._process_values_for_isin(values.tolist())
             else:
-                raise e
-        else:
-            if isinstance(rhs, NumericalColumn):
-                rhs = rhs.astype(dtype=self.dtype)
-
-        if lhs.null_count == len(lhs):
-            lhs = lhs.astype(rhs.dtype)
-        elif rhs.null_count == len(rhs):
-            rhs = rhs.astype(lhs.dtype)
-
+                raise
+        if lhs.dtype != rhs.dtype and rhs.dtype != CUDF_STRING_DTYPE:
+            if rhs.can_cast_safely(lhs.dtype):
+                rhs = rhs.astype(lhs.dtype)
+            elif lhs.can_cast_safely(rhs.dtype):
+                lhs = lhs.astype(rhs.dtype)
         return lhs, rhs
 
     def _can_return_nan(self, skipna: bool | None = None) -> bool:
@@ -496,11 +474,11 @@ class NumericalColumn(NumericalBaseColumn):
         # is inferred as `string`, but this is a valid
         # float64 column too, Hence we will need to type-cast
         # to self.dtype.
-        to_replace_col = column.as_column(to_replace)
+        to_replace_col = as_column(to_replace)
         if to_replace_col.null_count == len(to_replace_col):
             to_replace_col = to_replace_col.astype(self.dtype)
 
-        replacement_col = column.as_column(replacement)
+        replacement_col = as_column(replacement)
         if replacement_col.null_count == len(replacement_col):
             replacement_col = replacement_col.astype(self.dtype)
 
@@ -527,7 +505,7 @@ class NumericalColumn(NumericalBaseColumn):
             return self.copy()
 
         if all_nan:
-            replacement_col = column.as_column(replacement, dtype=self.dtype)
+            replacement_col = as_column(replacement, dtype=self.dtype)
         else:
             try:
                 replacement_col = _normalize_find_and_replace_input(
@@ -538,7 +516,7 @@ class NumericalColumn(NumericalBaseColumn):
                 # for those cases, we just need a column of `replacement` constructed
                 # with its own type for the final type determination below at `find_common_type`
                 # call.
-                replacement_col = column.as_column(
+                replacement_col = as_column(
                     replacement,
                     dtype=self.dtype if len(replacement) <= 0 else None,
                 )
@@ -546,7 +524,7 @@ class NumericalColumn(NumericalBaseColumn):
             (to_replace_col.dtype, replacement_col.dtype, self.dtype)
         )
         if len(replacement_col) == 1 and len(to_replace_col) > 1:
-            replacement_col = column.as_column(
+            replacement_col = as_column(
                 replacement[0], length=len(to_replace_col), dtype=common_type
             )
         elif len(replacement_col) == 1 and len(to_replace_col) == 0:
@@ -769,7 +747,7 @@ class NumericalColumn(NumericalBaseColumn):
 def _normalize_find_and_replace_input(
     input_column_dtype: DtypeObj, col_to_normalize: ColumnBase | list
 ) -> ColumnBase:
-    normalized_column = column.as_column(
+    normalized_column = as_column(
         col_to_normalize,
         dtype=input_column_dtype if len(col_to_normalize) <= 0 else None,
     )
@@ -784,7 +762,7 @@ def _normalize_find_and_replace_input(
         )
         # Scalar case
         if len(col_to_normalize) == 1:
-            if cudf.utils.utils._is_null_host_scalar(col_to_normalize[0]):
+            if _is_null_host_scalar(col_to_normalize[0]):
                 return normalized_column.astype(input_column_dtype)
             if np.isinf(col_to_normalize[0]):
                 return normalized_column

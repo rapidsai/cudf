@@ -75,7 +75,17 @@ files:
       - test_python_common
       - test_python_cudf_common
       - test_python_cudf
+      - test_python_pylibcudf
       - depends_on_cudf
+      - depends_on_pylibcudf
+      - depends_on_libcudf
+  test_python_pylibcudf:
+    output: none
+    includes:
+      - cuda_version
+      - py_version
+      - test_python_common
+      - test_python_pylibcudf
       - depends_on_pylibcudf
       - depends_on_libcudf
   test_python_other:
@@ -86,6 +96,7 @@ files:
       - test_python_common
       - test_python_cudf_common
       - test_python_dask_cudf
+      - test_python_pylibcudf
       - depends_on_cudf
       - depends_on_pylibcudf
       - depends_on_libcudf
@@ -205,7 +216,10 @@ files:
     includes:
       - depends_on_libkvikio
       - depends_on_librmm
-      - depends_on_nvcomp
+      # TODO(nvcomp): when `nvcomp` supports Python 3.13 and we de-vendor `nvcomp` from `kvikio`
+      # this dependency should be restored
+      # https://github.com/rapidsai/build-planning/issues/171
+      # - depends_on_nvcomp
       - depends_on_rapids_logger
   py_build_pylibcudf:
     output: pyproject
@@ -510,7 +524,7 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - cython>=3.0.3
+          - cython>=3.0.3,<3.1.0a0
   pyarrow_run:
     common:
       - output_types: [conda]
@@ -716,8 +730,12 @@ dependencies:
             packages:
               - python=3.12
           - matrix:
+              py: "3.13"
             packages:
-              - python>=3.10,<3.13
+              - python=3.13
+          - matrix:
+            packages:
+              - python>=3.10,<3.14
   run_common:
     common:
       - output_types: [conda, requirements, pyproject]
@@ -753,7 +771,7 @@ dependencies:
       - output_types: [conda, requirements, pyproject]
         packages:
           - cachetools
-          - &numba-cuda-dep numba-cuda>=0.4.0,<0.5.0a0
+          - &numba-cuda-dep numba-cuda>=0.9.0,!=0.10.0
           - &numba-dep numba>=0.59.1,<0.62.0a0
           - nvtx>=0.2.1
           - packaging
@@ -813,7 +831,7 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - polars>=1.24,<1.28
+          - polars>=1.25,<1.29
   run_cudf_polars_experimental:
     common:
       - output_types: [conda, requirements, pyproject]
@@ -879,7 +897,6 @@ dependencies:
           - pytest<8
           - pytest-cov
           - pytest-xdist
-          - pytest-rerunfailures
   test_python_cudf_common:
     specific:
       # Define additional constraints for testing with oldest dependencies.
@@ -887,7 +904,7 @@ dependencies:
         matrices:
           - matrix: {dependencies: "oldest"}
             packages:
-              - numba-cuda==0.4.0
+              - numba-cuda==0.9.0
               - numba==0.59.1
               - pandas==2.0.*
           - matrix: {dependencies: "latest"}
@@ -920,27 +937,28 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - fastavro>=0.22.9
-          - hypothesis
+          - &fastavro fastavro>=0.22.9
+          - mmh3
+          - nanoarrow
+          - hypothesis>=6.131.7
           - *numpy
           - pandas
+      - output_types: conda
+        packages:
+          - python-xxhash
+      - output_types: [pyproject, requirements]
+        packages:
+          - xxhash
   test_python_cudf:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
           - cramjam
-          - fastavro>=0.22.9
-          - hypothesis
-          - mmh3
-          # Version 5.1 is incompatible with pytest<8.2.
-          # https://github.com/ionelmc/pytest-benchmark/commit/8dfeeeca8a5c640a4dc4455904ace4f97f62e655
-          # Remove upper bound when we unbound pytest
-          # https://github.com/rapidsai/build-planning/issues/105
-          # or when a fixed version of pytest-benchmark 5.1 with the necessary bounds is released
-          # https://github.com/conda-forge/pytest-benchmark-feedstock/pull/27
-          # https://github.com/conda-forge/conda-forge-repodata-patches-feedstock/pull/990
-          - pytest-benchmark<5.1.0
+          - *fastavro
+          - hypothesis>=6.131.7
+          - pytest-benchmark
           - pytest-cases>=3.8.2
+          - pytest-rerunfailures
           - scipy
           - zstandard
       - output_types: conda
@@ -951,13 +969,10 @@ dependencies:
           - msgpack-python
           - moto>=4.0.8
           - s3fs>=2022.3.0
-          - python-xxhash
       - output_types: [pyproject, requirements]
         packages:
           - msgpack
-          - &tokenizers tokenizers==0.15.2
           - tzdata
-          - xxhash
     specific:
       - output_types: [conda, requirements]
         matrices:
@@ -976,7 +991,6 @@ dependencies:
               cuda: "12.*"
             packages:
               - pytorch>=2.4.0
-              - *tokenizers
           - matrix:
             packages:
   test_python_dask_cudf:
@@ -1219,10 +1233,12 @@ dependencies:
           - pandas[test, pyarrow, performance, computation, fss, excel, parquet, feather, hdf5, spss, html, xml, plot, output-formatting, clipboard, compression]
           - pytest-reportlog
           - ipython
+          - hypothesis>=6.131.7
   test_python_cudf_pandas:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
+          - certifi
           - ipython
           - jupyter_client
           - nbconvert

@@ -30,14 +30,12 @@ from cudf.core._compat import PANDAS_LT_300
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import (
     ColumnBase,
-    DatetimeColumn,
     IntervalColumn,
-    TimeDeltaColumn,
     as_column,
 )
 from cudf.core.column.categorical import (
     _DEFAULT_CATEGORICAL_VALUE,
-    CategoricalAccessor as CategoricalAccessor,
+    CategoricalAccessor,
     CategoricalColumn,
 )
 from cudf.core.column.column import concat_columns
@@ -46,7 +44,13 @@ from cudf.core.column.string import StringMethods
 from cudf.core.column.struct import StructMethods
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.groupby.groupby import SeriesGroupBy, groupby_doc_template
-from cudf.core.index import BaseIndex, DatetimeIndex, RangeIndex, ensure_index
+from cudf.core.index import (
+    BaseIndex,
+    DatetimeIndex,
+    Index,
+    RangeIndex,
+    ensure_index,
+)
 from cudf.core.indexed_frame import (
     IndexedFrame,
     _FrameIndexer,
@@ -61,12 +65,14 @@ from cudf.utils import docutils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
+    _get_nan_for_dtype,
     can_convert_to_column,
     find_common_type,
     is_dtype_obj_numeric,
     is_mixed_with_object_dtype,
 )
 from cudf.utils.performance_tracking import _performance_tracking
+from cudf.utils.utils import _EQUALITY_OPS, _is_same_name
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
@@ -369,13 +375,13 @@ class _SeriesLocIndexer(_FrameIndexer):
             return _indices_from_labels(self._frame, arg)
 
         else:
-            arg = cudf.core.series.Series._from_column(
-                cudf.core.column.as_column(arg)
-            )
-            if arg.dtype.kind == "b":
-                return arg
+            col = as_column(arg)
+            if col.dtype.kind == "b":
+                return Series._from_column(col)
             else:
-                indices = _indices_from_labels(self._frame, arg)
+                indices = _indices_from_labels(
+                    self._frame, Index._from_column(col)
+                )
                 if indices.null_count > 0:
                     raise KeyError("label scalar is out of bound")
                 return indices
@@ -475,8 +481,8 @@ class Series(SingleColumnFrame, IndexedFrame):
         >>> pd_categorical
         ['a', 'b', 'c', 'a']
         Categories (3, object): ['a', 'b', 'c']
-        >>> series = cudf.Series.from_categorical(pd_categorical)
-        >>> series
+        >>> series = cudf.Series.from_categorical(pd_categorical)  # doctest: +SKIP
+        >>> series  # doctest: +SKIP
         0    a
         1    b
         2    c
@@ -484,6 +490,10 @@ class Series(SingleColumnFrame, IndexedFrame):
         dtype: category
         Categories (3, object): ['a', 'b', 'c']
         """
+        warnings.warn(
+            "Series.from_categorical is deprecated and will be removed in 25.08.",
+            FutureWarning,
+        )
         col = as_column(categorical)
         if codes is not None:
             codes = as_column(codes)
@@ -571,7 +581,7 @@ class Series(SingleColumnFrame, IndexedFrame):
         5    <NA>
         dtype: int64
         >>> b = cudf.Series([10, 11, 12, 13, 14])
-        >>> cudf.Series.from_masked_array(data=b, mask=a._column.mask)
+        >>> cudf.Series.from_masked_array(data=b, mask=a._column.mask)  # doctest: +SKIP
         0      10
         1      11
         2      12
@@ -579,6 +589,10 @@ class Series(SingleColumnFrame, IndexedFrame):
         4      14
         dtype: int64
         """
+        warnings.warn(
+            "Series.from_masked_array is deprecated and will be removed in 25.08.",
+            FutureWarning,
+        )
         return cls._from_column(as_column(data).set_mask(mask))
 
     @_performance_tracking
@@ -673,11 +687,9 @@ class Series(SingleColumnFrame, IndexedFrame):
 
         super().__init__({name: column}, index=first_index)
         if second_index is not None:
-            # TODO: This there a better way to do this?
             reindexed = self.reindex(index=second_index, copy=False)
             self._data = reindexed._data
             self._index = second_index
-        self._check_data_index_length_match()
 
     @classmethod
     @_performance_tracking
@@ -1176,7 +1188,7 @@ class Series(SingleColumnFrame, IndexedFrame):
         return self._to_frame(name=name, index=self.index)
 
     @_performance_tracking
-    def memory_usage(self, index=True, deep=False):
+    def memory_usage(self, index: bool = True, deep: bool = False) -> int:
         return self._column.memory_usage + (
             self.index.memory_usage() if index else 0
         )
@@ -1483,7 +1495,7 @@ class Series(SingleColumnFrame, IndexedFrame):
             lines = output.split(",")
             lines[-1] = " dtype: %s)" % self.dtype
             return ",".join(lines)
-        if isinstance(preprocess._column, cudf.core.column.CategoricalColumn):
+        if isinstance(preprocess._column.dtype, cudf.CategoricalDtype):
             lines.append(category_memory)
         return "\n".join(lines)
 
@@ -1504,7 +1516,7 @@ class Series(SingleColumnFrame, IndexedFrame):
         if isinstance(other, Series):
             if (
                 not can_reindex
-                and fn in cudf.utils.utils._EQUALITY_OPS
+                and fn in _EQUALITY_OPS
                 and not self.index.equals(other.index)
             ):
                 raise ValueError(
@@ -1515,9 +1527,7 @@ class Series(SingleColumnFrame, IndexedFrame):
             lhs = self
 
         ca_attributes = {}
-        if hasattr(other, "name") and cudf.utils.utils._is_same_name(
-            self.name, other.name
-        ):
+        if hasattr(other, "name") and _is_same_name(self.name, other.name):
             ca_attributes["level_names"] = self._data._level_names
 
         operands = lhs._make_operands_for_binop(other, fill_value, reflect)
@@ -1572,9 +1582,7 @@ class Series(SingleColumnFrame, IndexedFrame):
             else:
                 with warnings.catch_warnings():
                     warnings.simplefilter("ignore", FutureWarning)
-                    result_index = cudf.core.index.Index._concat(
-                        [o.index for o in objs]
-                    )
+                    result_index = Index._concat([o.index for o in objs])
         elif index is False:
             result_index = None
         else:
@@ -1592,12 +1600,8 @@ class Series(SingleColumnFrame, IndexedFrame):
                 if (
                     obj.null_count == len(obj)
                     or len(obj) == 0
-                    or isinstance(
-                        obj._column, cudf.core.column.CategoricalColumn
-                    )
-                    or isinstance(
-                        objs[0]._column, cudf.core.column.CategoricalColumn
-                    )
+                    or isinstance(obj._column.dtype, cudf.CategoricalDtype)
+                    or isinstance(objs[0]._column.dtype, cudf.CategoricalDtype)
                 ):
                     continue
 
@@ -1605,10 +1609,10 @@ class Series(SingleColumnFrame, IndexedFrame):
                     not dtype_mismatch
                     and (
                         not isinstance(
-                            objs[0]._column, cudf.core.column.CategoricalColumn
+                            objs[0]._column.dtype, cudf.CategoricalDtype
                         )
                         and not isinstance(
-                            obj._column, cudf.core.column.CategoricalColumn
+                            obj._column.dtype, cudf.CategoricalDtype
                         )
                     )
                     and objs[0].dtype != obj.dtype
@@ -1648,6 +1652,10 @@ class Series(SingleColumnFrame, IndexedFrame):
     @_performance_tracking
     def nullable(self):
         """A boolean indicating whether a null-mask is needed"""
+        warnings.warn(
+            "Series.nullable is deprecated and will be removed in 25.08.",
+            FutureWarning,
+        )
         return self._column.nullable
 
     @property  # type: ignore
@@ -2084,6 +2092,10 @@ class Series(SingleColumnFrame, IndexedFrame):
     @_performance_tracking
     def nullmask(self):
         """The gpu buffer for the null-mask"""
+        warnings.warn(
+            "Series.nullmask is deprecated and will be removed in 25.08.",
+            FutureWarning,
+        )
         return cudf.Series(self._column.nullmask)
 
     @_performance_tracking
@@ -2799,7 +2811,7 @@ class Series(SingleColumnFrame, IndexedFrame):
             raise NotImplementedError("ddof parameter is not implemented yet")
 
         if self.empty or other.empty:
-            return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
+            return _get_nan_for_dtype(self.dtype)
 
         lhs = self.nans_to_nulls().dropna()
         rhs = other.nans_to_nulls().dropna()
@@ -2930,7 +2942,7 @@ class Series(SingleColumnFrame, IndexedFrame):
             raise NotImplementedError("Unsupported argument 'min_periods'")
 
         if self.empty or other.empty:
-            return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
+            return _get_nan_for_dtype(self.dtype)
 
         lhs = self.nans_to_nulls().dropna()
         rhs = other.nans_to_nulls().dropna()
@@ -3294,7 +3306,7 @@ class Series(SingleColumnFrame, IndexedFrame):
                 np_array_q = np.asarray(q)
             except TypeError:
                 try:
-                    np_array_q = cudf.core.column.as_column(q).values_host
+                    np_array_q = as_column(q).values_host
                 except TypeError:
                     raise TypeError(
                         f"q must be a scalar or array-like, got {type(q)}"
@@ -3342,12 +3354,12 @@ class Series(SingleColumnFrame, IndexedFrame):
         dtype = "str"
         if self.dtype.kind == "b":
             data = _describe_categorical(self, percentiles)
-        elif isinstance(self._column, cudf.core.column.NumericalColumn):
+        elif is_dtype_obj_numeric(self._column.dtype):
             data = _describe_numeric(self, percentiles)
             dtype = None
-        elif isinstance(self._column, TimeDeltaColumn):
+        elif self._column.dtype.kind == "m":
             data = _describe_timedelta(self, percentiles)
-        elif isinstance(self._column, DatetimeColumn):
+        elif self._column.dtype.kind == "M":
             data = _describe_timestamp(self, percentiles)
         else:
             data = _describe_categorical(self, percentiles)
@@ -3857,9 +3869,7 @@ class Series(SingleColumnFrame, IndexedFrame):
             name = metadata.get("name")
             index = metadata.get("index")
         return cls._from_column(
-            cudf.core.column.ColumnBase.from_pylibcudf(
-                col, data_ptr_exposed=True
-            ),
+            ColumnBase.from_pylibcudf(col, data_ptr_exposed=True),
             name=name,
             index=index,
         )
@@ -5401,7 +5411,7 @@ def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
     4           19.9
     5           <NA>
     dtype: float64
-    >>> cudf.isclose(s1, s2)
+    >>> cudf.isclose(s1, s2)  # doctest: +SKIP
     0     True
     1     True
     2     True
@@ -5409,7 +5419,7 @@ def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
     4    False
     5    False
     dtype: bool
-    >>> cudf.isclose(s1, s2, equal_nan=True)
+    >>> cudf.isclose(s1, s2, equal_nan=True)  # doctest: +SKIP
     0     True
     1     True
     2     True
@@ -5417,7 +5427,7 @@ def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
     4    False
     5    False
     dtype: bool
-    >>> cudf.isclose(s1, s2, equal_nan=False)
+    >>> cudf.isclose(s1, s2, equal_nan=False)  # doctest: +SKIP
     0     True
     1     True
     2     True
@@ -5426,7 +5436,10 @@ def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
     5    False
     dtype: bool
     """
-
+    warnings.warn(
+        "cudf.isclose is deprecated and will be removed in 25.08.",
+        FutureWarning,
+    )
     if not can_convert_to_column(a):
         raise TypeError(
             f"Parameter `a` is expected to be a "

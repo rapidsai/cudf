@@ -24,7 +24,7 @@ import rmm
 
 import cudf
 from cudf.api.types import (
-    _is_pandas_nullable_extension_dtype,
+    _is_categorical_dtype,
     infer_dtype,
     is_dtype_equal,
     is_scalar,
@@ -59,6 +59,7 @@ from cudf.errors import MixedTypeError
 from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
     SIZE_TYPE_DTYPE,
+    _get_nan_for_dtype,
     _maybe_convert_to_default_type,
     cudf_dtype_from_pa_type,
     cudf_dtype_to_pa_type,
@@ -68,6 +69,7 @@ from cudf.utils.dtypes import (
     is_column_like,
     is_dtype_obj_numeric,
     is_mixed_with_object_dtype,
+    is_pandas_nullable_extension_dtype,
     min_signed_type,
     min_unsigned_type,
 )
@@ -75,20 +77,52 @@ from cudf.utils.utils import (
     _array_ufunc,
     _is_null_host_scalar,
     is_na_like,
-    mask_dtype,
 )
 
 if TYPE_CHECKING:
     import builtins
 
     from cudf._typing import ColumnLike, Dtype, DtypeObj, ScalarLike
+    from cudf.core.column.categorical import CategoricalColumn
     from cudf.core.column.numerical import NumericalColumn
     from cudf.core.column.strings import StringColumn
+    from cudf.core.index import BaseIndex
 
 if PANDAS_GE_210:
     NumpyExtensionArray = pd.arrays.NumpyExtensionArray
 else:
     NumpyExtensionArray = pd.arrays.PandasArray
+
+
+def _can_values_be_equal(left: DtypeObj, right: DtypeObj) -> bool:
+    """
+    Given 2 possibly not equal dtypes, can they both hold equivalent values.
+
+    Helper function for .equals when check_dtypes is False.
+    """
+    if left == right:
+        return True
+    if isinstance(left, CategoricalDtype):
+        return _can_values_be_equal(left.categories.dtype, right)
+    elif isinstance(right, CategoricalDtype):
+        return _can_values_be_equal(left, right.categories.dtype)
+    elif is_dtype_obj_numeric(left) and is_dtype_obj_numeric(right):
+        return True
+    elif left.kind == right.kind and left.kind in "mM":
+        return True
+    return False
+
+
+def pa_mask_buffer_to_mask(mask_buf: pa.Buffer, size: int) -> Buffer:
+    """
+    Convert PyArrow mask buffer to cuDF mask buffer
+    """
+    mask_size = plc.null_mask.bitmask_allocation_size_bytes(size)
+    if mask_buf.size < mask_size:
+        dbuf = rmm.DeviceBuffer(size=mask_size)
+        dbuf.copy_from_host(np.asarray(mask_buf).view("u1"))
+        return as_buffer(dbuf)
+    return as_buffer(mask_buf)
 
 
 class ColumnBase(Serializable, BinaryOperand, Reducible):
@@ -169,7 +203,20 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         if self.data is None:
             return 0
         else:
-            return self.data.get_ptr(mode="write")
+            # Save the original ptr
+            original_ptr = self.data.get_ptr(mode="read")
+
+            # Get the pointer which may trigger a copy due to copy-on-write
+            ptr = self.data.get_ptr(mode="write")
+
+            # Check if a new buffer was created or if the underlying data was modified
+            # This happens both when the buffer object is replaced and when
+            # ExposureTrackedBuffer.make_single_owner_inplace() is called
+            if cudf.get_option("copy_on_write") and (ptr != original_ptr):
+                # Update base_data to match the new data buffer
+                self.set_base_data(self.data)
+
+            return ptr
 
     def set_base_data(self, value: None | Buffer) -> None:
         if value is not None and not isinstance(value, Buffer):
@@ -211,7 +258,20 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         if self.mask is None:
             return 0
         else:
-            return self.mask.get_ptr(mode="write")
+            # Save the original ptr
+            original_ptr = self.mask.get_ptr(mode="read")
+
+            # Get the pointer which may trigger a copy due to copy-on-write
+            ptr = self.mask.get_ptr(mode="write")
+
+            # Check if a new buffer was created or if the underlying data was modified
+            # This happens both when the buffer object is replaced and when
+            # ExposureTrackedBuffer.make_single_owner_inplace() is called
+            if cudf.get_option("copy_on_write") and (ptr != original_ptr):
+                # Update base_data to match the new data buffer
+                self.set_base_mask(self.mask)
+
+            return ptr
 
     def set_base_mask(self, value: None | Buffer) -> None:
         """
@@ -312,7 +372,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 dbuf.copy_from_host(value)
                 mask = as_buffer(dbuf)
 
-        return cudf.core.column.build_column(  # type: ignore[return-value]
+        return build_column(  # type: ignore[return-value]
             data=self.data,
             dtype=self.dtype,
             mask=mask,
@@ -507,7 +567,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
         dtype = dtype_from_pylibcudf_column(col)
 
-        return cudf.core.column.build_column(  # type: ignore[return-value]
+        return build_column(  # type: ignore[return-value]
             data=as_buffer(col.data().obj, exposed=data_ptr_exposed)
             if col.data() is not None
             else None,
@@ -602,7 +662,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 raise ValueError(f"Unsupported mode: {mode}")
         else:
             obj = None
-        return cuda.as_cuda_array(obj).view(mask_dtype)
+        return cuda.as_cuda_array(obj).view(SIZE_TYPE_DTYPE)
 
     def __len__(self) -> int:
         return self.size
@@ -698,15 +758,21 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         return type(self).from_pylibcudf(plc_column)  # type: ignore[return-value]
 
     def equals(self, other: ColumnBase, check_dtypes: bool = False) -> bool:
-        if self is other:
-            return True
-        if other is None or len(self) != len(other):
+        if not isinstance(other, ColumnBase) or len(self) != len(other):
             return False
-        if check_dtypes and (self.dtype != other.dtype):
+        elif self is other:
+            return True
+        elif check_dtypes and self.dtype != other.dtype:
+            return False
+        elif not check_dtypes and not _can_values_be_equal(
+            self.dtype, other.dtype
+        ):
+            return False
+        elif self.null_count != other.null_count:
             return False
         ret = self._binaryop(other, "NULL_EQUALS")
         if ret is NotImplemented:
-            raise TypeError(f"Cannot compare equality with {type(other)}")
+            return False
         return ret.all()
 
     def all(self, skipna: bool = True) -> bool:
@@ -1333,9 +1399,31 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     def nan_count(self) -> int:
         return 0
 
-    def indices_of(
-        self, value: ScalarLike
-    ) -> cudf.core.column.NumericalColumn:
+    def interpolate(self, index: BaseIndex) -> ColumnBase:
+        # figure out where the nans are
+        mask = self.isnull()
+
+        # trivial cases, all nan or no nans
+        if not mask.any() or mask.all():
+            return self.copy()
+
+        from cudf.core.index import RangeIndex
+
+        valid_locs = ~mask
+        if isinstance(index, RangeIndex):
+            # Each point is evenly spaced, index values don't matter
+            known_x = cupy.flatnonzero(valid_locs.values)
+        else:
+            known_x = index._column.apply_boolean_mask(valid_locs).values  # type: ignore[attr-defined]
+        known_y = self.apply_boolean_mask(valid_locs).values
+
+        result = cupy.interp(index.to_cupy(), known_x, known_y)
+
+        first_nan_idx = valid_locs.values.argmax().item()
+        result[:first_nan_idx] = np.nan
+        return as_column(result)
+
+    def indices_of(self, value: ScalarLike) -> NumericalColumn:
         """
         Find locations of value in the column
 
@@ -1408,7 +1496,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         return last
 
     def append(self, other: ColumnBase) -> ColumnBase:
-        return concat_columns([self, as_column(other)])
+        return concat_columns([self, other])
 
     def quantile(
         self,
@@ -1456,17 +1544,28 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         result: Column
             Column of booleans indicating if each element is in values.
         """
-        try:
-            lhs, rhs = self._process_values_for_isin(values)
-            res = lhs._isin_earlystop(rhs)
-            if res is not None:
-                return res
-        except ValueError:
-            # pandas functionally returns all False when cleansing via
-            # typecasting fails
+        lhs, rhs = self._process_values_for_isin(values)
+        if lhs.dtype != rhs.dtype:
+            if lhs.null_count and rhs.null_count:
+                return lhs.isnull()
+            else:
+                return as_column(
+                    False, length=len(self), dtype=np.dtype(np.bool_)
+                )
+        elif lhs.null_count == 0 and (rhs.null_count == len(rhs)):
             return as_column(False, length=len(self), dtype=np.dtype(np.bool_))
 
-        return lhs._obtain_isin_result(rhs)
+        result = rhs.contains(lhs)
+        if lhs.null_count > 0:
+            # If one of the needles is null, then the result contains
+            # nulls, these nulls should be replaced by whether or not the
+            # haystack contains a null.
+            # TODO: this is unnecessary if we resolve
+            # https://github.com/rapidsai/cudf/issues/14515 by
+            # providing a mode in which cudf::contains does not mask
+            # the result.
+            result = result.fillna(rhs.null_count > 0)
+        return result
 
     def _process_values_for_isin(
         self, values: Sequence
@@ -1481,44 +1580,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         elif rhs.null_count == len(rhs):
             rhs = rhs.astype(lhs.dtype)
         return lhs, rhs
-
-    def _isin_earlystop(self, rhs: ColumnBase) -> ColumnBase | None:
-        """
-        Helper function for `isin` which determines possibility of
-        early-stopping or not.
-        """
-        if self.dtype != rhs.dtype:
-            if self.null_count and rhs.null_count:
-                return self.isnull()
-            else:
-                return as_column(
-                    False, length=len(self), dtype=np.dtype(np.bool_)
-                )
-        elif self.null_count == 0 and (rhs.null_count == len(rhs)):
-            return as_column(False, length=len(self), dtype=np.dtype(np.bool_))
-        else:
-            return None
-
-    def _obtain_isin_result(self, rhs: ColumnBase) -> ColumnBase:
-        """
-        Helper function for `isin` which merges `self` & `rhs`
-        to determine what values of `rhs` exist in `self`.
-        """
-        # We've already matched dtypes by now
-        # self.isin(other) asks "which values of self are in other"
-        # contains(haystack, needles) asks "which needles are in haystack"
-        # hence this argument ordering.
-        result = rhs.contains(self)
-        if self.null_count > 0:
-            # If one of the needles is null, then the result contains
-            # nulls, these nulls should be replaced by whether or not the
-            # haystack contains a null.
-            # TODO: this is unnecessary if we resolve
-            # https://github.com/rapidsai/cudf/issues/14515 by
-            # providing a mode in which cudf::contains does not mask
-            # the result.
-            result = result.fillna(rhs.null_count > 0)
-        return result
 
     def as_mask(self) -> Buffer:
         """Convert booleans to bitmask
@@ -1653,7 +1714,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
     def as_categorical_column(
         self, dtype: cudf.CategoricalDtype
-    ) -> cudf.core.column.categorical.CategoricalColumn:
+    ) -> CategoricalColumn:
         ordered = dtype.ordered
 
         # Re-label self w.r.t. the provided categories
@@ -1712,7 +1773,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     ) -> cudf.core.column.TimeDeltaColumn:
         raise NotImplementedError
 
-    def as_string_column(self) -> cudf.core.column.StringColumn:
+    def as_string_column(self) -> StringColumn:
         raise NotImplementedError
 
     def as_decimal_column(
@@ -1944,14 +2005,14 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         skipna = True if skipna is None else skipna
 
         if self._can_return_nan(skipna=skipna):
-            return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
+            return _get_nan_for_dtype(self.dtype)
 
         col = self.nans_to_nulls() if skipna else self
         if col.has_nulls():
             if skipna:
                 col = col.dropna()
             else:
-                return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
+                return _get_nan_for_dtype(self.dtype)
 
         # TODO: If and when pandas decides to validate that `min_count` >= 0 we
         # should insert comparable behavior.
@@ -1959,7 +2020,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         if min_count > 0:
             valid_count = len(col) - col.null_count
             if valid_count < min_count:
-                return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
+                return _get_nan_for_dtype(self.dtype)
         return col
 
     def _reduction_result_dtype(self, reduction_op: str) -> Dtype:
@@ -2107,7 +2168,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             if reduction_op == "any":
                 return False
 
-            return cudf.utils.dtypes._get_nan_for_dtype(col_dtype)
+            return _get_nan_for_dtype(col_dtype)
 
         with acquire_spill_lock():
             plc_scalar = plc.reduce.reduce(
@@ -2189,7 +2250,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         left_inclusive: bool,
         right_edge: Self,
         right_inclusive: bool,
-    ) -> cudf.core.column.NumericalColumn:
+    ) -> NumericalColumn:
         return type(self).from_pylibcudf(  # type: ignore[return-value]
             plc.labeling.label_bins(
                 self.to_pylibcudf(mode="read"),
@@ -2669,7 +2730,7 @@ def as_column(
             raise NotImplementedError(
                 "cuDF does not yet support Intervals with timezone-aware datetimes"
             )
-        elif _is_pandas_nullable_extension_dtype(arbitrary.dtype):
+        elif is_pandas_nullable_extension_dtype(arbitrary.dtype):
             if cudf.get_option("mode.pandas_compatible"):
                 raise NotImplementedError("not supported")
             if isinstance(arbitrary, (pd.Series, pd.Index)):
@@ -2794,9 +2855,7 @@ def as_column(
             raise ValueError(f"{length=} must be >=0.")
 
         pa_type = None
-        if isinstance(
-            arbitrary, pd.Interval
-        ) or cudf.api.types._is_categorical_dtype(dtype):
+        if isinstance(arbitrary, pd.Interval) or _is_categorical_dtype(dtype):
             return as_column(
                 pd.Series([arbitrary] * length),
                 nan_as_null=nan_as_null,

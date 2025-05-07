@@ -16,14 +16,16 @@ import pylibcudf as plc
 
 import cudf
 from cudf.api.types import is_integer, is_scalar
-from cudf.core import column
 from cudf.core.buffer import acquire_spill_lock
+from cudf.core.column.column import ColumnBase, as_column
 from cudf.core.index import ensure_index
 from cudf.core.scalar import pa_scalar_to_plc_scalar
 from cudf.utils.dtypes import CUDF_STRING_DTYPE
+from cudf.utils.temporal import infer_format, unit_to_nanoseconds_conversion
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from cudf.core.column.datetime import DatetimeColumn
+
 
 # https://github.com/pandas-dev/pandas/blob/2.2.x/pandas/core/tools/datetimes.py#L1112
 _unit_map = {
@@ -243,7 +245,7 @@ def to_datetime(
 
             times_column = None
             factor_denominator = (
-                column.datetime._unit_to_nanoseconds_conversion["s"]
+                unit_to_nanoseconds_conversion["s"]
                 if np.datetime_data(col.dtype)[0] == "s"
                 else 1
             )
@@ -264,8 +266,7 @@ def to_datetime(
                             )
 
                     factor = (
-                        column.datetime._unit_to_nanoseconds_conversion[u]
-                        / factor_denominator
+                        unit_to_nanoseconds_conversion[u] / factor_denominator
                     )
 
                     if times_column is None:
@@ -287,7 +288,7 @@ def to_datetime(
             return cudf.Series._from_column(col, index=arg.index)
         else:
             col = _process_col(
-                col=column.as_column(arg),
+                col=as_column(arg),
                 unit=unit,
                 dayfirst=dayfirst,
                 infer_datetime_format=infer_datetime_format,
@@ -329,7 +330,7 @@ def _process_col(
 ):
     if col.dtype.kind == "f":
         if unit not in (None, "ns"):
-            col = col * column.datetime._unit_to_nanoseconds_conversion[unit]
+            col = col * unit_to_nanoseconds_conversion[unit]
 
         if format is not None:
             # Converting to int because,
@@ -354,8 +355,8 @@ def _process_col(
     elif col.dtype.kind in "iu":
         if unit in ("D", "h", "m"):
             factor = (
-                column.datetime._unit_to_nanoseconds_conversion[unit]
-                / column.datetime._unit_to_nanoseconds_conversion["s"]
+                unit_to_nanoseconds_conversion[unit]
+                / unit_to_nanoseconds_conversion["s"]
             )
             col = col * factor
 
@@ -387,7 +388,7 @@ def _process_col(
                         f"{dayfirst=} not implemented "
                         f"when {format=} and {infer_datetime_format=}."
                     )
-                format = column.datetime.infer_format(
+                format = infer_format(
                     element=col.element_indexing(0),
                     dayfirst=dayfirst,
                 )
@@ -636,7 +637,7 @@ class DateOffset:
 
     def _datetime_binop(
         self, datetime_col, op, reflect=False
-    ) -> column.DatetimeColumn:
+    ) -> DatetimeColumn:
         if reflect and op == "__sub__":
             raise TypeError(
                 f"Can not subtract a {type(datetime_col).__name__}"
@@ -659,9 +660,7 @@ class DateOffset:
                             )
                         )
                 else:
-                    datetime_col += column.as_column(
-                        value, length=len(datetime_col)
-                    )
+                    datetime_col += as_column(value, length=len(datetime_col))
 
         return datetime_col
 
@@ -725,60 +724,6 @@ class DateOffset:
             # the base offset for faster binary ops.
             return pd.tseries.frequencies.to_offset(pd.Timedelta(**self.kwds))
         return pd.DateOffset(**self.kwds, n=1)
-
-
-def _isin_datetimelike(
-    lhs: column.TimeDeltaColumn | column.DatetimeColumn, values: Sequence
-) -> column.ColumnBase:
-    """
-    Check whether values are contained in the
-    DateTimeColumn or TimeDeltaColumn.
-
-    Parameters
-    ----------
-    lhs : TimeDeltaColumn or DatetimeColumn
-        Column to check whether the `values` exist in.
-    values : set or list-like
-        The sequence of values to test. Passing in a single string will
-        raise a TypeError. Instead, turn a single string into a list
-        of one element.
-
-    Returns
-    -------
-    result: Column
-        Column of booleans indicating if each element is in values.
-    """
-    rhs = None
-    try:
-        rhs = column.as_column(values)
-        was_string = len(rhs) and rhs.dtype.kind == "O"
-
-        if rhs.dtype.kind in {"f", "i", "u"}:
-            return column.as_column(
-                False, length=len(lhs), dtype=np.dtype(np.bool_)
-            )
-        rhs = rhs.astype(lhs.dtype)
-        if was_string:
-            warnings.warn(
-                f"The behavior of 'isin' with dtype={lhs.dtype} and "
-                "castable values (e.g. strings) is deprecated. In a "
-                "future version, these will not be considered matching "
-                "by isin. Explicitly cast to the appropriate dtype before "
-                "calling isin instead.",
-                FutureWarning,
-            )
-        res = lhs._isin_earlystop(rhs)
-        if res is not None:
-            return res
-    except ValueError:
-        # pandas functionally returns all False when cleansing via
-        # typecasting fails
-        return column.as_column(
-            False, length=len(lhs), dtype=np.dtype(np.bool_)
-        )
-
-    res = lhs._obtain_isin_result(rhs)
-    return res
 
 
 def date_range(
@@ -902,7 +847,7 @@ def date_range(
         start = dtype.type(start, unit).astype(np.dtype(np.int64))
         end = dtype.type(end, unit).astype(np.dtype(np.int64))
         arr = np.linspace(start=start, stop=end, num=periods).astype(dtype)
-        result = column.as_column(arr)
+        result = as_column(arr)
         return cudf.DatetimeIndex._from_column(result, name=name).tz_localize(
             tz
         )
@@ -990,7 +935,7 @@ def date_range(
             "months", 0
         )
         with acquire_spill_lock():
-            res = column.ColumnBase.from_pylibcudf(
+            res = ColumnBase.from_pylibcudf(
                 plc.filling.calendrical_month_sequence(
                     periods,
                     pa_scalar_to_plc_scalar(pa.scalar(start)),
@@ -1011,7 +956,7 @@ def date_range(
         start = start.astype(np.dtype(np.int64))
         step = _offset_to_nanoseconds_lower_bound(offset)
         arr = range(int(start), int(stop), step)
-        res = column.as_column(arr).astype(dtype)
+        res = as_column(arr).astype(dtype)
 
     return cudf.DatetimeIndex._from_column(
         res, name=name, freq=freq
