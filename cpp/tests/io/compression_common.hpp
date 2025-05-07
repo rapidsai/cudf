@@ -28,12 +28,12 @@
 
 class tmp_env_var {
  public:
-  explicit tmp_env_var(std::string const& name, std::string const& value) : name_(name)
+  explicit tmp_env_var(std::string name, std::string const& value) : name_(std::move(name))
   {
-    auto const previous_value = std::getenv(name.c_str());
+    auto const previous_value = std::getenv(name_.c_str());
     if (previous_value != nullptr) { previous_value_ = std::string(previous_value); }
 
-    setenv(name.c_str(), value.c_str(), 1);
+    setenv(name_.c_str(), value.c_str(), 1);
   }
 
   ~tmp_env_var()
@@ -76,7 +76,7 @@ struct CompressionTest
   }
 
  private:
-  std::vector<tmp_env_var> env_vars;
+  std::list<tmp_env_var> env_vars;
 };
 
 template <typename Base>
