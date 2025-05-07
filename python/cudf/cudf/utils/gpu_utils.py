@@ -62,19 +62,18 @@ def validate_setup():
         if e.status == cudaError_t.cudaErrorInsufficientDriver:
             try:
                 status, _ = cudaDriverGetVersion()
+                if status != cudaError_t.cudaSuccess:
+                    # Error while getting the driver version
+                    raise CUDARuntimeError(status) from e
             except RuntimeError:
                 # cudaDriverGetVersion() can raise a RuntimeError
                 # when ``libcuda.so`` is missing.
                 # We don't want this to propagate up to the user.
                 warnings.warn(str(e))
-            finally:
-                if status != cudaError_t.cudaSuccess:
-                    # Error while getting the driver version
-                    raise CUDARuntimeError(status) from e
-                else:
-                    # There is a driver but it is insufficient for the runtime,
-                    # re-raise the original exception
-                    raise e
+            else:
+                # There is a CUDA driver but it is insufficient for the
+                # runtime, re-raise the original exception
+                raise e
 
         # If there is no GPU detected, set `gpus_count` to -1
         gpus_count = -1
