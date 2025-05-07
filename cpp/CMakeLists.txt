@@ -647,6 +647,7 @@ add_library(
   src/replace/replace.cu
   src/reshape/byte_cast.cu
   src/reshape/interleave_columns.cu
+  src/reshape/table_to_array.cu
   src/reshape/tile.cu
   src/rolling/detail/optimized_unbounded_window.cpp
   src/rolling/detail/rolling_collect_list.cu
@@ -956,11 +957,7 @@ target_compile_definitions(cudf PRIVATE $<$<BOOL:${CUDF_KVIKIO_REMOTE_IO}>:CUDF_
 
 # Remove this after upgrading to a CCCL that has a proper CMake option. See
 # https://github.com/NVIDIA/cccl/pull/2844
-target_compile_definitions(
-  cudf
-  PUBLIC _LIBCUDACXX_ATOMIC_UNSAFE_AUTOMATIC_STORAGE=1
-  PRIVATE THRUST_FORCE_32_BIT_OFFSET_TYPE=1 CCCL_AVOID_SORT_UNROLL=1
-)
+target_compile_definitions(cudf PRIVATE THRUST_FORCE_32_BIT_OFFSET_TYPE=1 CCCL_AVOID_SORT_UNROLL=1)
 
 # Compile stringified JIT sources first
 add_dependencies(cudf jitify_preprocess_run)

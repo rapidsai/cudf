@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -32,6 +32,7 @@ def pq_file(tmp_path_factory, df):
     "expr",
     [
         pl.col("a").is_in([0, 1]),
+        pl.col("c").is_in(["a", "b"]),
         pl.col("a").is_between(0, 2),
         (pl.col("a") < 2).not_(),
         pl.lit(2) > pl.col("a"),
