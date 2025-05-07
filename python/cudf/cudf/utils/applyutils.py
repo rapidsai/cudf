@@ -13,9 +13,9 @@ import cudf
 from cudf.core._internals import binaryop
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import column
-from cudf.utils import utils
 from cudf.utils._numba import _CUDFNumbaConfig
 from cudf.utils.docutils import docfmt_partial
+from cudf.utils.dtypes import SIZE_TYPE_DTYPE
 
 _doc_applyparams = """
 df : DataFrame
@@ -118,9 +118,7 @@ def make_aggregate_nullmask(df, columns=None, op="__and__"):
         nullmask = column.as_column(df[k]._column.nullmask)
 
         if out_mask is None:
-            out_mask = column.as_column(
-                nullmask.copy(), dtype=utils.mask_dtype
-            )
+            out_mask = column.as_column(nullmask.copy(), dtype=SIZE_TYPE_DTYPE)
         else:
             out_mask = binaryop.binaryop(
                 nullmask, out_mask, op, out_mask.dtype
