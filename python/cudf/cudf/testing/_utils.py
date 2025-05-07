@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 
 import itertools
 import string
@@ -18,6 +18,7 @@ from numba.cuda.cudaimpl import lower as cuda_lower
 import pylibcudf as plc
 
 import cudf
+from cudf.core.column.column import as_column
 from cudf.core.column.timedelta import _unit_to_nanoseconds_conversion
 from cudf.core.udf.strings_lowering import cast_string_view_to_udf_string
 from cudf.core.udf.strings_typing import StringView, string_view, udf_string
@@ -265,7 +266,9 @@ def gen_rand(dtype, size, **kwargs):
 def gen_rand_series(dtype, size, **kwargs):
     values = gen_rand(dtype, size, **kwargs)
     if kwargs.get("has_nulls", False):
-        return cudf.Series.from_masked_array(values, random_bitmask(size))
+        return cudf.Series._from_column(
+            as_column(values).set_mask(random_bitmask(size))
+        )
 
     return cudf.Series(values)
 

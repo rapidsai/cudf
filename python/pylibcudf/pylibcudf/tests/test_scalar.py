@@ -13,9 +13,8 @@ def np():
     return pytest.importorskip("numpy")
 
 
-@pytest.mark.parametrize(
-    "val",
-    [
+@pytest.fixture(
+    params=[
         True,
         False,
         -1,
@@ -31,9 +30,13 @@ def np():
         datetime.timedelta(days=1, microseconds=1),
     ],
 )
-def test_from_py(val):
-    result = plc.Scalar.from_py(val)
-    expected = pa.scalar(val)
+def py_scalar(request):
+    return request.param
+
+
+def test_from_py(py_scalar):
+    result = plc.Scalar.from_py(py_scalar)
+    expected = pa.scalar(py_scalar)
     assert plc.interop.to_arrow(result).equals(expected)
 
 
@@ -221,3 +224,18 @@ def test_from_numpy_notimplemented(np, np_type):
 def test_from_numpy_typeerror(np):
     with pytest.raises(TypeError):
         plc.Scalar.from_numpy(np.void(5))
+
+
+def test_round_trip_scalar_through_column(py_scalar):
+    result = plc.Column.from_scalar(
+        plc.Scalar.from_py(py_scalar), 1
+    ).to_scalar()
+    expected = pa.scalar(py_scalar)
+    assert plc.interop.to_arrow(result).equals(expected)
+
+
+def test_non_constant_column_to_scalar_raises():
+    with pytest.raises(
+        ValueError, match="to_scalar only works for columns of size 1"
+    ):
+        plc.interop.from_arrow(pa.array([0, 1])).to_scalar()

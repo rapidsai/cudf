@@ -16,6 +16,7 @@
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/default_stream.hpp>
+#include <cudf_test/testing_main.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/scalar/scalar.hpp>
@@ -41,3 +42,5 @@ TEST_F(StringScalarTest, DefaultValidity)
   auto s            = cudf::string_scalar(value, true, cudf::test::get_default_stream());
   EXPECT_EQ(value, s.to_string(cudf::test::get_default_stream()));
 }
+
+CUDF_TEST_PROGRAM_MAIN()
