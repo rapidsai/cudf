@@ -282,6 +282,9 @@ std::vector<text::byte_range_info> aggregate_reader_metadata::get_bloom_filter_b
                   std::back_inserter(equality_col_schemas),
                   [](auto& eq_literals) { return not eq_literals.empty(); });
 
+  // No equality literals found, return empty vector
+  if (equality_col_schemas.empty()) { return {}; }
+
   // Compute total number of input row groups
   auto const total_row_groups = compute_total_row_groups(row_group_indices);
 
@@ -338,14 +341,20 @@ std::vector<cudf::io::text::byte_range_info> aggregate_reader_metadata::get_dict
   CUDF_EXPECTS(literals.size() == operators.size(),
                "Literals and operators must have the same size");
 
+  auto iter = thrust::make_zip_iterator(
+    thrust::make_tuple(thrust::counting_iterator(0), output_column_schemas.begin()));
+
   // Collect schema indices of columns with equality predicate(s)
-  std::vector<cudf::size_type> dictionary_col_schemas;
+  std::vector<thrust::tuple<cudf::size_type, cudf::size_type>> dictionary_col_schemas;
   thrust::copy_if(thrust::host,
-                  output_column_schemas.begin(),
-                  output_column_schemas.end(),
+                  iter,
+                  iter + output_column_schemas.size(),
                   literals.begin(),
                   std::back_inserter(dictionary_col_schemas),
                   [](auto& dict_literals) { return not dict_literals.empty(); });
+
+  // No (in)equality literals found, return empty vector
+  if (dictionary_col_schemas.empty()) { return {}; }
 
   // Compute total number of input row groups
   auto const total_row_groups = compute_total_row_groups(row_group_indices);
@@ -372,9 +381,13 @@ std::vector<cudf::io::text::byte_range_info> aggregate_reader_metadata::get_dict
         auto const& rg = per_file_metadata[0].row_groups[rg_index];
         // For all column chunks
         std::for_each(
-          dictionary_col_schemas.begin(), dictionary_col_schemas.end(), [&](auto const schema_idx) {
-            auto& col_meta        = get_column_metadata(rg_index, src_index, schema_idx);
-            auto const& col_chunk = rg.columns[schema_idx];
+          dictionary_col_schemas.begin(),
+          dictionary_col_schemas.end(),
+          [&](auto const& schema_col_idx_pair) {
+            auto const input_col_idx = thrust::get<0>(schema_col_idx_pair);
+            auto const schema_idx    = thrust::get<1>(schema_col_idx_pair);
+            auto& col_meta           = get_column_metadata(rg_index, src_index, schema_idx);
+            auto const& col_chunk    = rg.columns[input_col_idx];
 
             auto dictionary_offset = int64_t{0};
             auto dictionary_size   = int64_t{0};
