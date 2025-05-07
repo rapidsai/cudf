@@ -86,7 +86,8 @@ void decompress(compression_type compression,
  *
  * @return Size of decompressed output
  */
-std::optional<size_t> get_host_uncompressed_size(compression_type compression, host_span<uint8_t const> src);
+std::optional<size_t> get_host_uncompressed_size(compression_type compression,
+                                                 host_span<uint8_t const> src);
 
 /**
  * @brief Struct to hold information about decompression.

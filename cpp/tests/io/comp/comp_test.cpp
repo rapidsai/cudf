@@ -175,9 +175,13 @@ struct GzipDecompressTest : public DecompressTest<GzipDecompressTest> {
                                      cudf::host_span<uint8_t const> compressed,
                                      size_t uncompressed_size)
   {
-    CUDF_EXPECTS(cudf::io::detail::get_host_uncompressed_size(cudf::io::compression_type::AUTO, compressed).has_value(), "Error detecting compression type");
+    CUDF_EXPECTS(
+      cudf::io::detail::get_host_uncompressed_size(cudf::io::compression_type::AUTO, compressed)
+        .has_value(),
+      "Error detecting compression type");
     CUDF_EXPECTS(uncompressed_size <= cudf::io::detail::get_host_uncompressed_size(
-                                        cudf::io::compression_type::AUTO, compressed).value(),
+                                        cudf::io::compression_type::AUTO, compressed)
+                                        .value(),
                  "Underestimating uncompressed size!");
     CUDF_EXPECTS(comp_type == cudf::io::compression_type::AUTO ||
                    comp_type == cudf::io::compression_type::GZIP,
@@ -194,9 +198,13 @@ struct ZstdDecompressTest : public DecompressTest<ZstdDecompressTest> {
                                      cudf::host_span<uint8_t const> compressed,
                                      size_t uncompressed_size)
   {
-    CUDF_EXPECTS(cudf::io::detail::get_host_uncompressed_size(cudf::io::compression_type::AUTO, compressed).has_value(), "Error detecting compression type");
+    CUDF_EXPECTS(
+      cudf::io::detail::get_host_uncompressed_size(cudf::io::compression_type::AUTO, compressed)
+        .has_value(),
+      "Error detecting compression type");
     CUDF_EXPECTS(uncompressed_size <= cudf::io::detail::get_host_uncompressed_size(
-                                        cudf::io::compression_type::AUTO, compressed).value(),
+                                        cudf::io::compression_type::AUTO, compressed)
+                                        .value(),
                  "Underestimating uncompressed size!");
     CUDF_EXPECTS(comp_type == cudf::io::compression_type::AUTO ||
                    comp_type == cudf::io::compression_type::ZSTD,
@@ -220,9 +228,13 @@ struct SnappyDecompressTest : public DecompressTest<SnappyDecompressTest> {
                                      cudf::host_span<uint8_t const> compressed,
                                      size_t uncompressed_size)
   {
-    CUDF_EXPECTS(cudf::io::detail::get_host_uncompressed_size(cudf::io::compression_type::AUTO, compressed).has_value(), "Error detecting compression type");
+    CUDF_EXPECTS(
+      cudf::io::detail::get_host_uncompressed_size(cudf::io::compression_type::AUTO, compressed)
+        .has_value(),
+      "Error detecting compression type");
     CUDF_EXPECTS(uncompressed_size <= cudf::io::detail::get_host_uncompressed_size(
-                                        cudf::io::compression_type::AUTO, compressed).value(),
+                                        cudf::io::compression_type::AUTO, compressed)
+                                        .value(),
                  "Underestimating uncompressed size!");
     CUDF_EXPECTS(comp_type == cudf::io::compression_type::AUTO ||
                    comp_type == cudf::io::compression_type::SNAPPY,
