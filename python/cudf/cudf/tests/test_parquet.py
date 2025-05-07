@@ -2353,16 +2353,14 @@ def test_parquet_writer_list_basic(tmpdir):
 
 
 def test_parquet_writer_list_large(tmpdir):
-    expect = pd.DataFrame({"a": list_gen(int_gen, 256, 80, 50)})
+    gdf = cudf.DataFrame({"a": list_gen(int_gen, 256, 80, 50)})
     fname = tmpdir.join("test_parquet_writer_list_large.parquet")
-
-    gdf = cudf.from_pandas(expect)
 
     gdf.to_parquet(fname)
     assert os.path.exists(fname)
 
     got = pd.read_parquet(fname)
-    assert_eq(expect, got)
+    assert gdf.to_arrow().equals(pa.Table.from_pandas(got))
 
 
 def test_parquet_writer_list_large_mixed(tmpdir):
@@ -2410,15 +2408,15 @@ def test_parquet_writer_list_chunked(tmpdir, store_schema):
     expect = cudf.concat([table1, table2])
     expect = expect.reset_index(drop=True)
 
-    writer = ParquetWriter(fname, store_schema=store_schema)
-    writer.write_table(table1)
-    writer.write_table(table2)
-    writer.close()
+    with ParquetWriter(fname, store_schema=store_schema) as writer:
+        writer.write_table(table1)
+        writer.write_table(table2)
 
     assert os.path.exists(fname)
-
-    got = pd.read_parquet(fname)
-    assert_eq(expect, got)
+    got = pq.read_table(fname)
+    # compare with pyarrow since pandas doesn't
+    # have a list or struct dtype
+    assert expect.to_arrow().equals(got)
 
 
 @pytest.mark.parametrize("engine", ["cudf", "pyarrow"])

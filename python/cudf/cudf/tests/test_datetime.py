@@ -1856,10 +1856,7 @@ def test_is_quarter_end(data, dtype):
 
 def test_error_values():
     s = cudf.Series([1, 2, 3], dtype="datetime64[ns]")
-    with pytest.raises(
-        NotImplementedError,
-        match="DateTime Arrays is not yet implemented in cudf",
-    ):
+    with pytest.raises(NotImplementedError, match="cupy does not support"):
         s.values
 
 
