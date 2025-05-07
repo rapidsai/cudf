@@ -1156,7 +1156,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
 
     @classmethod
     @_performance_tracking
-    def from_arrow(cls, obj) -> Index | cudf.MultiIndex:
+    def from_arrow(cls, obj: pa.Array) -> Index | cudf.MultiIndex:
         """Create from PyArrow Array/ChunkedArray.
 
         Parameters

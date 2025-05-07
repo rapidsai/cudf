@@ -32,6 +32,8 @@ from cudf.utils.dtypes import (
 )
 
 if TYPE_CHECKING:
+    from typing_extensions import Self
+
     from cudf._typing import ColumnBinaryOperand, ColumnLike, Dtype, ScalarLike
     from cudf.core.buffer import Buffer
 
@@ -283,7 +285,7 @@ class Decimal32Column(DecimalBaseColumn):
         )
 
     @classmethod
-    def from_arrow(cls, data: pa.Array):
+    def from_arrow(cls, data: pa.Array) -> Self:
         dtype = Decimal32Dtype.from_arrow(data.type)
         mask_buf = data.buffers()[0]
         mask = (
@@ -364,7 +366,7 @@ class Decimal128Column(DecimalBaseColumn):
         )
 
     @classmethod
-    def from_arrow(cls, data: pa.Array):
+    def from_arrow(cls, data: pa.Array) -> Self:
         result = cast(Decimal128Dtype, super().from_arrow(data))
         result.dtype.precision = data.type.precision
         return result
@@ -405,7 +407,7 @@ class Decimal64Column(DecimalBaseColumn):
         )
 
     @classmethod
-    def from_arrow(cls, data: pa.Array):
+    def from_arrow(cls, data: pa.Array) -> Self:
         dtype = Decimal64Dtype.from_arrow(data.type)
         mask_buf = data.buffers()[0]
         mask = (
