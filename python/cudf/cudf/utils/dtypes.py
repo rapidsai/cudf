@@ -377,6 +377,37 @@ def is_dtype_obj_numeric(
         return is_non_decimal
 
 
+def is_pandas_nullable_extension_dtype(dtype_to_check) -> bool:
+    if isinstance(
+        dtype_to_check,
+        (
+            pd.UInt8Dtype,
+            pd.UInt16Dtype,
+            pd.UInt32Dtype,
+            pd.UInt64Dtype,
+            pd.Int8Dtype,
+            pd.Int16Dtype,
+            pd.Int32Dtype,
+            pd.Int64Dtype,
+            pd.Float32Dtype,
+            pd.Float64Dtype,
+            pd.BooleanDtype,
+            pd.StringDtype,
+            pd.ArrowDtype,
+        ),
+    ):
+        return True
+    elif isinstance(dtype_to_check, pd.CategoricalDtype):
+        if dtype_to_check.categories is None:
+            return False
+        return is_pandas_nullable_extension_dtype(
+            dtype_to_check.categories.dtype
+        )
+    elif isinstance(dtype_to_check, pd.IntervalDtype):
+        return is_pandas_nullable_extension_dtype(dtype_to_check.subtype)
+    return False
+
+
 def dtype_to_pylibcudf_type(dtype) -> plc.DataType:
     if isinstance(dtype, cudf.ListDtype):
         return plc.DataType(plc.TypeId.LIST)
