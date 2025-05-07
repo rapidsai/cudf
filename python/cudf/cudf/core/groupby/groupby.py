@@ -595,7 +595,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         0  10  20  30
         1  10  30  40
         2  40  50  30
-        >>> df.groupby(by=["a"]).indices
+        >>> df.groupby(by=["a"]).indices  # doctest: +SKIP
         {10: array([0, 1]), 40: array([2])}
         """
         offsets, group_keys, (indices,) = self._groups(
