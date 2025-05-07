@@ -36,6 +36,11 @@ class tmp_env_var {
     setenv(name_.c_str(), value.c_str(), 1);
   }
 
+  tmp_env_var(tmp_env_var const&)            = delete;
+  tmp_env_var& operator=(tmp_env_var const&) = delete;
+  tmp_env_var(tmp_env_var&&)                 = delete;
+  tmp_env_var& operator=(tmp_env_var&&)      = delete;
+
   ~tmp_env_var()
   {
     if (previous_value_.has_value()) {
