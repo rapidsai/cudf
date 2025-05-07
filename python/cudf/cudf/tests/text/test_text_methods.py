@@ -110,7 +110,9 @@ def test_detokenize():
     assert type(expected) is type(actual)
     assert_eq(expected, actual)
 
-    indices = cudf.Series([4, 0, 0, 0, 0, 4, 1, 1, 4, 2, 2, 2, 2, 4, 3], dtype=np.int8)
+    indices = cudf.Series(
+        [4, 0, 0, 0, 0, 4, 1, 1, 4, 2, 2, 2, 2, 4, 3], dtype=np.int8
+    )
     actual = strings.str.detokenize(indices, "+")
     expected = cudf.Series(
         [
@@ -677,7 +679,9 @@ def test_text_replace_tokens():
             "emptyme",
         ],
     )
-    targets = cudf.Series(["a", "☕", "\t", "looooooooooonnnnnnnggggggg", "emptyme"])
+    targets = cudf.Series(
+        ["a", "☕", "\t", "looooooooooonnnnnnnggggggg", "emptyme"]
+    )
     replacements = cudf.Series(["the", "🚒", "🚒🚒🚒🚒", "🔥🔥", ""])
 
     expected = cudf.Series(
@@ -691,7 +695,9 @@ def test_text_replace_tokens():
 
     assert_eq(expected, actual)
 
-    sr = cudf.Series(["All-we-need;is;🔥", "\tall-we-need0is;🌊", "all;we:need+is;🌬"])
+    sr = cudf.Series(
+        ["All-we-need;is;🔥", "\tall-we-need0is;🌊", "all;we:need+is;🌬"]
+    )
     targets = cudf.Series(["🌬", "🔥", "🌊"])
     replacements = "🚰"
 
@@ -747,7 +753,9 @@ def test_text_filter_tokens():
     actual = sr.str.filter_tokens(5, "🔥")
     assert_eq(expected, actual)
 
-    sr = cudf.Series(["All-we-need;is;🔥", "\tall-we-need0is;🌊", "all;we:need+is;🌬"])
+    sr = cudf.Series(
+        ["All-we-need;is;🔥", "\tall-we-need0is;🌊", "all;we:need+is;🌬"]
+    )
     expected = cudf.Series(
         ["All-we-need;is;--", "\tall-we-need0is;--", "all;we:need+is;--"]
     )
@@ -920,7 +928,9 @@ def test_minhash():
 
 
 def test_minhash_ngrams():
-    strings = cudf.Series([["this", "is", "my"], ["favorite", "book", "today"]])
+    strings = cudf.Series(
+        [["this", "is", "my"], ["favorite", "book", "today"]]
+    )
 
     params = cudf.Series([1, 2, 3], dtype=np.uint32)
     expected = cudf.Series(
@@ -974,7 +984,9 @@ def test_jaccard_index():
         str1.str.jaccard_index(str3, 5)
 
 
-def _make_list_of_strings_of_random_length(num_strings, min_length, max_length):
+def _make_list_of_strings_of_random_length(
+    num_strings, min_length, max_length
+):
     return [
         "".join(
             random.choice(string.ascii_lowercase)
@@ -1112,5 +1124,7 @@ def test_resolve_duplicates_pair(duplicate_input):
     input2 = cudf.Series(text2)
     sa2 = input2.str.build_suffix_array(0)
     actual = input1.str.resolve_duplicates_pair(sa1, input2, sa2, 15)
-    expected = cudf.Series([". 012345678901234", " 012345678901234", " reprehenderit "])
+    expected = cudf.Series(
+        [". 012345678901234", " 012345678901234", " reprehenderit "]
+    )
     assert_eq(expected, actual)
