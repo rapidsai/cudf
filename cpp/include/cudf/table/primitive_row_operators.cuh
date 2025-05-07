@@ -33,14 +33,14 @@ namespace CUDF_EXPORT cudf {
 namespace row::primitive {
 
 /**
-￼ * @brief Returns `void` if it's not a primitive type
-￼ */
+ * @brief Returns `void` if it's not a primitive type
+ */
 template <typename T>
-using primitive_type_t = std::conditional_t<cudf::is_numeric<T>(), T, void>;
+using primitive_type_t = cuda::std::conditional_t<cudf::is_numeric<T>(), T, void>;
 
 /**
-￼ * @brief Custom dispatcher for primitive types
-￼ */
+ * @brief Custom dispatcher for primitive types
+ */
 template <cudf::type_id Id>
 struct dispatch_primitive_type {
   using type = primitive_type_t<id_to_type<Id>>;  ///< The underlying type
@@ -49,7 +49,6 @@ struct dispatch_primitive_type {
 /**
  * @brief Performs an equality comparison between two elements in two columns.
  */
-
 class element_equality_comparator {
  public:
   /**
@@ -99,23 +98,6 @@ class element_equality_comparator {
  */
 class row_equality_comparator {
  public:
-  /**
-   * @brief Construct a new row equality comparator object
-   *
-   * @param has_nulls Indicates if either input column contains nulls
-   * @param lhs The column containing the first element
-   * @param rhs The column containing the second element (may be the same as lhs)
-   * @param nulls_are_equal Indicates if two null elements are treated as equivalent
-   */
-  row_equality_comparator(cudf::nullate::DYNAMIC const& has_nulls,
-                          table_device_view lhs,
-                          table_device_view rhs,
-                          null_equality nulls_are_equal)
-    : _has_nulls{has_nulls}, _lhs{lhs}, _rhs{rhs}, _nulls_are_equal{nulls_are_equal}
-  {
-    CUDF_EXPECTS(_lhs.num_columns() == _rhs.num_columns(), "Mismatched number of columns.");
-  }
-
   /**
    * @brief Construct a new row equality comparator object
    *
@@ -282,7 +264,7 @@ class row_lexicographic_comparator {
   table_device_view _lhs;
   table_device_view _rhs;
   order const* _column_order{};
-};  // class row_lexicographic_comparator
+};
 
 /**
  * @brief Function object for computing the hash value of a row in a column.
