@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -97,7 +97,7 @@ struct byte_list_conversion_fn<T, std::enable_if_t<cudf::is_numeric<T>()>> {
       thrust::copy_n(rmm::exec_policy(stream), d_inp, num_bytes, d_out);
     }
 
-    auto const it = thrust::make_constant_iterator(cudf::size_of(input.type()));
+    auto const it = thrust::make_constant_iterator(sizeof(T));
     auto offsets_column =
       std::get<0>(cudf::detail::make_offsets_child_column(it, it + input.size(), stream, mr));
 
