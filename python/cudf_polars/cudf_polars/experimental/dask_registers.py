@@ -5,7 +5,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, ClassVar, overload
+from typing import TYPE_CHECKING, Any, ClassVar, overload
 
 from dask.sizeof import sizeof as sizeof_dispatch
 from distributed.protocol import dask_deserialize, dask_serialize
@@ -18,9 +18,15 @@ import rmm
 from cudf_polars.containers import Column, DataFrame
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
     from distributed import Client
 
-    from cudf_polars.typing import ColumnHeader, DataFrameHeader
+    from rmm.pylibrmm.memory_resource import DeviceMemoryResource
+    from rmm.pylibrmm.stream import Stream
+
+    from cudf_polars.typing import ColumnHeader, ColumnOptions, DataFrameHeader
+
 
 __all__ = ["DaskRegisterManager", "register"]
 
@@ -94,7 +100,7 @@ def register() -> None:
         x: Column,
     ) -> tuple[ColumnHeader, tuple[memoryview, memoryview]]: ...
 
-    @dask_serialize.register((Column, DataFrame))
+    @dask_serialize.register(Column)
     def dask_serialize_column_or_frame(
         x: DataFrame | Column,
     ) -> tuple[DataFrameHeader | ColumnHeader, tuple[memoryview, memoryview]]:
@@ -114,14 +120,6 @@ def register() -> None:
             )
             return header, (metadata, gpudata_on_host)
 
-    @dask_deserialize.register(DataFrame)
-    def _(header: DataFrameHeader, frames: tuple[memoryview, memoryview]) -> DataFrame:
-        with log_errors():
-            assert len(frames) == 2
-            # Copy the second frame (the gpudata in host memory) back to the gpu
-            frames = frames[0], plc.gpumemoryview(rmm.DeviceBuffer.to_device(frames[1]))
-            return DataFrame.deserialize(header, frames)
-
     @dask_deserialize.register(Column)
     def _(header: ColumnHeader, frames: tuple[memoryview, memoryview]) -> Column:
         with log_errors():
@@ -129,6 +127,55 @@ def register() -> None:
             # Copy the second frame (the gpudata in host memory) back to the gpu
             frames = frames[0], plc.gpumemoryview(rmm.DeviceBuffer.to_device(frames[1]))
             return Column.deserialize(header, frames)
+
+    @dask_serialize.register(DataFrame)
+    def _(
+        x: DataFrame, context: Mapping[str, Any] | None = None
+    ) -> tuple[DataFrameHeader, tuple[memoryview, memoryview]]:
+        # Do regular serialization if no staging buffer is provided.
+        if context is None or "staging_device_buffer" not in context:
+            return dask_serialize_column_or_frame(x)
+
+        # If a staging buffer is provided, we use `ChunkedPack` to
+        # serialize the dataframe using the provided staging buffer.
+        with log_errors():
+            # Keyword arguments for `Column.__init__`.
+            columns_kwargs: list[ColumnOptions] = [
+                {
+                    "is_sorted": col.is_sorted,
+                    "order": col.order,
+                    "null_order": col.null_order,
+                    "name": col.name,
+                }
+                for col in x.columns
+            ]
+            header: DataFrameHeader = {
+                "columns_kwargs": columns_kwargs,
+                "frame_count": 2,
+            }
+            if "stream" not in context:
+                raise ValueError(
+                    "context: stream must be given when staging_device_buffer is"
+                )
+            if "device_mr" not in context:
+                raise ValueError(
+                    "context: device_mr must be given when staging_device_buffer is"
+                )
+            stream: Stream = context["stream"]
+            device_mr: DeviceMemoryResource = context["device_mr"]
+            buf: rmm.DeviceBuffer = context["staging_device_buffer"]
+            frame = plc.contiguous_split.ChunkedPack.create(
+                x.table, buf.nbytes, stream, device_mr
+            ).pack_to_host(buf)
+            return header, frame
+
+    @dask_deserialize.register(DataFrame)
+    def _(header: DataFrameHeader, frames: tuple[memoryview, memoryview]) -> DataFrame:
+        with log_errors():
+            assert len(frames) == 2
+            # Copy the second frame (the gpudata in host memory) back to the gpu
+            frames = frames[0], plc.gpumemoryview(rmm.DeviceBuffer.to_device(frames[1]))
+            return DataFrame.deserialize(header, frames)
 
     @sizeof_dispatch.register(Column)
     def _(x: Column) -> int:
@@ -139,3 +186,11 @@ def register() -> None:
     def _(x: DataFrame) -> int:
         """The total size of the device buffers used by the DataFrame or Column."""
         return sum(c.obj.device_buffer_size() for c in x.columns)
+
+    # Register rapidsmpf serializer if it's installed.
+    try:
+        from rapidsmpf.integrations.dask.spilling import register_dask_serialize
+
+        register_dask_serialize()  # pragma: no cover; rapidsmpf dependency not included yet
+    except ImportError:
+        pass

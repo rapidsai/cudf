@@ -605,6 +605,7 @@ nitpick_ignore = [
     ("py:class", "pyarrow.lib.Scalar"),
     ("py:class", "pyarrow.lib.ChunkedArray"),
     ("py:class", "pyarrow.lib.Array"),
+    ("py:class", "StringColumn"),
     ("py:class", "ColumnLike"),
     ("py:class", "DtypeObj"),
     ("py:class", "pa.StructType"),
