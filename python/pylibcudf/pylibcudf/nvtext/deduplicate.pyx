@@ -6,7 +6,7 @@ from libcpp.memory cimport unique_ptr, make_unique
 from libcpp.utility cimport move
 from pylibcudf.column cimport Column
 from pylibcudf.libcudf.column.column cimport column
-from pylibcudf.libcudf.nvtext.dedup cimport (
+from pylibcudf.libcudf.nvtext.deduplicate cimport (
     substring_duplicates as cpp_substring_duplicates,
     build_suffix_array as cpp_build_suffix_array,
     suffix_array_type as cpp_suffix_array_type,

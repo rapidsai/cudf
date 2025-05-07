@@ -18,7 +18,7 @@
 
 #include <cudf/strings/strings_column_view.hpp>
 
-#include <nvtext/dedup.hpp>
+#include <nvtext/deduplicate.hpp>
 
 #include <nvbench/nvbench.cuh>
 

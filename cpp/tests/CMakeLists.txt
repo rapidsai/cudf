@@ -59,9 +59,7 @@ function(ConfigureTest CMAKE_TEST_NAME)
   )
 
   target_compile_definitions(
-    ${CMAKE_TEST_NAME}
-    PUBLIC _LIBCUDACXX_ATOMIC_UNSAFE_AUTOMATIC_STORAGE=1
-    PRIVATE THRUST_FORCE_32_BIT_OFFSET_TYPE=1 CCCL_AVOID_SORT_UNROLL=1
+    ${CMAKE_TEST_NAME} PRIVATE THRUST_FORCE_32_BIT_OFFSET_TYPE=1 CCCL_AVOID_SORT_UNROLL=1
   )
 
   target_link_libraries(
@@ -612,7 +610,7 @@ ConfigureTest(STRUCTS_TEST structs/structs_column_tests.cpp structs/utilities_te
 ConfigureTest(
   TEXT_TEST
   text/bpe_tests.cpp
-  text/dedup_tests.cpp
+  text/deduplicate_tests.cpp
   text/edit_distance_tests.cpp
   text/jaccard_tests.cpp
   text/minhash_tests.cpp

@@ -9,17 +9,13 @@ import pylibcudf as plc
 
 @pytest.fixture(scope="module")
 def input_col():
-    arr = [
-        "01234567890123456789",
-        "01234567890123456789",
-        "01234567890123456789",
-    ]
+    arr = ["0123456789"] * 6
     return pa.array(arr)
 
 
 @pytest.mark.parametrize("min_width", [10, 20])
 def test_substring_duplicates(input_col, min_width):
-    result = plc.nvtext.dedup.substring_duplicates(
+    result = plc.nvtext.deduplicate.substring_duplicates(
         plc.interop.from_arrow(input_col),
         min_width,
     )

@@ -21,7 +21,7 @@
 #include <cudf/column/column.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 
-#include <nvtext/dedup.hpp>
+#include <nvtext/deduplicate.hpp>
 
 #include <vector>
 
@@ -59,7 +59,8 @@ TEST_F(TextDedupTest, StringDedup)
   auto expected = cudf::test::strings_column_wrapper({" 01234567890123456789 "});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
 
-  results  = nvtext::substring_duplicates(sv, 15);
+  results = nvtext::substring_duplicates(sv, 15);
+  // we take advantage of the fact that the results are currently sorted
   expected = cudf::test::strings_column_wrapper(
     {" 01234567890123456789 ", ". 012345678901234", " reprehenderit "});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
