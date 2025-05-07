@@ -79,6 +79,7 @@ from cudf.core.indexed_frame import (
 )
 from cudf.core.join import Merge, MergeSemi
 from cudf.core.missing import NA
+from cudf.core.mixins import GetAttrGetItemMixin
 from cudf.core.multiindex import MultiIndex
 from cudf.core.resample import DataFrameResampler
 from cudf.core.series import Series
@@ -103,7 +104,6 @@ from cudf.utils.ioutils import (
 from cudf.utils.performance_tracking import _performance_tracking
 from cudf.utils.utils import (
     _EQUALITY_OPS,
-    GetAttrGetItemMixin,
     _external_only_api,
     _is_null_host_scalar,
 )
@@ -5689,14 +5689,14 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
 
     @classmethod
     @_performance_tracking
-    def from_arrow(cls, table):
+    def from_arrow(cls, table: pa.Table) -> Self:
         """
         Convert from PyArrow Table to DataFrame.
 
         Parameters
         ----------
-        table : PyArrow Table Object
-            PyArrow Table Object which has to be converted to cudf DataFrame.
+        table : pyarrow.Table
+            PyArrow Table to convert to a cudf DataFrame.
 
         Raises
         ------
@@ -5724,59 +5724,49 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             how :meth:`pyarrow.Table.to_pandas` works for PyArrow Tables i.e.
             it does not support automatically setting index column(s).
         """
-        index_col = None
-        col_index_names = None
-        physical_column_md = []
-        if isinstance(table, pa.Table) and isinstance(
-            table.schema.pandas_metadata, dict
-        ):
-            physical_column_md = table.schema.pandas_metadata["columns"]
-            index_col = table.schema.pandas_metadata["index_columns"]
-            if "column_indexes" in table.schema.pandas_metadata:
-                col_index_names = []
-                for col_meta in table.schema.pandas_metadata["column_indexes"]:
-                    col_index_names.append(col_meta["name"])
-
         out = super().from_arrow(table)
-        if col_index_names is not None:
-            out._data._level_names = col_index_names
-        if index_col:
-            if isinstance(index_col[0], dict):
-                range_meta = index_col[0]
-                idx = cudf.RangeIndex(
-                    start=range_meta["start"],
-                    stop=range_meta["stop"],
-                    step=range_meta["step"],
-                    name=range_meta["name"],
-                )
-                if len(idx) == len(out):
-                    # `idx` is generated from arrow `pandas_metadata`
-                    # which can get out of date with many of the
-                    # arrow operations. Hence verifying if the
-                    # lengths match, or else don't need to set
-                    # an index at all i.e., Default RangeIndex
-                    # will be set.
-                    # See more about the discussion here:
-                    # https://github.com/apache/arrow/issues/15178
-                    out = out.set_index(idx)
-            else:
-                out = out.set_index(index_col)
-
-        if (
-            "__index_level_0__" in out.index.names
-            and len(out.index.names) == 1
-        ):
-            real_index_name = None
-            for md in physical_column_md:
-                if md["field_name"] == "__index_level_0__":
-                    real_index_name = md["name"]
-                    break
-            out.index.name = real_index_name
-
+        if isinstance(table.schema.pandas_metadata, dict):
+            # Maybe set .index or .columns attributes
+            pd_meta = table.schema.pandas_metadata
+            if "column_indexes" in pd_meta:
+                out._data._level_names = [
+                    col_meta["name"] for col_meta in pd_meta["column_indexes"]
+                ]
+            if index_col := pd_meta["index_columns"]:
+                if isinstance(index_col[0], dict):
+                    range_meta = index_col[0]
+                    idx = cudf.RangeIndex(
+                        start=range_meta["start"],
+                        stop=range_meta["stop"],
+                        step=range_meta["step"],
+                        name=range_meta["name"],
+                    )
+                    if len(idx) == len(out):
+                        # `idx` is generated from arrow `pandas_metadata`
+                        # which can get out of date with many of the
+                        # arrow operations. Hence verifying if the
+                        # lengths match, or else don't need to set
+                        # an index at all i.e., Default RangeIndex
+                        # will be set.
+                        # See more about the discussion here:
+                        # https://github.com/apache/arrow/issues/15178
+                        out = out.set_index(idx)
+                else:
+                    out = out.set_index(index_col)
+            if (
+                len(out.index.names) == 1
+                and out.index.names[0] == "__index_level_0__"
+            ):
+                for col_meta in pd_meta["columns"]:
+                    if col_meta["field_name"] == "__index_level_0__":
+                        out.index.name = col_meta["name"]
+                        break
+                else:
+                    out.index.name = None
         return out
 
     @_performance_tracking
-    def to_arrow(self, preserve_index=None) -> pa.Table:
+    def to_arrow(self, preserve_index: bool | None = None) -> pa.Table:
         """
         Convert to a PyArrow Table.
 
@@ -6256,8 +6246,27 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             raise TypeError(msg)
 
         if method == "table":
-            interpolation = interpolation or "nearest"
-            result = self._quantile_table(qs, interpolation.upper())
+            with acquire_spill_lock():
+                plc_table = plc.quantiles.quantiles(
+                    plc.Table(
+                        [c.to_pylibcudf(mode="read") for c in self._columns]
+                    ),
+                    qs,
+                    plc.types.Interpolation[
+                        (interpolation or "nearest").upper()
+                    ],
+                    plc.types.Sorted.NO,
+                    [],
+                    [],
+                )
+                columns = [
+                    ColumnBase.from_pylibcudf(col)
+                    for col in plc_table.columns()
+                ]
+            result = self._from_columns_like_self(
+                columns,
+                column_names=self._column_names,
+            )
 
             if q_is_number:
                 result = result.transpose()
