@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import functools
 import math
+import warnings
 from typing import TYPE_CHECKING, Any, cast
 
 import cupy as cp
@@ -138,6 +139,21 @@ class TimeDeltaColumn(ColumnBase):
             children=children,
         )
 
+    def _clear_cache(self) -> None:
+        super()._clear_cache()
+        attrs = (
+            "days",
+            "seconds",
+            "microseconds",
+            "nanoseconds",
+            "time_unit",
+        )
+        for attr in attrs:
+            try:
+                delattr(self, attr)
+            except AttributeError:
+                pass
+
     def __contains__(self, item: DatetimeLikeScalar) -> bool:
         try:
             item = np.timedelta64(item, self.time_unit)
@@ -169,7 +185,7 @@ class TimeDeltaColumn(ColumnBase):
         Return a CuPy representation of the TimeDeltaColumn.
         """
         raise NotImplementedError(
-            "TimeDelta Arrays is not yet implemented in cudf"
+            "TimeDelta Arrays is not yet implemented in cupy"
         )
 
     def element_indexing(self, index: int):
@@ -458,8 +474,27 @@ class TimeDeltaColumn(ColumnBase):
             unit=self.time_unit,
         ).as_unit(self.time_unit)
 
-    def isin(self, values: Sequence) -> ColumnBase:
-        return cudf.core.tools.datetimes._isin_datetimelike(self, values)
+    def _process_values_for_isin(
+        self, values: Sequence
+    ) -> tuple[ColumnBase, ColumnBase]:
+        lhs, rhs = super()._process_values_for_isin(values)
+        if len(rhs) and rhs.dtype.kind == "O":
+            try:
+                rhs = rhs.astype(lhs.dtype)
+            except ValueError:
+                pass
+            else:
+                warnings.warn(
+                    f"The behavior of 'isin' with dtype={lhs.dtype} and "
+                    "castable values (e.g. strings) is deprecated. In a "
+                    "future version, these will not be considered matching "
+                    "by isin. Explicitly cast to the appropriate dtype before "
+                    "calling isin instead.",
+                    FutureWarning,
+                )
+        elif isinstance(rhs, type(self)):
+            rhs = rhs.astype(lhs.dtype)
+        return lhs, rhs
 
     def quantile(
         self,
@@ -590,7 +625,7 @@ class TimeDeltaColumn(ColumnBase):
             data[result_key] = res_col
         return data
 
-    @property
+    @functools.cached_property
     def days(self) -> cudf.core.column.NumericalColumn:
         """
         Number of days for each element.
@@ -601,7 +636,7 @@ class TimeDeltaColumn(ColumnBase):
         """
         return self // get_np_td_unit_conversion("D", self.dtype)
 
-    @property
+    @functools.cached_property
     def seconds(self) -> cudf.core.column.NumericalColumn:
         """
         Number of seconds (>= 0 and less than 1 day).
@@ -619,7 +654,7 @@ class TimeDeltaColumn(ColumnBase):
             self % get_np_td_unit_conversion("D", self.dtype)
         ) // get_np_td_unit_conversion("s", None)
 
-    @property
+    @functools.cached_property
     def microseconds(self) -> cudf.core.column.NumericalColumn:
         """
         Number of microseconds (>= 0 and less than 1 second).
@@ -637,7 +672,7 @@ class TimeDeltaColumn(ColumnBase):
             self % get_np_td_unit_conversion("s", self.dtype)
         ) // get_np_td_unit_conversion("us", None)
 
-    @property
+    @functools.cached_property
     def nanoseconds(self) -> cudf.core.column.NumericalColumn:
         """
         Return the number of nanoseconds (n), where 0 <= n < 1 microsecond.

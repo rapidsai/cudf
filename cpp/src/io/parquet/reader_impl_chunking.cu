@@ -933,6 +933,8 @@ struct codec_stats {
   int32_t start_pos = 0;
   for (auto const& codec : codecs) {
     if (codec.num_pages == 0) { continue; }
+    CUDF_EXPECTS(is_supported_read_parquet(from_parquet_compression(codec.compression_type)),
+                 "Unsupported compression type for Parquet reading");
 
     device_span<device_span<uint8_t const> const> d_comp_in_view{d_comp_in.data() + start_pos,
                                                                  codec.num_pages};
@@ -1399,7 +1401,7 @@ void reader::impl::setup_next_subpass(read_mode mode)
                                      dst_offsets.begin(),
                                      get_span_size_by_index{page_indices},
                                      0,
-                                     thrust::plus<size_t>{});
+                                     cuda::std::plus<size_t>{});
     thrust::for_each(
       rmm::exec_policy_nosync(_stream),
       iter,

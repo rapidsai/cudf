@@ -10,35 +10,46 @@ import polars as pl
 from cudf_polars import Translator
 from cudf_polars.experimental.parallel import lower_ir_graph
 from cudf_polars.experimental.shuffle import Shuffle
-from cudf_polars.testing.asserts import assert_gpu_result_equal
+from cudf_polars.testing.asserts import DEFAULT_SCHEDULER, assert_gpu_result_equal
+from cudf_polars.utils.config import ConfigOptions
 
 
-@pytest.mark.parametrize("how", ["inner", "left", "right", "full", "semi", "anti"])
-@pytest.mark.parametrize("reverse", [True, False])
-@pytest.mark.parametrize("max_rows_per_partition", [1, 5, 10, 15])
-@pytest.mark.parametrize("broadcast_join_limit", [1, 16])
-def test_join(how, reverse, max_rows_per_partition, broadcast_join_limit):
-    engine = pl.GPUEngine(
-        raise_on_fail=True,
-        executor="dask-experimental",
-        executor_options={
-            "max_rows_per_partition": max_rows_per_partition,
-            "broadcast_join_limit": broadcast_join_limit,
-        },
-    )
-    left = pl.LazyFrame(
+@pytest.fixture(scope="module")
+def left():
+    return pl.LazyFrame(
         {
             "x": range(15),
             "y": [1, 2, 3] * 5,
             "z": [1.0, 2.0, 3.0, 4.0, 5.0] * 3,
         }
     )
-    right = pl.LazyFrame(
+
+
+@pytest.fixture(scope="module")
+def right():
+    return pl.LazyFrame(
         {
-            "xx": range(6),
-            "y": [2, 4, 3] * 2,
-            "zz": [1, 2] * 3,
+            "xx": range(9),
+            "y": [2, 4, 3] * 3,
+            "zz": [1, 2, 3] * 3,
         }
+    )
+
+
+@pytest.mark.parametrize("how", ["inner", "left", "right", "full", "semi", "anti"])
+@pytest.mark.parametrize("reverse", [True, False])
+@pytest.mark.parametrize("max_rows_per_partition", [1, 5, 10, 15])
+@pytest.mark.parametrize("broadcast_join_limit", [1, 16])
+def test_join(left, right, how, reverse, max_rows_per_partition, broadcast_join_limit):
+    engine = pl.GPUEngine(
+        raise_on_fail=True,
+        executor="streaming",
+        executor_options={
+            "scheduler": DEFAULT_SCHEDULER,
+            "max_rows_per_partition": max_rows_per_partition,
+            "broadcast_join_limit": broadcast_join_limit,
+            "shuffle_method": "tasks",
+        },
     )
     if reverse:
         left, right = right, left
@@ -62,13 +73,15 @@ def test_join(how, reverse, max_rows_per_partition, broadcast_join_limit):
 
 
 @pytest.mark.parametrize("broadcast_join_limit", [1, 2, 3, 4])
-def test_broadcast_join_limit(broadcast_join_limit):
+def test_broadcast_join_limit(left, right, broadcast_join_limit):
     engine = pl.GPUEngine(
         raise_on_fail=True,
-        executor="dask-experimental",
+        executor="streaming",
         executor_options={
             "max_rows_per_partition": 3,
             "broadcast_join_limit": broadcast_join_limit,
+            "scheduler": DEFAULT_SCHEDULER,
+            "shuffle_method": "tasks",
         },
     )
     left = pl.LazyFrame(
@@ -89,7 +102,10 @@ def test_broadcast_join_limit(broadcast_join_limit):
     q = left.join(right, on="y", how="inner")
     shuffle_nodes = [
         type(node)
-        for node in lower_ir_graph(Translator(q._ldf.visit(), engine).translate_ir())[1]
+        for node in lower_ir_graph(
+            Translator(q._ldf.visit(), engine).translate_ir(),
+            ConfigOptions.from_polars_engine(engine),
+        )[1]
         if isinstance(node, Shuffle)
     ]
 
@@ -102,3 +118,23 @@ def test_broadcast_join_limit(broadcast_join_limit):
     else:
         # Expect broadcast join
         assert len(shuffle_nodes) == 0
+
+
+def test_join_then_shuffle(left, right):
+    engine = pl.GPUEngine(
+        raise_on_fail=True,
+        executor="streaming",
+        executor_options={
+            "scheduler": DEFAULT_SCHEDULER,
+            "max_rows_per_partition": 2,
+            "broadcast_join_limit": 1,
+        },
+    )
+    q = left.join(right, on="y", how="inner").select(
+        pl.col("x").sum(),
+        pl.col("xx").mean(),
+        pl.col("y").n_unique(),
+        (pl.col("y") * pl.col("y")).n_unique().alias("y2"),
+    )
+
+    assert_gpu_result_equal(q, engine=engine, check_row_order=False)

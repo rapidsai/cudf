@@ -10,6 +10,8 @@ from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
+from cudf_polars.testing.io import make_partitioned_source
+from cudf_polars.utils.versions import POLARS_VERSION_LT_128
 
 NO_CHUNK_ENGINE = pl.GPUEngine(raise_on_fail=True, parquet_options={"chunked": False})
 
@@ -46,7 +48,7 @@ def df():
 def columns(request, row_index):
     name, _ = row_index
     if name is not None and request.param is not None:
-        return [*request.param, name]
+        return [name, *request.param]
     return request.param
 
 
@@ -65,19 +67,6 @@ def slice(request):
     # For use in testing that we handle
     # polars slice pushdown correctly
     return request.param
-
-
-def make_source(df, path, format):
-    """
-    Writes the passed polars df to a file of
-    the desired format
-    """
-    if format == "csv":
-        df.write_csv(path)
-    elif format == "ndjson":
-        df.write_ndjson(path)
-    else:
-        df.write_parquet(path)
 
 
 @pytest.fixture(params=["csv", "ndjson", "parquet", "chunked_parquet"])
@@ -102,11 +91,21 @@ def test_scan(
     is_chunked = format == "chunked_parquet"
     if is_chunked:
         format = "parquet"
-    make_source(df, tmp_path / "file", format)
+    make_partitioned_source(df, tmp_path / "file", format)
     request.applymarker(
         pytest.mark.xfail(
             condition=(n_rows is not None and scan_fn is pl.scan_ndjson),
             reason="libcudf does not support n_rows",
+        )
+    )
+    request.applymarker(
+        pytest.mark.xfail(
+            condition=(
+                not POLARS_VERSION_LT_128
+                and slice is not None
+                and scan_fn is pl.scan_ndjson
+            ),
+            reason="slice pushdown not supported in the libcudf JSON reader",
         )
     )
     q = scan_fn(
@@ -305,13 +304,13 @@ def test_scan_csv_skip_initial_empty_rows(tmp_path):
     ],
 )
 def test_scan_ndjson_schema(df, tmp_path, schema):
-    make_source(df, tmp_path / "file", "ndjson")
+    make_partitioned_source(df, tmp_path / "file", "ndjson")
     q = pl.scan_ndjson(tmp_path / "file", schema=schema)
     assert_gpu_result_equal(q)
 
 
 def test_scan_ndjson_unsupported(df, tmp_path):
-    make_source(df, tmp_path / "file", "ndjson")
+    make_partitioned_source(df, tmp_path / "file", "ndjson")
     q = pl.scan_ndjson(tmp_path / "file", ignore_errors=True)
     assert_ir_translation_raises(q, NotImplementedError)
 
@@ -327,13 +326,13 @@ def test_scan_parquet_nested_null_raises(tmp_path):
 
 
 def test_scan_parquet_only_row_index_raises(df, tmp_path):
-    make_source(df, tmp_path / "file", "parquet")
+    make_partitioned_source(df, tmp_path / "file", "parquet")
     q = pl.scan_parquet(tmp_path / "file", row_index_name="index").select("index")
     assert_ir_translation_raises(q, NotImplementedError)
 
 
 def test_scan_include_file_path(request, tmp_path, format, scan_fn, df):
-    make_source(df, tmp_path / "file", format)
+    make_partitioned_source(df, tmp_path / "file", format)
 
     q = scan_fn(tmp_path / "file", include_file_paths="files")
 
@@ -360,7 +359,7 @@ def large_df(df, tmpdir_factory, chunked_slice):
     df = pl.concat([df] * 10)
     df = pl.concat([df] * 10)
     path = str(tmpdir_factory.mktemp("data") / "large.pq")
-    make_source(df, path, "parquet")
+    make_partitioned_source(df, path, "parquet")
     n_rows = len(df)
     q = pl.scan_parquet(path)
     if chunked_slice == "no_slice":
@@ -408,3 +407,18 @@ def test_scan_parquet_chunked(
 def test_scan_hf_url_raises():
     q = pl.scan_csv("hf://datasets/scikit-learn/iris/Iris.csv")
     assert_ir_translation_raises(q, NotImplementedError)
+
+
+def test_select_arbitrary_order_with_row_index_column(request, tmp_path):
+    request.applymarker(
+        pytest.mark.xfail(
+            condition=POLARS_VERSION_LT_128,
+            reason="unsupported until polars 1.28",
+        )
+    )
+    df = pl.DataFrame({"a": [1, 2, 3]})
+    df.write_parquet(tmp_path / "df.parquet")
+    q = pl.scan_parquet(tmp_path / "df.parquet", row_index_name="foo").select(
+        [pl.col("a"), pl.col("foo")]
+    )
+    assert_gpu_result_equal(q)

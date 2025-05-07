@@ -35,7 +35,11 @@ from cudf.core.column.categorical import CategoricalColumn, as_unsigned_codes
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.mixins import BinaryOperand, Scannable
 from cudf.utils import ioutils
-from cudf.utils.dtypes import CUDF_STRING_DTYPE, find_common_type
+from cudf.utils.dtypes import (
+    CUDF_STRING_DTYPE,
+    cudf_dtype_from_pa_type,
+    find_common_type,
+)
 from cudf.utils.performance_tracking import _performance_tracking
 from cudf.utils.utils import _array_ufunc, _warn_no_dask_cudf
 
@@ -48,14 +52,12 @@ if TYPE_CHECKING:
 
 # TODO: It looks like Frame is missing a declaration of `copy`, need to add
 class Frame(BinaryOperand, Scannable, Serializable):
-    """A collection of Column objects with an optional index.
+    """A collection of Column objects.
 
     Parameters
     ----------
     data : dict
         An dict mapping column names to Columns
-    index : Table
-        A Frame representing the (optional) index columns.
     """
 
     _VALID_BINARY_OPERATIONS = BinaryOperand._SUPPORTED_BINARY_OPERATIONS
@@ -299,7 +301,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
         """
         return self._num_columns * self._num_rows
 
-    def memory_usage(self, deep=False):
+    def memory_usage(self, deep: bool = False) -> int:
         """Return the memory usage of an object.
 
         Parameters
@@ -388,14 +390,21 @@ class Frame(BinaryOperand, Scannable, Serializable):
         >>> df.equals(different_column_type)
         True
         """
-        if self is other:
+        if not isinstance(other, type(self)):
+            return False
+        elif self is other:
             return True
-        if not isinstance(other, type(self)) or len(self) != len(other):
+        elif (
+            self._num_columns != other._num_columns
+            or self._num_rows != other._num_rows
+        ):
             return False
 
         return all(
             self_col.equals(other_col, check_dtypes=True)
-            for self_col, other_col in zip(self._columns, other._columns)
+            for self_col, other_col in zip(
+                self._columns, other._columns, strict=True
+            )
         )
 
     @_performance_tracking
@@ -516,12 +525,6 @@ class Frame(BinaryOperand, Scannable, Serializable):
                 matrix[:, i] = to_array(col, dtype)
             return matrix
 
-    # TODO: As of now, calling cupy.asarray is _much_ faster than calling
-    # to_cupy. We should investigate the reasons why and whether we can provide
-    # a more efficient method here by exploiting __cuda_array_interface__. In
-    # particular, we need to benchmark how much of the overhead is coming from
-    # (potentially unavoidable) local copies in to_cupy and how much comes from
-    # inefficiencies in the implementation.
     @_performance_tracking
     def to_cupy(
         self,
@@ -1041,7 +1044,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
                 # All of these cases are handled by calling the
                 # _with_type_metadata method on the column.
                 result[name] = result[name]._with_type_metadata(
-                    cudf.utils.dtypes.cudf_dtype_from_pa_type(data[name].type)
+                    cudf_dtype_from_pa_type(data[name].type)
                 )
 
         return cls._from_data({name: result[name] for name in column_names})

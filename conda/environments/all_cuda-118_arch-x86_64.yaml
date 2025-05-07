@@ -13,6 +13,7 @@ dependencies:
 - breathe>=4.35.0
 - c-compiler
 - cachetools
+- certifi
 - clang-tools=16.0.6
 - clang==16.0.6
 - cmake>=3.30.4
@@ -25,7 +26,7 @@ dependencies:
 - cudatoolkit
 - cupy>=12.0.0
 - cxx-compiler
-- cython>=3.0.3
+- cython>=3.0.3,<3.1.0a0
 - dask-cuda==25.6.*,>=0.0.0a0
 - dlpack>=0.8,<1.0
 - doxygen=1.9.1
@@ -33,7 +34,7 @@ dependencies:
 - flatbuffers==24.3.25
 - fsspec>=0.6.0
 - gcc_linux-64=11.*
-- hypothesis
+- hypothesis>=6.131.7
 - identify>=2.5.20
 - ipython
 - jupyter_client
@@ -49,12 +50,13 @@ dependencies:
 - moto>=4.0.8
 - msgpack-python
 - myst-nb
+- nanoarrow
 - nbconvert
 - nbformat
 - nbsphinx
 - ninja
 - notebook
-- numba-cuda>=0.4.0,<0.5.0a0
+- numba-cuda>=0.9.0,!=0.10.0
 - numba>=0.59.1,<0.62.0a0
 - numpy>=1.23,<3.0a0
 - numpydoc
@@ -66,7 +68,7 @@ dependencies:
 - pandas
 - pandas>=2.0,<2.2.4dev0
 - pandoc
-- polars>=1.24,<1.28
+- polars>=1.25,<1.29
 - pre-commit
 - ptxcompiler
 - pyarrow>=14.0.0,<20.0.0a0
@@ -80,7 +82,7 @@ dependencies:
 - pytest<8
 - python-confluent-kafka>=2.8.0,<2.9.0a0
 - python-xxhash
-- python>=3.10,<3.13
+- python>=3.10,<3.14
 - rapids-build-backend>=0.3.0,<0.4.0.dev0
 - rapids-dask-dependency==25.6.*,>=0.0.0a0
 - rapids-logger==0.1.*,>=0.0.0a0

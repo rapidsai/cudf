@@ -20,12 +20,14 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/filling.hpp>
-#include <cudf/join.hpp>
+#include <cudf/join/distinct_hash_join.hpp>
 #include <cudf/sorting.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/memory_resource.hpp>
+
+#include <cuco/utility/error.hpp>
 
 #include <numeric>
 #include <vector>
@@ -162,9 +164,7 @@ TEST_F(DistinctJoinTest, InnerJoinWithNulls)
   Table build(std::move(cols0));
   Table probe(std::move(cols1));
 
-  auto distinct_join = cudf::distinct_hash_join{build.view()};
-  auto result        = distinct_join.inner_join(probe.view());
-
+  // Create gold table once
   column_wrapper<int32_t> col_gold_0{{3, 2}};
   strcol_wrapper col_gold_1({"s1", "s0"}, {true, true});
   column_wrapper<int32_t> col_gold_2{{1, 1}};
@@ -180,7 +180,16 @@ TEST_F(DistinctJoinTest, InnerJoinWithNulls)
   cols_gold.push_back(col_gold_5.release());
   Table gold(std::move(cols_gold));
 
-  this->compare_to_reference(build.view(), probe.view(), result, gold.view());
+  // Test with different load factors
+  std::vector<double> load_factors = {0.5, 1.0};
+
+  for (auto load_factor : load_factors) {
+    auto distinct_join =
+      cudf::distinct_hash_join{build.view(), cudf::null_equality::EQUAL, load_factor};
+    auto result = distinct_join.inner_join(probe.view());
+
+    this->compare_to_reference(build.view(), probe.view(), result, gold.view());
+  }
 }
 
 TEST_F(DistinctJoinTest, InnerJoinWithStructsAndNulls)
@@ -496,4 +505,25 @@ TEST_F(DistinctJoinTest, LeftJoinWithStructsAndNulls)
 
   this->compare_to_reference(
     build.view(), probe.view(), gather_map, gold.view(), cudf::out_of_bounds_policy::NULLIFY);
+}
+
+// Disabled for now, waiting on upstream cuco updates
+TEST_F(DistinctJoinTest, DISABLED_InvalidLoadFactor)
+{
+  column_wrapper<int32_t> col0_0{{3, 1, 2, 0, 3}};
+  strcol_wrapper col0_1({"s0", "s1", "s2", "s4", "s1"});
+
+  CVector cols0;
+  cols0.push_back(col0_0.release());
+  cols0.push_back(col0_1.release());
+
+  Table t0(std::move(cols0));
+
+  // Test load factor of -0.1
+  EXPECT_THROW(cudf::distinct_hash_join(t0, cudf::null_equality::EQUAL, -0.1), cuco::logic_error);
+  // Test load factor of 0
+  EXPECT_THROW(cudf::distinct_hash_join(t0, cudf::null_equality::EQUAL, 0.0), cuco::logic_error);
+
+  // Test load factor > 1
+  EXPECT_THROW(cudf::distinct_hash_join(t0, cudf::null_equality::EQUAL, 1.1), cuco::logic_error);
 }

@@ -798,6 +798,7 @@ CUDF_KERNEL void __launch_bounds__(128)
           page_g.page_data    = ck_g.uncompressed_bfr + page_offset;
           if (not comp_page_sizes.empty()) {
             page_g.compressed_data = ck_g.compressed_bfr + comp_page_offset;
+            page_g.comp_data_size  = comp_page_sizes[ck_g.first_page + num_pages];
           }
           page_g.start_row          = cur_row;
           page_g.num_rows           = rows_in_page;
@@ -1600,7 +1601,7 @@ __device__ void finish_page_encode(state_buf* s,
       auto const bytes_to_compress = static_cast<uint32_t>(end_ptr - c_base);
       comp_in[blockIdx.x]          = {c_base, bytes_to_compress};
       comp_out[blockIdx.x] = {s->page.compressed_data + s->page.max_hdr_size + s->page.max_lvl_size,
-                              0};  // size is unused
+                              s->page.comp_data_size};
     }
     pages[blockIdx.x] = s->page;
     if (not comp_results.empty()) {
@@ -3430,8 +3431,11 @@ void EncodePages(device_span<EncPage> pages,
 
   // determine which kernels to invoke
   auto mask_iter       = thrust::make_transform_iterator(pages.begin(), mask_tform{});
-  uint32_t kernel_mask = thrust::reduce(
-    rmm::exec_policy(stream), mask_iter, mask_iter + pages.size(), 0U, thrust::bit_or<uint32_t>{});
+  uint32_t kernel_mask = thrust::reduce(rmm::exec_policy(stream),
+                                        mask_iter,
+                                        mask_iter + pages.size(),
+                                        0U,
+                                        cuda::std::bit_or<uint32_t>{});
 
   // get the number of streams we need from the pool
   int nkernels = std::bitset<32>(kernel_mask).count();

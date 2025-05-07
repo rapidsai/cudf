@@ -11,7 +11,10 @@ from collections import abc
 from functools import cached_property, singledispatch
 from typing import TYPE_CHECKING, Any, Literal
 
+# Needed to make Sphinx happy for typing purposes
+import cupy
 import cupy as cp
+import numpy
 import numpy as np
 import pandas as pd
 import pyarrow as pa
@@ -25,8 +28,16 @@ from cudf.core._compat import PANDAS_LT_300
 from cudf.core._internals import aggregation, sorting, stream_compaction
 from cudf.core.abc import Serializable
 from cudf.core.buffer import acquire_spill_lock
-from cudf.core.column.column import ColumnBase, as_column, column_empty
+from cudf.core.column.column import (
+    ColumnBase,
+    as_column,
+    column_empty,
+    deserialize_columns,
+    serialize_columns,
+)
+from cudf.core.column.struct import StructColumn
 from cudf.core.column_accessor import ColumnAccessor
+from cudf.core.common import pipe
 from cudf.core.copy_types import GatherMap
 from cudf.core.dtypes import (
     CategoricalDtype,
@@ -35,6 +46,7 @@ from cudf.core.dtypes import (
     ListDtype,
     StructDtype,
 )
+from cudf.core.index import _index_from_data
 from cudf.core.join._join_helpers import _match_join_keys
 from cudf.core.mixins import Reducible, Scannable
 from cudf.core.multiindex import MultiIndex
@@ -50,7 +62,7 @@ from cudf.utils.performance_tracking import _performance_tracking
 from cudf.utils.utils import GetAttrGetItemMixin
 
 if TYPE_CHECKING:
-    from collections.abc import Generator, Hashable, Iterable
+    from collections.abc import Generator, Hashable, Iterable, Sequence
 
     from cudf._typing import (
         AggType,
@@ -259,7 +271,7 @@ Examples
 >>> df = cudf.DataFrame({"key": [1, 1, 2], "a": [-1, 0, 1], 1: [10, 11, 12]})
 >>> agg_a = cudf.NamedAgg(column="a", aggfunc="min")
 >>> agg_1 = cudf.NamedAgg(column=1, aggfunc=lambda x: x.mean())
->>> df.groupby("key").agg(result_a=agg_a, result_1=agg_1)
+>>> df.groupby("key", sort=True).agg(result_a=agg_a, result_1=agg_1)
         result_a  result_1
 key
 1          -1      10.5
@@ -569,7 +581,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         )
 
     @cached_property
-    def indices(self) -> dict[ScalarLike, cp.ndarray]:
+    def indices(self) -> dict[ScalarLike, cupy.ndarray]:
         """
         Dict {group name -> group indices}.
 
@@ -583,15 +595,11 @@ class GroupBy(Serializable, Reducible, Scannable):
         0  10  20  30
         1  10  30  40
         2  40  50  30
-        >>> df.groupby(by=["a"]).indices
+        >>> df.groupby(by=["a"]).indices  # doctest: +SKIP
         {10: array([0, 1]), 40: array([2])}
         """
         offsets, group_keys, (indices,) = self._groups(
-            [
-                cudf.core.column.as_column(
-                    range(len(self.obj)), dtype=SIZE_TYPE_DTYPE
-                )
-            ]
+            [as_column(range(len(self.obj)), dtype=SIZE_TYPE_DTYPE)]
         )
 
         group_keys = [
@@ -1029,11 +1037,13 @@ class GroupBy(Serializable, Reducible, Scannable):
                     )
                     and len(col) == 0
                     and not isinstance(
-                        col,
+                        col.dtype,
                         (
-                            cudf.core.column.ListColumn,
-                            cudf.core.column.StructColumn,
-                            cudf.core.column.DecimalBaseColumn,
+                            cudf.ListDtype,
+                            cudf.StructDtype,
+                            cudf.Decimal32Dtype,
+                            cudf.Decimal64Dtype,
+                            cudf.Decimal128Dtype,
                         ),
                     )
                 ):
@@ -1435,8 +1445,8 @@ class GroupBy(Serializable, Reducible, Scannable):
         n: int | None = None,
         frac: float | None = None,
         replace: bool = False,
-        weights: abc.Sequence | "cudf.Series" | None = None,
-        random_state: np.random.RandomState | int | None = None,
+        weights: Sequence | "cudf.Series" | None = None,
+        random_state: numpy.random.RandomState | int | None = None,
     ):
         """Return a random sample of items in each group.
 
@@ -1604,9 +1614,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         offsets, grouped_key_cols, grouped_value_cols = self._groups(
             itertools.chain(self.obj.index._columns, self.obj._columns)
         )
-        grouped_keys = cudf.core.index._index_from_data(
-            dict(enumerate(grouped_key_cols))
-        )
+        grouped_keys = _index_from_data(dict(enumerate(grouped_key_cols)))
         if isinstance(self.grouping.keys, cudf.MultiIndex):
             grouped_keys.names = self.grouping.keys.names
             to_drop = self.grouping.keys.names
@@ -1752,7 +1760,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         a  2
         b  2
         """
-        return cudf.core.common.pipe(self, func, *args, **kwargs)
+        return pipe(self, func, *args, **kwargs)
 
     @_performance_tracking
     def _jit_groupby_apply(
@@ -2262,7 +2270,7 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         See Also
         --------
-        cudf.core.window.Rolling
+        cudf.core.window.rolling.RollingGroupby
         """
         return cudf.core.window.rolling.RollingGroupby(self, *args, **kwargs)
 
@@ -2487,7 +2495,7 @@ class GroupBy(Serializable, Reducible, Scannable):
                 )
                 x, y = str(x), str(y)
 
-            column_pair_structs[(x, y)] = cudf.core.column.StructColumn(
+            column_pair_structs[(x, y)] = StructColumn(
                 data=None,
                 dtype=StructDtype(
                     fields={x: self.obj._data[x].dtype, y: self.obj._data[y]}
@@ -3124,8 +3132,6 @@ class DataFrameGroupBy(GroupBy, GetAttrGetItemMixin):
 
         See Also
         --------
-        Series.value_counts: Equivalent method on Series.
-        DataFrame.value_counts: Equivalent method on DataFrame.
         SeriesGroupBy.value_counts: Equivalent method on SeriesGroupBy.
 
         Notes
@@ -3339,7 +3345,7 @@ class DataFrameGroupBy(GroupBy, GetAttrGetItemMixin):
         sharey: bool = False,
         figsize: tuple[float, float] | None = None,
         layout: tuple[int, int] | None = None,
-        bins: int | abc.Sequence[int] = 10,
+        bins: int | Sequence[int] = 10,
         backend: str | None = None,
         legend: bool = False,
         **kwargs,
@@ -3410,7 +3416,7 @@ class SeriesGroupBy(GroupBy):
         ylabelsize: int | None = None,
         yrot: float | None = None,
         figsize: tuple[float, float] | None = None,
-        bins: int | abc.Sequence[int] = 10,
+        bins: int | Sequence[int] = 10,
         backend: str | None = None,
         legend: bool = False,
         **kwargs,
@@ -3624,7 +3630,7 @@ class _Grouping(Serializable):
         self.names.append(level_values.name)
 
     def _handle_misc(self, by):
-        by = cudf.core.column.as_column(by)
+        by = as_column(by)
         if len(by) != len(self._obj):
             raise ValueError("Grouper and object must have same length")
         self._key_columns.append(by)
@@ -3635,9 +3641,7 @@ class _Grouping(Serializable):
         frames = []
         header["names"] = self.names
         header["_named_columns"] = self._named_columns
-        column_header, column_frames = cudf.core.column.serialize_columns(
-            self._key_columns
-        )
+        column_header, column_frames = serialize_columns(self._key_columns)
         header["columns"] = column_header
         frames.extend(column_frames)
         return header, frames
@@ -3646,9 +3650,7 @@ class _Grouping(Serializable):
     def deserialize(cls, header, frames):
         names = header["names"]
         _named_columns = header["_named_columns"]
-        key_columns = cudf.core.column.deserialize_columns(
-            header["columns"], frames
-        )
+        key_columns = deserialize_columns(header["columns"], frames)
         out = _Grouping.__new__(_Grouping)
         out.names = names
         out._named_columns = _named_columns
