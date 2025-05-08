@@ -4,7 +4,6 @@ from __future__ import annotations
 import glob
 import os
 import sys
-import warnings
 from functools import lru_cache
 
 import numba
@@ -120,7 +119,6 @@ def _setup_numba():
         from cudf.utils._ptxcompiler import NO_DRIVER, safe_get_versions
 
     versions = safe_get_versions()
-    warnings.warn(f"versions: {versions}\n")
     if versions != NO_DRIVER:
         driver_version, runtime_version = versions
         shim_ptx_cuda_version = _get_cuda_build_version()
@@ -129,11 +127,6 @@ def _setup_numba():
         # This could be the shipped shim PTX file (determined by the CUDA
         # version used at build time) or the PTX emitted by the version of NVVM
         # on the user system (determined by the user's CUDA runtime version)
-        warnings.warn(
-            f"driver_version: {driver_version},"
-            f"runtime_version: {runtime_version},",
-            f"shim_ptx_cuda_version: {shim_ptx_cuda_version}\n",
-        )
         if (driver_version < shim_ptx_cuda_version) or (
             driver_version < runtime_version
         ):
