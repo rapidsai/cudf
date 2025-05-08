@@ -32,8 +32,8 @@ and concatenate them to the input-IR node using ``HConcat``.
 from __future__ import annotations
 
 import operator
-from itertools import chain
 from functools import reduce
+from itertools import chain
 from typing import TYPE_CHECKING
 
 import pylibcudf as plc
@@ -123,16 +123,12 @@ def select(
     return columns, new_ir, partition_info
 
 
-def _root_columns(expr: Expr) -> tuple[Col]:
+def _root_columns(expr: Expr) -> tuple[Col, ...]:
     """Find the leaf columns of an expression."""
     for child in expr.children:
-        return tuple(
-            chain(
-                *(_root_columns(child) for child in expr.children)
-            )
-        )
+        return tuple(chain(*(_root_columns(child) for child in expr.children)))
     if isinstance(expr, Col):
-        return (expr.name,)
+        return (expr,)
     else:
         return ()
 
@@ -189,8 +185,9 @@ def _decompose_unique(
     )
 
     cardinality: float | None = None
-    if cardinality_factor:={
-        v for k, v in config_options.executor.cardinality_factor.items()
+    if cardinality_factor := {
+        v
+        for k, v in config_options.executor.cardinality_factor.items()
         if k in _root_columns(child)
     }:
         cardinality = max(cardinality_factor)

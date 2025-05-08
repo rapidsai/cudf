@@ -151,6 +151,7 @@ def _(
     # Extract child partitioning
     child, partition_info = rec(ir.children[0])
     try:
+        config_options = rec.state["config_options"]
         assert config_options.executor.name == "streaming", (
             "'in-memory' executor not supported in 'lower_ir_node'"
         )
@@ -166,7 +167,7 @@ def _(
             ir,
             child,
             partition_info,
-            rec.state["config_options"],
+            config_options,
             cardinality=cardinality,
         )
     except NotImplementedError as err:
