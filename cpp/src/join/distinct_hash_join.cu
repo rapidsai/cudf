@@ -99,6 +99,59 @@ struct output_fn {
     return static_cast<cudf::size_type>(x.second);
   }
 };
+
+/**
+ * @brief Find matching rows in the hash table
+ *
+ * @tparam IterType Type of the iterator over hash values
+ * @tparam EqualType Type of the equality comparator
+ * @param hash_table The hash table to search in
+ * @param iter Iterator over hash values
+ * @param d_equal Equality comparator
+ * @param probe The probe table
+ * @param probe_table_num_rows Number of rows in the probe table
+ * @param found_begin Output iterator for found indices
+ * @param stream CUDA stream
+ * @param nulls_equal Null equality setting
+ */
+template <typename HashTableType,
+          typename IterType,
+          typename EqualType,
+          typename Hasher,
+          typename FoundIterator>
+void find_matches_in_hash_table(HashTableType const& hash_table,
+                                IterType iter,
+                                EqualType const& d_equal,
+                                cudf::table_view const& probe,
+                                Hasher hasher,
+                                size_type probe_table_num_rows,
+                                FoundIterator found_begin,
+                                rmm::cuda_stream_view stream,
+                                cudf::null_equality nulls_equal)
+{
+  // If `idx` is within the range `[0, probe_table_num_rows)` and `found_indices[idx]` is not
+  // equal to `JoinNoneValue`, then `idx` has a match in the hash set.
+  if (nulls_equal == cudf::null_equality::EQUAL or (not cudf::nullable(probe))) {
+    hash_table.find_async(
+      iter, iter + probe_table_num_rows, d_equal, hasher, found_begin, stream.value());
+  } else {
+    auto stencil = thrust::counting_iterator<size_type>{0};
+    auto const row_bitmask =
+      cudf::detail::bitmask_and(probe, stream, cudf::get_current_device_resource_ref()).first;
+    auto const pred =
+      cudf::detail::row_is_valid{reinterpret_cast<bitmask_type const*>(row_bitmask.data())};
+
+    hash_table.find_if_async(iter,
+                             iter + probe_table_num_rows,
+                             stencil,
+                             pred,
+                             d_equal,
+                             hasher,
+                             found_begin,
+                             stream.value());
+  }
+}
+
 }  // namespace
 
 distinct_hash_join::distinct_hash_join(cudf::table_view const& build,
@@ -170,58 +223,6 @@ distinct_hash_join::distinct_hash_join(cudf::table_view const& build,
       cudf::detail::make_counting_transform_iterator(0, build_keys_fn<rhs_index_type>{d_hasher});
 
     helper(iter);
-  }
-}
-
-/**
- * @brief Find matching rows in the hash table
- *
- * @tparam IterType Type of the iterator over hash values
- * @tparam EqualType Type of the equality comparator
- * @param hash_table The hash table to search in
- * @param iter Iterator over hash values
- * @param d_equal Equality comparator
- * @param probe The probe table
- * @param probe_table_num_rows Number of rows in the probe table
- * @param found_begin Output iterator for found indices
- * @param stream CUDA stream
- * @param nulls_equal Null equality setting
- */
-template <typename HashTableType,
-          typename IterType,
-          typename EqualType,
-          typename Hasher,
-          typename FoundIterator>
-void find_matches_in_hash_table(HashTableType const& hash_table,
-                                IterType iter,
-                                EqualType const& d_equal,
-                                cudf::table_view const& probe,
-                                Hasher hasher,
-                                size_type probe_table_num_rows,
-                                FoundIterator found_begin,
-                                rmm::cuda_stream_view stream,
-                                cudf::null_equality nulls_equal)
-{
-  // If `idx` is within the range `[0, probe_table_num_rows)` and `found_indices[idx]` is not
-  // equal to `JoinNoneValue`, then `idx` has a match in the hash set.
-  if (nulls_equal == cudf::null_equality::EQUAL or (not cudf::nullable(probe))) {
-    hash_table.find_async(
-      iter, iter + probe_table_num_rows, d_equal, hasher, found_begin, stream.value());
-  } else {
-    auto stencil = thrust::counting_iterator<size_type>{0};
-    auto const row_bitmask =
-      cudf::detail::bitmask_and(probe, stream, cudf::get_current_device_resource_ref()).first;
-    auto const pred =
-      cudf::detail::row_is_valid{reinterpret_cast<bitmask_type const*>(row_bitmask.data())};
-
-    hash_table.find_if_async(iter,
-                             iter + probe_table_num_rows,
-                             stencil,
-                             pred,
-                             d_equal,
-                             hasher,
-                             found_begin,
-                             stream.value());
   }
 }
 
