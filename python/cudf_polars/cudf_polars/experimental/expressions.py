@@ -429,7 +429,7 @@ def _decompose(
     input_ir: IR
     assert len(input_irs) > 0  # Must have at least one input IR
     partition_count = max(partition_info[ir].count for ir in input_irs)
-    unique_input_irs = list(dict.fromkeys(input_irs))
+    unique_input_irs = [k for k in dict.fromkeys(input_irs) if not isinstance(k, Empty)]
     if len(unique_input_irs) > 1:
         # Need to make sure we only have a single input IR
         # TODO: Check that we aren't concatenating misaligned
@@ -445,7 +445,7 @@ def _decompose(
         )
         partition_info[input_ir] = PartitionInfo(count=partition_count)
     else:
-        input_ir = input_irs[0]
+        input_ir = unique_input_irs[0]
 
     # Call into class-specific logic to decompose ``expr``
     return _decompose_expr_node(
