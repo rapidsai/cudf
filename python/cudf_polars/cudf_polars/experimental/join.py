@@ -188,6 +188,11 @@ def _make_bcast_join(
 def _(
     ir: ConditionalJoin, rec: LowerIRTransformer
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+    if ir.options[2]:  # pragma: no cover
+        return _lower_ir_fallback(
+            ir, rec, msg="Slice not yet supported in ConditionalJoin."
+        )
+
     # Lower children
     left, right = ir.children
     left, pi_left = rec(left)
