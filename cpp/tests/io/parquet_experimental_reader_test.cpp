@@ -123,13 +123,15 @@ auto create_parquet_with_stats()
   cudf::io::parquet_writer_options out_opts =
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{&buffer}, expected)
       .metadata(std::move(expected_metadata))
-      .row_group_size_rows(5000)
-      .max_page_size_rows(1000)
+      .row_group_size_rows(page_size_for_ordered_tests)
+      .max_page_size_rows(page_size_for_ordered_tests / 5)
+      .compression(cudf::io::compression_type::NONE)
+      .dictionary_policy(cudf::io::dictionary_policy::ALWAYS)
       .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN);
 
   if constexpr (NumTableConcats > 1) {
-    out_opts.set_row_group_size_rows(20000);
-    out_opts.set_max_page_size_rows(5000);
+    out_opts.set_row_group_size_rows(num_ordered_rows);
+    out_opts.set_max_page_size_rows(page_size_for_ordered_tests);
   }
 
   cudf::io::write_parquet(out_opts);
@@ -201,6 +203,7 @@ TEST_F(ParquetExperimentalReaderTest, TestMetadata)
   input_row_group_indices = reader->all_row_groups(options);
   // Expect only 2 row groups now
   EXPECT_EQ(reader->all_row_groups(options).size(), 2);
+  EXPECT_EQ(reader->total_rows_in_row_groups(input_row_group_indices), 2 * num_ordered_rows);
 }
 
 TEST_F(ParquetExperimentalReaderTest, TestFilterRowGroupWithStats)
@@ -234,10 +237,13 @@ TEST_F(ParquetExperimentalReaderTest, TestFilterRowGroupWithStats)
   auto input_row_group_indices = reader->all_row_groups(options);
   // Expect 4 = 20000 rows / 5000 rows per row group
   EXPECT_EQ(input_row_group_indices.size(), 4);
+  EXPECT_EQ(reader->total_rows_in_row_groups(input_row_group_indices), 4 * num_ordered_rows);
+
   auto stats_filtered_row_groups = reader->filter_row_groups_with_stats(
     input_row_group_indices, options, cudf::get_default_stream());
   // Expect 3 row groups to be filtered out with stats
   EXPECT_EQ(stats_filtered_row_groups.size(), 1);
+  EXPECT_EQ(reader->total_rows_in_row_groups(stats_filtered_row_groups), num_ordered_rows);
 
   // Use custom input row group indices
   input_row_group_indices   = {1, 2};
@@ -245,4 +251,5 @@ TEST_F(ParquetExperimentalReaderTest, TestFilterRowGroupWithStats)
     input_row_group_indices, options, cudf::get_default_stream());
   // Expect all row groups to be filtered out with stats
   EXPECT_EQ(stats_filtered_row_groups.size(), 0);
+  EXPECT_EQ(reader->total_rows_in_row_groups(stats_filtered_row_groups), 0);
 }

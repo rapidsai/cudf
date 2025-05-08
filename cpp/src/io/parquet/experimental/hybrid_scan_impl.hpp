@@ -82,7 +82,7 @@ class hybrid_scan_reader_impl {
    * @copydoc cudf::io::experimental::hybrid_scan::total_rows_in_row_groups
    */
   [[nodiscard]] size_type total_rows_in_row_groups(
-    cudf::host_span<size_type const> row_group_indices) const;
+    cudf::host_span<std::vector<size_type> const> row_group_indices) const;
 
   /**
    * @copydoc cudf::io::experimental::hybrid_scan::filter_row_groups_with_stats
