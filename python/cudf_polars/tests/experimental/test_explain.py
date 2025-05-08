@@ -61,7 +61,7 @@ def test_explain_physical_plan(tmp_path, df):
         executor="streaming",
         raise_on_fail=True,
         executor_options={
-            "parquet_blocksize": 10_000,
+            "target_partition_size": 10_000,
             "scheduler": DEFAULT_SCHEDULER,
         },
     )

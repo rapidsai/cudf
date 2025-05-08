@@ -19,11 +19,9 @@ from cudf_polars.dsl.ir import (
     Scan,
     Select,
     Sort,
-    Union,
 )
 from cudf_polars.dsl.translate import Translator
 from cudf_polars.experimental.base import PartitionInfo
-from cudf_polars.experimental.io import SplitScan
 from cudf_polars.experimental.parallel import lower_ir_graph
 from cudf_polars.utils.config import ConfigOptions
 
@@ -57,21 +55,21 @@ def explain_query(
 
     if physical:
         lowered_ir, partition_info = lower_ir_graph(ir, config)
-        return _format_ir_tree(lowered_ir, partition_info)
+        return _repr_ir_tree(lowered_ir, partition_info)
     else:
-        return _format_ir_tree(ir)
+        return _repr_ir_tree(ir)
 
 
-def _format_ir_tree(
+def _repr_ir_tree(
     ir: IR,
     partition_info: MutableMapping[IR, PartitionInfo] | None = None,
     *,
     offset: str = "",
 ) -> str:
-    header = _format_ir(ir, partition_info, offset=offset)
+    header = _repr_ir(ir, partition_info, offset=offset)
 
     children_strs = [
-        _format_ir_tree(child, partition_info, offset=offset + "  ")
+        _repr_ir_tree(child, partition_info, offset=offset + "  ")
         for child in ir.children
     ]
 
@@ -86,7 +84,7 @@ def _format_ir_tree(
 
 
 @functools.singledispatch
-def _format_ir(
+def _repr_ir(
     ir: IR,
     partition_info: MutableMapping[IR, PartitionInfo] | None = None,
     *,
@@ -94,12 +92,20 @@ def _format_ir(
 ) -> str:
     count = partition_info[ir].count if partition_info else None
     header = f"{offset}{type(ir).__name__.upper()}"
+
+    schema = getattr(ir, "schema", None)
+    if schema is not None:
+        names = tuple(schema)
+        if len(names) > 6:
+            names = names[:3] + ("...",) + names[-2:]
+        header += f" {names}"
+
     if count is not None:
         header += f" [{count}]"
     return header + "\n"
 
 
-@_format_ir.register
+@_repr_ir.register
 def _(
     ir: GroupBy,
     partition_info: MutableMapping[IR, PartitionInfo] | None = None,
@@ -113,7 +119,7 @@ def _(
     )
 
 
-@_format_ir.register
+@_repr_ir.register
 def _(
     ir: Join,
     partition_info: MutableMapping[IR, PartitionInfo] | None = None,
@@ -130,7 +136,7 @@ def _(
     )
 
 
-@_format_ir.register
+@_repr_ir.register
 def _(
     ir: Projection,
     partition_info: MutableMapping[IR, PartitionInfo] | None = None,
@@ -145,7 +151,7 @@ def _(
     )
 
 
-@_format_ir.register
+@_repr_ir.register
 def _(
     ir: Select,
     partition_info: MutableMapping[IR, PartitionInfo] | None = None,
@@ -160,7 +166,7 @@ def _(
     )
 
 
-@_format_ir.register
+@_repr_ir.register
 def _(
     ir: Sort,
     partition_info: MutableMapping[IR, PartitionInfo] | None = None,
@@ -172,59 +178,18 @@ def _(
     return f"{offset}SORT {by}" + (f" [{count}]" if count is not None else "") + "\n"
 
 
-def _format_scan_summary(
-    typ: str,
-    schema: tuple,
-    paths: list[str],
-    *,
-    count: int | None = None,
-    prefix: str = "",
-) -> str:
-    first_path = paths[0]
-    suffix = " ..." if len(paths) > 1 else ""
-    header = f"{prefix}{typ.upper()} {schema} {first_path}{suffix}"
-    if count is not None:
-        header += f" [{count} partition{'s' if count > 1 else ''}]"
-    return header
-
-
-@_format_ir.register
-def _(
-    ir: Union,
-    partition_info: MutableMapping[IR, PartitionInfo] | None = None,
-    *,
-    offset: str = "",
-) -> str:
-    count = partition_info[ir].count if partition_info else None
-
-    if ir.children and isinstance(ir.children[0], (Scan, SplitScan)):
-        scan = ir.children[0]
-        base = scan.base_scan if isinstance(scan, SplitScan) else scan
-        scan_header = _format_scan_summary(
-            typ=f"{'SPLITSCAN' if isinstance(scan, SplitScan) else 'SCAN'} {base.typ.upper()}",
-            schema=tuple(ir.schema),
-            paths=base.paths,
-            count=count,
-        )
-        return f"{offset}UNION [{count} x {scan_header}]\n"
-
-    return f"{offset}UNION" + (f" [{count}]" if count is not None else "") + "\n"
-
-
-@_format_ir.register
+@_repr_ir.register
 def _(
     ir: Scan,
     partition_info: MutableMapping[IR, PartitionInfo] | None = None,
     *,
     offset: str = "",
 ) -> str:
-    return (
-        _format_scan_summary(
-            typ=ir.typ,
-            schema=tuple(ir.schema),
-            paths=ir.paths,
-            count=partition_info[ir].count if partition_info else None,
-            prefix=f"{offset}SCAN ",
-        )
-        + "\n"
-    )
+    count = partition_info[ir].count if partition_info else None
+    schema = tuple(ir.schema)
+    first_path = ir.paths[0]
+    suffix = " ..." if len(ir.paths) > 1 else ""
+    header = f"{offset}SCAN {ir.typ.upper()} {schema} {first_path}{suffix}"
+    if count is not None:
+        header += f" [{count} partition{'s' if count > 1 else ''}]"
+    return header + "\n"
