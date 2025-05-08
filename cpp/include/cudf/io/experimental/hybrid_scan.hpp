@@ -332,7 +332,7 @@ class hybrid_scan_reader {
    * @brief Get byte ranges of bloom filters and dictionary pages (secondary filters) for row group
    *        pruning
    *
-   * @note Note that the bloom filters rmm::device_buffers must be allocated using a 32 byte
+   * @note Device buffers for bloom filter byte ranges must be allocated using a 32 byte
    *       aligned memory resource
    *
    * @param row_group_indices Input row groups indices
@@ -363,8 +363,7 @@ class hybrid_scan_reader {
   /**
    * @brief Filter the row groups using column chunk bloom filters
    *
-   *
-   * @note Note that the rmm::device_buffers in `bloom_filter_data` must be allocated using a 32
+   * @note The `bloom_filter_data` device buffers must be allocated using a 32
    *       byte aligned memory resource
    *
    * @param bloom_filter_data 32 byte aligned device buffers containing bloom filter data of column
