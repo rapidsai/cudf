@@ -39,6 +39,7 @@ class RMPFIntegration:  # pragma: no cover
     @staticmethod
     def insert_partition(
         df: DataFrame,
+        partition_id: int,  # Not currently used
         partition_count: int,
         shuffler: Any,
         options: dict[str, Any],
