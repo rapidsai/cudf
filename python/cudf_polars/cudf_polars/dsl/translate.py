@@ -22,8 +22,13 @@ import pylibcudf as plc
 
 from cudf_polars.dsl import expr, ir
 from cudf_polars.dsl.to_ast import insert_colrefs
+from cudf_polars.dsl.traversal import traversal
+from cudf_polars.dsl.utils.aggregations import decompose_single_agg
 from cudf_polars.dsl.utils.groupby import rewrite_groupby
+from cudf_polars.dsl.utils.naming import unique_names
+from cudf_polars.dsl.utils.replace import replace
 from cudf_polars.dsl.utils.rolling import rewrite_rolling
+from cudf_polars.dsl.utils.windows import offsets_to_windows
 from cudf_polars.typing import Schema
 from cudf_polars.utils import config, dtypes, sorting
 
@@ -51,6 +56,7 @@ class Translator:
         self.visitor = visitor
         self.config_options = config.ConfigOptions.from_polars_engine(engine)
         self.errors: list[Exception] = []
+        self.schema_stack = []
 
     def translate_ir(self, *, n: int | None = None) -> ir.IR:
         """
@@ -106,10 +112,13 @@ class Translator:
                 self.errors.append(e)
                 return ir.ErrorNode(schema, str(e))
             try:
+                self.schema_stack.append(schema)
                 result = _translate_ir(node, self, schema)
             except Exception as e:
                 self.errors.append(e)
                 return ir.ErrorNode(schema, str(e))
+            finally:
+                self.schema_stack.pop()
             if any(
                 isinstance(dtype, pl.Null)
                 for dtype in pl.datatypes.unpack_dtypes(*polars_schema.values())
@@ -618,12 +627,46 @@ def _(node: pl_expr.Function, translator: Translator, dtype: plc.DataType) -> ex
 
 @_translate_expr.register
 def _(node: pl_expr.Window, translator: Translator, dtype: plc.DataType) -> expr.Expr:
-    # TODO: raise in groupby?
     if isinstance(node.options, pl_expr.RollingGroupOptions):
         # pl.col("a").rolling(...)
-        return expr.RollingWindow(
-            dtype, node.options, translator.translate_expr(n=node.function)
+        agg = translator.translate_expr(n=node.function)
+        name_generator = unique_names(
+            e.name for e in traversal([agg]) if isinstance(e, expr.Col)
         )
+        named_aggs, named_post_agg, _ = decompose_single_agg(
+            expr.NamedExpr(next(name_generator), agg), name_generator, is_top=True
+        )
+        orderby = node.options.index_column
+        preceding, following = offsets_to_windows(
+            translator.schema_stack[-1][orderby],
+            node.options.offset,
+            node.options.period,
+        )
+        closed_window = node.options.closed_window
+        if isinstance(named_post_agg.value, expr.Col):
+            (named_agg,) = named_aggs
+            return expr.RollingWindow(
+                named_agg.value.dtype,
+                preceding,
+                following,
+                closed_window,
+                orderby,
+                named_agg.value,
+            )
+        return replace(
+            [named_post_agg.value],  # type: ignore[misc]
+            {
+                expr.Col(agg.value.dtype, agg.name): expr.RollingWindow(
+                    agg.value.dtype,
+                    preceding,
+                    following,
+                    closed_window,
+                    orderby,
+                    agg.value,
+                )
+                for agg in named_aggs
+            },
+        )[0]
     elif isinstance(node.options, pl_expr.WindowMapping):
         # pl.col("a").over(...)
         return expr.GroupedRollingWindow(

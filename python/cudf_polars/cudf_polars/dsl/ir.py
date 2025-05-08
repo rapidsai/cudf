@@ -30,6 +30,8 @@ import pylibcudf as plc
 
 import cudf_polars.dsl.expr as expr
 from cudf_polars.containers import Column, DataFrame
+from cudf_polars.dsl.expressions import rolling
+from cudf_polars.dsl.expressions.base import ExecutionContext
 from cudf_polars.dsl.nodebase import Node
 from cudf_polars.dsl.to_ast import to_ast, to_parquet_filter
 from cudf_polars.dsl.utils.windows import range_window_bounds
@@ -1016,22 +1018,7 @@ class Rolling(IR):
         df: DataFrame,
     ) -> DataFrame:
         keys = broadcast(*(k.evaluate(df) for k in keys_in), target_length=df.num_rows)
-        requests: list[plc.rolling.RollingRequest] = []
-        names: list[str] = []
         orderby = index.evaluate(df)
-        for request in aggs:
-            name = request.name
-            value = request.value
-            if isinstance(value, expr.Len):
-                # A count aggregation, we need a column so use the orderby column
-                col = orderby.obj
-            elif isinstance(value, expr.Agg):
-                (child,) = value.children
-                col = child.evaluate(df).obj
-            else:
-                col = value.evaluate(df).obj
-            requests.append(plc.rolling.RollingRequest(col, 1, value.agg_request))
-            names.append(name)
         preceding_window, following_window = range_window_bounds(
             preceding, following, closed_window
         )
@@ -1048,11 +1035,11 @@ class Rolling(IR):
         values = plc.rolling.grouped_range_rolling_window(
             plc.Table([k.obj for k in keys]),
             orderby.obj,
-            orderby.order,
+            plc.types.Order.ASCENDING,  # Polars requires ascending orderby.
             plc.types.NullOrder.AFTER,  # Doesn't matter, polars doesn't allow nulls
             preceding_window,
             following_window,
-            requests,
+            [rolling.to_request(request.value, orderby, df) for request in aggs],
         )
         return DataFrame(
             itertools.chain(
@@ -1060,7 +1047,11 @@ class Rolling(IR):
                 [orderby],
                 (
                     Column(col, name=name)
-                    for col, name in zip(values.columns(), names, strict=True)
+                    for col, name in zip(
+                        values.columns(),
+                        (request.name for request in aggs),
+                        strict=True,
+                    )
                 ),
             )
         ).slice(zlice)
@@ -1155,10 +1146,10 @@ class GroupBy(IR):
                     child = value.children[0]
                 else:
                     (child,) = value.children
-                col = child.evaluate(df).obj
+                col = child.evaluate(df, context=ExecutionContext.GROUPBY).obj
             else:
                 # Anything else, we pre-evaluate
-                col = value.evaluate(df).obj
+                col = value.evaluate(df, context=ExecutionContext.GROUPBY).obj
             requests.append(plc.groupby.GroupByRequest(col, [value.agg_request]))
             names.append(name)
         group_keys, raw_tables = grouper.aggregate(requests)
