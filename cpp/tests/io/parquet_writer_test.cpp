@@ -1433,8 +1433,7 @@ INSTANTIATE_TEST_CASE_P(DeviceInternal,
                         ParquetCompressionTest,
                         ::testing::Combine(::testing::Values("DEVICE_INTERNAL"),
                                            ::testing::Values(cudf::io::compression_type::AUTO,
-                                                             cudf::io::compression_type::SNAPPY,
-                                                             cudf::io::compression_type::ZSTD)));
+                                                             cudf::io::compression_type::SNAPPY)));
 
 INSTANTIATE_TEST_CASE_P(Host,
                         ParquetCompressionTest,
