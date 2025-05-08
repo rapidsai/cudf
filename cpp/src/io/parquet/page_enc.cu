@@ -689,6 +689,7 @@ CUDF_KERNEL void __launch_bounds__(128)
           util::round_up_unsafe(page_g.max_hdr_size + page_g.max_data_size, page_align);
         if (not comp_page_sizes.empty()) {
           comp_page_offset += page_g.max_hdr_size + comp_page_sizes[ck_g.first_page];
+          page_g.comp_data_size = comp_page_sizes[ck_g.first_page + num_pages];
         }
         page_headers_size += page_g.max_hdr_size;
         max_page_data_size = max(max_page_data_size, page_g.max_data_size);
@@ -798,6 +799,7 @@ CUDF_KERNEL void __launch_bounds__(128)
           page_g.page_data    = ck_g.uncompressed_bfr + page_offset;
           if (not comp_page_sizes.empty()) {
             page_g.compressed_data = ck_g.compressed_bfr + comp_page_offset;
+            page_g.comp_data_size  = comp_page_sizes[ck_g.first_page + num_pages];
           }
           page_g.start_row          = cur_row;
           page_g.num_rows           = rows_in_page;
@@ -1600,7 +1602,7 @@ __device__ void finish_page_encode(state_buf* s,
       auto const bytes_to_compress = static_cast<uint32_t>(end_ptr - c_base);
       comp_in[blockIdx.x]          = {c_base, bytes_to_compress};
       comp_out[blockIdx.x] = {s->page.compressed_data + s->page.max_hdr_size + s->page.max_lvl_size,
-                              0};  // size is unused
+                              s->page.comp_data_size};
     }
     pages[blockIdx.x] = s->page;
     if (not comp_results.empty()) {

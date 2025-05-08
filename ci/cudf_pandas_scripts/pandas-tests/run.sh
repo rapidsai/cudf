@@ -5,6 +5,10 @@
 
 set -euo pipefail
 
+EXITCODE=0
+trap "EXITCODE=1" ERR
+set +e
+
 PANDAS_TESTS_BRANCH=${1}
 RAPIDS_FULL_VERSION=$(<./VERSION)
 rapids-logger "Running Pandas tests using $PANDAS_TESTS_BRANCH branch and rapids-version $RAPIDS_FULL_VERSION"
@@ -43,3 +47,5 @@ RAPIDS_ARTIFACTS_DIR=${RAPIDS_ARTIFACTS_DIR:-"${PWD}/artifacts"}
 mkdir -p "${RAPIDS_ARTIFACTS_DIR}"
 mv pandas-testing/"${SUMMARY_FILE_NAME}" "${RAPIDS_ARTIFACTS_DIR}"/
 rapids-upload-to-s3 "${RAPIDS_ARTIFACTS_DIR}"/"${SUMMARY_FILE_NAME}" "${RAPIDS_ARTIFACTS_DIR}"
+rapids-logger "Test script exiting with value: $EXITCODE"
+exit ${EXITCODE}

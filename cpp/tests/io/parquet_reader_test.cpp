@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include "compression_common.hpp"
 #include "parquet_common.hpp"
 
 #include <cudf_test/base_fixture.hpp>
@@ -32,6 +33,8 @@
 #include <src/io/parquet/parquet_gpu.hpp>
 
 #include <array>
+
+using ParquetDecompressionTest = DecompressionTest<ParquetReaderTest>;
 
 TEST_F(ParquetReaderTest, UserBounds)
 {
@@ -2833,6 +2836,48 @@ TYPED_TEST(ParquetReaderPredicatePushdownTest, FilterTyped)
       filter_expression, ref_filter, expected_total_row_groups, expected_stats_filtered_row_groups);
   }
 }
+
+TEST_P(ParquetDecompressionTest, RoundTripBasic)
+{
+  auto const compression_type = std::get<1>(GetParam());
+
+  srand(31337);
+  // Exercises multiple rowgroups
+  auto expected = create_compressible_fixed_table<int>(4, 12345, 3, true);
+
+  // Use a host buffer for faster I/O
+  std::vector<char> buffer;
+  cudf::io::parquet_writer_options args =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{&buffer}, *expected)
+      .compression(compression_type);
+  cudf::io::write_parquet(args);
+
+  cudf::io::parquet_reader_options custom_args =
+    cudf::io::parquet_reader_options::builder(cudf::io::source_info{buffer.data(), buffer.size()});
+  auto custom_tbl = cudf::io::read_parquet(custom_args);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(custom_tbl.tbl->view(), expected->view());
+}
+
+INSTANTIATE_TEST_CASE_P(Nvcomp,
+                        ParquetDecompressionTest,
+                        ::testing::Combine(::testing::Values("NVCOMP"),
+                                           ::testing::Values(cudf::io::compression_type::AUTO,
+                                                             cudf::io::compression_type::SNAPPY,
+                                                             cudf::io::compression_type::LZ4,
+                                                             cudf::io::compression_type::ZSTD)));
+
+INSTANTIATE_TEST_CASE_P(DeviceInternal,
+                        ParquetDecompressionTest,
+                        ::testing::Combine(::testing::Values("DEVICE_INTERNAL"),
+                                           ::testing::Values(cudf::io::compression_type::AUTO,
+                                                             cudf::io::compression_type::SNAPPY)));
+
+INSTANTIATE_TEST_CASE_P(Host,
+                        ParquetDecompressionTest,
+                        ::testing::Combine(::testing::Values("HOST"),
+                                           ::testing::Values(cudf::io::compression_type::AUTO,
+                                                             cudf::io::compression_type::SNAPPY,
+                                                             cudf::io::compression_type::ZSTD)));
 
 //////////////////////
 // wide tables tests

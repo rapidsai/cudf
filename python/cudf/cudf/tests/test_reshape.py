@@ -97,9 +97,9 @@ def test_melt(
     assert_eq(expect, got_from_melt_method)
 
 
-def test_melt_many_columns():
+def test_melt_more_than_255_columns():
     mydict = {"id": ["foobar"]}
-    for i in range(1, 1942):
+    for i in range(1, 260):
         mydict[f"d_{i}"] = i
 
     df = pd.DataFrame(mydict)

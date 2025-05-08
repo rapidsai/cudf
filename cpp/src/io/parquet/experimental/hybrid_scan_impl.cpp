@@ -37,11 +37,39 @@
 
 namespace cudf::io::parquet::experimental::detail {
 
+using io::detail::inline_column_buffer;
 using parquet::detail::ColumnChunkDesc;
 using parquet::detail::decode_kernel_mask;
 using parquet::detail::PageInfo;
 using parquet::detail::PageNestingDecodeInfo;
 using text::byte_range_info;
+
+namespace {
+
+// Tests the passed in logical type for a FIXED_LENGTH_BYTE_ARRAY column to see if it should
+// be treated as a string. Currently the only logical type that has special handling is DECIMAL.
+// Other valid types in the future would be UUID (still treated as string) and FLOAT16 (which
+// for now would also be treated as a string).
+[[maybe_unused]] inline bool is_treat_fixed_length_as_string(
+  std::optional<LogicalType> const& logical_type)
+{
+  if (!logical_type.has_value()) { return true; }
+  return logical_type->type != LogicalType::DECIMAL;
+}
+
+[[nodiscard]] std::vector<cudf::data_type> get_output_types(
+  cudf::host_span<inline_column_buffer const> output_buffer_template)
+{
+  std::vector<cudf::data_type> output_dtypes;
+  output_dtypes.reserve(output_buffer_template.size());
+  std::transform(output_buffer_template.begin(),
+                 output_buffer_template.end(),
+                 std::back_inserter(output_dtypes),
+                 [](auto const& col) { return col.type; });
+  return output_dtypes;
+}
+
+}  // namespace
 
 hybrid_scan_reader_impl::hybrid_scan_reader_impl(cudf::host_span<uint8_t const> footer_bytes,
                                                  parquet_reader_options const& options)
@@ -69,6 +97,52 @@ void hybrid_scan_reader_impl::setup_page_index(
   _metadata->setup_page_index(page_index_bytes);
 }
 
+void hybrid_scan_reader_impl::select_columns(read_mode read_mode,
+                                             parquet_reader_options const& options)
+{
+  // Strings may be returned as either string or categorical columns
+  auto const strings_to_categorical = options.is_enabled_convert_strings_to_categories();
+  auto const use_pandas_metadata    = options.is_enabled_use_pandas_metadata();
+  auto const timestamp_type_id      = options.get_timestamp_type().id();
+
+  // Select only columns required by the filter
+  if (read_mode == read_mode::FILTER_COLUMNS) {
+    if (_is_filter_columns_selected) { return; }
+    // list, struct, dictionary are not supported by AST filter yet.
+    _filter_columns_names =
+      cudf::io::parquet::detail::get_column_names_in_expression(options.get_filter(), {});
+    // Select only filter columns using the base `select_columns` method
+    std::tie(_input_columns, _output_buffers, _output_column_schemas) = _metadata->select_columns(
+      _filter_columns_names, {}, use_pandas_metadata, strings_to_categorical, timestamp_type_id);
+
+    _is_filter_columns_selected  = true;
+    _is_payload_columns_selected = false;
+  } else {
+    if (_is_payload_columns_selected) { return; }
+
+    std::tie(_input_columns, _output_buffers, _output_column_schemas) =
+      _metadata->select_payload_columns(options.get_columns(),
+                                        _filter_columns_names,
+                                        use_pandas_metadata,
+                                        strings_to_categorical,
+                                        timestamp_type_id);
+
+    _is_payload_columns_selected = true;
+    _is_filter_columns_selected  = false;
+  }
+
+  CUDF_EXPECTS(_input_columns.size() > 0 and _output_buffers.size() > 0, "No columns selected");
+
+  // Clear the output buffers templates
+  _output_buffers_template.clear();
+
+  // Save the states of the output buffers for reuse.
+  std::transform(_output_buffers.begin(),
+                 _output_buffers.end(),
+                 std::back_inserter(_output_buffers_template),
+                 [](auto const& buff) { return inline_column_buffer::empty_like(buff); });
+}
+
 std::vector<size_type> hybrid_scan_reader_impl::all_row_groups(
   parquet_reader_options const& options) const
 {
@@ -83,7 +157,23 @@ std::vector<std::vector<size_type>> hybrid_scan_reader_impl::filter_row_groups_w
   parquet_reader_options const& options,
   rmm::cuda_stream_view stream)
 {
-  return {};
+  CUDF_EXPECTS(not row_group_indices.empty(), "Empty input row group indices encountered");
+  CUDF_EXPECTS(options.get_filter().has_value(), "Encountered empty converted filter expression");
+
+  select_columns(read_mode::FILTER_COLUMNS, options);
+
+  table_metadata metadata;
+  populate_metadata(metadata);
+  auto expr_conv = named_to_reference_converter(options.get_filter(), metadata);
+  CUDF_EXPECTS(expr_conv.get_converted_expr().has_value(),
+               "Columns names in filter expression must be convertible to index references");
+  auto output_dtypes = get_output_types(_output_buffers_template);
+
+  return _metadata->filter_row_groups_with_stats(row_group_indices,
+                                                 output_dtypes,
+                                                 _output_column_schemas,
+                                                 expr_conv.get_converted_expr(),
+                                                 stream);
 }
 
 std::pair<std::vector<byte_range_info>, std::vector<byte_range_info>>
@@ -165,6 +255,23 @@ table_with_metadata hybrid_scan_reader_impl::materialize_payload_columns(
   rmm::cuda_stream_view stream)
 {
   return {};
+}
+
+void hybrid_scan_reader_impl::populate_metadata(table_metadata& out_metadata) const
+{
+  // Return column names
+  out_metadata.schema_info.resize(_output_buffers.size());
+  for (size_t i = 0; i < _output_column_schemas.size(); i++) {
+    auto const& schema               = _metadata->get_schema(_output_column_schemas[i]);
+    out_metadata.schema_info[i].name = schema.name;
+    out_metadata.schema_info[i].is_nullable =
+      schema.repetition_type != cudf::io::parquet::FieldRepetitionType::REQUIRED;
+  }
+
+  // Return user metadata
+  out_metadata.per_file_user_data = _metadata->get_key_value_metadata();
+  out_metadata.user_data          = {out_metadata.per_file_user_data[0].begin(),
+                                     out_metadata.per_file_user_data[0].end()};
 }
 
 bool hybrid_scan_reader_impl::has_more_work() const

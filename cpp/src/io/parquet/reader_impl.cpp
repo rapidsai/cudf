@@ -570,9 +570,11 @@ reader::impl::impl(std::size_t chunk_read_limit,
                               _options.timestamp_type.id());
 
   // Save the states of the output buffers for reuse in `chunk_read()`.
-  for (auto const& buff : _output_buffers) {
-    _output_buffers_template.emplace_back(cudf::io::detail::inline_column_buffer::empty_like(buff));
-  }
+  std::transform(
+    _output_buffers.begin(),
+    _output_buffers.end(),
+    std::back_inserter(_output_buffers_template),
+    [](auto const& buff) { return cudf::io::detail::inline_column_buffer::empty_like(buff); });
 
   // Save the name to reference converter to extract output filter AST in
   // `preprocess_file()` and `finalize_output()`

@@ -26,6 +26,7 @@ from cudf.api.types import is_list_like
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import ColumnBase, as_column, column_empty
 from cudf.core.column.categorical import CategoricalColumn, as_unsigned_codes
+from cudf.core.dtypes import DecimalDtype
 from cudf.utils import ioutils
 from cudf.utils.performance_tracking import _performance_tracking
 
@@ -2184,7 +2185,7 @@ def _set_col_metadata(
             column_type_length,
             output_as_binary,
         )
-    elif isinstance(col.dtype, cudf.core.dtypes.DecimalDtype):
+    elif isinstance(col.dtype, DecimalDtype):
         col_meta.set_decimal_precision(col.dtype.precision)
 
 
@@ -2257,7 +2258,7 @@ def _process_metadata(
 
         # update the decimal precision of each column
         for col in names:
-            if isinstance(df._data[col].dtype, cudf.core.dtypes.DecimalDtype):
+            if isinstance(df._data[col].dtype, DecimalDtype):
                 df._data[col].dtype.precision = meta_data_per_column[col][
                     "metadata"
                 ]["precision"]
@@ -2309,9 +2310,7 @@ def _process_metadata(
                 if len(filtered_idx) > 0:
                     idx = cudf.concat(filtered_idx)
                 else:
-                    idx = cudf.Index._from_column(
-                        cudf.core.column.column_empty(0)
-                    )
+                    idx = cudf.Index._from_column(column_empty(0))
             else:
                 start = range_index_meta["start"] + skip_rows  # type: ignore[operator]
                 stop = range_index_meta["stop"]
