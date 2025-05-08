@@ -1,37 +1,12 @@
-# Copyright (c) 2023-2024, NVIDIA CORPORATION.
+# Copyright (c) 2023-2025, NVIDIA CORPORATION.
 import subprocess
 import sys
+from importlib.util import find_spec
 
 import pytest
-from packaging import version
 
-IS_CUDA_11 = False
-IS_CUDA_12 = False
-try:
-    from ptxcompiler.patch import safe_get_versions
-except ModuleNotFoundError:
-    from cudf.utils._ptxcompiler import safe_get_versions
-
-# do not test cuda 12 if pynvjitlink isn't present
-HAVE_PYNVJITLINK = False
-try:
-    import numba
-    import pynvjitlink  # noqa: F401
-
-    HAVE_PYNVJITLINK = version.parse(numba.__version__) >= version.parse(
-        "0.58"
-    )
-except ModuleNotFoundError:
-    pass
-
-
-versions = safe_get_versions()
-driver_version, runtime_version = versions
-
-if (11, 0) <= driver_version < (12, 0):
-    IS_CUDA_11 = True
-if (12, 0) <= driver_version < (13, 0):
-    IS_CUDA_12 = True
+IS_CUDA_12_PLUS = find_spec("pynvjitlink") is not None
+IS_CUDA_11 = not IS_CUDA_12_PLUS
 
 
 TEST_BODY = """
@@ -59,7 +34,7 @@ patch_numba_linker_cuda_11()
 )
 
 
-CUDA_12_TEST = (
+CUDA_12_PLUS_TEST = (
     """
 import numba.cuda
 import cudf
@@ -85,10 +60,10 @@ patch_numba_linker_pynvjitlink()
             ),
         ),
         pytest.param(
-            CUDA_12_TEST,
+            CUDA_12_PLUS_TEST,
             marks=pytest.mark.skipif(
-                not IS_CUDA_12 or not HAVE_PYNVJITLINK,
-                reason="Minor Version Compatibility test for CUDA 12",
+                not IS_CUDA_12_PLUS,
+                reason="Minor Version Compatibility test for CUDA 12+",
             ),
         ),
     ],
