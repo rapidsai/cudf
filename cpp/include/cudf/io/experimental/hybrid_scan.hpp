@@ -332,6 +332,9 @@ class hybrid_scan_reader {
    * @brief Get byte ranges of bloom filters and dictionary pages (secondary filters) for row group
    *        pruning
    *
+   * @note Note that the bloom filters rmm::device_buffers must be allocated using a 32 byte
+   *       aligned memory resource
+   *
    * @param row_group_indices Input row groups indices
    * @param options Parquet reader options
    * @return Pair of vectors of byte ranges of column chunk with bloom filters and dictionary
@@ -360,8 +363,12 @@ class hybrid_scan_reader {
   /**
    * @brief Filter the row groups using column chunk bloom filters
    *
-   * @param bloom_filter_data Device buffers containing bloom filter data of column chunks
-   *                          with equality predicate
+   *
+   * @note Note that the rmm::device_buffers in `bloom_filter_data` must be allocated using a 32
+   *       byte aligned memory resource
+   *
+   * @param bloom_filter_data 32 byte aligned device buffers containing bloom filter data of column
+                              chunks with equality predicate.
    * @param row_group_indices Input row groups indices
    * @param options Parquet reader options
    * @param stream CUDA stream used for device memory operations and kernel launches
