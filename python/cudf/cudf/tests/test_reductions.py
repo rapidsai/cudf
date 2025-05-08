@@ -12,6 +12,7 @@ import pytest
 import cudf
 from cudf import Series
 from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
+from cudf.core.column.column import as_column
 from cudf.core.dtypes import Decimal32Dtype, Decimal64Dtype, Decimal128Dtype
 from cudf.testing import _utils as utils, assert_eq
 from cudf.testing._utils import NUMERIC_TYPES, expect_warning_if, gen_rand
@@ -346,9 +347,8 @@ def test_sum_masked(nelem):
 
     mask = utils.random_bitmask(nelem)
     bitmask = utils.expand_bits_to_bytes(mask)[:nelem]
-    null_count = utils.count_zero(bitmask)
 
-    sr = Series.from_masked_array(data, mask, null_count)
+    sr = Series._from_column(as_column(data).set_mask(mask))
 
     got = sr.sum()
     res_mask = np.asarray(bitmask, dtype=np.bool_)[: data.size]

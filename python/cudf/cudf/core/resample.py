@@ -23,6 +23,7 @@ import pandas as pd
 
 import cudf
 from cudf.core.abc import Serializable
+from cudf.core.column.column import deserialize_columns
 from cudf.core.groupby.groupby import (
     DataFrameGroupBy,
     GroupBy,
@@ -161,7 +162,7 @@ class _ResampleGrouping(_Grouping):
     def deserialize(cls, header, frames):
         names = header["names"]
         _named_columns = header["_named_columns"]
-        key_columns = cudf.core.column.deserialize_columns(
+        key_columns = deserialize_columns(
             header["columns"], frames[: -header["__bin_labels_count"]]
         )
         out = _ResampleGrouping.__new__(_ResampleGrouping)
@@ -215,7 +216,7 @@ class _ResampleGrouping(_Grouping):
 
         key_column = self._key_columns[0]
 
-        if not isinstance(key_column, cudf.core.column.DatetimeColumn):
+        if not key_column.dtype.kind == "M":
             raise TypeError(
                 f"Can only resample on a DatetimeIndex or datetime column, "
                 f"got column of type {key_column.dtype}"
