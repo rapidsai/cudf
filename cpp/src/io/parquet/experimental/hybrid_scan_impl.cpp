@@ -214,7 +214,7 @@ hybrid_scan_reader_impl::filter_row_groups_with_dictionary_pages(
   select_columns(read_mode::FILTER_COLUMNS, options);
 
   return _metadata->filter_row_groups_with_dictionary_pages(
-    {}, {}, row_group_indices, {}, {}, {}, {}, {}, stream);
+    {}, {}, row_group_indices, {}, {}, {}, {}, stream);
 }
 
 std::vector<std::vector<size_type>> hybrid_scan_reader_impl::filter_row_groups_with_bloom_filters(

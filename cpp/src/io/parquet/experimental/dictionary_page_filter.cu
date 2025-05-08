@@ -46,35 +46,17 @@ using parquet::detail::ColumnChunkDesc;
 using parquet::detail::decode_error;
 using parquet::detail::PageInfo;
 
-dictionary_literals_and_operators_collector::dictionary_literals_and_operators_collector() =
-  default;
+dictionary_literals_collector::dictionary_literals_collector() = default;
 
-dictionary_literals_and_operators_collector::dictionary_literals_and_operators_collector(
-  ast::expression const& expr, cudf::size_type num_input_columns)
+dictionary_literals_collector::dictionary_literals_collector(ast::expression const& expr,
+                                                             cudf::size_type num_input_columns)
 {
   _num_input_columns = num_input_columns;
   _literals.resize(num_input_columns);
-  _operators.resize(num_input_columns);
   expr.accept(*this);
 }
 
-std::reference_wrapper<ast::expression const> dictionary_literals_and_operators_collector::visit(
-  ast::column_reference const& expr)
-{
-  CUDF_EXPECTS(expr.get_table_source() == ast::table_reference::LEFT,
-               "DictionaryAST supports only left table");
-  CUDF_EXPECTS(expr.get_column_index() < _num_input_columns,
-               "Column index cannot be more than number of columns in the table");
-  return expr;
-}
-
-std::reference_wrapper<ast::expression const> dictionary_literals_and_operators_collector::visit(
-  ast::column_name_reference const& expr)
-{
-  CUDF_FAIL("Column name reference is not supported in DictionaryAST");
-}
-
-std::reference_wrapper<ast::expression const> dictionary_literals_and_operators_collector::visit(
+std::reference_wrapper<ast::expression const> dictionary_literals_collector::visit(
   ast::operation const& expr)
 {
   using cudf::ast::ast_operator;
@@ -95,7 +77,6 @@ std::reference_wrapper<ast::expression const> dictionary_literals_and_operators_
     if (op == ast_operator::EQUAL or op == ast::ast_operator::NOT_EQUAL) {
       auto const col_idx = v->get_column_index();
       _literals[col_idx].emplace_back(const_cast<ast::literal*>(literal_ptr));
-      _operators[col_idx].emplace_back(op);
     }
   } else {
     // Just visit the operands and ignore any output
@@ -103,12 +84,6 @@ std::reference_wrapper<ast::expression const> dictionary_literals_and_operators_
   }
 
   return expr;
-}
-
-std::pair<std::vector<std::vector<ast::literal*>>, std::vector<std::vector<ast::ast_operator>>>
-dictionary_literals_and_operators_collector::get_literals_and_operators() &&
-{
-  return {std::move(_literals), std::move(_operators)};
 }
 
 }  // namespace cudf::io::parquet::experimental::detail

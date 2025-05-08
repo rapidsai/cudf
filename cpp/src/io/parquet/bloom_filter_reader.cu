@@ -604,7 +604,7 @@ std::reference_wrapper<ast::expression const> equality_literals_collector::visit
   ast::column_reference const& expr)
 {
   CUDF_EXPECTS(expr.get_table_source() == ast::table_reference::LEFT,
-               "BloomfilterAST supports only left table");
+               "DictionaryAST and BloomfilterAST support only left table");
   CUDF_EXPECTS(expr.get_column_index() < _num_input_columns,
                "Column index cannot be more than number of columns in the table");
   return expr;
@@ -613,7 +613,7 @@ std::reference_wrapper<ast::expression const> equality_literals_collector::visit
 std::reference_wrapper<ast::expression const> equality_literals_collector::visit(
   ast::column_name_reference const& expr)
 {
-  CUDF_FAIL("Column name reference is not supported in BloomfilterAST");
+  CUDF_FAIL("Column name reference is not supported in DictionaryAST and BloomfilterAST");
 }
 
 std::reference_wrapper<ast::expression const> equality_literals_collector::visit(

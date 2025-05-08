@@ -332,13 +332,10 @@ std::vector<byte_range_info> aggregate_reader_metadata::get_dictionary_page_byte
   std::optional<std::reference_wrapper<ast::expression const>> filter)
 {
   // Collect equality literals for each input table column
-  auto const [literals, operators] =
-    dictionary_literals_and_operators_collector{filter.value().get(),
-                                                static_cast<cudf::size_type>(output_dtypes.size())}
-      .get_literals_and_operators();
-
-  CUDF_EXPECTS(literals.size() == operators.size(),
-               "Literals and operators must have the same size");
+  auto const literals =
+    dictionary_literals_collector{filter.value().get(),
+                                  static_cast<cudf::size_type>(output_dtypes.size())}
+      .get_literals();
 
   auto iter = thrust::make_zip_iterator(
     thrust::make_tuple(thrust::counting_iterator(0), output_column_schemas.begin()));
@@ -435,7 +432,6 @@ aggregate_reader_metadata::filter_row_groups_with_dictionary_pages(
   cudf::detail::hostdevice_span<parquet::detail::PageInfo const> pages,
   cudf::host_span<std::vector<cudf::size_type> const> row_group_indices,
   cudf::host_span<std::vector<ast::literal*> const> literals,
-  cudf::host_span<std::vector<ast::ast_operator> const> operators,
   cudf::host_span<data_type const> output_dtypes,
   cudf::host_span<int const> output_column_schemas,
   std::optional<std::reference_wrapper<ast::expression const>> filter,

@@ -158,7 +158,6 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
    *              page and (in)equality predicate
    * @param row_group_indices Input row groups indices
    * @param literals Lists of literals, one per input column
-   * @param operators Lists of operators, one per input column
    * @param output_dtypes Datatypes of output columns
    * @param dictionary_col_schemas schema indices of dictionary columns only
    * @param filter Optional AST expression to filter row groups based on dictionary pages
@@ -171,7 +170,6 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
     cudf::detail::hostdevice_span<parquet::detail::PageInfo const> pages,
     cudf::host_span<std::vector<cudf::size_type> const> row_group_indices,
     cudf::host_span<std::vector<ast::literal*> const> literals,
-    cudf::host_span<std::vector<ast::ast_operator> const> operators,
     cudf::host_span<data_type const> output_dtypes,
     cudf::host_span<int const> output_column_schemas,
     std::optional<std::reference_wrapper<ast::expression const>> filter,
@@ -202,47 +200,18 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
  * @brief Collects lists of equal and not-equal predicate literals in the AST expression, one list
  * per input table column. This is used in row group filtering based on dictionary pages.
  */
-class dictionary_literals_and_operators_collector : public equality_literals_collector {
+class dictionary_literals_collector : public equality_literals_collector {
  public:
-  dictionary_literals_and_operators_collector();
+  dictionary_literals_collector();
 
-  dictionary_literals_and_operators_collector(ast::expression const& expr,
-                                              cudf::size_type num_input_columns);
+  dictionary_literals_collector(ast::expression const& expr, cudf::size_type num_input_columns);
 
   using equality_literals_collector::visit;
-
-  /**
-   * @copydoc ast::detail::expression_transformer::visit(ast::column_reference const& )
-   */
-  std::reference_wrapper<ast::expression const> visit(ast::column_reference const& expr) override;
-
-  /**
-   * @copydoc ast::detail::expression_transformer::visit(ast::column_name_reference const& )
-   */
-  std::reference_wrapper<ast::expression const> visit(
-    ast::column_name_reference const& expr) override;
 
   /**
    * @copydoc ast::detail::expression_transformer::visit(ast::operation const& )
    */
   std::reference_wrapper<ast::expression const> visit(ast::operation const& expr) override;
-
-  /**
-   * @brief Returns the vectors of dictionary page filter literals in the AST expression, one per
-   * input table column
-   */
-  [[nodiscard]] std::vector<std::vector<ast::literal*>> get_literals() = delete;
-
-  /**
-   * @brief Returns a pair of two vectors containing dictionary filter literals and operators
-   * in the AST expression respectively, one per input table column
-   */
-  [[nodiscard]] std::pair<std::vector<std::vector<ast::literal*>>,
-                          std::vector<std::vector<ast::ast_operator>>>
-  get_literals_and_operators() &&;
-
- private:
-  std::vector<std::vector<ast::ast_operator>> _operators;
 };
 
 }  // namespace cudf::io::parquet::experimental::detail
