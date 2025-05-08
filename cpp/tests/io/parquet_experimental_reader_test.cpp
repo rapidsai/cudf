@@ -145,8 +145,9 @@ auto create_parquet_with_stats(
 TEST_F(ParquetExperimentalReaderTest, TestMetadata)
 {
   // Create a table with several row groups each with a single page.
-  auto constexpr num_concat = 1;
-  auto [_, file_buffer]     = create_parquet_with_stats<num_concat>();
+  auto constexpr num_concat         = 1;
+  auto constexpr rows_per_row_group = page_size_for_ordered_tests;
+  auto [_, file_buffer]             = create_parquet_with_stats<num_concat>();
 
   // Filtering AST - table[0] < 100
   auto literal_value     = cudf::numeric_scalar<uint32_t>(100);
@@ -203,14 +204,15 @@ TEST_F(ParquetExperimentalReaderTest, TestMetadata)
   // Get all row groups from the reader again
   input_row_group_indices = reader->all_row_groups(options);
   // Expect only 2 row groups now
-  EXPECT_EQ(reader->all_row_groups(options).size(), 2);
-  EXPECT_EQ(reader->total_rows_in_row_groups(input_row_group_indices), 2 * num_ordered_rows);
+  EXPECT_EQ(input_row_group_indices.size(), 2);
+  EXPECT_EQ(reader->total_rows_in_row_groups(input_row_group_indices), 2 * rows_per_row_group);
 }
 
 TEST_F(ParquetExperimentalReaderTest, TestFilterRowGroupWithStats)
 {
   // Create a table with 4 row groups each with a single page.
   auto constexpr num_concat         = 1;
+  auto constexpr rows_per_row_group = page_size_for_ordered_tests;
   auto [written_table, file_buffer] = create_parquet_with_stats<num_concat>();
 
   // Filtering AST - table[0] < 50
@@ -238,13 +240,13 @@ TEST_F(ParquetExperimentalReaderTest, TestFilterRowGroupWithStats)
   auto input_row_group_indices = reader->all_row_groups(options);
   // Expect 4 = 20000 rows / 5000 rows per row group
   EXPECT_EQ(input_row_group_indices.size(), 4);
-  EXPECT_EQ(reader->total_rows_in_row_groups(input_row_group_indices), 4 * num_ordered_rows);
+  EXPECT_EQ(reader->total_rows_in_row_groups(input_row_group_indices), 4 * rows_per_row_group);
 
   auto stats_filtered_row_groups = reader->filter_row_groups_with_stats(
     input_row_group_indices, options, cudf::get_default_stream());
   // Expect 3 row groups to be filtered out with stats
   EXPECT_EQ(stats_filtered_row_groups.size(), 1);
-  EXPECT_EQ(reader->total_rows_in_row_groups(stats_filtered_row_groups), num_ordered_rows);
+  EXPECT_EQ(reader->total_rows_in_row_groups(stats_filtered_row_groups), rows_per_row_group);
 
   // Use custom input row group indices
   input_row_group_indices   = {1, 2};
