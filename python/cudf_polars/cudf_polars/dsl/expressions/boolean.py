@@ -19,10 +19,9 @@ from cudf_polars.dsl.expressions.base import (
     ExecutionContext,
     Expr,
 )
+from cudf_polars.utils.versions import POLARS_VERSION_LT_128
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
-
     from typing_extensions import Self
 
     import polars.type_aliases as pl_types
@@ -89,9 +88,11 @@ class BooleanFunction(Expr):
             BooleanFunction.Name.IsLastDistinct,
             BooleanFunction.Name.IsUnique,
         )
-        if self.name is BooleanFunction.Name.IsIn and not all(
-            c.dtype == self.children[0].dtype for c in self.children
-        ):
+        if (
+            POLARS_VERSION_LT_128
+            and self.name is BooleanFunction.Name.IsIn
+            and not all(c.dtype == self.children[0].dtype for c in self.children)
+        ):  # pragma: no cover
             # TODO: If polars IR doesn't put the casts in, we need to
             # mimic the supertype promotion rules.
             raise NotImplementedError("IsIn doesn't support supertype casting")
@@ -145,11 +146,7 @@ class BooleanFunction(Expr):
     }
 
     def do_evaluate(
-        self,
-        df: DataFrame,
-        *,
-        context: ExecutionContext = ExecutionContext.FRAME,
-        mapping: Mapping[Expr, Column] | None = None,
+        self, df: DataFrame, *, context: ExecutionContext = ExecutionContext.FRAME
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
         if self.name in (
@@ -160,11 +157,9 @@ class BooleanFunction(Expr):
             (child,) = self.children
             is_finite = self.name is BooleanFunction.Name.IsFinite
             if child.dtype.id() not in (plc.TypeId.FLOAT32, plc.TypeId.FLOAT64):
-                value = plc.interop.from_arrow(
-                    pa.scalar(value=is_finite, type=plc.interop.to_arrow(self.dtype))
-                )
+                value = plc.Scalar.from_py(is_finite)
                 return Column(plc.Column.from_scalar(value, df.num_rows))
-            needles = child.evaluate(df, context=context, mapping=mapping)
+            needles = child.evaluate(df, context=context)
             to_search = [-float("inf"), float("inf")]
             if is_finite:
                 # NaN is neither finite not infinite
@@ -179,10 +174,7 @@ class BooleanFunction(Expr):
             if is_finite:
                 result = plc.unary.unary_operation(result, plc.unary.UnaryOperator.NOT)
             return Column(result)
-        columns = [
-            child.evaluate(df, context=context, mapping=mapping)
-            for child in self.children
-        ]
+        columns = [child.evaluate(df, context=context) for child in self.children]
         # Kleene logic for Any (OR) and All (AND) if ignore_nulls is
         # False
         if self.name in (BooleanFunction.Name.Any, BooleanFunction.Name.All):
@@ -233,48 +225,32 @@ class BooleanFunction(Expr):
             return self._distinct(
                 column,
                 keep=plc.stream_compaction.DuplicateKeepOption.KEEP_FIRST,
-                source_value=plc.interop.from_arrow(
-                    pa.scalar(value=True, type=plc.interop.to_arrow(self.dtype))
-                ),
-                target_value=plc.interop.from_arrow(
-                    pa.scalar(value=False, type=plc.interop.to_arrow(self.dtype))
-                ),
+                source_value=plc.Scalar.from_py(py_val=True, dtype=self.dtype),
+                target_value=plc.Scalar.from_py(py_val=False, dtype=self.dtype),
             )
         elif self.name is BooleanFunction.Name.IsLastDistinct:
             (column,) = columns
             return self._distinct(
                 column,
                 keep=plc.stream_compaction.DuplicateKeepOption.KEEP_LAST,
-                source_value=plc.interop.from_arrow(
-                    pa.scalar(value=True, type=plc.interop.to_arrow(self.dtype))
-                ),
-                target_value=plc.interop.from_arrow(
-                    pa.scalar(value=False, type=plc.interop.to_arrow(self.dtype))
-                ),
+                source_value=plc.Scalar.from_py(py_val=True, dtype=self.dtype),
+                target_value=plc.Scalar.from_py(py_val=False, dtype=self.dtype),
             )
         elif self.name is BooleanFunction.Name.IsUnique:
             (column,) = columns
             return self._distinct(
                 column,
                 keep=plc.stream_compaction.DuplicateKeepOption.KEEP_NONE,
-                source_value=plc.interop.from_arrow(
-                    pa.scalar(value=True, type=plc.interop.to_arrow(self.dtype))
-                ),
-                target_value=plc.interop.from_arrow(
-                    pa.scalar(value=False, type=plc.interop.to_arrow(self.dtype))
-                ),
+                source_value=plc.Scalar.from_py(py_val=True, dtype=self.dtype),
+                target_value=plc.Scalar.from_py(py_val=False, dtype=self.dtype),
             )
         elif self.name is BooleanFunction.Name.IsDuplicated:
             (column,) = columns
             return self._distinct(
                 column,
                 keep=plc.stream_compaction.DuplicateKeepOption.KEEP_NONE,
-                source_value=plc.interop.from_arrow(
-                    pa.scalar(value=False, type=plc.interop.to_arrow(self.dtype))
-                ),
-                target_value=plc.interop.from_arrow(
-                    pa.scalar(value=True, type=plc.interop.to_arrow(self.dtype))
-                ),
+                source_value=plc.Scalar.from_py(py_val=False, dtype=self.dtype),
+                target_value=plc.Scalar.from_py(py_val=True, dtype=self.dtype),
             )
         elif self.name is BooleanFunction.Name.AllHorizontal:
             return Column(

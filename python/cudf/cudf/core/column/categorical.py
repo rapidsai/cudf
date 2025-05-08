@@ -27,6 +27,7 @@ from cudf.utils.dtypes import (
     min_signed_type,
     min_unsigned_type,
 )
+from cudf.utils.utils import _is_null_host_scalar
 
 if TYPE_CHECKING:
     from collections import abc
@@ -621,7 +622,7 @@ class CategoricalColumn(column.ColumnBase):
         return self.dtype.ordered
 
     def __setitem__(self, key, value):
-        if is_scalar(value) and cudf.utils.utils._is_null_host_scalar(value):
+        if is_scalar(value) and _is_null_host_scalar(value):
             to_add_categories = 0
         else:
             if is_scalar(value):
