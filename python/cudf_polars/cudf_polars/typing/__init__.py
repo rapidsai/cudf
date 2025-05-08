@@ -81,6 +81,8 @@ CSECache: TypeAlias = MutableMapping[int, tuple["DataFrame", int]]
 
 ClosedInterval: TypeAlias = Literal["left", "right", "both", "none"]
 
+Duration: TypeAlias = tuple[int, int, int, int, bool, bool]
+
 
 class NodeTraverser(Protocol):
     """Abstract protocol for polars NodeTraverser."""

@@ -12,7 +12,7 @@ import pyarrow as pa
 import pylibcudf as plc
 
 if TYPE_CHECKING:
-    from cudf_polars.typing import ClosedInterval
+    from cudf_polars.typing import ClosedInterval, Duration
 
 
 __all__ = [
@@ -121,8 +121,8 @@ def duration_to_scalar(dtype: plc.DataType, value: int) -> pa.Scalar:
 
 def offsets_to_windows(
     dtype: plc.DataType,
-    offset: tuple[int, int, int, int, bool, bool],
-    period: tuple[int, int, int, int, bool, bool],
+    offset: Duration,
+    period: Duration,
 ) -> tuple[pa.Scalar, pa.Scalar]:
     """
     Convert polars offset/period pair to preceding/following windows.
