@@ -364,8 +364,8 @@ void host_compress(compression_type compression,
     };
     tasks.emplace_back(cudf::detail::host_worker_pool().submit_task(std::move(task)));
   }
-  for (auto i = 0ul; i < tasks.size(); ++i) {
-    auto const [idx, bytes_written] = tasks[i].get();
+  for (auto& task : tasks) {
+    auto const [idx, bytes_written] = task.get();
     h_results[idx]                  = {bytes_written, compression_status::SUCCESS};
   }
   cudf::detail::cuda_memcpy<compression_result>(results, h_results, stream);
