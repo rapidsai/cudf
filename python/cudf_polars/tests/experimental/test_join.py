@@ -140,7 +140,8 @@ def test_join_then_shuffle(left, right):
     assert_gpu_result_equal(q, engine=engine, check_row_order=False)
 
 
-def test_join_conditional(left, right):
+@pytest.mark.parametrize("reverse", [True, False])
+def test_join_conditional(reverse):
     engine = pl.GPUEngine(
         raise_on_fail=True,
         executor="streaming",
@@ -152,6 +153,9 @@ def test_join_conditional(left, right):
             "fallback_mode": "silent",
         },
     )
-
-    q = left.join_where(right, pl.col("y") < pl.col("xx"))
+    left = pl.LazyFrame({"x": range(15), "y": [1, 2, 3] * 5})
+    right = pl.LazyFrame({"xx": range(9), "yy": [2, 4, 3] * 3})
+    if reverse:
+        left, right = right, left
+    q = left.join_where(right, pl.col("y") < pl.col("yy"))
     assert_gpu_result_equal(q, engine=engine, check_row_order=False)
