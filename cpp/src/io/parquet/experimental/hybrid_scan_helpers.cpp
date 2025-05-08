@@ -40,10 +40,9 @@ using io::detail::inline_column_buffer;
 using parquet::detail::CompactProtocolReader;
 using parquet::detail::equality_literals_collector;
 using parquet::detail::input_column_info;
-using parquet::detail::row_group_info;
+using text::byte_range_info;
 
 namespace {
-
 // Construct a vector of all row group indices from the input vectors
 [[nodiscard]] auto all_row_group_indices(
   host_span<std::vector<cudf::size_type> const> row_group_indices)
@@ -261,7 +260,7 @@ std::vector<std::vector<cudf::size_type>> aggregate_reader_metadata::filter_row_
   return stats_filtered_row_group_indices.value_or(all_row_group_indices(row_group_indices));
 }
 
-std::vector<text::byte_range_info> aggregate_reader_metadata::get_bloom_filter_bytes(
+std::vector<byte_range_info> aggregate_reader_metadata::get_bloom_filter_bytes(
   cudf::host_span<std::vector<cudf::size_type> const> row_group_indices,
   host_span<data_type const> output_dtypes,
   host_span<int const> output_column_schemas,
@@ -292,7 +291,7 @@ std::vector<text::byte_range_info> aggregate_reader_metadata::get_bloom_filter_b
   auto const num_equality_columns = equality_col_schemas.size();
   auto const num_chunks           = total_row_groups * num_equality_columns;
 
-  std::vector<text::byte_range_info> bloom_filter_bytes;
+  std::vector<byte_range_info> bloom_filter_bytes;
   bloom_filter_bytes.reserve(num_chunks);
 
   // Flag to check if we have at least one valid bloom filter offset
@@ -326,7 +325,7 @@ std::vector<text::byte_range_info> aggregate_reader_metadata::get_bloom_filter_b
   return bloom_filter_bytes;
 }
 
-std::vector<cudf::io::text::byte_range_info> aggregate_reader_metadata::get_dictionary_page_bytes(
+std::vector<byte_range_info> aggregate_reader_metadata::get_dictionary_page_bytes(
   cudf::host_span<std::vector<cudf::size_type> const> row_group_indices,
   host_span<data_type const> output_dtypes,
   host_span<int const> output_column_schemas,
@@ -363,7 +362,7 @@ std::vector<cudf::io::text::byte_range_info> aggregate_reader_metadata::get_dict
   auto const num_equality_columns = dictionary_col_schemas.size();
   auto const num_chunks           = total_row_groups * num_equality_columns;
 
-  std::vector<cudf::io::text::byte_range_info> dictionary_page_bytes;
+  std::vector<byte_range_info> dictionary_page_bytes;
   dictionary_page_bytes.reserve(num_chunks);
 
   // Flag to check if we have at least one valid dictionary page
