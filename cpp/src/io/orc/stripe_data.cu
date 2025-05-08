@@ -25,6 +25,8 @@
 
 #include <cub/cub.cuh>
 
+#include <atomic>
+
 namespace cudf::io::orc::detail {
 
 using cudf::io::detail::string_index_pair;
@@ -300,6 +302,34 @@ class cache_helper {
  private:
   run_cache_manager& _manager;  ///< An instance of run_cache_manager.
   int64_t _storage;             ///< Per-thread cache storage.
+};
+
+class validator {
+ public:
+  __device__ validator(bool for_primary_stream,
+                       uint32_t base_aligned_stream_length,
+                       size_type* error_count)
+    : for_primary_stream_(for_primary_stream),
+      is_first_thread_for_last_rowgroup_(blockIdx.x == gridDim.x - 1 and threadIdx.x == 0),
+      base_aligned_stream_length_(base_aligned_stream_length),
+      error_count_(error_count)
+  {
+  }
+
+  __device__ void check_stream(uint32_t current_pos)
+  {
+    if (is_first_thread_for_last_rowgroup_ and current_pos > base_aligned_stream_length_) {
+      atomicAdd(error_count_, 1);
+    }
+  }
+
+  __device__ bool for_primary_stream() { return for_primary_stream_; }
+
+ private:
+  bool for_primary_stream_{};
+  bool is_first_thread_for_last_rowgroup_{};
+  uint32_t base_aligned_stream_length_{};
+  size_type* error_count_{};
 };
 
 /**
@@ -812,6 +842,7 @@ static __device__ uint32_t integer_rlev2(orc_bytestream_s* bs,
                                          T* vals,
                                          uint32_t maxvals,
                                          int t,
+                                         validator* validator_inst       = nullptr,
                                          bool has_buffered_values        = false,
                                          cache_helper* cache_helper_inst = nullptr)
 {
@@ -869,11 +900,13 @@ static __device__ uint32_t integer_rlev2(orc_bytestream_s* bs,
       if ((numvals == 0) and (n > maxvals) and (has_buffered_values)) break;
 
       pos += l;
+      if (validator_inst != nullptr) { validator_inst->check_stream(pos); }
       if (pos > maxpos) break;
       ((numvals == 0) and (n > maxvals)) ? numvals = maxvals : numvals += n;
       lastpos = pos;
       numruns++;
     }
+
     rle->num_vals = numvals;
     rle->num_runs = numruns;
     bytestream_flush_bytes(bs, lastpos - bs->pos);
@@ -1645,6 +1678,10 @@ CUDF_KERNEL void __launch_bounds__(block_size)
   }
   __syncthreads();
 
+  validator validator_for_primary_stream(true, s->bs.pos + s->chunk.strm_len[CI_DATA], error_count);
+  validator validator_for_secondary_stream(
+    false, s->bs2.pos + s->chunk.strm_len[CI_DATA2], error_count);
+
   while (is_valid && (s->top.data.cur_row < s->top.data.end_row)) {
     uint32_t list_child_elements = 0;
     bytestream_fill(&s->bs, t);
@@ -1670,8 +1707,11 @@ CUDF_KERNEL void __launch_bounds__(block_size)
       uint32_t vals_skipped  = 0;
       if (s->is_string || s->chunk.type_kind == TIMESTAMP) {
         // For these data types, we have a secondary unsigned 32-bit data stream
-        orc_bytestream_s* bs = (is_dictionary(s->chunk.encoding_kind)) ? &s->bs : &s->bs2;
-        uint32_t ofs         = 0;
+        bool is_dict         = is_dictionary(s->chunk.encoding_kind);
+        orc_bytestream_s* bs = is_dict ? &s->bs : &s->bs2;
+        validator* validator_inst =
+          is_dict ? &validator_for_primary_stream : &validator_for_secondary_stream;
+        uint32_t ofs = 0;
         if (s->chunk.type_kind == TIMESTAMP) {
           // Restore buffered secondary stream values, if any
           ofs = s->top.data.buffered_count;
@@ -1689,10 +1729,14 @@ CUDF_KERNEL void __launch_bounds__(block_size)
           } else {
             if (s->chunk.type_kind == TIMESTAMP)
               numvals =
-                ofs + integer_rlev2(bs, &s->u.rlev2, &s->vals.u64[ofs], numvals - ofs, t, ofs > 0);
+                ofs +
+                integer_rlev2(
+                  bs, &s->u.rlev2, &s->vals.u64[ofs], numvals - ofs, t, validator_inst, ofs > 0);
             else
               numvals =
-                ofs + integer_rlev2(bs, &s->u.rlev2, &s->vals.u32[ofs], numvals - ofs, t, ofs > 0);
+                ofs +
+                integer_rlev2(
+                  bs, &s->u.rlev2, &s->vals.u32[ofs], numvals - ofs, t, validator_inst, ofs > 0);
           }
           __syncthreads();
           if (numvals <= ofs && t >= ofs && t < s->top.data.max_vals) { s->vals.u32[t] = 0; }
@@ -1751,14 +1795,16 @@ CUDF_KERNEL void __launch_bounds__(block_size)
         if (is_rlev1(s->chunk.encoding_kind)) {
           numvals = integer_rlev1(&s->bs, &s->u.rlev1, s->vals.i32, numvals, t);
         } else {
-          numvals = integer_rlev2(&s->bs, &s->u.rlev2, s->vals.i32, numvals, t);
+          numvals = integer_rlev2(
+            &s->bs, &s->u.rlev2, s->vals.i32, numvals, t, &validator_for_primary_stream);
         }
         __syncthreads();
       } else if (s->chunk.type_kind == LIST or s->chunk.type_kind == MAP) {
         if (is_rlev1(s->chunk.encoding_kind)) {
           numvals = integer_rlev1<uint64_t>(&s->bs2, &s->u.rlev1, s->vals.u64, numvals, t);
         } else {
-          numvals = integer_rlev2<uint64_t>(&s->bs2, &s->u.rlev2, s->vals.u64, numvals, t);
+          numvals = integer_rlev2<uint64_t>(
+            &s->bs2, &s->u.rlev2, s->vals.u64, numvals, t, &validator_for_secondary_stream);
         }
         __syncthreads();
       } else if (s->chunk.type_kind == BYTE) {
@@ -1797,7 +1843,10 @@ CUDF_KERNEL void __launch_bounds__(block_size)
 
       } else if (s->chunk.type_kind == LONG || s->chunk.type_kind == TIMESTAMP ||
                  s->chunk.type_kind == DECIMAL) {
-        orc_bytestream_s* bs = (s->chunk.type_kind == DECIMAL) ? &s->bs2 : &s->bs;
+        bool is_decimal      = (s->chunk.type_kind == DECIMAL);
+        orc_bytestream_s* bs = is_decimal ? &s->bs2 : &s->bs;
+        validator* validator_inst =
+          is_decimal ? &validator_for_secondary_stream : &validator_for_primary_stream;
         if (is_rlev1(s->chunk.encoding_kind)) {
           numvals = integer_rlev1<int64_t>(bs, &s->u.rlev1, s->vals.i64, numvals, t);
         } else {
@@ -1806,6 +1855,7 @@ CUDF_KERNEL void __launch_bounds__(block_size)
                                            s->vals.i64,
                                            numvals,
                                            t,
+                                           validator_inst,
                                            false /**has_buffered_values */,
                                            &cache_helper_inst);
         }

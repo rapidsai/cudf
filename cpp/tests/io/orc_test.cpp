@@ -1814,6 +1814,17 @@ TEST_F(OrcWriterTest, EmptyRowGroup)
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
 }
 
+TEST(OrcWriterTestDebug, DebugReadOrc)
+{
+  //   std::string filepath = "/home/coder/cudf/debug/orc_null/data/good_OrcEmptyRowGroup.orc";
+  //   std::string filepath = "/home/coder/cudf/debug/orc_null/data/bad_OrcEmptyRowGroup.orc";
+  std::string filepath = "/home/coder/cudf/debug/orc_null/data/col_b_only.orc";
+  //   std::string filepath = "/home/coder/cudf/debug/orc_null/data/five_elements.orc";
+  cudf::io::orc_reader_options in_opts =
+    cudf::io::orc_reader_options::builder(cudf::io::source_info{filepath});
+  [[maybe_unused]] auto result = cudf::io::read_orc(in_opts);
+}
+
 TEST_F(OrcWriterTest, NoNullsAsNonNullable)
 {
   auto valids = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });

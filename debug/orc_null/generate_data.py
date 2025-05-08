@@ -9,8 +9,9 @@ class DataGenerator:
         print("--> orc_path: {}".format(orc_path))
 
     def run(self):
-        my_list = [np.nan] * 10000
-        my_list.extend([-1] * 5)
+        # my_list = [np.nan] * 10000
+        # my_list.extend([-1] * 5)
+        my_list = [1] * 5
         my_series = pd.Series(my_list, name="biu", dtype="Int64")
         df = pd.DataFrame(my_series)
         print(df)
@@ -19,6 +20,6 @@ class DataGenerator:
 
 
 if __name__ == "__main__":
-    orc_path = "data/ref.orc"
+    orc_path = "data/five_elements.orc"
     dg = DataGenerator(orc_path)
     dg.run()

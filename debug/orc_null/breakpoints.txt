@@ -1,12 +1,13 @@
-# b /home/coder/cudf/cpp/src/io/orc/stripe_data.cu:832
+b /home/coder/cudf/cpp/src/io/orc/stripe_data.cu:321
+
 # b /home/coder/cudf/cpp/src/io/orc/stripe_data.cu:2096
-# b /home/coder/cudf/cpp/src/io/orc/stripe_data.cu:1648
+# b /home/coder/cudf/cpp/src/io/orc/stripe_data.cu:1699
 # b /home/coder/cudf/cpp/src/io/orc/stripe_data.cu:1883
 # b /home/coder/cudf/cpp/src/io/orc/stripe_data.cu:1663
 
 # b /home/coder/cudf/cpp/src/io/orc/stripe_data.cu:2085
 
-b /home/coder/cudf/cpp/src/io/orc/stripe_data.cu:315
+# b /home/coder/cudf/cpp/src/io/orc/stripe_data.cu:319
 
 define biu0
     cuda block (0,0,0) thread (0,0,0)
