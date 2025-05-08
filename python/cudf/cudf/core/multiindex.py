@@ -29,17 +29,19 @@ from cudf.core.frame import Frame
 from cudf.core.index import (
     BaseIndex,
     _get_indexer_basic,
+    _index_from_data,
     _lexsorted_equal_range,
     ensure_index,
 )
 from cudf.core.join._join_helpers import _match_join_keys
+from cudf.core.mixins import NotIterable
 from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
     SIZE_TYPE_DTYPE,
     is_column_like,
 )
 from cudf.utils.performance_tracking import _performance_tracking
-from cudf.utils.utils import NotIterable, _external_only_api, _is_same_name
+from cudf.utils.utils import _external_only_api, _is_same_name
 
 if TYPE_CHECKING:
     from collections.abc import Generator, Hashable, MutableMapping
@@ -1602,7 +1604,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             new_data.pop(self._data.names[i])
 
         if len(new_data) == 1:
-            return cudf.core.index._index_from_data(new_data)
+            return _index_from_data(new_data)
         else:
             mi = type(self)._from_data(new_data)
             mi.names = new_names
@@ -2181,7 +2183,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             # None is caught later to return RangeIndex
             return None
 
-        index = cudf.core.index._index_from_data(
+        index = _index_from_data(
             dict(enumerate(index_columns)),
             name=name,
         )
