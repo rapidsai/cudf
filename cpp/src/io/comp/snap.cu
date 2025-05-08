@@ -252,6 +252,8 @@ CUDF_KERNEL void __launch_bounds__(128)
 {
   __shared__ __align__(16) snap_state_s state_g;
 
+  if (results[blockIdx.x].status == compression_status::SKIPPED) { return; }
+
   snap_state_s* const s = &state_g;
   uint32_t t            = threadIdx.x;
   uint32_t pos;
