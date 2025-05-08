@@ -176,7 +176,7 @@ def _decompose_unique(
 
     cardinality: float | None = None
     if cardinality_factor := {
-        v
+        max(min(v, 1.0), 0.0)
         for k, v in config_options.executor.cardinality_factor.items()
         if k in _leaf_column_names(child)
     }:

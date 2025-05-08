@@ -157,7 +157,7 @@ def _(
 
     subset: frozenset = ir.subset or frozenset(ir.schema)
     cardinality_factor = {
-        c: min(f, 1.0)
+        c: max(min(f, 1.0), 0.0)
         for c, f in config_options.executor.cardinality_factor.items()
         if c in subset
     }
