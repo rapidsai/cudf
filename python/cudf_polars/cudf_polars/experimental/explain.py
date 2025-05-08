@@ -15,9 +15,7 @@ from cudf_polars.dsl.ir import (
     IR,
     GroupBy,
     Join,
-    Projection,
     Scan,
-    Select,
     Sort,
 )
 from cudf_polars.dsl.translate import Translator
@@ -131,36 +129,6 @@ def _(
     count = partition_info[ir].count if partition_info else None
     return (
         f"{offset}JOIN {ir.options[0]} {left_on} {right_on}"
-        + (f" [{count}]" if count is not None else "")
-        + "\n"
-    )
-
-
-@_repr_ir.register
-def _(
-    ir: Projection,
-    partition_info: MutableMapping[IR, PartitionInfo] | None = None,
-    *,
-    offset: str = "",
-) -> str:
-    count = partition_info[ir].count if partition_info else None
-    return (
-        f"{offset}PROJECTION {tuple(ir.schema)}"
-        + (f" [{count}]" if count is not None else "")
-        + "\n"
-    )
-
-
-@_repr_ir.register
-def _(
-    ir: Select,
-    partition_info: MutableMapping[IR, PartitionInfo] | None = None,
-    *,
-    offset: str = "",
-) -> str:
-    count = partition_info[ir].count if partition_info else None
-    return (
-        f"{offset}SELECT {tuple(ir.schema)}"
         + (f" [{count}]" if count is not None else "")
         + "\n"
     )
