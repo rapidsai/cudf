@@ -274,11 +274,13 @@ def _sample_pq_statistics(ir: Scan) -> dict[str, np.floating[T]]:
 
     # For each column, calculate the `total_uncompressed_size` for each file
     for name, uncompressed_sizes in metadata.columnchunk_metadata().items():
-        column_sizes[name] = np.array([
-            np.sum(uncompressed_sizes[start:end])
-            for (start, end) in itertools.pairwise(rowgroup_offsets_per_file)
-        ], dtype="int64")
-            
+        column_sizes[name] = np.array(
+            [
+                np.sum(uncompressed_sizes[start:end])
+                for (start, end) in itertools.pairwise(rowgroup_offsets_per_file)
+            ],
+            dtype="int64",
+        )
 
     # Return the mean per-file `total_uncompressed_size` for each column
     return {name: np.mean(sizes) for name, sizes in column_sizes.items()}
