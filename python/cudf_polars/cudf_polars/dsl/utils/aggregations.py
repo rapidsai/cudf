@@ -20,11 +20,7 @@ if TYPE_CHECKING:
 
     from cudf_polars.typing import Schema
 
-__all__ = [
-    "apply_pre_evaluation",
-    "decompose_aggs",
-    "decompose_single_agg",
-]
+__all__ = ["apply_pre_evaluation", "decompose_aggs", "decompose_single_agg"]
 
 
 def decompose_single_agg(
@@ -32,7 +28,7 @@ def decompose_single_agg(
     name_generator: Generator[str, None, None],
     *,
     is_top: bool,
-) -> tuple[list[expr.NamedExpr], expr.NamedExpr, bool]:
+) -> tuple[list[tuple[expr.NamedExpr, bool]], expr.NamedExpr]:
     """
     Decompose a single named aggregation.
 
@@ -48,14 +44,12 @@ def decompose_single_agg(
     Returns
     -------
     aggregations
-        Expressions to apply as grouped aggregations (whose children
-        may be evaluated pointwise).
+        Pairs of expressions to apply as grouped aggregations (whose children
+        may be evaluated pointwise) and flags indicating if the
+        expression contained nested aggregations.
     post_aggregate
         Single expression to apply to post-process the grouped
         aggregations.
-    is_nested
-        Flag indicating whether processing in the inner expression
-        itself requires aggregations.
 
     Raises
     ------
@@ -66,11 +60,11 @@ def decompose_single_agg(
     agg = named_expr.value
     name = named_expr.name
     if isinstance(agg, expr.Col):
-        return [named_expr], named_expr, False
+        return [(named_expr, False)], named_expr
     if isinstance(agg, expr.Len):
-        return [named_expr], named_expr.reconstruct(expr.Col(agg.dtype, name)), True
+        return [(named_expr, True)], named_expr.reconstruct(expr.Col(agg.dtype, name))
     if isinstance(agg, (expr.Literal, expr.LiteralColumn)):
-        return [], named_expr, False
+        return [], named_expr
     if isinstance(agg, expr.Agg):
         if agg.name == "quantile":
             # Second child the requested quantile (which is asserted
@@ -84,10 +78,10 @@ def decompose_single_agg(
         if needs_masking and agg.options:
             # pl.col("a").nan_max or nan_min
             raise NotImplementedError("Nan propagation in groupby for min/max")
-        _, _, has_agg = decompose_single_agg(
+        aggs, _ = decompose_single_agg(
             expr.NamedExpr(next(name_generator), child), name_generator, is_top=False
         )
-        if has_agg:
+        if any(has_agg for _, has_agg in aggs):
             raise NotImplementedError("Nested aggs in groupby not supported")
         if needs_masking:
             child = expr.UnaryFunction(child.dtype, "mask_nans", (), child)
@@ -95,9 +89,8 @@ def decompose_single_agg(
             # (potentially masked) child. This is safe because we recursed
             # to ensure there are no nested aggregations.
             return (
-                [named_expr.reconstruct(agg.reconstruct([child]))],
+                [(named_expr.reconstruct(agg.reconstruct([child])), True)],
                 named_expr.reconstruct(expr.Col(agg.dtype, name)),
-                True,
             )
         elif agg.name == "sum":
             col = (
@@ -115,28 +108,28 @@ def decompose_single_agg(
                     agg.dtype, pa.scalar(0, type=plc.interop.to_arrow(agg.dtype))
                 )
                 return (
-                    [named_expr],
+                    [(named_expr, True)],
                     named_expr.reconstruct(
                         expr.UnaryFunction(agg.dtype, "fill_null", (), col, rep)
                     ),
-                    True,
                 )
             else:
-                return [named_expr], expr.NamedExpr(name, col), True
+                return [(named_expr, True)], expr.NamedExpr(name, col)
         else:
-            return [named_expr], named_expr.reconstruct(expr.Col(agg.dtype, name)), True
+            return [(named_expr, True)], named_expr.reconstruct(
+                expr.Col(agg.dtype, name)
+            )
     if isinstance(agg, expr.Ternary):
         raise NotImplementedError("Ternary inside groupby")
     if agg.is_pointwise:
-        aggs, posts, has_aggs = _decompose_aggs(
+        aggs, posts = _decompose_aggs(
             (expr.NamedExpr(next(name_generator), child) for child in agg.children),
             name_generator,
             is_top=False,
         )
-        if any(has_aggs):
+        if any(has_agg for _, has_agg in aggs):
             if not all(
-                has_agg or isinstance(agg.value, expr.Literal)
-                for agg, has_agg in zip(aggs, has_aggs, strict=True)
+                has_agg or isinstance(agg.value, expr.Literal) for agg, has_agg in aggs
             ):
                 raise NotImplementedError(
                     "Broadcasting aggregated expressions in groupby/rolling"
@@ -146,14 +139,12 @@ def decompose_single_agg(
             return (
                 aggs,
                 named_expr.reconstruct(agg.reconstruct([p.value for p in posts])),
-                True,
             )
         else:
             # Or pre-evaluation if inside an aggregation.
             return (
-                [named_expr],
+                [(named_expr, False)],
                 named_expr.reconstruct(expr.Col(agg.dtype, name)),
-                False,
             )
     raise NotImplementedError(f"No support for {type(agg)} in groupby/rolling")
 
@@ -163,16 +154,12 @@ def _decompose_aggs(
     name_generator: Generator[str, None, None],
     *,
     is_top: bool,
-) -> tuple[list[expr.NamedExpr], Sequence[expr.NamedExpr], Sequence[bool]]:
-    new_aggs, post, has_aggs = zip(
+) -> tuple[list[tuple[expr.NamedExpr, bool]], Sequence[expr.NamedExpr]]:
+    new_aggs, post = zip(
         *(decompose_single_agg(agg, name_generator, is_top=is_top) for agg in aggs),
         strict=True,
     )
-    return (
-        list(itertools.chain.from_iterable(new_aggs)),
-        post,
-        has_aggs,
-    )
+    return list(itertools.chain.from_iterable(new_aggs)), post
 
 
 def decompose_aggs(
@@ -206,8 +193,8 @@ def decompose_aggs(
     NotImplementedError
         For unsupported aggregation combinations.
     """
-    new_aggs, post, _ = _decompose_aggs(aggs, name_generator, is_top=True)
-    return new_aggs, post
+    new_aggs, post = _decompose_aggs(aggs, name_generator, is_top=True)
+    return [agg for agg, _ in new_aggs], post
 
 
 def apply_pre_evaluation(

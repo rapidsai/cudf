@@ -661,9 +661,10 @@ def _(
         # pl.col("a").rolling(...)
         agg = translator.translate_expr(n=node.function, schema=schema)
         name_generator = unique_names(schema)
-        named_aggs, named_post_agg, _ = decompose_single_agg(
+        aggs, named_post_agg = decompose_single_agg(
             expr.NamedExpr(next(name_generator), agg), name_generator, is_top=True
         )
+        named_aggs = [agg for agg, _ in aggs]
         orderby = node.options.index_column
         preceding, following = offsets_to_windows(
             schema[orderby],

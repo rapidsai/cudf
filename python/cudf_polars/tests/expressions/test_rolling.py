@@ -1,11 +1,14 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
 
 import polars as pl
 
-from cudf_polars.testing.asserts import assert_ir_translation_raises
+from cudf_polars.testing.asserts import (
+    assert_gpu_result_equal,
+    assert_ir_translation_raises,
+)
 
 
 def test_rolling():
@@ -24,11 +27,11 @@ def test_rolling():
     )
     q = df.with_columns(
         sum_a=pl.sum("a").rolling(index_column="dt", period="2d"),
-        min_a=pl.min("a").rolling(index_column="dt", period="2d"),
-        max_a=pl.max("a").rolling(index_column="dt", period="2d"),
+        min_a=pl.min("a").rolling(index_column="dt", period="5d"),
+        max_a=pl.max("a").rolling(index_column="dt", period="10d", offset="2d"),
     )
 
-    assert_ir_translation_raises(q, NotImplementedError)
+    assert_gpu_result_equal(q)
 
 
 def test_grouped_rolling():
