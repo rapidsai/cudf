@@ -6,6 +6,7 @@ import nanoarrow.device
 import numpy as np
 import pyarrow as pa
 import pytest
+from packaging.version import parse
 from utils import assert_column_eq, assert_table_eq
 
 import pylibcudf as plc
@@ -165,6 +166,10 @@ def test_device_interop_table():
     assert_table_eq(pa_tbl, new_tbl)
 
 
+@pytest.mark.skipif(
+    parse(pa.__version__) < parse("16.0.0"),
+    reason="https://github.com/apache/arrow/pull/39985",
+)
 @pytest.mark.parametrize(
     "data",
     [
