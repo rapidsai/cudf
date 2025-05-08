@@ -106,6 +106,7 @@ def lower_distinct(
             raise NotImplementedError("Unsupported slice for multiple partitions.")
     elif cardinality is not None:
         # Use cardinality to determine partitioning
+        cardinality = max(cardinality, 0.0001)  # Avoid divide by 0
         n_ary = min(max(int(1.0 / cardinality), 2), child_count)
         output_count = max(int(cardinality * child_count), 1)
 
