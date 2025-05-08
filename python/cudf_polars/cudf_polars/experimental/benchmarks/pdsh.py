@@ -1114,6 +1114,12 @@ parser.add_argument(
     help="Print an outline of the physical plan",
     default=False,
 )
+parser.add_argument(
+    "--explain-logical",
+    action=argparse.BooleanOptionalAction,
+    help="Print an outline of the logical plan",
+    default=False,
+)
 args = parser.parse_args()
 
 
@@ -1205,8 +1211,12 @@ def run(args: argparse.Namespace) -> None:
             if args.print_results:
                 print(result)
             if args.explain and it == 0:
-                print(f"\nQuery {q_id} - Physical plan\n")
-                print(explain_query(q, engine))
+                if args.explain_logical:
+                    print(f"\nQuery {q_id} - Logical plan\n")
+                    print(explain_query(q, engine, physical=False))
+                else:
+                    print(f"\nQuery {q_id} - Physical plan\n")
+                    print(explain_query(q, engine))
             print(f"Ran query={q_id} in {record.duration:0.4f}s", flush=True)
             records[q_id].append(record)
 
