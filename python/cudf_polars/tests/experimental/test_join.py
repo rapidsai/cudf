@@ -140,13 +140,14 @@ def test_join_then_shuffle(left, right):
     assert_gpu_result_equal(q, engine=engine, check_row_order=False)
 
 
+@pytest.mark.parametrize("max_rows_per_partition", [3, 9])
 @pytest.mark.parametrize("reverse", [True, False])
-def test_join_conditional(reverse):
+def test_join_conditional(reverse, max_rows_per_partition):
     engine = pl.GPUEngine(
         raise_on_fail=True,
         executor="streaming",
         executor_options={
-            "max_rows_per_partition": 3,
+            "max_rows_per_partition": max_rows_per_partition,
             "scheduler": DEFAULT_SCHEDULER,
             "fallback_mode": "silent",
         },

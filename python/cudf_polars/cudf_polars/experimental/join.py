@@ -192,7 +192,7 @@ def _(
         return _lower_ir_fallback(
             ir,
             rec,
-            msg="Slice not supported in ConditionalJoin for multiple partitions."
+            msg="Slice not supported in ConditionalJoin for multiple partitions.",
         )
 
     # Lower children
