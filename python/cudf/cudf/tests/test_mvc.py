@@ -3,13 +3,17 @@ import subprocess
 import sys
 from importlib.util import find_spec
 
-import pytest
-
 IS_CUDA_12_PLUS = find_spec("pynvjitlink") is not None
 IS_CUDA_11 = not IS_CUDA_12_PLUS
 
 
-TEST_BODY = """
+TEST_SCRIPT = """
+import numba.cuda
+import cudf
+from cudf.utils._numba import _CUDFNumbaConfig, _setup_numba
+
+_setup_numba()
+
 @numba.cuda.jit
 def test_kernel(x):
     id = numba.cuda.grid(1)
@@ -21,56 +25,10 @@ with _CUDFNumbaConfig():
     test_kernel.forall(len(s))(s)
 """
 
-CUDA_11_TEST = (
-    """
-import numba.cuda
-import cudf
-from cudf.utils._numba import _CUDFNumbaConfig, patch_numba_linker_cuda_11
 
-
-patch_numba_linker_cuda_11()
-"""
-    + TEST_BODY
-)
-
-
-CUDA_12_PLUS_TEST = (
-    """
-import numba.cuda
-import cudf
-from cudf.utils._numba import _CUDFNumbaConfig
-from pynvjitlink.patch import (
-    patch_numba_linker as patch_numba_linker_pynvjitlink,
-)
-
-patch_numba_linker_pynvjitlink()
-"""
-    + TEST_BODY
-)
-
-
-@pytest.mark.parametrize(
-    "test",
-    [
-        pytest.param(
-            CUDA_11_TEST,
-            marks=pytest.mark.skipif(
-                not IS_CUDA_11,
-                reason="Minor Version Compatibility test for CUDA 11",
-            ),
-        ),
-        pytest.param(
-            CUDA_12_PLUS_TEST,
-            marks=pytest.mark.skipif(
-                not IS_CUDA_12_PLUS,
-                reason="Minor Version Compatibility test for CUDA 12+",
-            ),
-        ),
-    ],
-)
-def test_numba_mvc(test):
+def test_numba_mvc():
     cp = subprocess.run(
-        [sys.executable, "-c", test],
+        [sys.executable, "-c", TEST_SCRIPT],
         capture_output=True,
         cwd="/",
     )
