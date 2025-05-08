@@ -127,13 +127,13 @@ def _setup_numba():
         # This could be the shipped shim PTX file (determined by the CUDA
         # version used at build time) or the PTX emitted by the version of NVVM
         # on the user system (determined by the user's CUDA runtime version)
-        if (driver_version < shim_ptx_cuda_version) or (
-            driver_version < runtime_version
-        ):
-            if driver_version < (12, 0):
+        if driver_version < (12, 0):
+            if (driver_version < shim_ptx_cuda_version) or (
+                driver_version < runtime_version
+            ):
                 patch_numba_linker_cuda_11()
-            else:
-                numba_config.CUDA_ENABLE_PYNVJITLINK = True
+        else:
+            numba_config.CUDA_ENABLE_PYNVJITLINK = True
 
 
 # Avoids using contextlib.contextmanager due to additional overhead
