@@ -101,7 +101,7 @@ cdef class JsonWriterOptionsBuilder:
 
 cpdef void write_json(JsonWriterOptions options, Stream stream = *)
 
-cpdef bool is_supported_write_json_type(DataType type)
+cpdef bool is_json_writable_type(DataType type)
 
 cpdef tuple chunked_read_json(
     JsonReaderOptions options,

@@ -1764,7 +1764,7 @@ void write_csv(csv_writer_options const& options,
  * @param type The data_type to check.
  * @return true if the type is supported for CSV writing, false otherwise.
  */
-bool is_supported_write_csv_type(data_type type);
+bool is_csv_writable_type(data_type type);
 
 /** @} */  // end of group
 }  // namespace io

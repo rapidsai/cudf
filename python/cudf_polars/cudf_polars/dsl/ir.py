@@ -763,10 +763,10 @@ class Sink(IR):
             raise NotImplementedError(
                 f"sync_on_close='{sync_on_close}' is not supported."
             )  # pragma: no cover; no test yet
+        child_schema = df.schema.values()
         if kind == "Csv":
             if not all(
-                plc.io.csv.is_supported_write_csv_type(dtype)
-                for dtype in schema.values()
+                plc.io.csv.is_csv_writable_type(dtype) for dtype in child_schema
             ):
                 # Nested types are unsupported in polars and libcudf
                 raise NotImplementedError(
@@ -817,8 +817,7 @@ class Sink(IR):
             kind == "Json"
         ):  # pragma: no cover; options are validated on the polars side
             if not all(
-                plc.io.csv.is_supported_write_json_type(dtype)
-                for dtype in schema.values()
+                plc.io.json.is_json_writable_type(dtype) for dtype in child_schema
             ):
                 # Nested types are unsupported in polars and libcudf
                 raise NotImplementedError(

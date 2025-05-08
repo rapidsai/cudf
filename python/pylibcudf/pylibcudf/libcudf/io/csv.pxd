@@ -344,6 +344,6 @@ cdef extern from "cudf/io/csv.hpp" \
         cuda_stream_view stream,
     ) except +libcudf_exception_handler
 
-    cdef bool is_supported_write_csv_type(
+    cdef bool is_csv_writable_type(
         data_type type
     ) except +libcudf_exception_handler

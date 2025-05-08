@@ -15,7 +15,7 @@ from pylibcudf.libcudf.io.csv cimport (
     csv_writer_options,
     read_csv as cpp_read_csv,
     write_csv as cpp_write_csv,
-    is_supported_write_csv_type as cpp_is_supported_write_csv_type,
+    is_csv_writable_type as cpp_is_csv_writable_type,
 )
 
 from pylibcudf.libcudf.io.types cimport (
@@ -867,9 +867,9 @@ cpdef void write_csv(
         cpp_write_csv(move(options.c_obj), s.view())
 
 
-cpdef bool is_supported_write_csv_type(DataType type):
+cpdef bool is_csv_writable_type(DataType type):
     """Check if the dtype is supported for CSV writing
 
     For details, see :cpp:func:`is_supported_write_type`.
     """
-    return cpp_is_supported_write_csv_type(type.c_obj)
+    return cpp_is_csv_writable_type(type.c_obj)

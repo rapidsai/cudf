@@ -269,7 +269,7 @@ struct is_supported_json_write_type_fn {
   }
 };
 
-bool is_supported_write_json_type(data_type type)
+bool is_json_writable_type(data_type type)
 {
   return cudf::type_dispatcher(type, is_supported_json_write_type_fn{});
 }
@@ -319,7 +319,7 @@ struct is_supported_csv_write_type_fn {
   }
 };
 
-bool is_supported_write_csv_type(data_type type)
+bool is_csv_writable_type(data_type type)
 {
   return cudf::type_dispatcher(type, is_supported_csv_write_type_fn{});
 }

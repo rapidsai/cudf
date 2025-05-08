@@ -26,13 +26,6 @@ namespace io::detail {
  */
 enum class single_write_mode : bool { YES, NO };
 
-// compile-time predicate that defines unsupported column types;
-// based on the conditions used for instantiations of individual
-// converters in strings/convert/convert_*.hpp;
-//(this should have been a `variable template`,
-// instead of a static function, but nvcc (10.0)
-// fails to compile var-templs);
-//
 template <typename T>
 constexpr static bool is_not_handled()
 {
