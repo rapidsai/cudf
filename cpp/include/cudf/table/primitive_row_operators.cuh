@@ -52,44 +52,34 @@ struct dispatch_primitive_type {
 class element_equality_comparator {
  public:
   /**
-   * @brief Construct type-dispatched function object for comparing equality
-   * between two elements.
-   *
-   * @note `lhs` and `rhs` may be the same.
-   *
-   * @param lhs The column containing the first element
-   * @param rhs The column containing the second element (may be the same as lhs)
-   */
-  __host__ __device__ element_equality_comparator(column_device_view lhs, column_device_view rhs)
-    : _lhs{lhs}, _rhs{rhs}
-  {
-  }
-
-  /**
    * @brief Compares the specified elements for equality.
    *
+   * @param lhs The first column
+   * @param rhs The second column
    * @param lhs_element_index The index of the first element
    * @param rhs_element_index The index of the second element
    * @return True if lhs and rhs element are equal
    */
   template <typename Element, CUDF_ENABLE_IF(cudf::is_equality_comparable<Element, Element>())>
-  __device__ bool operator()(size_type lhs_element_index, size_type rhs_element_index) const
+  __device__ bool operator()(column_device_view const& lhs,
+                             column_device_view const& rhs,
+                             size_type lhs_element_index,
+                             size_type rhs_element_index) const
   {
-    return cudf::equality_compare(_lhs.element<Element>(lhs_element_index),
-                                  _rhs.element<Element>(rhs_element_index));
+    return cudf::equality_compare(lhs.element<Element>(lhs_element_index),
+                                  rhs.element<Element>(rhs_element_index));
   }
 
   // @cond
   template <typename Element, CUDF_ENABLE_IF(not cudf::is_equality_comparable<Element, Element>())>
-  __device__ bool operator()(size_type, size_type) const
+  __device__ bool operator()(column_device_view const&,
+                             column_device_view const&,
+                             size_type,
+                             size_type) const
   {
     CUDF_UNREACHABLE("Attempted to compare elements of uncomparable types.");
   }
   // @endcond
-
- private:
-  column_device_view _lhs;
-  column_device_view _rhs;
 };
 
 /**
@@ -133,11 +123,12 @@ class row_equality_comparator {
         return false;
       }
     }
-    return cudf::type_dispatcher<dispatch_primitive_type>(
-      _lhs.begin()->type(),
-      element_equality_comparator{_lhs.column(0), _rhs.column(0)},
-      lhs_row_index,
-      rhs_row_index);
+    return cudf::type_dispatcher<dispatch_primitive_type>(_lhs.begin()->type(),
+                                                          element_equality_comparator{},
+                                                          _lhs.column(0),
+                                                          _rhs.column(0),
+                                                          lhs_row_index,
+                                                          rhs_row_index);
   }
 
  private:
@@ -156,36 +147,29 @@ template <template <typename> class Hash>
 class element_hasher {
  public:
   /**
-   * @brief Constructs a function object for hashing an element in the given column
-   *
-   * @param seed The seed to use for the hash function
-   */
-  __device__ element_hasher(hash_value_type seed) : _seed{seed} {}
-
-  /**
    * @brief Returns the hash value of the given element in the given column.
    *
    * @tparam T The type of the element to hash
+   * @param seed The seed value to use for hashing
    * @param col The column to hash
    * @param row_index The index of the row to hash
    * @return The hash value of the given element
    */
   template <typename T, CUDF_ENABLE_IF(column_device_view::has_element_accessor<T>())>
-  __device__ hash_value_type operator()(column_device_view const& col, size_type row_index) const
+  __device__ hash_value_type operator()(hash_value_type seed,
+                                        column_device_view const& col,
+                                        size_type row_index) const
   {
-    return Hash<T>{_seed}(col.element<T>(row_index));
+    return Hash<T>{seed}(col.element<T>(row_index));
   }
 
   // @cond
   template <typename T, CUDF_ENABLE_IF(not column_device_view::has_element_accessor<T>())>
-  __device__ hash_value_type operator()(column_device_view const&, size_type) const
+  __device__ hash_value_type operator()(hash_value_type, column_device_view const&, size_type) const
   {
     CUDF_UNREACHABLE("Unsupported type in hash.");
   }
   // @endcond
-
- private:
-  hash_value_type _seed;
 };
 
 /**
@@ -236,7 +220,7 @@ class row_hasher {
       return cuda::std::numeric_limits<hash_value_type>::max();
     }
     return cudf::type_dispatcher<dispatch_primitive_type>(
-      _table.column(0).type(), element_hasher<Hash>{_seed}, _table.column(0), row_index);
+      _table.column(0).type(), element_hasher<Hash>{}, _seed, _table.column(0), row_index);
   }
 
  private:
