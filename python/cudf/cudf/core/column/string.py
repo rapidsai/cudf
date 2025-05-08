@@ -5344,6 +5344,56 @@ class StringMethods(ColumnMethods):
             self._column.is_letter(True, position)  # type: ignore[arg-type]
         )
 
+    def substring_duplicates(self, min_width: int) -> SeriesOrIndex:
+        """
+        Returns duplicate strings found anywhere in the input column
+        with min_width minimum number of bytes.
+
+        Parameters
+        ----------
+        min_width : int
+            The minimum number of bytes to determine duplicates
+
+        Returns
+        -------
+        Series of duplicate strings found
+
+        """
+        return self._return_or_inplace(
+            self._column.substring_duplicates(min_width),  # type: ignore[arg-type]
+            inplace=False,
+            expand=False,
+            retain_index=False,
+        )
+
+    def build_suffix_array(self, min_width: int) -> SeriesOrIndex:
+        """
+        Builds a suffix array for the input strings column.
+        A suffix array is the indices of the sorted set of substrings
+        of the input column as: [ input[0:], input[1:], ... input[bytes-1:] ]
+        where bytes is the total number of bytes in input.
+        The returned array represent the sorted strings such that
+        result[i] = input[suffix_array[i]:]
+
+        For details, see :cpp:func:`build_suffix_array`
+
+        Parameters
+        ----------
+        min_width : int
+            The minimum number of bytes to determine duplicates
+
+        Returns
+        -------
+        Column
+            New column of suffix array
+        """
+        return self._return_or_inplace(
+            self._column.build_suffix_array(min_width),  # type: ignore[arg-type]
+            inplace=False,
+            expand=False,
+            retain_index=False,
+        )
+
     def edit_distance(self, targets) -> SeriesOrIndex:
         """
         The ``targets`` strings are measured against the strings in this
@@ -6358,6 +6408,20 @@ class StringColumn(ColumnBase):
     ) -> ListColumn:
         result = plc.nvtext.generate_ngrams.hash_character_ngrams(
             self.to_pylibcudf(mode="read"), ngrams, seed
+        )
+        return type(self).from_pylibcudf(result)  # type: ignore[return-value]
+
+    @acquire_spill_lock()
+    def substring_duplicates(self, min_width: int) -> Self:
+        result = plc.nvtext.deduplicate.substring_duplicates(
+            self.to_pylibcudf(mode="read"), min_width
+        )
+        return type(self).from_pylibcudf(result)  # type: ignore[return-value]
+
+    @acquire_spill_lock()
+    def build_suffix_array(self, min_width: int) -> Self:
+        result = plc.nvtext.deduplicate.build_suffix_array(
+            self.to_pylibcudf(mode="read"), min_width
         )
         return type(self).from_pylibcudf(result)  # type: ignore[return-value]
 
