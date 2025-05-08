@@ -1808,13 +1808,6 @@ ArrowExtensionArray = make_final_proxy_type(
     slow_to_fast=_Unusable(),
 )
 
-ABCSeries = make_final_proxy_type(
-    "ABCSeries",
-    _Unusable,
-    pd.core.dtypes.generic.ABCSeries,
-    fast_to_slow=_Unusable(),
-    slow_to_fast=_Unusable(),
-)
 
 # The following are subclasses of `pandas.core.base.PandasObj`,
 # excluding subclasses defined in `pandas.core.internals`.  These are
