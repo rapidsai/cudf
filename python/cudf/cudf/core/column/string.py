@@ -16,7 +16,6 @@ from typing_extensions import Self
 import pylibcudf as plc
 
 import cudf
-import cudf.core.column.datetime as datetime
 from cudf.api.types import is_integer, is_scalar
 from cudf.core._internals import binaryop
 from cudf.core.buffer import Buffer, acquire_spill_lock
@@ -31,6 +30,7 @@ from cudf.utils.dtypes import (
     can_convert_to_column,
     dtype_to_pylibcudf_type,
 )
+from cudf.utils.temporal import infer_format
 from cudf.utils.utils import is_na_like
 
 if TYPE_CHECKING:
@@ -5344,6 +5344,56 @@ class StringMethods(ColumnMethods):
             self._column.is_letter(True, position)  # type: ignore[arg-type]
         )
 
+    def substring_duplicates(self, min_width: int) -> SeriesOrIndex:
+        """
+        Returns duplicate strings found anywhere in the input column
+        with min_width minimum number of bytes.
+
+        Parameters
+        ----------
+        min_width : int
+            The minimum number of bytes to determine duplicates
+
+        Returns
+        -------
+        Series of duplicate strings found
+
+        """
+        return self._return_or_inplace(
+            self._column.substring_duplicates(min_width),  # type: ignore[arg-type]
+            inplace=False,
+            expand=False,
+            retain_index=False,
+        )
+
+    def build_suffix_array(self, min_width: int) -> SeriesOrIndex:
+        """
+        Builds a suffix array for the input strings column.
+        A suffix array is the indices of the sorted set of substrings
+        of the input column as: [ input[0:], input[1:], ... input[bytes-1:] ]
+        where bytes is the total number of bytes in input.
+        The returned array represent the sorted strings such that
+        result[i] = input[suffix_array[i]:]
+
+        For details, see :cpp:func:`build_suffix_array`
+
+        Parameters
+        ----------
+        min_width : int
+            The minimum number of bytes to determine duplicates
+
+        Returns
+        -------
+        Column
+            New column of suffix array
+        """
+        return self._return_or_inplace(
+            self._column.build_suffix_array(min_width),  # type: ignore[arg-type]
+            inplace=False,
+            expand=False,
+            retain_index=False,
+        )
+
     def edit_distance(self, targets) -> SeriesOrIndex:
         """
         The ``targets`` strings are measured against the strings in this
@@ -6083,7 +6133,7 @@ class StringColumn(ColumnBase):
             format = ""
         else:
             # infer on host from the first not na element
-            format = datetime.infer_format(not_null.element_indexing(0))
+            format = infer_format(not_null.element_indexing(0))
         return self.strptime(dtype, format)  # type: ignore[return-value]
 
     def as_timedelta_column(self, dtype: np.dtype) -> TimeDeltaColumn:
@@ -6358,6 +6408,20 @@ class StringColumn(ColumnBase):
     ) -> ListColumn:
         result = plc.nvtext.generate_ngrams.hash_character_ngrams(
             self.to_pylibcudf(mode="read"), ngrams, seed
+        )
+        return type(self).from_pylibcudf(result)  # type: ignore[return-value]
+
+    @acquire_spill_lock()
+    def substring_duplicates(self, min_width: int) -> Self:
+        result = plc.nvtext.deduplicate.substring_duplicates(
+            self.to_pylibcudf(mode="read"), min_width
+        )
+        return type(self).from_pylibcudf(result)  # type: ignore[return-value]
+
+    @acquire_spill_lock()
+    def build_suffix_array(self, min_width: int) -> Self:
+        result = plc.nvtext.deduplicate.build_suffix_array(
+            self.to_pylibcudf(mode="read"), min_width
         )
         return type(self).from_pylibcudf(result)  # type: ignore[return-value]
 
