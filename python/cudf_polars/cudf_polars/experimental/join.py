@@ -190,7 +190,9 @@ def _(
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     if ir.options[2]:  # pragma: no cover
         return _lower_ir_fallback(
-            ir, rec, msg="Slice not yet supported in ConditionalJoin."
+            ir,
+            rec,
+            msg="Slice not supported in ConditionalJoin for multiple partitions."
         )
 
     # Lower children
