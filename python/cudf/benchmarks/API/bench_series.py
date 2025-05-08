@@ -1,4 +1,4 @@
-# Copyright (c) 2022, NVIDIA CORPORATION.
+# Copyright (c) 2022-2025, NVIDIA CORPORATION.
 
 """Benchmarks of Series methods."""
 
@@ -28,10 +28,12 @@ def bench_series_cp_asarray(benchmark, series):
     series = series.dropna()
     benchmark(cupy.asarray, series)
 
+
 @benchmark_with_object(cls="series", dtype="int")
 def bench_series_values(benchmark, series):
     series = series.dropna()
     benchmark(lambda: series.values)
+
 
 @benchmark_with_object(cls="series", dtype="int")
 def bench_series_to_cupy(benchmark, series):
