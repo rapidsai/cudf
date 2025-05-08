@@ -148,7 +148,6 @@ def test_join_conditional(reverse):
         executor_options={
             "max_rows_per_partition": 3,
             "scheduler": DEFAULT_SCHEDULER,
-            "shuffle_method": "tasks",
             "fallback_mode": "silent",
         },
     )
