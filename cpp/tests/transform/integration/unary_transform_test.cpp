@@ -523,12 +523,11 @@ TEST_F(StringOperationTest, StringConcat)
   auto scratch_sizes = cudf::test::fixed_width_column_wrapper<int32_t>{100};
 
   std::string cuda = R"***(
-__device__ void transform(cudf::string_view* out,
+__device__ void transform(void* user_data, cudf::string_view* out,
                           cudf::string_view first_name,
                           cudf::string_view last_name,
                           int32_t offset,
-                          int32_t size,
-                          void* user_data)
+                          int32_t size)
 {
   char* it                = static_cast<char*>(user_data) + offset;
   char const* const begin = it;

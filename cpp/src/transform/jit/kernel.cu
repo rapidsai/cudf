@@ -43,14 +43,12 @@ struct column_accessor {
   static constexpr int32_t index = Index;
 
   static __device__ decltype(auto) element(cudf::mutable_column_device_view_core const* outputs,
-                                           [[maybe_unused]] void* user_data,
                                            cudf::size_type row)
   {
     return outputs[index].element<T>(row);
   }
 
   static __device__ decltype(auto) element(cudf::column_device_view_core const* inputs,
-                                           [[maybe_unused]] void* user_data,
                                            cudf::size_type row)
   {
     return inputs[index].element<T>(row);
@@ -69,9 +67,7 @@ struct span_accessor {
   using type                     = T;
   static constexpr int32_t index = Index;
 
-  static __device__ type& element(cudf::jit::device_span<T> const* spans,
-                                  [[maybe_unused]] void* user_data,
-                                  cudf::size_type row)
+  static __device__ type& element(cudf::jit::device_span<T> const* spans, cudf::size_type row)
   {
     return spans[index][row];
   }
@@ -84,34 +80,21 @@ struct span_accessor {
   }
 };
 
-struct user_data_accessor {
-  using type = void*;
-
-  static __device__ void* element([[maybe_unused]] cudf::column_device_view_core const* inputs,
-                                  void* user_data,
-                                  [[maybe_unused]] cudf::size_type row)
-  {
-    return user_data;
-  }
-};
-
 template <typename Accessor>
 struct scalar {
   using type                     = typename Accessor::type;
   static constexpr int32_t index = Accessor::index;
 
   static __device__ decltype(auto) element(cudf::mutable_column_device_view_core const* outputs,
-                                           void* user_data,
                                            cudf::size_type row)
   {
-    return Accessor::element(outputs, user_data, 0);
+    return Accessor::element(outputs, 0);
   }
 
   static __device__ decltype(auto) element(cudf::column_device_view_core const* inputs,
-                                           void* user_data,
                                            cudf::size_type row)
   {
-    return Accessor::element(inputs, user_data, 0);
+    return Accessor::element(inputs, 0);
   }
 
   static __device__ void assign(cudf::mutable_column_device_view_core const* outputs,
@@ -122,11 +105,14 @@ struct scalar {
   }
 };
 
-template <typename Out, typename... In>
+template <bool has_user_data, typename Out, typename... In>
 CUDF_KERNEL void kernel(cudf::mutable_column_device_view_core const* outputs,
                         cudf::column_device_view_core const* inputs,
                         void* user_data)
 {
+  // inputs to JITIFY kernels have to be either sized-integral types or pointers. Structs or
+  // references can't be passed directly/correctly as they will be crossing an ABI boundary
+
   // cannot use global_thread_id utility due to a JIT build issue by including
   // the `cudf/detail/utilities/cuda.cuh` header
   auto const block_size          = static_cast<thread_index_type>(blockDim.x);
@@ -135,12 +121,15 @@ CUDF_KERNEL void kernel(cudf::mutable_column_device_view_core const* outputs,
   thread_index_type const size   = outputs[0].size();
 
   for (auto i = start; i < size; i += stride) {
-    GENERIC_TRANSFORM_OP(&Out::element(outputs, user_data, i),
-                         In::element(inputs, user_data, i)...);
+    if constexpr (has_user_data) {
+      GENERIC_TRANSFORM_OP(user_data, &Out::element(outputs, i), In::element(inputs, i)...);
+    } else {
+      GENERIC_TRANSFORM_OP(&Out::element(outputs, i), In::element(inputs, i)...);
+    }
   }
 }
 
-template <typename Out, typename... In>
+template <bool has_user_data, typename Out, typename... In>
 CUDF_KERNEL void fixed_point_kernel(cudf::mutable_column_device_view_core const* outputs,
                                     cudf::column_device_view_core const* inputs,
                                     void* user_data)
@@ -155,12 +144,18 @@ CUDF_KERNEL void fixed_point_kernel(cudf::mutable_column_device_view_core const*
 
   for (auto i = start; i < size; i += stride) {
     typename Out::type result{numeric::scaled_integer<typename Out::type::rep>{0, output_scale}};
-    GENERIC_TRANSFORM_OP(&result, In::element(inputs, user_data, i)...);
+
+    if constexpr (has_user_data) {
+      GENERIC_TRANSFORM_OP(user_data, &result, In::element(inputs, i)...);
+    } else {
+      GENERIC_TRANSFORM_OP(&result, In::element(inputs, i)...);
+    }
+
     Out::assign(outputs, i, result);
   }
 }
 
-template <typename Out, typename... In>
+template <bool has_user_data, typename Out, typename... In>
 CUDF_KERNEL void span_kernel(cudf::jit::device_span<typename Out::type> const* outputs,
                              cudf::column_device_view_core const* inputs,
                              void* user_data)
@@ -173,8 +168,11 @@ CUDF_KERNEL void span_kernel(cudf::jit::device_span<typename Out::type> const* o
   thread_index_type const size   = outputs[0].size();
 
   for (auto i = start; i < size; i += stride) {
-    GENERIC_TRANSFORM_OP(&Out::element(outputs, user_data, i),
-                         In::element(inputs, user_data, i)...);
+    if constexpr (has_user_data) {
+      GENERIC_TRANSFORM_OP(user_data, &Out::element(outputs, i), In::element(inputs, i)...);
+    } else {
+      GENERIC_TRANSFORM_OP(&Out::element(outputs, i), In::element(inputs, i)...);
+    }
   }
 }
 

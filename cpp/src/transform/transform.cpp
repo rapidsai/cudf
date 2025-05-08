@@ -54,16 +54,19 @@ struct input_column_reflection {
   }
 };
 
-jitify2::StringVec build_jit_typenames(std::vector<std::string> const& span_outputs,
-                                       std::vector<std::string> const& column_outputs,
-                                       std::vector<input_column_reflection> const& column_inputs,
-                                       bool has_user_data)
+jitify2::StringVec build_jit_template_params(
+  bool has_user_data,
+  std::vector<std::string> const& span_outputs,
+  std::vector<std::string> const& column_outputs,
+  std::vector<input_column_reflection> const& column_inputs)
 {
-  jitify2::StringVec typenames;
+  jitify2::StringVec tparams;
+
+  tparams.emplace_back(jitify2::reflection::reflect(has_user_data));
 
   std::transform(thrust::make_counting_iterator<size_t>(0),
                  thrust::make_counting_iterator(span_outputs.size()),
-                 std::back_inserter(typenames),
+                 std::back_inserter(tparams),
                  [&](auto i) {
                    return jitify2::reflection::Template("cudf::transformation::jit::span_accessor")
                      .instantiate(span_outputs[i], i);
@@ -72,7 +75,7 @@ jitify2::StringVec build_jit_typenames(std::vector<std::string> const& span_outp
   std::transform(
     thrust::make_counting_iterator<size_t>(0),
     thrust::make_counting_iterator(column_outputs.size()),
-    std::back_inserter(typenames),
+    std::back_inserter(tparams),
     [&](auto i) {
       return jitify2::reflection::Template("cudf::transformation::jit::column_accessor")
         .instantiate(column_outputs[i], i);
@@ -80,12 +83,10 @@ jitify2::StringVec build_jit_typenames(std::vector<std::string> const& span_outp
 
   std::transform(thrust::make_counting_iterator<size_t>(0),
                  thrust::make_counting_iterator(column_inputs.size()),
-                 std::back_inserter(typenames),
+                 std::back_inserter(tparams),
                  [&](auto i) { return column_inputs[i].accessor(i); });
 
-  if (has_user_data) { typenames.emplace_back("cudf::transformation::jit::user_data_accessor"); }
-
-  return typenames;
+  return tparams;
 }
 
 std::map<uint32_t, std::string> build_ptx_params(std::vector<std::string> const& output_typenames,
@@ -95,6 +96,8 @@ std::map<uint32_t, std::string> build_ptx_params(std::vector<std::string> const&
   std::map<uint32_t, std::string> params;
   uint32_t index = 0;
 
+  if (has_user_data) { params.emplace(index++, "void *"); }
+
   for (auto& name : output_typenames) {
     params.emplace(index++, name + "*");
   }
@@ -102,8 +105,6 @@ std::map<uint32_t, std::string> build_ptx_params(std::vector<std::string> const&
   for (auto& name : input_typenames) {
     params.emplace(index++, name);
   }
-
-  if (has_user_data) { params.emplace(index++, "void *"); }
 
   return params;
 }
@@ -209,11 +210,11 @@ jitify2::ConfiguredKernel build_transform_kernel(
       : cudf::jit::parse_single_function_cuda(udf, "GENERIC_TRANSFORM_OP");
 
   return get_kernel(jitify2::reflection::Template(kernel_name)
-                      .instantiate(
-                        build_jit_typenames({},
-                                            column_type_names(output_columns),
-                                            reflect_input_columns(base_column_size, input_columns),
-                                            has_user_data)),
+                      .instantiate(build_jit_template_params(
+                        has_user_data,
+                        {},
+                        column_type_names(output_columns),
+                        reflect_input_columns(base_column_size, input_columns))),
                     cuda_source)
     ->configure_1d_max_occupancy(0, 0, nullptr, stream.value());
 }
@@ -236,11 +237,11 @@ jitify2::ConfiguredKernel build_span_kernel(std::string const& kernel_name,
            : cudf::jit::parse_single_function_cuda(udf, "GENERIC_TRANSFORM_OP");
 
   return get_kernel(jitify2::reflection::Template(kernel_name)
-                      .instantiate(
-                        build_jit_typenames(span_outputs,
-                                            {},
-                                            reflect_input_columns(base_column_size, input_columns),
-                                            has_user_data)),
+                      .instantiate(build_jit_template_params(
+                        has_user_data,
+                        span_outputs,
+                        {},
+                        reflect_input_columns(base_column_size, input_columns))),
                     cuda_source)
     ->configure_1d_max_occupancy(0, 0, nullptr, stream.value());
 }
