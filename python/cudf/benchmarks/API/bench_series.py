@@ -33,9 +33,3 @@ def bench_series_cp_asarray(benchmark, series):
 def bench_series_values(benchmark, series):
     series = series.dropna()
     benchmark(lambda: series.values)
-
-
-@benchmark_with_object(cls="series", dtype="int")
-def bench_series_to_cupy(benchmark, series):
-    series = series.dropna()
-    benchmark(series.to_cupy)
