@@ -24,14 +24,14 @@ target_link_libraries(parquet_io_utils PRIVATE cudf::cudf)
 
 # Build and install parquet_io
 add_executable(parquet_io parquet_io.cpp)
-target_link_libraries(parquet_io PRIVATE cudf::cudf nvToolsExt $<TARGET_OBJECTS:parquet_io_utils>)
+target_link_libraries(parquet_io PRIVATE cudf::cudf $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp> $<TARGET_OBJECTS:parquet_io_utils>)
 target_compile_features(parquet_io PRIVATE cxx_std_17)
 install(TARGETS parquet_io DESTINATION bin/examples/libcudf)
 
 # Build and install parquet_io_multithreaded
 add_executable(parquet_io_multithreaded parquet_io_multithreaded.cpp)
 target_link_libraries(
-  parquet_io_multithreaded PRIVATE cudf::cudf nvToolsExt $<TARGET_OBJECTS:parquet_io_utils>
+  parquet_io_multithreaded PRIVATE cudf::cudf $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp> $<TARGET_OBJECTS:parquet_io_utils>
 )
 target_compile_features(parquet_io_multithreaded PRIVATE cxx_std_17)
 install(TARGETS parquet_io_multithreaded DESTINATION bin/examples/libcudf)
