@@ -71,3 +71,39 @@ def test_explain_physical_plan(tmp_path, df):
     assert "UNION" in plan
     assert "SPLITSCAN" in plan
     assert "SELECT ('sum', 'y')" in plan or "PROJECTION ('sum', 'y')" in plan
+
+
+def test_explain_logical_plan_with_join(tmp_path, df):
+    make_partitioned_source(df, tmp_path, fmt="parquet", n_files=2)
+
+    left = pl.scan_parquet(tmp_path)
+    right = pl.scan_parquet(tmp_path).select(["x", "z"]).rename({"z": "z2"})
+
+    q = left.join(right, on="x", how="inner").select(["y", "z2"])
+
+    engine = pl.GPUEngine(executor="streaming", raise_on_fail=True)
+    plan = explain_query(q, engine, physical=False)
+
+    assert "JOIN Inner ('x',) ('x',)" in plan
+
+
+def test_explain_logical_plan_with_sort(tmp_path, df):
+    make_partitioned_source(df, tmp_path, fmt="parquet", n_files=2)
+
+    q = pl.scan_parquet(tmp_path).sort("z").select(["x", "z"])
+
+    engine = pl.GPUEngine(executor="streaming", raise_on_fail=True)
+    plan = explain_query(q, engine, physical=False)
+
+    assert "SORT ('z',)" in plan
+
+
+def test_explain_physical_plan_with_union_without_scan(df):
+    q1 = df.lazy().select(["x", "z"])
+    q2 = df.lazy().select(["x", "z"])
+    q = pl.concat([q1, q2])
+
+    engine = pl.GPUEngine(executor="streaming", raise_on_fail=True)
+    plan = explain_query(q, engine, physical=False)
+
+    assert "UNION" in plan
