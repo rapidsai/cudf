@@ -79,6 +79,12 @@ class hybrid_scan_reader_impl {
   [[nodiscard]] std::vector<size_type> all_row_groups(parquet_reader_options const& options) const;
 
   /**
+   * @copydoc cudf::io::experimental::hybrid_scan::total_rows_in_row_groups
+   */
+  [[nodiscard]] size_type total_rows_in_row_groups(
+    cudf::host_span<size_type const> row_group_indices) const;
+
+  /**
    * @copydoc cudf::io::experimental::hybrid_scan::filter_row_groups_with_stats
    */
   [[nodiscard]] std::vector<std::vector<size_type>> filter_row_groups_with_stats(

@@ -127,6 +127,15 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
   void setup_page_index(cudf::host_span<uint8_t const> page_index_bytes);
 
   /**
+   * @brief Get the total number of rows in the row groups
+   *
+   * @param row_group_indices Input row groups indices
+   * @return Total number of rows in the row groups
+   */
+  [[nodiscard]] size_type total_rows_in_row_groups(
+    cudf::host_span<std::vector<size_type> const> row_group_indices) const;
+
+  /**
    * @brief Filters and reduces down to the selection of payload columns
    *
    * @param payload_column_names List of paths of select payload column names, if any
