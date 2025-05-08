@@ -134,6 +134,13 @@ def decompose_single_agg(
             is_top=False,
         )
         if any(has_aggs):
+            if not all(
+                has_agg or isinstance(agg.value, expr.Literal)
+                for agg, has_agg in zip(aggs, has_aggs, strict=True)
+            ):
+                raise NotImplementedError(
+                    "Broadcasting aggregated expressions in groupby/rolling"
+                )
             # Any pointwise expression can be handled either by
             # post-evaluation (if outside an aggregation).
             return (
@@ -148,7 +155,7 @@ def decompose_single_agg(
                 named_expr.reconstruct(expr.Col(agg.dtype, name)),
                 False,
             )
-    raise NotImplementedError(f"No support for {type(agg)} in groupby")
+    raise NotImplementedError(f"No support for {type(agg)} in groupby/rolling")
 
 
 def _decompose_aggs(
