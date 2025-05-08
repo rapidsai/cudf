@@ -646,4 +646,27 @@ TEST_P(JsonCompressedWriterTest, UnicodeUnescaped)
   EXPECT_EQ(expected, output);
 }
 
+struct JsonWriterTypeSupportTest : public cudf::test::BaseFixture {};
+
+TEST(JsonWriterTypeSupportTest, SupportedTypes)
+{
+  using cudf::io::is_supported_write_json_type;
+
+  EXPECT_TRUE(is_supported_write_json_type(cudf::data_type{cudf::type_id::INT32}));
+  EXPECT_TRUE(is_supported_write_json_type(cudf::data_type{cudf::type_id::FLOAT64}));
+  EXPECT_TRUE(is_supported_write_json_type(cudf::data_type{cudf::type_id::STRING}));
+  EXPECT_TRUE(is_supported_write_json_type(cudf::data_type{cudf::type_id::DECIMAL64}));
+  EXPECT_TRUE(is_supported_write_json_type(cudf::data_type{cudf::type_id::TIMESTAMP_NANOSECONDS}));
+  EXPECT_TRUE(is_supported_write_json_type(cudf::data_type{cudf::type_id::DURATION_SECONDS}));
+}
+
+TEST(JsonWriterTypeSupportTest, UnsupportedTypes)
+{
+  using cudf::io::is_supported_write_json_type;
+
+  EXPECT_FALSE(is_supported_write_json_type(cudf::data_type{cudf::type_id::LIST}));
+  EXPECT_FALSE(is_supported_write_json_type(cudf::data_type{cudf::type_id::STRUCT}));
+  EXPECT_FALSE(is_supported_write_json_type(cudf::data_type{cudf::type_id::DICTIONARY32}));
+}
+
 CUDF_TEST_PROGRAM_MAIN()

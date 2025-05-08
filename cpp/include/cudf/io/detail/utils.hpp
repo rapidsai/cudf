@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 #pragma once
 
 #include <cudf/utilities/export.hpp>
+#include <cudf/utilities/traits.hpp>
 
 namespace CUDF_EXPORT cudf {
 namespace io::detail {
@@ -24,6 +25,24 @@ namespace io::detail {
  * @brief Whether writer writes in chunks or all at once
  */
 enum class single_write_mode : bool { YES, NO };
+
+// compile-time predicate that defines unsupported column types;
+// based on the conditions used for instantiations of individual
+// converters in strings/convert/convert_*.hpp;
+//(this should have been a `variable template`,
+// instead of a static function, but nvcc (10.0)
+// fails to compile var-templs);
+//
+template <typename T>
+constexpr static bool is_not_handled()
+{
+  // Note: the case (not std::is_same_v<column_type, bool>)
+  // is already covered by is_integral)
+  //
+  return not((std::is_same_v<T, cudf::string_view>) || (std::is_integral_v<T>) ||
+             (std::is_floating_point_v<T>) || (cudf::is_fixed_point<T>()) ||
+             (cudf::is_timestamp<T>()) || (cudf::is_duration<T>()));
+}
 
 }  // namespace io::detail
 }  // namespace CUDF_EXPORT cudf

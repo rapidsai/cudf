@@ -70,16 +70,24 @@ def test_sink_csv_unsupported_kwargs(df, tmp_path, kwarg, value):
     )
 
 
-def test_sink_ndjson(request, df, tmp_path):
+@pytest.mark.parametrize("maintain_order", [True, False])
+def test_sink_ndjson(request, df, tmp_path, maintain_order):
     request.applymarker(
         pytest.mark.xfail(
             condition=POLARS_VERSION_LT_128,
             reason="not supported until polars 1.28",
         )
     )
+    request.applymarker(
+        pytest.mark.xfail(
+            condition=not maintain_order,
+            reason="expected to fail",
+        )
+    )
     assert_sink_result_equal(
         df,
         tmp_path / "out.ndjson",
+        write_kwargs={"maintain_order": maintain_order},
     )
 
 
@@ -104,20 +112,31 @@ def test_sink_parquet(request, df, tmp_path, mkdir, data_page_size, row_group_si
     )
 
 
-def test_sink_parquet_unsupported_kwargs(df, tmp_path):
-    assert_sink_ir_translation_raises(
-        df,
-        tmp_path / "unsupported.parquet",
-        {"compression_level": 10},
-        NotImplementedError,
-    )
-
-
-@pytest.mark.parametrize("compression", ["gzip", "brotli", "zstd"])
-def test_sink_parquet_unsupported_compression_type(df, tmp_path, compression):
-    assert_sink_ir_translation_raises(
-        df,
-        tmp_path / "unsupported_compression.parquet",
-        {"compression": compression, "compression_level": 9},
-        NotImplementedError,
-    )
+@pytest.mark.parametrize("compression_level", [9, None])
+@pytest.mark.parametrize(
+    "compression", ["zstd", "gzip", "brotli", "snappy", "lz4", "uncompressed"]
+)
+def test_sink_parquet_compression_type(df, tmp_path, compression, compression_level):
+    # LZO compression not supported in polars
+    if compression_level is None and compression == "zstd":
+        assert_sink_result_equal(
+            df,
+            tmp_path / "compression.parquet",
+            write_kwargs={
+                "compression": compression,
+                "compression_level": compression_level,
+            },
+        )
+    elif compression in {"snappy", "lz4", "uncompressed"}:
+        assert_sink_result_equal(
+            df,
+            tmp_path / "compression.parquet",
+            write_kwargs={"compression": compression},
+        )
+    else:
+        assert_sink_ir_translation_raises(
+            df,
+            tmp_path / "unsupported_compression.parquet",
+            {"compression": compression, "compression_level": compression_level},
+            NotImplementedError,
+        )

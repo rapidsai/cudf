@@ -27,14 +27,6 @@ from typing_extensions import assert_never
 import polars as pl
 
 import pylibcudf as plc
-from pylibcudf import TypeId
-from pylibcudf.traits import (
-    is_duration,
-    is_fixed_point,
-    is_floating_point,
-    is_integral,
-    is_timestamp,
-)
 
 import cudf_polars.dsl.expr as expr
 from cudf_polars.containers import Column, DataFrame
@@ -733,42 +725,53 @@ class Scan(IR):
             return df.filter(mask)
 
 
-def _is_unsupported_type_for_sink_csv(dtype: plc.DataType) -> bool:
-    return not (
-        dtype.id() == TypeId.STRING
-        or is_integral(dtype)
-        or is_floating_point(dtype)
-        or is_fixed_point(dtype)
-        or is_timestamp(dtype)
-        or is_duration(dtype)
-    )
-
-
 class Sink(IR):
     """Sink a dataframe to a file."""
 
-    __slots__ = ("kind", "options", "path")
-    _non_child = ("schema", "kind", "path", "options")
+    __slots__ = ("cloud_options", "kind", "options", "path")
+    _non_child = ("schema", "kind", "path", "options", "cloud_options")
 
     kind: str
     path: str
     options: dict[str, Any]
 
     def __init__(
-        self, schema: Schema, kind: str, path: str, options: dict[str, Any], df: IR
+        self,
+        schema: Schema,
+        kind: str,
+        path: str,
+        options: dict[str, Any],
+        cloud_options: dict[str, Any],
+        df: IR,
     ):
         self.schema = schema
         self.kind = kind
         self.path = path
         self.options = options
+        self.cloud_options = cloud_options
         self.children = (df,)
         self._non_child_args = (schema, kind, path, options)
-
+        if self.cloud_options is not None and any(
+            self.cloud_options.get(k) is not None
+            for k in ("config", "credential_provider")
+        ):
+            raise NotImplementedError(
+                "Write to cloud storage"
+            )  # pragma: no cover; no test yet
+        sync_on_close = options.get("sync_on_close")
+        if sync_on_close not in {"None", None}:
+            raise NotImplementedError(
+                f"sync_on_close='{sync_on_close}' is not supported."
+            )  # pragma: no cover; no test yet
         if kind == "Csv":
-            # nested types are unsupported in polars and libcudf
-            assert not all(
-                _is_unsupported_type_for_sink_csv(dtype) for dtype in df.schema.values()
-            )
+            if not all(
+                plc.io.csv.is_supported_write_csv_type(dtype)
+                for dtype in schema.values()
+            ):
+                # Nested types are unsupported in polars and libcudf
+                raise NotImplementedError(
+                    "Contains unsupported types for CSV writing"
+                )  # pragma: no cover
             serialize = options["serialize_options"]
             if options["include_bom"]:
                 raise NotImplementedError("include_bom is not supported.")
@@ -787,17 +790,43 @@ class Sink(IR):
                 raise NotImplementedError("Only quote_char='\"' is supported.")
         elif kind == "Parquet":
             compression = options["compression"]
+            if isinstance(compression, dict):
+                if len(compression) != 1:
+                    raise NotImplementedError(
+                        "Compression dict with more than one entry."
+                    )  # pragma: no cover
+                compression, compression_level = next(iter(compression.items()))
+                options["compression"] = compression
+                if compression_level is not None:
+                    raise NotImplementedError(
+                        "Setting compression_level is not supported."
+                    )
+            if compression == "Lz4Raw":
+                compression = "Lz4"
+                options["compression"] = compression
             if (
                 compression != "Uncompressed"
-                and isinstance(compression, dict)
-                and next(iter(compression)) in {"Gzip", "Brotli", "Zstd"}
+                and not plc.io.parquet.is_supported_write_parquet(
+                    getattr(plc.io.types.CompressionType, compression.upper())
+                )
             ):
-                _, compression_level = next(iter(compression.items()))
-                if compression_level is not None:
-                    raise NotImplementedError("compression_level is not supported.")
-        elif kind == "Json":
-            # TODO: JSON?
-            pass
+                raise NotImplementedError(
+                    f"Compression type '{compression}' is not supported."
+                )
+        elif (
+            kind == "Json"
+        ):  # pragma: no cover; options are validated on the polars side
+            if not all(
+                plc.io.csv.is_supported_write_json_type(dtype)
+                for dtype in schema.values()
+            ):
+                # Nested types are unsupported in polars and libcudf
+                raise NotImplementedError(
+                    "Contains unsupported types for JSON writing"
+                )  # pragma: no cover
+            shared_writer_options = {"sync_on_close", "maintain_order", "mkdir"}
+            if set(options) - shared_writer_options:
+                raise NotImplementedError("Unsupported options passed JSON writer.")
         else:
             raise NotImplementedError(
                 f"Unhandled sink kind: {kind}"
@@ -816,6 +845,7 @@ class Sink(IR):
             self.kind,
             self.path,
             json.dumps(self.options),
+            json.dumps(self.cloud_options),
         )  # pragma: no cover
 
     @classmethod
@@ -850,10 +880,10 @@ class Sink(IR):
                 metadata.column_metadata[i].set_name(name)
 
             builder = plc.io.parquet.ParquetWriterOptions.builder(target, df.table)
-            if (compression := options["compression"]) != "Uncompressed":
-                compression_type, _ = next(iter(compression.items()))
+            compression = options["compression"]
+            if compression != "Uncompressed":
                 builder.compression(
-                    getattr(plc.io.types.CompressionType, compression_type.upper())
+                    getattr(plc.io.types.CompressionType, compression.upper())
                 )
 
             writer_options = builder.metadata(metadata).build()
@@ -879,7 +909,7 @@ class Sink(IR):
             )
             plc.io.json.write_json(options)
 
-        return df
+        return DataFrame([])
 
 
 class Cache(IR):

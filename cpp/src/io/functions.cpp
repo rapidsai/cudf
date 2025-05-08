@@ -31,6 +31,7 @@
 #include <cudf/io/detail/json.hpp>
 #include <cudf/io/detail/orc.hpp>
 #include <cudf/io/detail/parquet.hpp>
+#include <cudf/io/detail/utils.hpp>
 #include <cudf/io/json.hpp>
 #include <cudf/io/orc.hpp>
 #include <cudf/io/orc_metadata.hpp>
@@ -260,6 +261,19 @@ void write_json(json_writer_options const& options, rmm::cuda_stream_view stream
     stream);
 }
 
+struct is_supported_json_write_type_fn {
+  template <typename T>
+  constexpr bool operator()() const
+  {
+    return !cudf::io::detail::is_not_handled<T>();
+  }
+};
+
+bool is_supported_write_json_type(data_type type)
+{
+  return cudf::type_dispatcher(type, is_supported_json_write_type_fn{});
+}
+
 table_with_metadata read_csv(csv_reader_options options,
                              rmm::cuda_stream_view stream,
                              rmm::device_async_resource_ref mr)
@@ -295,6 +309,19 @@ void write_csv(csv_writer_options const& options, rmm::cuda_stream_view stream)
     options.get_names(),
     options,
     stream);
+}
+
+struct is_supported_csv_write_type_fn {
+  template <typename T>
+  constexpr bool operator()() const
+  {
+    return !cudf::io::detail::is_not_handled<T>();
+  }
+};
+
+bool is_supported_write_csv_type(data_type type)
+{
+  return cudf::type_dispatcher(type, is_supported_csv_write_type_fn{});
 }
 
 bool is_supported_read_orc(compression_type compression)

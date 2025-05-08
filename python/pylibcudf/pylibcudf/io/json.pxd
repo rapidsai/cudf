@@ -24,6 +24,8 @@ from pylibcudf.libcudf.types cimport size_type
 
 from pylibcudf.table cimport Table
 
+from pylibcudf.types cimport DataType
+
 
 cdef class JsonReaderOptions:
     cdef json_reader_options c_obj
@@ -98,6 +100,8 @@ cdef class JsonWriterOptionsBuilder:
     cpdef JsonWriterOptions build(self)
 
 cpdef void write_json(JsonWriterOptions options, Stream stream = *)
+
+cpdef bool is_supported_write_json_type(DataType type)
 
 cpdef tuple chunked_read_json(
     JsonReaderOptions options,

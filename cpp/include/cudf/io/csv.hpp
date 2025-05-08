@@ -1758,6 +1758,14 @@ class csv_writer_options_builder {
 void write_csv(csv_writer_options const& options,
                rmm::cuda_stream_view stream = cudf::get_default_stream());
 
+/**
+ * @brief Checks if a cudf::data_type is supported for CSV writing.
+ *
+ * @param type The data_type to check.
+ * @return true if the type is supported for CSV writing, false otherwise.
+ */
+bool is_supported_write_csv_type(data_type type);
+
 /** @} */  // end of group
 }  // namespace io
 }  // namespace CUDF_EXPORT cudf
