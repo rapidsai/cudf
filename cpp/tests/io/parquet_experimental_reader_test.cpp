@@ -102,7 +102,8 @@ cudf::host_span<uint8_t const> fetch_page_index_bytes(
  * @return Tuple of table and Parquet host buffer
  */
 template <size_t NumTableConcats>
-auto create_parquet_with_stats()
+auto create_parquet_with_stats(
+  cudf::io::compression_type compression = cudf::io::compression_type::AUTO)
 {
   static_assert(NumTableConcats >= 1, "Concatenated table must contain at least one table");
 
@@ -125,7 +126,7 @@ auto create_parquet_with_stats()
       .metadata(std::move(expected_metadata))
       .row_group_size_rows(page_size_for_ordered_tests)
       .max_page_size_rows(page_size_for_ordered_tests / 5)
-      .compression(cudf::io::compression_type::NONE)
+      .compression(compression)
       .dictionary_policy(cudf::io::dictionary_policy::ALWAYS)
       .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN);
 
