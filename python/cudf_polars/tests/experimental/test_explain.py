@@ -107,3 +107,25 @@ def test_explain_physical_plan_with_union_without_scan(df):
     plan = explain_query(q, engine, physical=False)
 
     assert "UNION" in plan
+
+
+def test_explain_logical_plan_wide_table_with_scan(tmp_path):
+    df = pl.DataFrame({f"col{i}": range(10) for i in range(10)})
+    make_partitioned_source(df, tmp_path, fmt="parquet", n_files=1)
+
+    q = pl.scan_parquet(tmp_path).select(df.columns)
+
+    engine = pl.GPUEngine(executor="streaming", raise_on_fail=True)
+    plan = explain_query(q, engine, physical=False)
+
+    assert "SCAN PARQUET ('col0', 'col1', 'col2', '...', 'col8', 'col9')" in plan
+
+
+def test_explain_logical_plan_wide_table():
+    df = pl.DataFrame({f"col{i}": range(10) for i in range(20)})
+    q = df.lazy().select(df.columns)
+
+    engine = pl.GPUEngine(executor="streaming", raise_on_fail=True)
+    plan = explain_query(q, engine, physical=False)
+
+    assert "DATAFRAMESCAN ('col0', 'col1', 'col2', '...', 'col18', 'col19')" in plan

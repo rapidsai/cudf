@@ -81,6 +81,15 @@ def _repr_ir_tree(
     return header + "".join(formatted)
 
 
+def _repr_schema(schema: tuple | None) -> str:
+    if schema is None:
+        return ""
+    names = tuple(schema)
+    if len(names) > 6:
+        names = names[:3] + ("...",) + names[-2:]
+    return f" {names}"
+
+
 @functools.singledispatch
 def _repr_ir(
     ir: IR,
@@ -90,14 +99,7 @@ def _repr_ir(
 ) -> str:
     count = partition_info[ir].count if partition_info else None
     header = f"{offset}{type(ir).__name__.upper()}"
-
-    schema = getattr(ir, "schema", None)
-    if schema is not None:
-        names = tuple(schema)
-        if len(names) > 6:
-            names = names[:3] + ("...",) + names[-2:]
-        header += f" {names}"
-
+    header += _repr_schema(getattr(ir, "schema", None))
     if count is not None:
         header += f" [{count}]"
     return header + "\n"
@@ -112,9 +114,11 @@ def _(
 ) -> str:
     keys = tuple(ne.name for ne in ir.keys)
     count = partition_info[ir].count if partition_info else None
-    return (
-        f"{offset}GROUPBY {keys}" + (f" [{count}]" if count is not None else "") + "\n"
-    )
+    header = f"{offset}GROUPBY {keys}"
+    header += _repr_schema(getattr(ir, "schema", None))
+    if count is not None:
+        header += f" [{count}]"
+    return header + "\n"
 
 
 @_repr_ir.register
@@ -127,11 +131,11 @@ def _(
     left_on = tuple(ne.name for ne in ir.left_on)
     right_on = tuple(ne.name for ne in ir.right_on)
     count = partition_info[ir].count if partition_info else None
-    return (
-        f"{offset}JOIN {ir.options[0]} {left_on} {right_on}"
-        + (f" [{count}]" if count is not None else "")
-        + "\n"
-    )
+    header = f"{offset}JOIN {ir.options[0]} {left_on} {right_on}"
+    header += _repr_schema(getattr(ir, "schema", None))
+    if count is not None:
+        header += f" [{count}]"
+    return header + "\n"
 
 
 @_repr_ir.register
@@ -143,7 +147,11 @@ def _(
 ) -> str:
     by = tuple(ne.name for ne in ir.by)
     count = partition_info[ir].count if partition_info else None
-    return f"{offset}SORT {by}" + (f" [{count}]" if count is not None else "") + "\n"
+    header = f"{offset}SORT {by}"
+    header += _repr_schema(getattr(ir, "schema", None))
+    if count is not None:
+        header += f" [{count}]"
+    return header + "\n"
 
 
 @_repr_ir.register
@@ -154,10 +162,10 @@ def _(
     offset: str = "",
 ) -> str:
     count = partition_info[ir].count if partition_info else None
-    schema = tuple(ir.schema)
+    schema_str = _repr_schema(tuple(ir.schema))
     first_path = ir.paths[0]
     suffix = " ..." if len(ir.paths) > 1 else ""
-    header = f"{offset}SCAN {ir.typ.upper()} {schema} {first_path}{suffix}"
+    header = f"{offset}SCAN {ir.typ.upper()}{schema_str} {first_path}{suffix}"
     if count is not None:
         header += f" [{count} partition{'s' if count > 1 else ''}]"
     return header + "\n"
