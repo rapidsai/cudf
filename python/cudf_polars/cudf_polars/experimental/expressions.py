@@ -123,12 +123,12 @@ def select(
     return columns, new_ir, partition_info
 
 
-def _root_columns(expr: Expr) -> tuple[Col, ...]:
-    """Find the leaf columns of an expression."""
+def _leaf_column_names(expr: Expr) -> tuple[str, ...]:
+    """Find the leaf column names of an expression."""
     for child in expr.children:
-        return tuple(chain(*(_root_columns(child) for child in expr.children)))
+        return tuple(chain(*(_leaf_column_names(child) for child in expr.children)))
     if isinstance(expr, Col):
-        return (expr,)
+        return (expr.name,)
     else:
         return ()
 
@@ -188,7 +188,7 @@ def _decompose_unique(
     if cardinality_factor := {
         v
         for k, v in config_options.executor.cardinality_factor.items()
-        if k in _root_columns(child)
+        if k in _leaf_column_names(child)
     }:
         cardinality = max(cardinality_factor)
 
