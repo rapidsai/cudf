@@ -10,6 +10,12 @@ import pickle
 import sys
 
 import pandas as pd
+
+# cuGraph third party integration test, test_cugraph_from_pandas_adjacency,
+# fails without this pyarrow.dataset import
+# I suspect it relates to pyarrow's pandas-shim that gets imported
+# with this module https://github.com/rapidsai/cudf/issues/14521#issue-2015198786
+import pyarrow.dataset as ds  # noqa: F401
 from pandas.tseries.holiday import (
     AbstractHolidayCalendar as pd_AbstractHolidayCalendar,
     EasterMonday as pd_EasterMonday,
@@ -248,6 +254,7 @@ DataFrame = make_final_proxy_type(
         "_constructor_sliced": _FastSlowAttribute("_constructor_sliced"),
         "_accessors": set(),
         "_ipython_canary_method_should_not_exist_": ignore_ipython_canary_check,
+        "_typ": pd.DataFrame._typ,  #  for isinstance with ABCDataFrame
     },
 )
 
@@ -293,6 +300,7 @@ Series = make_final_proxy_type(
         "_constructor_expanddim": _FastSlowAttribute("_constructor_expanddim"),
         "_accessors": set(),
         "dtype": property(_Series_dtype),
+        "_typ": pd.Series._typ,  #  for isinstance with ABCSeries
     },
 )
 
@@ -348,6 +356,7 @@ Index = make_final_proxy_type(
         "_data": _FastSlowAttribute("_data", private=True),
         "_mask": _FastSlowAttribute("_mask", private=True),
         "name": _FastSlowAttribute("name"),
+        "_typ": pd.Index._typ,  #  for isinstance with ABCIndex
     },
 )
 
@@ -362,6 +371,7 @@ RangeIndex = make_final_proxy_type(
         "__init__": _DELETE,
         "__setattr__": Index__setattr__,
         "name": _FastSlowAttribute("name"),
+        "_typ": pd.RangeIndex._typ,  #  for isinstance with ABCRangeIndex
     },
 )
 
@@ -395,6 +405,7 @@ CategoricalIndex = make_final_proxy_type(
         "__init__": _DELETE,
         "__setattr__": Index__setattr__,
         "name": _FastSlowAttribute("name"),
+        "_typ": pd.CategoricalIndex._typ,  #  for isinstance with ABCCategoricalIndex
     },
 )
 
@@ -404,6 +415,9 @@ Categorical = make_final_proxy_type(
     pd.Categorical,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
+    additional_attributes={
+        "_typ": pd.Categorical._typ,  #  for isinstance with ABCCategorical
+    },
 )
 
 CategoricalDtype = make_final_proxy_type(
@@ -430,6 +444,7 @@ DatetimeIndex = make_final_proxy_type(
         "_data": _FastSlowAttribute("_data", private=True),
         "_mask": _FastSlowAttribute("_mask", private=True),
         "name": _FastSlowAttribute("name"),
+        "_typ": pd.DatetimeIndex._typ,  #  for isinstance with ABCDatetimeIndex
     },
 )
 
@@ -442,6 +457,7 @@ DatetimeArray = make_final_proxy_type(
     additional_attributes={
         "_data": _FastSlowAttribute("_data", private=True),
         "_mask": _FastSlowAttribute("_mask", private=True),
+        "_typ": pd.arrays.DatetimeArray._typ,  #  for isinstance with ABCDatetimeArray
     },
 )
 
@@ -469,6 +485,9 @@ TimedeltaIndex = make_final_proxy_type(
         "_data": _FastSlowAttribute("_data", private=True),
         "_mask": _FastSlowAttribute("_mask", private=True),
         "name": _FastSlowAttribute("name"),
+        "_typ": _FastSlowAttribute(
+            "_typ", private=True
+        ),  #  for isinstance with ABCTimedeltaIndex
     },
 )
 
@@ -484,6 +503,9 @@ try:
         additional_attributes={
             "_ndarray": _FastSlowAttribute("_ndarray"),
             "_dtype": _FastSlowAttribute("_dtype"),
+            "_typ": _FastSlowAttribute(
+                "_typ", private=True
+            ),  #  for isinstance with ABCTimedeltaIndex
         },
     )
 
@@ -511,6 +533,9 @@ TimedeltaArray = make_final_proxy_type(
     additional_attributes={
         "_data": _FastSlowAttribute("_data", private=True),
         "_mask": _FastSlowAttribute("_mask", private=True),
+        "_typ": _FastSlowAttribute(
+            "_typ", private=True
+        ),  #  for isinstance with ABCTimedeltaIndex
     },
 )
 
@@ -527,6 +552,9 @@ PeriodIndex = make_final_proxy_type(
         "_data": _FastSlowAttribute("_data", private=True),
         "_mask": _FastSlowAttribute("_mask", private=True),
         "name": _FastSlowAttribute("name"),
+        "_typ": _FastSlowAttribute(
+            "_typ", private=True
+        ),  #  for isinstance with ABCPeriodIndex
     },
 )
 
@@ -540,6 +568,9 @@ PeriodArray = make_final_proxy_type(
         "_data": _FastSlowAttribute("_data", private=True),
         "_mask": _FastSlowAttribute("_mask", private=True),
         "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
+        "_typ": _FastSlowAttribute(
+            "_typ", private=True
+        ),  #  for isinstance with ABCPeriodArray
     },
 )
 
@@ -574,6 +605,9 @@ MultiIndex = make_final_proxy_type(
         "__init__": _DELETE,
         "__setattr__": Index__setattr__,
         "names": _FastSlowAttribute("names"),
+        "_typ": _FastSlowAttribute(
+            "_typ", private=True
+        ),  #  for isinstance with ABCMultiIndex
     },
 )
 
@@ -783,6 +817,9 @@ IntervalIndex = make_final_proxy_type(
         "_data": _FastSlowAttribute("_data", private=True),
         "_mask": _FastSlowAttribute("_mask", private=True),
         "name": _FastSlowAttribute("name"),
+        "_typ": _FastSlowAttribute(
+            "_typ", private=True
+        ),  #  for isinstance with ABCIntervalIndex
     },
 )
 
@@ -1802,6 +1839,13 @@ ArrowExtensionArray = make_final_proxy_type(
     slow_to_fast=_Unusable(),
 )
 
+ABCSeries = make_final_proxy_type(
+    "ABCSeries",
+    _Unusable,
+    pd.core.dtypes.generic.ABCSeries,
+    fast_to_slow=_Unusable(),
+    slow_to_fast=_Unusable(),
+)
 
 # The following are subclasses of `pandas.core.base.PandasObj`,
 # excluding subclasses defined in `pandas.core.internals`.  These are
