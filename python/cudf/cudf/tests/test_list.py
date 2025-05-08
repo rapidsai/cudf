@@ -147,6 +147,7 @@ def test_list_dtype_explode(nested_list):
     sr = cudf.Series([nested_list])
     ji = sr.explode()
     # print(ji)
+
     assert sr.dtype.element_type == ji.dtype
 
 

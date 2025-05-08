@@ -12,6 +12,7 @@ from cudf.core.column.column import ColumnBase
 from cudf.core.column.methods import ColumnMethods
 from cudf.core.dtypes import StructDtype
 from cudf.core.scalar import pa_scalar_to_plc_scalar
+from cudf.utils.dtypes import pyarrow_dtype_to_cudf_dtype
 from cudf.utils.utils import _is_null_host_scalar
 
 if TYPE_CHECKING:
@@ -93,12 +94,13 @@ class StructColumn(ColumnBase):
 
     def to_arrow(self) -> pa.Array:
         children = [child.to_arrow() for child in self.children]
-
+        dtype = (
+            pyarrow_dtype_to_cudf_dtype(self.dtype)
+            if isinstance(self.dtype, pd.ArrowDtype)
+            else self.dtype
+        )
         pa_type = pa.struct(
-            {
-                field: child.type
-                for field, child in zip(self.dtype.fields, children)
-            }
+            {field: child.type for field, child in zip(dtype.fields, children)}
         )
 
         if self.mask is not None:
