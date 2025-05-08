@@ -109,10 +109,10 @@ struct output_fn {
  * @param iter Iterator over hash values
  * @param d_equal Equality comparator
  * @param probe The probe table
- * @param probe_table_num_rows Number of rows in the probe table
+ * @param hasher Hash function
+ * @param nulls_equal Null equality setting
  * @param found_begin Output iterator for found indices
  * @param stream CUDA stream
- * @param nulls_equal Null equality setting
  */
 template <typename HashTableType,
           typename IterType,
@@ -124,11 +124,11 @@ void find_matches_in_hash_table(HashTableType const& hash_table,
                                 EqualType const& d_equal,
                                 cudf::table_view const& probe,
                                 Hasher hasher,
-                                size_type probe_table_num_rows,
+                                cudf::null_equality nulls_equal,
                                 FoundIterator found_begin,
-                                rmm::cuda_stream_view stream,
-                                cudf::null_equality nulls_equal)
+                                rmm::cuda_stream_view stream)
 {
+  auto const probe_table_num_rows = probe.num_rows();
   // If `idx` is within the range `[0, probe_table_num_rows)` and `found_indices[idx]` is not
   // equal to `JoinNoneValue`, then `idx` has a match in the hash set.
   if (nulls_equal == cudf::null_equality::EQUAL or (not cudf::nullable(probe))) {
@@ -266,10 +266,9 @@ distinct_hash_join::inner_join(cudf::table_view const& probe,
                                primitive_comparator_adapter{d_equal},
                                probe,
                                hasher{},
-                               probe_table_num_rows,
+                               _nulls_equal,
                                found_begin,
-                               stream,
-                               _nulls_equal);
+                               stream);
   } else {
     auto const two_table_equal = cudf::experimental::row::equality::two_table_comparator(
       preprocessed_probe, _preprocessed_build);
@@ -287,10 +286,9 @@ distinct_hash_join::inner_join(cudf::table_view const& probe,
                                  comparator_adapter{device_comparator},
                                  probe,
                                  hasher{},
-                                 probe_table_num_rows,
+                                 _nulls_equal,
                                  found_begin,
-                                 stream,
-                                 _nulls_equal);
+                                 stream);
     } else {
       auto const device_comparator =
         two_table_equal.equal_to<false>(nullate::DYNAMIC{has_nulls}, _nulls_equal);
@@ -299,10 +297,9 @@ distinct_hash_join::inner_join(cudf::table_view const& probe,
                                  comparator_adapter{device_comparator},
                                  probe,
                                  hasher{},
-                                 probe_table_num_rows,
+                                 _nulls_equal,
                                  found_begin,
-                                 stream,
-                                 _nulls_equal);
+                                 stream);
     }
   }
 
@@ -366,10 +363,9 @@ std::unique_ptr<rmm::device_uvector<size_type>> distinct_hash_join::left_join(
                                primitive_comparator_adapter{d_equal},
                                probe,
                                hasher{},
-                               probe_table_num_rows,
+                               _nulls_equal,
                                output_begin,
-                               stream,
-                               _nulls_equal);
+                               stream);
   } else {
     // If build table is empty, return probe table
     if (this->_build.num_rows() == 0) {
@@ -394,10 +390,9 @@ std::unique_ptr<rmm::device_uvector<size_type>> distinct_hash_join::left_join(
                                    comparator_adapter{device_comparator},
                                    probe,
                                    hasher{},
-                                   probe_table_num_rows,
+                                   _nulls_equal,
                                    output_begin,
-                                   stream,
-                                   _nulls_equal);
+                                   stream);
       } else {
         auto const device_comparator =
           two_table_equal.equal_to<false>(nullate::DYNAMIC{has_nulls}, _nulls_equal);
@@ -406,10 +401,9 @@ std::unique_ptr<rmm::device_uvector<size_type>> distinct_hash_join::left_join(
                                    comparator_adapter{device_comparator},
                                    probe,
                                    hasher{},
-                                   probe_table_num_rows,
+                                   _nulls_equal,
                                    output_begin,
-                                   stream,
-                                   _nulls_equal);
+                                   stream);
       }
     }
   }
