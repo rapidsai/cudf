@@ -35,10 +35,11 @@
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
-#include <src/io/parquet/parquet_gpu.hpp>
+#include <rmm/mr/device/aligned_resource_adaptor.hpp>
 
 // Base test fixture for tests
 struct ParquetExperimentalReaderTest : public cudf::test::BaseFixture {};
+auto constexpr bloom_filter_alignment = 32;
 
 namespace {
 
@@ -191,7 +192,8 @@ auto hybrid_scan(std::vector<char>& buffer,
                  cudf::size_type num_filter_columns,
                  std::optional<std::vector<std::string>> const& payload_column_names,
                  rmm::cuda_stream_view stream,
-                 rmm::device_async_resource_ref mr)
+                 rmm::device_async_resource_ref mr,
+                 rmm::mr::aligned_resource_adaptor<rmm::mr::device_memory_resource>& aligned_mr)
 {
   // Create reader options with empty source info
   cudf::io::parquet_reader_options options =
@@ -260,9 +262,12 @@ auto hybrid_scan(std::vector<char>& buffer,
   std::vector<cudf::size_type> bloom_filtered_row_group_indices;
   bloom_filtered_row_group_indices.reserve(current_row_group_indices.size());
   if (bloom_filter_byte_ranges.size()) {
-    // Fetch bloom filter data from the input file buffer
+    // Fetch 32 byte aligned bloom filter data buffers from the input file buffer
+    auto aligned_mr = rmm::mr::aligned_resource_adaptor(cudf::get_current_device_resource(),
+                                                        bloom_filter_alignment);
+
     std::vector<rmm::device_buffer> bloom_filter_data =
-      fetch_byte_ranges(file_buffer_span, bloom_filter_byte_ranges, stream, mr);
+      fetch_byte_ranges(file_buffer_span, bloom_filter_byte_ranges, stream, aligned_mr);
 
     // Filter row groups with bloom filters
     bloom_filtered_row_group_indices = reader->filter_row_groups_with_bloom_filters(
@@ -401,12 +406,14 @@ TEST_F(ParquetExperimentalReaderTest, PruneRowGroupsOnly)
   auto col_ref_0                    = cudf::ast::column_name_reference("col_uint32");
   auto filter_expression = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_0, literal);
 
-  auto stream = cudf::get_default_stream();
-  auto mr     = cudf::get_current_device_resource_ref();
+  auto stream     = cudf::get_default_stream();
+  auto mr         = cudf::get_current_device_resource_ref();
+  auto aligned_mr = rmm::mr::aligned_resource_adaptor<rmm::mr::device_memory_resource>(
+    cudf::get_current_device_resource(), bloom_filter_alignment);
 
   // Read parquet using the hybrid scan reader
   auto [read_filter_table, read_payload_table, read_filter_meta, read_payload_meta, row_mask] =
-    hybrid_scan(buffer, filter_expression, num_filter_columns, {}, stream, mr);
+    hybrid_scan(buffer, filter_expression, num_filter_columns, {}, stream, mr, aligned_mr);
 
   CUDF_EXPECTS(read_filter_table->num_rows() == read_payload_table->num_rows(),
                "Filter and payload tables should have the same number of rows");
@@ -440,14 +447,22 @@ TEST_F(ParquetExperimentalReaderTest, TestPayloadColumns)
   auto col_ref_0                    = cudf::ast::column_name_reference("col_uint32");
   auto filter_expression = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_0, literal);
 
-  auto stream = cudf::get_default_stream();
-  auto mr     = cudf::get_current_device_resource_ref();
+  auto stream     = cudf::get_default_stream();
+  auto mr         = cudf::get_current_device_resource_ref();
+  auto aligned_mr = rmm::mr::aligned_resource_adaptor<rmm::mr::device_memory_resource>(
+    cudf::get_current_device_resource(), bloom_filter_alignment);
 
   {
     auto const payload_column_names = std::vector<std::string>{"col_uint32", "col_str"};
     // Read parquet using the hybrid scan reader
     auto [read_filter_table, read_payload_table, read_filter_meta, read_payload_meta, row_mask] =
-      hybrid_scan(buffer, filter_expression, num_filter_columns, payload_column_names, stream, mr);
+      hybrid_scan(buffer,
+                  filter_expression,
+                  num_filter_columns,
+                  payload_column_names,
+                  stream,
+                  mr,
+                  aligned_mr);
 
     CUDF_EXPECTS(read_filter_table->num_rows() == read_payload_table->num_rows(),
                  "Filter and payload tables should have the same number of rows");
@@ -463,7 +478,13 @@ TEST_F(ParquetExperimentalReaderTest, TestPayloadColumns)
     auto const payload_column_names = std::vector<std::string>{"col_str", "col_int64"};
     // Read parquet using the hybrid scan reader
     auto [read_filter_table, read_payload_table, read_filter_meta, read_payload_meta, row_mask] =
-      hybrid_scan(buffer, filter_expression, num_filter_columns, payload_column_names, stream, mr);
+      hybrid_scan(buffer,
+                  filter_expression,
+                  num_filter_columns,
+                  payload_column_names,
+                  stream,
+                  mr,
+                  aligned_mr);
 
     CUDF_EXPECTS(read_filter_table->num_rows() == read_payload_table->num_rows(),
                  "Filter and payload tables should have the same number of rows");
@@ -493,12 +514,14 @@ TEST_F(ParquetExperimentalReaderTest, PrunePagesOnly)
   auto col_ref_0                    = cudf::ast::column_name_reference("col_uint32");
   auto filter_expression = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_0, literal);
 
-  auto stream = cudf::get_default_stream();
-  auto mr     = cudf::get_current_device_resource_ref();
+  auto stream     = cudf::get_default_stream();
+  auto mr         = cudf::get_current_device_resource_ref();
+  auto aligned_mr = rmm::mr::aligned_resource_adaptor<rmm::mr::device_memory_resource>(
+    cudf::get_current_device_resource(), bloom_filter_alignment);
 
   // Read parquet using the hybrid scan reader
   auto [read_filter_table, read_payload_table, read_filter_meta, read_payload_meta, row_mask] =
-    hybrid_scan(buffer, filter_expression, num_filter_columns, {}, stream, mr);
+    hybrid_scan(buffer, filter_expression, num_filter_columns, {}, stream, mr, aligned_mr);
 
   CUDF_EXPECTS(read_filter_table->num_rows() == read_payload_table->num_rows(),
                "Filter and payload tables should have the same number of rows");
