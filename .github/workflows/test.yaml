@@ -119,7 +119,7 @@ jobs:
       script: ci/test_wheel_dask_cudf.sh
   unit-tests-cudf-pandas:
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@python-3.13
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@branch-25.06
     with:
       build_type: ${{ inputs.build_type }}
       branch: ${{ inputs.branch }}
