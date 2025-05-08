@@ -13,19 +13,21 @@ from typing_extensions import Self
 import pylibcudf as plc
 
 import cudf
-import cudf.core.column.column as column
 from cudf.api.types import is_scalar
 from cudf.core.buffer import acquire_spill_lock
-from cudf.core.column.column import ColumnBase, as_column
+from cudf.core.column.column import ColumnBase, as_column, column_empty
 from cudf.core.column.methods import ColumnMethods, ParentType
 from cudf.core.column.numerical import NumericalColumn
 from cudf.core.dtypes import ListDtype
 from cudf.core.missing import NA
 from cudf.core.scalar import pa_scalar_to_plc_scalar
 from cudf.utils.dtypes import SIZE_TYPE_DTYPE, is_dtype_obj_numeric
+from cudf.utils.utils import _is_null_host_scalar
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
+
+    from typing_extensions import Self
 
     from cudf._typing import ColumnBinaryOperand, ColumnLike, Dtype, ScalarLike
     from cudf.core.buffer import Buffer
@@ -131,7 +133,7 @@ class ListColumn(ColumnBase):
             raise ValueError(f"Can not set {value} into ListColumn")
 
     @property
-    def base_size(self):
+    def base_size(self) -> int:
         # in some cases, libcudf will return an empty ListColumn with no
         # indices; in these cases, we must manually set the base_size to 0 to
         # avoid it being negative
@@ -211,15 +213,12 @@ class ListColumn(ColumnBase):
             return other
         return NotImplemented
 
-    def _with_type_metadata(
-        self: "cudf.core.column.ListColumn",
-        dtype: Dtype,
-    ) -> "cudf.core.column.ListColumn":
+    def _with_type_metadata(self: Self, dtype: Dtype) -> Self:
         if isinstance(dtype, ListDtype):
             elements = self.base_children[1]._with_type_metadata(
                 dtype.element_type
             )
-            return ListColumn(
+            return type(self)(
                 data=None,
                 dtype=dtype,
                 mask=self.base_mask,
@@ -231,7 +230,7 @@ class ListColumn(ColumnBase):
 
         return self
 
-    def copy(self, deep: bool = True):
+    def copy(self, deep: bool = True) -> Self:
         # Since list columns are immutable, both deep and shallow copies share
         # the underlying device data and mask.
         return super().copy(deep=False)
@@ -243,20 +242,18 @@ class ListColumn(ColumnBase):
             return self.elements
 
     @classmethod
-    def from_sequences(
-        cls, arbitrary: Sequence[ColumnLike]
-    ) -> "cudf.core.column.ListColumn":
+    def from_sequences(cls, arbitrary: Sequence[ColumnLike]) -> Self:
         """
         Create a list column for list of column-like sequences
         """
-        data_col = column.column_empty(0)
+        data_col = column_empty(0)
         mask_col = []
         offset_vals = [0]
         offset = 0
 
         # Build Data, Mask & Offsets
         for data in arbitrary:
-            if cudf.utils.utils._is_null_host_scalar(data):
+            if _is_null_host_scalar(data):
                 mask_col.append(False)
                 offset_vals.append(offset)
             else:
@@ -267,7 +264,7 @@ class ListColumn(ColumnBase):
 
         offset_col = cast(
             NumericalColumn,
-            column.as_column(offset_vals, dtype=SIZE_TYPE_DTYPE),
+            as_column(offset_vals, dtype=SIZE_TYPE_DTYPE),
         )
 
         # Build ListColumn
@@ -282,7 +279,7 @@ class ListColumn(ColumnBase):
         )
         return res
 
-    def as_string_column(self) -> cudf.core.column.StringColumn:
+    def as_string_column(self) -> StringColumn:
         """
         Create a strings column from a list column
         """
@@ -316,7 +313,7 @@ class ListColumn(ColumnBase):
         # Rebuild the list column replacing just the leaf child
         for c in cc:
             o = c.children[0]
-            lc = cudf.core.column.ListColumn(  # type: ignore
+            lc = ListColumn(  # type: ignore
                 data=None,
                 size=c.size,
                 dtype=cudf.ListDtype(lc.dtype),

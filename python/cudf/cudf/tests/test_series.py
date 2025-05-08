@@ -16,6 +16,7 @@ import pytest
 import cudf
 from cudf.api.extensions import no_default
 from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
+from cudf.core.column.column import as_column
 from cudf.errors import MixedTypeError
 from cudf.testing import assert_eq
 from cudf.testing._utils import (
@@ -556,7 +557,7 @@ def test_categorical_value_counts(dropna, normalize, num_elements):
 
     # gdf
     gdf = cudf.DataFrame()
-    gdf["a"] = cudf.Series.from_categorical(pd_cat)
+    gdf["a"] = cudf.Series.from_pandas(pd_cat)
     gdf_value_counts = gdf["a"].value_counts(
         dropna=dropna, normalize=normalize
     )
@@ -590,8 +591,8 @@ def test_series_value_counts(dropna, normalize):
     for size in [10**x for x in range(5)]:
         arr = rng.integers(low=-1, high=10, size=size)
         mask = arr != -1
-        sr = cudf.Series.from_masked_array(
-            arr, cudf.Series(mask)._column.as_mask()
+        sr = cudf.Series._from_column(
+            as_column(arr).set_mask(cudf.Series(mask)._column.as_mask())
         )
         sr.name = "col"
 
@@ -2788,9 +2789,7 @@ def test_series_duplicate_index_reindex():
 def test_list_category_like_maintains_dtype():
     dtype = cudf.CategoricalDtype(categories=[1, 2, 3, 4], ordered=True)
     data = [1, 2, 3]
-    result = cudf.Series._from_column(
-        cudf.core.column.as_column(data, dtype=dtype)
-    )
+    result = cudf.Series._from_column(as_column(data, dtype=dtype))
     expected = pd.Series(data, dtype=dtype.to_pandas())
     assert_eq(result, expected)
 
@@ -2798,9 +2797,7 @@ def test_list_category_like_maintains_dtype():
 def test_list_interval_like_maintains_dtype():
     dtype = cudf.IntervalDtype(subtype=np.int8)
     data = [pd.Interval(1, 2)]
-    result = cudf.Series._from_column(
-        cudf.core.column.as_column(data, dtype=dtype)
-    )
+    result = cudf.Series._from_column(as_column(data, dtype=dtype))
     expected = pd.Series(data, dtype=dtype.to_pandas())
     assert_eq(result, expected)
 
@@ -3116,3 +3113,43 @@ def test_series_to_cupy(dtype, has_nulls, use_na_value):
     }.get(dtype, 0)
     expected = cp.asarray(sr.fillna(na_value)) if has_nulls else cp.asarray(sr)
     assert_eq(sr.to_cupy(na_value=na_value), expected)
+
+
+def test_nullmask_deprecation():
+    ser = cudf.Series([1, 2, 3, None])
+    with pytest.warns(FutureWarning):
+        ser.nullmask
+
+
+def test_nullable_deprecation():
+    ser = cudf.Series([1, 2, 3])
+    with pytest.warns(FutureWarning):
+        ser.nullable
+
+
+def test_from_masked_array_deprecation():
+    data = cudf.Series([10, 11, 12, 13, 14])
+    mask = cudf.Series([1, 2, 3, None, 4, None])._column.mask
+    with pytest.warns(FutureWarning):
+        cudf.Series.from_masked_array(data, mask)
+
+
+def test_from_categorical_deprecation():
+    pd_cat = pd.Categorical(pd.Series(["a", "b", "c", "a"], dtype="category"))
+    with pytest.warns(FutureWarning):
+        cudf.Series.from_categorical(pd_cat)
+
+
+def test_to_dense_array():
+    rng = np.random.default_rng(seed=0)
+    data = rng.random(8)
+    mask = np.asarray([0b11010110]).astype(np.byte)
+    sr = cudf.Series._from_column(
+        as_column(data, dtype=np.float64).set_mask(mask)
+    )
+    assert sr.has_nulls
+    assert sr.null_count != len(sr)
+    filled = sr.to_numpy(na_value=np.nan)
+    dense = sr.dropna().to_numpy()
+    assert dense.size < filled.size
+    assert filled.size == len(sr)

@@ -35,7 +35,11 @@ from cudf.core.column.categorical import CategoricalColumn, as_unsigned_codes
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.mixins import BinaryOperand, Scannable
 from cudf.utils import ioutils
-from cudf.utils.dtypes import CUDF_STRING_DTYPE, find_common_type
+from cudf.utils.dtypes import (
+    CUDF_STRING_DTYPE,
+    cudf_dtype_from_pa_type,
+    find_common_type,
+)
 from cudf.utils.performance_tracking import _performance_tracking
 from cudf.utils.utils import _array_ufunc, _warn_no_dask_cudf
 
@@ -46,7 +50,6 @@ if TYPE_CHECKING:
     from cudf._typing import Dtype, DtypeObj, ScalarLike
 
 
-# TODO: It looks like Frame is missing a declaration of `copy`, need to add
 class Frame(BinaryOperand, Scannable, Serializable):
     """A collection of Column objects.
 
@@ -827,55 +830,6 @@ class Frame(BinaryOperand, Scannable, Serializable):
             self._data._from_columns_like_self(columns, verify=False)
         )
 
-    @_performance_tracking
-    def _drop_column(
-        self, name: abc.Hashable, errors: Literal["ignore", "raise"] = "raise"
-    ) -> None:
-        """Drop a column by *name* inplace."""
-        try:
-            del self._data[name]
-        except KeyError as err:
-            if errors != "ignore":
-                raise KeyError(f"column '{name}' does not exist") from err
-
-    @_performance_tracking
-    def _quantile_table(
-        self,
-        q: float,
-        interpolation: Literal[
-            "LINEAR", "LOWER", "HIGHER", "MIDPOINT", "NEAREST"
-        ] = "LINEAR",
-        is_sorted: bool = False,
-        column_order=(),
-        null_precedence=(),
-    ):
-        interpolation = plc.types.Interpolation[interpolation]
-
-        is_sorted = plc.types.Sorted["YES" if is_sorted else "NO"]
-
-        column_order = [plc.types.Order[key] for key in column_order]
-
-        null_precedence = [plc.types.NullOrder[key] for key in null_precedence]
-
-        with acquire_spill_lock():
-            plc_table = plc.quantiles.quantiles(
-                plc.Table(
-                    [c.to_pylibcudf(mode="read") for c in self._columns]
-                ),
-                q,
-                interpolation,
-                is_sorted,
-                column_order,
-                null_precedence,
-            )
-            columns = [
-                ColumnBase.from_pylibcudf(col) for col in plc_table.columns()
-            ]
-        return self._from_columns_like_self(
-            columns,
-            column_names=self._column_names,
-        )
-
     @classmethod
     @_performance_tracking
     def from_arrow(cls, data: pa.Table) -> Self:
@@ -900,28 +854,19 @@ class Frame(BinaryOperand, Scannable, Serializable):
         1  2  5
         2  3  6
         """
-
-        if not isinstance(data, (pa.Table)):
+        if not isinstance(data, pa.Table):
             raise TypeError(
-                "To create a multicolumn cudf data, "
-                "the data should be an arrow Table"
+                f"data must be a pyarrow.Table, not {type(data).__name__}"
             )
 
         column_names = data.column_names
         pandas_dtypes = {}
         np_dtypes = {}
         if isinstance(data.schema.pandas_metadata, dict):
-            metadata = data.schema.pandas_metadata
-            pandas_dtypes = {
-                col["field_name"]: col["pandas_type"]
-                for col in metadata["columns"]
-                if "field_name" in col
-            }
-            np_dtypes = {
-                col["field_name"]: col["numpy_type"]
-                for col in metadata["columns"]
-                if "field_name" in col
-            }
+            for col in data.schema.pandas_metadata:
+                if "field_name" in col:
+                    pandas_dtypes[col["field_name"]] = col["pandas_type"]
+                    np_dtypes[col["field_name"]] = col["numpy_type"]
 
         # Currently we don't have support for
         # pyarrow.DictionaryArray -> cudf Categorical column,
@@ -1040,10 +985,14 @@ class Frame(BinaryOperand, Scannable, Serializable):
                 # All of these cases are handled by calling the
                 # _with_type_metadata method on the column.
                 result[name] = result[name]._with_type_metadata(
-                    cudf.utils.dtypes.cudf_dtype_from_pa_type(data[name].type)
+                    cudf_dtype_from_pa_type(data[name].type)
                 )
 
-        return cls._from_data({name: result[name] for name in column_names})
+        return cls._from_data(
+            ColumnAccessor(
+                {name: result[name] for name in column_names}, verify=False
+            )
+        )
 
     @_performance_tracking
     def to_arrow(self) -> pa.Table:
@@ -1093,7 +1042,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
         return self
 
     @_performance_tracking
-    def isna(self):
+    def isna(self) -> Self:
         """
         Identify missing values.
 
@@ -1174,7 +1123,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
     isnull = isna
 
     @_performance_tracking
-    def notna(self):
+    def notna(self) -> Self:
         """
         Identify non-missing values.
 
@@ -1508,7 +1457,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
         ]
 
     @_performance_tracking
-    def _encode(self):
+    def _encode(self) -> tuple[Self, ColumnBase]:
         plc_table, plc_column = plc.transform.encode(
             plc.Table([col.to_pylibcudf(mode="read") for col in self._columns])
         )
@@ -1520,7 +1469,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
         return keys, indices
 
     @_performance_tracking
-    def _unaryop(self, op):
+    def _unaryop(self, op: str) -> Self:
         data_columns = (col.unary_operator(op) for col in self._columns)
         return self._from_data_like_self(
             self._data._from_columns_like_self(data_columns)
@@ -1653,7 +1602,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
 
     # Unary logical operators
     @_performance_tracking
-    def __neg__(self):
+    def __neg__(self) -> Self:
         """Negate for integral dtypes, logical NOT for bools."""
         return self._from_data_like_self(
             self._data._from_columns_like_self(
@@ -1667,27 +1616,18 @@ class Frame(BinaryOperand, Scannable, Serializable):
         )
 
     @_performance_tracking
-    def __pos__(self):
+    def __pos__(self) -> Self:
         return self.copy(deep=True)
 
     @_performance_tracking
-    def __abs__(self):
+    def __abs__(self) -> Self:
         return self._unaryop("abs")
 
-    def __bool__(self):
+    def __bool__(self) -> None:
         raise ValueError(
             f"The truth value of a {type(self).__name__} is ambiguous. Use "
             "a.empty, a.bool(), a.item(), a.any() or a.all()."
         )
-
-    # Reductions
-    @classmethod
-    @_performance_tracking
-    def _get_axis_from_axis_arg(cls, axis):
-        try:
-            return cls._SUPPORT_AXIS_LOOKUP[axis]
-        except KeyError:
-            raise ValueError(f"No axis named {axis} for object type {cls}")
 
     @_performance_tracking
     def _reduce(self, *args, **kwargs):
@@ -1908,19 +1848,22 @@ class Frame(BinaryOperand, Scannable, Serializable):
         return cudf.io.dlpack.to_dlpack(self)
 
     @_performance_tracking
-    def __str__(self):
+    def __str__(self) -> str:
         return repr(self)
 
     @_performance_tracking
-    def __deepcopy__(self, memo):
+    def __deepcopy__(self, memo) -> Self:
         return self.copy(deep=True)
 
     @_performance_tracking
-    def __copy__(self):
+    def __copy__(self) -> Self:
         return self.copy(deep=False)
 
+    def copy(self, deep: bool = True) -> Self:
+        raise NotImplementedError
+
     @_performance_tracking
-    def __invert__(self):
+    def __invert__(self) -> Self:
         """Bitwise invert (~) for integral dtypes, logical NOT for bools."""
         return self._from_data_like_self(
             self._data._from_columns_like_self((~col for col in self._columns))

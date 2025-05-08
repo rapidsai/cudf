@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2024, NVIDIA CORPORATION.
+# Copyright (c) 2018-2025, NVIDIA CORPORATION.
 
 import itertools
 import pickle
@@ -10,6 +10,7 @@ import pytest
 from packaging import version
 
 import cudf
+from cudf.core.column import as_column
 from cudf.testing import _utils as utils, assert_eq
 
 
@@ -236,7 +237,7 @@ def test_serialize_masked_series():
     bitmask = utils.expand_bits_to_bytes(mask)[:nelem]
     null_count = utils.count_zero(bitmask)
     assert null_count >= 0
-    sr = cudf.Series.from_masked_array(data, mask, null_count=null_count)
+    sr = cudf.Series._from_column(as_column(data).set_mask(mask))
     outsr = cudf.Series.deserialize(*sr.serialize())
     assert_eq(sr, outsr)
 
