@@ -126,7 +126,9 @@ def select(
 def _leaf_column_names(expr: Expr) -> tuple[str, ...]:
     """Find the leaf column names of an expression."""
     for child in expr.children:
-        return tuple(chain.from_iterable(_leaf_column_names(child) for child in expr.children)))
+        return tuple(
+            chain.from_iterable(_leaf_column_names(child) for child in expr.children)
+        )
     if isinstance(expr, Col):
         return (expr.name,)
     else:
