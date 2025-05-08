@@ -105,7 +105,7 @@ class ScanPartitionPlan:
                 "'in-memory' executor not supported in 'generate_ir_tasks'"
             )
 
-            blocksize: int = ir.config_options.executor.parquet_blocksize
+            blocksize: int = ir.config_options.executor.target_partition_size
             # _sample_pq_statistics is generic over the bit-width of the array
             # We don't care about that here, so we ignore it.
             stats = _sample_pq_statistics(ir)  # type: ignore[var-annotated]

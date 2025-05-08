@@ -125,6 +125,18 @@ def test_quantile_invalid_q(df):
     assert_ir_translation_raises(q, NotImplementedError)
 
 
+def test_quantile_equiprobable_unsupported(df):
+    expr = pl.col("a").quantile(0.5, interpolation="equiprobable")
+    q = df.select(expr)
+    assert_ir_translation_raises(q, NotImplementedError)
+
+
+def test_quantile_duration_unsupported():
+    df = pl.LazyFrame({"a": pl.Series([1, 2, 3, 4], dtype=pl.Duration("ns"))})
+    q = df.select(pl.col("a").quantile(0.5))
+    assert_ir_translation_raises(q, NotImplementedError)
+
+
 @pytest.mark.parametrize(
     "op", [pl.Expr.min, pl.Expr.nan_min, pl.Expr.max, pl.Expr.nan_max]
 )

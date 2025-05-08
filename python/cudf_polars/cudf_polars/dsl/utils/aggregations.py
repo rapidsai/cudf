@@ -70,7 +70,12 @@ def decompose_single_agg(
     if isinstance(agg, (expr.Literal, expr.LiteralColumn)):
         return [], named_expr, False
     if isinstance(agg, expr.Agg):
-        (child,) = agg.children
+        if agg.name == "quantile":
+            # Second child the requested quantile (which is asserted
+            # to be a literal on construction)
+            child = agg.children[0]
+        else:
+            (child,) = agg.children
         needs_masking = agg.name in {"min", "max"} and plc.traits.is_floating_point(
             child.dtype
         )
