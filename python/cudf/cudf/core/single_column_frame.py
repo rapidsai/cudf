@@ -39,11 +39,6 @@ class SingleColumnFrame(Frame, NotIterable):
     share certain logic that is encoded in this class.
     """
 
-    _SUPPORT_AXIS_LOOKUP = {
-        0: 0,
-        "index": 0,
-    }
-
     @_performance_tracking
     def _reduce(
         self,
@@ -181,7 +176,7 @@ class SingleColumnFrame(Frame, NotIterable):
 
     @classmethod
     @_performance_tracking
-    def from_arrow(cls, array) -> Self:
+    def from_arrow(cls, array: pa.Array) -> Self:
         raise NotImplementedError
 
     @_performance_tracking
