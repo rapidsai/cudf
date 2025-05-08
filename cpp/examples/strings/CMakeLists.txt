@@ -28,7 +28,9 @@ install(TARGETS libcudf_apis DESTINATION bin/examples/libcudf)
 add_executable(custom_with_malloc custom_with_malloc.cu)
 target_compile_features(custom_with_malloc PRIVATE cxx_std_17)
 target_compile_options(custom_with_malloc PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>")
-target_link_libraries(custom_with_malloc PRIVATE cudf::cudf $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp>)
+target_link_libraries(
+  custom_with_malloc PRIVATE cudf::cudf $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp>
+)
 install(TARGETS custom_with_malloc DESTINATION bin/examples/libcudf)
 
 add_executable(custom_prealloc custom_prealloc.cu)
