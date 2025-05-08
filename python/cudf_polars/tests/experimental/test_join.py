@@ -138,3 +138,20 @@ def test_join_then_shuffle(left, right):
     )
 
     assert_gpu_result_equal(q, engine=engine, check_row_order=False)
+
+
+def test_join_conditional(left, right):
+    engine = pl.GPUEngine(
+        raise_on_fail=True,
+        executor="streaming",
+        executor_options={
+            "max_rows_per_partition": 3,
+            "broadcast_join_limit": 2,
+            "scheduler": DEFAULT_SCHEDULER,
+            "shuffle_method": "tasks",
+            "fallback_mode": "silent",
+        },
+    )
+
+    q = left.join_where(right, pl.col("y") < pl.col("xx"))
+    assert_gpu_result_equal(q, engine=engine, check_row_order=False)

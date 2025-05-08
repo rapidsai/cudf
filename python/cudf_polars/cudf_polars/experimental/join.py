@@ -8,11 +8,12 @@ import operator
 from functools import reduce
 from typing import TYPE_CHECKING, Any
 
-from cudf_polars.dsl.ir import Join
+from cudf_polars.dsl.ir import ConditionalJoin, Join
 from cudf_polars.experimental.base import PartitionInfo, get_key_name
 from cudf_polars.experimental.dispatch import generate_ir_tasks, lower_ir_node
+from cudf_polars.experimental.repartition import Repartition
 from cudf_polars.experimental.shuffle import Shuffle, _partition_dataframe
-from cudf_polars.experimental.utils import _concat, _lower_ir_fallback
+from cudf_polars.experimental.utils import _concat, _fallback_inform, _lower_ir_fallback
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
@@ -179,6 +180,37 @@ def _make_bcast_join(
             )
 
     new_node = ir.reconstruct([left, right])
+    partition_info[new_node] = PartitionInfo(count=output_count)
+    return new_node, partition_info
+
+
+@lower_ir_node.register(ConditionalJoin)
+def _(
+    ir: ConditionalJoin, rec: LowerIRTransformer
+) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+    # Lower children
+    left, right = ir.children
+    left, pi_left = rec(left)
+    right, pi_right = rec(right)
+
+    # Fallback to single partition on the smaller table
+    left_count = pi_left[left].count
+    right_count = pi_right[right].count
+    output_count = max(left_count, right_count)
+    fallback_msg = "ConditionalJoin not supported for multiple partitions."
+    if left_count < right_count:
+        if left_count > 1:
+            left = Repartition(left.schema, left)
+            pi_left[left] = PartitionInfo(count=1)
+            _fallback_inform(fallback_msg, rec.state["config_options"])
+    elif right_count > 1:
+        right = Repartition(left.schema, right)
+        pi_right[right] = PartitionInfo(count=1)
+        _fallback_inform(fallback_msg, rec.state["config_options"])
+
+    # Reconstruct and return
+    new_node = ir.reconstruct([left, right])
+    partition_info = reduce(operator.or_, (pi_left, pi_right))
     partition_info[new_node] = PartitionInfo(count=output_count)
     return new_node, partition_info
 
