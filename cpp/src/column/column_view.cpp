@@ -17,6 +17,7 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/hashing/detail/hashing.hpp>
+#include <cudf/logger_macros.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -55,8 +56,7 @@ void prefetch_col_data(ColumnView& col, void const* data_ptr, std::string_view k
         scv.chars_size(cudf::get_default_stream()) * sizeof(char),
         cudf::get_default_stream());
     } else {
-      std::cout << key << ": Unsupported type: " << static_cast<int32_t>(col.type().id())
-                << std::endl;
+      CUDF_LOG_DEBUG("Unsupported type: %d", static_cast<int32_t>(col.type().id()));
     }
   }
 }
