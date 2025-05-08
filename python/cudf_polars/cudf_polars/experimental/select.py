@@ -108,9 +108,7 @@ def _(
     pi = partition_info[child]
     if (
         pi.count == 1
-        and len(ir.exprs) == 1
-        and isinstance(ir.exprs[0].value, expr.Cast)
-        and isinstance(ir.exprs[0].value.children[0], expr.Len)
+        and Select._is_len_expr(ir.exprs)
         and isinstance(child, Union)
         and len(child.children) == 1
         and isinstance(child.children[0], Scan)

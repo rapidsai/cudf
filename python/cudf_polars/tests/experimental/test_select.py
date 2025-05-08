@@ -105,3 +105,10 @@ def test_select_with_cse_no_agg(df, engine):
     expr = pl.col("a") + pl.col("a")
     query = df.select(expr, (expr * 2).alias("b"), ((expr * 2) + 10).alias("c"))
     assert_gpu_result_equal(query, engine=engine)
+
+
+def test_select_parquet_fast_count(tmp_path, df, engine):
+    file = tmp_path / "data.parquet"
+    df.collect().write_parquet(file)
+    q = pl.scan_parquet(file).select(pl.len())
+    assert_gpu_result_equal(q, engine=engine)

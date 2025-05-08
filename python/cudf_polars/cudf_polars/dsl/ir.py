@@ -894,15 +894,16 @@ class Select(IR):
         self._non_child_args = (self.exprs, should_broadcast)
         if (
             not POLARS_VERSION_LT_128
-            and self._is_len_expr()
+            and Select._is_len_expr(self.exprs)
             and isinstance(df, Scan)
             and df.typ != "parquet"
         ):  # pragma: no cover
             raise NotImplementedError(f"Unsupported scan type: {df.typ}")
 
-    def _is_len_expr(self) -> bool:  # pragma: no cover
-        if len(self.exprs) == 1:
-            expr0 = self.exprs[0].value
+    @staticmethod
+    def _is_len_expr(exprs: tuple[expr.NamedExpr, ...]) -> bool:  # pragma: no cover
+        if len(exprs) == 1:
+            expr0 = exprs[0].value
             return (
                 isinstance(expr0, expr.Cast)
                 and len(expr0.children) == 1
@@ -954,7 +955,7 @@ class Select(IR):
             """
             if (
                 isinstance(self.children[0], Scan)
-                and self._is_len_expr()
+                and Select._is_len_expr(self.exprs)
                 and self.children[0].typ == "parquet"
                 and self.children[0].predicate is None
             ):
