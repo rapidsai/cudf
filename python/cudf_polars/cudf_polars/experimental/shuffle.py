@@ -49,7 +49,7 @@ class RMPFIntegration:  # pragma: no cover
         from rapidsmpf.shuffler import partition_and_pack
 
         on: Sequence[str] = options["on"]
-        assert not other, "Unexpected arguments: {other}"
+        assert not other, f"Unexpected arguments: {other}"
         columns_to_hash = tuple(df.column_names.index(val) for val in on)
         packed_inputs = partition_and_pack(
             df.table,
