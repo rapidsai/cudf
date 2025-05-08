@@ -73,8 +73,7 @@ class element_equality_comparator {
    * @return True if lhs and rhs element are equal
    */
   template <typename Element, CUDF_ENABLE_IF(cudf::is_equality_comparable<Element, Element>())>
-  __device__ bool operator()(size_type lhs_element_index,
-                             size_type rhs_element_index) const noexcept
+  __device__ bool operator()(size_type lhs_element_index, size_type rhs_element_index) const
   {
     return cudf::equality_compare(_lhs.element<Element>(lhs_element_index),
                                   _rhs.element<Element>(rhs_element_index));
@@ -82,7 +81,7 @@ class element_equality_comparator {
 
   // @cond
   template <typename Element, CUDF_ENABLE_IF(not cudf::is_equality_comparable<Element, Element>())>
-  __device__ bool operator()(size_type lhs_element_index, size_type rhs_element_index)
+  __device__ bool operator()(size_type, size_type) const
   {
     CUDF_UNREACHABLE("Attempted to compare elements of uncomparable types.");
   }
@@ -123,7 +122,7 @@ class row_equality_comparator {
    * @param rhs_row_index The index of the second row to compare (in the rhs table)
    * @return true if both rows are equal, otherwise false
    */
-  __device__ bool operator()(size_type lhs_row_index, size_type rhs_row_index) const noexcept
+  __device__ bool operator()(size_type lhs_row_index, size_type rhs_row_index) const
   {
     if (_has_nulls) {
       bool const lhs_is_null{_lhs.column(0).is_null(lhs_row_index)};
@@ -146,124 +145,6 @@ class row_equality_comparator {
   table_device_view _lhs;
   table_device_view _rhs;
   null_equality _nulls_are_equal;
-};
-
-/**
- * @brief Performs a relational comparison between two elements in two columns.
- */
-class element_relational_comparator {
- public:
-  /**
-   * @brief Construct type-dispatched function object for performing a
-   * relational comparison between two elements.
-   *
-   * @note `lhs` and `rhs` may be the same.
-   *
-   * @param lhs The column containing the first element
-   * @param rhs The column containing the second element (may be the same as lhs)
-   */
-  __host__ __device__ element_relational_comparator(column_device_view lhs, column_device_view rhs)
-    : lhs{lhs}, rhs{rhs}
-  {
-  }
-
-  /**
-   * @brief Performs a relational comparison between the specified elements
-   *
-   * @param lhs_element_index The index of the first element
-   * @param rhs_element_index The index of the second element
-   * @return Indicates the relationship between the elements in
-   * the `lhs` and `rhs` columns.
-   */
-  template <typename Element, CUDF_ENABLE_IF(cudf::is_relationally_comparable<Element, Element>())>
-  __device__ weak_ordering operator()(size_type lhs_element_index,
-                                      size_type rhs_element_index) const noexcept
-  {
-    return cudf::relational_compare(lhs.element<Element>(lhs_element_index),
-                                    rhs.element<Element>(rhs_element_index));
-  }
-
-  // @cond
-  template <typename Element,
-            CUDF_ENABLE_IF(not cudf::is_relationally_comparable<Element, Element>())>
-  __device__ weak_ordering operator()(size_type lhs_element_index, size_type rhs_element_index)
-  {
-    CUDF_UNREACHABLE("Attempted to compare elements of uncomparable types.");
-  }
-  // @endcond
-
- private:
-  column_device_view lhs;
-  column_device_view rhs;
-};
-
-/**
- * @brief Computes whether one row is lexicographically *less* than another row.
- *
- * Lexicographic ordering is determined by:
- * - Two rows are compared element by element.
- * - The first mismatching element defines which row is lexicographically less
- * or greater than the other.
- *
- * Lexicographic ordering is exactly equivalent to doing an alphabetical sort of
- * two words, for example, `aac` would be *less* than (or precede) `abb`. The
- * second letter in both words is the first non-equal letter, and `a < b`, thus
- * `aac < abb`.
- */
-class row_lexicographic_comparator {
- public:
-  /**
-   * @brief Construct a function object for performing a lexicographic
-   * comparison between the rows of two tables.
-   *
-   * Behavior is undefined if called with incomparable column types.
-   *
-   * @throws cudf::logic_error if `lhs.num_columns() != rhs.num_columns()`
-   *
-   * @param lhs The first table
-   * @param rhs The second table (may be the same table as `lhs`)
-   * @param column_order Optional, device array the same length as a row that
-   * indicates the desired ascending/descending order of each column in a row.
-   * If `nullptr`, it is assumed all columns are sorted in ascending order.
-   */
-  row_lexicographic_comparator(table_device_view lhs,
-                               table_device_view rhs,
-                               order const* column_order = nullptr)
-    : _lhs{lhs}, _rhs{rhs}, _column_order{column_order}
-  {
-    CUDF_EXPECTS(_lhs.num_columns() == _rhs.num_columns(), "Mismatched number of columns.");
-  }
-
-  /**
-   * @brief Checks whether the row at `lhs_index` in the `lhs` table compares
-   * lexicographically less than the row at `rhs_index` in the `rhs` table.
-   *
-   * @param lhs_index The index of the row in the `lhs` table to examine
-   * @param rhs_index The index of the row in the `rhs` table to examine
-   * @return `true` if row from the `lhs` table compares less than row in the
-   * `rhs` table
-   */
-  __device__ bool operator()(size_type lhs_index, size_type rhs_index) const noexcept
-  {
-    for (size_type i = 0; i < _lhs.num_columns(); ++i) {
-      bool ascending = (_column_order == nullptr) or (_column_order[i] == order::ASCENDING);
-
-      auto comparator = element_relational_comparator{_lhs.column(i), _rhs.column(i)};
-
-      weak_ordering state = cudf::type_dispatcher<dispatch_primitive_type>(
-        _lhs.column(i).type(), comparator, lhs_index, rhs_index);
-
-      if (state == weak_ordering::EQUIVALENT) { continue; }
-
-      return state == (ascending ? weak_ordering::LESS : weak_ordering::GREATER);
-    }
-    return false;
-  }
-
- private:
-  table_device_view _lhs;
-  table_device_view _rhs;
-  order const* _column_order{};
 };
 
 /**
@@ -295,19 +176,13 @@ class element_hasher {
     return Hash<T>{_seed}(col.element<T>(row_index));
   }
 
-  /**
-   * @brief Returns the hash value of the given element in the given column.
-   *
-   * @tparam T The type of the element to hash
-   * @param col The column to hash
-   * @param row_index The index of the row to hash
-   * @return The hash value of the given element
-   */
+  // @cond
   template <typename T, CUDF_ENABLE_IF(not column_device_view::has_element_accessor<T>())>
-  __device__ hash_value_type operator()(column_device_view const& col, size_type row_index) const
+  __device__ hash_value_type operator()(column_device_view const&, size_type) const
   {
     CUDF_UNREACHABLE("Unsupported type in hash.");
   }
+  // @endcond
 
  private:
   hash_value_type _seed;
