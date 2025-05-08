@@ -8,7 +8,10 @@ import pytest
 
 import polars as pl
 
-from cudf_polars.testing.asserts import assert_gpu_result_equal
+from cudf_polars.testing.asserts import (
+    assert_gpu_result_equal,
+    assert_ir_translation_raises,
+)
 
 
 @pytest.fixture
@@ -45,28 +48,37 @@ def partition_by(request):
         pl.col("b").max(),
         pl.col("b").min(),
         pl.col("b").sum(),
-        pl.col("b") + pl.col("c").sum(),
-        pl.col("b").cum_sum(),
-        pl.col("b").rank(),
-        pl.col("b").rank(method="dense"),
         pl.col("b").count(),
-        pl.col("b").n_unique(),
-        pl.col("b").first(),
-        pl.col("b").last(),
         pl.col("b").sum(),
         pl.col("b").mean(),
-        pl.col("b").median(),
-        pl.col("b").std(),
         pl.col("b").var(),
-        pl.col("b").quantile(0.5),
     ],
-    ids=lambda agg: str(agg),
+    ids=str,
 )
 def agg_expr(request):
     return request.param
 
 
-@pytest.mark.xfail(reason="Window functions are not implemented in cudf-polars")
+@pytest.fixture(
+    params=[
+        pl.col("b")
+        + pl.col("c").sum(),  # Broadcasting aggregated values inside rolling
+        pl.col("b").cum_sum(),  # libcudf doesn't support rolling cumulative sum
+        pl.col("b").rank(),  # Rank not exposed in polars IR yet
+        pl.col("b").rank(method="dense"),  # Rank not exposed in polars IR yet
+        pl.col("b").n_unique(),  # libcudf doesn't support rolling nunique
+        pl.col("b").first(),  # libcudf doesn't support rolling first
+        pl.col("b").last(),  # libcudf doesn't support rolling last
+        pl.col("b").median(),  # libcudf doesn't support rolling median
+        pl.col("b").std(),  # libcudf doesn't support rolling std
+        pl.col("b").quantile(0.5),  # libcudf doesn't support rolling quantile
+    ],
+    ids=str,
+)
+def unsupported_agg_expr(request):
+    return request.param
+
+
 def test_over(df: pl.LazyFrame, partition_by, agg_expr):
     """Test window functions over partitions."""
 
@@ -77,31 +89,24 @@ def test_over(df: pl.LazyFrame, partition_by, agg_expr):
 
     query = df.with_columns(window_expr)
 
-    assert_gpu_result_equal(query)
+    assert_ir_translation_raises(query, NotImplementedError)
 
 
-@pytest.mark.xfail(reason="Window functions are not implemented in cudf-polars")
 def test_over_with_sort(df: pl.LazyFrame):
     """Test window functions with sorting."""
     query = df.with_columns([pl.col("c").rank().sort().over(pl.col("a"))])
-    assert_gpu_result_equal(query)
+    assert_ir_translation_raises(query, NotImplementedError)
 
 
-@pytest.mark.parametrize(
-    "mapping_strategy",
-    ["group_to_rows", "explode", "join"],
-    ids=lambda x: f"mapping_{x}",
-)
-@pytest.mark.xfail(reason="Window functions are not implemented in cudf-polars")
+@pytest.mark.parametrize("mapping_strategy", ["group_to_rows", "explode", "join"])
 def test_over_mapping_strategy(df: pl.LazyFrame, mapping_strategy: str):
     """Test window functions with different mapping strategies."""
     query = df.with_columns(
         [pl.col("b").rank().over(pl.col("a"), mapping_strategy=mapping_strategy)]
     )
-    assert_gpu_result_equal(query)
+    assert_ir_translation_raises(query, NotImplementedError)
 
 
-@pytest.mark.xfail(reason="Window functions are not implemented in cudf-polars")
 @pytest.mark.parametrize("period", ["2d", "3d"])
 def test_rolling(df: pl.LazyFrame, agg_expr, period: str):
     """Test rolling window functions over time series."""
@@ -114,12 +119,18 @@ def test_rolling(df: pl.LazyFrame, agg_expr, period: str):
     assert_gpu_result_equal(query)
 
 
-@pytest.mark.xfail(reason="Window functions are not implemented in cudf-polars")
-@pytest.mark.parametrize(
-    "closed",
-    ["left", "right", "both", "none"],
-    ids=lambda x: f"closed_{x}",
-)
+def test_rolling_unsupported(df: pl.LazyFrame, unsupported_agg_expr):
+    """Test rolling window functions over time series."""
+    window_expr = unsupported_agg_expr.rolling(period="2d", index_column="date")
+    result_name = f"{agg_expr!s}_rolling"
+    window_expr = window_expr.alias(result_name)
+
+    query = df.with_columns(window_expr)
+
+    assert_ir_translation_raises(query, NotImplementedError)
+
+
+@pytest.mark.parametrize("closed", ["left", "right", "both", "none"])
 def test_rolling_closed(df: pl.LazyFrame, closed: str):
     """Test rolling window functions with different closed parameters."""
     query = df.with_columns(
