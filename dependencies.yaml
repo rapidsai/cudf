@@ -730,8 +730,12 @@ dependencies:
             packages:
               - python=3.12
           - matrix:
+              py: "3.13"
             packages:
-              - python>=3.10,<3.13
+              - python=3.13
+          - matrix:
+            packages:
+              - python>=3.10,<3.14
   run_common:
     common:
       - output_types: [conda, requirements, pyproject]
@@ -767,7 +771,7 @@ dependencies:
       - output_types: [conda, requirements, pyproject]
         packages:
           - cachetools
-          - &numba-cuda-dep numba-cuda>=0.9.0
+          - &numba-cuda-dep numba-cuda>=0.9.0,!=0.10.0
           - &numba-dep numba>=0.59.1,<0.62.0a0
           - nvtx>=0.2.1
           - packaging
@@ -827,7 +831,7 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - polars>=1.24,<1.28
+          - polars>=1.25,<1.29
   run_cudf_polars_experimental:
     common:
       - output_types: [conda, requirements, pyproject]

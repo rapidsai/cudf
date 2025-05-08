@@ -13,22 +13,24 @@ def np():
     return pytest.importorskip("numpy")
 
 
-@pytest.mark.parametrize(
-    "val",
-    [
-        True,
-        False,
-        -1,
-        0,
-        1 - 1.0,
-        0.0,
-        1.52,
-        "",
-        "a1!",
-        datetime.timedelta(1),
-        datetime.timedelta(days=1, microseconds=1),
-    ],
-)
+PY_SCALARS = [
+    True,
+    False,
+    -1,
+    0,
+    1 - 1.0,
+    0.0,
+    1.52,
+    "",
+    "a1!",
+    datetime.datetime(2020, 1, 1),
+    datetime.datetime(2020, 1, 1, microsecond=1),
+    datetime.timedelta(1),
+    datetime.timedelta(days=1, microseconds=1),
+]
+
+
+@pytest.mark.parametrize("val", PY_SCALARS)
 def test_from_py(val):
     result = plc.Scalar.from_py(val)
     expected = pa.scalar(val)
@@ -54,6 +56,9 @@ def test_from_py(val):
         (datetime.timedelta(1), TypeId.DURATION_SECONDS),
         (datetime.timedelta(1), TypeId.DURATION_MILLISECONDS),
         (datetime.timedelta(1), TypeId.DURATION_NANOSECONDS),
+        (datetime.datetime(2020, 1, 1), TypeId.TIMESTAMP_SECONDS),
+        (datetime.datetime(2020, 1, 1), TypeId.TIMESTAMP_MILLISECONDS),
+        (datetime.datetime(2020, 1, 1), TypeId.TIMESTAMP_NANOSECONDS),
     ],
 )
 def test_from_py_with_dtype(val, tid):
@@ -115,6 +120,12 @@ def test_from_py_with_dtype(val, tid):
             "Cannot convert float to Scalar with dtype INT32",
         ),
         (
+            datetime.datetime(2020, 1, 1),
+            TypeId.INT32,
+            TypeError,
+            "Cannot convert datetime to Scalar with dtype INT32",
+        ),
+        (
             datetime.timedelta(days=1, microseconds=1),
             TypeId.INT32,
             TypeError,
@@ -144,6 +155,7 @@ def test_from_py_with_dtype_errors(val, tid, error, msg):
         (float(-(2**150)), TypeId.FLOAT32),
         (datetime.timedelta.max, TypeId.DURATION_NANOSECONDS),
         (datetime.timedelta.max, TypeId.DURATION_MICROSECONDS),
+        (datetime.datetime.max, TypeId.TIMESTAMP_NANOSECONDS),
     ],
 )
 def test_from_py_overflow_errors(val, tid):
@@ -152,7 +164,7 @@ def test_from_py_overflow_errors(val, tid):
         plc.Scalar.from_py(val, dtype)
 
 
-@pytest.mark.parametrize("val", [datetime.datetime(2020, 1, 1), [1], {1: 1}])
+@pytest.mark.parametrize("val", [[1], {1: 1}])
 def test_from_py_notimplemented(val):
     with pytest.raises(NotImplementedError):
         plc.Scalar.from_py(val)
@@ -209,3 +221,17 @@ def test_from_numpy_notimplemented(np, np_type):
 def test_from_numpy_typeerror(np):
     with pytest.raises(TypeError):
         plc.Scalar.from_numpy(np.void(5))
+
+
+@pytest.mark.parametrize("val", PY_SCALARS)
+def test_round_trip_scalar_through_column(val):
+    result = plc.Column.from_scalar(plc.Scalar.from_py(val), 1).to_scalar()
+    expected = pa.scalar(val)
+    assert plc.interop.to_arrow(result).equals(expected)
+
+
+def test_non_constant_column_to_scalar_raises():
+    with pytest.raises(
+        ValueError, match="to_scalar only works for columns of size 1"
+    ):
+        plc.interop.from_arrow(pa.array([0, 1])).to_scalar()

@@ -9,7 +9,7 @@ import pylibcudf as plc
 import cudf
 from cudf.core._internals import sorting
 from cudf.core.buffer import acquire_spill_lock
-from cudf.core.column import ColumnBase
+from cudf.core.column import ColumnBase, as_column
 from cudf.core.copy_types import GatherMap
 from cudf.core.join._join_helpers import (
     _coerce_to_tuple,
@@ -266,7 +266,7 @@ class Merge:
         # tables, we gather from iota on both right and left, and then
         # sort the gather maps with those two columns as key.
         key_order = [
-            cudf.core.column.as_column(range(n), dtype=SIZE_TYPE_DTYPE).take(
+            as_column(range(n), dtype=SIZE_TYPE_DTYPE).take(
                 map_, nullify=null, check_bounds=False
             )
             for map_, n, null in zip(maps, lengths, nullify)
