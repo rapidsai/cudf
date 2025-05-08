@@ -147,7 +147,6 @@ def test_join_conditional(reverse):
         executor="streaming",
         executor_options={
             "max_rows_per_partition": 3,
-            "broadcast_join_limit": 2,
             "scheduler": DEFAULT_SCHEDULER,
             "shuffle_method": "tasks",
             "fallback_mode": "silent",
