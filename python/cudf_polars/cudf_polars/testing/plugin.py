@@ -149,8 +149,6 @@ EXPECTED_FAILURES: Mapping[str, str | tuple[str, bool]] = {
     "tests/unit/test_cse.py::test_nested_cache_no_panic_16553": "Needs https://github.com/rapidsai/cudf/issues/18630",
     "tests/unit/test_empty.py::test_empty_9137": "Mismatching dtypes, needs cudf#15852",
     "tests/unit/test_errors.py::test_error_on_empty_group_by": "Incorrect exception raised",
-    "tests/unit/streaming/test_streaming_io.py::test_sink_phases[parquet]": "Debug output on stderr doesn't match",
-    "tests/unit/streaming/test_streaming_io.py::test_sink_phases[ndjson]": "Debug output on stderr doesn't match",
     "tests/unit/io/test_scan.py::test_async_read_21945[scan_type0]": "Debug output on stderr doesn't match",
     "tests/unit/io/test_scan.py::test_async_read_21945[scan_type1]": "Debug output on stderr doesn't match",
     "tests/unit/io/test_scan.py::test_async_read_21945[scan_type2]": "Debug output on stderr doesn't match",
