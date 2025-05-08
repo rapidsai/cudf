@@ -468,8 +468,13 @@ def _(
     node: pl_ir.Sink, translator: Translator, schema: dict[str, plc.DataType]
 ) -> ir.IR:
     payload = json.loads(node.payload)
-    file = payload["File"]
+    try:
+        file = payload["File"]
+    except KeyError as err:  # pragma: no cover
+        raise NotImplementedError("Unsupported payload structure") from err
     sink_kind, options = next(iter(file["file_type"].items()))
+    sink_options = file.get("sink_options", {})
+    options.update(sink_options)
     return ir.Sink(
         schema=schema,
         kind=sink_kind,

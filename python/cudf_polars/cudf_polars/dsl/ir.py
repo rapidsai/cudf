@@ -27,6 +27,14 @@ from typing_extensions import assert_never
 import polars as pl
 
 import pylibcudf as plc
+from pylibcudf import TypeId
+from pylibcudf.traits import (
+    is_duration,
+    is_fixed_point,
+    is_floating_point,
+    is_integral,
+    is_timestamp,
+)
 
 import cudf_polars.dsl.expr as expr
 from cudf_polars.containers import Column, DataFrame
@@ -725,6 +733,17 @@ class Scan(IR):
             return df.filter(mask)
 
 
+def _is_unsupported_type_for_sink_csv(dtype: plc.DataType) -> bool:
+    return not (
+        dtype.id() == TypeId.STRING
+        or is_integral(dtype)
+        or is_floating_point(dtype)
+        or is_fixed_point(dtype)
+        or is_timestamp(dtype)
+        or is_duration(dtype)
+    )
+
+
 class Sink(IR):
     """Sink a dataframe to a file."""
 
@@ -746,6 +765,10 @@ class Sink(IR):
         self._non_child_args = (schema, kind, path, options)
 
         if kind == "Csv":
+            # nested types are unsupported in polars and libcudf
+            assert not all(
+                _is_unsupported_type_for_sink_csv(dtype) for dtype in df.schema.values()
+            )
             serialize = options["serialize_options"]
             if options["include_bom"]:
                 raise NotImplementedError("include_bom is not supported.")
@@ -764,12 +787,14 @@ class Sink(IR):
                 raise NotImplementedError("Only quote_char='\"' is supported.")
         elif kind == "Parquet":
             compression = options["compression"]
-            if compression != "Uncompressed":
-                compression_type, compression_level = next(iter(compression.items()))
+            if (
+                compression != "Uncompressed"
+                and isinstance(compression, dict)
+                and next(iter(compression)) in {"Gzip", "Brotli", "Zstd"}
+            ):
+                _, compression_level = next(iter(compression.items()))
                 if compression_level is not None:
                     raise NotImplementedError("compression_level is not supported.")
-                if not hasattr(plc.io.types.CompressionType, compression_type.upper()):
-                    raise NotImplementedError(f"{compression_type=} is not supported.")
         elif kind == "Json":
             # TODO: JSON?
             pass
@@ -784,14 +809,14 @@ class Sink(IR):
 
         The option dictionary is serialised for hashing purposes.
         """
-        schema_hash = tuple(self.schema.items())
+        schema_hash = tuple(self.schema.items())  # pragma: no cover
         return (
             type(self),
             schema_hash,
             self.kind,
             self.path,
             json.dumps(self.options),
-        )
+        )  # pragma: no cover
 
     @classmethod
     def do_evaluate(
@@ -804,6 +829,8 @@ class Sink(IR):
     ) -> DataFrame:
         target = plc.io.SinkInfo([path])
 
+        if options.get("mkdir", False):
+            Path(path).parent.mkdir(parents=True, exist_ok=True)
         if kind == "Csv":
             serialize = options["serialize_options"]
             options = (
@@ -829,12 +856,13 @@ class Sink(IR):
                     getattr(plc.io.types.CompressionType, compression_type.upper())
                 )
 
+            writer_options = builder.metadata(metadata).build()
             if options["data_page_size"] is not None:
-                builder.set_max_page_size_bytes(options["data_page_size"])
+                writer_options.set_max_page_size_bytes(options["data_page_size"])
             if options["row_group_size"] is not None:
-                builder.row_group_size_rows(options["row_group_size"])
+                writer_options.set_row_group_size_rows(options["row_group_size"])
 
-            plc.io.parquet.write_parquet(builder.metadata(metadata).build())
+            plc.io.parquet.write_parquet(writer_options)
 
         elif kind == "Json":
             metadata = plc.io.TableWithMetadata(
