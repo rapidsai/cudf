@@ -33,7 +33,6 @@ from __future__ import annotations
 
 import operator
 from functools import reduce
-from itertools import chain
 from typing import TYPE_CHECKING
 
 import pylibcudf as plc
@@ -50,6 +49,7 @@ from cudf_polars.dsl.traversal import (
 from cudf_polars.dsl.utils.naming import unique_names
 from cudf_polars.experimental.base import PartitionInfo
 from cudf_polars.experimental.repartition import Repartition
+from cudf_polars.experimental.utils import _leaf_column_names
 
 if TYPE_CHECKING:
     from collections.abc import Generator, MutableMapping, Sequence
@@ -121,18 +121,6 @@ def select(
 
     columns = [Col(ne.value.dtype, ne.name) for ne in named_exprs]
     return columns, new_ir, partition_info
-
-
-def _leaf_column_names(expr: Expr) -> tuple[str, ...]:
-    """Find the leaf column names of an expression."""
-    for child in expr.children:
-        return tuple(
-            chain.from_iterable(_leaf_column_names(child) for child in expr.children)
-        )
-    if isinstance(expr, Col):
-        return (expr.name,)
-    else:
-        return ()
 
 
 def _decompose_unique(

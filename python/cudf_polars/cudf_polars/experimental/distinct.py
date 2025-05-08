@@ -150,19 +150,19 @@ def _(
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     # Extract child partitioning
     child, partition_info = rec(ir.children[0])
-    try:
-        config_options = rec.state["config_options"]
-        assert config_options.executor.name == "streaming", (
-            "'in-memory' executor not supported in 'lower_ir_node'"
-        )
+    config_options = rec.state["config_options"]
+    assert config_options.executor.name == "streaming", (
+        "'in-memory' executor not supported in 'lower_ir_node'"
+    )
 
-        subset: frozenset = ir.subset or frozenset(ir.schema)
-        cardinality_factor = {
-            c: min(f, 1.0)
-            for c, f in config_options.executor.cardinality_factor.items()
-            if c in subset
-        }
-        cardinality = max(cardinality_factor.values()) if cardinality_factor else None
+    subset: frozenset = ir.subset or frozenset(ir.schema)
+    cardinality_factor = {
+        c: min(f, 1.0)
+        for c, f in config_options.executor.cardinality_factor.items()
+        if c in subset
+    }
+    cardinality = max(cardinality_factor.values()) if cardinality_factor else None
+    try:
         return lower_distinct(
             ir,
             child,
