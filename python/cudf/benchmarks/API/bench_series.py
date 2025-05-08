@@ -21,3 +21,19 @@ def bench_sort_values(benchmark, series):
 @pytest.mark.parametrize("n", [10])
 def bench_series_nsmallest(benchmark, series, n):
     benchmark(series.nsmallest, n)
+
+
+@benchmark_with_object(cls="series", dtype="int")
+def bench_series_cp_asarray(benchmark, series):
+    series = series.dropna()
+    benchmark(cupy.asarray, series)
+
+@benchmark_with_object(cls="series", dtype="int")
+def bench_series_values(benchmark, series):
+    series = series.dropna()
+    benchmark(lambda: series.values)
+
+@benchmark_with_object(cls="series", dtype="int")
+def bench_series_to_cupy(benchmark, series):
+    series = series.dropna()
+    benchmark(series.to_cupy)
