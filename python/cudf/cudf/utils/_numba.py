@@ -126,6 +126,12 @@ def _setup_numba():
         versions = safe_get_versions()
         if versions != NO_DRIVER:
             driver_version, runtime_version = versions
+
+            # If ptxcompiler (CUDA 11) is running on a CUDA 12 driver, no patch
+            # is needed.
+            if driver_version >= (12, 0):
+                return
+
             shim_ptx_cuda_version = _get_cuda_build_version()
 
             # MVC is required whenever any PTX is newer than the driver
