@@ -339,15 +339,20 @@ void host_compress(compression_type compression,
     return h_inputs[a].size() > h_inputs[b].size();
   });
 
-  std::vector<std::future<size_t>> tasks;
+  auto h_results =
+    cudf::detail::make_pinned_vector_async<compression_result>(results.size(), stream);
+  cudf::detail::cuda_memcpy<compression_result>(h_results, results, stream);
+
+  std::vector<std::future<std::pair<size_t, size_t>>> tasks;
   auto const num_streams =
     std::min<std::size_t>(num_chunks, cudf::detail::host_worker_pool().get_thread_count());
   auto const streams = cudf::detail::fork_streams(stream, num_streams);
   for (size_t i = 0; i < num_chunks; ++i) {
     auto const idx        = task_order[i];
     auto const cur_stream = streams[i % streams.size()];
-    auto task =
-      [d_in = h_inputs[idx], d_out = h_outputs[idx], cur_stream, compression]() -> size_t {
+    if (h_results[task_order[i]].status == compression_status::SKIPPED) { continue; }
+
+    auto task = [d_in = h_inputs[idx], d_out = h_outputs[idx], cur_stream, compression, idx]() {
       auto h_in = cudf::detail::make_pinned_vector_async<uint8_t>(d_in.size(), cur_stream);
       cudf::detail::cuda_memcpy<uint8_t>(h_in, d_in, cur_stream);
 
@@ -355,13 +360,13 @@ void host_compress(compression_type compression,
       h_in.clear();
 
       cudf::detail::cuda_memcpy<uint8_t>(d_out.subspan(0, h_out.size()), h_out, cur_stream);
-      return h_out.size();
+      return std::pair<size_t, size_t>{idx, h_out.size()};
     };
     tasks.emplace_back(cudf::detail::host_worker_pool().submit_task(std::move(task)));
   }
-  auto h_results = cudf::detail::make_pinned_vector<compression_result>(num_chunks, stream);
-  for (auto i = 0ul; i < num_chunks; ++i) {
-    h_results[task_order[i]] = {tasks[i].get(), compression_status::SUCCESS};
+  for (auto i = 0ul; i < tasks.size(); ++i) {
+    auto const [idx, bytes_written] = tasks[i].get();
+    h_results[idx]                  = {bytes_written, compression_status::SUCCESS};
   }
   cudf::detail::cuda_memcpy<compression_result>(results, h_results, stream);
 }
