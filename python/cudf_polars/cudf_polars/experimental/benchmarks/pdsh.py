@@ -1225,6 +1225,7 @@ def run(args: argparse.Namespace) -> None:
                             "c_custkey": 0.05,  # Q10
                             "l_orderkey": 1.0,  # Q18
                             "l_partkey": 0.1,  # Q20
+                            "o_custkey": 0.5,  # Q22
                         },
                     }
                     if run_config.blocksize:

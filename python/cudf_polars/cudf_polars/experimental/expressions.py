@@ -32,6 +32,7 @@ and concatenate them to the input-IR node using ``HConcat``.
 from __future__ import annotations
 
 import operator
+from itertools import chain
 from functools import reduce
 from typing import TYPE_CHECKING
 
@@ -122,6 +123,20 @@ def select(
     return columns, new_ir, partition_info
 
 
+def _root_columns(expr: Expr) -> tuple[Col]:
+    """Find the leaf columns of an expression."""
+    for child in expr.children:
+        return tuple(
+            chain(
+                *(_root_columns(child) for child in expr.children)
+            )
+        )
+    if isinstance(expr, Col):
+        return (expr.name,)
+    else:
+        return ()
+
+
 def _decompose_unique(
     unique: UnaryFunction,
     input_ir: IR,
@@ -168,6 +183,18 @@ def _decompose_unique(
         names=names,
     )
     (column,) = columns
+
+    assert config_options.executor.name == "streaming", (
+        "'in-memory' executor not supported in '_decompose_unique'"
+    )
+
+    cardinality: float | None = None
+    if cardinality_factor:={
+        v for k, v in config_options.executor.cardinality_factor.items()
+        if k in _root_columns(child)
+    }:
+        cardinality = max(cardinality_factor)
+
     input_ir, partition_info = lower_distinct(
         Distinct(
             {column.name: column.dtype},
@@ -180,6 +207,7 @@ def _decompose_unique(
         input_ir,
         partition_info,
         config_options,
+        cardinality=cardinality,
     )
     return column, input_ir, partition_info
 
