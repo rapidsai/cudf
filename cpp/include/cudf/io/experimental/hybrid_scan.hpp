@@ -317,10 +317,10 @@ class hybrid_scan_reader {
   [[nodiscard]] std::vector<size_type> all_row_groups(parquet_reader_options const& options) const;
 
   /**
-   * @brief Get the total number of rows in the row groups
+   * @brief Get the total number of top-level rows in the row groups
    *
    * @param row_group_indices Input row groups indices
-   * @return Total number of rows in the row groups
+   * @return Total number of top-level rows in the row groups
    */
   [[nodiscard]] size_type total_rows_in_row_groups(
     cudf::host_span<size_type const> row_group_indices) const;
