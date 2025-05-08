@@ -108,7 +108,7 @@ aggregate_reader_metadata::aggregate_reader_metadata(cudf::host_span<uint8_t con
   }
 }
 
-byte_range_info aggregate_reader_metadata::get_page_index_bytes() const
+byte_range_info aggregate_reader_metadata::page_index_byte_range() const
 {
   auto& schema     = per_file_metadata.front();
   auto& row_groups = schema.row_groups;

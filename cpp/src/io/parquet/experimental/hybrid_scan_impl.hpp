@@ -64,9 +64,9 @@ class hybrid_scan_reader_impl {
   [[nodiscard]] FileMetaData parquet_metadata() const;
 
   /**
-   * @copydoc cudf::io::experimental::hybrid_scan::page_index_bytes
+   * @copydoc cudf::io::experimental::hybrid_scan::page_index_byte_range
    */
-  [[nodiscard]] byte_range_info get_page_index_bytes() const;
+  [[nodiscard]] byte_range_info page_index_byte_range() const;
 
   /**
    * @copydoc cudf::io::experimental::hybrid_scan::setup_page_index

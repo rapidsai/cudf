@@ -33,9 +33,9 @@ hybrid_scan_reader::hybrid_scan_reader(cudf::host_span<uint8_t const> footer_byt
 
 hybrid_scan_reader::~hybrid_scan_reader() = default;
 
-[[nodiscard]] byte_range_info hybrid_scan_reader::get_page_index_bytes() const
+[[nodiscard]] byte_range_info hybrid_scan_reader::page_index_byte_range() const
 {
-  return _impl->get_page_index_bytes();
+  return _impl->page_index_byte_range();
 }
 
 [[nodiscard]] FileMetaData hybrid_scan_reader::parquet_metadata() const
@@ -43,7 +43,7 @@ hybrid_scan_reader::~hybrid_scan_reader() = default;
   return _impl->parquet_metadata();
 }
 
-void hybrid_scan_reader::setup_page_index(cudf::host_span<uint8_t const> page_index_bytes)
+void hybrid_scan_reader::setup_page_index(cudf::host_span<uint8_t const> page_index_bytes) const
 {
   return _impl->setup_page_index(page_index_bytes);
 }

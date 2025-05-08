@@ -113,9 +113,9 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
                             bool has_cols_from_mismatched_srcs);
 
   /**
-   * @brief Fetch the byte range of the `PageIndex` in the Parquet file
+   * @brief Fetch the byte range of the page index in the Parquet file
    */
-  [[nodiscard]] byte_range_info get_page_index_bytes() const;
+  [[nodiscard]] byte_range_info page_index_byte_range() const;
 
   /**
    * @brief Get the Parquet file metadata

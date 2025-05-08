@@ -527,9 +527,9 @@ FileMetaData hybrid_scan_reader_impl::parquet_metadata() const
   return _metadata->parquet_metadata();
 }
 
-byte_range_info hybrid_scan_reader_impl::get_page_index_bytes() const
+byte_range_info hybrid_scan_reader_impl::page_index_byte_range() const
 {
-  return _metadata->get_page_index_bytes();
+  return _metadata->page_index_byte_range();
 }
 
 void hybrid_scan_reader_impl::setup_page_index(
