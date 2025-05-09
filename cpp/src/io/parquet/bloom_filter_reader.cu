@@ -513,7 +513,7 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::ap
   host_span<std::vector<ast::literal*> const> literals,
   size_type total_row_groups,
   host_span<data_type const> output_dtypes,
-  host_span<int const> equality_col_schemas,
+  host_span<int const> bloom_filter_col_schemas,
   std::reference_wrapper<ast::expression const> filter,
   rmm::cuda_stream_view stream) const
 {
@@ -521,7 +521,7 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::ap
   auto const num_input_columns = static_cast<cudf::size_type>(output_dtypes.size());
 
   // Get parquet types for the predicate columns
-  auto const parquet_types = get_parquet_types(input_row_group_indices, equality_col_schemas);
+  auto const parquet_types = get_parquet_types(input_row_group_indices, bloom_filter_col_schemas);
 
   // Create spans from bloom filter bitset buffers to use in cuco::bloom_filter_ref.
   std::vector<cudf::device_span<cuda::std::byte>> h_bloom_filter_spans;
@@ -542,7 +542,7 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::ap
   bloom_filter_caster const bloom_filter_col{bloom_filter_spans,
                                              parquet_types,
                                              static_cast<size_t>(total_row_groups),
-                                             equality_col_schemas.size()};
+                                             bloom_filter_col_schemas.size()};
 
   // Converts bloom filter membership for equality predicate columns to a table
   // containing a column for each `col[i] == literal` predicate to be evaluated.

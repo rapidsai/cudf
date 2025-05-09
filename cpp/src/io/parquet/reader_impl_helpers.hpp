@@ -272,7 +272,7 @@ class aggregate_reader_metadata {
    * @param literals Lists of equality literals, one per each input row group
    * @param total_row_groups Total number of row groups in `input_row_group_indices`
    * @param output_dtypes Datatypes of output columns
-   * @param equality_col_schemas schema indices of equality columns only
+   * @param bloom_filter_col_schemas Schema indices of bloom filter columns only
    * @param filter AST expression to filter row groups based on bloom filter membership
    * @param stream CUDA stream used for device memory operations and kernel launches
    *
@@ -284,7 +284,7 @@ class aggregate_reader_metadata {
     host_span<std::vector<ast::literal*> const> literals,
     size_type total_row_groups,
     host_span<data_type const> output_dtypes,
-    host_span<int const> equality_col_schemas,
+    host_span<int const> bloom_filter_col_schemas,
     std::reference_wrapper<ast::expression const> filter,
     rmm::cuda_stream_view stream) const;
 
