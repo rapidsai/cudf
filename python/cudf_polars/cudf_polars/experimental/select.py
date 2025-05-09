@@ -10,7 +10,10 @@ from cudf_polars.dsl.ir import HConcat, Select
 from cudf_polars.dsl.traversal import traversal
 from cudf_polars.experimental.base import PartitionInfo
 from cudf_polars.experimental.dispatch import lower_ir_node
-from cudf_polars.experimental.expressions import decompose_expr_graph
+from cudf_polars.experimental.expressions import (
+    _fuse_simple_reductions,
+    decompose_expr_graph,
+)
 from cudf_polars.experimental.utils import _lower_ir_fallback
 
 if TYPE_CHECKING:
@@ -63,7 +66,7 @@ def decompose_select(
     decompose_expr_graph
     """
     # Collect partial selections
-    selections = []
+    selections: list[IR] = []
     for ne in select_ir.exprs:
         # Decompose this partial expression
         new_ne, partial_input_ir, _partition_info = decompose_expr_graph(
@@ -81,7 +84,8 @@ def decompose_select(
         selections.append(partial_input_ir)
 
     # Concatenate partial selections
-    new_ir: HConcat | Select
+    new_ir: IR
+    selections, partition_info = _fuse_simple_reductions(selections, partition_info)
     if len(selections) > 1:
         new_ir = HConcat(
             select_ir.schema,

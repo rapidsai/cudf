@@ -420,6 +420,71 @@ def _decompose_expr_node(
         )
 
 
+def _fuse_simple_reductions(
+    input_irs: Sequence[IR],
+    pi: MutableMapping[IR, PartitionInfo],
+) -> tuple[list[IR], MutableMapping[IR, PartitionInfo]]:
+    from collections import defaultdict
+
+    if len(input_irs) == 1:
+        return list(input_irs), pi
+
+    groups: defaultdict[IR, list[IR]] = defaultdict(list)
+    for input_ir in input_irs:
+        single = True
+        if isinstance(input_ir, Select) and pi[input_ir].count == 1:
+            (repartition,) = input_ir.children
+            if isinstance(repartition, Repartition) and pi[repartition].count == 1:
+                (select,) = repartition.children
+                if isinstance(select, Select):
+                    # We have a simple reduction that may be
+                    # fused with other simple reductions.
+                    single = False
+                    (reference,) = select.children
+                    groups[reference].append(input_ir)
+        if single:
+            groups[input_ir].append(input_ir)
+
+    output_irs: list[IR] = []
+    for ref_ir, group in groups.items():
+        if len(group) > 1:
+            # Fuse simple-aggregation group
+            combined_exprs = []
+            pwise_exprs = []
+            combined_schema: Schema = {}
+            pwise_schema: Schema = {}
+            for combined in group:
+                assert isinstance(combined, Select)
+                combined_exprs.extend(list(combined.exprs))
+                combined_schema |= combined.schema
+                pwise = combined.children[0].children[0]
+                assert isinstance(pwise, Select)
+                pwise_exprs.extend(list(pwise.exprs))
+                pwise_schema |= pwise.schema
+            new_pwise = Select(
+                pwise_schema,
+                pwise_exprs,
+                True,  # noqa: FBT003
+                ref_ir,
+            )
+            pi[new_pwise] = PartitionInfo(count=pi[ref_ir].count)
+            new_repartition = Repartition(pwise_schema, new_pwise)
+            pi[new_repartition] = PartitionInfo(count=1)
+            new_combined = Select(
+                combined_schema,
+                combined_exprs,
+                True,  # noqa: FBT003
+                new_repartition,
+            )
+            pi[new_combined] = PartitionInfo(count=1)
+            output_irs.append(new_combined)
+        else:
+            # Nothing to fuse for this group
+            output_irs.append(ref_ir)
+
+    return output_irs, pi
+
+
 def _decompose(
     expr: Expr, rec: ExprDecomposer
 ) -> tuple[Expr, IR, MutableMapping[IR, PartitionInfo]]:
@@ -446,6 +511,9 @@ def _decompose(
     assert len(input_irs) > 0  # Must have at least one input IR
     partition_count = max(partition_info[ir].count for ir in input_irs)
     unique_input_irs = [k for k in dict.fromkeys(input_irs) if not isinstance(k, Empty)]
+    unique_input_irs, partition_info = _fuse_simple_reductions(
+        unique_input_irs, partition_info
+    )
     if len(unique_input_irs) > 1:
         # Need to make sure we only have a single input IR
         # TODO: Check that we aren't concatenating misaligned
