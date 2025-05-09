@@ -168,3 +168,8 @@ def test_groupby_agg_duplicate(
     )
     q = df.group_by("y").agg(op, pl.min(column_name))
     assert_gpu_result_equal(q, engine=engine, check_row_order=False)
+
+
+def test_groupby_agg_empty(df: pl.LazyFrame, engine: pl.GPUEngine) -> None:
+    q = df.group_by("y").agg()
+    assert_gpu_result_equal(q, engine=engine, check_row_order=False)
