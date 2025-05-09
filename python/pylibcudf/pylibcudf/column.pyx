@@ -56,6 +56,7 @@ from .gpumemoryview import _datatype_from_dtype_desc
 from ._interop_helpers import ColumnMetadata
 
 import functools
+import operator
 
 __all__ = ["Column", "ListColumnView", "is_c_contiguous"]
 
@@ -156,41 +157,71 @@ class _Ravelled:
 
 
 def _prepare_array_metadata(
-    iface: dict
+    iface: dict,
 ) -> tuple[int, int, tuple[int, ...], tuple[int, ...] | None, DataType]:
     """
-    Parse and validate a CUDA or NumPy array interface dict.
-    """
-    typestr = iface["typestr"]
-    shape = iface["shape"]
-    strides = iface.get("strides")
-    data = iface.get("data")
+    Parse and validate a CUDA or NumPy array interface dictionary.
 
-    if typestr[0] == ">":
+    Parameters
+    ----------
+    iface : dict
+        A dictionary conforming to the __cuda_array_interface__
+        or __array_interface__ spec.
+
+    Returns
+    -------
+    tuple
+        - data pointer (int)
+        - total number of bytes (int)
+        - shape (tuple[int, ...])
+        - strides (tuple[int, ...] | None)
+        - data type (pylibcudf.DataType)
+
+    Raises
+    ------
+    ValueError
+        If the interface is invalid, big-endian, non-contiguous,
+        or exceed the size_type limit.
+    """
+    if iface["typestr"][0] == ">":
         raise ValueError("Big-endian data is not supported")
-    if not isinstance(data, tuple) or not isinstance(data[0], int):
+
+    if not (
+        isinstance(iface.get("data"), tuple)
+        and isinstance(iface["data"][0], int)
+    ):
         raise ValueError(
             "Expected a data field with an integer pointer in the array interface. "
             "Objects with data set to None or a buffer object are not supported."
         )
-    if not isinstance(shape, tuple) or len(shape) == 0:
+
+    if not isinstance(iface["shape"], tuple) or len(iface["shape"]) == 0:
         raise ValueError("shape must be a non-empty tuple")
-    if len(shape) > 2:
-        raise ValueError("Only 1D or 2D arrays are supported")
-    dtype = _datatype_from_dtype_desc(typestr[1:])
+
+    dtype = _datatype_from_dtype_desc(iface["typestr"][1:])
     itemsize = size_of(dtype)
+
+    shape = iface["shape"]
+    strides = iface.get("strides")
+
     if not is_c_contiguous(shape, strides, itemsize):
         raise ValueError("Data must be C-contiguous")
-    if shape[0] >= numeric_limits[size_type].max():
+
+    size_type_row_limit = numeric_limits[size_type].max()
+    if (
+        shape[0] > size_type_row_limit if len(shape) == 1
+        # >= because we do list column construction _from_gpumemoryview
+        else shape[0] >= size_type_row_limit
+    ):
         raise ValueError(
             "Number of rows exceeds size_type limit for offsets column construction."
         )
-    flat_size = shape[0] if len(shape) == 1 else shape[0] * shape[1]
+
+    flat_size = functools.reduce(operator.mul, shape)
     if flat_size > numeric_limits[size_type].max():
         raise ValueError("Flat size exceeds size_type limit")
-    data_ptr = data[0]
-    nbytes = shape[0] * itemsize if len(shape) == 1 else shape[0] * shape[1] * itemsize
-    return data_ptr, nbytes, shape, strides, dtype
+
+    return iface["data"][0], flat_size * itemsize, shape, strides, dtype
 
 
 cdef class Column:
@@ -646,40 +677,42 @@ cdef class Column:
         strides, size_type overflow) by a prior call to
         `_prepare_array_metadata`.
         """
-        if len(shape) == 1:
-            size = shape[0]
-            return Column(dtype, size, data, None, 0, 0, [])
+        ndim = len(shape)
+        flat_size = functools.reduce(operator.mul, shape)
+        data_col = Column(
+            data_type=dtype,
+            size=flat_size,
+            data=data,
+            mask=None,
+            null_count=0,
+            offset=0,
+            children=[],
+        )
 
-        else:
-            num_rows, num_cols = shape
+        if ndim == 1:
+            return data_col
 
+        current_data_col = data_col
+        int32_dtype = DataType(type_id.INT32)
+
+        for i in range(ndim - 1, 0, -1):
+            total_rows = functools.reduce(operator.mul, shape[:i])
             offsets_col = sequence(
-                num_rows + 1,
-                Scalar.from_py(0, DataType(type_id.INT32)),
-                Scalar.from_py(num_cols, DataType(type_id.INT32)),
+                total_rows + 1,
+                Scalar.from_py(0, int32_dtype),
+                Scalar.from_py(shape[i], int32_dtype),
             )
-
-            flat_size = num_rows * num_cols
-
-            data_col = Column(
-                data_type=dtype,
-                size=flat_size,
-                data=data,
-                mask=None,
-                null_count=0,
-                offset=0,
-                children=[],
-            )
-
-            return Column(
+            current_data_col = Column(
                 data_type=DataType(type_id.LIST),
-                size=num_rows,
+                size=total_rows,
                 data=None,
                 mask=None,
                 null_count=0,
                 offset=0,
-                children=[offsets_col, data_col],
+                children=[offsets_col, current_data_col],
             )
+
+        return current_data_col
 
     @classmethod
     def from_array_interface(cls, obj):
@@ -787,7 +820,7 @@ cdef class Column:
 
         Notes
         -----
-        - 1D and 2D C-contiguous host and device arrays are supported.
+        - Only C-contiguous host and device ndarrays are supported.
           For device arrays, the data is not copied.
 
         Examples
