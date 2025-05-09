@@ -12,6 +12,7 @@ rapids-logger "validate packages with 'pydistcheck'"
 
 pydistcheck \
     --inspect \
+    --output-file-size-precision=4 \
     "$(echo "${wheel_dir_relative_path}"/*.whl)"
 
 rapids-logger "validate packages with 'twine'"
