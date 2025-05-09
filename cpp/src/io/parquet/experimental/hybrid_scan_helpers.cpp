@@ -375,8 +375,7 @@ std::vector<byte_range_info> aggregate_reader_metadata::get_dictionary_page_byte
           dictionary_col_schemas.begin(),
           dictionary_col_schemas.end(),
           [&](auto const& schema_col_idx_pair) {
-            auto const input_col_idx = thrust::get<0>(schema_col_idx_pair);
-            auto const schema_idx    = thrust::get<1>(schema_col_idx_pair);
+            auto const [input_col_idx, schema_idx] = schema_col_idx_pair;
             auto& col_meta           = get_column_metadata(rg_index, src_index, schema_idx);
             auto const& col_chunk    = rg.columns[input_col_idx];
 
