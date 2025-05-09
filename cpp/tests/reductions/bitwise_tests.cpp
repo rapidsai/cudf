@@ -43,7 +43,7 @@ TYPED_TEST(BitwiseAggTypedTest, BitwiseAND)
     if constexpr (std::is_same_v<T, bool>) {
       return std::vector<T>{true, false, true, true, true, true};
     } else {
-      return std::vector<T>{0x1F, 0x0F, 0x33, 0xFF, 0x2F, 0x3F};
+      return std::vector<T>{0x1F, 0x0F, 0x33, static_cast<T>(0xFF), 0x2F, 0x3F};
     }
   }();
   auto const input_col = column<T>(input_data.begin(), input_data.end());
@@ -70,7 +70,7 @@ TYPED_TEST(BitwiseAggTypedTest, BitwiseOR)
     if constexpr (std::is_same_v<T, bool>) {
       return std::vector<T>{true, false, true, true, true, true};
     } else {
-      return std::vector<T>{0x1F, 0x0F, 0x33, 0xFF, 0x2F, 0x3F};
+      return std::vector<T>{0x1F, 0x0F, 0x33, static_cast<T>(0xFF), 0x2F, 0x3F};
     }
   }();
   auto const input_col = column<T>(input_data.begin(), input_data.end());
@@ -97,7 +97,7 @@ TYPED_TEST(BitwiseAggTypedTest, BitwiseXOR)
     if constexpr (std::is_same_v<T, bool>) {
       return std::vector<T>{true, false, true, true, true, true};
     } else {
-      return std::vector<T>{0x1F, 0x0F, 0x33, 0xFF, 0x2F, 0x3F};
+      return std::vector<T>{0x1F, 0x0F, 0x33, static_cast<T>(0xFF), 0x2F, 0x3F};
     }
   }();
   auto const input_col = column<T>(input_data.begin(), input_data.end());
@@ -124,7 +124,7 @@ TYPED_TEST(BitwiseAggTypedTest, WithNulls)
     if constexpr (std::is_same_v<T, bool>) {
       return std::vector<T>{true, true, false, true, true, true};
     } else {
-      return std::vector<T>{0x1F, 0x0F, 0x33, 0xFF, 0x2F, 0x3F};
+      return std::vector<T>{0x1F, 0x0F, 0x33, static_cast<T>(0xFF), 0x2F, 0x3F};
     }
   }();
   // If T is bool, null is at the position of a false value.
