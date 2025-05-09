@@ -176,7 +176,7 @@ def _decompose_unique(
 
     cardinality: float | None = None
     if cardinality_factor := {
-        max(min(v, 1.0), 0.0)
+        max(min(v, 1.0), 0.00001)
         for k, v in config_options.executor.cardinality_factor.items()
         if k in _leaf_column_names(child)
     }:
@@ -197,7 +197,7 @@ def _decompose_unique(
             config_options,
             cardinality=cardinality,
         )
-    except NotImplementedError as err:
+    except NotImplementedError as err:  # pragma: no cover
         input_ir = Repartition(input_ir.schema, input_ir)
         partition_info[input_ir] = PartitionInfo(count=1)
         _fallback_inform(str(err), config_options)

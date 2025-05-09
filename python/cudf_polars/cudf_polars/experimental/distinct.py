@@ -105,8 +105,7 @@ def lower_distinct(
             # to one partition.
             raise NotImplementedError("Unsupported slice for multiple partitions.")
     elif cardinality is not None:
-        # Use cardinality to determine partitioning
-        cardinality = max(cardinality, 0.0001)  # Avoid divide by 0
+        # Use cardinality to determine partitioningcardinality
         n_ary = min(max(int(1.0 / cardinality), 2), child_count)
         output_count = max(int(cardinality * child_count), 1)
 
@@ -158,7 +157,7 @@ def _(
 
     subset: frozenset = ir.subset or frozenset(ir.schema)
     cardinality_factor = {
-        c: max(min(f, 1.0), 0.0)
+        c: max(min(f, 1.0), 0.00001)
         for c, f in config_options.executor.cardinality_factor.items()
         if c in subset
     }
