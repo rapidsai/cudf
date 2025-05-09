@@ -57,6 +57,8 @@ def make_partitioned_source(
                 raise ValueError(f"Unsupported format: {fmt}")
 
     if n_files == 1:
+        if path.is_dir():
+            path = path / f"part.0.{fmt}"
         write(df, path)
     else:
         stride = len(df) // n_files
