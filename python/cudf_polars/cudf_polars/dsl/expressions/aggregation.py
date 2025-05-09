@@ -66,9 +66,13 @@ class Agg(Expr):
                 else plc.types.NullPolicy.INCLUDE
             )
         elif name == "quantile":
-            _, quantile = self.children
+            child, quantile = self.children
             if not isinstance(quantile, Literal):
                 raise NotImplementedError("Only support literal quantile values")
+            if options == "equiprobable":
+                raise NotImplementedError("Quantile with equiprobable interpolation")
+            if plc.traits.is_duration(child.dtype):
+                raise NotImplementedError("Quantile with duration data type")
             req = plc.aggregation.quantile(
                 quantiles=[quantile.value.as_py()], interp=Agg.interp_mapping[options]
             )

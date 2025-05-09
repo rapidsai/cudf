@@ -12,7 +12,7 @@ from pylibcudf.types import DataType
 class ArrayInterface(TypedDict):
     shape: tuple[int, ...]
     typestr: str
-    data: tuple[int, bool]
+    data: None | tuple[int, bool]
     version: int
     strides: None | tuple[int, ...]
     descr: None | list[tuple[Any, ...]]
@@ -70,8 +70,8 @@ class Column:
     ) -> Column: ...
     @classmethod
     def from_array_interface(cls, obj: SupportsArrayInterface) -> Column: ...
-    @classmethod
-    def from_arraylike(
+    @staticmethod
+    def from_array(
         cls, obj: SupportsCudaArrayInterface | SupportsArrayInterface
     ) -> Column: ...
 
