@@ -1211,10 +1211,7 @@ def test_timedelta_reductions(data, op, dtype):
 
 def test_error_values():
     s = cudf.Series([1, 2, 3], dtype="timedelta64[ns]")
-    with pytest.raises(
-        NotImplementedError,
-        match="TimeDelta Arrays is not yet implemented in cupy",
-    ):
+    with pytest.raises(NotImplementedError, match="cupy does not support"):
         s.values
 
 

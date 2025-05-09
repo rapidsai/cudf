@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,8 @@
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+
+#include <numeric>
 
 namespace cudf {
 
@@ -59,6 +61,14 @@ table::table(table_view view, rmm::cuda_stream_view stream, rmm::device_async_re
   for (auto const& c : view) {
     _columns.emplace_back(std::make_unique<column>(c, stream, mr));
   }
+}
+
+std::size_t table::alloc_size() const
+{
+  return std::transform_reduce(
+    _columns.begin(), _columns.end(), size_t{0}, std::plus{}, [](auto const& c) {
+      return c->alloc_size();
+    });
 }
 
 // Create immutable view

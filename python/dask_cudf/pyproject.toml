@@ -36,6 +36,7 @@ classifiers = [
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
 ]
 
 [project.entry-points."dask.dataframe.backends"]
@@ -47,7 +48,7 @@ cudf = "dask_cudf.backends:CudfBackendEntrypoint"
 [project.optional-dependencies]
 test = [
     "dask-cuda==25.6.*,>=0.0.0a0",
-    "numba-cuda>=0.9.0",
+    "numba-cuda>=0.10.1,<0.11.0a0",
     "numba>=0.59.1,<0.62.0a0",
     "pytest-cov",
     "pytest-xdist",

@@ -1764,5 +1764,24 @@ constexpr inline bool is_valid_aggregation()
  */
 bool is_valid_aggregation(data_type source, aggregation::Kind k);
 
+/**
+ * @brief Initializes each column in a table with a corresponding identity value
+ * of an aggregation operation.
+ *
+ * The `i`th column will be initialized with the identity value of the `i`th
+ * aggregation operation in `aggs`.
+ *
+ * @throw cudf::logic_error if column type and corresponding agg are incompatible
+ * @throw cudf::logic_error if column type is not fixed-width
+ *
+ * @param table The table of columns to initialize.
+ * @param aggs A span of aggregation operations corresponding to the table
+ * columns. The aggregations determine the identity value for each column.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ */
+void initialize_with_identity(mutable_table_view& table,
+                              host_span<cudf::aggregation::Kind const> aggs,
+                              rmm::cuda_stream_view stream);
+
 }  // namespace detail
 }  // namespace CUDF_EXPORT cudf
