@@ -73,6 +73,7 @@ def test_unique_select(df, maintain_order, cardinality):
             "max_rows_per_partition": 4,
             "scheduler": DEFAULT_SCHEDULER,
             "cardinality_factor": cardinality,
+            "fallback_mode": "silent",
         },
     )
 
