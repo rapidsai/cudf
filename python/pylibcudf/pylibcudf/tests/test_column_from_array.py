@@ -40,16 +40,12 @@ NUMPY_DTYPES = [
 ]
 
 
-@pytest.fixture(params=[1, 2, 3, 4], ids=lambda x: f"ndim={x}")
+@pytest.fixture(
+    params=[(6,), (2, 3), (2, 2, 3), (2, 2, 2, 3)],
+    ids=lambda x: f"ndim={len(x)}",
+)
 def shape(request):
-    ndim = request.param
-    shapes = {
-        1: (6,),
-        2: (2, 3),
-        3: (2, 2, 3),
-        4: (2, 2, 2, 3),
-    }
-    return shapes[ndim]
+    return request.param
 
 
 @pytest.fixture(params=CUPY_DTYPES, ids=repr)
@@ -74,7 +70,7 @@ def np_array(request, shape):
             shape
         )
     elif np.issubdtype(dtype, np.datetime64):
-        unit = dtype.name.split("[")[-1][:-1]
+        unit = np.datetime_data(dtype)[0]
         start = np.datetime64("2000-01-01", unit)
         step = np.timedelta64(1, unit)
         arr = np.arange(start, start + size * step, step, dtype=dtype).reshape(
@@ -165,3 +161,12 @@ def test_array_interface_with_data_none():
         match="Expected a data field .* the array interface.",
     ):
         plc.Column.from_array(ArrayInterfaceWithNone())
+
+
+def test_from_zero_dimensional_array():
+    arr = np.array(0)
+    with pytest.raises(
+        ValueError,
+        match="shape must be a non-empty tuple",
+    ):
+        plc.Column.from_array(arr)

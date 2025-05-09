@@ -689,9 +689,6 @@ cdef class Column:
             children=[],
         )
 
-        if ndim == 1:
-            return data_col
-
         int32_dtype = DataType(type_id.INT32)
 
         for i in range(ndim - 1, 0, -1):
