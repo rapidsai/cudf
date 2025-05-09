@@ -692,7 +692,6 @@ cdef class Column:
         if ndim == 1:
             return data_col
 
-        current_data_col = data_col
         int32_dtype = DataType(type_id.INT32)
 
         for i in range(ndim - 1, 0, -1):
@@ -702,17 +701,17 @@ cdef class Column:
                 Scalar.from_py(0, int32_dtype),
                 Scalar.from_py(shape[i], int32_dtype),
             )
-            current_data_col = Column(
+            data_col = Column(
                 data_type=DataType(type_id.LIST),
                 size=total_rows,
                 data=None,
                 mask=None,
                 null_count=0,
                 offset=0,
-                children=[offsets_col, current_data_col],
+                children=[offsets_col, data_col],
             )
 
-        return current_data_col
+        return data_col
 
     @classmethod
     def from_array_interface(cls, obj):
