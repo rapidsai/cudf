@@ -584,8 +584,6 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::ap
                                             stream);
 }
 
-equality_literals_collector::equality_literals_collector() = default;
-
 equality_literals_collector::equality_literals_collector(ast::expression const& expr,
                                                          cudf::size_type num_input_columns)
   : _num_input_columns{num_input_columns}

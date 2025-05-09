@@ -46,8 +46,6 @@ using parquet::detail::ColumnChunkDesc;
 using parquet::detail::decode_error;
 using parquet::detail::PageInfo;
 
-dictionary_literals_collector::dictionary_literals_collector() = default;
-
 dictionary_literals_collector::dictionary_literals_collector(ast::expression const& expr,
                                                              cudf::size_type num_input_columns)
 {
@@ -79,7 +77,7 @@ std::reference_wrapper<ast::expression const> dictionary_literals_collector::vis
       _literals[col_idx].emplace_back(const_cast<ast::literal*>(literal_ptr));
     }
   } else {
-    // Just visit the operands and ignore any output
+    // Visit the operands and ignore any output as we only want to collect literals
     std::ignore = visit_operands(operands);
   }
 

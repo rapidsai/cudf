@@ -547,7 +547,7 @@ class named_to_reference_converter : public ast::detail::expression_transformer 
  */
 class equality_literals_collector : public ast::detail::expression_transformer {
  public:
-  equality_literals_collector();
+  equality_literals_collector() = default;
 
   equality_literals_collector(ast::expression const& expr, cudf::size_type num_input_columns);
 

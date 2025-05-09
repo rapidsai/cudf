@@ -114,7 +114,7 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
     host_span<std::vector<size_type> const> row_group_indices,
     host_span<data_type const> output_dtypes,
     host_span<int const> output_column_schemas,
-    std::optional<std::reference_wrapper<ast::expression const>> filter,
+    std::reference_wrapper<ast::expression const> filter,
     rmm::cuda_stream_view stream) const;
 
   /**
@@ -131,7 +131,7 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
     cudf::host_span<std::vector<size_type> const> row_group_indices,
     host_span<data_type const> output_dtypes,
     host_span<int const> output_column_schemas,
-    std::optional<std::reference_wrapper<ast::expression const>> filter);
+    std::reference_wrapper<ast::expression const> filter);
 
   /**
    * @brief Get the dictionary page byte ranges, one per column chunk with (in)equality predicate
@@ -147,7 +147,7 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
     cudf::host_span<std::vector<size_type> const> row_group_indices,
     host_span<data_type const> output_dtypes,
     host_span<int const> output_column_schemas,
-    std::optional<std::reference_wrapper<ast::expression const>> filter);
+    std::reference_wrapper<ast::expression const> filter);
 
   /**
    * @brief Filter the row groups using dictionaries based on predicate filter
@@ -172,7 +172,7 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
     cudf::host_span<std::vector<ast::literal*> const> literals,
     cudf::host_span<data_type const> output_dtypes,
     cudf::host_span<int const> output_column_schemas,
-    std::optional<std::reference_wrapper<ast::expression const>> filter,
+    std::reference_wrapper<ast::expression const> filter,
     rmm::cuda_stream_view stream) const;
 
   /**
@@ -192,7 +192,7 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
     host_span<std::vector<size_type> const> row_group_indices,
     host_span<data_type const> output_dtypes,
     host_span<int const> output_column_schemas,
-    std::optional<std::reference_wrapper<ast::expression const>> filter,
+    std::reference_wrapper<ast::expression const> filter,
     rmm::cuda_stream_view stream) const;
 };
 
@@ -202,7 +202,7 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
  */
 class dictionary_literals_collector : public equality_literals_collector {
  public:
-  dictionary_literals_collector();
+  dictionary_literals_collector() = default;
 
   dictionary_literals_collector(ast::expression const& expr, cudf::size_type num_input_columns);
 
