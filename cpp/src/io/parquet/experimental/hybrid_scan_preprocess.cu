@@ -1431,8 +1431,10 @@ void hybrid_scan_reader_impl::update_row_mask(cudf::column_view in_row_mask,
   // Make sure the null mask of the output row mask column is all valid after the update. This is
   // to correctly assess if a payload column data page can be pruned. An invalid row in the row mask
   // column means the corresponding data page cannot be pruned.
-  cudf::set_null_mask(out_row_mask.null_mask(), 0, total_rows, true, stream);
-  out_row_mask.set_null_count(0);
+  if (out_row_mask.nullable()) {
+    cudf::set_null_mask(out_row_mask.null_mask(), 0, total_rows, true, stream);
+    out_row_mask.set_null_count(0);
+  }
 }
 
 void hybrid_scan_reader_impl::sanitize_row_mask(
