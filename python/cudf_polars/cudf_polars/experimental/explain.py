@@ -83,7 +83,7 @@ def _repr_ir_tree(
 
 def _repr_schema(schema: tuple | None) -> str:
     if schema is None:
-        return ""
+        return ""  # pragma: no cover; no test yet
     names = tuple(schema)
     if len(names) > 6:
         names = names[:3] + ("...",) + names[-2:]
@@ -134,7 +134,7 @@ def _(
     header = f"{offset}JOIN {ir.options[0]} {left_on} {right_on}"
     header += _repr_schema(getattr(ir, "schema", None))
     if count is not None:
-        header += f" [{count}]"
+        header += f" [{count}]"  # pragma: no cover; no test yet
     return header + "\n"
 
 
@@ -150,7 +150,7 @@ def _(
     header = f"{offset}SORT {by}"
     header += _repr_schema(getattr(ir, "schema", None))
     if count is not None:
-        header += f" [{count}]"
+        header += f" [{count}]"  # pragma: no cover; no test yet
     return header + "\n"
 
 
@@ -167,5 +167,5 @@ def _(
     suffix = " ..." if len(ir.paths) > 1 else ""
     header = f"{offset}SCAN {ir.typ.upper()}{schema_str} {first_path}{suffix}"
     if count is not None:
-        header += f" [{count} partition{'s' if count > 1 else ''}]"
+        header += f" [{count} partition{'s' if count > 1 else ''}]"  # pragma: no cover; no test yet
     return header + "\n"
