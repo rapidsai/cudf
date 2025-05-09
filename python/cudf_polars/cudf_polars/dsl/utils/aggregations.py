@@ -23,6 +23,30 @@ if TYPE_CHECKING:
 __all__ = ["apply_pre_evaluation", "decompose_aggs", "decompose_single_agg"]
 
 
+def replace_nulls(col: expr.Expr, value: pa.Scalar, *, is_top: bool) -> expr.Expr:
+    """
+    Replace nulls with the given scalar if at top level.
+
+    Parameters
+    ----------
+    col
+        Expression to replace nulls in.
+    value
+        Scalar replacement
+    is_top
+        Is this top-level (should replacement be performed).
+
+    Returns
+    -------
+    Massaged expression.
+    """
+    if not is_top:
+        return col
+    return expr.UnaryFunction(
+        col.dtype, "fill_null", (), col, expr.Literal(col.dtype, value)
+    )
+
+
 def decompose_single_agg(
     named_expr: expr.NamedExpr,
     name_generator: Generator[str, None, None],
@@ -60,7 +84,22 @@ def decompose_single_agg(
     agg = named_expr.value
     name = named_expr.name
     if isinstance(agg, expr.Col):
-        return [(named_expr, False)], named_expr
+        # TODO: collect_list produces null for empty group in libcudf, empty list in polars.
+        # But we need the nested value type, so need to track proper dtypes in our DSL.
+        return [(named_expr, False)], named_expr.reconstruct(expr.Col(agg.dtype, name))
+    if is_top and isinstance(agg, expr.Cast) and isinstance(agg.children[0], expr.Len):
+        # Special case to fill nulls with zeros for empty group length calculations
+        (child,) = agg.children
+        child_agg, post = decompose_single_agg(
+            expr.NamedExpr(next(name_generator), child), name_generator, is_top=True
+        )
+        return child_agg, named_expr.reconstruct(
+            replace_nulls(
+                agg.reconstruct([post.value]),
+                pa.scalar(0, type=plc.interop.to_arrow(agg.dtype)),
+                is_top=True,
+            )
+        )
     if isinstance(agg, expr.Len):
         return [(named_expr, True)], named_expr.reconstruct(expr.Col(agg.dtype, name))
     if isinstance(agg, (expr.Literal, expr.LiteralColumn)):
@@ -101,20 +140,18 @@ def decompose_single_agg(
                 )
                 else expr.Col(agg.dtype, name)
             )
-            if is_top:
-                # In polars sum(empty_group) => 0, but in libcudf sum(empty_group) => null
-                # So must post-process by replacing nulls, but only if we're a "top-level" agg.
-                rep = expr.Literal(
-                    agg.dtype, pa.scalar(0, type=plc.interop.to_arrow(agg.dtype))
-                )
-                return (
-                    [(named_expr, True)],
-                    named_expr.reconstruct(
-                        expr.UnaryFunction(agg.dtype, "fill_null", (), col, rep)
-                    ),
-                )
-            else:
-                return [(named_expr, True)], expr.NamedExpr(name, col)
+            return [(named_expr, True)], expr.NamedExpr(
+                name,
+                # In polars sum(empty_group) => 0, but in libcudf
+                # sum(empty_group) => null So must post-process by
+                # replacing nulls, but only if we're a "top-level"
+                # agg.
+                replace_nulls(
+                    col,
+                    pa.scalar(0, type=plc.interop.to_arrow(agg.dtype)),
+                    is_top=is_top,
+                ),
+            )
         else:
             return [(named_expr, True)], named_expr.reconstruct(
                 expr.Col(agg.dtype, name)
