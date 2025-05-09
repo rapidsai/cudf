@@ -49,7 +49,7 @@ from cudf_polars.dsl.traversal import (
 from cudf_polars.dsl.utils.naming import unique_names
 from cudf_polars.experimental.base import PartitionInfo
 from cudf_polars.experimental.repartition import Repartition
-from cudf_polars.experimental.utils import _fallback_inform, _leaf_column_names
+from cudf_polars.experimental.utils import _leaf_column_names
 
 if TYPE_CHECKING:
     from collections.abc import Generator, MutableMapping, Sequence
@@ -182,25 +182,20 @@ def _decompose_unique(
     }:
         cardinality = max(cardinality_factor)
 
-    try:
-        input_ir, partition_info = lower_distinct(
-            Distinct(
-                {column.name: column.dtype},
-                plc.stream_compaction.DuplicateKeepOption.KEEP_ANY,
-                None,
-                None,
-                maintain_order,
-                input_ir,
-            ),
+    input_ir, partition_info = lower_distinct(
+        Distinct(
+            {column.name: column.dtype},
+            plc.stream_compaction.DuplicateKeepOption.KEEP_ANY,
+            None,
+            None,
+            maintain_order,
             input_ir,
-            partition_info,
-            config_options,
-            cardinality=cardinality,
-        )
-    except NotImplementedError as err:  # pragma: no cover
-        input_ir = Repartition(input_ir.schema, input_ir)
-        partition_info[input_ir] = PartitionInfo(count=1)
-        _fallback_inform(str(err), config_options)
+        ),
+        input_ir,
+        partition_info,
+        config_options,
+        cardinality=cardinality,
+    )
 
     return column, input_ir, partition_info
 
