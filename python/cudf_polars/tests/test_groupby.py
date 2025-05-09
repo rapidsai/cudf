@@ -81,6 +81,11 @@ def keys(request):
         [pl.col("float").round(decimals=1).sum()],
         [pl.col("int").first(), pl.col("float").last()],
         [pl.col("int").sum(), pl.col("string").str.replace("h", "foo", literal=True)],
+        [pl.col("float").quantile(0.3, interpolation="nearest")],
+        [pl.col("float").quantile(0.3, interpolation="higher")],
+        [pl.col("float").quantile(0.3, interpolation="lower")],
+        [pl.col("float").quantile(0.3, interpolation="midpoint")],
+        [pl.col("float").quantile(0.3, interpolation="linear")],
         [
             pl.col("datetime").max(),
             pl.col("datetime").max().dt.is_leap_year().alias("leapyear"),

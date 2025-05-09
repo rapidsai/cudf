@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -146,6 +146,32 @@ TEST_F(TableTest, CreateFromViewVectorEmptyTables)
   views.emplace_back(std::vector<column_view>{});
   TView final_view{views};
   EXPECT_EQ(final_view.num_columns(), 0);
+}
+
+TEST_F(TableTest, AllocSize)
+{
+  column_wrapper<int32_t> col1{{1, 2, 3, 4}};
+  column_wrapper<int16_t> col2{{1, 2, 3, 4}};
+
+  CVector cols;
+  cols.push_back(col1.release());
+  cols.push_back(col2.release());
+
+  Table t(std::move(cols));
+  EXPECT_EQ(t.alloc_size(), 24);
+}
+
+TEST_F(TableTest, AllocSizeWithNulls)
+{
+  column_wrapper<int32_t> col1{{1, 2, 3, 4}, {1, 0, 1, 0}};
+  column_wrapper<int16_t> col2{{1, 2, 3, 4}, {1, 0, 1, 0}};
+
+  CVector cols;
+  cols.push_back(col1.release());
+  cols.push_back(col2.release());
+
+  Table t(std::move(cols));
+  EXPECT_EQ(t.alloc_size(), 152);  // bitmask has padding
 }
 
 CUDF_TEST_PROGRAM_MAIN()
