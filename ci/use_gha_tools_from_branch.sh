@@ -11,4 +11,4 @@ if [[ ! -d "/tmp/gha-tools" ]]; then
 fi
 
 echo "--- gha-tools content ---"
-cat /tmp/gha-tools/tools/_rapidsa-get-pr-artifact
+cat /tmp/gha-tools/tools/_rapids-get-pr-artifact
