@@ -135,24 +135,24 @@ std::unique_ptr<column> rsplit_record(strings_column_view const& input,
 
 // external APIs
 
-std::unique_ptr<column> split_record(strings_column_view const& strings,
+std::unique_ptr<column> split_record(strings_column_view const& input,
                                      string_scalar const& delimiter,
                                      size_type maxsplit,
                                      rmm::cuda_stream_view stream,
                                      rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::split_record(strings, delimiter, maxsplit, stream, mr);
+  return detail::split_record(input, delimiter, maxsplit, stream, mr);
 }
 
-std::unique_ptr<column> rsplit_record(strings_column_view const& strings,
+std::unique_ptr<column> rsplit_record(strings_column_view const& input,
                                       string_scalar const& delimiter,
                                       size_type maxsplit,
                                       rmm::cuda_stream_view stream,
                                       rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::rsplit_record(strings, delimiter, maxsplit, stream, mr);
+  return detail::rsplit_record(input, delimiter, maxsplit, stream, mr);
 }
 
 }  // namespace strings

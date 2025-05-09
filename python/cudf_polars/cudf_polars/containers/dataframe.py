@@ -18,7 +18,7 @@ from cudf_polars.utils import conversion
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping, Sequence, Set
 
-    from typing_extensions import Self
+    from typing_extensions import Any, Self
 
     from cudf_polars.typing import ColumnOptions, DataFrameHeader, Slice
 
@@ -270,7 +270,7 @@ class DataFrame:
         """Drop columns by name."""
         return type(self)(column for column in self.columns if column.name not in names)
 
-    def select(self, names: Sequence[str]) -> Self:
+    def select(self, names: Sequence[str] | Mapping[str, Any]) -> Self:
         """Select columns by name returning DataFrame."""
         try:
             return type(self)(self.column_map[name] for name in names)
