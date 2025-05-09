@@ -53,7 +53,10 @@ def to_request(
             # 1.
             min_periods = value.options + 1
     else:
-        col = value.evaluate(df, context=ExecutionContext.ROLLING)
+        col = value.evaluate(
+            df, context=ExecutionContext.ROLLING
+        )  # pragma: no cover; raise before we get here because we
+        # don't do correct handling of empty groups
     return plc.rolling.RollingRequest(col.obj, min_periods, value.agg_request)
 
 
@@ -77,6 +80,10 @@ class RollingWindow(Expr):
         self.orderby = orderby
         self.children = (agg,)
         self.is_pointwise = False
+        if agg.agg_request.kind() == plc.aggregation.Kind.COLLECT_LIST:
+            raise NotImplementedError(
+                "Incorrect handling of empty groups for list collection"
+            )
         if not plc.rolling.is_valid_rolling_aggregation(agg.dtype, agg.agg_request):
             raise NotImplementedError(f"Unsupported rolling aggregation {agg}")
 
@@ -84,9 +91,19 @@ class RollingWindow(Expr):
         self, df: DataFrame, *, context: ExecutionContext = ExecutionContext.FRAME
     ) -> Column:
         if context != ExecutionContext.FRAME:
-            raise RuntimeError("Rolling aggregation inside groupby/over/rolling")
+            raise RuntimeError(
+                "Rolling aggregation inside groupby/over/rolling"
+            )  # pragma: no cover; translation raises first
         (agg,) = self.children
         orderby = df.column_map[self.orderby]
+        # Polars casts integral orderby to int64, but only for calculating window bounds
+        if (
+            plc.traits.is_integral(orderby.obj.type())
+            and orderby.obj.type().id() != plc.TypeId.INT64
+        ):
+            orderby_obj = plc.unary.cast(orderby.obj, plc.DataType(plc.TypeId.INT64))
+        else:
+            orderby_obj = orderby.obj
         preceding, following = range_window_bounds(
             self.preceding, self.following, self.closed_window
         )
@@ -102,7 +119,7 @@ class RollingWindow(Expr):
             )
         (result,) = plc.rolling.grouped_range_rolling_window(
             plc.Table([]),
-            orderby.obj,
+            orderby_obj,
             plc.types.Order.ASCENDING,
             plc.types.NullOrder.AFTER,
             preceding,

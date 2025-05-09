@@ -72,9 +72,9 @@ def rewrite_rolling(
     """
     index_name = options.rolling.index_column
     index_dtype = schema[index_name]
-    index_col: expr.Expr = expr.Col(index_dtype, index_name)
+    index_col = expr.Col(index_dtype, index_name)
     if plc.traits.is_integral(index_dtype) and index_dtype.id() != plc.TypeId.INT64:
-        index_col = expr.Cast(plc.DataType(plc.TypeId.INT64), index_col)
+        index_dtype = plc.DataType(plc.TypeId.INT64)
     index = expr.NamedExpr(index_name, index_col)
     if len(aggs) == 0:
         inp = ir.Select(schema, [*keys, index], True, inp)  # noqa: FBT003

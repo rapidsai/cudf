@@ -65,7 +65,9 @@ def duration_to_int(
     if months != 0:
         raise NotImplementedError("Month durations in rolling windows")
     if parsed_int and (weeks != 0 or days != 0 or dtype.id() != plc.TypeId.INT64):
-        raise NotImplementedError("Invalid duration for parsed_int")
+        raise NotImplementedError(
+            "Invalid duration for parsed_int"
+        )  # pragma: no cover; polars raises first
     value = nanoseconds + 24 * 60 * 60 * 10**9 * (days + 7 * weeks)
     return -value if negative else value
 
@@ -112,9 +114,7 @@ def duration_to_scalar(dtype: plc.DataType, value: int) -> pa.Scalar:
     elif tid == plc.TypeId.TIMESTAMP_MICROSECONDS:
         return pa.scalar(value // 10**3, type=pa.duration("us"))
     elif tid == plc.TypeId.TIMESTAMP_MILLISECONDS:
-        return pa.scalar(value // 10**6, type=pa.duration("us"))
-    elif tid == plc.TypeId.TIMESTAMP_SECONDS:
-        return pa.scalar(value // 10**9, type=pa.duration("s"))
+        return pa.scalar(value // 10**6, type=pa.duration("ms"))
     else:
         raise NotImplementedError("Unsupported data type in rolling window offset")
 

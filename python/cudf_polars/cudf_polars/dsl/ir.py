@@ -993,6 +993,14 @@ class Rolling(IR):
             for agg in self.agg_requests
         ):
             raise NotImplementedError("Unsupported rolling aggregation")
+        if any(
+            agg.value.agg_request.kind() == plc.aggregation.Kind.COLLECT_LIST
+            for agg in self.agg_requests
+        ):
+            raise NotImplementedError(
+                "Incorrect handling of empty groups for list collection"
+            )
+
         self.zlice = zlice
         self.children = (df,)
         self._non_child_args = (
@@ -1019,6 +1027,14 @@ class Rolling(IR):
     ) -> DataFrame:
         keys = broadcast(*(k.evaluate(df) for k in keys_in), target_length=df.num_rows)
         orderby = index.evaluate(df)
+        # Polars casts integral orderby to int64, but only for calculating window bounds
+        if (
+            plc.traits.is_integral(orderby.obj.type())
+            and orderby.obj.type().id() != plc.TypeId.INT64
+        ):
+            orderby_obj = plc.unary.cast(orderby.obj, plc.DataType(plc.TypeId.INT64))
+        else:
+            orderby_obj = orderby.obj
         preceding_window, following_window = range_window_bounds(
             preceding, following, closed_window
         )
@@ -1034,7 +1050,7 @@ class Rolling(IR):
             )
         values = plc.rolling.grouped_range_rolling_window(
             plc.Table([k.obj for k in keys]),
-            orderby.obj,
+            orderby_obj,
             plc.types.Order.ASCENDING,  # Polars requires ascending orderby.
             plc.types.NullOrder.AFTER,  # Doesn't matter, polars doesn't allow nulls
             preceding_window,
