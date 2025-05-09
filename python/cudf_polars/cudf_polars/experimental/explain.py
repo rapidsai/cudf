@@ -77,9 +77,10 @@ def _repr_ir_tree(
     ]
 
     return header + "".join(
-        f"{line}{f'{offset}  (repeated {count} times)\n' if count > 1 else ''}"
+        f"{line}{offset}  (repeated {count} times)\n"
+        if (count := sum(1 for _ in group)) > 1
+        else line
         for line, group in groupby(children_strs)
-        if (count := sum(1 for _ in group)) or True
     )
 
 
