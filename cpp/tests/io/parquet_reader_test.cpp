@@ -2503,21 +2503,42 @@ TEST_F(ParquetMetadataReaderTest, TestBasic)
       .metadata(std::move(expected_metadata));
   cudf::io::write_parquet(out_opts);
 
-  auto meta = read_parquet_metadata(cudf::io::source_info{filepath});
-  EXPECT_EQ(meta.num_rows(), num_rows);
+  // Single file
+  auto const test_parquet_metadata = [&](int num_sources) {
+    auto meta =
+      read_parquet_metadata(cudf::io::source_info{std::vector<std::string>(num_sources, filepath)});
+    EXPECT_EQ(meta.num_rows(), num_sources * num_rows);
 
-  std::string expected_schema = R"(schema
+    auto const column_chunk_metadata = meta.columnchunk_metadata();
+    // Two leaf columns
+    EXPECT_EQ(column_chunk_metadata.size(), 2);
+    // Check if all leaf columns have the expected number of row groups
+    EXPECT_EQ(column_chunk_metadata.at("int_col").size(), meta.num_rowgroups());
+    EXPECT_EQ(column_chunk_metadata.at("float_col").size(), meta.num_rowgroups());
+
+    EXPECT_EQ(meta.num_rowgroups_per_file().size(), num_sources);
+    for (auto const& num_row_groups : meta.num_rowgroups_per_file()) {
+      // Each source file has only one row group
+      EXPECT_EQ(num_row_groups, 1);
+    }
+
+    std::string expected_schema = R"(schema
  int_col
  float_col
 )";
-  EXPECT_EQ(expected_schema, print(meta.schema().root()));
+    EXPECT_EQ(expected_schema, print(meta.schema().root()));
+    EXPECT_EQ(meta.schema().root().name(), "schema");
+    EXPECT_EQ(meta.schema().root().type(), cudf::io::parquet::Type::UNDEFINED);
+    ASSERT_EQ(meta.schema().root().num_children(), 2);
 
-  EXPECT_EQ(meta.schema().root().name(), "schema");
-  EXPECT_EQ(meta.schema().root().type(), cudf::io::parquet::Type::UNDEFINED);
-  ASSERT_EQ(meta.schema().root().num_children(), 2);
+    EXPECT_EQ(meta.schema().root().child(0).name(), "int_col");
+    EXPECT_EQ(meta.schema().root().child(1).name(), "float_col");
+  };
 
-  EXPECT_EQ(meta.schema().root().child(0).name(), "int_col");
-  EXPECT_EQ(meta.schema().root().child(1).name(), "float_col");
+  // Test with single file
+  test_parquet_metadata(1);
+  // Test with multiple files
+  test_parquet_metadata(3);
 }
 
 TEST_F(ParquetMetadataReaderTest, TestNested)
@@ -2550,7 +2571,7 @@ TEST_F(ParquetMetadataReaderTest, TestNested)
   expected_metadata.column_metadata[1].child(1).child(0).set_name("int_field");
   expected_metadata.column_metadata[1].child(1).child(1).set_name("float_field");
 
-  auto filepath = temp_env->get_temp_filepath("MetadataTest.orc");
+  auto filepath = temp_env->get_temp_filepath("MetadataTest.parquet");
   cudf::io::parquet_writer_options out_opts =
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
       .metadata(std::move(expected_metadata));
@@ -2558,6 +2579,20 @@ TEST_F(ParquetMetadataReaderTest, TestNested)
 
   auto meta = read_parquet_metadata(cudf::io::source_info{filepath});
   EXPECT_EQ(meta.num_rows(), num_rows);
+
+  auto const column_chunk_metadata = meta.columnchunk_metadata();
+  // Four leaf columns
+  EXPECT_EQ(column_chunk_metadata.size(), 4);
+  // Check if all leaf columns are present
+  EXPECT_TRUE(column_chunk_metadata.find("maps.key_value.key") != column_chunk_metadata.end());
+  EXPECT_TRUE(column_chunk_metadata.find("maps.key_value.value") != column_chunk_metadata.end());
+  EXPECT_TRUE(column_chunk_metadata.find("lists.list.element.int_field") !=
+              column_chunk_metadata.end());
+  EXPECT_TRUE(column_chunk_metadata.find("lists.list.element.float_field") !=
+              column_chunk_metadata.end());
+
+  EXPECT_EQ(meta.num_rowgroups_per_file().size(), 1);
+  EXPECT_EQ(meta.num_rowgroups_per_file()[0], meta.num_rowgroups());
 
   std::string expected_schema = R"(schema
  maps
