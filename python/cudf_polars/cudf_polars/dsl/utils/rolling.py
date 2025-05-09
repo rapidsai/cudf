@@ -83,12 +83,23 @@ def rewrite_rolling(
             return ir.Slice(schema, offset, length, inp)
         return inp
     temp_prefix = "_" * max(map(len, schema))
-    inp, aggs, rolling_schema, apply_post_evaluation = apply_pre_evaluation(
-        schema, inp, keys, aggs, unique_names(temp_prefix), index
+    aggs, rolling_schema, apply_post_evaluation = apply_pre_evaluation(
+        schema, keys, aggs, unique_names(temp_prefix), index
     )
     preceding, following = offsets_to_windows(
         index_dtype, options.rolling.offset, options.rolling.period
     )
+    if (n := len(keys)) > 0:
+        # Grouped rolling in polars sorts the output by the groups.
+        inp = ir.Sort(
+            inp.schema,
+            keys,
+            [plc.types.Order.ASCENDING] * n,
+            [plc.types.NullOrder.BEFORE] * n,
+            True,  # noqa: FBT003
+            None,
+            inp,
+        )
     return apply_post_evaluation(
         ir.Rolling(
             rolling_schema,

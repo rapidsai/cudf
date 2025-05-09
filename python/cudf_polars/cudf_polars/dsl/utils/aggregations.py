@@ -236,12 +236,11 @@ def decompose_aggs(
 
 def apply_pre_evaluation(
     output_schema: Schema,
-    inp: ir.IR,
     keys: Sequence[expr.NamedExpr],
     original_aggs: Sequence[expr.NamedExpr],
     name_generator: Generator[str, None, None],
     *extra_columns: expr.NamedExpr,
-) -> tuple[ir.IR, Sequence[expr.NamedExpr], Schema, Callable[[ir.IR], ir.IR]]:
+) -> tuple[Sequence[expr.NamedExpr], Schema, Callable[[ir.IR], ir.IR]]:
     """
     Apply pre-evaluation to aggregations in a grouped or rolling context.
 
@@ -249,8 +248,6 @@ def apply_pre_evaluation(
     ----------
     output_schema
         Schema of the plan node we're rewriting.
-    inp
-        The input to the grouped/rolling aggregation.
     keys
         Grouping keys (may be empty).
     original_aggs
@@ -264,8 +261,6 @@ def apply_pre_evaluation(
 
     Returns
     -------
-    new_input
-        Rewritten input, suitable as input to the aggregation node
     aggregations
         The required aggregations.
     schema
@@ -295,10 +290,9 @@ def apply_pre_evaluation(
             e.name: e.value.dtype for e in itertools.chain(keys, extra_columns, aggs)
         }
         return (
-            inp,
             aggs,
             inter_schema,
             partial(ir.Select, output_schema, selection, True),  # noqa: FBT003
         )
     else:
-        return inp, aggs, output_schema, lambda inp: inp
+        return aggs, output_schema, lambda inp: inp

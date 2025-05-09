@@ -112,7 +112,7 @@ class RollingWindow(Expr):
                 f"Index column '{self.orderby}' in rolling may not contain nulls"
             )
         if not orderby.check_sorted(
-            order=plc.types.Order.ASCENDING, null_order=plc.types.NullOrder.AFTER
+            order=plc.types.Order.ASCENDING, null_order=plc.types.NullOrder.BEFORE
         ):
             raise RuntimeError(
                 f"Index column '{self.orderby}' in rolling is not sorted, please sort first"
@@ -121,7 +121,7 @@ class RollingWindow(Expr):
             plc.Table([]),
             orderby_obj,
             plc.types.Order.ASCENDING,
-            plc.types.NullOrder.AFTER,
+            plc.types.NullOrder.BEFORE,
             preceding,
             following,
             [to_request(agg, orderby, df)],

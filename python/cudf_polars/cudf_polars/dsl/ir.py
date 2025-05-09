@@ -1042,17 +1042,26 @@ class Rolling(IR):
             raise RuntimeError(
                 f"Index column '{index.name}' in rolling may not contain nulls"
             )
-        if not orderby.check_sorted(
-            order=plc.types.Order.ASCENDING, null_order=plc.types.NullOrder.AFTER
-        ):
-            raise RuntimeError(
-                f"Index column '{index.name}' in rolling is not sorted, please sort first"
-            )
+        if len(keys_in) > 0:
+            # Must always check sortedness
+            table = plc.Table([*(k.obj for k in keys), orderby_obj])
+            n = table.num_columns()
+            if not plc.sorting.is_sorted(
+                table, [plc.types.Order.ASCENDING] * n, [plc.types.NullOrder.BEFORE] * n
+            ):
+                raise RuntimeError("Input for grouped rolling is not sorted")
+        else:
+            if not orderby.check_sorted(
+                order=plc.types.Order.ASCENDING, null_order=plc.types.NullOrder.BEFORE
+            ):
+                raise RuntimeError(
+                    f"Index column '{index.name}' in rolling is not sorted, please sort first"
+                )
         values = plc.rolling.grouped_range_rolling_window(
             plc.Table([k.obj for k in keys]),
             orderby_obj,
             plc.types.Order.ASCENDING,  # Polars requires ascending orderby.
-            plc.types.NullOrder.AFTER,  # Doesn't matter, polars doesn't allow nulls
+            plc.types.NullOrder.BEFORE,  # Doesn't matter, polars doesn't allow nulls in orderby
             preceding_window,
             following_window,
             [rolling.to_request(request.value, orderby, df) for request in aggs],
@@ -1763,12 +1772,6 @@ class Sort(IR):
     ) -> DataFrame:
         """Evaluate and return a dataframe."""
         sort_keys = broadcast(*(k.evaluate(df) for k in by), target_length=df.num_rows)
-        # TODO: More robust identification here.
-        keys_in_result = {
-            k.name: i
-            for i, k in enumerate(sort_keys)
-            if k.name in df.column_map and k.obj is df.column_map[k.name].obj
-        }
         do_sort = plc.sorting.stable_sort_by_key if stable else plc.sorting.sort_by_key
         table = do_sort(
             df.table,
@@ -1776,19 +1779,17 @@ class Sort(IR):
             list(order),
             list(null_order),
         )
-        columns: list[Column] = []
-        for name, c in zip(df.column_map, table.columns(), strict=True):
-            column = Column(c, name=name)
-            # If a sort key is in the result table, set the sortedness property
-            if name in keys_in_result:
-                i = keys_in_result[name]
-                column = column.set_sorted(
-                    is_sorted=plc.types.Sorted.YES,
-                    order=order[i],
-                    null_order=null_order[i],
-                )
-            columns.append(column)
-        return DataFrame(columns).slice(zlice)
+        result = DataFrame.from_table(table, df.column_names)
+        first_key = sort_keys[0]
+        name = by[0].name
+        first_key_in_result = (
+            name in df.column_map and first_key.obj is df.column_map[name].obj
+        )
+        if first_key_in_result:
+            result.column_map[name].set_sorted(
+                is_sorted=plc.types.Sorted.YES, order=order[0], null_order=null_order[0]
+            )
+        return result.slice(zlice)
 
 
 class Slice(IR):

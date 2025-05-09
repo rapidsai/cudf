@@ -117,6 +117,35 @@ def test_unsorted_raises_computeerror():
         q.collect(engine=pl.GPUEngine(raise_on_fail=True))
 
 
+def test_grouped_rolling():
+    df = pl.LazyFrame(
+        {
+            "keys": [1, None, 2, 1, 2, None],
+            "orderby": [10, 2, -11, 11, -5, 3],
+            "values": [1, 2, 3, 4, 5, 6],
+        }
+    )
+    q = df.rolling("orderby", period="5i", group_by="keys").agg(pl.col("values").sum())
+
+    assert_gpu_result_equal(q)
+
+
+def test_grouped_rolling_unsorted_raises_computeerror():
+    df = pl.LazyFrame(
+        {
+            "keys": [1, None, 2, 1, 2, None],
+            "orderby": [10, 2, -11, 11, -5, -2],
+            "values": [1, 2, 3, 4, 5, 6],
+        }
+    )
+    q = df.rolling("orderby", period="5i", group_by="keys").agg(pl.col("values").sum())
+
+    with pytest.raises(pl.exceptions.ComputeError):
+        q.collect(engine="in-memory")
+    with pytest.raises(pl.exceptions.ComputeError):
+        q.collect(engine=pl.GPUEngine(raise_on_fail=True))
+
+
 def test_orderby_nulls_raises_computeerror():
     df = pl.LazyFrame({"orderby": [1, 2, 4, None], "values": [1, 2, 3, 4]})
     q = df.rolling("orderby", period="2i").agg(sum=pl.sum("values"))
