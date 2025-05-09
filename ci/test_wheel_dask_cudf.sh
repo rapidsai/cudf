@@ -3,6 +3,9 @@
 
 set -eou pipefail
 
+source ci/use_gha_tools_from_branch.sh
+source ci/use_wheels_from_prs.sh
+
 RAPIDS_PY_CUDA_SUFFIX="$(rapids-wheel-ctk-name-gen "${RAPIDS_CUDA_VERSION}")"
 DASK_CUDF_WHEELHOUSE=$(RAPIDS_PY_WHEEL_NAME="dask_cudf_${RAPIDS_PY_CUDA_SUFFIX}" RAPIDS_PY_WHEEL_PURE="1" rapids-download-wheels-from-github python)
 

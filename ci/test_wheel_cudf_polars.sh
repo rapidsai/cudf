@@ -3,6 +3,9 @@
 
 set -eou pipefail
 
+source ci/use_gha_tools_from_branch.sh
+source ci/use_wheels_from_prs.sh
+
 rapids-logger "Download wheels"
 
 RAPIDS_PY_CUDA_SUFFIX="$(rapids-wheel-ctk-name-gen "${RAPIDS_CUDA_VERSION}")"
@@ -21,6 +24,7 @@ rapids-generate-pip-constraints py_test_cudf_polars ./constraints.txt
 rapids-pip-retry install \
     -v \
     --constraint ./constraints.txt \
+    --constraint "${PIP_CONSTRAINT}" \
     "$(echo "${CUDF_POLARS_WHEELHOUSE}"/cudf_polars_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)[test,experimental]" \
     "$(echo "${LIBCUDF_WHEELHOUSE}"/libcudf_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)" \
     "$(echo "${PYLIBCUDF_WHEELHOUSE}"/pylibcudf_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)"

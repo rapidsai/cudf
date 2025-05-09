@@ -3,6 +3,9 @@
 
 set -euo pipefail
 
+source ci/use_gha_tools_from_branch.sh
+source ci/use_conda_packages_from_prs.sh
+
 RAPIDS_VERSION="$(rapids-version)"
 RAPIDS_VERSION_MAJOR_MINOR="$(rapids-version-major-minor)"
 export RAPIDS_VERSION

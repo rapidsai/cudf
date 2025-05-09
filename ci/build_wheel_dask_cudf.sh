@@ -3,6 +3,9 @@
 
 set -euo pipefail
 
+source ci/use_gha_tools_from_branch.sh
+source ci/use_wheels_from_prs.sh
+
 package_dir="python/dask_cudf"
 
 ./ci/build_wheel.sh dask-cudf ${package_dir}
