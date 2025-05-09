@@ -307,7 +307,7 @@ def concat(
         objs = {k: obj for k, obj in objs.items() if obj is not None}
         keys_objs = list(objs)
         objs = list(objs.values())
-        if any(isinstance(o, cudf.BaseIndex) for o in objs):
+        if any(isinstance(o, cudf.Index) for o in objs):
             raise TypeError(
                 "cannot concatenate a dictionary containing indices"
             )
@@ -324,7 +324,7 @@ def concat(
     allowed_typs = {
         cudf.Series,
         cudf.DataFrame,
-        cudf.BaseIndex,
+        cudf.Index,
     }
     if not all(isinstance(o, tuple(allowed_typs)) for o in objs):
         raise TypeError(
@@ -332,8 +332,8 @@ def concat(
             f"{allowed_typs}, instead received {[type(o) for o in objs]}"
         )
 
-    if any(isinstance(o, cudf.BaseIndex) for o in objs):
-        if not all(isinstance(o, cudf.BaseIndex) for o in objs):
+    if any(isinstance(o, cudf.Index) for o in objs):
+        if not all(isinstance(o, cudf.Index) for o in objs):
             raise TypeError(
                 "when concatenating indices you must provide ONLY indices"
             )

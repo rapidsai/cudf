@@ -502,7 +502,7 @@ class GroupBy(Serializable, Reducible, Scannable):
 
     def __iter__(self):
         group_names, offsets, _, grouped_values = self._grouped()
-        if isinstance(group_names, cudf.BaseIndex):
+        if isinstance(group_names, cudf.Index):
             group_names = group_names.to_pandas()
         for i, name in enumerate(group_names):
             yield (
@@ -3533,7 +3533,7 @@ class _Grouping(Serializable):
                     self._handle_callable(by)
                 elif isinstance(by, cudf.Series):
                     self._handle_series(by)
-                elif isinstance(by, cudf.BaseIndex):
+                elif isinstance(by, cudf.Index):
                     self._handle_index(by)
                 elif isinstance(by, abc.Mapping):
                     self._handle_mapping(by)

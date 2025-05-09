@@ -2089,7 +2089,7 @@ class MultiIndex(Index):
     def _union(self, other, sort=None) -> Self:
         # TODO: When to_frame is refactored to return a
         # deep copy in future, we should push most of the common
-        # logic between MultiIndex._union & BaseIndex._union into
+        # logic between MultiIndex._union & Index._union into
         # Index._union.
         other_df = other.copy(deep=True).to_frame(index=False)
         self_df = self.copy(deep=True).to_frame(index=False)

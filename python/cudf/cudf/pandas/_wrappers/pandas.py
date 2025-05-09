@@ -1949,7 +1949,7 @@ def wrap_from_pandas_index(original_call):
     def wrapped_from_pandas_index(index, *args, **kwargs):
         if is_proxy_object(index):
             index = index.as_gpu_object()
-            if isinstance(index, cudf.core.index.BaseIndex):
+            if isinstance(index, cudf.Index):
                 return index
         return original_call(index, *args, **kwargs)
 
@@ -2012,7 +2012,7 @@ def initial_setup():
     cudf.Series.from_pandas = wrap_from_pandas_series(
         _original_Series_from_pandas
     )
-    cudf.BaseIndex.from_pandas = wrap_from_pandas_index(
+    cudf.Index.from_pandas = wrap_from_pandas_index(
         _original_Index_from_pandas
     )
     cudf.MultiIndex.from_pandas = wrap_from_pandas_multiindex(
