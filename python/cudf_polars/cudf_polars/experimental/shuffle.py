@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 import operator
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, TypedDict
 
 import pylibcudf as plc
 import rmm.mr
@@ -32,6 +32,13 @@ if TYPE_CHECKING:
 _SHUFFLE_METHODS = ("rapidsmpf", "tasks")
 
 
+class ShuffleOptions(TypedDict):
+    """RapidsMPF shuffling options."""
+
+    on: Sequence[str]
+    column_names: Sequence[str]
+
+
 # Experimental rapidsmpf shuffler integration
 class RMPFIntegration:  # pragma: no cover
     """cuDF-Polars protocol for rapidsmpf shuffler."""
@@ -39,13 +46,17 @@ class RMPFIntegration:  # pragma: no cover
     @staticmethod
     def insert_partition(
         df: DataFrame,
-        on: Sequence[str],
+        partition_id: int,  # Not currently used
         partition_count: int,
         shuffler: Any,
+        options: ShuffleOptions,
+        *other: Any,
     ) -> None:
         """Add cudf-polars DataFrame chunks to an RMP shuffler."""
         from rapidsmpf.shuffler import partition_and_pack
 
+        on = options["on"]
+        assert not other, f"Unexpected arguments: {other}"
         columns_to_hash = tuple(df.column_names.index(val) for val in on)
         packed_inputs = partition_and_pack(
             df.table,
@@ -59,13 +70,14 @@ class RMPFIntegration:  # pragma: no cover
     @staticmethod
     def extract_partition(
         partition_id: int,
-        column_names: list[str],
         shuffler: Any,
+        options: ShuffleOptions,
     ) -> DataFrame:
         """Extract a finished partition from the RMP shuffler."""
         from rapidsmpf.shuffler import unpack_and_concat
 
         shuffler.wait_on(partition_id)
+        column_names = options["column_names"]
         return DataFrame.from_table(
             unpack_and_concat(
                 shuffler.extract(partition_id),
@@ -256,11 +268,10 @@ def _(
             return rapidsmpf_shuffle_graph(
                 get_key_name(ir.children[0]),
                 get_key_name(ir),
-                list(ir.schema.keys()),
-                shuffle_on,
                 partition_info[ir.children[0]].count,
                 partition_info[ir].count,
                 RMPFIntegration,
+                {"on": shuffle_on, "column_names": list(ir.schema.keys())},
             )
         except (ImportError, ValueError) as err:
             # ImportError: rapidsmpf is not installed
