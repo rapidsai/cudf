@@ -2045,22 +2045,7 @@ def test_orc_reader_desynced_timestamp(datadir, inputfile):
 
 
 @pytest.mark.parametrize("compression", ["LZ4", "SNAPPY", "ZLIB", "ZSTD"])
-@pytest.mark.parametrize(
-    "env_vars",
-    [
-        {
-            "LIBCUDF_HOST_DECOMPRESSION": "OFF",
-            "LIBCUDF_NVCOMP_POLICY": "ALWAYS",
-        },
-        {"LIBCUDF_HOST_DECOMPRESSION": "OFF", "LIBCUDF_NVCOMP_POLICY": "OFF"},
-        {"LIBCUDF_HOST_DECOMPRESSION": "ON"},
-    ],
-)
-def test_orc_decompression(monkeypatch, env_vars, compression, non_nested_pdf):
-    # Set environment variables
-    for key, value in env_vars.items():
-        monkeypatch.setenv(key, value)
-
+def test_orc_decompression(set_decomp_env_vars, compression, non_nested_pdf):
     # Write the DataFrame to a Parquet file
     buffer = BytesIO()
     non_nested_pdf.to_orc(buffer, engine_kwargs={"compression": compression})

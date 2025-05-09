@@ -4465,22 +4465,7 @@ def my_pdf(request):
 
 
 @pytest.mark.parametrize("compression", ["brotli", "gzip", "snappy", "zstd"])
-@pytest.mark.parametrize(
-    "env_vars",
-    [
-        {
-            "LIBCUDF_HOST_DECOMPRESSION": "OFF",
-            "LIBCUDF_NVCOMP_POLICY": "ALWAYS",
-        },
-        {"LIBCUDF_HOST_DECOMPRESSION": "OFF", "LIBCUDF_NVCOMP_POLICY": "OFF"},
-        {"LIBCUDF_HOST_DECOMPRESSION": "ON"},
-    ],
-)
-def test_parquet_decompression(monkeypatch, env_vars, my_pdf, compression):
-    # Set environment variables
-    for key, value in env_vars.items():
-        monkeypatch.setenv(key, value)
-
+def test_parquet_decompression(set_decomp_env_vars, my_pdf, compression):
     # PANDAS returns category objects whereas cuDF returns hashes
     expect = my_pdf.drop(columns=["col_category"])
 
