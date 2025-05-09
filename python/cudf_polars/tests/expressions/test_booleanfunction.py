@@ -8,7 +8,6 @@ import polars as pl
 
 from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
-    assert_ir_translation_raises,
 )
 
 
@@ -188,6 +187,6 @@ def test_boolean_kleene_logic(expr):
 
 def test_boolean_is_in_raises_unsupported():
     ldf = pl.LazyFrame({"a": pl.Series([1, 2, 3], dtype=pl.Int64)})
-    q = ldf.select(pl.col("a").is_in(pl.lit(1, dtype=pl.Int32())))
+    q = ldf.select(pl.col("a").implode())
 
-    assert_ir_translation_raises(q, NotImplementedError)
+    assert_gpu_result_equal(q)

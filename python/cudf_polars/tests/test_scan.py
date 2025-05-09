@@ -11,7 +11,6 @@ from cudf_polars.testing.asserts import (
     assert_ir_translation_raises,
 )
 from cudf_polars.testing.io import make_partitioned_source
-from cudf_polars.utils.versions import POLARS_VERSION_LT_128
 
 NO_CHUNK_ENGINE = pl.GPUEngine(raise_on_fail=True, parquet_options={"chunked": False})
 
@@ -63,7 +62,7 @@ def mask(request):
     params=[None, (1, 1)],
     ids=["no_slice", "slice_second"],
 )
-def slice(request):
+def slice_(request):
     # For use in testing that we handle
     # polars slice pushdown correctly
     return request.param
@@ -85,7 +84,7 @@ def scan_fn(format):
 
 
 def test_scan(
-    tmp_path, df, format, scan_fn, row_index, n_rows, columns, mask, slice, request
+    tmp_path, df, format, scan_fn, row_index, n_rows, columns, mask, slice_, request
 ):
     name, offset = row_index
     is_chunked = format == "chunked_parquet"
@@ -100,11 +99,7 @@ def test_scan(
     )
     request.applymarker(
         pytest.mark.xfail(
-            condition=(
-                not POLARS_VERSION_LT_128
-                and slice is not None
-                and scan_fn is pl.scan_ndjson
-            ),
+            condition=(slice_ is not None and scan_fn is pl.scan_ndjson),
             reason="slice pushdown not supported in the libcudf JSON reader",
         )
     )
@@ -116,8 +111,8 @@ def test_scan(
     )
     engine = pl.GPUEngine(raise_on_fail=True, parquet_options={"chunked": is_chunked})
 
-    if slice is not None:
-        q = q.slice(*slice)
+    if slice_ is not None:
+        q = q.slice(*slice_)
     if mask is not None:
         q = q.filter(mask)
     if columns is not None:
@@ -410,12 +405,6 @@ def test_scan_hf_url_raises():
 
 
 def test_select_arbitrary_order_with_row_index_column(request, tmp_path):
-    request.applymarker(
-        pytest.mark.xfail(
-            condition=POLARS_VERSION_LT_128,
-            reason="unsupported until polars 1.28",
-        )
-    )
     df = pl.DataFrame({"a": [1, 2, 3]})
     df.write_parquet(tmp_path / "df.parquet")
     q = pl.scan_parquet(tmp_path / "df.parquet", row_index_name="foo").select(

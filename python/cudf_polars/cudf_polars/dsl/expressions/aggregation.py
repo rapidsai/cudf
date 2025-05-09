@@ -76,6 +76,8 @@ class Agg(Expr):
             req = plc.aggregation.quantile(
                 quantiles=[quantile.value.as_py()], interp=Agg.interp_mapping[options]
             )
+        elif name == "implode":
+            req = plc.aggregation.collect_list()
         else:
             raise NotImplementedError(
                 f"Unreachable, {name=} is incorrectly listed in _SUPPORTED"
@@ -108,6 +110,7 @@ class Agg(Expr):
             "std",
             "var",
             "quantile",
+            "implode",
         ]
     )
 

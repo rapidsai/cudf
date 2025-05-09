@@ -11,13 +11,12 @@ from packaging.version import parse
 from polars import __version__
 
 POLARS_VERSION = parse(__version__)
-
-POLARS_VERSION_LT_125 = POLARS_VERSION < parse("1.25")
-POLARS_VERSION_LT_128 = POLARS_VERSION < parse("1.28")
+POLARS_LOWER_BOUND = "1.29"
+POLARS_VERSION_LT_129 = POLARS_VERSION < parse("1.29")
 
 
 def _ensure_polars_version() -> None:
-    if POLARS_VERSION_LT_125:
+    if POLARS_VERSION < parse(POLARS_LOWER_BOUND):
         raise ImportError(
-            "cudf_polars requires py-polars v1.25 or greater."
+            "cudf_polars requires py-polars v1.29 or greater."
         )  # pragma: no cover

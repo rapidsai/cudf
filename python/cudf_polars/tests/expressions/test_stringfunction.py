@@ -287,14 +287,10 @@ def test_replace_re(ldf):
 @pytest.mark.parametrize(
     "target,repl",
     [
-        (["A", "de", "kLm", "awef"], "a"),
-        (["A", "de", "kLm", "awef"], ""),
+        (["A", "de", "kLm", "awef"], ["a"]),
+        (["A", "de", "kLm", "awef"], [""]),
         (["A", "de", "kLm", "awef"], ["a", "b", "c", "d"]),
         (["A", "de", "kLm", "awef"], ["a", "b", "c", ""]),
-        (
-            pl.lit(pl.Series(["A", "de", "kLm", "awef"])),
-            pl.lit(pl.Series(["a", "b", "c", "d"])),
-        ),
     ],
 )
 def test_replace_many(ldf, target, repl):

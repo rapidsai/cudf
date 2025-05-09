@@ -33,7 +33,6 @@ from cudf_polars.containers import Column, DataFrame
 from cudf_polars.dsl.nodebase import Node
 from cudf_polars.dsl.to_ast import to_ast, to_parquet_filter
 from cudf_polars.utils import dtypes
-from cudf_polars.utils.versions import POLARS_VERSION_LT_128
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Hashable, Iterable, Sequence
@@ -374,12 +373,6 @@ class Scan(IR):
             # TODO: polars has this implemented for parquet,
             # maybe we can do this too?
             raise NotImplementedError("slice pushdown for negative slices")
-        if (
-            POLARS_VERSION_LT_128 and self.typ in {"csv"} and self.skip_rows != 0
-        ):  # pragma: no cover
-            # This comes from slice pushdown, but that
-            # optimization doesn't happen right now
-            raise NotImplementedError("skipping rows in CSV reader")
         if self.cloud_options is not None and any(
             self.cloud_options.get(k) is not None for k in ("aws", "azure", "gcp")
         ):
@@ -539,9 +532,7 @@ class Scan(IR):
                 options = (
                     plc.io.csv.CsvReaderOptions.builder(plc.io.SourceInfo([path]))
                     .nrows(n_rows)
-                    .skiprows(
-                        skiprows if POLARS_VERSION_LT_128 else skiprows + skip_rows
-                    )  # pragma: no cover
+                    .skiprows(skiprows + skip_rows)
                     .lineterminator(str(eol))
                     .quotechar(str(quote))
                     .decimal(decimal)
@@ -553,9 +544,7 @@ class Scan(IR):
                 if column_names is not None:
                     options.set_names([str(name) for name in column_names])
                 else:
-                    if (
-                        not POLARS_VERSION_LT_128 and skip_rows > header
-                    ):  # pragma: no cover
+                    if skip_rows > header:
                         # We need to read the header otherwise we would skip it
                         column_names = read_csv_header(path, str(sep))
                         options.set_names(column_names)

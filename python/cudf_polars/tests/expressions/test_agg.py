@@ -169,7 +169,7 @@ def test_sum_empty_zero(data):
     assert_gpu_result_equal(q)
 
 
-def test_implode_agg_unsupported():
+def test_implode_agg():
     df = pl.LazyFrame(
         {
             "a": pl.Series([1, 2, 3], dtype=pl.Int64()),
@@ -179,4 +179,4 @@ def test_implode_agg_unsupported():
         }
     )
     q = df.select(pl.col("b").implode())
-    assert_ir_translation_raises(q, NotImplementedError)
+    assert_gpu_result_equal(q)
