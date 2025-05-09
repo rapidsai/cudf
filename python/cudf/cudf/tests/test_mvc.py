@@ -1,10 +1,7 @@
 # Copyright (c) 2023-2025, NVIDIA CORPORATION.
 import subprocess
 import sys
-from importlib.util import find_spec
 
-IS_CUDA_12_PLUS = find_spec("pynvjitlink") is not None
-IS_CUDA_11 = not IS_CUDA_12_PLUS
 
 
 TEST_SCRIPT = """
