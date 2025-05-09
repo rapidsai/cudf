@@ -36,8 +36,7 @@ def df():
         pl.col("b"),
         [pl.col("a"), pl.col("b")],
         pl.col("b") + pl.col("c"),
-    ],
-    ids=lambda key: str(key),
+    ]
 )
 def partition_by(request):
     return request.param
@@ -53,7 +52,6 @@ def partition_by(request):
         pl.col("b").mean(),
         pl.col("b").var(),
     ],
-    ids=str,
 )
 def agg_expr(request):
     return request.param
@@ -73,7 +71,6 @@ def agg_expr(request):
         pl.col("b").std(),  # libcudf doesn't support rolling std
         pl.col("b").quantile(0.5),  # libcudf doesn't support rolling quantile
     ],
-    ids=str,
 )
 def unsupported_agg_expr(request):
     return request.param
