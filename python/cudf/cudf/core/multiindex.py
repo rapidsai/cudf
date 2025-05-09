@@ -19,22 +19,19 @@ import cudf
 from cudf.api.extensions import no_default
 from cudf.api.types import is_integer, is_list_like, is_scalar
 from cudf.core import column
-from cudf.core._base_index import _return_get_indexer_result
 from cudf.core._internals import sorting
 from cudf.core.algorithms import factorize
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column.column import ColumnBase
 from cudf.core.column_accessor import ColumnAccessor
-from cudf.core.frame import Frame
 from cudf.core.index import (
-    BaseIndex,
+    Index,
     _get_indexer_basic,
     _index_from_data,
     _lexsorted_equal_range,
     ensure_index,
 )
 from cudf.core.join._join_helpers import _match_join_keys
-from cudf.core.mixins import NotIterable
 from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
     SIZE_TYPE_DTYPE,
@@ -70,7 +67,7 @@ def _maybe_indices_to_slice(indices: cp.ndarray) -> slice | cp.ndarray:
     return indices
 
 
-class MultiIndex(Frame, BaseIndex, NotIterable):
+class MultiIndex(Index):
     """A multi-level or hierarchical index.
 
     Provides N-Dimensional indexing into Series and DataFrame objects.
@@ -331,7 +328,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             existing_names[lev] = names[i]
         names = existing_names
 
-        return self._set_names(names=names, inplace=inplace)
+        return self._set_names(names=names, inplace=inplace)  # type: ignore[return-value]
 
     def _maybe_materialize_codes_and_levels(self: Self) -> Self:
         """
@@ -565,11 +562,11 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             "get_slice_bound is not currently implemented."
         )
 
-    @property  # type: ignore
+    @property
     @_performance_tracking
     def nlevels(self) -> int:
         """Integer number of levels in this MultiIndex."""
-        return self._num_columns
+        return len(self._data)
 
     @property  # type: ignore
     @_performance_tracking
@@ -601,7 +598,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         """
         self._maybe_materialize_codes_and_levels()
         return [
-            idx.rename(name)
+            idx.rename(name)  # type: ignore[misc]
             for idx, name in zip(self._levels, self.names)  # type: ignore[arg-type]
         ]
 
@@ -1944,11 +1941,11 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             dtype=SIZE_TYPE_DTYPE,
         )
         if not len(self):
-            return _return_get_indexer_result(result.values)
+            return self._return_get_indexer_result(result.values)
         try:
             target = cudf.MultiIndex.from_tuples(target)
         except TypeError:
-            return _return_get_indexer_result(result.values)
+            return self._return_get_indexer_result(result.values)
 
         join_keys = [
             _match_join_keys(lcol, rcol, "inner")
@@ -1987,7 +1984,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
                 "{['ffill'/'pad', 'bfill'/'backfill', None]}"
             )
 
-        return _return_get_indexer_result(result_series.to_cupy())
+        return self._return_get_indexer_result(result_series.to_cupy())
 
     @_performance_tracking
     def get_loc(self, key):
@@ -2167,7 +2164,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
     @_performance_tracking
     def _new_index_for_reset_index(
         self, levels: tuple | None, name
-    ) -> None | BaseIndex:
+    ) -> None | Index:
         """Return the new index after .reset_index"""
         if levels is None:
             return None

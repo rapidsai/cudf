@@ -295,7 +295,7 @@ def to_datetime(
                 format=format,
                 utc=utc,
             )
-            if isinstance(arg, (cudf.BaseIndex, pd.Index)):
+            if isinstance(arg, (cudf.Index, pd.Index)):
                 return cudf.DatetimeIndex._from_column(col, name=arg.name)
             elif isinstance(arg, (cudf.Series, pd.Series)):
                 return cudf.Series._from_column(

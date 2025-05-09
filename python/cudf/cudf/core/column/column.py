@@ -86,7 +86,7 @@ if TYPE_CHECKING:
     from cudf.core.column.categorical import CategoricalColumn
     from cudf.core.column.numerical import NumericalColumn
     from cudf.core.column.strings import StringColumn
-    from cudf.core.index import BaseIndex
+    from cudf.core.index import Index
 
 if PANDAS_GE_210:
     NumpyExtensionArray = pd.arrays.NumpyExtensionArray
@@ -1399,7 +1399,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     def nan_count(self) -> int:
         return 0
 
-    def interpolate(self, index: BaseIndex) -> ColumnBase:
+    def interpolate(self, index: Index) -> ColumnBase:
         # figure out where the nans are
         mask = self.isnull()
 
@@ -2657,11 +2657,11 @@ def as_column(
         if dtype is not None:
             return column.astype(dtype)
         return column
-    elif isinstance(arbitrary, (ColumnBase, cudf.Series, cudf.BaseIndex)):
+    elif isinstance(arbitrary, (ColumnBase, cudf.Series, cudf.Index)):
         # Ignoring nan_as_null per the docstring
         if isinstance(arbitrary, cudf.Series):
             arbitrary = arbitrary._column
-        elif isinstance(arbitrary, cudf.BaseIndex):
+        elif isinstance(arbitrary, cudf.Index):
             arbitrary = arbitrary._values
         if dtype is not None:
             return arbitrary.astype(dtype)

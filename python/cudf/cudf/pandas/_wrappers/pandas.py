@@ -1872,7 +1872,7 @@ _original_IndexMeta_call = cudf.core.index.IndexMeta.__call__
 _original_from_pandas = cudf.from_pandas
 _original_DataFrame_from_pandas = cudf.DataFrame.from_pandas
 _original_Series_from_pandas = cudf.Series.from_pandas
-_original_Index_from_pandas = cudf.BaseIndex.from_pandas
+_original_Index_from_pandas = cudf.Index.from_pandas
 _original_MultiIndex_from_pandas = cudf.MultiIndex.from_pandas
 
 

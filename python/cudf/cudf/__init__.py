@@ -51,7 +51,6 @@ from cudf.core.dtypes import (
 )
 from cudf.core.groupby import Grouper, NamedAgg
 from cudf.core.index import (
-    BaseIndex,
     CategoricalIndex,
     DatetimeIndex,
     Index,

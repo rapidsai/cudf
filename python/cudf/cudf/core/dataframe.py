@@ -64,7 +64,6 @@ from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.copy_types import BooleanMask
 from cudf.core.groupby.groupby import DataFrameGroupBy, groupby_doc_template
 from cudf.core.index import (
-    BaseIndex,
     Index,
     RangeIndex,
     _index_from_data,
@@ -1064,9 +1063,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             nan_as_null = not cudf.get_option("mode.pandas_compatible")
 
         if columns is not None:
-            if isinstance(
-                columns, (cudf.BaseIndex, cudf.Series, cupy.ndarray)
-            ):
+            if isinstance(columns, (Index, Series, cupy.ndarray)):
                 columns = ensure_index(columns).to_pandas()
             elif not isinstance(columns, pd.Index):
                 columns = pd.Index(columns)
@@ -1277,7 +1274,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
     def _from_data(
         cls,
         data: MutableMapping,
-        index: BaseIndex | None = None,
+        index: Index | None = None,
         columns: Any = None,
     ) -> Self:
         out = super()._from_data(data=data, index=index)
@@ -1325,7 +1322,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
 
     @property
     @_performance_tracking
-    def shape(self):
+    def shape(self) -> tuple[int, int]:
         """Returns a tuple representing the dimensionality of the DataFrame."""
         return self._num_rows, self._num_columns
 
@@ -2170,7 +2167,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
     ) -> tuple[
         dict[str | None, tuple[ColumnBase, Any, bool, Any]]
         | NotImplementedType,
-        BaseIndex | None,
+        Index | None,
         dict[str, Any],
     ]:
         lhs, rhs = self._data, other
@@ -2821,7 +2818,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             if pd_columns.nunique(dropna=False) != len(pd_columns):
                 raise ValueError("Duplicate column names are not allowed")
             level_names = list(pd_columns.names)
-        elif isinstance(columns, (cudf.BaseIndex, ColumnBase, Series)):
+        elif isinstance(columns, (Index, ColumnBase, Series)):
             level_names = (getattr(columns, "name", None),)
             rangeindex = isinstance(columns, cudf.RangeIndex)
             if rangeindex:

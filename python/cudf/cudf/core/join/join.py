@@ -457,7 +457,7 @@ class Merge:
         else:
             multiindex_columns = False
 
-        index: cudf.BaseIndex | None
+        index: cudf.Index | None
         if self._using_right_index:
             # right_index and left_on
             index = left_result.index

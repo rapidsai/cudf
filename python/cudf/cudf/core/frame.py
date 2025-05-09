@@ -300,6 +300,10 @@ class Frame(BinaryOperand, Scannable, Serializable):
         """
         return self._num_columns * self._num_rows
 
+    @property
+    def empty(self) -> bool:
+        return self.size == 0
+
     def memory_usage(self, deep: bool = False) -> int:
         """Return the memory usage of an object.
 
