@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -114,14 +114,20 @@ DLDataType data_type_to_DLDataType(data_type type)
 }
 
 // Context object to own memory allocated for DLManagedTensor
+template <typename DLManagedTensorT>
 struct dltensor_context {
   int64_t shape[2]{};    // NOLINT
   int64_t strides[2]{};  // NOLINT
-  rmm::device_buffer buffer;
+  rmm::device_buffer gpu_buffer;
+  std::vector<char> cpu_buffer;
+  /* custom deletion, needed for lifetime management */
+  void (*delete_func)(void*);
+  void* delete_ctx;
 
-  static void deleter(DLManagedTensor* arg)
+  static void deleter(DLManagedTensorT* arg)
   {
     auto context = static_cast<dltensor_context*>(arg->manager_ctx);
+    if (context->delete_func != nullptr) { context->delete_func(context->delete_ctx); }
     delete context;
     delete arg;
   }
@@ -239,7 +245,10 @@ DLManagedTensor* to_dlpack(table_view const& input,
     "Input required to have null count zero");
 
   auto managed_tensor = std::make_unique<DLManagedTensor>();
-  auto context        = std::make_unique<dltensor_context>();
+  auto context        = std::make_unique<dltensor_context<DLManagedTensor>>();
+
+  context->delete_func = nullptr;
+  context->delete_ctx  = nullptr;
 
   DLTensor& tensor = managed_tensor->dl_tensor;
   tensor.dtype     = dltype;
@@ -269,8 +278,8 @@ DLManagedTensor* to_dlpack(table_view const& input,
   size_t const stride_bytes = num_rows * size_of(type);
   size_t const total_bytes  = stride_bytes * num_cols;
 
-  context->buffer = rmm::device_buffer(total_bytes, stream, mr);
-  tensor.data     = context->buffer.data();
+  context->gpu_buffer = rmm::device_buffer(total_bytes, stream, mr);
+  tensor.data         = context->gpu_buffer.data();
 
   auto tensor_data = reinterpret_cast<uintptr_t>(tensor.data);
   for (auto const& col : input) {
@@ -283,7 +292,7 @@ DLManagedTensor* to_dlpack(table_view const& input,
   }
 
   // Defer ownership of managed tensor to caller
-  managed_tensor->deleter     = dltensor_context::deleter;
+  managed_tensor->deleter     = dltensor_context<DLManagedTensor>::deleter;
   managed_tensor->manager_ctx = context.release();
 
   // synchronize the stream because after the return the data may be accessed from the host before
@@ -292,6 +301,112 @@ DLManagedTensor* to_dlpack(table_view const& input,
   stream.synchronize();
 
   return managed_tensor.release();
+}
+
+template <typename DLManagedTensorT>
+DLManagedTensorT* to_dlpack_both(column_view col,
+                                 bool copy,
+                                 bool to_cpu,
+                                 rmm::cuda_stream_view sync_stream,
+                                 void (*delete_func)(void*),
+                                 void* delete_ctx,
+                                 rmm::cuda_stream_view stream,
+                                 rmm::device_async_resource_ref mr)
+{
+  CUDF_EXPECTS(copy || !to_cpu, "Must copy data if exporting to CPU.");
+  // Ensure none of the columns have nulls
+  CUDF_EXPECTS(!col.has_nulls(), "Cannot export column with nulls to DLPack.");
+
+  auto const num_rows = col.size();
+
+  // Ensure that type is convertible to DLDataType
+  data_type const type    = col.type();
+  DLDataType const dltype = data_type_to_DLDataType(type);
+
+  auto managed_tensor = std::make_unique<DLManagedTensorT>();
+  auto context        = std::make_unique<dltensor_context<DLManagedTensorT>>();
+
+  context->delete_func = delete_func;
+  context->delete_ctx  = delete_ctx;
+
+  DLTensor& tensor = managed_tensor->dl_tensor;
+  tensor.dtype     = dltype;
+
+  tensor.ndim     = 1;
+  tensor.shape    = context->shape;
+  tensor.shape[0] = num_rows;
+
+  tensor.device.device_id   = rmm::get_current_cuda_device().value();
+  tensor.device.device_type = to_cpu ? kDLCPU : kDLCUDA;
+
+  size_t const nbytes = num_rows * size_of(type);
+
+  if (!copy) {
+    tensor.data = (void*)get_column_data(col);
+  } else {
+    cudaMemcpyKind memcpykind;
+    if (!to_cpu) {
+      context->gpu_buffer = rmm::device_buffer(nbytes, stream, mr);
+      tensor.data         = context->gpu_buffer.data();
+      memcpykind          = cudaMemcpyDeviceToDevice;
+    } else {
+      context->cpu_buffer.reserve(nbytes);
+      tensor.data = context->cpu_buffer.data();
+      memcpykind  = cudaMemcpyDeviceToHost;
+    }
+
+    CUDF_CUDA_TRY(
+      cudaMemcpyAsync(tensor.data, get_column_data(col), nbytes, memcpykind, stream.value()));
+  }
+
+  // Finalize tensor and defer ownership of managed tensor to caller
+  if constexpr (std::is_same_v<DLManagedTensorT, DLManagedTensorVersioned>) {
+    // For versioned tensors, indicate copy or read-only (old version just ignore it)
+    managed_tensor->version = {1, 0};
+    if (copy) {
+      managed_tensor->flags = DLPACK_FLAG_BITMASK_IS_COPIED;
+    } else {
+      managed_tensor->flags = DLPACK_FLAG_BITMASK_READ_ONLY;
+    }
+  }
+  managed_tensor->deleter     = context->deleter;
+  managed_tensor->manager_ctx = context.release();
+
+  if (sync_stream.value() != stream.value()) {
+    cudaEvent_t event;
+    CUDF_CUDA_TRY(cudaEventCreate(&event));
+    CUDF_CUDA_TRY(cudaEventRecord(event, stream.value()));
+    CUDF_CUDA_TRY(cudaStreamWaitEvent(sync_stream.value(), event, 0));
+    CUDF_CUDA_TRY(cudaEventDestroy(event));
+  }
+
+  return managed_tensor.release();
+}
+
+DLManagedTensor* to_dlpack_unversioned(column_view col,
+                                       bool copy,
+                                       bool to_cpu,
+                                       rmm::cuda_stream_view sync_stream,
+                                       void (*delete_func)(void*),
+                                       void* delete_ctx,
+                                       rmm::cuda_stream_view stream,
+                                       rmm::device_async_resource_ref mr)
+{
+  return to_dlpack_both<DLManagedTensor>(
+    col, copy, to_cpu, sync_stream, delete_func, delete_ctx, stream, mr);
+}
+
+DLManagedTensorVersioned* to_dlpack_versioned(column_view col,
+                                              bool copy,
+                                              bool to_cpu,
+                                              rmm::cuda_stream_view sync_stream,
+                                              void (*delete_func)(void*),
+                                              void* delete_ctx,
+                                              rmm::cuda_stream_view stream,
+                                              rmm::device_async_resource_ref mr)
+{
+  return to_dlpack_both<DLManagedTensorVersioned>(
+    col, copy, to_cpu, sync_stream, delete_func, delete_ctx, stream, mr);
 }
 
 }  // namespace detail

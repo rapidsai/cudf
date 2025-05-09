@@ -1,5 +1,7 @@
 # Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
+import sys
+
 import cupy as cp
 import nanoarrow
 import nanoarrow.device
@@ -163,3 +165,71 @@ def test_device_interop_table():
 
     new_tbl = plc.Table(na_arr)
     assert_table_eq(pa_tbl, new_tbl)
+
+
+@pytest.mark.parametrize("dtype", ["int32", "float32", "float64"])
+def test__dlpack___simple(dtype):
+    # Going via cupy also sanity checks __dlpack_device__ works.
+    orig = cp.arange(1000, dtype=dtype)
+    col = plc.Column.from_cuda_array_interface(orig)
+    arr = cp.from_dlpack(col)
+
+    cp.testing.assert_array_equal(orig, arr)
+
+
+def test__dlpack___cleanup():
+    # Sanity check refcount of the original column with dlpack
+    col = plc.Column(pa.array([1, 2, 3]))
+    refcnt = sys.getrefcount(col)
+
+    capsule = col.__dlpack__()  # No capsule user
+    assert sys.getrefcount(col) == refcnt + 1
+    del capsule
+    assert sys.getrefcount(col) == refcnt
+
+    arr = cp.from_dlpack(col)  # Capsule is consumed
+    assert sys.getrefcount(col) == refcnt + 1
+    del arr
+    assert sys.getrefcount(col) == refcnt
+
+
+@pytest.mark.parametrize("version", [None, (1, 0), (1, 1)])
+def test__dlpack__version(version):
+    orig = cp.arange(1000, dtype="int32")
+    col = plc.Column.from_cuda_array_interface(orig)
+
+    if version is None or version < (1, 0):
+        name = '"dltensor"'
+    else:
+        name = '"dltensor_versioned"'
+
+    assert name in str(col.__dlpack__(max_version=version))
+
+
+@pytest.mark.parametrize("dtype", ["int32", "float32", "float64"])
+def test__dlpack___to_host(dtype):
+    orig = cp.arange(1000, dtype=dtype)
+    col = plc.Column.from_cuda_array_interface(orig)
+    try:
+        arr = np.from_dlpack(col, device="cpu")
+    except TypeError as e:
+        if "numpy.from_dlpack() takes no keyword arguments" in str(e):
+            pytest.skip("New numpy version does not support device kwarg")
+        raise
+
+    cp.testing.assert_array_equal(orig, cp.asarray(arr))
+
+
+def test__dlpack__device_error():
+    col = plc.Column.from_cuda_array_interface(cp.arange(1000))
+    with pytest.raises(
+        BufferError, match="cudf only supports dl_device if identical or CPU"
+    ):
+        col.__dlpack__(max_version=(1, 0), dl_device=(10, 0))
+
+
+def test__dlpack___reject_mask():
+    col = plc.Column(pa.array([1, 2, 3, None]))
+
+    with pytest.raises(BufferError, match="Cannot export column with nulls."):
+        col.__dlpack__()

@@ -30,12 +30,13 @@ from pylibcudf.libcudf.types cimport size_type, size_of as cpp_size_of, bitmask_
 from pylibcudf.libcudf.utilities.traits cimport is_fixed_width
 from pylibcudf.libcudf.copying cimport get_element
 
-
+from rmm.librmm.device_buffer cimport get_current_cuda_device
 from rmm.pylibrmm.device_buffer cimport DeviceBuffer
 from rmm.pylibrmm.stream cimport Stream
 
 from .gpumemoryview cimport gpumemoryview
 from .filling cimport sequence
+from . cimport interop
 from .scalar cimport Scalar
 from .traits cimport (
     is_fixed_width as plc_is_fixed_width,
@@ -875,6 +876,21 @@ cdef class Column:
             )
 
         return self._to_schema(), self._to_device_array()
+
+    def __dlpack__(
+        self,
+        /,
+        *,
+        stream: int | Any | None = None,
+        max_version: tuple[int, int] | None = None,
+        dl_device: tuple[int, int] | None = None,
+        copy: bool | None = None,
+    ):
+        return interop.to_dlpack_col(self, stream, max_version, dl_device, copy)
+
+    def __dlpack_device__(self):
+        # Indicate as CUDA memory (although it could be pinned in theory).
+        return (2, get_current_cuda_device().value())
 
 
 cdef class ListColumnView:
