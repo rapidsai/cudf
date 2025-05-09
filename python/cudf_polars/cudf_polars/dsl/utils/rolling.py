@@ -76,16 +76,14 @@ def rewrite_rolling(
     if plc.traits.is_integral(index_dtype) and index_dtype.id() != plc.TypeId.INT64:
         index_dtype = plc.DataType(plc.TypeId.INT64)
     index = expr.NamedExpr(index_name, index_col)
-    if len(aggs) == 0:
-        inp = ir.Select(schema, [*keys, index], True, inp)  # noqa: FBT003
-        if options.slice is not None:
-            offset, length = options.slice
-            return ir.Slice(schema, offset, length, inp)
-        return inp
     temp_prefix = "_" * max(map(len, schema))
-    aggs, rolling_schema, apply_post_evaluation = apply_pre_evaluation(
-        schema, keys, aggs, unique_names(temp_prefix), index
-    )
+    if len(aggs) > 0:
+        aggs, rolling_schema, apply_post_evaluation = apply_pre_evaluation(
+            schema, keys, aggs, unique_names(temp_prefix), index
+        )
+    else:
+        rolling_schema = schema
+        apply_post_evaluation = lambda inp: inp  # noqa: E731
     preceding, following = offsets_to_windows(
         index_dtype, options.rolling.offset, options.rolling.period
     )

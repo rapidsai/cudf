@@ -9,6 +9,8 @@ from typing import TYPE_CHECKING
 
 import pyarrow as pa
 
+import polars as pl
+
 import pylibcudf as plc
 
 if TYPE_CHECKING:
@@ -68,6 +70,8 @@ def duration_to_int(
         raise NotImplementedError(
             "Invalid duration for parsed_int"
         )  # pragma: no cover; polars raises first
+    elif not parsed_int and dtype.id() == plc.TypeId.INT64:
+        raise pl.exceptions.InvalidOperationError("Duration must be a parsed integer")
     value = nanoseconds + 24 * 60 * 60 * 10**9 * (days + 7 * weeks)
     return -value if negative else value
 
