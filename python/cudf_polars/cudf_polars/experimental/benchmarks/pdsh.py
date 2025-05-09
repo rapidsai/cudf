@@ -1212,7 +1212,7 @@ def run(args: argparse.Namespace) -> None:
 
         records[q_id] = []
 
-        for _ in range(args.iterations):
+        for it in range(args.iterations):
             t0 = time.monotonic()
 
             if run_config.executor == "cpu":
@@ -1224,10 +1224,12 @@ def run(args: argparse.Namespace) -> None:
                         "cardinality_factor": {
                             "c_custkey": 0.05,  # Q10
                             "l_orderkey": 1.0,  # Q18
+                            "l_partkey": 0.1,  # Q20
+                            "o_custkey": 0.25,  # Q22
                         },
                     }
                     if run_config.blocksize:
-                        executor_options["parquet_blocksize"] = run_config.blocksize
+                        executor_options["target_partition_size"] = run_config.blocksize
                     if run_config.shuffle:
                         executor_options["shuffle_method"] = run_config.shuffle
                     if run_config.broadcast_join_limit:
@@ -1260,7 +1262,7 @@ def run(args: argparse.Namespace) -> None:
             record = Record(query=q_id, duration=t1 - t0)
             if args.print_results:
                 print(result)
-            if args.explain:
+            if args.explain and it == 0:
                 print(f"\nQuery {q_id} - Physical plan\n")
                 print(explain_query(q, engine))
             print(f"Ran query={q_id} in {record.duration:0.4f}s", flush=True)

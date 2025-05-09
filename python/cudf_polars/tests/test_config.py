@@ -222,7 +222,7 @@ def test_validate_shuffle_method() -> None:
     [
         "max_rows_per_partition",
         "cardinality_factor",
-        "parquet_blocksize",
+        "target_partition_size",
         "groupby_n_ary",
         "broadcast_join_limit",
         "rapidsmpf_spill",
