@@ -480,7 +480,7 @@ def _fuse_simple_reductions(
             output_irs.append(new_combined)
         else:
             # Nothing to fuse for this group
-            output_irs.append(ref_ir)
+            output_irs.append(group[0])
 
     return output_irs, pi
 
