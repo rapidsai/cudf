@@ -183,8 +183,12 @@ dependencies:
             packages:
               - python=3.12
           - matrix:
+              py: "3.13"
             packages:
-              - python>=3.10,<3.13
+              - python=3.13
+          - matrix:
+            packages:
+              - python>=3.10,<3.14
   test_base:
     common:
       - output_types: conda
@@ -239,13 +243,15 @@ dependencies:
     common:
       - output_types: conda
         packages:
-          - tensorflow
+          - pip
+          - pip:
+              - tensorflow[and-cuda]
   test_xgboost:
     common:
       - output_types: conda
         packages:
         # TODO: Remove hypothesis pinning once https://github.com/HypothesisWorks/hypothesis/issues/4365 is resolved
-          - hypothesis<6.131.1
+          - hypothesis>=6.131.7
           - numpy
           - scipy
           - scikit-learn

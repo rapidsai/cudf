@@ -125,6 +125,18 @@ def test_quantile_invalid_q(df):
     assert_ir_translation_raises(q, NotImplementedError)
 
 
+def test_quantile_equiprobable_unsupported(df):
+    expr = pl.col("a").quantile(0.5, interpolation="equiprobable")
+    q = df.select(expr)
+    assert_ir_translation_raises(q, NotImplementedError)
+
+
+def test_quantile_duration_unsupported():
+    df = pl.LazyFrame({"a": pl.Series([1, 2, 3, 4], dtype=pl.Duration("ns"))})
+    q = df.select(pl.col("a").quantile(0.5))
+    assert_ir_translation_raises(q, NotImplementedError)
+
+
 @pytest.mark.parametrize(
     "op", [pl.Expr.min, pl.Expr.nan_min, pl.Expr.max, pl.Expr.nan_max]
 )
@@ -155,3 +167,16 @@ def test_sum_empty_zero(data):
     df = pl.LazyFrame({"a": pl.Series(values=data, dtype=pl.Int32())})
     q = df.select(pl.col("a").sum())
     assert_gpu_result_equal(q)
+
+
+def test_implode_agg_unsupported():
+    df = pl.LazyFrame(
+        {
+            "a": pl.Series([1, 2, 3], dtype=pl.Int64()),
+            "b": pl.Series([3, 4, 2], dtype=pl.Int64()),
+            "c": pl.Series([1, None, 3], dtype=pl.Int64()),
+            "d": pl.Series([10, None, 11], dtype=pl.Int64()),
+        }
+    )
+    q = df.select(pl.col("b").implode())
+    assert_ir_translation_raises(q, NotImplementedError)
