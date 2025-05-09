@@ -98,6 +98,7 @@ def rewrite_rolling(
             [plc.types.NullOrder.BEFORE] * n,
             True,  # noqa: FBT003
             None,
+            config_options,
             inp,
         )
     return apply_post_evaluation(

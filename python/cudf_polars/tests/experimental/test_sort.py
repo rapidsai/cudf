@@ -38,17 +38,7 @@ def df():
 
 def test_sort(df, engine):
     q = df.sort(by=["y", "z"])
-    if POLARS_VERSION_LT_130:
-        with pytest.raises(
-            pl.exceptions.ComputeError,
-            match="Sort does not support multiple partitions.",
-        ):
-            assert_gpu_result_equal(q, engine=engine)
-    else:
-        with pytest.raises(
-            NotImplementedError, match="Sort does not support multiple partitions."
-        ):
-            assert_gpu_result_equal(q, engine=engine)
+    assert_gpu_result_equal(q, engine=engine)
 
 
 def test_sort_head(df, engine):
