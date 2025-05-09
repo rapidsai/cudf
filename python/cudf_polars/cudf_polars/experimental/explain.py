@@ -7,24 +7,26 @@
 from __future__ import annotations
 
 import functools
-from collections.abc import MutableMapping
 from itertools import groupby
 from typing import TYPE_CHECKING
 
 from cudf_polars.dsl.ir import (
-    IR,
     GroupBy,
     Join,
     Scan,
     Sort,
 )
 from cudf_polars.dsl.translate import Translator
-from cudf_polars.experimental.base import PartitionInfo
 from cudf_polars.experimental.parallel import lower_ir_graph
 from cudf_polars.utils.config import ConfigOptions
 
 if TYPE_CHECKING:
+    from collections.abc import MutableMapping
+
     import polars as pl
+
+    from cudf_polars.dsl.ir import IR
+    from cudf_polars.experimental.base import PartitionInfo
 
 
 def explain_query(
@@ -64,21 +66,21 @@ def _repr_ir_tree(
     *,
     offset: str = "",
 ) -> str:
-    header = _repr_ir(ir, partition_info, offset=offset)
+    header = _repr_ir(ir, offset=offset)
+    count = partition_info[ir].count if partition_info else None
+    if count is not None:
+        header = header.rstrip("\n") + f" [{count}]\n"
 
     children_strs = [
         _repr_ir_tree(child, partition_info, offset=offset + "  ")
         for child in ir.children
     ]
 
-    formatted = []
-    for line, group in groupby(children_strs):
-        count = sum(1 for _ in group)
-        formatted.append(line)
-        if count > 1:
-            formatted.append(f"{offset}  (repeated {count} times)\n")
-
-    return header + "".join(formatted)
+    return header + "".join(
+        f"{line}{f'{offset}  (repeated {count} times)\n' if count > 1 else ''}"
+        for line, group in groupby(children_strs)
+        if (count := sum(1 for _ in group)) or True
+    )
 
 
 def _repr_schema(schema: tuple | None) -> str:
@@ -90,82 +92,37 @@ def _repr_schema(schema: tuple | None) -> str:
     return f" {names}"
 
 
+def _repr_header(offset: str, label: str, schema: tuple | dict | None) -> str:
+    return f"{offset}{label}{_repr_schema(tuple(schema) if schema is not None else None)}\n"
+
+
 @functools.singledispatch
-def _repr_ir(
-    ir: IR,
-    partition_info: MutableMapping[IR, PartitionInfo] | None = None,
-    *,
-    offset: str = "",
-) -> str:
-    count = partition_info[ir].count if partition_info else None
-    header = f"{offset}{type(ir).__name__.upper()}"
-    header += _repr_schema(getattr(ir, "schema", None))
-    if count is not None:
-        header += f" [{count}]"
-    return header + "\n"
+def _repr_ir(ir: IR, *, offset: str = "") -> str:
+    return _repr_header(offset, type(ir).__name__.upper(), ir.schema)
 
 
 @_repr_ir.register
-def _(
-    ir: GroupBy,
-    partition_info: MutableMapping[IR, PartitionInfo] | None = None,
-    *,
-    offset: str = "",
-) -> str:
+def _(ir: GroupBy, *, offset: str = "") -> str:
     keys = tuple(ne.name for ne in ir.keys)
-    count = partition_info[ir].count if partition_info else None
-    header = f"{offset}GROUPBY {keys}"
-    header += _repr_schema(getattr(ir, "schema", None))
-    if count is not None:
-        header += f" [{count}]"
-    return header + "\n"
+    return _repr_header(offset, f"GROUPBY {keys}", ir.schema)
 
 
 @_repr_ir.register
-def _(
-    ir: Join,
-    partition_info: MutableMapping[IR, PartitionInfo] | None = None,
-    *,
-    offset: str = "",
-) -> str:
+def _(ir: Join, *, offset: str = "") -> str:
     left_on = tuple(ne.name for ne in ir.left_on)
     right_on = tuple(ne.name for ne in ir.right_on)
-    count = partition_info[ir].count if partition_info else None
-    header = f"{offset}JOIN {ir.options[0]} {left_on} {right_on}"
-    header += _repr_schema(getattr(ir, "schema", None))
-    if count is not None:
-        header += f" [{count}]"  # pragma: no cover; no test yet
-    return header + "\n"
+    return _repr_header(offset, f"JOIN {ir.options[0]} {left_on} {right_on}", ir.schema)
 
 
 @_repr_ir.register
-def _(
-    ir: Sort,
-    partition_info: MutableMapping[IR, PartitionInfo] | None = None,
-    *,
-    offset: str = "",
-) -> str:
+def _(ir: Sort, *, offset: str = "") -> str:
     by = tuple(ne.name for ne in ir.by)
-    count = partition_info[ir].count if partition_info else None
-    header = f"{offset}SORT {by}"
-    header += _repr_schema(getattr(ir, "schema", None))
-    if count is not None:
-        header += f" [{count}]"  # pragma: no cover; no test yet
-    return header + "\n"
+    return _repr_header(offset, f"SORT {by}", ir.schema)
 
 
 @_repr_ir.register
-def _(
-    ir: Scan,
-    partition_info: MutableMapping[IR, PartitionInfo] | None = None,
-    *,
-    offset: str = "",
-) -> str:
-    count = partition_info[ir].count if partition_info else None
-    schema_str = _repr_schema(tuple(ir.schema))
+def _(ir: Scan, *, offset: str = "") -> str:
     first_path = ir.paths[0]
     suffix = " ..." if len(ir.paths) > 1 else ""
-    header = f"{offset}SCAN {ir.typ.upper()}{schema_str} {first_path}{suffix}"
-    if count is not None:
-        header += f" [{count} partition{'s' if count > 1 else ''}]"  # pragma: no cover; no test yet
-    return header + "\n"
+    label = f"SCAN {ir.typ.upper()} {first_path}{suffix}"
+    return _repr_header(offset, label, ir.schema)

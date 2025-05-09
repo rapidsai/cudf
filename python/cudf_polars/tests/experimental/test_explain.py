@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+import re
+
 import pytest
 
 import polars as pl
@@ -142,7 +144,8 @@ def test_explain_logical_plan_wide_table_with_scan(tmp_path):
     engine = pl.GPUEngine(executor="streaming", raise_on_fail=True)
     plan = explain_query(q, engine, physical=False)
 
-    assert "SCAN PARQUET ('col0', 'col1', 'col2', '...', 'col8', 'col9')" in plan
+    pattern = r"SCAN PARQUET .+ \('col0', 'col1', 'col2', '\.\.\.', 'col8', 'col9'\)"
+    assert re.search(pattern, plan)
 
 
 def test_explain_logical_plan_wide_table():
