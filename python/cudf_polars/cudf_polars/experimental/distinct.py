@@ -28,6 +28,8 @@ def lower_distinct(
     child: IR,
     partition_info: MutableMapping[IR, PartitionInfo],
     config_options: ConfigOptions,
+    *,
+    cardinality: float | None = None,
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     """
     Lower a Distinct IR into partition-wise stages.
@@ -44,6 +46,8 @@ def lower_distinct(
         associated partitioning information.
     config_options
         GPUEngine configuration options.
+    cardinality
+        Cardinality factor to use for algorithm selection.
 
     Returns
     -------
@@ -100,20 +104,10 @@ def lower_distinct(
             # partitions. For now, we raise an error to fall back
             # to one partition.
             raise NotImplementedError("Unsupported slice for multiple partitions.")
-    else:
-        # Use cardinality to determine partitioning
-        assert config_options.executor.name == "streaming", (
-            "'in-memory' executor not supported in 'lower_distinct'"
-        )
-        cardinality_factor = {
-            c: min(f, 1.0)
-            for c, f in config_options.executor.cardinality_factor.items()
-            if c in subset
-        }
-        if cardinality_factor:
-            cardinality = max(cardinality_factor.values())
-            n_ary = min(max(int(1.0 / cardinality), 2), child_count)
-            output_count = max(int(cardinality * child_count), 1)
+    elif cardinality is not None:
+        # Use cardinality to determine partitioningcardinality
+        n_ary = min(max(int(1.0 / cardinality), 2), child_count)
+        output_count = max(int(cardinality * child_count), 1)
 
     if output_count > 1 and require_tree_reduction:
         # Need to reduce down to a single partition even
@@ -156,7 +150,25 @@ def _(
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     # Extract child partitioning
     child, partition_info = rec(ir.children[0])
+    config_options = rec.state["config_options"]
+    assert config_options.executor.name == "streaming", (
+        "'in-memory' executor not supported in 'lower_ir_node'"
+    )
+
+    subset: frozenset = ir.subset or frozenset(ir.schema)
+    cardinality_factor = {
+        c: max(min(f, 1.0), 0.00001)
+        for c, f in config_options.executor.cardinality_factor.items()
+        if c in subset
+    }
+    cardinality = max(cardinality_factor.values()) if cardinality_factor else None
     try:
-        return lower_distinct(ir, child, partition_info, rec.state["config_options"])
+        return lower_distinct(
+            ir,
+            child,
+            partition_info,
+            config_options,
+            cardinality=cardinality,
+        )
     except NotImplementedError as err:
         return _lower_ir_fallback(ir, rec, msg=str(err))

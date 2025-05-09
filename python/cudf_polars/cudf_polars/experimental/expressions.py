@@ -49,6 +49,7 @@ from cudf_polars.dsl.traversal import (
 from cudf_polars.dsl.utils.naming import unique_names
 from cudf_polars.experimental.base import PartitionInfo
 from cudf_polars.experimental.repartition import Repartition
+from cudf_polars.experimental.utils import _leaf_column_names
 
 if TYPE_CHECKING:
     from collections.abc import Generator, MutableMapping, Sequence
@@ -168,6 +169,19 @@ def _decompose_unique(
         names=names,
     )
     (column,) = columns
+
+    assert config_options.executor.name == "streaming", (
+        "'in-memory' executor not supported in '_decompose_unique'"
+    )
+
+    cardinality: float | None = None
+    if cardinality_factor := {
+        max(min(v, 1.0), 0.00001)
+        for k, v in config_options.executor.cardinality_factor.items()
+        if k in _leaf_column_names(child)
+    }:
+        cardinality = max(cardinality_factor)
+
     input_ir, partition_info = lower_distinct(
         Distinct(
             {column.name: column.dtype},
@@ -180,7 +194,9 @@ def _decompose_unique(
         input_ir,
         partition_info,
         config_options,
+        cardinality=cardinality,
     )
+
     return column, input_ir, partition_info
 
 
