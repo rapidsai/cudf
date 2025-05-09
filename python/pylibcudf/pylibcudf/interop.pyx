@@ -68,6 +68,9 @@ if (string_view := getattr(pa, "string_view", None)) is not None:
 LIBCUDF_TO_ARROW_TYPES = {
     v: k for k, v in ARROW_TO_PYLIBCUDF_TYPES.items()
 }
+# Because we map 2-3 pyarrow string types to type_id.STRING,
+# just map type_id.STRING to pa.string
+LIBCUDF_TO_ARROW_TYPES[type_id.STRING] = pa.string()
 
 
 @singledispatch
