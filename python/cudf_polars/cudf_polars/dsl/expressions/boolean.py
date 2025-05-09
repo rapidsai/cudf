@@ -10,7 +10,7 @@ from enum import IntEnum, auto
 from functools import partial, reduce
 from typing import TYPE_CHECKING, Any, ClassVar
 
-import pyarrow as pa
+import polars as pl
 
 import pylibcudf as plc
 
@@ -164,12 +164,11 @@ class BooleanFunction(Expr):
             if is_finite:
                 # NaN is neither finite not infinite
                 to_search.append(float("nan"))
-            haystack = plc.interop.from_arrow(
-                pa.array(
-                    to_search,
-                    type=plc.interop.to_arrow(needles.obj.type()),
-                )
-            )
+            if needles.obj.type().id() == plc.TypeId.FLOAT32:
+                pl_type = pl.datatypes.Float32()
+            else:
+                pl_type = pl.datatypes.Float64()
+            haystack = plc.Column(pl.Series(values=to_search, dtype=pl_type))
             result = plc.search.contains(haystack, needles.obj)
             if is_finite:
                 result = plc.unary.unary_operation(result, plc.unary.UnaryOperator.NOT)

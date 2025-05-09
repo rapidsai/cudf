@@ -9,7 +9,7 @@ from __future__ import annotations
 from enum import IntEnum, auto
 from typing import TYPE_CHECKING, Any, ClassVar
 
-import pyarrow as pa
+import polars as pl
 
 import pylibcudf as plc
 
@@ -143,9 +143,27 @@ class TemporalFunction(Expr):
         if self.name is TemporalFunction.Name.CastTimeUnit:
             (unit,) = self.options
             if plc.traits.is_timestamp(column.obj.type()):
-                dtype = plc.interop.from_arrow(pa.timestamp(unit))
+                if unit == "ns":
+                    dtype = plc.DataType(plc.TypeId.TIMESTAMP_NANOSECONDS)
+                elif unit == "us":
+                    dtype = plc.DataType(plc.TypeId.TIMESTAMP_MICROSECONDS)
+                elif unit == "ms":
+                    dtype = plc.DataType(plc.TypeId.TIMESTAMP_MILLISECONDS)
+                elif unit == "s":
+                    dtype = plc.DataType(plc.TypeId.TIMESTAMP_SECONDS)
+                else:
+                    raise ValueError(f"Unsupported time unit: {unit}")
             elif plc.traits.is_duration(column.obj.type()):
-                dtype = plc.interop.from_arrow(pa.duration(unit))
+                if unit == "ns":
+                    dtype = plc.DataType(plc.TypeId.DURATION_NANOSECONDS)
+                elif unit == "us":
+                    dtype = plc.DataType(plc.TypeId.DURATION_MICROSECONDS)
+                elif unit == "ms":
+                    dtype = plc.DataType(plc.TypeId.DURATION_MILLISECONDS)
+                elif unit == "s":
+                    dtype = plc.DataType(plc.TypeId.DURATION_SECONDS)
+                else:
+                    raise ValueError(f"Unsupported time unit: {unit}")
             result = plc.unary.cast(column.obj, dtype)
             return Column(result)
         if self.name == TemporalFunction.Name.ToString:
@@ -153,17 +171,15 @@ class TemporalFunction(Expr):
                 plc.strings.convert.convert_datetime.from_timestamps(
                     column.obj,
                     self.options[0],
-                    plc.interop.from_arrow(pa.array([], type=pa.string())),
+                    plc.Column(pl.Series(dtype=pl.datatypes.String())),
                 )
             )
         if self.name is TemporalFunction.Name.Week:
             result = plc.strings.convert.convert_integers.to_integers(
                 plc.strings.convert.convert_datetime.from_timestamps(
                     column.obj,
-                    format="%V",
-                    input_strings_names=plc.interop.from_arrow(
-                        pa.array([], type=pa.string())
-                    ),
+                    "%V",
+                    plc.Column(pl.Series(dtype=pl.datatypes.String())),
                 ),
                 plc.types.DataType(plc.types.TypeId.INT8),
             )
@@ -172,10 +188,8 @@ class TemporalFunction(Expr):
             result = plc.strings.convert.convert_integers.to_integers(
                 plc.strings.convert.convert_datetime.from_timestamps(
                     column.obj,
-                    format="%G",
-                    input_strings_names=plc.interop.from_arrow(
-                        pa.array([], type=pa.string())
-                    ),
+                    "%G",
+                    plc.Column(pl.Series(dtype=pl.datatypes.String())),
                 ),
                 plc.types.DataType(plc.types.TypeId.INT32),
             )
