@@ -766,7 +766,7 @@ class Sink(IR):
         child_schema = df.schema.values()
         if kind == "Csv":
             if not all(
-                plc.io.csv.is_csv_writable_type(dtype) for dtype in child_schema
+                plc.io.csv.is_supported_write_csv(dtype) for dtype in child_schema
             ):
                 # Nested types are unsupported in polars and libcudf
                 raise NotImplementedError(
@@ -817,7 +817,7 @@ class Sink(IR):
             kind == "Json"
         ):  # pragma: no cover; options are validated on the polars side
             if not all(
-                plc.io.json.is_json_writable_type(dtype) for dtype in child_schema
+                plc.io.json.is_supported_write_json(dtype) for dtype in child_schema
             ):
                 # Nested types are unsupported in polars and libcudf
                 raise NotImplementedError(

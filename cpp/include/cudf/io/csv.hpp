@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <cudf/io/detail/utils.hpp>
 #include <cudf/io/types.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
@@ -1758,13 +1759,26 @@ class csv_writer_options_builder {
 void write_csv(csv_writer_options const& options,
                rmm::cuda_stream_view stream = cudf::get_default_stream());
 
+/// @cond
+struct is_supported_csv_write_type_fn {
+  template <typename T>
+  constexpr bool operator()() const
+  {
+    return cudf::io::detail::is_handled<T>();
+  }
+};
+/// @endcond
+
 /**
  * @brief Checks if a cudf::data_type is supported for CSV writing.
  *
  * @param type The data_type to check.
  * @return true if the type is supported for CSV writing, false otherwise.
  */
-bool is_csv_writable_type(data_type type);
+constexpr bool is_supported_write_csv(data_type type)
+{
+  return cudf::type_dispatcher(type, is_supported_csv_write_type_fn{});
+}
 
 /** @} */  // end of group
 }  // namespace io

@@ -568,7 +568,7 @@ struct column_to_strings_fn {
 
   // unsupported type of column:
   template <typename column_type>
-  std::enable_if_t<cudf::io::detail::is_not_handled<column_type>(), std::unique_ptr<column>>
+  std::enable_if_t<!cudf::io::detail::is_handled<column_type>(), std::unique_ptr<column>>
   operator()(column_view const&) const
   {
     CUDF_FAIL("Unsupported column type.");

@@ -94,4 +94,4 @@ cdef class CsvWriterOptionsBuilder:
 
 cpdef void write_csv(CsvWriterOptions options, Stream stream = *)
 
-cpdef bool is_csv_writable_type(DataType type)
+cpdef bool is_supported_write_csv(DataType type)

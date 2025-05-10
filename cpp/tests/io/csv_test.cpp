@@ -2547,23 +2547,23 @@ struct CsvWriterTypeSupportTest : public cudf::test::BaseFixture {};
 
 TEST(CsvWriterTypeSupportTest, SupportedTypes)
 {
-  using cudf::io::is_csv_writable_type;
+  using cudf::io::is_supported_write_csv;
 
-  EXPECT_TRUE(is_csv_writable_type(cudf::data_type{cudf::type_id::INT32}));
-  EXPECT_TRUE(is_csv_writable_type(cudf::data_type{cudf::type_id::FLOAT64}));
-  EXPECT_TRUE(is_csv_writable_type(cudf::data_type{cudf::type_id::STRING}));
-  EXPECT_TRUE(is_csv_writable_type(cudf::data_type{cudf::type_id::DECIMAL64}));
-  EXPECT_TRUE(is_csv_writable_type(cudf::data_type{cudf::type_id::TIMESTAMP_NANOSECONDS}));
-  EXPECT_TRUE(is_csv_writable_type(cudf::data_type{cudf::type_id::DURATION_SECONDS}));
+  EXPECT_TRUE(is_supported_write_csv(cudf::data_type{cudf::type_id::INT32}));
+  EXPECT_TRUE(is_supported_write_csv(cudf::data_type{cudf::type_id::FLOAT64}));
+  EXPECT_TRUE(is_supported_write_csv(cudf::data_type{cudf::type_id::STRING}));
+  EXPECT_TRUE(is_supported_write_csv(cudf::data_type{cudf::type_id::DECIMAL64}));
+  EXPECT_TRUE(is_supported_write_csv(cudf::data_type{cudf::type_id::TIMESTAMP_NANOSECONDS}));
+  EXPECT_TRUE(is_supported_write_csv(cudf::data_type{cudf::type_id::DURATION_SECONDS}));
 }
 
 TEST(CsvWriterTypeSupportTest, UnsupportedTypes)
 {
-  using cudf::io::is_csv_writable_type;
+  using cudf::io::is_supported_write_csv;
 
-  EXPECT_FALSE(is_csv_writable_type(cudf::data_type{cudf::type_id::LIST}));
-  EXPECT_FALSE(is_csv_writable_type(cudf::data_type{cudf::type_id::STRUCT}));
-  EXPECT_FALSE(is_csv_writable_type(cudf::data_type{cudf::type_id::DICTIONARY32}));
+  EXPECT_FALSE(is_supported_write_csv(cudf::data_type{cudf::type_id::LIST}));
+  EXPECT_FALSE(is_supported_write_csv(cudf::data_type{cudf::type_id::STRUCT}));
+  EXPECT_FALSE(is_supported_write_csv(cudf::data_type{cudf::type_id::DICTIONARY32}));
 }
 
 CUDF_TEST_PROGRAM_MAIN()

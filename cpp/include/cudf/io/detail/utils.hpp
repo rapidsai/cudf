@@ -27,14 +27,13 @@ namespace io::detail {
 enum class single_write_mode : bool { YES, NO };
 
 template <typename T>
-constexpr static bool is_not_handled()
+constexpr bool is_handled()
 {
-  // Note: the case (not std::is_same_v<column_type, bool>)
-  // is already covered by is_integral)
-  //
-  return not((std::is_same_v<T, cudf::string_view>) || (std::is_integral_v<T>) ||
-             (std::is_floating_point_v<T>) || (cudf::is_fixed_point<T>()) ||
-             (cudf::is_timestamp<T>()) || (cudf::is_duration<T>()));
+  // Note: the case (not std::is_same_v<T, bool>)
+  // is already covered by is_integral
+  return std::is_same_v<T, cudf::string_view> || std::is_integral_v<T> ||
+         std::is_floating_point_v<T> || cudf::is_fixed_point<T>() || cudf::is_timestamp<T>() ||
+         cudf::is_duration<T>();
 }
 
 }  // namespace io::detail
