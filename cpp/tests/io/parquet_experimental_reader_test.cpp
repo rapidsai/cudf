@@ -147,7 +147,7 @@ TEST_F(ParquetExperimentalReaderTest, TestMetadata)
   // Create a table with several row groups each with a single page.
   auto constexpr num_concat         = 1;
   auto constexpr rows_per_row_group = page_size_for_ordered_tests;
-  auto [_, file_buffer]             = create_parquet_with_stats<num_concat>();
+  auto file_buffer  = std::get<1>(create_parquet_with_stats<num_concat>());
 
   // Filtering AST - table[0] < 100
   auto literal_value     = cudf::numeric_scalar<uint32_t>(100);
