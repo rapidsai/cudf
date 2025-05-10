@@ -156,7 +156,19 @@ def assert_column_eq(
             lhs = [lhs]
             rhs = [rhs]
 
+        def _is_supported_for_pc_is_nan(arr_type):
+            if pa.types.is_floating(arr_type):
+                return False
+            elif pa.types.is_list(arr_type):
+                return _is_supported_for_pc_is_nan(arr_type.value_type)
+            return True
+
         for lh_arr, rh_arr in zip(lhs, rhs):
+            # pc.is_nan does not support nested list
+            # with float (eg. list<list<float>>)
+            if not _is_supported_for_pc_is_nan(lh_arr.type):
+                continue
+
             # Check NaNs positions match
             # and then filter out nans
             lhs_nans = pc.is_nan(lh_arr)

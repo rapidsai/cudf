@@ -188,7 +188,9 @@ def post_process_task_graph(
     if config_options.executor.rapidsmpf_spill:  # pragma: no cover
         from cudf_polars.experimental.spilling import wrap_dataframe_in_spillable
 
-        return wrap_dataframe_in_spillable(graph, ignore_key=key)
+        return wrap_dataframe_in_spillable(
+            graph, ignore_key=key, config_options=config_options
+        )
     return graph
 
 
