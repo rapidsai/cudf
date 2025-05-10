@@ -2,8 +2,6 @@
 import subprocess
 import sys
 
-
-
 TEST_SCRIPT = """
 import numba.cuda
 import cudf
