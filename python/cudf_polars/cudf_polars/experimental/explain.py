@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import functools
 from itertools import groupby
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from cudf_polars.dsl.ir import (
@@ -123,7 +124,7 @@ def _(ir: Sort, *, offset: str = "") -> str:
 
 @_repr_ir.register
 def _(ir: Scan, *, offset: str = "") -> str:
-    first_path = ir.paths[0]
+    first_path = Path(ir.paths[0]).name
     suffix = " ..." if len(ir.paths) > 1 else ""
     label = f"SCAN {ir.typ.upper()} {first_path}{suffix}"
     return _repr_header(offset, label, ir.schema)
