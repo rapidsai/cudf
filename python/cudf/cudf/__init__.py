@@ -106,7 +106,6 @@ del rmm
 
 __all__ = [
     "NA",
-    "BaseIndex",
     "CategoricalDtype",
     "CategoricalIndex",
     "DataFrame",
