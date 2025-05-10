@@ -89,36 +89,6 @@ def _get_result_name(
     return left_name if _is_same_name(left_name, right_name) else None
 
 
-class IndexMeta(type):
-    """Custom metaclass for Index that overrides instance/subclass tests."""
-
-    def __call__(cls, data, *args, **kwargs):
-        if kwargs.get("tupleize_cols", True) is not True:
-            raise NotImplementedError(
-                "tupleize_cols is currently not supported."
-            )
-
-        if cls is Index:
-            return as_index(
-                arbitrary=data,
-                *args,
-                **kwargs,
-            )
-        return super().__call__(data, *args, **kwargs)
-
-    def __instancecheck__(self, instance):
-        if self is Index:
-            return isinstance(instance, Index)
-        else:
-            return type.__instancecheck__(self, instance)
-
-    def __subclasscheck__(self, subclass):
-        if self is Index:
-            return issubclass(subclass, Index)
-        else:
-            return type.__subclasscheck__(self, subclass)
-
-
 def _lexsorted_equal_range(
     idx: Index | cudf.MultiIndex,
     keys: list[ColumnBase],
@@ -193,7 +163,7 @@ def validate_range_arg(arg, arg_name: Literal["start", "stop", "step"]) -> int:
     return int(arg)
 
 
-class Index(SingleColumnFrame, metaclass=IndexMeta):
+class Index(SingleColumnFrame):
     """
     Immutable sequence used for indexing and alignment.
 
@@ -214,10 +184,93 @@ class Index(SingleColumnFrame, metaclass=IndexMeta):
         Currently not supported.
     """
 
+    _accessors: set[Any] = set()
+
+    def __new__(
+        cls,
+        data=None,
+        dtype=None,
+        copy: bool = False,
+        name=None,
+        tupleize_cols: bool = True,
+        nan_as_null=no_default,
+    ) -> Self:
+        if not tupleize_cols:
+            raise NotImplementedError(
+                "tupleize_cols is currently not supported."
+            )
+        if cls is Index:
+            # We do this to match pandas returning a new class
+            # in the Index constructor.
+            if data is None:
+                data = []
+            if nan_as_null is no_default:
+                nan_as_null = (
+                    False
+                    if cudf.get_option("mode.pandas_compatible")
+                    else None
+                )
+
+            if name is no_default:
+                name = getattr(data, "name", None)
+            if dtype is not None:
+                dtype = cudf.dtype(dtype)
+
+            if isinstance(data, cudf.MultiIndex):
+                if dtype is not None:
+                    raise TypeError(
+                        "dtype must be `None` for inputs of type: "
+                        f"{type(data).__name__}, found {dtype=} "
+                    )
+                return data.copy(deep=copy)
+            elif isinstance(data, Index):
+                idx = data.copy(deep=copy).rename(name)
+            elif isinstance(data, ColumnBase):
+                raise ValueError("Use cudf.Index._from_column instead.")
+            elif isinstance(data, (pd.RangeIndex, range)):
+                idx = RangeIndex(
+                    start=data.start,
+                    stop=data.stop,
+                    step=data.step,
+                    name=name,
+                )
+            elif isinstance(data, pd.MultiIndex):
+                if dtype is not None:
+                    raise TypeError(
+                        "dtype must be `None` for inputs of type: "
+                        f"{type(data).__name__}, found {dtype=} "
+                    )
+                return cudf.MultiIndex.from_pandas(
+                    data, nan_as_null=nan_as_null
+                )
+            elif isinstance(data, cudf.DataFrame) or is_scalar(data):
+                raise ValueError(
+                    "Index data must be 1-dimensional and list-like"
+                )
+            else:
+                return Index._from_column(
+                    as_column(data, dtype=dtype, nan_as_null=nan_as_null),
+                    name=name,
+                )
+            if dtype is not None:
+                idx = idx.astype(dtype)
+            return idx
+        return super().__new__(cls)
+
     @_performance_tracking
-    def __init__(self, data, **kwargs):
-        name = _getdefault_name(data, name=kwargs.get("name"))
-        super().__init__({name: data})
+    def __init__(
+        self,
+        data=None,
+        dtype=None,
+        copy: bool = False,
+        name=None,
+        tupleize_cols: bool = True,
+        nan_as_null=no_default,
+    ) -> None:
+        # Constructed in __new__
+        # Subclasses should initialize with
+        # SingleColumnFrame.__init__(self, {name: column})
+        return None
 
     @property
     def _constructor_expanddim(self):
@@ -2123,7 +2176,7 @@ class Index(SingleColumnFrame, metaclass=IndexMeta):
                 output = "\n".join(data_repr[:-1] + cats_repr[-1:])
 
             output = output.replace("nan", str(cudf.NA))
-        elif preprocess._values.nullable:
+        elif preprocess._column.nullable:
             if self.dtype == CUDF_STRING_DTYPE:
                 output = repr(self.to_pandas(nullable=True))
             else:
@@ -2524,6 +2577,9 @@ class RangeIndex(Index):
     _VALID_BINARY_OPERATIONS = BinaryOperand._SUPPORTED_BINARY_OPERATIONS
 
     _range: range
+
+    def __new__(cls, *args, **kwargs):
+        return object.__new__(cls)
 
     @_performance_tracking
     def __init__(
@@ -3421,6 +3477,9 @@ class DatetimeIndex(Index):
                   dtype='datetime64[ns]', name='a')
     """
 
+    def __new__(cls, *args, **kwargs):
+        return object.__new__(cls)
+
     @_performance_tracking
     def __init__(
         self,
@@ -3484,7 +3543,9 @@ class DatetimeIndex(Index):
         if copy:
             data = data.copy()
 
-        super().__init__(data, name=name)
+        SingleColumnFrame.__init__(
+            self, ColumnAccessor({name: data}, verify=False)
+        )
 
         if self._freq is not None:
             unique_vals = self.to_series().diff().unique()
@@ -4389,6 +4450,9 @@ class TimedeltaIndex(Index):
                   dtype='timedelta64[s]', name='delta-index')
     """
 
+    def __new__(cls, *args, **kwargs):
+        return object.__new__(cls)
+
     @_performance_tracking
     def __init__(
         self,
@@ -4434,7 +4498,9 @@ class TimedeltaIndex(Index):
         if copy:
             data = data.copy()
 
-        super().__init__(data, name=name)
+        SingleColumnFrame.__init__(
+            self, ColumnAccessor({name: data}, verify=False)
+        )
 
     @classmethod
     @_performance_tracking
@@ -4669,6 +4735,9 @@ class CategoricalIndex(Index):
     CategoricalIndex([1, 2, 3, <NA>], categories=[1, 2, 3], ordered=False, dtype='category', name='a')
     """
 
+    def __new__(cls, *args, **kwargs):
+        return object.__new__(cls)
+
     @_performance_tracking
     def __init__(
         self,
@@ -4707,7 +4776,9 @@ class CategoricalIndex(Index):
             data = data.as_ordered(ordered=True)
         elif ordered is False and data.ordered is True:
             data = data.as_ordered(ordered=False)
-        super().__init__(data, name=name)
+        SingleColumnFrame.__init__(
+            self, ColumnAccessor({name: data}, verify=False)
+        )
 
     @classmethod
     @_performance_tracking
@@ -5041,6 +5112,9 @@ class IntervalIndex(Index):
     IntervalIndex
     """
 
+    def __new__(cls, *args, **kwargs):
+        return object.__new__(cls)
+
     @_performance_tracking
     def __init__(
         self,
@@ -5096,7 +5170,9 @@ class IntervalIndex(Index):
         if dtype:
             interval_col = interval_col.astype(dtype)  # type: ignore[assignment]
 
-        super().__init__(interval_col, name=name)
+        SingleColumnFrame.__init__(
+            self, ColumnAccessor({name: interval_col}, verify=False)
+        )
 
     @property
     def closed(self) -> Literal["left", "right", "neither", "both"]:

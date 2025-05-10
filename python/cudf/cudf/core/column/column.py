@@ -2662,7 +2662,7 @@ def as_column(
         if isinstance(arbitrary, cudf.Series):
             arbitrary = arbitrary._column
         elif isinstance(arbitrary, cudf.Index):
-            arbitrary = arbitrary._values
+            arbitrary = arbitrary._column
         if dtype is not None:
             return arbitrary.astype(dtype)
         return arbitrary
