@@ -220,6 +220,10 @@ cdef class Table:
         """The columns in this table."""
         return self._columns
 
+    cpdef tuple shape(self):
+        """The shape of this table"""
+        return (self.num_rows(), self.num_columns())
+
     def _to_schema(self, metadata=None):
         """Create an Arrow schema from this table."""
         if metadata is None:
