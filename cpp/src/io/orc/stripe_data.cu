@@ -306,14 +306,19 @@ class cache_helper {
 
 class validator {
  public:
-  __device__ validator(bool for_primary_stream,
+  __device__ validator(size_type num_rowgroups,
+                       bool for_primary_stream,
                        uint32_t base_aligned_stream_length,
                        size_type* error_count)
     : for_primary_stream_(for_primary_stream),
-      is_first_thread_for_last_rowgroup_(blockIdx.x == gridDim.x - 1 and threadIdx.x == 0),
       base_aligned_stream_length_(base_aligned_stream_length),
       error_count_(error_count)
   {
+    is_first_thread_for_last_rowgroup_ = (threadIdx.x == 0);
+    if (num_rowgroups > 0) {
+      auto const rg_idx = blockIdx.x % num_rowgroups;
+      is_first_thread_for_last_rowgroup_ &= (rg_idx == num_rowgroups - 1);
+    }
   }
 
   __device__ void check_stream(uint32_t current_pos)
@@ -351,6 +356,8 @@ static __device__ void bytestream_init(orc_bytestream_s* bs, uint8_t const* base
   bs->len        = (len + pos + 7) & ~7;
   bs->fill_pos   = 0;
   bs->fill_count = min(bs->len, bytestream_buffer_size) >> 3;
+
+  if (blockIdx.x == 39) { printf("ha\n"); }
 }
 
 /**
@@ -1678,9 +1685,10 @@ CUDF_KERNEL void __launch_bounds__(block_size)
   }
   __syncthreads();
 
-  validator validator_for_primary_stream(true, s->bs.pos + s->chunk.strm_len[CI_DATA], error_count);
+  validator validator_for_primary_stream(
+    num_rowgroups, true, s->bs.pos + s->chunk.strm_len[CI_DATA], error_count);
   validator validator_for_secondary_stream(
-    false, s->bs2.pos + s->chunk.strm_len[CI_DATA2], error_count);
+    num_rowgroups, false, s->bs2.pos + s->chunk.strm_len[CI_DATA2], error_count);
 
   while (is_valid && (s->top.data.cur_row < s->top.data.end_row)) {
     uint32_t list_child_elements = 0;

@@ -1818,8 +1818,11 @@ TEST(OrcWriterTestDebug, DebugReadOrc)
 {
   //   std::string filepath = "/home/coder/cudf/debug/orc_null/data/good_OrcEmptyRowGroup.orc";
   //   std::string filepath = "/home/coder/cudf/debug/orc_null/data/bad_OrcEmptyRowGroup.orc";
-  std::string filepath = "/home/coder/cudf/debug/orc_null/data/col_b_only.orc";
+  //   std::string filepath = "/home/coder/cudf/debug/orc_null/data/col_b_only.orc";
   //   std::string filepath = "/home/coder/cudf/debug/orc_null/data/five_elements.orc";
+  std::string filepath = "/home/coder/cudf/debug/orc_null/data/chunked_read_simple_nullable.orc";
+  //   std::string filepath = "/home/coder/cudf/debug/orc_null/data/simple.orc";
+  //   std::string filepath = "/home/coder/cudf/debug/orc_null/data/comprehensive.orc";
   cudf::io::orc_reader_options in_opts =
     cudf::io::orc_reader_options::builder(cudf::io::source_info{filepath});
   [[maybe_unused]] auto result = cudf::io::read_orc(in_opts);

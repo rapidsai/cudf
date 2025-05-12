@@ -204,31 +204,32 @@ TEST_F(OrcChunkedReaderTest, TestChunkedReadSimpleData)
                       stripe_rows);
   };
 
-  {
-    auto const [expected, filepath] = generate_input(false, 1'000);
-    auto const [result, num_chunks] = chunked_read(filepath, output_limit{245'000});
-    EXPECT_EQ(num_chunks, 2);
-    CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
-  }
-  {
-    auto const [expected, filepath] = generate_input(false, cudf::io::default_stripe_size_rows);
-    auto const [result, num_chunks] = chunked_read(filepath, output_limit{245'000});
-    EXPECT_EQ(num_chunks, 2);
-    CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
-  }
+  //   {
+  //     auto const [expected, filepath] = generate_input(false, 1'000);
+  //     auto const [result, num_chunks] = chunked_read(filepath, output_limit{245'000});
+  //     EXPECT_EQ(num_chunks, 2);
+  //     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
+  //   }
+  //   {
+  //     auto const [expected, filepath] = generate_input(false,
+  //     cudf::io::default_stripe_size_rows); auto const [result, num_chunks] =
+  //     chunked_read(filepath, output_limit{245'000}); EXPECT_EQ(num_chunks, 2);
+  //     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
+  //   }
 
   {
     auto const [expected, filepath] = generate_input(true, 1'000);
+    std::abort();
     auto const [result, num_chunks] = chunked_read(filepath, output_limit{245'000});
     EXPECT_EQ(num_chunks, 2);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
   }
-  {
-    auto const [expected, filepath] = generate_input(true, cudf::io::default_stripe_size_rows);
-    auto const [result, num_chunks] = chunked_read(filepath, output_limit{245'000});
-    EXPECT_EQ(num_chunks, 2);
-    CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
-  }
+  //   {
+  //     auto const [expected, filepath] = generate_input(true, cudf::io::default_stripe_size_rows);
+  //     auto const [result, num_chunks] = chunked_read(filepath, output_limit{245'000});
+  //     EXPECT_EQ(num_chunks, 2);
+  //     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
+  //   }
 }
 
 TEST_F(OrcChunkedReaderTest, TestChunkedReadBoundaryCases)

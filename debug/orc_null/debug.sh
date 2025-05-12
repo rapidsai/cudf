@@ -8,9 +8,9 @@ my_program=/home/coder/cudf/cpp/build/latest/gtests/ORC_TEST
 # my_args="--gtest_filter=OrcWriterTest.EmptyRowGroup"
 my_args="--gtest_filter=OrcWriterTestDebug.DebugReadOrc"
 
-# $my_debugger -ex start --ex 'source breakpoints.txt' --args $my_program $my_args
+$my_debugger -ex start --ex 'source breakpoints.txt' --args $my_program $my_args
 
-$my_program $my_args
+# $my_program $my_args
 
 
 # Debug this test in orc_test.cpp
