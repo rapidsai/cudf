@@ -17,6 +17,7 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/detail/utilities/integer_utils.hpp>
@@ -114,8 +115,12 @@ TEST_F(UnaryBitwiseOpsBoolTest, BitCountBool)
 
 TYPED_TEST(UnaryBitwiseOpsTypedTest, BitCount)
 {
-  using T          = TypeParam;
-  auto const data  = std::vector<T>{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15};
+  using T         = TypeParam;
+  auto const data = [] {
+    std::vector<T> data(15);
+    std::iota(data.begin(), data.end(), 1);
+    return data;
+  }();
   auto const input = cudf::test::fixed_width_column_wrapper<T>(data.begin(), data.end());
 
   std::vector<int32_t> expected_data(data.size());
@@ -133,11 +138,15 @@ TYPED_TEST(UnaryBitwiseOpsTypedTest, BitCount)
 
 TYPED_TEST(UnaryBitwiseOpsTypedTest, BitCountWithNulls)
 {
-  using T             = TypeParam;
-  auto const data     = std::vector<T>{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15};
-  auto const validity = std::vector<bool>{1, 1, 0, 1, 1, 0, 1, 1, 1, 0, 1, 1, 0, 1, 1, 1};
+  using T         = TypeParam;
+  auto const data = [] {
+    std::vector<T> data(15);
+    std::iota(data.begin(), data.end(), 1);
+    return data;
+  }();
+  auto const validity = cudf::test::iterators::nulls_at({2, 5, 9, 12});
   auto const input =
-    cudf::test::fixed_width_column_wrapper<TypeParam>(data.begin(), data.end(), validity.begin());
+    cudf::test::fixed_width_column_wrapper<TypeParam>(data.begin(), data.end(), validity);
 
   std::vector<int32_t> expected_data(data.size());
   std::transform(data.begin(), data.end(), expected_data.begin(), [](T val) {
@@ -147,7 +156,7 @@ TYPED_TEST(UnaryBitwiseOpsTypedTest, BitCountWithNulls)
     return b.count();
   });
   auto const expected = cudf::test::fixed_width_column_wrapper<int32_t>(
-    expected_data.begin(), expected_data.end(), validity.begin());
+    expected_data.begin(), expected_data.end(), validity);
   auto const output = cudf::unary_operation(input, cudf::unary_operator::BIT_COUNT);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, output->view());
 }
