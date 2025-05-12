@@ -191,7 +191,7 @@ distinct_hash_join::distinct_hash_join(cudf::table_view const& build,
 
   if (build_table_num_rows == 0) { return; }
 
-  auto const helper = [&](auto iter) {
+  auto const build_hash_table = [&](auto iter) {
     if (this->_nulls_equal == cudf::null_equality::EQUAL or (not cudf::nullable(build))) {
       this->_hash_table.insert_async(iter, iter + build_table_num_rows, stream.value());
     } else {
@@ -214,7 +214,7 @@ distinct_hash_join::distinct_hash_join(cudf::table_view const& build,
     auto const iter = cudf::detail::make_counting_transform_iterator(
       0, primitive_keys_fn<rhs_index_type>{d_hasher});
 
-    helper(iter);
+    build_hash_table(iter);
   } else {
     auto const row_hasher = experimental::row::hash::row_hasher{this->_preprocessed_build};
     auto const d_hasher   = row_hasher.device_hasher(nullate::DYNAMIC{has_nulls});
@@ -222,7 +222,7 @@ distinct_hash_join::distinct_hash_join(cudf::table_view const& build,
     auto const iter =
       cudf::detail::make_counting_transform_iterator(0, build_keys_fn<rhs_index_type>{d_hasher});
 
-    helper(iter);
+    build_hash_table(iter);
   }
 }
 
