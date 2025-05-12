@@ -5344,28 +5344,6 @@ class StringMethods(ColumnMethods):
             self._column.is_letter(True, position)  # type: ignore[arg-type]
         )
 
-    def substring_duplicates(self, min_width: int) -> SeriesOrIndex:
-        """
-        Returns duplicate strings found anywhere in the input column
-        with min_width minimum number of bytes.
-
-        Parameters
-        ----------
-        min_width : int
-            The minimum number of bytes to determine duplicates
-
-        Returns
-        -------
-        Series of duplicate strings found
-
-        """
-        return self._return_or_inplace(
-            self._column.substring_duplicates(min_width),  # type: ignore[arg-type]
-            inplace=False,
-            expand=False,
-            retain_index=False,
-        )
-
     def build_suffix_array(self, min_width: int) -> SeriesOrIndex:
         """
         Builds a suffix array for the input strings column.
@@ -6476,13 +6454,6 @@ class StringColumn(ColumnBase):
     ) -> ListColumn:
         result = plc.nvtext.generate_ngrams.hash_character_ngrams(
             self.to_pylibcudf(mode="read"), ngrams, seed
-        )
-        return type(self).from_pylibcudf(result)  # type: ignore[return-value]
-
-    @acquire_spill_lock()
-    def substring_duplicates(self, min_width: int) -> Self:
-        result = plc.nvtext.deduplicate.substring_duplicates(
-            self.to_pylibcudf(mode="read"), min_width
         )
         return type(self).from_pylibcudf(result)  # type: ignore[return-value]
 
