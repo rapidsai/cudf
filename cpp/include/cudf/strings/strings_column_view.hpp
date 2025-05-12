@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -43,8 +43,6 @@ class strings_column_view : private column_view {
    * @param strings_column The column view to wrap.
    */
   strings_column_view(column_view strings_column);
-  // So we can use this from cython.
-  strings_column_view()                           = default;
   strings_column_view(strings_column_view&&)      = default;  ///< Move constructor
   strings_column_view(strings_column_view const&) = default;  ///< Copy constructor
   ~strings_column_view() override                 = default;
