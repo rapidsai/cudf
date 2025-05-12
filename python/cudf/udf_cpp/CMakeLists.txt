@@ -26,14 +26,27 @@ rapids_find_package(
   INSTALL_EXPORT_SET udf-exports
 )
 
+# The below in vendored/inspired by legate dataframe
+execute_process(
+  COMMAND "python" -c "from numba.cuda.runtime.nrt import get_include; print(get_include())"
+  OUTPUT_VARIABLE NRT_INCLUDE_DIR
+  ERROR_VARIABLE NRT_ERROR
+  RESULT_VARIABLE NRT_RESULT
+  OUTPUT_STRIP_TRAILING_WHITESPACE
+)
+if(${NRT_RESULT})
+  message(FATAL_ERROR "Error while trying to obtain NRT include directory:\n${NRT_ERROR}")
+endif()
+
+message(STATUS "NRT_INCLUDE_DIR: ${NRT_INCLUDE_DIR}")
+
 include(${rapids-cmake-dir}/cpm/cccl.cmake)
 rapids_cpm_cccl(BUILD_EXPORT_SET udf-exports INSTALL_EXPORT_SET udf-exports)
 
 add_library(cudf_strings_udf SHARED strings/src/strings/udf/udf_apis.cu)
 target_include_directories(
-  cudf_strings_udf
-  PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/strings/include>"
-         "$<BUILD_INTERFACE:/raid/brmiller/repos/numba-cuda/numba_cuda/numba/cuda/runtime>"
+  cudf_strings_udf PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/strings/include>"
+                          "${NRT_INCLUDE_DIR}"
 )
 
 set_target_properties(
@@ -77,9 +90,8 @@ foreach(arch IN LISTS CMAKE_CUDA_ARCHITECTURES)
   set_target_properties(${tgt} PROPERTIES CUDA_ARCHITECTURES ${arch} CUDA_PTX_COMPILATION ON)
 
   target_include_directories(
-    ${tgt}
-    PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/strings/include>"
-           "$<BUILD_INTERFACE:/raid/brmiller/repos/numba-cuda/numba_cuda/numba/cuda/runtime>"
+    ${tgt} PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/strings/include>"
+                  "${NRT_INCLUDE_DIR}"
   )
   target_compile_options(${tgt} PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:${SHIM_CUDA_FLAGS}>")
   target_link_libraries(${tgt} PUBLIC cudf::cudf)
@@ -99,9 +111,8 @@ foreach(arch IN LISTS CMAKE_CUDA_ARCHITECTURES)
   set_target_properties(${tgt} PROPERTIES CUDA_ARCHITECTURES ${arch} CUDA_PTX_COMPILATION ON)
 
   target_include_directories(
-    ${tgt}
-    PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/strings/include>"
-           "$<BUILD_INTERFACE:/raid/brmiller/repos/numba-cuda/numba_cuda/numba/cuda/runtime>"
+    ${tgt} PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/strings/include>"
+                  "${NRT_INCLUDE_DIR}"
   )
   target_compile_options(${tgt} PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:${SHIM_CUDA_FLAGS}>")
   target_link_libraries(${tgt} PUBLIC cudf::cudf)

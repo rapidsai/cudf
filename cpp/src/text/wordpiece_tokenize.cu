@@ -434,7 +434,6 @@ __device__ cudf::size_type wp_tokenize_fn(cudf::string_view word,
 template <typename MapRefType, typename SubMapRefType>
 CUDF_KERNEL void tokenize_all_kernel(cudf::device_span<int64_t const> d_edges,
                                      char const* d_chars,
-                                     // int64_t offset,
                                      MapRefType const d_map,
                                      SubMapRefType const d_sub_map,
                                      cudf::size_type unk_id,
@@ -447,7 +446,7 @@ CUDF_KERNEL void tokenize_all_kernel(cudf::device_span<int64_t const> d_edges,
   auto const word_end = thrust::find(thrust::seq, begin, end, ' ');
   auto const size     = static_cast<cudf::size_type>(cuda::std::distance(begin, word_end));
   if (size == 0) { return; }
-  auto d_output = d_tokens + d_edges[idx];  // - offset;
+  auto d_output = d_tokens + d_edges[idx];
   if (size >= max_word_size) {
     *d_output = unk_id;
     return;
@@ -833,7 +832,8 @@ std::unique_ptr<cudf::column> wordpiece_tokenize(cudf::strings_column_view const
                                                  rmm::cuda_stream_view stream,
                                                  rmm::device_async_resource_ref mr)
 {
-  CUDF_EXPECTS(max_words_per_row >= 0, "Invalid value for max_words_per_row argument");
+  CUDF_EXPECTS(
+    max_words_per_row >= 0, "Invalid value for max_words_per_row argument", std::invalid_argument);
 
   auto const output_type = cudf::data_type{cudf::type_to_id<cudf::size_type>()};
   if (input.size() == input.null_count()) {

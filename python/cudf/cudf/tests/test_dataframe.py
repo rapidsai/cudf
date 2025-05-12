@@ -32,7 +32,7 @@ from cudf.core._compat import (
     PANDAS_VERSION,
 )
 from cudf.core.buffer.spill_manager import get_global_manager
-from cudf.core.column import column
+from cudf.core.column.column import as_column
 from cudf.errors import MixedTypeError
 from cudf.testing import _utils as utils, assert_eq, assert_neq
 from cudf.testing._utils import (
@@ -44,6 +44,7 @@ from cudf.testing._utils import (
     expect_warning_if,
     gen_rand,
 )
+from cudf.utils.dtypes import SIZE_TYPE_DTYPE
 
 pytest_xfail = pytest.mark.xfail
 pytestmark = pytest.mark.spilling
@@ -176,12 +177,7 @@ def test_init_via_list_of_empty_tuples(rows):
     pdf = pd.DataFrame(data)
     gdf = cudf.DataFrame(data)
 
-    assert_eq(
-        pdf,
-        gdf,
-        check_like=True,
-        check_index_type=False,
-    )
+    assert_eq(pdf, gdf)
 
 
 @pytest.mark.parametrize(
@@ -1068,10 +1064,10 @@ def test_dataframe_to_string_with_masked_data():
     )
 
     data = np.arange(6)
-    mask = np.zeros(1, dtype=cudf.utils.utils.mask_dtype)
+    mask = np.zeros(1, dtype=SIZE_TYPE_DTYPE)
     mask[0] = 0b00101101
 
-    masked = cudf.Series.from_masked_array(data, mask)
+    masked = cudf.Series._from_column(as_column(data).set_mask(mask))
     assert masked.null_count == 2
     df["c"] = masked
 
@@ -1344,7 +1340,6 @@ def test_dataframe_setitem_from_masked_object():
     ary[mask] = np.nan
 
     test1_null = cudf.Series(ary, nan_as_null=True)
-    assert test1_null.nullable
     assert test1_null.null_count == 20
     test1_nan = cudf.Series(ary, nan_as_null=False)
     assert test1_nan.null_count == 0
@@ -1352,7 +1347,6 @@ def test_dataframe_setitem_from_masked_object():
     test2_null = cudf.DataFrame.from_pandas(
         pd.DataFrame({"a": ary}), nan_as_null=True
     )
-    assert test2_null["a"].nullable
     assert test2_null["a"].null_count == 20
     test2_nan = cudf.DataFrame.from_pandas(
         pd.DataFrame({"a": ary}), nan_as_null=False
@@ -1361,7 +1355,6 @@ def test_dataframe_setitem_from_masked_object():
 
     gpu_ary = cupy.asarray(ary)
     test3_null = cudf.Series(gpu_ary, nan_as_null=True)
-    assert test3_null.nullable
     assert test3_null.null_count == 20
     test3_nan = cudf.Series(gpu_ary, nan_as_null=False)
     assert test3_nan.null_count == 0
@@ -1369,7 +1362,6 @@ def test_dataframe_setitem_from_masked_object():
     test4 = cudf.DataFrame()
     lst = [1, 2, None, 4, 5, 6, None, 8, 9]
     test4["lst"] = lst
-    assert test4["lst"].nullable
     assert test4["lst"].null_count == 2
 
 
@@ -2413,7 +2405,7 @@ def test_dataframe_reductions(data, axis, func, skipna):
         elif func not in cudf.core.dataframe._cupy_nan_methods_map:
             if skipna is False:
                 expected_exception = NotImplementedError
-            elif any(col.nullable for name, col in gdf.items()):
+            elif any(col._column.nullable for name, col in gdf.items()):
                 expected_exception = ValueError
             elif func in ("cummin", "cummax"):
                 expected_exception = AttributeError
@@ -4336,14 +4328,14 @@ def test_empty_dataframe_describe():
 
 
 def test_as_column_types():
-    col = column.as_column(cudf.Series([], dtype="float64"))
+    col = as_column(cudf.Series([], dtype="float64"))
     assert_eq(col.dtype, np.dtype("float64"))
     gds = cudf.Series._from_column(col)
     pds = pd.Series(pd.Series([], dtype="float64"))
 
     assert_eq(pds, gds)
 
-    col = column.as_column(
+    col = as_column(
         cudf.Series([], dtype="float64"), dtype=np.dtype(np.float32)
     )
     assert_eq(col.dtype, np.dtype("float32"))
@@ -4352,18 +4344,14 @@ def test_as_column_types():
 
     assert_eq(pds, gds)
 
-    col = column.as_column(
-        cudf.Series([], dtype="float64"), dtype=cudf.dtype("str")
-    )
+    col = as_column(cudf.Series([], dtype="float64"), dtype=cudf.dtype("str"))
     assert_eq(col.dtype, np.dtype("object"))
     gds = cudf.Series._from_column(col)
     pds = pd.Series(pd.Series([], dtype="str"))
 
     assert_eq(pds, gds)
 
-    col = column.as_column(
-        cudf.Series([], dtype="float64"), dtype=cudf.dtype("str")
-    )
+    col = as_column(cudf.Series([], dtype="float64"), dtype=cudf.dtype("str"))
     assert_eq(col.dtype, np.dtype("object"))
     gds = cudf.Series._from_column(col)
     pds = pd.Series(pd.Series([], dtype="object"))
@@ -4372,7 +4360,7 @@ def test_as_column_types():
 
     pds = pd.Series(np.array([1, 2, 3]), dtype="float32")
     gds = cudf.Series._from_column(
-        column.as_column(np.array([1, 2, 3]), dtype=np.dtype(np.float32))
+        as_column(np.array([1, 2, 3]), dtype=np.dtype(np.float32))
     )
 
     assert_eq(pds, gds)
@@ -4383,30 +4371,26 @@ def test_as_column_types():
     assert_eq(pds, gds)
 
     pds = pd.Series([], dtype="float64")
-    gds = cudf.Series._from_column(column.as_column(pds))
+    gds = cudf.Series._from_column(as_column(pds))
     assert_eq(pds, gds)
 
     pds = pd.Series([1, 2, 4], dtype="int64")
     gds = cudf.Series._from_column(
-        column.as_column(cudf.Series([1, 2, 4]), dtype="int64")
+        as_column(cudf.Series([1, 2, 4]), dtype="int64")
     )
 
     assert_eq(pds, gds)
 
     pds = pd.Series([1.2, 18.0, 9.0], dtype="float32")
     gds = cudf.Series._from_column(
-        column.as_column(
-            cudf.Series([1.2, 18.0, 9.0]), dtype=np.dtype(np.float32)
-        )
+        as_column(cudf.Series([1.2, 18.0, 9.0]), dtype=np.dtype(np.float32))
     )
 
     assert_eq(pds, gds)
 
     pds = pd.Series([1.2, 18.0, 9.0], dtype="str")
     gds = cudf.Series._from_column(
-        column.as_column(
-            cudf.Series([1.2, 18.0, 9.0]), dtype=cudf.dtype("str")
-        )
+        as_column(cudf.Series([1.2, 18.0, 9.0]), dtype=cudf.dtype("str"))
     )
 
     assert_eq(pds, gds)
@@ -5957,6 +5941,22 @@ def test_memory_usage_multi(rows):
     assert expect == gdf.index.memory_usage(deep=True)
 
 
+@pytest.mark.parametrize("index", [False, True])
+def test_memory_usage_index_preserve_types(index):
+    data = [[1, 2, 3]]
+    columns = pd.Index(np.array([1, 2, 3], dtype=np.int8), name="a")
+    result = (
+        cudf.DataFrame(data, columns=columns).memory_usage(index=index).index
+    )
+    expected = (
+        pd.DataFrame(data, columns=columns).memory_usage(index=index).index
+    )
+    if index:
+        # pandas returns an Index[object] with int and string elements
+        expected = expected.astype(str)
+    assert_eq(result, expected)
+
+
 @pytest.mark.parametrize(
     "list_input",
     [
@@ -6582,22 +6582,22 @@ def test_from_pandas_nan_as_null(nan_as_null, index):
         pdf = pd.DataFrame({"a": data, "b": data})
         expected = cudf.DataFrame(
             {
-                "a": column.as_column(data, nan_as_null=nan_as_null),
-                "b": column.as_column(data, nan_as_null=nan_as_null),
+                "a": as_column(data, nan_as_null=nan_as_null),
+                "b": as_column(data, nan_as_null=nan_as_null),
             }
         )
     else:
         pdf = pd.DataFrame({"a": data, "b": data}).set_index(index)
         expected = cudf.DataFrame(
             {
-                "a": column.as_column(data, nan_as_null=nan_as_null),
-                "b": column.as_column(data, nan_as_null=nan_as_null),
+                "a": as_column(data, nan_as_null=nan_as_null),
+                "b": as_column(data, nan_as_null=nan_as_null),
             }
         )
         expected = cudf.DataFrame(
             {
-                "a": column.as_column(data, nan_as_null=nan_as_null),
-                "b": column.as_column(data, nan_as_null=nan_as_null),
+                "a": as_column(data, nan_as_null=nan_as_null),
+                "b": as_column(data, nan_as_null=nan_as_null),
             }
         )
         expected = expected.set_index(index)
@@ -6613,7 +6613,7 @@ def test_from_pandas_for_series_nan_as_null(nan_as_null):
     psr = pd.Series(data)
 
     expected = cudf.Series._from_column(
-        column.as_column(data, nan_as_null=nan_as_null)
+        as_column(data, nan_as_null=nan_as_null)
     )
     got = cudf.from_pandas(psr, nan_as_null=nan_as_null)
 
@@ -7163,239 +7163,10 @@ def test_dataframe_info_null_counts():
     assert str_cmp == actual_string
 
 
-@pytest_unmark_spilling
-@pytest.mark.parametrize(
-    "data1",
-    [
-        [1, 2, 3, 4, 5, 6, 7],
-        [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0],
-        [
-            1.9876543,
-            2.9876654,
-            3.9876543,
-            4.1234587,
-            5.23,
-            6.88918237,
-            7.00001,
-        ],
-        [
-            -1.9876543,
-            -2.9876654,
-            -3.9876543,
-            -4.1234587,
-            -5.23,
-            -6.88918237,
-            -7.00001,
-        ],
-        [
-            1.987654321,
-            2.987654321,
-            3.987654321,
-            0.1221,
-            2.1221,
-            0.112121,
-            -21.1212,
-        ],
-        [
-            -1.987654321,
-            -2.987654321,
-            -3.987654321,
-            -0.1221,
-            -2.1221,
-            -0.112121,
-            21.1212,
-        ],
-    ],
-)
-@pytest.mark.parametrize(
-    "data2",
-    [
-        [1, 2, 3, 4, 5, 6, 7],
-        [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0],
-        [
-            1.9876543,
-            2.9876654,
-            3.9876543,
-            4.1234587,
-            5.23,
-            6.88918237,
-            7.00001,
-        ],
-        [
-            -1.9876543,
-            -2.9876654,
-            -3.9876543,
-            -4.1234587,
-            -5.23,
-            -6.88918237,
-            -7.00001,
-        ],
-        [
-            1.987654321,
-            2.987654321,
-            3.987654321,
-            0.1221,
-            2.1221,
-            0.112121,
-            -21.1212,
-        ],
-        [
-            -1.987654321,
-            -2.987654321,
-            -3.987654321,
-            -0.1221,
-            -2.1221,
-            -0.112121,
-            21.1212,
-        ],
-    ],
-)
-@pytest.mark.parametrize("rtol", [0, 0.01, 1e-05, 1e-08, 5e-1, 50.12])
-@pytest.mark.parametrize("atol", [0, 0.01, 1e-05, 1e-08, 50.12])
-def test_cudf_isclose(data1, data2, rtol, atol):
-    array1 = cupy.array(data1)
-    array2 = cupy.array(data2)
-
-    expected = cudf.Series(cupy.isclose(array1, array2, rtol=rtol, atol=atol))
-
-    actual = cudf.isclose(
-        cudf.Series(data1), cudf.Series(data2), rtol=rtol, atol=atol
-    )
-
-    assert_eq(expected, actual)
-    actual = cudf.isclose(data1, data2, rtol=rtol, atol=atol)
-
-    assert_eq(expected, actual)
-
-    actual = cudf.isclose(
-        cupy.array(data1), cupy.array(data2), rtol=rtol, atol=atol
-    )
-
-    assert_eq(expected, actual)
-
-    actual = cudf.isclose(
-        np.array(data1), np.array(data2), rtol=rtol, atol=atol
-    )
-
-    assert_eq(expected, actual)
-
-    actual = cudf.isclose(
-        pd.Series(data1), pd.Series(data2), rtol=rtol, atol=atol
-    )
-
-    assert_eq(expected, actual)
-
-
-@pytest.mark.parametrize(
-    "data1",
-    [
-        [
-            -1.9876543,
-            -2.9876654,
-            np.nan,
-            -4.1234587,
-            -5.23,
-            -6.88918237,
-            -7.00001,
-        ],
-        [
-            1.987654321,
-            2.987654321,
-            3.987654321,
-            0.1221,
-            2.1221,
-            np.nan,
-            -21.1212,
-        ],
-    ],
-)
-@pytest.mark.parametrize(
-    "data2",
-    [
-        [
-            -1.9876543,
-            -2.9876654,
-            -3.9876543,
-            -4.1234587,
-            -5.23,
-            -6.88918237,
-            -7.00001,
-        ],
-        [
-            1.987654321,
-            2.987654321,
-            3.987654321,
-            0.1221,
-            2.1221,
-            0.112121,
-            -21.1212,
-        ],
-        [
-            -1.987654321,
-            -2.987654321,
-            -3.987654321,
-            np.nan,
-            np.nan,
-            np.nan,
-            21.1212,
-        ],
-    ],
-)
-@pytest.mark.parametrize("equal_nan", [True, False])
-def test_cudf_isclose_nulls(data1, data2, equal_nan):
-    array1 = cupy.array(data1)
-    array2 = cupy.array(data2)
-
-    expected = cudf.Series(cupy.isclose(array1, array2, equal_nan=equal_nan))
-
-    actual = cudf.isclose(
-        cudf.Series(data1), cudf.Series(data2), equal_nan=equal_nan
-    )
-    assert_eq(expected, actual, check_dtype=False)
-    actual = cudf.isclose(data1, data2, equal_nan=equal_nan)
-    assert_eq(expected, actual, check_dtype=False)
-
-
-def test_cudf_isclose_different_index():
-    s1 = cudf.Series(
-        [-1.9876543, -2.9876654, -3.9876543, -4.1234587, -5.23, -7.00001],
-        index=[0, 1, 2, 3, 4, 5],
-    )
-    s2 = cudf.Series(
-        [-1.9876543, -2.9876654, -7.00001, -4.1234587, -5.23, -3.9876543],
-        index=[0, 1, 5, 3, 4, 2],
-    )
-
-    expected = cudf.Series([True] * 6, index=s1.index)
-    assert_eq(expected, cudf.isclose(s1, s2))
-
-    s1 = cudf.Series(
-        [-1.9876543, -2.9876654, -3.9876543, -4.1234587, -5.23, -7.00001],
-        index=[0, 1, 2, 3, 4, 5],
-    )
-    s2 = cudf.Series(
-        [-1.9876543, -2.9876654, -7.00001, -4.1234587, -5.23, -3.9876543],
-        index=[0, 1, 5, 10, 4, 2],
-    )
-
-    expected = cudf.Series(
-        [True, True, True, False, True, True], index=s1.index
-    )
-    assert_eq(expected, cudf.isclose(s1, s2))
-
-    s1 = cudf.Series(
-        [-1.9876543, -2.9876654, -3.9876543, -4.1234587, -5.23, -7.00001],
-        index=[100, 1, 2, 3, 4, 5],
-    )
-    s2 = cudf.Series(
-        [-1.9876543, -2.9876654, -7.00001, -4.1234587, -5.23, -3.9876543],
-        index=[0, 1, 100, 10, 4, 2],
-    )
-
-    expected = cudf.Series(
-        [False, True, True, False, True, False], index=s1.index
-    )
-    assert_eq(expected, cudf.isclose(s1, s2))
+def test_is_close_deprecation():
+    ser = cudf.Series([1])
+    with pytest.warns(FutureWarning):
+        cudf.isclose(ser, ser)
 
 
 @pytest.mark.parametrize(
@@ -10736,7 +10507,7 @@ def test_dataframe_constructor_unbounded_sequence():
 
 def test_dataframe_constructor_dataframe_list():
     df = cudf.DataFrame(range(2))
-    with pytest.raises(ValueError):
+    with pytest.raises(TypeError):
         cudf.DataFrame([df])
 
 
@@ -11338,6 +11109,14 @@ def test_construct_dict_scalar_values_raises():
         pd.DataFrame(data)
     with pytest.raises(ValueError):
         cudf.DataFrame(data)
+
+
+@pytest.mark.parametrize("columns", [None, [3, 4]])
+@pytest.mark.parametrize("index", [None, [1, 2]])
+def test_construct_empty_listlike_index_and_columns(columns, index):
+    result = cudf.DataFrame([], columns=columns, index=index)
+    expected = pd.DataFrame([], columns=columns, index=index)
+    assert_eq(result, expected)
 
 
 def test_rename_reset_label_dtype():

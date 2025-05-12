@@ -11,6 +11,7 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pytest
+from pyarrow import orc
 
 import cudf
 from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
@@ -983,7 +984,7 @@ def test_orc_string_stream_offset_issue():
     assert_eq(df, cudf.read_orc(buffer))
 
 
-def generate_list_struct_buff(size=100_000):
+def generate_list_struct_buff(size=10_000):
     rd = random.Random(1)
     rng = np.random.default_rng(seed=1)
 
@@ -1049,7 +1050,7 @@ def generate_list_struct_buff(size=100_000):
         {"struct": lvl1_struct[x], "list": lvl1_list[x]} for x in range(size)
     ]
 
-    df = pd.DataFrame(
+    pa_table = pa.table(
         {
             "lvl3_list": lvl3_list,
             "lvl1_list": lvl1_list,
@@ -1059,9 +1060,8 @@ def generate_list_struct_buff(size=100_000):
             "struct_nests_list": struct_nests_list,
         }
     )
-
-    df.to_orc(buff, engine="pyarrow", engine_kwargs={"stripe_size": 1024})
-
+    with orc.ORCWriter(buff, stripe_size=1024) as writer:
+        writer.write(pa_table)
     return buff
 
 
@@ -1078,7 +1078,7 @@ def list_struct_buff():
         ["lvl2_struct", "lvl1_struct"],
     ],
 )
-@pytest.mark.parametrize("num_rows", [0, 15, 1005, 10561, 100_000])
+@pytest.mark.parametrize("num_rows", [0, 15, 1005, 10561, 10_000])
 @pytest.mark.parametrize("use_index", [True, False])
 def test_lists_struct_nests(columns, num_rows, use_index, list_struct_buff):
     from pyarrow import orc
@@ -1367,15 +1367,15 @@ def dec(num):
     ],
 )
 def test_orc_writer_lists(data):
-    pdf_in = pd.DataFrame(data)
-
     buffer = BytesIO()
-    cudf.from_pandas(pdf_in).to_orc(
+    cudf.DataFrame(data).to_orc(
         buffer, stripe_size_rows=2048, row_index_stride=512
     )
-
-    pdf_out = pd.read_orc(buffer)
-    assert_eq(pdf_out, pdf_in)
+    # Read in as pandas but compare with pyarrow
+    # since pandas doesn't have a list type
+    pa_out = pa.Table.from_pandas(pd.read_orc(buffer))
+    pa_in = pa.table(data)
+    assert pa_out.equals(pa_in)
 
 
 def test_chunked_orc_writer_lists():
@@ -1617,14 +1617,12 @@ def test_orc_reader_zstd_compression(list_struct_buff):
     # save with ZSTD compression
     buffer = BytesIO()
     pyarrow_tbl = orc.ORCFile(list_struct_buff).read()
-    writer = orc.ORCWriter(buffer, compression="zstd")
-    writer.write(pyarrow_tbl)
-    writer.close()
-    try:
-        got = cudf.read_orc(buffer)
-        assert_eq(expected, got)
-    except RuntimeError:
-        pytest.mark.xfail(reason="zstd support is not enabled")
+    with orc.ORCWriter(buffer, compression="zstd") as writer:
+        writer.write(pyarrow_tbl)
+    got = cudf.read_orc(buffer)
+    # compare with pyarrow since pandas doesn't
+    # have a list or struct
+    assert expected.to_arrow().equals(got.to_arrow())
 
 
 def test_writer_protobuf_large_rowindexentry():

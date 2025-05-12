@@ -48,7 +48,6 @@ from cudf.utils.dtypes import (
     TIMEDELTA_TYPES,
 )
 from cudf.utils.performance_tracking import _performance_tracking
-from cudf.utils.utils import initfunc
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -380,6 +379,23 @@ def _get_extensionty_size(ty):
     target_data = ll.create_target_data(_nvvm_data_layout)
     llty = default_manager[ty].get_value_type()
     return llty.get_abi_size(target_data)
+
+
+def initfunc(f):
+    """
+    Decorator for initialization functions that should
+    be run exactly once.
+    """
+
+    @functools.wraps(f)
+    def wrapper(*args, **kwargs):
+        if wrapper.initialized:
+            return
+        wrapper.initialized = True
+        return f(*args, **kwargs)
+
+    wrapper.initialized = False
+    return wrapper
 
 
 @initfunc
