@@ -372,7 +372,7 @@ void perform_checks(column_view base_column,
                              return is_fixed_width(input.type()) ||
                                     (input.type().id() == type_id::STRING);
                            }),
-               "Transforms only support input of fixed-width and string types");
+               "Transforms only support input of fixed-width or string types", std::invalid_argument);
 
   CUDF_EXPECTS(std::all_of(inputs.begin(),
                            inputs.end(),
