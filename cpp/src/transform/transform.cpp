@@ -365,7 +365,7 @@ void perform_checks(column_view base_column,
 {
   CUDF_EXPECTS(is_runtime_jit_supported(), "Runtime JIT is only supported on CUDA Runtime 11.5+");
   CUDF_EXPECTS(is_fixed_width(output_type) || output_type.id() == type_id::STRING,
-               "Transforms only support output of fixed-width types and string");
+               "Transforms only support output of fixed-width or string types", std::invalid_argument);
   CUDF_EXPECTS(std::all_of(inputs.begin(),
                            inputs.end(),
                            [](auto& input) {
