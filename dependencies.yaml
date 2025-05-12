@@ -809,6 +809,8 @@ dependencies:
               cuda_suffixed: "true"
             packages:
               - pynvjitlink-cu12>=0.0.0a0
+              - nvidia-cuda-nvcc-cu12
+              - nvidia-cuda-nvrtc-cu12
           - matrix:
               cuda: "12.*"
               cuda_suffixed: "false"
@@ -958,7 +960,6 @@ dependencies:
           - hypothesis>=6.131.7
           - pytest-benchmark
           - pytest-cases>=3.8.2
-          - pytest-rerunfailures
           - scipy
           - zstandard
       - output_types: conda
