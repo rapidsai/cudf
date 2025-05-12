@@ -25,6 +25,7 @@ from pylibcudf.libcudf.interop cimport (
     to_arrow_device_raw,
     to_arrow_schema_raw,
 )
+from pylibcudf.libcudf.null_mask cimport bitmask_allocation_size_bytes
 from pylibcudf.libcudf.scalar.scalar cimport scalar
 from pylibcudf.libcudf.strings.strings_column_view cimport strings_column_view
 from pylibcudf.libcudf.types cimport size_type, size_of as cpp_size_of, bitmask_type
@@ -50,7 +51,6 @@ from ._interop_helpers cimport (
     _release_device_array,
     _metadata_to_libcudf,
 )
-from .null_mask cimport bitmask_allocation_size_bytes
 from .utils cimport _get_stream
 
 from .gpumemoryview import _datatype_from_dtype_desc
@@ -90,12 +90,10 @@ cdef class OwnerWithCAI:
         # The default size of 0 will be applied for any type that stores data in the
         # children (such that the parent size is 0).
         size = 0
-        cdef column_view offsets_column
-        cdef unique_ptr[scalar] last_offset
         if cv.type().id() == type_id.EMPTY:
             size = cv.size()
         elif is_fixed_width(cv.type()):
-            # Cast to Python integers before multiplyling to avoid overflow.
+            # Cast to Python integers before multiplying to avoid overflow.
             size = int(cv.size()) * int(cpp_size_of(cv.type()))
         elif cv.type().id() == type_id.STRING:
             # TODO: stream-ordered
