@@ -1,5 +1,4 @@
 # Copyright (c) 2023-2025, NVIDIA CORPORATION.
-# cython: cpp_locals=True
 
 from cython.operator cimport dereference
 
