@@ -565,7 +565,9 @@ std::unique_ptr<cudf::column> unary_operation(cudf::column_view const& input,
     return type_dispatcher(input.type(), detail::FixedPointOpDispatcher{}, input, op, stream, mr);
 
   if (input.is_empty()) {
-    return op == cudf::unary_operator::NOT ? make_empty_column(type_id::BOOL8) : empty_like(input);
+    if (op == cudf::unary_operator::NOT) { return make_empty_column(type_id::BOOL8); }
+    if (op == cudf::unary_operator::BIT_COUNT) { return make_empty_column(type_id::INT32); }
+    return empty_like(input);
   }
 
   // dispatch on the keys if dictionary saves a 2nd dispatch later
