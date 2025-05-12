@@ -24,7 +24,6 @@ from cudf.core.algorithms import factorize
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column.column import ColumnBase
 from cudf.core.column_accessor import ColumnAccessor
-from cudf.core.frame import Frame
 from cudf.core.index import (
     Index,
     _get_indexer_basic,
@@ -132,12 +131,12 @@ class MultiIndex(Index):
                )
     """
 
-    def __new__(cls, *args, **kwargs):
-        return object.__new__(cls)
+    _levels: None | list[cudf.Index]
+    _codes: None | list[column.ColumnBase]
 
     @_performance_tracking
-    def __init__(
-        self,
+    def __new__(
+        cls,
         levels=None,
         codes=None,
         sortorder=None,
@@ -195,11 +194,13 @@ class MultiIndex(Index):
             result_col = level._column.take(code, nullify=True)
             source_data[i] = result_col._with_type_metadata(level.dtype)
 
-        Frame.__init__(self, ColumnAccessor(source_data))
-        self._levels: None | list[cudf.Index] = new_levels
-        self._codes: None | list[column.ColumnBase] = new_codes
-        self._name = None
-        self.names = names
+        result = object.__new__(cls)
+        result._data = ColumnAccessor(source_data)
+        result._levels: None | list[cudf.Index] = new_levels
+        result._codes: None | list[column.ColumnBase] = new_codes
+        result._name = None
+        result.names = names
+        return result
 
     @property  # type: ignore
     @_performance_tracking
