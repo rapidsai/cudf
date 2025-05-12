@@ -435,6 +435,16 @@ size_type aggregate_reader_metadata::calc_num_row_groups() const
   return static_cast<size_type>(total_row_groups);
 }
 
+std::vector<size_type> aggregate_reader_metadata::get_num_row_groups_per_file() const
+{
+  std::vector<size_type> per_file_num_row_groups(per_file_metadata.size());
+  std::transform(per_file_metadata.begin(),
+                 per_file_metadata.end(),
+                 per_file_num_row_groups.begin(),
+                 [](auto const& pfm) { return pfm.row_groups.size(); });
+  return per_file_num_row_groups;
+}
+
 // Copies info from the column and offset indexes into the passed in row_group_info.
 void aggregate_reader_metadata::column_info_for_row_group(row_group_info& rg_info,
                                                           size_type chunk_start_row) const
@@ -962,6 +972,62 @@ aggregate_reader_metadata::get_rowgroup_metadata() const
   return rg_metadata;
 }
 
+std::unordered_map<std::string, std::vector<int64_t>>
+aggregate_reader_metadata::get_column_chunk_metadata() const
+{
+  std::unordered_map<std::string, std::vector<int64_t>> column_chunk_metadata;
+
+  std::function<void(std::string const&, int)> const populate_column_chunk_metadata =
+    [&](std::string const& path_till_now, int schema_idx) {
+      auto const& schema = get_schema(schema_idx);
+      auto const path_in_schema =
+        path_till_now.empty() ? schema.name : path_till_now + "." + schema.name;
+
+      // If this is not a leaf column, keep traversing the schema tree
+      if (not schema.children_idx.empty()) {
+        for (auto const& child_idx : schema.children_idx) {
+          populate_column_chunk_metadata(path_in_schema, child_idx);
+        }
+        return;
+      }
+
+      // Otherwise, if this is a leaf column, collect its `total_uncompressed_size` fields from
+      // all column chunks and add to the `column_chunk_metadata` map.
+      auto total_uncompressed_sizes = std::vector<int64_t>{};
+      total_uncompressed_sizes.reserve(num_row_groups);
+      // For each input source
+      std::for_each(thrust::counting_iterator<size_t>(0),
+                    thrust::counting_iterator(per_file_metadata.size()),
+                    [&](auto const& src_idx) {
+                      auto const& file_metadata = per_file_metadata[src_idx];
+                      // For each row group in this source
+                      std::transform(thrust::counting_iterator<size_t>(0),
+                                     thrust::counting_iterator(file_metadata.row_groups.size()),
+                                     std::back_inserter(total_uncompressed_sizes),
+                                     [&](auto const& row_group_idx) {
+                                       // Return `total_uncompressed_size` of this column's chunk
+                                       return get_column_metadata(
+                                                row_group_idx, src_idx, schema_idx)
+                                         .total_uncompressed_size;
+                                     });
+                    });
+      // Check if this column already exists in the map
+      CUDF_EXPECTS(column_chunk_metadata.find(path_in_schema) == column_chunk_metadata.end(),
+                   "Encountered an already mapped leaf column in the schema tree" + path_in_schema,
+                   std::invalid_argument);
+      // Map the collected metadata fields for this column to its named path
+      column_chunk_metadata[path_in_schema] = total_uncompressed_sizes;
+    };
+
+  // Traverse the schema tree and populate `ColumnChunkMetaData`s for all leaf columns.
+  auto const& root = get_schema(0);
+  for (auto const& child_idx : root.children_idx) {
+    populate_column_chunk_metadata("", child_idx);
+  }
+
+  return column_chunk_metadata;
+}
+
 bool aggregate_reader_metadata::is_schema_index_mapped(int schema_idx, int pfm_idx) const
 {
   // Check if schema_idx or pfm_idx is invalid
@@ -1225,7 +1291,7 @@ aggregate_reader_metadata::select_columns(
   type_id timestamp_type_id)
 {
   auto const find_schema_child =
-    [&](SchemaElement const& schema_elem, std::string const& name, int const pfm_idx = 0) {
+    [&](SchemaElement const& schema_elem, std::string_view name, int const pfm_idx = 0) {
       auto const& col_schema_idx = std::find_if(
         schema_elem.children_idx.cbegin(),
         schema_elem.children_idx.cend(),

@@ -61,6 +61,13 @@ cdef class Column:
     @staticmethod
     cdef Column from_column_view_of_arbitrary(const column_view& cv, object owner)
 
+    @staticmethod
+    cdef Column _from_gpumemoryview(
+        gpumemoryview data,
+        tuple shape,
+        DataType dtype,
+    )
+
     cpdef Scalar to_scalar(self)
     cpdef DataType type(self)
     cpdef Column child(self, size_type index)
