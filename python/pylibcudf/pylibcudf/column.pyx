@@ -7,7 +7,7 @@ from cpython.pycapsule cimport (
     PyCapsule_New,
 )
 
-from libc.stdint cimport uintptr_t
+from libc.stdint cimport uintptr_t, int32_t, int64_t
 
 from libcpp.limits cimport numeric_limits
 from libcpp.memory cimport make_unique, unique_ptr
@@ -103,7 +103,12 @@ cdef class OwnerWithCAI:
             if cv.num_children():
                 offsets_column = cv.child(0)
                 last_offset = get_element(offsets_column, offsets_column.size() - 1)
-                size = (<numeric_scalar[size_type] *> last_offset.get()).value()
+                if offsets_column.type().id() == type_id.INT32:
+                    size = (<numeric_scalar[int32_t] *> last_offset.get()).value()
+                elif offsets_column.type().id() == type_id.INT64:
+                    size = (<numeric_scalar[int64_t] *>last_offset.get()).value()
+                else:
+                    raise RuntimeError("Invalid strings column offset dtype")
 
         obj.cai = {
             "shape": (size,),
