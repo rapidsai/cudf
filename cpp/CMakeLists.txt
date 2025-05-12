@@ -29,6 +29,7 @@ project(
   VERSION "${RAPIDS_VERSION}"
   LANGUAGES C CXX CUDA
 )
+
 if(CMAKE_CUDA_COMPILER_ID STREQUAL "NVIDIA" AND CMAKE_CUDA_COMPILER_VERSION VERSION_LESS 11.5)
   message(
     FATAL_ERROR
@@ -45,7 +46,6 @@ set(THREADS_PREFER_PTHREAD_FLAG ON)
 
 # ##################################################################################################
 # * build options ---------------------------------------------------------------------------------
-
 option(USE_NVTX "Build with NVTX support" ON)
 option(BUILD_TESTS "Configure CMake to build tests" ON)
 option(BUILD_BENCHMARKS "Configure CMake to build (google & nvbench) benchmarks" OFF)
@@ -63,6 +63,7 @@ option(
          stream to external libraries."
   OFF
 )
+
 # Option to add all symbols to the dynamic symbol table in the library file, allowing to retrieve
 # human-readable stacktrace for debugging.
 option(
@@ -71,19 +72,23 @@ option(
   OFF
 )
 option(DISABLE_DEPRECATION_WARNINGS "Disable warnings generated from deprecated declarations." OFF)
+
 # Option to enable line info in CUDA device compilation to allow introspection when profiling /
 # memchecking
 option(CUDA_ENABLE_LINEINFO
        "Enable the -lineinfo option for nvcc (useful for cuda-memcheck / profiler)" OFF
 )
 option(CUDA_WARNINGS_AS_ERRORS "Enable -Werror=all-warnings for all CUDA compilation" ON)
+
 # cudart can be statically linked or dynamically linked. The python ecosystem wants dynamic linking
 option(CUDA_STATIC_RUNTIME "Statically link the CUDA runtime" OFF)
 
 set(DEFAULT_CUDF_BUILD_STREAMS_TEST_UTIL ON)
+
 if(CUDA_STATIC_RUNTIME OR NOT BUILD_SHARED_LIBS)
   set(DEFAULT_CUDF_BUILD_STREAMS_TEST_UTIL OFF)
 endif()
+
 option(
   CUDF_BUILD_STREAMS_TEST_UTIL
   "Whether to build the utilities for stream testing contained in libcudf"
@@ -127,6 +132,7 @@ message(VERBOSE
 rapids_cmake_build_type("Release")
 set(CUDF_BUILD_TESTS ${BUILD_TESTS})
 set(CUDF_BUILD_BENCHMARKS ${BUILD_BENCHMARKS})
+
 if(BUILD_TESTS AND NOT CUDF_BUILD_TESTUTIL)
   message(
     FATAL_ERROR
@@ -175,12 +181,14 @@ if(CUDF_CLANG_TIDY)
   string(REGEX MATCH "LLVM version ([0-9]+\\.[0-9]+)\\.[0-9]+" LLVM_VERSION_MATCH
                "${CLANG_TIDY_OUTPUT}"
   )
+
   # Discard the patch version and allow it to float. Empirically, results between patch versions are
   # mostly stable, and looking at available packages on some package managers sometimes patch
   # versions are skipped so we don't want to constrain to a patch version that the user can't
   # install.
   set(LLVM_VERSION "${CMAKE_MATCH_1}")
   set(expected_clang_tidy_version 19.1)
+
   if(NOT expected_clang_tidy_version VERSION_EQUAL LLVM_VERSION)
     message(
       FATAL_ERROR
@@ -216,6 +224,7 @@ function(enable_static_checkers target)
       )
     endif()
   endif()
+
   if(_LINT_IWYU)
     # A few extra warnings pop up when building with IWYU. I'm not sure why, but they are not
     # relevant since they don't show up in any other build so it's better to suppress them until we
@@ -226,16 +235,19 @@ function(enable_static_checkers target)
     # on real builds.
     foreach(_flag -Wno-missing-braces -Wno-unneeded-internal-declaration)
       list(FIND CUDF_CXX_FLAGS "${_flag}" _flag_index)
+
       if(_flag_index EQUAL -1)
         list(APPEND CUDF_CXX_FLAGS ${_flag})
       endif()
     endforeach()
+
     set(CUDF_CXX_FLAGS
         "${CUDF_CXX_FLAGS}"
         PARENT_SCOPE
     )
     set_target_properties(${target} PROPERTIES CXX_INCLUDE_WHAT_YOU_USE "${IWYU_EXE}")
   endif()
+
   foreach(file IN LISTS _LINT_SKIPPED_FILES)
     set_source_files_properties(${file} PROPERTIES SKIP_LINTING ON)
   endforeach()
@@ -279,32 +291,45 @@ create_logger_macros(CUDF "cudf::default_logger()" include/cudf)
 
 # find jitify
 include(cmake/thirdparty/get_jitify.cmake)
+
 # find NVTX
 include(cmake/thirdparty/get_nvtx.cmake)
+
 # find nvCOMP
 include(cmake/thirdparty/get_nvcomp.cmake)
+
 # find CCCL before rmm so that we get cudf's patched version of CCCL
 include(cmake/thirdparty/get_cccl.cmake)
+
 # find rmm
 include(cmake/thirdparty/get_rmm.cmake)
+
 # find flatbuffers
 include(cmake/thirdparty/get_flatbuffers.cmake)
+
 # find dlpack
 include(cmake/thirdparty/get_dlpack.cmake)
+
 # find cuCollections, should come after including CCCL
 include(cmake/thirdparty/get_cucollections.cmake)
+
 # find or install GoogleTest
 if(CUDF_BUILD_TESTUTIL)
   include(cmake/thirdparty/get_gtest.cmake)
 endif()
+
 # preprocess jitify-able kernels
 include(cmake/Modules/JitifyPreprocessKernels.cmake)
+
 # find KvikIO
 include(cmake/thirdparty/get_kvikio.cmake)
+
 # find nanoarrow
 include(cmake/thirdparty/get_nanoarrow.cmake)
+
 # find thread_pool
 include(cmake/thirdparty/get_thread_pool.cmake)
+
 # find zstd
 include(cmake/thirdparty/get_zstd.cmake)
 
@@ -327,7 +352,6 @@ endif()
 
 # ##################################################################################################
 # * library targets -------------------------------------------------------------------------------
-
 add_library(
   cudf
   src/aggregation/aggregation.cpp
@@ -858,16 +882,20 @@ set_target_properties(
 # flags if necessary.
 if(CUDF_CLANG_TIDY OR CUDF_IWYU)
   set(linters)
+
   if(CUDF_CLANG_TIDY)
     list(APPEND linters CLANG_TIDY)
   endif()
+
   if(CUDF_IWYU)
     list(APPEND linters IWYU)
   endif()
+
   enable_static_checkers(
     cudf SKIPPED_FILES src/io/comp/cpu_unbz2.cpp src/io/comp/brotli_dict.cpp ${linters}
   )
 endif()
+
 target_compile_options(
   cudf PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_FLAGS}>"
                "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>"
@@ -998,7 +1026,6 @@ add_library(cudf::cudf ALIAS cudf)
 
 # ##################################################################################################
 # * build cudftestutil ----------------------------------------------------------------------------
-
 if(CUDF_BUILD_TESTUTIL)
   add_library(
     cudftest_default_stream
@@ -1097,11 +1124,9 @@ if(CUDF_BUILD_TESTUTIL)
           tests/utilities/tdigest_utilities.cu
     DESTINATION src/cudftestutil/utilities
   )
-
 endif()
 
 # * build cudf_identify_stream_usage --------------------------------------------------------------
-
 if(CUDF_BUILD_STREAMS_TEST_UTIL)
   if(CUDA_STATIC_RUNTIME)
     message(
@@ -1118,6 +1143,7 @@ if(CUDF_BUILD_STREAMS_TEST_UTIL)
     add_library(
       ${_tgt} SHARED src/utilities/stacktrace.cpp tests/utilities/identify_stream_usage.cpp
     )
+
     if(CUDF_USE_PER_THREAD_DEFAULT_STREAM)
       target_compile_definitions(
         ${_tgt} PUBLIC CUDA_API_PER_THREAD_DEFAULT_STREAM CUDF_USE_PER_THREAD_DEFAULT_STREAM
@@ -1136,9 +1162,11 @@ if(CUDF_BUILD_STREAMS_TEST_UTIL)
     )
     target_include_directories(${_tgt} PRIVATE "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/include>")
     target_link_libraries(${_tgt} PUBLIC CUDA::cudart rmm::rmm)
+
     if(CUDF_BUILD_STACKTRACE_DEBUG)
       target_link_libraries(${_tgt} PRIVATE cudf_backtrace)
     endif()
+
     rapids_cuda_set_runtime(${_tgt} USE_STATIC ${CUDA_STATIC_RUNTIME})
     add_library(cudf::${_tgt} ALIAS ${_tgt})
 
@@ -1150,7 +1178,6 @@ endif()
 
 # ##################################################################################################
 # * add tests -------------------------------------------------------------------------------------
-
 if(CUDF_BUILD_TESTS)
   # include CTest module -- automatically calls enable_testing()
   include(CTest)
@@ -1168,7 +1195,6 @@ endif()
 
 # ##################################################################################################
 # * add benchmarks --------------------------------------------------------------------------------
-
 if(CUDF_BUILD_BENCHMARKS)
   # Find or install GoogleBench
   include(${rapids-cmake-dir}/cpm/gbench.cmake)
@@ -1199,6 +1225,7 @@ install(FILES ${CUDF_BINARY_DIR}/include/cudf/version_config.hpp
 )
 
 set(_components_export_string)
+
 if(TARGET cudftestutil)
   install(
     TARGETS cudftest_default_stream cudftestutil cudftestutil_impl

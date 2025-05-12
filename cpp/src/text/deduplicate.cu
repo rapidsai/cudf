@@ -117,7 +117,7 @@ struct find_adjacent_duplicates_fn {
  */
 struct collapse_overlaps_fn {
   char const* d_chars;
-  cudf::size_type const* d_offsets;
+  cudf::size_type const* d_suffix_offsets;
   int16_t const* d_sizes;
   __device__ string_index operator()(cudf::size_type idx) const
   {
@@ -125,20 +125,20 @@ struct collapse_overlaps_fn {
       static_cast<cudf::size_type>(cuda::std::numeric_limits<int16_t>::max());
 
     auto size   = d_sizes[idx];
-    auto offset = d_offsets[idx];
-    if ((idx > 0) && ((offset - 1) == d_offsets[idx - 1])) {
+    auto offset = d_suffix_offsets[idx];
+    if ((idx > 0) && ((offset - 1) == d_suffix_offsets[idx - 1])) {
       if (size < d_sizes[idx - 1]) { return string_index{nullptr, 0}; }
       if (size == d_sizes[idx - 1] && size == max_common_length) {
         // check if we are in the middle of a chain
         auto prev_idx    = idx - max_common_length;
         auto prev_offset = offset;
         while (prev_idx >= 0) {
-          if (d_offsets[prev_idx] != (prev_offset - max_common_length)) {
+          if (d_suffix_offsets[prev_idx] != (prev_offset - max_common_length)) {
             prev_idx = -1;
           } else {
             if (d_sizes[idx + 1] < size) { break; }  // final edge
-            prev_offset = d_offsets[prev_idx];
-            if ((prev_idx == 0) || ((prev_offset - 1) != d_offsets[prev_idx - 1])) { break; }
+            prev_offset = d_suffix_offsets[prev_idx];
+            if ((prev_idx == 0) || ((prev_offset - 1) != d_suffix_offsets[prev_idx - 1])) { break; }
             prev_idx -= max_common_length;
           }
         }
@@ -183,8 +183,8 @@ std::unique_ptr<cudf::column> resolve_duplicates_fn(
 
   // locate candidate duplicates within the suffix array
   thrust::transform(rmm::exec_policy_nosync(stream),
-                    thrust::counting_iterator<int64_t>(0),
-                    thrust::counting_iterator<int64_t>(indices.size()),
+                    thrust::counting_iterator<cudf::size_type>(0),
+                    thrust::counting_iterator<cudf::size_type>(indices.size()),
                     sizes.begin(),
                     find_adjacent_duplicates_fn{chars_span, min_width, indices.data()});
 
@@ -201,7 +201,7 @@ std::unique_ptr<cudf::column> resolve_duplicates_fn(
     dup_indices.begin(),
     [d_sizes = sizes.data()] __device__(cudf::size_type idx) -> bool { return d_sizes[idx] == 0; });
   auto end = thrust::remove(rmm::exec_policy(stream), sizes.begin(), sizes.end(), 0);
-  sizes.resize(thrust::distance(sizes.begin(), end), stream);
+  sizes.resize(cuda::std::distance(sizes.begin(), end), stream);
 
   // sort the resulting indices/sizes for overlap filtering
   thrust::sort_by_key(
@@ -218,7 +218,7 @@ std::unique_ptr<cudf::column> resolve_duplicates_fn(
 
   // filter out the remaining non-viable candidates
   duplicates.resize(
-    thrust::distance(
+    cuda::std::distance(
       duplicates.begin(),
       thrust::remove(
         rmm::exec_policy(stream), duplicates.begin(), duplicates.end(), string_index{nullptr, 0})),
@@ -232,14 +232,14 @@ std::unique_ptr<cudf::column> resolve_duplicates_fn(
 
   // ironically remove duplicates from the sorted list
   duplicates.resize(
-    thrust::distance(duplicates.begin(),
-                     thrust::unique(rmm::exec_policy(stream),
-                                    duplicates.begin(),
-                                    duplicates.end(),
-                                    [] __device__(auto lhs, auto rhs) -> bool {
-                                      return cudf::string_view(lhs.first, lhs.second) ==
-                                             cudf::string_view(rhs.first, rhs.second);
-                                    })),
+    cuda::std::distance(duplicates.begin(),
+                        thrust::unique(rmm::exec_policy(stream),
+                                       duplicates.begin(),
+                                       duplicates.end(),
+                                       [] __device__(auto lhs, auto rhs) -> bool {
+                                         return cudf::string_view(lhs.first, lhs.second) ==
+                                                cudf::string_view(rhs.first, rhs.second);
+                                       })),
     stream);
 
   return cudf::strings::detail::make_strings_column(
@@ -259,9 +259,11 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> build_suffix_array(
 
   auto const d_input_chars = input.chars_begin(stream) + first_offset;
   auto const chars_size    = last_offset - first_offset;
-  CUDF_EXPECTS(min_width < chars_size, "min_width value cannot exceed the input size");
+  CUDF_EXPECTS(
+    min_width < chars_size, "min_width value cannot exceed the input size", std::invalid_argument);
   CUDF_EXPECTS(chars_size < std::numeric_limits<cudf::size_type>::max(),
-               "input size cannot exceed the 2GB");
+               "Input size cannot exceed the maximum integer size limit of 2GB",
+               std::invalid_argument);
 
   auto const chars_span = cudf::device_span<char const>(d_input_chars, chars_size);
   return build_suffix_array_fn(chars_span, min_width, stream, mr);
@@ -272,14 +274,18 @@ std::unique_ptr<cudf::column> substring_duplicates(cudf::strings_column_view con
                                                    rmm::cuda_stream_view stream,
                                                    rmm::device_async_resource_ref mr)
 {
-  CUDF_EXPECTS(min_width > 8, "min_width should be at least 8");
+  CUDF_EXPECTS(min_width > 8, "min_width should be at least 8", std::invalid_argument);
 
   auto d_strings = cudf::column_device_view::create(input.parent(), stream);
   auto [first_offset, last_offset] =
     cudf::strings::detail::get_first_and_last_offset(input, stream);
   auto const d_input_chars = input.chars_begin(stream) + first_offset;
   auto const chars_size    = last_offset - first_offset;
-  CUDF_EXPECTS(min_width < chars_size, "min_width value cannot exceed the input size");
+  CUDF_EXPECTS(
+    min_width < chars_size, "min_width value cannot exceed the input size", std::invalid_argument);
+  CUDF_EXPECTS(chars_size < std::numeric_limits<cudf::size_type>::max(),
+               "Input size cannot exceed the maximum integer size limit of 2GB",
+               std::invalid_argument);
 
   auto const chars_span = cudf::device_span<char const>(d_input_chars, chars_size);
 
@@ -352,7 +358,7 @@ struct find_duplicates_fn {
     auto size = common_prefix_length(lh_str, *fnd);
 
     // check for lower_bound edge case
-    auto const ridx = lb_idx + thrust::distance(begin, fnd) - (lb_idx > 0);
+    auto const ridx = lb_idx + cuda::std::distance(begin, fnd) - (lb_idx > 0);
     if (size < width && ridx >= 0) {
       auto const rhs_idx  = d_indices2[ridx];
       auto const rhs_size = static_cast<cudf::size_type>(chars_span2.size() - rhs_idx);
@@ -481,7 +487,7 @@ std::unique_ptr<cudf::column> resolve_duplicates_pair_impl(
     dup_indices.begin(),
     [d_sizes = sizes.data()] __device__(cudf::size_type idx) -> bool { return d_sizes[idx] == 0; });
   auto end = thrust::remove(rmm::exec_policy(stream), sizes.begin(), sizes.end(), 0);
-  sizes.resize(thrust::distance(sizes.begin(), end), stream);
+  sizes.resize(cuda::std::distance(sizes.begin(), end), stream);
 
   // sort the resulting indices/sizes for overlap filtering
   thrust::sort_by_key(
@@ -498,7 +504,7 @@ std::unique_ptr<cudf::column> resolve_duplicates_pair_impl(
 
   // filter out the remaining non-viable candidates
   duplicates.resize(
-    thrust::distance(
+    cuda::std::distance(
       duplicates.begin(),
       thrust::remove(
         rmm::exec_policy(stream), duplicates.begin(), duplicates.end(), string_index{nullptr, 0})),
@@ -512,14 +518,14 @@ std::unique_ptr<cudf::column> resolve_duplicates_pair_impl(
 
   // ironically remove duplicates from the sorted list
   duplicates.resize(
-    thrust::distance(duplicates.begin(),
-                     thrust::unique(rmm::exec_policy(stream),
-                                    duplicates.begin(),
-                                    duplicates.end(),
-                                    [] __device__(auto lhs, auto rhs) -> bool {
-                                      return cudf::string_view(lhs.first, lhs.second) ==
-                                             cudf::string_view(rhs.first, rhs.second);
-                                    })),
+    cuda::std::distance(duplicates.begin(),
+                        thrust::unique(rmm::exec_policy(stream),
+                                       duplicates.begin(),
+                                       duplicates.end(),
+                                       [] __device__(auto lhs, auto rhs) -> bool {
+                                         return cudf::string_view(lhs.first, lhs.second) ==
+                                                cudf::string_view(rhs.first, rhs.second);
+                                       })),
     stream);
 
   return cudf::strings::detail::make_strings_column(
