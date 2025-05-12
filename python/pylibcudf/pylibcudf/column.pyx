@@ -86,25 +86,24 @@ cdef class OwnerWithCAI:
     cdef create(column_view cv, object owner):
         obj = OwnerWithCAI()
         obj.owner = owner
-        cdef int size
+        # The default size of 0 will be applied for any type that stores data in the
+        # children (such that the parent size is 0).
+        size = 0
         cdef column_view offsets_column
         cdef unique_ptr[scalar] last_offset
         if cv.type().id() == type_id.EMPTY:
             size = cv.size()
         elif is_fixed_width(cv.type()):
-            size = cv.size() * cpp_size_of(cv.type())
+            # Cast to Python integers before multiplyling to avoid overflow.
+            size = int(cv.size()) * int(cpp_size_of(cv.type()))
         elif cv.type().id() == type_id.STRING:
-            # The size of the character array in the parent is the offsets size
-            num_children = cv.num_children()
-            size = 0
-            # A strings column with no children is created for empty/all null
-            if num_children:
+            # A strings column with no children is created for empty/all null, in which
+            # case the size remains 0. Otherwise, the size of the character array stored
+            # in the parent is the last offset in the offsets child.
+            if cv.num_children():
                 offsets_column = cv.child(0)
                 last_offset = get_element(offsets_column, offsets_column.size() - 1)
                 size = (<numeric_scalar[size_type] *> last_offset.get()).value()
-        else:
-            # All other types store data in the children, so the parent size is 0
-            size = 0
 
         obj.cai = {
             "shape": (size,),
