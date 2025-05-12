@@ -10,7 +10,7 @@ RAPIDS_COVERAGE_DIR=${RAPIDS_COVERAGE_DIR:-"${PWD}/coverage-results"}
 mkdir -p "${RAPIDS_TESTS_DIR}" "${RAPIDS_COVERAGE_DIR}"
 
 DEPENDENCIES_PATH="dependencies.yaml"
-PIP_CONSTRAINT="${PIP_CONSTRAINT:$(mktemp -d)/constraints.txt}"
+PIP_CONSTRAINT="${PIP_CONSTRAINT}:$(mktemp -d)/constraints.txt}"
 export PIP_CONSTRAINT
 
 # Use grep to find the line containing the package name and version constraint

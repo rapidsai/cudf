@@ -2,7 +2,7 @@
 # Copyright (c) 2025, NVIDIA CORPORATION.
 
 # create or fetch PIP_CONSTRAINT
-PIP_CONSTRAINT="${PIP_CONSTRAINT:$(mktemp -d)/constraints.txt}"
+PIP_CONSTRAINT="${PIP_CONSTRAINT}:$(mktemp -d)/constraints.txt}"
 export PIP_CONSTRAINT
 touch "${PIP_CONSTRAINT}"
 
