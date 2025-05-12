@@ -27,6 +27,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <cuda/std/bit>
 #include <cuda/std/cmath>
 #include <thrust/transform.h>
 
@@ -213,27 +214,11 @@ struct DeviceBitCount {
   template <typename T>
   int32_t __device__ operator()(T data)
   {
-    auto constexpr nbits = CHAR_BIT * sizeof(T);
-    if constexpr (nbits <= 32) {
-      return __popc(static_cast<unsigned int>(data));
-    } else if constexpr (nbits <= 64) {
-      return __popcll(static_cast<unsigned long long>(data));
-    } else if constexpr (nbits == 128 && sizeof(unsigned long long) == 64) {
-      // Size of unsigned long long is not guaranteed to be 64 bits,
-      // thus we need to check size as above before doing this computation.
-      auto const p = reinterpret_cast<unsigned long long const*>(&data);
-      return __popcll(p[0]) + __popcll(p[1]);
+    if constexpr (std::is_same_v<T, bool>) {
+      return static_cast<int32_t>(data);
     } else {
-      // Convert to unsigned of the same width to handle negative numbers correctly as right shift
-      // on unsigned types is always zero fill.
       using UnsignedT = std::make_unsigned_t<T>;
-      auto x          = static_cast<UnsignedT>(data);
-      int32_t count   = 0;
-      while (x) {
-        count += x & 1;
-        x >>= 1;
-      }
-      return count;
+      return cuda::std::popcount(static_cast<UnsignedT>(data));
     }
   }
 };
