@@ -1310,7 +1310,7 @@ build_chunk_dictionaries(hostdevice_2dvector<EncColumnChunk>& chunks,
     } else {
       chunk.use_dictionary = true;
       chunk.dict_map_size =
-        static_cast<cudf::size_type>(cuco::make_bucket_extent<map_cg_size, bucket_size>(
+        static_cast<cudf::size_type>(cuco::make_valid_extent<map_cg_size, bucket_size>(
           static_cast<cudf::size_type>(occupancy_factor * chunk.num_values)));
       chunk.dict_map_offset = total_map_storage_size;
       total_map_storage_size += chunk.dict_map_size;
@@ -1325,7 +1325,7 @@ build_chunk_dictionaries(hostdevice_2dvector<EncColumnChunk>& chunks,
     total_map_storage_size,
     cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream}};
   // Create a span of non-const map_storage as map_storage_ref takes in a non-const pointer.
-  device_span<bucket_type> const map_storage_data{map_storage.data(), total_map_storage_size};
+  device_span<slot_type> const map_storage_data{map_storage.data(), total_map_storage_size};
 
   // Synchronize
   chunks.host_to_device_async(stream);

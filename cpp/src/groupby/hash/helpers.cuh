@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -48,9 +48,9 @@ using shmem_extent_t =
   cuco::extent<cudf::size_type,
                static_cast<cudf::size_type>(static_cast<double>(GROUPBY_SHM_MAX_ELEMENTS) * 1.43)>;
 
-/// Number of buckets needed by each shared memory hash set
-CUDF_HOST_DEVICE auto constexpr bucket_extent =
-  cuco::make_bucket_extent<GROUPBY_CG_SIZE, GROUPBY_BUCKET_SIZE>(shmem_extent_t{});
+/// Number of valid slots needed by each shared memory hash set
+CUDF_HOST_DEVICE auto constexpr valid_extent =
+  cuco::make_valid_extent<GROUPBY_CG_SIZE, GROUPBY_BUCKET_SIZE>(shmem_extent_t{});
 
 using row_hash_t =
   cudf::experimental::row::hash::device_row_hasher<cudf::hashing::detail::default_hash,
@@ -91,7 +91,7 @@ using hash_set_ref_t = cuco::static_set_ref<
   cuda::thread_scope_device,
   row_comparator_t,
   probing_scheme_t,
-  cuco::bucket_storage_ref<cudf::size_type, GROUPBY_BUCKET_SIZE, cuco::bucket_extent<int64_t>>,
+  cuco::flat_storage_ref<cudf::size_type, GROUPBY_BUCKET_SIZE, cuco::valid_extent<int64_t>>,
   Op>;
 
 template <typename Op>
@@ -100,6 +100,6 @@ using nullable_hash_set_ref_t = cuco::static_set_ref<
   cuda::thread_scope_device,
   nullable_row_comparator_t,
   probing_scheme_t,
-  cuco::bucket_storage_ref<cudf::size_type, GROUPBY_BUCKET_SIZE, cuco::bucket_extent<int64_t>>,
+  cuco::flat_storage_ref<cudf::size_type, GROUPBY_BUCKET_SIZE, cuco::valid_extent<int64_t>>,
   Op>;
 }  // namespace cudf::groupby::detail::hash
