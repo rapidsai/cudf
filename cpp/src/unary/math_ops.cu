@@ -218,6 +218,11 @@ struct DeviceBitCount {
       return __popc(static_cast<unsigned int>(data));
     } else if constexpr (nbits <= 64) {
       return __popcll(static_cast<unsigned long long>(data));
+    } else if constexpr (nbits == 128 && sizeof(unsigned long long) == 64) {
+      // Size of unsigned long long is not guaranteed to be 64 bits,
+      // thus we need to check size as above before doing this computation.
+      auto const p = reinterpret_cast<unsigned long long const*>(&data);
+      return __popcll(p[0]) + __popcll(p[1]);
     } else {
       // Convert to unsigned of the same width to handle negative numbers correctly as right shift
       // on unsigned types is always zero fill.

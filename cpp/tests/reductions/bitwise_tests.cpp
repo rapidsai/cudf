@@ -31,22 +31,40 @@ template <typename T>
 class BitwiseAggTypedTest : public BitwiseAggregationTest {};
 
 // Test types for bitwise operations - only integer types
-TYPED_TEST_SUITE(BitwiseAggTypedTest, cudf::test::IntegralTypes);
+using ExtendedIntegralTypes =
+  cudf::test::Concat<cudf::test::IntegralTypes, cudf::test::Types<__int128_t>>;
 
+TYPED_TEST_SUITE(BitwiseAggTypedTest, ExtendedIntegralTypes);
+
+template <typename T>
+auto get_input_data()
+{
+  if constexpr (std::is_same_v<T, bool>) {
+    return std::vector<T>{true, false, true, true, true, true};
+  } else if constexpr (std::is_same_v<T, __int128_t>) {
+    // Base number with three common bits.
+    auto const base = (static_cast<__int128_t>(1) << 100) | (static_cast<__int128_t>(1) << 50) |
+                      (static_cast<__int128_t>(1) << 10);
+    return std::vector<T>{
+      base,                                       // Base value
+      base | (static_cast<__int128_t>(1) << 5),   // + bit 5
+      base | (static_cast<__int128_t>(1) << 20),  // + bit 20
+      base | (static_cast<__int128_t>(1) << 30),  // + bit 30
+      base | (static_cast<__int128_t>(1) << 40),  // + bit 40
+      base | (static_cast<__int128_t>(1) << 60)   // + bit 60
+    };
+  } else {
+    return std::vector<T>{0x1F, 0x0F, 0x33, static_cast<T>(0xFF), 0x2F, 0x3F};
+  }
+}
 // Basic bitwise AND test
 TYPED_TEST(BitwiseAggTypedTest, BitwiseAND)
 {
   using T = TypeParam;
 
   // Test data
-  auto const input_data = [] {
-    if constexpr (std::is_same_v<T, bool>) {
-      return std::vector<T>{true, false, true, true, true, true};
-    } else {
-      return std::vector<T>{0x1F, 0x0F, 0x33, static_cast<T>(0xFF), 0x2F, 0x3F};
-    }
-  }();
-  auto const input_col = column<T>(input_data.begin(), input_data.end());
+  auto const input_data = get_input_data<T>();
+  auto const input_col  = column<T>(input_data.begin(), input_data.end());
 
   // Expected result - bitwise AND of all values
   auto const expected = static_cast<T>(input_data[0] & input_data[1] & input_data[2] &
@@ -66,14 +84,8 @@ TYPED_TEST(BitwiseAggTypedTest, BitwiseOR)
   using T = TypeParam;
 
   // Test data
-  auto const input_data = [] {
-    if constexpr (std::is_same_v<T, bool>) {
-      return std::vector<T>{true, false, true, true, true, true};
-    } else {
-      return std::vector<T>{0x1F, 0x0F, 0x33, static_cast<T>(0xFF), 0x2F, 0x3F};
-    }
-  }();
-  auto const input_col = column<T>(input_data.begin(), input_data.end());
+  auto const input_data = get_input_data<T>();
+  auto const input_col  = column<T>(input_data.begin(), input_data.end());
 
   // Expected result - bitwise OR of all values
   auto const expected = static_cast<T>(input_data[0] | input_data[1] | input_data[2] |
@@ -93,14 +105,8 @@ TYPED_TEST(BitwiseAggTypedTest, BitwiseXOR)
   using T = TypeParam;
 
   // Test data
-  auto const input_data = [] {
-    if constexpr (std::is_same_v<T, bool>) {
-      return std::vector<T>{true, false, true, true, true, true};
-    } else {
-      return std::vector<T>{0x1F, 0x0F, 0x33, static_cast<T>(0xFF), 0x2F, 0x3F};
-    }
-  }();
-  auto const input_col = column<T>(input_data.begin(), input_data.end());
+  auto const input_data = get_input_data<T>();
+  auto const input_col  = column<T>(input_data.begin(), input_data.end());
 
   // Expected result - bitwise XOR of all values
   auto const expected = static_cast<T>(input_data[0] ^ input_data[1] ^ input_data[2] ^
@@ -120,13 +126,7 @@ TYPED_TEST(BitwiseAggTypedTest, WithNulls)
   using T = TypeParam;
 
   // Test data with nulls
-  auto const input_data = [] {
-    if constexpr (std::is_same_v<T, bool>) {
-      return std::vector<T>{true, true, false, true, true, true};
-    } else {
-      return std::vector<T>{0x1F, 0x0F, 0x33, static_cast<T>(0xFF), 0x2F, 0x3F};
-    }
-  }();
+  auto const input_data = get_input_data<T>();
   // If T is bool, null is at the position of a false value.
   auto const validity  = std::vector<bool>{true, true, false, true, true, true};
   auto const input_col = column<T>(input_data.begin(), input_data.end(), validity.begin());
