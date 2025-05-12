@@ -146,15 +146,6 @@ cdef class OwnerMaskWithCAI:
         return self.cai
 
 
-class _Ravelled:
-    def __init__(self, obj):
-        self.obj = obj
-        cai = obj.__cuda_array_interface__.copy()
-        shape = cai["shape"]
-        cai["shape"] = (shape[0]*shape[1],)
-        self.__cuda_array_interface__ = cai
-
-
 def _prepare_array_metadata(
     iface: dict,
 ) -> tuple[int, int, tuple[int, ...], tuple[int, ...] | None, DataType]:
@@ -787,9 +778,6 @@ cdef class Column:
             raise TypeError("Object does not implement __cuda_array_interface__")
 
         _, _, shape, _, dtype = _prepare_array_metadata(iface)
-
-        if len(shape) == 2:
-            obj = _Ravelled(obj)
 
         return Column._from_gpumemoryview(gpumemoryview(obj), shape, dtype)
 
