@@ -29,6 +29,86 @@
 #include <cudf/transform.hpp>
 
 namespace transformation {
+
+struct RuntimeSupportTest : public cudf::test::BaseFixture {
+ protected:
+  cudf::test::fixed_width_column_wrapper<float> a{1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+
+  cudf::test::fixed_width_column_wrapper<float> b{
+    0.1F, 0.25F, 0.5F, 0.1F, 0.4F, 0.75F, 0.2F, 0.33F, 0.45F, 0.66F};
+
+  cudf::test::fixed_width_column_wrapper<float> b_nulls{
+    {0.1F, 0.25F, 0.5F, 0.1F, 0.4F, 0.75F, 0.2F, 0.33F, 0.45F, 0.66F},
+    {true, true, true, true, true, true, true, true, true, false}};
+
+  cudf::test::fixed_width_column_wrapper<float> t{0.5f};
+
+  cudf::test::fixed_width_column_wrapper<float> bad_col{1, 2, 3, 4, 5, 6, 7, 8, 9};
+
+  cudf::test::structs_column_wrapper struct_col{a, b};
+
+  static constexpr char const* udf =
+    "__device__ inline void mix(float* out, float a, float b, float t) { *out = a + b - b * t; }";
+};
+
+struct AssertsTest : public RuntimeSupportTest {
+ protected:
+  void SetUp() override
+  {
+    if (!cudf::is_runtime_jit_supported()) {
+      GTEST_SKIP() << "Skipping tests that require runtime JIT support";
+    }
+  }
+};
+
+TEST_F(RuntimeSupportTest, RuntimeSupport)
+{
+  if (!cudf::is_runtime_jit_supported()) {
+    EXPECT_THROW(
+      cudf::transform({a, b, t}, udf, cudf::data_type{cudf::type_id::FLOAT32}, false, std::nullopt),
+      std::logic_error);
+  } else {
+    EXPECT_NO_THROW(cudf::transform(
+      {a, b, t}, udf, cudf::data_type{cudf::type_id::FLOAT32}, false, std::nullopt));
+  }
+}
+
+TEST_F(AssertsTest, TypeSupport)
+{
+  EXPECT_NO_THROW(
+    cudf::transform({a, b, t}, udf, cudf::data_type{cudf::type_id::FLOAT32}, false, std::nullopt));
+
+  EXPECT_THROW(
+    cudf::transform({a, b, t}, udf, cudf::data_type{cudf::type_id::STRUCT}, false, std::nullopt),
+    std::invalid_argument);
+
+  EXPECT_THROW(
+    cudf::transform(
+      {struct_col, t}, udf, cudf::data_type{cudf::type_id::FLOAT32}, false, std::nullopt),
+    std::invalid_argument);
+}
+
+TEST_F(AssertsTest, UnequalRowCount)
+{
+  EXPECT_THROW(
+    cudf::transform(
+      {a, b, bad_col}, udf, cudf::data_type{cudf::type_id::FLOAT32}, false, std::nullopt),
+    std::invalid_argument);
+
+  EXPECT_THROW(
+    cudf::transform(
+      {a, b_nulls, t}, udf, cudf::data_type{cudf::type_id::FLOAT32}, false, std::nullopt),
+    std::invalid_argument);
+}
+
+TEST_F(AssertsTest, NullSupport)
+{
+  EXPECT_THROW(
+    cudf::transform(
+      {a, b_nulls, t}, udf, cudf::data_type{cudf::type_id::FLOAT32}, false, std::nullopt),
+    std::invalid_argument);
+}
+
 struct UnaryOperationIntegrationTest : public cudf::test::BaseFixture {
  protected:
   void SetUp() override

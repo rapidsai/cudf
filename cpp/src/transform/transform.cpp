@@ -302,8 +302,12 @@ std::unique_ptr<column> transform_operation(column_view base_column,
                                             rmm::cuda_stream_view stream,
                                             rmm::device_async_resource_ref mr)
 {
-  auto output =
-    make_fixed_width_column(output_type, base_column.size(), rmm::device_buffer{}, 0, stream, mr);
+  auto output = make_fixed_width_column(output_type,
+                                        base_column.size(),
+                                        copy_bitmask(base_column, stream, mr),
+                                        base_column.null_count(),
+                                        stream,
+                                        mr);
 
   if (base_column.is_empty()) { return output; }
 
@@ -348,9 +352,11 @@ std::unique_ptr<column> string_view_operation(column_view base_column,
 
   launch_span_kernel<string_view>(kernel, string_views, inputs, user_data, stream, mr);
 
-  auto column = make_strings_column(string_views, string_view{}, stream, mr);
+  auto output = make_strings_column(string_views, string_view{}, stream, mr);
 
-  return column;
+  output->set_null_mask(copy_bitmask(base_column, stream, mr), base_column.null_count());
+
+  return output;
 }
 
 void perform_checks(column_view base_column,
@@ -375,12 +381,14 @@ void perform_checks(column_view base_column,
                            [&](auto const& input) {
                              return (input.size() == 1) || (input.size() == base_column.size());
                            }),
-               "All transform input columns must have the same size or be scalar (have size 1)");
+               "All transform input columns must have the same size or be scalar (have size 1)",
+               std::invalid_argument);
 
   CUDF_EXPECTS(
     std::all_of(
       inputs.begin(), inputs.end(), [&](auto const& input) { return input.null_count() == 0; }),
-    "All transform input columns must have no nulls");
+    "All transform input columns must have no nulls",
+    std::invalid_argument);
 }
 
 }  // namespace

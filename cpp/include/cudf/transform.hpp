@@ -41,11 +41,14 @@ namespace CUDF_EXPORT cudf {
  *
  * Note that for every scalar in `inputs` (columns of size 1), `input[i] == input[0]`
  *
- * The output null mask is the same as the null mask of the input columns, so if input[i] is
- * null then output[i] is also null. The size of the resulting column is the size of the largest
- * column.
- * All input columns must have equivalent null masks.
  *
+ * @throws cudf::invalid_argument if:
+ *    - JIT is not supported by the runtime
+ *    - any of the input columns have different sizes (except scalars of size 1)
+ *    - `output_type` or any of the inputs are not fixed-width or string types
+ *    - any of the input columns have nulls
+ *
+ * The size of the resulting column is the size of the largest column.
  *
  * @param inputs        Immutable views of the input columns to transform
  * @param transform_udf The PTX/CUDA string of the transform function to apply
