@@ -214,10 +214,10 @@ struct DeviceBitCount {
   template <typename T>
   int32_t __device__ operator()(T data)
   {
-    if constexpr (std::is_same_v<T, bool>) {
+    if constexpr (cuda::std::is_same_v<T, bool>) {
       return static_cast<int32_t>(data);
     } else {
-      using UnsignedT = std::make_unsigned_t<T>;
+      using UnsignedT = cuda::std::make_unsigned_t<T>;
       return cuda::std::popcount(static_cast<UnsignedT>(data));
     }
   }
