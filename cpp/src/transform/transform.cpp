@@ -405,7 +405,7 @@ std::unique_ptr<column> transform(std::vector<column_view> const& inputs,
                                   rmm::cuda_stream_view stream,
                                   rmm::device_async_resource_ref mr)
 {
-  CUDF_EXPECTS(!inputs.empty(), "Transform must have at least 1 input column");
+  CUDF_EXPECTS(!inputs.empty(), "Transform must have at least 1 input column", std::invalid_argument);
 
   auto const base_column = std::max_element(
     inputs.begin(), inputs.end(), [](auto& a, auto& b) { return a.size() < b.size(); });
