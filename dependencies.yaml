@@ -809,6 +809,8 @@ dependencies:
               cuda_suffixed: "true"
             packages:
               - pynvjitlink-cu12>=0.0.0a0
+              - nvidia-cuda-nvcc-cu12
+              - nvidia-cuda-nvrtc-cu12
           - matrix:
               cuda: "12.*"
               cuda_suffixed: "false"
