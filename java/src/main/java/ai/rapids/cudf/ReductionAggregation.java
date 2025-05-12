@@ -313,4 +313,25 @@ public final class ReductionAggregation {
   public static ReductionAggregation mergeHistogram() {
     return new ReductionAggregation(Aggregation.mergeHistogram());
   }
+
+  /**
+  * Bitwise AND aggregation, computing the bitwise AND of all non-null values.
+  */
+  public static ReductionAggregation bitAnd() {
+    return new ReductionAggregation(Aggregation.bitAnd());
+  }
+
+  /**
+   * Bitwise OR aggregation, computing the bitwise OR of all non-null values.
+   */
+  public static ReductionAggregation bitOr() {
+    return new ReductionAggregation(Aggregation.bitOr());
+  }
+
+  /**
+   * Bitwise XOR aggregation, computing the bitwise XOR of all non-null values.
+   */
+  public static ReductionAggregation bitXor() {
+    return new ReductionAggregation(Aggregation.bitXor());
+  }
 }
