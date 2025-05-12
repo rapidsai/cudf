@@ -152,6 +152,12 @@ std::vector<size_type> hybrid_scan_reader_impl::all_row_groups(
   return row_groups_indices;
 }
 
+size_type hybrid_scan_reader_impl::total_rows_in_row_groups(
+  cudf::host_span<std::vector<size_type> const> row_group_indices) const
+{
+  return _metadata->total_rows_in_row_groups(row_group_indices);
+}
+
 std::vector<std::vector<size_type>> hybrid_scan_reader_impl::filter_row_groups_with_stats(
   cudf::host_span<std::vector<size_type> const> row_group_indices,
   parquet_reader_options const& options,
