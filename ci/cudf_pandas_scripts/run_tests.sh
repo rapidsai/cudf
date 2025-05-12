@@ -10,6 +10,8 @@ RAPIDS_COVERAGE_DIR=${RAPIDS_COVERAGE_DIR:-"${PWD}/coverage-results"}
 mkdir -p "${RAPIDS_TESTS_DIR}" "${RAPIDS_COVERAGE_DIR}"
 
 DEPENDENCIES_PATH="dependencies.yaml"
+PIP_CONSTRAINT="${PIP_CONSTRAINT:$(mktemp -d)/constraints.txt}"
+export PIP_CONSTRAINT
 
 # Use grep to find the line containing the package name and version constraint
 pandas_version_constraint=$(grep -oP "pandas>=\d+\.\d+,\<\d+\.\d+\.\d+dev\d+" $DEPENDENCIES_PATH)
@@ -59,6 +61,7 @@ else
     python -m pip install \
         -v \
         --constraint ./constraints.txt \
+        --constraint "${PIP_CONSTRAINT}" \
         "$(echo "${CUDF_WHEELHOUSE}"/cudf_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)[test,cudf-pandas-tests]" \
         "$(echo "${LIBCUDF_WHEELHOUSE}"/libcudf_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)" \
         "$(echo "${PYLIBCUDF_WHEELHOUSE}"/pylibcudf_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)"

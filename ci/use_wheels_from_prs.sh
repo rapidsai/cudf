@@ -1,6 +1,11 @@
 #!/bin/bash
 # Copyright (c) 2025, NVIDIA CORPORATION.
 
+# create or fetch PIP_CONSTRAINT
+PIP_CONSTRAINT="${PIP_CONSTRAINT:$(mktemp -d)/constraints.txt}"
+export PIP_CONSTRAINT
+touch "${PIP_CONSTRAINT}"
+
 RAPIDS_PY_CUDA_SUFFIX=$(rapids-wheel-ctk-name-gen "${RAPIDS_CUDA_VERSION}")
 
 # download wheels, store the directories holding them in variables
@@ -12,9 +17,7 @@ RMM_WHEELHOUSE=$(
 )
 
 # write a pip constraints file saying e.g. "whenever you encounter a requirement for 'librmm-cu12', use this wheel"
-cat > /tmp/constraints.txt <<EOF
+cat > "${PIP_CONSTRAINT}" <<EOF
 librmm-${RAPIDS_PY_CUDA_SUFFIX} @ file://$(echo ${LIBRMM_WHEELHOUSE}/librmm_*.whl)
 rmm-${RAPIDS_PY_CUDA_SUFFIX} @ file://$(echo ${RMM_WHEELHOUSE}/rmm_*.whl)
 EOF
-
-export PIP_CONSTRAINT=/tmp/constraints.txt

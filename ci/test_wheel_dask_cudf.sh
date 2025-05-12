@@ -6,6 +6,9 @@ set -eou pipefail
 source ci/use_gha_tools_from_branch.sh
 source ci/use_wheels_from_prs.sh
 
+PIP_CONSTRAINT="${PIP_CONSTRAINT:$(mktemp -d)/constraints.txt}"
+export PIP_CONSTRAINT
+
 RAPIDS_PY_CUDA_SUFFIX="$(rapids-wheel-ctk-name-gen "${RAPIDS_CUDA_VERSION}")"
 DASK_CUDF_WHEELHOUSE=$(RAPIDS_PY_WHEEL_NAME="dask_cudf_${RAPIDS_PY_CUDA_SUFFIX}" RAPIDS_PY_WHEEL_PURE="1" rapids-download-wheels-from-github python)
 
@@ -23,6 +26,7 @@ rapids-generate-pip-constraints py_test_dask_cudf ./constraints.txt
 rapids-pip-retry install \
   -v \
   --constraint ./constraints.txt \
+  --constraint "${PIP_CONSTRAINT}" \
   "$(echo "${CUDF_WHEELHOUSE}"/cudf_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)" \
   "$(echo "${DASK_CUDF_WHEELHOUSE}"/dask_cudf_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)[test]" \
   "$(echo "${LIBCUDF_WHEELHOUSE}"/libcudf_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)" \
