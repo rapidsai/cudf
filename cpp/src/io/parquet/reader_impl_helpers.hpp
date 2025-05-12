@@ -323,9 +323,36 @@ class aggregate_reader_metadata {
    */
   [[nodiscard]] std::vector<std::unordered_map<std::string, int64_t>> get_rowgroup_metadata() const;
 
+  /**
+   * @brief Maps leaf column names to vectors of `total_uncompressed_size` fields from their all
+   *        column chunks
+   *
+   * @return Map of leaf column names to vectors of `total_uncompressed_size` fields from all their
+   *         column chunks
+   */
+  [[nodiscard]] std::unordered_map<std::string, std::vector<int64_t>> get_column_chunk_metadata()
+    const;
+
+  /**
+   * @brief Get total number of rows across all files
+   *
+   * @return Total number of rows across all files
+   */
   [[nodiscard]] auto get_num_rows() const { return num_rows; }
 
+  /**
+   * @brief Get total number of row groups across all files
+   *
+   * @return Total number of row groups across all files
+   */
   [[nodiscard]] auto get_num_row_groups() const { return num_row_groups; }
+
+  /**
+   * @brief Get the number of row groups per file
+   *
+   * @return Number of row groups per file
+   */
+  [[nodiscard]] std::vector<size_type> get_num_row_groups_per_file() const;
 
   /**
    * @brief Checks if a schema index from 0th source is mapped to the specified file index
