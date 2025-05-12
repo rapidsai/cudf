@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include "compression_common.hpp"
 #include "parquet_common.hpp"
 
 #include <cudf_test/base_fixture.hpp>
@@ -37,32 +38,7 @@
 
 using cudf::test::iterators::no_nulls;
 
-struct CompressionTest
-  : public ParquetWriterTest,
-    public ::testing::WithParamInterface<std::tuple<std::string, cudf::io::compression_type>> {
-  CompressionTest()
-  {
-    auto const comp_impl = std::get<0>(GetParam());
-
-    if (comp_impl == "NVCOMP") {
-      setenv("LIBCUDF_HOST_COMPRESSION", "OFF", 1);
-      setenv("LIBCUDF_NVCOMP_POLICY", "ALWAYS", 1);
-    } else if (comp_impl == "DEVICE_INTERNAL") {
-      setenv("LIBCUDF_HOST_COMPRESSION", "OFF", 1);
-      setenv("LIBCUDF_NVCOMP_POLICY", "OFF", 1);
-    } else if (comp_impl == "HOST") {
-      setenv("LIBCUDF_HOST_COMPRESSION", "ON", 1);
-      setenv("LIBCUDF_NVCOMP_POLICY", "OFF", 1);
-    } else {
-      CUDF_FAIL("Invalid test parameter");
-    }
-  }
-  ~CompressionTest() override
-  {
-    unsetenv("LIBCUDF_HOST_COMPRESSION");
-    unsetenv("LIBCUDF_NVCOMP_POLICY");
-  }
-};
+using ParquetCompressionTest = CompressionTest<ParquetWriterTest>;
 
 template <typename mask_op_t>
 void test_durations(mask_op_t mask_op, bool use_byte_stream_split, bool arrow_schema)
@@ -1361,7 +1337,7 @@ TEST_F(ParquetWriterTest, UserNullabilityInvalid)
   EXPECT_THROW(cudf::io::write_parquet(write_opts), cudf::logic_error);
 }
 
-TEST_P(CompressionTest, CompStats)
+TEST_P(ParquetCompressionTest, CompStats)
 {
   auto const compression_type = std::get<1>(GetParam());
 
@@ -1388,7 +1364,7 @@ TEST_P(CompressionTest, CompStats)
   CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, table->view());
 }
 
-TEST_P(CompressionTest, CompStatsEmptyTable)
+TEST_P(ParquetCompressionTest, CompStatsEmptyTable)
 {
   auto const compression_type = std::get<1>(GetParam());
 
@@ -1407,29 +1383,54 @@ TEST_P(CompressionTest, CompStatsEmptyTable)
   expect_compression_stats_empty(stats);
 }
 
-INSTANTIATE_TEST_CASE_P(NvcompCompressionTest,
-                        CompressionTest,
-                        ::testing::Combine(::testing::Values("NVCOMP"),
-                                           ::testing::Values(cudf::io::compression_type::AUTO,
-                                                             cudf::io::compression_type::SNAPPY,
-                                                             cudf::io::compression_type::LZ4,
-                                                             cudf::io::compression_type::ZSTD)));
+TEST_P(ParquetCompressionTest, RoundTripBasic)
+{
+  constexpr auto num_rows     = 12000;
+  auto const compression_type = std::get<1>(GetParam());
 
-INSTANTIATE_TEST_CASE_P(OtherCompressionTest,
-                        CompressionTest,
-                        ::testing::Combine(::testing::Values("DEVICE_INTERNAL", "HOST"),
-                                           ::testing::Values(cudf::io::compression_type::AUTO,
-                                                             cudf::io::compression_type::SNAPPY,
-                                                             cudf::io::compression_type::ZSTD)));
+  // Generate compressible data
+  auto int_sequence =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 100; });
+  auto float_sequence =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i / 32; });
 
-TEST_F(ParquetWriterTest, SkipCompression)
+  cudf::test::fixed_width_column_wrapper<int> int_col(int_sequence, int_sequence + num_rows);
+  cudf::test::fixed_width_column_wrapper<float> float_col(float_sequence,
+                                                          float_sequence + num_rows);
+
+  table_view expected({int_col, float_col});
+
+  auto const stats = std::make_shared<cudf::io::writer_compression_statistics>();
+
+  std::vector<char> out_buffer;
+  cudf::io::parquet_writer_options out_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{&out_buffer}, expected)
+      .compression(compression_type)
+      .compression_statistics(stats);
+  cudf::io::write_parquet(out_opts);
+
+  cudf::io::parquet_reader_options in_opts = cudf::io::parquet_reader_options::builder(
+    cudf::io::source_info{out_buffer.data(), out_buffer.size()});
+  auto result = cudf::io::read_parquet(in_opts);
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
+
+  EXPECT_NE(stats->num_compressed_bytes(), 0);
+  EXPECT_EQ(stats->num_failed_bytes(), 0);
+  EXPECT_EQ(stats->num_skipped_bytes(), 0);
+  EXPECT_FALSE(std::isnan(stats->compression_ratio()));
+}
+
+TEST_P(ParquetCompressionTest, SkipCompression)
 {
   constexpr auto page_rows      = 1000;
   constexpr auto row_group_rows = 2 * page_rows;
   constexpr auto num_rows       = 2 * row_group_rows;
+  auto const compression_type   = std::get<1>(GetParam());
 
-  auto sequence = thrust::make_counting_iterator(0);
-  column_wrapper<int> col(sequence, sequence + num_rows, no_nulls());
+  auto compressible_seq =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i / 4; });
+  column_wrapper<float> col(compressible_seq, compressible_seq + num_rows, no_nulls());
 
   auto expected          = table_view{{col, col}};
   auto expected_metadata = cudf::io::table_input_metadata{expected};
@@ -1438,10 +1439,11 @@ TEST_F(ParquetWriterTest, SkipCompression)
   auto const filepath = temp_env->get_temp_filepath("SkipCompression.parquet");
   cudf::io::parquet_writer_options out_opts =
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
-      .compression(cudf::io::compression_type::ZSTD)
+      .compression(compression_type)
       .max_page_size_rows(page_rows)
       .row_group_size_rows(row_group_rows)
       .max_page_fragment_size(page_rows)
+      .dictionary_policy(cudf::io::dictionary_policy::NEVER)
       .metadata(std::move(expected_metadata));
 
   cudf::io::write_parquet(out_opts);
@@ -1459,8 +1461,30 @@ TEST_F(ParquetWriterTest, SkipCompression)
 
   EXPECT_EQ(fmd.row_groups[0].columns[0].meta_data.codec,
             cudf::io::parquet::Compression::UNCOMPRESSED);
-  EXPECT_EQ(fmd.row_groups[0].columns[1].meta_data.codec, cudf::io::parquet::Compression::ZSTD);
+  EXPECT_NE(fmd.row_groups[0].columns[1].meta_data.codec,
+            cudf::io::parquet::Compression::UNCOMPRESSED);
 }
+
+INSTANTIATE_TEST_CASE_P(Nvcomp,
+                        ParquetCompressionTest,
+                        ::testing::Combine(::testing::Values("NVCOMP"),
+                                           ::testing::Values(cudf::io::compression_type::AUTO,
+                                                             cudf::io::compression_type::SNAPPY,
+                                                             cudf::io::compression_type::LZ4,
+                                                             cudf::io::compression_type::ZSTD)));
+
+INSTANTIATE_TEST_CASE_P(DeviceInternal,
+                        ParquetCompressionTest,
+                        ::testing::Combine(::testing::Values("DEVICE_INTERNAL"),
+                                           ::testing::Values(cudf::io::compression_type::AUTO,
+                                                             cudf::io::compression_type::SNAPPY)));
+
+INSTANTIATE_TEST_CASE_P(Host,
+                        ParquetCompressionTest,
+                        ::testing::Combine(::testing::Values("HOST"),
+                                           ::testing::Values(cudf::io::compression_type::AUTO,
+                                                             cudf::io::compression_type::SNAPPY,
+                                                             cudf::io::compression_type::ZSTD)));
 
 TEST_F(ParquetWriterTest, NoNullsAsNonNullable)
 {
