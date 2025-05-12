@@ -6,7 +6,7 @@ set -eou pipefail
 source ci/use_gha_tools_from_branch.sh
 source ci/use_wheels_from_prs.sh
 
-PIP_CONSTRAINT="${PIP_CONSTRAINT}:$(mktemp -d)/constraints.txt}"
+PIP_CONSTRAINT="${PIP_CONSTRAINT:-$(mktemp -d)/constraints.txt}"
 export PIP_CONSTRAINT
 
 rapids-logger "Download wheels"
