@@ -1,4 +1,4 @@
-# Copyright (c) 2023-2024, NVIDIA CORPORATION.
+# Copyright (c) 2023-2025, NVIDIA CORPORATION.
 
 from libc.stdint cimport int32_t
 from pylibcudf.libcudf.types cimport (
@@ -91,6 +91,42 @@ cdef class DataType:
         cdef DataType ret = DataType.__new__(DataType, type_id.EMPTY)
         ret.c_obj = dt
         return ret
+
+    @staticmethod
+    def from_py(typ: type) -> DataType:
+        """
+        Construct a DataType from a Python type.
+
+        Parameters
+        ----------
+        typ : type
+            A Python type (e.g., int, float, str)
+
+        Returns
+        -------
+        DataType
+            The corresponding pylibcudf DataType.
+
+        Raises
+        ------
+        TypeError
+            If the Python type is not supported.
+        """
+        if typ is bool:
+            return DataType(type_id.BOOL8)
+        elif typ is int:
+            return DataType(type_id.INT64)
+        elif typ is float:
+            return DataType(type_id.FLOAT64)
+        elif typ is str:
+            return DataType(type_id.STRING)
+        elif typ is list:
+            return DataType(type_id.LIST)
+        elif typ is dict:
+            return DataType(type_id.STRUCT)
+        else:
+            raise TypeError(f"Cannot infer DataType from Python type {typ}")
+
 
 cpdef size_type size_of(DataType t):
     """Returns the size in bytes of elements of the specified data_type.

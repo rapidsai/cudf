@@ -155,6 +155,90 @@ class _Ravelled:
         self.__cuda_array_interface__ = cai
 
 
+def _infer_list_depth_and_dtype(obj: list) -> tuple[int, type]:
+    """
+    Infer the nesting depth and final scalar type.
+
+    Returns
+    -------
+    (depth, dtype): tuple[int, Python scalar type]
+    """
+    depth = 0
+    current = obj
+
+    while isinstance(current, list) and current:
+        current = current[0]
+        depth += 1
+
+    if not current and depth == 0:
+        raise ValueError("Cannot infer dtype from empty input")
+
+    scalar_type = type(current)
+    if scalar_type not in (int, float, bool):
+        raise TypeError(f"Unsupported scalar type: {scalar_type}")
+
+    return depth, scalar_type
+
+
+def _flatten_nested_list(obj: list, depth: int) -> tuple[list, tuple[int, ...]]:
+    """
+    Flatten a nested list to a flat list of scalars and compute shape.
+    """
+    if depth == 1:
+        shape = (len(obj),)
+        return obj, shape
+
+    sublists = obj
+    n_outer = len(sublists)
+    if n_outer == 0:
+        raise ValueError("Cannot determine shape from empty outer list")
+
+    flat = []
+    shapes = []
+
+    for sub in sublists:
+        sub_flat, sub_shape = _flatten_nested_list(sub, depth - 1)
+        flat.extend(sub_flat)
+        shapes.append(sub_shape)
+
+    if not all(s == shapes[0] for s in shapes):
+        raise ValueError("Inconsistent inner list shapes")
+
+    return flat, (n_outer,) + shapes[0]
+
+
+def _python_typecode_from_dtype(dtype: DataType) -> str:
+    return {
+        type_id.INT8: 'b',
+        type_id.INT16: 'h',
+        type_id.INT32: 'i',
+        type_id.INT64: 'q',
+        type_id.UINT8: 'B',
+        type_id.UINT16: 'H',
+        type_id.UINT32: 'I',
+        type_id.UINT64: 'Q',
+        type_id.FLOAT32: 'f',
+        type_id.FLOAT64: 'd',
+        type_id.BOOL8: 'b'
+    }[dtype.id()]
+
+
+def _typestr_from_dtype(dtype: DataType) -> str:
+    return {
+        type_id.INT8: "|i1",
+        type_id.INT16: "<i2",
+        type_id.INT32: "<i4",
+        type_id.INT64: "<i8",
+        type_id.UINT8: "|u1",
+        type_id.UINT16: "<u2",
+        type_id.UINT32: "<u4",
+        type_id.UINT64: "<u8",
+        type_id.FLOAT32: "<f4",
+        type_id.FLOAT64: "<f8",
+        type_id.BOOL8: "|b1",
+    }[dtype.id()]
+
+
 def _prepare_array_metadata(
     iface: dict,
 ) -> tuple[int, int, tuple[int, ...], tuple[int, ...] | None, DataType]:
@@ -833,6 +917,43 @@ cdef class Column:
         raise TypeError(
             f"Cannot convert object of type {type(obj)} to a pylibcudf Column"
         )
+
+    @staticmethod
+    def from_list(obj: list, dtype: DataType | None = None) -> Column:
+        if not isinstance(obj, list):
+            raise TypeError("Expected a list")
+
+        if not obj:
+            if dtype is None:
+                raise ValueError(
+                    "Cannot infer dtype from empty list, please specify dtype"
+                )
+            return Column(dtype, 0, None, None, 0, 0, [])
+        if dtype is None:
+            depth, py_dtype = _infer_list_depth_and_dtype(obj)
+            dtype = DataType.from_py(py_dtype)
+        else:
+            depth, _ = _infer_list_depth_and_dtype(obj)
+
+        flat, shape = _flatten_nested_list(obj, depth)
+
+        import array
+        buf = array.array(_python_typecode_from_dtype(dtype), flat)
+        mv = memoryview(buf).cast("B")
+
+        iface = {
+            "data": (mv.obj.buffer_info()[0], False),
+            "shape": shape,
+            "typestr": _typestr_from_dtype(dtype),
+            "strides": None,
+            "version": 3,
+        }
+
+        class ArrayInterfaceWrapper:
+            def __init__(self, iface):
+                self.__array_interface__ = iface
+
+        return Column.from_array_interface(ArrayInterfaceWrapper(iface))
 
     cpdef DataType type(self):
         """The type of data in the column."""

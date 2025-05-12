@@ -462,9 +462,10 @@ class Scan(IR):
         Each path is repeated according to the number of rows read from it.
         """
         (filepaths,) = plc.filling.repeat(
-            # TODO: Remove call from_arrow when we support python list to Column
+            # TODO: Remove call from_arrow when we support python list[str] to strings Column
+            # Needs https://github.com/rapidsai/cudf/issues/17192
             plc.Table([plc.interop.from_arrow(pa.array(map(str, paths)))]),
-            plc.interop.from_arrow(pa.array(rows_per_path, type=pa.int32())),
+            plc.Column.from_list(rows_per_path, dtype=plc.DataType(plc.TypeId.INT32)),
         ).columns()
         return df.with_columns([Column(filepaths, name=name)])
 
@@ -1857,6 +1858,8 @@ class MapFunction(IR):
             (variable_column,) = plc.filling.repeat(
                 plc.Table(
                     [
+                        # TODO: Remove call from_arrow when we support python list[str] to strings Column
+                        # Needs https://github.com/rapidsai/cudf/issues/17192
                         plc.interop.from_arrow(
                             pa.array(
                                 pivotees,
