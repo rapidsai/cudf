@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -104,6 +104,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_createNoParamAgg(JNIEnv*
           return cudf::make_histogram_aggregation();
         case 35:  // MERGE_HISTOGRAM
           return cudf::make_merge_histogram_aggregation();
+          // case 36: BITWISE_AGG
 
         default: throw std::logic_error("Unsupported No Parameter Aggregation Operation");
       }
@@ -309,6 +310,39 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_createHostUDFAgg(JNIEnv*
     cudf::jni::auto_set_device(env);
     auto const udf_ptr = reinterpret_cast<cudf::host_udf_base const*>(udf_native_handle);
     auto output        = cudf::make_host_udf_aggregation(udf_ptr->clone());
+    return reinterpret_cast<jlong>(output.release());
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_createBitAndAgg(JNIEnv* env,
+                                                                        jclass class_object)
+{
+  try {
+    cudf::jni::auto_set_device(env);
+    auto output = cudf::make_bitwise_aggregation<cudf::aggregation>(cudf::bitwise_op::AND);
+    return reinterpret_cast<jlong>(output.release());
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_createBitOrAgg(JNIEnv* env,
+                                                                       jclass class_object)
+{
+  try {
+    cudf::jni::auto_set_device(env);
+    auto output = cudf::make_bitwise_aggregation<cudf::aggregation>(cudf::bitwise_op::OR);
+    return reinterpret_cast<jlong>(output.release());
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_createBitXorAgg(JNIEnv* env,
+                                                                        jclass class_object)
+{
+  try {
+    cudf::jni::auto_set_device(env);
+    auto output = cudf::make_bitwise_aggregation<cudf::aggregation>(cudf::bitwise_op::XOR);
     return reinterpret_cast<jlong>(output.release());
   }
   CATCH_STD(env, 0);
