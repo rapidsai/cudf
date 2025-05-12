@@ -315,7 +315,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
     @property
     @_performance_tracking
     def _columns(self) -> tuple[ColumnBase]:
-        return (self._values,)
+        return (self._column,)
 
     @property
     def _column_labels_and_values(self) -> Iterable:
@@ -390,7 +390,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
     @property  # type: ignore
     @_performance_tracking
     def _data(self):
-        return ColumnAccessor({self.name: self._values}, verify=False)
+        return ColumnAccessor({self.name: self._column}, verify=False)
 
     @_performance_tracking
     def __contains__(self, item):
@@ -1040,7 +1040,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
                 f"to isin(), you passed a {type(values).__name__}"
             )
 
-        return self._values.isin(values).values
+        return self._column.isin(values).values
 
     def __pos__(self) -> Self:
         return self.copy()
@@ -1513,7 +1513,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
 
             output = output.replace("nan", str(cudf.NA))
         elif preprocess._values.nullable:
-            if isinstance(self._values, StringColumn):
+            if self.dtype == CUDF_STRING_DTYPE:
                 output = repr(self.to_pandas(nullable=True))
             else:
                 output = repr(self._pandas_repr_compatible().to_pandas())
