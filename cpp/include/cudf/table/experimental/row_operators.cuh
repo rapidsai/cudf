@@ -1584,6 +1584,7 @@ struct preprocessed_table {
   friend class self_comparator;       ///< Allow self_comparator to access private members
   friend class two_table_comparator;  ///< Allow two_table_comparator to access private members
   friend class hash::row_hasher;      ///< Allow row_hasher to access private members
+  /// Allow primitive equality comparator to access private members
   friend class ::cudf::row::primitive::row_equality_comparator;
 
   template <template <typename> class Hash>
