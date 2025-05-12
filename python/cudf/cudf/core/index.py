@@ -186,7 +186,6 @@ class Index(SingleColumnFrame):
 
     _accessors: set[Any] = set()
 
-    @_performance_tracking
     def __new__(
         cls,
         data=None,
@@ -258,8 +257,19 @@ class Index(SingleColumnFrame):
             return idx
         return super().__new__(cls)
 
-    def __init__(self, *args, **kwargs) -> None:
-        # Initialized in __new__, subclasses should do the same
+    @_performance_tracking
+    def __init__(
+        self,
+        data=None,
+        dtype=None,
+        copy: bool = False,
+        name=None,
+        tupleize_cols: bool = True,
+        nan_as_null=no_default,
+    ) -> None:
+        # Constructed in __new__
+        # Subclasses should initialize with
+        # SingleColumnFrame.__init__(self, {name: column})
         return None
 
     @property
@@ -2568,23 +2578,25 @@ class RangeIndex(Index):
 
     _range: range
 
+    def __new__(cls, *args, **kwargs):
+        return object.__new__(cls)
+
     @_performance_tracking
-    def __new__(
-        cls, start, stop=None, step=1, dtype=None, copy=False, name=None
+    def __init__(
+        self, start, stop=None, step=1, dtype=None, copy=False, name=None
     ):
         if not is_hashable(name):
             raise ValueError("Name must be a hashable value.")
-        result = object.__new__(cls)
-        result._name = name
+        self._name = name
         if dtype is not None and cudf.dtype(dtype).kind != "i":
             raise ValueError(f"{dtype=} must be a signed integer type")
 
         if isinstance(start, range):
-            result._range = start
+            self._range = start
         elif isinstance(start, (pd.RangeIndex, RangeIndex)):
-            result._range = range(start.start, start.stop, start.step)
+            self._range = range(start.start, start.stop, start.step)
             if name is None:
-                result._name = start.name
+                self._name = start.name
         else:
             if stop is None:
                 start, stop = 0, start
@@ -2595,12 +2607,11 @@ class RangeIndex(Index):
             else:
                 step = 1
             try:
-                result._range = range(start, stop, step)
+                self._range = range(start, stop, step)
             except ValueError as err:
                 if step == 0:
                     raise ValueError("Step must not be zero.") from err
                 raise
-        return result
 
     @property
     @_performance_tracking
@@ -3470,11 +3481,12 @@ class DatetimeIndex(Index):
                   dtype='datetime64[ns]', name='a')
     """
 
-    _freq: cudf.DateOffset | None
+    def __new__(cls, *args, **kwargs):
+        return object.__new__(cls)
 
     @_performance_tracking
-    def __new__(
-        cls,
+    def __init__(
+        self,
         data=None,
         freq=None,
         tz=None,
@@ -3515,8 +3527,7 @@ class DatetimeIndex(Index):
         if yearfirst is not False:
             raise NotImplementedError("yearfirst == True is not yet supported")
 
-        result = object.__new__(cls)
-        result._freq = _validate_freq(freq)
+        self._freq = _validate_freq(freq)
 
         if dtype is None:
             # nanosecond default matches pandas
@@ -3536,18 +3547,17 @@ class DatetimeIndex(Index):
         if copy:
             data = data.copy()
 
-        result = object.__new__(cls)
-        result._data = ColumnAccessor({name: data}, verify=False)
+        SingleColumnFrame.__init__(
+            self, ColumnAccessor({name: data}, verify=False)
+        )
 
-        if result._freq is not None:
-            unique_vals = result.to_series().diff().unique()
+        if self._freq is not None:
+            unique_vals = self.to_series().diff().unique()
             if len(unique_vals) > 2 or (
                 len(unique_vals) == 2
-                and unique_vals[1]
-                != result._freq._maybe_as_fast_pandas_offset()
+                and unique_vals[1] != self._freq._maybe_as_fast_pandas_offset()
             ):
                 raise ValueError("No unique frequency found")
-        return result
 
     @_performance_tracking
     def _copy_type_metadata(self: Self, other: Self) -> Self:
@@ -4444,9 +4454,12 @@ class TimedeltaIndex(Index):
                   dtype='timedelta64[s]', name='delta-index')
     """
 
+    def __new__(cls, *args, **kwargs):
+        return object.__new__(cls)
+
     @_performance_tracking
-    def __new__(
-        cls,
+    def __init__(
+        self,
         data=None,
         unit=None,
         freq=None,
@@ -4489,9 +4502,9 @@ class TimedeltaIndex(Index):
         if copy:
             data = data.copy()
 
-        result = object.__new__(cls)
-        result._data = ColumnAccessor({name: data}, verify=False)
-        return result
+        SingleColumnFrame.__init__(
+            self, ColumnAccessor({name: data}, verify=False)
+        )
 
     @classmethod
     @_performance_tracking
@@ -4726,9 +4739,12 @@ class CategoricalIndex(Index):
     CategoricalIndex([1, 2, 3, <NA>], categories=[1, 2, 3], ordered=False, dtype='category', name='a')
     """
 
+    def __new__(cls, *args, **kwargs):
+        return object.__new__(cls)
+
     @_performance_tracking
-    def __new__(
-        cls,
+    def __init__(
+        self,
         data=None,
         categories=None,
         ordered=None,
@@ -4764,9 +4780,9 @@ class CategoricalIndex(Index):
             data = data.as_ordered(ordered=True)
         elif ordered is False and data.ordered is True:
             data = data.as_ordered(ordered=False)
-        result = object.__new__(cls)
-        result._data = ColumnAccessor({name: data}, verify=False)
-        return result
+        SingleColumnFrame.__init__(
+            self, ColumnAccessor({name: data}, verify=False)
+        )
 
     @classmethod
     @_performance_tracking
@@ -5100,9 +5116,12 @@ class IntervalIndex(Index):
     IntervalIndex
     """
 
+    def __new__(cls, *args, **kwargs):
+        return object.__new__(cls)
+
     @_performance_tracking
-    def __new__(
-        cls,
+    def __init__(
+        self,
         data,
         closed: Literal["left", "right", "neither", "both"] | None = None,
         dtype=None,
@@ -5155,9 +5174,9 @@ class IntervalIndex(Index):
         if dtype:
             interval_col = interval_col.astype(dtype)  # type: ignore[assignment]
 
-        result = object.__new__(cls)
-        result._data = ColumnAccessor({name: interval_col}, verify=False)
-        return result
+        SingleColumnFrame.__init__(
+            self, ColumnAccessor({name: interval_col}, verify=False)
+        )
 
     @property
     def closed(self) -> Literal["left", "right", "neither", "both"]:
