@@ -105,17 +105,17 @@ Examples
 doc_read_avro: Callable = docfmt_partial(docstring=_docstring_read_avro)
 
 _docstring_read_parquet_metadata = """
-Read a Parquet file's metadata and schema
+Read metadata and schema of a list of Parquet files
 
 Parameters
 ----------
-path : string or path object
-    Path of file to be read
+paths : List of strings or path objects
+    Path of file(s) to be read
 
 Returns
 -------
 Total number of rows
-Number of row groups
+Total number of row groups
 List of column names
 Number of columns
 List of metadata of row groups
@@ -124,7 +124,7 @@ Examples
 --------
 >>> import cudf
 >>> num_rows, num_row_groups, names, num_columns, row_group_metadata = cudf.io.read_parquet_metadata(filename)
->>> df = [cudf.read_parquet(fname, row_group=i) for i in range(row_groups)]
+>>> df = [cudf.read_parquet(fname, row_group=i) for i in range(num_row_groups)]
 >>> df = cudf.concat(df)
 >>> df
   num1                datetime text
