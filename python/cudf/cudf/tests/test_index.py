@@ -3347,3 +3347,14 @@ def test_categoricalindex_from_codes(ordered, name):
         name=name,
     )
     assert_eq(result, expected)
+
+
+@pytest.mark.parametrize("klass", [cudf.RangeIndex, pd.RangeIndex])
+@pytest.mark.parametrize("name_inner", [None, "a"])
+@pytest.mark.parametrize("name_outer", [None, "b"])
+def test_rangeindex_accepts_rangeindex(klass, name_inner, name_outer):
+    result = cudf.RangeIndex(klass(range(1), name=name_inner), name=name_outer)
+    expected = pd.RangeIndex(
+        pd.RangeIndex(range(1), name=name_inner), name=name_outer
+    )
+    assert_eq(result, expected)
