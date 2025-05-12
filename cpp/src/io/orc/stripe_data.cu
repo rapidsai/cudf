@@ -356,8 +356,6 @@ static __device__ void bytestream_init(orc_bytestream_s* bs, uint8_t const* base
   bs->len        = (len + pos + 7) & ~7;
   bs->fill_pos   = 0;
   bs->fill_count = min(bs->len, bytestream_buffer_size) >> 3;
-
-  if (blockIdx.x == 39) { printf("ha\n"); }
 }
 
 /**
