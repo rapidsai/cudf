@@ -223,17 +223,17 @@ class Index(SingleColumnFrame):
                         f"{type(data).__name__}, found {dtype=} "
                     )
                 return data.copy(deep=copy)
-            elif isinstance(data, Index):
-                idx = data.copy(deep=copy).rename(name)
-            elif isinstance(data, ColumnBase):
-                raise ValueError("Use cudf.Index._from_column instead.")
-            elif isinstance(data, (pd.RangeIndex, range)):
+            elif isinstance(data, (RangeIndex, pd.RangeIndex, range)):
                 idx = RangeIndex(
                     start=data.start,
                     stop=data.stop,
                     step=data.step,
                     name=name,
                 )
+            elif isinstance(data, Index):
+                idx = data.copy(deep=copy).rename(name)
+            elif isinstance(data, ColumnBase):
+                raise ValueError("Use cudf.Index._from_column instead.")
             elif isinstance(data, pd.MultiIndex):
                 if dtype is not None:
                     raise TypeError(
@@ -2593,6 +2593,10 @@ class RangeIndex(Index):
 
         if isinstance(start, range):
             self._range = start
+        elif isinstance(start, (pd.RangeIndex, RangeIndex)):
+            self._range = range(start.start, start.stop, start.step)
+            if name is None:
+                self._name = start.name
         else:
             if stop is None:
                 start, stop = 0, start
