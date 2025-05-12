@@ -33,7 +33,7 @@ def test_replace_tokens(input_col, targets, delim):
         expect = pa.array(
             ["the quick", "brown fox", "jumps*over the", "lazy dog"]
         )
-    assert_column_eq(got, expect)
+    assert_column_eq(expect, got)
 
 
 @pytest.mark.parametrize("min_token_length", [4, 5])

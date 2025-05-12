@@ -16,4 +16,4 @@ def test_format_list_column(na_rep, separators):
         separators if separators is None else plc.Column(separators),
     )
     expect = pa.array(["[1,A]", ""])
-    assert_column_eq(got, expect)
+    assert_column_eq(expect, got)

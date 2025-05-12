@@ -98,7 +98,7 @@ def test_hash_column_sha_md5(
         type=pa.string(),
     )
     got = plc_hasher(plc_scalar_input_tbl)
-    assert_column_eq(got, expect)
+    assert_column_eq(expect, got)
 
 
 def test_hash_column_xxhash32(pa_scalar_input_column, plc_scalar_input_tbl):
@@ -115,7 +115,7 @@ def test_hash_column_xxhash32(pa_scalar_input_column, plc_scalar_input_tbl):
         plc_scalar_input_tbl, plc.hashing.LIBCUDF_DEFAULT_HASH_SEED
     )
 
-    assert_column_eq(got, expect)
+    assert_column_eq(expect, got)
 
 
 def test_hash_column_xxhash64(pa_scalar_input_column, plc_scalar_input_tbl):
@@ -132,7 +132,7 @@ def test_hash_column_xxhash64(pa_scalar_input_column, plc_scalar_input_tbl):
         plc_scalar_input_tbl, plc.hashing.LIBCUDF_DEFAULT_HASH_SEED
     )
 
-    assert_column_eq(got, expect)
+    assert_column_eq(expect, got)
 
 
 @pytest.mark.parametrize(
@@ -166,7 +166,7 @@ def test_murmurhash3_x86_32(pa_scalar_input_column, plc_scalar_input_tbl):
         type=pa.uint32(),
     )
     got = plc.hashing.murmurhash3_x86_32(plc_scalar_input_tbl, 0)
-    assert_column_eq(got, expect)
+    assert_column_eq(expect, got)
 
 
 @pytest.mark.filterwarnings("ignore::RuntimeWarning")
@@ -203,7 +203,7 @@ def test_murmurhash3_x86_32_list():
     got = plc.hashing.murmurhash3_x86_32(
         plc_tbl, plc.hashing.LIBCUDF_DEFAULT_HASH_SEED
     )
-    assert_column_eq(got, expect)
+    assert_column_eq(expect, got)
 
 
 @pytest.mark.filterwarnings("ignore::RuntimeWarning")
@@ -249,7 +249,7 @@ def test_murmurhash3_x86_32_struct():
         [hash_struct(val) for val in pa_tbl["struct"].to_pylist()],
         type=pa.uint32(),
     )
-    assert_column_eq(got, expect)
+    assert_column_eq(expect, got)
 
 
 def test_murmurhash3_x64_128(pa_scalar_input_column, plc_scalar_input_tbl):
