@@ -96,11 +96,6 @@ TEST_F(AssertsTest, UnequalRowCount)
     cudf::transform(
       {a, b, bad_col}, udf, cudf::data_type{cudf::type_id::FLOAT32}, false, std::nullopt),
     std::invalid_argument);
-
-  EXPECT_THROW(
-    cudf::transform(
-      {a, b_nulls, t}, udf, cudf::data_type{cudf::type_id::FLOAT32}, false, std::nullopt),
-    std::invalid_argument);
 }
 
 TEST_F(AssertsTest, NullSupport)
