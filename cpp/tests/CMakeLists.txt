@@ -59,9 +59,7 @@ function(ConfigureTest CMAKE_TEST_NAME)
   )
 
   target_compile_definitions(
-    ${CMAKE_TEST_NAME}
-    PUBLIC _LIBCUDACXX_ATOMIC_UNSAFE_AUTOMATIC_STORAGE=1
-    PRIVATE THRUST_FORCE_32_BIT_OFFSET_TYPE=1 CCCL_AVOID_SORT_UNROLL=1
+    ${CMAKE_TEST_NAME} PRIVATE THRUST_FORCE_32_BIT_OFFSET_TYPE=1 CCCL_AVOID_SORT_UNROLL=1
   )
 
   target_link_libraries(
@@ -125,6 +123,7 @@ ConfigureTest(
   GROUPBY_TEST
   groupby/argmin_tests.cpp
   groupby/argmax_tests.cpp
+  groupby/bitwise_tests.cpp
   groupby/collect_list_tests.cpp
   groupby/collect_set_tests.cpp
   groupby/correlation_tests.cpp
@@ -220,6 +219,7 @@ ConfigureTest(
 # * reduction tests -------------------------------------------------------------------------------
 ConfigureTest(
   REDUCTIONS_TEST
+  reductions/bitwise_tests.cpp
   reductions/collect_ops_tests.cpp
   reductions/ewm_tests.cpp
   reductions/host_udf_example_tests.cu
@@ -527,7 +527,7 @@ ConfigureTest(
 # * reshape test ----------------------------------------------------------------------------------
 ConfigureTest(
   RESHAPE_TEST reshape/byte_cast_tests.cpp reshape/interleave_columns_tests.cpp
-  reshape/tile_tests.cpp
+  reshape/table_to_array_tests.cpp reshape/tile_tests.cpp
 )
 
 # ##################################################################################################
@@ -612,6 +612,7 @@ ConfigureTest(STRUCTS_TEST structs/structs_column_tests.cpp structs/utilities_te
 ConfigureTest(
   TEXT_TEST
   text/bpe_tests.cpp
+  text/deduplicate_tests.cpp
   text/edit_distance_tests.cpp
   text/jaccard_tests.cpp
   text/minhash_tests.cpp

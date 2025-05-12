@@ -8,6 +8,8 @@ from __future__ import annotations
 import dataclasses
 import enum
 import json
+import os
+import warnings
 from typing import TYPE_CHECKING, Literal
 
 if TYPE_CHECKING:
@@ -99,6 +101,49 @@ class ParquetOptions:
             raise TypeError("pass_read_limit must be an int")
 
 
+def default_blocksize(scheduler: str) -> int:
+    """Return the default blocksize."""
+    try:
+        # Use PyNVML to find the worker device size.
+        import pynvml
+
+        pynvml.nvmlInit()
+        index = os.environ.get("CUDA_VISIBLE_DEVICES", "0").split(",")[0]
+        if index and not index.isnumeric():  # pragma: no cover
+            # This means device_index is UUID.
+            # This works for both MIG and non-MIG device UUIDs.
+            handle = pynvml.nvmlDeviceGetHandleByUUID(str.encode(index))
+            if pynvml.nvmlDeviceIsMigDeviceHandle(handle):
+                # Additionally get parent device handle
+                # if the device itself is a MIG instance
+                handle = pynvml.nvmlDeviceGetDeviceHandleFromMigDeviceHandle(handle)
+        else:
+            handle = pynvml.nvmlDeviceGetHandleByIndex(int(index))
+
+        device_size = pynvml.nvmlDeviceGetMemoryInfo(handle).total
+
+    except (ImportError, ValueError, pynvml.NVMLError) as err:  # pragma: no cover
+        # Fall back to a conservative 12GiB default
+        warnings.warn(
+            "Failed to query the device size with NVML. Please "
+            "set 'target_partition_size' to a literal byte size to "
+            f"silence this warning. Original error: {err}",
+            stacklevel=1,
+        )
+        device_size = 12 * 1024**3
+
+    if scheduler == "distributed":
+        # Distributed execution requires a conservative
+        # blocksize for now.
+        blocksize = int(device_size * 0.025)
+    else:
+        # Single-GPU execution can lean on UVM to
+        # support a much larger blocksize.
+        blocksize = int(device_size * 0.0625)
+
+    return max(blocksize, 256_000_000)
+
+
 @dataclasses.dataclass(frozen=True, eq=True)
 class StreamingExecutor:
     """
@@ -125,9 +170,10 @@ class StreamingExecutor:
         Each factor estimates the fractional number of unique values in the
         column. By default, ``1.0`` is used for any column not included in
         ``cardinality_factor``.
-    parquet_blocksize
-        Controls how large parquet files are split into multiple partitions.
-        Files larger than ``parquet_blocksize`` bytes are split into multiple
+    target_partition_size
+        Target partition size for IO tasks. This configuration currently
+        controls how large parquet files are split into multiple partitions.
+        Files larger than ``target_partition_size`` bytes are split into multiple
         partitions.
     groupby_n_ary
         The factor by which the number of partitions is decreased when performing
@@ -152,9 +198,9 @@ class StreamingExecutor:
     fallback_mode: StreamingFallbackMode = StreamingFallbackMode.WARN
     max_rows_per_partition: int = 1_000_000
     cardinality_factor: dict[str, float] = dataclasses.field(default_factory=dict)
-    parquet_blocksize: int = 1_000_000_000
+    target_partition_size: int = 0
     groupby_n_ary: int = 32
-    broadcast_join_limit: int = 4
+    broadcast_join_limit: int = 0
     shuffle_method: ShuffleMethod | None = None
     rapidsmpf_spill: bool = False
 
@@ -168,6 +214,17 @@ class StreamingExecutor:
         object.__setattr__(
             self, "fallback_mode", StreamingFallbackMode(self.fallback_mode)
         )
+        if self.target_partition_size == 0:
+            object.__setattr__(
+                self, "target_partition_size", default_blocksize(self.scheduler)
+            )
+        if self.broadcast_join_limit == 0:
+            object.__setattr__(
+                self,
+                "broadcast_join_limit",
+                # Usually better to avoid shuffling for single gpu
+                2 if self.scheduler == "distributed" else 32,
+            )
         object.__setattr__(self, "scheduler", Scheduler(self.scheduler))
         if self.shuffle_method is not None:
             object.__setattr__(
@@ -179,8 +236,8 @@ class StreamingExecutor:
             raise TypeError("max_rows_per_partition must be an int")
         if not isinstance(self.cardinality_factor, dict):
             raise TypeError("cardinality_factor must be a dict of column name to float")
-        if not isinstance(self.parquet_blocksize, int):
-            raise TypeError("parquet_blocksize must be an int")
+        if not isinstance(self.target_partition_size, int):
+            raise TypeError("target_partition_size must be an int")
         if not isinstance(self.groupby_n_ary, int):
             raise TypeError("groupby_n_ary must be an int")
         if not isinstance(self.broadcast_join_limit, int):
