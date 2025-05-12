@@ -408,8 +408,8 @@ def _(py_val: datetime.timedelta, dtype: DataType | None):
     return _new_scalar(move(c_obj), dtype)
 
 
-@_from_py.register(datetime.datetime)
-def _(py_val: datetime.datetime, dtype: DataType | None):
+@_from_py.register(datetime.date)
+def _(py_val: datetime.date, dtype: DataType | None):
     cdef unique_ptr[scalar] c_obj
     cdef DataType c_dtype
     cdef duration_us c_duration_us
@@ -425,7 +425,10 @@ def _(py_val: datetime.datetime, dtype: DataType | None):
     else:
         c_dtype = <DataType>dtype
     cdef type_id tid = c_dtype.id()
-    epoch_seconds = py_val.timestamp()
+    if isinstance(py_val, datetime.datetime):
+        epoch_seconds = py_val.timestamp()
+    else:
+        epoch_seconds = (py_val - datetime.date(1970, 1, 1)).total_seconds()
     if tid == type_id.TIMESTAMP_NANOSECONDS:
         epoch_nanoseconds = int(epoch_seconds * 1_000_000_000)
         if epoch_nanoseconds > numeric_limits[int64_t].max():
