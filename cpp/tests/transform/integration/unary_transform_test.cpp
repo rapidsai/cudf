@@ -522,7 +522,7 @@ TEST_F(StringOperationTest, StringConcat)
 
   std::string cuda = R"***(
 __device__ void transform(void* user_data, cudf::size_type row,
-                          cudf::string_view* out, 
+                          cudf::string_view* out,
                           cudf::string_view first_name,
                           cudf::string_view last_name,
                           int32_t size)

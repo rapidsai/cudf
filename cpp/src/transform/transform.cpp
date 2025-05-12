@@ -365,14 +365,16 @@ void perform_checks(column_view base_column,
 {
   CUDF_EXPECTS(is_runtime_jit_supported(), "Runtime JIT is only supported on CUDA Runtime 11.5+");
   CUDF_EXPECTS(is_fixed_width(output_type) || output_type.id() == type_id::STRING,
-               "Transforms only support output of fixed-width or string types", std::invalid_argument);
+               "Transforms only support output of fixed-width or string types",
+               std::invalid_argument);
   CUDF_EXPECTS(std::all_of(inputs.begin(),
                            inputs.end(),
                            [](auto& input) {
                              return is_fixed_width(input.type()) ||
                                     (input.type().id() == type_id::STRING);
                            }),
-               "Transforms only support input of fixed-width or string types", std::invalid_argument);
+               "Transforms only support input of fixed-width or string types",
+               std::invalid_argument);
 
   CUDF_EXPECTS(std::all_of(inputs.begin(),
                            inputs.end(),
@@ -381,13 +383,10 @@ void perform_checks(column_view base_column,
                            }),
                "All transform input columns must have the same size or be scalar (have size 1)");
 
-  CUDF_EXPECTS(std::all_of(inputs.begin(),
-                           inputs.end(),
-                           [&](auto const& input) {
-                             return (input.size() == 1 && input.null_count() == 0) ||
-                                    (input.null_count() == base_column.null_count());
-                           }),
-               "All transform input columns must have the same null-count");
+  CUDF_EXPECTS(
+    std::all_of(
+      inputs.begin(), inputs.end(), [&](auto const& input) { return input.null_count() == 0; }),
+    "All transform input columns must have no nulls");
 }
 
 }  // namespace
@@ -405,7 +404,8 @@ std::unique_ptr<column> transform(std::vector<column_view> const& inputs,
                                   rmm::cuda_stream_view stream,
                                   rmm::device_async_resource_ref mr)
 {
-  CUDF_EXPECTS(!inputs.empty(), "Transform must have at least 1 input column", std::invalid_argument);
+  CUDF_EXPECTS(
+    !inputs.empty(), "Transform must have at least 1 input column", std::invalid_argument);
 
   auto const base_column = std::max_element(
     inputs.begin(), inputs.end(), [](auto& a, auto& b) { return a.size() < b.size(); });
