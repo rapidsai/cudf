@@ -49,7 +49,7 @@ struct always_not_equal {
 };
 
 /**
- * @brief An comparator adapter wrapping the two table comparator
+ * @brief A comparator adapter wrapping the two table comparator
  */
 template <typename Equal>
 struct comparator_adapter {
@@ -68,7 +68,7 @@ struct comparator_adapter {
 };
 
 /**
- * @brief An comparator adapter wrapping the two table comparator
+ * @brief A comparator adapter wrapping the two table comparator
  */
 template <typename Equal>
 struct primitive_comparator_adapter {
