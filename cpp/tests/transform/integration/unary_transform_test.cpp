@@ -48,7 +48,9 @@ struct RuntimeSupportTest : public cudf::test::BaseFixture {
   cudf::test::structs_column_wrapper struct_col{a, b};
 
   static constexpr char const* udf =
-    "__device__ inline void mix(float* out, float a, float b, float t) { *out = a + b - b * t; }";
+    R"***(
+    __device__ inline void lerp(float* out, float a, float b, float t) { *out = a - t * a + t * b; }
+    )***";
 };
 
 struct AssertsTest : public RuntimeSupportTest {

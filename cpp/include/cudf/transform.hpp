@@ -42,11 +42,12 @@ namespace CUDF_EXPORT cudf {
  * Note that for every scalar in `inputs` (columns of size 1), `input[i] == input[0]`
  *
  *
- * @throws cudf::invalid_argument if:
- *    - JIT is not supported by the runtime
- *    - any of the input columns have different sizes (except scalars of size 1)
- *    - `output_type` or any of the inputs are not fixed-width or string types
- *    - any of the input columns have nulls
+ * @throws std::invalid_argument if any of the input columns have different sizes (except scalars of
+ * size 1)
+ * @throws std::invalid_argument if `output_type` or any of the inputs are not fixed-width or string
+ * types
+ * @throws std::invalid_argument if any of the input columns have nulls
+ * @throws std::logic_error if JIT is not supported by the runtime
  *
  * The size of the resulting column is the size of the largest column.
  *
