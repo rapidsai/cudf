@@ -7,7 +7,6 @@ from libcpp.utility cimport move
 from pylibcudf.column cimport Column
 from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.nvtext.deduplicate cimport (
-    substring_duplicates as cpp_substring_duplicates,
     build_suffix_array as cpp_build_suffix_array,
     suffix_array_type as cpp_suffix_array_type,
     resolve_duplicates as cpp_resolve_duplicates,
@@ -18,7 +17,6 @@ from pylibcudf.libcudf.types cimport size_type
 from rmm.librmm.device_buffer cimport device_buffer
 
 __all__ = [
-    "substring_duplicates",
     "build_suffix_array",
     "resolve_duplicates",
     "resolve_duplicates_pair"
@@ -35,32 +33,6 @@ cdef Column _column_from_suffix_array(cpp_suffix_array_type suffix_array):
             )
         )
     )
-
-cpdef Column substring_duplicates(Column input, size_type min_width):
-    """
-    Returns duplicate strings found anywhere in the input column
-    with min_width minimum number of bytes.
-
-    For details, see :cpp:func:`substring_duplicates`
-
-    Parameters
-    ----------
-    input : Column
-        Strings column of text
-    min_width : size_type
-        Minimum width of bytes to detect duplicates
-
-    Returns
-    -------
-    Column
-        New column of duplicate strings
-    """
-    cdef unique_ptr[column] c_result
-
-    with nogil:
-        c_result = cpp_substring_duplicates(input.view(), min_width)
-
-    return Column.from_libcudf(move(c_result))
 
 
 cpdef Column build_suffix_array(Column input, size_type min_width):

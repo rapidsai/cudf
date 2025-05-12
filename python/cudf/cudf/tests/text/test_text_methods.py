@@ -1093,16 +1093,6 @@ def duplicate_input():
     ]
 
 
-def test_substring_duplicates(duplicate_input):
-    text = duplicate_input
-    input = cudf.Series(text)
-    actual = input.str.substring_duplicates(15)
-    expected = cudf.Series(
-        [" 01234567890123456789 ", ". 012345678901234", " reprehenderit "]
-    )
-    assert_eq(expected, actual)
-
-
 def test_resolve_duplicates(duplicate_input):
     text = duplicate_input
     input = cudf.Series(text)

@@ -50,30 +50,6 @@ cudf::test::strings_column_wrapper build_input()
 }
 }  // namespace
 
-TEST_F(TextDeduplicateTest, StringDuplicates)
-{
-  auto const input = build_input();
-  auto sv          = cudf::strings_column_view(input);
-
-  auto results  = nvtext::substring_duplicates(sv, 20);
-  auto expected = cudf::test::strings_column_wrapper({" 01234567890123456789 "});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
-
-  results = nvtext::substring_duplicates(sv, 15);
-  // we take advantage of the fact that the results are currently sorted
-  expected = cudf::test::strings_column_wrapper(
-    {" 01234567890123456789 ", ". 012345678901234", " reprehenderit "});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
-
-  // Test with sliced input
-  auto const sliced_input = cudf::slice(input, {1, 10}).front();
-
-  sv       = cudf::strings_column_view(sliced_input);
-  results  = nvtext::substring_duplicates(sv, 15);
-  expected = cudf::test::strings_column_wrapper({"01234567890123456789 ", " reprehenderit "});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
-}
-
 TEST_F(TextDeduplicateTest, SuffixArray)
 {
   auto const input = cudf::test::strings_column_wrapper({
@@ -150,7 +126,11 @@ TEST_F(TextDeduplicateTest, Errors)
   auto const input = cudf::test::strings_column_wrapper({"0123456789"});
   auto const sv    = cudf::strings_column_view(input);
 
-  EXPECT_THROW(nvtext::substring_duplicates(sv, 50), std::invalid_argument);
-  EXPECT_THROW(nvtext::substring_duplicates(sv, 5), std::invalid_argument);
   EXPECT_THROW(nvtext::build_suffix_array(sv, 50), std::invalid_argument);
+
+  auto sa = nvtext::build_suffix_array(sv, 8);
+  EXPECT_THROW(nvtext::resolve_duplicates(sv, *sa, 5), std::invalid_argument);
+  EXPECT_THROW(nvtext::resolve_duplicates(sv, *sa, 50), std::invalid_argument);
+  EXPECT_THROW(nvtext::resolve_duplicates_pair(sv, *sa, sv, *sa, 5), std::invalid_argument);
+  EXPECT_THROW(nvtext::resolve_duplicates_pair(sv, *sa, sv, *sa, 50), std::invalid_argument);
 }
