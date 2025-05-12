@@ -7,7 +7,7 @@ from cpython.pycapsule cimport (
     PyCapsule_New,
 )
 
-from libc.stdint cimport uintptr_t, int32_t, int64_t
+from libc.stdint cimport uintptr_t
 
 from libcpp.limits cimport numeric_limits
 from libcpp.memory cimport make_unique, unique_ptr
@@ -25,7 +25,8 @@ from pylibcudf.libcudf.interop cimport (
     to_arrow_device_raw,
     to_arrow_schema_raw,
 )
-from pylibcudf.libcudf.scalar.scalar cimport scalar, numeric_scalar
+from pylibcudf.libcudf.scalar.scalar cimport scalar
+from pylibcudf.libcudf.strings.strings_column_view cimport strings_column_view
 from pylibcudf.libcudf.types cimport size_type, size_of as cpp_size_of, bitmask_type
 from pylibcudf.libcudf.utilities.traits cimport is_fixed_width
 from pylibcudf.libcudf.copying cimport get_element
@@ -97,18 +98,8 @@ cdef class OwnerWithCAI:
             # Cast to Python integers before multiplyling to avoid overflow.
             size = int(cv.size()) * int(cpp_size_of(cv.type()))
         elif cv.type().id() == type_id.STRING:
-            # A strings column with no children is created for empty/all null, in which
-            # case the size remains 0. Otherwise, the size of the character array stored
-            # in the parent is the last offset in the offsets child.
-            if cv.num_children():
-                offsets_column = cv.child(0)
-                last_offset = get_element(offsets_column, offsets_column.size() - 1)
-                if offsets_column.type().id() == type_id.INT32:
-                    size = (<numeric_scalar[int32_t] *> last_offset.get()).value()
-                elif offsets_column.type().id() == type_id.INT64:
-                    size = (<numeric_scalar[int64_t] *>last_offset.get()).value()
-                else:
-                    raise RuntimeError("Invalid strings column offset dtype")
+            # TODO: stream-ordered
+            size = strings_column_view(cv).chars_size(_get_stream().view())
 
         obj.cai = {
             "shape": (size,),
