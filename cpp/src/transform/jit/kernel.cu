@@ -122,7 +122,7 @@ CUDF_KERNEL void kernel(cudf::mutable_column_device_view_core const* outputs,
 
   for (auto i = start; i < size; i += stride) {
     if constexpr (has_user_data) {
-      GENERIC_TRANSFORM_OP(user_data, &Out::element(outputs, i), In::element(inputs, i)...);
+      GENERIC_TRANSFORM_OP(user_data, i, &Out::element(outputs, i), In::element(inputs, i)...);
     } else {
       GENERIC_TRANSFORM_OP(&Out::element(outputs, i), In::element(inputs, i)...);
     }
@@ -146,7 +146,7 @@ CUDF_KERNEL void fixed_point_kernel(cudf::mutable_column_device_view_core const*
     typename Out::type result{numeric::scaled_integer<typename Out::type::rep>{0, output_scale}};
 
     if constexpr (has_user_data) {
-      GENERIC_TRANSFORM_OP(user_data, &result, In::element(inputs, i)...);
+      GENERIC_TRANSFORM_OP(user_data, i, &result, In::element(inputs, i)...);
     } else {
       GENERIC_TRANSFORM_OP(&result, In::element(inputs, i)...);
     }
@@ -169,7 +169,7 @@ CUDF_KERNEL void span_kernel(cudf::jit::device_span<typename Out::type> const* o
 
   for (auto i = start; i < size; i += stride) {
     if constexpr (has_user_data) {
-      GENERIC_TRANSFORM_OP(user_data, &Out::element(outputs, i), In::element(inputs, i)...);
+      GENERIC_TRANSFORM_OP(user_data, i, &Out::element(outputs, i), In::element(inputs, i)...);
     } else {
       GENERIC_TRANSFORM_OP(&Out::element(outputs, i), In::element(inputs, i)...);
     }

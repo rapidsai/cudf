@@ -96,7 +96,10 @@ std::map<uint32_t, std::string> build_ptx_params(std::vector<std::string> const&
   std::map<uint32_t, std::string> params;
   uint32_t index = 0;
 
-  if (has_user_data) { params.emplace(index++, "void *"); }
+  if (has_user_data) {
+    params.emplace(index++, "void *");
+    params.emplace(index++, jitify2::reflection::reflect<cudf::size_type>());
+  }
 
   for (auto& name : output_typenames) {
     params.emplace(index++, name + "*");

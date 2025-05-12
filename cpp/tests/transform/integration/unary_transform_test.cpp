@@ -518,18 +518,16 @@ TEST_F(StringOperationTest, StringConcat)
   auto last_name =
     cudf::test::strings_column_wrapper{"Doe", "Folk", "Louis", "Xi", "Serenity", "Scott"};
   rmm::device_buffer scratch(100 * 6, cudf::get_default_stream());
-  auto scratch_offsets =
-    cudf::test::fixed_width_column_wrapper<int32_t>{0, 100, 200, 300, 400, 500};
   auto scratch_sizes = cudf::test::fixed_width_column_wrapper<int32_t>{100};
 
   std::string cuda = R"***(
-__device__ void transform(void* user_data, cudf::string_view* out,
+__device__ void transform(void* user_data, cudf::size_type row,
+                          cudf::string_view* out, 
                           cudf::string_view first_name,
                           cudf::string_view last_name,
-                          int32_t offset,
                           int32_t size)
 {
-  char* it                = static_cast<char*>(user_data) + offset;
+  char* it = static_cast<char*>(user_data) + static_cast<size_t>(row) * static_cast<size_t>(size);
   char const* const begin = it;
 
   memcpy(it, first_name.data(), first_name.size_bytes());
@@ -547,7 +545,7 @@ __device__ void transform(void* user_data, cudf::string_view* out,
 
   auto expected = cudf::test::strings_column_wrapper{
     "John Doe", "Mia Folk", "Abd Louis", "Mendes Xi", "Arya Serenity", "John Scott"};
-  auto result = cudf::transform({first_name, last_name, scratch_offsets, scratch_sizes},
+  auto result = cudf::transform({first_name, last_name, scratch_sizes},
                                 cuda,
                                 cudf::data_type(cudf::type_id::STRING),
                                 false,
