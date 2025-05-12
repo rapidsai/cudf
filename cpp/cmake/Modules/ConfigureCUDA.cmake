@@ -38,6 +38,9 @@ endif()
 
 # make sure we produce smallest binary size
 list(APPEND CUDF_CUDA_FLAGS -Xfatbin=-compress-all)
+if(CMAKE_CUDA_COMPILER_ID STREQUAL "NVIDIA" AND CMAKE_CUDA_COMPILER_VERSION VERSION_EQUAL 12.9)
+  list(APPEND CUDF_CUDA_FLAGS -Xfatbin=--compress-level=3)
+endif()
 
 # Option to enable line info in CUDA device compilation to allow introspection when profiling /
 # memchecking
