@@ -231,7 +231,7 @@ std::unique_ptr<table> split(strings_column_view const& input,
   }
 
   auto tokenizer    = split_tokenizer_fn{*d_strings, delimiter.size(), max_tokens};
-  auto delimiter_fn = string_delimiter_fn{string_view(delimiter.data(), delimiter.size())};
+  auto delimiter_fn = string_delimiter_fn{delimiter.value(stream)};
   return split_fn(input, tokenizer, delimiter_fn, stream, mr);
 }
 
@@ -256,7 +256,7 @@ std::unique_ptr<table> rsplit(strings_column_view const& input,
   }
 
   auto tokenizer    = rsplit_tokenizer_fn{*d_strings, delimiter.size(), max_tokens};
-  auto delimiter_fn = string_delimiter_fn{string_view(delimiter.data(), delimiter.size())};
+  auto delimiter_fn = string_delimiter_fn{delimiter.value(stream)};
   return split_fn(input, tokenizer, delimiter_fn, stream, mr);
 }
 

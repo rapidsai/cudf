@@ -251,4 +251,92 @@ struct DeviceLeadLag {
   explicit CUDF_HOST_DEVICE inline DeviceLeadLag(size_type offset_) : row_offset(offset_) {}
 };
 
+/**
+ * @brief Binary bitwise `AND` operator
+ */
+struct DeviceBitAnd {
+  template <typename T, std::enable_if_t<std::is_integral_v<T>>* = nullptr>
+  CUDF_HOST_DEVICE inline T operator()(T const& lhs, T const& rhs) const
+  {
+    return lhs & rhs;
+  }
+
+  template <typename T, std::enable_if_t<std::is_integral_v<T>>* = nullptr>
+  CUDF_HOST_DEVICE static constexpr T identity()
+  {
+    if constexpr (std::is_same_v<T, bool>) {
+      return true;
+    } else {
+      return ~T{0};
+    }
+  }
+
+  template <typename T, std::enable_if_t<!std::is_integral_v<T>>* = nullptr>
+  CUDF_HOST_DEVICE static constexpr T identity()
+  {
+#ifndef __CUDA_ARCH__
+    CUDF_FAIL("Bitwise AND is only supported for integral types.");
+#else
+    CUDF_UNREACHABLE("Bitwise AND is only supported for integral types.");
+#endif
+    return T{};
+  }
+};
+
+/**
+ * @brief Binary bitwise `OR` operator
+ */
+struct DeviceBitOr {
+  template <typename T, std::enable_if_t<std::is_integral_v<T>>* = nullptr>
+  CUDF_HOST_DEVICE inline T operator()(T const& lhs, T const& rhs) const
+  {
+    return lhs | rhs;
+  }
+
+  template <typename T, std::enable_if_t<std::is_integral_v<T>>* = nullptr>
+  CUDF_HOST_DEVICE static constexpr T identity()
+  {
+    return T{0};
+  }
+
+  template <typename T, std::enable_if_t<!std::is_integral_v<T>>* = nullptr>
+  CUDF_HOST_DEVICE static constexpr T identity()
+  {
+#ifndef __CUDA_ARCH__
+    CUDF_FAIL("Bitwise OR is only supported for integral types.");
+#else
+    CUDF_UNREACHABLE("Bitwise OR is only supported for integral types.");
+#endif
+    return T{};
+  }
+};
+
+/**
+ * @brief Binary bitwise `XOR` operator
+ */
+struct DeviceBitXor {
+  template <typename T, std::enable_if_t<std::is_integral_v<T>>* = nullptr>
+  CUDF_HOST_DEVICE inline T operator()(T const& lhs, T const& rhs) const
+  {
+    return lhs ^ rhs;
+  }
+
+  template <typename T, std::enable_if_t<std::is_integral_v<T>>* = nullptr>
+  CUDF_HOST_DEVICE static constexpr T identity()
+  {
+    return T{0};
+  }
+
+  template <typename T, std::enable_if_t<!std::is_integral_v<T>>* = nullptr>
+  CUDF_HOST_DEVICE static constexpr T identity()
+  {
+#ifndef __CUDA_ARCH__
+    CUDF_FAIL("Bitwise XOR is only supported for integral types.");
+#else
+    CUDF_UNREACHABLE("Bitwise XOR is only supported for integral types.");
+#endif
+    return T{};
+  }
+};
+
 }  // namespace cudf
