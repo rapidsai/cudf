@@ -66,7 +66,7 @@ def test_explain_physical_plan(tmp_path, df):
         },
     )
 
-    plan = explain_query(q, engine)
+    plan = explain_query(q, engine, fuse=False)
 
     assert "UNION" in plan
     assert "SPLITSCAN" in plan
