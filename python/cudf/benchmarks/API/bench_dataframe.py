@@ -352,7 +352,6 @@ def bench_where(benchmark, dataframe, cond, other):
 
 
 @benchmark_with_object(cls="dataframe", dtype="float", nulls=False, cols=20)
-@pytest.mark.parametrize("fast", [True, False])
 @pytest.mark.pandas_incompatible
-def bench_to_cupy(benchmark, dataframe, fast):
-    benchmark(dataframe.to_cupy, fast=fast)
+def bench_to_cupy(benchmark, dataframe):
+    benchmark(dataframe.to_cupy)
