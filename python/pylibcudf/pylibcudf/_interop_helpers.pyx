@@ -15,6 +15,22 @@ from pylibcudf.libcudf.interop cimport (
 from dataclasses import dataclass, field
 
 
+class _ArrowLikeMeta(type):
+    # We cannot separate these types via singledispatch because the dispatch
+    # will often be ambiguous when objects expose multiple protocols.
+    def __subclasscheck__(cls, other):
+        return (
+            hasattr(other, "__arrow_c_stream__")
+            or hasattr(other, "__arrow_c_device_stream__")
+            or hasattr(other, "__arrow_c_array__")
+            or hasattr(other, "__arrow_c_device_array__")
+        )
+
+
+class ArrowLike(metaclass=_ArrowLikeMeta):
+    pass
+
+
 @dataclass
 class ColumnMetadata:
     """Metadata associated with a column.
