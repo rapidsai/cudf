@@ -1,19 +1,28 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
+from libc.stdint cimport uintptr_t
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
+from libcpp.limits cimport numeric_limits
 from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.reshape cimport (
     interleave_columns as cpp_interleave_columns,
     tile as cpp_tile,
+    table_to_array as cpp_table_to_array,
+    byte,
 )
 from pylibcudf.libcudf.table.table cimport table
 from pylibcudf.libcudf.types cimport size_type
 
+from pylibcudf.libcudf.utilities.span cimport device_span
+
+from rmm.pylibrmm.stream cimport Stream
+
 from .column cimport Column
 from .table cimport Table
+from .utils cimport _get_stream
 
-__all__ = ["interleave_columns", "tile"]
+__all__ = ["interleave_columns", "tile", "table_to_array"]
 
 cpdef Column interleave_columns(Table source_table):
     """Interleave columns of a table into a single column.
@@ -67,3 +76,41 @@ cpdef Table tile(Table source_table, size_type count):
         c_result = cpp_tile(source_table.view(), count)
 
     return Table.from_libcudf(move(c_result))
+
+
+cpdef void table_to_array(
+    Table input_table,
+    uintptr_t ptr,
+    size_type size,
+    Stream stream=None
+):
+    """
+    Copy a table into a preallocated column-major device array.
+    Parameters
+    ----------
+    input_table : Table
+        A table with fixed-width, non-nullable columns of the same type.
+    ptr : uintptr_t
+        A device pointer to the beginning of the output buffer.
+    size : size_type
+        The total number of bytes available at `ptr`.
+        Must be at least `num_rows * num_columns * sizeof(dtype)`.
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
+    """
+    if size > numeric_limits[size_type].max():
+        raise ValueError(
+            "Size exceeds the int32_t limit."
+        )
+    stream = _get_stream(stream)
+
+    cdef device_span[byte] span = device_span[byte](
+        <byte*> ptr, size
+    )
+
+    with nogil:
+        cpp_table_to_array(
+            input_table.view(),
+            span,
+            stream.view()
+        )

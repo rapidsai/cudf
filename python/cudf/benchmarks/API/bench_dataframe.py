@@ -349,3 +349,10 @@ def bench_nsmallest(benchmark, dataframe, num_cols_to_sort, n):
 )
 def bench_where(benchmark, dataframe, cond, other):
     benchmark(dataframe.where, cond, other)
+
+
+@benchmark_with_object(cls="dataframe", dtype="float", nulls=False, cols=20)
+@pytest.mark.parametrize("fast", [True, False])
+@pytest.mark.pandas_incompatible
+def bench_to_cupy(benchmark, dataframe, fast):
+    benchmark(dataframe.to_cupy, fast=fast)

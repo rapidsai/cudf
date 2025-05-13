@@ -1,10 +1,21 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 import pyarrow as pa
 import pytest
 from utils import assert_column_eq, assert_table_eq
 
 import pylibcudf as plc
+from pylibcudf.types import TypeId
+
+
+@pytest.fixture(scope="module")
+def np():
+    return pytest.importorskip("cupy")
+
+
+@pytest.fixture(scope="module")
+def cp():
+    return pytest.importorskip("cupy")
 
 
 @pytest.fixture(scope="module")
@@ -37,3 +48,34 @@ def test_tile(reshape_data, cnt):
     )
 
     assert_table_eq(expect, res)
+
+
+@pytest.mark.parametrize(
+    "dtype, type_id",
+    [
+        ("int32", TypeId.INT32),
+        ("int64", TypeId.INT64),
+        ("float32", TypeId.FLOAT32),
+        ("float64", TypeId.FLOAT64),
+    ],
+)
+def test_table_to_array(dtype, type_id, np, cp):
+    arrow_type = pa.from_numpy_dtype(getattr(np, dtype))
+    arrs = [
+        pa.array([1, 2, 3], type=arrow_type),
+        pa.array([4, 5, 6], type=arrow_type),
+    ]
+    arrow_tbl = pa.Table.from_arrays(arrs, names=["a", "b"])
+    tbl = plc.interop.from_arrow(arrow_tbl)
+
+    rows, cols = tbl.num_rows(), tbl.num_columns()
+    out = cp.empty((rows, cols), dtype=dtype, order="F")
+
+    plc.reshape.table_to_array(
+        tbl,
+        out.data.ptr,
+        out.nbytes,
+    )
+
+    expect = cp.array([[1, 4], [2, 5], [3, 6]], dtype=dtype)
+    cp.testing.assert_array_equal(out, expect)
