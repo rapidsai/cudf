@@ -139,4 +139,6 @@ def _(ir: Scan, *, offset: str = "") -> str:
 @_repr_ir.register
 def _(ir: Fused, *, offset: str = "") -> str:
     nodes = tuple(type(node).__name__.upper() for node in ir.subnodes)
+    if ir.fused_io:
+        nodes = (type(ir.fused_io.children[0]).__name__.upper(), *nodes)
     return _repr_header(offset, f"FUSED {nodes}", ir.schema)
