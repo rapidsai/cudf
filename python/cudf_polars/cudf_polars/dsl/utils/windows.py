@@ -56,8 +56,9 @@ def duration_to_int(
 
     Returns
     -------
-    Pyarrow scalar
-        With datatype matching the provided dtype.
+    int
+        The total number of nanoseconds represented by this duration,
+        or just an integer if `parsed_int` was true.
 
     Raises
     ------

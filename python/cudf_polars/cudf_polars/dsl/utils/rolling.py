@@ -67,7 +67,7 @@ def rewrite_rolling(
     that live within an aggregation), the aggregation phase (now
     acting on columns only), and a post-selection phase (evaluating
     expressions of aggregated results).
-    This does scheme does not permit nested aggregations, so those are
+    This scheme does not permit nested aggregations, so those are
     unsupported.
     """
     index_name = options.rolling.index_column
