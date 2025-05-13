@@ -148,7 +148,6 @@ def _lexsorted_equal_range(
 
 def _index_from_data(data: MutableMapping, name: Any = no_default):
     """Construct an index of the appropriate type from some data."""
-
     if len(data) == 0:
         raise ValueError("Cannot construct Index from any empty Table")
     if len(data) == 1:

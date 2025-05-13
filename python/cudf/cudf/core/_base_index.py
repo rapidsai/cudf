@@ -1911,6 +1911,12 @@ class BaseIndex(Serializable):
                 step=index.step,
                 name=index.name,
             )
+        elif isinstance(index, pd.DatetimeIndex):
+            return cudf.DatetimeIndex(
+                as_column(index, nan_as_null=nan_as_null),
+                name=index.name,
+                freq=index.freq.name,
+            )
         else:
             return cudf.Index._from_column(
                 as_column(index, nan_as_null=nan_as_null),
