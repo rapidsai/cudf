@@ -57,9 +57,10 @@ class RMPFIntegration:  # pragma: no cover
 
         on = options["on"]
         assert not other, f"Unexpected arguments: {other}"
-        columns_to_hash = tuple(df.column_names.index(val) for val in on)
+        column_names = options["column_names"]
+        columns_to_hash = tuple(column_names.index(val) for val in on)
         packed_inputs = partition_and_pack(
-            df.table,
+            df.select(column_names).table,
             columns_to_hash=columns_to_hash,
             num_partitions=partition_count,
             stream=DEFAULT_STREAM,
