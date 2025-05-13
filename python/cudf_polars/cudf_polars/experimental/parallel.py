@@ -134,7 +134,9 @@ def _fuse_ir_node(
 def _fusable_ir_type(ir: IR) -> bool:
     return (
         # Basic fusion
-        isinstance(ir, (Filter, GroupBy, HStack, MapFunction, Projection, Select, Sort))
+        isinstance(
+            ir, (Cache, Filter, GroupBy, HStack, MapFunction, Projection, Select, Sort)
+        )
         or (
             # IO Fusion
             isinstance(ir, Union)
@@ -467,22 +469,7 @@ def _lower_ir_pwise(
 
 _lower_ir_pwise_preserve = partial(_lower_ir_pwise, preserve_partitioning=True)
 lower_ir_node.register(Filter, _lower_ir_pwise_preserve)
+lower_ir_node.register(Projection, _lower_ir_pwise_preserve)
+lower_ir_node.register(Cache, _lower_ir_pwise)
 lower_ir_node.register(HStack, _lower_ir_pwise)
 lower_ir_node.register(HConcat, _lower_ir_pwise)
-
-
-@lower_ir_node.register(Cache)
-def _(
-    ir: Cache, rec: LowerIRTransformer
-) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
-    return rec(ir.children[0])
-
-
-@lower_ir_node.register(Projection)
-def _(
-    ir: Projection, rec: LowerIRTransformer
-) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
-    child, pi = rec(ir.children[0])
-    if ir.schema == child.schema:
-        return child, pi
-    return _lower_ir_pwise_preserve(ir, rec)
