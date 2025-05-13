@@ -686,20 +686,18 @@ def _(
                 orderby,
                 named_agg.value,
             )
-        return replace(
-            [named_post_agg.value],
-            {
-                expr.Col(agg.value.dtype, agg.name): expr.RollingWindow(
-                    agg.value.dtype,
-                    preceding,
-                    following,
-                    closed_window,
-                    orderby,
-                    agg.value,
-                )
-                for agg in named_aggs
-            },
-        )[0]
+        replacements: dict[expr.Expr, expr.Expr] = {
+            expr.Col(agg.value.dtype, agg.name): expr.RollingWindow(
+                agg.value.dtype,
+                preceding,
+                following,
+                closed_window,
+                orderby,
+                agg.value,
+            )
+            for agg in named_aggs
+        }
+        return replace([named_post_agg.value], replacements)[0]
     elif isinstance(node.options, pl_expr.WindowMapping):
         # pl.col("a").over(...)
         return expr.GroupedRollingWindow(

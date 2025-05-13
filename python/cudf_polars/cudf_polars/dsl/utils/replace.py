@@ -5,14 +5,13 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, overload
+from typing import TYPE_CHECKING
 
 from cudf_polars.dsl.traversal import CachingVisitor, reuse_if_unchanged
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
-    from cudf_polars.dsl import expr, ir
     from cudf_polars.typing import GenericTransformer, NodeT
 
 __all__ = ["replace"]
@@ -23,24 +22,6 @@ def _replace(node: NodeT, fn: GenericTransformer[NodeT, NodeT]) -> NodeT:
         return fn.state["replacements"][node]
     except KeyError:
         return reuse_if_unchanged(node, fn)
-
-
-if TYPE_CHECKING:
-
-    @overload
-    def replace(
-        nodes: Sequence[expr.Expr], replacements: Mapping[expr.Expr, expr.Expr]
-    ) -> list[expr.Expr]: ...
-
-    @overload
-    def replace(
-        nodes: Sequence[ir.IR], replacements: Mapping[ir.IR, ir.IR]
-    ) -> list[ir.IR]: ...
-
-    @overload
-    def replace(
-        nodes: Sequence[NodeT], replacements: Mapping[NodeT, NodeT]
-    ) -> list[NodeT]: ...
 
 
 def replace(nodes: Sequence[NodeT], replacements: Mapping[NodeT, NodeT]) -> list[NodeT]:
