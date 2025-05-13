@@ -81,8 +81,8 @@ class Fused(IR):
         self._non_child_args = (
             [node.do_evaluate for node in subnodes],
             [tuple(node._non_child_args) for node in self.subnodes],
-            None,
-            (),
+            [],
+            [],
         )
         self.children = children
 
@@ -91,13 +91,13 @@ class Fused(IR):
         cls,
         funcs: Sequence[Callable],
         subargs: Sequence[Sequence[Any]],
-        io_func: Callable | None,
+        io_funcs: Sequence[Callable],
         io_args: Sequence[Any],
         *children: DataFrame,
     ) -> DataFrame:
         """Evaluate and return a dataframe."""
-        if io_func:
-            children = (io_func(*io_args),)
+        if io_funcs:
+            children = (io_funcs[0](*io_args),)
         for func, args in zip(funcs, subargs, strict=False):
             children = (func(*args, *children),)
         return children[0]
@@ -381,8 +381,8 @@ def _(
             ir.do_evaluate,
             ir._non_child_args[0],
             ir._non_child_args[1],
-            io.do_evaluate,
-            io._non_child_args,
+            [io.do_evaluate],
+            list(io._non_child_args),
         )
     return graph
 
