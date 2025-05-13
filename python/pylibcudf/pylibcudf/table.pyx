@@ -35,27 +35,11 @@ from pylibcudf._interop_helpers cimport (
     _release_device_array,
     _metadata_to_libcudf,
 )
-from ._interop_helpers import ColumnMetadata
+from ._interop_helpers import ArrowLike, ColumnMetadata
 
 from functools import singledispatchmethod
 
 __all__ = ["Table"]
-
-
-class _ArrowLikeMeta(type):
-    # We cannot separate these types via singledispatch because the dispatch
-    # will often be ambiguous when objects expose multiple protocols.
-    def __subclasscheck__(cls, other):
-        return (
-            hasattr(other, "__arrow_c_stream__")
-            or hasattr(other, "__arrow_c_device_stream__")
-            or hasattr(other, "__arrow_c_array__")
-            or hasattr(other, "__arrow_c_device_array__")
-        )
-
-
-class _ArrowLike(metaclass=_ArrowLikeMeta):
-    pass
 
 
 cdef class _ArrowTableHolder:
@@ -86,7 +70,7 @@ cdef class Table:
             raise ValueError("All columns must be pylibcudf Column objects")
         self._columns = columns
 
-    @_init.register(_ArrowLike)
+    @_init.register(ArrowLike)
     def _(self, arrow_like):
         cdef ArrowSchema* c_schema
         cdef ArrowDeviceArray* c_array

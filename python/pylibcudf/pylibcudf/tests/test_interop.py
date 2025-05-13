@@ -6,6 +6,7 @@ import nanoarrow.device
 import numpy as np
 import pyarrow as pa
 import pytest
+from packaging.version import parse
 from utils import assert_column_eq, assert_table_eq
 
 import pylibcudf as plc
@@ -163,3 +164,22 @@ def test_device_interop_table():
 
     new_tbl = plc.Table(na_arr)
     assert_table_eq(pa_tbl, new_tbl)
+
+
+@pytest.mark.skipif(
+    parse(pa.__version__) < parse("16.0.0"),
+    reason="https://github.com/apache/arrow/pull/39985",
+)
+@pytest.mark.parametrize(
+    "data",
+    [
+        [[1, 2, 3], [4, 5, 6]],
+        [[1, 2, 3], [None, 5, 6]],
+        [[[1]], [[2]]],
+        [[{"a": 1}], [{"b": 2}]],
+    ],
+)
+def test_column_from_arrow_stream(data):
+    pa_arr = pa.chunked_array(data)
+    col = plc.Column(pa_arr)
+    assert_column_eq(pa_arr, col)
