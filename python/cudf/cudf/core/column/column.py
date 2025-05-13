@@ -1713,9 +1713,13 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             (cudf.Decimal128Dtype, cudf.Decimal64Dtype, cudf.Decimal32Dtype),
         ):
             result.dtype.precision = dtype.precision  # type: ignore[union-attr]
+        if cudf.get_option("mode.pandas_compatible") and result.dtype != dtype:
+            # import pdb;pdb.set_trace()
+            result._dtype = dtype
         return result
 
     def astype(self, dtype: DtypeObj, copy: bool = False) -> ColumnBase:
+        # import pdb;pdb.set_trace()
         if self.dtype == dtype:
             result = self
         elif len(self) == 0:
@@ -1738,7 +1742,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             elif dtype.kind == "m":
                 result = self.as_timedelta_column(dtype)
             elif dtype.kind == "O":
-                result = self.as_string_column()
+                result = self.as_string_column(dtype)
             else:
                 result = self.as_numerical_column(dtype)
 
@@ -1807,7 +1811,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     ) -> cudf.core.column.TimeDeltaColumn:
         raise NotImplementedError
 
-    def as_string_column(self) -> StringColumn:
+    def as_string_column(self, dtype) -> StringColumn:
         raise NotImplementedError
 
     def as_decimal_column(
@@ -2248,6 +2252,8 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 result_col = type(self).from_struct_column(  # type: ignore[attr-defined]
                     result_col, closed=col_dtype.closed
                 )
+            # else:
+            #     result_col = result_col._with_type_metadata(col_dtype)
         return result_col.element_indexing(0)
 
     @acquire_spill_lock()
@@ -2537,7 +2543,7 @@ def build_column(
             offset=offset,
             null_count=null_count,
         )
-    elif dtype == CUDF_STRING_DTYPE:
+    elif dtype == CUDF_STRING_DTYPE or isinstance(dtype, pd.StringDtype):
         return cudf.core.column.StringColumn(
             data=data,  # type: ignore[arg-type]
             size=size,

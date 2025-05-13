@@ -365,6 +365,7 @@ class ColumnAccessor(abc.MutableMapping):
             raise ValueError("All columns must be of equal length")
 
         # TODO: we should move all insert logic here
+        # import pdb;pdb.set_trace()
         if loc == old_ncols:
             self._data[name] = value
         else:
@@ -372,8 +373,15 @@ class ColumnAccessor(abc.MutableMapping):
             new_values = self.columns[:loc] + (value,) + self.columns[loc:]
             self._data = dict(zip(new_keys, new_values))
         self._clear_cache(old_ncols, old_ncols + 1)
-        # The type(name) may no longer match the prior label_dtype
-        self.label_dtype = None
+        if cudf.get_option("mode.pandas_compatible"):
+            try:
+                pd.Index([*list(self.names), name], dtype=self.label_dtype)
+            except TypeError:
+                # The type(name) may no longer match the prior label_dtype
+                self.label_dtype = None
+        else:
+            # The type(name) may no longer match the prior label_dtype
+            self.label_dtype = None
 
     def copy(self, deep: bool = False) -> Self:
         """

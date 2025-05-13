@@ -34,6 +34,7 @@ pandas_dtypes_to_np_dtypes = {
     pd_dtype: np_dtype
     for np_dtype, pd_dtype in np_dtypes_to_pandas_dtypes.items()
 }
+pandas_dtypes_to_np_dtypes[pd.StringDtype("pyarrow")] = np.dtype("object")
 
 pyarrow_dtypes_to_pandas_dtypes = {
     pa.uint8(): pd.UInt8Dtype(),
@@ -114,7 +115,7 @@ def cudf_dtype_to_pa_type(dtype: DtypeObj) -> pa.DataType:
         return dtype.to_arrow()
     elif isinstance(dtype, pd.DatetimeTZDtype):
         return pa.timestamp(dtype.unit, str(dtype.tz))
-    elif dtype == CUDF_STRING_DTYPE:
+    elif dtype == CUDF_STRING_DTYPE or isinstance(dtype, pd.StringDtype):
         return pa.string()
     else:
         return pa.from_numpy_dtype(dtype)
@@ -451,12 +452,63 @@ def dtype_to_pylibcudf_type(dtype) -> plc.DataType:
     # libcudf types don't support timezones so convert to the base type
     elif isinstance(dtype, pd.DatetimeTZDtype):
         dtype = _get_base_dtype(dtype)
+    elif isinstance(dtype, pd.StringDtype):
+        dtype = CUDF_STRING_DTYPE
     else:
+        dtype = pandas_dtypes_to_np_dtypes.get(dtype, dtype)
         try:
             dtype = np.dtype(dtype)
         except TypeError:
             dtype = cudf.dtype(dtype)
+    # print(type(dtype), dtype)
     return plc.DataType(SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES[dtype])
+
+
+def dtype_to_pyarrow_type(dtype) -> pa.DataType:
+    if isinstance(dtype, pd.ArrowDtype):
+        return dtype
+    if isinstance(
+        dtype,
+        (cudf.ListDtype, cudf.StructDtype, cudf.core.dtypes.DecimalDtype),
+    ):
+        return dtype.to_arrow()
+    # libcudf types don't support timezones so convert to the base type
+    elif isinstance(dtype, pd.DatetimeTZDtype):
+        dtype = _get_base_dtype(dtype)
+    else:
+        dtype = pandas_dtypes_to_np_dtypes.get(dtype, dtype)
+        try:
+            dtype = np.dtype(dtype)
+        except TypeError:
+            dtype = cudf.dtype(dtype)
+    return pa.from_numpy_dtype(dtype)
+
+
+def dtype_to_pandas_nullable_extension_type(dtype) -> DtypeObj:
+    if isinstance(dtype, pd.ArrowDtype):
+        return dtype_to_pandas_nullable_extension_type(
+            pyarrow_dtype_to_cudf_dtype(dtype)
+        )
+    else:
+        return np_dtypes_to_pandas_dtypes.get(dtype, dtype)
+
+
+def get_dtype_of_same_kind(source_dtype: DtypeObj, target_dtype: DtypeObj):
+    """
+    Given a dtype, return a dtype of the same kind
+    with the same size as the input dtype.
+    If no such dtype exists, return the default dtype.
+    """
+    if isinstance(source_dtype, pd.ArrowDtype):
+        return dtype_to_pyarrow_type(target_dtype)
+    elif is_pandas_nullable_extension_dtype(source_dtype):
+        return dtype_to_pandas_nullable_extension_type(target_dtype)
+    elif isinstance(source_dtype, np.dtype) and isinstance(
+        target_dtype, np.dtype
+    ):
+        return target_dtype
+    else:
+        raise TypeError(f"Cannot convert {source_dtype} to {target_dtype}")
 
 
 def dtype_from_pylibcudf_column(col: plc.Column) -> DtypeObj:

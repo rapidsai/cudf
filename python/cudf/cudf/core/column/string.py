@@ -9,6 +9,7 @@ from functools import cached_property
 from typing import TYPE_CHECKING, Any, Literal, cast, overload
 
 import numpy as np
+import pandas as pd
 import pyarrow as pa
 from typing_extensions import Self
 
@@ -37,7 +38,6 @@ if TYPE_CHECKING:
 
     import cupy
     import numba.cuda
-    import pandas as pd
 
     from cudf._typing import (
         ColumnBinaryOperand,
@@ -5855,7 +5855,14 @@ class StringColumn(ColumnBase):
     ):
         if not isinstance(data, Buffer):
             raise ValueError("data must be a Buffer")
-        if dtype != CUDF_STRING_DTYPE:
+        if (
+            dtype != CUDF_STRING_DTYPE
+            and not isinstance(dtype, pd.StringDtype)
+            and not (
+                isinstance(dtype, pd.ArrowDtype)
+                and dtype.pyarrow_dtype == pa.string()
+            )
+        ):
             raise ValueError(f"dtype must be {CUDF_STRING_DTYPE}")
         if len(children) > 1:
             raise ValueError("StringColumn must have at most 1 offset column.")
@@ -6149,7 +6156,13 @@ class StringColumn(ColumnBase):
         result.dtype.precision = dtype.precision  # type: ignore[union-attr]
         return result  # type: ignore[return-value]
 
-    def as_string_column(self) -> StringColumn:
+    def as_string_column(self, dtype) -> StringColumn:
+        if dtype != self.dtype:
+            if isinstance(dtype, pd.StringDtype) or (
+                isinstance(dtype, pd.ArrowDtype)
+                and pa.string() == dtype.pyarrow_dtype
+            ):
+                self._dtype = dtype
         return self
 
     @property
@@ -6172,6 +6185,14 @@ class StringColumn(ColumnBase):
         nullable: bool = False,
         arrow_type: bool = False,
     ) -> pd.Index:
+        if (
+            isinstance(self.dtype, pd.StringDtype)
+            and "pyarrow" in self.dtype.storage
+        ):
+            pandas_array = self.dtype.__from_arrow__(
+                self.to_arrow().cast(pa.large_string())
+            )
+            return pd.Index(pandas_array, copy=False)
         return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
 
     def can_cast_safely(self, to_dtype: DtypeObj) -> bool:

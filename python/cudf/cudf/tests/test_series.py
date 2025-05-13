@@ -2715,8 +2715,9 @@ def test_series_error_nan_non_float_dtypes():
 def test_astype_pandas_nullable_pandas_compat(dtype, klass, kind):
     ser = klass([1, 2, 3])
     with cudf.option_context("mode.pandas_compatible", True):
-        with pytest.raises(NotImplementedError):
-            ser.astype(kind(dtype))
+        actual = ser.astype(kind(dtype))
+        expected = klass([1, 2, 3], dtype=kind(dtype))
+        assert_eq(actual, expected)
 
 
 @pytest.mark.parametrize("klass", [cudf.Series, cudf.Index])

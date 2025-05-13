@@ -30,6 +30,8 @@ from cudf.core.scalar import _to_plc_scalar, pa_scalar_to_plc_scalar
 from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
     cudf_dtype_to_pa_type,
+    dtype_to_pylibcudf_type,
+    get_dtype_of_same_kind,
     pyarrow_dtype_to_cudf_dtype,
 )
 
@@ -89,7 +91,7 @@ class DecimalBaseColumn(NumericalBaseColumn):
             return self
         return self.cast(dtype=dtype)  # type: ignore[return-value]
 
-    def as_string_column(self) -> cudf.core.column.StringColumn:
+    def as_string_column(self, dtype) -> cudf.core.column.StringColumn:
         if len(self) > 0:
             with acquire_spill_lock():
                 plc_column = (
@@ -341,7 +343,15 @@ class Decimal32Column(DecimalBaseColumn):
     ) -> "cudf.core.column.Decimal32Column":
         if isinstance(dtype, Decimal32Dtype):
             self.dtype.precision = dtype.precision
-
+        if cudf.get_option("mode.pandas_compatible"):
+            # import pdb;pdb.set_trace()
+            if dtype_to_pylibcudf_type(dtype) == dtype_to_pylibcudf_type(
+                self.dtype
+            ):
+                # res = self.copy(deep=False)
+                self._dtype = dtype
+            else:
+                self._dtype = get_dtype_of_same_kind(dtype, self.dtype)
         return self
 
 
@@ -388,6 +398,15 @@ class Decimal128Column(DecimalBaseColumn):
     ) -> "cudf.core.column.Decimal128Column":
         if isinstance(dtype, Decimal128Dtype):
             self.dtype.precision = dtype.precision
+        if cudf.get_option("mode.pandas_compatible"):
+            # import pdb;pdb.set_trace()
+            if dtype_to_pylibcudf_type(dtype) == dtype_to_pylibcudf_type(
+                self.dtype
+            ):
+                # res = self.copy(deep=False)
+                self._dtype = dtype
+            else:
+                self._dtype = get_dtype_of_same_kind(dtype, self.dtype)
         return self
 
 
@@ -463,7 +482,15 @@ class Decimal64Column(DecimalBaseColumn):
     ) -> "cudf.core.column.Decimal64Column":
         if isinstance(dtype, Decimal64Dtype):
             self.dtype.precision = dtype.precision
-
+        if cudf.get_option("mode.pandas_compatible"):
+            # import pdb;pdb.set_trace()
+            if dtype_to_pylibcudf_type(dtype) == dtype_to_pylibcudf_type(
+                self.dtype
+            ):
+                # res = self.copy(deep=False)
+                self._dtype = dtype
+            else:
+                self._dtype = get_dtype_of_same_kind(dtype, self.dtype)
         return self
 
 

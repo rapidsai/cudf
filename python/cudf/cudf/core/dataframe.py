@@ -93,6 +93,7 @@ from cudf.utils.dtypes import (
     SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES,
     can_convert_to_column,
     find_common_type,
+    get_dtype_of_same_kind,
     is_column_like,
     is_dtype_obj_numeric,
     min_signed_type,
@@ -836,6 +837,7 @@ def _array_to_column_accessor(
 def _mapping_to_column_accessor(
     data: Mapping,
     index: None | cudf.Index,
+    dtype: None | Dtype,
     nan_as_null: bool,
 ) -> tuple[dict[Any, ColumnBase], cudf.Index, pd.Index]:
     """
@@ -858,7 +860,7 @@ def _mapping_to_column_accessor(
 
     # 1) Align indexes of all data.values() that are Series/dicts
     values_as_series = {
-        key: Series(val, nan_as_null=nan_as_null)
+        key: Series(val, nan_as_null=nan_as_null, dtype=dtype)
         for key, val in data.items()
         if isinstance(val, (pd.Series, Series, dict))
     }
@@ -898,7 +900,7 @@ def _mapping_to_column_accessor(
             if isinstance(key, tuple):
                 tuple_key_count += 1
                 tuple_key_lengths.add(len(key))
-            column = as_column(value, nan_as_null=nan_as_null)
+            column = as_column(value, nan_as_null=nan_as_null, dtype=dtype)
             value_lengths.add(len(column))
             col_data[key] = column
 
@@ -926,7 +928,7 @@ def _mapping_to_column_accessor(
         if scalar is None or scalar is cudf.NA:
             scalar = pa.scalar(None, type=pa.string())
         col_data[key] = as_column(
-            scalar, nan_as_null=nan_as_null, length=scalar_length
+            scalar, nan_as_null=nan_as_null, length=scalar_length, dtype=dtype
         )
 
     if tuple_key_count and len(tuple_key_lengths) > 1:
@@ -1058,6 +1060,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         copy=None,
         nan_as_null=no_default,
     ):
+        # import pdb;pdb.set_trace()
         if copy is not None:
             raise NotImplementedError("copy is not currently implemented.")
         if nan_as_null is no_default:
@@ -1219,7 +1222,9 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             )
         elif isinstance(data, Mapping):
             # Note: We excluded ColumnAccessor already above
-            result = _mapping_to_column_accessor(data, index, nan_as_null)
+            result = _mapping_to_column_accessor(
+                data, index, dtype, nan_as_null
+            )
             col_dict = result[0]
             index = result[1]
             columns, second_columns = result[2], columns
@@ -1504,6 +1509,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
     @_performance_tracking
     def __setitem__(self, arg, value):
         """Add/set column by *arg or DataFrame*"""
+        # import pdb;pdb.set_trace()
         if isinstance(arg, DataFrame):
             # not handling set_item where arg = df & value = df
             if isinstance(value, DataFrame):
@@ -2006,6 +2012,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         copy: bool = False,
         errors: Literal["raise", "ignore"] = "raise",
     ) -> Self:
+        # import pdb;pdb.set_trace()
         if is_dict_like(dtype):
             if len(set(dtype.keys()) - set(self._column_names)) > 0:  # type: ignore[union-attr]
                 raise KeyError(
@@ -3490,7 +3497,12 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 )
 
         value = as_column(value, nan_as_null=nan_as_null)
-
+        if cudf.get_option("mode.pandas_compatible"):
+            dtype = value.dtype
+            if len(self._data.names) > 0:
+                first_dtype = self._data[self._data.names[0]].dtype
+                dtype = get_dtype_of_same_kind(first_dtype, dtype)
+                value = value.astype(dtype)
         self._data.insert(name, value, loc=loc)
 
     @property  # type:ignore
@@ -4554,6 +4566,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         observed=True,
         dropna=True,
     ):
+        # import pdb;pdb.set_trace()
         return super().groupby(
             by,
             axis,
@@ -6566,6 +6579,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         numeric_only=False,
         **kwargs,
     ):
+        # import pdb;pdb.set_trace()
         source = self
 
         if axis is None:
@@ -6657,9 +6671,15 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                     idx = MultiIndex.from_pandas(pd_index)
                 else:
                     idx = cudf.Index.from_pandas(pd_index)
-                return Series._from_column(
-                    as_column(axis_0_results), index=idx
+                # import pdb;pdb.set_trace()
+                res = as_column(
+                    axis_0_results,
+                    nan_as_null=not cudf.get_option("mode.pandas_compatible"),
                 )
+                if cudf.get_option("mode.pandas_compatible"):
+                    new_dtype = get_dtype_of_same_kind(common_dtype, res.dtype)
+                    res = res.astype(new_dtype)
+                return Series._from_column(res, index=idx)
 
     @_performance_tracking
     def _scan(
@@ -8217,6 +8237,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         6         0            1
         Name: count, dtype: int64
         """
+        # import pdb;pdb.set_trace()
         if subset:
             diff = set(subset) - set(self._data)
             if len(diff) != 0:

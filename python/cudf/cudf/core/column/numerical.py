@@ -25,7 +25,9 @@ from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
     cudf_dtype_from_pa_type,
     cudf_dtype_to_pa_type,
+    dtype_to_pylibcudf_type,
     find_common_type,
+    get_dtype_of_same_kind,
     min_signed_type,
     min_unsigned_type,
 )
@@ -342,7 +344,7 @@ class NumericalColumn(NumericalBaseColumn):
         )
         return type(self).from_pylibcudf(plc_column)  # type: ignore[return-value]
 
-    def as_string_column(self) -> StringColumn:
+    def as_string_column(self, dtype) -> StringColumn:
         if len(self) == 0:
             return cast(
                 cudf.core.column.StringColumn,
@@ -390,6 +392,14 @@ class NumericalColumn(NumericalBaseColumn):
     def as_numerical_column(self, dtype: Dtype) -> NumericalColumn:
         if dtype == self.dtype:
             return self
+        if cudf.get_option("mode.pandas_compatible"):
+            # import pdb;pdb.set_trace()
+            if dtype_to_pylibcudf_type(dtype) == dtype_to_pylibcudf_type(
+                self.dtype
+            ):
+                res = self.copy(deep=True)
+                res._dtype = dtype
+                return res
         return self.cast(dtype=dtype)  # type: ignore[return-value]
 
     def all(self, skipna: bool = True) -> bool:
@@ -691,7 +701,15 @@ class NumericalColumn(NumericalBaseColumn):
                 null_count=self.null_count,
                 children=(codes,),
             )
-
+        if cudf.get_option("mode.pandas_compatible"):
+            # import pdb;pdb.set_trace()
+            if dtype_to_pylibcudf_type(dtype) == dtype_to_pylibcudf_type(
+                self.dtype
+            ):
+                # res = self.copy(deep=False)
+                self._dtype = dtype
+            else:
+                self._dtype = get_dtype_of_same_kind(dtype, self.dtype)
         return self
 
     def to_pandas(

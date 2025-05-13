@@ -3198,6 +3198,7 @@ class Series(SingleColumnFrame, IndexedFrame):
         (3.0, 4.0]      1
         Name: count, dtype: int64
         """
+        # import pdb;pdb.set_trace()
         if bins is not None:
             series_bins = cudf.cut(self, bins, include_lowest=True)
         result_name = "proportion" if normalize else "count"

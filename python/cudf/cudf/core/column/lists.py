@@ -279,11 +279,11 @@ class ListColumn(ColumnBase):
         )
         return res
 
-    def as_string_column(self) -> StringColumn:
+    def as_string_column(self, dtype) -> StringColumn:
         """
         Create a strings column from a list column
         """
-        lc = self._transform_leaves(lambda col: col.as_string_column())
+        lc = self._transform_leaves(lambda col: col.as_string_column(dtype))
 
         # Separator strings to match the Python format
         separators = as_column([", ", "[", "]"])

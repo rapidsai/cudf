@@ -5415,19 +5415,49 @@ class IndexedFrame(Frame):
         element_type = cast(
             ListDtype, self._columns[column_index].dtype
         ).element_type
+
+        column_index += len(idx_cols)
         exploded = [
-            column._with_type_metadata(
+            new_column._with_type_metadata(
                 element_type,
             )
             if i == column_index
-            else column
-            for i, column in enumerate(exploded, start=-len(idx_cols))
+            else new_column._with_type_metadata(old_column.dtype)
+            for i, (new_column, old_column) in enumerate(
+                zip(exploded, itertools.chain(idx_cols, self._columns))
+            )
         ]
-        return self._from_columns_like_self(
-            exploded,
-            self._column_names,
-            self.index.names if not ignore_index else None,
+
+        data = type(self._data)(
+            dict(zip(self._column_names, exploded[len(idx_cols) :])),
+            multiindex=self._data.multiindex,
+            level_names=self._data.level_names,
+            rangeindex=self._data.rangeindex,
+            label_dtype=self._data.label_dtype,
+            verify=False,
         )
+        if len(idx_cols):
+            index = _index_from_data(
+                dict(enumerate(exploded[: len(idx_cols)]))
+            )._copy_type_metadata(self.index)
+            if (
+                isinstance(self.index, cudf.CategoricalIndex)
+                and not isinstance(index, cudf.CategoricalIndex)
+            ) or (
+                isinstance(self.index, cudf.MultiIndex)
+                and not isinstance(index, cudf.MultiIndex)
+            ):
+                index = type(self.index)._from_data(index._data)
+            if isinstance(self.index, cudf.MultiIndex):
+                index.names = self.index.names
+            else:
+                index.name = self.index.name
+        else:
+            index = None
+
+        result = type(self)._from_data(data, index)
+        # result._set_columns_like(self._data)
+        return result
 
     @_performance_tracking
     def tile(self, count: int):

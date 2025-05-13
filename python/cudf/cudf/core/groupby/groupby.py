@@ -804,6 +804,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         column_included = []
         requests = []
         result_columns: list[list[ColumnBase]] = []
+
         for i, (col, aggs) in enumerate(zip(values, aggregations)):
             valid_aggregations = get_valid_aggregation(col.dtype)
             included_aggregations_i = []
@@ -841,10 +842,16 @@ class GroupBy(Serializable, Reducible, Scannable):
             if _is_all_scan_aggregate(aggregations)
             else self._groupby.plc_groupby.aggregate(requests)
         )
-
-        for i, result in zip(column_included, results):
+        # import pdb;pdb.set_trace()
+        for i, result, val in zip(column_included, results, values):
             result_columns[i] = [
-                ColumnBase.from_pylibcudf(col) for col in result.columns()
+                ColumnBase.from_pylibcudf(col)._with_type_metadata(val.dtype)
+                if not isinstance(
+                    val.dtype,
+                    (cudf.core.dtypes.DecimalDtype, cudf.CategoricalDtype),
+                )
+                else ColumnBase.from_pylibcudf(col)
+                for col in result.columns()
             ]
 
         return (
@@ -1028,7 +1035,7 @@ class GroupBy(Serializable, Reducible, Scannable):
                 ):
                     # Structs lose their labels which we reconstruct here
                     col = col._with_type_metadata(cudf.ListDtype(orig_dtype))
-
+                # import pdb;pdb.set_trace()
                 if agg_kind in {"COUNT", "SIZE", "ARGMIN", "ARGMAX"}:
                     data[key] = col.astype(np.dtype(np.int64))
                 elif (
@@ -1942,7 +1949,7 @@ class GroupBy(Serializable, Reducible, Scannable):
                 >>> import pandas as pd
                 >>> df = pd.DataFrame({
                 ...     'a': [1, 1, 2, 2],
-                ...     'b': [1, 2, 3, 4],
+                ...     'b': [1, 2, 1, 2],
                 ...     'c': [1, 2, 3, 4],
                 ... })
                 >>> gdf = cudf.from_pandas(df)

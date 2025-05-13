@@ -31,6 +31,8 @@ from cudf.utils.dtypes import (
     _get_base_dtype,
     cudf_dtype_from_pa_type,
     cudf_dtype_to_pa_type,
+    dtype_to_pylibcudf_type,
+    get_dtype_of_same_kind,
 )
 
 if TYPE_CHECKING:
@@ -468,7 +470,7 @@ class DatetimeColumn(TemporalBaseColumn):
                 )
             )
 
-    def as_string_column(self) -> StringColumn:
+    def as_string_column(self, dtype) -> StringColumn:
         format = _dtype_to_format_conversion.get(
             self.dtype.name, "%Y-%m-%d %H:%M:%S"
         )
@@ -617,6 +619,16 @@ class DatetimeColumn(TemporalBaseColumn):
                 offset=self.offset,
                 null_count=self.null_count,
             )
+        if cudf.get_option("mode.pandas_compatible"):
+            # import pdb;pdb.set_trace()
+            if dtype_to_pylibcudf_type(dtype) == dtype_to_pylibcudf_type(
+                self.dtype
+            ):
+                # res = self.copy(deep=False)
+                self._dtype = dtype
+            else:
+                self._dtype = get_dtype_of_same_kind(dtype, self.dtype)
+        # return self
         return self
 
     def _find_ambiguous_and_nonexistent(
@@ -816,8 +828,8 @@ class DatetimeTZColumn(DatetimeColumn):
     def strftime(self, format: str) -> StringColumn:
         return self._local_time.strftime(format)
 
-    def as_string_column(self) -> StringColumn:
-        return self._local_time.as_string_column()
+    def as_string_column(self, dtype) -> StringColumn:
+        return self._local_time.as_string_column(dtype)
 
     def as_datetime_column(
         self, dtype: np.dtype | pd.DatetimeTZDtype

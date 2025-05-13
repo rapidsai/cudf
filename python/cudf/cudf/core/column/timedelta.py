@@ -247,7 +247,7 @@ class TimeDeltaColumn(TemporalBaseColumn):
                     )
                 )
 
-    def as_string_column(self) -> StringColumn:
+    def as_string_column(self, dtype) -> StringColumn:
         return self.strftime("%D days %H:%M:%S")
 
     def as_timedelta_column(self, dtype: np.dtype) -> TimeDeltaColumn:

@@ -430,7 +430,7 @@ def _to_plc_scalar(value: ScalarLike, dtype: Dtype) -> plc.Scalar:
 
     if isinstance(dtype, cudf.core.dtypes._BaseDtype):
         pa_type = dtype.to_arrow()
-    elif dtype == CUDF_STRING_DTYPE:
+    elif dtype == CUDF_STRING_DTYPE or isinstance(dtype, pd.StringDtype):
         # Have to manually convert object types, which we use internally
         # for strings but pyarrow only supports as unicode 'U'
         pa_type = pa.string()

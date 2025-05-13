@@ -1150,8 +1150,8 @@ class CategoricalColumn(column.ColumnBase):
     def as_numerical_column(self, dtype: np.dtype) -> NumericalColumn:
         return self._get_decategorized_column().as_numerical_column(dtype)
 
-    def as_string_column(self) -> StringColumn:
-        return self._get_decategorized_column().as_string_column()
+    def as_string_column(self, dtype) -> StringColumn:
+        return self._get_decategorized_column().as_string_column(dtype)
 
     def as_datetime_column(self, dtype: np.dtype) -> DatetimeColumn:
         return self._get_decategorized_column().as_datetime_column(dtype)
