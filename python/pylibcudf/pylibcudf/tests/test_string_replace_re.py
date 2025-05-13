@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 import pyarrow as pa
 import pyarrow.compute as pc
@@ -13,15 +13,15 @@ def test_replace_re_regex_program_scalar(max_replace_count):
     arr = pa.array(["foo", "fuz", None])
     pat = "f."
     repl = "ba"
-    result = plc.strings.replace_re.replace_re(
-        plc.interop.from_arrow(arr),
+    got = plc.strings.replace_re.replace_re(
+        plc.Column(arr),
         plc.strings.regex_program.RegexProgram.create(
             pat, plc.strings.regex_flags.RegexFlags.DEFAULT
         ),
         plc.interop.from_arrow(pa.scalar(repl)),
         max_replace_count=max_replace_count,
     )
-    expected = pc.replace_substring_regex(
+    expect = pc.replace_substring_regex(
         arr,
         pat,
         repl,
@@ -29,7 +29,7 @@ def test_replace_re_regex_program_scalar(max_replace_count):
         if max_replace_count != -1
         else None,
     )
-    assert_column_eq(result, expected)
+    assert_column_eq(expect, got)
 
 
 @pytest.mark.parametrize(
@@ -43,30 +43,30 @@ def test_replace_re_list_str_columns(flags):
     arr = pa.array(["foo", "fuz", None])
     pats = ["oo", "uz"]
     repls = ["a", "b"]
-    result = plc.strings.replace_re.replace_re(
-        plc.interop.from_arrow(arr),
+    got = plc.strings.replace_re.replace_re(
+        plc.Column(arr),
         pats,
-        plc.interop.from_arrow(pa.array(repls)),
+        plc.Column(pa.array(repls)),
         flags=flags,
     )
-    expected = arr
+    expect = arr
     for pat, repl in zip(pats, repls):
-        expected = pc.replace_substring_regex(
-            expected,
+        expect = pc.replace_substring_regex(
+            expect,
             pat,
             repl,
         )
-    assert_column_eq(result, expected)
+    assert_column_eq(expect, got)
 
 
 def test_replace_with_backrefs():
     arr = pa.array(["Z756", None])
-    result = plc.strings.replace_re.replace_with_backrefs(
-        plc.interop.from_arrow(arr),
+    got = plc.strings.replace_re.replace_with_backrefs(
+        plc.Column(arr),
         plc.strings.regex_program.RegexProgram.create(
             "(\\d)(\\d)", plc.strings.regex_flags.RegexFlags.DEFAULT
         ),
         "V\\2\\1",
     )
-    expected = pa.array(["ZV576", None])
-    assert_column_eq(result, expected)
+    expect = pa.array(["ZV576", None])
+    assert_column_eq(expect, got)

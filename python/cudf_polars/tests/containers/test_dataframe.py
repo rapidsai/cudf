@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -177,7 +177,7 @@ def test_empty_name_roundtrips_no_overlap():
     ],
 )
 def test_serialization_roundtrip(arrow_tbl):
-    plc_tbl = plc.interop.from_arrow(arrow_tbl)
+    plc_tbl = plc.Table(arrow_tbl)
     df = DataFrame.from_table(plc_tbl, names=arrow_tbl.column_names)
 
     header, frames = df.serialize()
