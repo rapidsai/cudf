@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import itertools
 import operator
+from collections import defaultdict
 from functools import partial, reduce
 from typing import TYPE_CHECKING, Any
 
@@ -20,10 +21,13 @@ from cudf_polars.dsl.ir import (
     IR,
     Cache,
     Filter,
+    GroupBy,
     HConcat,
     HStack,
     MapFunction,
     Projection,
+    Select,
+    Sort,
     Union,
 )
 from cudf_polars.dsl.traversal import CachingVisitor, traversal
@@ -35,11 +39,12 @@ from cudf_polars.experimental.dispatch import (
 from cudf_polars.experimental.utils import _concat, _lower_ir_fallback
 
 if TYPE_CHECKING:
-    from collections.abc import MutableMapping
+    from collections.abc import Callable, MutableMapping, Sequence
     from typing import Any
 
     from cudf_polars.containers import DataFrame
     from cudf_polars.experimental.dispatch import LowerIRTransformer
+    from cudf_polars.typing import Schema
     from cudf_polars.utils.config import ConfigOptions
 
 
@@ -51,6 +56,96 @@ def _(
     return _lower_ir_fallback(
         ir, rec, msg=f"Class {type(ir)} does not support multiple partitions."
     )
+
+
+class Fused(IR):
+    """Fused IR node."""
+
+    __slots__ = ("subnodes",)
+    _non_child = ("schema", "subnodes")
+    subnodes: tuple[IR, ...]
+    """Fused sub-nodes."""
+
+    def __init__(
+        self,
+        schema: Schema,
+        subnodes: tuple[IR, ...],
+        *children: IR,
+    ):
+        self.schema = schema
+        self.subnodes = subnodes
+        self._non_child_args = (
+            [node.do_evaluate for node in subnodes],
+            [tuple(node._non_child_args) for node in self.subnodes],
+        )
+        self.children = children
+
+    @classmethod
+    def do_evaluate(
+        cls,
+        funcs: Sequence[Callable],
+        subargs: Sequence[Sequence[Any]],
+        *children: DataFrame,
+    ) -> DataFrame:
+        """Evaluate and return a dataframe."""
+        for func, args in zip(funcs, subargs, strict=False):
+            children = (func(*args, *children),)
+        return children[0]
+
+
+def _fuse_ir_node(
+    ir: IR, rec: LowerIRTransformer
+) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+    partition_info: MutableMapping[IR, PartitionInfo] = {}
+    children = ()
+    if ir.children:
+        children, _partition_info = zip(*(rec(c) for c in ir.children), strict=True)
+        partition_info = reduce(operator.or_, _partition_info)
+
+    new_node: IR
+    if ir in rec.state["fusable"]:
+        if len(children) == 1 and isinstance(children[0], Fused):
+            (child,) = children
+            grandchildren = child.children
+            new_node = Fused(ir.schema, (*child.subnodes, ir), *grandchildren)
+        else:
+            new_node = Fused(ir.schema, (ir,), *children)
+    else:
+        new_node = ir.reconstruct(children)
+
+    partition_info[new_node] = rec.state["partition_info"][ir]
+    return new_node, partition_info
+
+
+def fuse_ir_graph(
+    ir: IR, partition_info: MutableMapping[IR, PartitionInfo]
+) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+    """
+    Rewrite an IR graph with fused nodes.
+
+    Parameters
+    ----------
+    ir
+        Root of the graph to rewrite.
+    partition_info
+        Initial partitioning information.
+
+    Returns
+    -------
+    new_ir, partition_info
+        The rewritten graph, and a mapping from unique nodes
+        in the new graph to associated partitioning information.
+    """
+    parents: defaultdict[IR, int] = defaultdict(int)
+    for node in traversal([ir]):
+        for child in node.children:
+            if isinstance(child, (Select, GroupBy, Projection, Filter, Sort)):
+                parents[child] += 1
+
+    fusable = {node for node, count in parents.items() if count == 1}
+    state = {"fusable": fusable, "partition_info": partition_info}
+    mapper = CachingVisitor(_fuse_ir_node, state=state)
+    return mapper(ir)
 
 
 def lower_ir_graph(
@@ -211,6 +306,8 @@ def evaluate_streaming(ir: IR, config_options: ConfigOptions) -> DataFrame:
     """
     ir, partition_info = lower_ir_graph(ir, config_options)
 
+    ir, partition_info = fuse_ir_graph(ir, partition_info)
+
     graph, key = task_graph(ir, partition_info)
 
     graph = post_process_task_graph(graph, key, config_options)
@@ -319,8 +416,23 @@ def _lower_ir_pwise(
 
 
 _lower_ir_pwise_preserve = partial(_lower_ir_pwise, preserve_partitioning=True)
-lower_ir_node.register(Projection, _lower_ir_pwise_preserve)
 lower_ir_node.register(Filter, _lower_ir_pwise_preserve)
-lower_ir_node.register(Cache, _lower_ir_pwise)
 lower_ir_node.register(HStack, _lower_ir_pwise)
 lower_ir_node.register(HConcat, _lower_ir_pwise)
+
+
+@lower_ir_node.register(Cache)
+def _(
+    ir: Cache, rec: LowerIRTransformer
+) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+    return rec(ir.children[0])
+
+
+@lower_ir_node.register(Projection)
+def _(
+    ir: Projection, rec: LowerIRTransformer
+) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+    child, pi = rec(ir.children[0])
+    if ir.schema == child.schema:
+        return child, pi
+    return _lower_ir_pwise_preserve(ir, rec)

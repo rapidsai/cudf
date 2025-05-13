@@ -92,7 +92,7 @@ def test_explain_physical_plan_with_groupby(tmp_path, df):
         },
     )
 
-    plan = explain_query(q, engine, physical=True)
+    plan = explain_query(q, engine, physical=True, fuse=False)
 
     assert "GROUPBY ('g',)" in plan
 
