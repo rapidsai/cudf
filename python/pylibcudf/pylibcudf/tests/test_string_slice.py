@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 import pyarrow as pa
 import pytest
@@ -14,7 +14,7 @@ def pa_col():
 
 @pytest.fixture(scope="module")
 def plc_col(pa_col):
-    return plc.interop.from_arrow(pa_col)
+    return plc.Column(pa_col)
 
 
 @pytest.fixture(
@@ -37,7 +37,7 @@ def pa_starts_col():
 
 @pytest.fixture(scope="module")
 def plc_starts_col(pa_starts_col):
-    return plc.interop.from_arrow(pa_starts_col)
+    return plc.Column(pa_starts_col)
 
 
 @pytest.fixture(scope="module")
@@ -47,7 +47,7 @@ def pa_stops_col():
 
 @pytest.fixture(scope="module")
 def plc_stops_col(pa_stops_col):
-    return plc.interop.from_arrow(pa_stops_col)
+    return plc.Column(pa_stops_col)
 
 
 def test_slice(pa_col, plc_col, pa_start_stop_step, plc_start_stop_step):
@@ -57,7 +57,7 @@ def test_slice(pa_col, plc_col, pa_start_stop_step, plc_start_stop_step):
     def slice_string(st, start, stop, step):
         return st[start:stop:step] if st is not None else None
 
-    expected = pa.array(
+    expect = pa.array(
         [
             slice_string(x, pa_start.as_py(), pa_stop.as_py(), pa_step.as_py())
             for x in pa_col.to_pylist()
@@ -69,7 +69,7 @@ def test_slice(pa_col, plc_col, pa_start_stop_step, plc_start_stop_step):
         plc_col, start=plc_start, stop=plc_stop, step=plc_step
     )
 
-    assert_column_eq(expected, got)
+    assert_column_eq(expect, got)
 
 
 def test_slice_column(
@@ -80,7 +80,7 @@ def test_slice_column(
             stop = len(st)
         return st[start:stop] if st is not None else None
 
-    expected = pa.array(
+    expect = pa.array(
         [
             slice_string(x, start, stop)
             for x, start, stop in zip(
@@ -96,7 +96,7 @@ def test_slice_column(
         plc_col, plc_starts_col, plc_stops_col
     )
 
-    assert_column_eq(expected, got)
+    assert_column_eq(expect, got)
 
 
 def test_slice_invalid(plc_col, plc_starts_col, plc_stops_col):
