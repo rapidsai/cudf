@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 import pyarrow as pa
 import pytest
@@ -11,24 +11,24 @@ import pylibcudf as plc
 def reshape_data():
     data = [[1, 2, 3], [4, 5, 6]]
     arrow_tbl = pa.Table.from_arrays(data, names=["a", "b"])
-    return data, plc.interop.from_arrow(arrow_tbl)
+    return data, plc.Table(arrow_tbl)
 
 
 def test_interleave_columns(reshape_data):
     raw_data, reshape_plc_tbl = reshape_data
-    res = plc.reshape.interleave_columns(reshape_plc_tbl)
+    got = plc.reshape.interleave_columns(reshape_plc_tbl)
 
     interleaved_data = [pa.array(pair) for pair in zip(*raw_data)]
 
     expect = pa.concat_arrays(interleaved_data)
 
-    assert_column_eq(expect, res)
+    assert_column_eq(expect, got)
 
 
 @pytest.mark.parametrize("cnt", [0, 1, 3])
 def test_tile(reshape_data, cnt):
     raw_data, reshape_plc_tbl = reshape_data
-    res = plc.reshape.tile(reshape_plc_tbl, cnt)
+    got = plc.reshape.tile(reshape_plc_tbl, cnt)
 
     tiled_data = [pa.array(col * cnt) for col in raw_data]
 
@@ -36,4 +36,4 @@ def test_tile(reshape_data, cnt):
         tiled_data, schema=plc.interop.to_arrow(reshape_plc_tbl).schema
     )
 
-    assert_table_eq(expect, res)
+    assert_table_eq(expect, got)
