@@ -313,7 +313,7 @@ size_t decompress_gzip(host_span<uint8_t const> src, host_span<uint8_t> dst)
  */
 size_t decompress_snappy(host_span<uint8_t const> src, host_span<uint8_t> dst)
 {
-  CUDF_EXPECTS(not src.empty(), "Empty Snappy decompress input");
+  CUDF_EXPECTS(not src.empty(), "Empty Snappy decompress input", std::length_error);
 
   uint32_t uncompressed_size = 0, bytes_left = 0, dst_pos = 0;
   auto cur       = src.begin();
