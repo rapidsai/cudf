@@ -17,6 +17,7 @@ from pylibcudf.libcudf.column.column cimport column, column_contents
 from pylibcudf.libcudf.column.column_factories cimport make_column_from_scalar
 from pylibcudf.libcudf.interop cimport (
     ArrowArray,
+    ArrowArrayStream,
     ArrowSchema,
     ArrowDeviceArray,
     arrow_column,
@@ -53,26 +54,12 @@ from .null_mask cimport bitmask_allocation_size_bytes
 from .utils cimport _get_stream
 
 from .gpumemoryview import _datatype_from_dtype_desc
-from ._interop_helpers import ColumnMetadata
+from ._interop_helpers import ArrowLike, ColumnMetadata
 
 import functools
 import operator
 
 __all__ = ["Column", "ListColumnView", "is_c_contiguous"]
-
-
-class _ArrowLikeMeta(type):
-    def __subclasscheck__(cls, other):
-        # We cannot separate these types via singledispatch because the dispatch
-        # will often be ambiguous when objects expose multiple protocols.
-        return (
-            hasattr(other, "__arrow_c_array__")
-            or hasattr(other, "__arrow_c_device_array__")
-        )
-
-
-class _ArrowLike(metaclass=_ArrowLikeMeta):
-    pass
 
 
 cdef class _ArrowColumnHolder:
@@ -144,15 +131,6 @@ cdef class OwnerMaskWithCAI:
     @property
     def __cuda_array_interface__(self):
         return self.cai
-
-
-class _Ravelled:
-    def __init__(self, obj):
-        self.obj = obj
-        cai = obj.__cuda_array_interface__.copy()
-        shape = cai["shape"]
-        cai["shape"] = (shape[0]*shape[1],)
-        self.__cuda_array_interface__ = cai
 
 
 def _prepare_array_metadata(
@@ -285,7 +263,7 @@ cdef class Column:
         self._children = children
         self._num_children = len(children)
 
-    @_init.register(_ArrowLike)
+    @_init.register(ArrowLike)
     def _(self, arrow_like):
         cdef ArrowSchema* c_schema
         cdef ArrowArray* c_array
@@ -338,6 +316,34 @@ cdef class Column:
                 tmp.offset(),
                 tmp.children(),
             )
+        elif hasattr(arrow_like, "__arrow_c_stream__"):
+            stream = arrow_like.__arrow_c_stream__()
+            c_stream = (
+                <ArrowArrayStream*>PyCapsule_GetPointer(stream, "arrow_array_stream")
+            )
+
+            result = _ArrowColumnHolder()
+            with nogil:
+                c_result = make_unique[arrow_column](
+                    move(dereference(c_stream))
+                )
+            result.col.swap(c_result)
+
+            tmp = Column.from_column_view_of_arbitrary(result.col.get().view(), result)
+            self._init(
+                tmp.type(),
+                tmp.size(),
+                tmp.data(),
+                tmp.null_mask(),
+                tmp.null_count(),
+                tmp.offset(),
+                tmp.children(),
+            )
+        elif hasattr(arrow_like, "__arrow_c_device_stream__"):
+            # TODO: When we add support for this case, it should be moved above
+            # the __arrow_c_array__ case since we should prioritize device
+            # data if possible.
+            raise NotImplementedError("Device streams not yet supported")
         else:
             raise ValueError("Invalid Arrow-like object")
 
@@ -787,9 +793,6 @@ cdef class Column:
             raise TypeError("Object does not implement __cuda_array_interface__")
 
         _, _, shape, _, dtype = _prepare_array_metadata(iface)
-
-        if len(shape) == 2:
-            obj = _Ravelled(obj)
 
         return Column._from_gpumemoryview(gpumemoryview(obj), shape, dtype)
 

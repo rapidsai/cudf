@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -95,7 +95,7 @@ class strings_column_view : private column_view {
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @return Number of bytes in the chars child column
    */
-  [[nodiscard]] int64_t chars_size(rmm::cuda_stream_view stream) const noexcept;
+  [[nodiscard]] int64_t chars_size(rmm::cuda_stream_view stream) const;
 
   /**
    * @brief Return an iterator for the chars child column.
@@ -108,7 +108,7 @@ class strings_column_view : private column_view {
    *
    * @return Iterator pointing to the first char byte.
    */
-  [[nodiscard]] chars_iterator chars_begin(rmm::cuda_stream_view) const;
+  [[nodiscard]] chars_iterator chars_begin(rmm::cuda_stream_view) const noexcept;
 
   /**
    * @brief Return an end iterator for the offsets child column.
