@@ -147,7 +147,6 @@ class SingleColumnFrame(Frame, NotIterable):
             not copy
             and col.dtype.kind in {"i", "u", "f", "b"}
             and cp.can_cast(col.dtype, final_dtype)
-            and not col.has_nulls()
         ):
             if col.has_nulls():
                 if na_value is not None:

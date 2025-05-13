@@ -584,13 +584,27 @@ class Frame(BinaryOperand, Scannable, Serializable):
                 out.nbytes,
             )
             return out
-        elif (
-            self._num_columns == 1
-            and na_value is None
-            and self._columns[0].dtype.kind in {"i", "u", "f", "b"}
-            and not self._columns[0].nullable
-        ):
-            return cp.asarray(self._columns[0]).reshape((-1, 1))
+        elif self._num_columns == 1:
+            col = self._columns[0]
+            final_dtype = col.dtype if dtype is None else dtype
+
+            if (
+                not copy
+                and col.dtype.kind in {"i", "u", "f", "b"}
+                and cp.can_cast(col.dtype, final_dtype)
+            ):
+                if col.has_nulls():
+                    if na_value is not None:
+                        col = col.fillna(na_value)
+                    else:
+                        return self._to_array(
+                            lambda col: col.values,
+                            cupy,
+                            copy,
+                            dtype,
+                            na_value,
+                        )
+                return cp.asarray(col, dtype=final_dtype).reshape((-1, 1))
         return self._to_array(
             lambda col: col.values,
             cupy,
