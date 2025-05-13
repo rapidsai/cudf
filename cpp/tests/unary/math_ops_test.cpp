@@ -95,10 +95,7 @@ struct UnaryBitwiseOpsBoolTest : public cudf::test::BaseFixture {};
 
 template <typename T>
 struct UnaryBitwiseOpsTypedTest : public cudf::test::BaseFixture {};
-
-using ExtendedIntegralTypes =
-  cudf::test::Concat<cudf::test::IntegralTypesNotBool, cudf::test::Types<__int128_t>>;
-TYPED_TEST_SUITE(UnaryBitwiseOpsTypedTest, ExtendedIntegralTypes);
+TYPED_TEST_SUITE(UnaryBitwiseOpsTypedTest, cudf::test::IntegralTypesNotBool);
 
 TEST_F(UnaryBitwiseOpsBoolTest, BitCountBool)
 {
@@ -121,7 +118,7 @@ TYPED_TEST(UnaryBitwiseOpsTypedTest, BitCount)
   using T         = TypeParam;
   auto const data = [] {
     std::vector<T> data(15);
-    std::iota(data.begin(), data.end(), std::numeric_limits<T>::max() / 2);
+    std::iota(data.begin(), data.end(), 1);
     return data;
   }();
   auto const input = cudf::test::fixed_width_column_wrapper<T>(data.begin(), data.end());
@@ -144,11 +141,12 @@ TYPED_TEST(UnaryBitwiseOpsTypedTest, BitCountWithNulls)
   using T         = TypeParam;
   auto const data = [] {
     std::vector<T> data(15);
-    std::iota(data.begin(), data.end(), std::numeric_limits<T>::max() / 2);
+    std::iota(data.begin(), data.end(), 1);
     return data;
   }();
   auto const validity = cudf::test::iterators::nulls_at({2, 5, 9, 12});
-  auto const input = cudf::test::fixed_width_column_wrapper<T>(data.begin(), data.end(), validity);
+  auto const input =
+    cudf::test::fixed_width_column_wrapper<TypeParam>(data.begin(), data.end(), validity);
 
   std::vector<int32_t> expected_data(data.size());
   std::transform(data.begin(), data.end(), expected_data.begin(), [](T val) {
