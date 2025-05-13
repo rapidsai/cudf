@@ -521,7 +521,7 @@ def _(py_val: datetime.date, dtype: DataType | None):
                 f"{epoch_days} days out of range for INT32 limit."
             )
         c_obj = make_timestamp_scalar(c_dtype.c_obj)
-        c_duration_D = duration_D(<int32_t>epoch_seconds)
+        c_duration_D = duration_D(<int32_t>epoch_days)
         c_timestamp_D = timestamp_D(c_duration_D)
         (<timestamp_scalar[timestamp_D]*>c_obj.get()).set_value(c_timestamp_D)
     else:
