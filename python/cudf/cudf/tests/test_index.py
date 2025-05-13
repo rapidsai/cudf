@@ -3123,14 +3123,10 @@ def test_period_index_error():
         cudf.Series(pd.array(pidx))
 
 
-def test_index_from_dataframe_valueerror():
-    with pytest.raises(ValueError):
-        cudf.Index(cudf.DataFrame(range(1)))
-
-
-def test_index_from_scalar_valueerror():
-    with pytest.raises(ValueError):
-        cudf.Index(11)
+@pytest.mark.parametrize("value", [cudf.DataFrame(range(1)), 11])
+def test_index_from_dataframe_scalar_raises(value):
+    with pytest.raises(TypeError):
+        cudf.Index(value)
 
 
 @pytest.mark.parametrize("idx", [0, np.int64(0)])

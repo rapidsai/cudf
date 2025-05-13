@@ -5353,7 +5353,7 @@ def as_index(
             arbitrary.copy(deep=copy), nan_as_null=nan_as_null
         )
     elif isinstance(arbitrary, cudf.DataFrame) or is_scalar(arbitrary):
-        raise ValueError("Index data must be 1-dimensional and list-like")
+        raise TypeError("Index data must be 1-dimensional and list-like")
     else:
         return Index._from_column(
             as_column(arbitrary, dtype=dtype, nan_as_null=nan_as_null),

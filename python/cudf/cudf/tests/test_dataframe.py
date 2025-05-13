@@ -1995,7 +1995,7 @@ def test_dataframe_cupy_array_wrong_index():
     with pytest.raises(ValueError):
         cudf.DataFrame(d_ary, index=["a"])
 
-    with pytest.raises(ValueError):
+    with pytest.raises(TypeError):
         cudf.DataFrame(d_ary, index="a")
 
 
