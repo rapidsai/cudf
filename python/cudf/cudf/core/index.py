@@ -1022,52 +1022,17 @@ class RangeIndex(BaseIndex, BinaryOperand):
         # have an underlying column.
         return self
 
-    def searchsorted(
-        self,
-        value: int,
-        side: Literal["left", "right"] = "left",
-        ascending: bool = True,
-        na_position: Literal["first", "last"] = "last",
-    ):
-        assert (len(self) <= 1) or (ascending == (self.step > 0)), (
-            "Invalid ascending flag"
-        )
-        if side not in {"left", "right"}:
-            raise ValueError("side must be 'left' or 'right'")
-        ri = self._range
-        if flip := (ri.step < 0):
-            ri = ri[::-1]
-            shift = int(side == "right")
-        else:
-            shift = int(side == "left")
-
-        offset = (value - ri.start - shift) // ri.step + 1
-        if flip:
-            offset = len(ri) - offset
-        return max(min(len(ri), offset), 0)
-
-    def factorize(
-        self, sort: bool = False, use_na_sentinel: bool = True
-    ) -> tuple[cupy.ndarray, Self]:
-        if sort and self.step < 0:
-            codes = cupy.arange(len(self) - 1, -1, -1)
-            uniques = self[::-1]
-        else:
-            codes = cupy.arange(len(self), dtype=np.intp)
-            uniques = self
-        return codes, uniques
-
-    @property  # type: ignore
+    @property
     @_performance_tracking
     def name(self) -> Hashable:
         return self._name
 
-    @name.setter  # type: ignore
+    @name.setter
     @_performance_tracking
     def name(self, value: Hashable) -> None:
         self._name = value
 
-    @property  # type: ignore
+    @property
     @_performance_tracking
     def _num_rows(self) -> int:
         return len(self)
@@ -1077,7 +1042,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
     def _column_names(self) -> tuple[Hashable]:
         return (self.name,)
 
-    @cached_property  # type: ignore
+    @cached_property
     @_performance_tracking
     def _column(self) -> ColumnBase:
         if len(self) > 0:
@@ -1086,7 +1051,13 @@ class RangeIndex(BaseIndex, BinaryOperand):
             return column_empty(0, dtype=self.dtype)
 
     # TODO: Remove once BaseIndex is removed
-    _values = _column
+    @cached_property
+    @_performance_tracking
+    def _values(self) -> ColumnBase:
+        if len(self) > 0:
+            return as_column(self._range, dtype=self.dtype)
+        else:
+            return column_empty(0, dtype=self.dtype)
 
     @property
     @_performance_tracking
@@ -1124,13 +1095,18 @@ class RangeIndex(BaseIndex, BinaryOperand):
         """
         return self._range.stop
 
-    @property  # type: ignore
+    @property
     @_performance_tracking
     def step(self) -> int:
         """
         The value of the step parameter.
         """
         return self._range.step
+
+    @property
+    @_performance_tracking
+    def hasnans(self) -> bool:
+        return False
 
     def _pandas_repr_compatible(self) -> Self:
         return self
@@ -1154,11 +1130,6 @@ class RangeIndex(BaseIndex, BinaryOperand):
         return False
 
     def _is_interval(self) -> bool:
-        return False
-
-    @property  # type: ignore
-    @_performance_tracking
-    def hasnans(self) -> bool:
         return False
 
     @_performance_tracking
@@ -1315,7 +1286,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
             start=start, stop=stop, step=step, dtype=dtype, name=name
         )
 
-    @property  # type: ignore
+    @property
     @_performance_tracking
     def dtype(self) -> np.dtype:
         """
@@ -1378,12 +1349,12 @@ class RangeIndex(BaseIndex, BinaryOperand):
     def is_unique(self) -> bool:
         return True
 
-    @cached_property  # type: ignore
+    @cached_property
     @_performance_tracking
     def is_monotonic_increasing(self) -> bool:
         return self.step > 0 or len(self) <= 1
 
-    @cached_property  # type: ignore
+    @cached_property
     @_performance_tracking
     def is_monotonic_decreasing(self):
         return self.step < 0 or len(self) <= 1
@@ -1718,6 +1689,43 @@ class RangeIndex(BaseIndex, BinaryOperand):
             return cupy.arange(len(self) - 1, -1, -1)
         else:
             return cupy.arange(len(self))
+
+    @_performance_tracking
+    def searchsorted(
+        self,
+        value: int,
+        side: Literal["left", "right"] = "left",
+        ascending: bool = True,
+        na_position: Literal["first", "last"] = "last",
+    ):
+        assert (len(self) <= 1) or (ascending == (self.step > 0)), (
+            "Invalid ascending flag"
+        )
+        if side not in {"left", "right"}:
+            raise ValueError("side must be 'left' or 'right'")
+        ri = self._range
+        if flip := (ri.step < 0):
+            ri = ri[::-1]
+            shift = int(side == "right")
+        else:
+            shift = int(side == "left")
+
+        offset = (value - ri.start - shift) // ri.step + 1
+        if flip:
+            offset = len(ri) - offset
+        return max(min(len(ri), offset), 0)
+
+    @_performance_tracking
+    def factorize(
+        self, sort: bool = False, use_na_sentinel: bool = True
+    ) -> tuple[cupy.ndarray, Self]:
+        if sort and self.step < 0:
+            codes = cupy.arange(len(self) - 1, -1, -1)
+            uniques = self[::-1]
+        else:
+            codes = cupy.arange(len(self), dtype=np.intp)
+            uniques = self
+        return codes, uniques
 
     @_performance_tracking
     def where(self, cond, other=None, inplace: bool = False) -> Self | None:
