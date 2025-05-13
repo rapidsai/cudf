@@ -857,10 +857,10 @@ parquet_column_schema walk_schema(aggregate_reader_metadata const* mt, int idx)
 parquet_metadata read_parquet_metadata(host_span<std::unique_ptr<datasource> const> sources)
 {
   // Do not use arrow schema when reading information from parquet metadata.
-  static constexpr auto use_arrow_schema = false;
+  constexpr auto use_arrow_schema = false;
 
   // Do not select any columns when only reading the parquet metadata.
-  static constexpr auto has_column_projection = false;
+  constexpr auto has_column_projection = false;
 
   // Open and parse the source dataset metadata
   auto metadata = aggregate_reader_metadata(sources, use_arrow_schema, has_column_projection);
@@ -868,8 +868,10 @@ parquet_metadata read_parquet_metadata(host_span<std::unique_ptr<datasource> con
   return parquet_metadata{parquet_schema{walk_schema(&metadata, 0)},
                           metadata.get_num_rows(),
                           metadata.get_num_row_groups(),
+                          metadata.get_num_row_groups_per_file(),
                           metadata.get_key_value_metadata()[0],
-                          metadata.get_rowgroup_metadata()};
+                          metadata.get_rowgroup_metadata(),
+                          metadata.get_column_chunk_metadata()};
 }
 
 }  // namespace cudf::io::parquet::detail
