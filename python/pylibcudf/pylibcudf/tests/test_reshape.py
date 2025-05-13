@@ -22,24 +22,24 @@ def cp():
 def reshape_data():
     data = [[1, 2, 3], [4, 5, 6]]
     arrow_tbl = pa.Table.from_arrays(data, names=["a", "b"])
-    return data, plc.interop.from_arrow(arrow_tbl)
+    return data, plc.Table(arrow_tbl)
 
 
 def test_interleave_columns(reshape_data):
     raw_data, reshape_plc_tbl = reshape_data
-    res = plc.reshape.interleave_columns(reshape_plc_tbl)
+    got = plc.reshape.interleave_columns(reshape_plc_tbl)
 
     interleaved_data = [pa.array(pair) for pair in zip(*raw_data)]
 
     expect = pa.concat_arrays(interleaved_data)
 
-    assert_column_eq(expect, res)
+    assert_column_eq(expect, got)
 
 
 @pytest.mark.parametrize("cnt", [0, 1, 3])
 def test_tile(reshape_data, cnt):
     raw_data, reshape_plc_tbl = reshape_data
-    res = plc.reshape.tile(reshape_plc_tbl, cnt)
+    got = plc.reshape.tile(reshape_plc_tbl, cnt)
 
     tiled_data = [pa.array(col * cnt) for col in raw_data]
 
@@ -47,7 +47,7 @@ def test_tile(reshape_data, cnt):
         tiled_data, schema=plc.interop.to_arrow(reshape_plc_tbl).schema
     )
 
-    assert_table_eq(expect, res)
+    assert_table_eq(expect, got)
 
 
 @pytest.mark.parametrize(
@@ -69,13 +69,13 @@ def test_table_to_array(dtype, type_id, np, cp):
     tbl = plc.interop.from_arrow(arrow_tbl)
 
     rows, cols = tbl.num_rows(), tbl.num_columns()
-    out = cp.empty((rows, cols), dtype=dtype, order="F")
+    got = cp.empty((rows, cols), dtype=dtype, order="F")
 
     plc.reshape.table_to_array(
         tbl,
-        out.data.ptr,
-        out.nbytes,
+        got.data.ptr,
+        got.nbytes,
     )
 
     expect = cp.array([[1, 4], [2, 5], [3, 6]], dtype=dtype)
-    cp.testing.assert_array_equal(out, expect)
+    cp.testing.assert_array_equal(expect, got)
