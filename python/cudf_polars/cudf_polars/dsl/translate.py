@@ -687,7 +687,7 @@ def _(
                 named_agg.value,
             )
         return replace(
-            [named_post_agg.value],  # type: ignore[misc]
+            [named_post_agg.value],
             {
                 expr.Col(agg.value.dtype, agg.name): expr.RollingWindow(
                     agg.value.dtype,
