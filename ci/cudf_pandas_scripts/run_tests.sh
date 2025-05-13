@@ -5,13 +5,14 @@
 
 set -eoxu pipefail
 
+source ci/use_gha_tools_from_branch.sh
+source ci/use_wheels_from_prs.sh
+
 RAPIDS_TESTS_DIR=${RAPIDS_TESTS_DIR:-"${PWD}/test-results"}
 RAPIDS_COVERAGE_DIR=${RAPIDS_COVERAGE_DIR:-"${PWD}/coverage-results"}
 mkdir -p "${RAPIDS_TESTS_DIR}" "${RAPIDS_COVERAGE_DIR}"
 
 DEPENDENCIES_PATH="dependencies.yaml"
-PIP_CONSTRAINT="${PIP_CONSTRAINT:-$(mktemp -d)/constraints.txt}"
-export PIP_CONSTRAINT
 
 # Use grep to find the line containing the package name and version constraint
 pandas_version_constraint=$(grep -oP "pandas>=\d+\.\d+,\<\d+\.\d+\.\d+dev\d+" $DEPENDENCIES_PATH)

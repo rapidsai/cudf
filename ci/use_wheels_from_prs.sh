@@ -1,10 +1,8 @@
 #!/bin/bash
 # Copyright (c) 2025, NVIDIA CORPORATION.
 
-# create or fetch PIP_CONSTRAINT
-PIP_CONSTRAINT="${PIP_CONSTRAINT:-$(mktemp -d)/constraints.txt}"
-export PIP_CONSTRAINT
-touch "${PIP_CONSTRAINT}"
+# initialize PIP_CONSTRAINT
+source rapids-init-pip
 
 RAPIDS_PY_CUDA_SUFFIX=$(rapids-wheel-ctk-name-gen "${RAPIDS_CUDA_VERSION}")
 

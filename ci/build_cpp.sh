@@ -26,7 +26,6 @@ mkdir -p "${RAPIDS_ARTIFACTS_DIR}"
 export RAPIDS_ARTIFACTS_DIR
 
 # populates `RATTLER_CHANNELS` array and `RATTLER_ARGS` array
-set +x
 source rapids-rattler-channel-string
 
 # --no-build-id allows for caching with `sccache`
