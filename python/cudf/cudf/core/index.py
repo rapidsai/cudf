@@ -628,7 +628,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
                 output = "\n".join(data_repr[:-1] + cats_repr[-1:])
 
             output = output.replace("nan", str(cudf.NA))
-        elif preprocess._values.nullable:
+        elif preprocess._column.nullable:
             if self.dtype == CUDF_STRING_DTYPE:
                 output = repr(self.to_pandas(nullable=True))
             else:
