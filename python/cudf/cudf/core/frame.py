@@ -563,7 +563,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
         if (
             self._num_columns > 1
             and na_value is None
-            and not isinstance(self._columns[0].dtype, cudf.CategoricalDtype)
+            and self._columns[0].dtype.kind in {"i", "u", "f", "b"}
             and all(
                 not col.nullable and col.dtype == self._columns[0].dtype
                 for col in self._columns
@@ -587,7 +587,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
         elif (
             self._num_columns == 1
             and na_value is None
-            and not isinstance(self._columns[0].dtype, cudf.CategoricalDtype)
+            and self._columns[0].dtype.kind in {"i", "u", "f", "b"}
             and not self._columns[0].nullable
         ):
             return cp.asarray(self._columns[0]).reshape((-1, 1))
