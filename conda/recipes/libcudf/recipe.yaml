@@ -7,7 +7,7 @@ context:
   cuda_version: ${{ (env.get("RAPIDS_CUDA_VERSION") | split("."))[:2] | join(".") }}
   cuda_major: '${{ (env.get("RAPIDS_CUDA_VERSION") | split("."))[0] }}'
   date_string: '${{ env.get("RAPIDS_DATE_STRING") }}'
-  head_rev: ${{ git.head_rev(".")[:8] }}
+  head_rev: '${{ git.head_rev(".")[:8] }}'
 
 recipe:
   name: libcudf-split
