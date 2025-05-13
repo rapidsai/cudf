@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2024, NVIDIA CORPORATION.
+# Copyright (c) 2021-2025, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -212,7 +212,7 @@ def test_can_parse_no_schema():
 
 @pytest.mark.parametrize("rows", [0, 1, 10, 1000])
 @pytest.mark.parametrize("codec", ["null", "deflate", "snappy"])
-def test_avro_compression(rows, codec):
+def test_avro_decompression(set_decomp_env_vars, rows, codec):
     schema = {
         "name": "root",
         "type": "record",
