@@ -13,6 +13,7 @@ cdef class Table:
 
     cpdef int num_columns(self)
     cpdef int num_rows(self)
+    cpdef tuple shape(self)
 
     @staticmethod
     cdef Table from_libcudf(unique_ptr[table] libcudf_tbl, Stream stream=*)
