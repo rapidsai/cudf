@@ -391,7 +391,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):  # type: ignore[
             )
 
         if not isinstance(index, pd.Index):
-            raise TypeError("not a pandas.Index")
+            raise TypeError("Expected a pandas.Index, got {type(index)}")
         if isinstance(index, pd.RangeIndex):
             return cudf.RangeIndex(
                 start=index.start,
