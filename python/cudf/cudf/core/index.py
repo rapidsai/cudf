@@ -1874,7 +1874,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):  # type: ignore[
     @staticmethod
     def _return_get_indexer_result(result: cupy.ndarray) -> cupy.ndarray:
         if cudf.get_option("mode.pandas_compatible"):
-            return result.astype(np.dtype(np.int64))
+            return result.astype(np.int64)
         return result
 
     @_performance_tracking
