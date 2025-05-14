@@ -20,7 +20,7 @@ def column(request, nullable):
     typ = {"float32": pa.float32(), "float64": pa.float64()}[request.param]
     if nullable:
         values[2] = None
-    return plc.interop.from_arrow(pa.array(values, type=typ))
+    return plc.Column(pa.array(values, type=typ))
 
 
 def test_copy_bitmask(column, nullable):

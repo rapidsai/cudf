@@ -150,6 +150,28 @@ void aggregate_reader_metadata::setup_page_index(cudf::host_span<uint8_t const> 
   }
 }
 
+size_type aggregate_reader_metadata::total_rows_in_row_groups(
+  cudf::host_span<std::vector<size_type> const> row_group_indices) const
+{
+  size_t total_rows = 0;
+
+  std::for_each(thrust::counting_iterator<size_t>(0),
+                thrust::counting_iterator(row_group_indices.size()),
+                [&](auto const src_idx) {
+                  auto const& pfm = per_file_metadata[src_idx];
+                  for (auto const row_group_idx : row_group_indices[src_idx]) {
+                    CUDF_EXPECTS(
+                      row_group_idx < static_cast<cudf::size_type>(pfm.row_groups.size()),
+                      "Row group index out of bounds");
+                    total_rows += pfm.row_groups[row_group_idx].num_rows;
+                  }
+                });
+  CUDF_EXPECTS(total_rows <= static_cast<size_t>(std::numeric_limits<size_type>::max()),
+               "Total number of rows exceeds cudf::size_type's limit");
+
+  return static_cast<size_type>(total_rows);
+}
+
 std::tuple<std::vector<input_column_info>,
            std::vector<inline_column_buffer>,
            std::vector<cudf::size_type>>

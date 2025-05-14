@@ -771,7 +771,7 @@ dependencies:
       - output_types: [conda, requirements, pyproject]
         packages:
           - cachetools
-          - &numba-cuda-dep numba-cuda>=0.10.1,<0.11.0a0
+          - &numba-cuda-dep numba-cuda>=0.11.0,<0.12.0a0
           - &numba-dep numba>=0.59.1,<0.62.0a0
           - nvtx>=0.2.1
           - packaging
@@ -809,6 +809,8 @@ dependencies:
               cuda_suffixed: "true"
             packages:
               - pynvjitlink-cu12>=0.0.0a0
+              - nvidia-cuda-nvcc-cu12
+              - nvidia-cuda-nvrtc-cu12
           - matrix:
               cuda: "12.*"
               cuda_suffixed: "false"
@@ -904,7 +906,7 @@ dependencies:
         matrices:
           - matrix: {dependencies: "oldest"}
             packages:
-              - numba-cuda==0.10.1
+              - numba-cuda==0.11.0
               - numba==0.59.1
               - pandas==2.0.*
           - matrix: {dependencies: "latest"}
@@ -958,7 +960,6 @@ dependencies:
           - hypothesis>=6.131.7
           - pytest-benchmark
           - pytest-cases>=3.8.2
-          - pytest-rerunfailures
           - scipy
           - zstandard
       - output_types: conda
