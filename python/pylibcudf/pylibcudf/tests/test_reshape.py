@@ -9,16 +9,6 @@ from pylibcudf.types import TypeId
 
 
 @pytest.fixture(scope="module")
-def np():
-    return pytest.importorskip("cupy")
-
-
-@pytest.fixture(scope="module")
-def cp():
-    return pytest.importorskip("cupy")
-
-
-@pytest.fixture(scope="module")
 def reshape_data():
     data = [[1, 2, 3], [4, 5, 6]]
     arrow_tbl = pa.Table.from_arrays(data, names=["a", "b"])
@@ -59,8 +49,10 @@ def test_tile(reshape_data, cnt):
         ("float64", TypeId.FLOAT64),
     ],
 )
-def test_table_to_array(dtype, type_id, np, cp):
-    arrow_type = pa.from_numpy_dtype(getattr(np, dtype))
+def test_table_to_array(dtype, type_id):
+    import cupy as cp
+
+    arrow_type = pa.from_numpy_dtype(getattr(cp, dtype))
     arrs = [
         pa.array([1, 2, 3], type=arrow_type),
         pa.array([4, 5, 6], type=arrow_type),

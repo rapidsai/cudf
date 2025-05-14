@@ -8,7 +8,6 @@ from collections import abc
 from typing import TYPE_CHECKING, Any, Literal
 
 import cupy
-import cupy as cp
 import numpy
 import numpy as np
 import pyarrow as pa
@@ -591,7 +590,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
             if (
                 not copy
                 and col.dtype.kind in {"i", "u", "f", "b"}
-                and cp.can_cast(col.dtype, final_dtype)
+                and cupy.can_cast(col.dtype, final_dtype)
             ):
                 if col.has_nulls():
                     if na_value is not None:
@@ -604,7 +603,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
                             dtype,
                             na_value,
                         )
-                return cp.asarray(col, dtype=final_dtype).reshape((-1, 1))
+                return cupy.asarray(col, dtype=final_dtype).reshape((-1, 1))
         return self._to_array(
             lambda col: col.values,
             cupy,

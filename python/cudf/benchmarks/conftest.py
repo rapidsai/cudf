@@ -45,7 +45,6 @@ specialized fixtures:
 """
 
 import os
-import string
 import sys
 
 import pytest_cases
@@ -83,14 +82,8 @@ fixtures = OrderedSet()
 for dtype, column_generator in column_generators.items():
 
     def make_dataframe(nr, nc, column_generator=column_generator):
-        assert nc <= len(string.ascii_lowercase), (
-            "make_dataframe only supports a maximum of 26 columns"
-        )
         return cudf.DataFrame(
-            {
-                f"{string.ascii_lowercase[i]}": column_generator(nr)
-                for i in range(nc)
-            }
+            {f"col{i}": column_generator(nr) for i in range(nc)}
         )
 
     for nr in NUM_ROWS:

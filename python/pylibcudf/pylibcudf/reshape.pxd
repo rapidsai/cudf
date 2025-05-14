@@ -1,5 +1,6 @@
 # Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
+from libc.stddef cimport size_t
 from libc.stdint cimport uintptr_t
 
 from pylibcudf.libcudf.types cimport size_type
@@ -18,6 +19,6 @@ cpdef Table tile(Table source_table, size_type count)
 cpdef void table_to_array(
     Table input_table,
     uintptr_t ptr,
-    size_type size,
+    size_t size,
     Stream stream=*
 )

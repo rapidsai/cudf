@@ -1,5 +1,6 @@
 # Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
+from libc.stddef cimport size_t
 from libc.stdint cimport uintptr_t
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
@@ -81,11 +82,12 @@ cpdef Table tile(Table source_table, size_type count):
 cpdef void table_to_array(
     Table input_table,
     uintptr_t ptr,
-    size_type size,
+    size_t size,
     Stream stream=None
 ):
     """
     Copy a table into a preallocated column-major device array.
+
     Parameters
     ----------
     input_table : Table
@@ -98,7 +100,7 @@ cpdef void table_to_array(
     stream : Stream | None
         CUDA stream on which to perform the operation.
     """
-    if size > numeric_limits[size_type].max():
+    if size > numeric_limits[size_t].max():
         raise ValueError(
             "Size exceeds the int32_t limit."
         )
