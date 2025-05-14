@@ -49,7 +49,7 @@ struct always_not_equal {
 };
 
 /**
- * @brief An comparator adapter wrapping the two table comparator
+ * @brief A comparator adapter wrapping the two table comparator
  */
 template <typename Equal>
 struct comparator_adapter {
@@ -61,6 +61,25 @@ struct comparator_adapter {
   {
     if (lhs.first != rhs.first) { return false; }
     return _d_equal(lhs.second, rhs.second);
+  }
+
+ private:
+  Equal _d_equal;
+};
+
+/**
+ * @brief A comparator adapter wrapping the two table comparator
+ */
+template <typename Equal>
+struct primitive_comparator_adapter {
+  primitive_comparator_adapter(Equal const& d_equal) : _d_equal{d_equal} {}
+
+  __device__ constexpr auto operator()(
+    cuco::pair<hash_value_type, lhs_index_type> const& lhs,
+    cuco::pair<hash_value_type, rhs_index_type> const& rhs) const noexcept
+  {
+    if (lhs.first != rhs.first) { return false; }
+    return _d_equal(static_cast<size_type>(lhs.second), static_cast<size_type>(rhs.second));
   }
 
  private:
