@@ -98,12 +98,18 @@ def duration_to_scalar(dtype: plc.DataType, value: int) -> plc.Scalar:
         For unsupported durations or datatypes.
     """
     tid = dtype.id()
-    if tid in {plc.TypeId.INT64, plc.TypeId.TIMESTAMP_NANOSECONDS}:
+    if tid == plc.TypeId.INT64:
         return plc.Scalar.from_py(value, dtype)
+    elif tid == plc.TypeId.TIMESTAMP_NANOSECONDS:
+        return plc.Scalar.from_py(value, plc.DataType(plc.TypeId.DURATION_NANOSECONDS))
     elif tid == plc.TypeId.TIMESTAMP_MICROSECONDS:
-        return plc.Scalar.from_py(value // 10**3, dtype)
+        return plc.Scalar.from_py(
+            value // 1000, plc.DataType(plc.TypeId.DURATION_MICROSECONDS)
+        )
     elif tid == plc.TypeId.TIMESTAMP_MILLISECONDS:
-        return plc.Scalar.from_py(value // 10**6, dtype)
+        return plc.Scalar.from_py(
+            value // 1_000_000, plc.DataType(plc.TypeId.DURATION_MILLISECONDS)
+        )
     else:
         raise NotImplementedError("Unsupported data type in rolling window offset")
 
