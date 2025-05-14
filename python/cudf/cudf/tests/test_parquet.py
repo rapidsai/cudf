@@ -425,7 +425,7 @@ def test_parquet_read_metadata(tmp_path, pdf):
         assert a == b
 
 
-def test_parquet_read_filtered(tmpdir):
+def test_parquet_read_filtered(set_decomp_env_vars, tmpdir):
     # Generate data
     fname = tmpdir.join("filtered.parquet")
     dg.generate(
@@ -4457,3 +4457,23 @@ def test_parquet_reader_empty_compressed_page(datadir):
 
     df = cudf.DataFrame({"value": cudf.Series([None], dtype="float32")})
     assert_eq(cudf.read_parquet(fname), df)
+
+
+@pytest.fixture(params=[12345], scope="module")
+def my_pdf(request):
+    return build_pdf(request, True)
+
+
+@pytest.mark.parametrize("compression", ["brotli", "gzip", "snappy", "zstd"])
+def test_parquet_decompression(set_decomp_env_vars, my_pdf, compression):
+    # PANDAS returns category objects whereas cuDF returns hashes
+    expect = my_pdf.drop(columns=["col_category"])
+
+    # Write the DataFrame to a Parquet file
+    buffer = BytesIO()
+    expect.to_parquet(buffer, compression=compression)
+
+    # Read the Parquet file back into a DataFrame
+    got = cudf.read_parquet(buffer)
+
+    assert_eq(expect, got)
