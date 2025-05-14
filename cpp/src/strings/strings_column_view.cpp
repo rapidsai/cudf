@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,13 +35,14 @@ column_view strings_column_view::offsets() const
   return child(offsets_column_index);
 }
 
-int64_t strings_column_view::chars_size(rmm::cuda_stream_view stream) const noexcept
+int64_t strings_column_view::chars_size(rmm::cuda_stream_view stream) const
 {
   if (size() == 0) { return 0L; }
   return cudf::strings::detail::get_offset_value(offsets(), offsets().size() - 1, stream);
 }
 
-strings_column_view::chars_iterator strings_column_view::chars_begin(rmm::cuda_stream_view) const
+strings_column_view::chars_iterator strings_column_view::chars_begin(
+  rmm::cuda_stream_view) const noexcept
 {
   return head<char>();
 }
