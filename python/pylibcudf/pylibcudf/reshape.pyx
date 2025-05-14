@@ -94,7 +94,7 @@ cpdef void table_to_array(
         A table with fixed-width, non-nullable columns of the same type.
     ptr : uintptr_t
         A device pointer to the beginning of the output buffer.
-    size : size_type
+    size : size_t
         The total number of bytes available at `ptr`.
         Must be at least `num_rows * num_columns * sizeof(dtype)`.
     stream : Stream | None
