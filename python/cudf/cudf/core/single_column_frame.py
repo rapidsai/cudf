@@ -220,7 +220,7 @@ class SingleColumnFrame(Frame, NotIterable):
 
         Notes
         -----
-        cuDF currently does not support implicity conversion from GPU stored series to
+        cuDF currently does not support implicit conversion from GPU stored series to
         host stored lists. A `TypeError` is raised when this method is called.
         Consider calling `.to_arrow().to_pylist()` to construct a Python list.
         """
