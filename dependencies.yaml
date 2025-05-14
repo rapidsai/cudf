@@ -11,7 +11,7 @@ files:
       # clang-format version. Until we update our clang-format version we will
       # not be able to install both into the same environment. Moreover, using
       # this version will break compatibility with other RAPIDS libraries that
-      # are still using 16.0.6, and as such will and that would break any
+      # are still using 20.1.4, and as such will and that would break any
       # unified environment like that used in unified devcontainers.
       - build_base
       - build_all
@@ -670,8 +670,8 @@ dependencies:
     common:
       - output_types: conda
         packages:
-          - clang==16.0.6
-          - clang-tools=16.0.6
+          - clang==20.1.4
+          - clang-tools=20.1.4
   clang_tidy:
     common:
       - output_types: conda
