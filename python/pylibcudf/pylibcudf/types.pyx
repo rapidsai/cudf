@@ -101,7 +101,7 @@ cdef class DataType:
         Parameters
         ----------
         typ : type
-            A Python type (e.g., int, float, str)
+            A Python type (eg. int, str, list)
 
         Returns
         -------
