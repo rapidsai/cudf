@@ -140,7 +140,7 @@ def _infer_list_depth_and_dtype(obj: list) -> tuple[int, type]:
         raise ValueError("Cannot infer dtype from empty input")
 
     scalar_type = type(current)
-    if scalar_type not in (int, float, bool):
+    if scalar_type not in {int, float, bool}:
         raise TypeError(f"Unsupported scalar type: {scalar_type}")
 
     return depth, scalar_type
