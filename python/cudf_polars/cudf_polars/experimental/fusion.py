@@ -131,7 +131,6 @@ def _(
     if ir.fused_io is None:
         return _default_generate_ir_tasks(ir, partition_info)
 
-    assert isinstance(ir.fused_io, Union)
     graph: MutableMapping[Any, Any] = {}
     for i, key in enumerate(partition_info[ir].keys(ir)):
         io = ir.fused_io.children[i]
