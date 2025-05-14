@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 # TODO: remove need for this
 # ruff: noqa: D101
@@ -16,7 +16,7 @@ from cudf_polars.containers import Column
 from cudf_polars.dsl.nodebase import Node
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from typing_extensions import Self
 
     from cudf_polars.containers import Column, DataFrame
 
@@ -46,11 +46,7 @@ class Expr(Node["Expr"]):
     """Names of non-child data (not Exprs) for reconstruction."""
 
     def do_evaluate(
-        self,
-        df: DataFrame,
-        *,
-        context: ExecutionContext = ExecutionContext.FRAME,
-        mapping: Mapping[Expr, Column] | None = None,
+        self, df: DataFrame, *, context: ExecutionContext = ExecutionContext.FRAME
     ) -> Column:
         """
         Evaluate this expression given a dataframe for context.
@@ -61,15 +57,10 @@ class Expr(Node["Expr"]):
             DataFrame that will provide columns.
         context
             What context are we performing this evaluation in?
-        mapping
-            Substitution mapping from expressions to Columns, used to
-            override the evaluation of a given expression if we're
-            performing a simple rewritten evaluation.
 
         Notes
         -----
-        Do not call this function directly, but rather
-        :meth:`evaluate` which handles the mapping lookups.
+        Do not call this function directly, but rather :meth:`evaluate`.
 
         Returns
         -------
@@ -87,11 +78,7 @@ class Expr(Node["Expr"]):
         )  # pragma: no cover; translation of unimplemented nodes trips first
 
     def evaluate(
-        self,
-        df: DataFrame,
-        *,
-        context: ExecutionContext = ExecutionContext.FRAME,
-        mapping: Mapping[Expr, Column] | None = None,
+        self, df: DataFrame, *, context: ExecutionContext = ExecutionContext.FRAME
     ) -> Column:
         """
         Evaluate this expression given a dataframe for context.
@@ -102,10 +89,6 @@ class Expr(Node["Expr"]):
             DataFrame that will provide columns.
         context
             What context are we performing this evaluation in?
-        mapping
-            Substitution mapping from expressions to Columns, used to
-            override the evaluation of a given expression if we're
-            performing a simple rewritten evaluation.
 
         Notes
         -----
@@ -124,37 +107,28 @@ class Expr(Node["Expr"]):
             are returned during translation to the IR, but for now we
             are not perfect.
         """
-        if mapping is None:
-            return self.do_evaluate(df, context=context, mapping=mapping)
-        try:
-            return mapping[self]
-        except KeyError:
-            return self.do_evaluate(df, context=context, mapping=mapping)
+        return self.do_evaluate(df, context=context)
 
-    def collect_agg(self, *, depth: int) -> AggInfo:
+    @property
+    def agg_request(self) -> plc.aggregation.Aggregation:
         """
-        Collect information about aggregations in groupbys.
-
-        Parameters
-        ----------
-        depth
-            The depth of aggregating (reduction or sampling)
-            expressions we are currently at.
+        The aggregation for this expression in a grouped aggregation.
 
         Returns
         -------
-        Aggregation info describing the expression to aggregate in the
-        groupby.
+        Aggregation request. Default is to collect the expression.
+
+        Notes
+        -----
+        This presumes that the IR translation has decomposed groupby
+        reductions only into cases we can handle.
 
         Raises
         ------
         NotImplementedError
-            If we can't currently perform the aggregation request, for
-            example nested aggregations like ``a.max().min()``.
+            If requesting an aggregation from an unexpected expression.
         """
-        raise NotImplementedError(
-            f"Collecting aggregation info for {type(self).__name__}"
-        )  # pragma: no cover; check_agg trips first
+        return plc.aggregation.collect_list()
 
 
 class ErrorExpr(Expr):
@@ -166,7 +140,7 @@ class ErrorExpr(Expr):
         self.dtype = dtype
         self.error = error
         self.children = ()
-        self.is_pointwise = True
+        self.is_pointwise = False
 
 
 class NamedExpr:
@@ -202,11 +176,7 @@ class NamedExpr:
         return not self.__eq__(other)
 
     def evaluate(
-        self,
-        df: DataFrame,
-        *,
-        context: ExecutionContext = ExecutionContext.FRAME,
-        mapping: Mapping[Expr, Column] | None = None,
+        self, df: DataFrame, *, context: ExecutionContext = ExecutionContext.FRAME
     ) -> Column:
         """
         Evaluate this expression given a dataframe for context.
@@ -217,8 +187,6 @@ class NamedExpr:
             DataFrame providing context
         context
             Execution context
-        mapping
-            Substitution mapping
 
         Returns
         -------
@@ -229,13 +197,25 @@ class NamedExpr:
         :meth:`Expr.evaluate` for details, this function just adds the
         name to a column produced from an expression.
         """
-        return self.value.evaluate(df, context=context, mapping=mapping).rename(
-            self.name
-        )
+        return self.value.evaluate(df, context=context).rename(self.name)
 
-    def collect_agg(self, *, depth: int) -> AggInfo:
-        """Collect information about aggregations in groupbys."""
-        return self.value.collect_agg(depth=depth)
+    def reconstruct(self, expr: Expr) -> Self:
+        """
+        Rebuild with a new `Expr` value.
+
+        Parameters
+        ----------
+        expr
+            New `Expr` value
+
+        Returns
+        -------
+        New `NamedExpr` with `expr` as the underlying expression.
+        The name of the original `NamedExpr` is preserved.
+        """
+        if expr is self.value:
+            return self
+        return type(self)(self.name, expr)
 
 
 class Col(Expr):
@@ -250,20 +230,12 @@ class Col(Expr):
         self.children = ()
 
     def do_evaluate(
-        self,
-        df: DataFrame,
-        *,
-        context: ExecutionContext = ExecutionContext.FRAME,
-        mapping: Mapping[Expr, Column] | None = None,
+        self, df: DataFrame, *, context: ExecutionContext = ExecutionContext.FRAME
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
         # Deliberately remove the name here so that we guarantee
         # evaluation of the IR produces names.
         return df.column_map[self.name].rename(None)
-
-    def collect_agg(self, *, depth: int) -> AggInfo:
-        """Collect information about aggregations in groupbys."""
-        return AggInfo([(self, plc.aggregation.collect_list(), self)])
 
 
 class ColRef(Expr):
@@ -288,11 +260,7 @@ class ColRef(Expr):
         self.children = (column,)
 
     def do_evaluate(
-        self,
-        df: DataFrame,
-        *,
-        context: ExecutionContext = ExecutionContext.FRAME,
-        mapping: Mapping[Expr, Column] | None = None,
+        self, df: DataFrame, *, context: ExecutionContext = ExecutionContext.FRAME
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
         raise NotImplementedError(

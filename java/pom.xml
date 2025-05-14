@@ -167,7 +167,7 @@
         <CUDA_STATIC_RUNTIME>OFF</CUDA_STATIC_RUNTIME>
         <CUDF_USE_PER_THREAD_DEFAULT_STREAM>OFF</CUDF_USE_PER_THREAD_DEFAULT_STREAM>
         <USE_GDS>OFF</USE_GDS>
-        <GPU_ARCHS>RAPIDS</GPU_ARCHS>
+        <CMAKE_CUDA_ARCHITECTURES>RAPIDS</CMAKE_CUDA_ARCHITECTURES>
         <CUDF_JNI_LIBCUDF_STATIC>OFF</CUDF_JNI_LIBCUDF_STATIC>
         <native.build.path>${project.build.directory}/cmake-build</native.build.path>
         <slf4j.version>1.7.30</slf4j.version>
@@ -463,6 +463,7 @@
                                 <exec dir="${native.build.path}"
                                       failonerror="true"
                                       executable="cmake">
+                                    <env key="CUDF_CPP_BUILD_DIR" value="${CUDF_CPP_BUILD_DIR}"/>
                                     <arg value="${basedir}/src/main/native"/>
                                     <arg line="${cmake.ccache.opts}"/>
                                     <arg value="-DCUDA_STATIC_RUNTIME=${CUDA_STATIC_RUNTIME}" />
@@ -470,8 +471,7 @@
                                     <arg value="-DUSE_GDS=${USE_GDS}" />
                                     <arg value="-DCMAKE_CXX_FLAGS=${cxx.flags}"/>
                                     <arg value="-DCMAKE_EXPORT_COMPILE_COMMANDS=${CMAKE_EXPORT_COMPILE_COMMANDS}"/>
-                                    <arg value="-DCUDF_CPP_BUILD_DIR=${CUDF_CPP_BUILD_DIR}"/>
-                                    <arg value="-DGPU_ARCHS=${GPU_ARCHS}"/>
+                                    <arg value="-DCMAKE_CUDA_ARCHITECTURES=${CMAKE_CUDA_ARCHITECTURES}"/>
                                     <arg value="-DCUDF_JNI_LIBCUDF_STATIC=${CUDF_JNI_LIBCUDF_STATIC}"/>
                                     <arg value="-DCUDF_JNI_ENABLE_PROFILING=${CUDF_JNI_ENABLE_PROFILING}"/>
                                     <arg value="-DBUILD_SHARED_LIBS=ON"/>

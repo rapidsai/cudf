@@ -208,3 +208,7 @@ cdef extern from "cudf/aggregation.hpp" namespace "cudf" nogil:
     cdef unique_ptr[T] make_merge_m2_aggregation[T]() except +libcudf_exception_handler
 
     cdef unique_ptr[T] make_m2_aggregation[T]() except +libcudf_exception_handler
+
+    bool is_valid_aggregation(
+        data_type source, Kind kind
+    ) noexcept

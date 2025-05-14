@@ -405,6 +405,7 @@ _names_to_skip_in_pylibcudf = {
     "type_id",
     # Unknown base types
     "int32_t",
+    "uint64_t",
     "void",
 }
 
@@ -596,6 +597,7 @@ nitpick_ignore = [
     ("py:class", "pd.DataFrame"),
     ("py:class", "pandas.core.indexes.frozen.FrozenList"),
     ("py:class", "pa.Array"),
+    ("py:class", "pa.ListType"),
     ("py:class", "pa.Decimal128Type"),
     ("py:class", "ScalarLike"),
     ("py:class", "ParentType"),
@@ -604,6 +606,7 @@ nitpick_ignore = [
     ("py:class", "pyarrow.lib.Scalar"),
     ("py:class", "pyarrow.lib.ChunkedArray"),
     ("py:class", "pyarrow.lib.Array"),
+    ("py:class", "StringColumn"),
     ("py:class", "ColumnLike"),
     ("py:class", "DtypeObj"),
     ("py:class", "pa.StructType"),

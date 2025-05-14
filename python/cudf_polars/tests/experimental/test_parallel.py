@@ -12,8 +12,11 @@ from polars import GPUEngine
 from polars.testing import assert_frame_equal
 
 from cudf_polars import Translator
+from cudf_polars.dsl.expressions.base import Col, NamedExpr
 from cudf_polars.dsl.traversal import traversal
+from cudf_polars.experimental.parallel import get_scheduler, lower_ir_graph, task_graph
 from cudf_polars.testing.asserts import DEFAULT_SCHEDULER, assert_gpu_result_equal
+from cudf_polars.utils.config import ConfigOptions
 
 
 def test_evaluate_streaming():
@@ -108,3 +111,72 @@ def test_rename_multi(mapping, engine):
     df = pl.LazyFrame({"a": [1, 2, 3], "b": [3, 4, 5]})
     q = df.rename(mapping)
     assert_gpu_result_equal(q, engine=engine)
+
+
+def test_preserve_partitioning():
+    engine = pl.GPUEngine(
+        raise_on_fail=True,
+        executor="streaming",
+        executor_options={
+            "max_rows_per_partition": 2,
+            "scheduler": DEFAULT_SCHEDULER,
+            "broadcast_join_limit": 2,
+            "cardinality_factor": {"a": 1.0},
+        },
+    )
+    left = pl.LazyFrame({"a": [1, 2, 3, 4] * 5, "b": range(20)})
+    right = pl.LazyFrame({"a": [3, 4, 5, 6, 7] * 4, "c": range(20)})
+    q = (
+        left.join(right, on="a")
+        .filter(pl.col("a") == 2)
+        .group_by(pl.col("a"))
+        .mean()
+        .select(pl.col("a"), pl.col("c"))
+    )
+    config_options = ConfigOptions.from_polars_engine(engine)
+    ir = Translator(q._ldf.visit(), engine).translate_ir()
+    ir, partition_info = lower_ir_graph(ir, config_options)
+    expect_dtype = ir.schema["a"]
+    expect_expr = (NamedExpr("a", Col(expect_dtype, "a")),)
+    assert partition_info[ir].partitioned_on == expect_expr
+    assert_gpu_result_equal(q, engine=engine)
+
+
+def test_synchronous_scheduler():
+    # Test that the synchronous scheduler clears
+    # the cache as tasks are executed.
+    engine = pl.GPUEngine(
+        raise_on_fail=True,
+        executor="streaming",
+        executor_options={
+            "max_rows_per_partition": 4,
+            "scheduler": "synchronous",
+        },
+    )
+    left = pl.LazyFrame(
+        {
+            "x": range(15),
+            "y": [1, 2, 3] * 5,
+            "z": [1.0, 2.0, 3.0, 4.0, 5.0] * 3,
+        }
+    )
+    right = pl.LazyFrame(
+        {
+            "xx": range(6),
+            "y": [2, 4, 3] * 2,
+            "zz": [1, 2] * 3,
+        }
+    )
+    q = left.join(right, on="y").group_by("y").agg(pl.col("zz").mean()).sort(by="y")
+
+    config_options = ConfigOptions.from_polars_engine(engine)
+    ir = Translator(q._ldf.visit(), engine).translate_ir()
+    ir, partition_info = lower_ir_graph(ir, config_options)
+    graph, key = task_graph(ir, partition_info)
+    scheduler = get_scheduler(config_options)
+    cache = {}
+    result = scheduler(graph, key, cache=cache)
+    assert_frame_equal(result.to_polars(), q.collect())
+
+    # The cache should only contain the final result
+    assert set(cache) == {key}
