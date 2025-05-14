@@ -3,7 +3,7 @@ files:
   all:
     output: conda
     matrix:
-      cuda: ["11.8", "12.9"]
+      cuda: ["11.8", "12.8"]
       arch: [x86_64, aarch64]
     includes:
       # Note that clang-tidy is not included here because cudf's preferred
