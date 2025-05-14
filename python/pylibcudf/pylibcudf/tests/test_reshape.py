@@ -1,5 +1,6 @@
 # Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
+import cupy as cp
 import pyarrow as pa
 import pytest
 from utils import assert_column_eq, assert_table_eq
@@ -50,8 +51,6 @@ def test_tile(reshape_data, cnt):
     ],
 )
 def test_table_to_array(dtype, type_id):
-    import cupy as cp
-
     arrow_type = pa.from_numpy_dtype(getattr(cp, dtype))
     arrs = [
         pa.array([1, 2, 3], type=arrow_type),
