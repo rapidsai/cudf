@@ -120,7 +120,7 @@ struct calculate_compute_buffer_fn {
     auto d_tgt = d_targets.size() == 1 ? d_targets.element<cudf::string_view>(0)
                                        : d_targets.element<cudf::string_view>(idx);
     // just need 2 integers for each character of the shorter string
-    return (cuda::std::min(d_str.length(), d_tgt.length()) + 1) * 2;
+    return (cuda::std::min(d_str.length(), d_tgt.length()) + 1L) * 2L;
   }
 };
 
@@ -193,7 +193,7 @@ struct edit_distance_matrix_levenshtein_algorithm {
       d_strings.is_null(row) ? cudf::string_view{} : d_strings.element<cudf::string_view>(row);
     cudf::string_view d_str2 =
       d_strings.is_null(col) ? cudf::string_view{} : d_strings.element<cudf::string_view>(col);
-    auto work_buffer    = d_buffer + d_offsets[idx - ((row + 1) * (row + 2)) / 2];
+    auto work_buffer    = d_buffer + d_offsets[idx - ((row + 1L) * (row + 2L)) / 2L];
     auto const distance = (row == col) ? 0 : compute_distance(d_str1, d_str2, work_buffer);
     d_results[idx]      = distance;                   // top half of matrix
     d_results[col * strings_count + row] = distance;  // bottom half of matrix
@@ -215,8 +215,8 @@ struct calculate_matrix_compute_buffer_fn {
       d_strings.is_null(col) ? cudf::string_view{} : d_strings.element<cudf::string_view>(col);
     if (d_str1.empty() || d_str2.empty()) { return; }
     // the temp size needed is 2 integers per character of the shorter string
-    d_sizes[idx - ((row + 1) * (row + 2)) / 2] =
-      (cuda::std::min(d_str1.length(), d_str2.length()) + 1) * 2;
+    d_sizes[idx - ((row + 1L) * (row + 2L)) / 2L] =
+      (cuda::std::min(d_str1.length(), d_str2.length()) + 1L) * 2L;
   }
 };
 
@@ -244,7 +244,7 @@ std::unique_ptr<cudf::column> edit_distance_matrix(cudf::strings_column_view con
   // Calculate the size of the compute-buffer.
   // We only need memory for half the size of the output matrix since the edit distance calculation
   // is commutative -- `distance(strings[i],strings[j]) == distance(strings[j],strings[i])`
-  auto const n_upper     = (input.size() * (input.size() - 1)) / 2;
+  auto const n_upper     = (input.size() * (input.size() - 1L)) / 2L;
   auto const output_size = input.size() * input.size();
   rmm::device_uvector<std::ptrdiff_t> offsets(n_upper + 1, stream);
   thrust::uninitialized_fill(rmm::exec_policy_nosync(stream), offsets.begin(), offsets.end(), 0);
