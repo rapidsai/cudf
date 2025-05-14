@@ -645,7 +645,6 @@ def _(node: pl_expr.Literal, translator: Translator, dtype: plc.DataType) -> exp
         # TODO: Find an alternative to pa.infer_type
         data = pa.array(node.value, type=pa.infer_type(node.value))
         return expr.LiteralColumn(dtype, data)
-        # return expr.LiteralColumn(dtype, node.value)
     value = pa.scalar(node.value, type=plc.interop.to_arrow(dtype))
     return expr.Literal(dtype, value)
 

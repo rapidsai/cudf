@@ -128,13 +128,7 @@ cdef class OwnerMaskWithCAI:
 
 
 def _infer_list_depth_and_dtype(obj: list) -> tuple[int, type]:
-    """
-    Infer the nesting depth and final scalar type.
-
-    Returns
-    -------
-    (depth, dtype): tuple[int, Python scalar type]
-    """
+    """Infer the nesting depth and final scalar type."""
     depth = 0
     current = obj
 
@@ -153,9 +147,7 @@ def _infer_list_depth_and_dtype(obj: list) -> tuple[int, type]:
 
 
 def _flatten_nested_list(obj: list, depth: int) -> tuple[list, tuple[int, ...]]:
-    """
-    Flatten a nested list to a flat list of scalars and compute shape.
-    """
+    """Flatten a nested list to a flat list of scalars and compute shape."""
     if depth == 1:
         shape = (len(obj),)
         return obj, shape
@@ -917,6 +909,44 @@ cdef class Column:
 
     @staticmethod
     def from_list(obj: list, dtype: DataType | None = None) -> Column:
+        """
+        Create a Column from a Python list
+
+        Parameters
+        ----------
+        obj : list
+            A list of scalar values (e.g., int, float, bool)
+            or a nested list of such values.
+        dtype : DataType | None
+            The data type of the elements. If not specified,
+            the type is inferred from the list.
+
+        Returns
+        -------
+        Column
+            A Column containing the data from the input list.
+
+        Raises
+        ------
+        TypeError
+            If the input is not a list or contains unsupported scalar types.
+        ValueError
+            If the list is empty and no dtype is specified.
+            If the nested lists are irregular (i.e., have inconsistent shapes).
+
+        Notes
+        -----
+        - Only scalar types int, float, and bool are supported.
+        - The input list may be multi-dimensional, and will be interpreted
+          as a C-contiguous array with nested list columns.
+
+        Examples
+        --------
+        >>> import pylibcudf as plc
+        >>> plc.Column.from_list([1, 2, 3])
+        >>> plc.Column.from_list([[1, 2], [3, 4]])
+        >>> plc.Column.from_list([[1.0, 2.0], [3.0, 4.0]], dtype=plc.DataType.FLOAT64)
+        """
         if not isinstance(obj, list):
             raise TypeError("Expected a list")
 

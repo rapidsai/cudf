@@ -72,8 +72,6 @@ class LiteralColumn(Expr):
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
         # datatype of pyarrow array is correct by construction.
-        # if isinstance(self.value, list):
-        #     return Column(plc.Column.from_list(self.value))
         return Column(plc.interop.from_arrow(self.value))
 
     @property
