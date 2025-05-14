@@ -30,8 +30,11 @@ import pylibcudf as plc
 
 import cudf_polars.dsl.expr as expr
 from cudf_polars.containers import Column, DataFrame
+from cudf_polars.dsl.expressions import rolling
+from cudf_polars.dsl.expressions.base import ExecutionContext
 from cudf_polars.dsl.nodebase import Node
 from cudf_polars.dsl.to_ast import to_ast, to_parquet_filter
+from cudf_polars.dsl.utils.windows import range_window_bounds
 from cudf_polars.utils import dtypes
 from cudf_polars.utils.versions import POLARS_VERSION_LT_128
 
@@ -43,7 +46,7 @@ if TYPE_CHECKING:
 
     from polars.polars import _expr_nodes as pl_expr
 
-    from cudf_polars.typing import CSECache, Schema, Slice as Zlice
+    from cudf_polars.typing import CSECache, ClosedInterval, Schema, Slice as Zlice
     from cudf_polars.utils.config import ConfigOptions
     from cudf_polars.utils.timer import Timer
 
@@ -927,6 +930,158 @@ class Reduce(IR):
         return DataFrame(columns)
 
 
+class Rolling(IR):
+    """Perform a (possibly grouped) rolling aggregation."""
+
+    __slots__ = (
+        "agg_requests",
+        "closed_window",
+        "following",
+        "index",
+        "keys",
+        "preceding",
+        "zlice",
+    )
+    _non_child = (
+        "schema",
+        "index",
+        "preceding",
+        "following",
+        "closed_window",
+        "keys",
+        "agg_requests",
+        "zlice",
+    )
+    index: expr.NamedExpr
+    """Column being rolled over."""
+    preceding: pa.Scalar
+    """Preceding window extent defining start of window."""
+    following: pa.Scalar
+    """Following window extent defining end of window."""
+    closed_window: ClosedInterval
+    """Treatment of window endpoints."""
+    keys: tuple[expr.NamedExpr, ...]
+    """Grouping keys."""
+    agg_requests: tuple[expr.NamedExpr, ...]
+    """Aggregation expressions."""
+    zlice: Zlice | None
+    """Optional slice"""
+
+    def __init__(
+        self,
+        schema: Schema,
+        index: expr.NamedExpr,
+        preceding: pa.Scalar,
+        following: pa.Scalar,
+        closed_window: ClosedInterval,
+        keys: Sequence[expr.NamedExpr],
+        agg_requests: Sequence[expr.NamedExpr],
+        zlice: Zlice | None,
+        df: IR,
+    ):
+        self.schema = schema
+        self.index = index
+        self.preceding = preceding
+        self.following = following
+        self.closed_window = closed_window
+        self.keys = tuple(keys)
+        self.agg_requests = tuple(agg_requests)
+        if not all(
+            plc.rolling.is_valid_rolling_aggregation(
+                agg.value.dtype, agg.value.agg_request
+            )
+            for agg in self.agg_requests
+        ):
+            raise NotImplementedError("Unsupported rolling aggregation")
+        if any(
+            agg.value.agg_request.kind() == plc.aggregation.Kind.COLLECT_LIST
+            for agg in self.agg_requests
+        ):
+            raise NotImplementedError(
+                "Incorrect handling of empty groups for list collection"
+            )
+
+        self.zlice = zlice
+        self.children = (df,)
+        self._non_child_args = (
+            index,
+            preceding,
+            following,
+            closed_window,
+            keys,
+            agg_requests,
+            zlice,
+        )
+
+    @classmethod
+    def do_evaluate(
+        cls,
+        index: expr.NamedExpr,
+        preceding: pa.Scalar,
+        following: pa.Scalar,
+        closed_window: ClosedInterval,
+        keys_in: Sequence[expr.NamedExpr],
+        aggs: Sequence[expr.NamedExpr],
+        zlice: Zlice | None,
+        df: DataFrame,
+    ) -> DataFrame:
+        keys = broadcast(*(k.evaluate(df) for k in keys_in), target_length=df.num_rows)
+        orderby = index.evaluate(df)
+        # Polars casts integral orderby to int64, but only for calculating window bounds
+        if (
+            plc.traits.is_integral(orderby.obj.type())
+            and orderby.obj.type().id() != plc.TypeId.INT64
+        ):
+            orderby_obj = plc.unary.cast(orderby.obj, plc.DataType(plc.TypeId.INT64))
+        else:
+            orderby_obj = orderby.obj
+        preceding_window, following_window = range_window_bounds(
+            preceding, following, closed_window
+        )
+        if orderby.obj.null_count() != 0:
+            raise RuntimeError(
+                f"Index column '{index.name}' in rolling may not contain nulls"
+            )
+        if len(keys_in) > 0:
+            # Must always check sortedness
+            table = plc.Table([*(k.obj for k in keys), orderby_obj])
+            n = table.num_columns()
+            if not plc.sorting.is_sorted(
+                table, [plc.types.Order.ASCENDING] * n, [plc.types.NullOrder.BEFORE] * n
+            ):
+                raise RuntimeError("Input for grouped rolling is not sorted")
+        else:
+            if not orderby.check_sorted(
+                order=plc.types.Order.ASCENDING, null_order=plc.types.NullOrder.BEFORE
+            ):
+                raise RuntimeError(
+                    f"Index column '{index.name}' in rolling is not sorted, please sort first"
+                )
+        values = plc.rolling.grouped_range_rolling_window(
+            plc.Table([k.obj for k in keys]),
+            orderby_obj,
+            plc.types.Order.ASCENDING,  # Polars requires ascending orderby.
+            plc.types.NullOrder.BEFORE,  # Doesn't matter, polars doesn't allow nulls in orderby
+            preceding_window,
+            following_window,
+            [rolling.to_request(request.value, orderby, df) for request in aggs],
+        )
+        return DataFrame(
+            itertools.chain(
+                keys,
+                [orderby],
+                (
+                    Column(col, name=name)
+                    for col, name in zip(
+                        values.columns(),
+                        (request.name for request in aggs),
+                        strict=True,
+                    )
+                ),
+            )
+        ).slice(zlice)
+
+
 class GroupBy(IR):
     """Perform a groupby."""
 
@@ -1016,10 +1171,10 @@ class GroupBy(IR):
                     child = value.children[0]
                 else:
                     (child,) = value.children
-                col = child.evaluate(df).obj
+                col = child.evaluate(df, context=ExecutionContext.GROUPBY).obj
             else:
                 # Anything else, we pre-evaluate
-                col = value.evaluate(df).obj
+                col = value.evaluate(df, context=ExecutionContext.GROUPBY).obj
             requests.append(plc.groupby.GroupByRequest(col, [value.agg_request]))
             names.append(name)
         group_keys, raw_tables = grouper.aggregate(requests)
@@ -1617,12 +1772,6 @@ class Sort(IR):
     ) -> DataFrame:
         """Evaluate and return a dataframe."""
         sort_keys = broadcast(*(k.evaluate(df) for k in by), target_length=df.num_rows)
-        # TODO: More robust identification here.
-        keys_in_result = {
-            k.name: i
-            for i, k in enumerate(sort_keys)
-            if k.name in df.column_map and k.obj is df.column_map[k.name].obj
-        }
         do_sort = plc.sorting.stable_sort_by_key if stable else plc.sorting.sort_by_key
         table = do_sort(
             df.table,
@@ -1630,19 +1779,17 @@ class Sort(IR):
             list(order),
             list(null_order),
         )
-        columns: list[Column] = []
-        for name, c in zip(df.column_map, table.columns(), strict=True):
-            column = Column(c, name=name)
-            # If a sort key is in the result table, set the sortedness property
-            if name in keys_in_result:
-                i = keys_in_result[name]
-                column = column.set_sorted(
-                    is_sorted=plc.types.Sorted.YES,
-                    order=order[i],
-                    null_order=null_order[i],
-                )
-            columns.append(column)
-        return DataFrame(columns).slice(zlice)
+        result = DataFrame.from_table(table, df.column_names)
+        first_key = sort_keys[0]
+        name = by[0].name
+        first_key_in_result = (
+            name in df.column_map and first_key.obj is df.column_map[name].obj
+        )
+        if first_key_in_result:
+            result.column_map[name].set_sorted(
+                is_sorted=plc.types.Sorted.YES, order=order[0], null_order=null_order[0]
+            )
+        return result.slice(zlice)
 
 
 class Slice(IR):
