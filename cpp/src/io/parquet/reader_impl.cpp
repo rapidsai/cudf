@@ -570,9 +570,11 @@ reader::impl::impl(std::size_t chunk_read_limit,
                               _options.timestamp_type.id());
 
   // Save the states of the output buffers for reuse in `chunk_read()`.
-  for (auto const& buff : _output_buffers) {
-    _output_buffers_template.emplace_back(cudf::io::detail::inline_column_buffer::empty_like(buff));
-  }
+  std::transform(
+    _output_buffers.begin(),
+    _output_buffers.end(),
+    std::back_inserter(_output_buffers_template),
+    [](auto const& buff) { return cudf::io::detail::inline_column_buffer::empty_like(buff); });
 
   // Save the name to reference converter to extract output filter AST in
   // `preprocess_file()` and `finalize_output()`
@@ -848,18 +850,17 @@ parquet_column_schema walk_schema(aggregate_reader_metadata const* mt, int idx)
   for (auto const& child_idx : sch.children_idx) {
     children.push_back(walk_schema(mt, child_idx));
   }
-  return parquet_column_schema{
-    sch.name, static_cast<parquet::TypeKind>(sch.type), std::move(children)};
+  return parquet_column_schema{sch.name, static_cast<parquet::Type>(sch.type), std::move(children)};
 }
 }  // namespace
 
 parquet_metadata read_parquet_metadata(host_span<std::unique_ptr<datasource> const> sources)
 {
   // Do not use arrow schema when reading information from parquet metadata.
-  static constexpr auto use_arrow_schema = false;
+  constexpr auto use_arrow_schema = false;
 
   // Do not select any columns when only reading the parquet metadata.
-  static constexpr auto has_column_projection = false;
+  constexpr auto has_column_projection = false;
 
   // Open and parse the source dataset metadata
   auto metadata = aggregate_reader_metadata(sources, use_arrow_schema, has_column_projection);
@@ -867,8 +868,10 @@ parquet_metadata read_parquet_metadata(host_span<std::unique_ptr<datasource> con
   return parquet_metadata{parquet_schema{walk_schema(&metadata, 0)},
                           metadata.get_num_rows(),
                           metadata.get_num_row_groups(),
+                          metadata.get_num_row_groups_per_file(),
                           metadata.get_key_value_metadata()[0],
-                          metadata.get_rowgroup_metadata()};
+                          metadata.get_rowgroup_metadata(),
+                          metadata.get_column_chunk_metadata()};
 }
 
 }  // namespace cudf::io::parquet::detail

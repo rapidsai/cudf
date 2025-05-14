@@ -60,10 +60,15 @@ def test_groupby_single_partitions(df, op, keys):
     )
 
 
-@pytest.mark.parametrize("op", ["sum", "mean", "len", "count", "min", "max"])
+@pytest.mark.parametrize(
+    "op", ["sum", "mean", "len", "count", "min", "max", "n_unique"]
+)
 @pytest.mark.parametrize("keys", [("y",), ("y", "z")])
 def test_groupby_agg(df, engine, op, keys):
-    q = df.group_by(*keys).agg(getattr(pl.col("x"), op)())
+    agg = getattr(pl.col("x"), op)()
+    if op == "n_unique":
+        agg = agg.cast(pl.Int64)
+    q = df.group_by(*keys).agg(agg)
     assert_gpu_result_equal(q, engine=engine, check_row_order=False)
 
 
@@ -159,4 +164,9 @@ def test_groupby_agg_duplicate(
         }
     )
     q = df.group_by("y").agg(op, pl.min(column_name))
+    assert_gpu_result_equal(q, engine=engine, check_row_order=False)
+
+
+def test_groupby_agg_empty(df: pl.LazyFrame, engine: pl.GPUEngine) -> None:
+    q = df.group_by("y").agg()
     assert_gpu_result_equal(q, engine=engine, check_row_order=False)

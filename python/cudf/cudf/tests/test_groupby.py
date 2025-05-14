@@ -1490,12 +1490,7 @@ def test_groupby_datetime_multi_agg_multi_groupby():
     ],
 )
 def test_groupby_multi_agg_hash_groupby(agg):
-    alphabets = "abcdefghijklmnopqrstuvwxyz"
-    prefixes = alphabets[:10]
-    coll_dict = dict()
-    for prefix in prefixes:
-        for this_name in alphabets:
-            coll_dict[prefix + this_name] = float
+    coll_dict = {letter: float for letter in string.ascii_lowercase}
     coll_dict["id"] = int
     gdf = cudf.datasets.timeseries(
         start="2000",

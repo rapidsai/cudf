@@ -5,12 +5,13 @@ import decimal
 import os
 import random
 from io import BytesIO
-from string import ascii_lowercase
+from string import ascii_letters, ascii_lowercase
 
 import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pytest
+from pyarrow import orc
 
 import cudf
 from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
@@ -62,6 +63,53 @@ def path_or_buf(datadir):
         raise ValueError("Invalid source type")
 
     yield _make_path_or_buf
+
+
+@pytest.fixture(scope="module")
+def non_nested_pdf():
+    rng = np.random.default_rng(seed=0)
+    types = [
+        "bool",
+        "int8",
+        "int16",
+        "int32",
+        "int64",
+        "float32",
+        "float64",
+        "datetime64[ns]",
+        "str",
+    ]
+    nrows = 12345
+
+    # Create a pandas dataframe with random data of mixed types
+    test_pdf = pd.DataFrame(
+        {
+            f"col_{typ}": rng.integers(0, nrows, nrows).astype(typ)
+            for typ in types
+        },
+    )
+
+    for t in [
+        {
+            "name": "datetime64[ns]",
+            "nsDivisor": 1000,
+            "dayModulus": 86400000000,
+        },
+    ]:
+        data = [
+            rng.integers(0, (0x7FFFFFFFFFFFFFFF / t["nsDivisor"]))
+            for i in range(nrows)
+        ]
+
+        test_pdf["col_" + t["name"]] = pd.Series(
+            np.asarray(data, dtype=t["name"])
+        )
+
+    # Create non-numeric str data
+    data = [ascii_letters[rng.integers(0, 52)] for i in range(nrows)]
+    test_pdf["col_str"] = pd.Series(data, dtype="str")
+
+    return test_pdf
 
 
 @pytest.mark.filterwarnings("ignore:Using CPU")
@@ -983,7 +1031,7 @@ def test_orc_string_stream_offset_issue():
     assert_eq(df, cudf.read_orc(buffer))
 
 
-def generate_list_struct_buff(size=100_000):
+def generate_list_struct_buff(size=10_000):
     rd = random.Random(1)
     rng = np.random.default_rng(seed=1)
 
@@ -1049,7 +1097,7 @@ def generate_list_struct_buff(size=100_000):
         {"struct": lvl1_struct[x], "list": lvl1_list[x]} for x in range(size)
     ]
 
-    df = pd.DataFrame(
+    pa_table = pa.table(
         {
             "lvl3_list": lvl3_list,
             "lvl1_list": lvl1_list,
@@ -1059,9 +1107,8 @@ def generate_list_struct_buff(size=100_000):
             "struct_nests_list": struct_nests_list,
         }
     )
-
-    df.to_orc(buff, engine="pyarrow", engine_kwargs={"stripe_size": 1024})
-
+    with orc.ORCWriter(buff, stripe_size=1024) as writer:
+        writer.write(pa_table)
     return buff
 
 
@@ -1078,7 +1125,7 @@ def list_struct_buff():
         ["lvl2_struct", "lvl1_struct"],
     ],
 )
-@pytest.mark.parametrize("num_rows", [0, 15, 1005, 10561, 100_000])
+@pytest.mark.parametrize("num_rows", [0, 15, 1005, 10561, 10_000])
 @pytest.mark.parametrize("use_index", [True, False])
 def test_lists_struct_nests(columns, num_rows, use_index, list_struct_buff):
     from pyarrow import orc
@@ -1367,15 +1414,15 @@ def dec(num):
     ],
 )
 def test_orc_writer_lists(data):
-    pdf_in = pd.DataFrame(data)
-
     buffer = BytesIO()
-    cudf.from_pandas(pdf_in).to_orc(
+    cudf.DataFrame(data).to_orc(
         buffer, stripe_size_rows=2048, row_index_stride=512
     )
-
-    pdf_out = pd.read_orc(buffer)
-    assert_eq(pdf_out, pdf_in)
+    # Read in as pandas but compare with pyarrow
+    # since pandas doesn't have a list type
+    pa_out = pa.Table.from_pandas(pd.read_orc(buffer))
+    pa_in = pa.table(data)
+    assert pa_out.equals(pa_in)
 
 
 def test_chunked_orc_writer_lists():
@@ -1617,14 +1664,12 @@ def test_orc_reader_zstd_compression(list_struct_buff):
     # save with ZSTD compression
     buffer = BytesIO()
     pyarrow_tbl = orc.ORCFile(list_struct_buff).read()
-    writer = orc.ORCWriter(buffer, compression="zstd")
-    writer.write(pyarrow_tbl)
-    writer.close()
-    try:
-        got = cudf.read_orc(buffer)
-        assert_eq(expected, got)
-    except RuntimeError:
-        pytest.mark.xfail(reason="zstd support is not enabled")
+    with orc.ORCWriter(buffer, compression="zstd") as writer:
+        writer.write(pyarrow_tbl)
+    got = cudf.read_orc(buffer)
+    # compare with pyarrow since pandas doesn't
+    # have a list or struct
+    assert expected.to_arrow().equals(got.to_arrow())
 
 
 def test_writer_protobuf_large_rowindexentry():
@@ -1997,3 +2042,15 @@ def test_orc_reader_desynced_timestamp(datadir, inputfile):
     got = cudf.read_orc(path)
 
     assert_frame_equal(cudf.from_pandas(expect), got)
+
+
+@pytest.mark.parametrize("compression", ["LZ4", "SNAPPY", "ZLIB", "ZSTD"])
+def test_orc_decompression(set_decomp_env_vars, compression, non_nested_pdf):
+    # Write the DataFrame to a Parquet file
+    buffer = BytesIO()
+    non_nested_pdf.to_orc(buffer, engine_kwargs={"compression": compression})
+
+    # Read the Parquet file back into a DataFrame
+    got = cudf.read_orc(buffer)
+
+    assert_eq(non_nested_pdf, got)

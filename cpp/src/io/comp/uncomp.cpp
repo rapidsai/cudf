@@ -313,7 +313,8 @@ size_t decompress_gzip(host_span<uint8_t const> src, host_span<uint8_t> dst)
  */
 size_t decompress_snappy(host_span<uint8_t const> src, host_span<uint8_t> dst)
 {
-  CUDF_EXPECTS(not dst.empty() and src.size() >= 1, "invalid Snappy decompress inputs");
+  CUDF_EXPECTS(not src.empty(), "Empty Snappy decompress input", std::length_error);
+
   uint32_t uncompressed_size = 0, bytes_left = 0, dst_pos = 0;
   auto cur       = src.begin();
   auto const end = src.end();
@@ -328,9 +329,17 @@ size_t decompress_snappy(host_span<uint8_t const> src, host_span<uint8_t> dst)
       uncompressed_size |= lo7 << l;
       l += 7;
     } while (c > 0x7f && cur < end);
-    CUDF_EXPECTS(uncompressed_size != 0 and uncompressed_size <= dst.size() and cur < end,
-                 "Destination buffer too small");
   }
+
+  if (uncompressed_size == 0) {
+    CUDF_EXPECTS(cur == end, "Non-empty compressed data for empty output in Snappy decompress");
+    return 0;
+  }
+  // If the uncompressed size is not zero, the input must not be empty
+  CUDF_EXPECTS(cur < end, "Missing data in Snappy decompress input");
+
+  CUDF_EXPECTS(uncompressed_size <= dst.size(), "Output buffer too small for Snappy decompression");
+
   // Decode lz77
   dst_pos    = 0;
   bytes_left = uncompressed_size;
@@ -705,7 +714,7 @@ void host_decompress(compression_type compression,
   cudf::detail::cuda_memcpy<compression_result>(results, h_results, stream);
 }
 
-[[nodiscard]] bool host_decompression_supported(compression_type compression)
+[[nodiscard]] bool is_host_decompression_supported(compression_type compression)
 {
   switch (compression) {
     case compression_type::GZIP:
@@ -717,7 +726,7 @@ void host_decompress(compression_type compression,
   }
 }
 
-[[nodiscard]] bool device_decompression_supported(compression_type compression)
+[[nodiscard]] bool is_device_decompression_supported(compression_type compression)
 {
   auto const nvcomp_type = to_nvcomp_compression(compression);
   switch (compression) {
@@ -734,13 +743,14 @@ void host_decompress(compression_type compression,
 
 [[nodiscard]] bool use_host_decompression(compression_type compression, size_t num_buffers)
 {
-  CUDF_EXPECTS(
-    host_decompression_supported(compression) or device_decompression_supported(compression),
-    "Unsupported compression type: " + compression_type_name(compression));
-  if (not host_decompression_supported(compression)) { return false; }
-  if (not device_decompression_supported(compression)) { return true; }
-  // If both host and device compression are supported, dispatch based on the environment variable
+  auto const has_host_support   = is_host_decompression_supported(compression);
+  auto const has_device_support = is_device_decompression_supported(compression);
+  CUDF_EXPECTS(has_host_support or has_device_support,
+               "Unsupported compression type: " + compression_type_name(compression));
+  if (not has_host_support) { return false; }
+  if (not has_device_support) { return true; }
 
+  // If both host and device compression are supported, dispatch based on the environment variable
   auto const env_var = getenv_or("LIBCUDF_HOST_DECOMPRESSION", std::string{"OFF"});
   if (env_var == "AUTO") {
     auto const threshold =
@@ -787,6 +797,12 @@ void decompress(compression_type compression,
     return device_decompress(
       compression, inputs, outputs, results, max_uncomp_chunk_size, max_total_uncomp_size, stream);
   }
+}
+
+[[nodiscard]] bool is_decompression_supported(compression_type compression)
+{
+  return is_host_decompression_supported(compression) or
+         is_device_decompression_supported(compression);
 }
 
 }  // namespace cudf::io::detail

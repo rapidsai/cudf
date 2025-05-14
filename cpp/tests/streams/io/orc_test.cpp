@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/default_stream.hpp>
+#include <cudf_test/testing_main.hpp>
 
 #include <cudf/io/orc.hpp>
 #include <cudf/io/orc_metadata.hpp>
@@ -115,3 +116,5 @@ TEST_F(ORCTest, ORCReader)
   auto meta        = read_orc_metadata(cudf::io::source_info{filepath});
   auto const stats = cudf::io::read_parsed_orc_statistics(cudf::io::source_info{filepath});
 }
+
+CUDF_TEST_PROGRAM_MAIN()
