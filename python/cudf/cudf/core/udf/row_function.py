@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2023, NVIDIA CORPORATION.
+# Copyright (c) 2021-2025, NVIDIA CORPORATION.
 import math
 
 import numpy as np
@@ -14,16 +14,13 @@ from cudf.core.udf.templates import (
     row_kernel_template,
     unmasked_input_initializer_template,
 )
+from cudf.core.udf.udf_kernel_base import ApplyKernelBase
 from cudf.core.udf.utils import (
     Row,
     _all_dtypes_from_frame,
-    _construct_signature,
     _get_extensionty_size,
-    _get_kernel,
-    _get_udf_return_type,
     _mask_get,
     _supported_cols_from_frame,
-    _supported_dtypes_from_frame,
 )
 
 
@@ -136,29 +133,32 @@ def _row_kernel_string_from_template(frame, row_type, args):
     )
 
 
-def _get_row_kernel(frame, func, args):
-    row_type = _get_frame_row_type(
-        np.dtype(list(_all_dtypes_from_frame(frame).items()))
-    )
-    scalar_return_type = _get_udf_return_type(row_type, func, args)
-    # this is the signature for the final full kernel compilation
-    sig = _construct_signature(frame, scalar_return_type, args)
-    # this row type is used within the kernel to pack up the column and
-    # mask data into the dict like data structure the user udf expects
-    np_field_types = np.dtype(
-        list(_supported_dtypes_from_frame(frame).items())
-    )
-    row_type = _get_frame_row_type(np_field_types)
+class DataFrameApplyKernel(ApplyKernelBase):
+    @property
+    def kernel_type(self):
+        return "dataframe_apply"
 
-    # Dict of 'local' variables into which `_kernel` is defined
-    global_exec_context = {
-        "cuda": cuda,
-        "Masked": Masked,
-        "_mask_get": _mask_get,
-        "pack_return": pack_return,
-        "row_type": row_type,
-    }
-    kernel_string = _row_kernel_string_from_template(frame, row_type, args)
-    kernel = _get_kernel(kernel_string, global_exec_context, sig, func)
+    def _get_frame_type(self):
+        return _get_frame_row_type(
+            np.dtype(list(_all_dtypes_from_frame(self.frame).items()))
+        )
 
-    return kernel, scalar_return_type
+    def _get_kernel_string(self):
+        row_type = self._get_frame_type()
+        return _row_kernel_string_from_template(
+            self.frame, row_type, self.args
+        )
+
+    def _get_kernel_string_exec_context(self):
+        # This is the global execution context that will be used
+        # to compile the kernel. It contains the function being
+        # compiled and the cuda module.
+
+        row_type = self._get_frame_type()
+        return {
+            "cuda": cuda,
+            "Masked": Masked,
+            "_mask_get": _mask_get,
+            "pack_return": pack_return,
+            "row_type": row_type,
+        }

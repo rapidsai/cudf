@@ -60,7 +60,7 @@ from cudf.core.indexed_frame import (
 )
 from cudf.core.resample import SeriesResampler
 from cudf.core.single_column_frame import SingleColumnFrame
-from cudf.core.udf.scalar_function import _get_scalar_kernel
+from cudf.core.udf.scalar_function import SeriesApplyKernel
 from cudf.utils import docutils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
@@ -2659,7 +2659,7 @@ class Series(SingleColumnFrame, IndexedFrame):
         elif by_row != "compat":
             raise NotImplementedError("by_row is currently not supported.")
 
-        result = self._apply(func, _get_scalar_kernel, *args, **kwargs)
+        result = self._apply(func, SeriesApplyKernel, *args, **kwargs)
         result.name = self.name
         return result
 

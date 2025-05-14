@@ -19,15 +19,12 @@ from cudf.core.udf.templates import (
     group_initializer_template,
     groupby_apply_kernel_template,
 )
+from cudf.core.udf.udf_kernel_base import ApplyKernelBase
 from cudf.core.udf.utils import (
     UDFError,
     _all_dtypes_from_frame,
-    _compile_or_get,
     _get_extensionty_size,
-    _get_kernel,
-    _get_udf_return_type,
     _supported_cols_from_frame,
-    _supported_dtypes_from_frame,
 )
 from cudf.utils._numba import _CUDFNumbaConfig
 from cudf.utils.performance_tracking import _performance_tracking
@@ -105,27 +102,6 @@ def _groupby_apply_kernel_string_from_template(frame, args):
     )
 
 
-def _get_groupby_apply_kernel(frame, func, args):
-    np_field_types = np.dtype(list(_all_dtypes_from_frame(frame).items()))
-    dataframe_group_type = _get_frame_groupby_type(
-        np_field_types, frame.index.dtype
-    )
-
-    return_type = _get_udf_return_type(dataframe_group_type, func, args)
-
-    # Dict of 'local' variables into which `_kernel` is defined
-    global_exec_context = {
-        "cuda": cuda,
-        "Group": Group,
-        "dataframe_group_type": dataframe_group_type,
-        "types": types,
-    }
-    kernel_string = _groupby_apply_kernel_string_from_template(frame, args)
-    kernel = _get_kernel(kernel_string, global_exec_context, None, func)
-
-    return kernel, return_type
-
-
 @_performance_tracking
 def jit_groupby_apply(offsets, grouped_values, function, *args):
     """
@@ -143,13 +119,8 @@ def jit_groupby_apply(offsets, grouped_values, function, *args):
         The user-defined function to execute
     """
 
-    kernel, return_type = _compile_or_get(
-        grouped_values,
-        function,
-        args,
-        kernel_getter=_get_groupby_apply_kernel,
-        suffix="__GROUPBY_APPLY_UDF",
-    )
+    kr = GroupByApplyKernel(grouped_values, function, args)
+    kernel, return_type = kr.get_kernel()
 
     offsets = cp.asarray(offsets)
     ngroups = len(offsets) - 1
@@ -211,18 +182,39 @@ def _can_be_jitted(frame, func, args):
 
     if any(col.has_nulls() for col in frame._columns):
         return False
-    np_field_types = np.dtype(
-        list(
-            _supported_dtypes_from_frame(
-                frame, supported_types=SUPPORTED_GROUPBY_NUMPY_TYPES
-            ).items()
-        )
-    )
-    dataframe_group_type = _get_frame_groupby_type(
-        np_field_types, frame.index.dtype
-    )
+    kr = GroupByApplyKernel(frame, func, args)
     try:
-        _get_udf_return_type(dataframe_group_type, func, args)
+        kr._get_udf_return_type()
         return True
     except (UDFError, TypingError):
         return False
+
+
+class GroupByApplyKernel(ApplyKernelBase):
+    @property
+    def kernel_type(self):
+        return "groupby_apply"
+
+    def _get_frame_type(self):
+        return _get_frame_groupby_type(
+            np.dtype(list(_all_dtypes_from_frame(self.frame).items())),
+            self.frame.index.dtype,
+        )
+
+    def _get_kernel_string(self):
+        return _groupby_apply_kernel_string_from_template(
+            self.frame, self.args
+        )
+
+    def _get_kernel_string_exec_context(self):
+        dataframe_group_type = self._get_frame_type()
+        global_exec_context = {
+            "cuda": cuda,
+            "Group": Group,
+            "dataframe_group_type": dataframe_group_type,
+            "types": types,
+        }
+        return global_exec_context
+
+    def _construct_signature(self, return_type):
+        return None
