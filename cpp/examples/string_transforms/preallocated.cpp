@@ -32,17 +32,18 @@ std::unique_ptr<cudf::column> transform(cudf::table_view const& table)
   /// Convert a phone number to E.164 international phone format
   /// (https://en.wikipedia.org/wiki/E.164)
   auto udf = R"***(
-  __device__ void e164_format(cudf::string_view* out,
+__device__ void e164_format(void* scratch,
+                            cudf::size_type row,
+                            cudf::string_view* out,
                             cudf::string_view const country_code,
                             cudf::string_view const area_code,
                             cudf::string_view const phone_number,
-                            int32_t scratch_offset,
-                            [[maybe_unused]] int32_t scratch_size,
-                            void* scratch)
+                            [[maybe_unused]] int32_t scratch_size)
 {
-  auto const begin = static_cast<char*>(scratch) + scratch_offset;
+  auto const begin =
+    static_cast<char*>(scratch) + static_cast<size_t>(row) * static_cast<size_t>(scratch_size);
   auto const end = begin + scratch_size;
-  auto it = begin;
+  auto it        = begin;
 
   auto push = [&](cudf::string_view str) {
     auto const size = str.size_bytes();
@@ -69,16 +70,10 @@ std::unique_ptr<cudf::column> transform(cudf::table_view const& table)
 
   rmm::device_uvector<char> scratch(maximum_size * num_rows, stream, mr);
 
-  auto offsets = cudf::sequence(num_rows,
-                                cudf::numeric_scalar<int32_t>(0, true, stream),
-                                cudf::numeric_scalar<int32_t>(maximum_size, true, stream),
-                                stream,
-                                mr);
-
   auto size =
     cudf::make_column_from_scalar(cudf::numeric_scalar<int32_t>(maximum_size, true, stream, mr), 1);
 
-  return cudf::transform({table.column(2), table.column(3), table.column(4), *offsets, *size},
+  return cudf::transform({table.column(2), table.column(3), table.column(4), *size},
                          udf,
                          cudf::data_type{cudf::type_id::STRING},
                          false,
