@@ -7,7 +7,6 @@ from __future__ import annotations
 import dataclasses
 import enum
 import math
-import random
 from enum import IntEnum
 from typing import TYPE_CHECKING, Any, TypeVar
 
@@ -263,10 +262,9 @@ def _sample_pq_statistics(ir: Scan) -> dict[str, np.floating[T]]:
     import numpy as np
 
     # Use average total_uncompressed_size of three files
-    n_sample = min(5, len(ir.paths))
-    random.seed(42)  # Deterministic partitioning
     metadata = plc.io.parquet_metadata.read_parquet_metadata(
-        plc.io.SourceInfo(random.sample(ir.paths, n_sample))
+        # TODO: Add configuration for random sampling
+        plc.io.SourceInfo(ir.paths[:5])
     )
     column_sizes = {}
     rowgroup_offsets_per_file = np.insert(
