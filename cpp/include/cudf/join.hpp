@@ -17,7 +17,7 @@
 #pragma once
 
 #pragma message( \
-    "WARNING: This header is deprecated in cuDF 25.06. Please use the appropriate headers from include/cudf/join/")
+  "WARNING: This header is deprecated in cuDF 25.06. Please use the appropriate headers from include/cudf/join/")
 
 #include <cudf/join/conditional_join.hpp>
 #include <cudf/join/distinct_hash_join.hpp>
