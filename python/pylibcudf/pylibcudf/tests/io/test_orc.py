@@ -139,7 +139,7 @@ def test_roundtrip_pa_table(
     stream,
 ):
     pa_table = pa.table({"a": [1.0, 2.0, None], "b": [True, None, False]})
-    plc_table = plc.interop.from_arrow(pa_table)
+    plc_table = plc.Table(pa_table)
 
     tmpfile_name = tmp_path / "test.orc"
 
@@ -167,7 +167,7 @@ def test_roundtrip_pa_table(
     read_table = pa.orc.read_table(str(tmpfile_name))
 
     res = plc.io.types.TableWithMetadata(
-        plc.interop.from_arrow(read_table),
+        plc.Table(read_table),
         [(name, []) for name in pa_table.schema.names],
     )
 

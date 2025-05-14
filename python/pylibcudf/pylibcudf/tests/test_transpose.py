@@ -1,8 +1,9 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 import pyarrow as pa
 import pytest
 from packaging.version import parse
+from utils import assert_table_eq
 
 import pylibcudf as plc
 
@@ -23,11 +24,13 @@ import pylibcudf as plc
 def test_transpose(arr):
     data = {"a": arr, "b": arr}
     arrow_tbl = pa.table(data)
-    plc_tbl = plc.interop.from_arrow(arrow_tbl)
-    plc_result = plc.transpose.transpose(plc_tbl)
-    result = plc.interop.to_arrow(plc_result)
-    expected = pa.Table.from_pandas(
-        arrow_tbl.to_pandas().T, preserve_index=False
-    ).rename_columns([""] * len(arr))
-    expected = pa.table(expected, schema=result.schema)
-    assert result.equals(expected)
+    plc_tbl = plc.Table(arrow_tbl)
+    got = plc.transpose.transpose(plc_tbl)
+    pa_got = plc.interop.to_arrow(got)
+    expect = pa.table(
+        pa.Table.from_pandas(
+            arrow_tbl.to_pandas().T, preserve_index=False
+        ).rename_columns([""] * len(arr)),
+        schema=pa_got.schema,
+    )
+    assert_table_eq(expect, got)

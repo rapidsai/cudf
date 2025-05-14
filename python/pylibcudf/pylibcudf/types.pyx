@@ -1,5 +1,6 @@
 # Copyright (c) 2023-2025, NVIDIA CORPORATION.
 
+from libc.stddef cimport size_t
 from libc.stdint cimport int32_t
 from pylibcudf.libcudf.types cimport (
     data_type,
@@ -127,8 +128,7 @@ cdef class DataType:
         else:
             raise TypeError(f"Cannot infer DataType from Python type {typ}")
 
-
-cpdef size_type size_of(DataType t):
+cpdef size_t size_of(DataType t):
     """Returns the size in bytes of elements of the specified data_type.
 
     Only fixed-width types are supported.
