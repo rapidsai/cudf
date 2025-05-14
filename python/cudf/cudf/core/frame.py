@@ -569,14 +569,14 @@ class Frame(BinaryOperand, Scannable, Serializable):
             )
         ):
             if dtype is None:
-                dtype = np.dtype(self._columns[0].dtype)
+                dtype = self._columns[0].dtype
 
             shape = (len(self), self._num_columns)
             out = cupy.empty(shape, dtype=dtype, order="F")
 
-            table = self.to_pylibcudf()[0]
-            if isinstance(table, plc.Column):
-                table = plc.Table([table])
+            table = plc.Table(
+                [col.to_pylibcudf(mode="read") for col in self._columns]
+            )
             plc.reshape.table_to_array(
                 table,
                 out.data.ptr,
