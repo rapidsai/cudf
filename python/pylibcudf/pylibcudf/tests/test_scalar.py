@@ -35,6 +35,7 @@ def test_from_py(val):
     result = plc.Scalar.from_py(val)
     expected = pa.scalar(val)
     assert plc.interop.to_arrow(result).equals(expected)
+    assert plc.interop.to_arrow(result.type()).equals(expected.type)
 
 
 @pytest.mark.parametrize(
