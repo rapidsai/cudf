@@ -82,9 +82,15 @@ def lower_ir_graph(
     --------
     lower_ir_node
     """
+    assert config_options.executor.name == "streaming", (
+        "'in-memory' executor not supported in 'lower_ir_graph'"
+    )
+
     mapper = CachingVisitor(lower_ir_node, state={"config_options": config_options})
     lowered_ir, partition_info = mapper(ir)
-    return fuse_ir_graph(lowered_ir, partition_info, config_options)
+    if config_options.executor.task_fusion:
+        return fuse_ir_graph(lowered_ir, partition_info)
+    return lowered_ir, partition_info
 
 
 def task_graph(

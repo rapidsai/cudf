@@ -33,7 +33,6 @@ if TYPE_CHECKING:
     from cudf_polars.experimental.base import PartitionInfo
     from cudf_polars.experimental.dispatch import LowerIRTransformer
     from cudf_polars.typing import Schema
-    from cudf_polars.utils.config import ConfigOptions
 
 
 class Fused(IR):
@@ -150,7 +149,6 @@ def _(
 def fuse_ir_graph(
     ir: IR,
     partition_info: MutableMapping[IR, PartitionInfo],
-    config_options: ConfigOptions,
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     """
     Rewrite an IR graph with fused nodes.
@@ -161,8 +159,6 @@ def fuse_ir_graph(
         Root of the graph to rewrite.
     partition_info
         Initial partitioning information.
-    config_options
-        GPUEngine configuration options.
 
     Returns
     -------
@@ -170,12 +166,6 @@ def fuse_ir_graph(
         The rewritten graph, and a mapping from unique nodes
         in the new graph to associated partitioning information.
     """
-    assert config_options.executor.name == "streaming", (
-        "'in-memory' executor not supported in 'fuse_ir_graph'"
-    )
-    if not config_options.executor.task_fusion:
-        return ir, partition_info
-
     parents: defaultdict[IR, int] = defaultdict(int)
     if _fusable_ir_type(ir):
         parents[ir] = 1
