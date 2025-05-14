@@ -273,11 +273,12 @@ std::unique_ptr<cudf::column> edit_distance_matrix(cudf::strings_column_view con
     edit_distance_matrix_levenshtein_algorithm{*d_strings, d_buffer, offsets.data(), d_results});
 
   // build a lists column of the results
-  auto offsets_column = cudf::detail::sequence(input.size() + 1,
-                                               cudf::numeric_scalar<cudf::size_type>(0),
-                                               cudf::numeric_scalar<cudf::size_type>(input.size()),
-                                               stream,
-                                               mr);
+  auto offsets_column =
+    cudf::detail::sequence(input.size() + 1,
+                           cudf::numeric_scalar<cudf::size_type>(0, true, stream),
+                           cudf::numeric_scalar<cudf::size_type>(input.size(), true, stream),
+                           stream,
+                           mr);
   return cudf::make_lists_column(input.size(),
                                  std::move(offsets_column),
                                  std::move(results),
