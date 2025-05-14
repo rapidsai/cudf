@@ -313,7 +313,8 @@ size_t decompress_gzip(host_span<uint8_t const> src, host_span<uint8_t> dst)
  */
 size_t decompress_snappy(host_span<uint8_t const> src, host_span<uint8_t> dst)
 {
-  CUDF_EXPECTS(not dst.empty() and src.size() >= 1, "invalid Snappy decompress inputs");
+  CUDF_EXPECTS(not src.empty(), "Empty Snappy decompress input", std::length_error);
+
   uint32_t uncompressed_size = 0, bytes_left = 0, dst_pos = 0;
   auto cur       = src.begin();
   auto const end = src.end();
@@ -328,9 +329,17 @@ size_t decompress_snappy(host_span<uint8_t const> src, host_span<uint8_t> dst)
       uncompressed_size |= lo7 << l;
       l += 7;
     } while (c > 0x7f && cur < end);
-    CUDF_EXPECTS(uncompressed_size != 0 and uncompressed_size <= dst.size() and cur < end,
-                 "Destination buffer too small");
   }
+
+  if (uncompressed_size == 0) {
+    CUDF_EXPECTS(cur == end, "Non-empty compressed data for empty output in Snappy decompress");
+    return 0;
+  }
+  // If the uncompressed size is not zero, the input must not be empty
+  CUDF_EXPECTS(cur < end, "Missing data in Snappy decompress input");
+
+  CUDF_EXPECTS(uncompressed_size <= dst.size(), "Output buffer too small for Snappy decompression");
+
   // Decode lz77
   dst_pos    = 0;
   bytes_left = uncompressed_size;
