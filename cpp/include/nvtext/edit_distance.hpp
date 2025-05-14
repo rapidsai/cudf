@@ -51,7 +51,7 @@ namespace CUDF_EXPORT nvtext {
  * In this case, all `input` will be computed against the single `targets[0]` string.
  *
  * @throw std::invalid_argument if `targets.size() != input.size()` and if `targets.size() != 1`
- * @throw std::invalid_argument if `targets.size()==1` and `targets[0].is_null()`
+ * @throw std::invalid_argument if `targets.size() == 1` and `targets[0].is_null()`
  *
  * @param input Strings column of input strings
  * @param targets Strings to compute edit distance against `input`
