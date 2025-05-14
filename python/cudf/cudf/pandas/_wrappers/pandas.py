@@ -10,6 +10,12 @@ import pickle
 import sys
 
 import pandas as pd
+
+# cuGraph third party integration test, test_cugraph_from_pandas_adjacency,
+# fails without this pyarrow.dataset import
+# I suspect it relates to pyarrow's pandas-shim that gets imported
+# with this module https://github.com/rapidsai/cudf/issues/14521#issue-2015198786
+import pyarrow.dataset as ds  # noqa: F401
 from pandas.tseries.holiday import (
     AbstractHolidayCalendar as pd_AbstractHolidayCalendar,
     EasterMonday as pd_EasterMonday,
