@@ -172,6 +172,7 @@ def _flatten_nested_list(obj: list, depth: int) -> tuple[list, tuple[int, ...]]:
 
 
 def _python_typecode_from_dtype(dtype: DataType) -> str:
+    """The Python type string."""
     return {
         type_id.INT8: 'b',
         type_id.INT16: 'h',
@@ -188,6 +189,7 @@ def _python_typecode_from_dtype(dtype: DataType) -> str:
 
 
 def _typestr_from_dtype(dtype: DataType) -> str:
+    """The array interface type string."""
     return {
         type_id.INT8: "|i1",
         type_id.INT16: "<i2",
