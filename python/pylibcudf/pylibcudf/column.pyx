@@ -147,28 +147,42 @@ def _infer_list_depth_and_dtype(obj: list) -> tuple[int, type]:
 
 
 def _flatten_nested_list(obj: list, depth: int) -> tuple[list, tuple[int, ...]]:
-    """Flatten a nested list to a flat list of scalars and compute shape."""
-    if depth == 1:
-        shape = (len(obj),)
-        return obj, shape
+    """Flatten a nested list and compute the shape"""
+    shape = _infer_shape(obj, depth)
 
-    sublists = obj
-    n_outer = len(sublists)
-    if n_outer == 0:
-        raise ValueError("Cannot determine shape from empty outer list")
+    flat = [None] * functools.reduce(operator.mul, shape)
+    _flatten(obj, flat, 0)
+    return flat, shape
 
-    flat = []
-    shapes = []
 
-    for sub in sublists:
-        sub_flat, sub_shape = _flatten_nested_list(sub, depth - 1)
-        flat.extend(sub_flat)
-        shapes.append(sub_shape)
+def _infer_shape(obj: list, depth: int) -> tuple[int, ...]:
+    shape = []
+    current = obj
 
-    if not all(s == shapes[0] for s in shapes):
-        raise ValueError("Inconsistent inner list shapes")
+    for i in range(depth):
+        if not current:
+            raise ValueError("Cannot infer shape from empty list")
 
-    return flat, (n_outer,) + shapes[0]
+        shape.append(len(current))
+
+        if i < depth - 1:
+            first = current[0]
+            if not all(
+                isinstance(sub, list) and len(sub) == len(first) for sub in current
+            ):
+                raise ValueError("Inconsistent inner list shapes")
+            current = first
+
+    return tuple(shape)
+
+
+def _flatten(obj: list, out: list, offset: int) -> int:
+    if not isinstance(obj[0], list):
+        out[offset:offset + len(obj)] = obj
+        return offset + len(obj)
+    for sub in obj:
+        offset = _flatten(sub, out, offset)
+    return offset
 
 
 def _python_typecode_from_dtype(dtype: DataType) -> str:
@@ -949,9 +963,6 @@ cdef class Column:
         >>> plc.Column.from_list([[1, 2], [3, 4]])
         >>> plc.Column.from_list([[1.0, 2.0], [3.0, 4.0]], dtype=plc.DataType.FLOAT64)
         """
-        if not isinstance(obj, list):
-            raise TypeError("Expected a list")
-
         if not obj:
             if dtype is None:
                 raise ValueError(
