@@ -75,7 +75,7 @@ class Fused(IR):
         """Evaluate and return a dataframe."""
         if io_funcs:
             children = (io_funcs[0](*io_args),)
-        for func, args in zip(funcs, subargs, strict=False):
+        for func, args in zip(funcs, subargs, strict=True):
             children = (func(*args, *children),)
         return children[0]
 
