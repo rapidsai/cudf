@@ -405,9 +405,18 @@ class Scan(IR):
                     "Multi-character comment prefix not supported for CSV reader"
                 )
             if not self.reader_options["has_header"]:
-                # Need to do some file introspection to get the number
-                # of columns so that column projection works right.
-                raise NotImplementedError("Reading CSV without header")
+                # TODO: To support reading headerless CSV files without requiring new
+                # column names, we would need to do file introspection to infer the number
+                # of columns so column projection works right.
+                reader_schema = self.reader_options.get("schema")
+                if not (
+                    reader_schema
+                    and isinstance(schema, dict)
+                    and "fields" in reader_schema
+                ):
+                    raise NotImplementedError(
+                        "Reading CSV without header requires user-provided column names via new_columns"
+                    )
         elif self.typ == "ndjson":
             # TODO: consider handling the low memory option here
             # (maybe use chunked JSON reader)
@@ -507,8 +516,8 @@ class Scan(IR):
                 # file provides column names
                 column_names = None
             usecols = with_columns
-            # TODO: support has_header=False
-            header = 0
+            has_header = reader_options["has_header"]
+            header = 0 if has_header else -1
 
             # polars defaults to no null recognition
             null_values = [""]
@@ -554,7 +563,7 @@ class Scan(IR):
                     options.set_names([str(name) for name in column_names])
                 else:
                     if (
-                        not POLARS_VERSION_LT_128 and skip_rows > header
+                        not POLARS_VERSION_LT_128 and header > -1 and skip_rows > header
                     ):  # pragma: no cover
                         # We need to read the header otherwise we would skip it
                         column_names = read_csv_header(path, str(sep))
