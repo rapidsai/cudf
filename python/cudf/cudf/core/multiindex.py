@@ -1944,7 +1944,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             dtype=SIZE_TYPE_DTYPE,
         )
         if not len(self):
-            # Replace cudf.Index with self once MultiIndex inherits from Index
+            # TODO: Replace cudf.Index with self once MultiIndex inherits from Index
             return cudf.Index._return_get_indexer_result(result.values)
         try:
             target = cudf.MultiIndex.from_tuples(target)
