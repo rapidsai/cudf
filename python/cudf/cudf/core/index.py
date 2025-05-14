@@ -184,890 +184,6 @@ def validate_range_arg(arg, arg_name: Literal["start", "stop", "step"]) -> int:
     return int(arg)
 
 
-class RangeIndex(BaseIndex, BinaryOperand):
-    """
-    Immutable Index implementing a monotonic integer range.
-
-    This is the default index type used by DataFrame and Series
-    when no explicit index is provided by the user.
-
-    Parameters
-    ----------
-    start : int (default: 0), or other range instance
-    stop : int (default: 0)
-    step : int (default: 1)
-    name : object, optional
-        Name to be stored in the index.
-    dtype : numpy dtype
-        Unused, accepted for homogeneity with other index types.
-    copy : bool, default False
-        Unused, accepted for homogeneity with other index types.
-
-    Attributes
-    ----------
-    start
-    stop
-    step
-
-    Methods
-    -------
-    to_numpy
-    to_arrow
-
-    Examples
-    --------
-    >>> import cudf
-    >>> cudf.RangeIndex(0, 10, 1, name="a")
-    RangeIndex(start=0, stop=10, step=1, name='a')
-
-    >>> cudf.RangeIndex(range(1, 10, 1), name="a")
-    RangeIndex(start=1, stop=10, step=1, name='a')
-    """
-
-    _VALID_BINARY_OPERATIONS = BinaryOperand._SUPPORTED_BINARY_OPERATIONS
-
-    _range: range
-
-    @_performance_tracking
-    def __init__(
-        self, start, stop=None, step=1, dtype=None, copy=False, name=None
-    ):
-        if not is_hashable(name):
-            raise ValueError("Name must be a hashable value.")
-        self._name = name
-        if dtype is not None and cudf.dtype(dtype).kind != "i":
-            raise ValueError(f"{dtype=} must be a signed integer type")
-
-        if isinstance(start, range):
-            self._range = start
-        else:
-            if stop is None:
-                start, stop = 0, start
-            start = validate_range_arg(start, "start")
-            stop = validate_range_arg(stop, "stop")
-            if step is not None:
-                step = validate_range_arg(step, "step")
-            else:
-                step = 1
-            try:
-                self._range = range(start, stop, step)
-            except ValueError as err:
-                if step == 0:
-                    raise ValueError("Step must not be zero.") from err
-                raise
-
-    def _copy_type_metadata(self: Self, other: Self) -> Self:
-        # There is no metadata to be copied for RangeIndex since it does not
-        # have an underlying column.
-        return self
-
-    def searchsorted(
-        self,
-        value: int,
-        side: Literal["left", "right"] = "left",
-        ascending: bool = True,
-        na_position: Literal["first", "last"] = "last",
-    ):
-        assert (len(self) <= 1) or (ascending == (self.step > 0)), (
-            "Invalid ascending flag"
-        )
-        if side not in {"left", "right"}:
-            raise ValueError("side must be 'left' or 'right'")
-        ri = self._range
-        if flip := (ri.step < 0):
-            ri = ri[::-1]
-            shift = int(side == "right")
-        else:
-            shift = int(side == "left")
-
-        offset = (value - ri.start - shift) // ri.step + 1
-        if flip:
-            offset = len(ri) - offset
-        return max(min(len(ri), offset), 0)
-
-    def factorize(
-        self, sort: bool = False, use_na_sentinel: bool = True
-    ) -> tuple[cupy.ndarray, Self]:
-        if sort and self.step < 0:
-            codes = cupy.arange(len(self) - 1, -1, -1)
-            uniques = self[::-1]
-        else:
-            codes = cupy.arange(len(self), dtype=np.intp)
-            uniques = self
-        return codes, uniques
-
-    @property  # type: ignore
-    @_performance_tracking
-    def name(self):
-        return self._name
-
-    @name.setter  # type: ignore
-    @_performance_tracking
-    def name(self, value):
-        self._name = value
-
-    @property
-    @_performance_tracking
-    def _column_names(self) -> tuple[Any]:
-        return (self.name,)
-
-    @property
-    @_performance_tracking
-    def _columns(self) -> tuple[ColumnBase]:
-        return (self._values,)
-
-    @property
-    def _column_labels_and_values(self) -> Iterable:
-        return zip(self._column_names, self._columns)
-
-    @property  # type: ignore
-    @_performance_tracking
-    def start(self) -> int:
-        """
-        The value of the `start` parameter (0 if this was not supplied).
-        """
-        return self._range.start
-
-    @property  # type: ignore
-    @_performance_tracking
-    def stop(self) -> int:
-        """
-        The value of the stop parameter.
-        """
-        return self._range.stop
-
-    @property  # type: ignore
-    @_performance_tracking
-    def step(self) -> int:
-        """
-        The value of the step parameter.
-        """
-        return self._range.step
-
-    @property  # type: ignore
-    @_performance_tracking
-    def _num_rows(self) -> int:
-        return len(self)
-
-    @cached_property  # type: ignore
-    @_performance_tracking
-    def _values(self) -> ColumnBase:
-        if len(self) > 0:
-            return as_column(self._range, dtype=self.dtype)
-        else:
-            return column_empty(0, dtype=self.dtype)
-
-    def _pandas_repr_compatible(self) -> Self:
-        return self
-
-    def _is_numeric(self) -> bool:
-        return True
-
-    def _is_boolean(self) -> bool:
-        return False
-
-    def _is_integer(self) -> bool:
-        return True
-
-    def _is_floating(self) -> bool:
-        return False
-
-    def _is_object(self) -> bool:
-        return False
-
-    def _is_categorical(self) -> bool:
-        return False
-
-    def _is_interval(self) -> bool:
-        return False
-
-    @property  # type: ignore
-    @_performance_tracking
-    def hasnans(self) -> bool:
-        return False
-
-    @property  # type: ignore
-    @_performance_tracking
-    def _data(self):
-        return ColumnAccessor({self.name: self._values}, verify=False)
-
-    @_performance_tracking
-    def __contains__(self, item):
-        hash(item)
-        if not isinstance(item, (np.floating, np.integer, int, float)):
-            return False
-        elif isinstance(item, (np.timedelta64, np.datetime64, bool)):
-            # Cases that would pass the above check
-            return False
-        try:
-            int_item = int(item)
-            return int_item == item and int_item in self._range
-        except (ValueError, OverflowError):
-            return False
-
-    @_performance_tracking
-    def copy(self, name=None, deep=False):
-        """
-        Make a copy of this object.
-
-        Parameters
-        ----------
-        name : object optional (default: None), name of index
-        deep : Bool (default: False)
-            Ignored for RangeIndex
-
-        Returns
-        -------
-        New RangeIndex instance with same range
-        """
-
-        name = self.name if name is None else name
-
-        return RangeIndex(self._range, name=name)
-
-    @_performance_tracking
-    def astype(self, dtype, copy: bool = True):
-        if is_dtype_equal(dtype, self.dtype):
-            return self
-        return self._as_int_index().astype(dtype, copy=copy)
-
-    def fillna(self, value, downcast=None):
-        return self.copy()
-
-    @_performance_tracking
-    def drop_duplicates(self, keep="first"):
-        return self
-
-    @_performance_tracking
-    def duplicated(self, keep="first") -> cupy.ndarray:
-        return cupy.zeros(len(self), dtype=bool)
-
-    @_performance_tracking
-    def __repr__(self):
-        return (
-            f"{self.__class__.__name__}(start={self.start}, stop={self.stop}"
-            f", step={self.step}"
-            + (
-                f", name={pd.io.formats.printing.default_pprint(self.name)}"
-                if self.name is not None
-                else ""
-            )
-            + ")"
-        )
-
-    @property
-    @_performance_tracking
-    def size(self) -> int:
-        return len(self)
-
-    @_performance_tracking
-    def __len__(self):
-        return len(self._range)
-
-    @_performance_tracking
-    def __getitem__(self, index):
-        if isinstance(index, slice):
-            sl_start, sl_stop, sl_step = index.indices(len(self))
-
-            lo = self.start + sl_start * self.step
-            hi = self.start + sl_stop * self.step
-            st = self.step * sl_step
-            return RangeIndex(start=lo, stop=hi, step=st, name=self._name)
-
-        elif isinstance(index, Number):
-            len_self = len(self)
-            if index < 0:
-                index += len_self
-            if not (0 <= index < len_self):
-                raise IndexError("Index out of bounds")
-            return self.start + index * self.step
-        return self._as_int_index()[index]
-
-    def _get_columns_by_label(self, labels) -> Index:
-        # used in .sort_values
-        if isinstance(labels, Hashable):
-            if labels == self.name:
-                return self._as_int_index()
-        elif is_list_like(labels):
-            if list(self.names) == list(labels):
-                return self._as_int_index()
-        raise KeyError(labels)
-
-    @_performance_tracking
-    def equals(self, other) -> bool:
-        if isinstance(other, RangeIndex):
-            return self._range == other._range
-        elif not isinstance(other, BaseIndex) or len(self) != len(other):
-            return False
-        elif not (
-            is_dtype_obj_numeric(other.dtype)
-            or (
-                isinstance(other, CategoricalIndex)
-                and is_dtype_obj_numeric(other.categories.dtype)
-            )
-        ):
-            return False
-        return self._as_int_index().equals(other)
-
-    @_performance_tracking
-    def serialize(self):
-        header = {}
-        header["index_column"] = {}
-
-        # store metadata values of index separately
-        # We don't need to store the GPU buffer for RangeIndexes
-        # cuDF only needs to store start/stop and rehydrate
-        # during de-serialization
-        header["index_column"]["start"] = self.start
-        header["index_column"]["stop"] = self.stop
-        header["index_column"]["step"] = self.step
-        frames = []
-
-        header["name"] = self.name
-        header["dtype"] = self.dtype.str
-        header["frame_count"] = 0
-        return header, frames
-
-    @classmethod
-    @_performance_tracking
-    def deserialize(cls, header, frames):
-        h = header["index_column"]
-        name = header["name"]
-        start = h["start"]
-        stop = h["stop"]
-        step = h.get("step", 1)
-        dtype = np.dtype(header["dtype"])
-        return RangeIndex(
-            start=start, stop=stop, step=step, dtype=dtype, name=name
-        )
-
-    @property  # type: ignore
-    @_performance_tracking
-    def dtype(self):
-        """
-        `dtype` of the range of values in RangeIndex.
-
-        By default the dtype is 64 bit signed integer. This is configurable
-        via `default_integer_bitwidth` as 32 bit in `cudf.options`
-        """
-        dtype = np.dtype(np.int64)
-        return _maybe_convert_to_default_type(dtype)
-
-    @property
-    def _dtypes(self) -> Iterable:
-        return [(self.name, self.dtype)]
-
-    @_performance_tracking
-    def to_pandas(
-        self, *, nullable: bool = False, arrow_type: bool = False
-    ) -> pd.RangeIndex:
-        if nullable:
-            raise NotImplementedError(f"{nullable=} is not implemented.")
-        elif arrow_type:
-            raise NotImplementedError(f"{arrow_type=} is not implemented.")
-        return pd.RangeIndex(
-            start=self.start,
-            stop=self.stop,
-            step=self.step,
-            dtype=self.dtype,
-            name=self.name,
-        )
-
-    def to_frame(
-        self, index: bool = True, name: Hashable = no_default
-    ) -> cudf.DataFrame:
-        return self._as_int_index().to_frame(index=index, name=name)
-
-    @property
-    def is_unique(self) -> bool:
-        return True
-
-    @cached_property  # type: ignore
-    @_performance_tracking
-    def is_monotonic_increasing(self) -> bool:
-        return self.step > 0 or len(self) <= 1
-
-    @cached_property  # type: ignore
-    @_performance_tracking
-    def is_monotonic_decreasing(self):
-        return self.step < 0 or len(self) <= 1
-
-    @_performance_tracking
-    def memory_usage(self, deep: bool = False) -> int:
-        if deep:
-            warnings.warn(
-                "The deep parameter is ignored and is only included "
-                "for pandas compatibility."
-            )
-        return 0
-
-    def unique(self, level: int | None = None) -> Self:
-        # RangeIndex always has unique values
-        if level is not None and level > 0:
-            raise IndexError(
-                f"Too many levels: Index has only 1 level, not {level + 1}"
-            )
-        return self.copy()
-
-    @_performance_tracking
-    def __mul__(self, other):
-        # Multiplication by raw ints must return a RangeIndex to match pandas.
-        if (
-            isinstance(other, (np.ndarray, cupy.ndarray))
-            and other.ndim == 0
-            and other.dtype.kind in "iu"
-        ):
-            other = other.item()
-        if isinstance(other, (int, np.integer)):
-            return RangeIndex(
-                self.start * other, self.stop * other, self.step * other
-            )
-        return self._as_int_index().__mul__(other)
-
-    @_performance_tracking
-    def __rmul__(self, other):
-        # Multiplication is commutative.
-        return self.__mul__(other)
-
-    @_performance_tracking
-    def _as_int_index(self) -> Index:
-        # Convert self to an integer index. This method is used to perform ops
-        # that are not defined directly on RangeIndex.
-        return cudf.Index._from_data(self._data)
-
-    @_performance_tracking
-    def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
-        return self._as_int_index().__array_ufunc__(
-            ufunc, method, *inputs, **kwargs
-        )
-
-    @_performance_tracking
-    def get_indexer(self, target, limit=None, method=None, tolerance=None):
-        target_col = as_column(target)
-        if method is not None or not is_dtype_obj_numeric(
-            target_col.dtype, include_decimal=False
-        ):
-            # TODO: See if we can implement this without converting to
-            # Integer index.
-            return self._as_int_index().get_indexer(
-                target=target, limit=limit, method=method, tolerance=tolerance
-            )
-
-        if self.step > 0:
-            start, stop, step = self.start, self.stop, self.step
-        else:
-            # Reversed
-            reverse = self._range[::-1]
-            start, stop, step = reverse.start, reverse.stop, reverse.step
-
-        target_array = target_col.values
-        locs = target_array - start
-        valid = (locs % step == 0) & (locs >= 0) & (target_array < stop)
-        locs[~valid] = -1
-        locs[valid] = locs[valid] / step
-
-        if step != self.step:
-            # Reversed
-            locs[valid] = len(self) - 1 - locs[valid]
-        return locs
-
-    @_performance_tracking
-    def get_loc(self, key):
-        if not is_scalar(key):
-            raise TypeError("Should be a scalar-like")
-        idx = (key - self.start) / self.step
-        idx_int_upper_bound = (self.stop - self.start) // self.step
-        if idx > idx_int_upper_bound or idx < 0:
-            raise KeyError(key)
-
-        idx_int = (key - self.start) // self.step
-        if idx_int != idx:
-            raise KeyError(key)
-        return idx_int
-
-    @_performance_tracking
-    def _union(self, other, sort=None):
-        if isinstance(other, RangeIndex):
-            # Variable suffixes are of the
-            # following notation: *_o -> other, *_s -> self,
-            # and *_r -> result
-            start_s, step_s = self.start, self.step
-            end_s = self.start + self.step * (len(self) - 1)
-            start_o, step_o = other.start, other.step
-            end_o = other.start + other.step * (len(other) - 1)
-            if self.step < 0:
-                start_s, step_s, end_s = end_s, -step_s, start_s
-            if other.step < 0:
-                start_o, step_o, end_o = end_o, -step_o, start_o
-            if len(self) == 1 and len(other) == 1:
-                step_s = step_o = abs(self.start - other.start)
-            elif len(self) == 1:
-                step_s = step_o
-            elif len(other) == 1:
-                step_o = step_s
-
-            # Determine minimum start value of the result.
-            start_r = min(start_s, start_o)
-            # Determine maximum end value of the result.
-            end_r = max(end_s, end_o)
-            result = None
-            min_step = min(step_o, step_s)
-
-            if ((start_s - start_o) % min_step) == 0:
-                # Checking to determine other is a subset of self with
-                # equal step size.
-                if (
-                    step_o == step_s
-                    and (start_s - end_o) <= step_s
-                    and (start_o - end_s) <= step_s
-                ):
-                    result = type(self)(start_r, end_r + step_s, step_s)
-                # Checking if self is a subset of other with unequal
-                # step sizes.
-                elif (
-                    step_o % step_s == 0
-                    and (start_o + step_s >= start_s)
-                    and (end_o - step_s <= end_s)
-                ):
-                    result = type(self)(start_r, end_r + step_s, step_s)
-                # Checking if other is a subset of self with unequal
-                # step sizes.
-                elif (
-                    step_s % step_o == 0
-                    and (start_s + step_o >= start_o)
-                    and (end_s - step_o <= end_o)
-                ):
-                    result = type(self)(start_r, end_r + step_o, step_o)
-            # Checking to determine when the steps are even but one of
-            # the inputs spans across is near half or less then half
-            # the other input. This case needs manipulation to step
-            # size.
-            elif (
-                step_o == step_s
-                and (step_s % 2 == 0)
-                and (abs(start_s - start_o) <= step_s / 2)
-                and (abs(end_s - end_o) <= step_s / 2)
-            ):
-                result = type(self)(start_r, end_r + step_s / 2, step_s / 2)
-            if result is not None:
-                if sort in {None, True} and not result.is_monotonic_increasing:
-                    return result.sort_values()
-                else:
-                    return result
-
-        # If all the above optimizations don't cater to the inputs,
-        # we materialize RangeIndexes into integer indexes and
-        # then perform `union`.
-        return self._try_reconstruct_range_index(
-            self._as_int_index()._union(other, sort=sort)
-        )
-
-    @_performance_tracking
-    def _intersection(self, other, sort=None):
-        if not isinstance(other, RangeIndex):
-            return self._try_reconstruct_range_index(
-                super()._intersection(other, sort=sort)
-            )
-
-        if not len(self) or not len(other):
-            return RangeIndex(0)
-
-        first = self._range[::-1] if self.step < 0 else self._range
-        second = other._range[::-1] if other.step < 0 else other._range
-
-        # check whether intervals intersect
-        # deals with in- and decreasing ranges
-        int_low = max(first.start, second.start)
-        int_high = min(first.stop, second.stop)
-        if int_high <= int_low:
-            return RangeIndex(0)
-
-        # Method hint: linear Diophantine equation
-        # solve intersection problem
-        # performance hint: for identical step sizes, could use
-        # cheaper alternative
-        gcd, s, _ = _extended_gcd(first.step, second.step)
-
-        # check whether element sets intersect
-        if (first.start - second.start) % gcd:
-            return RangeIndex(0)
-
-        # calculate parameters for the RangeIndex describing the
-        # intersection disregarding the lower bounds
-        tmp_start = (
-            first.start + (second.start - first.start) * first.step // gcd * s
-        )
-        new_step = first.step * second.step // gcd
-        no_steps = -(-(int_low - tmp_start) // abs(new_step))
-        new_start = tmp_start + abs(new_step) * no_steps
-        new_range = range(new_start, int_high, new_step)
-        new_index = RangeIndex(new_range)
-
-        if (self.step < 0 and other.step < 0) is not (new_index.step < 0):
-            new_index = new_index[::-1]
-        if sort in {None, True}:
-            new_index = new_index.sort_values()
-
-        return self._try_reconstruct_range_index(new_index)
-
-    @_performance_tracking
-    def difference(self, other, sort=None):
-        if isinstance(other, RangeIndex) and self.equals(other):
-            return self[:0]._get_reconciled_name_object(other)
-
-        return self._try_reconstruct_range_index(
-            super().difference(other, sort=sort)
-        )
-
-    def _try_reconstruct_range_index(
-        self, index: BaseIndex
-    ) -> Self | BaseIndex:
-        if isinstance(index, RangeIndex) or index.dtype.kind not in "iu":
-            return index
-        # Evenly spaced values can return a
-        # RangeIndex instead of a materialized Index.
-        if not index._column.has_nulls():  # type: ignore[attr-defined]
-            uniques = cupy.unique(cupy.diff(index.values))
-            if len(uniques) == 1 and (diff := uniques[0].get()) != 0:
-                new_range = range(index[0], index[-1] + diff, diff)
-                return type(self)(new_range, name=index.name)
-        return index
-
-    def sort_values(
-        self,
-        return_indexer=False,
-        ascending=True,
-        na_position="last",
-        key=None,
-    ):
-        if key is not None:
-            raise NotImplementedError("key parameter is not yet implemented.")
-        if na_position not in {"first", "last"}:
-            raise ValueError(f"invalid na_position: {na_position}")
-
-        sorted_index = self
-        indexer = RangeIndex(range(len(self)))
-
-        sorted_index = self
-        if ascending:
-            if self.step < 0:
-                sorted_index = self[::-1]
-                indexer = indexer[::-1]
-        else:
-            if self.step > 0:
-                sorted_index = self[::-1]
-                indexer = indexer = indexer[::-1]
-
-        if return_indexer:
-            return sorted_index, indexer
-        else:
-            return sorted_index
-
-    @_performance_tracking
-    def _gather(self, gather_map, nullify=False, check_bounds=True):
-        gather_map = as_column(gather_map)
-        return Index._from_column(
-            self._column.take(gather_map, nullify, check_bounds),
-            name=self.name,
-        )
-
-    @_performance_tracking
-    def _apply_boolean_mask(self, boolean_mask):
-        return Index._from_column(
-            self._column.apply_boolean_mask(boolean_mask), name=self.name
-        )
-
-    def repeat(self, repeats, axis=None):
-        return self._as_int_index().repeat(repeats, axis)
-
-    def _split(self, splits):
-        return Index._from_column(
-            self._as_int_index()._split(splits), name=self.name
-        )
-
-    def _binaryop(self, other, op: str):
-        # TODO: certain binops don't require materializing range index and
-        # could use some optimization.
-        return self._as_int_index()._binaryop(other, op=op)
-
-    def join(
-        self, other, how="left", level=None, return_indexers=False, sort=False
-    ):
-        if how in {"left", "right"} or self.equals(other):
-            # pandas supports directly merging RangeIndex objects and can
-            # intelligently create RangeIndex outputs depending on the type of
-            # join. Hence falling back to performing a merge on pd.RangeIndex
-            # since the conversion is cheap.
-            if isinstance(other, RangeIndex):
-                result = self.to_pandas().join(
-                    other.to_pandas(),
-                    how=how,
-                    level=level,
-                    return_indexers=return_indexers,
-                    sort=sort,
-                )
-                if return_indexers:
-                    return tuple(
-                        cudf.from_pandas(result[0]), result[1], result[2]
-                    )
-                else:
-                    return cudf.from_pandas(result)
-        return self._as_int_index().join(
-            other, how, level, return_indexers, sort
-        )
-
-    @property  # type: ignore
-    @_performance_tracking
-    def _column(self) -> ColumnBase:
-        return self._as_int_index()._column
-
-    @property  # type: ignore
-    @_performance_tracking
-    def _columns(self) -> list[ColumnBase]:
-        return self._as_int_index()._columns
-
-    @property  # type: ignore
-    @_performance_tracking
-    def values_host(self) -> np.ndarray:
-        return np.arange(start=self.start, stop=self.stop, step=self.step)
-
-    @_performance_tracking
-    def argsort(
-        self,
-        ascending=True,
-        na_position="last",
-    ) -> cupy.ndarray:
-        if na_position not in {"first", "last"}:
-            raise ValueError(f"invalid na_position: {na_position}")
-        if (ascending and self.step < 0) or (not ascending and self.step > 0):
-            return cupy.arange(len(self) - 1, -1, -1)
-        else:
-            return cupy.arange(len(self))
-
-    @_performance_tracking
-    def where(self, cond, other=None, inplace: bool = False) -> Self | None:
-        return self._as_int_index().where(cond, other, inplace)
-
-    @_performance_tracking
-    def to_numpy(self) -> np.ndarray:
-        return self.values_host
-
-    @_performance_tracking
-    def to_cupy(self) -> cupy.ndarray:
-        return self.values
-
-    @_performance_tracking
-    def to_arrow(self) -> pa.Array:
-        return pa.array(self._range, type=pa.from_numpy_dtype(self.dtype))
-
-    def __array__(self, dtype=None):
-        raise TypeError(
-            "Implicit conversion to a host NumPy array via __array__ is not "
-            "allowed, To explicitly construct a GPU matrix, consider using "
-            ".to_cupy()\nTo explicitly construct a host matrix, consider "
-            "using .to_numpy()."
-        )
-
-    @_performance_tracking
-    def nunique(self, dropna: bool = True) -> int:
-        return len(self)
-
-    @_performance_tracking
-    def isna(self) -> cupy.ndarray:
-        return cupy.zeros(len(self), dtype=bool)
-
-    isnull = isna
-
-    @_performance_tracking
-    def notna(self) -> cupy.ndarray:
-        return cupy.ones(len(self), dtype=bool)
-
-    notnull = isna
-
-    @_performance_tracking
-    def _minmax(self, meth: str) -> int | float:
-        no_steps = len(self) - 1
-        if no_steps == -1:
-            return np.nan
-        elif (meth == "min" and self.step > 0) or (
-            meth == "max" and self.step < 0
-        ):
-            return self.start
-
-        return self.start + self.step * no_steps
-
-    def min(self) -> int | float:
-        return self._minmax("min")
-
-    def max(self) -> int | float:
-        return self._minmax("max")
-
-    @property
-    def values(self) -> cupy.ndarray:
-        return cupy.arange(self.start, self.stop, self.step)
-
-    def any(self) -> bool:
-        return any(self._range)
-
-    def all(self) -> bool:
-        return 0 not in self._range
-
-    def append(self, other):
-        result = self._as_int_index().append(other)
-        return self._try_reconstruct_range_index(result)
-
-    def _indices_of(self, value) -> NumericalColumn:
-        if isinstance(value, (bool, np.bool_)):
-            raise ValueError(
-                f"Cannot use {type(value).__name__} to get an index of a "
-                f"{type(self).__name__}."
-            )
-        try:
-            i = [self._range.index(value)]
-        except ValueError:
-            i = []
-        return as_column(i, dtype=SIZE_TYPE_DTYPE)
-
-    def isin(self, values, level=None):
-        if level is not None and level > 0:
-            raise IndexError(
-                f"Too many levels: Index has only 1 level, not {level + 1}"
-            )
-        if is_scalar(values):
-            raise TypeError(
-                "only list-like objects are allowed to be passed "
-                f"to isin(), you passed a {type(values).__name__}"
-            )
-
-        return self._values.isin(values).values
-
-    def __pos__(self) -> Self:
-        return self.copy()
-
-    def __neg__(self) -> Self:
-        rng = range(-self.start, -self.stop, -self.step)
-        return type(self)(rng, name=self.name)
-
-    def __abs__(self) -> Self | Index:
-        if len(self) == 0 or self.min() >= 0:
-            return self.copy()
-        elif self.max() <= 0:
-            return -self
-        else:
-            return abs(self._as_int_index())
-
-    def _columns_for_reset_index(
-        self, levels: tuple | None
-    ) -> Generator[tuple[Any, ColumnBase], None, None]:
-        """Return the columns and column names for .reset_index"""
-        # We need to explicitly materialize the RangeIndex to a column
-        yield "index" if self.name is None else self.name, as_column(self)
-
-    @_warn_no_dask_cudf
-    def __dask_tokenize__(self):
-        return (type(self), self.start, self.stop, self.step)
-
-
 class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
     """
     Immutable sequence used for indexing and alignment.
@@ -1512,7 +628,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
 
             output = output.replace("nan", str(cudf.NA))
         elif preprocess._values.nullable:
-            if isinstance(self._values, StringColumn):
+            if self.dtype == CUDF_STRING_DTYPE:
                 output = repr(self.to_pandas(nullable=True))
             else:
                 output = repr(self._pandas_repr_compatible().to_pandas())
@@ -1826,6 +942,896 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
     def __dask_tokenize__(self):
         # We can use caching, because an index is immutable
         return super().__dask_tokenize__()
+
+
+class RangeIndex(BaseIndex, BinaryOperand):
+    """
+    Immutable Index implementing a monotonic integer range.
+
+    This is the default index type used by DataFrame and Series
+    when no explicit index is provided by the user.
+
+    Parameters
+    ----------
+    start : int (default: 0), or other range instance
+    stop : int (default: 0)
+    step : int (default: 1)
+    name : object, optional
+        Name to be stored in the index.
+    dtype : numpy dtype
+        Unused, accepted for homogeneity with other index types.
+    copy : bool, default False
+        Unused, accepted for homogeneity with other index types.
+
+    Attributes
+    ----------
+    start
+    stop
+    step
+
+    Methods
+    -------
+    to_numpy
+    to_arrow
+
+    Examples
+    --------
+    >>> import cudf
+    >>> cudf.RangeIndex(0, 10, 1, name="a")
+    RangeIndex(start=0, stop=10, step=1, name='a')
+
+    >>> cudf.RangeIndex(range(1, 10, 1), name="a")
+    RangeIndex(start=1, stop=10, step=1, name='a')
+    """
+
+    _VALID_BINARY_OPERATIONS = BinaryOperand._SUPPORTED_BINARY_OPERATIONS
+
+    _range: range
+
+    @_performance_tracking
+    def __init__(
+        self, start, stop=None, step=1, dtype=None, copy=False, name=None
+    ):
+        if not is_hashable(name):
+            raise ValueError("Name must be a hashable value.")
+        self._name = name
+        if dtype is not None and cudf.dtype(dtype).kind != "i":
+            raise ValueError(f"{dtype=} must be a signed integer type")
+
+        if isinstance(start, range):
+            self._range = start
+        else:
+            if stop is None:
+                start, stop = 0, start
+            start = validate_range_arg(start, "start")
+            stop = validate_range_arg(stop, "stop")
+            if step is not None:
+                step = validate_range_arg(step, "step")
+            else:
+                step = 1
+            try:
+                self._range = range(start, stop, step)
+            except ValueError as err:
+                if step == 0:
+                    raise ValueError("Step must not be zero.") from err
+                raise
+
+    def _copy_type_metadata(self: Self, other: Self) -> Self:
+        # There is no metadata to be copied for RangeIndex since it does not
+        # have an underlying column.
+        return self
+
+    @property
+    @_performance_tracking
+    def name(self) -> Hashable:
+        return self._name
+
+    @name.setter
+    @_performance_tracking
+    def name(self, value: Hashable) -> None:
+        self._name = value
+
+    @property
+    @_performance_tracking
+    def _num_rows(self) -> int:
+        return len(self)
+
+    @property
+    @_performance_tracking
+    def _column_names(self) -> tuple[Hashable]:
+        return (self.name,)
+
+    @cached_property
+    @_performance_tracking
+    def _column(self) -> ColumnBase:
+        if len(self) > 0:
+            return as_column(self._range, dtype=self.dtype)
+        else:
+            return column_empty(0, dtype=self.dtype)
+
+    # TODO: Remove once BaseIndex is removed
+    @cached_property
+    @_performance_tracking
+    def _values(self) -> ColumnBase:
+        if len(self) > 0:
+            return as_column(self._range, dtype=self.dtype)
+        else:
+            return column_empty(0, dtype=self.dtype)
+
+    @property
+    @_performance_tracking
+    def _columns(self) -> tuple[ColumnBase]:
+        return (self._column,)
+
+    @property
+    @_performance_tracking
+    def _data(self) -> ColumnAccessor:
+        return ColumnAccessor({self.name: self._column}, verify=False)
+
+    @property
+    def _column_labels_and_values(self) -> Iterable:
+        return zip(self._column_names, self._columns)
+
+    @_performance_tracking
+    def _as_int_index(self) -> Index:
+        # Convert self to an integer index. This method is used to perform ops
+        # that are not defined directly on RangeIndex.
+        return Index._from_column(self._column, name=self.name)
+
+    @property
+    @_performance_tracking
+    def start(self) -> int:
+        """
+        The value of the `start` parameter (0 if this was not supplied).
+        """
+        return self._range.start
+
+    @property
+    @_performance_tracking
+    def stop(self) -> int:
+        """
+        The value of the stop parameter.
+        """
+        return self._range.stop
+
+    @property
+    @_performance_tracking
+    def step(self) -> int:
+        """
+        The value of the step parameter.
+        """
+        return self._range.step
+
+    @property
+    @_performance_tracking
+    def hasnans(self) -> bool:
+        return False
+
+    def _pandas_repr_compatible(self) -> Self:
+        return self
+
+    def _is_numeric(self) -> bool:
+        return True
+
+    def _is_boolean(self) -> bool:
+        return False
+
+    def _is_integer(self) -> bool:
+        return True
+
+    def _is_floating(self) -> bool:
+        return False
+
+    def _is_object(self) -> bool:
+        return False
+
+    def _is_categorical(self) -> bool:
+        return False
+
+    def _is_interval(self) -> bool:
+        return False
+
+    @_performance_tracking
+    def __contains__(self, item: Any) -> bool:
+        hash(item)
+        if not isinstance(item, (np.floating, np.integer, int, float)):
+            return False
+        elif isinstance(item, (np.timedelta64, np.datetime64, bool)):
+            # Cases that would pass the above check
+            return False
+        try:
+            int_item = int(item)
+            return int_item == item and int_item in self._range
+        except (ValueError, OverflowError):
+            return False
+
+    @_performance_tracking
+    def copy(self, name: Hashable | None = None, deep: bool = False) -> Self:
+        """
+        Make a copy of this object.
+
+        Parameters
+        ----------
+        name : object optional (default: None), name of index
+        deep : Bool (default: False)
+            Ignored for RangeIndex
+
+        Returns
+        -------
+        New RangeIndex instance with same range
+        """
+
+        name = self.name if name is None else name
+
+        return RangeIndex(self._range, name=name)
+
+    @_performance_tracking
+    def astype(self, dtype, copy: bool = True):
+        if is_dtype_equal(dtype, self.dtype):
+            return self
+        return self._as_int_index().astype(dtype, copy=copy)
+
+    def fillna(self, value, downcast=None) -> Self:
+        return self.copy()
+
+    @_performance_tracking
+    def drop_duplicates(
+        self, keep: Literal["first", "last", False] = "first"
+    ) -> Self:
+        return self
+
+    @_performance_tracking
+    def duplicated(
+        self, keep: Literal["first", "last", False] = "first"
+    ) -> cupy.ndarray:
+        return cupy.zeros(len(self), dtype=bool)
+
+    @_performance_tracking
+    def __repr__(self) -> str:
+        return (
+            f"{self.__class__.__name__}(start={self.start}, stop={self.stop}"
+            f", step={self.step}"
+            + (
+                f", name={pd.io.formats.printing.default_pprint(self.name)}"
+                if self.name is not None
+                else ""
+            )
+            + ")"
+        )
+
+    @property
+    @_performance_tracking
+    def size(self) -> int:
+        return len(self)
+
+    @_performance_tracking
+    def __len__(self) -> int:
+        return len(self._range)
+
+    @_performance_tracking
+    def __getitem__(self, index):
+        if isinstance(index, slice):
+            sl_start, sl_stop, sl_step = index.indices(len(self))
+
+            lo = self.start + sl_start * self.step
+            hi = self.start + sl_stop * self.step
+            st = self.step * sl_step
+            return RangeIndex(start=lo, stop=hi, step=st, name=self._name)
+
+        elif isinstance(index, Number):
+            len_self = len(self)
+            if index < 0:
+                index += len_self
+            if not (0 <= index < len_self):
+                raise IndexError("Index out of bounds")
+            return self.start + index * self.step
+        return self._as_int_index()[index]
+
+    def _get_columns_by_label(self, labels) -> Index:
+        # used in .sort_values
+        if isinstance(labels, Hashable):
+            if labels == self.name:
+                return self._as_int_index()
+        elif is_list_like(labels):
+            if list(self.names) == list(labels):
+                return self._as_int_index()
+        raise KeyError(labels)
+
+    @_performance_tracking
+    def equals(self, other) -> bool:
+        if isinstance(other, RangeIndex):
+            return self._range == other._range
+        elif not isinstance(other, BaseIndex) or len(self) != len(other):
+            return False
+        elif not (
+            is_dtype_obj_numeric(other.dtype)
+            or (
+                isinstance(other, CategoricalIndex)
+                and is_dtype_obj_numeric(other.categories.dtype)
+            )
+        ):
+            return False
+        return self._as_int_index().equals(other)
+
+    @_performance_tracking
+    def serialize(self):
+        header = {}
+        header["index_column"] = {}
+
+        # store metadata values of index separately
+        # We don't need to store the GPU buffer for RangeIndexes
+        # cuDF only needs to store start/stop and rehydrate
+        # during de-serialization
+        header["index_column"]["start"] = self.start
+        header["index_column"]["stop"] = self.stop
+        header["index_column"]["step"] = self.step
+        frames = []
+
+        header["name"] = self.name
+        header["dtype"] = self.dtype.str
+        header["frame_count"] = 0
+        return header, frames
+
+    @classmethod
+    @_performance_tracking
+    def deserialize(cls, header, frames):
+        h = header["index_column"]
+        name = header["name"]
+        start = h["start"]
+        stop = h["stop"]
+        step = h.get("step", 1)
+        dtype = np.dtype(header["dtype"])
+        return RangeIndex(
+            start=start, stop=stop, step=step, dtype=dtype, name=name
+        )
+
+    @property
+    @_performance_tracking
+    def dtype(self) -> np.dtype:
+        """
+        `dtype` of the range of values in RangeIndex.
+
+        By default the dtype is 64 bit signed integer. This is configurable
+        via `default_integer_bitwidth` as 32 bit in `cudf.options`
+        """
+        dtype = np.dtype(np.int64)
+        return _maybe_convert_to_default_type(dtype)
+
+    @property
+    def _dtypes(self) -> Generator[tuple[Hashable, np.dtype], None, None]:
+        yield self.name, self.dtype
+
+    @cached_property
+    @_performance_tracking
+    def values(self) -> cupy.ndarray:
+        return cupy.arange(self.start, self.stop, self.step)
+
+    @cached_property
+    @_performance_tracking
+    def values_host(self) -> np.ndarray:
+        return np.arange(start=self.start, stop=self.stop, step=self.step)
+
+    @_performance_tracking
+    def to_numpy(self) -> np.ndarray:
+        return self.values_host
+
+    @_performance_tracking
+    def to_cupy(self) -> cupy.ndarray:
+        return self.values
+
+    @_performance_tracking
+    def to_pandas(
+        self, *, nullable: bool = False, arrow_type: bool = False
+    ) -> pd.RangeIndex:
+        if nullable:
+            raise NotImplementedError(f"{nullable=} is not implemented.")
+        elif arrow_type:
+            raise NotImplementedError(f"{arrow_type=} is not implemented.")
+        return pd.RangeIndex(
+            start=self.start,
+            stop=self.stop,
+            step=self.step,
+            dtype=self.dtype,
+            name=self.name,
+        )
+
+    @_performance_tracking
+    def to_arrow(self) -> pa.Array:
+        return pa.array(self._range, type=pa.from_numpy_dtype(self.dtype))
+
+    def to_frame(
+        self, index: bool = True, name: Hashable = no_default
+    ) -> cudf.DataFrame:
+        return self._as_int_index().to_frame(index=index, name=name)
+
+    @property
+    def is_unique(self) -> bool:
+        return True
+
+    @cached_property
+    @_performance_tracking
+    def is_monotonic_increasing(self) -> bool:
+        return self.step > 0 or len(self) <= 1
+
+    @cached_property
+    @_performance_tracking
+    def is_monotonic_decreasing(self):
+        return self.step < 0 or len(self) <= 1
+
+    @_performance_tracking
+    def memory_usage(self, deep: bool = False) -> int:
+        if deep:
+            warnings.warn(
+                "The deep parameter is ignored and is only included "
+                "for pandas compatibility."
+            )
+        return 0
+
+    def unique(self, level: int | None = None) -> Self:
+        # RangeIndex always has unique values
+        if level is not None and level > 0:
+            raise IndexError(
+                f"Too many levels: Index has only 1 level, not {level + 1}"
+            )
+        return self.copy()
+
+    @_performance_tracking
+    def __mul__(self, other):
+        # Multiplication by raw ints must return a RangeIndex to match pandas.
+        if (
+            isinstance(other, (np.ndarray, cupy.ndarray))
+            and other.ndim == 0
+            and other.dtype.kind in "iu"
+        ):
+            other = other.item()
+        if isinstance(other, (int, np.integer)):
+            return RangeIndex(
+                self.start * other, self.stop * other, self.step * other
+            )
+        return self._as_int_index().__mul__(other)
+
+    @_performance_tracking
+    def __rmul__(self, other):
+        # Multiplication is commutative.
+        return self.__mul__(other)
+
+    @_performance_tracking
+    def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
+        return self._as_int_index().__array_ufunc__(
+            ufunc, method, *inputs, **kwargs
+        )
+
+    @_performance_tracking
+    def get_indexer(self, target, limit=None, method=None, tolerance=None):
+        target_col = as_column(target)
+        if method is not None or not is_dtype_obj_numeric(
+            target_col.dtype, include_decimal=False
+        ):
+            # TODO: See if we can implement this without converting to
+            # Integer index.
+            return self._as_int_index().get_indexer(
+                target=target, limit=limit, method=method, tolerance=tolerance
+            )
+
+        if self.step > 0:
+            start, stop, step = self.start, self.stop, self.step
+        else:
+            # Reversed
+            reverse = self._range[::-1]
+            start, stop, step = reverse.start, reverse.stop, reverse.step
+
+        target_array = target_col.values
+        locs = target_array - start
+        valid = (locs % step == 0) & (locs >= 0) & (target_array < stop)
+        locs[~valid] = -1
+        locs[valid] = locs[valid] / step
+
+        if step != self.step:
+            # Reversed
+            locs[valid] = len(self) - 1 - locs[valid]
+        return locs
+
+    @_performance_tracking
+    def get_loc(self, key) -> int:
+        if not is_scalar(key):
+            raise TypeError("Should be a scalar-like")
+        idx = (key - self.start) / self.step
+        idx_int_upper_bound = (self.stop - self.start) // self.step
+        if idx > idx_int_upper_bound or idx < 0:
+            raise KeyError(key)
+
+        idx_int = (key - self.start) // self.step
+        if idx_int != idx:
+            raise KeyError(key)
+        return idx_int
+
+    @_performance_tracking
+    def _union(self, other, sort=None):
+        if isinstance(other, RangeIndex):
+            # Variable suffixes are of the
+            # following notation: *_o -> other, *_s -> self,
+            # and *_r -> result
+            start_s, step_s = self.start, self.step
+            end_s = self.start + self.step * (len(self) - 1)
+            start_o, step_o = other.start, other.step
+            end_o = other.start + other.step * (len(other) - 1)
+            if self.step < 0:
+                start_s, step_s, end_s = end_s, -step_s, start_s
+            if other.step < 0:
+                start_o, step_o, end_o = end_o, -step_o, start_o
+            if len(self) == 1 and len(other) == 1:
+                step_s = step_o = abs(self.start - other.start)
+            elif len(self) == 1:
+                step_s = step_o
+            elif len(other) == 1:
+                step_o = step_s
+
+            # Determine minimum start value of the result.
+            start_r = min(start_s, start_o)
+            # Determine maximum end value of the result.
+            end_r = max(end_s, end_o)
+            result = None
+            min_step = min(step_o, step_s)
+
+            if ((start_s - start_o) % min_step) == 0:
+                # Checking to determine other is a subset of self with
+                # equal step size.
+                if (
+                    step_o == step_s
+                    and (start_s - end_o) <= step_s
+                    and (start_o - end_s) <= step_s
+                ):
+                    result = type(self)(start_r, end_r + step_s, step_s)
+                # Checking if self is a subset of other with unequal
+                # step sizes.
+                elif (
+                    step_o % step_s == 0
+                    and (start_o + step_s >= start_s)
+                    and (end_o - step_s <= end_s)
+                ):
+                    result = type(self)(start_r, end_r + step_s, step_s)
+                # Checking if other is a subset of self with unequal
+                # step sizes.
+                elif (
+                    step_s % step_o == 0
+                    and (start_s + step_o >= start_o)
+                    and (end_s - step_o <= end_o)
+                ):
+                    result = type(self)(start_r, end_r + step_o, step_o)
+            # Checking to determine when the steps are even but one of
+            # the inputs spans across is near half or less then half
+            # the other input. This case needs manipulation to step
+            # size.
+            elif (
+                step_o == step_s
+                and (step_s % 2 == 0)
+                and (abs(start_s - start_o) <= step_s / 2)
+                and (abs(end_s - end_o) <= step_s / 2)
+            ):
+                result = type(self)(start_r, end_r + step_s / 2, step_s / 2)
+            if result is not None:
+                if sort in {None, True} and not result.is_monotonic_increasing:
+                    return result.sort_values()
+                else:
+                    return result
+
+        # If all the above optimizations don't cater to the inputs,
+        # we materialize RangeIndexes into integer indexes and
+        # then perform `union`.
+        return self._try_reconstruct_range_index(
+            self._as_int_index()._union(other, sort=sort)
+        )
+
+    @_performance_tracking
+    def _intersection(self, other, sort=None):
+        if not isinstance(other, RangeIndex):
+            return self._try_reconstruct_range_index(
+                super()._intersection(other, sort=sort)
+            )
+
+        if not len(self) or not len(other):
+            return RangeIndex(0)
+
+        first = self._range[::-1] if self.step < 0 else self._range
+        second = other._range[::-1] if other.step < 0 else other._range
+
+        # check whether intervals intersect
+        # deals with in- and decreasing ranges
+        int_low = max(first.start, second.start)
+        int_high = min(first.stop, second.stop)
+        if int_high <= int_low:
+            return RangeIndex(0)
+
+        # Method hint: linear Diophantine equation
+        # solve intersection problem
+        # performance hint: for identical step sizes, could use
+        # cheaper alternative
+        gcd, s, _ = _extended_gcd(first.step, second.step)
+
+        # check whether element sets intersect
+        if (first.start - second.start) % gcd:
+            return RangeIndex(0)
+
+        # calculate parameters for the RangeIndex describing the
+        # intersection disregarding the lower bounds
+        tmp_start = (
+            first.start + (second.start - first.start) * first.step // gcd * s
+        )
+        new_step = first.step * second.step // gcd
+        no_steps = -(-(int_low - tmp_start) // abs(new_step))
+        new_start = tmp_start + abs(new_step) * no_steps
+        new_range = range(new_start, int_high, new_step)
+        new_index = RangeIndex(new_range)
+
+        if (self.step < 0 and other.step < 0) is not (new_index.step < 0):
+            new_index = new_index[::-1]
+        if sort in {None, True}:
+            new_index = new_index.sort_values()
+
+        return self._try_reconstruct_range_index(new_index)
+
+    @_performance_tracking
+    def difference(self, other, sort=None):
+        if isinstance(other, RangeIndex) and self.equals(other):
+            return self[:0]._get_reconciled_name_object(other)
+
+        return self._try_reconstruct_range_index(
+            super().difference(other, sort=sort)
+        )
+
+    def _try_reconstruct_range_index(
+        self, index: BaseIndex
+    ) -> Self | BaseIndex:
+        if isinstance(index, RangeIndex) or index.dtype.kind not in "iu":
+            return index
+        # Evenly spaced values can return a
+        # RangeIndex instead of a materialized Index.
+        if not index._column.has_nulls():  # type: ignore[attr-defined]
+            uniques = cupy.unique(cupy.diff(index.values))
+            if len(uniques) == 1 and (diff := uniques[0].get()) != 0:
+                new_range = range(index[0], index[-1] + diff, diff)
+                return type(self)(new_range, name=index.name)
+        return index
+
+    def sort_values(
+        self,
+        return_indexer=False,
+        ascending=True,
+        na_position="last",
+        key=None,
+    ):
+        if key is not None:
+            raise NotImplementedError("key parameter is not yet implemented.")
+        if na_position not in {"first", "last"}:
+            raise ValueError(f"invalid na_position: {na_position}")
+
+        sorted_index = self
+        indexer = RangeIndex(range(len(self)))
+
+        sorted_index = self
+        if ascending:
+            if self.step < 0:
+                sorted_index = self[::-1]
+                indexer = indexer[::-1]
+        else:
+            if self.step > 0:
+                sorted_index = self[::-1]
+                indexer = indexer = indexer[::-1]
+
+        if return_indexer:
+            return sorted_index, indexer
+        else:
+            return sorted_index
+
+    @_performance_tracking
+    def _gather(self, gather_map, nullify=False, check_bounds=True):
+        gather_map = as_column(gather_map)
+        return Index._from_column(
+            self._column.take(gather_map, nullify, check_bounds),
+            name=self.name,
+        )
+
+    @_performance_tracking
+    def _apply_boolean_mask(self, boolean_mask):
+        return Index._from_column(
+            self._column.apply_boolean_mask(boolean_mask), name=self.name
+        )
+
+    def repeat(self, repeats, axis=None):
+        return self._as_int_index().repeat(repeats, axis)
+
+    def _split(self, splits):
+        return Index._from_column(
+            self._as_int_index()._split(splits), name=self.name
+        )
+
+    def _binaryop(self, other, op: str):
+        # TODO: certain binops don't require materializing range index and
+        # could use some optimization.
+        return self._as_int_index()._binaryop(other, op=op)
+
+    def join(
+        self, other, how="left", level=None, return_indexers=False, sort=False
+    ):
+        if how in {"left", "right"} or self.equals(other):
+            # pandas supports directly merging RangeIndex objects and can
+            # intelligently create RangeIndex outputs depending on the type of
+            # join. Hence falling back to performing a merge on pd.RangeIndex
+            # since the conversion is cheap.
+            if isinstance(other, RangeIndex):
+                result = self.to_pandas().join(
+                    other.to_pandas(),
+                    how=how,
+                    level=level,
+                    return_indexers=return_indexers,
+                    sort=sort,
+                )
+                if return_indexers:
+                    return tuple(
+                        cudf.from_pandas(result[0]), result[1], result[2]
+                    )
+                else:
+                    return cudf.from_pandas(result)
+        return self._as_int_index().join(
+            other, how, level, return_indexers, sort
+        )
+
+    @_performance_tracking
+    def argsort(
+        self,
+        ascending=True,
+        na_position="last",
+    ) -> cupy.ndarray:
+        if na_position not in {"first", "last"}:
+            raise ValueError(f"invalid na_position: {na_position}")
+        if (ascending and self.step < 0) or (not ascending and self.step > 0):
+            return cupy.arange(len(self) - 1, -1, -1)
+        else:
+            return cupy.arange(len(self))
+
+    @_performance_tracking
+    def searchsorted(
+        self,
+        value: int,
+        side: Literal["left", "right"] = "left",
+        ascending: bool = True,
+        na_position: Literal["first", "last"] = "last",
+    ):
+        assert (len(self) <= 1) or (ascending == (self.step > 0)), (
+            "Invalid ascending flag"
+        )
+        if side not in {"left", "right"}:
+            raise ValueError("side must be 'left' or 'right'")
+        ri = self._range
+        if flip := (ri.step < 0):
+            ri = ri[::-1]
+            shift = int(side == "right")
+        else:
+            shift = int(side == "left")
+
+        offset = (value - ri.start - shift) // ri.step + 1
+        if flip:
+            offset = len(ri) - offset
+        return max(min(len(ri), offset), 0)
+
+    @_performance_tracking
+    def factorize(
+        self, sort: bool = False, use_na_sentinel: bool = True
+    ) -> tuple[cupy.ndarray, Self]:
+        if sort and self.step < 0:
+            codes = cupy.arange(len(self) - 1, -1, -1)
+            uniques = self[::-1]
+        else:
+            codes = cupy.arange(len(self), dtype=np.intp)
+            uniques = self
+        return codes, uniques
+
+    @_performance_tracking
+    def where(self, cond, other=None, inplace: bool = False) -> Self | None:
+        return self._as_int_index().where(cond, other, inplace)
+
+    def __array__(self, dtype=None):
+        raise TypeError(
+            "Implicit conversion to a host NumPy array via __array__ is not "
+            "allowed, To explicitly construct a GPU matrix, consider using "
+            ".to_cupy()\nTo explicitly construct a host matrix, consider "
+            "using .to_numpy()."
+        )
+
+    @_performance_tracking
+    def nunique(self, dropna: bool = True) -> int:
+        return len(self)
+
+    @_performance_tracking
+    def isna(self) -> cupy.ndarray:
+        return cupy.zeros(len(self), dtype=bool)
+
+    isnull = isna
+
+    @_performance_tracking
+    def notna(self) -> cupy.ndarray:
+        return cupy.ones(len(self), dtype=bool)
+
+    notnull = isna
+
+    @_performance_tracking
+    def _minmax(self, meth: str) -> int | float:
+        no_steps = len(self) - 1
+        if no_steps == -1:
+            return np.nan
+        elif (meth == "min" and self.step > 0) or (
+            meth == "max" and self.step < 0
+        ):
+            return self.start
+
+        return self.start + self.step * no_steps
+
+    def min(self) -> int | float:
+        return self._minmax("min")
+
+    def max(self) -> int | float:
+        return self._minmax("max")
+
+    def any(self) -> bool:
+        return any(self._range)
+
+    def all(self) -> bool:
+        return 0 not in self._range
+
+    def append(self, other):
+        result = self._as_int_index().append(other)
+        return self._try_reconstruct_range_index(result)
+
+    def _indices_of(self, value) -> NumericalColumn:
+        if isinstance(value, (bool, np.bool_)):
+            raise ValueError(
+                f"Cannot use {type(value).__name__} to get an index of a "
+                f"{type(self).__name__}."
+            )
+        try:
+            i = [self._range.index(value)]
+        except ValueError:
+            i = []
+        return as_column(i, dtype=SIZE_TYPE_DTYPE)
+
+    def isin(self, values, level=None) -> cupy.ndarray:
+        if level is not None and level > 0:
+            raise IndexError(
+                f"Too many levels: Index has only 1 level, not {level + 1}"
+            )
+        if is_scalar(values):
+            raise TypeError(
+                "only list-like objects are allowed to be passed "
+                f"to isin(), you passed a {type(values).__name__}"
+            )
+
+        return self._column.isin(values).values
+
+    def __pos__(self) -> Self:
+        return self.copy()
+
+    def __neg__(self) -> Self:
+        rng = range(-self.start, -self.stop, -self.step)
+        return type(self)(rng, name=self.name)
+
+    def __abs__(self) -> Self | Index:
+        if len(self) == 0 or self.min() >= 0:
+            return self.copy()
+        elif self.max() <= 0:
+            return -self
+        else:
+            return abs(self._as_int_index())
+
+    def _columns_for_reset_index(
+        self, levels: tuple | None
+    ) -> Generator[tuple[Any, ColumnBase], None, None]:
+        """Return the columns and column names for .reset_index"""
+        # We need to explicitly materialize the RangeIndex to a column
+        yield "index" if self.name is None else self.name, as_column(self)
+
+    @_warn_no_dask_cudf
+    def __dask_tokenize__(self):
+        return (type(self), self.start, self.stop, self.step)
 
 
 class DatetimeIndex(Index):

@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 import textwrap
 
 import pyarrow as pa
@@ -16,11 +16,11 @@ def test_wrap():
             None,
         ]
     )
-    result = plc.strings.wrap.wrap(plc.interop.from_arrow(pa_array), width)
-    expected = pa.array(
+    got = plc.strings.wrap.wrap(plc.Column(pa_array), width)
+    expect = pa.array(
         [
             textwrap.fill(val, width) if isinstance(val, str) else val
             for val in pa_array.to_pylist()
         ]
     )
-    assert_column_eq(expected, result)
+    assert_column_eq(expect, got)

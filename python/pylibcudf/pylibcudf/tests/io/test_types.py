@@ -28,10 +28,9 @@ def test_gc_with_table_and_column_input_metadata():
         def __del__(self):
             pass
 
-    pa_table = pa.table(
-        {"a": pa.array([1, 2, 3]), "b": pa.array(["a", "b", "c"])}
+    plc_table = plc.Table(
+        pa.table({"a": pa.array([1, 2, 3]), "b": pa.array(["a", "b", "c"])})
     )
-    plc_table = plc.interop.from_arrow(pa_table)
 
     tbl_meta = Foo(plc_table)
     weak_tbl_meta = weakref.ref(tbl_meta)
