@@ -525,7 +525,6 @@ dependencies:
       - output_types: [conda, requirements, pyproject]
         packages:
           - cython>=3.0.3,<3.1.0a0
-          - numba-cuda>=0.11.0
   pyarrow_run:
     common:
       - output_types: [conda]
