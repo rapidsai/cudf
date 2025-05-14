@@ -226,6 +226,7 @@ def test_validate_shuffle_method() -> None:
         "groupby_n_ary",
         "broadcast_join_limit",
         "rapidsmpf_spill",
+        "task_fusion",
     ],
 )
 def test_validate_max_rows_per_partition(option: str) -> None:
