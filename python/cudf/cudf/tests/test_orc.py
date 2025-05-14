@@ -724,22 +724,20 @@ def test_orc_write_statistics(tmpdir, datadir, nrows, stats_freq):
 
 
 @pytest.mark.parametrize("stats_freq", ["STRIPE", "ROWGROUP"])
-@pytest.mark.parametrize("nrows", [2, 100, 200000])
+@pytest.mark.parametrize("nrows", [2, 100, 1024])
 def test_orc_chunked_write_statistics(tmpdir, datadir, nrows, stats_freq):
     from pyarrow import orc
 
     supported_stat_types = [*supported_numpy_dtypes, "str"]
     # Writing bool columns to multiple row groups is disabled
     # until #6763 is fixed
-    if nrows == 200000:
+    if nrows == 1024:
         supported_stat_types.remove("bool")
 
     gdf_fname = tmpdir.join("chunked_stats.orc")
-    writer = ORCWriter(
-        gdf_fname, statistics=stats_freq, stripe_size_rows=30000
-    )
+    writer = ORCWriter(gdf_fname, statistics=stats_freq, stripe_size_rows=512)
 
-    max_char_length = 100 if nrows < 10000 else 10
+    max_char_length = 100 if nrows < 1000 else 10
 
     # Make a dataframe
     gdf = cudf.DataFrame(

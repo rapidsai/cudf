@@ -237,6 +237,7 @@ def test_avro_decompression(set_decomp_env_vars, rows, codec):
         ],
         rows,
         seed=0,
+        use_threads=False,
     )
     expected_df = cudf.DataFrame.from_arrow(df)
 
