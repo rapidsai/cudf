@@ -6,12 +6,12 @@ from __future__ import annotations
 
 import itertools
 import operator
-from collections import defaultdict
 from functools import partial, reduce
 from typing import TYPE_CHECKING, Any
 
 import cudf_polars.experimental.distinct
 import cudf_polars.experimental.groupby
+import cudf_polars.experimental.io
 import cudf_polars.experimental.join
 import cudf_polars.experimental.select
 import cudf_polars.experimental.shuffle
@@ -20,13 +20,10 @@ from cudf_polars.dsl.ir import (
     IR,
     Cache,
     Filter,
-    GroupBy,
     HConcat,
     HStack,
     MapFunction,
     Projection,
-    Select,
-    Sort,
     Union,
 )
 from cudf_polars.dsl.traversal import CachingVisitor, traversal
@@ -35,16 +32,15 @@ from cudf_polars.experimental.dispatch import (
     generate_ir_tasks,
     lower_ir_node,
 )
-from cudf_polars.experimental.io import Scan, SplitScan
+from cudf_polars.experimental.fusion import fuse_ir_graph
 from cudf_polars.experimental.utils import _concat, _lower_ir_fallback
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, MutableMapping, Sequence
+    from collections.abc import MutableMapping
     from typing import Any
 
     from cudf_polars.containers import DataFrame
     from cudf_polars.experimental.dispatch import LowerIRTransformer
-    from cudf_polars.typing import Schema
     from cudf_polars.utils.config import ConfigOptions
 
 
@@ -56,126 +52,6 @@ def _(
     return _lower_ir_fallback(
         ir, rec, msg=f"Class {type(ir)} does not support multiple partitions."
     )
-
-
-class Fused(IR):
-    """Fused IR node."""
-
-    __slots__ = ("fused_io", "subnodes")
-    _non_child = ("schema", "subnodes", "fused_io")
-    subnodes: tuple[IR, ...]
-    """Fused sub-nodes."""
-    fused_io: Union | None
-    """Fused IO node."""
-
-    def __init__(
-        self,
-        schema: Schema,
-        subnodes: tuple[IR, ...],
-        fused_io: Union | None,
-        *children: IR,
-    ):
-        self.schema = schema
-        self.subnodes = subnodes
-        self.fused_io = fused_io
-        self._non_child_args = (
-            [node.do_evaluate for node in subnodes],
-            [tuple(node._non_child_args) for node in self.subnodes],
-            [],
-            [],
-        )
-        self.children = children
-
-    @classmethod
-    def do_evaluate(
-        cls,
-        funcs: Sequence[Callable],
-        subargs: Sequence[Sequence[Any]],
-        io_funcs: Sequence[Callable],
-        io_args: Sequence[Any],
-        *children: DataFrame,
-    ) -> DataFrame:
-        """Evaluate and return a dataframe."""
-        if io_funcs:
-            children = (io_funcs[0](*io_args),)
-        for func, args in zip(funcs, subargs, strict=False):
-            children = (func(*args, *children),)
-        return children[0]
-
-
-def _fuse_ir_node(
-    ir: IR, rec: LowerIRTransformer
-) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
-    partition_info: MutableMapping[IR, PartitionInfo] = {}
-    children = ()
-    if ir.children:
-        children, _partition_info = zip(*(rec(c) for c in ir.children), strict=True)
-        partition_info = reduce(operator.or_, _partition_info)
-
-    new_node: IR
-    if ir in rec.state["fusable"]:
-        if isinstance(ir, Union):
-            new_node = Fused(ir.schema, (), ir)
-        elif len(children) == 1 and isinstance(children[0], Fused):
-            (child,) = children
-            grandchildren = child.children
-            new_node = Fused(
-                ir.schema, (*child.subnodes, ir), child.fused_io, *grandchildren
-            )
-        else:
-            new_node = Fused(ir.schema, (ir,), None, *children)
-    else:
-        new_node = ir.reconstruct(children)
-
-    partition_info[new_node] = rec.state["partition_info"][ir]
-    return new_node, partition_info
-
-
-def _fusable_ir_type(ir: IR) -> bool:
-    return (
-        # Basic fusion
-        isinstance(
-            ir, (Cache, Filter, GroupBy, HStack, MapFunction, Projection, Select, Sort)
-        )
-        or (
-            # IO Fusion
-            isinstance(ir, Union)
-            and all(isinstance(n, (Scan, SplitScan)) for n in ir.children)
-        )
-    )
-
-
-def fuse_ir_graph(
-    ir: IR, partition_info: MutableMapping[IR, PartitionInfo]
-) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
-    """
-    Rewrite an IR graph with fused nodes.
-
-    Parameters
-    ----------
-    ir
-        Root of the graph to rewrite.
-    partition_info
-        Initial partitioning information.
-
-    Returns
-    -------
-    new_ir, partition_info
-        The rewritten graph, and a mapping from unique nodes
-        in the new graph to associated partitioning information.
-    """
-    parents: defaultdict[IR, int] = defaultdict(int)
-    if _fusable_ir_type(ir):
-        parents[ir] = 1
-    for node in traversal([ir]):
-        for child in node.children:
-            if _fusable_ir_type(child):
-                # Basic fusion
-                parents[child] += 1
-    fusable = {node for node, count in parents.items() if count == 1}
-    state = {"fusable": fusable, "partition_info": partition_info}
-    mapper = CachingVisitor(_fuse_ir_node, state=state)
-    return mapper(ir)
 
 
 def lower_ir_graph(
@@ -207,7 +83,8 @@ def lower_ir_graph(
     lower_ir_node
     """
     mapper = CachingVisitor(lower_ir_node, state={"config_options": config_options})
-    return mapper(ir)
+    lowered_ir, partition_info = mapper(ir)
+    return fuse_ir_graph(lowered_ir, partition_info, config_options)
 
 
 def task_graph(
@@ -336,8 +213,6 @@ def evaluate_streaming(ir: IR, config_options: ConfigOptions) -> DataFrame:
     """
     ir, partition_info = lower_ir_graph(ir, config_options)
 
-    ir, partition_info = fuse_ir_graph(ir, partition_info)
-
     graph, key = task_graph(ir, partition_info)
 
     graph = post_process_task_graph(graph, key, config_options)
@@ -363,28 +238,6 @@ def _default_generate_ir_tasks(
         )
         for i, key in enumerate(partition_info[ir].keys(ir))
     }
-
-
-@generate_ir_tasks.register(Fused)
-def _(
-    ir: Fused, partition_info: MutableMapping[IR, PartitionInfo]
-) -> MutableMapping[Any, Any]:
-    if ir.fused_io is None:
-        return _default_generate_ir_tasks(ir, partition_info)
-
-    assert isinstance(ir.fused_io, Union)
-    graph: MutableMapping[Any, Any] = {}
-    for i, key in enumerate(partition_info[ir].keys(ir)):
-        io = ir.fused_io.children[i]
-        assert isinstance(io, (Scan, SplitScan))
-        graph[key] = (
-            ir.do_evaluate,
-            ir._non_child_args[0],
-            ir._non_child_args[1],
-            [io.do_evaluate],
-            list(io._non_child_args),
-        )
-    return graph
 
 
 @lower_ir_node.register(Union)

@@ -17,7 +17,8 @@ from cudf_polars.dsl.ir import (
     Sort,
 )
 from cudf_polars.dsl.translate import Translator
-from cudf_polars.experimental.parallel import Fused, fuse_ir_graph, lower_ir_graph
+from cudf_polars.experimental.fusion import Fused
+from cudf_polars.experimental.parallel import lower_ir_graph
 from cudf_polars.utils.config import ConfigOptions
 
 if TYPE_CHECKING:
@@ -34,7 +35,6 @@ def explain_query(
     engine: pl.GPUEngine,
     *,
     physical: bool = True,
-    fuse: bool = True,
 ) -> str:
     """
     Return a formatted string representation of the IR plan.
@@ -48,9 +48,6 @@ def explain_query(
     physical : bool, default True
         If True, show the physical (lowered) plan.
         If False, show the logical (pre-lowering) plan.
-    fuse : bool, default True
-        Whether to show the fused physical plan.
-        Ignored if physical is False.
 
     Returns
     -------
@@ -62,8 +59,6 @@ def explain_query(
 
     if physical:
         lowered_ir, partition_info = lower_ir_graph(ir, config)
-        if fuse:
-            lowered_ir, partition_info = fuse_ir_graph(lowered_ir, partition_info)
         return _repr_ir_tree(lowered_ir, partition_info)
     else:
         return _repr_ir_tree(ir)
