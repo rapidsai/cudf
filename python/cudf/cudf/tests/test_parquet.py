@@ -425,7 +425,7 @@ def test_parquet_read_metadata(tmp_path, pdf):
         assert a == b
 
 
-def test_parquet_read_filtered(tmpdir):
+def test_parquet_read_filtered(set_decomp_env_vars, tmpdir):
     # Generate data
     fname = tmpdir.join("filtered.parquet")
     dg.generate(
