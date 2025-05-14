@@ -108,16 +108,25 @@ def _fuse_ir_node(
     return new_node, partition_info
 
 
-def _is_fusible_ir_type(ir: IR) -> bool:
+def _is_fusible_ir_node(
+    ir: IR, partition_info: MutableMapping[IR, PartitionInfo]
+) -> bool:
     return (
-        # Basic fusion
+        # Basic fusion.
+        # These are partition-wise operations if they exist
+        # in the graph after lowering (the data-movement
+        # has been encoded with Shuffle/Reduction/etc).
         isinstance(
             ir, (Cache, Filter, GroupBy, HStack, MapFunction, Projection, Select, Sort)
         )
         or (
-            # IO Fusion
+            # IO Fusion.
+            # Multi-partition IO is always implemented as a Union
+            # over Scan/SplitScan nodes. The number of children
+            # must correspond to the number of partitions.
             isinstance(ir, Union)
             and all(isinstance(n, (Scan, SplitScan)) for n in ir.children)
+            and partition_info[ir].count == len(ir.children)
         )
     )
 
@@ -166,12 +175,11 @@ def fuse_ir_graph(
         in the new graph to associated partitioning information.
     """
     parents: defaultdict[IR, int] = defaultdict(int)
-    if _is_fusible_ir_type(ir):
+    if _is_fusible_ir_node(ir, partition_info):
         parents[ir] = 1
     for node in traversal([ir]):
         for child in node.children:
-            if _is_fusible_ir_type(child):
-                # Basic fusion
+            if _is_fusible_ir_node(child, partition_info):
                 parents[child] += 1
     fusible = {node for node, count in parents.items() if count == 1}
     state = {"fusible": fusible, "partition_info": partition_info}
