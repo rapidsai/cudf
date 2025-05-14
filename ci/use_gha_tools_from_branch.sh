@@ -9,6 +9,3 @@ if [[ ! -d "/tmp/gha-tools" ]]; then
 
   export PATH="/tmp/gha-tools/tools":$PATH
 fi
-
-echo "--- gha-tools content ---"
-cat /tmp/gha-tools/tools/_rapids-get-pr-artifact

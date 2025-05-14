@@ -5,6 +5,9 @@
 
 set -euo pipefail
 
+source ci/use_gha_tools_from_branch.sh
+source ci/use_wheels_from_prs.sh
+
 EXITCODE=0
 trap "EXITCODE=1" ERR
 set +e
