@@ -116,7 +116,8 @@ def _is_fusible_ir_node(
         # in the graph after lowering (the data-movement
         # has been encoded with Shuffle/Reduction/etc).
         isinstance(
-            ir, (Cache, Filter, GroupBy, HStack, MapFunction, Projection, Select)
+            ir,
+            (Cache, Filter, GroupBy, HStack, MapFunction, Projection, Select),
         )
         or (
             # IO Fusion.
@@ -142,11 +143,7 @@ def _(
     graph: MutableMapping[Any, Any] = {}
     for i, key in enumerate(partition_info[ir].keys(ir)):
         io = ir.fused_io.children[i]
-        try:
-            assert isinstance(io, (Scan, SplitScan))
-        except Exception as err:
-            import pdb; pdb.set_trace()
-            pass
+        assert isinstance(io, (Scan, SplitScan))
         graph[key] = (
             ir.do_evaluate,
             ir._non_child_args[0],
