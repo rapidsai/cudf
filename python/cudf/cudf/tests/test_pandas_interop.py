@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2024, NVIDIA CORPORATION.
+# Copyright (c) 2018-2025, NVIDIA CORPORATION.
 
 import numpy as np
 import pandas as pd
@@ -81,6 +81,14 @@ def test_from_pandas_rangeindex():
     # Check index
     assert_eq(idx1.values, idx2.values)
     assert idx1.name == idx2.name
+
+
+def test_from_pandas_datetimeindex_freq():
+    expected = pd.date_range(start="1990-01-01", periods=10, freq="h")
+    actual = cudf.from_pandas(expected)
+
+    assert_eq(expected, actual)
+    assert actual.freq is not None
 
 
 def test_from_pandas_rangeindex_step():
