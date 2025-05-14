@@ -90,7 +90,7 @@ def _fuse_ir_node(
         partition_info = reduce(operator.or_, _partition_info)
 
     new_node: IR
-    if ir in rec.state["fusable"]:
+    if ir in rec.state["fusible"]:
         if isinstance(ir, Union):
             new_node = Fused(ir.schema, (), ir)
         elif len(children) == 1 and isinstance(children[0], Fused):
@@ -108,7 +108,7 @@ def _fuse_ir_node(
     return new_node, partition_info
 
 
-def _fusable_ir_type(ir: IR) -> bool:
+def _is_fusible_ir_type(ir: IR) -> bool:
     return (
         # Basic fusion
         isinstance(
@@ -155,7 +155,7 @@ def fuse_ir_graph(
     Parameters
     ----------
     ir
-        Root of the graph to rewrite.
+        Root of the lowered-IR graph to rewrite.
     partition_info
         Initial partitioning information.
 
@@ -166,14 +166,14 @@ def fuse_ir_graph(
         in the new graph to associated partitioning information.
     """
     parents: defaultdict[IR, int] = defaultdict(int)
-    if _fusable_ir_type(ir):
+    if _is_fusible_ir_type(ir):
         parents[ir] = 1
     for node in traversal([ir]):
         for child in node.children:
-            if _fusable_ir_type(child):
+            if _is_fusible_ir_type(child):
                 # Basic fusion
                 parents[child] += 1
-    fusable = {node for node, count in parents.items() if count == 1}
-    state = {"fusable": fusable, "partition_info": partition_info}
+    fusible = {node for node, count in parents.items() if count == 1}
+    state = {"fusible": fusible, "partition_info": partition_info}
     mapper = CachingVisitor(_fuse_ir_node, state=state)
     return mapper(ir)
