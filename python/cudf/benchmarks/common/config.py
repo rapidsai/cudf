@@ -66,5 +66,5 @@ if "CUDF_BENCHMARKS_DEBUG_ONLY" in os.environ:
     NUM_ROWS = [10, 20]
     NUM_COLS = [1, 6, 20]
 else:
-    NUM_ROWS = [100, 1_000, 10_000, 50_000, 1_000_000]
-    NUM_COLS = [1, 6, 20, 1_000, 10_000, 50_000]
+    NUM_ROWS = [100, 10_000, 1_000_000]
+    NUM_COLS = [1, 6, 20]

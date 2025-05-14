@@ -102,7 +102,7 @@ cpdef void table_to_array(
     """
     if size > numeric_limits[size_t].max():
         raise ValueError(
-            "Size exceeds the int32_t limit."
+            "Size exceeds the size_t limit."
         )
     stream = _get_stream(stream)
 
