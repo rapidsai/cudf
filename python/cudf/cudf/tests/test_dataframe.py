@@ -1270,6 +1270,34 @@ def test_dataframe_to_cupy():
         np.testing.assert_array_equal(df[k].to_numpy(), mat[:, i])
 
 
+@pytest.mark.parametrize("has_nulls", [False, True])
+@pytest.mark.parametrize("use_na_value", [False, True])
+def test_dataframe_to_cupy_single_column(has_nulls, use_na_value):
+    nelem = 10
+    data = np.arange(nelem, dtype=np.float64)
+
+    if has_nulls:
+        data = data.astype("object")
+        data[::2] = None
+
+    df = cudf.DataFrame({"a": data})
+
+    if has_nulls and not use_na_value:
+        with pytest.raises(ValueError, match="Column must have no nulls"):
+            df.to_cupy()
+        return
+
+    na_value = 0.0 if use_na_value else None
+    expected = (
+        cupy.asarray(df["a"].fillna(na_value))
+        if has_nulls
+        else cupy.asarray(df["a"])
+    )
+    result = df.to_cupy(na_value=na_value)
+    assert result.shape == (nelem, 1)
+    assert_eq(result.ravel(), expected)
+
+
 def test_dataframe_to_cupy_null_values():
     df = cudf.DataFrame()
 
@@ -1995,7 +2023,7 @@ def test_dataframe_cupy_array_wrong_index():
     with pytest.raises(ValueError):
         cudf.DataFrame(d_ary, index=["a"])
 
-    with pytest.raises(ValueError):
+    with pytest.raises(TypeError):
         cudf.DataFrame(d_ary, index="a")
 
 

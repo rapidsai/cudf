@@ -3091,6 +3091,7 @@ def test_series_to_cupy(dtype, has_nulls, use_na_value):
 
     if not has_nulls:
         assert_eq(sr.values, cp.asarray(sr))
+        return
 
     if has_nulls and not use_na_value:
         with pytest.raises(ValueError, match="Column must have no nulls"):

@@ -566,12 +566,6 @@ class MultiIndex(Index):
             "get_slice_bound is not currently implemented."
         )
 
-    @property
-    @_performance_tracking
-    def nlevels(self) -> int:
-        """Integer number of levels in this MultiIndex."""
-        return len(self._data)
-
     @property  # type: ignore
     @_performance_tracking
     def levels(self) -> list[cudf.Index]:
