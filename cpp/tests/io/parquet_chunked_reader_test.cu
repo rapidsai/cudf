@@ -1926,12 +1926,15 @@ TEST_F(ParquetReaderTest, ManyLargeLists)
   // Write the table to parquet
   cudf::io::write_parquet(out_opts);
 
-  // Concat filepath 150x for num rows to overflow cudf column size limits
-  constexpr cudf::size_type reads_to_overflow = 150;
+  // Times to concat filepath to overflow cudf column size limits
+  constexpr cudf::size_type reads_to_overflow =
+    (std::numeric_limits<cudf::size_type>::max() / (num_rows * bools_per_row)) + 1;
+
   auto const in_opts =
     cudf::io::parquet_reader_options::builder(
       cudf::io::source_info{std::vector<std::string>(reads_to_overflow, filepath)})
       .build();
+
   // Expect an overflow error when reading the files
   EXPECT_THROW(cudf::io::read_parquet(in_opts), std::overflow_error);
 }
