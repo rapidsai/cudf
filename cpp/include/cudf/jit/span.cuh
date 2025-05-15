@@ -16,6 +16,7 @@
 #pragma once
 
 #include <cudf/types.hpp>
+#include <cudf/utilities/bit.hpp>
 
 namespace CUDF_EXPORT cudf {
 
@@ -95,6 +96,26 @@ struct device_span {
    * @return An iterator to the element following the last element of the span
    */
   CUDF_HOST_DEVICE [[nodiscard]] constexpr element_type* end() const { return _data + _size; }
+};
+
+template <typename T>
+struct optional_span {
+  cudf::jit::device_span<T> span_{};
+  cudf::bitmask_type* null_mask_ = nullptr;
+
+  __device__ void set_valid(size_type element_index) const
+  {
+    return set_bit(null_mask_, element_index);
+  }
+
+  __device__ void set_null(size_type element_index) const
+  {
+    return clear_bit(null_mask_, element_index);
+  }
+
+  __device__ T& element(cudf::size_type row) const { return span_[row]; }
+
+  __device__ void assign(cudf::size_type row, T value) const { span_[row] = value; }
 };
 
 }  // namespace jit

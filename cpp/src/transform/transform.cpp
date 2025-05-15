@@ -302,6 +302,9 @@ std::unique_ptr<column> transform_operation(column_view base_column,
                                             rmm::cuda_stream_view stream,
                                             rmm::device_async_resource_ref mr)
 {
+  auto const has_nulls = std::any_of(
+    inputs.begin(), inputs.end(), [](auto const& col) { return col.null_count() != 0; });
+
   auto output = make_fixed_width_column(output_type,
                                         base_column.size(),
                                         copy_bitmask(base_column, stream, mr),
