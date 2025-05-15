@@ -1764,7 +1764,7 @@ struct is_supported_csv_write_type_fn {
   template <typename T>
   constexpr bool operator()() const
   {
-    return cudf::io::detail::is_handled<T>();
+    return cudf::io::detail::is_convertible_to_string_column<T>();
   }
 };
 /// @endcond

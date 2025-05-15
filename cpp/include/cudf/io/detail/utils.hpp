@@ -27,7 +27,7 @@ namespace io::detail {
 enum class single_write_mode : bool { YES, NO };
 
 template <typename T>
-constexpr bool is_handled()
+constexpr bool is_convertible_to_string_column()
 {
   // Note: the case (not std::is_same_v<T, bool>)
   // is already covered by is_integral
