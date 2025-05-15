@@ -105,7 +105,7 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
    * @param row_group_indices Input row groups indices
    * @param output_dtypes Datatypes of output columns
    * @param output_column_schemas schema indices of output columns
-   * @param filter Optional AST expression to filter row groups based on Column chunk statistics
+   * @param filter AST expression to filter row groups based on Column chunk statistics
    * @param stream CUDA stream used for device memory operations and kernel launches
    *
    * @return Filtered row group indices, if any are filtered
@@ -123,7 +123,7 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
    * @param row_group_indices Input row groups indices
    * @param output_dtypes Datatypes of output columns
    * @param output_column_schemas schema indices of output columns
-   * @param filter Optional AST expression to filter row groups based on bloom filters
+   * @param filter AST expression to filter row groups based on bloom filters
    *
    * @return Byte ranges of bloom filters, one per column chunk with equality predicate
    */
@@ -139,7 +139,7 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
    * @param row_group_indices Input row groups indices
    * @param output_dtypes Datatypes of output columns
    * @param output_column_schemas schema indices of output columns
-   * @param filter Optional AST expression to filter row groups based on dictionary pages
+   * @param filter AST expression to filter row groups based on dictionary pages
    *
    * @return Byte ranges of dictionary pages, one input column chunk with (in)equality predicate
    */
@@ -160,7 +160,7 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
    * @param literals Lists of literals, one per input column
    * @param output_dtypes Datatypes of output columns
    * @param dictionary_col_schemas schema indices of dictionary columns only
-   * @param filter Optional AST expression to filter row groups based on dictionary pages
+   * @param filter AST expression to filter row groups based on dictionary pages
    * @param stream CUDA stream used for device memory operations and kernel launches
    *
    * @return Filtered row group indices, if any are filtered
@@ -182,7 +182,7 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
    * @param row_group_indices Input row groups indices
    * @param output_dtypes Datatypes of output columns
    * @param output_column_schemas schema indices of output columns
-   * @param filter Optional AST expression to filter row groups based on bloom filters
+   * @param filter AST expression to filter row groups based on bloom filters
    * @param stream CUDA stream used for device memory operations and kernel launches
    *
    * @return Filtered row group indices, if any are filtered
