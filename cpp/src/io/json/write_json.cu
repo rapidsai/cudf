@@ -105,7 +105,7 @@ struct escape_strings_fn {
       d_buffer[2] = nibble_to_hex((codepoint >> 12) & 0x0F);
       d_buffer[3] = nibble_to_hex((codepoint >> 8) & 0x0F);
       d_buffer[4] = nibble_to_hex((codepoint >> 4) & 0x0F);
-      d_buffer[5] = nibble_to_hex((codepoint)&0x0F);
+      d_buffer[5] = nibble_to_hex((codepoint) & 0x0F);
       d_buffer += 6;
     } else {
       bytes += 6;
