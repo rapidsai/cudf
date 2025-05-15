@@ -162,7 +162,7 @@ class BooleanFunction(Expr):
             if is_finite:
                 # NaN is neither finite not infinite
                 to_search.append(float("nan"))
-            haystack = plc.Column.from_list(
+            haystack = plc.Column.from_iterable_of_py(
                 to_search,
                 dtype=needles.obj.type(),
             )

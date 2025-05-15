@@ -57,8 +57,10 @@ from .utils cimport _get_stream
 from .gpumemoryview import _datatype_from_dtype_desc
 from ._interop_helpers import ArrowLike, ColumnMetadata
 
+import array
 import functools
 import operator
+from typing import Iterable
 
 __all__ = ["Column", "ListColumnView", "is_c_contiguous"]
 
@@ -139,11 +141,10 @@ def _infer_list_depth_and_dtype(obj: list) -> tuple[int, type]:
     if not current and depth == 0:
         raise ValueError("Cannot infer dtype from empty input")
 
-    scalar_type = type(current)
-    if scalar_type not in {int, float, bool}:
-        raise TypeError(f"Unsupported scalar type: {scalar_type}")
+    if not isinstance(current, (int, float, bool)):
+        raise TypeError(f"Unsupported scalar type: {type(current).__name__}")
 
-    return depth, scalar_type
+    return depth, type(current)
 
 
 def _flatten_nested_list(obj: list, depth: int) -> tuple[list, tuple[int, ...]]:
@@ -357,10 +358,10 @@ cdef class Column:
         cdef _ArrowColumnHolder result
         cdef unique_ptr[arrow_column] c_result
         if hasattr(arrow_like, "__arrow_c_device_array__"):
-            schema, array = arrow_like.__arrow_c_device_array__()
+            schema, d_array = arrow_like.__arrow_c_device_array__()
             c_schema = <ArrowSchema*>PyCapsule_GetPointer(schema, "arrow_schema")
             c_device_array = (
-                <ArrowDeviceArray*>PyCapsule_GetPointer(array, "arrow_device_array")
+                <ArrowDeviceArray*>PyCapsule_GetPointer(d_array, "arrow_device_array")
             )
 
             result = _ArrowColumnHolder()
@@ -381,9 +382,9 @@ cdef class Column:
                 tmp.children(),
             )
         elif hasattr(arrow_like, "__arrow_c_array__"):
-            schema, array = arrow_like.__arrow_c_array__()
+            schema, h_array = arrow_like.__arrow_c_array__()
             c_schema = <ArrowSchema*>PyCapsule_GetPointer(schema, "arrow_schema")
-            c_array = <ArrowArray*>PyCapsule_GetPointer(array, "arrow_array")
+            c_array = <ArrowArray*>PyCapsule_GetPointer(h_array, "arrow_array")
 
             result = _ArrowColumnHolder()
             with nogil:
@@ -924,51 +925,43 @@ cdef class Column:
         )
 
     @staticmethod
-    def from_list(obj: list, dtype: DataType | None = None) -> Column:
+    def from_iterable_of_py(obj: Iterable, dtype: DataType | None = None) -> Column:
         """
-        Create a Column from a Python list
+        Create a Column from a Python iterable of scalar values or nested iterables.
 
         Parameters
         ----------
-        obj : list
-            A list of scalar values (e.g., int, float, bool)
-            or a nested list of such values.
+        obj : Iterable
+            An iterable of scalar values (e.g., int, float, bool) or a nested iterable.
         dtype : DataType | None
-            The data type of the elements. If not specified,
-            the type is inferred from the list.
+            The data type of the elements. If not specified, the type is inferred.
 
         Returns
         -------
         Column
-            A Column containing the data from the input list.
+            A Column containing the data from the input iterable.
 
         Raises
         ------
         TypeError
-            If the input is not a list or contains unsupported scalar types.
+            If the input contains unsupported scalar types.
         ValueError
-            If the list is empty and no dtype is specified.
-            If the nested lists are irregular (i.e., have inconsistent shapes).
+            If the iterable is empty and dtype is not provided.
 
         Notes
         -----
         - Only scalar types int, float, and bool are supported.
-        - The input list may be multi-dimensional, and will be interpreted
-          as a C-contiguous array with nested list columns.
-
-        Examples
-        --------
-        >>> import pylibcudf as plc
-        >>> plc.Column.from_list([1, 2, 3])
-        >>> plc.Column.from_list([[1, 2], [3, 4]])
-        >>> plc.Column.from_list([[1.0, 2.0], [3.0, 4.0]], dtype=plc.DataType.FLOAT64)
+        - Nested iterables must be materialized as lists.
         """
+
+        # TODO: Investigate when we can avoid full list materialization.
+        obj = list(obj)
+
         if not obj:
             if dtype is None:
-                raise ValueError(
-                    "Cannot infer dtype from empty list, please specify dtype"
-                )
+                raise ValueError("Cannot infer dtype from empty iterable object")
             return Column(dtype, 0, None, None, 0, 0, [])
+
         if dtype is None:
             depth, py_dtype = _infer_list_depth_and_dtype(obj)
             dtype = DataType.from_py(py_dtype)
@@ -977,7 +970,6 @@ cdef class Column:
 
         flat, shape = _flatten_nested_list(obj, depth)
 
-        import array
         buf = array.array(_python_typecode_from_dtype(dtype), flat)
         mv = memoryview(buf).cast("B")
 
