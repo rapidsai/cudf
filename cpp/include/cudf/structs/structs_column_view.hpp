@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -96,6 +96,6 @@ class structs_column_view : public column_view {
    */
   [[nodiscard]] column_view get_sliced_child(
     int index, rmm::cuda_stream_view stream = cudf::get_default_stream()) const;
-};         // class structs_column_view;
+};  // class structs_column_view;
 /** @} */  // end of group
 }  // namespace CUDF_EXPORT cudf

@@ -187,7 +187,7 @@ if(CUDF_CLANG_TIDY)
   # versions are skipped so we don't want to constrain to a patch version that the user can't
   # install.
   set(LLVM_VERSION "${CMAKE_MATCH_1}")
-  set(expected_clang_tidy_version 19.1)
+  set(expected_clang_tidy_version 20.1)
 
   if(NOT expected_clang_tidy_version VERSION_EQUAL LLVM_VERSION)
     message(
@@ -452,6 +452,7 @@ add_library(
   src/groupby/sort/aggregate.cpp
   src/groupby/sort/group_argmax.cu
   src/groupby/sort/group_argmin.cu
+  src/groupby/sort/group_bitwise.cu
   src/groupby/sort/group_collect.cu
   src/groupby/sort/group_correlation.cu
   src/groupby/sort/group_count.cu
@@ -634,6 +635,7 @@ add_library(
   src/quantiles/quantiles.cu
   src/reductions/all.cu
   src/reductions/any.cu
+  src/reductions/bitwise.cu
   src/reductions/collect_ops.cu
   src/reductions/histogram.cu
   src/reductions/max.cu
