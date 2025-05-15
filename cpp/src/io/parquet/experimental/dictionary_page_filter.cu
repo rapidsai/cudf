@@ -64,9 +64,9 @@ auto constexpr occupancy_factor = 70;  ///< cuCollections suggests targeting a 7
 uint32_t constexpr hasher_seed  = 0;   ///< seed for the hashers
 
 using storage_type     = cuco::bucket_storage<key_type,
-                                          bucket_size,
-                                          cuco::extent<std::size_t>,
-                                          cudf::detail::cuco_allocator<char>>;
+                                              bucket_size,
+                                              cuco::extent<std::size_t>,
+                                              cudf::detail::cuco_allocator<char>>;
 using storage_ref_type = typename storage_type::ref_type;
 using bucket_type      = typename storage_type::bucket_type;
 
