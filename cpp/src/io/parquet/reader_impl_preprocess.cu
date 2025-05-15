@@ -1697,16 +1697,16 @@ void reader::impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num
         // for struct columns, higher levels of the output columns are shared between input
         // columns. so don't compute any given level more than once.
         if ((out_buf.user_data & PARQUET_COLUMN_BUFFER_FLAG_HAS_LIST_PARENT) && out_buf.size == 0) {
-          auto size = static_cast<size_t>(sizes[(idx * max_depth) + l_idx]);
-
+          auto buffer_size = sizes[(idx * max_depth) + l_idx];
           // if this is a list column add 1 for non-leaf levels for the terminating offset
-          if (out_buf.type.id() == type_id::LIST && l_idx < max_depth) { size++; }
-          CUDF_EXPECTS(size <= std::numeric_limits<cudf::size_type>::max(),
+          if (out_buf.type.id() == type_id::LIST && l_idx < max_depth) { buffer_size++; }
+          CUDF_EXPECTS(buffer_size <= std::numeric_limits<cudf::size_type>::max(),
                        "Number of list column rows exceeds cudf's column size limit",
                        std::overflow_error);
           // allocate
           // we're going to start null mask as all valid and then turn bits off if necessary
-          out_buf.create_with_mask(size, cudf::mask_state::UNINITIALIZED, false, _stream, _mr);
+          out_buf.create_with_mask(
+            buffer_size, cudf::mask_state::UNINITIALIZED, false, _stream, _mr);
           memset_bufs.push_back(cudf::device_span<std::byte>(
             static_cast<std::byte*>(out_buf.data()), out_buf.data_size()));
           nullmask_bufs.push_back(cudf::device_span<cudf::bitmask_type>(
