@@ -3347,3 +3347,10 @@ def test_categoricalindex_from_codes(ordered, name):
         name=name,
     )
     assert_eq(result, expected)
+
+
+def test_roundtrip_index_plc_column():
+    index = cudf.Index([1])
+    expect = cudf.Index(index)
+    actual = cudf.Index.from_pylibcudf(*expect.to_pylibcudf())
+    assert_eq(expect, actual)

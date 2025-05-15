@@ -270,6 +270,72 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
     def _from_data_like_self(self, data: MutableMapping) -> Self:
         return _index_from_data(data, self.name)
 
+    @_performance_tracking
+    def to_pylibcudf(self, copy=False) -> tuple[plc.Column, dict]:
+        """
+        Convert this Index to a pylibcudf.Column.
+
+        Parameters
+        ----------
+        copy : bool
+            Whether or not to generate a new copy of the underlying device data
+
+        Returns
+        -------
+        pylibcudf.Column
+            A new pylibcudf.Column referencing the same data.
+        dict
+            Dict of metadata (includes name)
+
+        Notes
+        -----
+        User requests to convert to pylibcudf must assume that the
+        data may be modified afterwards.
+        """
+        if copy:
+            raise NotImplementedError("copy=True is not supported")
+        metadata = {"name": self.name}
+        return self._column.to_pylibcudf(mode="write"), metadata
+
+    @classmethod
+    @_performance_tracking
+    def from_pylibcudf(
+        cls, col: plc.Column, metadata: dict | None = None
+    ) -> Self:
+        """
+        Create a Index from a pylibcudf.Column.
+
+        Parameters
+        ----------
+        col : pylibcudf.Column
+            The input Column.
+
+        Returns
+        -------
+        pylibcudf.Column
+            A new pylibcudf.Column referencing the same data.
+
+        Notes
+        -----
+        This function will generate an Index which contains a Column
+        pointing to the provided pylibcudf Column.  It will directly access
+        the data and mask buffers of the pylibcudf Column, so the newly created
+        object is not tied to the lifetime of the original pylibcudf.Column.
+        """
+        name = None
+        if metadata is not None:
+            if not (
+                isinstance(metadata, dict)
+                and len(metadata) == 1
+                and set(metadata) == {"name"}
+            ):
+                raise ValueError("Metadata dict must only contain a name")
+            name = metadata.get("name")
+        return cls._from_column(
+            ColumnBase.from_pylibcudf(col, data_ptr_exposed=True),
+            name=name,
+        )
+
     @classmethod
     @_performance_tracking
     def from_arrow(cls, obj: pa.Array) -> Index | cudf.MultiIndex:
