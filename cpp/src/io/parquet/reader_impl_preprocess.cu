@@ -1526,7 +1526,7 @@ void reader::impl::preprocess_subpass_pages(read_mode mode, size_t chunk_read_li
   subpass.skip_rows   = pass.skip_rows + pass.processed_rows;
   auto const pass_end = pass.skip_rows + pass.num_rows;
   max_row             = min(max_row, pass_end);
-  CUDF_EXPECTS(max_row >= subpass.skip_rows, "Unexpected short subpass");
+  CUDF_EXPECTS(max_row >= subpass.skip_rows, "Unexpected short subpass", std::underflow_error);
   subpass.num_rows = max_row - subpass.skip_rows;
 
   // now split up the output into chunks as necessary
@@ -1587,7 +1587,8 @@ void reader::impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num
         auto const out_buf_size =
           out_buf.type.id() == type_id::LIST && l_idx < max_depth ? num_rows + 1 : num_rows;
         CUDF_EXPECTS(out_buf_size <= std::numeric_limits<cudf::size_type>::max(),
-                     "Number of rows exceeds cudf's column size limit");
+                     "Number of rows exceeds cudf's column size limit",
+                     std::overflow_error);
         out_buf.create_with_mask(
           out_buf_size, cudf::mask_state::UNINITIALIZED, false, _stream, _mr);
         memset_bufs.push_back(cudf::device_span<std::byte>(static_cast<std::byte*>(out_buf.data()),
@@ -1701,7 +1702,8 @@ void reader::impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num
           // if this is a list column add 1 for non-leaf levels for the terminating offset
           if (out_buf.type.id() == type_id::LIST && l_idx < max_depth) { size++; }
           CUDF_EXPECTS(size <= std::numeric_limits<cudf::size_type>::max(),
-                       "Number of list column rows exceeds cudf's column size limit");
+                       "Number of list column rows exceeds cudf's column size limit",
+                       std::overflow_error);
           // allocate
           // we're going to start null mask as all valid and then turn bits off if necessary
           out_buf.create_with_mask(size, cudf::mask_state::UNINITIALIZED, false, _stream, _mr);
