@@ -203,11 +203,11 @@ namespace io::parquet::experimental {
  * filter columns and also updates the row mask column to only the valid rows that satisfy the
  * filter expression. If no row group pruning is needed, pass a span of all row group indices from
  * `all_row_groups()` function as the current list of row groups. Similarly, if no page pruning is
- * needed, pass an empty span as data page mask and a mutable view of a BOOL8 column of size equal
- * to total number of rows in the current list of row groups containing all `true` values as row
- * mask. Further, the byte ranges for the required column chunk data may be obtained using the
- * `filter_column_chunks_byte_ranges()` function and read into a corresponding vector of vectors of
- * device buffers.
+ * desired, pass an empty span as data page mask and a mutable view of a BOOL8 column of size equal
+ * to total number of rows in the current row groups list (computed by `total_rows_in_row_groups()`)
+ * containing all `true` values as row mask. Further, the byte ranges for the required column chunk
+ * data may be obtained using the `filter_column_chunks_byte_ranges()` function and read into a
+ * corresponding vector of vectors of device buffers.
  * @code{.cpp}
  * // Get byte ranges of column chunk byte ranges from the reader
  * auto const filter_column_chunk_byte_ranges =
@@ -231,11 +231,12 @@ namespace io::parquet::experimental {
  * materialize the payload columns into another table (second reader pass). This is done using the
  * `materialize_payload_columns()` function. This function requires a vector of device buffers
  * containing column chunk data for the current list of row groups, and the updated row mask from
- * the `materialize_filter_columns()`. The function uses the row mask to internally prune payload
- * column data pages and mask the materialized payload columns to the desired rows. Similar to the
- * first reader pass, the byte ranges for the required column chunk data may be obtained using the
- * `payload_column_chunks_byte_ranges()` function, read into a vector of device buffers and read
- * into a corresponding vector of vectors of device buffers.
+ * the `materialize_filter_columns()`. The function uses the row mask - may be a BOOL8 column of
+ * size equal to total number of rows in the current row groups list containing all `true` values if
+ * no pruning is desired - to internally prune payload column data pages and mask the materialized
+ * payload columns to the desired rows. Similar to the first reader pass, the byte ranges for the
+ * required column chunk data may be obtained using the `payload_column_chunks_byte_ranges()`
+ * function and read into a corresponding vector of vectors of device buffers.
  * @code{.cpp}
  * // Get column chunk byte ranges from the reader
  * auto const payload_column_chunk_byte_ranges =
@@ -316,6 +317,15 @@ class hybrid_scan_reader {
   [[nodiscard]] std::vector<size_type> all_row_groups(parquet_reader_options const& options) const;
 
   /**
+   * @brief Get the total number of top-level rows in the row groups
+   *
+   * @param row_group_indices Input row groups indices
+   * @return Total number of top-level rows in the row groups
+   */
+  [[nodiscard]] size_type total_rows_in_row_groups(
+    cudf::host_span<size_type const> row_group_indices) const;
+
+  /**
    * @brief Filter the input row groups using column chunk statistics
    *
    * @param row_group_indices Input row groups indices
@@ -329,12 +339,16 @@ class hybrid_scan_reader {
     rmm::cuda_stream_view stream) const;
 
   /**
-   * @brief Get byte ranges of bloom filters and dictionary pages (secondary filters) for
-   * further row group pruning
+   * @brief Get byte ranges of bloom filters and dictionary pages (secondary filters) for row group
+   *        pruning
+   *
+   * @note Device buffers for bloom filter byte ranges must be allocated using a 32 byte
+   *       aligned memory resource
    *
    * @param row_group_indices Input row groups indices
    * @param options Parquet reader options
-   * @return Pair of vectors of byte ranges to per-column-chunk bloom filters and dictionary pages
+   * @return Pair of vectors of byte ranges of column chunk with bloom filters and dictionary
+   *         pages subject to filter predicate
    */
   [[nodiscard]] std::pair<std::vector<byte_range_info>, std::vector<byte_range_info>>
   secondary_filters_byte_ranges(cudf::host_span<size_type const> row_group_indices,
@@ -343,7 +357,8 @@ class hybrid_scan_reader {
   /**
    * @brief Filter the row groups using column chunk dictionary pages
    *
-   * @param dictionary_page_data Device buffers containing per-column-chunk dictionary page data
+   * @param dictionary_page_data Device buffers containing dictionary page data of column chunks
+   *                             with (in)equality predicate
    * @param row_group_indices Input row groups indices
    * @param options Parquet reader options
    * @param stream CUDA stream used for device memory operations and kernel launches
@@ -358,7 +373,11 @@ class hybrid_scan_reader {
   /**
    * @brief Filter the row groups using column chunk bloom filters
    *
-   * @param bloom_filter_data Device buffers containing per-column-chunk bloom filter data
+   * @note The `bloom_filter_data` device buffers must be allocated using a 32
+   *       byte aligned memory resource
+   *
+   * @param bloom_filter_data Device buffers containing bloom filter data of column chunks with
+   *                          an equality predicate
    * @param row_group_indices Input row groups indices
    * @param options Parquet reader options
    * @param stream CUDA stream used for device memory operations and kernel launches

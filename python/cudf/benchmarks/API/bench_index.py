@@ -1,4 +1,4 @@
-# Copyright (c) 2022, NVIDIA CORPORATION.
+# Copyright (c) 2022-2025, NVIDIA CORPORATION.
 
 """Benchmarks of Index methods."""
 
@@ -15,3 +15,8 @@ def bench_construction(benchmark, N):
 @benchmark_with_object(cls="index", dtype="int", nulls=False)
 def bench_sort_values(benchmark, index):
     benchmark(index.sort_values)
+
+
+def bench_large_unique_categories_repr(benchmark):
+    pi = cudf.CategoricalIndex(range(100_000_000))
+    benchmark(repr, pi)

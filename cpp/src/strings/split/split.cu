@@ -105,14 +105,19 @@ namespace {
  *      6    ''    aa  b__ccc__
  * ```
  *
- * @tparam Tokenizer provides unique functions for split/rsplit.
- * @param strings_column The strings to split
+ * @tparam Tokenizer provides unique functions for split/rsplit
+ * @tparam DelimiterFn Functor for locating delimiters
+ * @param input The strings to split
  * @param tokenizer Tokenizer for counting and producing tokens
+ * @param delimiter_fn Functor called on each byte to check for delimiters
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned objects' device memory
  * @return table of columns for the output of the split
  */
-template <typename Tokenizer>
+template <typename Tokenizer, typename DelimiterFn>
 std::unique_ptr<table> split_fn(strings_column_view const& input,
                                 Tokenizer tokenizer,
+                                DelimiterFn delimiter_fn,
                                 rmm::cuda_stream_view stream,
                                 rmm::device_async_resource_ref mr)
 {
@@ -123,7 +128,7 @@ std::unique_ptr<table> split_fn(strings_column_view const& input,
   }
 
   // builds the offsets and the vector of all tokens
-  auto [offsets, tokens] = split_helper(input, tokenizer, stream, mr);
+  auto [offsets, tokens] = split_helper(input, tokenizer, delimiter_fn, stream, mr);
   auto const d_offsets   = cudf::detail::offsetalator_factory::make_input_iterator(offsets->view());
   auto const d_tokens    = tokens.data();
 
@@ -386,7 +391,7 @@ std::unique_ptr<table> whitespace_split_fn(size_type strings_count,
 
 }  // namespace
 
-std::unique_ptr<table> split(strings_column_view const& strings_column,
+std::unique_ptr<table> split(strings_column_view const& input,
                              string_scalar const& delimiter,
                              size_type maxsplit,
                              rmm::cuda_stream_view stream,
@@ -396,20 +401,18 @@ std::unique_ptr<table> split(strings_column_view const& strings_column,
 
   size_type max_tokens = maxsplit > 0 ? maxsplit + 1 : std::numeric_limits<size_type>::max();
 
-  auto strings_device_view = column_device_view::create(strings_column.parent(), stream);
+  auto d_strings = column_device_view::create(input.parent(), stream);
   if (delimiter.size() == 0) {
-    return whitespace_split_fn(strings_column.size(),
-                               whitespace_split_tokenizer_fn{*strings_device_view, max_tokens},
-                               stream,
-                               mr);
+    return whitespace_split_fn(
+      input.size(), whitespace_split_tokenizer_fn{*d_strings, max_tokens}, stream, mr);
   }
 
-  string_view d_delimiter(delimiter.data(), delimiter.size());
-  return split_fn(
-    strings_column, split_tokenizer_fn{*strings_device_view, d_delimiter, max_tokens}, stream, mr);
+  auto tokenizer    = split_tokenizer_fn{*d_strings, delimiter.size(), max_tokens};
+  auto delimiter_fn = string_delimiter_fn{delimiter.value(stream)};
+  return split_fn(input, tokenizer, delimiter_fn, stream, mr);
 }
 
-std::unique_ptr<table> rsplit(strings_column_view const& strings_column,
+std::unique_ptr<table> rsplit(strings_column_view const& input,
                               string_scalar const& delimiter,
                               size_type maxsplit,
                               rmm::cuda_stream_view stream,
@@ -419,17 +422,15 @@ std::unique_ptr<table> rsplit(strings_column_view const& strings_column,
 
   size_type max_tokens = maxsplit > 0 ? maxsplit + 1 : std::numeric_limits<size_type>::max();
 
-  auto strings_device_view = column_device_view::create(strings_column.parent(), stream);
+  auto d_strings = column_device_view::create(input.parent(), stream);
   if (delimiter.size() == 0) {
-    return whitespace_split_fn(strings_column.size(),
-                               whitespace_rsplit_tokenizer_fn{*strings_device_view, max_tokens},
-                               stream,
-                               mr);
+    return whitespace_split_fn(
+      input.size(), whitespace_rsplit_tokenizer_fn{*d_strings, max_tokens}, stream, mr);
   }
 
-  string_view d_delimiter(delimiter.data(), delimiter.size());
-  return split_fn(
-    strings_column, rsplit_tokenizer_fn{*strings_device_view, d_delimiter, max_tokens}, stream, mr);
+  auto tokenizer    = rsplit_tokenizer_fn{*d_strings, delimiter.size(), max_tokens};
+  auto delimiter_fn = string_delimiter_fn{delimiter.value(stream)};
+  return split_fn(input, tokenizer, delimiter_fn, stream, mr);
 }
 
 }  // namespace detail

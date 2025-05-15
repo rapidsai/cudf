@@ -139,26 +139,11 @@ class SingleColumnFrame(Frame, NotIterable):
         -------
         cupy.ndarray
         """
-        col = self._column
-        final_dtype = (
-            col.dtype if dtype is None else dtype
-        )  # some types do not support | operator
-        if (
-            not copy
-            and col.dtype.kind in {"i", "u", "f", "b"}
-            and cp.can_cast(col.dtype, final_dtype)
-            and not col.has_nulls()
-        ):
-            if col.has_nulls():
-                if na_value is not None:
-                    col = col.fillna(na_value)
-                else:
-                    return super().to_cupy(
-                        dtype=dtype, copy=copy, na_value=na_value
-                    )
-            return cp.asarray(col, dtype=final_dtype)
-
-        return super().to_cupy(dtype=dtype, copy=copy, na_value=na_value)
+        return (
+            super()
+            .to_cupy(dtype=dtype, copy=copy, na_value=na_value)
+            .reshape(len(self), order="F")
+        )
 
     @property  # type: ignore
     @_performance_tracking
@@ -209,6 +194,28 @@ class SingleColumnFrame(Frame, NotIterable):
         ]
         """
         return self._column.to_arrow()
+
+    def tolist(self) -> None:
+        """Conversion to host memory lists is currently unsupported
+
+        Raises
+        ------
+        TypeError
+            If this method is called
+
+        Notes
+        -----
+        cuDF currently does not support implicit conversion from GPU stored series to
+        host stored lists. A `TypeError` is raised when this method is called.
+        Consider calling `.to_arrow().to_pylist()` to construct a Python list.
+        """
+        raise TypeError(
+            "cuDF does not support conversion to host memory "
+            "via the `tolist()` method. Consider using "
+            "`.to_arrow().to_pylist()` to construct a Python list."
+        )
+
+    to_list = tolist
 
     def _to_frame(
         self, name: Hashable, index: cudf.Index | None

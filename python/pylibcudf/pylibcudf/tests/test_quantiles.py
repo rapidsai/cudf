@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 import numpy as np
 import pyarrow as pa
@@ -21,7 +21,7 @@ interp_mapping = {
 @pytest.fixture(scope="module", params=[[1, 2, 3, 4, 5], [5, 4, 3, 2, 1]])
 def col_data(request, numeric_pa_type):
     pa_array = pa.array(request.param, type=numeric_pa_type)
-    return pa_array, plc.interop.from_arrow(pa_array)
+    return pa_array, plc.Column(pa_array)
 
 
 @pytest.fixture(
@@ -51,17 +51,17 @@ def col_data(request, numeric_pa_type):
     ],
 )
 def plc_tbl_data(request):
-    return plc.interop.from_arrow(pa.Table.from_arrays(**request.param))
+    return plc.Table(pa.Table.from_arrays(**request.param))
 
 
 @pytest.mark.parametrize("q", [[], [0], [0.5], [0.1, 0.5, 0.7, 0.9]])
 @pytest.mark.parametrize("exact", [True, False])
 def test_quantile(col_data, interp_opt, q, exact):
     pa_col_data, plc_col_data = col_data
-    ordered_indices = plc.interop.from_arrow(
+    ordered_indices = plc.Column(
         pc.cast(pc.sort_indices(pa_col_data), pa.int32())
     )
-    res = plc.quantiles.quantile(
+    got = plc.quantiles.quantile(
         plc_col_data, q, interp_opt, ordered_indices, exact
     )
 
@@ -72,14 +72,14 @@ def test_quantile(col_data, interp_opt, q, exact):
 
     if len(q) > 0:
         # pyarrow quantile doesn't support empty q
-        exp = pc.quantile(pa_col_data, q=q, interpolation=pa_interp_opt)
+        expect = pc.quantile(pa_col_data, q=q, interpolation=pa_interp_opt)
     else:
-        exp = pa.array([], type=pa.float64())
+        expect = pa.array([], type=pa.float64())
 
     if not exact:
-        exp = pc.cast(exp, pa_col_data.type, safe=False)
+        expect = pc.cast(expect, pa_col_data.type, safe=False)
 
-    assert_column_eq(exp, res)
+    assert_column_eq(expect, got)
 
 
 def _pyarrow_quantiles(
@@ -141,13 +141,13 @@ def _pyarrow_quantiles(
         row_idxs = pc.quantile(
             np.arange(0, len(pa_tbl_data)), q=q, interpolation=pa_interp_opt
         )
-        exp = pa_tbl_data.take(row_idxs)
+        expect = pa_tbl_data.take(row_idxs)
     else:
-        exp = pa.Table.from_arrays(
+        expect = pa.Table.from_arrays(
             [[] for _ in range(len(pa_tbl_data.schema))],
             schema=pa_tbl_data.schema,
         )
-    return exp
+    return expect
 
 
 @pytest.mark.parametrize(
@@ -176,7 +176,7 @@ def test_quantiles(
 
     pa_tbl_data = plc.interop.to_arrow(plc_tbl_data, ["a", "b"])
 
-    exp = _pyarrow_quantiles(
+    expect = _pyarrow_quantiles(
         pa_tbl_data,
         q=q,
         interp_opt=interp_opt,
@@ -185,11 +185,11 @@ def test_quantiles(
         null_precedence=null_precedence,
     )
 
-    res = plc.quantiles.quantiles(
+    got = plc.quantiles.quantiles(
         plc_tbl_data, q, interp_opt, sorted_opt, column_order, null_precedence
     )
 
-    assert_table_eq(exp, res)
+    assert_table_eq(expect, got)
 
 
 @pytest.mark.parametrize(
@@ -209,16 +209,16 @@ def test_quantiles_invalid_interp(plc_tbl_data, invalid_interp):
 )
 def test_quantile_q_array_like(col_data, q):
     pa_col_data, plc_col_data = col_data
-    ordered_indices = plc.interop.from_arrow(
+    ordered_indices = plc.Column(
         pc.cast(pc.sort_indices(pa_col_data), pa.int32())
     )
-    res = plc.quantiles.quantile(
+    got = plc.quantiles.quantile(
         plc_col_data,
         q=q,
         ordered_indices=ordered_indices,
     )
-    exp = pc.quantile(pa_col_data, q=q)
-    assert_column_eq(exp, res)
+    expect = pc.quantile(pa_col_data, q=q)
+    assert_column_eq(expect, got)
 
 
 @pytest.mark.parametrize(
@@ -226,7 +226,7 @@ def test_quantile_q_array_like(col_data, q):
     [[0.1], (0.1,), np.array([0.1])],
 )
 def test_quantiles_q_array_like(plc_tbl_data, q):
-    res = plc.quantiles.quantiles(plc_tbl_data, q=q)
+    got = plc.quantiles.quantiles(plc_tbl_data, q=q)
     pa_tbl_data = plc.interop.to_arrow(plc_tbl_data, ["a", "b"])
-    exp = _pyarrow_quantiles(pa_tbl_data, q=q)
-    assert_table_eq(exp, res)
+    expect = _pyarrow_quantiles(pa_tbl_data, q=q)
+    assert_table_eq(expect, got)

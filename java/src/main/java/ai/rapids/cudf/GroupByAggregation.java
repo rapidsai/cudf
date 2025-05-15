@@ -346,4 +346,25 @@ public final class GroupByAggregation {
   public static GroupByAggregation mergeHistogram() {
     return new GroupByAggregation(Aggregation.mergeHistogram());
   }
+
+  /**
+   * Bitwise AND aggregation, computing the bitwise AND of all non-null values in a group.
+   */
+  public static GroupByAggregation bitAnd() {
+    return new GroupByAggregation(Aggregation.bitAnd());
+  }
+
+  /**
+   * Bitwise OR aggregation, computing the bitwise OR of all non-null values in a group.
+   */
+  public static GroupByAggregation bitOr() {
+    return new GroupByAggregation(Aggregation.bitOr());
+  }
+
+  /**
+   * Bitwise XOR aggregation, computing the bitwise XOR of all non-null values in a group.
+   */
+  public static GroupByAggregation bitXor() {
+    return new GroupByAggregation(Aggregation.bitXor());
+  }
 }
