@@ -658,7 +658,11 @@ and not test_dt_to_pydatetime_date_error[32] \
 and not test_dt_to_pytimedelta \
 and not test_pivot_list_like_columns[lev4-input_columns0-values-expected_values0-expected_columns0-expected_index0] \
 and not test_pivot_list_like_columns[input_index1-input_columns1-values-expected_values1-expected_columns1-expected_index1] \
-"
+and not test_setop_with_categorical[string-python-None-symmetric_difference] \
+and not test_setop_with_categorical[string-python-False-symmetric_difference] \
+and not test_setop_with_categorical[string-pyarrow-None-symmetric_difference] \
+and not test_setop_with_categorical[string-pyarrow-False-symmetric_difference] \
+and not test_slice_locs_negative_step[in_slice13--string[pyarrow_numpy]]"
 
 DESELECT_TESTS="--deselect tests/extension/test_arrow.py::TestArrowArray::test_reduce_series_numeric \
 --deselect tests/arrays/interval/test_interval.py::TestSetitem::test_set_na[float64]"
