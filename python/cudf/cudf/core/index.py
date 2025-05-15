@@ -2537,7 +2537,14 @@ class RangeIndex(Index):
 
     @_performance_tracking
     def __init__(
-        self, start, stop=None, step=1, dtype=None, copy=False, name=None
+        self,
+        start,
+        stop=None,
+        step=1,
+        dtype=None,
+        copy=False,
+        name=None,
+        nan_as_null=no_default,
     ):
         if not is_hashable(name):
             raise ValueError("Name must be a hashable value.")
@@ -3462,6 +3469,7 @@ class DatetimeIndex(Index):
         dtype=None,
         copy: bool = False,
         name=None,
+        nan_as_null=no_default,
     ):
         # we should be more strict on what we accept here but
         # we'd have to go and figure out all the semantics around
@@ -4424,6 +4432,7 @@ class TimedeltaIndex(Index):
         dtype=None,
         copy: bool = False,
         name=None,
+        nan_as_null=no_default,
     ):
         if freq is not None:
             raise NotImplementedError("freq is not yet supported")
@@ -4447,14 +4456,18 @@ class TimedeltaIndex(Index):
                 "dtype parameter is supported"
             )
 
-        if dtype is None:
-            dtype = "timedelta64[ns]"
-        dtype = cudf.dtype(dtype)
-        if dtype.kind != "m":
-            raise TypeError("dtype must be a timedelta type")
-
         name = _getdefault_name(data, name=name)
         data = as_column(data, dtype=dtype)
+
+        if dtype is not None:
+            dtype = cudf.dtype(dtype)
+            if dtype.kind != "m":
+                raise TypeError("dtype must be a timedelta type")
+            elif not isinstance(data.dtype, pd.DatetimeTZDtype):
+                data = data.astype(dtype)
+        elif data.dtype.kind != "m":
+            # nanosecond default matches pandas
+            data = data.astype(np.dtype("timedelta64[ns]"))
 
         if copy:
             data = data.copy()
@@ -4705,6 +4718,7 @@ class CategoricalIndex(Index):
         dtype=None,
         copy=False,
         name=None,
+        nan_as_null=no_default,
     ):
         if isinstance(dtype, (pd.CategoricalDtype, cudf.CategoricalDtype)):
             if categories is not None or ordered is not None:
@@ -5079,6 +5093,7 @@ class IntervalIndex(Index):
         copy: bool = False,
         name=None,
         verify_integrity: bool = True,
+        nan_as_null=no_default,
     ):
         name = _getdefault_name(data, name=name)
 

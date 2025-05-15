@@ -44,6 +44,7 @@ from cudf.utils.utils import _external_only_api, _is_same_name
 if TYPE_CHECKING:
     from collections.abc import Generator, Hashable, MutableMapping
 
+    import pyarrow as pa
     from typing_extensions import Self
 
     from cudf._typing import DataFrameOrSeries, Dtype
@@ -995,6 +996,10 @@ class MultiIndex(Index):
             return result
 
     @_performance_tracking
+    def to_arrow(self) -> pa.Table:
+        return Frame.to_arrow(self)
+
+    @_performance_tracking
     def to_frame(
         self,
         index: bool = True,
@@ -1294,6 +1299,11 @@ class MultiIndex(Index):
                 "Unable to create a cupy array with tuples."
             )
         return self.to_frame(index=False).values
+
+    @classmethod
+    @_performance_tracking
+    def from_arrow(cls, data: pa.Table) -> Self:
+        return cls._from_data(Frame.from_arrow(data)._data)
 
     @classmethod
     @_performance_tracking

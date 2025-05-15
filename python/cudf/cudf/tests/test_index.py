@@ -3188,12 +3188,12 @@ def test_index_to_pandas_nullable_notimplemented(idx):
         "a",
         datetime.datetime(2020, 1, 1),
         datetime.timedelta(1),
-        {"1": 2},
+        pd.Interval(1, 2),
     ],
 )
 def test_index_to_pandas_arrow_type_nullable_raises(scalar):
-    pa_array = pa.array([scalar, None])
-    idx = cudf.Index(pa_array)
+    data = [scalar, None]
+    idx = cudf.Index(data)
     with pytest.raises(ValueError):
         idx.to_pandas(nullable=True, arrow_type=True)
 
@@ -3206,7 +3206,6 @@ def test_index_to_pandas_arrow_type_nullable_raises(scalar):
         "a",
         datetime.datetime(2020, 1, 1),
         datetime.timedelta(1),
-        {"1": 2},
     ],
 )
 def test_index_to_pandas_arrow_type(scalar):
