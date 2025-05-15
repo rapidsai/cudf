@@ -210,6 +210,28 @@ class SingleColumnFrame(Frame, NotIterable):
         """
         return self._column.to_arrow()
 
+    def tolist(self) -> None:
+        """Conversion to host memory lists is currently unsupported
+
+        Raises
+        ------
+        TypeError
+            If this method is called
+
+        Notes
+        -----
+        cuDF currently does not support implicit conversion from GPU stored series to
+        host stored lists. A `TypeError` is raised when this method is called.
+        Consider calling `.to_arrow().to_pylist()` to construct a Python list.
+        """
+        raise TypeError(
+            "cuDF does not support conversion to host memory "
+            "via the `tolist()` method. Consider using "
+            "`.to_arrow().to_pylist()` to construct a Python list."
+        )
+
+    to_list = tolist
+
     def _to_frame(
         self, name: Hashable, index: cudf.Index | None
     ) -> cudf.DataFrame:
