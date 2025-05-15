@@ -462,3 +462,13 @@ def test_scan_csv_without_header_and_new_column_names_raises(df, tmp_path):
     make_partitioned_source(df, path, "csv", write_kwargs={"include_header": False})
     q = pl.scan_csv(path, has_header=False)
     assert_ir_translation_raises(q, NotImplementedError)
+
+
+def test_scan_parquet_uri_source(df, tmp_path):
+    path = tmp_path / "test.parquet"
+    df.write_parquet(path)
+
+    uri = path.resolve().as_uri()
+    q = pl.scan_parquet(uri)
+
+    assert_gpu_result_equal(q)
