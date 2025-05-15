@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import functools
 import json
+import re
 from contextlib import AbstractContextManager, nullcontext
 from functools import singledispatch
 from typing import TYPE_CHECKING, Any
@@ -32,6 +33,8 @@ from cudf_polars.typing import Schema
 from cudf_polars.utils import config, dtypes, sorting
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from polars import GPUEngine
 
     from cudf_polars.typing import NodeTraverser
@@ -214,6 +217,18 @@ def _(node: pl_ir.PythonScan, translator: Translator, schema: Schema) -> ir.IR:
     return ir.PythonScan(schema, options, predicate)
 
 
+def _normalize_paths(paths: list[str | Path]) -> list[str]:
+    normalized = []
+    for p in paths:
+        s = str(p)
+        if s.startswith("file:/"):
+            match = re.match(r"^file:(//)?(?:localhost)?(?P<path>/.*)", s)
+            if match:
+                s = match.group("path")
+        normalized.append(s)
+    return normalized
+
+
 @_translate_ir.register
 def _(node: pl_ir.Scan, translator: Translator, schema: Schema) -> ir.IR:
     typ, *options = node.scan_type
@@ -240,7 +255,7 @@ def _(node: pl_ir.Scan, translator: Translator, schema: Schema) -> ir.IR:
         reader_options,
         cloud_options,
         translator.config_options,
-        node.paths,
+        _normalize_paths(node.paths),
         with_columns,
         skip_rows,
         n_rows,
