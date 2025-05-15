@@ -6,9 +6,8 @@ strings columns.
 The example source code loads a csv file and produces a transformed column from the table using the values from the tables.
 
 Four examples are included:
-1. Using transforms to perform a checksum on two columns
-2. Using a transform to get get a substring from a kernel
-3. Using a transform kernel to output a string to a pre-allocated buffer
+1. Using a transform to get get a substring from a kernel
+2. Using a transform kernel to output a string to a pre-allocated buffer
 
 
 ## Compile and execute
@@ -19,8 +18,6 @@ cmake -S . -B build/
 # Build
 cmake --build build/ --parallel $PARALLEL_LEVEL
 # Execute
-build/int_output info.csv
---OR--
 build/output info.csv
 --OR--
 build/preallocated info.csv
