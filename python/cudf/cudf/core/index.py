@@ -26,7 +26,6 @@ from cudf.api.types import (
     is_list_like,
     is_scalar,
 )
-from cudf.core._base_index import BaseIndex
 from cudf.core._compat import PANDAS_LT_300
 from cudf.core._internals import copying, search, stream_compaction
 from cudf.core.buffer import acquire_spill_lock
@@ -71,15 +70,16 @@ if TYPE_CHECKING:
 
     from cudf._typing import ColumnLike, Dtype
     from cudf.core.frame import Frame
+    from cudf.core.series import Series
 
 
-def ensure_index(index_like: Any) -> BaseIndex:
+def ensure_index(index_like: Any) -> Index:
     """
     Ensure an Index is returned.
 
     Avoids a shallow copy compared to calling cudf.Index(...)
     """
-    if not isinstance(index_like, BaseIndex):
+    if not isinstance(index_like, Index):
         return cudf.Index(index_like)
     return index_like
 
@@ -109,13 +109,13 @@ class IndexMeta(type):
 
     def __instancecheck__(self, instance):
         if self is cudf.Index:
-            return isinstance(instance, BaseIndex)
+            return isinstance(instance, Index)
         else:
             return type.__instancecheck__(self, instance)
 
     def __subclasscheck__(self, subclass):
         if self is cudf.Index:
-            return issubclass(subclass, BaseIndex)
+            return issubclass(subclass, Index)
         else:
             return type.__subclasscheck__(self, subclass)
 
@@ -194,7 +194,7 @@ def validate_range_arg(arg, arg_name: Literal["start", "stop", "step"]) -> int:
     return int(arg)
 
 
-class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):  # type: ignore[misc]
+class Index(SingleColumnFrame):  # type: ignore[misc]
     """
     Immutable sequence used for indexing and alignment.
 
@@ -239,7 +239,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):  # type: ignore[
 
         fname = func.__name__
 
-        handled_types = [BaseIndex, cudf.Series]
+        handled_types = [Index, cudf.Series]
 
         # check if  we don't handle any of the types (including sub-class)
         for t in types:
@@ -795,7 +795,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):  # type: ignore[
                     (2, 'Green')],
                    )
         """
-        if not isinstance(other, BaseIndex):
+        if not isinstance(other, Index):
             other = Index(other, name=getattr(other, "name", self.name))
 
         if sort not in {None, False, True}:
@@ -913,7 +913,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):  # type: ignore[
                     (1, 'Blue')],
                 )
         """
-        if not isinstance(other, BaseIndex):
+        if not isinstance(other, Index):
             other = Index(
                 other,
                 name=getattr(other, "name", self.name),
@@ -997,7 +997,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):  # type: ignore[
         >>> idx1.difference(idx2, sort=False)
         Index([2, 1], dtype='int64')
         """
-        if not isinstance(other, BaseIndex):
+        if not isinstance(other, Index):
             other = cudf.Index(
                 other,
                 name=getattr(other, "name", self.name),
@@ -1884,7 +1884,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):  # type: ignore[
 
     @_performance_tracking
     def equals(self, other) -> bool:
-        if not isinstance(other, BaseIndex) or len(self) != len(other):
+        if not isinstance(other, Index) or len(self) != len(other):
             return False
 
         check_dtypes = False
@@ -2332,11 +2332,39 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):  # type: ignore[
         """
         return self._to_frame(name=name, index=self if index else None)
 
+    def to_series(
+        self, index: Index | None = None, name: Hashable | None = None
+    ) -> Series:
+        """
+        Create a Series with both index and values equal to the index keys.
+        Useful with map for returning an indexer based on an index.
+
+        Parameters
+        ----------
+        index : Index, optional
+            Index of resulting Series. If None, defaults to original index.
+        name : Hashable, optional
+            Name of resulting Series. If None, defaults to name of original
+            index.
+
+        Returns
+        -------
+        Series
+            The dtype will be based on the type of the Index values.
+        """
+        from cudf.core.series import Series
+
+        return Series._from_column(
+            self._column,
+            index=self.copy(deep=False) if index is None else index,
+            name=self.name if name is None else name,
+        )
+
     def append(self, other):
         if is_list_like(other):
             to_concat = [self]
             for obj in other:
-                if not isinstance(obj, BaseIndex):
+                if not isinstance(obj, Index):
                     raise TypeError("all inputs must be Index")
                 to_concat.append(obj)
         else:
@@ -2477,7 +2505,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):  # type: ignore[
         return super().__dask_tokenize__()
 
 
-class RangeIndex(BaseIndex, BinaryOperand):
+class RangeIndex(Index):
     """
     Immutable Index implementing a monotonic integer range.
 
@@ -2533,6 +2561,10 @@ class RangeIndex(BaseIndex, BinaryOperand):
 
         if isinstance(start, range):
             self._range = start
+        elif isinstance(start, (pd.RangeIndex, RangeIndex)):
+            self._range = range(start.start, start.stop, start.step)
+            if name is None:
+                self._name = start.name
         else:
             if stop is None:
                 start, stop = 0, start
@@ -2577,15 +2609,6 @@ class RangeIndex(BaseIndex, BinaryOperand):
     @cached_property
     @_performance_tracking
     def _column(self) -> ColumnBase:
-        if len(self) > 0:
-            return as_column(self._range, dtype=self.dtype)
-        else:
-            return column_empty(0, dtype=self.dtype)
-
-    # TODO: Remove once BaseIndex is removed
-    @cached_property
-    @_performance_tracking
-    def _values(self) -> ColumnBase:
         if len(self) > 0:
             return as_column(self._range, dtype=self.dtype)
         else:
@@ -2756,7 +2779,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
             lo = self.start + sl_start * self.step
             hi = self.start + sl_stop * self.step
             st = self.step * sl_step
-            return RangeIndex(start=lo, stop=hi, step=st, name=self._name)
+            return RangeIndex(start=lo, stop=hi, step=st, name=self.name)
 
         elif isinstance(index, Number):
             len_self = len(self)
@@ -2781,7 +2804,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
     def equals(self, other) -> bool:
         if isinstance(other, RangeIndex):
             return self._range == other._range
-        elif not isinstance(other, BaseIndex) or len(self) != len(other):
+        elif not isinstance(other, Index) or len(self) != len(other):
             return False
         elif not (
             is_dtype_obj_numeric(other.dtype)
@@ -3119,9 +3142,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
             super().difference(other, sort=sort)
         )
 
-    def _try_reconstruct_range_index(
-        self, index: BaseIndex
-    ) -> Self | BaseIndex:
+    def _try_reconstruct_range_index(self, index: Index) -> Self | Index:
         if isinstance(index, RangeIndex) or index.dtype.kind not in "iu":
             return index
         # Evenly spaced values can return a
@@ -3185,7 +3206,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
             self._as_int_index()._split(splits), name=self.name
         )
 
-    def _binaryop(self, other, op: str):
+    def _binaryop(self, other, op: str):  # type: ignore[override]
         # TODO: certain binops don't require materializing range index and
         # could use some optimization.
         return self._as_int_index()._binaryop(other, op=op)
@@ -3367,7 +3388,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
     ) -> Generator[tuple[Any, ColumnBase], None, None]:
         """Return the columns and column names for .reset_index"""
         # We need to explicitly materialize the RangeIndex to a column
-        yield "index" if self.name is None else self.name, as_column(self)
+        yield "index" if self.name is None else self.name, self._column
 
     @_warn_no_dask_cudf
     def __dask_tokenize__(self):
@@ -5334,7 +5355,7 @@ class IntervalIndex(Index):
 @_performance_tracking
 def as_index(
     arbitrary, nan_as_null=no_default, copy=False, name=no_default, dtype=None
-) -> BaseIndex:
+) -> Index:
     """Create an Index from an arbitrary object
 
     Parameters
@@ -5400,7 +5421,7 @@ def as_index(
                 f"{type(arbitrary).__name__}, found {dtype=} "
             )
         return arbitrary.copy(deep=copy)
-    elif isinstance(arbitrary, BaseIndex):
+    elif isinstance(arbitrary, Index):
         idx = arbitrary.copy(deep=copy).rename(name)
     elif isinstance(arbitrary, ColumnBase):
         raise ValueError("Use cudf.Index._from_column instead.")
@@ -5439,7 +5460,7 @@ def _getdefault_name(values, name):
 
 
 @_performance_tracking
-def _concat_range_index(indexes: list[RangeIndex]) -> BaseIndex:
+def _concat_range_index(indexes: list[RangeIndex]) -> Index:
     """
     An internal Utility function to concat RangeIndex objects.
     """
