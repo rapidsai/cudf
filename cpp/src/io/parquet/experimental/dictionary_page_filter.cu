@@ -58,12 +58,12 @@ auto constexpr decode_block_size = 128;  ///< Must be a multiple of warp_size
 auto constexpr max_inline_literals = 2;
 
 // cuCollections static set parameters
-using key_type = cudf::size_type;                  ///< Using data indices (size_type) as set keys
+using key_type = cudf::size_type;                  ///< Using column indices (size_type) as set keys
 auto constexpr empty_key_sentinel = key_type{-1};  ///< We will never encounter a -1 index.
 auto constexpr set_cg_size        = 1;             ///< Cooperative group size for cuco::static_set
 auto constexpr bucket_size        = 1;             ///< Number of buckets per set slot
 auto constexpr occupancy_factor = 70;  ///< cuCollections suggests targeting a 70% occupancy factor
-uint32_t constexpr hasher_seed  = 0;   ///< seed for the hashers
+uint32_t constexpr hasher_seed  = 0;   ///< default seed for the hashers
 
 using storage_type     = cuco::bucket_storage<key_type,
                                           bucket_size,
@@ -95,7 +95,8 @@ struct insert_hash_functor {
 template <typename T>
 struct insert_equality_functor {
   cudf::device_span<T const> const decoded_data;
-  __device__ constexpr bool operator()(key_type lhs_idx, key_type rhs_idx) const noexcept
+  __device__ __forceinline__ constexpr bool operator()(key_type lhs_idx,
+                                                       key_type rhs_idx) const noexcept
   {
     return decoded_data[lhs_idx] == decoded_data[rhs_idx];
   }
@@ -109,7 +110,7 @@ struct insert_equality_functor {
 template <typename T>
 struct query_hash_functor {
   uint32_t const seed{hasher_seed};
-  __device__ constexpr auto operator()(T const& key) const noexcept
+  __device__ __forceinline__ constexpr auto operator()(T const& key) const noexcept
   {
     return cudf::hashing::detail::MurmurHash3_x86_32<T>{seed}(key);
   }
@@ -123,7 +124,7 @@ struct query_hash_functor {
 template <typename T>
 struct query_equality_functor {
   cudf::device_span<T const> const decoded_data;
-  __device__ constexpr bool operator()(T const& lhs, key_type rhs) const noexcept
+  __device__ __forceinline__ constexpr bool operator()(T const& lhs, key_type rhs) const noexcept
   {
     return lhs == decoded_data[rhs];
   }
@@ -222,6 +223,8 @@ query_dictionaries(cudf::device_span<T> decoded_data,
     // Set storage reference for the current cuco hash set
     storage_ref_type const storage_ref{set_offsets[set_idx + 1] - set_offsets[set_idx],
                                        set_storage + set_offsets[set_idx]};
+
+    // Create a view of the hash set
     auto hash_set_ref = cuco::static_set_ref{cuco::empty_key{empty_key_sentinel},
                                              equality_fn_type{decoded_data},
                                              probing_scheme_type{hash_fn_type{}},
@@ -298,6 +301,7 @@ __global__ void build_string_dictionaries(PageInfo const* pages,
   storage_ref_type const storage_ref{set_offsets[row_group_idx + 1] - set_offsets[row_group_idx],
                                      set_storage + set_offsets[row_group_idx]};
 
+  // Create a view of the hash set
   auto hash_set_ref   = cuco::static_set_ref{cuco::empty_key<key_type>{empty_key_sentinel},
                                            equality_fn_type{decoded_data},
                                            probing_scheme_type{hash_fn_type{decoded_data}},
@@ -404,6 +408,7 @@ build_fixed_width_dictionaries(PageInfo const* pages,
   using hash_fn_type        = insert_hash_functor<T>;
   using probing_scheme_type = cuco::linear_probing<set_cg_size, hash_fn_type>;
 
+  // Create a view of the hash set
   auto hash_set_ref   = cuco::static_set_ref{cuco::empty_key{empty_key_sentinel},
                                            equality_fn_type{decoded_data},
                                            probing_scheme_type{hash_fn_type{decoded_data}},

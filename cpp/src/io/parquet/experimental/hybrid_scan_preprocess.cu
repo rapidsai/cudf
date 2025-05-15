@@ -195,9 +195,9 @@ hybrid_scan_reader_impl::prepare_dictionaries(
                                           0,  // Not needed
                                           0,  // Not needed
                                           col_meta.codec,
-                                          parquet::LogicalType::UNDEFINED,  // Not needed
-                                          0,                                // Not needed
-                                          0,                                // Not needed
+                                          schema.logical_type,
+                                          0,  // Not needed
+                                          0,  // Not needed
                                           col_schema_idx,
                                           nullptr,  // Not needed
                                           0.0f,     // Not needed
