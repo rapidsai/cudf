@@ -588,6 +588,15 @@ class Frame(BinaryOperand, Scannable, Serializable):
             return matrix
 
     @_performance_tracking
+    def to_pylibcudf(self) -> tuple[plc.Table, dict[str, Any]]:
+        """
+        Converts Frame to a pylibcudf.Table.
+        Note: This method should not be called directly on a Frame object
+        Instead, it should be called on subclasses like DataFrame/Series.
+        """
+        raise NotImplementedError(f"{type(self)} must implement to_pylibcudf")
+
+    @_performance_tracking
     def to_cupy(
         self,
         dtype: Dtype | None = None,
@@ -613,6 +622,51 @@ class Frame(BinaryOperand, Scannable, Serializable):
         -------
         cupy.ndarray
         """
+        if (
+            self._num_columns > 1
+            and na_value is None
+            and self._columns[0].dtype.kind in {"i", "u", "f", "b"}
+            and all(
+                not col.nullable and col.dtype == self._columns[0].dtype
+                for col in self._columns
+            )
+        ):
+            if dtype is None:
+                dtype = self._columns[0].dtype
+
+            shape = (len(self), self._num_columns)
+            out = cupy.empty(shape, dtype=dtype, order="F")
+
+            table = plc.Table(
+                [col.to_pylibcudf(mode="read") for col in self._columns]
+            )
+            plc.reshape.table_to_array(
+                table,
+                out.data.ptr,
+                out.nbytes,
+            )
+            return out
+        elif self._num_columns == 1:
+            col = self._columns[0]
+            final_dtype = col.dtype if dtype is None else dtype
+
+            if (
+                not copy
+                and col.dtype.kind in {"i", "u", "f", "b"}
+                and cupy.can_cast(col.dtype, final_dtype)
+            ):
+                if col.has_nulls():
+                    if na_value is not None:
+                        col = col.fillna(na_value)
+                    else:
+                        return self._to_array(
+                            lambda col: col.values,
+                            cupy,
+                            copy,
+                            dtype,
+                            na_value,
+                        )
+                return cupy.asarray(col, dtype=final_dtype).reshape((-1, 1))
         return self._to_array(
             lambda col: col.values,
             cupy,
