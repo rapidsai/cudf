@@ -1895,7 +1895,7 @@ TEST_F(ParquetReaderTest, ManyLargeLists)
 {
   auto const stream = cudf::get_default_stream();
 
-  // Generate a list<bool> column with 10M outer rows and 2 bools per row
+  // Generate a large list<bool> column
   constexpr cudf::size_type num_rows      = 10'000'000;
   constexpr cudf::size_type bools_per_row = 2;
   auto offsets_iter = cudf::detail::make_counting_transform_iterator(0, offset_gen{bools_per_row});
