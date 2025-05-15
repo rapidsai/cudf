@@ -98,7 +98,7 @@ def test_explain_physical_plan_with_groupby(tmp_path, df, task_fusion):
     if task_fusion:
         plan = explain_query(q, engine, physical=True)
         assert "FUSED ('GROUPBY'" in plan
-        assert "FUSED ('SPLITSCAN'" in plan
+        assert "FUSEDIO ('SPLITSCAN'" in plan
     else:
         plan = explain_query(q, engine, physical=True)
         assert "GROUPBY ('g',)" in plan
