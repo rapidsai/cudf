@@ -6,7 +6,6 @@ import warnings
 from functools import cached_property
 from typing import TYPE_CHECKING, Any, Literal
 
-import numpy as np
 import pandas as pd
 from typing_extensions import Self
 
@@ -2171,9 +2170,3 @@ class BaseIndex(Serializable):
 
 def _get_result_name(left_name, right_name):
     return left_name if _is_same_name(left_name, right_name) else None
-
-
-def _return_get_indexer_result(result: cupy.ndarray) -> cupy.ndarray:
-    if cudf.get_option("mode.pandas_compatible"):
-        return result.astype(np.dtype(np.int64))
-    return result

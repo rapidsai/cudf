@@ -28,13 +28,24 @@ def test_length_leq_one_always_sorted(length):
             plc.DataType(plc.TypeId.INT8), length, plc.MaskState.ALL_VALID
         )
     )
-    assert column.is_sorted == plc.types.Sorted.YES
+    assert column.check_sorted(
+        order=plc.types.Order.ASCENDING, null_order=plc.types.NullOrder.AFTER
+    )
+    assert column.check_sorted(
+        order=plc.types.Order.DESCENDING, null_order=plc.types.NullOrder.AFTER
+    )
+
     column.set_sorted(
         is_sorted=plc.types.Sorted.NO,
         order=plc.types.Order.ASCENDING,
         null_order=plc.types.NullOrder.AFTER,
     )
-    assert column.is_sorted == plc.types.Sorted.YES
+    assert column.check_sorted(
+        order=plc.types.Order.ASCENDING, null_order=plc.types.NullOrder.AFTER
+    )
+    assert column.check_sorted(
+        order=plc.types.Order.DESCENDING, null_order=plc.types.NullOrder.AFTER
+    )
 
 
 def test_shallow_copy():
