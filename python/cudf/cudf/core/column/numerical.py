@@ -77,7 +77,12 @@ class NumericalColumn(NumericalBaseColumn):
         null_count: int | None = None,
         children: tuple = (),
     ):
-        if not (isinstance(dtype, np.dtype) and dtype.kind in "iufb"):
+        if cudf.get_option("mode.pandas_compatible"):
+            if dtype.kind not in "iufb":
+                raise ValueError(
+                    "dtype must be a floating, integer or boolean numpy dtype."
+                )
+        elif not (isinstance(dtype, np.dtype) and dtype.kind in "iufb"):
             raise ValueError(
                 "dtype must be a floating, integer or boolean numpy dtype."
             )
@@ -721,14 +726,20 @@ class NumericalColumn(NumericalBaseColumn):
         return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
 
     def _reduction_result_dtype(self, reduction_op: str) -> Dtype:
+        # import pdb;pdb.set_trace()
         if reduction_op in {"sum", "product"}:
             if self.dtype.kind == "f":
                 return self.dtype
+            elif self.dtype.kind == "u":
+                return np.dtype("uint64")
             return np.dtype("int64")
         elif reduction_op == "sum_of_squares":
             return find_common_type((self.dtype, np.dtype(np.uint64)))
         elif reduction_op in {"var", "std", "mean"}:
-            return np.dtype("float64")
+            if self.dtype.kind == "f":
+                return self.dtype
+            else:
+                return np.dtype("float64")
 
         return super()._reduction_result_dtype(reduction_op)
 

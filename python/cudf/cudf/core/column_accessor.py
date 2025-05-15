@@ -376,7 +376,7 @@ class ColumnAccessor(abc.MutableMapping):
         if cudf.get_option("mode.pandas_compatible"):
             try:
                 pd.Index([*list(self.names), name], dtype=self.label_dtype)
-            except TypeError:
+            except Exception:
                 # The type(name) may no longer match the prior label_dtype
                 self.label_dtype = None
         else:

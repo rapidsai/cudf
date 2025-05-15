@@ -198,7 +198,10 @@ class DatetimeColumn(TemporalBaseColumn):
 
     @staticmethod
     def _validate_dtype_instance(dtype: np.dtype) -> np.dtype:
-        if not (isinstance(dtype, np.dtype) and dtype.kind == "M"):
+        if cudf.get_option("mode.pandas_compatible"):
+            if not dtype.kind == "M":
+                raise ValueError("dtype must be a datetime numpy dtype.")
+        elif not (isinstance(dtype, np.dtype) and dtype.kind == "M"):
             raise ValueError("dtype must be a datetime, numpy dtype")
         return dtype
 

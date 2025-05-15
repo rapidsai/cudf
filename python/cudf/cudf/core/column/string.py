@@ -29,6 +29,7 @@ from cudf.utils.dtypes import (
     SIZE_TYPE_DTYPE,
     can_convert_to_column,
     dtype_to_pylibcudf_type,
+    is_pandas_nullable_extension_dtype,
 )
 from cudf.utils.temporal import infer_format
 from cudf.utils.utils import is_na_like
@@ -6049,12 +6050,16 @@ class StringColumn(ColumnBase):
 
     def as_numerical_column(self, dtype: np.dtype) -> NumericalColumn:
         if dtype.kind == "b":
+            # import pdb;pdb.set_trace()
             with acquire_spill_lock():
                 plc_column = plc.strings.attributes.count_characters(
                     self.to_pylibcudf(mode="read")
                 )
                 result = ColumnBase.from_pylibcudf(plc_column)
-            return (result > np.int8(0)).fillna(False)
+            result = result > np.int8(0)
+            if not is_pandas_nullable_extension_dtype(dtype):
+                result = result.fillna(False)
+            return result._with_type_metadata(dtype)  # type: ignore[return-value]
         elif dtype.kind in {"i", "u"}:
             if not self.is_integer().all():
                 raise ValueError(
@@ -6073,8 +6078,12 @@ class StringColumn(ColumnBase):
             raise ValueError(f"dtype must be a numerical type, not {dtype}")
         plc_dtype = dtype_to_pylibcudf_type(dtype)
         with acquire_spill_lock():
-            return type(self).from_pylibcudf(  # type: ignore[return-value]
-                cast_func(self.to_pylibcudf(mode="read"), plc_dtype)
+            return (
+                type(self)
+                .from_pylibcudf(  # type: ignore[return-value]
+                    cast_func(self.to_pylibcudf(mode="read"), plc_dtype)
+                )
+                ._with_type_metadata(dtype=dtype)
             )
 
     def strptime(

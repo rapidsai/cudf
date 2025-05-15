@@ -1467,6 +1467,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         codes = []
         levels = []
         names_from_arrays = []
+
         for array in arrays:
             if not (is_list_like(array) or is_column_like(array)):
                 raise TypeError(error_msg)

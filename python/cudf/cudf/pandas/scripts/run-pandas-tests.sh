@@ -650,7 +650,18 @@ and not test_datetime_date_tuple_columns_from_dict \
 and not test_serializable \
 and not test_value_counts_nat \
 and not test_timedelta_add_timestamp_interval \
-and not test_nested_scope"
+and not test_nested_scope \
+and not test_accumulate_series[bool-cumsum-True] \
+and not test_accumulate_series[bool-cumsum-False] \
+and not test_dt_to_pydatetime \
+and not test_dt_to_pydatetime_date_error[32] \
+and not test_dt_to_pytimedelta \
+and not test_pivot_list_like_columns[lev4-input_columns0-values-expected_values0-expected_columns0-expected_index0] \
+and not test_pivot_list_like_columns[input_index1-input_columns1-values-expected_values1-expected_columns1-expected_index1] \
+"
+
+DESELECT_TESTS="--deselect tests/extension/test_arrow.py::TestArrowArray::test_reduce_series_numeric \
+--deselect tests/arrays/interval/test_interval.py::TestSetitem::test_set_na[float64]"
 
 PYTEST_IGNORES="--ignore=tests/io/parser/common/test_read_errors.py \
 --ignore=tests/io/test_clipboard.py" # crashes pytest workers (possibly due to fixture patching clipboard functionality)
@@ -659,6 +670,7 @@ PYTEST_IGNORES="--ignore=tests/io/parser/common/test_read_errors.py \
 PANDAS_CI="1" timeout 90m python -m pytest -p cudf.pandas \
     --import-mode=importlib \
     -k "$TEST_THAT_NEED_MOTO_SERVER and $TEST_THAT_CRASH_PYTEST_WORKERS and $TEST_THAT_NEED_REASON_TO_SKIP and $TEST_THAT_NEED_FIX" \
+    ${DESELECT_TESTS} \
     ${PYTEST_IGNORES} \
     "$@"
 

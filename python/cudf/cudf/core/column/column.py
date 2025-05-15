@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import pickle
 import warnings
 from collections import abc
 from collections.abc import MutableSequence, Sequence
@@ -1681,7 +1682,11 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 order[0],
                 order[1],
             )
-            return type(self).from_pylibcudf(plc_table.columns()[0])  # type: ignore[return-value]
+            return (
+                type(self)  # type: ignore[return-value]
+                .from_pylibcudf(plc_table.columns()[0])
+                ._with_type_metadata(self.dtype)
+            )
 
     def distinct_count(self, dropna: bool = True) -> int:
         try:
@@ -1943,8 +1948,12 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             frames.extend(dtype_frames)
             header["dtype-is-cudf-serialized"] = True
         except AttributeError:
-            header["dtype"] = self.dtype.str
-            header["dtype-is-cudf-serialized"] = False
+            if isinstance(self.dtype, pd.ArrowDtype):
+                header["dtype"] = pickle.dumps(self.dtype)
+                header["dtype-is-cudf-serialized"] = False
+            else:
+                header["dtype"] = self.dtype.str
+                header["dtype-is-cudf-serialized"] = False
 
         if self.data is not None:
             data_header, data_frames = self.data.device_serialize()
@@ -1979,7 +1988,13 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         if header["dtype-is-cudf-serialized"]:
             dtype, frames = unpack(header["dtype"], frames)
         else:
-            dtype = np.dtype(header["dtype"])
+            try:
+                dtype = np.dtype(header["dtype"])
+            except TypeError as e:
+                if cudf.get_option("mode.pandas_compatible"):
+                    dtype = pickle.loads(header["dtype"])
+                else:
+                    raise e
         if "data" in header:
             data, frames = unpack(header["data"], frames)
         else:
@@ -2027,6 +2042,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             The minimum number of entries for the reduction, otherwise the
             reduction returns NaN.
         """
+        # import pdb;pdb.set_trace()
         preprocessed = self._process_for_reduction(
             skipna=skipna, min_count=min_count
         )
@@ -2202,6 +2218,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         )
 
     def reduce(self, reduction_op: str, **kwargs) -> ScalarLike:
+        # import pdb;pdb.set_trace()
         col_dtype = self._reduction_result_dtype(reduction_op)
 
         # check empty case
@@ -2543,7 +2560,11 @@ def build_column(
             offset=offset,
             null_count=null_count,
         )
-    elif dtype == CUDF_STRING_DTYPE or isinstance(dtype, pd.StringDtype):
+    elif (
+        dtype == CUDF_STRING_DTYPE
+        or isinstance(dtype, pd.StringDtype)
+        or (isinstance(dtype, pd.ArrowDtype) and dtype.kind == "U")
+    ):
         return cudf.core.column.StringColumn(
             data=data,  # type: ignore[arg-type]
             size=size,
@@ -2815,6 +2836,8 @@ def as_column(
                 length=length,
             )
         elif is_pandas_nullable_extension_dtype(arbitrary.dtype):
+            if getattr(arbitrary.dtype, "pyarrow_dtype", None) == pa.date32():
+                raise NotImplementedError("cuDF does not yet support date32")
             if isinstance(arbitrary, (pd.Series, pd.Index)):
                 # pandas arrays define __arrow_array__ for better
                 # pyarrow.array conversion

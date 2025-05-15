@@ -231,12 +231,20 @@ def is_mixed_with_object_dtype(lhs, rhs):
 
 
 def _get_nan_for_dtype(dtype: DtypeObj) -> DtypeObj:
+    # import pdb;pdb.set_trace()
     if dtype.kind in "mM":
         time_unit, _ = np.datetime_data(dtype)
         return dtype.type("nat", time_unit)
     elif dtype.kind == "f":
+        if is_pandas_nullable_extension_dtype(dtype):
+            return pd.NA
         return dtype.type("nan")
     else:
+        if (
+            is_pandas_nullable_extension_dtype(dtype)
+            and getattr(dtype, "kind", "c") in "biu"
+        ):
+            return pd.NA
         return np.float64("nan")
 
 
@@ -395,8 +403,12 @@ def pyarrow_dtype_to_cudf_dtype(dtype: pa.DataType) -> DtypeObj:
         return cudf.ListDtype.from_arrow(pyarrow_dtype)
     elif isinstance(pyarrow_dtype, pa.StructType):
         return cudf.StructDtype.from_arrow(pyarrow_dtype)
+    elif str(pyarrow_dtype) == "large_string":
+        return CUDF_STRING_DTYPE
     elif isinstance(pyarrow_dtype, pa.DataType):
         return pyarrow_dtype.to_pandas_dtype()
+    elif pyarrow_dtype is pa.date32():
+        return TypeError("Unsupported type")
     else:
         raise TypeError(f"Unsupported Arrow type: {pyarrow_dtype}")
 
@@ -434,6 +446,8 @@ def is_pandas_nullable_extension_dtype(dtype_to_check) -> bool:
 
 def dtype_to_pylibcudf_type(dtype) -> plc.DataType:
     # if cudf.get_option("mode.pandas_compatible"):
+    # import pdb;pdb.set_trace()
+    # print(dtype)
     if isinstance(dtype, pd.ArrowDtype):
         dtype = pyarrow_dtype_to_cudf_dtype(dtype)
     if isinstance(dtype, cudf.ListDtype):

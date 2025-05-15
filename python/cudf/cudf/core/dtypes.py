@@ -996,6 +996,11 @@ class IntervalDtype(StructDtype):
         )
 
     def to_pandas(self) -> pd.IntervalDtype:
+        if cudf.get_option("mode.pandas_compatible"):
+            return pd.IntervalDtype(
+                subtype=getattr(self.subtype, "numpy_dtype", self.subtype),
+                closed=self.closed,
+            )
         return pd.IntervalDtype(subtype=self.subtype, closed=self.closed)
 
     def __eq__(self, other) -> bool:

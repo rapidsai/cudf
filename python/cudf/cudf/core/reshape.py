@@ -1153,6 +1153,7 @@ def pivot(
             )
         ),
         verify=False,
+        # label_dtype=getattr(column_data, "dtype", None),
     )
     columns_index = cudf.DataFrame._from_data(ca)
 
@@ -1167,6 +1168,8 @@ def pivot(
     # MultiIndex to Index
     if not values_is_list:
         result._data.droplevel(0)
+        if cudf.get_option("mode.pandas_compatible"):
+            result._data.label_dtype = column_data.dtype
 
     return result
 

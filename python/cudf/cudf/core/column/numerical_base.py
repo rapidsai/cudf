@@ -228,12 +228,15 @@ class NumericalBaseColumn(ColumnBase, Scannable):
             return _get_nan_for_dtype(self.dtype)
 
         # enforce linear in case the default ever changes
-        return self.quantile(
+        result = self.quantile(
             np.array([0.5]),
             interpolation="linear",
             exact=True,
             return_scalar=True,
         )
+        if self.dtype.kind == "f":
+            result = self.dtype.type(result)
+        return result
 
     def cov(self, other: NumericalBaseColumn) -> float:
         if (
