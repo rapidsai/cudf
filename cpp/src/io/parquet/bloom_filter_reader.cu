@@ -513,7 +513,7 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::ap
   host_span<std::vector<ast::literal*> const> literals,
   size_type total_row_groups,
   host_span<data_type const> output_dtypes,
-  host_span<int const> equality_col_schemas,
+  host_span<cudf::size_type const> bloom_filter_col_schemas,
   std::reference_wrapper<ast::expression const> filter,
   rmm::cuda_stream_view stream) const
 {
@@ -521,7 +521,7 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::ap
   auto const num_input_columns = static_cast<cudf::size_type>(output_dtypes.size());
 
   // Get parquet types for the predicate columns
-  auto const parquet_types = get_parquet_types(input_row_group_indices, equality_col_schemas);
+  auto const parquet_types = get_parquet_types(input_row_group_indices, bloom_filter_col_schemas);
 
   // Create spans from bloom filter bitset buffers to use in cuco::bloom_filter_ref.
   std::vector<cudf::device_span<cuda::std::byte>> h_bloom_filter_spans;
@@ -542,7 +542,7 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::ap
   bloom_filter_caster const bloom_filter_col{bloom_filter_spans,
                                              parquet_types,
                                              static_cast<size_t>(total_row_groups),
-                                             equality_col_schemas.size()};
+                                             bloom_filter_col_schemas.size()};
 
   // Converts bloom filter membership for equality predicate columns to a table
   // containing a column for each `col[i] == literal` predicate to be evaluated.
@@ -584,8 +584,6 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::ap
                                             stream);
 }
 
-equality_literals_collector::equality_literals_collector() = default;
-
 equality_literals_collector::equality_literals_collector(ast::expression const& expr,
                                                          cudf::size_type num_input_columns)
   : _num_input_columns{num_input_columns}
@@ -604,7 +602,7 @@ std::reference_wrapper<ast::expression const> equality_literals_collector::visit
   ast::column_reference const& expr)
 {
   CUDF_EXPECTS(expr.get_table_source() == ast::table_reference::LEFT,
-               "BloomfilterAST supports only left table");
+               "DictionaryAST and BloomfilterAST support only left table");
   CUDF_EXPECTS(expr.get_column_index() < _num_input_columns,
                "Column index cannot be more than number of columns in the table");
   return expr;
@@ -613,7 +611,7 @@ std::reference_wrapper<ast::expression const> equality_literals_collector::visit
 std::reference_wrapper<ast::expression const> equality_literals_collector::visit(
   ast::column_name_reference const& expr)
 {
-  CUDF_FAIL("Column name reference is not supported in BloomfilterAST");
+  CUDF_FAIL("Column name reference is not supported in DictionaryAST and BloomfilterAST");
 }
 
 std::reference_wrapper<ast::expression const> equality_literals_collector::visit(
