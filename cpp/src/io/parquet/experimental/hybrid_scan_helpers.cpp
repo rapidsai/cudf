@@ -498,13 +498,28 @@ aggregate_reader_metadata::filter_row_groups_with_dictionary_pages(
   cudf::detail::hostdevice_span<parquet::detail::PageInfo const> pages,
   cudf::host_span<std::vector<cudf::size_type> const> row_group_indices,
   cudf::host_span<std::vector<ast::literal*> const> literals,
+  cudf::host_span<std::vector<ast::ast_operator> const> operators,
   cudf::host_span<data_type const> output_dtypes,
-  cudf::host_span<cudf::size_type const> output_column_schemas,
+  cudf::host_span<int const> dictionary_col_schemas,
   std::reference_wrapper<ast::expression const> filter,
   rmm::cuda_stream_view stream) const
 {
-  // Not yet implemented so just return all row group indices
-  return all_row_group_indices(row_group_indices);
+  // Compute total number of input row groups
+  auto const total_row_groups = static_cast<size_t>(compute_total_row_groups(row_group_indices));
+
+  // Filter row groups using column chunk dictionaries
+  auto const dictionary_filtered_row_groups = apply_dictionary_filter(chunks,
+                                                                      pages,
+                                                                      row_group_indices,
+                                                                      literals,
+                                                                      operators,
+                                                                      total_row_groups,
+                                                                      output_dtypes,
+                                                                      dictionary_col_schemas,
+                                                                      filter,
+                                                                      stream);
+
+  return dictionary_filtered_row_groups.value_or(all_row_group_indices(row_group_indices));
 }
 
 std::vector<std::vector<cudf::size_type>>
@@ -546,37 +561,6 @@ aggregate_reader_metadata::filter_row_groups_with_bloom_filters(
                                                              stream);
 
   return bloom_filtered_row_groups.value_or(all_row_group_indices(row_group_indices));
-}
-
-std::vector<std::vector<cudf::size_type>>
-aggregate_reader_metadata::filter_row_groups_with_dictionary_pages(
-  cudf::detail::hostdevice_span<parquet::detail::ColumnChunkDesc const> chunks,
-  cudf::detail::hostdevice_span<parquet::detail::PageInfo const> pages,
-  cudf::host_span<std::vector<cudf::size_type> const> row_group_indices,
-  cudf::host_span<std::vector<ast::literal*> const> literals,
-  cudf::host_span<std::vector<ast::ast_operator> const> operators,
-  cudf::host_span<data_type const> output_dtypes,
-  cudf::host_span<int const> dictionary_col_schemas,
-  std::reference_wrapper<ast::expression const> filter,
-  rmm::cuda_stream_view stream) const
-{
-  // Number of input row groups
-  auto const total_row_groups = static_cast<size_t>(compute_total_row_groups(row_group_indices));
-
-  // NYI: Filter row groups using dictionaries
-  auto const dictionary_filtered_row_groups = apply_dictionary_filter(chunks,
-                                                                      pages,
-                                                                      row_group_indices,
-                                                                      literals,
-                                                                      operators,
-                                                                      total_row_groups,
-                                                                      output_dtypes,
-                                                                      dictionary_col_schemas,
-                                                                      filter,
-                                                                      stream);
-
-  // Return all_row_group_indices as dictionary filtering not yet implemented
-  return dictionary_filtered_row_groups.value_or(all_row_group_indices(row_group_indices));
 }
 
 }  // namespace cudf::io::parquet::experimental::detail

@@ -49,6 +49,8 @@ using parquet::detail::PageInfo;
 
 namespace {
 
+namespace cg = cooperative_groups;
+
 // Decode kernel parameters
 auto constexpr int96_size        = 12;   ///< Size of INT96 physical type
 auto constexpr decode_block_size = 128;  ///< Must be a multiple of warp_size
@@ -64,12 +66,17 @@ auto constexpr occupancy_factor = 70;  ///< cuCollections suggests targeting a 7
 uint32_t constexpr hasher_seed  = 0;   ///< seed for the hashers
 
 using storage_type     = cuco::bucket_storage<key_type,
-                                              bucket_size,
-                                              cuco::extent<std::size_t>,
-                                              cudf::detail::cuco_allocator<char>>;
+                                          bucket_size,
+                                          cuco::extent<std::size_t>,
+                                          cudf::detail::cuco_allocator<char>>;
 using storage_ref_type = typename storage_type::ref_type;
 using bucket_type      = typename storage_type::bucket_type;
 
+/**
+ * @brief Hash functor for inserting values into a `cuco::static_set`
+ *
+ * @tparam T Underlying data type of the cudf column
+ */
 template <typename T>
 struct insert_hash_functor {
   cudf::device_span<T const> const decoded_data;
@@ -80,6 +87,11 @@ struct insert_hash_functor {
   }
 };
 
+/**
+ * @brief Equality functor for inserting values into a `cuco::static_set`
+ *
+ * @tparam T Underlying data type of the cudf column
+ */
 template <typename T>
 struct insert_equality_functor {
   cudf::device_span<T const> const decoded_data;
@@ -89,6 +101,11 @@ struct insert_equality_functor {
   }
 };
 
+/**
+ * @brief Hash functor for querying values from a `cuco::static_set`
+ *
+ * @tparam T Underlying data type of the cudf column
+ */
 template <typename T>
 struct query_hash_functor {
   uint32_t const seed{hasher_seed};
@@ -98,6 +115,11 @@ struct query_hash_functor {
   }
 };
 
+/**
+ * @brief Equality functor for querying values from a `cuco::static_set`
+ *
+ * @tparam T Underlying data type of the cudf column
+ */
 template <typename T>
 struct query_equality_functor {
   cudf::device_span<T const> const decoded_data;
@@ -107,6 +129,59 @@ struct query_equality_functor {
   }
 };
 
+/**
+ * @brief Helper function to check if there is a data stream overrun
+ *
+ * @param offset Offset into the data stream
+ * @param length Length of the data to read
+ * @param page_data_size Size of the page data
+
+ * @return Boolean indicating if there is a data stream overrun
+ */
+__device__ __forceinline__ bool is_stream_overrun(size_type offset,
+                                                  size_type length,
+                                                  size_type page_data_size)
+{
+  return offset + length > page_data_size;
+}
+
+/**
+ * @brief Helper function to set error
+ *
+ * @param error Pointer to the kernel error code
+ * @param error_value Error value to set
+ */
+__device__ __forceinline__ void set_error(kernel_error::pointer error, decode_error error_value)
+{
+  cuda::atomic_ref<kernel_error::value_type, cuda::thread_scope_block> ref{*error};
+  ref.fetch_or(static_cast<kernel_error::value_type>(error_value), cuda::std::memory_order_relaxed);
+}
+
+/**
+ * @brief Helper function to check if an error has been set
+ *
+ * @param error Pointer to the kernel error code
+ * @return Boolean indicating if an error has been set
+ */
+__device__ __forceinline__ bool is_error_set(kernel_error::pointer error)
+{
+  return cuda::atomic_ref<kernel_error::value_type, cuda::thread_scope_block>{*error}.load(
+           cuda::std::memory_order_relaxed) != 0;
+}
+
+/**
+ * @brief Query `cuco::static_set`s to evaluate (many) input (in)equality predicates
+ *
+ * @param decoded_data Span of storage for decoded values from all dictionaries
+ * @param results Span of device vector start pointers to store query results, one per predicate
+ * @param scalars Pointer to scalar device views, one per predicate
+ * @param operators Pointer to corresponding (in)equality operators, one per predicate
+ * @param set_storage Pointer to the start of the bulk storage for cuco hash sets
+ * @param set_offsets Pointer to offsets into the bulk set storage for each dictionary
+ * @param value_offsets Pointer to offsets into running sum of values in each dictionary
+ * @param total_row_groups Total number of row groups
+ * @param physical_type Parquet physical type of the column
+ */
 template <typename T>
 __global__ std::enable_if_t<not std::is_same_v<T, bool> and
                               not(cudf::is_compound<T>() and not std::is_same_v<T, string_view>),
@@ -121,16 +196,22 @@ query_dictionaries(cudf::device_span<T> decoded_data,
                    cudf::size_type total_row_groups,
                    parquet::Type physical_type)
 {
-  namespace cg          = cooperative_groups;
+  // Each thread block (cg) evaluates one scalar against all column chunk dictionaries (cuco hash
+  // sets) of this column
+  auto const group = cg::this_thread_block();
+
+  // Scalar to evaluate
   auto const scalar_idx = cg::this_grid().block_rank();
   auto const scalar     = scalars[scalar_idx];
-  auto result           = results[scalar_idx];
+
+  // Result vector for this scalar
+  auto result = results[scalar_idx];
 
   using equality_fn_type    = query_equality_functor<T>;
   using hash_fn_type        = query_hash_functor<T>;
   using probing_scheme_type = cuco::linear_probing<set_cg_size, hash_fn_type>;
 
-  auto const group = cg::this_thread_block();
+  // Evaluate the scalar against all cuco hash sets of this column
   for (auto set_idx = group.thread_rank(); set_idx < total_row_groups; set_idx += group.size()) {
     // If the set is empty (no dictionary page data), then skip the dictionary page filter
     if (set_offsets[set_idx + 1] - set_offsets[set_idx] == 0) {
@@ -138,26 +219,47 @@ query_dictionaries(cudf::device_span<T> decoded_data,
       continue;
     }
 
+    // Set storage reference for the current cuco hash set
     storage_ref_type const storage_ref{set_offsets[set_idx + 1] - set_offsets[set_idx],
                                        set_storage + set_offsets[set_idx]};
-
-    auto hash_set_ref         = cuco::static_set_ref{cuco::empty_key{empty_key_sentinel},
+    auto hash_set_ref = cuco::static_set_ref{cuco::empty_key{empty_key_sentinel},
                                              equality_fn_type{decoded_data},
                                              probing_scheme_type{hash_fn_type{}},
                                              cuco::thread_scope_block,
                                              storage_ref};
-    auto const num_set_values = value_offsets[set_idx + 1] - value_offsets[set_idx];
-    auto set_find_ref         = hash_set_ref.rebind_operators(cuco::contains);
-    auto const literal_value  = scalar.value<T>();
+    auto set_find_ref = hash_set_ref.rebind_operators(cuco::contains);
 
+    // Number of values in this hash set
+    auto const num_set_values = value_offsets[set_idx + 1] - value_offsets[set_idx];
+    // Literal value to find in this hash set
+    auto const literal_value = scalar.value<T>();
+
+    // If the operator is NOT_EQUAL, then we mark the result as true (to be pruned) if and only if
+    // the literal is present in the hash set and it's the only value in the hash set
     if (operators[scalar_idx] == ast::ast_operator::NOT_EQUAL) {
       result[set_idx] = num_set_values == 1 and set_find_ref.contains(literal_value);
-    } else {
+    }
+    // Otherwise, mark the result as true (keep) / false (prune) based on if the literal is present
+    // in the hash set
+    else {
       result[set_idx] = set_find_ref.contains(literal_value);
     }
   }
 }
 
+/**
+ * @brief Decode string column chunk dictionaries and build `cuco::static_set`s from them,
+ * one hash set per dictionary
+ *
+ * @param pages Column chunk dictionary page headers
+ * @param decoded_data Span of storage for decoded values from all dictionaries
+ * @param set_storage Pointer to the start of the bulk storage for cuco hash sets
+ * @param set_offsets Pointer to offsets into the bulk set storage for each dictionary
+ * @param value_offsets Pointer to offsets into running sum of values in each dictionary
+ * @param num_dictionary_columns Total number of columns with dictionaries
+ * @param dictionary_col_idx Index of the current dictionary column
+ * @param error Pointer to the kernel error code
+ */
 __global__ void build_string_dictionaries(PageInfo const* pages,
                                           cudf::device_span<cudf::string_view> decoded_data,
                                           bucket_type* const set_storage,
@@ -168,13 +270,18 @@ __global__ void build_string_dictionaries(PageInfo const* pages,
                                           cudf::size_type dictionary_col_idx,
                                           kernel_error::pointer error)
 {
-  namespace cg    = cooperative_groups;
+  // Single thread from each warp decodes one dictionary page and inserts into the corresponding
+  // cuco hash set
   auto const warp = cg::tiled_partition<cudf::detail::warp_size>(cg::this_thread_block());
+
+  // Index of the current column chunk of the column
   auto const row_group_idx =
     (cg::this_grid().block_rank() * warp.meta_group_size()) + warp.meta_group_rank();
 
+  // Return early if the row group index is out of bounds
   if (row_group_idx > total_row_groups) { return; }
 
+  // Global index of the current column chunk (dictionary page)
   auto const chunk_idx      = dictionary_col_idx + (row_group_idx * num_dictionary_columns);
   auto const& page          = pages[chunk_idx];
   auto const& page_data     = page.page_data;
@@ -183,76 +290,81 @@ __global__ void build_string_dictionaries(PageInfo const* pages,
   // If empty buffer or no input values, then return early
   if (page.num_input_values == 0 or page_data_size == 0) { return; }
 
-  storage_ref_type const storage_ref{set_offsets[row_group_idx + 1] - set_offsets[row_group_idx],
-                                     set_storage + set_offsets[row_group_idx]};
-
   using equality_fn_type    = insert_equality_functor<cudf::string_view>;
   using hash_fn_type        = insert_hash_functor<cudf::string_view>;
   using probing_scheme_type = cuco::linear_probing<set_cg_size, hash_fn_type>;
 
-  auto hash_set_ref = cuco::static_set_ref{cuco::empty_key<key_type>{empty_key_sentinel},
+  // Set storage reference for the current cuco hash set
+  storage_ref_type const storage_ref{set_offsets[row_group_idx + 1] - set_offsets[row_group_idx],
+                                     set_storage + set_offsets[row_group_idx]};
+
+  auto hash_set_ref   = cuco::static_set_ref{cuco::empty_key<key_type>{empty_key_sentinel},
                                            equality_fn_type{decoded_data},
                                            probing_scheme_type{hash_fn_type{decoded_data}},
                                            cuco::thread_scope_thread,
                                            storage_ref};
-
   auto set_insert_ref = hash_set_ref.rebind_operators(cuco::insert);
 
-  // Helper to check data stream overrun
-  auto const is_stream_overrun = [&](size_type offset, size_type length) {
-    return offset + length > page_data_size;
-  };
-
-  // Helper to set error
-  auto const set_error = [&](decode_error error_value) {
-    cuda::atomic_ref<kernel_error::value_type, cuda::thread_scope_block> ref{*error};
-    ref.fetch_or(static_cast<kernel_error::value_type>(error_value),
-                 cuda::std::memory_order_relaxed);
-  };
-
-  auto const is_error_set = [&]() {
-    return cuda::atomic_ref<kernel_error::value_type, cuda::thread_scope_block>{*error}.load(
-             cuda::std::memory_order_relaxed) != 0;
-  };
-
+  // Offset into the running sum of values to be decoded from all column chunks of this column
   auto const value_offset = value_offsets[row_group_idx];
 
-  // Decode with single warp thread until the value is found or we reach the end of the page
+  // Decode values from the current dictionary page with single warp thread
   if (warp.thread_rank() == 0) {
-    auto buffer_offset  = int32_t{0};
-    auto decoded_values = key_type{0};
+    auto buffer_offset      = int32_t{0};
+    auto num_values_decoded = key_type{0};
+
     while (buffer_offset < page_data_size) {
-      if (decoded_values > page.num_input_values or
-          is_stream_overrun(buffer_offset, sizeof(int32_t))) {
-        set_error(decode_error::DATA_STREAM_OVERRUN);
+      // Check if we have a stream overrun
+      if (num_values_decoded > page.num_input_values or
+          is_stream_overrun(buffer_offset, sizeof(int32_t), page_data_size)) {
+        set_error(error, decode_error::DATA_STREAM_OVERRUN);
         break;
       }
 
       // Decode string length
       auto const string_length = static_cast<int32_t>(*(page_data + buffer_offset));
       buffer_offset += sizeof(int32_t);
-      if (is_stream_overrun(buffer_offset, string_length)) {
-        set_error(decode_error::DATA_STREAM_OVERRUN);
+
+      // Check if we have a stream overrun
+      if (is_stream_overrun(buffer_offset, string_length, page_data_size)) {
+        set_error(error, decode_error::DATA_STREAM_OVERRUN);
         break;
       }
 
       // Decode cudf::string_view value
-      decoded_data[value_offset + decoded_values] =
+      decoded_data[value_offset + num_values_decoded] =
         cudf::string_view{reinterpret_cast<char const*>(page_data + buffer_offset),
                           static_cast<cudf::size_type>(string_length)};
 
-      set_insert_ref.insert(static_cast<key_type>(value_offset + decoded_values));
+      // Insert the key (decoded value's global index) into the cuco hash set
+      set_insert_ref.insert(static_cast<key_type>(value_offset + num_values_decoded));
 
-      // Otherwise, keep going
+      // Update the buffer offset and the number of values decoded
       buffer_offset += string_length;
-      decoded_values++;
+      num_values_decoded++;
 
       // Break if an error has been set
-      if (is_error_set()) { break; }
+      if (is_error_set(error)) { break; }
     }
   }
 }
 
+/**
+ * @brief Decode fixed width column chunk dictionaries and build `cuco::static_set`s from them,
+ * one hash set per dictionary
+ *
+ * @tparam Underlying data type of the cudf column
+ * @param pages Column chunk dictionary page headers
+ * @param decoded_data Span of storage for decoded values from all dictionaries
+ * @param set_storage Pointer to the start of the bulk storage for cuco hash sets
+ * @param set_offsets Pointer to offsets into the bulk set storage for each dictionary
+ * @param value_offsets Pointer to offsets into running sum of values in each dictionary
+ * @param physical_type Parquet physical type of the column
+ * @param num_dictionary_columns Total number of columns with dictionaries
+ * @param dictionary_col_idx Index of the current dictionary column
+ * @param error Pointer to the kernel error code
+ * @param flba_length Fixed length byte array length (0 if not FLBA type)
+ */
 template <typename T>
 __global__ std::enable_if_t<not std::is_same_v<T, bool> and not cudf::is_compound<T>(), void>
 build_fixed_width_dictionaries(PageInfo const* pages,
@@ -266,71 +378,86 @@ build_fixed_width_dictionaries(PageInfo const* pages,
                                kernel_error::pointer error,
                                cudf::size_type flba_length = 0)
 {
-  namespace cg             = cooperative_groups;
-  auto const group         = cg::this_thread_block();
+  // Each thread block (cg) decodes values from one dictionary page and inserts into the
+  // corresponding cuco hash set
+  auto const group = cg::this_thread_block();
+
+  // Index of the current column chunk of the column
   auto const row_group_idx = cg::this_grid().block_rank();
-  auto const chunk_idx     = dictionary_col_idx + (row_group_idx * num_dictionary_columns);
-  auto const& page         = pages[chunk_idx];
-  auto const& page_data    = page.page_data;
+
+  // Global index of the current column chunk (dictionary page)
+  auto const chunk_idx  = dictionary_col_idx + (row_group_idx * num_dictionary_columns);
+  auto const& page      = pages[chunk_idx];
+  auto const& page_data = page.page_data;
 
   // If empty buffer or no input values, then return early
   if (page.num_input_values == 0 or page.uncompressed_page_size == 0) { return; }
 
+  // Offset into the running sum of values to be decoded from all column chunks of this column
   auto const value_offset = value_offsets[row_group_idx];
+
+  // Set storage reference for the current cuco hash set
   storage_ref_type const storage_ref{set_offsets[row_group_idx + 1] - set_offsets[row_group_idx],
                                      set_storage + set_offsets[row_group_idx]};
 
-  using equality_fn_type = insert_equality_functor<T>;
-  using hash_fn_type     = insert_hash_functor<T>;
-  // Choosing `linear_probing` over `double_hashing` for slighhhtly better performance seen in
-  // benchmarks.
+  using equality_fn_type    = insert_equality_functor<T>;
+  using hash_fn_type        = insert_hash_functor<T>;
   using probing_scheme_type = cuco::linear_probing<set_cg_size, hash_fn_type>;
 
-  auto hash_set_ref = cuco::static_set_ref{cuco::empty_key{empty_key_sentinel},
+  auto hash_set_ref   = cuco::static_set_ref{cuco::empty_key{empty_key_sentinel},
                                            equality_fn_type{decoded_data},
                                            probing_scheme_type{hash_fn_type{decoded_data}},
                                            cuco::thread_scope_block,
                                            storage_ref};
-
   auto set_insert_ref = hash_set_ref.rebind_operators(cuco::insert);
 
-  // Helper to check data stream overrun
-  auto const is_stream_overrun = [&](size_type offset, size_type length) {
-    return offset + length > page.uncompressed_page_size;
-  };
-
-  // Helper to set error
-  auto const set_error = [&](decode_error error_value) {
-    cuda::atomic_ref<kernel_error::value_type, cuda::thread_scope_block> ref{*error};
-    ref.fetch_or(static_cast<kernel_error::value_type>(error_value),
-                 cuda::std::memory_order_relaxed);
-  };
-
-  auto const is_error_set = [&]() {
-    return cuda::atomic_ref<kernel_error::value_type, cuda::thread_scope_block>{*error}.load(
-             cuda::std::memory_order_relaxed) != 0;
-  };
-
+  // Decode values from the current dictionary page
   for (auto value_idx = group.thread_rank(); value_idx < page.num_input_values;
        value_idx += group.num_threads()) {
+    // Key (decoded value's global index) to insert into the cuco hash set
     auto const insert_key = static_cast<key_type>(value_offset + value_idx);
 
-    // Parquet physical type must be fixed length so either INT96 or FIXED_LEN_BYTE_ARRAY
+    // Initialize the decoded value to the default value of the underlying data type
+    decoded_data[value_offset + value_idx] = T{};
+
+    // Decode the value based on the physical type
     switch (physical_type) {
-      case parquet::Type::INT96: flba_length = int96_size; [[fallthrough]];
+      case parquet::Type::INT96: {
+        // Check if we have a stream overrun
+        if (is_stream_overrun(value_idx * int96_size, int96_size, page.uncompressed_page_size)) {
+          set_error(error, decode_error::DATA_STREAM_OVERRUN);
+          break;
+        }
+        // Check if the flba length is valid
+        if (flba_length != int96_size) {
+          set_error(error, decode_error::UNSUPPORTED_ENCODING);
+          break;
+        }
+
+        // Decode the int96 value from the page data
+        auto const int96_value = cudf::string_view{
+          reinterpret_cast<char const*>(page_data) + value_idx * flba_length, flba_length};
+        cuda::std::memcpy(&decoded_data[value_offset + value_idx], int96_value.data(), sizeof(T));
+        break;
+      }
+
       case parquet::Type::FIXED_LEN_BYTE_ARRAY: {
-        if (is_stream_overrun(value_idx * flba_length, flba_length)) {
-          set_error(decode_error::DATA_STREAM_OVERRUN);
+        // Check if we have a stream overrun
+        if (is_stream_overrun(value_idx * flba_length, flba_length, page.uncompressed_page_size)) {
+          set_error(error, decode_error::DATA_STREAM_OVERRUN);
           break;
         }
-        if (flba_length == 0 or
-            (physical_type != parquet::Type::INT96 and sizeof(T) < flba_length)) {
-          set_error(decode_error::INVALID_DATA_TYPE);
+        // Check if the flba length is smaller than or equal to the underlying data type size
+        if (sizeof(T) <= flba_length) {
+          set_error(error, decode_error::UNSUPPORTED_ENCODING);
           break;
         }
+        // Decode the value from the page data
         auto const flba_value = cudf::string_view{
           reinterpret_cast<char const*>(page_data) + value_idx * flba_length, flba_length};
-        cuda::std::memcpy(&decoded_data[value_offset + value_idx], flba_value.data(), flba_length);
+        cuda::std::memcpy(&decoded_data[value_offset + value_idx],
+                          flba_value.data(),
+                          cuda::std::min<size_t>(sizeof(T), flba_length));
         break;
       }
       case parquet::Type::INT32: [[fallthrough]];
@@ -338,8 +465,8 @@ build_fixed_width_dictionaries(PageInfo const* pages,
       case parquet::Type::FLOAT: [[fallthrough]];
       case parquet::Type::DOUBLE: {
         // Check if we are overruning the data stream
-        if (is_stream_overrun(value_idx * sizeof(T), sizeof(T))) {
-          set_error(decode_error::DATA_STREAM_OVERRUN);
+        if (is_stream_overrun(value_idx * sizeof(T), sizeof(T), page.uncompressed_page_size)) {
+          set_error(error, decode_error::DATA_STREAM_OVERRUN);
           break;
         }
         cuda::std::memcpy(
@@ -347,19 +474,34 @@ build_fixed_width_dictionaries(PageInfo const* pages,
         break;
       }
       default: {
-        // Parquet physical type is not fixed length so set the error code and break early
-        set_error(decode_error::INVALID_DATA_TYPE);
+        // Parquet physical type is not fixed width so set the error code and break early
+        set_error(error, decode_error::INVALID_DATA_TYPE);
         break;
       }
     }
 
     // Return early if an error has been set
-    if (is_error_set()) { return; }
+    if (is_error_set(error)) { return; }
 
+    // Insert the key (decoded value's global index) into the cuco hash set
     set_insert_ref.insert(insert_key);
   }
 }
 
+/**
+ * @brief Decode string column chunk dictionaries and evaluate (few) input predicates against
+ * decoded values
+ *
+ * @param pages Column chunk dictionary page headers
+ * @param results Span of device vector start pointers to store query results, one per predicate
+ * @param scalars Span of scalar device views, one per predicate
+ * @param operators Span of corresponding (in)equality operators, one per predicate
+ * @param total_num_scalars Total number of predicates (scalars or operators)
+ * @param total_row_groups Total number of row groups
+ * @param num_dictionary_columns Total number of columns with dictionaries
+ * @param dictionary_col_idx Index of the current dictionary column
+ * @param error Pointer to the kernel error code
+ */
 __global__ void evaluate_some_string_literals(PageInfo const* pages,
                                               cudf::device_span<bool*> results,
                                               ast::generic_scalar_device_view const* scalars,
@@ -370,65 +512,59 @@ __global__ void evaluate_some_string_literals(PageInfo const* pages,
                                               cudf::size_type dictionary_col_idx,
                                               kernel_error::pointer error)
 {
-  namespace cg    = cooperative_groups;
+  // Single thread from each warp decodes values from one dictionary page and evaluates all input
+  // predicates against them
   auto const warp = cg::tiled_partition<cudf::detail::warp_size>(cg::this_thread_block());
+
+  // Index of the current column chunk of the column
   auto const row_group_idx =
     (cg::this_grid().block_rank() * warp.meta_group_size()) + warp.meta_group_rank();
 
+  // Return early if the row group index is out of bounds
+  if (row_group_idx > total_row_groups) { return; }
+
+  // Global index of the current column chunk (dictionary page)
   auto const chunk_idx      = dictionary_col_idx + (row_group_idx * num_dictionary_columns);
   auto const& page          = pages[chunk_idx];
   auto const& page_data     = page.page_data;
   auto const page_data_size = page.uncompressed_page_size;
 
-  // If empty buffer or no input values, then return early
+  // If the page buffer is empty or has no values to decode, then return early
   if (page.num_input_values == 0 or page_data_size == 0) {
     if (warp.thread_rank() == 0 and row_group_idx < total_row_groups) {
       for (auto i = 0; i < total_num_scalars; ++i) {
+        // Set the result to true (keep) if the operator is EQUAL, otherwise set it to false (do not
+        // prune)
         results[i][row_group_idx] = operators[i] == ast::ast_operator::EQUAL;
       }
     }
     return;
   }
 
-  // Helper to check data stream overrun
-  auto const is_stream_overrun = [&](size_type offset, size_type length) {
-    return offset + length > page_data_size;
-  };
-
-  // Helper to set error
-  auto const set_error = [&](decode_error error_value) {
-    cuda::atomic_ref<kernel_error::value_type, cuda::thread_scope_block> ref{*error};
-    ref.fetch_or(static_cast<kernel_error::value_type>(error_value),
-                 cuda::std::memory_order_relaxed);
-  };
-
-  auto const is_error_set = [&]() {
-    return cuda::atomic_ref<kernel_error::value_type, cuda::thread_scope_block>{*error}.load(
-             cuda::std::memory_order_relaxed) != 0;
-  };
-
-  if (row_group_idx >= total_row_groups) { return; }
-
-  // Decode with single warp thread until the value is found or we reach the end of the page
+  // Decode values from the current dictionary page with single warp thread
   if (warp.thread_rank() == 0) {
+    // Initialize results for all predicates to false
     for (auto i = 0; i < total_num_scalars; ++i) {
       results[i][row_group_idx] = false;
     }
-    int32_t buffer_offset          = 0;
-    cudf::size_type decoded_values = 0;
+
+    // Initialize the buffer offset and the number of values decoded
+    auto buffer_offset      = int32_t{0};
+    auto num_values_decoded = cudf::size_type{0};
+
     while (buffer_offset < page_data_size) {
-      // Check for errors
-      if (decoded_values > page.num_input_values or
-          is_stream_overrun(buffer_offset, sizeof(int32_t))) {
-        set_error(decode_error::DATA_STREAM_OVERRUN);
+      // Check if we have a stream overrun
+      if (num_values_decoded > page.num_input_values or
+          is_stream_overrun(buffer_offset, sizeof(int32_t), page_data_size)) {
+        set_error(error, decode_error::DATA_STREAM_OVERRUN);
         break;
       }
 
       // Decode string length
       auto const string_length = static_cast<int32_t>(*(page_data + buffer_offset));
       buffer_offset += sizeof(int32_t);
-      if (is_stream_overrun(buffer_offset, string_length)) {
-        set_error(decode_error::DATA_STREAM_OVERRUN);
+      if (is_stream_overrun(buffer_offset, string_length, page_data_size)) {
+        set_error(error, decode_error::DATA_STREAM_OVERRUN);
         break;
       }
 
@@ -437,36 +573,60 @@ __global__ void evaluate_some_string_literals(PageInfo const* pages,
         cudf::string_view{reinterpret_cast<char const*>(page_data + buffer_offset),
                           static_cast<cudf::size_type>(string_length)};
 
-      // If the decoded value is equal to the scalar value, set the result to true and return
-      // early
+      // Evaluate all input predicates against the decoded string value
       for (auto scalar_idx = 0; scalar_idx < total_num_scalars; ++scalar_idx) {
+        // Check if the literal value matches the decoded value
         if (decoded_value == scalars[scalar_idx].value<cudf::string_view>()) {
+          // If the operator is NOT_EQUAL, set the result to true (row group to be pruned) if and
+          // only if this is the only value in the dictionary page (all values are unique).
+          // Otherwise set it to true (row group to be kept)
           results[scalar_idx][row_group_idx] = operators[scalar_idx] == ast::ast_operator::NOT_EQUAL
                                                  ? page.num_input_values == 1
                                                  : true;
         }
       }
-      // Otherwise, keep going
-      buffer_offset += string_length;
-      decoded_values++;
 
-      // Break if we have found all literals
-      if (is_error_set() or thrust::all_of(thrust::seq,
-                                           thrust::counting_iterator(0),
-                                           thrust::counting_iterator(total_num_scalars),
-                                           [&](auto scalar_idx) {
-                                             return operators[scalar_idx] ==
-                                                        ast::ast_operator::NOT_EQUAL
-                                                      ? page.num_input_values > 1 or
-                                                          results[scalar_idx][row_group_idx]
-                                                      : results[scalar_idx][row_group_idx];
-                                           })) {
+      // Update the buffer offset and the number of values decoded
+      buffer_offset += string_length;
+      num_values_decoded++;
+
+      // Return early if we have an error
+      if (is_error_set(error)) { return; }
+
+      // If operator is NOT_EQUAL, check if we have more than one values in the dictionary (will
+      // never evaluate to true so we can easily break) or if the decoded value was a match with the
+      // literal value. Otherwise, check if all literal values have been found and break early
+      if (thrust::all_of(thrust::seq,
+                         thrust::counting_iterator(0),
+                         thrust::counting_iterator(total_num_scalars),
+                         [&](auto scalar_idx) {
+                           return operators[scalar_idx] == ast::ast_operator::NOT_EQUAL
+                                    ? page.num_input_values > 1 or
+                                        results[scalar_idx][row_group_idx]
+                                    : results[scalar_idx][row_group_idx];
+                         })) {
         break;
       }
     }
   }
 }
 
+/**
+ * @brief Decode fixed width column chunk dictionaries and evaluate (few) input predicates against
+ * decoded values
+ *
+ * @tparam Underlying data type of the cudf column
+ * @param pages Column chunk dictionary page headers
+ * @param results Span of device vector start pointers to store query results, one per predicate
+ * @param scalars Span of scalar device views, one per predicate
+ * @param operators Span of corresponding (in)equality operators, one per predicate
+ * @param physical_type Parquet physical type of the column
+ * @param total_num_scalars Total number of predicates
+ * @param num_dictionary_columns Total number of columns with dictionaries
+ * @param dictionary_col_idx Index of the current dictionary column
+ * @param error Pointer to the kernel error code
+ * @param flba_length Fixed length byte array length (0 if not FLBA type)
+ */
 template <typename T>
 __global__ std::enable_if_t<not std::is_same_v<T, bool> and not cudf::is_compound<T>(), void>
 evaluate_some_fixed_width_literals(PageInfo const* pages,
@@ -480,74 +640,85 @@ evaluate_some_fixed_width_literals(PageInfo const* pages,
                                    kernel_error::pointer error,
                                    cudf::size_type flba_length = 0)
 {
-  namespace cg             = cooperative_groups;
-  auto const group         = cg::this_thread_block();
-  auto const row_group_idx = cg::this_grid().block_rank();
-  auto const chunk_idx     = dictionary_col_idx + (row_group_idx * num_dictionary_columns);
-  auto const& page         = pages[chunk_idx];
-  auto const& page_data    = page.page_data;
+  // Each thread block decodes values from one dictionary page and evaluates all input predicates
+  // against them
+  auto const group = cg::this_thread_block();
 
-  // If empty buffer or no input values, then return early
+  // Index of the current column chunk of the column
+  auto const row_group_idx = cg::this_grid().block_rank();
+
+  // Global index of the current column chunk (dictionary page)
+  auto const chunk_idx  = dictionary_col_idx + (row_group_idx * num_dictionary_columns);
+  auto const& page      = pages[chunk_idx];
+  auto const& page_data = page.page_data;
+
+  // If the page buffer is empty or has no values to decode, then return early
   if (page.num_input_values == 0 or page.uncompressed_page_size == 0) {
     for (auto i = group.thread_rank(); i < total_num_scalars; i += group.num_threads()) {
+      // Set the result to true (keep) if the operator is EQUAL, otherwise set it to false (do not
+      // prune)
       results[i][row_group_idx] = operators[i] == ast::ast_operator::EQUAL;
     }
     return;
   }
 
-  // Helper to check data stream overrun
-  auto const is_stream_overrun = [&](size_type offset, size_type length) {
-    return offset + length > page.uncompressed_page_size;
-  };
-
-  // Helper to set error
-  auto const set_error = [&](decode_error error_value) {
-    cuda::atomic_ref<kernel_error::value_type, cuda::thread_scope_block> ref{*error};
-    ref.fetch_or(static_cast<kernel_error::value_type>(error_value),
-                 cuda::std::memory_order_relaxed);
-  };
-
-  auto const is_error_set = [&]() {
-    return cuda::atomic_ref<kernel_error::value_type, cuda::thread_scope_block>{*error}.load(
-             cuda::std::memory_order_relaxed) != 0;
-  };
-
+  // Initialize results for all predicates to false
   for (auto i = group.thread_rank(); i < total_num_scalars; i += group.num_threads()) {
     results[i][row_group_idx] = false;
   }
 
+  // Decode values from the current dictionary page with the current thread block
   for (auto value_idx = group.thread_rank(); value_idx < page.num_input_values;
        value_idx += group.num_threads()) {
-    // Placeholder for the decoded value
+    // Initialize the decoded value to the default value of the underlying data type
     auto decoded_value = T{};
 
-    // Parquet physical type must be fixed length so either INT96 or FIXED_LEN_BYTE_ARRAY
+    // Decode the value based on the physical type
     switch (physical_type) {
-      case parquet::Type::INT96: flba_length = int96_size; [[fallthrough]];
-      case parquet::Type::FIXED_LEN_BYTE_ARRAY: {
-        // Check if we are overruning the data stream
-        if (is_stream_overrun(value_idx * flba_length, flba_length)) {
-          set_error(decode_error::DATA_STREAM_OVERRUN);
+      case parquet::Type::INT96: {
+        // Check if we have a stream overrun
+        if (is_stream_overrun(value_idx * int96_size, int96_size, page.uncompressed_page_size)) {
+          set_error(error, decode_error::DATA_STREAM_OVERRUN);
           return;
         }
-        if (flba_length == 0 or
-            (physical_type != parquet::Type::INT96 and sizeof(T) < flba_length)) {
-          set_error(decode_error::INVALID_DATA_TYPE);
-          break;
+        // Check if the flba length is valid
+        if (flba_length != int96_size) {
+          set_error(error, decode_error::UNSUPPORTED_ENCODING);
+          return;
         }
 
+        // Decode the int96 value from the page data
+        auto const int96_value = cudf::string_view{
+          reinterpret_cast<char const*>(page_data) + value_idx * flba_length, flba_length};
+        cuda::std::memcpy(&decoded_value, int96_value.data(), sizeof(T));
+        break;
+      }
+      case parquet::Type::FIXED_LEN_BYTE_ARRAY: {
+        // Check if we have a stream overrun
+        if (is_stream_overrun(value_idx * flba_length, flba_length, page.uncompressed_page_size)) {
+          set_error(error, decode_error::DATA_STREAM_OVERRUN);
+          return;
+        }
+        // Check if the flba length is smaller than or equal to the underlying data type size
+        if (sizeof(T) <= flba_length) {
+          set_error(error, decode_error::UNSUPPORTED_ENCODING);
+          return;
+        }
+
+        // Decode the value from the page data
         auto const flba_value = cudf::string_view{
           reinterpret_cast<char const*>(page_data) + value_idx * flba_length, flba_length};
-        cuda::std::memcpy(&decoded_value, flba_value.data(), flba_length);
+        cuda::std::memcpy(
+          &decoded_value, flba_value.data(), cuda::std::min<size_t>(sizeof(T), flba_length));
         break;
       }
       case parquet::Type::INT32: [[fallthrough]];
       case parquet::Type::INT64: [[fallthrough]];
       case parquet::Type::FLOAT: [[fallthrough]];
       case parquet::Type::DOUBLE: {
-        // Check if we are overruning the data stream
-        if (is_stream_overrun(value_idx * sizeof(T), sizeof(T))) {
-          set_error(decode_error::DATA_STREAM_OVERRUN);
+        // Check if we have a stream overrun
+        if (is_stream_overrun(value_idx * sizeof(T), sizeof(T), page.uncompressed_page_size)) {
+          set_error(error, decode_error::DATA_STREAM_OVERRUN);
           return;
         }
         // Simply copy over the decoded value bytes from page data
@@ -555,22 +726,30 @@ evaluate_some_fixed_width_literals(PageInfo const* pages,
         break;
       }
       default: {
-        // Parquet physical type is not fixed length so set the error code and break early
-        set_error(decode_error::INVALID_DATA_TYPE);
+        // Parquet physical type is not fixed width so set the error code and break early
+        set_error(error, decode_error::INVALID_DATA_TYPE);
         return;
       }
     }
 
-    if (is_error_set()) { return; }
-
+    // Evaluate all input predicates against the decoded value
     for (auto scalar_idx = 0; scalar_idx < total_num_scalars; ++scalar_idx) {
+      // Check if the literal value matches the decoded value
       if (decoded_value == scalars[scalar_idx].value<T>()) {
+        // If the operator is NOT_EQUAL, set the result to true (row group to be pruned) if and
+        // only if this is the only value in the dictionary page (all values are unique).
+        // Otherwise set it to true (row group to be kept)
         results[scalar_idx][row_group_idx] =
           operators[scalar_idx] == ast::ast_operator::NOT_EQUAL ? page.num_input_values == 1 : true;
       }
     }
 
-    // If we have already found matches or error, return early
+    // Return early if we have an error
+    if (is_error_set(error)) { return; }
+
+    // If operator is NOT_EQUAL, check if we have more than one values in the dictionary (will
+    // never evaluate to true so we can easily break) or if the decoded value was a match with the
+    // literal value. Otherwise, check if all literal values have been found and break early
     if (thrust::all_of(thrust::seq,
                        thrust::counting_iterator(0),
                        thrust::counting_iterator(total_num_scalars),
@@ -585,7 +764,8 @@ evaluate_some_fixed_width_literals(PageInfo const* pages,
 }
 
 /**
- * @brief Converts dictionary membership results (for each column chunk) to a device column.
+ * @brief Computes dictionary membership results (for each column chunk) into a vector of BOOL8
+ * columns, one per (in)equality predicate.
  */
 struct dictionary_caster {
   cudf::detail::hostdevice_span<parquet::detail::ColumnChunkDesc const> chunks;
@@ -616,6 +796,15 @@ struct dictionary_caster {
     return columns;
   }
 
+  /**
+   * @brief Build `cuco::static_set`s from decoded column chunk dictionaries and evaluate (many)
+   * input predicates using the built hash sets.
+   *
+   * @param literals List of literals
+   * @param operators List of operators
+   *
+   * @return A vector of BOOL8 columns containing dictionary membership results, one per predicate
+   */
   template <typename T>
   std::enable_if_t<not std::is_same_v<T, bool> and
                      not(cudf::is_compound<T>() and not std::is_same_v<T, string_view>),
@@ -623,63 +812,71 @@ struct dictionary_caster {
   evaluate_many_literals(cudf::host_span<ast::literal* const> literals,
                          cudf::host_span<ast::ast_operator const> operators)
   {
+    // Host vectors to store the running number of hash set slots and decoded values for all
+    // dictionaries
     auto host_set_offsets   = std::vector<cudf::size_type>{};
     auto host_value_offsets = std::vector<cudf::size_type>{};
     host_set_offsets.reserve(total_row_groups + 1);
     host_value_offsets.reserve(total_row_groups + 1);
     host_set_offsets.emplace_back(0);
     host_value_offsets.emplace_back(0);
+
+    // Compute the running number of hash set slots and decoded values for all dictionaries
     std::for_each(
       thrust::counting_iterator<size_t>(0),
       thrust::counting_iterator(total_row_groups),
       [&](auto row_group_idx) {
         auto const chunk_idx        = dictionary_col_idx + (row_group_idx * num_dictionary_columns);
         auto const num_input_values = pages[chunk_idx].num_input_values;
+        // Update the running number of values in this dictionary
         host_value_offsets.emplace_back(host_value_offsets.back() + num_input_values);
+        // Compute the number of hash set slots needed to target the desired occupancy factor
         host_set_offsets.emplace_back(host_set_offsets.back() +
                                       static_cast<cudf::size_type>(compute_hash_table_size(
                                         num_input_values, occupancy_factor)));
       });
 
+    // Device vectors to store the running number of hash set slots and decoded values for all
+    // dictionaries
     auto const set_offsets = cudf::detail::make_device_uvector_async(
       host_set_offsets, stream, cudf::get_current_device_resource_ref());
     auto const value_offsets = cudf::detail::make_device_uvector_async(
       host_value_offsets, stream, cudf::get_current_device_resource_ref());
 
-    auto const total_bucket_storage_size = static_cast<size_t>(host_set_offsets.back());
-    auto const total_num_values          = static_cast<size_t>(host_value_offsets.back());
-    auto const total_num_literals        = static_cast<cudf::size_type>(literals.size());
+    auto const total_set_storage_size = static_cast<size_t>(host_set_offsets.back());
+    auto const total_num_values       = static_cast<size_t>(host_value_offsets.back());
+    auto const total_num_literals     = static_cast<cudf::size_type>(literals.size());
 
-    // Create a single bulk storage used by all sub-dictionaries
+    // Create a single bulk storage used by all cuco hash sets
     auto set_storage = storage_type{
-      total_bucket_storage_size,
+      total_set_storage_size,
       cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream}};
 
     // Initialize storage with the empty key sentinel
     set_storage.initialize_async(empty_key_sentinel, {stream.value()});
 
+    // Device vector to store the decoded values for all dictionaries
     rmm::device_uvector<T> decoded_data{
       total_num_values, stream, cudf::get_current_device_resource_ref()};
     kernel_error error_code(stream);
 
+    // Host vector of scalar device views from all literals
     std::vector<ast::generic_scalar_device_view> host_scalars;
     host_scalars.reserve(total_num_literals);
     std::for_each(literals.begin(), literals.end(), [&](auto const& literal) {
       host_scalars.push_back(literal->get_value());
     });
-
+    // Device vector of all scalars device views
     auto const scalars = cudf::detail::make_device_uvector_async(
       host_scalars, stream, cudf::get_current_device_resource_ref());
+
+    // Device vector of all operators
     auto const d_operators = cudf::detail::make_device_uvector_async(
       operators, stream, cudf::get_current_device_resource_ref());
 
-    auto query_block_size = [&]() {
-      auto query_block_size = std::max<cudf::size_type>(cudf::detail::warp_size, total_row_groups);
-      query_block_size      = cudf::size_type{1} << (31 - __builtin_clz(query_block_size));
-      return std::min<cudf::size_type>(query_block_size, 128);
-    }();
-
+    // Device buffers to store the dictionary membership results for all predicates
     std::vector<rmm::device_buffer> results_buffers(total_num_literals);
+    // Host vector of pointers to the result buffers
     std::vector<bool*> host_results_ptrs(total_num_literals);
     std::for_each(
       thrust::counting_iterator(0), thrust::counting_iterator(total_num_literals), [&](auto i) {
@@ -687,10 +884,13 @@ struct dictionary_caster {
           rmm::device_buffer(total_row_groups, stream, cudf::get_current_device_resource_ref());
         host_results_ptrs[i] = static_cast<bool*>(results_buffers[i].data());
       });
+    // Device vector of pointers to the result buffers
     auto results_ptrs = cudf::detail::make_device_uvector_async(
       host_results_ptrs, stream, cudf::get_current_device_resource_ref());
 
     if constexpr (not cuda::std::is_same_v<T, cudf::string_view>) {
+      // Decode fixed width dictionaries and insert them to cuco hash sets, one dictionary per
+      // thread block
       auto const flba_length = chunks[dictionary_col_idx].type_length;
       build_fixed_width_dictionaries<T>
         <<<total_row_groups, decode_block_size, 0, stream.value()>>>(pages.device_begin(),
@@ -705,14 +905,20 @@ struct dictionary_caster {
                                                                      flba_length);
 
     } else {
+      // Check if the decode block size is a multiple of the warp size
       static_assert(decode_block_size % cudf::detail::warp_size == 0,
                     "decode_block_size must be a multiple of warp_size");
+      // Check if the physical type is a string
       CUDF_EXPECTS(physical_type == parquet::Type::BYTE_ARRAY, "Unsupported physical type");
 
+      // Number of warps per thread block
       size_t const warps_per_block = decode_block_size / cudf::detail::warp_size;
+      // Number of thread blocks to get at least `total_row_groups` warps
       auto const num_blocks =
         cudf::util::div_rounding_up_safe<size_t>(total_row_groups, warps_per_block);
 
+      // Decode string dictionaries and insert them to cuco hash sets, one dictionary per
+      // warp
       build_string_dictionaries<<<num_blocks, decode_block_size, 0, stream.value()>>>(
         pages.device_begin(),
         decoded_data,
@@ -730,6 +936,15 @@ struct dictionary_caster {
       CUDF_FAIL("Dictionary decode failed with code(s) " + kernel_error::to_string(error));
     }
 
+    // Compute an optimal thread block size for the query kernel so that we can query all cuco hash
+    // sets of this column per thread block
+    auto query_block_size = [&]() {
+      auto query_block_size = std::max<cudf::size_type>(cudf::detail::warp_size, total_row_groups);
+      query_block_size      = cudf::size_type{1} << (31 - __builtin_clz(query_block_size));
+      return std::min<cudf::size_type>(query_block_size, 128);
+    }();
+
+    // Query one predicate against all cuco hash sets of this column using a thread block
     query_dictionaries<T>
       <<<total_num_literals, query_block_size, 0, stream.value()>>>(decoded_data,
                                                                     results_ptrs,
@@ -741,9 +956,18 @@ struct dictionary_caster {
                                                                     total_row_groups,
                                                                     physical_type);
 
+    // Build the BOOL8 columns from the results buffers
     return build_columns(results_buffers);
   }
 
+  /**
+   * @brief Decode column chunk dictionaries and evaluate (few) input predicates while decoding
+   *
+   * @param literals List of literals
+   * @param operators List of operators
+   *
+   * @return A vector of BOOL8 columns containing dictionary membership results, one per predicate
+   */
   template <typename T>
   std::enable_if_t<not std::is_same_v<T, bool> and
                      not(cudf::is_compound<T>() and not std::is_same_v<T, string_view>),
@@ -751,20 +975,26 @@ struct dictionary_caster {
   evaluate_some_literals(cudf::host_span<ast::literal* const> literals,
                          cudf::host_span<ast::ast_operator const> operators)
   {
+    // Get the total number of scalars and literals
+    auto const total_num_literals = static_cast<cudf::size_type>(literals.size());
+
+    // Host vector of scalar device views from all literals
     std::vector<ast::generic_scalar_device_view> host_scalars;
-    host_scalars.reserve(literals.size());
+    host_scalars.reserve(total_num_literals);
     std::for_each(literals.begin(), literals.end(), [&](auto const& literal) {
       host_scalars.push_back(literal->get_value());
     });
-
+    // Device vector of all scalars device views
     auto const scalars = cudf::detail::make_device_uvector_async(
       host_scalars, stream, cudf::get_current_device_resource_ref());
+
+    // Device vector of all operators
     auto const d_operators = cudf::detail::make_device_uvector_async(
       operators, stream, cudf::get_current_device_resource_ref());
-    auto const total_num_scalars  = static_cast<cudf::size_type>(scalars.size());
-    auto const total_num_literals = static_cast<cudf::size_type>(literals.size());
 
+    // Device buffers to store the dictionary membership results for all predicates
     std::vector<rmm::device_buffer> results_buffers(total_num_literals);
+    // Host vector of pointers to the result buffers
     std::vector<bool*> host_results_ptrs(total_num_literals);
     std::for_each(
       thrust::counting_iterator(0), thrust::counting_iterator(total_num_literals), [&](auto i) {
@@ -773,12 +1003,16 @@ struct dictionary_caster {
         host_results_ptrs[i] = static_cast<bool*>(results_buffers[i].data());
       });
 
+    // Device vector of pointers to the result buffers
     auto results_ptrs = cudf::detail::make_device_uvector_async(
       host_results_ptrs, stream, cudf::get_current_device_resource_ref());
 
+    // Error code for the dictionary decode kernel
     kernel_error error_code(stream);
 
     if constexpr (not cuda::std::is_same_v<T, cudf::string_view>) {
+      // Decode fixed width dictionaries and evaluate literals against them, one dictionary per
+      // thread block
       auto const flba_length = chunks[dictionary_col_idx].type_length;
       evaluate_some_fixed_width_literals<T>
         <<<total_row_groups, decode_block_size, 0, stream.value()>>>(pages.device_begin(),
@@ -786,36 +1020,41 @@ struct dictionary_caster {
                                                                      scalars.data(),
                                                                      d_operators.data(),
                                                                      physical_type,
-                                                                     total_num_scalars,
+                                                                     total_num_literals,
                                                                      num_dictionary_columns,
                                                                      dictionary_col_idx,
                                                                      error_code.data(),
                                                                      flba_length);
     } else {
       static_assert(decode_block_size % cudf::detail::warp_size == 0,
-                    "decode_block_size must be a multiple of warp_size");
+                    "decoder block size must be a multiple of warp_size");
       CUDF_EXPECTS(physical_type == parquet::Type::BYTE_ARRAY, "Unsupported physical type");
 
+      // Number of warps per thread block
       size_t const warps_per_block = decode_block_size / cudf::detail::warp_size;
+      // Number of thread blocks to get at least `total_row_groups` warps
       auto const num_blocks =
         cudf::util::div_rounding_up_safe<size_t>(total_row_groups, warps_per_block);
 
+      // Decode string dictionaries and evaluate all literals against them, one dictionary per warp
       evaluate_some_string_literals<<<num_blocks, decode_block_size, 0, stream.value()>>>(
         pages.device_begin(),
         results_ptrs,
         scalars.data(),
         d_operators.data(),
-        total_num_scalars,
+        total_num_literals,
         total_row_groups,
         num_dictionary_columns,
         dictionary_col_idx,
         error_code.data());
     }
 
+    // Check if there are any errors in data decoding
     if (auto const error = error_code.value_sync(stream); error != 0) {
       CUDF_FAIL("Dictionary decode failed with code(s) " + kernel_error::to_string(error));
     }
 
+    // Build the BOOL8 columns from the results buffers
     return build_columns(results_buffers);
   }
 
@@ -870,6 +1109,7 @@ class dictionary_expression_converter : public equality_literals_collector {
     _col_literals_offsets.reserve(_num_input_columns + 1);
     _col_literals_offsets.emplace_back(0);
 
+    // Set column literal count offsets
     std::transform(literals.begin(),
                    literals.end(),
                    std::back_inserter(_col_literals_offsets),
@@ -919,14 +1159,19 @@ class dictionary_expression_converter : public equality_literals_collector {
         CUDF_EXPECTS(literal_iter != equality_literals.end(), "Could not find the literal ptr");
         col_literal_offset += std::distance(equality_literals.cbegin(), literal_iter);
 
-        // Evaluate boolean is_true(value) expression as NOT(NOT(value))
         auto const& value = _dictionary_expr.push(ast::column_reference{col_literal_offset});
 
-        auto const& not_in_dictionary =
+        // For NOT_EQUAL operator, simply evaluate boolean is_false(value) expression as NOT(value).
+        // The value indicates if the row group should be pruned (if the literal is present in the
+        // hash set and it's the only value in the hash set)
+        auto const& should_be_pruned =
           _dictionary_expr.push(ast::operation{ast_operator::NOT, value});
 
+        // For EQUAL operator, evaluate boolean is_true(value) expression as NOT(NOT(value))
+        // The value indicates if the row group should be kept (if the literal is present in the
+        // hash set)
         if (op == ast_operator::EQUAL) {
-          _dictionary_expr.push(ast::operation{ast_operator::NOT, not_in_dictionary});
+          _dictionary_expr.push(ast::operation{ast_operator::NOT, should_be_pruned});
         }
       }
       // For all other expressions, push an always true expression
@@ -981,17 +1226,20 @@ aggregate_reader_metadata::apply_dictionary_filter(
 {
   // Number of input table columns
   auto const num_input_columns = static_cast<cudf::size_type>(output_dtypes.size());
-  // Number of dictionary columns
+  // Number of columns with dictionaries
   auto const num_dictionary_columns = static_cast<cudf::size_type>(dictionary_col_schemas.size());
-
   // Get parquet types for the predicate columns
   auto const parquet_types = get_parquet_types(input_row_group_indices, dictionary_col_schemas);
 
-  // Converts dictionary membership for (in)equality predicate columns to a table
-  // containing a column for each `col[i] == literal` or `col[i] != literal` predicate to be
-  // evaluated. The table contains #sources * #column_chunks_per_src rows.
+  // Convert dictionary membership for (in)equality predicate columns to a table
+  // containing a column for each `col[i] == literal` or `col[i] != literal` predicate
+  // to be evaluated. The table contains #sources * #column_chunks_per_src rows.
   std::vector<std::unique_ptr<cudf::column>> dictionary_membership_columns;
+
+  // Dictionary column index currently being processed
   cudf::size_type dictionary_col_idx = 0;
+
+  // For each input column
   std::for_each(
     thrust::counting_iterator<size_t>(0),
     thrust::counting_iterator(output_dtypes.size()),
@@ -1004,26 +1252,27 @@ aggregate_reader_metadata::apply_dictionary_filter(
       // Skip if non-comparable (compound) type except string
       if (cudf::is_compound(dtype) and dtype.id() != cudf::type_id::STRING) { return; }
 
-      auto const type_length = chunks[dictionary_col_idx].type_length;
-
-      // Create a bloom filter query table caster
+      // Create a dictionary membership caster struct for the current column
       dictionary_caster const dictionary_col{chunks,
                                              pages,
                                              total_row_groups,
                                              parquet_types[dictionary_col_idx],
-                                             type_length,
+                                             chunks[dictionary_col_idx].type_length,
                                              num_dictionary_columns,
                                              dictionary_col_idx,
                                              stream};
 
-      // Add a column for all literals associated with an equality column
+      // Process all predicates associated with the current column and build a BOOL8 column per
+      // predicate
       auto dict_columns = cudf::type_dispatcher<dispatch_storage_type>(
         dtype, dictionary_col, dtype, literals[input_col_idx], operators[input_col_idx]);
 
+      // Add the built columns to the vector of columns
       dictionary_membership_columns.insert(dictionary_membership_columns.end(),
                                            std::make_move_iterator(dict_columns.begin()),
                                            std::make_move_iterator(dict_columns.end()));
 
+      // Increment the dictionary column index
       dictionary_col_idx++;
     });
 

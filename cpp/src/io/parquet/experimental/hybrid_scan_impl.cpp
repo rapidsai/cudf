@@ -245,6 +245,7 @@ hybrid_scan_reader_impl::filter_row_groups_with_dictionary_pages(
     return std::vector<std::vector<size_type>>(row_group_indices.begin(), row_group_indices.end());
   }
 
+  // Collect schema indices of columns with an (in)equality predicate
   std::vector<cudf::size_type> dictionary_col_schemas;
   thrust::copy_if(thrust::host,
                   _output_column_schemas.begin(),
@@ -253,15 +254,18 @@ hybrid_scan_reader_impl::filter_row_groups_with_dictionary_pages(
                   std::back_inserter(dictionary_col_schemas),
                   [](auto& dict_literals) { return not dict_literals.empty(); });
 
+  // Prepare column chunks and dictionary page headers filtering
   auto [has_compressed_data, chunks, pages] = prepare_dictionaries(
     row_group_indices, dictionary_page_data, dictionary_col_schemas, options, stream);
 
+  // Decompress dictionary pages if needed and store uncompressed buffers here
   auto decompressed_dictionary_page_data = std::optional<rmm::device_buffer>{};
   if (has_compressed_data) {
     decompressed_dictionary_page_data = decompress_dictionary_page_data(chunks, pages, stream);
     pages.host_to_device_async(stream);
   }
 
+  // Filter row groups using dictionary pages
   return _metadata->filter_row_groups_with_dictionary_pages(chunks,
                                                             pages,
                                                             row_group_indices,

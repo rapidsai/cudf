@@ -249,9 +249,9 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
    */
   [[nodiscard]] std::vector<std::vector<size_type>> filter_row_groups_with_bloom_filters(
     cudf::host_span<rmm::device_buffer> bloom_filter_data,
-    host_span<std::vector<size_type> const> row_group_indices,
-    host_span<data_type const> output_dtypes,
-    host_span<int const> output_column_schemas,
+    cudf::host_span<std::vector<size_type> const> row_group_indices,
+    cudf::host_span<data_type const> output_dtypes,
+    cudf::host_span<cudf::size_type const> output_column_schemas,
     std::reference_wrapper<ast::expression const> filter,
     rmm::cuda_stream_view stream) const;
 };
