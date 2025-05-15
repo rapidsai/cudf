@@ -1381,7 +1381,7 @@ def test_dataframe_append_to_empty():
 def test_dataframe_setitem_index_len1():
     gdf = cudf.DataFrame()
     gdf["a"] = [1]
-    gdf["b"] = gdf.index._values
+    gdf["b"] = gdf.index._column
 
     np.testing.assert_equal(gdf.b.to_numpy(), [0])
 
@@ -1995,7 +1995,7 @@ def test_dataframe_cupy_array_wrong_index():
     with pytest.raises(ValueError):
         cudf.DataFrame(d_ary, index=["a"])
 
-    with pytest.raises(ValueError):
+    with pytest.raises(TypeError):
         cudf.DataFrame(d_ary, index="a")
 
 
@@ -2932,12 +2932,12 @@ def test_gpu_memory_usage_with_boolmask():
     cudaDF = cudaDF[boolmask]
 
     assert (
-        cudaDF.index._values.data_array_view(mode="read").device_ctypes_pointer
-        == cudaDF["col0"].index._values.data_array_view.device_ctypes_pointer
+        cudaDF.index._column.data_array_view(mode="read").device_ctypes_pointer
+        == cudaDF["col0"].index._column.data_array_view.device_ctypes_pointer
     )
     assert (
-        cudaDF.index._values.data_array_view(mode="read").device_ctypes_pointer
-        == cudaDF["col1"].index._values.data_array_view.device_ctypes_pointer
+        cudaDF.index._column.data_array_view(mode="read").device_ctypes_pointer
+        == cudaDF["col1"].index._column.data_array_view.device_ctypes_pointer
     )
 
     assert memory_used == query_GPU_memory()
