@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -45,9 +45,7 @@ static void bench_translate(nvbench::state& state)
   std::transform(thrust::counting_iterator<int>(0),
                  thrust::counting_iterator<int>(entry_count),
                  entries.begin(),
-                 [](auto idx) -> entry_type {
-                   return entry_type{'!' + idx, '~' - idx};
-                 });
+                 [](auto idx) -> entry_type { return entry_type{'!' + idx, '~' - idx}; });
 
   auto stream = cudf::get_default_stream();
   state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));

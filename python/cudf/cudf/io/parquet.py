@@ -17,7 +17,6 @@ from uuid import uuid4
 import numpy as np
 import pandas as pd
 import pyarrow as pa
-from pyarrow import dataset as ds
 
 import pylibcudf as plc
 
@@ -610,6 +609,9 @@ def _process_dataset(
     # directory input into a list of paths (using the pyarrow
     # dataset API), (2) to apply row-group filters, and (3)
     # to discover directory-partitioning information
+
+    # Lazily import pyarrow.dataset due to import time
+    import pyarrow.dataset as ds
 
     # Deal with case that the user passed in a directory name
     file_list = paths

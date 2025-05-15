@@ -34,7 +34,7 @@ constexpr uint8_t fhcrc    = 0x02;  // Header CRC present
 constexpr uint8_t fextra   = 0x04;  // Extra fields present
 constexpr uint8_t fname    = 0x08;  // Original file name present
 constexpr uint8_t fcomment = 0x10;  // Comment present
-};                                  // namespace GZIPHeaderFlag
+};  // namespace GZIPHeaderFlag
 
 // Threshold for buffer count where device compression is favored over host in AUTO mode
 constexpr size_t default_host_compression_auto_threshold = 128;
