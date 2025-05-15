@@ -1830,7 +1830,7 @@ class IndexedFrame(Frame):
         method: str = "single",
     ):
         return Rolling(
-            self,
+            self,  # type: ignore[arg-type]
             window,
             min_periods=min_periods,
             center=center,
