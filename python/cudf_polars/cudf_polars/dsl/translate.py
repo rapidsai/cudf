@@ -217,6 +217,7 @@ def _(node: pl_ir.PythonScan, translator: Translator, schema: Schema) -> ir.IR:
     return ir.PythonScan(schema, options, predicate)
 
 
+# TODO: Remove once we have https://github.com/pola-rs/polars/issues/22766
 def _normalize_paths(paths: list[str | Path]) -> list[str]:
     normalized = []
     for p in paths:
