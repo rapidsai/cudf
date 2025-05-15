@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,34 +15,37 @@
  */
 
 #include <benchmarks/common/generate_input.hpp>
-#include <benchmarks/fixture/benchmark_fixture.hpp>
-#include <benchmarks/synchronization/synchronization.hpp>
 
 #include <cudf/sorting.hpp>
+#include <cudf/strings/strings_column_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
-class Sort : public cudf::benchmark {};
+#include <nvbench/nvbench.cuh>
 
-static void BM_sort(benchmark::State& state)
+static void bench_sort_strings(nvbench::state& state)
 {
-  cudf::size_type const n_rows{(cudf::size_type)state.range(0)};
+  auto const num_rows  = static_cast<cudf::size_type>(state.get_int64("num_rows"));
+  auto const min_width = static_cast<cudf::size_type>(state.get_int64("min_width"));
+  auto const max_width = static_cast<cudf::size_type>(state.get_int64("max_width"));
 
-  auto const table = create_random_table({cudf::type_id::STRING}, row_count{n_rows});
+  data_profile const profile = data_profile_builder().distribution(
+    cudf::type_id::STRING, distribution_id::NORMAL, min_width, max_width);
 
-  for (auto _ : state) {
-    cuda_event_timer raii(state, true, cudf::get_default_stream());
-    cudf::sort(table->view());
-  }
+  auto const table = create_random_table({cudf::type_id::STRING}, row_count{num_rows});
+
+  auto sv    = cudf::strings_column_view(table->view().column(0));
+  auto bytes = sv.chars_size(cudf::get_default_stream());
+
+  state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
+  state.add_global_memory_reads<nvbench::int8_t>(bytes);
+  state.add_global_memory_writes<nvbench::int8_t>(bytes);
+
+  state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) { cudf::sort(table->view()); });
 }
 
-#define SORT_BENCHMARK_DEFINE(name)          \
-  BENCHMARK_DEFINE_F(Sort, name)             \
-  (::benchmark::State & st) { BM_sort(st); } \
-  BENCHMARK_REGISTER_F(Sort, name)           \
-    ->RangeMultiplier(8)                     \
-    ->Ranges({{1 << 10, 1 << 24}})           \
-    ->UseManualTime()                        \
-    ->Unit(benchmark::kMillisecond);
-
-SORT_BENCHMARK_DEFINE(strings)
+NVBENCH_BENCH(bench_sort_strings)
+  .set_name("sort_strings")
+  .add_int64_axis("min_width", {0})
+  .add_int64_axis("max_width", {32, 64, 128, 256})
+  .add_int64_axis("num_rows", {32768, 262144, 2097152});

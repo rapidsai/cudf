@@ -201,7 +201,7 @@ def _(py_val: float, dtype: DataType | None):
     cdef unique_ptr[scalar] c_obj
     cdef DataType c_dtype
     if dtype is None:
-        c_dtype = DataType(type_id.FLOAT64)
+        c_dtype = dtype = DataType(type_id.FLOAT64)
     else:
         c_dtype = <DataType>dtype
 
@@ -227,7 +227,7 @@ def _(py_val: int, dtype: DataType | None):
     cdef unique_ptr[scalar] c_obj
     cdef DataType c_dtype
     if dtype is None:
-        c_dtype = DataType(type_id.INT64)
+        c_dtype = dtype = DataType(type_id.INT64)
     elif is_floating_point(dtype):
         return _from_py(float(py_val), dtype)
     else:
@@ -336,15 +336,14 @@ def _(py_val: str, dtype: DataType | None):
 @_from_py.register(datetime.timedelta)
 def _(py_val: datetime.timedelta, dtype: DataType | None):
     cdef unique_ptr[scalar] c_obj
-    cdef DataType c_dtype
     cdef duration_us c_duration_us
     cdef duration_ns c_duration_ns
     cdef duration_ms c_duration_ms
     cdef duration_s c_duration_s
     if dtype is None:
-        c_dtype = DataType(type_id.DURATION_MICROSECONDS)
-    else:
-        c_dtype = <DataType>dtype
+        dtype = DataType(type_id.DURATION_MICROSECONDS)
+
+    cdef DataType c_dtype = dtype
     cdef type_id tid = c_dtype.id()
     total_seconds = py_val.total_seconds()
     if tid == type_id.DURATION_NANOSECONDS:
@@ -392,7 +391,6 @@ def _(py_val: datetime.timedelta, dtype: DataType | None):
 @_from_py.register(datetime.datetime)
 def _(py_val: datetime.datetime, dtype: DataType | None):
     cdef unique_ptr[scalar] c_obj
-    cdef DataType c_dtype
     cdef duration_us c_duration_us
     cdef duration_ns c_duration_ns
     cdef duration_ms c_duration_ms
@@ -402,9 +400,9 @@ def _(py_val: datetime.datetime, dtype: DataType | None):
     cdef timestamp_us c_timestamp_us
     cdef timestamp_ns c_timestamp_ns
     if dtype is None:
-        c_dtype = DataType(type_id.TIMESTAMP_MICROSECONDS)
-    else:
-        c_dtype = <DataType>dtype
+        dtype = DataType(type_id.TIMESTAMP_MICROSECONDS)
+
+    cdef DataType c_dtype = dtype
     cdef type_id tid = c_dtype.id()
     epoch_seconds = py_val.timestamp()
     if tid == type_id.TIMESTAMP_NANOSECONDS:
