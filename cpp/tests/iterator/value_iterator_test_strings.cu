@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,7 +31,7 @@ auto strings_to_string_views(std::vector<std::string>& input_strings)
   std::vector<int32_t> offsets;
   std::tie(chars, offsets) = cudf::test::detail::make_chars_and_offsets(
     input_strings.begin(), input_strings.end(), all_valid);
-  auto dev_chars = cudf::detail::make_device_uvector_sync(
+  auto dev_chars = cudf::detail::make_device_uvector(
     chars, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
 
   // calculate the expected value by CPU. (but contains device pointers)
@@ -52,7 +52,7 @@ TEST_F(StringIteratorTest, string_view_null_iterator)
   using T = cudf::string_view;
   std::string zero("zero");
   // the char data has to be in GPU
-  auto initmsg = cudf::detail::make_device_uvector_sync(
+  auto initmsg = cudf::detail::make_device_uvector(
     zero, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
   T init = T{initmsg.data(), int(initmsg.size())};
 
@@ -88,7 +88,7 @@ TEST_F(StringIteratorTest, string_view_no_null_iterator)
   // T init = T{"", 0};
   std::string zero("zero");
   // the char data has to be in GPU
-  auto initmsg = cudf::detail::make_device_uvector_sync(
+  auto initmsg = cudf::detail::make_device_uvector(
     zero, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
   T init = T{initmsg.data(), int(initmsg.size())};
 
@@ -113,7 +113,7 @@ TEST_F(StringIteratorTest, string_scalar_iterator)
   // T init = T{"", 0};
   std::string zero("zero");
   // the char data has to be in GPU
-  auto initmsg = cudf::detail::make_device_uvector_sync(
+  auto initmsg = cudf::detail::make_device_uvector(
     zero, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
   T init = T{initmsg.data(), int(initmsg.size())};
 

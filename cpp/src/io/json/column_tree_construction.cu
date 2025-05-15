@@ -51,7 +51,7 @@ template <typename T>
 void print(device_span<T const> d_vec, std::string name, rmm::cuda_stream_view stream)
 {
   stream.synchronize();
-  auto h_vec = cudf::detail::make_std_vector_sync(d_vec, stream);
+  auto h_vec = cudf::detail::make_std_vector(d_vec, stream);
   std::cout << name << " = ";
   for (auto e : h_vec) {
     std::cout << e << " ";
@@ -228,7 +228,7 @@ std::tuple<compressed_sparse_row, column_tree_properties> reduce_to_column_tree(
           auto idx = thrust::get<1>(a);
           return n == 1 ? idx : idx + 1;
         }),
-        thrust::plus<NodeIndexT>{});
+        cuda::std::plus<NodeIndexT>{});
     } else {
       auto single_node = 1;
       row_idx.set_element_async(1, single_node, stream);

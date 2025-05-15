@@ -1,7 +1,6 @@
 # Copyright (c) 2024-2025, NVIDIA CORPORATION.
 import io
 import os
-from io import StringIO
 
 import pandas as pd
 import pyarrow as pa
@@ -14,6 +13,7 @@ from utils import (
     write_source_str,
 )
 
+from rmm.pylibrmm.device_buffer import DeviceBuffer
 from rmm.pylibrmm.stream import Stream
 
 import pylibcudf as plc
@@ -43,7 +43,7 @@ def csv_table_data(table_data):
             "col_struct<a: int64 not null, b_struct: struct<b: double not null> not null>",
         ]
     )
-    return plc.interop.from_arrow(pa_table), pa_table
+    return plc.Table(pa_table), pa_table
 
 
 @pytest.mark.parametrize("stream", [None, Stream()])
@@ -135,7 +135,7 @@ def test_read_csv_byte_range(table_data, chunk_size, tmp_path):
     full_tbl = pa.concat_tables(tbls)
 
     full_tbl_plc = plc.io.TableWithMetadata(
-        plc.interop.from_arrow(full_tbl),
+        plc.Table(full_tbl),
         tbls_w_meta[0].column_names(include_children=True),
     )
     assert_table_and_meta_eq(pa.Table.from_pandas(exp), full_tbl_plc)
@@ -214,7 +214,7 @@ def test_read_csv_parse_options(
     options.set_comment("#")
     plc_table_w_meta = plc.io.csv.read_csv(options)
     df = pd.read_csv(
-        StringIO(buffer),
+        io.StringIO(buffer),
         comment="#",
         decimal=decimal,
         skip_blank_lines=skip_blanks,
@@ -247,7 +247,7 @@ def test_read_csv_na_values(
         options.set_na_values(na_values)
     plc_table_w_meta = plc.io.csv.read_csv(options)
     df = pd.read_csv(
-        StringIO(buffer),
+        io.StringIO(buffer),
         na_filter=na_filter,
         na_values=na_values if na_filter else None,
         keep_default_na=keep_default_na,
@@ -291,6 +291,27 @@ def test_read_csv_header(csv_table_data, source_or_sink, header):
     assert_table_and_meta_eq(
         pa_table,
         plc_table_w_meta,
+        check_types_if_empty=False,
+    )
+
+
+@pytest.mark.parametrize("stream", [None, Stream()])
+def test_read_csv_from_device_buffers(csv_table_data, stream):
+    _, pa_table = csv_table_data
+
+    csv_string = pa_table.to_pandas().to_csv(index=False)
+    buf = DeviceBuffer.to_device(csv_string.encode("utf-8"))
+
+    options = plc.io.csv.CsvReaderOptions.builder(
+        plc.io.SourceInfo([buf])
+    ).build()
+    result = plc.io.csv.read_csv(options, stream)
+
+    expected = pa.concat_tables([pa_table])
+
+    assert_table_and_meta_eq(
+        expected,
+        result,
         check_types_if_empty=False,
     )
 
@@ -366,7 +387,7 @@ def test_write_csv_na_rep(na_rep):
         [pa.array([1.0, 2.0, None]), pa.array([True, None, False])],
         names=names,
     )
-    plc_tbl = plc.interop.from_arrow(pa_tbl)
+    plc_tbl = plc.Table(pa_tbl)
     plc_tbl_w_meta = plc.io.types.TableWithMetadata(
         plc_tbl, column_names=[(name, []) for name in names]
     )

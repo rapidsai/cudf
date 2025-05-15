@@ -14,7 +14,7 @@ import pylibcudf
 import rmm
 
 from cudf.core.abc import Serializable
-from cudf.utils.string import format_bytes
+from cudf.core.buffer.string import format_bytes
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -396,7 +396,7 @@ class Buffer(Serializable):
             )
 
         # Otherwise, we create a new copy of the memory
-        owner = self._owner.from_device_memory(
+        owner = type(self._owner).from_device_memory(
             rmm.DeviceBuffer(
                 ptr=self._owner.get_ptr(mode="read") + self._offset,
                 size=self.size,

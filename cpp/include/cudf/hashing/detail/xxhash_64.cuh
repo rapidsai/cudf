@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -71,30 +71,30 @@ XXHash_64<double>::result_type __device__ inline XXHash_64<double>::operator()(
 }
 
 template <>
-XXHash_64<cudf::string_view>::result_type
-  __device__ inline XXHash_64<cudf::string_view>::operator()(cudf::string_view const& key) const
+XXHash_64<cudf::string_view>::result_type __device__ inline XXHash_64<cudf::string_view>::
+operator()(cudf::string_view const& key) const
 {
   return this->compute_bytes(reinterpret_cast<cuda::std::byte const*>(key.data()),
                              key.size_bytes());
 }
 
 template <>
-XXHash_64<numeric::decimal32>::result_type
-  __device__ inline XXHash_64<numeric::decimal32>::operator()(numeric::decimal32 const& key) const
+XXHash_64<numeric::decimal32>::result_type __device__ inline XXHash_64<numeric::decimal32>::
+operator()(numeric::decimal32 const& key) const
 {
   return this->compute(key.value());
 }
 
 template <>
-XXHash_64<numeric::decimal64>::result_type
-  __device__ inline XXHash_64<numeric::decimal64>::operator()(numeric::decimal64 const& key) const
+XXHash_64<numeric::decimal64>::result_type __device__ inline XXHash_64<numeric::decimal64>::
+operator()(numeric::decimal64 const& key) const
 {
   return this->compute(key.value());
 }
 
 template <>
-XXHash_64<numeric::decimal128>::result_type
-  __device__ inline XXHash_64<numeric::decimal128>::operator()(numeric::decimal128 const& key) const
+XXHash_64<numeric::decimal128>::result_type __device__ inline XXHash_64<numeric::decimal128>::
+operator()(numeric::decimal128 const& key) const
 {
   return this->compute(key.value());
 }

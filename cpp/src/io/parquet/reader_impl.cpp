@@ -21,6 +21,7 @@
 #include <cudf/detail/stream_compaction.hpp>
 #include <cudf/detail/transform.hpp>
 #include <cudf/detail/utilities/stream_pool.hpp>
+#include <cudf/null_mask.hpp>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
@@ -83,7 +84,7 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
     // TODO: we could probably dummy up size stats for FLBA data since we know the width
     auto const has_flba =
       std::any_of(pass.chunks.begin(), pass.chunks.end(), [](auto const& chunk) {
-        return chunk.physical_type == FIXED_LEN_BYTE_ARRAY and
+        return chunk.physical_type == Type::FIXED_LEN_BYTE_ARRAY and
                is_treat_fixed_length_as_string(chunk.logical_type);
       });
 
@@ -211,6 +212,12 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
     }
   }
 
+  // TODO: Page pruning not yet implemented (especially for the chunked reader) so set all pages in
+  // this subpass to be decoded.
+  auto host_page_mask = cudf::detail::make_host_vector<bool>(subpass.pages.size(), _stream);
+  std::fill(host_page_mask.begin(), host_page_mask.end(), true);
+  auto page_mask = cudf::detail::make_device_uvector_async(host_page_mask, _stream, _mr);
+
   // Create an empty device vector to store the initial str offset for large string columns from for
   // string decoders.
   auto initial_str_offsets = rmm::device_uvector<size_t>{0, _stream, _mr};
@@ -246,6 +253,7 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
                    skip_rows,
                    level_type_size,
                    decoder_mask,
+                   page_mask,
                    initial_str_offsets,
                    error_code.data(),
                    streams[s_idx++]);
@@ -303,6 +311,7 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
                          num_rows,
                          skip_rows,
                          level_type_size,
+                         page_mask,
                          initial_str_offsets,
                          error_code.data(),
                          streams[s_idx++]);
@@ -315,6 +324,7 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
                                num_rows,
                                skip_rows,
                                level_type_size,
+                               page_mask,
                                initial_str_offsets,
                                error_code.data(),
                                streams[s_idx++]);
@@ -327,6 +337,7 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
                       num_rows,
                       skip_rows,
                       level_type_size,
+                      page_mask,
                       error_code.data(),
                       streams[s_idx++]);
   }
@@ -353,6 +364,7 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
                         num_rows,
                         skip_rows,
                         level_type_size,
+                        page_mask,
                         error_code.data(),
                         streams[s_idx++]);
   }
@@ -409,6 +421,7 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
                    num_rows,
                    skip_rows,
                    level_type_size,
+                   page_mask,
                    error_code.data(),
                    streams[s_idx++]);
   }
@@ -557,9 +570,11 @@ reader::impl::impl(std::size_t chunk_read_limit,
                               _options.timestamp_type.id());
 
   // Save the states of the output buffers for reuse in `chunk_read()`.
-  for (auto const& buff : _output_buffers) {
-    _output_buffers_template.emplace_back(cudf::io::detail::inline_column_buffer::empty_like(buff));
-  }
+  std::transform(
+    _output_buffers.begin(),
+    _output_buffers.end(),
+    std::back_inserter(_output_buffers_template),
+    [](auto const& buff) { return cudf::io::detail::inline_column_buffer::empty_like(buff); });
 
   // Save the name to reference converter to extract output filter AST in
   // `preprocess_file()` and `finalize_output()`
@@ -589,9 +604,10 @@ void reader::impl::populate_metadata(table_metadata& out_metadata)
   // Return column names
   out_metadata.schema_info.resize(_output_buffers.size());
   for (size_t i = 0; i < _output_column_schemas.size(); i++) {
-    auto const& schema                      = _metadata->get_schema(_output_column_schemas[i]);
-    out_metadata.schema_info[i].name        = schema.name;
-    out_metadata.schema_info[i].is_nullable = schema.repetition_type != REQUIRED;
+    auto const& schema               = _metadata->get_schema(_output_column_schemas[i]);
+    out_metadata.schema_info[i].name = schema.name;
+    out_metadata.schema_info[i].is_nullable =
+      schema.repetition_type != FieldRepetitionType::REQUIRED;
   }
 
   // Return user metadata
@@ -654,7 +670,7 @@ table_with_metadata reader::impl::read_chunk_internal(read_mode mode)
     // FIXED_LEN_BYTE_ARRAY never read as string.
     // TODO: if we ever decide that the default reader behavior is to treat unannotated BINARY as
     // binary and not strings, this test needs to change.
-    if (schema.type == FIXED_LEN_BYTE_ARRAY and logical_type.type != LogicalType::DECIMAL) {
+    if (schema.type == Type::FIXED_LEN_BYTE_ARRAY and logical_type.type != LogicalType::DECIMAL) {
       metadata = std::make_optional<reader_column_schema>();
       metadata->set_convert_binary_to_strings(false);
       metadata->set_type_length(schema.type_length);
@@ -834,18 +850,17 @@ parquet_column_schema walk_schema(aggregate_reader_metadata const* mt, int idx)
   for (auto const& child_idx : sch.children_idx) {
     children.push_back(walk_schema(mt, child_idx));
   }
-  return parquet_column_schema{
-    sch.name, static_cast<parquet::TypeKind>(sch.type), std::move(children)};
+  return parquet_column_schema{sch.name, static_cast<parquet::Type>(sch.type), std::move(children)};
 }
 }  // namespace
 
 parquet_metadata read_parquet_metadata(host_span<std::unique_ptr<datasource> const> sources)
 {
   // Do not use arrow schema when reading information from parquet metadata.
-  static constexpr auto use_arrow_schema = false;
+  constexpr auto use_arrow_schema = false;
 
   // Do not select any columns when only reading the parquet metadata.
-  static constexpr auto has_column_projection = false;
+  constexpr auto has_column_projection = false;
 
   // Open and parse the source dataset metadata
   auto metadata = aggregate_reader_metadata(sources, use_arrow_schema, has_column_projection);
@@ -853,8 +868,10 @@ parquet_metadata read_parquet_metadata(host_span<std::unique_ptr<datasource> con
   return parquet_metadata{parquet_schema{walk_schema(&metadata, 0)},
                           metadata.get_num_rows(),
                           metadata.get_num_row_groups(),
+                          metadata.get_num_row_groups_per_file(),
                           metadata.get_key_value_metadata()[0],
-                          metadata.get_rowgroup_metadata()};
+                          metadata.get_rowgroup_metadata(),
+                          metadata.get_column_chunk_metadata()};
 }
 
 }  // namespace cudf::io::parquet::detail

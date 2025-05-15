@@ -84,7 +84,8 @@ def gdf_writer_types(request):
 
 
 index_params = [True, False]
-compression_params = ["gzip", "bz2", "zip", "xz", None]
+# tests limited to compressions formats supported by pandas and cudf: bz2, gzip, zip, zstd
+compression_params = ["bz2", "gzip", "zip", "zstd", None]
 orient_params = ["columns", "records", "table", "split"]
 params = itertools.product(index_params, compression_params, orient_params)
 
@@ -1440,8 +1441,8 @@ def test_json_reader_on_bad_lines(on_bad_lines):
 def test_chunked_json_reader():
     df = cudf.DataFrame(
         {
-            "a": ["aaaa"] * 9_00_00_00,
-            "b": list(range(0, 9_00_00_00)),
+            "a": ["aaaa"] * 9_000_000,
+            "b": range(9_000_000),
         }
     )
     buf = BytesIO()
@@ -1453,9 +1454,10 @@ def test_chunked_json_reader():
     assert_eq(df, gdf)
 
 
-@pytest.mark.parametrize("compression", ["gzip", None])
+# compression formats limited to those supported by both reader and writer
+@pytest.mark.parametrize("compression", ["gzip", "snappy", "zstd"])
 def test_roundtrip_compression(compression, tmp_path):
-    expected = cudf.DataFrame({"a": 1, "b": "2"})
+    expected = cudf.DataFrame({"a": [1], "b": ["2"]})
     fle = BytesIO()
     expected.to_json(fle, engine="cudf", compression=compression)
     result = cudf.read_json(fle, engine="cudf", compression=compression)

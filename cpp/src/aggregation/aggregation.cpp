@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -243,6 +243,12 @@ std::vector<std::unique_ptr<aggregation>> simple_aggregations_collector::visit(
   return visit(col_type, static_cast<aggregation const&>(agg));
 }
 
+std::vector<std::unique_ptr<aggregation>> simple_aggregations_collector::visit(
+  data_type col_type, bitwise_aggregation const& agg)
+{
+  return visit(col_type, static_cast<aggregation const&>(agg));
+}
+
 // aggregation_finalizer ----------------------------------------
 
 void aggregation_finalizer::visit(aggregation const& agg) {}
@@ -417,6 +423,11 @@ void aggregation_finalizer::visit(merge_tdigest_aggregation const& agg)
 }
 
 void aggregation_finalizer::visit(host_udf_aggregation const& agg)
+{
+  visit(static_cast<aggregation const&>(agg));
+}
+
+void aggregation_finalizer::visit(bitwise_aggregation const& agg)
 {
   visit(static_cast<aggregation const&>(agg));
 }
@@ -928,6 +939,18 @@ make_merge_tdigest_aggregation<groupby_aggregation>(int max_centroids);
 template CUDF_EXPORT std::unique_ptr<reduce_aggregation>
 make_merge_tdigest_aggregation<reduce_aggregation>(int max_centroids);
 
+template <typename Base>
+std::unique_ptr<Base> make_bitwise_aggregation(bitwise_op bit_op)
+{
+  return std::make_unique<detail::bitwise_aggregation>(bit_op);
+}
+template CUDF_EXPORT std::unique_ptr<aggregation> make_bitwise_aggregation<aggregation>(
+  bitwise_op bit_op);
+template CUDF_EXPORT std::unique_ptr<groupby_aggregation>
+make_bitwise_aggregation<groupby_aggregation>(bitwise_op bit_op);
+template CUDF_EXPORT std::unique_ptr<reduce_aggregation>
+make_bitwise_aggregation<reduce_aggregation>(bitwise_op bit_op);
+
 namespace detail {
 namespace {
 struct target_type_functor {
@@ -962,4 +985,8 @@ bool is_valid_aggregation(data_type source, aggregation::Kind k)
   return dispatch_type_and_aggregation(source, k, is_valid_aggregation_impl{});
 }
 }  // namespace detail
+bool is_valid_aggregation(data_type source, aggregation::Kind k)
+{
+  return detail::is_valid_aggregation(source, k);
+}
 }  // namespace cudf

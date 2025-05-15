@@ -692,7 +692,7 @@ CUDF_KERNEL void __launch_bounds__(delta_preproc_block_size) gpuComputeDeltaPage
   auto const start_value = pp->start_val;
 
   // if data size is known, can short circuit here
-  if (chunks[pp->chunk_idx].physical_type == FIXED_LEN_BYTE_ARRAY) {
+  if (chunks[pp->chunk_idx].physical_type == Type::FIXED_LEN_BYTE_ARRAY) {
     if (t == 0) {
       pp->str_bytes = pp->num_valids * s->dtype_len_in;
 
@@ -884,7 +884,7 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size) gpuComputePageStringSi
   auto const& col  = s->col;
   size_t str_bytes = 0;
   // short circuit for FIXED_LEN_BYTE_ARRAY
-  if (col.physical_type == FIXED_LEN_BYTE_ARRAY) {
+  if (col.physical_type == Type::FIXED_LEN_BYTE_ARRAY) {
     str_bytes = pp->num_valids * s->dtype_len_in;
   } else {
     // now process string info in the range [start_value, end_value)
@@ -1012,7 +1012,7 @@ void ComputePageStringSizes(cudf::detail::hostdevice_span<PageInfo> pages,
                                                      pages.device_end(),
                                                      page_sizes,
                                                      0L,
-                                                     thrust::plus<int64_t>{});
+                                                     cuda::std::plus<int64_t>{});
 
     // now do an exclusive scan over the temp_string_sizes to get offsets for each
     // page's chunk of the temp buffer
@@ -1023,7 +1023,7 @@ void ComputePageStringSizes(cudf::detail::hostdevice_span<PageInfo> pages,
                                      page_string_offsets.begin(),
                                      page_sizes,
                                      0L,
-                                     thrust::plus<int64_t>{});
+                                     cuda::std::plus<int64_t>{});
 
     // allocate the temp space
     temp_string_buf.resize(total_size, stream);

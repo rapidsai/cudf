@@ -11,6 +11,7 @@ from utils import (
     write_source_str,
 )
 
+from rmm.pylibrmm.device_buffer import DeviceBuffer
 from rmm.pylibrmm.stream import Stream
 
 import pylibcudf as plc
@@ -61,7 +62,7 @@ def test_write_json_nulls(na_rep, include_nulls):
         [pa.array([1.0, 2.0, None]), pa.array([True, None, False])],
         names=names,
     )
-    plc_tbl = plc.interop.from_arrow(pa_tbl)
+    plc_tbl = plc.Table(pa_tbl)
     plc_tbl_w_meta = plc.io.types.TableWithMetadata(
         plc_tbl, column_names=[(name, []) for name in names]
     )
@@ -109,7 +110,7 @@ def test_write_json_nulls(na_rep, include_nulls):
 def test_write_json_bool_opts(true_value, false_value):
     names = ["a"]
     pa_tbl = pa.Table.from_arrays([pa.array([True, None, False])], names=names)
-    plc_tbl = plc.interop.from_arrow(pa_tbl)
+    plc_tbl = plc.Table(pa_tbl)
     plc_tbl_w_meta = plc.io.types.TableWithMetadata(
         plc_tbl, column_names=[(name, []) for name in names]
     )
@@ -308,7 +309,7 @@ def test_read_json_lines_byte_range(source_or_sink, chunk_size):
     full_tbl = pa.concat_tables(tbls)
 
     full_tbl_plc = plc.io.TableWithMetadata(
-        plc.interop.from_arrow(full_tbl),
+        plc.Table(full_tbl),
         tbls_w_meta[0].column_names(include_children=True),
     )
     assert_table_and_meta_eq(pa.Table.from_pandas(exp), full_tbl_plc)
@@ -372,6 +373,62 @@ def test_read_json_lines_recovery_mode(recovery_mode, source_or_sink):
             [[1, 2, None, 3], [10, 11, None, 12]], names=["a", "b"]
         )
         assert_table_and_meta_eq(exp, tbl_w_meta)
+
+
+@pytest.mark.parametrize("num_buffers", [1, 2])
+@pytest.mark.parametrize("stream", [None, Stream()])
+def test_read_json_from_device_buffers(table_data, num_buffers, stream):
+    _, pa_table = table_data
+
+    json_str = pa_table.to_pandas().to_json(orient="records", lines=True)
+    buf = DeviceBuffer.to_device(json_str.encode("utf-8"))
+
+    options = (
+        plc.io.json.JsonReaderOptions.builder(
+            plc.io.SourceInfo([buf] * num_buffers)
+        )
+        .lines(True)
+        .build()
+    )
+    result = plc.io.json.read_json(options, stream)
+
+    expected = (
+        pa_table
+        if num_buffers == 1
+        else pa.concat_tables([pa_table] * num_buffers)
+    )
+
+    if len(expected) == 0:
+        expected = pa.table([])
+    else:
+        new_fields = []
+        for field in expected.schema:
+            if field.type == pa.uint64():
+                field = field.with_type(pa.int64())
+            new_fields.append(field)
+        expected = expected.cast(pa.schema(new_fields))
+
+    assert_table_and_meta_eq(expected, result, check_field_nullability=False)
+
+
+def test_utf8_escaped_json_writer(tmp_path):
+    arrow_table = pa.table({"a": ["C𝞵𝓓𝒻"]})
+    plc_table = plc.Table(arrow_table)
+
+    path = tmp_path / "out.json"
+
+    options = (
+        plc.io.json.JsonWriterOptions.builder(
+            plc.io.SinkInfo([path]), plc_table
+        )
+        .utf8_escaped(False)
+        .build()
+    )
+    plc.io.json.write_json(options)
+
+    output_string = path.read_text(encoding="utf-8").strip()
+
+    assert output_string == '[{"0":"C𝞵𝓓𝒻"}]'
 
 
 # TODO: Add tests for these!

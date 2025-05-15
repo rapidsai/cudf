@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include "compression_common.hpp"
 #include "parquet_common.hpp"
 
 #include <cudf_test/base_fixture.hpp>
@@ -35,6 +36,7 @@
 #include <cudf/io/data_sink.hpp>
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/parquet.hpp>
+#include <cudf/io/parquet_schema.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
@@ -47,7 +49,6 @@
 #include <thrust/iterator/counting_iterator.h>
 
 #include <src/io/parquet/compact_protocol_reader.hpp>
-#include <src/io/parquet/parquet.hpp>
 
 #include <fstream>
 #include <type_traits>
@@ -180,6 +181,8 @@ auto const read_table_and_nrows_per_source(cudf::io::chunked_parquet_reader cons
 }  // namespace
 
 struct ParquetChunkedReaderTest : public cudf::test::BaseFixture {};
+
+using ParquetChunkedDecompressionTest = DecompressionTest<ParquetChunkedReaderTest>;
 
 TEST_F(ParquetChunkedReaderTest, TestChunkedReadNoData)
 {
@@ -1882,3 +1885,55 @@ TEST_F(ParquetChunkedReaderTest, TestNumRowsPerSourceEmptyTable)
   EXPECT_TRUE(
     std::equal(expected_counts.cbegin(), expected_counts.cend(), num_rows_per_source.cbegin()));
 }
+
+TEST_P(ParquetChunkedDecompressionTest, RoundTripBasic)
+{
+  auto const compression_type = std::get<1>(GetParam());
+
+  srand(31337);
+  auto expected = create_compressible_fixed_table<int>(4, 23456, 3, true);
+
+  auto const filepath = temp_env->get_temp_filepath("chunked_decompression");
+  cudf::io::parquet_writer_options args =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, *expected)
+      .compression(compression_type)
+      .row_group_size_rows(2000);
+  cudf::io::write_parquet(args);
+
+  {
+    auto const [result, num_chunks] = chunked_read(filepath, 0, 2'400'000);
+    EXPECT_EQ(num_chunks, 1);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
+  }
+
+  {
+    auto const [result, num_chunks] = chunked_read(filepath, 0, 240'000);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
+  }
+
+  {
+    auto const [result, num_chunks] = chunked_read(filepath, 0, 24'000);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
+  }
+}
+
+INSTANTIATE_TEST_CASE_P(Nvcomp,
+                        ParquetChunkedDecompressionTest,
+                        ::testing::Combine(::testing::Values("NVCOMP"),
+                                           ::testing::Values(cudf::io::compression_type::AUTO,
+                                                             cudf::io::compression_type::SNAPPY,
+                                                             cudf::io::compression_type::LZ4,
+                                                             cudf::io::compression_type::ZSTD)));
+
+INSTANTIATE_TEST_CASE_P(DeviceInternal,
+                        ParquetChunkedDecompressionTest,
+                        ::testing::Combine(::testing::Values("DEVICE_INTERNAL"),
+                                           ::testing::Values(cudf::io::compression_type::AUTO,
+                                                             cudf::io::compression_type::SNAPPY)));
+
+INSTANTIATE_TEST_CASE_P(Host,
+                        ParquetChunkedDecompressionTest,
+                        ::testing::Combine(::testing::Values("HOST"),
+                                           ::testing::Values(cudf::io::compression_type::AUTO,
+                                                             cudf::io::compression_type::SNAPPY,
+                                                             cudf::io::compression_type::ZSTD)));

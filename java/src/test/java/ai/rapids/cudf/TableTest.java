@@ -7867,45 +7867,45 @@ public class TableTest extends CudfTestBase {
   @Test
   void testGroupByMergeM2() {
     StructType nestedType = new StructType(false,
-        new BasicType(true, DType.INT32),
+        new BasicType(true, DType.INT64),
         new BasicType(true, DType.FLOAT64),
         new BasicType(true, DType.FLOAT64));
 
     try (Table partialResults1 = new Table.TestBuilder()
              .column(1, 2, 3, 4)
              .column(nestedType,
-                 struct(1, 0.0, 0.0),
-                 struct(1, 1.0, 0.0),
-                 struct(0, null, null),
-                 struct(0, null, null))
+                 struct(1L, 0.0, 0.0),
+                 struct(1L, 1.0, 0.0),
+                 struct(0L, null, null),
+                 struct(0L, null, null))
              .build();
          Table partialResults2 = new Table.TestBuilder()
              .column(1, 2, 3)
              .column(nestedType,
-                 struct(1, 3.0, 0.0),
-                 struct(1, 4.0, 0.0),
-                 struct(1, 2.0, 0.0))
+                 struct(1L, 3.0, 0.0),
+                 struct(1L, 4.0, 0.0),
+                 struct(1L, 2.0, 0.0))
              .build();
          Table partialResults3 = new Table.TestBuilder()
              .column(1, 2)
              .column(nestedType,
-                 struct(1, 6.0, 0.0),
-                 struct(1, Double.NaN, Double.NaN))
+                 struct(1L, 6.0, 0.0),
+                 struct(1L, Double.NaN, Double.NaN))
              .build();
          Table partialResults4 = new Table.TestBuilder()
              .column(2, 3, 4)
              .column(nestedType,
-                 struct(1, 9.0, 0.0),
-                 struct(1, 8.0, 0.0),
-                 struct(2, Double.NaN, Double.NaN))
+                 struct(1L, 9.0, 0.0),
+                 struct(1L, 8.0, 0.0),
+                 struct(2L, Double.NaN, Double.NaN))
              .build();
          Table expected = new Table.TestBuilder()
              .column(1, 2, 3, 4)
              .column(nestedType,
-                 struct(3, 3.0, 18.0),
-                 struct(4, Double.NaN, Double.NaN),
-                 struct(2, 5.0, 18.0),
-                 struct(2, Double.NaN, Double.NaN))
+                 struct(3L, 3.0, 18.0),
+                 struct(4L, Double.NaN, Double.NaN),
+                 struct(2L, 5.0, 18.0),
+                 struct(2L, Double.NaN, Double.NaN))
              .build()) {
       try (Table concatenatedResults = Table.concatenate(
              partialResults1,
@@ -8434,6 +8434,87 @@ public class TableTest extends CudfTestBase {
       assertColumnsAreEqual(expectedListOfDoubles.getColumn(1), listsDoublesSorted);
       assertColumnsAreEqual(expectedListOfDoublesNaNEq.getColumn(1), listsDoublesNaNEqSorted);
 
+    }
+  }
+
+  @Test
+  void testGroupByBitAnd() {
+    try (Table t1 = new Table.TestBuilder()
+        .column(0x1F, 0x0F, 0x33, 0x55, 0x3F, 0x2F, 0x0F, 0x42)
+        .column(1, 1, 2, 2, 2, 3, 3, 4).build();
+         Table output = t1.groupBy(1).aggregate(GroupByAggregation.bitAnd().onColumn(0));
+         Table ordered = output.orderBy(OrderByArg.asc(0));
+         Table expected = new Table.TestBuilder()
+             .column(1, 2, 3, 4)
+             .column(0x1F & 0x0F,
+                 0x33 & 0x55 & 0x3F,
+                 0x2F & 0x0F,
+                 0x42)
+             .build()) {
+      assertTablesAreEqual(expected, ordered);
+    }
+  }
+
+  @Test
+  void testGroupByBitOr() {
+    try (Table t1 = new Table.TestBuilder()
+        .column(0x1F, 0x0F, 0x33, 0x55, 0x3F, 0x2F, 0x0F, 0x42)
+        .column(1, 1, 2, 2, 2, 3, 3, 4).build();
+         Table output = t1.groupBy(1).aggregate(GroupByAggregation.bitOr().onColumn(0));
+         Table ordered = output.orderBy(OrderByArg.asc(0));
+         Table expected = new Table.TestBuilder()
+             .column(1, 2, 3, 4)
+             .column(0x1F | 0x0F,
+                 0x33 | 0x55 | 0x3F,
+                 0x2F | 0x0F,
+                 0x42)
+             .build()) {
+      assertTablesAreEqual(expected, ordered);
+    }
+  }
+
+  @Test
+  void testGroupByBitXor() {
+    try (Table t1 = new Table.TestBuilder()
+        .column(0x1F, 0x0F, 0x33, 0x55, 0x3F, 0x2F, 0x0F, 0x42)
+        .column(1, 1, 2, 2, 2, 3, 3, 4).build();
+         Table output = t1.groupBy(1).aggregate(GroupByAggregation.bitXor().onColumn(0));
+         Table ordered = output.orderBy(OrderByArg.asc(0));
+         Table expected = new Table.TestBuilder()
+             .column(1, 2, 3, 4)
+             .column(0x1F ^ 0x0F,
+                 0x33 ^ 0x55 ^ 0x3F,
+                 0x2F ^ 0x0F,
+                 0x42)
+             .build()) {
+      assertTablesAreEqual(expected, ordered);
+    }
+  }
+
+  @Test
+  void testReductionBitAnd() {
+    try (ColumnVector input = ColumnVector.fromInts(0x1F, 0x0F, 0x33, 0xFF, 0x2F, 0x3F);
+         Scalar result = input.reduce(ReductionAggregation.bitAnd())) {
+      int expected = 0x1F & 0x0F & 0x33 & 0xFF & 0x2F & 0x3F;
+      assertEquals(expected, result.getInt());
+    }
+  }
+
+  @Test
+  void testReductionBitOr() {
+    try (ColumnVector input = ColumnVector.fromInts(0x1F, 0x0F, 0x33, 0xFF, 0x2F, 0x3F);
+         Scalar result = input.reduce(ReductionAggregation.bitOr())) {
+      int expected = 0x1F | 0x0F | 0x33 | 0xFF | 0x2F | 0x3F;
+      assertEquals(expected, result.getInt());
+    }
+  }
+
+  @Test
+  void testReductionBitXor() {
+    try (ColumnVector input = ColumnVector.fromInts(0x1F, 0x0F, 0x33, 0xFF, 0x2F, 0x3F);
+         Scalar result = input.reduce(ReductionAggregation.bitXor())) {
+      int expected = 0x1F ^ 0x0F ^ 0x33 ^ 0xFF ^ 0x2F ^ 0x3F;
+      assertEquals(expected, result.getInt());
     }
   }
 
