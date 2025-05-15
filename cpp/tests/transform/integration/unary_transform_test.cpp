@@ -590,11 +590,12 @@ TEST_F(StringOperationTest, Output)
 
 TEST_F(StringOperationTest, StringConcat)
 {
-  auto first_name =
-    cudf::test::strings_column_wrapper{"John", "Mia", "Abd", "Mendes", "Arya", "John"};
-  auto last_name =
-    cudf::test::strings_column_wrapper{"Doe", "Folk", "Louis", "Xi", "Serenity", "Scott"};
-  rmm::device_buffer scratch(100 * 6, cudf::get_default_stream());
+  auto first_name = cudf::test::strings_column_wrapper{
+    "John", "Mia", "Abd", "Mendes", "Arya", "John", u8"François", u8"José", u8"Søren", u8"张"};
+  auto last_name = cudf::test::strings_column_wrapper{
+    "Doe", "Folk", "Louis", "Xi", "Serenity", "Scott", u8"Ольга", u8"Łukasz", u8"Zoë", u8"伟"};
+  rmm::device_buffer scratch(100 * static_cast<cudf::column_view>(first_name).size(),
+                             cudf::get_default_stream());
   auto scratch_sizes = cudf::test::fixed_width_column_wrapper<int32_t>{100};
 
   std::string cuda = R"***(
@@ -620,9 +621,17 @@ __device__ void transform(void* user_data, cudf::size_type row,
 }
     )***";
 
-  auto expected = cudf::test::strings_column_wrapper{
-    "John Doe", "Mia Folk", "Abd Louis", "Mendes Xi", "Arya Serenity", "John Scott"};
-  auto result = cudf::transform({first_name, last_name, scratch_sizes},
+  auto expected = cudf::test::strings_column_wrapper{"John Doe",
+                                                     "Mia Folk",
+                                                     "Abd Louis",
+                                                     "Mendes Xi",
+                                                     "Arya Serenity",
+                                                     "John Scott",
+                                                     u8"François Ольга",
+                                                     u8"José Łukasz",
+                                                     u8"Søren Zoë",
+                                                     u8"张 伟"};
+  auto result   = cudf::transform({first_name, last_name, scratch_sizes},
                                 cuda,
                                 cudf::data_type(cudf::type_id::STRING),
                                 false,
