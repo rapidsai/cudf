@@ -4734,9 +4734,9 @@ class CategoricalIndex(Index):
         elif isinstance(getattr(data, "dtype", None), pd.CategoricalDtype):
             data = as_column(data)
         else:
-            data = as_column(
-                data, dtype=cudf.CategoricalDtype() if dtype is None else dtype
-            )
+            data = as_column(data)
+            if not isinstance(data.dtype, cudf.CategoricalDtype):
+                data = data.astype(cudf.CategoricalDtype())
             # dtype has already been taken care
             dtype = None
 
