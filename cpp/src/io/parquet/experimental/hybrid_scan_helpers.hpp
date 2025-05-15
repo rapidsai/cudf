@@ -52,46 +52,29 @@ struct metadata : private metadata_base {
 class aggregate_reader_metadata : public aggregate_reader_metadata_base {
  private:
   /**
-   * @brief Materializes column chunk dictionary pages into `cuco::static_set`s
-   *
-   * @param dictionary_page_data Dictionary page data device buffers for each input row group
-   * @param input_row_group_indices Lists of input row groups, one per source
-   * @param total_row_groups Total number of row groups in `input_row_group_indices`
-   * @param output_dtypes Datatypes of output columns
-   * @param dictionary_col_schemas schema indices of dictionary columns only
-   * @param stream CUDA stream used for device memory operations and kernel launches
-   *
-   * @return A flattened list of `cuco::static_set_ref` device buffers for each filter column
-   * across row groups
-   */
-  [[nodiscard]] std::vector<rmm::device_buffer> materialize_dictionaries(
-    cudf::host_span<rmm::device_buffer> dictionary_page_data,
-    host_span<std::vector<size_type> const> input_row_group_indices,
-    host_span<data_type const> output_dtypes,
-    host_span<int const> dictionary_col_schemas,
-    rmm::cuda_stream_view stream) const;
-
-  /**
    * @brief Filters the row groups using dictionary pages
    *
-   * @param dictionaries `cuco::static_set_ref` device buffers for column chunk dictionary
+   * @param chunks Host device span of column chunk descriptors, one per column chunk with
+   *               dictionary page and (in)equality predicate
+   * @param pages Host device span of decoded page headers, one per column chunk with dictionary
+   *              page and (in)equality predicate
    * @param input_row_group_indices Lists of input row groups, one per source
-   * @param literals Lists of literals, one per input column
-   * @param operators Lists of operators, one per input column
+   * @param literals Lists of literals, one per column with (in)equality predicate
+   * @param operators Lists of operators, one per column with (in)equality predicate
    * @param total_row_groups Total number of row groups in `input_row_group_indices`
-   * @param output_dtypes Datatypes of output columns
-   * @param dictionary_col_schemas schema indices of dictionary columns only
-   * @param filter AST expression to filter row groups based on bloom filter membership
+   * @param dictionary_col_schemas Schema indices of columns with (in)equality predicate
+   * @param filter AST expression to filter row groups based on dictionary pages
    * @param stream CUDA stream used for device memory operations and kernel launches
    *
-   * @return Surviving row group indices if any of them are filtered.
+   * @return A pair of filtered row group indices if any is filtered.
    */
-  [[nodiscard]] std::optional<std::vector<std::vector<size_type>>> apply_dictionary_filter(
-    cudf::host_span<rmm::device_buffer> dictionaries,
+  [[nodiscard]] std::optional<std::vector<std::vector<cudf::size_type>>> apply_dictionary_filter(
+    cudf::detail::hostdevice_span<parquet::detail::ColumnChunkDesc const> chunks,
+    cudf::detail::hostdevice_span<parquet::detail::PageInfo const> pages,
     host_span<std::vector<size_type> const> input_row_group_indices,
     host_span<std::vector<ast::literal*> const> literals,
-    host_span<std::vector<ast::ast_operator> const> operators,
-    size_type total_row_groups,
+    cudf::host_span<std::vector<ast::ast_operator> const> operators,
+    size_t total_row_groups,
     host_span<data_type const> output_dtypes,
     host_span<int const> dictionary_col_schemas,
     std::reference_wrapper<ast::expression const> filter,
@@ -156,12 +139,31 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
                            type_id timestamp_type_id);
 
   /**
+   * @brief Filters and reduces down to a selection of row groups
+   *
+   * The input `row_start` and `row_count` parameters will be recomputed and output as the valid
+   * values based on the input row group list.
+   *
+   * @param row_group_indices Lists of row groups to read, one per source
+   * @param row_start Starting row of the selection
+   * @param row_count Total number of rows selected
+   *
+   * @return A tuple of corrected row_start, row_count, list of row group indexes and its
+   *         starting row, list of number of rows per source, number of input row groups, and a
+   *         struct containing the number of row groups surviving each predicate pushdown filter
+   */
+  [[nodiscard]] std::tuple<int64_t, size_type, std::vector<row_group_info>> select_row_groups(
+    host_span<std::vector<size_type> const> row_group_indices,
+    int64_t row_start,
+    std::optional<size_type> const& row_count);
+
+  /**
    * @brief Filter the row groups with statistics based on predicate filter
    *
    * @param row_group_indices Input row groups indices
    * @param output_dtypes Datatypes of output columns
    * @param output_column_schemas schema indices of output columns
-   * @param filter Optional AST expression to filter row groups based on Column chunk statistics
+   * @param filter AST expression to filter row groups based on Column chunk statistics
    * @param stream CUDA stream used for device memory operations and kernel launches
    *
    * @return Filtered row group indices, if any are filtered
@@ -170,8 +172,70 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
     host_span<std::vector<size_type> const> row_group_indices,
     host_span<data_type const> output_dtypes,
     host_span<int const> output_column_schemas,
-    std::optional<std::reference_wrapper<ast::expression const>> filter,
+    std::reference_wrapper<ast::expression const> filter,
     rmm::cuda_stream_view stream) const;
+
+  /**
+   * @brief Filter the row groups using dictionaries based on predicate filter
+   *
+   * @param chunks Host device span of column chunk descriptors, one per column chunk with
+   *               dictionary page and (in)equality predicate
+   * @param pages Host device span of decoded page headers, one per column chunk with dictionary
+   *              page and (in)equality predicate
+   * @param row_group_indices Input row groups indices
+   * @param literals Lists of literals, one per input column
+   * @param operators Lists of operators, one per input column
+   * @param output_dtypes Datatypes of output columns
+   * @param dictionary_col_schemas Schema indices of output columns with (in)equality predicate
+   * @param filter AST expression to filter row groups based on dictionary pages
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   *
+   * @return Filtered row group indices, if any are filtered
+   */
+  [[nodiscard]] std::vector<std::vector<cudf::size_type>> filter_row_groups_with_dictionary_pages(
+    cudf::detail::hostdevice_span<parquet::detail::ColumnChunkDesc const> chunks,
+    cudf::detail::hostdevice_span<parquet::detail::PageInfo const> pages,
+    cudf::host_span<std::vector<cudf::size_type> const> row_group_indices,
+    cudf::host_span<std::vector<ast::literal*> const> literals,
+    cudf::host_span<std::vector<ast::ast_operator> const> operators,
+    cudf::host_span<data_type const> output_dtypes,
+    cudf::host_span<int const> dictionary_col_schemas,
+    std::reference_wrapper<ast::expression const> filter,
+    rmm::cuda_stream_view stream) const;
+};
+
+/**
+ * @brief Collects lists of equal and not-equal predicate literals and operators in the AST
+ * expression, one per input table column. This is used in row group filtering based on dictionary
+ * pages
+ */
+class dictionary_literals_collector : public equality_literals_collector {
+ public:
+  dictionary_literals_collector() = default;
+
+  dictionary_literals_collector(ast::expression const& expr, cudf::size_type num_input_columns);
+
+  // Bring all overloads of `visit` from equality_literals_collector into scope
+  using equality_literals_collector::visit;
+
+  /**
+   * @copydoc ast::detail::expression_transformer::visit(ast::operation const& )
+   */
+  std::reference_wrapper<ast::expression const> visit(ast::operation const& expr) override;
+
+  /**
+   * @brief Returns vectors of collected literals and (in)equality operators in the AST expression,
+   * one per input table column
+   *
+   * @return A pair of vectors of collected literals and (in)equality operators, one per input table
+   * column
+   */
+  [[nodiscard]] std::pair<std::vector<std::vector<ast::literal*>>,
+                          std::vector<std::vector<ast::ast_operator>>>
+  get_literals_and_operators() &&;
+
+ private:
+  std::vector<std::vector<ast::ast_operator>> _operators;
 };
 
 }  // namespace cudf::io::parquet::experimental::detail
