@@ -996,6 +996,10 @@ class MultiIndex(Index):
             return result
 
     @_performance_tracking
+    def equals(self, other) -> bool:
+        return Frame.equals(self, other)
+
+    @_performance_tracking
     def to_arrow(self) -> pa.Table:
         return Frame.to_arrow(self)
 
