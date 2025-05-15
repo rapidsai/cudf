@@ -4482,7 +4482,7 @@ def test_parquet_decompression(set_decomp_env_vars, my_pdf, compression):
 def test_parquet_reader_many_large_lists():
     NROWS = 10_000_000
     MIN_NTIMES = 150
-    df = cudf.DataFrame({"a": [[1.0, 2.0]] * NROWS})
+    df = cudf.DataFrame({"a": [[True, False]] * NROWS})
     buffer = BytesIO()
     df.to_parquet(buffer)
     buffers = [buffer] * MIN_NTIMES
