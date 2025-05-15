@@ -33,15 +33,15 @@ std::unique_ptr<cudf::column> transform(cudf::table_view const& table)
                                  cudf::string_view const alt)
   {
     auto pos = email.find('@');
-  
+
     if (pos == cudf::string_view::npos) {
       *out = alt;
       return;
     }
-  
+
     auto provider_begin = pos + 1;
     auto provider       = email.substr(provider_begin, email.length() - provider_begin);
-  
+
     *out = provider;
   }
   )***";

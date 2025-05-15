@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright (c) 2021-2024, NVIDIA CORPORATION.
+# Copyright (c) 2021-2025, NVIDIA CORPORATION.
 
 # libcudf examples build script
 
