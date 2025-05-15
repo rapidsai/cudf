@@ -376,8 +376,8 @@ class hybrid_scan_reader {
    * @note The `bloom_filter_data` device buffers must be allocated using a 32
    *       byte aligned memory resource
    *
-   * @param bloom_filter_data 32 byte aligned device buffers containing bloom filter data of column
-                              chunks with equality predicate.
+   * @param bloom_filter_data Device buffers containing bloom filter data of column chunks with
+   *                          an equality predicate
    * @param row_group_indices Input row groups indices
    * @param options Parquet reader options
    * @param stream CUDA stream used for device memory operations and kernel launches
