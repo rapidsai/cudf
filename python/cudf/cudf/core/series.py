@@ -3820,6 +3820,8 @@ class Series(SingleColumnFrame, IndexedFrame):
         ----------
         col : pylibcudf.Column
             The input Column.
+        metadata : dict | None
+            The Series metadata.
 
         Returns
         -------
