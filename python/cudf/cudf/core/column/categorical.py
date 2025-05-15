@@ -781,9 +781,6 @@ class CategoricalColumn(column.ColumnBase):
         nullable: bool = False,
         arrow_type: bool = False,
     ) -> pd.Index:
-        # Check if dtype is a pandas extension dtype directly
-        # if arrow_type or isinstance(self.dtype, pd.ArrowDtype):
-        #     return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
         if nullable:
             raise NotImplementedError(f"{arrow_type=} is not implemented.")
 
@@ -814,10 +811,7 @@ class CategoricalColumn(column.ColumnBase):
         data = pd.Categorical.from_codes(
             codes, categories=cats.to_pandas(), ordered=col.ordered
         )
-        res = pd.Index(data)
-        if isinstance(self.dtype, pd.ArrowDtype):
-            res = res.astype(self.dtype)
-        return res
+        return pd.Index(data)
 
     def to_arrow(self) -> pa.Array:
         """Convert to PyArrow Array."""
@@ -1175,10 +1169,7 @@ class CategoricalColumn(column.ColumnBase):
                 categories=self.categories.copy(),
                 ordered=self.ordered,
             )
-            result_col = cast(
-                Self,
-                result_col._with_type_metadata(dtype_copy),
-            )
+            result_col = cast(Self, result_col._with_type_metadata(dtype_copy))
         return result_col
 
     @cached_property
@@ -1241,14 +1232,7 @@ class CategoricalColumn(column.ColumnBase):
         )
 
     def _with_type_metadata(self: Self, dtype: Dtype) -> Self:
-        if isinstance(
-            dtype,
-            (
-                CategoricalDtype,
-                pd.ArrowDtype,
-                # pd.core.dtypes.dtypes.ExtensionDtype,
-            ),
-        ):
+        if isinstance(dtype, CategoricalDtype):
             result = type(self)(
                 data=self.data,  # type: ignore[arg-type]
                 size=self.codes.size,

@@ -995,9 +995,6 @@ class GroupBy(Serializable, Reducible, Scannable):
         column_names, columns, normalized_aggs = self._normalize_aggs(
             func, **kwargs
         )
-        # Store info about input columns:
-        # - original dtypes so we can cast back if needed
-        # - original columns for broadcasting
         orig_dtypes = tuple(c.dtype for c in columns)
 
         # Note: When there are no key columns, the below produces

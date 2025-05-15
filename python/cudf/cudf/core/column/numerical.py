@@ -401,9 +401,8 @@ class NumericalColumn(NumericalBaseColumn):
             if dtype_to_pylibcudf_type(dtype) == dtype_to_pylibcudf_type(
                 self.dtype
             ):
-                res = self.copy(deep=True)
-                res._dtype = dtype
-                return res
+                self._dtype = dtype
+                return self
         return self.cast(dtype=dtype)  # type: ignore[return-value]
 
     def all(self, skipna: bool = True) -> bool:

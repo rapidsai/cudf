@@ -1222,7 +1222,10 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         elif isinstance(data, Mapping):
             # Note: We excluded ColumnAccessor already above
             result = _mapping_to_column_accessor(
-                data, index, dtype, nan_as_null
+                data,
+                index,
+                cudf.dtype(dtype) if dtype is not None else None,
+                nan_as_null,
             )
             col_dict = result[0]
             index = result[1]

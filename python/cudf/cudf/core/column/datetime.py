@@ -629,7 +629,7 @@ class DatetimeColumn(TemporalBaseColumn):
                 self._dtype = dtype
             else:
                 self._dtype = get_dtype_of_same_kind(dtype, self.dtype)
-        # return self
+
         return self
 
     def _find_ambiguous_and_nonexistent(

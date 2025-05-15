@@ -128,7 +128,7 @@ def benchmark_with_object(
     if rows is not None:
         assert rows in NUM_ROWS, (
             f"You have requested a {cls} with {rows} rows but fixtures "
-            f"only exist for the values {', '.join(NUM_ROWS)}"
+            f"only exist for the values {', '.join(str(NUM_ROWS))}"
         )
         row_str = f"_rows_{rows}"
 

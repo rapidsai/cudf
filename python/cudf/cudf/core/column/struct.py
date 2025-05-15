@@ -211,9 +211,7 @@ class StructColumn(ColumnBase):
         elif isinstance(dtype, pd.ArrowDtype) and isinstance(
             dtype.pyarrow_dtype, pa.StructType
         ):
-            result = self.copy(deep=False)
-            result._dtype = dtype
-            return result
+            self._dtype = dtype
 
         return self
 

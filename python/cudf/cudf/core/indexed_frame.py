@@ -5393,7 +5393,6 @@ class IndexedFrame(Frame):
             index = None
 
         result = type(self)._from_data(data, index)
-        # result._set_columns_like(self._data)
         return result
 
     @_performance_tracking
@@ -6776,6 +6775,7 @@ def _drop_rows_by_labels(
             )
 
     else:
+        orig_index_type = obj.index.dtype
         if errors == "raise" and not labels.isin(obj.index).all():  # type: ignore[union-attr]
             raise KeyError("One or more values not found in axis")
 
@@ -6792,7 +6792,7 @@ def _drop_rows_by_labels(
         # Join changes the index to common type,
         # but we need to preserve the type of
         # index being returned, Hence this type-cast.
-        res.index = res.index.astype(obj.index.dtype)
+        res.index = res.index.astype(orig_index_type)
         return res
 
 

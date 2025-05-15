@@ -919,15 +919,17 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 plc.interop.from_arrow(data).columns()[0]
             )
 
-            # Special handling for pandas dtypes
-            if hasattr(array, "_pandas_type"):
-                if isinstance(array._pandas_type, pd.ArrowDtype):
-                    result._dtype = array._pandas_type
-                elif isinstance(
-                    array._pandas_type, pd.core.dtypes.dtypes.ExtensionDtype
-                ):
-                    result._dtype = array._pandas_type
-                return result
+            if cudf.get_option("mode.pandas_compatible"):
+                # Special handling for pandas dtypes
+                if hasattr(array, "_pandas_type"):
+                    if isinstance(array._pandas_type, pd.ArrowDtype):
+                        result._dtype = array._pandas_type
+                    elif isinstance(
+                        array._pandas_type,
+                        pd.core.dtypes.dtypes.ExtensionDtype,
+                    ):
+                        result._dtype = array._pandas_type
+                    return result
 
             # Return a column with the appropriately converted dtype
             return result._with_type_metadata(
@@ -1948,10 +1950,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         except AttributeError:
             if isinstance(self.dtype, pd.ArrowDtype):
                 header["dtype"] = pickle.dumps(self.dtype)
-                header["dtype-is-cudf-serialized"] = False
             else:
                 header["dtype"] = self.dtype.str
-                header["dtype-is-cudf-serialized"] = False
+            header["dtype-is-cudf-serialized"] = False
 
         if self.data is not None:
             data_header, data_frames = self.data.device_serialize()
@@ -2094,9 +2095,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         if isinstance(
             dtype, (pd.ArrowDtype, pd.core.dtypes.dtypes.ExtensionDtype)
         ):
-            result = self.copy(deep=False)
-            result._dtype = dtype
-            return result
+            self._dtype = dtype
         return self
 
     def _label_encoding(
@@ -2265,8 +2264,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 result_col = type(self).from_struct_column(  # type: ignore[attr-defined]
                     result_col, closed=col_dtype.closed
                 )
-            # else:
-            #     result_col = result_col._with_type_metadata(col_dtype)
         return result_col.element_indexing(0)
 
     @acquire_spill_lock()
