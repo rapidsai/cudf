@@ -7,7 +7,7 @@ from __future__ import annotations
 import operator
 from collections import defaultdict
 from functools import reduce
-from typing import TYPE_CHECKING, Any, Self
+from typing import TYPE_CHECKING
 
 from cudf_polars.dsl.ir import (
     IR,
@@ -27,6 +27,8 @@ from cudf_polars.experimental.io import Scan, SplitScan
 if TYPE_CHECKING:
     from collections.abc import Callable, MutableMapping, Sequence
     from typing import Any
+
+    from typing_extensions import Self
 
     from cudf_polars.containers import DataFrame
     from cudf_polars.experimental.base import PartitionInfo
