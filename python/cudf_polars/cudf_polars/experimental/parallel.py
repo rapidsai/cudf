@@ -227,7 +227,7 @@ def evaluate_streaming(ir: IR, config_options: ConfigOptions) -> DataFrame:
 
 
 @generate_ir_tasks.register(IR)
-def _default_generate_ir_tasks(
+def _(
     ir: IR, partition_info: MutableMapping[IR, PartitionInfo]
 ) -> MutableMapping[Any, Any]:
     # Generate pointwise (embarrassingly-parallel) tasks by default

@@ -17,7 +17,7 @@ from cudf_polars.dsl.ir import (
     Sort,
 )
 from cudf_polars.dsl.translate import Translator
-from cudf_polars.experimental.fusion import Fused
+from cudf_polars.experimental.fusion import Fused, FusedIO
 from cudf_polars.experimental.parallel import lower_ir_graph
 from cudf_polars.utils.config import ConfigOptions
 
@@ -134,6 +134,6 @@ def _(ir: Scan, *, offset: str = "") -> str:
 @_repr_ir.register
 def _(ir: Fused, *, offset: str = "") -> str:
     nodes = tuple(type(node).__name__.upper() for node in ir.subnodes)
-    if ir.fused_io:
+    if isinstance(ir, FusedIO):
         nodes = (type(ir.fused_io.children[0]).__name__.upper(), *nodes)
     return _repr_header(offset, f"FUSED {nodes}", ir.schema)
