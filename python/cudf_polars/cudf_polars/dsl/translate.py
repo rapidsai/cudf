@@ -493,6 +493,40 @@ def _(node: pl_ir.HConcat, translator: Translator, schema: Schema) -> ir.IR:
     )
 
 
+@_translate_ir.register
+def _(
+    node: pl_ir.Sink, translator: Translator, schema: dict[str, plc.DataType]
+) -> ir.IR:
+    payload = json.loads(node.payload)
+    try:
+        file = payload["File"]
+        sink_kind_options = file["file_type"]
+    except KeyError as err:  # pragma: no cover
+        raise NotImplementedError("Unsupported payload structure") from err
+    if isinstance(sink_kind_options, dict):
+        if len(sink_kind_options) != 1:  # pragma: no cover; not sure if this can happen
+            raise NotImplementedError("Sink options dict with more than one entry.")
+        sink_kind, options = next(iter(sink_kind_options.items()))
+    else:
+        raise NotImplementedError(
+            "Unsupported sink options structure"
+        )  # pragma: no cover
+
+    sink_options = file.get("sink_options", {})
+    cloud_options = file.get("cloud_options")
+
+    options.update(sink_options)
+
+    return ir.Sink(
+        schema=schema,
+        kind=sink_kind,
+        path=file["target"],
+        options=options,
+        cloud_options=cloud_options,
+        df=translator.translate_ir(n=node.input),
+    )
+
+
 def translate_named_expr(
     translator: Translator, *, n: pl_expr.PyExprIR, schema: Schema
 ) -> expr.NamedExpr:
