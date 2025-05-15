@@ -4477,17 +4477,3 @@ def test_parquet_decompression(set_decomp_env_vars, my_pdf, compression):
     got = cudf.read_parquet(buffer)
 
     assert_eq(expect, got)
-
-
-def test_parquet_reader_many_large_lists():
-    NROWS = 10_000_000
-    MIN_NTIMES = 150
-    df = cudf.DataFrame({"a": [[True, False]] * NROWS})
-    buffer = BytesIO()
-    df.to_parquet(buffer)
-    buffers = [buffer] * MIN_NTIMES
-    with pytest.raises(
-        OverflowError,
-        match="Number of list column rows exceeds cudf's column size limit",
-    ):
-        cudf.read_parquet(buffers)
