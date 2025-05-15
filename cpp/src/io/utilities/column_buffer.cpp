@@ -98,6 +98,9 @@ void column_buffer_base<string_policy>::create_with_mask(size_type _size,
                                                          rmm::cuda_stream_view stream,
                                                          rmm::device_async_resource_ref mr)
 {
+  CUDF_EXPECTS(_size >= 0 and _size <= std::numeric_limits<cudf::size_type>::max(),
+               "Unexpected column buffer allocation size requested",
+               std::overflow_error);
   size = _size;
   _mr  = mr;
 
