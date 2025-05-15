@@ -1060,7 +1060,6 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         copy=None,
         nan_as_null=no_default,
     ):
-        # import pdb;pdb.set_trace()
         if copy is not None:
             raise NotImplementedError("copy is not currently implemented.")
         if nan_as_null is no_default:
@@ -1522,7 +1521,6 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
     @_performance_tracking
     def __setitem__(self, arg, value):
         """Add/set column by *arg or DataFrame*"""
-        # import pdb;pdb.set_trace()
         if isinstance(arg, DataFrame):
             # not handling set_item where arg = df & value = df
             if isinstance(value, DataFrame):
@@ -2021,7 +2019,6 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         copy: bool = False,
         errors: Literal["raise", "ignore"] = "raise",
     ) -> Self:
-        # import pdb;pdb.set_trace()
         if is_dict_like(dtype):
             if len(set(dtype.keys()) - set(self._column_names)) > 0:  # type: ignore[union-attr]
                 raise KeyError(
@@ -4578,7 +4575,6 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         observed=True,
         dropna=True,
     ):
-        # import pdb;pdb.set_trace()
         return super().groupby(
             by,
             axis,
@@ -6592,7 +6588,6 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         numeric_only=False,
         **kwargs,
     ):
-        # import pdb;pdb.set_trace()
         source = self
 
         if axis is None:
@@ -6684,7 +6679,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                     idx = MultiIndex.from_pandas(pd_index)
                 else:
                     idx = cudf.Index.from_pandas(pd_index)
-                # import pdb;pdb.set_trace()
+
                 res = as_column(
                     axis_0_results,
                     nan_as_null=not cudf.get_option("mode.pandas_compatible"),
@@ -8299,7 +8294,6 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         6         0            1
         Name: count, dtype: int64
         """
-        # import pdb;pdb.set_trace()
         if subset:
             diff = set(subset) - set(self._data)
             if len(diff) != 0:

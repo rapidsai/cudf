@@ -231,7 +231,6 @@ def is_mixed_with_object_dtype(lhs, rhs):
 
 
 def _get_nan_for_dtype(dtype: DtypeObj) -> DtypeObj:
-    # import pdb;pdb.set_trace()
     if dtype.kind in "mM":
         time_unit, _ = np.datetime_data(dtype)
         return dtype.type("nat", time_unit)
@@ -445,9 +444,6 @@ def is_pandas_nullable_extension_dtype(dtype_to_check) -> bool:
 
 
 def dtype_to_pylibcudf_type(dtype) -> plc.DataType:
-    # if cudf.get_option("mode.pandas_compatible"):
-    # import pdb;pdb.set_trace()
-    # print(dtype)
     if isinstance(dtype, pd.ArrowDtype):
         dtype = pyarrow_dtype_to_cudf_dtype(dtype)
     if isinstance(dtype, cudf.ListDtype):
@@ -522,7 +518,7 @@ def get_dtype_of_same_kind(source_dtype: DtypeObj, target_dtype: DtypeObj):
     ):
         return target_dtype
     else:
-        raise TypeError(f"Cannot convert {source_dtype} to {target_dtype}")
+        return target_dtype
 
 
 def dtype_from_pylibcudf_column(col: plc.Column) -> DtypeObj:

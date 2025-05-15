@@ -842,7 +842,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             if _is_all_scan_aggregate(aggregations)
             else self._groupby.plc_groupby.aggregate(requests)
         )
-        # import pdb;pdb.set_trace()
+
         for i, result, val in zip(column_included, results, values):
             result_columns[i] = [
                 ColumnBase.from_pylibcudf(col)._with_type_metadata(val.dtype)
@@ -1035,7 +1035,6 @@ class GroupBy(Serializable, Reducible, Scannable):
                 ):
                     # Structs lose their labels which we reconstruct here
                     col = col._with_type_metadata(cudf.ListDtype(orig_dtype))
-                # import pdb;pdb.set_trace()
                 if agg_kind in {"COUNT", "SIZE", "ARGMIN", "ARGMAX"}:
                     data[key] = col.astype(np.dtype(np.int64))
                 elif (

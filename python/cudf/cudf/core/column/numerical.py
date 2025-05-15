@@ -398,7 +398,6 @@ class NumericalColumn(NumericalBaseColumn):
         if dtype == self.dtype:
             return self
         if cudf.get_option("mode.pandas_compatible"):
-            # import pdb;pdb.set_trace()
             if dtype_to_pylibcudf_type(dtype) == dtype_to_pylibcudf_type(
                 self.dtype
             ):
@@ -707,11 +706,9 @@ class NumericalColumn(NumericalBaseColumn):
                 children=(codes,),
             )
         if cudf.get_option("mode.pandas_compatible"):
-            # import pdb;pdb.set_trace()
             if dtype_to_pylibcudf_type(dtype) == dtype_to_pylibcudf_type(
                 self.dtype
             ):
-                # res = self.copy(deep=False)
                 self._dtype = dtype
             else:
                 self._dtype = get_dtype_of_same_kind(dtype, self.dtype)
@@ -726,7 +723,6 @@ class NumericalColumn(NumericalBaseColumn):
         return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
 
     def _reduction_result_dtype(self, reduction_op: str) -> Dtype:
-        # import pdb;pdb.set_trace()
         if reduction_op in {"sum", "product"}:
             if self.dtype.kind == "f":
                 return self.dtype

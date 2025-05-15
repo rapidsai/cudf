@@ -365,7 +365,6 @@ class ColumnAccessor(abc.MutableMapping):
             raise ValueError("All columns must be of equal length")
 
         # TODO: we should move all insert logic here
-        # import pdb;pdb.set_trace()
         if loc == old_ncols:
             self._data[name] = value
         else:

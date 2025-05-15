@@ -1719,12 +1719,10 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         ):
             result.dtype.precision = dtype.precision  # type: ignore[union-attr]
         if cudf.get_option("mode.pandas_compatible") and result.dtype != dtype:
-            # import pdb;pdb.set_trace()
             result._dtype = dtype
         return result
 
     def astype(self, dtype: DtypeObj, copy: bool = False) -> ColumnBase:
-        # import pdb;pdb.set_trace()
         if self.dtype == dtype:
             result = self
         elif len(self) == 0:
@@ -2042,7 +2040,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             The minimum number of entries for the reduction, otherwise the
             reduction returns NaN.
         """
-        # import pdb;pdb.set_trace()
         preprocessed = self._process_for_reduction(
             skipna=skipna, min_count=min_count
         )
@@ -2218,7 +2215,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         )
 
     def reduce(self, reduction_op: str, **kwargs) -> ScalarLike:
-        # import pdb;pdb.set_trace()
         col_dtype = self._reduction_result_dtype(reduction_op)
 
         # check empty case
@@ -2836,8 +2832,14 @@ def as_column(
                 length=length,
             )
         elif is_pandas_nullable_extension_dtype(arbitrary.dtype):
-            if getattr(arbitrary.dtype, "pyarrow_dtype", None) == pa.date32():
-                raise NotImplementedError("cuDF does not yet support date32")
+            arrow_type = getattr(arbitrary.dtype, "pyarrow_dtype", None)
+            if arrow_type is not None and (
+                arrow_type == pa.date32()
+                or isinstance(arrow_type, pa.DictionaryType)
+            ):
+                raise NotImplementedError(
+                    f"cuDF does not yet support {arbitrary.dtype}"
+                )
             if isinstance(arbitrary, (pd.Series, pd.Index)):
                 # pandas arrays define __arrow_array__ for better
                 # pyarrow.array conversion

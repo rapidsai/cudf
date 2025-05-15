@@ -485,7 +485,6 @@ def run_groupby_apply_jit_test(data, func, keys, *args):
         func, *args, engine="jit", include_groups=False
     )
     pandas_result = expect_groupby_obj.apply(func, *args, include_groups=False)
-    # import pdb;pdb.set_trace()
     assert_groupby_results_equal(cudf_jit_result, pandas_result)
 
 
@@ -529,7 +528,6 @@ def groupby_apply_jit_reductions_test_inner(func, data, dtype):
 def test_groupby_apply_jit_unary_reductions(
     func, dtype, dataset, groupby_jit_datasets
 ):
-    # import pdb;pdb.set_trace()
     dataset = groupby_jit_datasets[dataset]
     groupby_apply_jit_reductions_test_inner(func, dataset, dtype)
 

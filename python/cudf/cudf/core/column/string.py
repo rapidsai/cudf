@@ -6050,7 +6050,6 @@ class StringColumn(ColumnBase):
 
     def as_numerical_column(self, dtype: np.dtype) -> NumericalColumn:
         if dtype.kind == "b":
-            # import pdb;pdb.set_trace()
             with acquire_spill_lock():
                 plc_column = plc.strings.attributes.count_characters(
                     self.to_pylibcudf(mode="read")

@@ -344,11 +344,9 @@ class Decimal32Column(DecimalBaseColumn):
         if isinstance(dtype, Decimal32Dtype):
             self.dtype.precision = dtype.precision
         if cudf.get_option("mode.pandas_compatible"):
-            # import pdb;pdb.set_trace()
             if dtype_to_pylibcudf_type(dtype) == dtype_to_pylibcudf_type(
                 self.dtype
             ):
-                # res = self.copy(deep=False)
                 self._dtype = dtype
             else:
                 self._dtype = get_dtype_of_same_kind(dtype, self.dtype)
@@ -399,11 +397,9 @@ class Decimal128Column(DecimalBaseColumn):
         if isinstance(dtype, Decimal128Dtype):
             self.dtype.precision = dtype.precision
         if cudf.get_option("mode.pandas_compatible"):
-            # import pdb;pdb.set_trace()
             if dtype_to_pylibcudf_type(dtype) == dtype_to_pylibcudf_type(
                 self.dtype
             ):
-                # res = self.copy(deep=False)
                 self._dtype = dtype
             else:
                 self._dtype = get_dtype_of_same_kind(dtype, self.dtype)
@@ -483,11 +479,9 @@ class Decimal64Column(DecimalBaseColumn):
         if isinstance(dtype, Decimal64Dtype):
             self.dtype.precision = dtype.precision
         if cudf.get_option("mode.pandas_compatible"):
-            # import pdb;pdb.set_trace()
             if dtype_to_pylibcudf_type(dtype) == dtype_to_pylibcudf_type(
                 self.dtype
             ):
-                # res = self.copy(deep=False)
                 self._dtype = dtype
             else:
                 self._dtype = get_dtype_of_same_kind(dtype, self.dtype)

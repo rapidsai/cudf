@@ -2563,19 +2563,16 @@ def test_series_arrow_category_types_roundtrip():
     pdf = pi.to_frame()
 
     with cudf.option_context("mode.pandas_compatible", True):
-        gs = cudf.from_pandas(ps)
-
-    assert_eq(ps, gs)
-
-    with cudf.option_context("mode.pandas_compatible", True):
-        gi = cudf.from_pandas(pi)
-
-    assert_eq(pi, gi)
+        with pytest.raises(NotImplementedError):
+            cudf.from_pandas(ps)
 
     with cudf.option_context("mode.pandas_compatible", True):
-        gdf = cudf.from_pandas(pdf)
+        with pytest.raises(NotImplementedError):
+            cudf.from_pandas(pi)
 
-    assert_eq(pdf, gdf)
+    with cudf.option_context("mode.pandas_compatible", True):
+        with pytest.raises(NotImplementedError):
+            cudf.from_pandas(pdf)
 
 
 @pytest.mark.parametrize(
