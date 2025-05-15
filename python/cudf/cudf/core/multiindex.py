@@ -132,9 +132,6 @@ class MultiIndex(Index):
                )
     """
 
-    def __new__(cls, *args, **kwargs):
-        return object.__new__(cls)
-
     @_performance_tracking
     def __init__(
         self,
@@ -147,6 +144,10 @@ class MultiIndex(Index):
         name=None,
         verify_integrity=True,
     ):
+        if isinstance(levels, (pd.MultiIndex, MultiIndex)):
+            # TODO: Figure out why cudf.Index(pd.MultiIndex(...)) goes through here twice
+            # Somehow due to from_pandas calling cls?
+            return
         if sortorder is not None:
             raise NotImplementedError("sortorder is not yet supported")
         if name is not None:
