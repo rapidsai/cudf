@@ -367,6 +367,8 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):  # type: ignore[
         -------
         pylibcudf.Column
             A new pylibcudf.Column referencing the same data.
+        metadata : dict | None
+            The Index metadata.
 
         Notes
         -----
