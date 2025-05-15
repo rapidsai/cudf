@@ -354,8 +354,8 @@ std::vector<byte_range_info> aggregate_reader_metadata::get_dictionary_page_byte
     dictionary_literals_collector{filter.get(), static_cast<cudf::size_type>(output_dtypes.size())}
       .get_literals();
 
-  auto iter = thrust::make_zip_iterator(thrust::make_tuple(
-    thrust::counting_iterator<cudf::size_type>(0), output_column_schemas.begin()));
+  auto iter = thrust::make_zip_iterator(thrust::counting_iterator<cudf::size_type>(0),
+                                        output_column_schemas.begin());
 
   // Collect schema indices of columns with equality predicate(s)
   std::vector<thrust::tuple<cudf::size_type, cudf::size_type>> dictionary_col_schemas;
