@@ -1196,7 +1196,7 @@ def run(args: argparse.Namespace) -> None:
                         )
                     if run_config.rapidsmpf_spill:
                         executor_options["rapidsmpf_spill"] = run_config.rapidsmpf_spill
-                    if not run_config.no_fuse:
+                    if run_config.no_fuse:
                         executor_options["task_fusion"] = False
                     if run_config.scheduler == "distributed":
                         executor_options["scheduler"] = "distributed"
