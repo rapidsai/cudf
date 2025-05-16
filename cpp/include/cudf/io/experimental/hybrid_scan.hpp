@@ -339,12 +339,16 @@ class hybrid_scan_reader {
     rmm::cuda_stream_view stream) const;
 
   /**
-   * @brief Get byte ranges of bloom filters and dictionary pages (secondary filters) for
-   * further row group pruning
+   * @brief Get byte ranges of bloom filters and dictionary pages (secondary filters) for row group
+   *        pruning
+   *
+   * @note Device buffers for bloom filter byte ranges must be allocated using a 32 byte
+   *       aligned memory resource
    *
    * @param row_group_indices Input row groups indices
    * @param options Parquet reader options
-   * @return Pair of vectors of byte ranges to per-column-chunk bloom filters and dictionary pages
+   * @return Pair of vectors of byte ranges of column chunk with bloom filters and dictionary
+   *         pages subject to filter predicate
    */
   [[nodiscard]] std::pair<std::vector<byte_range_info>, std::vector<byte_range_info>>
   secondary_filters_byte_ranges(cudf::host_span<size_type const> row_group_indices,
@@ -353,7 +357,8 @@ class hybrid_scan_reader {
   /**
    * @brief Filter the row groups using column chunk dictionary pages
    *
-   * @param dictionary_page_data Device buffers containing per-column-chunk dictionary page data
+   * @param dictionary_page_data Device buffers containing dictionary page data of column chunks
+   *                             with (in)equality predicate
    * @param row_group_indices Input row groups indices
    * @param options Parquet reader options
    * @param stream CUDA stream used for device memory operations and kernel launches
@@ -368,7 +373,11 @@ class hybrid_scan_reader {
   /**
    * @brief Filter the row groups using column chunk bloom filters
    *
-   * @param bloom_filter_data Device buffers containing per-column-chunk bloom filter data
+   * @note The `bloom_filter_data` device buffers must be allocated using a 32
+   *       byte aligned memory resource
+   *
+   * @param bloom_filter_data Device buffers containing bloom filter data of column chunks with
+   *                          an equality predicate
    * @param row_group_indices Input row groups indices
    * @param options Parquet reader options
    * @param stream CUDA stream used for device memory operations and kernel launches
