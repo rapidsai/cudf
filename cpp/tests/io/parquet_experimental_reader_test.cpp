@@ -123,9 +123,13 @@ std::vector<rmm::device_buffer> fetch_byte_ranges(
   return buffers;
 }
 
-template <typename T>
-std::enable_if_t<std::is_same_v<T, cudf::string_view>, cudf::test::strings_column_wrapper> constant(
-  cudf::size_type value)
+/**
+ * @brief Creates a strings column with a constant stringified value between 0 and 9999
+ *
+ * @param value String value between 0 and 9999
+ * @return Strings column wrapper
+ */
+cudf::test::strings_column_wrapper constant_strings(cudf::size_type value)
 {
   std::array<char, 5> buf;
   auto elements =
@@ -158,7 +162,7 @@ auto create_parquet_with_stats(
 
   auto col0 = testdata::ascending<uint32_t>();
   auto col1 = testdata::descending<int64_t>();
-  auto col2 = testdata::ascending<cudf::string_view>();
+  auto col2 = constant_strings(99);  // stringified value = "0099"
 
   auto expected = table_view{{col0, col1, col2}};
   auto table    = cudf::concatenate(std::vector<table_view>(NumTableConcats, expected));

@@ -97,9 +97,6 @@ std::vector<cudf::size_type> hybrid_scan_reader::filter_row_groups_with_dictiona
   parquet_reader_options const& options,
   rmm::cuda_stream_view stream) const
 {
-  CUDF_EXPECTS(row_group_indices.size() == dictionary_page_data.size(),
-               "Mismatch in size of input row group indices and dictionary page device buffers");
-
   // Temporary vector with row group indices from the first source
   auto const input_row_group_indices =
     std::vector<std::vector<size_type>>{{row_group_indices.begin(), row_group_indices.end()}};
