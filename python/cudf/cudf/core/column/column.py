@@ -2832,6 +2832,7 @@ def as_column(
             arrow_type = getattr(arbitrary.dtype, "pyarrow_dtype", None)
             if arrow_type is not None and (
                 arrow_type == pa.date32()
+                or arrow_type == pa.binary()
                 or isinstance(arrow_type, pa.DictionaryType)
             ):
                 raise NotImplementedError(
