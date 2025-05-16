@@ -67,6 +67,7 @@ from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
     SIZE_TYPE_DTYPE,
     can_convert_to_column,
+    get_dtype_of_same_kind,
     is_column_like,
     is_dtype_obj_numeric,
 )
@@ -441,7 +442,13 @@ class IndexedFrame(Frame):
             if cast_to_int and result_col.dtype.kind in "uib":
                 # For reductions that accumulate a value (e.g. sum, not max)
                 # pandas returns an int64 dtype for all int or bool dtypes.
-                result_col = result_col.astype(np.dtype(np.int64))
+                if cudf.get_option("mode.pandas_compatible"):
+                    dtype = get_dtype_of_same_kind(
+                        result_col.dtype, np.dtype(np.int64)
+                    )
+                else:
+                    dtype = np.dtype(np.int64)
+                result_col = result_col.astype(dtype)
             results.append(getattr(result_col, op)())
         return self._from_data_like_self(
             self._data._from_columns_like_self(results)
