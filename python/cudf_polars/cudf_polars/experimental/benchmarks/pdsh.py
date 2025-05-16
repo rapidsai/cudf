@@ -1211,7 +1211,7 @@ def run(args: argparse.Namespace) -> None:
 
         records[q_id] = []
 
-        for _it in range(args.iterations):
+        for _ in range(args.iterations):
             t0 = time.monotonic()
 
             if run_config.executor == "cpu":
