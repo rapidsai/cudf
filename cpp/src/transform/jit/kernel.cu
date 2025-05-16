@@ -30,7 +30,7 @@
 #include <cstddef>
 
 // clang-format off
-#include "transform/jit/operation-udf.hpp"
+#include <transform/jit/operation-udf.hpp>
 // clang-format on
 
 namespace cudf {
