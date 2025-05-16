@@ -145,6 +145,7 @@ class RunConfig:
     )
     hardware: HardwareInfo = dataclasses.field(default_factory=HardwareInfo.collect)
     rapidsmpf_spill: bool
+    no_fuse: bool
     spill_device: float
 
     @classmethod
@@ -170,6 +171,7 @@ class RunConfig:
             suffix=args.suffix,
             spill_device=args.spill_device,
             rapidsmpf_spill=args.rapidsmpf_spill,
+            no_fuse=args.no_fuse,
         )
 
     def serialize(self) -> dict:
@@ -195,6 +197,7 @@ class RunConfig:
                     print(f"threads: {self.threads}")
                     print(f"spill_device: {self.spill_device}")
                     print(f"rapidsmpf_spill: {self.rapidsmpf_spill}")
+                    print(f"task-fusion: {not self.no_fuse}")
             print(f"iterations: {self.iterations}")
             print("---------------------------------------")
             print(f"min time : {min([record.duration for record in records]):0.4f}")
@@ -1120,6 +1123,12 @@ parser.add_argument(
     help="Print an outline of the logical plan",
     default=False,
 )
+parser.add_argument(
+    "--no-fuse",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help="Disable task fusion.",
+)
 args = parser.parse_args()
 
 
@@ -1187,6 +1196,8 @@ def run(args: argparse.Namespace) -> None:
                         )
                     if run_config.rapidsmpf_spill:
                         executor_options["rapidsmpf_spill"] = run_config.rapidsmpf_spill
+                    if not run_config.no_fuse:
+                        executor_options["task_fusion"] = False
                     if run_config.scheduler == "distributed":
                         executor_options["scheduler"] = "distributed"
 
