@@ -1,4 +1,4 @@
-# <div align="left"><img src="../../img/rapids_logo.png" width="90px"/>&nbsp;custreamz - GPU Accelerated Streaming</div>
+# custreamz - GPU Accelerated Streaming
 
 Built as an extension to [python streamz](https://github.com/python-streamz/streamz), cuStreamz provides GPU accelerated abstractions for streaming data. CuStreamz can be used along side python streamz or as a standalone library for ingesting streaming data to cudf dataframes.
 
@@ -14,8 +14,8 @@ from custreamz import kafka
 
 # Full list of configurations can be found at: https://github.com/edenhill/librdkafka/blob/master/CONFIGURATION.md
 kafka_configs = {
-	"metadata.broker.list": "localhost:9092",
-	"group.id": "custreamz-client",
+    "metadata.broker.list": "localhost:9092",
+    "group.id": "custreamz-client",
 }
 
 # Create a reusable Kafka Consumer client; "datasource"
@@ -26,7 +26,7 @@ tips_df = consumer.read_gdf(topic="custreamz_tips",
                         partition=0,
                         start=0,
                         end=10000,
-                        message_format="CSV")
+                        message_format="csv")
 
 print(tips_df.head())
 tips_df['tip_percentage'] = tips_df['tip'] / tips_df['total_bill'] * 100
@@ -50,11 +50,11 @@ Please see the [Demo Docker Repository](https://hub.docker.com/r/rapidsai/rapids
 
 * CUDA 11.0+
 * NVIDIA driver 450.80.02+
-* Pascal architecture or better (Compute Capability >=6.0)
+* Volta architecture or better (Compute Capability >=7.0)
 
 ### Conda
 
-cuStreamz is installed with conda ([miniconda](https://conda.io/miniconda.html), or the full [Anaconda distribution](https://www.anaconda.com/download)) from the `rapidsai` or `rapidsai-nightly` channel:
+cuStraamz can be installed with conda (via [miniforge](https://github.com/conda-forge/miniforge)) from the `rapidsai` channel:
 
 Release:
 ```bash

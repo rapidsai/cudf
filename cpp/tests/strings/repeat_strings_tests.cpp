@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/repeat_strings.hpp>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/strings/utilities.hpp>
 
 using namespace cudf::test::iterators;
 
@@ -90,7 +91,7 @@ TYPED_TEST(RepeatStringsTypedTest, ValidStringScalar)
   // Repeat too many times.
   {
     EXPECT_THROW(cudf::strings::repeat_string(str, std::numeric_limits<int32_t>::max() / 2),
-                 cudf::logic_error);
+                 std::overflow_error);
   }
 }
 
@@ -220,6 +221,8 @@ TEST_F(RepeatStringsTest, StringsColumnWithColumnRepeatTimesInvalidInput)
 
 TEST_F(RepeatStringsTest, StringsColumnWithColumnRepeatTimesOverflowOutput)
 {
+  if (cudf::strings::is_large_strings_enabled()) { return; }
+
   auto const strs    = strs_col{"1", "12", "123", "1234", "12345", "123456", "1234567"};
   auto const strs_cv = cudf::strings_column_view(strs);
 
@@ -276,7 +279,7 @@ TYPED_TEST(RepeatStringsTypedTest, StringsColumnNoNullWithColumnRepeatTimes)
 
   // repeat_times column has negative values.
   {
-    auto const repeat_times = ints_col{1, 2, 3, -1, -2};
+    auto const repeat_times  = ints_col{1, 2, 3, -1, -2};
     auto const expected_strs = strs_col{"0a0b0c", "abcxyzabcxyz", "xyzéééxyzéééxyzééé", "", ""};
 
     auto results = cudf::strings::repeat_strings(strs_cv, repeat_times);
@@ -357,7 +360,7 @@ TYPED_TEST(RepeatStringsTypedTest, SlicedStringsColumnNoNullWithColumnRepeatTime
     auto const sliced_strs    = cudf::slice(strs, {2, 5})[0];
     auto const sliced_rtimes  = cudf::slice(repeat_times, {2, 5})[0];
     auto const sliced_strs_cv = cudf::strings_column_view(sliced_strs);
-    auto const expected_strs = strs_col{"xyzéééxyzéééxyzééé", "áááááá", "íííííí"};
+    auto const expected_strs  = strs_col{"xyzéééxyzéééxyzééé", "áááááá", "íííííí"};
 
     auto results = cudf::strings::repeat_strings(sliced_strs_cv, sliced_rtimes);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_strs, *results, verbosity);

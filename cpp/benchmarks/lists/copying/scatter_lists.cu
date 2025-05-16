@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@
 #include <cudf/null_mask.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/exec_policy.hpp>
 #include <rmm/mr/device/device_memory_resource.hpp>
@@ -38,11 +39,11 @@ template <class TypeParam, bool coalesce>
 void BM_lists_scatter(::benchmark::State& state)
 {
   auto stream = cudf::get_default_stream();
-  auto mr     = rmm::mr::get_current_device_resource();
+  auto mr     = cudf::get_current_device_resource_ref();
 
-  const cudf::size_type base_size{(cudf::size_type)state.range(0)};
-  const cudf::size_type num_elements_per_row{(cudf::size_type)state.range(1)};
-  const auto num_rows = (cudf::size_type)ceil(double(base_size) / num_elements_per_row);
+  cudf::size_type const base_size{(cudf::size_type)state.range(0)};
+  cudf::size_type const num_elements_per_row{(cudf::size_type)state.range(1)};
+  auto const num_rows = (cudf::size_type)ceil(double(base_size) / num_elements_per_row);
 
   auto source_base_col = make_fixed_width_column(cudf::data_type{cudf::type_to_id<TypeParam>()},
                                                  base_size,
@@ -62,26 +63,26 @@ void BM_lists_scatter(::benchmark::State& state)
                    target_base_col->mutable_view().end<TypeParam>());
 
   auto source_offsets =
-    make_fixed_width_column(cudf::data_type{cudf::type_to_id<cudf::offset_type>()},
+    make_fixed_width_column(cudf::data_type{cudf::type_to_id<cudf::size_type>()},
                             num_rows + 1,
                             cudf::mask_state::UNALLOCATED,
                             stream,
                             mr);
   auto target_offsets =
-    make_fixed_width_column(cudf::data_type{cudf::type_to_id<cudf::offset_type>()},
+    make_fixed_width_column(cudf::data_type{cudf::type_to_id<cudf::size_type>()},
                             num_rows + 1,
                             cudf::mask_state::UNALLOCATED,
                             stream,
                             mr);
 
   thrust::sequence(rmm::exec_policy(stream),
-                   source_offsets->mutable_view().begin<cudf::offset_type>(),
-                   source_offsets->mutable_view().end<cudf::offset_type>(),
+                   source_offsets->mutable_view().begin<cudf::size_type>(),
+                   source_offsets->mutable_view().end<cudf::size_type>(),
                    0,
                    num_elements_per_row);
   thrust::sequence(rmm::exec_policy(stream),
-                   target_offsets->mutable_view().begin<cudf::offset_type>(),
-                   target_offsets->mutable_view().end<cudf::offset_type>(),
+                   target_offsets->mutable_view().begin<cudf::size_type>(),
+                   target_offsets->mutable_view().end<cudf::size_type>(),
                    0,
                    num_elements_per_row);
 
@@ -122,7 +123,11 @@ void BM_lists_scatter(::benchmark::State& state)
 
   for (auto _ : state) {
     cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0
-    scatter(cudf::table_view{{*source}}, *scatter_map, cudf::table_view{{*target}}, mr);
+    scatter(cudf::table_view{{*source}},
+            *scatter_map,
+            cudf::table_view{{*target}},
+            cudf::get_default_stream(),
+            mr);
   }
 
   state.SetBytesProcessed(static_cast<int64_t>(state.iterations()) * state.range(0) * 2 *
@@ -139,5 +144,5 @@ void BM_lists_scatter(::benchmark::State& state)
     ->Ranges({{1 << 10, 1 << 25}, {64, 2048}}) /* 1K-1B rows, 64-2048 elements */ \
     ->UseManualTime();
 
-SBM_BENCHMARK_DEFINE(double_type_colesce_o, double, true);
-SBM_BENCHMARK_DEFINE(double_type_colesce_x, double, false);
+SBM_BENCHMARK_DEFINE(double_coalesced, double, true);
+SBM_BENCHMARK_DEFINE(double_shuffled, double, false);

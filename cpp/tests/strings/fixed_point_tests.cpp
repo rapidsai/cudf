@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,8 +22,6 @@
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/strings/convert/convert_fixed_point.hpp>
 #include <cudf/strings/strings_column_view.hpp>
-
-#include <limits>
 
 struct StringsConvertTest : public cudf::test::BaseFixture {};
 
@@ -54,7 +52,7 @@ TYPED_TEST(StringsFixedPointConvertTest, ToFixedPoint)
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected_scaled);
 
   cudf::test::strings_column_wrapper strings_nulls(
-    {"1234", "-876", "543", "900000", "25E5", "", ""}, {1, 1, 1, 1, 1, 1, 0});
+    {"1234", "-876", "543", "900000", "25E5", "", ""}, {true, true, true, true, true, true, false});
   results = cudf::strings::to_fixed_point(cudf::strings_column_view(strings_nulls),
                                           cudf::data_type{cudf::type_to_id<DecimalType>()});
   auto const expected_nulls = fp_wrapper{
@@ -205,14 +203,14 @@ TYPED_TEST(StringsFixedPointConvertTest, FromFixedPoint)
     fp_wrapper({110, -222, 3330, 4, -550, 0}, {1, 1, 1, 1, 1, 0}, numeric::scale_type{2});
   results = cudf::strings::from_fixed_point(positive_scale);
   cudf::test::strings_column_wrapper positive_expected(
-    {"11000", "-22200", "333000", "400", "-55000", ""}, {1, 1, 1, 1, 1, 0});
+    {"11000", "-22200", "333000", "400", "-55000", ""}, {true, true, true, true, true, false});
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, positive_expected);
 
   auto const zero_scale =
     fp_wrapper({0, -222, 3330, 4, -550, 0}, {0, 1, 1, 1, 1, 1}, numeric::scale_type{0});
   results = cudf::strings::from_fixed_point(zero_scale);
   cudf::test::strings_column_wrapper zero_expected({"", "-222", "3330", "4", "-550", "0"},
-                                                   {0, 1, 1, 1, 1, 1});
+                                                   {false, true, true, true, true, true});
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, zero_expected);
 }
 
@@ -324,7 +322,8 @@ TEST_F(StringsConvertTest, DISABLED_FixedPointStringConversionOperator)
 {
   auto const max = cuda::std::numeric_limits<__int128_t>::max();
 
-  auto const x = numeric::decimal128{max, numeric::scale_type{-10}};
+  // Must use scaled_integer, else shift (multiply) is undefined behavior (integer overflow)
+  auto const x = numeric::decimal128(numeric::scaled_integer{max, numeric::scale_type{-10}});
   EXPECT_EQ(static_cast<std::string>(x), "17014118346046923173168730371.5884105727");
 
   auto const y = numeric::decimal128{max, numeric::scale_type{10}};

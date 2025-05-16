@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,7 +20,6 @@
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/concatenate.hpp>
-#include <cudf/strings/strings_column_view.hpp>
 
 #include <vector>
 
@@ -28,7 +27,7 @@ struct StringsConcatenateTest : public cudf::test::BaseFixture {};
 
 TEST_F(StringsConcatenateTest, Concatenate)
 {
-  std::vector<const char*> h_strings{"aaa",
+  std::vector<char const*> h_strings{"aaa",
                                      "bb",
                                      "",
                                      "cccc",
@@ -50,8 +49,8 @@ TEST_F(StringsConcatenateTest, Concatenate)
   cudf::test::strings_column_wrapper strings2(h_strings.data() + 6, h_strings.data() + 10);
   cudf::test::strings_column_wrapper strings3(h_strings.data() + 10,
                                               h_strings.data() + h_strings.size());
-  cudf::column_view zero_size_strings_column(
-    cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0);
+
+  auto const zero_size_strings_column = cudf::make_empty_column(cudf::type_id::STRING)->view();
 
   std::vector<cudf::column_view> strings_columns;
   strings_columns.push_back(strings1);
@@ -67,8 +66,7 @@ TEST_F(StringsConcatenateTest, Concatenate)
 
 TEST_F(StringsConcatenateTest, ZeroSizeStringsColumns)
 {
-  cudf::column_view zero_size_strings_column(
-    cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0);
+  auto const zero_size_strings_column = cudf::make_empty_column(cudf::type_id::STRING)->view();
   std::vector<cudf::column_view> strings_columns;
   strings_columns.push_back(zero_size_strings_column);
   strings_columns.push_back(zero_size_strings_column);
@@ -79,12 +77,11 @@ TEST_F(StringsConcatenateTest, ZeroSizeStringsColumns)
 
 TEST_F(StringsConcatenateTest, ZeroSizeStringsPlusNormal)
 {
-  cudf::column_view zero_size_strings_column(
-    cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0);
+  auto const zero_size_strings_column = cudf::make_empty_column(cudf::type_id::STRING)->view();
   std::vector<cudf::column_view> strings_columns;
   strings_columns.push_back(zero_size_strings_column);
 
-  std::vector<const char*> h_strings{"aaa",
+  std::vector<char const*> h_strings{"aaa",
                                      "bb",
                                      "",
                                      "cccc",

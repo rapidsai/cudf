@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,8 +14,7 @@
  * limitations under the License.
  */
 #include "avro_gpu.hpp"
-
-#include <io/utilities/block_utils.cuh>
+#include "io/utilities/block_utils.cuh"
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -32,7 +31,7 @@ constexpr int max_shared_schema_len = 1000;
  * Avro varint encoding - see
  * https://avro.apache.org/docs/1.2.0/spec.html#binary_encoding
  */
-static inline int64_t __device__ avro_decode_zigzag_varint(const uint8_t*& cur, const uint8_t* end)
+static inline int64_t __device__ avro_decode_zigzag_varint(uint8_t const*& cur, uint8_t const* end)
 {
   uint64_t u = 0;
   if (cur < end) {
@@ -102,7 +101,7 @@ avro_decode_row(schemadesc_s const* schema,
   // processing multiple blocks, i.e. this block could only have 10 rows, but
   // it's the 3rd block (where each block has 10 rows), so we need to write to
   // the 30th row in the destination array.
-  const ptrdiff_t dst_row =
+  ptrdiff_t const dst_row =
     (row >= first_row && row < end_row ? static_cast<ptrdiff_t>((row - first_row) + row_offset)
                                        : -1);
   // Critical invariant checks: dst_row should be -1 or greater, and
@@ -145,7 +144,7 @@ avro_decode_row(schemadesc_s const* schema,
       case type_null:
         if (dataptr != nullptr && dst_row >= 0) {
           atomicAnd(static_cast<uint32_t*>(dataptr) + (dst_row >> 5), ~(1 << (dst_row & 0x1f)));
-          atomicAdd(&schema_g[i].count, 1);
+          atomicAdd(&schema_g[i].count, 1U);
           *skipped_row = false;
         }
         break;
@@ -171,7 +170,7 @@ avro_decode_row(schemadesc_s const* schema,
       case type_enum: {
         int64_t v       = avro_decode_zigzag_varint(cur, end);
         size_t count    = 0;
-        const char* ptr = nullptr;
+        char const* ptr = nullptr;
         if (kind == type_enum) {  // dictionary
           size_t idx = schema[i].count + v;
           if (idx < global_dictionary.size()) {
@@ -179,7 +178,7 @@ avro_decode_row(schemadesc_s const* schema,
             count = global_dictionary[idx].second;
           }
         } else if (v >= 0 && cur + v <= end) {  // string or bytes
-          ptr   = reinterpret_cast<const char*>(cur);
+          ptr   = reinterpret_cast<char const*>(cur);
           count = (size_t)v;
           cur += count;
         }
@@ -303,7 +302,7 @@ avro_decode_row(schemadesc_s const* schema,
     // If within an array, check if we reached the last item
     if (array_repeat_count != 0 && array_children <= 0 && cur < end) {
       if (!--array_repeat_count) {
-        i = array_start;                   // Restart at the array parent
+        i = array_start;  // Restart at the array parent
       } else {
         i              = array_start + 1;  // Restart after the array parent
         array_children = schema[array_start].count;
@@ -324,7 +323,7 @@ avro_decode_row(schemadesc_s const* schema,
  * @param[in] min_row_size Minimum size in bytes of a row
  */
 // blockDim {32,num_warps,1}
-__global__ void __launch_bounds__(num_warps * 32, 2)
+CUDF_KERNEL void __launch_bounds__(num_warps * 32, 2)
   gpuDecodeAvroColumnData(device_span<block_desc_s const> blocks,
                           schemadesc_s* schema_g,
                           device_span<string_index_pair const> global_dictionary,
@@ -354,8 +353,8 @@ __global__ void __launch_bounds__(num_warps * 32, 2)
   __syncthreads();
   if (block_id >= blocks.size()) { return; }
 
-  const uint8_t* cur      = avro_data + blk->offset;
-  const uint8_t* end      = cur + blk->size;
+  uint8_t const* cur      = avro_data + blk->offset;
+  uint8_t const* end      = cur + blk->size;
   size_t first_row        = blk->first_row + blk->row_offset;
   size_t cur_row          = blk->row_offset;
   size_t end_row          = first_row + blk->num_rows;
@@ -363,7 +362,7 @@ __global__ void __launch_bounds__(num_warps * 32, 2)
 
   while (cur < end) {
     uint32_t nrows;
-    const uint8_t* start = cur;
+    uint8_t const* start = cur;
 
     if (cur + min_row_size * rows_remaining == end) {
       // We're dealing with predictable fixed-size rows, which means we can
@@ -419,7 +418,7 @@ __global__ void __launch_bounds__(num_warps * 32, 2)
  * @param[in] avro_data Raw block data
  * @param[in] schema_len Number of entries in schema
  * @param[in] min_row_size Minimum size in bytes of a row
- * @param[in] stream CUDA stream to use, default 0
+ * @param[in] stream CUDA stream to use
  */
 void DecodeAvroColumnData(device_span<block_desc_s const> blocks,
                           schemadesc_s* schema,

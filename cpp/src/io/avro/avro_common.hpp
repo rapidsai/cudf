@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include <io/utilities/column_buffer.hpp>
+#include "io/utilities/column_buffer.hpp"
 
 #include <cstdint>
 #include <cstdio>
@@ -25,7 +25,8 @@ namespace cudf {
 namespace io {
 namespace avro {
 struct block_desc_s {
-  block_desc_s() {}
+  block_desc_s() = default;  // required to compile on ctk-12.2 + aarch64
+
   explicit constexpr block_desc_s(
     size_t offset_, uint32_t size_, uint32_t row_offset_, uint32_t first_row_, uint32_t num_rows_)
     : offset(offset_),
@@ -141,7 +142,7 @@ enum logicaltype_kind_e {
  *
  * @return true if the logical type is supported, false otherwise.
  */
-inline constexpr bool is_supported_logical_type(logicaltype_kind_e logical_kind)
+CUDF_HOST_DEVICE inline constexpr bool is_supported_logical_type(logicaltype_kind_e logical_kind)
 {
   switch (logical_kind) {
     case logicaltype_date: return true;

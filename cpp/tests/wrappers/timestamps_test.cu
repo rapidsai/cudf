@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/testing_main.hpp>
 #include <cudf_test/timestamp_utilities.cuh>
 #include <cudf_test/type_lists.hpp>
 
@@ -36,9 +37,9 @@
 #include <thrust/logical.h>
 #include <thrust/sequence.h>
 
+namespace {
 template <typename T>
 struct ChronoColumnTest : public cudf::test::BaseFixture {
-  rmm::cuda_stream_view stream() { return cudf::get_default_stream(); }
   cudf::size_type size() { return cudf::size_type(100); }
   cudf::data_type type() { return cudf::data_type{cudf::type_to_id<T>()}; }
 };
@@ -72,6 +73,7 @@ struct compare_chrono_elements_to_primitive_representation {
     return primitive == dur.count();
   }
 };
+}  // namespace
 
 TYPED_TEST_SUITE(ChronoColumnTest, cudf::test::ChronoTypes);
 
@@ -103,6 +105,7 @@ TYPED_TEST(ChronoColumnTest, ChronoDurationsMatchPrimitiveRepresentation)
                                *cudf::column_device_view::create(chrono_col)}));
 }
 
+namespace {
 template <typename ChronoT>
 struct compare_chrono_elements {
   cudf::binary_operator comp;
@@ -129,6 +132,7 @@ struct compare_chrono_elements {
     }
   }
 };
+}  // namespace
 
 TYPED_TEST(ChronoColumnTest, ChronosCanBeComparedInDeviceCode)
 {
@@ -188,9 +192,7 @@ TYPED_TEST(ChronoColumnTest, ChronoFactoryNullMaskAsParm)
   auto column = make_fixed_width_column(cudf::data_type{cudf::type_to_id<TypeParam>()},
                                         this->size(),
                                         std::move(null_mask),
-                                        this->size(),
-                                        this->stream(),
-                                        this->mr());
+                                        this->size());
   EXPECT_EQ(column->type(), cudf::data_type{cudf::type_to_id<TypeParam>()});
   EXPECT_EQ(column->size(), this->size());
   EXPECT_EQ(this->size(), column->null_count());
@@ -202,12 +204,8 @@ TYPED_TEST(ChronoColumnTest, ChronoFactoryNullMaskAsParm)
 TYPED_TEST(ChronoColumnTest, ChronoFactoryNullMaskAsEmptyParm)
 {
   rmm::device_buffer null_mask{};
-  auto column = make_fixed_width_column(cudf::data_type{cudf::type_to_id<TypeParam>()},
-                                        this->size(),
-                                        std::move(null_mask),
-                                        0,
-                                        this->stream(),
-                                        this->mr());
+  auto column = make_fixed_width_column(
+    cudf::data_type{cudf::type_to_id<TypeParam>()}, this->size(), std::move(null_mask), 0);
 
   EXPECT_EQ(column->type(), cudf::data_type{cudf::type_to_id<TypeParam>()});
   EXPECT_EQ(column->size(), this->size());

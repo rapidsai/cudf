@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/table_utilities.hpp>
+#include <cudf_test/testing_main.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/copying.hpp>
@@ -27,7 +28,6 @@
 #include <cudf/types.hpp>
 
 #include <thrust/host_vector.h>
-#include <thrust/sort.h>
 
 #include <type_traits>
 #include <vector>
@@ -1086,7 +1086,7 @@ TEST_F(SortCornerTest, WithEmptyStructColumn)
   child_columns2.push_back(std::move(child_col_1));
   int_col col4{{5, 4, 3, 2, 1, 0}};
   std::vector<std::unique_ptr<cudf::column>> grand_child;
-  grand_child.push_back(std::move(col4.release()));
+  grand_child.push_back(col4.release());
   auto child_col_2 = cudf::make_structs_column(6, std::move(grand_child), 0, rmm::device_buffer{});
   child_columns2.push_back(std::move(child_col_2));
   auto struct_col3 =

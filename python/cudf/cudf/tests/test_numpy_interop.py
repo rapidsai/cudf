@@ -1,10 +1,10 @@
-# Copyright (c) 2019-2022, NVIDIA CORPORATION.
+# Copyright (c) 2019-2024, NVIDIA CORPORATION.
 
 import numpy as np
 import pytest
 
 from cudf import DataFrame, Series
-from cudf.testing._utils import assert_eq
+from cudf.testing import assert_eq
 
 
 def test_to_records_noindex():

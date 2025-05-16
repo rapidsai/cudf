@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,16 +20,19 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/table/experimental/row_operators.cuh>
+#include <cudf/transform.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/traits.hpp>
-
-#include <thrust/iterator/counting_iterator.h>
-#include <thrust/transform.h>
+#include <cudf/utilities/type_checks.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
+
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/transform.h>
 
 #include <algorithm>
 
@@ -58,16 +61,18 @@ struct ohe_equality_functor {
 std::pair<std::unique_ptr<column>, table_view> one_hot_encode(column_view const& input,
                                                               column_view const& categories,
                                                               rmm::cuda_stream_view stream,
-                                                              rmm::mr::device_memory_resource* mr)
+                                                              rmm::device_async_resource_ref mr)
 {
-  CUDF_EXPECTS(input.type() == categories.type(), "Mismatch type between input and categories.");
+  CUDF_EXPECTS(cudf::have_same_types(input, categories),
+               "Mismatch type between input and categories.",
+               cudf::data_type_error);
 
-  if (categories.is_empty()) { return std::pair(make_empty_column(type_id::BOOL8), table_view{}); }
+  if (categories.is_empty()) { return {make_empty_column(type_id::BOOL8), table_view{}}; }
 
   if (input.is_empty()) {
     auto empty_data = make_empty_column(type_id::BOOL8);
     std::vector<column_view> views(categories.size(), empty_data->view());
-    return std::pair(std::move(empty_data), table_view{views});
+    return {std::move(empty_data), table_view{views}};
   }
 
   auto const total_size = input.size() * categories.size();
@@ -101,18 +106,19 @@ std::pair<std::unique_ptr<column>, table_view> one_hot_encode(column_view const&
     make_counting_transform_iterator(1, [width = input.size()](auto i) { return i * width; });
   std::vector<size_type> split_indices(split_iter, split_iter + categories.size() - 1);
 
-  auto encodings_view = table_view{split(all_encodings->view(), split_indices, stream)};
+  auto encodings_view = table_view{detail::split(all_encodings->view(), split_indices, stream)};
 
-  return std::pair(std::move(all_encodings), encodings_view);
+  return {std::move(all_encodings), encodings_view};
 }
 
 }  // namespace detail
 
 std::pair<std::unique_ptr<column>, table_view> one_hot_encode(column_view const& input,
                                                               column_view const& categories,
-                                                              rmm::mr::device_memory_resource* mr)
+                                                              rmm::cuda_stream_view stream,
+                                                              rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::one_hot_encode(input, categories, cudf::get_default_stream(), mr);
+  return detail::one_hot_encode(input, categories, stream, mr);
 }
 }  // namespace cudf

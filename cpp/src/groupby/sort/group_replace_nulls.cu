@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,9 +19,11 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/replace/nulls.cuh>
 #include <cudf/replace.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/device_uvector.hpp>
 
+#include <cuda/std/functional>
 #include <thrust/functional.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/discard_iterator.h>
@@ -40,7 +42,7 @@ std::unique_ptr<column> group_replace_nulls(cudf::column_view const& grouped_val
                                             device_span<size_type const> group_labels,
                                             cudf::replace_policy replace_policy,
                                             rmm::cuda_stream_view stream,
-                                            rmm::mr::device_memory_resource* mr)
+                                            rmm::device_async_resource_ref mr)
 {
   cudf::size_type size = grouped_value.size();
 
@@ -54,7 +56,7 @@ std::unique_ptr<column> group_replace_nulls(cudf::column_view const& grouped_val
     thrust::make_tuple(gather_map.begin(), thrust::make_discard_iterator()));
 
   auto func = cudf::detail::replace_policy_functor();
-  thrust::equal_to<cudf::size_type> eq;
+  cuda::std::equal_to<cudf::size_type> eq;
   if (replace_policy == cudf::replace_policy::PRECEDING) {
     thrust::inclusive_scan_by_key(rmm::exec_policy(stream),
                                   group_labels.begin(),

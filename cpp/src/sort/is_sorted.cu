@@ -73,7 +73,8 @@ bool is_sorted(cudf::table_view const& in,
 
 bool is_sorted(cudf::table_view const& in,
                std::vector<order> const& column_order,
-               std::vector<null_order> const& null_precedence)
+               std::vector<null_order> const& null_precedence,
+               rmm::cuda_stream_view stream)
 {
   CUDF_FUNC_RANGE();
   if (in.num_columns() == 0 || in.num_rows() == 0) { return true; }
@@ -89,7 +90,7 @@ bool is_sorted(cudf::table_view const& in,
       "Number of columns in the table doesn't match the vector null_precedence's size .\n");
   }
 
-  return detail::is_sorted(in, column_order, null_precedence, cudf::get_default_stream());
+  return detail::is_sorted(in, column_order, null_precedence, stream);
 }
 
 }  // namespace cudf

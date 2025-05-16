@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,41 +15,18 @@
  */
 #pragma once
 
-#include "stream_compaction_common.hpp"
-
 #include <cudf/stream_compaction.hpp>
+#include <cudf/utilities/bit.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/std/iterator>
 #include <thrust/copy.h>
-#include <thrust/distance.h>
 #include <thrust/iterator/counting_iterator.h>
 
 namespace cudf {
 namespace detail {
-
-namespace experimental {
-
-/**
- * @brief Device callable to hash a given row.
- */
-template <typename RowHash>
-class compaction_hash {
- public:
-  compaction_hash(RowHash row_hasher) : _hash{row_hasher} {}
-
-  __device__ inline auto operator()(size_type i) const noexcept
-  {
-    auto hash = _hash(i);
-    return (hash == COMPACTION_EMPTY_KEY_SENTINEL) ? (hash - 1) : hash;
-  }
-
- private:
-  RowHash _hash;
-};
-
-}  // namespace experimental
 
 /**
 ￼ * @brief Device functor to determine if a row is valid.
@@ -58,7 +35,7 @@ class row_validity {
  public:
   row_validity(bitmask_type const* row_bitmask) : _row_bitmask{row_bitmask} {}
 
-  __device__ inline bool operator()(const size_type& i) const noexcept
+  __device__ inline bool operator()(size_type const& i) const noexcept
   {
     return cudf::bit_is_set(_row_bitmask, i);
   }
@@ -122,7 +99,7 @@ OutputIterator unique_copy(InputIterator first,
                            duplicate_keep_option const keep,
                            rmm::cuda_stream_view stream)
 {
-  size_type const last_index = thrust::distance(first, last) - 1;
+  size_type const last_index = cuda::std::distance(first, last) - 1;
   return thrust::copy_if(
     rmm::exec_policy(stream),
     first,

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,14 +14,13 @@
  * limitations under the License.
  */
 
-#include <cudf/column/column.hpp>
-#include <cudf/column/column_view.hpp>
-#include <cudf/transform.hpp>
-#include <cudf/types.hpp>
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/type_lists.hpp>
+
+#include <cudf/column/column.hpp>
+#include <cudf/column/column_view.hpp>
+#include <cudf/transform.hpp>
 
 template <typename T>
 struct NaNsToNullTest : public cudf::test::BaseFixture {
@@ -69,7 +68,7 @@ TYPED_TEST(NaNsToNullTest, WithMask)
   using T = TypeParam;
 
   std::vector<T> input   = {1, NAN, 3, NAN, 5, NAN};
-  std::vector<bool> mask = {1, 1, 1, 1, 0, 0};
+  std::vector<bool> mask = {true, true, true, true, false, false};
   auto input_column =
     cudf::test::fixed_width_column_wrapper<T>(input.begin(), input.end(), mask.begin());
   auto expected_column = this->create_expected(input, mask);
@@ -91,7 +90,7 @@ TYPED_TEST(NaNsToNullTest, NoNANWithMask)
   using T = TypeParam;
 
   std::vector<T> input   = {1, 2, 3, 4, 5, 6};
-  std::vector<bool> mask = {1, 1, 1, 1, 0, 0};
+  std::vector<bool> mask = {true, true, true, true, false, false};
   auto input_column =
     cudf::test::fixed_width_column_wrapper<T>(input.begin(), input.end(), mask.begin());
   auto expected_column = this->create_expected(input, mask);

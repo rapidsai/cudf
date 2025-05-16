@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -173,8 +173,8 @@ struct PMod {
   __device__ inline auto operator()(TypeLhs x, TypeRhs y)
   {
     using common_t = std::common_type_t<TypeLhs, TypeRhs>;
-    common_t xconv = static_cast<common_t>(x);
-    common_t yconv = static_cast<common_t>(y);
+    auto xconv     = static_cast<common_t>(x);
+    auto yconv     = static_cast<common_t>(y);
     auto rem       = xconv % yconv;
     if constexpr (std::is_signed_v<decltype(rem)>)
       if (rem < 0) rem = (rem + yconv) % yconv;
@@ -188,8 +188,8 @@ struct PMod {
   __device__ inline auto operator()(TypeLhs x, TypeRhs y)
   {
     using common_t = std::common_type_t<TypeLhs, TypeRhs>;
-    common_t xconv = static_cast<common_t>(x);
-    common_t yconv = static_cast<common_t>(y);
+    auto xconv     = static_cast<common_t>(x);
+    auto yconv     = static_cast<common_t>(y);
     auto rem       = std::fmod(xconv, yconv);
     if (rem < 0) rem = std::fmod(rem + yconv, yconv);
     return rem;
@@ -422,13 +422,24 @@ struct NullEquals {
     TypeLhs x, TypeRhs y, bool lhs_valid, bool rhs_valid, bool& output_valid) -> decltype(x == y)
   {
     output_valid = true;
-    if (!lhs_valid && !rhs_valid) return true;
     if (lhs_valid && rhs_valid) return x == y;
-    return false;
+    return !lhs_valid && !rhs_valid;
   }
   // To allow std::is_invocable_v = true
   template <typename TypeLhs, typename TypeRhs>
   __device__ inline auto operator()(TypeLhs x, TypeRhs y) -> decltype(x == y);
+};
+
+struct NullNotEquals {
+  template <typename TypeLhs, typename TypeRhs>
+  __device__ inline auto operator()(
+    TypeLhs x, TypeRhs y, bool lhs_valid, bool rhs_valid, bool& output_valid) -> decltype(x != y)
+  {
+    return !NullEquals{}(x, y, lhs_valid, rhs_valid, output_valid);
+  }
+  // To allow std::is_invocable_v = true
+  template <typename TypeLhs, typename TypeRhs>
+  __device__ inline auto operator()(TypeLhs x, TypeRhs y) -> decltype(x != y);
 };
 
 struct NullMax {

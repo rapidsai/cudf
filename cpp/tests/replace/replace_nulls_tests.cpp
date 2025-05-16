@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Copyright 2018 BlazingDB, Inc.
  *     Copyright 2018 Alexander Ocsa <cristhian@blazingdb.com>
@@ -20,12 +20,11 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/iterator_utilities.hpp>
+#include <cudf_test/testing_main.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/dictionary/encode.hpp>
-#include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/replace.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
@@ -46,8 +45,7 @@ TEST_F(ReplaceErrorTest, SizeMismatch)
                                                                {0, 0, 1, 1, 1, 1, 1, 1}};
   cudf::test::fixed_width_column_wrapper<int32_t> values_to_replace_column{{10, 11, 12, 13}};
 
-  ASSERT_THROW(cudf::replace_nulls(input_column, values_to_replace_column, mr()),
-               cudf::logic_error);
+  ASSERT_THROW(cudf::replace_nulls(input_column, values_to_replace_column), cudf::logic_error);
 }
 
 // Error: column type mismatch
@@ -58,8 +56,7 @@ TEST_F(ReplaceErrorTest, TypeMismatch)
   cudf::test::fixed_width_column_wrapper<float> values_to_replace_column{
     {10, 11, 12, 13, 14, 15, 16, 17}};
 
-  EXPECT_THROW(cudf::replace_nulls(input_column, values_to_replace_column, mr()),
-               cudf::logic_error);
+  EXPECT_THROW(cudf::replace_nulls(input_column, values_to_replace_column), cudf::data_type_error);
 }
 
 // Error: column type mismatch
@@ -69,7 +66,7 @@ TEST_F(ReplaceErrorTest, TypeMismatchScalar)
                                                                {0, 0, 1, 1, 1, 1, 1, 1}};
   cudf::numeric_scalar<float> replacement(1);
 
-  EXPECT_THROW(cudf::replace_nulls(input_column, replacement, mr()), cudf::logic_error);
+  EXPECT_THROW(cudf::replace_nulls(input_column, replacement), cudf::data_type_error);
 }
 
 struct ReplaceNullsStringsTest : public cudf::test::BaseFixture {};
@@ -88,7 +85,7 @@ TEST_F(ReplaceNullsStringsTest, SimpleReplace)
     replacement.begin(), replacement.end(), replacement_v.begin()};
 
   std::unique_ptr<cudf::column> result;
-  ASSERT_NO_THROW(result = cudf::replace_nulls(input_w, replacement_w, mr()));
+  ASSERT_NO_THROW(result = cudf::replace_nulls(input_w, replacement_w));
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected_w);
 }
@@ -107,7 +104,7 @@ TEST_F(ReplaceNullsStringsTest, ReplaceWithNulls)
     replacement.begin(), replacement.end(), replacement_v.begin()};
 
   std::unique_ptr<cudf::column> result;
-  ASSERT_NO_THROW(result = cudf::replace_nulls(input_w, replacement_w, mr()));
+  ASSERT_NO_THROW(result = cudf::replace_nulls(input_w, replacement_w));
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected_w);
 }
@@ -125,7 +122,7 @@ TEST_F(ReplaceNullsStringsTest, ReplaceWithAllNulls)
   cudf::test::strings_column_wrapper expected_w{input.begin(), input.end(), input_v.begin()};
 
   std::unique_ptr<cudf::column> result;
-  ASSERT_NO_THROW(result = cudf::replace_nulls(input_w, replacement_w, mr()));
+  ASSERT_NO_THROW(result = cudf::replace_nulls(input_w, replacement_w));
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected_w);
 }
@@ -143,7 +140,7 @@ TEST_F(ReplaceNullsStringsTest, ReplaceWithAllEmpty)
   cudf::test::strings_column_wrapper expected_w{input.begin(), input.end(), replacement_v.begin()};
 
   std::unique_ptr<cudf::column> result;
-  ASSERT_NO_THROW(result = cudf::replace_nulls(input_w, replacement_w, mr()));
+  ASSERT_NO_THROW(result = cudf::replace_nulls(input_w, replacement_w));
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected_w);
 }
@@ -161,7 +158,7 @@ TEST_F(ReplaceNullsStringsTest, ReplaceNone)
   cudf::test::strings_column_wrapper expected_w{input.begin(), input.end()};
 
   std::unique_ptr<cudf::column> result;
-  ASSERT_NO_THROW(result = cudf::replace_nulls(input_w, replacement_w, mr()));
+  ASSERT_NO_THROW(result = cudf::replace_nulls(input_w, replacement_w));
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, expected_w);
 }
@@ -170,8 +167,7 @@ TEST_F(ReplaceNullsStringsTest, SimpleReplaceScalar)
 {
   std::vector<std::string> input{"", "", "", "", "", "", "", ""};
   std::vector<cudf::valid_type> input_v{0, 0, 0, 0, 0, 0, 0, 0};
-  std::unique_ptr<cudf::scalar> repl =
-    cudf::make_string_scalar("rep", cudf::get_default_stream(), mr());
+  std::unique_ptr<cudf::scalar> repl = cudf::make_string_scalar("rep");
   repl->set_valid_async(true, cudf::get_default_stream());
   std::vector<std::string> expected{"rep", "rep", "rep", "rep", "rep", "rep", "rep", "rep"};
 
@@ -179,7 +175,7 @@ TEST_F(ReplaceNullsStringsTest, SimpleReplaceScalar)
   cudf::test::strings_column_wrapper expected_w{expected.begin(), expected.end()};
 
   std::unique_ptr<cudf::column> result;
-  ASSERT_NO_THROW(result = cudf::replace_nulls(input_w, *repl, mr()));
+  ASSERT_NO_THROW(result = cudf::replace_nulls(input_w, *repl));
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected_w);
 }
@@ -490,14 +486,12 @@ TYPED_TEST(ReplaceNullsFixedPointTest, ReplaceColumn)
 {
   auto const scale = numeric::scale_type{0};
   auto const sz    = std::size_t{1000};
-  auto data_begin  = cudf::detail::make_counting_transform_iterator(0, [&](auto i) {
-    return TypeParam{i, scale};
-  });
+  auto data_begin =
+    cudf::detail::make_counting_transform_iterator(0, [&](auto i) { return TypeParam{i, scale}; });
   auto valid_begin =
     cudf::detail::make_counting_transform_iterator(0, [&](auto i) { return i % 3 ? 1 : 0; });
-  auto replace_begin  = cudf::detail::make_counting_transform_iterator(0, [&](auto i) {
-    return TypeParam{-2, scale};
-  });
+  auto replace_begin =
+    cudf::detail::make_counting_transform_iterator(0, [&](auto i) { return TypeParam{-2, scale}; });
   auto expected_begin = cudf::detail::make_counting_transform_iterator(0, [&](auto i) {
     int val = i % 3 ? static_cast<int>(i) : -2;
     return TypeParam{val, scale};
@@ -520,9 +514,8 @@ TYPED_TEST(ReplaceNullsFixedPointTest, ReplaceScalar)
 {
   auto const scale = numeric::scale_type{0};
   auto const sz    = std::size_t{1000};
-  auto data_begin  = cudf::detail::make_counting_transform_iterator(0, [&](auto i) {
-    return TypeParam{i, scale};
-  });
+  auto data_begin =
+    cudf::detail::make_counting_transform_iterator(0, [&](auto i) { return TypeParam{i, scale}; });
   auto valid_begin =
     cudf::detail::make_counting_transform_iterator(0, [&](auto i) { return i % 3 ? 1 : 0; });
   auto expected_begin = cudf::detail::make_counting_transform_iterator(0, [&](auto i) {
@@ -542,14 +535,12 @@ TYPED_TEST(ReplaceNullsFixedPointTest, ReplacementHasNulls)
 {
   auto const scale = numeric::scale_type{0};
   auto const sz    = std::size_t{1000};
-  auto data_begin  = cudf::detail::make_counting_transform_iterator(0, [&](auto i) {
-    return TypeParam{i, scale};
-  });
+  auto data_begin =
+    cudf::detail::make_counting_transform_iterator(0, [&](auto i) { return TypeParam{i, scale}; });
   auto data_valid_begin =
     cudf::detail::make_counting_transform_iterator(0, [&](auto i) { return i % 3 ? 1 : 0; });
-  auto replace_begin = cudf::detail::make_counting_transform_iterator(0, [&](auto i) {
-    return TypeParam{-2, scale};
-  });
+  auto replace_begin =
+    cudf::detail::make_counting_transform_iterator(0, [&](auto i) { return TypeParam{-2, scale}; });
   auto replace_valid_begin =
     cudf::detail::make_counting_transform_iterator(0, [&](auto i) { return i % 2 ? 1 : 0; });
   auto expected_begin = cudf::detail::make_counting_transform_iterator(0, [&](auto i) {
@@ -661,14 +652,14 @@ TEST_F(ReplaceDictionaryTest, ReplaceNullsError)
   cudf::test::fixed_width_column_wrapper<int64_t> replacement_w({1, 2, 3, 4});
   auto replacement = cudf::dictionary::encode(replacement_w);
 
-  EXPECT_THROW(cudf::replace_nulls(input->view(), replacement->view()), cudf::logic_error);
-  EXPECT_THROW(cudf::replace_nulls(input->view(), cudf::string_scalar("x")), cudf::logic_error);
+  EXPECT_THROW(cudf::replace_nulls(input->view(), replacement->view()), cudf::data_type_error);
+  EXPECT_THROW(cudf::replace_nulls(input->view(), cudf::string_scalar("x")), cudf::data_type_error);
 
   cudf::test::fixed_width_column_wrapper<int64_t> input_one_w({1}, {0});
   auto input_one  = cudf::dictionary::encode(input_one_w);
   auto dict_input = cudf::dictionary_column_view(input_one->view());
   auto dict_repl  = cudf::dictionary_column_view(replacement->view());
-  EXPECT_THROW(cudf::replace_nulls(input->view(), replacement->view()), cudf::logic_error);
+  EXPECT_THROW(cudf::replace_nulls(input->view(), replacement->view()), cudf::data_type_error);
 }
 
 TEST_F(ReplaceDictionaryTest, ReplaceNullsEmpty)
@@ -676,7 +667,7 @@ TEST_F(ReplaceDictionaryTest, ReplaceNullsEmpty)
   cudf::test::fixed_width_column_wrapper<int64_t> input_empty_w({});
   auto input_empty = cudf::dictionary::encode(input_empty_w);
   auto result      = cudf::replace_nulls(input_empty->view(), input_empty->view());
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->view(), input_empty->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result->view(), input_empty->view());
 }
 
 TEST_F(ReplaceDictionaryTest, ReplaceNullsNoNulls)

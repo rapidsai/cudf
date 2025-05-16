@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 import io
 import sys
@@ -9,7 +9,7 @@ import cudf
 from cudf._fuzz_testing.json import JSONReader, JSONWriter
 from cudf._fuzz_testing.main import pythonfuzz
 from cudf._fuzz_testing.utils import ALL_POSSIBLE_VALUES, run_test
-from cudf.testing._utils import assert_eq
+from cudf.testing import assert_eq
 
 
 @pythonfuzz(data_handle=JSONReader)

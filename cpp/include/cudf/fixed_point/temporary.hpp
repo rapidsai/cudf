@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,16 +18,13 @@
 
 #include <cudf/types.hpp>
 
-// Note: The <cuda/std/*> versions are used in order for Jitify to work with our fixed_point type.
-//       Jitify is needed for several algorithms (binaryop, rolling, etc)
-#include <cuda/std/climits>
 #include <cuda/std/limits>
 #include <cuda/std/type_traits>
 
 #include <algorithm>
 #include <string>
 
-namespace numeric {
+namespace CUDF_EXPORT numeric {
 namespace detail {
 
 template <typename T>
@@ -43,10 +40,10 @@ auto to_string(T value) -> std::string
         return "-170141183460469231731687303715884105728";
       value += 1;  // can add back the one, no need to avoid overflow anymore
     }
-    while (value) {
+    do {
       s.push_back("0123456789"[value % 10]);
       value /= 10;
-    }
+    } while (value);
     if (sign) s.push_back('-');
     std::reverse(s.begin(), s.end());
     return s;
@@ -57,7 +54,7 @@ auto to_string(T value) -> std::string
 }
 
 template <typename T>
-constexpr auto abs(T value)
+CUDF_HOST_DEVICE constexpr auto abs(T value)
 {
   return value >= 0 ? value : -value;
 }
@@ -75,7 +72,7 @@ CUDF_HOST_DEVICE inline auto max(T lhs, T rhs)
 }
 
 template <typename BaseType>
-constexpr auto exp10(int32_t exponent)
+CUDF_HOST_DEVICE constexpr auto exp10(int32_t exponent)
 {
   BaseType value = 1;
   while (exponent > 0)
@@ -84,4 +81,4 @@ constexpr auto exp10(int32_t exponent)
 }
 
 }  // namespace detail
-}  // namespace numeric
+}  // namespace CUDF_EXPORT numeric

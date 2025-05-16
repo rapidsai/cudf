@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,8 +16,9 @@
 
 #pragma once
 
-#include <cuda_runtime.h>
 #include <cudf/types.hpp>
+
+#include <cuda_runtime.h>
 
 #include <limits>
 
@@ -26,7 +27,7 @@
  * @brief Concrete type definition for dictionary columns.
  */
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 /**
  * @addtogroup dictionary_classes
  * @{
@@ -65,7 +66,7 @@ struct dictionary_wrapper {
    *
    * @return The reference to this dictionary wrapper object
    */
-  dictionary_wrapper& operator=(const dictionary_wrapper&) = default;
+  dictionary_wrapper& operator=(dictionary_wrapper const&) = default;
 
   /**
    * @brief Construct dictionary_wrapper from a value
@@ -86,7 +87,7 @@ struct dictionary_wrapper {
    *
    * @return The value of this dictionary wrapper
    */
-  CUDF_HOST_DEVICE inline value_type value() const { return _value; }
+  CUDF_HOST_DEVICE [[nodiscard]] inline value_type value() const { return _value; }
 
   /**
    * @brief Returns the maximum value of the value type.
@@ -215,5 +216,5 @@ CUDF_HOST_DEVICE inline bool operator>(dictionary_wrapper<Integer> const& lhs,
 
 using dictionary32 = dictionary_wrapper<int32_t>;  ///< 32-bit integer indexed dictionary wrapper
 
-/** @} */                                          // end of group
-}  // namespace cudf
+/** @} */  // end of group
+}  // namespace CUDF_EXPORT cudf

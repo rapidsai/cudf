@@ -1,42 +1,50 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
-import datetime
-from typing import Any, Sequence, cast
+import functools
+import math
+from typing import TYPE_CHECKING, cast
 
 import numpy as np
 import pandas as pd
 import pyarrow as pa
 
+import pylibcudf as plc
+
 import cudf
-from cudf import _lib as libcudf
-from cudf._typing import ColumnBinaryOperand, DatetimeLikeScalar, Dtype
-from cudf.api.types import is_scalar, is_timedelta64_dtype
+from cudf.core._internals import binaryop
 from cudf.core.buffer import Buffer, acquire_spill_lock
-from cudf.core.column import ColumnBase, column, string
-from cudf.utils.dtypes import np_to_pa_dtype
-from cudf.utils.utils import _fillna_natwise
+from cudf.core.column.column import ColumnBase, as_column
+from cudf.core.column.temporal_base import TemporalBaseColumn
+from cudf.core.scalar import pa_scalar_to_plc_scalar
+from cudf.utils.dtypes import (
+    cudf_dtype_from_pa_type,
+    cudf_dtype_to_pa_type,
+    find_common_type,
+)
+from cudf.utils.temporal import unit_to_nanoseconds_conversion
 
-_dtype_to_format_conversion = {
-    "timedelta64[ns]": "%D days %H:%M:%S",
-    "timedelta64[us]": "%D days %H:%M:%S",
-    "timedelta64[ms]": "%D days %H:%M:%S",
-    "timedelta64[s]": "%D days %H:%M:%S",
-}
-
-_unit_to_nanoseconds_conversion = {
-    "ns": 1,
-    "us": 1_000,
-    "ms": 1_000_000,
-    "s": 1_000_000_000,
-    "m": 60_000_000_000,
-    "h": 3_600_000_000_000,
-    "D": 86_400_000_000_000,
-}
+if TYPE_CHECKING:
+    from cudf._typing import (
+        ColumnBinaryOperand,
+        DatetimeLikeScalar,
+    )
+    from cudf.core.column.numerical import NumericalColumn
+    from cudf.core.column.string import StringColumn
 
 
-class TimeDeltaColumn(ColumnBase):
+@functools.cache
+def get_np_td_unit_conversion(
+    reso: str, dtype: None | np.dtype
+) -> np.timedelta64:
+    td = np.timedelta64(unit_to_nanoseconds_conversion[reso], "ns")
+    if dtype is not None:
+        return td.astype(dtype)
+    return td
+
+
+class TimeDeltaColumn(TemporalBaseColumn):
     """
     Parameters
     ----------
@@ -55,6 +63,8 @@ class TimeDeltaColumn(ColumnBase):
         If None, it is calculated automatically.
     """
 
+    _NP_SCALAR = np.timedelta64
+    _PD_SCALAR = pd.Timedelta
     _VALID_BINARY_OPERATIONS = {
         "__eq__",
         "__ne__",
@@ -79,97 +89,65 @@ class TimeDeltaColumn(ColumnBase):
     def __init__(
         self,
         data: Buffer,
-        dtype: Dtype,
-        size: int = None,  # TODO: make non-optional
-        mask: Buffer = None,
+        size: int | None,
+        dtype: np.dtype,
+        mask: Buffer | None = None,
         offset: int = 0,
-        null_count: int = None,
+        null_count: int | None = None,
+        children: tuple = (),
     ):
-        dtype = cudf.dtype(dtype)
-
-        if data.size % dtype.itemsize:
-            raise ValueError("Buffer size must be divisible by element size")
-        if size is None:
-            size = data.size // dtype.itemsize
-            size = size - offset
+        if not (isinstance(dtype, np.dtype) and dtype.kind == "m"):
+            raise ValueError("dtype must be a timedelta numpy dtype.")
         super().__init__(
-            data,
+            data=data,
             size=size,
             dtype=dtype,
             mask=mask,
             offset=offset,
             null_count=null_count,
+            children=children,
         )
 
-        if not (self.dtype.type is np.timedelta64):
-            raise TypeError(f"{self.dtype} is not a supported duration type")
-
-        self._time_unit, _ = np.datetime_data(self.dtype)
+    def _clear_cache(self) -> None:
+        super()._clear_cache()
+        attrs = (
+            "days",
+            "seconds",
+            "microseconds",
+            "nanoseconds",
+            "time_unit",
+        )
+        for attr in attrs:
+            try:
+                delattr(self, attr)
+            except AttributeError:
+                pass
 
     def __contains__(self, item: DatetimeLikeScalar) -> bool:
         try:
-            item = np.timedelta64(item, self._time_unit)
+            item = self._NP_SCALAR(item, self.time_unit)
         except ValueError:
             # If item cannot be converted to duration type
             # np.timedelta64 raises ValueError, hence `item`
             # cannot exist in `self`.
             return False
-        return item.view("int64") in self.as_numerical
-
-    @property
-    def values(self):
-        """
-        Return a CuPy representation of the TimeDeltaColumn.
-        """
-        raise NotImplementedError(
-            "TimeDelta Arrays is not yet implemented in cudf"
-        )
-
-    @acquire_spill_lock()
-    def to_arrow(self) -> pa.Array:
-        mask = None
-        if self.nullable:
-            mask = pa.py_buffer(
-                self.mask_array_view(mode="read").copy_to_host()
-            )
-        data = pa.py_buffer(
-            self.as_numerical.data_array_view(mode="read").copy_to_host()
-        )
-        pa_dtype = np_to_pa_dtype(self.dtype)
-        return pa.Array.from_buffers(
-            type=pa_dtype,
-            length=len(self),
-            buffers=[mask, data],
-            null_count=self.null_count,
-        )
-
-    def to_pandas(
-        self, index=None, nullable: bool = False, **kwargs
-    ) -> pd.Series:
-        # Workaround until following issue is fixed:
-        # https://issues.apache.org/jira/browse/ARROW-9772
-
-        # Pandas supports only `timedelta64[ns]`, hence the cast.
-        pd_series = pd.Series(
-            self.astype("timedelta64[ns]").fillna("NaT").values_host,
-            copy=False,
-        )
-
-        if index is not None:
-            pd_series.index = index
-
-        return pd_series
+        return super().__contains__(item.to_numpy())
 
     def _binaryop(self, other: ColumnBinaryOperand, op: str) -> ColumnBase:
         reflect, op = self._check_reflected_op(op)
-        other = self._wrap_binop_normalization(other)
+        other = self._normalize_binop_operand(other)
         if other is NotImplemented:
             return NotImplemented
 
         this: ColumnBinaryOperand = self
         out_dtype = None
+        other_cudf_dtype = (
+            cudf_dtype_from_pa_type(other.type)
+            if isinstance(other, pa.Scalar)
+            else other.dtype
+        )
 
-        if is_timedelta64_dtype(other.dtype):
+        if other_cudf_dtype.kind == "m":
             # TODO: pandas will allow these operators to work but return false
             # when comparing to non-timedelta dtypes. We should do the same.
             if op in {
@@ -180,195 +158,119 @@ class TimeDeltaColumn(ColumnBase):
                 "__le__",
                 "__ge__",
                 "NULL_EQUALS",
+                "NULL_NOT_EQUALS",
             }:
-                out_dtype = np.bool_
+                out_dtype = np.dtype(np.bool_)
             elif op == "__mod__":
-                out_dtype = determine_out_dtype(self.dtype, other.dtype)
+                out_dtype = find_common_type((self.dtype, other_cudf_dtype))
             elif op in {"__truediv__", "__floordiv__"}:
-                common_dtype = determine_out_dtype(self.dtype, other.dtype)
-                out_dtype = np.float64 if op == "__truediv__" else np.int64
+                common_dtype = find_common_type((self.dtype, other_cudf_dtype))
+                out_dtype = (
+                    np.dtype(np.float64)
+                    if op == "__truediv__"
+                    else self._UNDERLYING_DTYPE
+                )
                 this = self.astype(common_dtype).astype(out_dtype)
-                if isinstance(other, cudf.Scalar):
-                    if other.is_valid():
-                        other = other.value.astype(common_dtype).astype(
+                if isinstance(other, pa.Scalar):
+                    if other.is_valid:
+                        # pyarrow.cast doesn't support casting duration to float
+                        # so go through numpy
+                        other_np = pa.array([other]).to_numpy(
+                            zero_copy_only=False
+                        )
+                        other_np = other_np.astype(common_dtype).astype(
                             out_dtype
                         )
+                        other = pa.array(other_np)[0]
                     else:
-                        other = cudf.Scalar(None, out_dtype)
+                        other = pa.scalar(
+                            None, type=cudf_dtype_to_pa_type(out_dtype)
+                        )
                 else:
                     other = other.astype(common_dtype).astype(out_dtype)
             elif op in {"__add__", "__sub__"}:
-                out_dtype = determine_out_dtype(self.dtype, other.dtype)
-        elif other.dtype.kind in {"f", "i", "u"}:
+                out_dtype = find_common_type((self.dtype, other_cudf_dtype))
+        elif other_cudf_dtype.kind in {"f", "i", "u"}:
             if op in {"__mul__", "__mod__", "__truediv__", "__floordiv__"}:
                 out_dtype = self.dtype
+            elif op in {"__eq__", "__ne__", "NULL_EQUALS", "NULL_NOT_EQUALS"}:
+                if isinstance(other, ColumnBase) and not isinstance(
+                    other, TimeDeltaColumn
+                ):
+                    fill_value = op in ("__ne__", "NULL_NOT_EQUALS")
+                    result = self._all_bools_with_nulls(
+                        other,
+                        bool_fill_value=fill_value,
+                    )
+                    if cudf.get_option("mode.pandas_compatible"):
+                        result = result.fillna(fill_value)
+                    return result
 
         if out_dtype is None:
             return NotImplemented
+        elif isinstance(other, pa.Scalar):
+            other = pa_scalar_to_plc_scalar(other)
 
         lhs, rhs = (other, this) if reflect else (this, other)
 
-        return libcudf.binaryop.binaryop(lhs, rhs, op, out_dtype)
+        result = binaryop.binaryop(lhs, rhs, op, out_dtype)
+        if cudf.get_option("mode.pandas_compatible") and out_dtype.kind == "b":
+            result = result.fillna(op == "__ne__")
+        return result
 
-    def normalize_binop_value(self, other) -> ColumnBinaryOperand:
-        if isinstance(other, (ColumnBase, cudf.Scalar)):
-            return other
-        if isinstance(other, datetime.timedelta):
-            other = np.timedelta64(other)
-        elif isinstance(other, pd.Timestamp):
-            other = other.to_datetime64()
-        elif isinstance(other, pd.Timedelta):
-            other = other.to_timedelta64()
-        if isinstance(other, np.timedelta64):
-            other_time_unit = cudf.utils.dtypes.get_time_unit(other)
-            if np.isnat(other):
-                return cudf.Scalar(None, dtype=self.dtype)
-
-            if other_time_unit not in {"s", "ms", "ns", "us"}:
-                common_dtype = "timedelta64[s]"
-            else:
-                common_dtype = determine_out_dtype(self.dtype, other.dtype)
-            return cudf.Scalar(other.astype(common_dtype))
-        elif np.isscalar(other):
-            return cudf.Scalar(other)
-        return NotImplemented
-
-    @property
-    def as_numerical(self) -> "cudf.core.column.NumericalColumn":
-        return cast(
-            "cudf.core.column.NumericalColumn",
-            column.build_column(
-                data=self.base_data,
-                dtype=np.int64,
-                mask=self.base_mask,
-                offset=self.offset,
-                size=self.size,
-            ),
+    def total_seconds(self) -> ColumnBase:
+        conversion = unit_to_nanoseconds_conversion[self.time_unit] / 1e9
+        # Typecast to decimal128 to avoid floating point precision issues
+        # https://github.com/rapidsai/cudf/issues/17664
+        return (
+            (self.astype(self._UNDERLYING_DTYPE) * conversion)
+            .astype(
+                cudf.Decimal128Dtype(cudf.Decimal128Dtype.MAX_PRECISION, 9)
+            )
+            .round(decimals=abs(int(math.log10(conversion))))
+            .astype(np.dtype(np.float64))
         )
 
-    @property
-    def time_unit(self) -> str:
-        return self._time_unit
-
-    def fillna(
-        self, fill_value: Any = None, method: str = None, dtype: Dtype = None
-    ) -> TimeDeltaColumn:
-        if fill_value is not None:
-            if cudf.utils.utils._isnat(fill_value):
-                return _fillna_natwise(self)
-            col: ColumnBase = self
-            if is_scalar(fill_value):
-                if isinstance(fill_value, np.timedelta64):
-                    dtype = determine_out_dtype(self.dtype, fill_value.dtype)
-                    fill_value = fill_value.astype(dtype)
-                    col = col.astype(dtype)
-                if not isinstance(fill_value, cudf.Scalar):
-                    fill_value = cudf.Scalar(fill_value, dtype=dtype)
-            else:
-                fill_value = column.as_column(fill_value, nan_as_null=False)
-            return cast(TimeDeltaColumn, ColumnBase.fillna(col, fill_value))
-        else:
-            return super().fillna(method=method)
-
-    def as_numerical_column(
-        self, dtype: Dtype, **kwargs
-    ) -> "cudf.core.column.NumericalColumn":
-        return cast(
-            "cudf.core.column.NumericalColumn", self.as_numerical.astype(dtype)
-        )
-
-    def as_datetime_column(
-        self, dtype: Dtype, **kwargs
-    ) -> "cudf.core.column.DatetimeColumn":
+    def as_datetime_column(self, dtype: np.dtype) -> None:  # type: ignore[override]
         raise TypeError(
             f"cannot astype a timedelta from {self.dtype} to {dtype}"
         )
 
-    def as_string_column(
-        self, dtype: Dtype, format=None, **kwargs
-    ) -> "cudf.core.column.StringColumn":
-        if format is None:
-            format = _dtype_to_format_conversion.get(
-                self.dtype.name, "%D days %H:%M:%S"
-            )
-        if len(self) > 0:
-            return string._timedelta_to_str_typecast_functions[
-                cudf.dtype(self.dtype)
-            ](self, format=format)
+    def strftime(self, format: str) -> StringColumn:
+        if len(self) == 0:
+            return super().strftime(format)
         else:
-            return cast(
-                "cudf.core.column.StringColumn",
-                column.column_empty(0, dtype="object", masked=False),
-            )
+            with acquire_spill_lock():
+                return type(self).from_pylibcudf(  # type: ignore[return-value]
+                    plc.strings.convert.convert_durations.from_durations(
+                        self.to_pylibcudf(mode="read"), format
+                    )
+                )
 
-    def as_timedelta_column(self, dtype: Dtype, **kwargs) -> TimeDeltaColumn:
-        dtype = cudf.dtype(dtype)
+    def as_string_column(self) -> StringColumn:
+        return self.strftime("%D days %H:%M:%S")
+
+    def as_timedelta_column(self, dtype: np.dtype) -> TimeDeltaColumn:
         if dtype == self.dtype:
             return self
-        return libcudf.unary.cast(self, dtype=dtype)
-
-    def mean(self, skipna=None, dtype: Dtype = np.float64) -> pd.Timedelta:
-        return pd.Timedelta(
-            self.as_numerical.mean(skipna=skipna, dtype=dtype),
-            unit=self.time_unit,
-        )
-
-    def median(self, skipna: bool = None) -> pd.Timedelta:
-        return pd.Timedelta(
-            self.as_numerical.median(skipna=skipna), unit=self.time_unit
-        )
-
-    def isin(self, values: Sequence) -> ColumnBase:
-        return cudf.core.tools.datetimes._isin_datetimelike(self, values)
-
-    def quantile(
-        self,
-        q: np.ndarray,
-        interpolation: str,
-        exact: bool,
-        return_scalar: bool,
-    ) -> ColumnBase:
-        result = self.as_numerical.quantile(
-            q=q,
-            interpolation=interpolation,
-            exact=exact,
-            return_scalar=return_scalar,
-        )
-        if return_scalar:
-            return pd.Timedelta(result, unit=self.time_unit)
-        return result.astype(self.dtype)
+        return self.cast(dtype=dtype)  # type: ignore[return-value]
 
     def sum(
         self,
-        skipna: bool = None,
+        skipna: bool | None = None,
         min_count: int = 0,
-        dtype: Dtype = None,
     ) -> pd.Timedelta:
-        return pd.Timedelta(
+        return self._PD_SCALAR(
             # Since sum isn't overridden in Numerical[Base]Column, mypy only
             # sees the signature from Reducible (which doesn't have the extra
             # parameters from ColumnBase._reduce) so we have to ignore this.
-            self.as_numerical.sum(  # type: ignore
-                skipna=skipna, min_count=min_count, dtype=dtype
+            self.astype(self._UNDERLYING_DTYPE).sum(  # type: ignore
+                skipna=skipna, min_count=min_count
             ),
             unit=self.time_unit,
-        )
+        ).as_unit(self.time_unit)
 
-    def std(
-        self,
-        skipna: bool = None,
-        min_count: int = 0,
-        dtype: Dtype = np.float64,
-        ddof: int = 1,
-    ) -> pd.Timedelta:
-        return pd.Timedelta(
-            self.as_numerical.std(
-                skipna=skipna, min_count=min_count, ddof=ddof, dtype=dtype
-            ),
-            unit=self.time_unit,
-        )
-
-    def components(self, index=None) -> "cudf.DataFrame":
+    def components(self) -> dict[str, NumericalColumn]:
         """
         Return a Dataframe of the components of the Timedeltas.
 
@@ -395,86 +297,34 @@ class TimeDeltaColumn(ColumnBase):
         2  13000     10       12       48           712             0            0
         3      0      0       35       35           656             0            0
         4     37     13       12       14           234             0            0
-        """  # noqa: E501
+        """
+        date_meta = {
+            "hours": ["D", "h"],
+            "minutes": ["h", "m"],
+            "seconds": ["m", "s"],
+            "milliseconds": ["s", "ms"],
+            "microseconds": ["ms", "us"],
+            "nanoseconds": ["us", "ns"],
+        }
+        data = {"days": self.days}
+        reached_self_unit = False
+        for result_key, (mod_unit, div_unit) in date_meta.items():
+            if not reached_self_unit:
+                res_col = (
+                    self % get_np_td_unit_conversion(mod_unit, self.dtype)
+                ) // get_np_td_unit_conversion(div_unit, self.dtype)
+                reached_self_unit = self.time_unit == div_unit
+            else:
+                res_col = as_column(
+                    0, length=len(self), dtype=self._UNDERLYING_DTYPE
+                )
+                if self.nullable:
+                    res_col = res_col.set_mask(self.mask)
+            data[result_key] = res_col
+        return data
 
-        return cudf.DataFrame(
-            data={
-                "days": self
-                // cudf.Scalar(
-                    np.timedelta64(_unit_to_nanoseconds_conversion["D"], "ns")
-                ),
-                "hours": (
-                    self
-                    % cudf.Scalar(
-                        np.timedelta64(
-                            _unit_to_nanoseconds_conversion["D"], "ns"
-                        )
-                    )
-                )
-                // cudf.Scalar(
-                    np.timedelta64(_unit_to_nanoseconds_conversion["h"], "ns")
-                ),
-                "minutes": (
-                    self
-                    % cudf.Scalar(
-                        np.timedelta64(
-                            _unit_to_nanoseconds_conversion["h"], "ns"
-                        )
-                    )
-                )
-                // cudf.Scalar(
-                    np.timedelta64(_unit_to_nanoseconds_conversion["m"], "ns")
-                ),
-                "seconds": (
-                    self
-                    % cudf.Scalar(
-                        np.timedelta64(
-                            _unit_to_nanoseconds_conversion["m"], "ns"
-                        )
-                    )
-                )
-                // cudf.Scalar(
-                    np.timedelta64(_unit_to_nanoseconds_conversion["s"], "ns")
-                ),
-                "milliseconds": (
-                    self
-                    % cudf.Scalar(
-                        np.timedelta64(
-                            _unit_to_nanoseconds_conversion["s"], "ns"
-                        )
-                    )
-                )
-                // cudf.Scalar(
-                    np.timedelta64(_unit_to_nanoseconds_conversion["ms"], "ns")
-                ),
-                "microseconds": (
-                    self
-                    % cudf.Scalar(
-                        np.timedelta64(
-                            _unit_to_nanoseconds_conversion["ms"], "ns"
-                        )
-                    )
-                )
-                // cudf.Scalar(
-                    np.timedelta64(_unit_to_nanoseconds_conversion["us"], "ns")
-                ),
-                "nanoseconds": (
-                    self
-                    % cudf.Scalar(
-                        np.timedelta64(
-                            _unit_to_nanoseconds_conversion["us"], "ns"
-                        )
-                    )
-                )
-                // cudf.Scalar(
-                    np.timedelta64(_unit_to_nanoseconds_conversion["ns"], "ns")
-                ),
-            },
-            index=index,
-        )
-
-    @property
-    def days(self) -> "cudf.core.column.NumericalColumn":
+    @functools.cached_property
+    def days(self) -> NumericalColumn:
         """
         Number of days for each element.
 
@@ -482,12 +332,10 @@ class TimeDeltaColumn(ColumnBase):
         -------
         NumericalColumn
         """
-        return self // cudf.Scalar(
-            np.timedelta64(_unit_to_nanoseconds_conversion["D"], "ns")
-        )
+        return self // get_np_td_unit_conversion("D", self.dtype)
 
-    @property
-    def seconds(self) -> "cudf.core.column.NumericalColumn":
+    @functools.cached_property
+    def seconds(self) -> NumericalColumn:
         """
         Number of seconds (>= 0 and less than 1 day).
 
@@ -501,16 +349,11 @@ class TimeDeltaColumn(ColumnBase):
         # division operation to extract the number of seconds.
 
         return (
-            self
-            % cudf.Scalar(
-                np.timedelta64(_unit_to_nanoseconds_conversion["D"], "ns")
-            )
-        ) // cudf.Scalar(
-            np.timedelta64(_unit_to_nanoseconds_conversion["s"], "ns")
-        )
+            self % get_np_td_unit_conversion("D", self.dtype)
+        ) // get_np_td_unit_conversion("s", None)
 
-    @property
-    def microseconds(self) -> "cudf.core.column.NumericalColumn":
+    @functools.cached_property
+    def microseconds(self) -> NumericalColumn:
         """
         Number of microseconds (>= 0 and less than 1 second).
 
@@ -524,13 +367,11 @@ class TimeDeltaColumn(ColumnBase):
         # division operation to extract the number of microseconds.
 
         return (
-            self % np.timedelta64(_unit_to_nanoseconds_conversion["s"], "ns")
-        ) // cudf.Scalar(
-            np.timedelta64(_unit_to_nanoseconds_conversion["us"], "ns")
-        )
+            self % get_np_td_unit_conversion("s", self.dtype)
+        ) // get_np_td_unit_conversion("us", None)
 
-    @property
-    def nanoseconds(self) -> "cudf.core.column.NumericalColumn":
+    @functools.cached_property
+    def nanoseconds(self) -> NumericalColumn:
         """
         Return the number of nanoseconds (n), where 0 <= n < 1 microsecond.
 
@@ -544,20 +385,13 @@ class TimeDeltaColumn(ColumnBase):
         # performing division operation to extract the number
         # of nanoseconds.
 
-        return (
-            self
-            % cudf.Scalar(
-                np.timedelta64(_unit_to_nanoseconds_conversion["us"], "ns")
+        if self.time_unit != "ns":
+            res_col = as_column(
+                0, length=len(self), dtype=self._UNDERLYING_DTYPE
             )
-        ) // cudf.Scalar(
-            np.timedelta64(_unit_to_nanoseconds_conversion["ns"], "ns")
-        )
-
-
-def determine_out_dtype(lhs_dtype: Dtype, rhs_dtype: Dtype) -> Dtype:
-    if np.can_cast(np.dtype(lhs_dtype), np.dtype(rhs_dtype)):
-        return rhs_dtype
-    elif np.can_cast(np.dtype(rhs_dtype), np.dtype(lhs_dtype)):
-        return lhs_dtype
-    else:
-        raise TypeError(f"Cannot type-cast {lhs_dtype} and {rhs_dtype}")
+            if self.nullable:
+                res_col = res_col.set_mask(self.mask)
+            return cast("cudf.core.column.NumericalColumn", res_col)
+        return (
+            self % get_np_td_unit_conversion("us", None)
+        ) // get_np_td_unit_conversion("ns", None)

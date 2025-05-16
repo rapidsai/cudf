@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,12 +17,13 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
-#include <cudf/concatenate.hpp>
 #include <cudf/copying.hpp>
-#include <cudf/detail/concatenate.cuh>
+#include <cudf/detail/concatenate.hpp>
+#include <cudf/detail/concatenate_masks.hpp>
 #include <cudf/detail/get_value.cuh>
 #include <cudf/detail/structs/utilities.hpp>
 #include <cudf/structs/structs_column_view.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -39,10 +40,10 @@ namespace detail {
  */
 std::unique_ptr<column> concatenate(host_span<column_view const> columns,
                                     rmm::cuda_stream_view stream,
-                                    rmm::mr::device_memory_resource* mr)
+                                    rmm::device_async_resource_ref mr)
 {
   // get ordered children
-  auto ordered_children = extract_ordered_struct_children(columns);
+  auto ordered_children = extract_ordered_struct_children(columns, stream);
 
   // concatenate them
   std::vector<std::unique_ptr<column>> children;
@@ -63,16 +64,11 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns,
   // if any of the input columns have nulls, construct the output mask
   bool const has_nulls =
     std::any_of(columns.begin(), columns.end(), [](auto const& col) { return col.has_nulls(); });
-  rmm::device_buffer null_mask =
-    create_null_mask(total_length, has_nulls ? mask_state::UNINITIALIZED : mask_state::UNALLOCATED);
-  cudf::size_type null_count{0};
-  if (has_nulls) {
-    cudf::detail::concatenate_masks(columns, static_cast<bitmask_type*>(null_mask.data()), stream);
-    null_count =
-      std::transform_reduce(columns.begin(), columns.end(), 0, std::plus{}, [](auto const& col) {
-        return col.null_count();
-      });
-  }
+  rmm::device_buffer null_mask = create_null_mask(
+    total_length, has_nulls ? mask_state::UNINITIALIZED : mask_state::UNALLOCATED, stream);
+  auto null_mask_data = static_cast<bitmask_type*>(null_mask.data());
+  auto const null_count =
+    has_nulls ? cudf::detail::concatenate_masks(columns, null_mask_data, stream) : size_type{0};
 
   // assemble into outgoing list column
   return make_structs_column(

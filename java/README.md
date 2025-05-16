@@ -51,9 +51,13 @@ CUDA 11.0:
 ## Build From Source
 
 Build [libcudf](../cpp) first, and make sure the JDK is installed and available. Specify
-the cmake option `-DCUDF_USE_ARROW_STATIC=ON -DCUDF_ENABLE_ARROW_S3=OFF` when building so
-that Apache Arrow is linked statically to libcudf, as this will help create a jar that
-does not require Arrow and its dependencies to be available in the runtime environment.
+the following cmake options to the libcudf build:
+```
+-DCUDF_LARGE_STRINGS_DISABLED=ON -DCUDF_USE_ARROW_STATIC=ON -DCUDF_ENABLE_ARROW_S3=OFF
+```
+These options:
+- Disable large string support, see https://github.com/rapidsai/cudf/issues/16215
+- Statically link Arrow to libcudf to remove Arrow as a runtime dependency.
 
 After building libcudf, the Java bindings can be built via Maven, e.g.:
 ```

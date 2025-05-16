@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ *  Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -47,6 +47,8 @@ public class HostColumnVectorCore implements AutoCloseable {
   public HostColumnVectorCore(DType type, long rows,
                               Optional<Long> nullCount, HostMemoryBuffer data, HostMemoryBuffer validity,
                               HostMemoryBuffer offsets, List<HostColumnVectorCore> nestedChildren) {
+    // NOTE: This constructor MUST NOT examine the contents of any host buffers, as they may be
+    //       asynchronously written by the device.
     this.offHeap = new OffHeapState(data, validity,  offsets);
     MemoryCleaner.register(this, offHeap);
     this.type = type;

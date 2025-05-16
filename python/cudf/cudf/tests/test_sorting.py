@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2023, NVIDIA CORPORATION.
+# Copyright (c) 2018-2025, NVIDIA CORPORATION.
 
 import string
 from itertools import product
@@ -7,12 +7,13 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from cudf import DataFrame, Series
+from cudf import DataFrame, Series, option_context
+from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.core.column import NumericalColumn
+from cudf.testing import assert_eq
 from cudf.testing._utils import (
     DATETIME_TYPES,
     NUMERIC_TYPES,
-    assert_eq,
     assert_exceptions_equal,
     expect_warning_if,
 )
@@ -33,10 +34,10 @@ sort_slice_args = [slice(1, None), slice(None, -1), slice(1, -1)]
     "nelem,dtype", list(product(sort_nelem_args, sort_dtype_args))
 )
 def test_dataframe_sort_values(nelem, dtype):
-    np.random.seed(0)
+    rng = np.random.default_rng(seed=0)
     df = DataFrame()
-    df["a"] = aa = (100 * np.random.random(nelem)).astype(dtype)
-    df["b"] = bb = (100 * np.random.random(nelem)).astype(dtype)
+    df["a"] = aa = (100 * rng.random(nelem)).astype(dtype)
+    df["b"] = bb = (100 * rng.random(nelem)).astype(dtype)
     sorted_df = df.sort_values(by="a")
     # Check
     sorted_index = np.argsort(aa, kind="mergesort")
@@ -45,9 +46,26 @@ def test_dataframe_sort_values(nelem, dtype):
     assert_eq(sorted_df["b"].values, bb[sorted_index])
 
 
+def test_sort_values_nans_pandas_compat():
+    data = {"a": [0, 0, 2, -1], "b": [1, 3, 2, None]}
+    with option_context("mode.pandas_compatible", True):
+        result = DataFrame(data).sort_values("b", na_position="first")
+    expected = pd.DataFrame(data).sort_values("b", na_position="first")
+    assert_eq(result, expected)
+
+
 @pytest.mark.parametrize("ignore_index", [True, False])
 @pytest.mark.parametrize("index", ["a", "b", ["a", "b"]])
 def test_dataframe_sort_values_ignore_index(index, ignore_index):
+    if (
+        PANDAS_VERSION >= PANDAS_CURRENT_SUPPORTED_VERSION
+        and isinstance(index, list)
+        and not ignore_index
+    ):
+        pytest.skip(
+            reason="Unstable sorting by pandas(numpy): https://github.com/pandas-dev/pandas/issues/57531"
+        )
+
     gdf = DataFrame(
         {"a": [1, 3, 5, 2, 4], "b": [1, 1, 2, 2, 3], "c": [9, 7, 7, 7, 1]}
     )
@@ -75,9 +93,9 @@ def test_series_sort_values_ignore_index(ignore_index):
     "nelem,sliceobj", list(product([10, 100], sort_slice_args))
 )
 def test_dataframe_sort_values_sliced(nelem, sliceobj):
-    np.random.seed(0)
+    rng = np.random.default_rng(seed=0)
     df = pd.DataFrame()
-    df["a"] = np.random.random(nelem)
+    df["a"] = rng.random(nelem)
 
     expect = df[sliceobj]["a"].sort_values()
     gdf = DataFrame.from_pandas(df)
@@ -90,14 +108,15 @@ def test_dataframe_sort_values_sliced(nelem, sliceobj):
     list(product(sort_nelem_args, sort_dtype_args, [True, False])),
 )
 def test_series_argsort(nelem, dtype, asc):
-    np.random.seed(0)
-    sr = Series((100 * np.random.random(nelem)).astype(dtype))
+    rng = np.random.default_rng(seed=0)
+    sr = Series((100 * rng.random(nelem)).astype(dtype))
     res = sr.argsort(ascending=asc)
 
     if asc:
         expected = np.argsort(sr.to_numpy(), kind="mergesort")
     else:
-        expected = np.argsort(sr.to_numpy() * -1, kind="mergesort")
+        # -1 multiply works around missing desc sort (may promote to float64)
+        expected = np.argsort(sr.to_numpy() * np.int8(-1), kind="mergesort")
     np.testing.assert_array_equal(expected, res.to_numpy())
 
 
@@ -105,8 +124,8 @@ def test_series_argsort(nelem, dtype, asc):
     "nelem,asc", list(product(sort_nelem_args, [True, False]))
 )
 def test_series_sort_index(nelem, asc):
-    np.random.seed(0)
-    sr = Series(100 * np.random.random(nelem))
+    rng = np.random.default_rng(seed=0)
+    sr = Series(100 * rng.random(nelem))
     psr = sr.to_pandas()
 
     expected = psr.sort_index(ascending=asc)
@@ -156,9 +175,9 @@ def test_series_nsmallest(data, n):
 @pytest.mark.parametrize("op", ["nsmallest", "nlargest"])
 @pytest.mark.parametrize("columns", ["a", ["b", "a"]])
 def test_dataframe_nlargest_nsmallest(nelem, n, op, columns):
-    np.random.seed(0)
-    aa = np.random.random(nelem)
-    bb = np.random.random(nelem)
+    rng = np.random.default_rng(seed=0)
+    aa = rng.random(nelem)
+    bb = rng.random(nelem)
 
     df = DataFrame({"a": aa, "b": bb})
     pdf = df.to_pandas()
@@ -170,10 +189,10 @@ def test_dataframe_nlargest_nsmallest(nelem, n, op, columns):
 )
 def test_dataframe_nlargest_sliced(counts, sliceobj):
     nelem, n = counts
-    np.random.seed(0)
+    rng = np.random.default_rng(seed=0)
     df = pd.DataFrame()
-    df["a"] = np.random.random(nelem)
-    df["b"] = np.random.random(nelem)
+    df["a"] = rng.random(nelem)
+    df["b"] = rng.random(nelem)
 
     expect = df[sliceobj].nlargest(n, "a")
     gdf = DataFrame.from_pandas(df)
@@ -186,10 +205,10 @@ def test_dataframe_nlargest_sliced(counts, sliceobj):
 )
 def test_dataframe_nsmallest_sliced(counts, sliceobj):
     nelem, n = counts
-    np.random.seed(0)
+    rng = np.random.default_rng(seed=0)
     df = pd.DataFrame()
-    df["a"] = np.random.random(nelem)
-    df["b"] = np.random.random(nelem)
+    df["a"] = rng.random(nelem)
+    df["b"] = rng.random(nelem)
 
     expect = df[sliceobj].nsmallest(n, "a")
     gdf = DataFrame.from_pandas(df)
@@ -205,14 +224,13 @@ def test_dataframe_nsmallest_sliced(counts, sliceobj):
 def test_dataframe_multi_column(
     num_cols, num_rows, dtype, ascending, na_position
 ):
-
-    np.random.seed(0)
+    rng = np.random.default_rng(seed=0)
     by = list(string.ascii_lowercase[:num_cols])
     pdf = pd.DataFrame()
 
     for i in range(5):
         colname = string.ascii_lowercase[i]
-        data = np.random.randint(0, 26, num_rows).astype(dtype)
+        data = rng.integers(0, 26, num_rows).astype(dtype)
         pdf[colname] = data
 
     gdf = DataFrame.from_pandas(pdf)
@@ -234,18 +252,17 @@ def test_dataframe_multi_column(
 def test_dataframe_multi_column_nulls(
     num_cols, num_rows, dtype, nulls, ascending, na_position
 ):
-
-    np.random.seed(0)
+    rng = np.random.default_rng(seed=0)
     by = list(string.ascii_lowercase[:num_cols])
     pdf = pd.DataFrame()
 
     for i in range(3):
         colname = string.ascii_lowercase[i]
-        data = np.random.randint(0, 26, num_rows).astype(dtype)
+        data = rng.integers(0, 26, num_rows).astype(dtype)
         if nulls == "some":
             idx = np.array([], dtype="int64")
             if num_rows > 0:
-                idx = np.random.choice(
+                idx = rng.choice(
                     num_rows, size=int(num_rows / 4), replace=False
                 )
             data[idx] = np.nan
@@ -286,8 +303,8 @@ def test_dataframe_multi_column_nulls_multiple_ascending(
 
 @pytest.mark.parametrize("nelem", [1, 100])
 def test_series_nlargest_nelem(nelem):
-    np.random.seed(0)
-    elems = np.random.random(nelem)
+    rng = np.random.default_rng(seed=0)
+    elems = rng.random(nelem)
     gds = Series(elems).nlargest(nelem)
     pds = pd.Series(elems).nlargest(nelem)
 
@@ -298,19 +315,20 @@ def test_series_nlargest_nelem(nelem):
 @pytest.mark.parametrize("nelem", [1, 10, 100])
 @pytest.mark.parametrize("keep", [True, False])
 def test_dataframe_scatter_by_map(map_size, nelem, keep):
-
     strlist = ["dog", "cat", "fish", "bird", "pig", "fox", "cow", "goat"]
-    np.random.seed(0)
-    df = DataFrame()
-    df["a"] = np.random.choice(strlist[:map_size], nelem)
-    df["b"] = np.random.uniform(low=0, high=map_size, size=nelem)
-    df["c"] = np.random.randint(map_size, size=nelem)
+    rng = np.random.default_rng(seed=0)
+    df = DataFrame(
+        {
+            "a": rng.choice(strlist[:map_size], nelem),
+            "b": rng.uniform(low=0, high=map_size, size=nelem),
+            "c": rng.integers(map_size, size=nelem),
+        }
+    )
     df["d"] = df["a"].astype("category")
 
     def _check_scatter_by_map(dfs, col):
         assert len(dfs) == map_size
         nrows = 0
-        # print(col._column)
         name = col.name
         for i, df in enumerate(dfs):
             nrows += len(df)
@@ -349,7 +367,7 @@ def test_dataframe_scatter_by_map(map_size, nelem, keep):
             with pytest.warns(UserWarning):
                 df.scatter_by_map("a", map_size=1, debug=True)  # Bad map_size
 
-    # Test GenericIndex
+    # Test Index
     df2 = df.set_index("c")
     generic_result = df2.scatter_by_map("b", map_size, keep_index=keep)
     _check_scatter_by_map(generic_result, df2["b"])
@@ -373,10 +391,10 @@ def test_dataframe_scatter_by_map(map_size, nelem, keep):
     "kind", ["quicksort", "mergesort", "heapsort", "stable"]
 )
 def test_dataframe_sort_values_kind(nelem, dtype, kind):
-    np.random.seed(0)
+    rng = np.random.default_rng(seed=0)
     df = DataFrame()
-    df["a"] = aa = (100 * np.random.random(nelem)).astype(dtype)
-    df["b"] = bb = (100 * np.random.random(nelem)).astype(dtype)
+    df["a"] = aa = (100 * rng.random(nelem)).astype(dtype)
+    df["b"] = bb = (100 * rng.random(nelem)).astype(dtype)
     with expect_warning_if(kind != "quicksort", UserWarning):
         sorted_df = df.sort_values(by="a", kind=kind)
     # Check
@@ -384,3 +402,36 @@ def test_dataframe_sort_values_kind(nelem, dtype, kind):
     assert_eq(sorted_df.index.values, sorted_index)
     assert_eq(sorted_df["a"].values, aa[sorted_index])
     assert_eq(sorted_df["b"].values, bb[sorted_index])
+
+
+@pytest.mark.parametrize("ids", [[-1, 0, 1, 0], [0, 2, 3, 0]])
+def test_dataframe_scatter_by_map_7513(ids):
+    df = DataFrame({"id": ids, "val": [0, 1, 2, 3]})
+    with pytest.raises(ValueError):
+        df.scatter_by_map(df["id"])
+
+
+def test_dataframe_scatter_by_map_empty():
+    df = DataFrame({"a": [], "b": []}, dtype="float64")
+    scattered = df.scatter_by_map(df["a"])
+    assert len(scattered) == 0
+
+
+def test_sort_values_by_index_level():
+    df = pd.DataFrame({"a": [1, 3, 2]}, index=pd.Index([1, 3, 2], name="b"))
+    cudf_df = DataFrame.from_pandas(df)
+    result = cudf_df.sort_values("b")
+    expected = df.sort_values("b")
+    assert_eq(result, expected)
+
+
+def test_sort_values_by_ambiguous():
+    df = pd.DataFrame({"a": [1, 3, 2]}, index=pd.Index([1, 3, 2], name="a"))
+    cudf_df = DataFrame.from_pandas(df)
+
+    assert_exceptions_equal(
+        lfunc=df.sort_values,
+        rfunc=cudf_df.sort_values,
+        lfunc_args_and_kwargs=(["a"], {}),
+        rfunc_args_and_kwargs=(["a"], {}),
+    )

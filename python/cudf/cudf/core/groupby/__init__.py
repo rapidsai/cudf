@@ -1,8 +1,17 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 
-from cudf.core.groupby.groupby import GroupBy, Grouper
+from cudf.core.groupby.groupby import (
+    DataFrameGroupBy,
+    GroupBy,
+    Grouper,
+    NamedAgg,
+    SeriesGroupBy,
+)
 
 __all__ = [
+    "DataFrameGroupBy",
     "GroupBy",
     "Grouper",
+    "NamedAgg",
+    "SeriesGroupBy",
 ]

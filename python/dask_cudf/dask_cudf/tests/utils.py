@@ -1,4 +1,4 @@
-# Copyright (c) 2022, NVIDIA CORPORATION.
+# Copyright (c) 2022-2025, NVIDIA CORPORATION.
 
 import numpy as np
 import pandas as pd
@@ -9,8 +9,9 @@ import cudf
 
 
 def _make_random_frame(nelem, npartitions=2, include_na=False):
+    rng = np.random.default_rng(seed=0)
     df = pd.DataFrame(
-        {"x": np.random.random(size=nelem), "y": np.random.random(size=nelem)}
+        {"x": rng.random(size=nelem), "y": rng.random(size=nelem)}
     )
 
     if include_na:

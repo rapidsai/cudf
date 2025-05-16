@@ -1,4 +1,4 @@
-# Copyright (c) 2022-2023, NVIDIA CORPORATION.
+# Copyright (c) 2022-2024, NVIDIA CORPORATION.
 
 import operator
 from functools import partial
@@ -7,7 +7,6 @@ from numba import cuda, types
 from numba.core import cgutils
 from numba.core.datamodel import default_manager
 from numba.core.typing import signature as nb_signature
-from numba.cuda.cudadrv import nvvm
 from numba.cuda.cudaimpl import (
     lower as cuda_lower,
     registry as cuda_lowering_registry,
@@ -126,9 +125,8 @@ def cast_string_literal_to_string_view(context, builder, fromty, toty, val):
     sv = cgutils.create_struct_proxy(string_view)(context, builder)
 
     # set the empty strview data pointer to point to the literal value
-    s = context.insert_const_string(builder.module, fromty.literal_value)
-    sv.data = context.insert_addrspace_conv(
-        builder, s, nvvm.ADDRSPACE_CONSTANT
+    sv.data = context.insert_string_const_addrspace(
+        builder, fromty.literal_value
     )
     sv.length = context.get_constant(size_type, len(fromty.literal_value))
     sv.bytes = context.get_constant(
@@ -251,7 +249,7 @@ def replace_impl(context, builder, sig, args):
     replacement_ptr = builder.alloca(args[2].type)
 
     builder.store(args[0], src_ptr)
-    builder.store(args[1], to_replace_ptr),
+    builder.store(args[1], to_replace_ptr)
     builder.store(args[2], replacement_ptr)
 
     udf_str_ptr = builder.alloca(default_manager[udf_string].get_value_type())

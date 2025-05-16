@@ -12,91 +12,158 @@ on:
       sha:
         required: true
         type: string
+      build_type:
+        type: string
+        default: nightly
 
 jobs:
+  conda-cpp-checks:
+    secrets: inherit
+    uses: rapidsai/shared-workflows/.github/workflows/conda-cpp-post-build-checks.yaml@branch-25.06
+    with:
+      build_type: ${{ inputs.build_type }}
+      branch: ${{ inputs.branch }}
+      date: ${{ inputs.date }}
+      sha: ${{ inputs.sha }}
+      enable_check_symbols: true
   conda-cpp-tests:
     secrets: inherit
-    uses: rapidsai/shared-action-workflows/.github/workflows/conda-cpp-tests.yaml@branch-23.06
+    uses: rapidsai/shared-workflows/.github/workflows/conda-cpp-tests.yaml@branch-25.06
     with:
-      build_type: nightly
+      build_type: ${{ inputs.build_type }}
       branch: ${{ inputs.branch }}
       date: ${{ inputs.date }}
       sha: ${{ inputs.sha }}
   conda-cpp-memcheck-tests:
     secrets: inherit
-    uses: rapidsai/shared-action-workflows/.github/workflows/custom-job.yaml@branch-23.06
+    uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@branch-25.06
     with:
-      build_type: nightly
+      build_type: ${{ inputs.build_type }}
       branch: ${{ inputs.branch }}
       date: ${{ inputs.date }}
       sha: ${{ inputs.sha }}
-      node_type: "gpu-v100-latest-1"
+      node_type: "gpu-l4-latest-1"
       arch: "amd64"
-      container_image: "rapidsai/ci:latest"
+      container_image: "rapidsai/ci-conda:latest"
       run_script: "ci/test_cpp_memcheck.sh"
+  cpp-linters:
+    secrets: inherit
+    uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@branch-25.06
+    with:
+      build_type: ${{ inputs.build_type }}
+      branch: ${{ inputs.branch }}
+      date: ${{ inputs.date }}
+      sha: ${{ inputs.sha }}
+      run_script: "ci/cpp_linters.sh"
+      file_to_upload: iwyu_results.txt
   conda-python-cudf-tests:
     secrets: inherit
-    uses: rapidsai/shared-action-workflows/.github/workflows/conda-python-tests.yaml@branch-23.06
+    uses: rapidsai/shared-workflows/.github/workflows/conda-python-tests.yaml@branch-25.06
     with:
-      build_type: nightly
+      build_type: ${{ inputs.build_type }}
       branch: ${{ inputs.branch }}
       date: ${{ inputs.date }}
       sha: ${{ inputs.sha }}
-      test_script: "ci/test_python_cudf.sh"
+      script: "ci/test_python_cudf.sh"
   conda-python-other-tests:
     # Tests for dask_cudf, custreamz, cudf_kafka are separated for CI parallelism
     secrets: inherit
-    uses: rapidsai/shared-action-workflows/.github/workflows/conda-python-tests.yaml@branch-23.06
+    uses: rapidsai/shared-workflows/.github/workflows/conda-python-tests.yaml@branch-25.06
     with:
-      build_type: nightly
+      build_type: ${{ inputs.build_type }}
       branch: ${{ inputs.branch }}
       date: ${{ inputs.date }}
       sha: ${{ inputs.sha }}
-      test_script: "ci/test_python_other.sh"
+      script: "ci/test_python_other.sh"
   conda-java-tests:
     secrets: inherit
-    uses: rapidsai/shared-action-workflows/.github/workflows/custom-job.yaml@branch-23.06
+    uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@branch-25.06
     with:
-      build_type: nightly
+      build_type: ${{ inputs.build_type }}
       branch: ${{ inputs.branch }}
       date: ${{ inputs.date }}
       sha: ${{ inputs.sha }}
-      node_type: "gpu-v100-latest-1"
+      node_type: "gpu-l4-latest-1"
       arch: "amd64"
-      container_image: "rapidsai/ci:latest"
+      container_image: "rapidsai/ci-conda:latest"
       run_script: "ci/test_java.sh"
   conda-notebook-tests:
     secrets: inherit
-    uses: rapidsai/shared-action-workflows/.github/workflows/custom-job.yaml@branch-23.06
+    uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@branch-25.06
     with:
-      build_type: nightly
+      build_type: ${{ inputs.build_type }}
       branch: ${{ inputs.branch }}
       date: ${{ inputs.date }}
       sha: ${{ inputs.sha }}
-      node_type: "gpu-v100-latest-1"
+      node_type: "gpu-l4-latest-1"
       arch: "amd64"
-      container_image: "rapidsai/ci:latest"
+      container_image: "rapidsai/ci-conda:latest"
       run_script: "ci/test_notebooks.sh"
   wheel-tests-cudf:
     secrets: inherit
-    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-manylinux-test.yml@branch-23.06
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@branch-25.06
     with:
-      build_type: nightly
+      build_type: ${{ inputs.build_type }}
       branch: ${{ inputs.branch }}
       date: ${{ inputs.date }}
       sha: ${{ inputs.sha }}
-      package-name: cudf
-      test-before-arm64: "python -m pip install 'cupy-cuda11x<12.0.0' -f https://pip.cupy.dev/aarch64"
-      test-unittest: "python -m pytest -n 8 ./python/cudf/cudf/tests"
+      script: ci/test_wheel_cudf.sh
   wheel-tests-dask-cudf:
     secrets: inherit
-    uses: rapidsai/shared-action-workflows/.github/workflows/wheels-pure-test.yml@branch-23.06
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@branch-25.06
     with:
-      build_type: nightly
+      build_type: ${{ inputs.build_type }}
       branch: ${{ inputs.branch }}
       date: ${{ inputs.date }}
       sha: ${{ inputs.sha }}
-      package-name: dask_cudf
-      # Test against latest dask/distributed/dask-cuda.
-      test-before: "pip install git+https://github.com/dask/dask.git@2023.3.2 git+https://github.com/dask/distributed.git@2023.3.2.1 git+https://github.com/rapidsai/dask-cuda.git@branch-23.06"
-      test-unittest: "python -m pytest -n 8 ./python/dask_cudf/dask_cudf/tests"
+      script: ci/test_wheel_dask_cudf.sh
+  unit-tests-cudf-pandas:
+    secrets: inherit
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@branch-25.06
+    with:
+      build_type: ${{ inputs.build_type }}
+      branch: ${{ inputs.branch }}
+      date: ${{ inputs.date }}
+      sha: ${{ inputs.sha }}
+      script: ci/cudf_pandas_scripts/run_tests.sh
+  third-party-integration-tests-cudf-pandas:
+    secrets: inherit
+    uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@branch-25.06
+    with:
+      build_type: ${{ inputs.build_type }}
+      branch: ${{ inputs.branch }}
+      date: ${{ inputs.date }}
+      sha: ${{ inputs.sha }}
+      node_type: "gpu-l4-latest-1"
+      container_image: "rapidsai/ci-conda:latest"
+      run_script: |
+        ci/cudf_pandas_scripts/third-party-integration/test.sh python/cudf/cudf_pandas_tests/third_party_integration_tests/dependencies.yaml
+  wheel-tests-cudf-polars:
+    secrets: inherit
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@branch-25.06
+    with:
+      build_type: ${{ inputs.build_type }}
+      branch: ${{ inputs.branch }}
+      date: ${{ inputs.date }}
+      sha: ${{ inputs.sha }}
+      script: "ci/test_wheel_cudf_polars.sh"
+  cudf-polars-polars-tests:
+    secrets: inherit
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@branch-25.06
+    with:
+      build_type: ${{ inputs.build_type }}
+      branch: ${{ inputs.branch }}
+      date: ${{ inputs.date }}
+      sha: ${{ inputs.sha }}
+      script: "ci/test_cudf_polars_polars_tests.sh"
+  narwhals-tests:
+    secrets: inherit
+    uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@branch-25.06
+    with:
+      build_type: ${{ inputs.build_type }}
+      branch: ${{ inputs.branch }}
+      date: ${{ inputs.date }}
+      sha: ${{ inputs.sha }}
+      node_type: "gpu-l4-latest-1"
+      container_image: "rapidsai/ci-conda:latest"
+      run_script: ci/test_narwhals.sh

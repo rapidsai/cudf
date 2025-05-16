@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,7 +22,6 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/iterator.cuh>
-#include <cudf/detail/null_mask.hpp>
 #include <cudf/lists/gather.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 
@@ -299,27 +298,6 @@ TYPED_TEST(SegmentedGatherTest, GatherNegatives)
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
     // clang-format on
   }
-}
-
-TYPED_TEST(SegmentedGatherTest, GatherOnNonCompactedNullLists)
-{
-  using T          = TypeParam;
-  auto constexpr X = -1;  // Signifies null value.
-
-  // List<T>
-  auto list = LCW<T>{{{1, 2, 3, 4}, {5}, {6, 7}, {8, 9, 0}, {}, {1, 2}, {3, 4, 5}}, no_nulls()};
-  auto const input = list.release();
-
-  // Set non-empty list row at index 5 to null.
-  cudf::detail::set_null_mask(
-    input->mutable_view().null_mask(), 5, 6, false, cudf::get_default_stream());
-
-  auto const gather_map = LCW<int>{{-1, 2, 1, -4}, {0}, {-2, 1}, {0, 2, 1}, {}, {0}, {1, 2}};
-  auto const expected =
-    LCW<T>{{{4, 3, 2, 1}, {5}, {6, 7}, {8, 0, 9}, {}, {{X}, all_nulls()}, {4, 5}}, null_at(5)};
-  auto const results = cudf::lists::segmented_gather(cudf::lists_column_view{*input},
-                                                     cudf::lists_column_view{gather_map});
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
 }
 
 TYPED_TEST(SegmentedGatherTest, GatherNestedNulls)

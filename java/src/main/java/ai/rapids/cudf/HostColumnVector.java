@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ *  Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -40,11 +40,30 @@ import java.util.function.Consumer;
  */
 public final class HostColumnVector extends HostColumnVectorCore {
   /**
+   * Interface to handle events for this HostColumnVector. Only invoked during
+   * close, hence `onClosed` is the only event.
+   */
+  public interface EventHandler {
+    /**
+     * `onClosed` is invoked with the updated `refCount` during `close`.
+     * The last invocation of `onClosed` will be with `refCount=0`.
+     *
+     * @note the callback is invoked with this `HostColumnVector`'s lock held.
+     *
+     * @param cv reference to the HostColumnVector we are closing
+     * @param refCount the updated ref count for this HostColumnVector at
+     *                 the time of invocation
+     */
+    void onClosed(HostColumnVector cv, int refCount);
+  }
+
+  /**
    * The size in bytes of an offset entry
    */
   static final int OFFSET_SIZE = DType.INT32.getSizeInBytes();
 
   private int refCount;
+  private EventHandler eventHandler;
 
   /**
    * Create a new column vector with data populated on the host.
@@ -73,6 +92,8 @@ public final class HostColumnVector extends HostColumnVectorCore {
   public HostColumnVector(DType type, long rows, Optional<Long> nullCount,
                    HostMemoryBuffer hostDataBuffer, HostMemoryBuffer hostValidityBuffer,
                    HostMemoryBuffer offsetBuffer, List<HostColumnVectorCore> nestedHcv) {
+    // NOTE: This constructor MUST NOT examine the contents of any host buffers, as they may be
+    //       asynchronously written by the device.
     super(type, rows, nullCount, hostDataBuffer, hostValidityBuffer, offsetBuffer, nestedHcv);
     refCount = 0;
     incRefCountInternal(true);
@@ -81,6 +102,8 @@ public final class HostColumnVector extends HostColumnVectorCore {
   HostColumnVector(DType type, long rows, Optional<Long> nullCount,
                    HostMemoryBuffer hostDataBuffer, HostMemoryBuffer hostValidityBuffer,
                    HostMemoryBuffer offsetBuffer) {
+    // NOTE: This constructor MUST NOT examine the contents of any host buffers, as they may be
+    //       asynchronously written by the device.
     super(type, rows, nullCount, hostDataBuffer, hostValidityBuffer, offsetBuffer, new ArrayList<>());
     assert !type.equals(DType.LIST) : "This constructor should not be used for list type";
     if (nullCount.isPresent() && nullCount.get() > 0 && hostValidityBuffer == null) {
@@ -91,6 +114,27 @@ public final class HostColumnVector extends HostColumnVectorCore {
     }
     refCount = 0;
     incRefCountInternal(true);
+  }
+
+  /**
+   * Set an event handler for this host vector. This method can be invoked with
+   * null to unset the handler.
+   *
+   * @param newHandler - the EventHandler to use from this point forward
+   * @return the prior event handler, or null if not set.
+   */
+  public synchronized EventHandler setEventHandler(EventHandler newHandler) {
+    EventHandler prev = this.eventHandler;
+    this.eventHandler = newHandler;
+    return prev;
+  }
+
+  /**
+   * Returns the current event handler for this HostColumnVector or null if no
+   * handler is associated.
+   */
+  public synchronized EventHandler getEventHandler() {
+    return this.eventHandler;
   }
 
   /**
@@ -110,14 +154,20 @@ public final class HostColumnVector extends HostColumnVectorCore {
   public synchronized void close() {
     refCount--;
     offHeap.delRef();
-    if (refCount == 0) {
-      offHeap.clean(false);
-      for( HostColumnVectorCore child : children) {
-        child.close();
+    try {
+      if (refCount == 0) {
+        offHeap.clean(false);
+        for (HostColumnVectorCore child : children) {
+          child.close();
+        }
+      } else if (refCount < 0) {
+        offHeap.logRefCountDebug("double free " + this);
+        throw new IllegalStateException("Close called too many times " + this);
       }
-    } else if (refCount < 0) {
-      offHeap.logRefCountDebug("double free " + this);
-      throw new IllegalStateException("Close called too many times " + this);
+    } finally {
+      if (eventHandler != null) {
+        eventHandler.onClosed(this, refCount);
+      }
     }
   }
 
@@ -156,7 +206,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
   /**
    * Returns this column's current refcount
    */
-  synchronized int getRefCount() {
+  public synchronized int getRefCount() {
     return refCount;
   }
 
@@ -1136,12 +1186,12 @@ public final class HostColumnVector extends HostColumnVectorCore {
     private ColumnBuilder append(StructData structData) {
       assert type.isNestedType();
       if (type.equals(DType.STRUCT)) {
-        if (structData == null || structData.dataRecord == null) {
+        if (structData == null || structData.isNull()) {
           return appendNull();
         } else {
           for (int i = 0; i < structData.getNumFields(); i++) {
             ColumnBuilder childBuilder = childBuilders.get(i);
-            appendChildOrNull(childBuilder, structData.dataRecord.get(i));
+            appendChildOrNull(childBuilder, structData.getField(i));
           }
           endStruct();
         }
@@ -2034,10 +2084,10 @@ public final class HostColumnVector extends HostColumnVectorCore {
   }
 
   public static abstract class DataType {
-    abstract DType getType();
-    abstract boolean isNullable();
-    abstract DataType getChild(int index);
-    abstract int getNumChildren();
+    public abstract DType getType();
+    public abstract boolean isNullable();
+    public abstract DataType getChild(int index);
+    public abstract int getNumChildren();
   }
 
   public static class ListType extends HostColumnVector.DataType {
@@ -2050,17 +2100,17 @@ public final class HostColumnVector extends HostColumnVectorCore {
     }
 
     @Override
-    DType getType() {
+    public DType getType() {
       return DType.LIST;
     }
 
     @Override
-    boolean isNullable() {
+    public boolean isNullable() {
       return isNullable;
     }
 
     @Override
-    HostColumnVector.DataType getChild(int index) {
+    public HostColumnVector.DataType getChild(int index) {
       if (index > 0) {
         return null;
       }
@@ -2068,7 +2118,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
     }
 
     @Override
-    int getNumChildren() {
+    public int getNumChildren() {
       return 1;
     }
   }
@@ -2091,6 +2141,14 @@ public final class HostColumnVector extends HostColumnVectorCore {
         return 0;
       }
     }
+
+    public boolean isNull() {
+      return (this.dataRecord == null);
+    }
+
+    public Object getField(int index) {
+      return this.dataRecord.get(index);
+    }
   }
 
   public static class StructType extends HostColumnVector.DataType {
@@ -2107,22 +2165,22 @@ public final class HostColumnVector extends HostColumnVectorCore {
     }
 
     @Override
-    DType getType() {
+    public DType getType() {
       return DType.STRUCT;
     }
 
     @Override
-    boolean isNullable() {
+    public boolean isNullable() {
       return isNullable;
     }
 
     @Override
-    HostColumnVector.DataType getChild(int index) {
+    public HostColumnVector.DataType getChild(int index) {
       return children.get(index);
     }
 
     @Override
-    int getNumChildren() {
+    public int getNumChildren() {
       return children.size();
     }
   }
@@ -2137,22 +2195,22 @@ public final class HostColumnVector extends HostColumnVectorCore {
     }
 
     @Override
-    DType getType() {
+    public DType getType() {
       return type;
     }
 
     @Override
-    boolean isNullable() {
+    public boolean isNullable() {
       return isNullable;
     }
 
     @Override
-    HostColumnVector.DataType getChild(int index) {
+    public HostColumnVector.DataType getChild(int index) {
       return null;
     }
 
     @Override
-    int getNumChildren() {
+    public int getNumChildren() {
       return 0;
     }
   }

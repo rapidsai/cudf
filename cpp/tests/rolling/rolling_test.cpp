@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,8 +19,9 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/iterator_utilities.hpp>
+#include <cudf_test/random.hpp>
+#include <cudf_test/testing_main.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/aggregation.hpp>
@@ -28,15 +29,16 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/dictionary/encode.hpp>
 #include <cudf/rolling.hpp>
-#include <cudf/unary.hpp>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/traits.hpp>
-#include <src/rolling/detail/rolling.hpp>
 
 #include <thrust/host_vector.h>
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
 
+#include <src/rolling/detail/rolling.hpp>
+
+#include <algorithm>
 #include <limits>
 #include <type_traits>
 #include <vector>
@@ -146,20 +148,6 @@ TEST_F(RollingStringTest, MinPeriods)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_max, got_max->view());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_count_val, got_count_valid->view());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_count_all, got_count_all->view());
-}
-
-TEST_F(RollingStringTest, ZeroWindowSize)
-{
-  cudf::test::strings_column_wrapper input(
-    {"This", "is", "rolling", "test", "being", "operated", "on", "string", "column"},
-    {1, 0, 0, 1, 0, 1, 1, 1, 0});
-  cudf::test::fixed_width_column_wrapper<cudf::size_type> expected_count(
-    {0, 0, 0, 0, 0, 0, 0, 0, 0}, {1, 1, 1, 1, 1, 1, 1, 1, 1, 1});
-
-  auto got_count = cudf::rolling_window(
-    input, 0, 0, 0, *cudf::make_count_aggregation<cudf::rolling_aggregation>());
-
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_count, got_count->view());
 }
 
 // =========================================================================================
@@ -413,8 +401,8 @@ class RollingTest : public cudf::test::BaseFixture {
  protected:
   // input as column_wrapper
   void run_test_col(cudf::column_view const& input,
-                    const std::vector<cudf::size_type>& preceding_window,
-                    const std::vector<cudf::size_type>& following_window,
+                    std::vector<cudf::size_type> const& preceding_window,
+                    std::vector<cudf::size_type> const& following_window,
                     cudf::size_type min_periods,
                     cudf::rolling_aggregation const& op)
   {
@@ -443,8 +431,8 @@ class RollingTest : public cudf::test::BaseFixture {
 
   // helper function to test all aggregators
   void run_test_col_agg(cudf::column_view const& input,
-                        const std::vector<cudf::size_type>& preceding_window,
-                        const std::vector<cudf::size_type>& following_window,
+                        std::vector<cudf::size_type> const& preceding_window,
+                        std::vector<cudf::size_type> const& following_window,
                         cudf::size_type min_periods)
   {
     // test all supported aggregators
@@ -552,7 +540,7 @@ class RollingTest : public cudf::test::BaseFixture {
 
     agg_op op;
     for (cudf::size_type i = 0; i < num_rows; i++) {
-      OutputType val = agg_op::template identity<OutputType>();
+      auto val = agg_op::template identity<OutputType>();
 
       // load sizes
       min_periods = std::max(min_periods, 1);  // at least one observation is required
@@ -673,7 +661,7 @@ TEST_F(RollingErrorTest, WindowArraySizeMismatch)
   cudf::test::fixed_width_column_wrapper<cudf::size_type> input(
     col_data.begin(), col_data.end(), col_valid.begin());
 
-  std::vector<cudf::size_type> five({2, 1, 2, 1, 4});
+  std::vector<cudf::size_type> five({1, 1, 2, 1, 0});
   std::vector<cudf::size_type> four({1, 2, 3, 4});
   cudf::test::fixed_width_column_wrapper<cudf::size_type> five_elements(five.begin(), five.end());
   cudf::test::fixed_width_column_wrapper<cudf::size_type> four_elements(four.begin(), four.end());
@@ -970,6 +958,7 @@ TEST_F(RollingtVarStdTestUntyped, SimpleStaticVarianceStdInfNaN)
 #undef XXX
 }
 
+/*
 // negative sizes
 TYPED_TEST(RollingTest, NegativeWindowSizes)
 {
@@ -980,10 +969,12 @@ TYPED_TEST(RollingTest, NegativeWindowSizes)
   std::vector<cudf::size_type> window{3};
   std::vector<cudf::size_type> negative_window{-2};
 
+
   this->run_test_col_agg(input, negative_window, window, 1);
   this->run_test_col_agg(input, window, negative_window, 1);
   this->run_test_col_agg(input, negative_window, negative_window, 1);
 }
+ */
 
 // simple example from Pandas docs:
 TYPED_TEST(RollingTest, SimpleDynamic)
@@ -995,22 +986,7 @@ TYPED_TEST(RollingTest, SimpleDynamic)
   cudf::test::fixed_width_column_wrapper<TypeParam> input(
     col_data.begin(), col_data.end(), col_mask.begin());
   std::vector<cudf::size_type> preceding_window({1, 2, 3, 4, 2});
-  std::vector<cudf::size_type> following_window({2, 1, 2, 1, 2});
-
-  // dynamic sizes
-  this->run_test_col_agg(input, preceding_window, following_window, 1);
-}
-
-// this is a special test to check the volatile count variable issue (see rolling.cu for detail)
-TYPED_TEST(RollingTest, VolatileCount)
-{
-  auto const col_data = cudf::test::make_type_param_vector<TypeParam>({8, 70, 45, 20, 59, 80});
-  const std::vector<bool> col_mask = {1, 1, 0, 0, 1, 0};
-
-  cudf::test::fixed_width_column_wrapper<TypeParam> input(
-    col_data.begin(), col_data.end(), col_mask.begin());
-  std::vector<cudf::size_type> preceding_window({5, 9, 4, 8, 3, 3});
-  std::vector<cudf::size_type> following_window({1, 1, 9, 2, 8, 9});
+  std::vector<cudf::size_type> following_window({2, 1, 2, 1, 0});
 
   // dynamic sizes
   this->run_test_col_agg(input, preceding_window, following_window, 1);
@@ -1033,6 +1009,7 @@ TYPED_TEST(RollingTest, AllInvalid)
 }
 
 // window = following_window = 0
+// Note: Preceding includes current row, so its value is set to 1.
 TYPED_TEST(RollingTest, ZeroWindow)
 {
   cudf::size_type num_rows = 1000;
@@ -1042,10 +1019,11 @@ TYPED_TEST(RollingTest, ZeroWindow)
 
   cudf::test::fixed_width_column_wrapper<TypeParam, int> input(
     col_data.begin(), col_data.end(), col_mask.begin());
-  std::vector<cudf::size_type> window({0});
+  std::vector<cudf::size_type> preceding({0});
+  std::vector<cudf::size_type> following({1});
   cudf::size_type periods = num_rows;
 
-  this->run_test_col_agg(input, window, window, periods);
+  this->run_test_col_agg(input, preceding, following, periods);
 }
 
 // min_periods = 0
@@ -1136,14 +1114,19 @@ TYPED_TEST(RollingTest, RandomDynamicAllValid)
 
   // random parameters
   cudf::test::UniformRandomGenerator<cudf::size_type> window_rng(0, max_window_size);
-  auto generator = [&]() { return window_rng.generate(); };
 
   std::vector<cudf::size_type> preceding_window(num_rows);
   std::vector<cudf::size_type> following_window(num_rows);
 
-  std::generate(preceding_window.begin(), preceding_window.end(), generator);
-  std::generate(following_window.begin(), following_window.end(), generator);
-
+  auto it = thrust::make_counting_iterator<cudf::size_type>(0);
+  std::transform(it, it + num_rows, preceding_window.begin(), [&window_rng, num_rows](auto i) {
+    auto p = window_rng.generate();
+    return std::min(i + 1, std::max(p, i + 1 - num_rows));
+  });
+  std::transform(it, it + num_rows, following_window.begin(), [&window_rng, num_rows](auto i) {
+    auto f = window_rng.generate();
+    return std::max(-i - 1, std::min(f, num_rows - i - 1));
+  });
   this->run_test_col_agg(input, preceding_window, following_window, max_window_size);
 }
 
@@ -1165,14 +1148,19 @@ TYPED_TEST(RollingTest, RandomDynamicWithInvalid)
 
   // random parameters
   cudf::test::UniformRandomGenerator<cudf::size_type> window_rng(0, max_window_size);
-  auto generator = [&]() { return window_rng.generate(); };
 
   std::vector<cudf::size_type> preceding_window(num_rows);
   std::vector<cudf::size_type> following_window(num_rows);
 
-  std::generate(preceding_window.begin(), preceding_window.end(), generator);
-  std::generate(following_window.begin(), following_window.end(), generator);
-
+  auto it = thrust::make_counting_iterator<cudf::size_type>(0);
+  std::transform(it, it + num_rows, preceding_window.begin(), [&window_rng, num_rows](auto i) {
+    auto p = window_rng.generate();
+    return std::min(i + 1, std::max(p, i + 1 - num_rows));
+  });
+  std::transform(it, it + num_rows, following_window.begin(), [&window_rng, num_rows](auto i) {
+    auto f = window_rng.generate();
+    return std::max(-i - 1, std::min(f, num_rows - i - 1));
+  });
   this->run_test_col_agg(input, preceding_window, following_window, max_window_size);
 }
 

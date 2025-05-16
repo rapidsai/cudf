@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,20 +14,18 @@
  * limitations under the License.
  */
 
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_utilities.hpp>
+#include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/type_lists.hpp>
+
 #include <cudf/column/column_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
-#include <cudf_test/base_fixture.hpp>
-#include <cudf_test/column_utilities.hpp>
-#include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/cudf_gtest.hpp>
-#include <cudf_test/type_lists.hpp>
-
 #include <thrust/iterator/counting_iterator.h>
 
-#include <random>
-
+namespace {
 template <typename T, typename T2 = void>
 struct rep_type_impl {
   using type = void;
@@ -50,12 +48,14 @@ struct rep_type_impl<T, std::enable_if_t<cudf::is_fixed_point<T>()>> {
 
 template <typename T>
 using rep_type_t = typename rep_type_impl<T>::type;
+}  // namespace
 
 template <typename T>
 struct ColumnViewAllTypesTests : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(ColumnViewAllTypesTests, cudf::test::FixedWidthTypes);
 
+namespace {
 template <typename FromType, typename ToType, typename Iterator>
 void do_bit_cast(cudf::column_view const& column_view, Iterator begin, Iterator end)
 {
@@ -105,6 +105,7 @@ void do_bit_cast(cudf::column_view const& column_view, Iterator begin, Iterator 
     }
   }
 }
+}  // namespace
 
 TYPED_TEST(ColumnViewAllTypesTests, BitCast)
 {

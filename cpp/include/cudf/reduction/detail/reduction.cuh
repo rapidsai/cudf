@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,8 @@
 #include "reduction_operators.cuh"
 
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/utilities/cast_functor.cuh>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -27,9 +29,8 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cub/device/device_reduce.cuh>
-
+#include <cuda/std/iterator>
 #include <thrust/for_each.h>
-#include <thrust/iterator/iterator_traits.h>
 
 #include <optional>
 
@@ -54,7 +55,7 @@ namespace detail {
  */
 template <typename Op,
           typename InputIterator,
-          typename OutputType = typename thrust::iterator_value<InputIterator>::type,
+          typename OutputType = cuda::std::iter_value_t<InputIterator>,
           std::enable_if_t<is_fixed_width<OutputType>() &&
                            not cudf::is_fixed_point<OutputType>()>* = nullptr>
 std::unique_ptr<scalar> reduce(InputIterator d_in,
@@ -62,9 +63,9 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
                                op::simple_op<Op> op,
                                std::optional<OutputType> init,
                                rmm::cuda_stream_view stream,
-                               rmm::mr::device_memory_resource* mr)
+                               rmm::device_async_resource_ref mr)
 {
-  auto const binary_op     = op.get_binary_op();
+  auto const binary_op     = cudf::detail::cast_functor<OutputType>(op.get_binary_op());
   auto const initial_value = init.value_or(op.template get_identity<OutputType>());
   auto dev_result          = rmm::device_scalar<OutputType>{initial_value, stream, mr};
 
@@ -98,14 +99,14 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
 
 template <typename Op,
           typename InputIterator,
-          typename OutputType = typename thrust::iterator_value<InputIterator>::type,
+          typename OutputType                             = cuda::std::iter_value_t<InputIterator>,
           std::enable_if_t<is_fixed_point<OutputType>()>* = nullptr>
 std::unique_ptr<scalar> reduce(InputIterator d_in,
                                cudf::size_type num_items,
                                op::simple_op<Op> op,
                                std::optional<OutputType> init,
                                rmm::cuda_stream_view stream,
-                               rmm::mr::device_memory_resource* mr)
+                               rmm::device_async_resource_ref mr)
 {
   CUDF_FAIL(
     "This function should never be called. fixed_point reduce should always go through the reduce "
@@ -115,16 +116,16 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
 // @brief string_view specialization of simple reduction
 template <typename Op,
           typename InputIterator,
-          typename OutputType = typename thrust::iterator_value<InputIterator>::type,
+          typename OutputType = cuda::std::iter_value_t<InputIterator>,
           std::enable_if_t<std::is_same_v<OutputType, string_view>>* = nullptr>
 std::unique_ptr<scalar> reduce(InputIterator d_in,
                                cudf::size_type num_items,
                                op::simple_op<Op> op,
                                std::optional<OutputType> init,
                                rmm::cuda_stream_view stream,
-                               rmm::mr::device_memory_resource* mr)
+                               rmm::device_async_resource_ref mr)
 {
-  auto const binary_op     = op.get_binary_op();
+  auto const binary_op     = cudf::detail::cast_functor<OutputType>(op.get_binary_op());
   auto const initial_value = init.value_or(op.template get_identity<OutputType>());
   auto dev_result          = rmm::device_scalar<OutputType>{initial_value, stream};
 
@@ -181,16 +182,16 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
 template <typename Op,
           typename InputIterator,
           typename OutputType,
-          typename IntermediateType = typename thrust::iterator_value<InputIterator>::type>
+          typename IntermediateType = cuda::std::iter_value_t<InputIterator>>
 std::unique_ptr<scalar> reduce(InputIterator d_in,
                                cudf::size_type num_items,
                                op::compound_op<Op> op,
                                cudf::size_type valid_count,
                                cudf::size_type ddof,
                                rmm::cuda_stream_view stream,
-                               rmm::mr::device_memory_resource* mr)
+                               rmm::device_async_resource_ref mr)
 {
-  auto const binary_op     = op.get_binary_op();
+  auto const binary_op     = cudf::detail::cast_functor<IntermediateType>(op.get_binary_op());
   auto const initial_value = op.template get_identity<IntermediateType>();
 
   rmm::device_scalar<IntermediateType> intermediate_result{initial_value, stream};

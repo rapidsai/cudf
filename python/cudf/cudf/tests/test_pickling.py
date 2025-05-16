@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2023, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
 import pickle
 
@@ -6,9 +6,9 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from cudf import DataFrame, GenericIndex, RangeIndex, Series
+from cudf import DataFrame, Index, RangeIndex, Series
 from cudf.core.buffer import as_buffer
-from cudf.testing._utils import assert_eq
+from cudf.testing import assert_eq
 
 pytestmark = pytest.mark.spilling
 
@@ -22,7 +22,7 @@ def check_serialization(df):
     assert_frame_picklable(df[2:-2])
     # sorted
     sortvaldf = df.sort_values("vals")
-    assert isinstance(sortvaldf.index, (GenericIndex, RangeIndex))
+    assert isinstance(sortvaldf.index, (Index, RangeIndex))
     assert_frame_picklable(sortvaldf)
     # out-of-band
     buffers = []
@@ -40,33 +40,33 @@ def assert_frame_picklable(df):
 
 
 def test_pickle_dataframe_numeric():
-    np.random.seed(0)
+    rng = np.random.default_rng(seed=0)
     df = DataFrame()
     nelem = 10
     df["keys"] = np.arange(nelem, dtype=np.float64)
-    df["vals"] = np.random.random(nelem)
+    df["vals"] = rng.random(nelem)
 
     check_serialization(df)
 
 
 def test_pickle_dataframe_categorical():
-    np.random.seed(0)
+    rng = np.random.default_rng(seed=0)
 
     df = DataFrame()
     df["keys"] = pd.Categorical(
         ["a", "a", "a", "b", "a", "b", "a", "b", "a", "c"]
     )
-    df["vals"] = np.random.random(len(df))
+    df["vals"] = rng.random(len(df))
 
     check_serialization(df)
 
 
 def test_memory_usage_dataframe():
-    np.random.seed(0)
+    rng = np.random.default_rng(seed=0)
     df = DataFrame()
     nelem = 1000
     df["keys"] = hkeys = np.arange(nelem, dtype=np.float64)
-    df["vals"] = hvals = np.random.random(nelem)
+    df["vals"] = hvals = rng.random(nelem)
 
     nbytes = hkeys.nbytes + hvals.nbytes
     sizeof = df.memory_usage().sum()
@@ -80,7 +80,7 @@ def test_memory_usage_dataframe():
 
 def test_pickle_index():
     nelem = 10
-    idx = GenericIndex(np.arange(nelem), name="a")
+    idx = Index(np.arange(nelem), name="a")
     pickled = pickle.dumps(idx)
     out = pickle.loads(pickled)
     assert (idx == out).all()
@@ -98,11 +98,11 @@ def test_pickle_buffer():
 
 @pytest.mark.parametrize("named", [True, False])
 def test_pickle_series(named):
-    np.random.seed(0)
+    rng = np.random.default_rng(seed=0)
     if named:
-        ser = Series(np.random.random(10), name="a")
+        ser = Series(rng.random(10), name="a")
     else:
-        ser = Series(np.random.random(10))
+        ser = Series(rng.random(10))
 
     pickled = pickle.dumps(ser)
     out = pickle.loads(pickled)
@@ -127,7 +127,7 @@ def test_pickle_categorical_column(slices):
     pickled = pickle.dumps(input_col)
     out = pickle.loads(pickled)
 
-    assert_eq(Series(out), Series(input_col))
+    assert_eq(Series._from_column(out), Series._from_column(input_col))
 
 
 @pytest.mark.parametrize(
@@ -148,4 +148,4 @@ def test_pickle_string_column(slices):
     pickled = pickle.dumps(input_col)
     out = pickle.loads(pickled)
 
-    assert_eq(Series(out), Series(input_col))
+    assert_eq(Series._from_column(out), Series._from_column(input_col))

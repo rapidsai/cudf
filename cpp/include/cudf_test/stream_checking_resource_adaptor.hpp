@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,15 +17,18 @@
 
 #include <cudf_test/default_stream.hpp>
 
+#include <cudf/detail/utilities/stacktrace.hpp>
+#include <cudf/utilities/memory_resource.hpp>
+
 #include <rmm/mr/device/device_memory_resource.hpp>
+
+#include <iostream>
+
+namespace cudf::test {
 
 /**
  * @brief Resource that verifies that the default stream is not used in any allocation.
- *
- * @tparam Upstream Type of the upstream resource used for
- * allocation/deallocation.
  */
-template <typename Upstream>
 class stream_checking_resource_adaptor final : public rmm::mr::device_memory_resource {
  public:
   /**
@@ -35,14 +38,13 @@ class stream_checking_resource_adaptor final : public rmm::mr::device_memory_res
    *
    * @param upstream The resource used for allocating/deallocating device memory
    */
-  stream_checking_resource_adaptor(Upstream* upstream,
+  stream_checking_resource_adaptor(rmm::device_async_resource_ref upstream,
                                    bool error_on_invalid_stream,
                                    bool check_default_stream)
     : upstream_{upstream},
       error_on_invalid_stream_{error_on_invalid_stream},
       check_default_stream_{check_default_stream}
   {
-    CUDF_EXPECTS(nullptr != upstream, "Unexpected null upstream resource pointer.");
   }
 
   stream_checking_resource_adaptor()                                                   = delete;
@@ -54,27 +56,13 @@ class stream_checking_resource_adaptor final : public rmm::mr::device_memory_res
     default;
 
   /**
-   * @brief Return pointer to the upstream resource.
+   * @brief Returns the wrapped upstream resource
    *
-   * @return Pointer to the upstream resource.
+   * @return The wrapped upstream resource
    */
-  Upstream* get_upstream() const noexcept { return upstream_; }
-
-  /**
-   * @brief Checks whether the upstream resource supports streams.
-   *
-   * @return Whether or not the upstream resource supports streams
-   */
-  bool supports_streams() const noexcept override { return upstream_->supports_streams(); }
-
-  /**
-   * @brief Query whether the resource supports the get_mem_info API.
-   *
-   * @return Whether or not the upstream resource supports get_mem_info
-   */
-  bool supports_get_mem_info() const noexcept override
+  [[nodiscard]] rmm::device_async_resource_ref get_upstream_resource() const noexcept
   {
-    return upstream_->supports_get_mem_info();
+    return upstream_;
   }
 
  private:
@@ -95,7 +83,7 @@ class stream_checking_resource_adaptor final : public rmm::mr::device_memory_res
   void* do_allocate(std::size_t bytes, rmm::cuda_stream_view stream) override
   {
     verify_stream(stream);
-    return upstream_->allocate(bytes, stream);
+    return upstream_.allocate_async(bytes, rmm::CUDA_ALLOCATION_ALIGNMENT, stream);
   }
 
   /**
@@ -110,7 +98,7 @@ class stream_checking_resource_adaptor final : public rmm::mr::device_memory_res
   void do_deallocate(void* ptr, std::size_t bytes, rmm::cuda_stream_view stream) override
   {
     verify_stream(stream);
-    upstream_->deallocate(ptr, bytes, stream);
+    upstream_.deallocate_async(ptr, bytes, rmm::CUDA_ALLOCATION_ALIGNMENT, stream);
   }
 
   /**
@@ -119,27 +107,12 @@ class stream_checking_resource_adaptor final : public rmm::mr::device_memory_res
    * @param other The other resource to compare to
    * @return Whether or not the two resources are equivalent
    */
-  bool do_is_equal(device_memory_resource const& other) const noexcept override
+  [[nodiscard]] bool do_is_equal(device_memory_resource const& other) const noexcept override
   {
     if (this == &other) { return true; }
-    auto cast = dynamic_cast<stream_checking_resource_adaptor<Upstream> const*>(&other);
-    return cast != nullptr ? upstream_->is_equal(*cast->get_upstream())
-                           : upstream_->is_equal(other);
-  }
-
-  /**
-   * @brief Get free and available memory from upstream resource.
-   *
-   * @throws `rmm::cuda_error` if unable to retrieve memory info.
-   * @throws `cudf::logic_error` if attempted on a default stream
-   *
-   * @param stream Stream on which to get the mem info.
-   * @return std::pair with available and free memory for resource
-   */
-  std::pair<std::size_t, std::size_t> do_get_mem_info(rmm::cuda_stream_view stream) const override
-  {
-    verify_stream(stream);
-    return upstream_->get_mem_info(stream);
+    auto cast = dynamic_cast<stream_checking_resource_adaptor const*>(&other);
+    if (cast == nullptr) { return false; }
+    return get_upstream_resource() == cast->get_upstream_resource();
   }
 
   /**
@@ -162,6 +135,10 @@ class stream_checking_resource_adaptor final : public rmm::mr::device_memory_res
                             : (cstream != cudf::test::get_default_stream().value());
 
     if (invalid_stream) {
+      // Exclude the current function from stacktrace.
+      std::cout << cudf::detail::get_stacktrace(cudf::detail::capture_last_stackframe::NO)
+                << std::endl;
+
       if (error_on_invalid_stream_) {
         throw std::runtime_error("Attempted to perform an operation on an unexpected stream!");
       } else {
@@ -170,7 +147,8 @@ class stream_checking_resource_adaptor final : public rmm::mr::device_memory_res
     }
   }
 
-  Upstream* upstream_;            // the upstream resource used for satisfying allocation requests
+  rmm::device_async_resource_ref
+    upstream_;                    // the upstream resource used for satisfying allocation requests
   bool error_on_invalid_stream_;  // If true, throw an exception when the wrong stream is detected.
                                   // If false, simply print to stdout.
   bool check_default_stream_;  // If true, throw an exception when the default stream is observed.
@@ -178,17 +156,4 @@ class stream_checking_resource_adaptor final : public rmm::mr::device_memory_res
                                // cudf::test::get_default_stream() is observed.
 };
 
-/**
- * @brief Convenience factory to return a `stream_checking_resource_adaptor` around the
- * upstream resource `upstream`.
- *
- * @tparam Upstream Type of the upstream `device_memory_resource`.
- * @param upstream Pointer to the upstream resource
- */
-template <typename Upstream>
-stream_checking_resource_adaptor<Upstream> make_stream_checking_resource_adaptor(
-  Upstream* upstream, bool error_on_invalid_stream, bool check_default_stream)
-{
-  return stream_checking_resource_adaptor<Upstream>{
-    upstream, error_on_invalid_stream, check_default_stream};
-}
+}  // namespace cudf::test

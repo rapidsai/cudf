@@ -16,6 +16,7 @@ DartConfiguration.tcl
 *.spec
 .nfs*
 .clangd
+compile_commands.json
 
 ## Python build directories & artifacts
 dask-worker-space/
@@ -77,6 +78,8 @@ CMakeFiles/
 Debug
 build/
 cpp/build/
+cpp/examples/*/install/
+cpp/examples/*/build/
 cpp/include/cudf/ipc_generated/*.h
 cpp/thirdparty/googletest/
 
@@ -94,6 +97,7 @@ cpp/thirdparty/googletest/
 
 ## Doxygen
 cpp/doxygen/html
+cpp/doxygen/xml
 
 #Java
 target
@@ -158,12 +162,9 @@ ENV/
 # Dask
 dask-worker-space/
 
-# protobuf
-**/*_pb2.py
-
 # Sphinx docs & build artifacts
 docs/cudf/source/api_docs/generated/*
-docs/cudf/source/api_docs/api/*
+docs/cudf/source/user_guide/api_docs/api/*
 docs/cudf/source/user_guide/example_output/*
 docs/cudf/source/user_guide/cudf.*Dtype.*.rst
 _html
@@ -172,3 +173,11 @@ jupyter_execute
 
 # cibuildwheel
 /wheelhouse
+
+# clang tooling
+compile_commands.json
+.clangd/
+
+# pytest artifacts
+rmm_log.txt
+python/cudf/cudf_pandas_tests/data/rmm_log.txt

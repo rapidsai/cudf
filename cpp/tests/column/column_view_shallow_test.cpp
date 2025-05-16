@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,16 +14,14 @@
  * limitations under the License.
  */
 
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/type_lists.hpp>
+
 #include <cudf/column/column_view.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/traits.hpp>
-
-#include <cudf_test/base_fixture.hpp>
-#include <cudf_test/column_utilities.hpp>
-#include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/cudf_gtest.hpp>
-#include <cudf_test/type_lists.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
 
@@ -43,7 +41,8 @@ template <typename T, std::enable_if_t<cudf::is_dictionary<T>()>* = nullptr>
 std::unique_ptr<cudf::column> example_column()
 {
   return cudf::test::dictionary_column_wrapper<std::string>(
-           {"fff", "aaa", "ddd", "bbb", "ccc", "ccc", "ccc", "", ""}, {1, 1, 1, 1, 1, 1, 1, 1, 0})
+           {"fff", "aaa", "ddd", "bbb", "ccc", "ccc", "ccc", "", ""},
+           {true, true, true, true, true, true, true, true, false})
     .release();
 }
 
@@ -221,8 +220,8 @@ TYPED_TEST(ColumnViewShallowTests, shallow_hash_slice)
   {
     if constexpr (std::is_integral_v<TypeParam> and not std::is_same_v<TypeParam, bool>) {
       using newType    = std::conditional_t<std::is_signed_v<TypeParam>,
-                                         std::make_unsigned_t<TypeParam>,
-                                         std::make_signed_t<TypeParam>>;
+                                            std::make_unsigned_t<TypeParam>,
+                                            std::make_signed_t<TypeParam>>;
       auto new_type    = cudf::data_type(cudf::type_to_id<newType>());
       auto col_bitcast = cudf::bit_cast(col_view, new_type);
       EXPECT_NE(shallow_hash(col_view), shallow_hash(col_bitcast));
@@ -388,8 +387,8 @@ TYPED_TEST(ColumnViewShallowTests, is_shallow_equivalent_slice)
   {
     if constexpr (std::is_integral_v<TypeParam> and not std::is_same_v<TypeParam, bool>) {
       using newType    = std::conditional_t<std::is_signed_v<TypeParam>,
-                                         std::make_unsigned_t<TypeParam>,
-                                         std::make_signed_t<TypeParam>>;
+                                            std::make_unsigned_t<TypeParam>,
+                                            std::make_signed_t<TypeParam>>;
       auto new_type    = cudf::data_type(cudf::type_to_id<newType>());
       auto col_bitcast = cudf::bit_cast(col_view, new_type);
       EXPECT_FALSE(is_shallow_equivalent(col_view, col_bitcast));

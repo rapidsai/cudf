@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2023, NVIDIA CORPORATION.
+# Copyright (c) 2018-2025, NVIDIA CORPORATION.
 
 # Configuration file for the Sphinx documentation builder.
 #
@@ -8,11 +8,18 @@
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
+import datetime
+
+import dask_cudf
+from packaging.version import Version
+
+DASK_CUDF_VERSION = Version(dask_cudf.__version__)
+
 project = "dask-cudf"
-copyright = "2018-2023, NVIDIA Corporation"
+copyright = f"2018-{datetime.datetime.today().year}, NVIDIA Corporation"
 author = "NVIDIA Corporation"
-version = "23.06"
-release = "23.06.00"
+version = f"{DASK_CUDF_VERSION.major:02}.{DASK_CUDF_VERSION.minor:02}"
+release = f"{DASK_CUDF_VERSION.major:02}.{DASK_CUDF_VERSION.minor:02}.{DASK_CUDF_VERSION.micro:02}"
 
 language = "en"
 
@@ -57,6 +64,7 @@ html_theme_options = {
     "twitter_url": "https://twitter.com/rapidsai",
     "show_toc_level": 1,
     "navbar_align": "right",
+    "navigation_with_keys": True,
 }
 include_pandas_compat = True
 
@@ -68,11 +76,14 @@ intersphinx_mapping = {
     "cudf": ("https://docs.rapids.ai/api/cudf/stable/", None),
     "dask": ("https://docs.dask.org/en/stable/", None),
     "pandas": ("https://pandas.pydata.org/docs/", None),
+    "dask-cuda": ("https://docs.rapids.ai/api/dask-cuda/stable/", None),
 }
 
 numpydoc_show_inherited_class_members = True
 numpydoc_class_members_toctree = False
 numpydoc_attributes_as_param_list = False
+
+nitpicky = True
 
 
 def setup(app):

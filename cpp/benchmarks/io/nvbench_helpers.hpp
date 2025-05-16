@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,6 +28,7 @@ enum class data_type : int32_t {
   INTEGRAL        = static_cast<int32_t>(type_group_id::INTEGRAL),
   INTEGRAL_SIGNED = static_cast<int32_t>(type_group_id::INTEGRAL_SIGNED),
   FLOAT           = static_cast<int32_t>(type_group_id::FLOATING_POINT),
+  BOOL8           = static_cast<int32_t>(cudf::type_id::BOOL8),
   DECIMAL         = static_cast<int32_t>(type_group_id::FIXED_POINT),
   TIMESTAMP       = static_cast<int32_t>(type_group_id::TIMESTAMP),
   DURATION        = static_cast<int32_t>(type_group_id::DURATION),
@@ -44,6 +45,7 @@ NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
       case data_type::INTEGRAL: return "INTEGRAL";
       case data_type::INTEGRAL_SIGNED: return "INTEGRAL_SIGNED";
       case data_type::FLOAT: return "FLOAT";
+      case data_type::BOOL8: return "BOOL8";
       case data_type::DECIMAL: return "DECIMAL";
       case data_type::TIMESTAMP: return "TIMESTAMP";
       case data_type::DURATION: return "DURATION";
@@ -56,13 +58,14 @@ NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
   [](auto) { return std::string{}; })
 
 NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
-  cudf::io::io_type,
+  io_type,
   [](auto value) {
     switch (value) {
-      case cudf::io::io_type::FILEPATH: return "FILEPATH";
-      case cudf::io::io_type::HOST_BUFFER: return "HOST_BUFFER";
-      case cudf::io::io_type::DEVICE_BUFFER: return "DEVICE_BUFFER";
-      case cudf::io::io_type::VOID: return "VOID";
+      case io_type::FILEPATH: return "FILEPATH";
+      case io_type::HOST_BUFFER: return "HOST_BUFFER";
+      case io_type::PINNED_BUFFER: return "PINNED_BUFFER";
+      case io_type::DEVICE_BUFFER: return "DEVICE_BUFFER";
+      case io_type::VOID: return "VOID";
       default: return "Unknown";
     }
   },
@@ -73,6 +76,7 @@ NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
   [](auto value) {
     switch (value) {
       case cudf::io::compression_type::SNAPPY: return "SNAPPY";
+      case cudf::io::compression_type::GZIP: return "GZIP";
       case cudf::io::compression_type::NONE: return "NONE";
       default: return "Unknown";
     }
@@ -165,6 +169,71 @@ NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
     switch (value) {
       case uses_pandas_metadata::YES: return "YES";
       case uses_pandas_metadata::NO: return "NO";
+      default: return "Unknown";
+    }
+  },
+  [](auto) { return std::string{}; })
+
+enum class json_lines : bool { YES, NO };
+
+enum class normalize_single_quotes : bool { YES, NO };
+
+enum class normalize_whitespace : bool { YES, NO };
+
+enum class mixed_types_as_string : bool { YES, NO };
+
+enum class recovery_mode : bool { FAIL, RECOVER_WITH_NULL };
+
+NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
+  json_lines,
+  [](auto value) {
+    switch (value) {
+      case json_lines::YES: return "YES";
+      case json_lines::NO: return "NO";
+      default: return "Unknown";
+    }
+  },
+  [](auto) { return std::string{}; })
+
+NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
+  normalize_single_quotes,
+  [](auto value) {
+    switch (value) {
+      case normalize_single_quotes::YES: return "YES";
+      case normalize_single_quotes::NO: return "NO";
+      default: return "Unknown";
+    }
+  },
+  [](auto) { return std::string{}; })
+
+NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
+  normalize_whitespace,
+  [](auto value) {
+    switch (value) {
+      case normalize_whitespace::YES: return "YES";
+      case normalize_whitespace::NO: return "NO";
+      default: return "Unknown";
+    }
+  },
+  [](auto) { return std::string{}; })
+
+NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
+  mixed_types_as_string,
+  [](auto value) {
+    switch (value) {
+      case mixed_types_as_string::YES: return "YES";
+      case mixed_types_as_string::NO: return "NO";
+      default: return "Unknown";
+    }
+  },
+  [](auto) { return std::string{}; })
+
+NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
+  recovery_mode,
+  [](auto value) {
+    switch (value) {
+      case recovery_mode::FAIL: return "FAIL";
+      case recovery_mode::RECOVER_WITH_NULL: return "RECOVER_WITH_NULL";
       default: return "Unknown";
     }
   },

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,12 +17,15 @@
 #pragma once
 
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
-#include <rmm/mr/device/per_device_resource.hpp>
+#include <rmm/cuda_stream_view.hpp>
 
 #include <memory>
 
-namespace cudf::lists {
+namespace CUDF_EXPORT cudf {
+namespace lists {
 /**
  * @addtogroup lists_filling
  * @{
@@ -57,13 +60,15 @@ namespace cudf::lists {
  *
  * @param starts First values in the result sequences.
  * @param sizes Numbers of values in the result sequences.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return The result column containing generated sequences.
  */
 std::unique_ptr<column> sequences(
   column_view const& starts,
   column_view const& sizes,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Create a lists column in which each row contains a sequence of values specified by a tuple
@@ -96,6 +101,7 @@ std::unique_ptr<column> sequences(
  * @param starts First values in the result sequences.
  * @param steps Increment values for the result sequences.
  * @param sizes Numbers of values in the result sequences.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return The result column containing generated sequences.
  */
@@ -103,7 +109,9 @@ std::unique_ptr<column> sequences(
   column_view const& starts,
   column_view const& steps,
   column_view const& sizes,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /** @} */  // end of group
-}  // namespace cudf::lists
+}  // namespace lists
+}  // namespace CUDF_EXPORT cudf

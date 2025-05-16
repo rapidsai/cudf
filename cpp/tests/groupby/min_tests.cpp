@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -111,8 +111,9 @@ TYPED_TEST(groupby_min_test, null_keys_and_values)
   using V = TypeParam;
   using R = cudf::detail::target_type_t<V, cudf::aggregation::MIN>;
 
-  cudf::test::fixed_width_column_wrapper<K> keys({1, 2, 3, 1, 2, 2, 1, 3, 3, 2, 4},
-                                                 {1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1});
+  cudf::test::fixed_width_column_wrapper<K> keys(
+    {1, 2, 3, 1, 2, 2, 1, 3, 3, 2, 4},
+    {true, true, true, true, true, true, true, false, true, true, true});
   cudf::test::fixed_width_column_wrapper<V> vals({0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 4},
                                                  {0, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0});
 
@@ -168,20 +169,24 @@ TEST_F(groupby_min_string_test, min_sorted_strings)
     {"",   "",   "",   "",   "",   "",   "06", "06", "06", "06", "10", "10", "10", "10", "14", "14",
      "14", "14", "18", "18", "18", "18", "22", "22", "22", "22", "26", "26", "26", "26", "30", "30",
      "30", "30", "34", "34", "34", "34", "38", "38", "38", "38", "42", "42", "42", "42"},
-    {0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-     1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1});
+    {false, false, false, false, false, false, true, true, true, true, true, true,
+     true,  true,  true,  true,  true,  true,  true, true, true, true, true, true,
+     true,  true,  true,  true,  true,  true,  true, true, true, true, true, true,
+     true,  true,  true,  true,  true,  true,  true, true, true, true});
   cudf::test::strings_column_wrapper vals(
     {"", "", "",   "", "", "", "06", "", "", "", "10", "", "", "", "14", "",
      "", "", "18", "", "", "", "22", "", "", "", "26", "", "", "", "30", "",
      "", "", "34", "", "", "", "38", "", "", "", "42", "", "", ""},
-    {0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1,
-     0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0});
+    {false, false, false, false, false, false, true, false, false, false, true, false,
+     false, false, true,  false, false, false, true, false, false, false, true, false,
+     false, false, true,  false, false, false, true, false, false, false, true, false,
+     false, false, true,  false, false, false, true, false, false, false});
   cudf::test::strings_column_wrapper expect_keys(
     {"06", "10", "14", "18", "22", "26", "30", "34", "38", "42", ""},
-    {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0});
+    {true, true, true, true, true, true, true, true, true, true, false});
   cudf::test::strings_column_wrapper expect_vals(
     {"06", "10", "14", "18", "22", "26", "30", "34", "38", "42", ""},
-    {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0});
+    {true, true, true, true, true, true, true, true, true, true, false});
 
   auto agg = cudf::make_min_aggregation<cudf::groupby_aggregation>();
   test_single_agg(keys,
@@ -424,6 +429,77 @@ TEST_F(groupby_min_struct_test, values_with_null_child)
   }
 }
 
+struct groupby_min_list_test : public cudf::test::BaseFixture {};
+
+TEST_F(groupby_min_list_test, basic)
+{
+  using lists = cudf::test::lists_column_wrapper<int32_t>;
+
+  auto const keys        = cudf::test::fixed_width_column_wrapper<int32_t>{1, 2, 3, 1, 2};
+  auto const vals        = lists{{1, 2}, {3, 4}, {5, 6, 7}, {0, 8}, {9, 10}};
+  auto const expect_keys = cudf::test::fixed_width_column_wrapper<int>{1, 2, 3};
+  auto const expect_vals = lists{{0, 8}, {3, 4}, {5, 6, 7}};
+
+  test_single_agg(
+    keys, vals, expect_keys, expect_vals, cudf::make_min_aggregation<cudf::groupby_aggregation>());
+}
+
+TEST_F(groupby_min_list_test, slice_input)
+{
+  using lists = cudf::test::lists_column_wrapper<int32_t>;
+  constexpr int32_t dont_care{1};
+
+  auto const keys_original =
+    cudf::test::fixed_width_column_wrapper<int32_t>{dont_care, 1, 2, 3, 1, 2, dont_care};
+  auto const vals_original =
+    lists{{1, 2, 3, 4, 5} /*dont care*/, {1, 2}, {3, 4}, {5, 6, 7}, {0, 8}, {9, 10}};
+  auto const keys = cudf::slice(keys_original, {1, 6})[0];
+  auto const vals = cudf::slice(vals_original, {1, 6})[0];
+
+  auto const expect_keys = cudf::test::fixed_width_column_wrapper<int>{1, 2, 3};
+  auto const expect_vals = lists{{0, 8}, {3, 4}, {5, 6, 7}};
+
+  test_single_agg(
+    keys, vals, expect_keys, expect_vals, cudf::make_min_aggregation<cudf::groupby_aggregation>());
+}
+
+TEST_F(groupby_min_list_test, null_keys_and_values)
+{
+  using lists = cudf::test::lists_column_wrapper<int32_t>;
+  constexpr int32_t null{0};
+
+  auto const keys =
+    cudf::test::fixed_width_column_wrapper<int32_t>{{1, 2, 3, null, 1, 2}, null_at(3)};
+  auto const expect_keys = cudf::test::fixed_width_column_wrapper<int>{{1, 2, 3}, no_nulls()};
+
+  // Null list element.
+  {
+    auto const vals = lists{{{} /*null*/, {1, 2}, {3, 4}, {5, 6, 7}, {0, 8}, {9, 10}}, null_at(0)};
+    auto const expect_vals = lists{{0, 8}, {1, 2}, {3, 4}};
+    test_single_agg(keys,
+                    vals,
+                    expect_keys,
+                    expect_vals,
+                    cudf::make_min_aggregation<cudf::groupby_aggregation>());
+  }
+
+  // Null child element.
+  {
+    auto const vals        = lists{lists{{0, null}, null_at(1)},
+                            lists{1, 2},
+                            lists{3, 4},
+                            lists{5, 6, 7},
+                            lists{0, 8},
+                            lists{9, 10}};
+    auto const expect_vals = lists{lists{{0, null}, null_at(1)}, {1, 2}, {3, 4}};
+    test_single_agg(keys,
+                    vals,
+                    expect_keys,
+                    expect_vals,
+                    cudf::make_min_aggregation<cudf::groupby_aggregation>());
+  }
+}
+
 template <typename V>
 struct groupby_min_floating_point_test : public cudf::test::BaseFixture {};
 
@@ -462,7 +538,7 @@ TYPED_TEST(groupby_min_floating_point_test, values_with_nan)
   auto const vals = floats_col{nan, nan};
 
   std::vector<cudf::groupby::aggregation_request> requests;
-  requests.emplace_back(cudf::groupby::aggregation_request());
+  requests.emplace_back();
   requests[0].values = vals;
   requests[0].aggregations.emplace_back(cudf::make_min_aggregation<cudf::groupby_aggregation>());
 

@@ -1,20 +1,28 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
+import operator
 import re
 from decimal import Decimal
 
 import numpy as np
 import pandas as pd
+import pyarrow as pa
 import pytest
 
 import cudf
-from cudf.core._compat import PANDAS_GE_134, PANDAS_GE_150
+from cudf.core._compat import (
+    PANDAS_CURRENT_SUPPORTED_VERSION,
+    PANDAS_GE_220,
+    PANDAS_GT_214,
+    PANDAS_VERSION,
+)
 from cudf.core.dtypes import Decimal32Dtype, Decimal64Dtype, Decimal128Dtype
+from cudf.testing import assert_eq
 from cudf.testing._utils import (
     INTEGER_TYPES,
     NUMERIC_TYPES,
-    assert_eq,
     assert_exceptions_equal,
+    expect_warning_if,
 )
 
 
@@ -23,7 +31,7 @@ from cudf.testing._utils import (
     [
         cudf.Series([5, 1, 2, 3, None, 243, None, 4]),
         cudf.Series(["one", "two", "three", None, "one"], dtype="category"),
-        cudf.Series(list(range(400)) + [None]),
+        cudf.Series([*list(range(400)), None]),
     ],
 )
 @pytest.mark.parametrize(
@@ -56,13 +64,20 @@ def test_series_replace_all(gsr, to_replace, value):
     else:
         pd_value = value
 
-    actual = gsr.replace(to_replace=gd_to_replace, value=gd_value)
-    if pd_value is None:
-        # TODO: Remove this workaround once cudf
-        # introduces `no_default` values
-        expected = psr.replace(to_replace=pd_to_replace)
-    else:
-        expected = psr.replace(to_replace=pd_to_replace, value=pd_value)
+    expect_warn = (
+        isinstance(gsr.dtype, cudf.CategoricalDtype)
+        and isinstance(gd_to_replace, str)
+        and gd_to_replace == "one"
+    )
+    with expect_warning_if(expect_warn):
+        actual = gsr.replace(to_replace=gd_to_replace, value=gd_value)
+    with expect_warning_if(expect_warn and PANDAS_GE_220):
+        if pd_value is None:
+            # TODO: Remove this workaround once cudf
+            # introduces `no_default` values
+            expected = psr.replace(to_replace=pd_to_replace)
+        else:
+            expected = psr.replace(to_replace=pd_to_replace, value=pd_value)
 
     assert_eq(
         expected.sort_values().reset_index(drop=True),
@@ -81,16 +96,19 @@ def test_series_replace():
 
     # Categorical
     psr3 = pd.Series(["one", "two", "three"], dtype="category")
-    psr4 = psr3.replace("one", "two")
+    with expect_warning_if(PANDAS_GE_220, FutureWarning):
+        psr4 = psr3.replace("one", "two")
     sr3 = cudf.from_pandas(psr3)
-    sr4 = sr3.replace("one", "two")
+    with pytest.warns(FutureWarning):
+        sr4 = sr3.replace("one", "two")
     assert_eq(
         psr4.sort_values().reset_index(drop=True),
         sr4.sort_values().reset_index(drop=True),
     )
-
-    psr5 = psr3.replace("one", "five")
-    sr5 = sr3.replace("one", "five")
+    with expect_warning_if(PANDAS_GE_220, FutureWarning):
+        psr5 = psr3.replace("one", "five")
+    with pytest.warns(FutureWarning):
+        sr5 = sr3.replace("one", "five")
 
     assert_eq(psr5, sr5)
 
@@ -99,8 +117,10 @@ def test_series_replace():
     sr6 = sr1.replace([0, 1], [5, 6])
     assert_eq(a6, sr6.to_numpy())
 
-    with pytest.raises(TypeError):
-        sr1.replace([0, 1], [5.5, 6.5])
+    assert_eq(
+        sr1.replace([0, 1], [5.5, 6.5]),
+        sr1.to_pandas().replace([0, 1], [5.5, 6.5]),
+    )
 
     # Series input
     a8 = np.array([5, 5, 5, 3, 4])
@@ -108,7 +128,7 @@ def test_series_replace():
     assert_eq(a8, sr8.to_numpy())
 
     # large input containing null
-    sr9 = cudf.Series(list(range(400)) + [None])
+    sr9 = cudf.Series([*list(range(400)), None])
     sr10 = sr9.replace([22, 323, 27, 0], None)
     assert sr10.null_count == 5
     assert len(sr10.dropna().to_numpy()) == (401 - 5)
@@ -143,8 +163,10 @@ def test_series_replace_with_nulls():
     assert_eq(a6, sr6.to_numpy())
 
     sr1 = cudf.Series([0, 1, 2, 3, 4, None])
-    with pytest.raises(TypeError):
-        sr1.replace([0, 1], [5.5, 6.5]).fillna(-10)
+    assert_eq(
+        sr1.replace([0, 1], [5.5, 6.5]).fillna(-10),
+        sr1.to_pandas().replace([0, 1], [5.5, 6.5]).fillna(-10),
+    )
 
     # Series input
     a8 = np.array([-10, -10, -10, 3, 4, -10])
@@ -156,6 +178,10 @@ def test_series_replace_with_nulls():
     assert_eq(a9, sr9.to_numpy())
 
 
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="warning introduced in pandas-2.2.0",
+)
 @pytest.mark.parametrize(
     "df",
     [
@@ -166,18 +192,12 @@ def test_series_replace_with_nulls():
                 "c": ["abc", "def", ".", None, None],
             }
         ),
-        pytest.param(
-            cudf.DataFrame(
-                {
-                    "a": ["one", "two", None, "three"],
-                    "b": ["one", None, "two", "three"],
-                },
-                dtype="category",
-            ),
-            marks=pytest.mark.xfail(
-                condition=not PANDAS_GE_150,
-                reason="https://github.com/pandas-dev/pandas/issues/46672",
-            ),
+        cudf.DataFrame(
+            {
+                "a": ["one", "two", None, "three"],
+                "b": ["one", None, "two", "three"],
+            },
+            dtype="category",
         ),
         cudf.DataFrame(
             {
@@ -241,11 +261,20 @@ def test_dataframe_replace(df, to_replace, value):
     else:
         gd_to_replace = to_replace
 
-    if pd_value is None:
-        expected = pdf.replace(to_replace=pd_to_replace)
-    else:
-        expected = pdf.replace(to_replace=pd_to_replace, value=pd_value)
-    actual = gdf.replace(to_replace=gd_to_replace, value=gd_value)
+    can_warn = (
+        isinstance(df["a"].dtype, cudf.CategoricalDtype)
+        and isinstance(to_replace, str)
+        and to_replace == "two"
+        and isinstance(value, str)
+        and value == "three"
+    )
+    with expect_warning_if(can_warn):
+        if pd_value is None:
+            expected = pdf.replace(to_replace=pd_to_replace)
+        else:
+            expected = pdf.replace(to_replace=pd_to_replace, value=pd_value)
+    with expect_warning_if(can_warn):
+        actual = gdf.replace(to_replace=gd_to_replace, value=gd_value)
 
     expected_sorted = expected.sort_values(by=list(expected.columns), axis=0)
     actual_sorted = actual.sort_values(by=list(actual.columns), axis=0)
@@ -319,6 +348,10 @@ def test_series_fillna_numerical(psr, data_dtype, fill_value, inplace):
     assert_eq(expected, actual, check_dtype=False)
 
 
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="warning not present in older pandas versions",
+)
 @pytest.mark.parametrize(
     "data",
     [
@@ -348,8 +381,10 @@ def test_fillna_method_numerical(data, container, data_dtype, method, inplace):
     # Explicitly using nans_as_nulls=True
     gdata = cudf.from_pandas(pdata, nan_as_null=True)
 
-    expected = pdata.fillna(method=method, inplace=inplace)
-    actual = gdata.fillna(method=method, inplace=inplace)
+    with pytest.warns(FutureWarning):
+        expected = pdata.fillna(method=method, inplace=inplace)
+    with pytest.warns(FutureWarning):
+        actual = gdata.fillna(method=method, inplace=inplace)
 
     if inplace:
         expected = pdata
@@ -487,7 +522,13 @@ def test_fillna_categorical(psr_data, fill_value, inplace):
 @pytest.mark.parametrize(
     "psr_data",
     [
-        pd.Series(pd.date_range("2010-01-01", "2020-01-10", freq="1y")),
+        pd.Series(
+            pd.date_range(
+                "2010-01-01",
+                "2020-01-10",
+                freq="1YE" if PANDAS_GE_220 else "1y",
+            )
+        ),
         pd.Series(["2010-01-01", None, "2011-10-10"], dtype="datetime64[ns]"),
         pd.Series(
             [
@@ -528,7 +569,13 @@ def test_fillna_categorical(psr_data, fill_value, inplace):
     "fill_value",
     [
         pd.Timestamp("2010-01-02"),
-        pd.Series(pd.date_range("2010-01-01", "2020-01-10", freq="1y"))
+        pd.Series(
+            pd.date_range(
+                "2010-01-01",
+                "2020-01-10",
+                freq="1YE" if PANDAS_GE_220 else "1y",
+            )
+        )
         + pd.Timedelta("1d"),
         pd.Series(["2010-01-01", None, "2011-10-10"], dtype="datetime64[ns]"),
         pd.Series(
@@ -586,6 +633,10 @@ def test_fillna_datetime(psr_data, fill_value, inplace):
     assert_eq(expected, got)
 
 
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="warning not present in older pandas versions",
+)
 @pytest.mark.parametrize(
     "data",
     [
@@ -665,8 +716,10 @@ def test_fillna_method_fixed_width_non_num(data, container, method, inplace):
     # Explicitly using nans_as_nulls=True
     gdata = cudf.from_pandas(pdata, nan_as_null=True)
 
-    expected = pdata.fillna(method=method, inplace=inplace)
-    actual = gdata.fillna(method=method, inplace=inplace)
+    with pytest.warns(FutureWarning):
+        expected = pdata.fillna(method=method, inplace=inplace)
+    with pytest.warns(FutureWarning):
+        actual = gdata.fillna(method=method, inplace=inplace)
 
     if inplace:
         expected = pdata
@@ -773,53 +826,33 @@ def test_fillna_string(ps_data, fill_value, inplace):
 def test_series_fillna_invalid_dtype(data_dtype):
     gdf = cudf.Series([1, 2, None, 3], dtype=data_dtype)
     fill_value = 2.5
-    with pytest.raises(TypeError) as raises:
-        gdf.fillna(fill_value)
-    raises.match(
+    msg = (
         f"Cannot safely cast non-equivalent"
         f" {type(fill_value).__name__} to {gdf.dtype.type.__name__}"
     )
+    with pytest.raises(TypeError, match=msg):
+        gdf.fillna(fill_value)
 
 
 @pytest.mark.parametrize("data_dtype", NUMERIC_TYPES)
 @pytest.mark.parametrize("fill_value", [100, 100.0, 128.5])
-def test_series_where(data_dtype, fill_value):
+@pytest.mark.parametrize("op", [operator.gt, operator.eq, operator.lt])
+def test_series_where(data_dtype, fill_value, op):
     psr = pd.Series(list(range(10)), dtype=data_dtype)
     sr = cudf.from_pandas(psr)
 
-    if sr.dtype.type(fill_value) != fill_value:
+    try:
+        scalar_fits = sr.dtype.type(fill_value) == fill_value
+    except OverflowError:
+        scalar_fits = False
+
+    if not scalar_fits:
         with pytest.raises(TypeError):
-            sr.where(sr > 0, fill_value)
+            sr.where(op(sr, 0), fill_value)
     else:
         # Cast back to original dtype as pandas automatically upcasts
-        expect = psr.where(psr > 0, fill_value)
-        got = sr.where(sr > 0, fill_value)
-        # pandas returns 'float16' dtype, which is not supported in cudf
-        assert_eq(
-            expect,
-            got,
-            check_dtype=expect.dtype.kind not in ("f"),
-        )
-
-    if sr.dtype.type(fill_value) != fill_value:
-        with pytest.raises(TypeError):
-            sr.where(sr < 0, fill_value)
-    else:
-        expect = psr.where(psr < 0, fill_value)
-        got = sr.where(sr < 0, fill_value)
-        # pandas returns 'float16' dtype, which is not supported in cudf
-        assert_eq(
-            expect,
-            got,
-            check_dtype=expect.dtype.kind not in ("f"),
-        )
-
-    if sr.dtype.type(fill_value) != fill_value:
-        with pytest.raises(TypeError):
-            sr.where(sr == 0, fill_value)
-    else:
-        expect = psr.where(psr == 0, fill_value)
-        got = sr.where(sr == 0, fill_value)
+        expect = psr.where(op(psr, 0), fill_value)
+        got = sr.where(op(sr, 0), fill_value)
         # pandas returns 'float16' dtype, which is not supported in cudf
         assert_eq(
             expect,
@@ -863,7 +896,6 @@ def test_dataframe_with_nulls_where_with_scalars(fill_value):
 
 
 def test_dataframe_with_different_types():
-
     # Testing for int and float
     pdf = pd.DataFrame(
         {"A": [111, 22, 31, 410, 56], "B": [-10.12, 121.2, 45.7, 98.4, 87.6]}
@@ -940,28 +972,37 @@ def test_series_multiple_times_with_nulls():
 @pytest.mark.parametrize(
     "replacement", [128, 128.0, 128.5, 32769, 32769.0, 32769.5]
 )
-def test_numeric_series_replace_dtype(series_dtype, replacement):
+def test_numeric_series_replace_dtype(request, series_dtype, replacement):
+    request.applymarker(
+        pytest.mark.xfail(
+            condition=PANDAS_GT_214
+            and (
+                (
+                    series_dtype == "int8"
+                    and replacement in {128, 128.0, 32769, 32769.0}
+                )
+                or (
+                    series_dtype == "int16" and replacement in {32769, 32769.0}
+                )
+            ),
+            reason="Pandas throws an AssertionError for these "
+            "cases and asks us to log a bug, they are trying to "
+            "avoid a RecursionError which cudf will not run into",
+        )
+    )
     psr = pd.Series([0, 1, 2, 3, 4, 5], dtype=series_dtype)
     sr = cudf.from_pandas(psr)
 
-    # Both Scalar
-    if sr.dtype.type(replacement) != replacement:
-        with pytest.raises(TypeError):
-            sr.replace(1, replacement)
-    else:
-        expect = psr.replace(1, replacement).astype(psr.dtype)
-        got = sr.replace(1, replacement)
-        assert_eq(expect, got)
+    expect = psr.replace(1, replacement)
+    got = sr.replace(1, replacement)
+
+    assert_eq(expect, got)
 
     # to_replace is a list, replacement is a scalar
-    if sr.dtype.type(replacement) != replacement:
-        with pytest.raises(TypeError):
+    expect = psr.replace([2, 3], replacement)
+    got = sr.replace([2, 3], replacement)
 
-            sr.replace([2, 3], replacement)
-    else:
-        expect = psr.replace([2, 3], replacement).astype(psr.dtype)
-        got = sr.replace([2, 3], replacement)
-        assert_eq(expect, got)
+    assert_eq(expect, got)
 
     # If to_replace is a scalar and replacement is a list
     with pytest.raises(TypeError):
@@ -972,17 +1013,9 @@ def test_numeric_series_replace_dtype(series_dtype, replacement):
         sr.replace([0, 1], [replacement])
 
     # Both lists of equal length
-    if (
-        np.dtype(type(replacement)).kind == "f" and sr.dtype.kind in {"i", "u"}
-    ) or (sr.dtype.type(replacement) != replacement):
-        with pytest.raises(TypeError):
-            sr.replace([2, 3], [replacement, replacement])
-    else:
-        expect = psr.replace([2, 3], [replacement, replacement]).astype(
-            psr.dtype
-        )
-        got = sr.replace([2, 3], [replacement, replacement])
-        assert_eq(expect, got)
+    expect = psr.replace([2, 3], [replacement, replacement])
+    got = sr.replace([2, 3], [replacement, replacement])
+    assert_eq(expect, got)
 
 
 @pytest.mark.parametrize(
@@ -1001,8 +1034,9 @@ def test_numeric_series_replace_dtype(series_dtype, replacement):
             pd.Series(["one", "two", "three"], dtype="category"),
             {"to_replace": "one", "value": "two", "inplace": True},
             marks=pytest.mark.xfail(
-                condition=not PANDAS_GE_134,
-                reason="https://github.com/pandas-dev/pandas/issues/43232",
+                condition=PANDAS_VERSION >= PANDAS_CURRENT_SUPPORTED_VERSION,
+                reason="https://github.com/pandas-dev/pandas/issues/43232"
+                "https://github.com/pandas-dev/pandas/issues/53358",
             ),
         ),
         (
@@ -1043,6 +1077,10 @@ def test_numeric_series_replace_dtype(series_dtype, replacement):
         ),
     ],
 )
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="Warning not given on older versions of pandas",
+)
 def test_replace_inplace(pframe, replace_args):
     gpu_frame = cudf.from_pandas(pframe)
     pandas_frame = pframe.copy()
@@ -1052,8 +1090,10 @@ def test_replace_inplace(pframe, replace_args):
 
     assert_eq(gpu_frame, pandas_frame)
     assert_eq(gpu_copy, cpu_copy)
-    gpu_frame.replace(**replace_args)
-    pandas_frame.replace(**replace_args)
+    with expect_warning_if(len(replace_args) == 0):
+        gpu_frame.replace(**replace_args)
+    with expect_warning_if(len(replace_args) == 0):
+        pandas_frame.replace(**replace_args)
     assert_eq(gpu_frame, pandas_frame)
     assert_eq(gpu_copy, cpu_copy)
 
@@ -1161,7 +1201,6 @@ def test_series_clip(data, lower, upper, inplace):
 
 
 def test_series_exceptions_for_clip():
-
     with pytest.raises(ValueError):
         cudf.Series([1, 2, 3, 4]).clip([1, 2], [2, 3])
 
@@ -1324,8 +1363,8 @@ def test_series_replace_errors():
     ],
 )
 def test_replace_nulls(gsr, old, new, expected):
-
-    actual = gsr.replace(old, new)
+    with expect_warning_if(isinstance(gsr.dtype, cudf.CategoricalDtype)):
+        actual = gsr.replace(old, new)
     assert_eq(
         expected.sort_values().reset_index(drop=True),
         actual.sort_values().reset_index(drop=True),
@@ -1344,3 +1383,65 @@ def test_fillna_columns_multiindex():
     actual = gdf.fillna(10)
 
     assert_eq(expected, actual)
+
+
+def test_fillna_nan_and_null():
+    ser = cudf.Series(pa.array([float("nan"), None, 1.1]), nan_as_null=False)
+    result = ser.fillna(2.2)
+    expected = cudf.Series([2.2, 2.2, 1.1])
+    assert_eq(result, expected)
+
+
+def test_replace_with_index_objects():
+    result = cudf.Series([1, 2]).replace(cudf.Index([1]), cudf.Index([2]))
+    expected = pd.Series([1, 2]).replace(pd.Index([1]), pd.Index([2]))
+    assert_eq(result, expected)
+
+
+# Example test function for datetime series replace
+def test_replace_datetime_series():
+    # Create a pandas datetime series
+    pd_series = pd.Series(pd.date_range("20210101", periods=5))
+    # Replace a specific datetime value
+    pd_result = pd_series.replace(
+        pd.Timestamp("2021-01-02"), pd.Timestamp("2021-01-10")
+    )
+
+    # Create a cudf datetime series
+    cudf_series = cudf.Series(pd.date_range("20210101", periods=5))
+    # Replace a specific datetime value
+    cudf_result = cudf_series.replace(
+        pd.Timestamp("2021-01-02"), pd.Timestamp("2021-01-10")
+    )
+
+    assert_eq(pd_result, cudf_result)
+
+
+# Example test function for timedelta series replace
+def test_replace_timedelta_series():
+    # Create a pandas timedelta series
+    pd_series = pd.Series(pd.timedelta_range("1 days", periods=5))
+    # Replace a specific timedelta value
+    pd_result = pd_series.replace(
+        pd.Timedelta("2 days"), pd.Timedelta("10 days")
+    )
+
+    # Create a cudf timedelta series
+    cudf_series = cudf.Series(pd.timedelta_range("1 days", periods=5))
+    # Replace a specific timedelta value
+    cudf_result = cudf_series.replace(
+        pd.Timedelta("2 days"), pd.Timedelta("10 days")
+    )
+
+    assert_eq(pd_result, cudf_result)
+
+
+def test_replace_multiple_rows(datadir):
+    path = datadir / "parquet" / "replace_multiple_rows.parquet"
+    pdf = pd.read_parquet(path)
+    gdf = cudf.read_parquet(path)
+
+    pdf.replace([np.inf, -np.inf], np.nan, inplace=True)
+    gdf.replace([np.inf, -np.inf], np.nan, inplace=True)
+
+    assert_eq(pdf, gdf, check_dtype=False)

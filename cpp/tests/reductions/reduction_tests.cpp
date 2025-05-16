@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,22 +18,24 @@
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/table_utilities.hpp>
+#include <cudf_test/testing_main.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/copying.hpp>
-#include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/iterator.cuh>
-#include <cudf/dictionary/encode.hpp>
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/reduction.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
+#include <cudf/sorting.hpp>
 #include <cudf/types.hpp>
 #include <cudf/wrappers/timestamps.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
 
-#include <iostream>
+#include <algorithm>
+#include <iterator>
+#include <numeric>
 #include <vector>
 
 using aggregation        = cudf::aggregation;
@@ -89,7 +91,7 @@ struct ReductionTest : public cudf::test::BaseFixture {
 
   ReductionTest() {}
 
-  ~ReductionTest() {}
+  ~ReductionTest() override {}
 
   template <typename T_out>
   std::pair<T_out, bool> reduction_test(cudf::column_view const& underlying_column,
@@ -122,7 +124,7 @@ struct ReductionTest : public cudf::test::BaseFixture {
 template <typename T>
 struct MinMaxReductionTest : public ReductionTest<T> {};
 
-using MinMaxTypes = cudf::test::Types<int16_t, int32_t, float, double>;
+using MinMaxTypes = cudf::test::Types<int32_t, int64_t, float, double>;
 TYPED_TEST_SUITE(MinMaxReductionTest, MinMaxTypes);
 
 // ------------------------------------------------------------------------
@@ -130,8 +132,9 @@ TYPED_TEST(MinMaxReductionTest, MinMaxTypes)
 {
   using T = TypeParam;
   std::vector<int> int_values({5, 0, -120, -111, 0, 64, 63, 99, 123, -16});
-  std::vector<bool> host_bools({1, 1, 0, 1, 1, 1, 0, 1, 0, 1});
-  std::vector<bool> all_null({0, 0, 0, 0, 0, 0, 0, 0, 0, 0});
+  std::vector<bool> host_bools({true, true, false, true, true, true, false, true, false, true});
+  std::vector<bool> all_null(
+    {false, false, false, false, false, false, false, false, false, false});
   std::vector<T> v       = convert_values<T>(int_values);
   T init_value           = convert_int<T>(100);
   auto const init_scalar = cudf::make_fixed_width_scalar<T>(init_value);
@@ -145,9 +148,9 @@ TYPED_TEST(MinMaxReductionTest, MinMaxTypes)
   T expected_min_result      = *(std::min_element(v.begin(), v.end()));
   T expected_max_result      = *(std::max_element(v.begin(), v.end()));
   T expected_min_init_result = std::accumulate(
-    v.begin(), v.end(), init_value, [](const T& a, const T& b) { return std::min<T>(a, b); });
+    v.begin(), v.end(), init_value, [](T const& a, T const& b) { return std::min<T>(a, b); });
   T expected_max_init_result = std::accumulate(
-    v.begin(), v.end(), init_value, [](const T& a, const T& b) { return std::max<T>(a, b); });
+    v.begin(), v.end(), init_value, [](T const& a, T const& b) { return std::max<T>(a, b); });
 
   EXPECT_EQ(
     this->template reduction_test<T>(col, *cudf::make_min_aggregation<reduce_aggregation>()).first,
@@ -183,11 +186,11 @@ TYPED_TEST(MinMaxReductionTest, MinMaxTypes)
   T expected_min_null_result = *(std::min_element(r_min.begin(), r_min.end()));
   T expected_max_null_result = *(std::max_element(r_max.begin(), r_max.end()));
   T expected_min_init_null_result =
-    std::accumulate(r_min.begin(), r_min.end(), init_value, [](const T& a, const T& b) {
+    std::accumulate(r_min.begin(), r_min.end(), init_value, [](T const& a, T const& b) {
       return std::min<T>(a, b);
     });
   T expected_max_init_null_result =
-    std::accumulate(r_max.begin(), r_max.end(), init_value, [](const T& a, const T& b) {
+    std::accumulate(r_max.begin(), r_max.end(), init_value, [](T const& a, T const& b) {
       return std::max<T>(a, b);
     });
 
@@ -257,7 +260,7 @@ TYPED_TEST(SumReductionTest, Sum)
 {
   using T = TypeParam;
   std::vector<int> int_values({6, -14, 13, 64, 0, -13, -20, 45});
-  std::vector<bool> host_bools({1, 1, 0, 0, 1, 1, 1, 1});
+  std::vector<bool> host_bools({true, true, false, false, true, true, true, true});
   std::vector<T> v       = convert_values<T>(int_values);
   T init_value           = convert_int<T>(100);
   auto const init_scalar = cudf::make_fixed_width_scalar<T>(init_value);
@@ -297,8 +300,9 @@ TYPED_TEST_SUITE(ReductionTest, cudf::test::NumericTypes);
 TYPED_TEST(ReductionTest, Product)
 {
   using T = TypeParam;
+
   std::vector<int> int_values({5, -1, 1, 0, 3, 2, 4});
-  std::vector<bool> host_bools({1, 1, 0, 0, 1, 1, 1});
+  std::vector<bool> host_bools({true, true, false, false, true, true, true});
   std::vector<TypeParam> v = convert_values<TypeParam>(int_values);
   T init_value             = convert_int<T>(4);
   auto const init_scalar   = cudf::make_fixed_width_scalar<T>(init_value);
@@ -349,7 +353,7 @@ TYPED_TEST(ReductionTest, SumOfSquare)
 {
   using T = TypeParam;
   std::vector<int> int_values({-3, 2, 1, 0, 5, -3, -2});
-  std::vector<bool> host_bools({1, 1, 0, 0, 1, 1, 1, 1});
+  std::vector<bool> host_bools({true, true, false, false, true, true, true, true});
   std::vector<T> v = convert_values<T>(int_values);
 
   auto calc_reduction = [](std::vector<T>& v) {
@@ -379,6 +383,212 @@ TYPED_TEST(ReductionTest, SumOfSquare)
             expected_null_value);
 }
 
+auto histogram_reduction(cudf::column_view const& input,
+                         std::unique_ptr<cudf::reduce_aggregation> const& agg)
+{
+  CUDF_EXPECTS(
+    agg->kind == cudf::aggregation::HISTOGRAM || agg->kind == cudf::aggregation::MERGE_HISTOGRAM,
+    "Aggregation must be either HISTOGRAM or MERGE_HISTOGRAM.");
+
+  auto const result_scalar = cudf::reduce(input, *agg, cudf::data_type{cudf::type_id::INT64});
+  EXPECT_EQ(result_scalar->is_valid(), true);
+
+  auto const result_list_scalar = dynamic_cast<cudf::list_scalar*>(result_scalar.get());
+  EXPECT_NE(result_list_scalar, nullptr);
+
+  auto const histogram = result_list_scalar->view();
+  EXPECT_EQ(histogram.num_children(), 2);
+  EXPECT_EQ(histogram.null_count(), 0);
+  EXPECT_EQ(histogram.child(1).null_count(), 0);
+
+  // Sort the histogram based on the first column (unique input values).
+  auto const sort_order = cudf::sorted_order(cudf::table_view{{histogram.child(0)}}, {}, {});
+  return std::move(cudf::gather(cudf::table_view{{histogram}}, *sort_order)->release().front());
+}
+
+template <typename T>
+struct ReductionHistogramTest : public cudf::test::BaseFixture {};
+
+// Avoid unsigned types, as the tests below have negative values in their input.
+using HistogramTestTypes = cudf::test::Concat<cudf::test::Types<int8_t, int16_t, int32_t, int64_t>,
+                                              cudf::test::FloatingPointTypes,
+                                              cudf::test::FixedPointTypes,
+                                              cudf::test::ChronoTypes>;
+TYPED_TEST_SUITE(ReductionHistogramTest, HistogramTestTypes);
+
+TYPED_TEST(ReductionHistogramTest, Histogram)
+{
+  using data_col    = cudf::test::fixed_width_column_wrapper<TypeParam, int>;
+  using int64_col   = cudf::test::fixed_width_column_wrapper<int64_t>;
+  using structs_col = cudf::test::structs_column_wrapper;
+
+  auto const agg = cudf::make_histogram_aggregation<reduce_aggregation>();
+
+  // Empty input.
+  {
+    auto const input    = data_col{};
+    auto const expected = [] {
+      auto child1 = data_col{};
+      auto child2 = int64_col{};
+      return structs_col{{child1, child2}};
+    }();
+    auto const result = histogram_reduction(input, agg);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
+  }
+
+  {
+    auto const input    = data_col{-3, 2, 1, 2, 0, 5, 2, -3, -2, 2, 1};
+    auto const expected = [] {
+      auto child1 = data_col{-3, -2, 0, 1, 2, 5};
+      auto child2 = int64_col{2, 1, 1, 2, 4, 1};
+      return structs_col{{child1, child2}};
+    }();
+    auto const result = histogram_reduction(input, agg);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
+  }
+
+  // Test without nulls, sliced input.
+  {
+    auto const input_original = data_col{-3, 2, 1, 2, 0, 5, 2, -3, -2, 2, 1};
+    auto const input          = cudf::slice(input_original, {0, 7})[0];
+    auto const expected       = [] {
+      auto child1 = data_col{-3, 0, 1, 2, 5};
+      auto child2 = int64_col{1, 1, 1, 3, 1};
+      return structs_col{{child1, child2}};
+    }();
+    auto const result = histogram_reduction(input, agg);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
+  }
+
+  // Test with nulls.
+  using namespace cudf::test::iterators;
+  auto constexpr null{0};
+  {
+    auto const input    = data_col{{null, -3, 2, 1, 2, 0, null, 5, 2, null, -3, -2, null, 2, 1},
+                                nulls_at({0, 6, 9, 12})};
+    auto const expected = [] {
+      auto child1 = data_col{{null, -3, -2, 0, 1, 2, 5}, null_at(0)};
+      auto child2 = int64_col{4, 2, 1, 1, 2, 4, 1};
+      return structs_col{{child1, child2}};
+    }();
+    auto const result = histogram_reduction(input, agg);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
+  }
+
+  // Test with nulls, sliced input.
+  {
+    auto const input_original = data_col{
+      {null, -3, 2, 1, 2, 0, null, 5, 2, null, -3, -2, null, 2, 1}, nulls_at({0, 6, 9, 12})};
+    auto const input    = cudf::slice(input_original, {0, 9})[0];
+    auto const expected = [] {
+      auto child1 = data_col{{null, -3, 0, 1, 2, 5}, null_at(0)};
+      auto child2 = int64_col{2, 1, 1, 1, 3, 1};
+      return structs_col{{child1, child2}};
+    }();
+    auto const result = histogram_reduction(input, agg);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
+  }
+}
+
+TYPED_TEST(ReductionHistogramTest, MergeHistogram)
+{
+  using data_col    = cudf::test::fixed_width_column_wrapper<TypeParam>;
+  using int64_col   = cudf::test::fixed_width_column_wrapper<int64_t>;
+  using structs_col = cudf::test::structs_column_wrapper;
+
+  auto const agg = cudf::make_merge_histogram_aggregation<reduce_aggregation>();
+
+  // Empty input.
+  {
+    auto const input = [] {
+      auto child1 = data_col{};
+      auto child2 = int64_col{};
+      return structs_col{{child1, child2}};
+    }();
+    auto const expected = [] {
+      auto child1 = data_col{};
+      auto child2 = int64_col{};
+      return structs_col{{child1, child2}};
+    }();
+    auto const result = histogram_reduction(input, agg);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
+  }
+
+  // Test without nulls.
+  {
+    auto const input = [] {
+      auto child1 = data_col{-3, 2, 1, 2, 0, 5, 2, -3, -2, 2, 1};
+      auto child2 = int64_col{2, 1, 1, 2, 4, 1, 2, 3, 5, 3, 4};
+      return structs_col{{child1, child2}};
+    }();
+
+    auto const expected = [] {
+      auto child1 = data_col{-3, -2, 0, 1, 2, 5};
+      auto child2 = int64_col{5, 5, 4, 5, 8, 1};
+      return structs_col{{child1, child2}};
+    }();
+    auto const result = histogram_reduction(input, agg);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
+  }
+
+  // Test without nulls, sliced input.
+  {
+    auto const input_original = [] {
+      auto child1 = data_col{-3, 2, 1, 2, 0, 5, 2, -3, -2, 2, 1};
+      auto child2 = int64_col{2, 1, 1, 2, 4, 1, 2, 3, 5, 3, 4};
+      return structs_col{{child1, child2}};
+    }();
+    auto const input = cudf::slice(input_original, {0, 7})[0];
+
+    auto const expected = [] {
+      auto child1 = data_col{-3, 0, 1, 2, 5};
+      auto child2 = int64_col{2, 4, 1, 5, 1};
+      return structs_col{{child1, child2}};
+    }();
+    auto const result = histogram_reduction(input, agg);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
+  }
+
+  // Test with nulls.
+  using namespace cudf::test::iterators;
+  auto constexpr null{0};
+  {
+    auto const input = [] {
+      auto child1 = data_col{{-3, 2, null, 1, 2, null, 0, 5, null, 2, -3, null, -2, 2, 1, null},
+                             nulls_at({2, 5, 8, 11, 15})};
+      auto child2 = int64_col{2, 1, 12, 1, 2, 11, 4, 1, 10, 2, 3, 15, 5, 3, 4, 19};
+      return structs_col{{child1, child2}};
+    }();
+
+    auto const expected = [] {
+      auto child1 = data_col{{null, -3, -2, 0, 1, 2, 5}, null_at(0)};
+      auto child2 = int64_col{67, 5, 5, 4, 5, 8, 1};
+      return structs_col{{child1, child2}};
+    }();
+    auto const result = histogram_reduction(input, agg);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
+  }
+
+  // Test with nulls, sliced input.
+  {
+    auto const input_original = [] {
+      auto child1 = data_col{{-3, 2, null, 1, 2, null, 0, 5, null, 2, -3, null, -2, 2, 1, null},
+                             nulls_at({2, 5, 8, 11, 15})};
+      auto child2 = int64_col{2, 1, 12, 1, 2, 11, 4, 1, 10, 2, 3, 15, 5, 3, 4, 19};
+      return structs_col{{child1, child2}};
+    }();
+    auto const input = cudf::slice(input_original, {0, 9})[0];
+
+    auto const expected = [] {
+      auto child1 = data_col{{null, -3, 0, 1, 2, 5}, null_at(0)};
+      auto child2 = int64_col{33, 2, 4, 1, 3, 1};
+      return structs_col{{child1, child2}};
+    }();
+    auto const result = histogram_reduction(input, agg);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
+  }
+}
+
 template <typename T>
 struct ReductionAnyAllTest : public ReductionTest<bool> {};
 using AnyAllTypes = cudf::test::Types<int32_t, float, bool>;
@@ -388,7 +598,7 @@ TYPED_TEST(ReductionAnyAllTest, AnyAllTrueTrue)
 {
   using T = TypeParam;
   std::vector<int> int_values({true, true, true, true});
-  std::vector<bool> host_bools({1, 1, 0, 1});
+  std::vector<bool> host_bools({true, true, false, true});
   std::vector<T> v       = convert_values<T>(int_values);
   auto const init_scalar = cudf::make_fixed_width_scalar<T>(convert_int<T>(true));
 
@@ -451,7 +661,7 @@ TYPED_TEST(ReductionAnyAllTest, AnyAllFalseFalse)
 {
   using T = TypeParam;
   std::vector<int> int_values({false, false, false, false});
-  std::vector<bool> host_bools({1, 1, 0, 1});
+  std::vector<bool> host_bools({true, true, false, true});
   std::vector<T> v       = convert_values<T>(int_values);
   auto const init_scalar = cudf::make_fixed_width_scalar<T>(convert_int<T>(false));
 
@@ -521,7 +731,7 @@ TYPED_TEST(MultiStepReductionTest, Mean)
 {
   using T = TypeParam;
   std::vector<int> int_values({-3, 2, 1, 0, 5, -3, -2, 28});
-  std::vector<bool> host_bools({1, 1, 0, 1, 1, 1, 0, 1});
+  std::vector<bool> host_bools({true, true, false, true, true, true, false, true});
 
   auto calc_mean = [](std::vector<T>& v, cudf::size_type valid_count) {
     double sum = std::accumulate(v.begin(), v.end(), double{0});
@@ -556,6 +766,25 @@ TYPED_TEST(MultiStepReductionTest, Mean)
             expected_value_nulls);
 }
 
+template <typename T>
+double calc_var(std::vector<T> const& v, int ddof, std::vector<bool> const& mask = {})
+{
+  auto const values = [&]() {
+    if (mask.empty()) { return v; }
+    std::vector<T> masked{};
+    thrust::copy_if(
+      v.begin(), v.end(), mask.begin(), std::back_inserter(masked), [](auto m) { return m; });
+    return masked;
+  }();
+  auto const valid_count = values.size();
+  double const mean      = std::accumulate(values.cbegin(), values.cend(), double{0}) / valid_count;
+  double const sq_sum_of_differences =
+    std::accumulate(values.cbegin(), values.cend(), double{0}, [mean](double acc, auto const v) {
+      return acc + std::pow(v - mean, 2);
+    });
+  return sq_sum_of_differences / (valid_count - ddof);
+}
+
 // This test is disabled for only a Debug build because a compiler error
 // documented in cpp/src/reductions/std.cu and cpp/src/reductions/var.cu
 #ifdef NDEBUG
@@ -566,27 +795,14 @@ TYPED_TEST(MultiStepReductionTest, DISABLED_var_std)
 {
   using T = TypeParam;
   std::vector<int> int_values({-3, 2, 1, 0, 5, -3, -2, 28});
-  std::vector<bool> host_bools({1, 1, 0, 1, 1, 1, 0, 1});
-
-  auto calc_var = [](std::vector<T>& v, cudf::size_type valid_count, int ddof) {
-    double mean = std::accumulate(v.begin(), v.end(), double{0});
-    mean /= valid_count;
-
-    double sum_of_sq = std::accumulate(
-      v.begin(), v.end(), double{0}, [](double acc, TypeParam i) { return acc + i * i; });
-
-    cudf::size_type div = valid_count - ddof;
-
-    double var = sum_of_sq / div - ((mean * mean) * valid_count) / div;
-    return var;
-  };
+  std::vector<bool> host_bools({true, true, false, true, true, true, false, true});
 
   // test without nulls
   std::vector<T> v = convert_values<T>(int_values);
   cudf::test::fixed_width_column_wrapper<T> col(v.begin(), v.end());
 
   auto const ddof = 1;
-  double var      = calc_var(v, v.size(), ddof);
+  double var      = calc_var(v, ddof);
   double std      = std::sqrt(var);
   auto var_agg    = cudf::make_variance_aggregation<reduce_aggregation>(ddof);
   auto std_agg    = cudf::make_std_aggregation<reduce_aggregation>(ddof);
@@ -602,23 +818,19 @@ TYPED_TEST(MultiStepReductionTest, DISABLED_var_std)
 
   // test with nulls
   cudf::test::fixed_width_column_wrapper<T> col_nulls = construct_null_column(v, host_bools);
-  cudf::size_type valid_count =
-    cudf::column_view(col_nulls).size() - cudf::column_view(col_nulls).null_count();
-  auto replaced_array = replace_nulls(v, host_bools, T{0});
+  double var_nulls                                    = calc_var(v, ddof, host_bools);
+  double std_nulls                                    = std::sqrt(var_nulls);
 
-  double var_nulls = calc_var(replaced_array, valid_count, ddof);
-  double std_nulls = std::sqrt(var_nulls);
-
-  EXPECT_EQ(this
-              ->template reduction_test<double>(
-                col_nulls, *var_agg, cudf::data_type(cudf::type_id::FLOAT64))
-              .first,
-            var_nulls);
-  EXPECT_EQ(this
-              ->template reduction_test<double>(
-                col_nulls, *std_agg, cudf::data_type(cudf::type_id::FLOAT64))
-              .first,
-            std_nulls);
+  EXPECT_DOUBLE_EQ(this
+                     ->template reduction_test<double>(
+                       col_nulls, *var_agg, cudf::data_type(cudf::type_id::FLOAT64))
+                     .first,
+                   var_nulls);
+  EXPECT_DOUBLE_EQ(this
+                     ->template reduction_test<double>(
+                       col_nulls, *std_agg, cudf::data_type(cudf::type_id::FLOAT64))
+                     .first,
+                   std_nulls);
 }
 
 // ----------------------------------------------------------------------------
@@ -653,7 +865,7 @@ TYPED_TEST(ReductionMultiStepErrorCheck, DISABLED_ErrorHandling)
 {
   using T = TypeParam;
   std::vector<int> int_values({-3, 2});
-  std::vector<bool> host_bools({1, 0});
+  std::vector<bool> host_bools({true, false});
 
   std::vector<T> v = convert_values<T>(int_values);
   cudf::test::fixed_width_column_wrapper<T> col(v.begin(), v.end());
@@ -730,7 +942,8 @@ TEST_F(ReductionDtypeTest, all_null_output)
   auto sum_agg = cudf::make_sum_aggregation<reduce_aggregation>();
 
   auto const col =
-    cudf::test::fixed_point_column_wrapper<int32_t>{{0, 0, 0}, {0, 0, 0}, numeric::scale_type{-2}}
+    cudf::test::fixed_point_column_wrapper<int32_t>{
+      {0, 0, 0}, {false, false, false}, numeric::scale_type{-2}}
       .release();
 
   std::unique_ptr<cudf::scalar> result = cudf::reduce(*col, *sum_agg, col->type());
@@ -885,7 +1098,7 @@ TEST_F(ReductionEmptyTest, empty_column)
   // expect result.is_valid() is false
   int col_size = 5;
   std::vector<T> col_data(col_size);
-  std::vector<bool> valids(col_size, 0);
+  std::vector<bool> valids(col_size, false);
 
   cudf::test::fixed_width_column_wrapper<T> col_nulls = construct_null_column(col_data, valids);
   CUDF_EXPECT_NO_THROW(statement(col_nulls));
@@ -926,25 +1139,12 @@ TEST_P(ReductionParamTest, DISABLED_std_var)
 {
   int ddof = GetParam();
   std::vector<double> int_values({-3, 2, 1, 0, 5, -3, -2, 28});
-  std::vector<bool> host_bools({1, 1, 0, 1, 1, 1, 0, 1});
-
-  auto calc_var = [ddof](std::vector<double>& v, cudf::size_type valid_count) {
-    double mean = std::accumulate(v.begin(), v.end(), double{0});
-    mean /= valid_count;
-
-    double sum_of_sq = std::accumulate(
-      v.begin(), v.end(), double{0}, [](double acc, double i) { return acc + i * i; });
-
-    cudf::size_type div = valid_count - ddof;
-
-    double var = sum_of_sq / div - ((mean * mean) * valid_count) / div;
-    return var;
-  };
+  std::vector<bool> host_bools({true, true, false, true, true, true, false, true});
 
   // test without nulls
   cudf::test::fixed_width_column_wrapper<double> col(int_values.begin(), int_values.end());
 
-  double var   = calc_var(int_values, int_values.size());
+  double var   = calc_var(int_values, ddof);
   double std   = std::sqrt(var);
   auto var_agg = cudf::make_variance_aggregation<reduce_aggregation>(ddof);
   auto std_agg = cudf::make_std_aggregation<reduce_aggregation>(ddof);
@@ -961,23 +1161,19 @@ TEST_P(ReductionParamTest, DISABLED_std_var)
   // test with nulls
   cudf::test::fixed_width_column_wrapper<double> col_nulls =
     construct_null_column(int_values, host_bools);
-  cudf::size_type valid_count =
-    cudf::column_view(col_nulls).size() - cudf::column_view(col_nulls).null_count();
-  auto replaced_array = replace_nulls<double>(int_values, host_bools, int{0});
-
-  double var_nulls = calc_var(replaced_array, valid_count);
+  double var_nulls = calc_var(int_values, ddof, host_bools);
   double std_nulls = std::sqrt(var_nulls);
 
-  EXPECT_EQ(this
-              ->template reduction_test<double>(
-                col_nulls, *var_agg, cudf::data_type(cudf::type_id::FLOAT64))
-              .first,
-            var_nulls);
-  EXPECT_EQ(this
-              ->template reduction_test<double>(
-                col_nulls, *std_agg, cudf::data_type(cudf::type_id::FLOAT64))
-              .first,
-            std_nulls);
+  EXPECT_DOUBLE_EQ(this
+                     ->template reduction_test<double>(
+                       col_nulls, *var_agg, cudf::data_type(cudf::type_id::FLOAT64))
+                     .first,
+                   var_nulls);
+  EXPECT_DOUBLE_EQ(this
+                     ->template reduction_test<double>(
+                       col_nulls, *std_agg, cudf::data_type(cudf::type_id::FLOAT64))
+                     .first,
+                   std_nulls);
 }
 
 //-------------------------------------------------------------------
@@ -1042,7 +1238,7 @@ struct StringReductionTest : public cudf::test::BaseFixture,
 };
 
 // ------------------------------------------------------------------------
-std::vector<std::string> string_list[] = {
+std::vector<std::vector<std::string>> string_list{{
   {"one", "two", "three", "four", "five", "six", "seven", "eight", "nine"},
   {"", "two", "three", "four", "five", "six", "seven", "eight", "nine"},
   {"one", "", "three", "four", "five", "six", "seven", "eight", "nine"},
@@ -1052,13 +1248,19 @@ std::vector<std::string> string_list[] = {
   {"\xF7\xBF\xBF\xBF", "", "", "", "", "", "", "", ""},
   {"one", "two", "three", "four", "\xF7\xBF\xBF\xBF", "six", "seven", "eight", "nine"},
   {"one", "two", "\xF7\xBF\xBF\xBF", "four", "five", "six", "seven", "eight", "nine"},
-};
+}};
 INSTANTIATE_TEST_CASE_P(string_cases, StringReductionTest, testing::ValuesIn(string_list));
 TEST_P(StringReductionTest, MinMax)
 {
   // data and valid arrays
   std::vector<std::string> host_strings(GetParam());
-  std::vector<bool> host_bools({1, 0, 1, 1, 1, 1, 0, 0, 1});
+  std::vector<bool> host_bools({true, false, true, true, true, true, false, false, true});
+  std::transform(thrust::counting_iterator<std::size_t>(0),
+                 thrust::counting_iterator<std::size_t>(host_strings.size()),
+                 host_strings.begin(),
+                 [host_strings, host_bools](auto idx) {
+                   return host_bools[idx] ? host_strings[idx] : std::string{};
+                 });
   bool succeed(true);
   std::string initial_value = "init";
 
@@ -1149,7 +1351,7 @@ TEST_P(StringReductionTest, DictionaryMinMax)
             expected_max_result);
 
   // column with nulls
-  std::vector<bool> validity({1, 0, 1, 1, 1, 1, 0, 0, 1});
+  std::vector<bool> validity({true, false, true, true, true, true, false, false, true});
   cudf::test::dictionary_column_wrapper<std::string> col_nulls(
     host_strings.begin(), host_strings.end(), validity.begin());
 
@@ -1185,7 +1387,7 @@ TEST_F(StringReductionTest, AllNull)
   std::vector<std::string> host_strings(
     {"one", "two", "three", "four", "five", "six", "seven", "eight", "nine"});
   std::vector<bool> host_bools(host_strings.size(), false);
-  auto initial_value = cudf::make_string_scalar("init");
+  auto initial_value = cudf::make_string_scalar("");
   initial_value->set_valid_async(false);
 
   // string column with nulls
@@ -1217,7 +1419,7 @@ TYPED_TEST(ReductionTest, Median)
   using T = TypeParam;
   //{-20, -14, -13,  0, 6, 13, 45, 64/None} =  3.0, 0.0
   std::vector<int> int_values({6, -14, 13, 64, 0, -13, -20, 45});
-  std::vector<bool> host_bools({1, 1, 1, 0, 1, 1, 1, 1});
+  std::vector<bool> host_bools({true, true, true, false, true, true, true, true});
   std::vector<T> v = convert_values<T>(int_values);
 
   // test without nulls
@@ -1276,7 +1478,7 @@ TYPED_TEST(ReductionTest, Quantile)
   using T = TypeParam;
   //{-20, -14, -13,  0, 6, 13, 45, 64/None}
   std::vector<int> int_values({6, -14, 13, 64, 0, -13, -20, 45});
-  std::vector<bool> host_bools({1, 1, 1, 0, 1, 1, 1, 1});
+  std::vector<bool> host_bools({true, true, true, false, true, true, true, true});
   std::vector<T> v = convert_values<T>(int_values);
   cudf::interpolation interp{cudf::interpolation::LINEAR};
 
@@ -1316,7 +1518,7 @@ TYPED_TEST(ReductionTest, UniqueCount)
 {
   using T = TypeParam;
   std::vector<int> int_values({1, -3, 1, 2, 0, 2, -4, 45});  // 6 unique values
-  std::vector<bool> host_bools({1, 1, 1, 0, 1, 1, 1, 1});
+  std::vector<bool> host_bools({true, true, true, false, true, true, true, true});
   std::vector<T> v = convert_values<T>(int_values);
 
   // test without nulls
@@ -1771,8 +1973,8 @@ TYPED_TEST(FixedPointTestAllReps, FixedPointReductionMedianOddNumberOfElements)
   using RepType    = cudf::device_storage_type_t<decimalXX>;
   using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
 
-  for (auto const i : {0, -1, -2, -3, -4}) {
-    auto const scale    = scale_type{i};
+  for (auto const s : {0, -1, -2, -3, -4}) {
+    auto const scale    = scale_type{s};
     auto const column   = fp_wrapper{{1, 2, 2, 3, 4}, scale};
     auto const out_type = static_cast<cudf::column_view>(column).type();
     auto const expected = decimalXX{scaled_integer<RepType>{2, scale}};
@@ -1792,8 +1994,8 @@ TYPED_TEST(FixedPointTestAllReps, FixedPointReductionMedianEvenNumberOfElements)
   using RepType    = cudf::device_storage_type_t<decimalXX>;
   using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
 
-  for (auto const i : {0, -1, -2, -3, -4}) {
-    auto const scale    = scale_type{i};
+  for (auto const s : {0, -1, -2, -3, -4}) {
+    auto const scale    = scale_type{s};
     auto const column   = fp_wrapper{{10, 20, 20, 30, 30, 40}, scale};
     auto const out_type = static_cast<cudf::column_view>(column).type();
     auto const expected = decimalXX{scaled_integer<RepType>{25, scale}};
@@ -1813,8 +2015,8 @@ TYPED_TEST(FixedPointTestAllReps, FixedPointReductionQuantile)
   using RepType    = cudf::device_storage_type_t<decimalXX>;
   using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
 
-  for (auto const i : {0, -1, -2, -3, -4}) {
-    auto const scale    = scale_type{i};
+  for (auto const s : {0, -1, -2, -3, -4}) {
+    auto const scale    = scale_type{s};
     auto const column   = fp_wrapper{{1, 2, 3, 4, 5}, scale};
     auto const out_type = static_cast<cudf::column_view>(column).type();
 
@@ -1837,8 +2039,8 @@ TYPED_TEST(FixedPointTestAllReps, FixedPointReductionNthElement)
   using RepType    = cudf::device_storage_type_t<decimalXX>;
   using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
 
-  for (auto const i : {0, -1, -2, -3, -4}) {
-    auto const scale    = scale_type{i};
+  for (auto const s : {0, -1, -2, -3, -4}) {
+    auto const scale    = scale_type{s};
     auto const values   = std::vector<RepType>{4104, 42, 1729, 55};
     auto const column   = fp_wrapper{values.cbegin(), values.cend(), scale};
     auto const out_type = static_cast<cudf::column_view>(column).type();
@@ -2023,7 +2225,7 @@ TYPED_TEST(ReductionTest, NthElement)
 
 struct DictionaryStringReductionTest : public StringReductionTest {};
 
-std::vector<std::string> data_list[] = {
+std::vector<std::vector<std::string>> data_list = {
   {"nine", "two", "five", "three", "five", "six", "two", "eight", "nine"},
 };
 INSTANTIATE_TEST_CASE_P(dictionary_cases,
@@ -2064,7 +2266,7 @@ TEST_P(DictionaryStringReductionTest, MinMax)
 
 template <typename T>
 struct DictionaryAnyAllTest : public ReductionTest<bool> {};
-using DictionaryAnyAllTypes = cudf::test::Types<int16_t, int32_t, float, double, bool>;
+using DictionaryAnyAllTypes = cudf::test::Types<int32_t, int64_t, float, double, bool>;
 TYPED_TEST_SUITE(DictionaryAnyAllTest, cudf::test::NumericTypes);
 TYPED_TEST(DictionaryAnyAllTest, AnyAll)
 {
@@ -2077,95 +2279,50 @@ TYPED_TEST(DictionaryAnyAllTest, AnyAll)
   std::vector<T> v_some = convert_values<T>(some_values);
   cudf::data_type output_dtype(cudf::type_id::BOOL8);
 
+  auto any_agg = cudf::make_any_aggregation<reduce_aggregation>();
+  auto all_agg = cudf::make_all_aggregation<reduce_aggregation>();
+
   // without nulls
   {
     cudf::test::dictionary_column_wrapper<T> all_col(v_all.begin(), v_all.end());
-    EXPECT_TRUE(this
-                  ->template reduction_test<bool>(
-                    all_col, *cudf::make_any_aggregation<reduce_aggregation>(), output_dtype)
-                  .first);
-    EXPECT_TRUE(this
-                  ->template reduction_test<bool>(
-                    all_col, *cudf::make_all_aggregation<reduce_aggregation>(), output_dtype)
-                  .first);
+    EXPECT_TRUE(this->template reduction_test<bool>(all_col, *any_agg, output_dtype).first);
+    EXPECT_TRUE(this->template reduction_test<bool>(all_col, *all_agg, output_dtype).first);
     cudf::test::dictionary_column_wrapper<T> none_col(v_none.begin(), v_none.end());
-    EXPECT_FALSE(this
-                   ->template reduction_test<bool>(
-                     none_col, *cudf::make_any_aggregation<reduce_aggregation>(), output_dtype)
-                   .first);
-    EXPECT_FALSE(this
-                   ->template reduction_test<bool>(
-                     none_col, *cudf::make_all_aggregation<reduce_aggregation>(), output_dtype)
-                   .first);
+    EXPECT_FALSE(this->template reduction_test<bool>(none_col, *any_agg, output_dtype).first);
+    EXPECT_FALSE(this->template reduction_test<bool>(none_col, *all_agg, output_dtype).first);
     cudf::test::dictionary_column_wrapper<T> some_col(v_some.begin(), v_some.end());
-    EXPECT_TRUE(this
-                  ->template reduction_test<bool>(
-                    some_col, *cudf::make_any_aggregation<reduce_aggregation>(), output_dtype)
-                  .first);
-    EXPECT_FALSE(this
-                   ->template reduction_test<bool>(
-                     some_col, *cudf::make_all_aggregation<reduce_aggregation>(), output_dtype)
-                   .first);
+    EXPECT_TRUE(this->template reduction_test<bool>(some_col, *any_agg, output_dtype).first);
+    EXPECT_FALSE(this->template reduction_test<bool>(some_col, *all_agg, output_dtype).first);
     // sliced test
-    EXPECT_TRUE(this
-                  ->template reduction_test<bool>(cudf::slice(some_col, {1, 3}).front(),
-                                                  *cudf::make_any_aggregation<reduce_aggregation>(),
-                                                  output_dtype)
-                  .first);
-    EXPECT_TRUE(this
-                  ->template reduction_test<bool>(cudf::slice(some_col, {1, 2}).front(),
-                                                  *cudf::make_all_aggregation<reduce_aggregation>(),
-                                                  output_dtype)
-                  .first);
+    auto slice1 = cudf::slice(some_col, {1, 3}).front();
+    auto slice2 = cudf::slice(some_col, {1, 2}).front();
+    EXPECT_TRUE(this->template reduction_test<bool>(slice1, *any_agg, output_dtype).first);
+    EXPECT_TRUE(this->template reduction_test<bool>(slice2, *all_agg, output_dtype).first);
   }
   // with nulls
   {
-    std::vector<bool> valid({1, 1, 0, 1});
+    std::vector<bool> valid({true, true, false, true});
     cudf::test::dictionary_column_wrapper<T> all_col(v_all.begin(), v_all.end(), valid.begin());
-    EXPECT_TRUE(this
-                  ->template reduction_test<bool>(
-                    all_col, *cudf::make_any_aggregation<reduce_aggregation>(), output_dtype)
-                  .first);
-    EXPECT_TRUE(this
-                  ->template reduction_test<bool>(
-                    all_col, *cudf::make_all_aggregation<reduce_aggregation>(), output_dtype)
-                  .first);
+    EXPECT_TRUE(this->template reduction_test<bool>(all_col, *any_agg, output_dtype).first);
+    EXPECT_TRUE(this->template reduction_test<bool>(all_col, *all_agg, output_dtype).first);
     cudf::test::dictionary_column_wrapper<T> none_col(v_none.begin(), v_none.end(), valid.begin());
-    EXPECT_FALSE(this
-                   ->template reduction_test<bool>(
-                     none_col, *cudf::make_any_aggregation<reduce_aggregation>(), output_dtype)
-                   .first);
-    EXPECT_FALSE(this
-                   ->template reduction_test<bool>(
-                     none_col, *cudf::make_all_aggregation<reduce_aggregation>(), output_dtype)
-                   .first);
+    EXPECT_FALSE(this->template reduction_test<bool>(none_col, *any_agg, output_dtype).first);
+    EXPECT_FALSE(this->template reduction_test<bool>(none_col, *all_agg, output_dtype).first);
     cudf::test::dictionary_column_wrapper<T> some_col(v_some.begin(), v_some.end(), valid.begin());
-    EXPECT_TRUE(this
-                  ->template reduction_test<bool>(
-                    some_col, *cudf::make_any_aggregation<reduce_aggregation>(), output_dtype)
-                  .first);
-    EXPECT_FALSE(this
-                   ->template reduction_test<bool>(
-                     some_col, *cudf::make_all_aggregation<reduce_aggregation>(), output_dtype)
-                   .first);
+    EXPECT_TRUE(this->template reduction_test<bool>(some_col, *any_agg, output_dtype).first);
+    EXPECT_FALSE(this->template reduction_test<bool>(some_col, *all_agg, output_dtype).first);
     // sliced test
-    EXPECT_TRUE(this
-                  ->template reduction_test<bool>(cudf::slice(some_col, {0, 3}).front(),
-                                                  *cudf::make_any_aggregation<reduce_aggregation>(),
-                                                  output_dtype)
-                  .first);
-    EXPECT_TRUE(this
-                  ->template reduction_test<bool>(cudf::slice(some_col, {1, 4}).front(),
-                                                  *cudf::make_all_aggregation<reduce_aggregation>(),
-                                                  output_dtype)
-                  .first);
+    auto slice1 = cudf::slice(some_col, {0, 3}).front();
+    auto slice2 = cudf::slice(some_col, {1, 4}).front();
+    EXPECT_TRUE(this->template reduction_test<bool>(slice1, *any_agg, output_dtype).first);
+    EXPECT_TRUE(this->template reduction_test<bool>(slice2, *all_agg, output_dtype).first);
   }
 }
 
 template <typename T>
 struct DictionaryReductionTest : public ReductionTest<T> {};
 
-using DictionaryTypes = cudf::test::Types<int16_t, int32_t, float, double>;
+using DictionaryTypes = cudf::test::Types<int32_t, int64_t, float, double>;
 TYPED_TEST_SUITE(DictionaryReductionTest, DictionaryTypes);
 TYPED_TEST(DictionaryReductionTest, Sum)
 {
@@ -2184,7 +2341,7 @@ TYPED_TEST(DictionaryReductionTest, Sum)
             expected_value);
 
   // test with nulls
-  std::vector<bool> validity({1, 1, 0, 0, 1, 1, 1, 1});
+  std::vector<bool> validity({true, true, false, false, true, true, true, true});
   cudf::test::dictionary_column_wrapper<T> col_nulls(v.begin(), v.end(), validity.begin());
   expected_value = [v, validity] {
     auto const r = replace_nulls(v, validity, T{0});
@@ -2218,7 +2375,7 @@ TYPED_TEST(DictionaryReductionTest, Product)
             calc_prod(v));
 
   // test with nulls
-  std::vector<bool> validity({1, 1, 0, 0, 1, 1, 1});
+  std::vector<bool> validity({true, true, false, false, true, true, true});
   cudf::test::dictionary_column_wrapper<T> col_nulls(v.begin(), v.end(), validity.begin());
 
   EXPECT_EQ(this
@@ -2249,7 +2406,7 @@ TYPED_TEST(DictionaryReductionTest, SumOfSquare)
             calc_reduction(v));
 
   // test with nulls
-  std::vector<bool> validity({1, 1, 0, 0, 1, 1, 1, 1});
+  std::vector<bool> validity({true, true, false, false, true, true, true, true});
   cudf::test::dictionary_column_wrapper<T> col_nulls(v.begin(), v.end(), validity.begin());
 
   EXPECT_EQ(
@@ -2282,7 +2439,7 @@ TYPED_TEST(DictionaryReductionTest, Mean)
             calc_mean(v, v.size()));
 
   // test with nulls
-  std::vector<bool> validity({1, 1, 0, 1, 1, 1, 0, 1});
+  std::vector<bool> validity({true, true, false, true, true, true, false, true});
   cudf::test::dictionary_column_wrapper<T> col_nulls(v.begin(), v.end(), validity.begin());
 
   cudf::size_type valid_count = std::count(validity.begin(), validity.end(), true);
@@ -2305,21 +2462,11 @@ TYPED_TEST(DictionaryReductionTest, DISABLED_VarStd)
   std::vector<T> v = convert_values<T>(int_values);
   cudf::data_type output_type{cudf::type_to_id<double>()};
 
-  auto calc_var = [](std::vector<T> const& v, cudf::size_type valid_count, cudf::size_type ddof) {
-    double mean = std::accumulate(v.cbegin(), v.cend(), double{0});
-    mean /= valid_count;
-    double sum_of_sq = std::accumulate(
-      v.cbegin(), v.cend(), double{0}, [](double acc, TypeParam i) { return acc + i * i; });
-    auto const div = valid_count - ddof;
-    double var     = sum_of_sq / div - ((mean * mean) * valid_count) / div;
-    return var;
-  };
-
   // test without nulls
   cudf::test::dictionary_column_wrapper<T> col(v.begin(), v.end());
 
   cudf::size_type const ddof = 1;
-  double var                 = calc_var(v, v.size(), ddof);
+  double var                 = calc_var(v, ddof);
   double std                 = std::sqrt(var);
   auto var_agg               = cudf::make_variance_aggregation<reduce_aggregation>(ddof);
   auto std_agg               = cudf::make_std_aggregation<reduce_aggregation>(ddof);
@@ -2328,18 +2475,16 @@ TYPED_TEST(DictionaryReductionTest, DISABLED_VarStd)
   EXPECT_EQ(this->template reduction_test<double>(col, *std_agg, output_type).first, std);
 
   // test with nulls
-  std::vector<bool> validity({1, 1, 0, 1, 1, 1, 0, 1});
+  std::vector<bool> validity({true, true, false, true, true, true, false, true});
   cudf::test::dictionary_column_wrapper<T> col_nulls(v.begin(), v.end(), validity.begin());
 
-  cudf::size_type const valid_count = std::count(validity.begin(), validity.end(), true);
-
-  double var_nulls = calc_var(replace_nulls(v, validity, T{0}), valid_count, ddof);
+  double var_nulls = calc_var(v, ddof, validity);
   double std_nulls = std::sqrt(var_nulls);
 
-  EXPECT_EQ(this->template reduction_test<double>(col_nulls, *var_agg, output_type).first,
-            var_nulls);
-  EXPECT_EQ(this->template reduction_test<double>(col_nulls, *std_agg, output_type).first,
-            std_nulls);
+  EXPECT_DOUBLE_EQ(this->template reduction_test<double>(col_nulls, *var_agg, output_type).first,
+                   var_nulls);
+  EXPECT_DOUBLE_EQ(this->template reduction_test<double>(col_nulls, *std_agg, output_type).first,
+                   std_nulls);
 }
 
 TYPED_TEST(DictionaryReductionTest, NthElement)
@@ -2361,7 +2506,7 @@ TYPED_TEST(DictionaryReductionTest, NthElement)
             v[n]);
 
   // test with nulls
-  std::vector<bool> validity({1, 1, 0, 1, 1, 1, 0, 1});
+  std::vector<bool> validity({true, true, false, true, true, true, false, true});
   cudf::test::dictionary_column_wrapper<T> col_nulls(v.begin(), v.end(), validity.begin());
 
   EXPECT_EQ(this
@@ -2398,7 +2543,7 @@ TYPED_TEST(DictionaryReductionTest, UniqueCount)
             6);
 
   // test with nulls
-  std::vector<bool> validity({1, 1, 1, 0, 1, 1, 1, 1});
+  std::vector<bool> validity({true, true, true, false, true, true, true, true});
   cudf::test::dictionary_column_wrapper<T> col_nulls(v.begin(), v.end(), validity.begin());
 
   EXPECT_EQ(this
@@ -2431,7 +2576,7 @@ TYPED_TEST(DictionaryReductionTest, Median)
     (std::is_signed_v<T>) ? 3.0 : 13.5);
 
   // test with nulls
-  std::vector<bool> validity({1, 1, 1, 0, 1, 1, 1, 1});
+  std::vector<bool> validity({true, true, true, false, true, true, true, true});
   cudf::test::dictionary_column_wrapper<T> col_nulls(v.begin(), v.end(), validity.begin());
   EXPECT_EQ(this
               ->template reduction_test<double>(
@@ -2462,7 +2607,7 @@ TYPED_TEST(DictionaryReductionTest, Quantile)
             64.0);
 
   // test with nulls
-  std::vector<bool> validity({1, 1, 1, 0, 1, 1, 1, 1});
+  std::vector<bool> validity({true, true, true, false, true, true, true, true});
   cudf::test::dictionary_column_wrapper<T> col_nulls(v.begin(), v.end(), validity.begin());
 
   EXPECT_EQ(this
@@ -2519,7 +2664,7 @@ TEST_F(ListReductionTest, ListReductionNthElement)
     *cudf::make_nth_element_aggregation<reduce_aggregation>(2, cudf::null_policy::INCLUDE));
 
   // test with null-exclude
-  std::vector<bool> validity{1, 0, 0, 1, 1, 0};
+  std::vector<bool> validity{true, false, false, true, true, false};
   LCW col_nulls({{-3}, {2, 1}, {0, 5, -3}, {-2}, {}, {28}}, validity.begin());
   this->reduction_test(
     col_nulls,
@@ -2542,7 +2687,7 @@ TEST_F(ListReductionTest, NestedListReductionNthElement)
   using LCW = cudf::test::lists_column_wrapper<int>;
 
   // test without nulls
-  auto validity    = std::vector<bool>{1, 0, 0, 1, 1};
+  auto validity    = std::vector<bool>{true, false, false, true, true};
   auto nested_list = LCW(
     {{LCW{}, LCW{2, 3, 4}}, {}, {LCW{5}, LCW{6}, LCW{7, 8}}, {LCW{9, 10}}, {LCW{11}, LCW{12, 13}}},
     validity.begin());
@@ -2576,7 +2721,7 @@ TEST_F(ListReductionTest, NonValidListReductionNthElement)
   using ElementCol = cudf::test::fixed_width_column_wrapper<int>;
 
   // test against col.size() <= col.null_count()
-  std::vector<bool> validity{0};
+  std::vector<bool> validity{false};
   this->reduction_test(
     LCW{{{1, 2}}, validity.begin()},
     ElementCol{},  // expected_value,
@@ -2591,6 +2736,105 @@ TEST_F(ListReductionTest, NonValidListReductionNthElement)
     true,
     false,
     *cudf::make_nth_element_aggregation<reduce_aggregation>(0, cudf::null_policy::INCLUDE));
+}
+
+TEST_F(ListReductionTest, ReductionMinMaxNoNull)
+{
+  using INTS_CW          = cudf::test::fixed_width_column_wrapper<int>;
+  using LISTS_CW         = cudf::test::lists_column_wrapper<int>;
+  using STRINGS_CW       = cudf::test::strings_column_wrapper;
+  using LISTS_STRINGS_CW = cudf::test::lists_column_wrapper<cudf::string_view>;
+
+  {
+    auto const input = LISTS_CW{{3, 4}, {1, 2}, {5, 6, 7}, {0, 8}, {9, 10}, {1, 0}};
+    this->reduction_test(
+      input, INTS_CW{0, 8}, true, true, *cudf::make_min_aggregation<reduce_aggregation>());
+    this->reduction_test(
+      input, INTS_CW{9, 10}, true, true, *cudf::make_max_aggregation<reduce_aggregation>());
+  }
+  {
+    auto const input = LISTS_STRINGS_CW{
+      {"34", "43"}, {"12", "21"}, {"567", "6", "765"}, {"08", "8"}, {"109", "10"}, {"10", "00"}};
+    this->reduction_test(
+      input, STRINGS_CW{"08", "8"}, true, true, *cudf::make_min_aggregation<reduce_aggregation>());
+    this->reduction_test(input,
+                         STRINGS_CW{"567", "6", "765"},
+                         true,
+                         true,
+                         *cudf::make_max_aggregation<reduce_aggregation>());
+  }
+}
+
+TEST_F(ListReductionTest, ReductionMinMaxSlicedInput)
+{
+  using INTS_CW          = cudf::test::fixed_width_column_wrapper<int>;
+  using LISTS_CW         = cudf::test::lists_column_wrapper<int>;
+  using STRINGS_CW       = cudf::test::strings_column_wrapper;
+  using LISTS_STRINGS_CW = cudf::test::lists_column_wrapper<cudf::string_view>;
+
+  {
+    auto const input_original = LISTS_CW{{9, 9} /*don't care*/,
+                                         {0, 0} /*don't care*/,
+                                         {3, 4},
+                                         {1, 2},
+                                         {5, 6, 7},
+                                         {0, 8},
+                                         {9, 10},
+                                         {1, 0},
+                                         {0, 7} /*don't care*/};
+    auto const input          = cudf::slice(input_original, {2, 8})[0];
+    this->reduction_test(
+      input, INTS_CW{0, 8}, true, true, *cudf::make_min_aggregation<reduce_aggregation>());
+    this->reduction_test(
+      input, INTS_CW{9, 10}, true, true, *cudf::make_max_aggregation<reduce_aggregation>());
+  }
+  {
+    auto const input_original = LISTS_STRINGS_CW{{"08", "8"} /*don't care*/,
+                                                 {"999", "8"} /*don't care*/,
+                                                 {"34", "43"},
+                                                 {"12", "21"},
+                                                 {"567", "6", "765"},
+                                                 {"08", "8"},
+                                                 {"109", "10"},
+                                                 {"10", "00"}};
+    auto const input          = cudf::slice(input_original, {2, 8})[0];
+    this->reduction_test(
+      input, STRINGS_CW{"08", "8"}, true, true, *cudf::make_min_aggregation<reduce_aggregation>());
+    this->reduction_test(input,
+                         STRINGS_CW{"567", "6", "765"},
+                         true,
+                         true,
+                         *cudf::make_max_aggregation<reduce_aggregation>());
+  }
+}
+
+TEST_F(ListReductionTest, ReductionMinMaxWithNulls)
+{
+  using INTS_CW  = cudf::test::fixed_width_column_wrapper<int>;
+  using LISTS_CW = cudf::test::lists_column_wrapper<int>;
+  using cudf::test::iterators::null_at;
+  using cudf::test::iterators::nulls_at;
+  constexpr int null{0};
+
+  auto const input = LISTS_CW{{LISTS_CW{3, 4},
+                               LISTS_CW{1, 2},
+                               LISTS_CW{{1, null}, null_at(1)},
+                               LISTS_CW{} /*null*/,
+                               LISTS_CW{5, 6, 7},
+                               LISTS_CW{1, 8},
+                               LISTS_CW{{9, null}, null_at(1)},
+                               LISTS_CW{} /*null*/},
+                              nulls_at({3, 7})};
+  this->reduction_test(input,
+                       INTS_CW{{1, null}, null_at(1)},
+                       true,
+                       true,
+                       *cudf::make_min_aggregation<reduce_aggregation>());
+  this->reduction_test(input,
+                       INTS_CW{{9, null}, null_at(1)},
+                       true,
+                       true,
+                       *cudf::make_max_aggregation<reduce_aggregation>());
 }
 
 struct StructReductionTest : public cudf::test::BaseFixture {
@@ -2625,8 +2869,9 @@ TEST_F(StructReductionTest, StructReductionNthElement)
   // test without nulls
   auto child0 = *ICW{-3, 2, 1, 0, 5, -3, -2, 28}.release();
   auto child1 = *ICW{0, 1, 2, 3, 4, 5, 6, 7}.release();
-  auto child2 =
-    *ICW{{-10, 10, -100, 100, -1000, 1000, -10000, 10000}, {1, 0, 0, 1, 1, 1, 0, 1}}.release();
+  auto child2 = *ICW{{-10, 10, -100, 100, -1000, 1000, -10000, 10000},
+                     {true, false, false, true, true, true, false, true}}
+                   .release();
   std::vector<std::unique_ptr<cudf::column>> input_vector;
   input_vector.push_back(std::make_unique<cudf::column>(child0));
   input_vector.push_back(std::make_unique<cudf::column>(child1));
@@ -2634,7 +2879,7 @@ TEST_F(StructReductionTest, StructReductionNthElement)
   auto struct_col  = SCW(std::move(input_vector));
   auto result_col0 = ICW{1};
   auto result_col1 = ICW{2};
-  auto result_col2 = ICW{{0}, {0}};
+  auto result_col2 = ICW{{0}, {false}};
   this->reduction_test(
     struct_col,
     cudf::table_view{{result_col0, result_col1, result_col2}},  // expected_value,
@@ -2643,15 +2888,15 @@ TEST_F(StructReductionTest, StructReductionNthElement)
     *cudf::make_nth_element_aggregation<reduce_aggregation>(2, cudf::null_policy::INCLUDE));
 
   // test with null-include
-  std::vector<bool> validity{1, 1, 1, 0, 1, 0, 0, 1};
+  std::vector<bool> validity{true, true, true, false, true, false, false, true};
   input_vector.clear();
   input_vector.push_back(std::make_unique<cudf::column>(child0));
   input_vector.push_back(std::make_unique<cudf::column>(child1));
   input_vector.push_back(std::make_unique<cudf::column>(child2));
   struct_col  = SCW(std::move(input_vector), validity);
-  result_col0 = ICW{{0}, {0}};
-  result_col1 = ICW{{0}, {0}};
-  result_col2 = ICW{{0}, {0}};
+  result_col0 = ICW{{0}, {false}};
+  result_col1 = ICW{{0}, {false}};
+  result_col2 = ICW{{0}, {false}};
   this->reduction_test(
     struct_col,
     cudf::table_view{{result_col0, result_col1, result_col2}},  // expected_value,
@@ -2660,9 +2905,9 @@ TEST_F(StructReductionTest, StructReductionNthElement)
     *cudf::make_nth_element_aggregation<reduce_aggregation>(6, cudf::null_policy::INCLUDE));
 
   // test with null-exclude
-  result_col0 = ICW{{28}, {1}};
-  result_col1 = ICW{{7}, {1}};
-  result_col2 = ICW{{10000}, {1}};
+  result_col0 = ICW{{28}, {true}};
+  result_col1 = ICW{{7}, {true}};
+  result_col2 = ICW{{10000}, {true}};
   this->reduction_test(
     struct_col,
     cudf::table_view{{result_col0, result_col1, result_col2}},  // expected_value,
@@ -2676,15 +2921,16 @@ TEST_F(StructReductionTest, NestedStructReductionNthElement)
   using ICW = cudf::test::fixed_width_column_wrapper<int>;
   using LCW = cudf::test::lists_column_wrapper<int>;
 
-  auto int_col0      = ICW{-4, -3, -2, -1, 0};
-  auto struct_col0   = SCW({int_col0}, std::vector<bool>{1, 0, 0, 1, 1});
-  auto int_col1      = ICW{0, 1, 2, 3, 4};
-  auto list_col      = LCW{{0}, {}, {1, 2}, {3}, {4}};
-  auto struct_col1   = SCW({struct_col0, int_col1, list_col}, std::vector<bool>{1, 1, 1, 0, 1});
+  auto int_col0    = ICW{-4, -3, -2, -1, 0};
+  auto struct_col0 = SCW({int_col0}, std::vector<bool>{true, false, false, true, true});
+  auto int_col1    = ICW{0, 1, 2, 3, 4};
+  auto list_col    = LCW{{0}, {}, {1, 2}, {3}, {4}};
+  auto struct_col1 =
+    SCW({struct_col0, int_col1, list_col}, std::vector<bool>{true, true, true, false, true});
   auto result_child0 = ICW{0};
-  auto result_col0   = SCW({result_child0}, std::vector<bool>{0});
-  auto result_col1   = ICW{{1}, {1}};
-  auto result_col2   = LCW({LCW{}}, std::vector<bool>{1}.begin());
+  auto result_col0   = SCW({result_child0}, std::vector<bool>{false});
+  auto result_col1   = ICW{{1}, {true}};
+  auto result_col2   = LCW({LCW{}}, std::vector<bool>{true}.begin());
   // test without nulls
   this->reduction_test(
     struct_col1,
@@ -2695,9 +2941,9 @@ TEST_F(StructReductionTest, NestedStructReductionNthElement)
 
   // test with null-include
   result_child0 = ICW{0};
-  result_col0   = SCW({result_child0}, std::vector<bool>{0});
-  result_col1   = ICW{{0}, {0}};
-  result_col2   = LCW({LCW{3}}, std::vector<bool>{0}.begin());
+  result_col0   = SCW({result_child0}, std::vector<bool>{false});
+  result_col1   = ICW{{0}, {false}};
+  result_col2   = LCW({LCW{3}}, std::vector<bool>{false}.begin());
   this->reduction_test(
     struct_col1,
     cudf::table_view{{result_col0, result_col1, result_col2}},  // expected_value,
@@ -2707,9 +2953,9 @@ TEST_F(StructReductionTest, NestedStructReductionNthElement)
 
   // test with null-exclude
   result_child0 = ICW{0};
-  result_col0   = SCW({result_child0}, std::vector<bool>{1});
-  result_col1   = ICW{{4}, {1}};
-  result_col2   = LCW({LCW{4}}, std::vector<bool>{1}.begin());
+  result_col0   = SCW({result_child0}, std::vector<bool>{true});
+  result_col1   = ICW{{4}, {true}};
+  result_col2   = LCW({LCW{4}}, std::vector<bool>{true}.begin());
   this->reduction_test(
     struct_col1,
     cudf::table_view{{result_col0, result_col1, result_col2}},  // expected_value,
@@ -2725,11 +2971,11 @@ TEST_F(StructReductionTest, NonValidStructReductionNthElement)
   // test against col.size() <= col.null_count()
   auto child0     = ICW{-3, 3};
   auto child1     = ICW{0, 0};
-  auto child2     = ICW{{-10, 10}, {0, 1}};
-  auto struct_col = SCW{{child0, child1, child2}, {0, 0}};
-  auto ret_col0   = ICW{{0}, {0}};
-  auto ret_col1   = ICW{{0}, {0}};
-  auto ret_col2   = ICW{{0}, {0}};
+  auto child2     = ICW{{-10, 10}, {false, true}};
+  auto struct_col = SCW{{child0, child1, child2}, {false, false}};
+  auto ret_col0   = ICW{{0}, {false}};
+  auto ret_col1   = ICW{{0}, {false}};
+  auto ret_col2   = ICW{{0}, {false}};
   this->reduction_test(
     struct_col,
     cudf::table_view{{ret_col0, ret_col1, ret_col2}},  // expected_value,
@@ -2842,21 +3088,28 @@ TEST_F(StructReductionTest, StructReductionMinMaxWithNulls)
   using cudf::test::iterators::null_at;
   using cudf::test::iterators::nulls_at;
 
-  // `null` means null at child column.
-  // `NULL` means null at parent column.
   auto const input = [] {
     auto child1 = STRINGS_CW{{"año",
                               "bit",
-                              "₹1" /*null*/,
-                              "aaa" /*NULL*/,
+                              "",     // child null
+                              "aaa",  // parent null
                               "zit",
                               "bat",
                               "aab",
-                              "$1" /*null*/,
-                              "€1" /*NULL*/,
+                              "",    // child null
+                              "€1",  // parent null
                               "wut"},
                              nulls_at({2, 7})};
-    auto child2 = INTS_CW{{1, 2, 3 /*null*/, 4 /*NULL*/, 5, 6, 7, 8 /*null*/, 9 /*NULL*/, 10},
+    auto child2 = INTS_CW{{1,
+                           2,
+                           0,  // child null
+                           4,  // parent null
+                           5,
+                           6,
+                           7,
+                           0,  // child null
+                           9,  // parent NULL
+                           10},
                           nulls_at({2, 7})};
     return STRUCTS_CW{{child1, child2}, nulls_at({3, 8})};
   }();

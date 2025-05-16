@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,15 +14,17 @@
  * limitations under the License.
  */
 
-#include <cudf/ast/expressions.hpp>
-#include <cudf/column/column_view.hpp>
-#include <cudf/join.hpp>
-#include <cudf/table/table_view.hpp>
-#include <cudf/utilities/default_stream.hpp>
-
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/type_lists.hpp>
+
+#include <cudf/ast/expressions.hpp>
+#include <cudf/column/column_view.hpp>
+#include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/join/conditional_join.hpp>
+#include <cudf/join/join.hpp>
+#include <cudf/table/table_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/exec_policy.hpp>
 
@@ -33,6 +35,7 @@
 
 #include <algorithm>
 #include <iostream>
+#include <numeric>
 #include <random>
 #include <stdexcept>
 #include <tuple>
@@ -41,7 +44,7 @@
 
 namespace {
 using PairJoinReturn   = std::pair<std::unique_ptr<rmm::device_uvector<cudf::size_type>>,
-                                 std::unique_ptr<rmm::device_uvector<cudf::size_type>>>;
+                                   std::unique_ptr<rmm::device_uvector<cudf::size_type>>>;
 using SingleJoinReturn = std::unique_ptr<rmm::device_uvector<cudf::size_type>>;
 using NullMaskVector   = std::vector<bool>;
 
@@ -55,8 +58,8 @@ constexpr cudf::size_type JoinNoneValue =
   std::numeric_limits<cudf::size_type>::min();  // TODO: how to test if this isn't public?
 
 // Common column references.
-const auto col_ref_left_0  = cudf::ast::column_reference(0, cudf::ast::table_reference::LEFT);
-const auto col_ref_right_0 = cudf::ast::column_reference(0, cudf::ast::table_reference::RIGHT);
+auto const col_ref_left_0  = cudf::ast::column_reference(0, cudf::ast::table_reference::LEFT);
+auto const col_ref_right_0 = cudf::ast::column_reference(0, cudf::ast::table_reference::RIGHT);
 
 // Common expressions.
 auto left_zero_eq_right_zero =
@@ -133,18 +136,18 @@ gen_random_nullable_repeated_columns(unsigned int N = 10000, unsigned int num_re
 struct index_pair {
   cudf::size_type first{};
   cudf::size_type second{};
-  __device__ index_pair(){};
+  __device__ index_pair() {};
   __device__ index_pair(cudf::size_type const& first, cudf::size_type const& second)
-    : first(first), second(second){};
+    : first(first), second(second) {};
 };
 
-__device__ inline bool operator<(const index_pair& lhs, const index_pair& rhs)
+__device__ inline bool operator<(index_pair const& lhs, index_pair const& rhs)
 {
   if (lhs.first > rhs.first) return false;
   return (lhs.first < rhs.first) || (lhs.second < rhs.second);
 }
 
-__device__ inline bool operator==(const index_pair& lhs, const index_pair& rhs)
+__device__ inline bool operator==(index_pair const& lhs, index_pair const& rhs)
 {
   return lhs.first == rhs.first && lhs.second == rhs.second;
 }
@@ -222,21 +225,22 @@ struct ConditionalJoinPairReturnTest : public ConditionalJoinTest<T> {
              std::vector<std::pair<cudf::size_type, cudf::size_type>> expected_outputs)
   {
     auto result_size = this->join_size(left, right, predicate);
-    EXPECT_TRUE(result_size == expected_outputs.size());
+    EXPECT_EQ(result_size, expected_outputs.size());
 
-    auto result = this->join(left, right, predicate);
-    std::vector<std::pair<cudf::size_type, cudf::size_type>> result_pairs;
-    for (size_t i = 0; i < result.first->size(); ++i) {
-      // Note: Not trying to be terribly efficient here since these tests are
-      // small, otherwise a batch copy to host before constructing the tuples
-      // would be important.
-      result_pairs.push_back({result.first->element(i, cudf::get_default_stream()),
-                              result.second->element(i, cudf::get_default_stream())});
-    }
+    auto result     = this->join(left, right, predicate);
+    auto lhs_result = cudf::detail::make_std_vector(*result.first, cudf::get_default_stream());
+    auto rhs_result = cudf::detail::make_std_vector(*result.second, cudf::get_default_stream());
+    std::vector<std::pair<cudf::size_type, cudf::size_type>> result_pairs(lhs_result.size());
+    std::transform(lhs_result.begin(),
+                   lhs_result.end(),
+                   rhs_result.begin(),
+                   result_pairs.begin(),
+                   [](cudf::size_type lhs, cudf::size_type rhs) { return std::pair{lhs, rhs}; });
     std::sort(result_pairs.begin(), result_pairs.end());
     std::sort(expected_outputs.begin(), expected_outputs.end());
 
-    EXPECT_TRUE(std::equal(expected_outputs.begin(), expected_outputs.end(), result_pairs.begin()));
+    EXPECT_TRUE(std::equal(
+      expected_outputs.begin(), expected_outputs.end(), result_pairs.begin(), result_pairs.end()));
   }
 
   /*
@@ -409,6 +413,11 @@ TYPED_TEST(ConditionalInnerJoinTest, TestOneColumnOneRowAllEqual)
 TYPED_TEST(ConditionalInnerJoinTest, TestOneColumnLeftEmpty)
 {
   this->test({{}}, {{3, 4, 5}}, left_zero_eq_right_zero, {});
+};
+
+TYPED_TEST(ConditionalInnerJoinTest, TestOneColumnRightEmpty)
+{
+  this->test({{3, 4, 5}}, {{}}, left_zero_eq_right_zero, {});
 };
 
 TYPED_TEST(ConditionalInnerJoinTest, TestOneColumnTwoRowAllEqual)
@@ -600,6 +609,14 @@ TYPED_TEST(ConditionalLeftJoinTest, TestOneColumnLeftEmpty)
   this->test({{}}, {{3, 4, 5}}, left_zero_eq_right_zero, {});
 };
 
+TYPED_TEST(ConditionalLeftJoinTest, TestOneColumnRightEmpty)
+{
+  this->test({{3, 4, 5}},
+             {{}},
+             left_zero_eq_right_zero,
+             {{0, JoinNoneValue}, {1, JoinNoneValue}, {2, JoinNoneValue}});
+};
+
 TYPED_TEST(ConditionalLeftJoinTest, TestCompareRandomToHash)
 {
   auto [left, right] = gen_random_repeated_columns<TypeParam>();
@@ -666,6 +683,14 @@ TYPED_TEST(ConditionalFullJoinTest, TestOneColumnLeftEmpty)
              {{JoinNoneValue, 0}, {JoinNoneValue, 1}, {JoinNoneValue, 2}});
 };
 
+TYPED_TEST(ConditionalFullJoinTest, TestOneColumnRightEmpty)
+{
+  this->test({{3, 4, 5}},
+             {{}},
+             left_zero_eq_right_zero,
+             {{0, JoinNoneValue}, {1, JoinNoneValue}, {2, JoinNoneValue}});
+};
+
 TYPED_TEST(ConditionalFullJoinTest, TestTwoColumnThreeRowSomeEqual)
 {
   this->test({{0, 1, 2}, {10, 20, 30}},
@@ -705,20 +730,16 @@ struct ConditionalJoinSingleReturnTest : public ConditionalJoinTest<T> {
     auto [left_wrappers, right_wrappers, left_columns, right_columns, left, right] =
       this->parse_input(left_data, right_data);
     auto result_size = this->join_size(left, right, predicate);
-    EXPECT_TRUE(result_size == expected_outputs.size());
+    EXPECT_EQ(result_size, expected_outputs.size());
 
-    auto result = this->join(left, right, predicate);
-    std::vector<cudf::size_type> resulting_indices;
-    for (size_t i = 0; i < result->size(); ++i) {
-      // Note: Not trying to be terribly efficient here since these tests are
-      // small, otherwise a batch copy to host before constructing the tuples
-      // would be important.
-      resulting_indices.push_back(result->element(i, cudf::get_default_stream()));
-    }
-    std::sort(resulting_indices.begin(), resulting_indices.end());
+    auto result         = this->join(left, right, predicate);
+    auto result_indices = cudf::detail::make_std_vector(*result, cudf::get_default_stream());
+    std::sort(result_indices.begin(), result_indices.end());
     std::sort(expected_outputs.begin(), expected_outputs.end());
-    EXPECT_TRUE(
-      std::equal(resulting_indices.begin(), resulting_indices.end(), expected_outputs.begin()));
+    EXPECT_TRUE(std::equal(result_indices.begin(),
+                           result_indices.end(),
+                           expected_outputs.begin(),
+                           expected_outputs.end()));
   }
 
   void _compare_to_hash_join(std::unique_ptr<rmm::device_uvector<cudf::size_type>> const& result,
@@ -826,6 +847,16 @@ struct ConditionalLeftSemiJoinTest : public ConditionalJoinSingleReturnTest<T> {
 
 TYPED_TEST_SUITE(ConditionalLeftSemiJoinTest, cudf::test::IntegralTypesNotBool);
 
+TYPED_TEST(ConditionalLeftSemiJoinTest, TestOneColumnLeftEmpty)
+{
+  this->test({{}}, {{3, 4, 5}}, left_zero_eq_right_zero, {});
+};
+
+TYPED_TEST(ConditionalLeftSemiJoinTest, TestOneColumnRightEmpty)
+{
+  this->test({{3, 4, 5}}, {{}}, left_zero_eq_right_zero, {});
+};
+
 TYPED_TEST(ConditionalLeftSemiJoinTest, TestTwoColumnThreeRowSomeEqual)
 {
   this->test({{0, 1, 2}, {10, 20, 30}}, {{0, 1, 3}, {30, 40, 50}}, left_zero_eq_right_zero, {0, 1});
@@ -872,6 +903,16 @@ struct ConditionalLeftAntiJoinTest : public ConditionalJoinSingleReturnTest<T> {
 };
 
 TYPED_TEST_SUITE(ConditionalLeftAntiJoinTest, cudf::test::IntegralTypesNotBool);
+
+TYPED_TEST(ConditionalLeftAntiJoinTest, TestOneColumnLeftEmpty)
+{
+  this->test({{}}, {{3, 4, 5}}, left_zero_eq_right_zero, {});
+};
+
+TYPED_TEST(ConditionalLeftAntiJoinTest, TestOneColumnRightEmpty)
+{
+  this->test({{3, 4, 5}}, {{}}, left_zero_eq_right_zero, {0, 1, 2});
+};
 
 TYPED_TEST(ConditionalLeftAntiJoinTest, TestTwoColumnThreeRowSomeEqual)
 {

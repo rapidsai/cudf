@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 
 import numpy as np
 import pandas as pd
@@ -6,7 +6,7 @@ import pyarrow as pa
 import pytest
 
 import cudf
-from cudf.core.column.column import as_column, full
+from cudf.core.column.column import as_column
 from cudf.testing import (
     assert_frame_equal,
     assert_index_equal,
@@ -17,9 +17,8 @@ from cudf.testing._utils import (
     OTHER_TYPES,
     assert_column_memory_eq,
     assert_column_memory_ne,
-    assert_eq,
 )
-from cudf.testing.testing import assert_column_equal
+from cudf.testing.testing import assert_column_equal, assert_eq
 
 
 @pytest.fixture(
@@ -70,7 +69,7 @@ def test_basic_assert_index_equal(
         msg = str(e)
 
     if kind is not None:
-        if (kind == TypeError) and (
+        if (kind is TypeError) and (
             msg
             == (
                 "Categoricals can only be compared "
@@ -112,7 +111,6 @@ def test_basic_assert_series_equal(
     check_categorical,
     dtype,
 ):
-
     p_left = pd.Series([1, 2, 3], name="a", dtype=dtype)
     p_right = pd.Series(rdata, name=rname, dtype=dtype)
 
@@ -173,8 +171,8 @@ def test_assert_column_equal_dtype_edge_cases(other):
     assert_column_equal(base.slice(0, 0), other.slice(0, 0), check_dtype=False)
     assert_column_equal(other.slice(0, 0), base.slice(0, 0), check_dtype=False)
 
-    base = full(len(base), fill_value=cudf.NA, dtype=base.dtype)
-    other = full(len(other), fill_value=cudf.NA, dtype=other.dtype)
+    base = as_column(cudf.NA, length=len(base), dtype=base.dtype)
+    other = as_column(cudf.NA, length=len(other), dtype=other.dtype)
 
     assert_column_equal(base, other, check_dtype=False)
     assert_column_equal(other, base, check_dtype=False)
@@ -431,8 +429,8 @@ def test_assert_column_memory_basic_same(arrow_arrays):
     data = cudf.core.column.ColumnBase.from_arrow(arrow_arrays)
     buf = cudf.core.buffer.as_buffer(data.base_data)
 
-    left = cudf.core.column.build_column(buf, dtype=np.int32)
-    right = cudf.core.column.build_column(buf, dtype=np.int32)
+    left = cudf.core.column.build_column(buf, dtype=np.dtype(np.int8))
+    right = cudf.core.column.build_column(buf, dtype=np.dtype(np.int8))
 
     assert_column_memory_eq(left, right)
     with pytest.raises(AssertionError):

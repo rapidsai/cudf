@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@
 #include "trie.cuh"
 
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <cuda_runtime.h>
@@ -33,26 +34,26 @@
 namespace cudf {
 namespace detail {
 
-rmm::device_uvector<serial_trie_node> create_serialized_trie(const std::vector<std::string>& keys,
+rmm::device_uvector<serial_trie_node> create_serialized_trie(std::vector<std::string> const& keys,
                                                              rmm::cuda_stream_view stream)
 {
   if (keys.empty()) { return rmm::device_uvector<serial_trie_node>{0, stream}; }
 
   static constexpr int alphabet_size = std::numeric_limits<char>::max() + 1;
   struct TreeTrieNode {
-    using TrieNodePtr                 = std::unique_ptr<TreeTrieNode>;
-    std::vector<TrieNodePtr> children = std::vector<TrieNodePtr>(alphabet_size);
-    bool is_end_of_word               = false;
+    using TrieNodePtr = std::unique_ptr<TreeTrieNode>;
+    std::array<TrieNodePtr, alphabet_size> children;
+    bool is_end_of_word = false;
   };
 
   // Construct a tree-structured trie
   // The trie takes a lot of memory, but the lookup is fast:
   // allows direct addressing of children nodes
   TreeTrieNode tree_trie;
-  for (const auto& key : keys) {
+  for (auto const& key : keys) {
     auto* current_node = &tree_trie;
 
-    for (const char character : key) {
+    for (char const character : key) {
       if (current_node->children[character] == nullptr)
         current_node->children[character] = std::make_unique<TreeTrieNode>();
 
@@ -80,9 +81,9 @@ rmm::device_uvector<serial_trie_node> create_serialized_trie(const std::vector<s
   // Add root node to queue. this node is not included to the serialized trie
   to_visit.emplace_back(&tree_trie, -1);
   while (!to_visit.empty()) {
-    const auto node_and_idx = to_visit.front();
-    const auto node         = node_and_idx.pnode;
-    const auto idx          = node_and_idx.idx;
+    auto const node_and_idx = to_visit.front();
+    auto const node         = node_and_idx.pnode;
+    auto const idx          = node_and_idx.idx;
     to_visit.pop_front();
 
     bool has_children = false;
@@ -103,8 +104,7 @@ rmm::device_uvector<serial_trie_node> create_serialized_trie(const std::vector<s
     // Only add the terminating character if any nodes were added
     if (has_children) { nodes.push_back(serial_trie_node(trie_terminating_character)); }
   }
-  return cudf::detail::make_device_uvector_sync(
-    nodes, stream, rmm::mr::get_current_device_resource());
+  return cudf::detail::make_device_uvector(nodes, stream, cudf::get_current_device_resource_ref());
 }
 
 }  // namespace detail

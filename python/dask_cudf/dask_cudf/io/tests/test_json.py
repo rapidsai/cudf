@@ -1,5 +1,6 @@
-# Copyright (c) 2019-2023, NVIDIA CORPORATION.
+# Copyright (c) 2019-2025, NVIDIA CORPORATION.
 
+import math
 import os
 
 import pandas as pd
@@ -80,7 +81,8 @@ def test_read_json_nested(tmp_path):
         }
     )
     kwargs = dict(orient="records", lines=True)
-    with tmp_path / "data.json" as f:
+    f = tmp_path / "data.json"
+    with dask.config.set({"dataframe.convert-string": False}):
         df.to_json(f, **kwargs)
         # Ensure engine='cudf' is tested.
         actual = dask_cudf.read_json(f, engine="cudf", **kwargs)
@@ -92,3 +94,42 @@ def test_read_json_nested(tmp_path):
         # Ensure not passing kwargs also reads the file.
         actual = dask_cudf.read_json(f)
         dd.assert_eq(actual, actual_pd)
+
+
+def test_read_json_aggregate_files(tmp_path):
+    df1 = dask.datasets.timeseries(
+        dtypes={"x": int, "y": int}, freq="120s"
+    ).reset_index(drop=True)
+    json_path = str(tmp_path / "data-*.json")
+    df1.to_json(json_path)
+
+    df2 = dask_cudf.read_json(json_path, aggregate_files=2)
+    assert df2.npartitions == math.ceil(df1.npartitions / 2)
+    dd.assert_eq(df1, df2, check_index=False)
+
+    df2 = dask_cudf.read_json(
+        json_path, aggregate_files=True, blocksize="1GiB"
+    )
+    assert df2.npartitions == 1
+    dd.assert_eq(df1, df2, check_index=False)
+
+    for include_path_column, name in [(True, "path"), ("file", "file")]:
+        df2 = dask_cudf.read_json(
+            json_path,
+            aggregate_files=2,
+            include_path_column=include_path_column,
+        )
+        assert name in df2.columns
+        assert len(df2[name].compute().unique()) == df1.npartitions
+        dd.assert_eq(df1, df2.drop(columns=[name]), check_index=False)
+
+
+def test_deprecated_api_paths(tmp_path):
+    path = str(tmp_path / "data-*.json")
+    df = dd.from_dict({"a": range(100)}, npartitions=1)
+    df.to_json(path)
+
+    # Encourage top-level read_json import only
+    with pytest.warns(match="dask_cudf.io.read_json is now deprecated"):
+        df2 = dask_cudf.io.read_json(path)
+    dd.assert_eq(df, df2, check_divisions=False)

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,11 +17,11 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/testing_main.hpp>
 #include <cudf_test/type_list_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/quantiles.hpp>
-#include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 
 #include <limits>
@@ -412,7 +412,7 @@ TYPED_TEST(QuantileTest, TestInterpolateExtremaLow)
 TYPED_TEST(QuantileTest, TestEmpty)
 {
   auto input    = cudf::test::fixed_width_column_wrapper<TypeParam>({});
-  auto expected = cudf::test::fixed_width_column_wrapper<double>({0, 0}, {0, 0});
+  auto expected = cudf::test::fixed_width_column_wrapper<double>({0, 0}, {false, false});
   auto actual   = cudf::quantile(input, {0.5, 0.25});
 }
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,31 +24,32 @@ import java.nio.ByteBuffer;
  */
 public enum UnaryOperator {
   IDENTITY(0),          // Identity function
-  SIN(1),               // Trigonometric sine
-  COS(2),               // Trigonometric cosine
-  TAN(3),               // Trigonometric tangent
-  ARCSIN(4),            // Trigonometric sine inverse
-  ARCCOS(5),            // Trigonometric cosine inverse
-  ARCTAN(6),            // Trigonometric tangent inverse
-  SINH(7),              // Hyperbolic sine
-  COSH(8),              // Hyperbolic cosine
-  TANH(9),              // Hyperbolic tangent
-  ARCSINH(10),          // Hyperbolic sine inverse
-  ARCCOSH(11),          // Hyperbolic cosine inverse
-  ARCTANH(12),          // Hyperbolic tangent inverse
-  EXP(13),              // Exponential (base e, Euler number)
-  LOG(14),              // Natural Logarithm (base e)
-  SQRT(15),             // Square-root (x^0.5)
-  CBRT(16),             // Cube-root (x^(1.0/3))
-  CEIL(17),             // Smallest integer value not less than arg
-  FLOOR(18),            // largest integer value not greater than arg
-  ABS(19),              // Absolute value
-  RINT(20),             // Rounds the floating-point argument arg to an integer value
-  BIT_INVERT(21),       // Bitwise Not (~)
-  NOT(22),              // Logical Not (!)
-  CAST_TO_INT64(23),    // Cast value to int64_t
-  CAST_TO_UINT64(24),   // Cast value to uint64_t
-  CAST_TO_FLOAT64(25);  // Cast value to double
+  IS_NULL(1),           // Check if operand is null
+  SIN(2),               // Trigonometric sine
+  COS(3),               // Trigonometric cosine
+  TAN(4),               // Trigonometric tangent
+  ARCSIN(5),            // Trigonometric sine inverse
+  ARCCOS(6),            // Trigonometric cosine inverse
+  ARCTAN(7),            // Trigonometric tangent inverse
+  SINH(8),              // Hyperbolic sine
+  COSH(9),              // Hyperbolic cosine
+  TANH(10),              // Hyperbolic tangent
+  ARCSINH(11),          // Hyperbolic sine inverse
+  ARCCOSH(12),          // Hyperbolic cosine inverse
+  ARCTANH(13),          // Hyperbolic tangent inverse
+  EXP(14),              // Exponential (base e, Euler number)
+  LOG(15),              // Natural Logarithm (base e)
+  SQRT(16),             // Square-root (x^0.5)
+  CBRT(17),             // Cube-root (x^(1.0/3))
+  CEIL(18),             // Smallest integer value not less than arg
+  FLOOR(19),            // largest integer value not greater than arg
+  ABS(20),              // Absolute value
+  RINT(21),             // Rounds the floating-point argument arg to an integer value
+  BIT_INVERT(22),       // Bitwise Not (~)
+  NOT(23),              // Logical Not (!)
+  CAST_TO_INT64(24),    // Cast value to int64_t
+  CAST_TO_UINT64(25),   // Cast value to uint64_t
+  CAST_TO_FLOAT64(26);  // Cast value to double
 
   private final byte nativeId;
 

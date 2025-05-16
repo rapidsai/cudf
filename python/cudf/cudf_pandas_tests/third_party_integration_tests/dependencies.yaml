@@ -1,0 +1,306 @@
+# Copyright (c) 2023-2024, NVIDIA CORPORATION.
+# Dependency list for https://github.com/rapidsai/dependency-file-generator
+files:
+  checks:
+    output: none
+    includes:
+      - develop
+      - py_version
+  test_dask:
+    output: none
+    includes:
+      - cuda_version
+      - py_version
+      - test_base
+      - test_dask
+  test_matplotlib:
+    output: none
+    includes:
+      - cuda_version
+      - py_version
+      - test_base
+      - test_matplotlib
+  test_numpy:
+    output: none
+    includes:
+      - cuda_version
+      - py_version
+      - test_base
+      - test_numpy
+  test_pytorch:
+    output: none
+    includes:
+      - cuda_version
+      - py_version
+      - test_base
+      - test_pytorch
+  test_seaborn:
+    output: none
+    includes:
+      - cuda_version
+      - py_version
+      - test_base
+      - test_seaborn
+  test_scipy:
+    output: none
+    includes:
+      - cuda_version
+      - py_version
+      - test_base
+      - test_scipy
+  test_sklearn:
+    output: none
+    includes:
+      - cuda_version
+      - py_version
+      - test_base
+      - test_sklearn
+  test_stumpy:
+    output: none
+    includes:
+      - cuda_version
+      - py_version
+      - test_base
+      - test_stumpy
+  test_tensorflow:
+    output: none
+    includes:
+      - cuda_version
+      - py_version
+      - test_base
+      - test_tensorflow
+  test_xgboost:
+    output: none
+    includes:
+      - cuda_version
+      - py_version
+      - test_base
+      - test_xgboost
+  test_catboost:
+    output: none
+    includes:
+      - cuda_version
+      - py_version
+      - test_base
+      - test_catboost
+  test_cuml:
+    output: none
+    includes:
+      - cuda_version
+      - py_version
+      - test_base
+      - test_cuml
+  test_cugraph:
+    output: none
+    includes:
+      - cuda_version
+      - py_version
+      - test_base
+      - test_cugraph
+  test_ibis:
+    output: none
+    includes:
+      - cuda_version
+      - py_version
+      - test_base
+      - test_ibis
+  test_hvplot:
+    output: none
+    includes:
+      - cuda_version
+      - py_version
+      - test_base
+      - test_hvplot
+  test_holoviews:
+    output: none
+    includes:
+      - cuda_version
+      - py_version
+      - test_base
+      - test_holoviews
+  test_plotly:
+    output: none
+    includes:
+      - cuda_version
+      - py_version
+      - test_base
+      - test_plotly
+
+channels:
+  - rapidsai-nightly
+  - rapidsai
+  - conda-forge
+  - nvidia
+
+dependencies:
+  develop:
+    common:
+      - output_types: conda
+        packages:
+          - pre-commit
+  cuda_version:
+    specific:
+      - output_types: conda
+        matrices:
+          - matrix:
+              cuda: "11"
+            packages:
+              - cuda-version=11.8
+          - matrix:
+              cuda: "11.8"
+            packages:
+              - cuda-version=11.8
+          - matrix:
+              cuda: "12.0"
+            packages:
+              - cuda-version=12.0
+          - matrix:
+              cuda: "12.2"
+            packages:
+              - cuda-version=12.2
+          - matrix:
+              cuda: "12.5"
+            packages:
+              - cuda-version=12.5
+          - matrix:
+              cuda: "12.8"
+            packages:
+              - cuda-version=12.8
+          - matrix:
+              cuda: "12.9"
+            packages:
+              - cuda-version=12.9
+  py_version:
+    specific:
+      - output_types: conda
+        matrices:
+          - matrix:
+              py: "3.10"
+            packages:
+              - python=3.10
+          - matrix:
+              py: "3.11"
+            packages:
+              - python=3.11
+          - matrix:
+              py: "3.12"
+            packages:
+              - python=3.12
+          - matrix:
+              py: "3.13"
+            packages:
+              - python=3.13
+          - matrix:
+            packages:
+              - python>=3.10,<3.14
+  test_base:
+    common:
+      - output_types: conda
+        packages:
+          - cudf==25.6.*,>=0.0.0a0
+          - pandas
+          - pytest
+          - pytest-xdist
+  test_dask:
+    common:
+      - output_types: conda
+        packages:
+          - dask
+  test_matplotlib:
+    common:
+      - output_types: conda
+        packages:
+          - matplotlib-base
+  test_numpy:
+    common:
+      - output_types: conda
+        packages:
+          - numpy
+  test_pytorch:
+    common:
+      - output_types: conda
+        packages:
+          - numpy
+          - pytorch>=2.4.0
+  test_seaborn:
+    common:
+      - output_types: conda
+        packages:
+          - seaborn
+  test_scipy:
+    common:
+      - output_types: conda
+        packages:
+          - scipy
+  test_sklearn:
+    common:
+      - output_types: conda
+        packages:
+          - scikit-learn
+  test_stumpy:
+    common:
+      - output_types: conda
+        packages:
+          - dask
+          - stumpy
+  test_tensorflow:
+    common:
+      - output_types: conda
+        packages:
+          - pip
+          - pip:
+              - tensorflow[and-cuda]
+  test_xgboost:
+    common:
+      - output_types: conda
+        packages:
+        # TODO: Remove hypothesis pinning once https://github.com/HypothesisWorks/hypothesis/issues/4365 is resolved
+          - hypothesis>=6.131.7
+          - numpy
+          - scipy
+          - scikit-learn
+          - pip
+          - xgboost>=2.0.1
+  test_catboost:
+    common:
+      - output_types: conda
+        packages:
+        # TODO: Remove numpy pinning once https://github.com/catboost/catboost/issues/2671 is resolved
+          - numpy>=1.23,<2.0.0
+          - scipy
+          - scikit-learn
+          - catboost
+  test_cuml:
+    common:
+      - output_types: conda
+        packages:
+          - cuml==25.6.*,>=0.0.0a0
+          - scikit-learn
+  test_cugraph:
+    common:
+      - output_types: conda
+        packages:
+          - cugraph==25.6.*,>=0.0.0a0
+          - networkx
+  test_ibis:
+    common:
+      - output_types: conda
+        packages:
+          - pip
+          - pip:
+              - ibis-framework[duckdb]
+  test_hvplot:
+    common:
+      - output_types: conda
+        packages:
+          - hvplot
+  test_holoviews:
+    common:
+      - output_types: conda
+        packages:
+          - holoviews
+  test_plotly:
+    common:
+      - output_types: conda
+        packages:
+          - plotly

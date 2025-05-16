@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -83,7 +83,7 @@ inline __device__ bool is_float(string_view const& d_str)
   bool decimal_found  = false;
   bool exponent_found = false;
   size_type bytes     = d_str.size_bytes();
-  const char* data    = d_str.data();
+  char const* data    = d_str.data();
   // sign character allowed at the beginning of the string
   size_type ch_idx = (*data == '-' || *data == '+') ? 1 : 0;
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,69 +16,16 @@
 
 #pragma once
 
-#include "gpuinflate.hpp"
+#include "io/comp/comp.hpp"
 
-#include <io/utilities/config_utils.hpp>
-
-#include <cudf/utilities/error.hpp>
+#include <cudf/io/nvcomp_adapter.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
 #include <optional>
 
-namespace cudf::io::nvcomp {
-
-enum class compression_type { SNAPPY, ZSTD, DEFLATE };
-
-/**
- * @brief Set of parameters that impact whether the use nvCOMP features is enabled.
- */
-struct feature_status_parameters {
-  int lib_major_version;
-  int lib_minor_version;
-  int lib_patch_version;
-  bool are_all_integrations_enabled;
-  bool are_stable_integrations_enabled;
-  int compute_capability_major;
-
-  feature_status_parameters();
-  feature_status_parameters(
-    int major, int minor, int patch, bool all_enabled, bool stable_enabled, int cc_major)
-    : lib_major_version{major},
-      lib_minor_version{minor},
-      lib_patch_version{patch},
-      are_all_integrations_enabled{all_enabled},
-      are_stable_integrations_enabled{stable_enabled},
-      compute_capability_major{cc_major}
-  {
-  }
-};
-
-/**
- * @brief If a compression type is disabled through nvCOMP, returns the reason as a string.
- *
- * Result cab depend on nvCOMP version and environment variables.
- *
- * @param compression Compression type
- * @param params Optional parameters to query status with different configurations
- * @returns Reason for the feature disablement, `std::nullopt` if the feature is enabled
- */
-[[nodiscard]] std::optional<std::string> is_compression_disabled(
-  compression_type compression, feature_status_parameters params = feature_status_parameters());
-
-/**
- * @brief If a decompression type is disabled through nvCOMP, returns the reason as a string.
- *
- * Result can depend on nvCOMP version and environment variables.
- *
- * @param compression Compression type
- * @param params Optional parameters to query status with different configurations
- * @returns Reason for the feature disablement, `std::nullopt` if the feature is enabled
- */
-[[nodiscard]] std::optional<std::string> is_decompression_disabled(
-  compression_type compression, feature_status_parameters params = feature_status_parameters());
-
+namespace cudf::io::detail::nvcomp {
 /**
  * @brief Device batch decompression of given type.
  *
@@ -86,8 +33,8 @@ struct feature_status_parameters {
  * @param[in] inputs List of input buffers
  * @param[out] outputs List of output buffers
  * @param[out] results List of output status structures
- * @param[in] max_uncomp_chunk_size maximum size of uncompressed chunk
- * @param[in] max_total_uncomp_size maximum total size of uncompressed data
+ * @param[in] max_uncomp_chunk_size Maximum size of any single uncompressed chunk
+ * @param[in] max_total_uncomp_size Maximum total size of uncompressed data
  * @param[in] stream CUDA stream to use
  */
 void batched_decompress(compression_type compression,
@@ -99,6 +46,24 @@ void batched_decompress(compression_type compression,
                         rmm::cuda_stream_view stream);
 
 /**
+ * @brief Return the amount of temporary space required in bytes for a given decompression
+ * operation.
+ *
+ * The size returned reflects the size of the scratch buffer to be passed to
+ * `batched_decompress_async`
+ *
+ * @param[in] compression Compression type
+ * @param[in] num_chunks The number of decompression chunks to be processed
+ * @param[in] max_uncomp_chunk_size Maximum size of any single uncompressed chunk
+ * @param[in] max_total_uncomp_size Maximum total size of uncompressed data
+ * @returns The total required size in bytes
+ */
+size_t batched_decompress_temp_size(compression_type compression,
+                                    size_t num_chunks,
+                                    size_t max_uncomp_chunk_size,
+                                    size_t max_total_uncomp_size);
+
+/**
  * @brief Gets the maximum size any chunk could compress to in the batch.
  *
  * @param compression Compression type
@@ -108,20 +73,12 @@ void batched_decompress(compression_type compression,
                                                     uint32_t max_uncomp_chunk_size);
 
 /**
- * @brief Gets input alignment requirements for the given compression type.
+ * @brief Gets input and output alignment requirements for the given compression type.
  *
  * @param compression Compression type
- * @returns required alignment, in bits
+ * @returns required alignment
  */
-[[nodiscard]] size_t compress_input_alignment_bits(compression_type compression);
-
-/**
- * @brief Gets output alignment requirements for the given compression type.
- *
- * @param compression Compression type
- * @returns required alignment, in bits
- */
-[[nodiscard]] size_t compress_output_alignment_bits(compression_type compression);
+[[nodiscard]] size_t required_alignment(compression_type compression);
 
 /**
  * @brief Maximum size of uncompressed chunks that can be compressed with nvCOMP.
@@ -146,4 +103,4 @@ void batched_compress(compression_type compression,
                       device_span<compression_result> results,
                       rmm::cuda_stream_view stream);
 
-}  // namespace cudf::io::nvcomp
+}  // namespace cudf::io::detail::nvcomp

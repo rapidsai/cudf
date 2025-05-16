@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,8 +20,10 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
+#include <cudf/detail/device_scalar.hpp>
 #include <cudf/dictionary/detail/iterator.cuh>
 #include <cudf/dictionary/dictionary_column_view.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
@@ -103,7 +105,7 @@ struct var_functor {
     cudf::device_span<size_type const> group_labels,
     size_type ddof,
     rmm::cuda_stream_view stream,
-    rmm::mr::device_memory_resource* mr)
+    rmm::device_async_resource_ref mr)
   {
     using ResultType = cudf::detail::target_type_t<T, aggregation::Kind::VARIANCE>;
 
@@ -131,18 +133,31 @@ struct var_functor {
     }
 
     // set nulls
-    auto result_view = mutable_column_device_view::create(*result, stream);
-    thrust::for_each_n(rmm::exec_policy(stream),
-                       thrust::make_counting_iterator(0),
-                       group_sizes.size(),
-                       [d_result = *result_view, d_group_sizes, ddof] __device__(size_type i) {
-                         size_type group_size = d_group_sizes[i];
-                         if (group_size == 0 or group_size - ddof <= 0)
-                           d_result.set_null(i);
-                         else
-                           d_result.set_valid(i);
-                       });
+    auto result_view  = mutable_column_device_view::create(*result, stream);
+    auto null_count   = cudf::detail::device_scalar<cudf::size_type>(0, stream, mr);
+    auto d_null_count = null_count.data();
+    thrust::for_each_n(
+      rmm::exec_policy(stream),
+      thrust::make_counting_iterator(0),
+      group_sizes.size(),
+      [d_result = *result_view, d_group_sizes, ddof, d_null_count] __device__(size_type i) {
+        size_type group_size = d_group_sizes[i];
+        if (group_size == 0 or group_size - ddof <= 0) {
+          d_result.set_null(i);
+          // Assuming that typical data does not have too many nulls this
+          // atomic shouldn't serialize the code too much. The alternatives
+          // would be 1) writing a more complex kernel using cub/shmem to
+          // increase parallelism, or 2) calling `cudf::count_nulls` after the
+          // fact. (1) is more work than it's worth without benchmarking, and
+          // this approach should outperform (2) unless large amounts of the
+          // data is null.
+          atomicAdd(d_null_count, 1);
+        } else {
+          d_result.set_valid(i);
+        }
+      });
 
+    result->set_null_count(null_count.value(stream));
     return result;
   }
 
@@ -161,7 +176,7 @@ std::unique_ptr<column> group_var(column_view const& values,
                                   cudf::device_span<size_type const> group_labels,
                                   size_type ddof,
                                   rmm::cuda_stream_view stream,
-                                  rmm::mr::device_memory_resource* mr)
+                                  rmm::device_async_resource_ref mr)
 {
   auto values_type = cudf::is_dictionary(values.type())
                        ? dictionary_column_view(values).keys().type()

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,8 +18,11 @@
 #include "in_reg_array.cuh"
 
 #include <cub/cub.cuh>
-
+#include <cuda/functional>
+#include <cuda/std/array>
+#include <cuda/std/type_traits>
 #include <thrust/execution_policy.h>
+#include <thrust/iterator/discard_iterator.h>
 #include <thrust/sequence.h>
 
 namespace cudf::io::fst::detail {
@@ -45,9 +48,10 @@ using StateIndexT = uint32_t;
 template <int32_t NUM_ITEMS>
 struct VectorCompositeOp {
   template <typename VectorT>
-  __host__ __device__ __forceinline__ VectorT operator()(VectorT const& lhs, VectorT const& rhs)
+  __device__ __forceinline__ VectorT operator()(VectorT const& lhs, VectorT const& rhs)
   {
     VectorT res{};
+#pragma unroll
     for (int32_t i = 0; i < NUM_ITEMS; ++i) {
       res.Set(i, rhs.Get(lhs.Get(i)));
     }
@@ -58,56 +62,277 @@ struct VectorCompositeOp {
 /**
  * @brief A class whose ReadSymbol member function is invoked for each symbol being read from the
  * input tape. The wrapper class looks up whether a state transition caused by a symbol is supposed
- * to emit any output symbol (the "transduced" output) and, if so, keeps track of how many symbols
- * it intends to write out and writing out such symbols to the given output iterators.
- *
- * @tparam TransducerTableT The type implementing a transducer table that can be used for looking up
- * the symbols that are supposed to be emitted on a given state transition.
- * @tparam TransducedOutItT A Random-access output iterator type to which symbols returned by the
- * transducer table are assignable.
- * @tparam TransducedIndexOutItT A Random-access output iterator type to which indexes are written.
+ * to emit any output symbol (the "transduced" output) and, if so, keeps track of *how many* symbols
+ * it intends to write out.
  */
-template <typename TransducerTableT, typename TransducedOutItT, typename TransducedIndexOutItT>
-class DFASimulationCallbackWrapper {
+template <typename TransducerTableT>
+class DFACountCallbackWrapper {
  public:
-  __host__ __device__ __forceinline__ DFASimulationCallbackWrapper(
-    TransducerTableT transducer_table, TransducedOutItT out_it, TransducedIndexOutItT out_idx_it)
-    : transducer_table(transducer_table), out_it(out_it), out_idx_it(out_idx_it), write(false)
+  __device__ __forceinline__ DFACountCallbackWrapper(TransducerTableT transducer_table)
+    : transducer_table(transducer_table)
   {
   }
 
   template <typename OffsetT>
-  __host__ __device__ __forceinline__ void Init(OffsetT const& offset)
+  __device__ __forceinline__ void Init(OffsetT const&)
   {
-    this->offset = offset;
-    if (!write) out_count = 0;
+    out_count = 0;
   }
 
-  template <typename CharIndexT, typename StateIndexT, typename SymbolIndexT>
-  __host__ __device__ __forceinline__ void ReadSymbol(CharIndexT const character_index,
-                                                      StateIndexT const old_state,
-                                                      StateIndexT const new_state,
-                                                      SymbolIndexT const symbol_id)
+  template <typename CharIndexT, typename StateIndexT, typename SymbolIndexT, typename SymbolT>
+  __device__ __forceinline__ void ReadSymbol(CharIndexT const character_index,
+                                             StateIndexT const old_state,
+                                             StateIndexT const new_state,
+                                             SymbolIndexT const symbol_id,
+                                             SymbolT const read_symbol)
   {
-    uint32_t const count = transducer_table(old_state, symbol_id);
-    if (write) {
-      for (uint32_t out_char = 0; out_char < count; out_char++) {
-        out_it[out_count + out_char]     = transducer_table(old_state, symbol_id, out_char);
-        out_idx_it[out_count + out_char] = offset + character_index;
-      }
-    }
+    uint32_t const count = transducer_table(old_state, symbol_id, read_symbol);
     out_count += count;
   }
 
-  __host__ __device__ __forceinline__ void TearDown() {}
+  __device__ __forceinline__ void TearDown() {}
+  TransducerTableT const transducer_table;
+  uint32_t out_count{};
+};
+
+/**
+ * @brief A class whose ReadSymbol member function is invoked for each symbol being read from the
+ * input tape. The wrapper class looks up whether a state transition caused by a symbol is supposed
+ * to emit any output symbol (the "transduced" output) and, if so, writes out such symbols to the
+ * given output iterators.
+ *
+ * @tparam MaxTranslatedOutChars The maximum number of symbols that are written on a any given state
+ * transition
+ * @tparam TransducerTableT The type implementing a transducer table that can be used for looking up
+ * the symbols that are supposed to be emitted on a given state transition.
+ * @tparam TransducedOutItT A random-access output iterator type to which symbols returned by the
+ * transducer table are assignable.
+ * @tparam TransducedIndexOutItT A random-access output iterator type to which indexes are written.
+ */
+template <int MaxTranslatedOutChars,
+          typename TransducerTableT,
+          typename TransducedOutItT,
+          typename TransducedIndexOutItT>
+class DFAWriteCallbackWrapper {
+ public:
+  __device__ __forceinline__ DFAWriteCallbackWrapper(TransducerTableT transducer_table,
+                                                     TransducedOutItT out_it,
+                                                     TransducedIndexOutItT out_idx_it,
+                                                     uint32_t out_offset,
+                                                     uint32_t /*tile_out_offset*/,
+                                                     uint32_t /*tile_in_offset*/,
+                                                     uint32_t /*tile_out_count*/)
+    : transducer_table(transducer_table),
+      out_it(out_it),
+      out_idx_it(out_idx_it),
+      out_offset(out_offset)
+  {
+  }
+
+  template <typename OffsetT>
+  __device__ __forceinline__ void Init(OffsetT const& in_offset)
+  {
+    this->in_offset = in_offset;
+  }
+
+  template <typename CharIndexT,
+            typename StateIndexT,
+            typename SymbolIndexT,
+            typename SymbolT,
+            int MaxTranslatedOutChars_>
+  __device__ __forceinline__
+    typename ::cuda::std::enable_if<(MaxTranslatedOutChars_ <= 2), void>::type
+    ReadSymbol(CharIndexT const character_index,
+               StateIndexT const old_state,
+               StateIndexT const new_state,
+               SymbolIndexT const symbol_id,
+               SymbolT const read_symbol,
+               cuda::std::integral_constant<int, MaxTranslatedOutChars_> /*MaxTranslatedOutChars*/)
+  {
+    uint32_t const count = transducer_table(old_state, symbol_id, read_symbol);
+
+#pragma unroll
+    for (uint32_t out_char = 0; out_char < MaxTranslatedOutChars_; out_char++) {
+      if (out_char < count) {
+        out_it[out_offset + out_char] =
+          transducer_table(old_state, symbol_id, out_char, read_symbol);
+        out_idx_it[out_offset + out_char] = in_offset + character_index;
+      }
+    }
+    out_offset += count;
+  }
+
+  template <typename CharIndexT,
+            typename StateIndexT,
+            typename SymbolIndexT,
+            typename SymbolT,
+            int MaxTranslatedOutChars_>
+  __device__ __forceinline__
+    typename ::cuda::std::enable_if<(MaxTranslatedOutChars_ > 2), void>::type
+    ReadSymbol(CharIndexT const character_index,
+               StateIndexT const old_state,
+               StateIndexT const new_state,
+               SymbolIndexT const symbol_id,
+               SymbolT const read_symbol,
+               cuda::std::integral_constant<int, MaxTranslatedOutChars_>)
+  {
+    uint32_t const count = transducer_table(old_state, symbol_id, read_symbol);
+
+    for (uint32_t out_char = 0; out_char < count; out_char++) {
+      out_it[out_offset + out_char] = transducer_table(old_state, symbol_id, out_char, read_symbol);
+      out_idx_it[out_offset + out_char] = in_offset + character_index;
+    }
+    out_offset += count;
+  }
+
+  template <typename CharIndexT, typename StateIndexT, typename SymbolIndexT, typename SymbolT>
+  __device__ __forceinline__ void ReadSymbol(CharIndexT const character_index,
+                                             StateIndexT const old_state,
+                                             StateIndexT const new_state,
+                                             SymbolIndexT const symbol_id,
+                                             SymbolT const read_symbol)
+  {
+    ReadSymbol(character_index,
+               old_state,
+               new_state,
+               symbol_id,
+               read_symbol,
+               cuda::std::integral_constant<int, MaxTranslatedOutChars>{});
+  }
+
+  __device__ __forceinline__ void TearDown() {}
 
  public:
   TransducerTableT const transducer_table;
   TransducedOutItT out_it;
   TransducedIndexOutItT out_idx_it;
-  uint32_t out_count;
-  uint32_t offset;
-  bool write;
+  uint32_t out_offset;
+  uint32_t in_offset;
+};
+
+/**
+ * @brief A class whose ReadSymbol member function is invoked for each symbol being read from the
+ * input tape. The wrapper class looks up whether a state transition caused by a symbol is supposed
+ * to emit any output symbol (the "transduced" output) and, if so, writes out such symbols to the
+ * given output iterators. This class uses a shared memory-backed write buffer to coalesce writes to
+ * global memory.
+ *
+ * @tparam DiscardIndexOutput Whether to discard the indexes instead of writing them to the given
+ * output iterator
+ * @tparam DiscardTranslatedOutput Whether to discard the translated output symbols instead of
+ * writing them to the given output iterator
+ * @tparam NumWriteBufferItems The number of items to allocate in shared memory for the write
+ * buffer.
+ * @tparam OutputT The type of the translated items
+ * @tparam TransducerTableT The type implementing a transducer table that can be used for looking up
+ * the symbols that are supposed to be emitted on a given state transition.
+ * @tparam TransducedOutItT A random-access output iterator type to which symbols returned by the
+ * transducer table are assignable.
+ * @tparam TransducedIndexOutItT A random-access output iterator type to which indexes are written.
+ */
+template <bool DiscardIndexOutput,
+          bool DiscardTranslatedOutput,
+          int NumWriteBufferItems,
+          typename OutputT,
+          typename TransducerTableT,
+          typename TransducedOutItT,
+          typename TransducedIndexOutItT>
+class WriteCoalescingCallbackWrapper {
+  struct TempStorage_Offsets {
+    uint16_t compacted_offset[NumWriteBufferItems];
+  };
+  struct TempStorage_Symbols {
+    OutputT compacted_symbols[NumWriteBufferItems];
+  };
+  using offset_cache_t =
+    ::cuda::std::conditional_t<DiscardIndexOutput, cub::NullType, TempStorage_Offsets>;
+  using symbol_cache_t = ::cuda::std::
+    conditional_t<DiscardTranslatedOutput, cub::Uninitialized<cub::NullType>, TempStorage_Symbols>;
+  struct TempStorage_ : offset_cache_t, symbol_cache_t {};
+
+  __device__ __forceinline__ TempStorage_& PrivateStorage()
+  {
+    __shared__ TempStorage private_storage;
+    return private_storage.Alias();
+  }
+  TempStorage_& temp_storage;
+
+ public:
+  struct TempStorage : cub::Uninitialized<TempStorage_> {};
+
+  __device__ __forceinline__ WriteCoalescingCallbackWrapper(TransducerTableT transducer_table,
+                                                            TransducedOutItT out_it,
+                                                            TransducedIndexOutItT out_idx_it,
+                                                            uint32_t thread_out_offset,
+                                                            uint32_t tile_out_offset,
+                                                            uint32_t tile_in_offset,
+                                                            uint32_t tile_out_count)
+    : temp_storage(PrivateStorage()),
+      transducer_table(transducer_table),
+      out_it(out_it),
+      out_idx_it(out_idx_it),
+      thread_out_offset(thread_out_offset),
+      tile_out_offset(tile_out_offset),
+      tile_in_offset(tile_in_offset),
+      tile_out_count(tile_out_count)
+  {
+  }
+
+  template <typename OffsetT>
+  __device__ __forceinline__ void Init(OffsetT const& offset)
+  {
+    this->in_offset = offset;
+  }
+
+  template <typename CharIndexT, typename StateIndexT, typename SymbolIndexT, typename SymbolT>
+  __device__ __forceinline__ void ReadSymbol(CharIndexT const character_index,
+                                             StateIndexT const old_state,
+                                             StateIndexT const new_state,
+                                             SymbolIndexT const symbol_id,
+                                             SymbolT const read_symbol)
+  {
+    uint32_t const count = transducer_table(old_state, symbol_id, read_symbol);
+    for (uint32_t out_char = 0; out_char < count; out_char++) {
+      if constexpr (!DiscardIndexOutput) {
+        temp_storage.compacted_offset[thread_out_offset + out_char - tile_out_offset] =
+          in_offset + character_index - tile_in_offset;
+      }
+      if constexpr (!DiscardTranslatedOutput) {
+        temp_storage.compacted_symbols[thread_out_offset + out_char - tile_out_offset] =
+          transducer_table(old_state, symbol_id, out_char, read_symbol);
+      }
+    }
+    thread_out_offset += count;
+  }
+
+  __device__ __forceinline__ void TearDown()
+  {
+    __syncthreads();
+    if constexpr (!DiscardTranslatedOutput) {
+      for (thread_index_type out_char = threadIdx.x; out_char < tile_out_count;
+           out_char += blockDim.x) {
+        out_it[tile_out_offset + out_char] = temp_storage.compacted_symbols[out_char];
+      }
+    }
+    if constexpr (!DiscardIndexOutput) {
+      for (thread_index_type out_char = threadIdx.x; out_char < tile_out_count;
+           out_char += blockDim.x) {
+        out_idx_it[tile_out_offset + out_char] =
+          temp_storage.compacted_offset[out_char] + tile_in_offset;
+      }
+    }
+    __syncthreads();
+  }
+
+ public:
+  TransducerTableT const transducer_table;
+  TransducedOutItT out_it;
+  TransducedIndexOutItT out_idx_it;
+  uint32_t thread_out_offset;
+  uint32_t tile_out_offset;
+  uint32_t tile_in_offset;
+  uint32_t in_offset;
+  uint32_t tile_out_count;
 };
 
 /**
@@ -121,23 +346,26 @@ class DFASimulationCallbackWrapper {
 template <int32_t NUM_INSTANCES, typename TransitionTableT>
 class StateVectorTransitionOp {
  public:
-  __host__ __device__ __forceinline__ StateVectorTransitionOp(
-    TransitionTableT const& transition_table, std::array<StateIndexT, NUM_INSTANCES>& state_vector)
+  __device__ __forceinline__
+  StateVectorTransitionOp(TransitionTableT const& transition_table,
+                          cuda::std::array<StateIndexT, NUM_INSTANCES>& state_vector)
     : transition_table(transition_table), state_vector(state_vector)
   {
   }
 
-  template <typename CharIndexT, typename SymbolIndexT>
-  __host__ __device__ __forceinline__ void ReadSymbol(CharIndexT const& character_index,
-                                                      SymbolIndexT const read_symbol_id) const
+  template <typename CharIndexT, typename SymbolIndexT, typename SymbolT>
+  __device__ __forceinline__ void ReadSymbol(CharIndexT const& character_index,
+                                             SymbolIndexT const& read_symbol_id,
+                                             SymbolT const& read_symbol) const
   {
+#pragma unroll
     for (int32_t i = 0; i < NUM_INSTANCES; ++i) {
       state_vector[i] = transition_table(state_vector[i], read_symbol_id);
     }
   }
 
  public:
-  std::array<StateIndexT, NUM_INSTANCES>& state_vector;
+  cuda::std::array<StateIndexT, NUM_INSTANCES>& state_vector;
   TransitionTableT const& transition_table;
 };
 
@@ -147,22 +375,23 @@ struct StateTransitionOp {
   TransitionTableT const& transition_table;
   CallbackOpT& callback_op;
 
-  __host__ __device__ __forceinline__ StateTransitionOp(TransitionTableT const& transition_table,
-                                                        StateIndexT state,
-                                                        CallbackOpT& callback_op)
+  __device__ __forceinline__ StateTransitionOp(TransitionTableT const& transition_table,
+                                               StateIndexT state,
+                                               CallbackOpT& callback_op)
     : transition_table(transition_table), state(state), callback_op(callback_op)
   {
   }
 
-  template <typename CharIndexT, typename SymbolIndexT>
-  __host__ __device__ __forceinline__ void ReadSymbol(CharIndexT const& character_index,
-                                                      SymbolIndexT const& read_symbol_id)
+  template <typename CharIndexT, typename SymbolIndexT, typename SymbolT>
+  __device__ __forceinline__ void ReadSymbol(CharIndexT const& character_index,
+                                             SymbolIndexT const& read_symbol_id,
+                                             SymbolT const& read_symbol)
   {
     // Remember what state we were in before we made the transition
     StateIndexT previous_state = state;
 
     state = transition_table(state, read_symbol_id);
-    callback_op.ReadSymbol(character_index, previous_state, state, read_symbol_id);
+    callback_op.ReadSymbol(character_index, previous_state, state, read_symbol_id, read_symbol);
   }
 };
 
@@ -183,10 +412,9 @@ struct AgentDFA {
   static constexpr uint32_t SYMBOLS_PER_BLOCK  = BLOCK_THREADS * SYMBOLS_PER_THREAD;
 
   static constexpr uint32_t MIN_UINTS_PER_BLOCK =
-    CUB_QUOTIENT_CEILING(SYMBOLS_PER_BLOCK, sizeof(AliasedLoadT));
-  static constexpr uint32_t UINTS_PER_THREAD =
-    CUB_QUOTIENT_CEILING(MIN_UINTS_PER_BLOCK, BLOCK_THREADS);
-  static constexpr uint32_t UINTS_PER_BLOCK        = UINTS_PER_THREAD * BLOCK_THREADS;
+    cuda::ceil_div<uint32_t>(SYMBOLS_PER_BLOCK, sizeof(AliasedLoadT));
+  static constexpr uint32_t UINTS_PER_THREAD = cuda::ceil_div(MIN_UINTS_PER_BLOCK, BLOCK_THREADS);
+  static constexpr uint32_t UINTS_PER_BLOCK  = UINTS_PER_THREAD * BLOCK_THREADS;
   static constexpr uint32_t SYMBOLS_PER_UINT_BLOCK = UINTS_PER_BLOCK * sizeof(AliasedLoadT);
 
   //------------------------------------------------------------------------------
@@ -215,22 +443,19 @@ struct AgentDFA {
   {
   }
 
-  template <int32_t NUM_SYMBOLS,
-            typename SymbolMatcherT,
-            typename CallbackOpT,
-            int32_t IS_FULL_BLOCK>
+  template <int32_t NUM_SYMBOLS, typename SymbolMatcherT, typename CallbackOpT, bool IS_FULL_BLOCK>
   __device__ __forceinline__ static void ThreadParse(SymbolMatcherT const& symbol_matcher,
                                                      CharT const* chars,
                                                      SymbolIndexT const& max_num_chars,
                                                      CallbackOpT callback_op,
-                                                     cub::Int2Type<IS_FULL_BLOCK> /*IS_FULL_BLOCK*/)
+                                                     cuda::std::bool_constant<IS_FULL_BLOCK>)
   {
     // Iterate over symbols
 #pragma unroll
     for (int32_t i = 0; i < NUM_SYMBOLS; ++i) {
       if (IS_FULL_BLOCK || threadIdx.x * SYMBOLS_PER_THREAD + i < max_num_chars) {
         auto matched_id = symbol_matcher(chars[i]);
-        callback_op.ReadSymbol(i, matched_id);
+        callback_op.ReadSymbol(i, matched_id, chars[i]);
       }
     }
   }
@@ -238,30 +463,33 @@ struct AgentDFA {
   template <int32_t NUM_SYMBOLS,
             typename SymbolMatcherT,
             typename StateTransitionOpT,
-            int32_t IS_FULL_BLOCK>
-  __device__ __forceinline__ void GetThreadStateTransitions(
-    SymbolMatcherT const& symbol_matcher,
-    CharT const* chars,
-    SymbolIndexT const& max_num_chars,
-    StateTransitionOpT& state_transition_op,
-    cub::Int2Type<IS_FULL_BLOCK> /*IS_FULL_BLOCK*/)
+            bool IS_FULL_BLOCK>
+  __device__ __forceinline__ void GetThreadStateTransitions(SymbolMatcherT const& symbol_matcher,
+                                                            CharT const* chars,
+                                                            SymbolIndexT const& max_num_chars,
+                                                            StateTransitionOpT& state_transition_op,
+                                                            cuda::std::bool_constant<IS_FULL_BLOCK>)
   {
-    ThreadParse<NUM_SYMBOLS>(
-      symbol_matcher, chars, max_num_chars, state_transition_op, cub::Int2Type<IS_FULL_BLOCK>());
+    ThreadParse<NUM_SYMBOLS>(symbol_matcher,
+                             chars,
+                             max_num_chars,
+                             state_transition_op,
+                             cuda::std::bool_constant<IS_FULL_BLOCK>());
   }
 
   //---------------------------------------------------------------------
   // LOADING FULL BLOCK OF CHARACTERS, NON-ALIASED
   //---------------------------------------------------------------------
-  __device__ __forceinline__ void LoadBlock(CharT const* d_chars,
+  template <typename CharInItT>
+  __device__ __forceinline__ void LoadBlock(CharInItT d_chars,
                                             OffsetT const block_offset,
                                             OffsetT const num_total_symbols,
-                                            cub::Int2Type<true> /*IS_FULL_BLOCK*/,
-                                            cub::Int2Type<1> /*ALIGNMENT*/)
+                                            cuda::std::true_type /*IS_FULL_BLOCK*/,
+                                            cuda::std::integral_constant<int, 1> /*ALIGNMENT*/)
   {
     CharT thread_chars[SYMBOLS_PER_THREAD];
 
-    CharT const* d_block_symbols = d_chars + block_offset;
+    CharInItT d_block_symbols = d_chars + block_offset;
     cub::LoadDirectStriped<BLOCK_THREADS>(threadIdx.x, d_block_symbols, thread_chars);
 
 #pragma unroll
@@ -273,11 +501,12 @@ struct AgentDFA {
   //---------------------------------------------------------------------
   // LOADING PARTIAL BLOCK OF CHARACTERS, NON-ALIASED
   //---------------------------------------------------------------------
-  __device__ __forceinline__ void LoadBlock(CharT const* d_chars,
+  template <typename CharInItT>
+  __device__ __forceinline__ void LoadBlock(CharInItT d_chars,
                                             OffsetT const block_offset,
                                             OffsetT const num_total_symbols,
-                                            cub::Int2Type<false> /*IS_FULL_BLOCK*/,
-                                            cub::Int2Type<1> /*ALIGNMENT*/)
+                                            cuda::std::false_type /*IS_FULL_BLOCK*/,
+                                            cuda::std::integral_constant<int, 1> /*ALIGNMENT*/)
   {
     CharT thread_chars[SYMBOLS_PER_THREAD];
 
@@ -286,7 +515,7 @@ struct AgentDFA {
     // Last unit to be loaded is IDIV_CEIL(#SYM, SYMBOLS_PER_UNIT)
     OffsetT num_total_chars = num_total_symbols - block_offset;
 
-    CharT const* d_block_symbols = d_chars + block_offset;
+    CharInItT d_block_symbols = d_chars + block_offset;
     cub::LoadDirectStriped<BLOCK_THREADS>(
       threadIdx.x, d_block_symbols, thread_chars, num_total_chars);
 
@@ -299,11 +528,12 @@ struct AgentDFA {
   //---------------------------------------------------------------------
   // LOADING FULL BLOCK OF CHARACTERS, ALIASED
   //---------------------------------------------------------------------
-  __device__ __forceinline__ void LoadBlock(CharT const* d_chars,
-                                            OffsetT const block_offset,
-                                            OffsetT const num_total_symbols,
-                                            cub::Int2Type<true> /*IS_FULL_BLOCK*/,
-                                            cub::Int2Type<sizeof(AliasedLoadT)> /*ALIGNMENT*/)
+  __device__ __forceinline__ void LoadBlock(
+    CharT const* d_chars,
+    OffsetT const block_offset,
+    OffsetT const num_total_symbols,
+    cuda::std::true_type /*IS_FULL_BLOCK*/,
+    cuda::std::integral_constant<int, sizeof(AliasedLoadT)> /*ALIGNMENT*/)
   {
     AliasedLoadT thread_units[UINTS_PER_THREAD];
 
@@ -320,11 +550,12 @@ struct AgentDFA {
   //---------------------------------------------------------------------
   // LOADING PARTIAL BLOCK OF CHARACTERS, ALIASED
   //---------------------------------------------------------------------
-  __device__ __forceinline__ void LoadBlock(CharT const* d_chars,
-                                            OffsetT const block_offset,
-                                            OffsetT const num_total_symbols,
-                                            cub::Int2Type<false> /*IS_FULL_BLOCK*/,
-                                            cub::Int2Type<sizeof(AliasedLoadT)> /*ALIGNMENT*/)
+  __device__ __forceinline__ void LoadBlock(
+    CharT const* d_chars,
+    OffsetT const block_offset,
+    OffsetT const num_total_symbols,
+    cuda::std::false_type /*IS_FULL_BLOCK*/,
+    cuda::std::integral_constant<int, sizeof(AliasedLoadT)> /*ALIGNMENT*/)
   {
     AliasedLoadT thread_units[UINTS_PER_THREAD];
 
@@ -332,7 +563,7 @@ struct AgentDFA {
 
     // Last unit to be loaded is IDIV_CEIL(#SYM, SYMBOLS_PER_UNIT)
     OffsetT num_total_units =
-      CUB_QUOTIENT_CEILING(num_total_symbols - block_offset, sizeof(AliasedLoadT));
+      cuda::ceil_div(num_total_symbols - block_offset, sizeof(AliasedLoadT));
 
     AliasedLoadT const* d_block_symbols =
       reinterpret_cast<AliasedLoadT const*>(d_chars + block_offset);
@@ -353,22 +584,55 @@ struct AgentDFA {
                                             OffsetT const num_total_symbols)
   {
     // Check if pointer is aligned to four bytes
-    if (((uintptr_t)(const void*)(d_chars + block_offset) % 4) == 0) {
+    if (((uintptr_t)(void const*)(d_chars + block_offset) % 4) == 0) {
       if (block_offset + SYMBOLS_PER_UINT_BLOCK < num_total_symbols) {
-        LoadBlock(
-          d_chars, block_offset, num_total_symbols, cub::Int2Type<true>(), cub::Int2Type<4>());
+        LoadBlock(d_chars,
+                  block_offset,
+                  num_total_symbols,
+                  cuda::std::true_type(),
+                  cuda::std::integral_constant<int, 4>());
       } else {
-        LoadBlock(
-          d_chars, block_offset, num_total_symbols, cub::Int2Type<false>(), cub::Int2Type<1>());
+        LoadBlock(d_chars,
+                  block_offset,
+                  num_total_symbols,
+                  cuda::std::false_type(),
+                  cuda::std::integral_constant<int, 1>());
       }
     } else {
       if (block_offset + SYMBOLS_PER_UINT_BLOCK < num_total_symbols) {
-        LoadBlock(
-          d_chars, block_offset, num_total_symbols, cub::Int2Type<true>(), cub::Int2Type<1>());
+        LoadBlock(d_chars,
+                  block_offset,
+                  num_total_symbols,
+                  cuda::std::true_type(),
+                  cuda::std::integral_constant<int, 1>());
       } else {
-        LoadBlock(
-          d_chars, block_offset, num_total_symbols, cub::Int2Type<false>(), cub::Int2Type<1>());
+        LoadBlock(d_chars,
+                  block_offset,
+                  num_total_symbols,
+                  cuda::std::false_type(),
+                  cuda::std::integral_constant<int, 1>());
       }
+    }
+  }
+
+  template <typename CharInItT>
+  __device__ __forceinline__ void LoadBlock(CharInItT d_chars,
+                                            OffsetT const block_offset,
+                                            OffsetT const num_total_symbols)
+  {
+    // Check if we are loading a full tile of data
+    if (block_offset + SYMBOLS_PER_UINT_BLOCK < num_total_symbols) {
+      LoadBlock(d_chars,
+                block_offset,
+                num_total_symbols,
+                cuda::std::true_type(),
+                cuda::std::integral_constant<int, 1>());
+    } else {
+      LoadBlock(d_chars,
+                block_offset,
+                num_total_symbols,
+                cuda::std::false_type(),
+                cuda::std::integral_constant<int, 1>());
     }
   }
 
@@ -376,10 +640,10 @@ struct AgentDFA {
   __device__ __forceinline__ void GetThreadStateTransitionVector(
     SymbolMatcherT const& symbol_matcher,
     TransitionTableT const& transition_table,
-    CharT const* d_chars,
+    SymbolItT d_chars,
     OffsetT const block_offset,
     OffsetT const num_total_symbols,
-    std::array<StateIndexT, NUM_STATES>& state_vector)
+    cuda::std::array<StateIndexT, NUM_STATES>& state_vector)
   {
     using StateVectorTransitionOpT = StateVectorTransitionOp<NUM_STATES, TransitionTableT>;
 
@@ -397,31 +661,31 @@ struct AgentDFA {
     __syncthreads();
 
     // Thread's symbols
-    CharT* t_chars = &temp_storage.chars[threadIdx.x * SYMBOLS_PER_THREAD];
+    CharT const* t_chars = &temp_storage.chars[threadIdx.x * SYMBOLS_PER_THREAD];
 
     // Parse thread's symbols and transition the state-vector
     if (is_full_block) {
       GetThreadStateTransitions<SYMBOLS_PER_THREAD>(
-        symbol_matcher, t_chars, num_block_chars, transition_op, cub::Int2Type<true>());
+        symbol_matcher, t_chars, num_block_chars, transition_op, cuda::std::true_type());
     } else {
       GetThreadStateTransitions<SYMBOLS_PER_THREAD>(
-        symbol_matcher, t_chars, num_block_chars, transition_op, cub::Int2Type<false>());
+        symbol_matcher, t_chars, num_block_chars, transition_op, cuda::std::false_type());
     }
   }
 
-  template <int32_t BYPASS_LOAD,
+  template <bool BYPASS_LOAD,
             typename SymbolMatcherT,
             typename TransitionTableT,
             typename CallbackOpT>
   __device__ __forceinline__ void GetThreadStateTransitions(
     SymbolMatcherT const& symbol_matcher,
     TransitionTableT const& transition_table,
-    CharT const* d_chars,
+    SymbolItT d_chars,
     OffsetT const block_offset,
     OffsetT const num_total_symbols,
     StateIndexT& state,
     CallbackOpT& callback_op,
-    cub::Int2Type<BYPASS_LOAD>)
+    cuda::std::bool_constant<BYPASS_LOAD>)
   {
     using StateTransitionOpT = StateTransitionOp<CallbackOpT, TransitionTableT>;
 
@@ -447,10 +711,10 @@ struct AgentDFA {
     // Parse thread's symbols and transition the state-vector
     if (is_full_block) {
       GetThreadStateTransitions<SYMBOLS_PER_THREAD>(
-        symbol_matcher, t_chars, num_block_chars, transition_op, cub::Int2Type<true>());
+        symbol_matcher, t_chars, num_block_chars, transition_op, cuda::std::true_type());
     } else {
       GetThreadStateTransitions<SYMBOLS_PER_THREAD>(
-        symbol_matcher, t_chars, num_block_chars, transition_op, cub::Int2Type<false>());
+        symbol_matcher, t_chars, num_block_chars, transition_op, cuda::std::false_type());
     }
 
     callback_op.TearDown();
@@ -469,7 +733,7 @@ template <bool IS_TRANS_VECTOR_PASS,
           typename TransducedOutItT,
           typename TransducedIndexOutItT,
           typename TransducedCountOutItT>
-__launch_bounds__(int32_t(AgentDFAPolicy::BLOCK_THREADS)) __global__
+__launch_bounds__(int32_t(AgentDFAPolicy::BLOCK_THREADS)) CUDF_KERNEL
   void SimulateDFAKernel(DfaT dfa,
                          SymbolItT d_chars,
                          OffsetT const num_chars,
@@ -515,13 +779,50 @@ __launch_bounds__(int32_t(AgentDFAPolicy::BLOCK_THREADS)) __global__
   // The state transition vector passed on to the second stage of the algorithm
   StateVectorT out_state_vector;
 
+  using OutSymbolT = typename DfaT::OutSymbolT;
+  // static constexpr int32_t MIN_TRANSLATED_OUT = DfaT::MIN_TRANSLATED_OUT;
+  static constexpr int32_t num_max_translated_out = DfaT::MAX_TRANSLATED_OUT;
+  static constexpr bool discard_out_index =
+    ::cuda::std::is_same<TransducedIndexOutItT, thrust::discard_iterator<>>::value;
+  static constexpr bool discard_out_it =
+    ::cuda::std::is_same<TransducedOutItT, thrust::discard_iterator<>>::value;
+  using NonWriteCoalescingT =
+    DFAWriteCallbackWrapper<num_max_translated_out,
+                            decltype(dfa.InitTranslationTable(transducer_table_storage)),
+                            TransducedOutItT,
+                            TransducedIndexOutItT>;
+
+  using WriteCoalescingT =
+    WriteCoalescingCallbackWrapper<discard_out_index,
+                                   discard_out_it,
+                                   num_max_translated_out * SYMBOLS_PER_BLOCK,
+                                   OutSymbolT,
+                                   decltype(dfa.InitTranslationTable(transducer_table_storage)),
+                                   TransducedOutItT,
+                                   TransducedIndexOutItT>;
+
+  static constexpr bool is_translation_pass = (!IS_TRANS_VECTOR_PASS) || IS_SINGLE_PASS;
+
+  // Use write-coalescing only if the worst-case output size per tile fits into shared memory
+  static constexpr bool can_use_smem_cache =
+    (sizeof(typename WriteCoalescingT::TempStorage) + sizeof(typename AgentDfaSimT::TempStorage) +
+     sizeof(typename DfaT::SymbolGroupStorageT) + sizeof(typename DfaT::TransitionTableStorageT) +
+     sizeof(typename DfaT::TranslationTableStorageT)) < (48 * 1024);
+  static constexpr bool use_smem_cache =
+    is_translation_pass and
+    (sizeof(typename WriteCoalescingT::TempStorage) <= AgentDFAPolicy::SMEM_THRESHOLD) and
+    can_use_smem_cache;
+
+  using DFASimulationCallbackWrapperT =
+    cuda::std::conditional_t<use_smem_cache, WriteCoalescingT, NonWriteCoalescingT>;
+
   // Stage 1: Compute the state-transition vector
   if (IS_TRANS_VECTOR_PASS || IS_SINGLE_PASS) {
     // Keeping track of the state for each of the <NUM_STATES> state machines
-    std::array<StateIndexT, NUM_STATES> state_vector;
+    cuda::std::array<StateIndexT, NUM_STATES> state_vector;
 
     // Initialize the seed state transition vector with the identity vector
-    thrust::sequence(thrust::seq, std::begin(state_vector), std::end(state_vector));
+    thrust::sequence(thrust::seq, cuda::std::begin(state_vector), cuda::std::end(state_vector));
 
     // Compute the state transition vector
     agent_dfa.GetThreadStateTransitionVector<NUM_STATES>(symbol_matcher,
@@ -553,7 +854,7 @@ __launch_bounds__(int32_t(AgentDFAPolicy::BLOCK_THREADS)) __global__
     // -> first block/tile: write out block aggregate as the "tile's" inclusive (i.e., the one that
     // incorporates all preceding blocks/tiles results)
     //------------------------------------------------------------------------------
-    if (IS_SINGLE_PASS) {
+    if constexpr (IS_SINGLE_PASS) {
       uint32_t tile_idx             = blockIdx.x;
       using StateVectorCompositeOpT = VectorCompositeOp<NUM_STATES>;
 
@@ -600,10 +901,7 @@ __launch_bounds__(int32_t(AgentDFAPolicy::BLOCK_THREADS)) __global__
     }
 
     // Perform finite-state machine simulation, computing size of transduced output
-    DFASimulationCallbackWrapper<decltype(dfa.InitTranslationTable(transducer_table_storage)),
-                                 TransducedOutItT,
-                                 TransducedIndexOutItT>
-      callback_wrapper(transducer_table, transduced_out_it, transduced_out_idx_it);
+    DFACountCallbackWrapper count_chars_callback_op{transducer_table};
 
     StateIndexT t_start_state = state;
     agent_dfa.GetThreadStateTransitions(symbol_matcher,
@@ -612,13 +910,13 @@ __launch_bounds__(int32_t(AgentDFAPolicy::BLOCK_THREADS)) __global__
                                         blockIdx.x * SYMBOLS_PER_BLOCK,
                                         num_chars,
                                         state,
-                                        callback_wrapper,
-                                        cub::Int2Type<IS_SINGLE_PASS>());
+                                        count_chars_callback_op,
+                                        cuda::std::bool_constant<IS_SINGLE_PASS>());
 
     __syncthreads();
 
     using OffsetPrefixScanCallbackOpT_ =
-      cub::TilePrefixCallbackOp<OffsetT, cub::Sum, OutOffsetScanTileState>;
+      cub::TilePrefixCallbackOp<OffsetT, cuda::std::plus<>, OutOffsetScanTileState>;
 
     using OutOffsetBlockScan =
       cub::BlockScan<OffsetT, BLOCK_THREADS, cub::BlockScanAlgorithm::BLOCK_SCAN_WARP_SCANS>;
@@ -627,15 +925,18 @@ __launch_bounds__(int32_t(AgentDFAPolicy::BLOCK_THREADS)) __global__
     __shared__ typename OffsetPrefixScanCallbackOpT_::TempStorage prefix_callback_temp_storage;
 
     uint32_t tile_idx = blockIdx.x;
+    uint32_t tile_out_offset{};
+    uint32_t tile_out_count{};
+    uint32_t thread_out_offset{};
     if (tile_idx == 0) {
       OffsetT block_aggregate = 0;
       OutOffsetBlockScan(scan_temp_storage)
-        .ExclusiveScan(callback_wrapper.out_count,
-                       callback_wrapper.out_count,
+        .ExclusiveScan(count_chars_callback_op.out_count,
+                       thread_out_offset,
                        static_cast<OffsetT>(0),
-                       cub::Sum{},
+                       cuda::std::plus{},
                        block_aggregate);
-
+      tile_out_count = block_aggregate;
       if (threadIdx.x == 0 /*and not IS_LAST_TILE*/) {
         offset_tile_state.SetInclusive(0, block_aggregate);
       }
@@ -645,26 +946,33 @@ __launch_bounds__(int32_t(AgentDFAPolicy::BLOCK_THREADS)) __global__
       }
     } else {
       auto prefix_op = OffsetPrefixScanCallbackOpT_(
-        offset_tile_state, prefix_callback_temp_storage, cub::Sum{}, tile_idx);
+        offset_tile_state, prefix_callback_temp_storage, cuda::std::plus{}, tile_idx);
 
       OutOffsetBlockScan(scan_temp_storage)
         .ExclusiveScan(
-          callback_wrapper.out_count, callback_wrapper.out_count, cub::Sum{}, prefix_op);
-
+          count_chars_callback_op.out_count, thread_out_offset, cuda::std::plus{}, prefix_op);
+      tile_out_offset = prefix_op.GetExclusivePrefix();
+      tile_out_count  = prefix_op.GetBlockAggregate();
       if (tile_idx == gridDim.x - 1 && threadIdx.x == 0) {
         *d_num_transduced_out_it = prefix_op.GetInclusivePrefix();
       }
     }
 
-    callback_wrapper.write = true;
+    DFASimulationCallbackWrapperT write_translated_callback_op{transducer_table,
+                                                               transduced_out_it,
+                                                               transduced_out_idx_it,
+                                                               thread_out_offset,
+                                                               tile_out_offset,
+                                                               blockIdx.x * SYMBOLS_PER_BLOCK,
+                                                               tile_out_count};
     agent_dfa.GetThreadStateTransitions(symbol_matcher,
                                         transition_table,
                                         d_chars,
                                         blockIdx.x * SYMBOLS_PER_BLOCK,
                                         num_chars,
                                         t_start_state,
-                                        callback_wrapper,
-                                        cub::Int2Type<true>());
+                                        write_translated_callback_op,
+                                        cuda::std::true_type());
   }
 }
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <quantiles/quantiles_util.hpp>
+#include "quantiles/quantiles_util.hpp"
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
@@ -25,15 +25,18 @@
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/dictionary/detail/iterator.cuh>
 #include <cudf/dictionary/dictionary_column_view.hpp>
+#include <cudf/quantiles.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/functional>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/permutation_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
@@ -52,7 +55,7 @@ struct quantile_functor {
   interpolation interp;
   bool retain_types;
   rmm::cuda_stream_view stream;
-  rmm::mr::device_memory_resource* mr;
+  rmm::device_async_resource_ref mr;
 
   template <typename T>
   std::enable_if_t<not std::is_arithmetic_v<T> and not cudf::is_fixed_point<T>(),
@@ -86,7 +89,7 @@ struct quantile_functor {
     auto d_output = mutable_column_device_view::create(output->mutable_view(), stream);
 
     auto q_device =
-      cudf::detail::make_device_uvector_sync(q, stream, rmm::mr::get_current_device_resource());
+      cudf::detail::make_device_uvector(q, stream, cudf::get_current_device_resource_ref());
 
     if (!cudf::is_dictionary(input.type())) {
       auto sorted_data =
@@ -95,9 +98,11 @@ struct quantile_functor {
                         q_device.begin(),
                         q_device.end(),
                         d_output->template begin<StorageResult>(),
-                        [sorted_data, interp = interp, size = size] __device__(double q) {
-                          return select_quantile_data<StorageResult>(sorted_data, size, q, interp);
-                        });
+                        cuda::proclaim_return_type<StorageResult>(
+                          [sorted_data, interp = interp, size = size] __device__(double q) {
+                            return select_quantile_data<StorageResult>(
+                              sorted_data, size, q, interp);
+                          }));
     } else {
       auto sorted_data = thrust::make_permutation_iterator(
         dictionary::detail::make_dictionary_iterator<T>(*d_input), ordered_indices);
@@ -105,15 +110,18 @@ struct quantile_functor {
                         q_device.begin(),
                         q_device.end(),
                         d_output->template begin<StorageResult>(),
-                        [sorted_data, interp = interp, size = size] __device__(double q) {
-                          return select_quantile_data<StorageResult>(sorted_data, size, q, interp);
-                        });
+                        cuda::proclaim_return_type<StorageResult>(
+                          [sorted_data, interp = interp, size = size] __device__(double q) {
+                            return select_quantile_data<StorageResult>(
+                              sorted_data, size, q, interp);
+                          }));
     }
 
     if (input.nullable()) {
       auto sorted_validity = thrust::make_transform_iterator(
         ordered_indices,
-        [input = *d_input] __device__(size_type idx) { return input.is_valid_nocheck(idx); });
+        cuda::proclaim_return_type<bool>(
+          [input = *d_input] __device__(size_type idx) { return input.is_valid_nocheck(idx); }));
 
       auto [mask, null_count] = valid_if(
         q_device.begin(),
@@ -139,7 +147,7 @@ std::unique_ptr<column> quantile(column_view const& input,
                                  interpolation interp,
                                  bool retain_types,
                                  rmm::cuda_stream_view stream,
-                                 rmm::mr::device_memory_resource* mr)
+                                 rmm::device_async_resource_ref mr)
 {
   auto functor = quantile_functor<exact, SortMapIterator>{
     ordered_indices, size, q, interp, retain_types, stream, mr};
@@ -157,7 +165,7 @@ std::unique_ptr<column> quantile(column_view const& input,
                                  column_view const& indices,
                                  bool exact,
                                  rmm::cuda_stream_view stream,
-                                 rmm::mr::device_memory_resource* mr)
+                                 rmm::device_async_resource_ref mr)
 {
   if (indices.is_empty()) {
     auto begin = thrust::make_counting_iterator<size_type>(0);
@@ -187,10 +195,11 @@ std::unique_ptr<column> quantile(column_view const& input,
                                  interpolation interp,
                                  column_view const& ordered_indices,
                                  bool exact,
-                                 rmm::mr::device_memory_resource* mr)
+                                 rmm::cuda_stream_view stream,
+                                 rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::quantile(input, q, interp, ordered_indices, exact, cudf::get_default_stream(), mr);
+  return detail::quantile(input, q, interp, ordered_indices, exact, stream, mr);
 }
 
 }  // namespace cudf

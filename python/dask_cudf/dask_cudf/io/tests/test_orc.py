@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2025, NVIDIA CORPORATION.
 
 import glob
 import os
@@ -85,7 +85,6 @@ def test_read_orc_filtered(tmpdir, engine, predicate, expected_len):
 
 
 def test_read_orc_first_file_empty(tmpdir):
-
     # Write a 3-file dataset where the first file is empty
     # See: https://github.com/rapidsai/cudf/issues/8011
     path = str(tmpdir)
@@ -112,7 +111,6 @@ def test_read_orc_first_file_empty(tmpdir):
     ],
 )
 def test_to_orc(tmpdir, dtypes, compression, compute):
-
     # Create cudf and dask_cudf dataframes
     df = cudf.datasets.randomdata(nrows=10, dtypes=dtypes, seed=1)
     df = df.set_index("index").sort_index()
@@ -143,3 +141,17 @@ def test_to_orc(tmpdir, dtypes, compression, compute):
     # the cudf dataframes (df and df_read)
     dd.assert_eq(df, ddf_read)
     dd.assert_eq(df_read, ddf_read)
+
+
+def test_deprecated_api_paths(tmpdir):
+    df = dask_cudf.DataFrame.from_dict({"a": range(100)}, npartitions=1)
+    path = tmpdir.join("test.orc")
+    # Top-level to_orc function is deprecated
+    with pytest.warns(match="dask_cudf.to_orc is now deprecated"):
+        dask_cudf.to_orc(df, path, write_index=False)
+
+    # Encourage top-level read_orc import only
+    paths = glob.glob(str(path) + "/*.orc")
+    with pytest.warns(match="dask_cudf.io.read_orc is now deprecated"):
+        df2 = dask_cudf.io.read_orc(paths)
+    dd.assert_eq(df, df2, check_divisions=False)

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,12 +19,11 @@
 #include <cudf/column/column.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
-
-#include <rmm/mr/device/per_device_resource.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <memory>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 /**
  * @addtogroup column_reshape
  * @{
@@ -65,6 +64,7 @@ namespace cudf {
  *
  * @param input_table Table to explode.
  * @param explode_column_idx Column index to explode inside the table.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned column's device memory.
  *
  * @return A new table with explode_col exploded.
@@ -72,7 +72,8 @@ namespace cudf {
 std::unique_ptr<table> explode(
   table_view const& input_table,
   size_type explode_column_idx,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Explodes a list column's elements and includes a position column.
@@ -108,6 +109,7 @@ std::unique_ptr<table> explode(
  *
  * @param input_table Table to explode.
  * @param explode_column_idx Column index to explode inside the table.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned column's device memory.
  *
  * @return A new table with exploded value and position. The column order of return table is
@@ -116,7 +118,8 @@ std::unique_ptr<table> explode(
 std::unique_ptr<table> explode_position(
   table_view const& input_table,
   size_type explode_column_idx,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Explodes a list column's elements retaining any null entries or empty lists inside.
@@ -151,6 +154,7 @@ std::unique_ptr<table> explode_position(
  *
  * @param input_table Table to explode.
  * @param explode_column_idx Column index to explode inside the table.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned column's device memory.
  *
  * @return A new table with explode_col exploded.
@@ -158,7 +162,8 @@ std::unique_ptr<table> explode_position(
 std::unique_ptr<table> explode_outer(
   table_view const& input_table,
   size_type explode_column_idx,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Explodes a list column's elements retaining any null entries or empty lists and includes a
@@ -195,6 +200,7 @@ std::unique_ptr<table> explode_outer(
  *
  * @param input_table Table to explode.
  * @param explode_column_idx Column index to explode inside the table.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned column's device memory.
  *
  * @return A new table with explode_col exploded.
@@ -202,8 +208,9 @@ std::unique_ptr<table> explode_outer(
 std::unique_ptr<table> explode_outer_position(
   table_view const& input_table,
   size_type explode_column_idx,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /** @} */  // end of group
 
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

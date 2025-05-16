@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -36,6 +36,8 @@ __device__ cudf::string_view strip(cudf::string_view const d_str,
                                    cudf::string_view const d_to_strip,
                                    side_type side = side_type::BOTH)
 {
+  if (d_str.empty()) { return cudf::string_view{}; }  // sanitize empty return
+
   auto is_strip_character = [d_to_strip](char_utf8 chr) -> bool {
     if (d_to_strip.empty()) return chr <= ' ';  // whitespace check
     for (auto c : d_to_strip) {

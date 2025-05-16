@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,8 +18,15 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
+//! Tdigest interfaces
 namespace tdigest {
+/**
+ * @addtogroup tdigest
+ * @{
+ * @file
+ * @brief tdigest data APIs
+ */
 
 /**
  * @brief Given a column_view containing tdigest data, an instance of this class
@@ -51,8 +58,8 @@ class tdigest_column_view : private column_view {
  public:
   tdigest_column_view(column_view const&);  ///< Construct tdigest_column_view from a column_view
   tdigest_column_view(tdigest_column_view&&)      = default;  ///< Move constructor
-  tdigest_column_view(const tdigest_column_view&) = default;  ///< Copy constructor
-  ~tdigest_column_view()                          = default;
+  tdigest_column_view(tdigest_column_view const&) = default;  ///< Copy constructor
+  ~tdigest_column_view() override                 = default;
   /**
    * @brief Copy assignment operator
    *
@@ -67,9 +74,7 @@ class tdigest_column_view : private column_view {
   tdigest_column_view& operator=(tdigest_column_view&&) = default;
 
   using column_view::size;
-  static_assert(std::is_same_v<offset_type, size_type>,
-                "offset_type is expected to be the same as size_type.");
-  using offset_iterator = offset_type const*;  ///< Iterator over offsets
+  using offset_iterator = size_type const*;  ///< Iterator over offsets
 
   // mean and weight column indices within tdigest inner struct columns
   static constexpr size_type mean_column_index{0};    ///< Mean column index
@@ -125,5 +130,6 @@ class tdigest_column_view : private column_view {
   [[nodiscard]] double const* max_begin() const;
 };
 
+/** @} */  // end of group
 }  // namespace tdigest
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

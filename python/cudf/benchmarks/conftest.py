@@ -1,4 +1,4 @@
-# Copyright (c) 2022, NVIDIA CORPORATION.
+# Copyright (c) 2022-2025, NVIDIA CORPORATION.
 
 """Defines pytest fixtures for all benchmarks.
 
@@ -40,8 +40,8 @@ Series/DataFrame we simply set `classname=index` and rely on the
 In addition to the above fixtures, we also provide the following more
 specialized fixtures:
     - rangeindex: Since RangeIndex always holds int64 data we cannot conflate
-      it with index_dtype_int64 (a true Int64Index), and it cannot hold nulls.
-      As a result, it is provided as a separate fixture.
+      it with index_dtype_int64 (a true Index with int64 dtype), and it
+      cannot hold nulls. As a result, it is provided as a separate fixture.
 """
 
 import os
@@ -56,27 +56,21 @@ import pytest_cases
 # into the main repo.
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "common"))
 
-from config import cudf  # noqa: W0611, E402, F401
-from utils import (  # noqa: E402
+from config import (
+    NUM_COLS,
+    NUM_ROWS,
+    collect_ignore,  # noqa: F401
+    cudf,
+    pytest_collection_modifyitems,  # noqa: F401
+    pytest_sessionfinish,  # noqa: F401
+    pytest_sessionstart,  # noqa: F401
+)
+from utils import (
     OrderedSet,
     collapse_fixtures,
     column_generators,
     make_fixture,
 )
-
-# Turn off isort until we upgrade to 5.8.0
-# https://github.com/pycqa/isort/issues/1594
-# isort: off
-from config import (  # noqa: W0611, E402, F401
-    NUM_COLS,
-    NUM_ROWS,
-    collect_ignore,
-    pytest_collection_modifyitems,
-    pytest_sessionfinish,
-    pytest_sessionstart,
-)
-
-# isort: on
 
 
 @pytest_cases.fixture(params=[0, 1], ids=["AxisIndex", "AxisColumn"])
@@ -89,9 +83,9 @@ fixtures = OrderedSet()
 for dtype, column_generator in column_generators.items():
 
     def make_dataframe(nr, nc, column_generator=column_generator):
-        assert nc <= len(
-            string.ascii_lowercase
-        ), "make_dataframe only supports a maximum of 26 columns"
+        assert nc <= len(string.ascii_lowercase), (
+            "make_dataframe only supports a maximum of 26 columns"
+        )
         return cudf.DataFrame(
             {
                 f"{string.ascii_lowercase[i]}": column_generator(nr)
@@ -206,7 +200,6 @@ while num_new_fixtures > 0:
         (r"_rows_\d+", ""),
         (r"_cols_\d+", ""),
     ]:
-
         collapse_fixtures(fixtures, pat, repl, globals(), idfunc)
 
     num_new_fixtures = len(fixtures) - num_fixtures

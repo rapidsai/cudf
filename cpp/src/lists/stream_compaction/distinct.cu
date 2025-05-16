@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <lists/utilities.hpp>
+#include "lists/utilities.hpp"
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/copy.hpp>
@@ -22,8 +22,11 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/stream_compaction.hpp>
 #include <cudf/lists/lists_column_view.hpp>
+#include <cudf/lists/stream_compaction.hpp>
+#include <cudf/stream_compaction.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -36,8 +39,9 @@ namespace detail {
 std::unique_ptr<column> distinct(lists_column_view const& input,
                                  null_equality nulls_equal,
                                  nan_equality nans_equal,
+                                 duplicate_keep_option keep_option,
                                  rmm::cuda_stream_view stream,
-                                 rmm::mr::device_memory_resource* mr)
+                                 rmm::device_async_resource_ref mr)
 {
   // Algorithm:
   // - Generate labels for the child elements.
@@ -48,12 +52,12 @@ std::unique_ptr<column> distinct(lists_column_view const& input,
 
   auto const child = input.get_sliced_child(stream);
   auto const labels =
-    generate_labels(input, child.size(), stream, rmm::mr::get_current_device_resource());
+    generate_labels(input, child.size(), stream, cudf::get_current_device_resource_ref());
 
   auto const distinct_table =
     cudf::detail::stable_distinct(table_view{{labels->view(), child}},  // input table
                                   std::vector<size_type>{0, 1},         // keys
-                                  duplicate_keep_option::KEEP_ANY,
+                                  keep_option,
                                   nulls_equal,
                                   nans_equal,
                                   stream,
@@ -71,15 +75,37 @@ std::unique_ptr<column> distinct(lists_column_view const& input,
                            mr);
 }
 
+std::unique_ptr<column> distinct(lists_column_view const& input,
+                                 null_equality nulls_equal,
+                                 nan_equality nans_equal,
+                                 rmm::cuda_stream_view stream,
+                                 rmm::device_async_resource_ref mr)
+{
+  return distinct(input, nulls_equal, nans_equal, duplicate_keep_option::KEEP_FIRST, stream, mr);
+}
+
 }  // namespace detail
 
 std::unique_ptr<column> distinct(lists_column_view const& input,
                                  null_equality nulls_equal,
                                  nan_equality nans_equal,
-                                 rmm::mr::device_memory_resource* mr)
+                                 duplicate_keep_option keep_option,
+                                 rmm::cuda_stream_view stream,
+                                 rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::distinct(input, nulls_equal, nans_equal, cudf::get_default_stream(), mr);
+  return detail::distinct(input, nulls_equal, nans_equal, keep_option, stream, mr);
+}
+
+std::unique_ptr<column> distinct(lists_column_view const& input,
+                                 null_equality nulls_equal,
+                                 nan_equality nans_equal,
+                                 rmm::cuda_stream_view stream,
+                                 rmm::device_async_resource_ref mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::distinct(
+    input, nulls_equal, nans_equal, duplicate_keep_option::KEEP_ANY, stream, mr);
 }
 
 }  // namespace cudf::lists

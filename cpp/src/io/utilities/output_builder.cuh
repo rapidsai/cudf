@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@
 
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -58,7 +59,7 @@ class split_device_span {
   {
   }
 
-  [[nodiscard]] constexpr reference operator[](size_type i) const
+  [[nodiscard]] __device__ constexpr reference operator[](size_type i) const
   {
     return i < _head.size() ? _head[i] : _tail[i - _head.size()];
   }
@@ -106,33 +107,33 @@ class split_device_span_iterator {
 
   [[nodiscard]] constexpr reference operator[](size_type i) const { return _span[_offset + i]; }
 
-  [[nodiscard]] constexpr friend bool operator==(const it& lhs, const it& rhs)
+  [[nodiscard]] constexpr friend bool operator==(it const& lhs, it const& rhs)
   {
     return lhs._offset == rhs._offset;
   }
 
-  [[nodiscard]] constexpr friend bool operator!=(const it& lhs, const it& rhs)
+  [[nodiscard]] constexpr friend bool operator!=(it const& lhs, it const& rhs)
   {
     return !(lhs == rhs);
   }
-  [[nodiscard]] constexpr friend bool operator<(const it& lhs, const it& rhs)
+  [[nodiscard]] constexpr friend bool operator<(it const& lhs, it const& rhs)
   {
     return lhs._offset < rhs._offset;
   }
 
-  [[nodiscard]] constexpr friend bool operator>=(const it& lhs, const it& rhs)
+  [[nodiscard]] constexpr friend bool operator>=(it const& lhs, it const& rhs)
   {
     return !(lhs < rhs);
   }
 
-  [[nodiscard]] constexpr friend bool operator>(const it& lhs, const it& rhs) { return rhs < lhs; }
+  [[nodiscard]] constexpr friend bool operator>(it const& lhs, it const& rhs) { return rhs < lhs; }
 
-  [[nodiscard]] constexpr friend bool operator<=(const it& lhs, const it& rhs)
+  [[nodiscard]] constexpr friend bool operator<=(it const& lhs, it const& rhs)
   {
     return !(lhs > rhs);
   }
 
-  [[nodiscard]] constexpr friend difference_type operator-(const it& lhs, const it& rhs)
+  [[nodiscard]] constexpr friend difference_type operator-(it const& lhs, it const& rhs)
   {
     return lhs._offset - rhs._offset;
   }
@@ -206,8 +207,8 @@ class output_builder {
   output_builder(size_type max_write_size,
                  size_type max_growth,
                  rmm::cuda_stream_view stream,
-                 rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
-    : _size{0}, _max_write_size{max_write_size}, _max_growth{max_growth}
+                 rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
+    : _max_write_size{max_write_size}, _max_growth{max_growth}
   {
     CUDF_EXPECTS(max_write_size > 0, "Internal error");
     _chunks.emplace_back(0, stream, mr);
@@ -215,9 +216,9 @@ class output_builder {
   }
 
   output_builder(output_builder&&)                 = delete;
-  output_builder(const output_builder&)            = delete;
+  output_builder(output_builder const&)            = delete;
   output_builder& operator=(output_builder&&)      = delete;
-  output_builder& operator=(const output_builder&) = delete;
+  output_builder& operator=(output_builder const&) = delete;
 
   /**
    * @brief Returns the next free chunk of `max_write_size` elements from the underlying storage.
@@ -306,8 +307,8 @@ class output_builder {
    * @param mr The memory resource used to allocate the output vector.
    * @return The output vector.
    */
-  rmm::device_uvector<T> gather(rmm::cuda_stream_view stream,
-                                rmm::mr::device_memory_resource* mr) const
+  [[nodiscard]] rmm::device_uvector<T> gather(rmm::cuda_stream_view stream,
+                                              rmm::device_async_resource_ref mr) const
   {
     rmm::device_uvector<T> output{size(), stream, mr};
     auto output_it = output.begin();
@@ -348,7 +349,7 @@ class output_builder {
     return device_span<T>{vector.data() + vector.size(), vector.capacity() - vector.size()};
   }
 
-  size_type _size;
+  size_type _size{0};
   size_type _max_write_size;
   size_type _max_growth;
   std::vector<rmm::device_uvector<T>> _chunks;

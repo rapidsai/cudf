@@ -1,24 +1,24 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 import numba.cuda
 import pytest
 
 import dask
-from dask import dataframe as dd
+from dask import array as da, dataframe as dd
 from dask.distributed import Client
 from distributed.utils_test import cleanup, loop, loop_in_thread  # noqa: F401
 
 import cudf
-from cudf.testing._utils import assert_eq
+from cudf.testing import assert_eq
 
 import dask_cudf
 
 dask_cuda = pytest.importorskip("dask_cuda")
 
 
-def more_than_two_gpus():
+def at_least_n_gpus(n):
     ngpus = len(numba.cuda.gpus)
-    return ngpus >= 2
+    return ngpus >= n
 
 
 @pytest.mark.parametrize("delayed", [True, False])
@@ -54,7 +54,7 @@ def test_merge():
 
 
 @pytest.mark.skipif(
-    not more_than_two_gpus(), reason="Machine does not have more than two GPUs"
+    not at_least_n_gpus(2), reason="Machine does not have two GPUs"
 )
 def test_ucx_seriesgroupby():
     pytest.importorskip("ucp")
@@ -77,3 +77,61 @@ def test_str_series_roundtrip():
 
             actual = dask_series.compute()
             assert_eq(actual, expected)
+
+
+def test_p2p_shuffle():
+    pytest.importorskip(
+        "pyarrow",
+        minversion="14.0.1",
+        reason="P2P shuffling requires pyarrow>=14.0.1",
+    )
+    # Check that we can use `shuffle_method="p2p"`
+    with dask_cuda.LocalCUDACluster(n_workers=1) as cluster:
+        with Client(cluster):
+            ddf = (
+                dask.datasets.timeseries(
+                    start="2000-01-01",
+                    end="2000-01-08",
+                    dtypes={"x": int},
+                )
+                .reset_index(drop=True)
+                .to_backend("cudf")
+            )
+            dd.assert_eq(
+                ddf.sort_values("x", shuffle_method="p2p").compute(),
+                ddf.compute().sort_values("x"),
+                check_index=False,
+            )
+
+
+@pytest.mark.skipif(
+    not at_least_n_gpus(3),
+    reason="Machine does not have three GPUs",
+)
+def test_unique():
+    # Using `"p2p"` can produce dispatching problems
+    # TODO: Test "p2p" after dask > 2024.4.1 is required
+    # See: https://github.com/dask/dask/pull/11040
+    with dask_cuda.LocalCUDACluster(n_workers=3) as cluster:
+        with Client(cluster):
+            df = cudf.DataFrame({"x": ["a", "b", "c", "a", "a"]})
+            ddf = dask_cudf.from_cudf(df, npartitions=2)
+            dd.assert_eq(
+                df.x.unique(),
+                ddf.x.unique().compute(),
+                check_index=False,
+            )
+
+
+def test_serialization_of_numpy_types():
+    # Dask uses numpy integers as column names, which can break cudf serialization
+    with dask_cuda.LocalCUDACluster(n_workers=1) as cluster:
+        with Client(cluster):
+            with dask.config.set(
+                {"dataframe.backend": "cudf", "array.backend": "cupy"}
+            ):
+                rng = da.random.default_rng()
+                X_arr = rng.random((100, 10), chunks=(50, 10))
+                X = dd.from_dask_array(X_arr)
+                X = X[X.columns[0]]
+                X.compute()

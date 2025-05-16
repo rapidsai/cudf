@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,10 +16,7 @@
 #pragma once
 
 #include <cudf/rolling/range_window_bounds.hpp>
-#include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/types.hpp>
-#include <cudf/utilities/default_stream.hpp>
-#include <cudf/wrappers/durations.hpp>
 
 namespace cudf {
 namespace detail {
@@ -29,16 +26,7 @@ template <typename RangeType>
 constexpr bool is_supported_range_type()
 {
   return cudf::is_duration<RangeType>() || cudf::is_fixed_point<RangeType>() ||
-         (std::is_integral_v<RangeType> && !cudf::is_boolean<RangeType>());
-}
-
-/// Checks if the specified type is a supported target type,
-/// as an orderby column, for comparisons with a range_window_bounds scalar.
-template <typename ColumnType>
-constexpr bool is_supported_order_by_column_type()
-{
-  return cudf::is_timestamp<ColumnType>() || cudf::is_fixed_point<ColumnType>() ||
-         (std::is_integral_v<ColumnType> && !cudf::is_boolean<ColumnType>());
+         (cudf::is_numeric<RangeType>() && !cudf::is_boolean<RangeType>());
 }
 
 /// Range-comparable representation type for an orderby column type.
@@ -63,7 +51,7 @@ struct range_type_impl {
 template <typename ColumnType>
 struct range_type_impl<
   ColumnType,
-  std::enable_if_t<std::is_integral_v<ColumnType> && !cudf::is_boolean<ColumnType>(), void>> {
+  std::enable_if_t<cudf::is_numeric<ColumnType>() && !cudf::is_boolean<ColumnType>(), void>> {
   using type     = ColumnType;
   using rep_type = ColumnType;
 };
@@ -97,7 +85,7 @@ void assert_non_negative([[maybe_unused]] T const& value)
 
 template <typename RangeT,
           typename RepT,
-          CUDF_ENABLE_IF(std::is_integral_v<RangeT> && !cudf::is_boolean<RangeT>())>
+          CUDF_ENABLE_IF(cudf::is_numeric<RangeT>() && !cudf::is_boolean<RangeT>())>
 RepT range_comparable_value_impl(scalar const& range_scalar,
                                  bool,
                                  data_type const&,

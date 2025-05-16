@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/exec_policy.hpp>
@@ -32,6 +33,7 @@
 
 #include <algorithm>
 #include <limits>
+#include <numeric>
 #include <vector>
 
 using namespace numeric;
@@ -71,18 +73,20 @@ TYPED_TEST(FixedPointTestAllReps, DecimalXXThrust)
   EXPECT_EQ(vec2, vec3);
 }
 
+namespace {
 struct cast_to_int32_fn {
   using decimal32 = fixed_point<int32_t, Radix::BASE_10>;
   int32_t __host__ __device__ operator()(decimal32 fp) { return static_cast<int32_t>(fp); }
 };
+}  // namespace
 
 TEST_F(FixedPointTest, DecimalXXThrustOnDevice)
 {
   using decimal32 = fixed_point<int32_t, Radix::BASE_10>;
 
   std::vector<decimal32> vec1(1000, decimal32{1, scale_type{-2}});
-  auto d_vec1 = cudf::detail::make_device_uvector_sync(
-    vec1, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
+  auto d_vec1 = cudf::detail::make_device_uvector(
+    vec1, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
 
   auto const sum = thrust::reduce(rmm::exec_policy(cudf::get_default_stream()),
                                   std::cbegin(d_vec1),
@@ -95,8 +99,8 @@ TEST_F(FixedPointTest, DecimalXXThrustOnDevice)
   //       change inclusive scan to run on device (avoid copying to host)
   thrust::inclusive_scan(std::cbegin(vec1), std::cend(vec1), std::begin(vec1));
 
-  d_vec1 = cudf::detail::make_device_uvector_sync(
-    vec1, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
+  d_vec1 = cudf::detail::make_device_uvector(
+    vec1, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
 
   std::vector<int32_t> vec2(1000);
   std::iota(std::begin(vec2), std::end(vec2), 1);
@@ -118,7 +122,7 @@ TEST_F(FixedPointTest, DecimalXXThrustOnDevice)
                     std::begin(d_vec3),
                     cast_to_int32_fn{});
 
-  auto vec3 = cudf::detail::make_std_vector_sync(d_vec3, cudf::get_default_stream());
+  auto vec3 = cudf::detail::make_std_vector(d_vec3, cudf::get_default_stream());
 
   EXPECT_EQ(vec2, vec3);
 }

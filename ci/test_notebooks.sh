@@ -1,17 +1,26 @@
 #!/bin/bash
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 
 set -euo pipefail
 
 . /opt/conda/etc/profile.d/conda.sh
 
+rapids-logger "Downloading artifacts from previous jobs"
+CPP_CHANNEL=$(rapids-download-conda-from-github cpp)
+PYTHON_CHANNEL=$(rapids-download-conda-from-github python)
+
 rapids-logger "Generate notebook testing dependencies"
+
+ENV_YAML_DIR="$(mktemp -d)"
+
 rapids-dependency-file-generator \
   --output conda \
-  --file_key test_notebooks \
-  --matrix "cuda=${RAPIDS_CUDA_VERSION%.*};arch=$(arch);py=${RAPIDS_PY_VERSION}" | tee env.yaml
+  --file-key test_notebooks \
+  --prepend-channel "${CPP_CHANNEL}" \
+  --prepend-channel "${PYTHON_CHANNEL}" \
+  --matrix "cuda=${RAPIDS_CUDA_VERSION%.*};arch=$(arch);py=${RAPIDS_PY_VERSION}" | tee "${ENV_YAML_DIR}/env.yaml"
 
-rapids-mamba-retry env create --force -f env.yaml -n test
+rapids-mamba-retry env create --yes -f "${ENV_YAML_DIR}/env.yaml" -n test
 
 # Temporarily allow unbound variables for conda activation.
 set +u
@@ -19,15 +28,6 @@ conda activate test
 set -u
 
 rapids-print-env
-
-rapids-logger "Downloading artifacts from previous jobs"
-CPP_CHANNEL=$(rapids-download-conda-from-s3 cpp)
-PYTHON_CHANNEL=$(rapids-download-conda-from-s3 python)
-
-rapids-mamba-retry install \
-  --channel "${CPP_CHANNEL}" \
-  --channel "${PYTHON_CHANNEL}" \
-  cudf libcudf
 
 NBTEST="$(realpath "$(dirname "$0")/utils/nbtest.sh")"
 pushd notebooks
@@ -39,11 +39,13 @@ SKIPNBS="performance-comparisons.ipynb"
 EXITCODE=0
 trap "EXITCODE=1" ERR
 set +e
+# Loops over `find` are fragile but this seems to be working
+# shellcheck disable=SC2044
 for nb in $(find . -name "*.ipynb"); do
-    nbBasename=$(basename ${nb})
+    nbBasename=$(basename "${nb}")
     # Skip all notebooks that use dask (in the code or even in their name)
-    if ((echo ${nb} | grep -qi dask) || \
-        (grep -q dask ${nb})); then
+    if (echo "${nb}" | grep -qi dask) || \
+        (grep -q dask "${nb}"); then
         echo "--------------------------------------------------------------------------------"
         echo "SKIPPING: ${nb} (suspected Dask usage, not currently automatable)"
         echo "--------------------------------------------------------------------------------"
@@ -53,7 +55,7 @@ for nb in $(find . -name "*.ipynb"); do
         echo "--------------------------------------------------------------------------------"
     else
         nvidia-smi
-        ${NBTEST} ${nbBasename}
+        ${NBTEST} "${nbBasename}"
     fi
 done
 

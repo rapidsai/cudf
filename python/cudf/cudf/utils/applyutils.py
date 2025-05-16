@@ -1,18 +1,21 @@
-# Copyright (c) 2018-2023, NVIDIA CORPORATION.
+# Copyright (c) 2018-2025, NVIDIA CORPORATION.
+from __future__ import annotations
 
 import functools
-from typing import Any, Dict
+from typing import Any
 
 import cupy as cp
+import numpy as np
 from numba import cuda
 from numba.core.utils import pysignature
 
 import cudf
-from cudf import _lib as libcudf
+from cudf.core._internals import binaryop
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import column
-from cudf.utils import utils
+from cudf.utils._numba import _CUDFNumbaConfig
 from cudf.utils.docutils import docfmt_partial
+from cudf.utils.dtypes import SIZE_TYPE_DTYPE
 
 _doc_applyparams = """
 df : DataFrame
@@ -107,7 +110,6 @@ def apply_chunks(
 
 @acquire_spill_lock()
 def make_aggregate_nullmask(df, columns=None, op="__and__"):
-
     out_mask = None
     for k in columns or df._data:
         col = cudf.core.dataframe.extract_col(df, k)
@@ -116,11 +118,9 @@ def make_aggregate_nullmask(df, columns=None, op="__and__"):
         nullmask = column.as_column(df[k]._column.nullmask)
 
         if out_mask is None:
-            out_mask = column.as_column(
-                nullmask.copy(), dtype=utils.mask_dtype
-            )
+            out_mask = column.as_column(nullmask.copy(), dtype=SIZE_TYPE_DTYPE)
         else:
-            out_mask = libcudf.binaryop.binaryop(
+            out_mask = binaryop.binaryop(
                 nullmask, out_mask, op, out_mask.dtype
             )
 
@@ -158,7 +158,7 @@ class ApplyKernelCompilerBase:
         outputs = {}
         for k, dt in self.outcols.items():
             outputs[k] = column.column_empty(
-                len(df), dt, False
+                len(df), np.dtype(dt), False
             ).data_array_view(mode="write")
         # Bind argument
         args = {}
@@ -195,7 +195,8 @@ class ApplyRowsCompiler(ApplyKernelCompilerBase):
         return kernel
 
     def launch_kernel(self, df, args):
-        self.kernel.forall(len(df))(*args)
+        with _CUDFNumbaConfig():
+            self.kernel.forall(len(df))(*args)
 
 
 class ApplyChunksCompiler(ApplyKernelCompilerBase):
@@ -209,12 +210,14 @@ class ApplyChunksCompiler(ApplyKernelCompilerBase):
     def launch_kernel(self, df, args, chunks, blkct=None, tpb=None):
         chunks = self.normalize_chunks(len(df), chunks)
         if blkct is None and tpb is None:
-            self.kernel.forall(len(df))(len(df), chunks, *args)
+            with _CUDFNumbaConfig():
+                self.kernel.forall(len(df))(len(df), chunks, *args)
         else:
             assert tpb is not None
             if blkct is None:
                 blkct = chunks.size
-            self.kernel[blkct, tpb](len(df), chunks, *args)
+            with _CUDFNumbaConfig():
+                self.kernel[blkct, tpb](len(df), chunks, *args)
 
     def normalize_chunks(self, size, chunks):
         if isinstance(chunks, int):
@@ -336,7 +339,7 @@ def chunk_wise_kernel(nrows, chunks, {args}):
     return kernel
 
 
-_cache = dict()  # type: Dict[Any, Any]
+_cache: dict[Any, Any] = dict()
 
 
 @functools.wraps(_make_row_wise_kernel)
@@ -346,10 +349,8 @@ def _load_cache_or_make_row_wise_kernel(cache_key, func, *args, **kwargs):
         cache_key = func
     try:
         out = _cache[cache_key]
-        # print("apply cache loaded", cache_key)
         return out
     except KeyError:
-        # print("apply cache NOT loaded", cache_key)
         kernel = _make_row_wise_kernel(func, *args, **kwargs)
         _cache[cache_key] = kernel
         return kernel

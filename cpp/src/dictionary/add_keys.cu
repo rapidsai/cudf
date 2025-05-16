@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <cudf/detail/concatenate.cuh>
+#include <cudf/detail/concatenate.hpp>
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
@@ -29,8 +29,9 @@
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
-
-#include <rmm/mr/device/per_device_resource.hpp>
+#include <cudf/utilities/error.hpp>
+#include <cudf/utilities/memory_resource.hpp>
+#include <cudf/utilities/type_checks.hpp>
 
 namespace cudf {
 namespace dictionary {
@@ -49,15 +50,16 @@ namespace detail {
 std::unique_ptr<column> add_keys(dictionary_column_view const& dictionary_column,
                                  column_view const& new_keys,
                                  rmm::cuda_stream_view stream,
-                                 rmm::mr::device_memory_resource* mr)
+                                 rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS(!new_keys.has_nulls(), "Keys must not have nulls");
   auto old_keys = dictionary_column.keys();  // [a,b,c,d,f]
-  CUDF_EXPECTS(new_keys.type() == old_keys.type(), "Keys must be the same type");
+  CUDF_EXPECTS(
+    cudf::have_same_types(new_keys, old_keys), "Keys must be the same type", cudf::data_type_error);
   // first, concatenate the keys together
   // [a,b,c,d,f] + [d,b,e] = [a,b,c,d,f,d,b,e]
   auto combined_keys = cudf::detail::concatenate(
-    std::vector<column_view>{old_keys, new_keys}, stream, rmm::mr::get_current_device_resource());
+    std::vector<column_view>{old_keys, new_keys}, stream, cudf::get_current_device_resource_ref());
 
   // Drop duplicates from the combined keys, then sort the result.
   // sort(distinct([a,b,c,d,f,d,b,e])) = [a,b,c,d,e,f]
@@ -104,10 +106,10 @@ std::unique_ptr<column> add_keys(dictionary_column_view const& dictionary_column
   auto indices_column     = [&] {
     column_view gather_result = table_indices.front()->view();
     auto const indices_size   = gather_result.size();
-    // we can just use the lower-bound/gather data directly for UINT32 case
-    if (indices_type.id() == type_id::UINT32) {
+    // we can just use the lower-bound/gather data directly for INT32 case
+    if (indices_type.id() == type_id::INT32) {
       auto contents = table_indices.front()->release();
-      return std::make_unique<column>(data_type{type_id::UINT32},
+      return std::make_unique<column>(data_type{type_id::INT32},
                                       indices_size,
                                       std::move(*(contents.data.release())),
                                       rmm::device_buffer{0, stream, mr},
@@ -130,10 +132,11 @@ std::unique_ptr<column> add_keys(dictionary_column_view const& dictionary_column
 
 std::unique_ptr<column> add_keys(dictionary_column_view const& dictionary_column,
                                  column_view const& keys,
-                                 rmm::mr::device_memory_resource* mr)
+                                 rmm::cuda_stream_view stream,
+                                 rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::add_keys(dictionary_column, keys, cudf::get_default_stream(), mr);
+  return detail::add_keys(dictionary_column, keys, stream, mr);
 }
 
 }  // namespace dictionary

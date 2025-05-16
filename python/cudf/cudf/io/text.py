@@ -1,14 +1,15 @@
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2025, NVIDIA CORPORATION.
 
-from io import BytesIO, StringIO
+from io import BytesIO, StringIO, TextIOBase
 
-import cudf
-from cudf._lib import text as libtext
+import pylibcudf as plc
+
+from cudf.core.series import Series
 from cudf.utils import ioutils
-from cudf.utils.utils import _cudf_nvtx_annotate
+from cudf.utils.performance_tracking import _performance_tracking
 
 
-@_cudf_nvtx_annotate
+@_performance_tracking
 @ioutils.doc_read_text()
 def read_text(
     filepath_or_buffer,
@@ -18,26 +19,48 @@ def read_text(
     compression=None,
     compression_offsets=None,
     storage_options=None,
-):
+) -> Series:
     """{docstring}"""
 
     if delimiter is None:
         raise ValueError("delimiter needs to be provided")
 
-    filepath_or_buffer, _ = ioutils.get_reader_filepath_or_buffer(
+    filepath_or_buffer = ioutils.get_reader_filepath_or_buffer(
         path_or_data=filepath_or_buffer,
-        compression=None,
         iotypes=(BytesIO, StringIO),
         storage_options=storage_options,
     )
-
-    return cudf.Series._from_data(
-        libtext.read_text(
-            filepath_or_buffer,
-            delimiter=delimiter,
-            byte_range=byte_range,
-            strip_delimiters=strip_delimiters,
-            compression=compression,
-            compression_offsets=compression_offsets,
-        )
+    filepath_or_buffer = ioutils._select_single_source(
+        filepath_or_buffer, "read_text"
     )
+
+    if compression is None:
+        if isinstance(filepath_or_buffer, TextIOBase):
+            datasource = plc.io.text.make_source(filepath_or_buffer.read())
+        else:
+            datasource = plc.io.text.make_source_from_file(filepath_or_buffer)
+    elif compression == "bgzip":
+        if isinstance(filepath_or_buffer, TextIOBase):
+            raise ValueError("bgzip compression requires a file path")
+        if compression_offsets is not None:
+            if len(compression_offsets) != 2:
+                raise ValueError(
+                    "Compression offsets need to consist of two elements"
+                )
+            datasource = plc.io.text.make_source_from_bgzip_file(
+                filepath_or_buffer,
+                compression_offsets[0],
+                compression_offsets[1],
+            )
+        else:
+            datasource = plc.io.text.make_source_from_bgzip_file(
+                filepath_or_buffer,
+            )
+    else:
+        raise ValueError("Only bgzip compression is supported at the moment")
+
+    options = plc.io.text.ParseOptions(
+        byte_range=byte_range, strip_delimiters=strip_delimiters
+    )
+    plc_column = plc.io.text.multibyte_split(datasource, delimiter, options)
+    return Series.from_pylibcudf(plc_column)

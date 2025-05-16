@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,10 +17,9 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
-#include <rmm/mr/device/per_device_resource.hpp>
-
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace strings {
 /**
  * @addtogroup strings_convert
@@ -43,18 +42,17 @@ namespace strings {
  * No checking is done on the format. If a string is not in IPv4 format, the resulting
  * integer is undefined.
  *
- * The resulting 32-bit integer is placed in an int64_t to avoid setting the sign-bit
- * in an int32_t type. This could be changed if cudf supported a UINT32 type in the future.
- *
  * Any null entries will result in corresponding null entries in the output column.
  *
- * @param strings Strings instance for this operation.
- * @param mr Device memory resource used to allocate the returned column's device memory.
- * @return New INT64 column converted from strings.
+ * @param input Strings instance for this operation
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return New UINT32 column converted from strings
  */
 std::unique_ptr<column> ipv4_to_integers(
-  strings_column_view const& strings,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  strings_column_view const& input,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Converts integers into IPv4 addresses as strings.
@@ -65,19 +63,19 @@ std::unique_ptr<column> ipv4_to_integers(
  * Each input integer is dissected into four integers by dividing the input into 8-bit sections.
  * These sub-integers are then converted into [0-9] characters and placed between '.' characters.
  *
- * No checking is done on the input integer value. Only the lower 32-bits are used.
- *
  * Any null entries will result in corresponding null entries in the output column.
  *
- * @throw cudf::logic_error if the input column is not INT64 type.
+ * @throw cudf::logic_error if the input column is not UINT32 type.
  *
- * @param integers Integer (INT64) column to convert.
- * @param mr Device memory resource used to allocate the returned column's device memory.
- * @return New strings column.
+ * @param integers Integer (UINT32) column to convert
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return New strings column
  */
 std::unique_ptr<column> integers_to_ipv4(
   column_view const& integers,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Returns a boolean column identifying strings in which all
@@ -96,14 +94,16 @@ std::unique_ptr<column> integers_to_ipv4(
  *
  * Any null row results in a null entry for that row in the output column.
  *
- * @param strings Strings instance for this operation.
- * @param mr Device memory resource used to allocate the returned column's device memory.
- * @return New column of boolean results for each string.
+ * @param input Strings instance for this operation
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return New column of boolean results for each string
  */
 std::unique_ptr<column> is_ipv4(
-  strings_column_view const& strings,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  strings_column_view const& input,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /** @} */  // end of doxygen group
 }  // namespace strings
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

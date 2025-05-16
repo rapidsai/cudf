@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
-#include <cudf/utilities/default_stream.hpp>
-
 #include <cudf_test/cudf_gtest.hpp>
+
+#include <cudf/utilities/default_stream.hpp>
 
 #ifdef CUDA_API_PER_THREAD_DEFAULT_STREAM
 TEST(DefaultStreamTest, PtdsIsEnabled) { EXPECT_TRUE(cudf::is_ptds_enabled()); }

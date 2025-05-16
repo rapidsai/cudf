@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,16 +14,17 @@
  * limitations under the License.
  */
 
-#include <cudf/column/column_factories.hpp>
-#include <cudf/copying.hpp>
-#include <cudf/strings/detail/utilities.hpp>
-#include <cudf/table/table.hpp>
-#include <cudf/utilities/type_dispatcher.hpp>
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/table_utilities.hpp>
+#include <cudf_test/testing_main.hpp>
 #include <cudf_test/type_lists.hpp>
+
+#include <cudf/column/column_factories.hpp>
+#include <cudf/copying.hpp>
+#include <cudf/table/table.hpp>
+#include <cudf/utilities/type_dispatcher.hpp>
 
 #include <thrust/iterator/transform_iterator.h>
 
@@ -60,7 +61,7 @@ void check_empty_string_columns(cudf::column_view lhs, cudf::column_view rhs)
 
 TEST_F(EmptyLikeStringTest, ColumnStringTest)
 {
-  std::vector<const char*> h_strings{"the quick brown fox jumps over the lazy dog",
+  std::vector<char const*> h_strings{"the quick brown fox jumps over the lazy dog",
                                      "thé result does not include the value in the sum in",
                                      "",
                                      nullptr,
@@ -83,7 +84,7 @@ TYPED_TEST(EmptyLikeScalarTest, FixedWidth)
 {
   // make a column
   auto input = make_fixed_width_column(
-    cudf::data_type{cudf::type_to_id<TypeParam>()}, 1, rmm::device_buffer{});
+    cudf::data_type{cudf::type_to_id<TypeParam>()}, 1, rmm::device_buffer{}, 0);
   // get a scalar out of it
   std::unique_ptr<cudf::scalar> sc = cudf::get_element(*input, 0);
 
@@ -194,15 +195,7 @@ TYPED_TEST(AllocateLikeTest, ColumnNumericTestSameSize)
   input = make_numeric_column(
     cudf::data_type{cudf::type_to_id<TypeParam>()}, size, cudf::mask_state::ALL_VALID);
   got = cudf::allocate_like(input->view());
-  EXPECT_EQ(input->type(), got->type());
-  EXPECT_EQ(input->size(), got->size());
-  EXPECT_EQ(input->nullable(), got->nullable());
-  EXPECT_EQ(input->num_children(), got->num_children());
-  // CUDF_TEST_EXPECT_COLUMN_PROPERTIES_EQUAL includes checking the null-count property.
-  // This value will be incorrect since the null mask will contain uninitialized bits
-  // and the null-count set to UNKNOWN_NULL_COUNT on return from allocate_like().
-  // This means any subsequent call to null_count() will try to compute the null-count
-  // using the uninitialized null-mask.
+  CUDF_TEST_EXPECT_COLUMN_PROPERTIES_EQUAL(*input, *got);
 }
 
 TYPED_TEST(AllocateLikeTest, ColumnNumericTestSpecifiedSize)
@@ -221,15 +214,13 @@ TYPED_TEST(AllocateLikeTest, ColumnNumericTestSpecifiedSize)
   input = make_numeric_column(
     cudf::data_type{cudf::type_to_id<TypeParam>()}, size, cudf::mask_state::ALL_VALID);
   got = cudf::allocate_like(input->view(), specified_size);
+  // Can't use CUDF_TEST_EXPECT_COLUMN_PROPERTIES_EQUAL because the sizes of
+  // the two columns are different.
   EXPECT_EQ(input->type(), got->type());
   EXPECT_EQ(specified_size, got->size());
+  EXPECT_EQ(0, got->null_count());
   EXPECT_EQ(input->nullable(), got->nullable());
   EXPECT_EQ(input->num_children(), got->num_children());
-  // CUDF_TEST_EXPECT_COLUMN_PROPERTIES_EQUAL includes checking the null-count property.
-  // This value will be incorrect since the null mask will contain uninitialized bits
-  // and the null-count set to UNKNOWN_NULL_COUNT on return from allocate_like().
-  // This means any subsequent call to null_count() will try to compute the null-count
-  // using the uninitialized null-mask.
 }
 
 CUDF_TEST_PROGRAM_MAIN()

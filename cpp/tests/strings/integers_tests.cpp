@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,13 +22,13 @@
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/strings/convert/convert_integers.hpp>
 #include <cudf/strings/strings_column_view.hpp>
-
-#include <rmm/cuda_stream_view.hpp>
-#include <rmm/device_uvector.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <thrust/host_vector.h>
 #include <thrust/iterator/transform_iterator.h>
 
+#include <array>
+#include <numeric>
 #include <string>
 #include <vector>
 
@@ -82,7 +82,7 @@ TEST_F(StringsConvertTest, IsIntegerBoundCheckNoNull)
 
 TEST_F(StringsConvertTest, IsIntegerBoundCheckWithNulls)
 {
-  std::vector<const char*> const h_strings{
+  std::vector<char const*> const h_strings{
     "eee", "1234", nullptr, "", "-9832", "93.24", "765é", nullptr};
   auto const strings = cudf::test::strings_column_wrapper(
     h_strings.begin(),
@@ -185,7 +185,7 @@ TEST_F(StringsConvertTest, IsIntegerBoundCheckLargeNumbers)
 
 TEST_F(StringsConvertTest, ToInteger)
 {
-  std::vector<const char*> h_strings{"eee",
+  std::vector<char const*> h_strings{"eee",
                                      "1234",
                                      nullptr,
                                      "",
@@ -241,7 +241,7 @@ TEST_F(StringsConvertTest, FromInteger)
   int32_t minint = std::numeric_limits<int32_t>::min();
   int32_t maxint = std::numeric_limits<int32_t>::max();
   std::vector<int32_t> h_integers{100, 987654321, 0, 0, -12761, 0, 5, -4, maxint, minint};
-  std::vector<const char*> h_expected{
+  std::vector<char const*> h_expected{
     "100", "987654321", nullptr, "0", "-12761", "0", "5", "-4", "2147483647", "-2147483648"};
 
   cudf::test::fixed_width_column_wrapper<int32_t> integers(
@@ -261,17 +261,16 @@ TEST_F(StringsConvertTest, FromInteger)
 
 TEST_F(StringsConvertTest, ZeroSizeStringsColumn)
 {
-  cudf::column_view zero_size_column(cudf::data_type{cudf::type_id::INT32}, 0, nullptr, nullptr, 0);
-  auto results = cudf::strings::from_integers(zero_size_column);
+  auto const zero_size_column = cudf::make_empty_column(cudf::type_id::INT32)->view();
+  auto results                = cudf::strings::from_integers(zero_size_column);
   cudf::test::expect_column_empty(results->view());
 }
 
 TEST_F(StringsConvertTest, ZeroSizeIntegersColumn)
 {
-  cudf::column_view zero_size_column(
-    cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0);
+  auto const zero_size_strings_column = cudf::make_empty_column(cudf::type_id::STRING)->view();
   auto results =
-    cudf::strings::to_integers(zero_size_column, cudf::data_type{cudf::type_id::INT32});
+    cudf::strings::to_integers(zero_size_strings_column, cudf::data_type{cudf::type_id::INT32});
   EXPECT_EQ(0, results->size());
 }
 
@@ -295,8 +294,8 @@ TYPED_TEST(StringsIntegerConvertTest, FromToInteger)
   std::iota(h_integers.begin(), h_integers.end(), -(TypeParam)(h_integers.size() / 2));
   h_integers.push_back(std::numeric_limits<TypeParam>::min());
   h_integers.push_back(std::numeric_limits<TypeParam>::max());
-  auto d_integers = cudf::detail::make_device_uvector_sync(
-    h_integers, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
+  auto const d_integers = cudf::detail::make_device_uvector(
+    h_integers, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
   auto integers      = cudf::make_numeric_column(cudf::data_type{cudf::type_to_id<TypeParam>()},
                                             (cudf::size_type)d_integers.size());
   auto integers_view = integers->mutable_view();
@@ -309,8 +308,6 @@ TYPED_TEST(StringsIntegerConvertTest, FromToInteger)
   // convert to strings
   auto results_strings = cudf::strings::from_integers(integers->view());
 
-  // copy back to host
-  h_integers = cudf::detail::make_host_vector_sync(d_integers, cudf::get_default_stream());
   std::vector<std::string> h_strings;
   for (auto itr = h_integers.begin(); itr != h_integers.end(); ++itr)
     h_strings.push_back(std::to_string(*itr));
@@ -344,7 +341,7 @@ TYPED_TEST(StringsFloatConvertTest, FromToIntegerError)
 
 TEST_F(StringsConvertTest, HexToInteger)
 {
-  std::vector<const char*> h_strings{
+  std::vector<char const*> h_strings{
     "1234", nullptr, "98BEEF", "1a5", "CAFE", "2face", "0xAABBCCDD", "112233445566"};
   cudf::test::strings_column_wrapper strings(
     h_strings.begin(),
@@ -353,11 +350,11 @@ TEST_F(StringsConvertTest, HexToInteger)
 
   {
     std::vector<int32_t> h_expected;
-    for (auto itr = h_strings.begin(); itr != h_strings.end(); ++itr) {
-      if (*itr == nullptr)
+    for (auto& h_string : h_strings) {
+      if (h_string == nullptr)
         h_expected.push_back(0);
       else
-        h_expected.push_back(static_cast<int>(std::stol(std::string(*itr), 0, 16)));
+        h_expected.push_back(static_cast<int>(std::stol(std::string(h_string), nullptr, 16)));
     }
 
     auto results = cudf::strings::hex_to_integers(cudf::strings_column_view(strings),
@@ -370,11 +367,11 @@ TEST_F(StringsConvertTest, HexToInteger)
   }
   {
     std::vector<int64_t> h_expected;
-    for (auto itr = h_strings.begin(); itr != h_strings.end(); ++itr) {
-      if (*itr == nullptr)
+    for (auto& h_string : h_strings) {
+      if (h_string == nullptr)
         h_expected.push_back(0);
       else
-        h_expected.push_back(std::stol(std::string(*itr), 0, 16));
+        h_expected.push_back(std::stol(std::string(h_string), nullptr, 16));
     }
 
     auto results = cudf::strings::hex_to_integers(cudf::strings_column_view(strings),
@@ -389,7 +386,7 @@ TEST_F(StringsConvertTest, HexToInteger)
 
 TEST_F(StringsConvertTest, IsHex)
 {
-  std::vector<const char*> h_strings{"",
+  std::vector<char const*> h_strings{"",
                                      "1234",
                                      nullptr,
                                      "98BEEF",
@@ -405,8 +402,9 @@ TEST_F(StringsConvertTest, IsHex)
     h_strings.begin(),
     h_strings.end(),
     thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
-  cudf::test::fixed_width_column_wrapper<bool> expected({0, 1, 0, 1, 1, 1, 1, 1, 0, 1, 0, 0},
-                                                        {1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1});
+  cudf::test::fixed_width_column_wrapper<bool> expected(
+    {0, 1, 0, 1, 1, 1, 1, 1, 0, 1, 0, 0},
+    {true, true, false, true, true, true, true, true, true, true, true, true});
   auto results = cudf::strings::is_hex(cudf::strings_column_view(strings));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
@@ -426,7 +424,7 @@ TYPED_TEST(StringsIntegerConvertTest, IntegerToHex)
     if (v == 0) { return std::string("00"); }
     // special handling for single-byte types
     if constexpr (std::is_same_v<TypeParam, int8_t> || std::is_same_v<TypeParam, uint8_t>) {
-      char const hex_digits[16] = {
+      std::array const hex_digits = {
         '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'};
       std::string str;
       str += hex_digits[(v & 0xF0) >> 4];
@@ -448,12 +446,39 @@ TYPED_TEST(StringsIntegerConvertTest, IntegerToHex)
 TEST_F(StringsConvertTest, IntegerToHexWithNull)
 {
   cudf::test::fixed_width_column_wrapper<int32_t> integers(
-    {123456, -1, 0, 0, 12, 12345, 123456789, -123456789}, {1, 1, 1, 0, 1, 1, 1, 1});
+    {123456, -1, 0, 0, 12, 12345, 123456789, -123456789},
+    {true, true, true, false, true, true, true, true});
 
   cudf::test::strings_column_wrapper expected(
     {"01E240", "FFFFFFFF", "00", "", "0C", "3039", "075BCD15", "F8A432EB"},
-    {1, 1, 1, 0, 1, 1, 1, 1});
+    {true, true, true, false, true, true, true, true});
 
   auto results = cudf::strings::integers_to_hex(integers);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+}
+
+TEST_F(StringsConvertTest, IntegerConvertErrors)
+{
+  cudf::test::fixed_width_column_wrapper<bool> bools(
+    {true, true, false, false, true, true, false, true});
+  cudf::test::fixed_width_column_wrapper<double> floats(
+    {123456.0, -1.0, 0.0, 0.0, 12.0, 12345.0, 123456789.0});
+  EXPECT_THROW(cudf::strings::integers_to_hex(bools), cudf::logic_error);
+  EXPECT_THROW(cudf::strings::integers_to_hex(floats), cudf::logic_error);
+  EXPECT_THROW(cudf::strings::from_integers(bools), cudf::logic_error);
+  EXPECT_THROW(cudf::strings::from_integers(floats), cudf::logic_error);
+
+  auto input = cudf::test::strings_column_wrapper({"123456", "-1", "0"});
+  auto view  = cudf::strings_column_view(input);
+  EXPECT_THROW(cudf::strings::to_integers(view, cudf::data_type(cudf::type_id::BOOL8)),
+               cudf::logic_error);
+  EXPECT_THROW(cudf::strings::to_integers(view, cudf::data_type(cudf::type_id::FLOAT32)),
+               cudf::logic_error);
+  EXPECT_THROW(cudf::strings::to_integers(view, cudf::data_type(cudf::type_id::TIMESTAMP_SECONDS)),
+               cudf::logic_error);
+  EXPECT_THROW(
+    cudf::strings::to_integers(view, cudf::data_type(cudf::type_id::DURATION_MILLISECONDS)),
+    cudf::logic_error);
+  EXPECT_THROW(cudf::strings::to_integers(view, cudf::data_type(cudf::type_id::DECIMAL32)),
+               cudf::logic_error);
 }

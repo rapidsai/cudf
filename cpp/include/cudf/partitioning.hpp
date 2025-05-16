@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,20 +18,29 @@
 
 #include <cudf/hashing.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/export.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/mr/device/per_device_resource.hpp>
 
 #include <memory>
 #include <vector>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 /**
  * @addtogroup reorder_partition
  * @{
  * @file
  * @brief Column partitioning APIs
  */
+
+/**
+ * @brief Identifies the hash function to be used in hash partitioning
+ */
+enum class hash_id {
+  HASH_IDENTITY = 0,  ///< Identity hash function that simply returns the key to be hashed
+  HASH_MURMUR3        ///< Murmur3 hash function
+};
 
 /**
  * @brief Partitions rows of `t` according to the mapping specified by
@@ -59,8 +68,9 @@ namespace cudf {
  *
  * @param t The table to partition
  * @param partition_map Non-nullable column of integer values that map each row
- * in `t` to it's partition.
+ * in `t` to its partition.
  * @param num_partitions The total number of partitions
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned table's device memory
  * @return Pair containing the reordered table and vector of `num_partitions +
  * 1` offsets to each partition such that the size of partition `i` is
@@ -70,7 +80,8 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> partition(
   table_view const& t,
   column_view const& partition_map,
   size_type num_partitions,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Partitions rows from the input table into multiple output tables.
@@ -96,10 +107,10 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
   table_view const& input,
   std::vector<size_type> const& columns_to_hash,
   int num_partitions,
-  hash_id hash_function               = hash_id::HASH_MURMUR3,
-  uint32_t seed                       = DEFAULT_HASH_SEED,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  hash_id hash_function             = hash_id::HASH_MURMUR3,
+  uint32_t seed                     = DEFAULT_HASH_SEED,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Round-robin partition.
@@ -233,6 +244,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
  * @param[in] input The input table to be round-robin partitioned
  * @param[in] num_partitions Number of partitions for the table
  * @param[in] start_partition Index of the 1st partition
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches
  * @param[in] mr Device memory resource used to allocate the returned table's device memory
  *
  * @return A std::pair consisting of a unique_ptr to the partitioned table
@@ -241,8 +253,9 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
 std::pair<std::unique_ptr<cudf::table>, std::vector<cudf::size_type>> round_robin_partition(
   table_view const& input,
   cudf::size_type num_partitions,
-  cudf::size_type start_partition     = 0,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  cudf::size_type start_partition   = 0,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /** @} */  // end of group
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

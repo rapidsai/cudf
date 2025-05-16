@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,10 +17,10 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/lists/lists_column_view.hpp>
+#include <cudf/utilities/export.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
-#include <rmm/mr/device/per_device_resource.hpp>
-
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 
 //! Lists column APIs
 namespace lists {
@@ -57,6 +57,7 @@ enum class concatenate_null_policy { IGNORE, NULLIFY_OUTPUT_ROW };
  * @param input Table of lists to be concatenated.
  * @param null_policy The parameter to specify whether a null list element will be ignored from
  *        concatenation, or any concatenation involving a null element will result in a null list.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return A new column in which each row is a list resulted from concatenating all list elements in
  *         the corresponding row of the input table.
@@ -64,7 +65,8 @@ enum class concatenate_null_policy { IGNORE, NULLIFY_OUTPUT_ROW };
 std::unique_ptr<column> concatenate_rows(
   table_view const& input,
   concatenate_null_policy null_policy = concatenate_null_policy::IGNORE,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr   = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Concatenating multiple lists on the same row of a lists column into a single list.
@@ -81,13 +83,12 @@ std::unique_ptr<column> concatenate_rows(
  * @endcode
  *
  * @throws std::invalid_argument if the input column is not at least two-level depth lists column
- * (i.e., each row must be a list of list).
- * @throws cudf::logic_error if the input lists column contains nested typed entries that are not
- * lists.
+ *         (i.e., each row must be a list of lists).
  *
  * @param input The lists column containing lists of list elements to concatenate.
  * @param null_policy The parameter to specify whether a null list element will be ignored from
  *        concatenation, or any concatenation involving a null element will result in a null list.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return A new column in which each row is a list resulted from concatenating all list elements in
  *         the corresponding row of the input lists column.
@@ -95,8 +96,9 @@ std::unique_ptr<column> concatenate_rows(
 std::unique_ptr<column> concatenate_list_elements(
   column_view const& input,
   concatenate_null_policy null_policy = concatenate_null_policy::IGNORE,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr   = cudf::get_current_device_resource_ref());
 
 /** @} */  // end of group
 }  // namespace lists
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

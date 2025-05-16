@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,9 +14,10 @@
  * limitations under the License.
  */
 
-#include <cudf/utilities/traits.hpp>
-#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/testing_main.hpp>
 #include <cudf_test/type_lists.hpp>
+
+#include <cudf/utilities/traits.hpp>
 
 #include <gtest/gtest.h>
 
@@ -31,7 +32,7 @@ void tuple_for_each_impl(Tuple&& tuple, F&& f, std::index_sequence<Indices...>)
 }
 
 template <typename F, typename... Args>
-void tuple_for_each(const std::tuple<Args...>& tuple, F&& f)
+void tuple_for_each(std::tuple<Args...> const& tuple, F&& f)
 {
   tuple_for_each_impl(tuple, std::forward<F>(f), std::index_sequence_for<Args...>{});
 }

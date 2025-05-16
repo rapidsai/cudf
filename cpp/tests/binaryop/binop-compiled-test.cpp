@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,14 +20,15 @@
 
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/testing_main.hpp>
 #include <cudf_test/type_lists.hpp>
 
+#include <cudf/aggregation.hpp>
 #include <cudf/binaryop.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/fixed_point/fixed_point.hpp>
-#include <cudf/scalar/scalar_factories.hpp>
+#include <cudf/reduction.hpp>
 #include <cudf/types.hpp>
-#include <cudf/unary.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
 
@@ -556,7 +557,11 @@ auto NullOp_Result(cudf::column_view lhs, cudf::column_view rhs)
   std::transform(thrust::make_counting_iterator(0),
                  thrust::make_counting_iterator(lhs.size()),
                  result.begin(),
-                 [&lhs_data, &lhs_mask, &rhs_data, &rhs_mask, &result_mask](auto i) -> TypeOut {
+                 [&lhs_data    = lhs_data,
+                  &lhs_mask    = lhs_mask,
+                  &rhs_data    = rhs_data,
+                  &rhs_mask    = rhs_mask,
+                  &result_mask = result_mask](auto i) -> TypeOut {
                    auto lhs_valid    = lhs_mask.data() and cudf::bit_is_set(lhs_mask.data(), i);
                    auto rhs_valid    = rhs_mask.data() and cudf::bit_is_set(rhs_mask.data(), i);
                    bool output_valid = lhs_valid or rhs_valid;
@@ -699,6 +704,40 @@ using BinaryOperationCompiledTest_NullOpsString =
   BinaryOperationCompiledTest_NullOps<cudf::test::Types<std::string, std::string, std::string>>;
 TEST_F(BinaryOperationCompiledTest_NullOpsString, NullEquals_Vector_Vector)
 {
+  using TypeOut         = bool;
+  using TypeLhs         = std::string;
+  using TypeRhs         = std::string;
+  using NULL_NOT_EQUALS = cudf::library::operation::NullNotEquals<TypeOut, TypeLhs, TypeRhs>;
+
+  auto lhs            = lhs_random_column<TypeLhs>(col_size);
+  auto rhs            = rhs_random_column<TypeRhs>(col_size);
+  auto const expected = NullOp_Result<TypeOut, TypeLhs, TypeRhs, NULL_NOT_EQUALS>(lhs, rhs);
+
+  auto const result = cudf::binary_operation(
+    lhs, rhs, cudf::binary_operator::NULL_NOT_EQUALS, cudf::data_type(cudf::type_to_id<TypeOut>()));
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
+TYPED_TEST(BinaryOperationCompiledTest_NullOps, NullNotEquals_Vector_Vector)
+{
+  using TypeOut         = bool;
+  using TypeLhs         = typename TestFixture::TypeLhs;
+  using TypeRhs         = typename TestFixture::TypeRhs;
+  using NULL_NOT_EQUALS = cudf::library::operation::NullNotEquals<TypeOut, TypeLhs, TypeRhs>;
+
+  auto lhs            = lhs_random_column<TypeLhs>(col_size);
+  auto rhs            = rhs_random_column<TypeRhs>(col_size);
+  auto const expected = NullOp_Result<TypeOut, TypeLhs, TypeRhs, NULL_NOT_EQUALS>(lhs, rhs);
+
+  auto const result = cudf::binary_operation(
+    lhs, rhs, cudf::binary_operator::NULL_NOT_EQUALS, cudf::data_type(cudf::type_to_id<TypeOut>()));
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
+using BinaryOperationCompiledTest_NullOpsString =
+  BinaryOperationCompiledTest_NullOps<cudf::test::Types<std::string, std::string, std::string>>;
+TEST_F(BinaryOperationCompiledTest_NullOpsString, NullNotEquals_Vector_Vector)
+{
   using TypeOut     = bool;
   using TypeLhs     = std::string;
   using TypeRhs     = std::string;
@@ -781,6 +820,26 @@ TEST_F(BinaryOperationCompiledTest_NullOpsString, NullMin_Vector_Vector)
                            cudf::binary_operator::NULL_MIN,
                            cudf::data_type(cudf::type_to_id<cudf::string_view>()));
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, result->view());
+}
+
+TEST(BinaryOperationCompiledTest, LargeColumnNoOverflow)
+{
+  cudf::size_type num_rows{1'799'989'091};
+  auto big = cudf::make_column_from_scalar(
+    cudf::numeric_scalar<cudf::id_to_type<cudf::type_id::INT8>>{10, true}, num_rows);
+  auto small = cudf::make_column_from_scalar(
+    cudf::numeric_scalar<cudf::id_to_type<cudf::type_id::INT8>>{1, true}, num_rows);
+
+  auto mask = cudf::binary_operation(big->view(),
+                                     small->view(),
+                                     cudf::binary_operator::GREATER,
+                                     cudf::data_type{cudf::type_id::BOOL8});
+
+  auto agg = cudf::make_sum_aggregation<cudf::reduce_aggregation>();
+  auto result =
+    cudf::reduce(mask->view(), *agg, cudf::data_type{cudf::type_to_id<cudf::size_type>()});
+  auto got = static_cast<cudf::numeric_scalar<cudf::size_type>*>(result.get())->value();
+  EXPECT_EQ(num_rows, got);
 }
 
 CUDF_TEST_PROGRAM_MAIN()

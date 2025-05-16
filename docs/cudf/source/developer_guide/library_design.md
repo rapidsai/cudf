@@ -1,5 +1,10 @@
 # Library Design
 
+```{note}
+This page is significantly outdated!
+It will be updated in 25.04 to reflect the current state of cuDF. Which includes libcudf, pylibcudf, cudf classic, cudf.pandas, and cudf.polars.
+```
+
 At a high level, cuDF is structured in three layers, each of which serves a distinct purpose:
 
 1. The Frame layer: The user-facing implementation of pandas-like data structures like `DataFrame` and `Series`.
@@ -22,7 +27,7 @@ Finally we tie these pieces together to provide a more holistic view of the proj
 % class IndexedFrame
 % class SingleColumnFrame
 % class BaseIndex
-% class GenericIndex
+% class Index
 % class MultiIndex
 % class RangeIndex
 % class DataFrame
@@ -42,8 +47,8 @@ Finally we tie these pieces together to provide a more holistic view of the proj
 % BaseIndex <|-- MultiIndex
 % Frame <|-- MultiIndex
 %
-% BaseIndex <|-- GenericIndex
-% SingleColumnFrame <|-- GenericIndex
+% BaseIndex <|-- Index
+% SingleColumnFrame <|-- Index
 %
 % @enduml
 
@@ -89,31 +94,26 @@ While we've highlighted some exceptional cases of Indexes before, let's start wi
 In practice, `BaseIndex` does have concrete implementations of a small set of methods.
 However, currently many of these implementations are not applicable to all subclasses and will be eventually be removed.
 
-Almost all indexes are subclasses of `GenericIndex`, a single-columned index with the class hierarchy:
+Almost all indexes are subclasses of `Index`, a single-columned index with the class hierarchy:
 ```python
-class GenericIndex(SingleColumnFrame, BaseIndex)
+class Index(SingleColumnFrame, BaseIndex)
 ```
 Integer, float, or string indexes are all composed of a single column of data.
-Most `GenericIndex` methods are inherited from `Frame`, saving us the trouble of rewriting them.
+Most `Index` methods are inherited from `Frame`, saving us the trouble of rewriting them.
 
 We now consider the three main exceptions to this model:
 
 - A `RangeIndex` is not backed by a column of data, so it inherits directly from `BaseIndex` alone.
   Wherever possible, its methods have special implementations designed to avoid materializing columns.
-  Where such an implementation is infeasible, we fall back to converting it to an `Int64Index` first instead.
+  Where such an implementation is infeasible, we fall back to converting it to an `Index` of `int64`
+  dtype first instead.
 - A `MultiIndex` is backed by _multiple_ columns of data.
   Therefore, its inheritance hierarchy looks like `class MultiIndex(Frame, BaseIndex)`.
   Some of its more `Frame`-like methods may be inherited,
   but many others must be reimplemented since in many cases a `MultiIndex` is not expected to behave like a `Frame`.
-- Just like in pandas, `Index` itself can never be instantiated.
-  `pandas.Index` is the parent class for indexes,
-  but its constructor returns an appropriate subclass depending on the input data type and shape.
-  Unfortunately, mimicking this behavior requires overriding `__new__`,
-  which in turn makes shared initialization across inheritance trees much more cumbersome to manage.
-  To enable sharing constructor logic across different index classes,
-  we instead define `BaseIndex` as the parent class of all indexes.
+- To enable sharing constructor logic across different index classes,
+  we define `BaseIndex` as the parent class of all indexes.
   `Index` inherits from `BaseIndex`, but it masquerades as a `BaseIndex` to match pandas.
-  This class should contain no implementations since it is simply a factory for other indexes.
 
 
 ## The Column layer
@@ -278,6 +278,10 @@ To have each worker in dask print spill statistics, do something like:
 
 ## The Cython layer
 
+```{note}
+As of 25.02, most of the functionality in the Cython layer has been moved to pylibcudf. All that remains is the Column layer which will be removed in a future release.
+```
+
 The lowest level of cuDF is its interaction with `libcudf` via Cython.
 The Cython layer is composed of two components: C++ bindings and Cython wrappers.
 The first component consists of [`.pxd` files](https://cython.readthedocs.io/en/latest/src/tutorial/pxd_files.html),
@@ -325,30 +329,26 @@ This section describes the internal implementation details of the copy-on-write 
 It is recommended that developers familiarize themselves with [the user-facing documentation](copy-on-write-user-doc) of this functionality before reading through the internals
 below.
 
-The core copy-on-write implementation relies on the `CopyOnWriteBuffer` class.
-When the cudf option `"copy_on_write"` is `True`, `as_buffer` will always return a `CopyOnWriteBuffer`.
-This subclass of `cudf.Buffer` contains all the mechanisms to enable copy-on-write behavior.
-The class stores [weak references](https://docs.python.org/3/library/weakref.html) to every existing `CopyOnWriteBuffer` in `CopyOnWriteBuffer._instances`, a mapping from `ptr` keys to `WeakSet`s containing references to `CopyOnWriteBuffer` objects.
-This means that all `CopyOnWriteBuffer`s that point to the same device memory are contained in the same `WeakSet` (corresponding to the same `ptr` key) in `CopyOnWriteBuffer._instances`.
-This data structure is then used to determine whether or not to make a copy when a write operation is performed on a `Column` (see below).
-If multiple buffers point to the same underlying memory, then a copy must be made whenever a modification is attempted.
+The core copy-on-write implementation relies on `ExposureTrackedBuffer` and the tracking features of `BufferOwner`.
+
+`BufferOwner` tracks internal and external references to its underlying memory. Internal references are tracked by maintaining [weak references](https://docs.python.org/3/library/weakref.html) to every `ExposureTrackedBuffer` of the underlying memory. External references are tracked through "exposure" status of the underlying memory. A buffer is considered exposed if the device pointer (integer or void*) has been handed out to a library outside of cudf. In this case, we have no way of knowing if the data are being modified by a third party.
+
+`ExposureTrackedBuffer` is a subclass of `Buffer` that represents a _slice_ of the memory underlying an exposure tracked buffer.
+
+When the cudf option `"copy_on_write"` is `True`, `as_buffer` returns a `ExposureTrackedBuffer`. It is this class that determines whether or not to make a copy when a write operation is performed on a `Column` (see below). If multiple slices point to the same underlying memory, then a copy must be made whenever a modification is attempted.
 
 
 ### Eager copies when exposing to third-party libraries
 
-If a `Column`/`CopyOnWriteBuffer` is exposed to a third-party library via `__cuda_array_interface__`, we are no longer able to track whether or not modification of the buffer has occurred. Hence whenever
+If a `Column`/`ExposureTrackedBuffer` is exposed to a third-party library via `__cuda_array_interface__`, we are no longer able to track whether or not modification of the buffer has occurred. Hence whenever
 someone accesses data through the `__cuda_array_interface__`, we eagerly trigger the copy by calling
-`_unlink_shared_buffers` which ensures a true copy of underlying device data is made and
-unlinks the buffer from any shared "weak" references. Any future copy requests must also trigger a true physical copy (since we cannot track the lifetime of the third-party object). To handle this we also mark the `Column`/`CopyOnWriteBuffer` as
-`obj._zero_copied=True` thus indicating that any future shallow-copy requests will trigger a true physical copy
-rather than a copy-on-write shallow copy with weak references.
+`.make_single_owner_inplace` which ensures a true copy of underlying data is made and that the slice is the sole owner. Any future copy requests must also trigger a true physical copy (since we cannot track the lifetime of the third-party object). To handle this we also mark the `Column`/`ExposureTrackedBuffer` as exposed thus indicating that any future shallow-copy requests will trigger a true physical copy rather than a copy-on-write shallow copy.
 
 ### Obtaining a read-only object
 
 A read-only object can be quite useful for operations that will not
-mutate the data. This can be achieved by calling `._get_cuda_array_interface(readonly=True)`, and creating a `SimpleNameSpace` object around it.
-This will not trigger a deep copy even if the `CopyOnWriteBuffer`
-has weak references. This API should only be used when the lifetime of the proxy object is restricted to cudf's internal code execution. Handing this out to external libraries or user-facing APIs will lead to untracked references and undefined copy-on-write behavior. We currently use this API for device to host
+mutate the data. This can be achieved by calling `.get_ptr(mode="read")`, and using `cuda_array_interface_wrapper` to wrap a `__cuda_array_interface__` object around it.
+This will not trigger a deep copy even if multiple `ExposureTrackedBuffer`s point to the same `ExposureTrackedBufferOwner`. This API should only be used when the lifetime of the proxy object is restricted to cudf's internal code execution. Handing this out to external libraries or user-facing APIs will lead to untracked references and undefined copy-on-write behavior. We currently use this API for device to host
 copies like in `ColumnBase.data_array_view(mode="read")` which is used for `Column.values_host`.
 
 

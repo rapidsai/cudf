@@ -1,0 +1,26 @@
+# Copyright (c) 2024, NVIDIA CORPORATION.
+
+from pylibcudf.column import Column
+from pylibcudf.scalar import Scalar
+
+class TokenizeVocabulary:
+    def __init__(self, vocab: Column): ...
+
+def tokenize_scalar(
+    input: Column, delimiter: Scalar | None = None
+) -> Column: ...
+def tokenize_column(input: Column, delimiters: Column) -> Column: ...
+def count_tokens_scalar(
+    input: Column, delimiter: Scalar | None = None
+) -> Column: ...
+def count_tokens_column(input: Column, delimiters: Column) -> Column: ...
+def character_tokenize(input: Column) -> Column: ...
+def detokenize(
+    input: Column, row_indices: Column, separator: Scalar | None = None
+) -> Column: ...
+def tokenize_with_vocabulary(
+    input: Column,
+    vocabulary: TokenizeVocabulary,
+    delimiter: Scalar,
+    default_id: int = -1,
+) -> Column: ...

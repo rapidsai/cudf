@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,6 @@
 
 #include <benchmarks/common/generate_input.hpp>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
-#include <benchmarks/fixture/rmm_pool_raii.hpp>
 #include <benchmarks/io/cuio_common.hpp>
 #include <benchmarks/io/nvbench_helpers.hpp>
 
@@ -38,7 +37,7 @@ NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
   },
   [](auto) { return std::string{}; })
 
-// Size of the data in the the benchmark dataframe; chosen to be low enough to allow benchmarks to
+// Size of the data in the benchmark dataframe; chosen to be low enough to allow benchmarks to
 // run on most GPUs, but large enough to allow highest throughput
 constexpr size_t data_size         = 512 << 20;
 constexpr cudf::size_type num_cols = 64;
@@ -83,13 +82,14 @@ void BM_parq_write_encode(nvbench::state& state, nvbench::type_list<nvbench::enu
   state.add_buffer_size(encoded_file_size, "encoded_file_size", "encoded_file_size");
 }
 
-template <cudf::io::io_type IO, cudf::io::compression_type Compression>
+template <io_type IO, cudf::io::compression_type Compression>
 void BM_parq_write_io_compression(
   nvbench::state& state,
   nvbench::type_list<nvbench::enum_type<IO>, nvbench::enum_type<Compression>>)
 {
   auto const data_types = get_type_or_group({static_cast<int32_t>(data_type::INTEGRAL),
                                              static_cast<int32_t>(data_type::FLOAT),
+                                             static_cast<int32_t>(data_type::BOOL8),
                                              static_cast<int32_t>(data_type::DECIMAL),
                                              static_cast<int32_t>(data_type::TIMESTAMP),
                                              static_cast<int32_t>(data_type::DURATION),
@@ -144,6 +144,7 @@ void BM_parq_write_varying_options(
 
   auto const data_types = get_type_or_group({static_cast<int32_t>(data_type::INTEGRAL_SIGNED),
                                              static_cast<int32_t>(data_type::FLOAT),
+                                             static_cast<int32_t>(data_type::BOOL8),
                                              static_cast<int32_t>(data_type::DECIMAL),
                                              static_cast<int32_t>(data_type::TIMESTAMP),
                                              static_cast<int32_t>(data_type::DURATION),
@@ -182,6 +183,7 @@ void BM_parq_write_varying_options(
 
 using d_type_list = nvbench::enum_type_list<data_type::INTEGRAL,
                                             data_type::FLOAT,
+                                            data_type::BOOL8,
                                             data_type::DECIMAL,
                                             data_type::TIMESTAMP,
                                             data_type::DURATION,
@@ -189,9 +191,7 @@ using d_type_list = nvbench::enum_type_list<data_type::INTEGRAL,
                                             data_type::LIST,
                                             data_type::STRUCT>;
 
-using io_list = nvbench::enum_type_list<cudf::io::io_type::FILEPATH,
-                                        cudf::io::io_type::HOST_BUFFER,
-                                        cudf::io::io_type::VOID>;
+using io_list = nvbench::enum_type_list<io_type::FILEPATH, io_type::HOST_BUFFER, io_type::VOID>;
 
 using compression_list =
   nvbench::enum_type_list<cudf::io::compression_type::SNAPPY, cudf::io::compression_type::NONE>;
@@ -205,8 +205,8 @@ NVBENCH_BENCH_TYPES(BM_parq_write_encode, NVBENCH_TYPE_AXES(d_type_list))
   .set_name("parquet_write_encode")
   .set_type_axes_names({"data_type"})
   .set_min_samples(4)
-  .add_int64_axis("cardinality", {0, 1000})
-  .add_int64_axis("run_length", {1, 32});
+  .add_int64_axis("cardinality", {0, 1000, 10'000, 100'000})
+  .add_int64_axis("run_length", {1, 8, 32});
 
 NVBENCH_BENCH_TYPES(BM_parq_write_io_compression, NVBENCH_TYPE_AXES(io_list, compression_list))
   .set_name("parquet_write_io_compression")

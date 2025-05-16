@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,18 +16,18 @@
 
 #pragma once
 
-#include "gpuinflate.hpp"
+#include "comp.hpp"
 
 #include <cudf/utilities/span.hpp>
-
-#include <nvcomp.h>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 
+#include <nvcomp.h>
+
 #include <optional>
 
-namespace cudf::io::nvcomp {
+namespace cudf::io::detail::nvcomp {
 
 struct batched_args {
   rmm::device_uvector<void const*> input_data_ptrs;
@@ -76,4 +76,4 @@ void skip_unsupported_inputs(device_span<size_t> input_sizes,
 std::pair<size_t, size_t> max_chunk_and_total_input_size(device_span<size_t const> input_sizes,
                                                          rmm::cuda_stream_view stream);
 
-}  // namespace cudf::io::nvcomp
+}  // namespace cudf::io::detail::nvcomp

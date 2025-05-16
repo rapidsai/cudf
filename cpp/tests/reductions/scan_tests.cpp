@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,16 +20,15 @@
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/iterator_utilities.hpp>
 
-#include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/utilities/device_operators.cuh>
 #include <cudf/reduction.hpp>
 
 #include <thrust/host_vector.h>
-#include <thrust/iterator/zip_iterator.h>
 #include <thrust/tuple.h>
 
 #include <algorithm>
+#include <functional>
 #include <numeric>
 
 using aggregation      = cudf::aggregation;
@@ -57,6 +56,7 @@ struct ScanTest : public BaseScanTest<T> {
       auto expected_col_out = this->make_expected(v, b, agg, inclusive, null_handling, scale);
       auto col_out          = scan(*col_in, agg, inclusive, null_handling);
       CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected_col_out, *col_out);
+      EXPECT_FALSE(cudf::has_nonempty_nulls(col_out->view()));
     }
   }
 
@@ -216,7 +216,8 @@ TYPED_TEST_SUITE(ScanTest, TestTypes);
 TYPED_TEST(ScanTest, Min)
 {
   auto const v = make_vector<TypeParam>({123, 64, 63, 99, -5, 123, -16, -120, -111});
-  auto const b = thrust::host_vector<bool>(std::vector<bool>{1, 0, 1, 1, 1, 1, 0, 0, 1});
+  auto const b = thrust::host_vector<bool>(
+    std::vector<bool>{true, false, true, true, true, true, false, false, true});
 
   // no nulls
   this->scan_test(v, {}, *cudf::make_min_aggregation<scan_aggregation>(), scan_type::INCLUSIVE);
@@ -248,7 +249,8 @@ TYPED_TEST(ScanTest, Min)
 TYPED_TEST(ScanTest, Max)
 {
   auto const v = make_vector<TypeParam>({-120, 5, 0, -120, -111, 64, 63, 99, 123, -16});
-  auto const b = thrust::host_vector<bool>(std::vector<bool>{1, 0, 1, 1, 1, 1, 0, 1, 0, 1});
+  auto const b = thrust::host_vector<bool>(
+    std::vector<bool>{true, false, true, true, true, true, false, true, false, true});
 
   // inclusive
   // no nulls
@@ -281,7 +283,7 @@ TYPED_TEST(ScanTest, Max)
 TYPED_TEST(ScanTest, Product)
 {
   auto const v = make_vector<TypeParam>({5, -1, 1, 3, -2, 4});
-  auto const b = thrust::host_vector<bool>(std::vector<bool>{1, 1, 1, 0, 1, 1});
+  auto const b = thrust::host_vector<bool>(std::vector<bool>{true, true, true, false, true, true});
 
   // no nulls
   this->scan_test(v, {}, *cudf::make_product_aggregation<scan_aggregation>(), scan_type::INCLUSIVE);
@@ -317,7 +319,8 @@ TYPED_TEST(ScanTest, Sum)
       return make_vector<TypeParam>({-120, 5, 6, 113, -111, 64, -63, 9, 34, -16});
     return make_vector<TypeParam>({12, 5, 6, 13, 11, 14, 3, 9, 34, 16});
   }();
-  auto const b = thrust::host_vector<bool>(std::vector<bool>{1, 0, 1, 1, 0, 0, 1, 1, 1, 1});
+  auto const b = thrust::host_vector<bool>(
+    std::vector<bool>{true, false, true, true, false, false, true, true, true, true});
 
   // no nulls
   this->scan_test(v, {}, *cudf::make_sum_aggregation<scan_aggregation>(), scan_type::INCLUSIVE);
@@ -378,7 +381,7 @@ TYPED_TEST(ScanTest, EmptyColumn)
 TYPED_TEST(ScanTest, LeadingNulls)
 {
   auto const v = make_vector<TypeParam>({100, 200, 300});
-  auto const b = thrust::host_vector<bool>(std::vector<bool>{0, 1, 1});
+  auto const b = thrust::host_vector<bool>(std::vector<bool>{false, true, true});
 
   // skipna = true (default)
   this->scan_test(v,
@@ -410,12 +413,13 @@ TEST_F(ScanStringsTest, MoreStringsMinMax)
 {
   int row_count = 512;
 
-  auto data_begin = cudf::detail::make_counting_transform_iterator(0, [](auto idx) {
-    char const s[] = {static_cast<char>('a' + (idx % 26)), 0};
-    return std::string(s);
-  });
-  auto validity   = cudf::detail::make_counting_transform_iterator(
+  auto validity = cudf::detail::make_counting_transform_iterator(
     0, [](auto idx) -> bool { return (idx % 23) != 22; });
+  auto data_begin = cudf::detail::make_counting_transform_iterator(0, [validity](auto idx) {
+    if (validity[idx] == 0) return std::string{};
+    char const s = static_cast<char>('a' + (idx % 26));
+    return std::string{1, s};
+  });
   cudf::test::strings_column_wrapper col(data_begin, data_begin + row_count, validity);
 
   thrust::host_vector<std::string> v(data_begin, data_begin + row_count);
@@ -618,21 +622,28 @@ TEST_F(StructScanTest, StructScanMinMaxWithNulls)
   using cudf::test::iterators::null_at;
   using cudf::test::iterators::nulls_at;
 
-  // `null` means null at child column.
-  // `NULL` means null at parent column.
   auto const input = [] {
     auto child1 = STRINGS_CW{{"año",
                               "bit",
-                              "₹1" /*null*/,
-                              "aaa" /*NULL*/,
+                              "",     // child null
+                              "aaa",  // parent null
                               "zit",
                               "bat",
                               "aab",
-                              "$1" /*null*/,
-                              "€1" /*NULL*/,
+                              "",    // child null
+                              "€1",  // parent null
                               "wut"},
                              nulls_at({2, 7})};
-    auto child2 = INTS_CW{{1, 2, 3 /*null*/, 4 /*NULL*/, 5, 6, 7, 8 /*null*/, 9 /*NULL*/, 10},
+    auto child2 = INTS_CW{{1,
+                           2,
+                           0,  // child null
+                           4,  // parent null
+                           5,
+                           6,
+                           7,
+                           0,  // child null
+                           9,  // parent null
+                           10},
                           nulls_at({2, 7})};
     return STRUCTS_CW{{child1, child2}, nulls_at({3, 8})};
   }();
@@ -690,25 +701,25 @@ TEST_F(StructScanTest, StructScanMinMaxWithNulls)
     auto const expected = [] {
       auto child1 = STRINGS_CW{{"año",
                                 "año",
-                                "" /*null*/,
-                                "" /*NULL*/,
-                                "" /*NULL*/,
-                                "" /*NULL*/,
-                                "" /*NULL*/,
-                                "" /*NULL*/,
-                                "" /*NULL*/,
-                                "" /*NULL*/},
+                                "",   // child null
+                                "",   // parent null
+                                "",   // parent null
+                                "",   // parent null
+                                "",   // parent null
+                                "",   // parent null
+                                "",   // parent null
+                                ""},  // parent null
                                null_at(2)};
       auto child2 = INTS_CW{{1,
                              1,
-                             0 /*null*/,
-                             0 /*NULL*/,
-                             0 /*NULL*/,
-                             0 /*NULL*/,
-                             0 /*NULL*/,
-                             0 /*NULL*/,
-                             0 /*NULL*/,
-                             0 /*NULL*/},
+                             0,   // child null
+                             0,   // parent null
+                             0,   // parent null
+                             0,   // parent null
+                             0,   // parent null
+                             0,   // parent null
+                             0,   // parent null
+                             0},  // parent null
                             null_at(2)};
       return STRUCTS_CW{{child1, child2}, nulls_at({3, 4, 5, 6, 7, 8, 9})};
     }();

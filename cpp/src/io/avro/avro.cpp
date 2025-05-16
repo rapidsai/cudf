@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,7 @@
 
 #include "avro.hpp"
 
-#include <cstring>
+#include <array>
 #include <unordered_map>
 
 namespace cudf {
@@ -27,8 +27,9 @@ template <>
 uint64_t container::get_encoded()
 {
   uint64_t val = 0;
-  for (uint64_t len = 0; len < 64; len += 7) {
-    auto const byte = get_raw<uint8_t>();
+  for (auto len = 0; len < 64; len += 7) {
+    // 64-bit int since shift left is upto 64.
+    uint64_t const byte = get_raw<uint8_t>();
     val |= (byte & 0x7f) << len;
     if (byte < 0x80) break;
   }
@@ -198,8 +199,8 @@ bool container::parse(file_metadata* md, size_t max_num_rows, size_t first_row)
     // Read the next sync markers and ensure they match the first ones we
     // encountered.  If they don't, we have to assume the data is corrupted,
     // and thus, we terminate processing immediately.
-    const uint64_t sync_marker[] = {get_raw<uint64_t>(), get_raw<uint64_t>()};
-    bool valid_sync_markers =
+    std::array const sync_marker = {get_raw<uint64_t>(), get_raw<uint64_t>()};
+    bool const valid_sync_markers =
       ((sync_marker[0] == md->sync_marker[0]) && (sync_marker[1] == md->sync_marker[1]));
     if (!valid_sync_markers) { return false; }
   }
@@ -217,10 +218,10 @@ bool container::parse(file_metadata* md, size_t max_num_rows, size_t first_row)
   md->selected_data_size = m_cur - m_start;
   // Extract columns
   for (size_t i = 0; i < md->schema.size(); i++) {
-    type_kind_e kind                = md->schema[i].kind;
-    logicaltype_kind_e logical_kind = md->schema[i].logical_kind;
+    type_kind_e const kind                = md->schema[i].kind;
+    logicaltype_kind_e const logical_kind = md->schema[i].logical_kind;
 
-    bool is_supported_kind = ((kind > type_null) && (kind < type_record));
+    bool const is_supported_kind = ((kind > type_null) && (kind < type_record));
     if (is_supported_logical_type(logical_kind) || is_supported_kind) {
       column_desc col;
       int parent_idx       = md->schema[i].parent_idx;
@@ -296,16 +297,16 @@ enum attrtype_e {
  *
  * @returns true if successful, false if error
  */
-bool schema_parser::parse(std::vector<schema_entry>& schema, const std::string& json_str)
+bool schema_parser::parse(std::vector<schema_entry>& schema, std::string_view json_str)
 {
   // Empty schema
   if (json_str == "[]") return true;
 
-  char depthbuf[MAX_SCHEMA_DEPTH];
+  std::array<char, MAX_SCHEMA_DEPTH> depthbuf{};
   int depth = 0, parent_idx = -1, entry_idx = -1;
   json_state_e state = state_attrname;
   std::string str;
-  const std::unordered_map<std::string, type_kind_e> typenames = {
+  std::unordered_map<std::string_view, type_kind_e> const typenames = {
     {"null", type_null},
     {"boolean", type_boolean},
     {"int", type_int},
@@ -328,7 +329,7 @@ bool schema_parser::parse(std::vector<schema_entry>& schema, const std::string& 
     {"local-timestamp-millis", type_local_timestamp_millis},
     {"local-timestamp-micros", type_local_timestamp_micros},
     {"duration", type_duration}};
-  const std::unordered_map<std::string, attrtype_e> attrnames = {
+  std::unordered_map<std::string_view, attrtype_e> const attrnames = {
     {"type", attrtype_type},
     {"name", attrtype_name},
     {"fields", attrtype_fields},
@@ -336,11 +337,11 @@ bool schema_parser::parse(std::vector<schema_entry>& schema, const std::string& 
     {"items", attrtype_items},
     {"logicalType", attrtype_logicaltype}};
   attrtype_e cur_attr = attrtype_none;
-  m_base              = json_str.c_str();
+  m_base              = json_str.begin();
   m_cur               = m_base;
-  m_end               = m_base + json_str.length();
+  m_end               = json_str.end();
   while (more_data()) {
-    int c = *m_cur++;
+    int const c = *m_cur++;
     switch (c) {
       case '"':
         str = get_str();
@@ -480,13 +481,14 @@ bool schema_parser::parse(std::vector<schema_entry>& schema, const std::string& 
 std::string schema_parser::get_str()
 {
   std::string s;
-  const char* start = m_cur;
-  const char* cur   = start;
+  char const* start = m_cur;
+  char const* cur   = start;
   while (cur < m_end && *cur++ != '"')
     ;
-  int32_t len = static_cast<int32_t>(cur - start - 1);
-  m_cur       = cur;
-  return s.assign(start, std::max(len, 0));
+  auto len = static_cast<int32_t>(cur - start - 1);
+  m_cur    = cur;
+  s.assign(start, std::max(len, 0));
+  return s;
 }
 
 }  // namespace avro

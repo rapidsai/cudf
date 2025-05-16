@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,31 +15,29 @@
  */
 #pragma once
 
-#include <strings/regex/regcomp.h>
+#include "strings/regex/regcomp.h"
 
 #include <cudf/strings/regex/flags.hpp>
+#include <cudf/strings/string_view.cuh>
 #include <cudf/types.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
-#include <thrust/optional.h>
+#include <cuda/std/optional>
+#include <cuda_runtime.h>
 #include <thrust/pair.h>
 
-#include <cuda_runtime.h>
-
+#include <functional>
 #include <memory>
 
 namespace cudf {
-
-class string_view;
-
 namespace strings {
 namespace detail {
 
 struct relist;
 
 using match_pair   = thrust::pair<cudf::size_type, cudf::size_type>;
-using match_result = thrust::optional<match_pair>;
+using match_result = cuda::std::optional<match_pair>;
 
 constexpr int32_t MAX_SHARED_MEM      = 2048;  ///< Memory size for storing prog instruction data
 constexpr std::size_t MAX_WORKING_MEM = 0x01'FFFF'FFFF;  ///< Memory size for state data
@@ -76,9 +74,9 @@ class reprog_device {
  public:
   reprog_device()                                = delete;
   ~reprog_device()                               = default;
-  reprog_device(const reprog_device&)            = default;
+  reprog_device(reprog_device const&)            = default;
   reprog_device(reprog_device&&)                 = default;
-  reprog_device& operator=(const reprog_device&) = default;
+  reprog_device& operator=(reprog_device const&) = default;
   reprog_device& operator=(reprog_device&&)      = default;
 
   /**
@@ -184,38 +182,35 @@ class reprog_device {
    *
    * @param thread_idx The index used for mapping the state memory for this string in global memory.
    * @param d_str The string to search.
-   * @param[in,out] begin Position index to begin the search. If found, returns the position found
-   * in the string.
-   * @param[in,out] end Position index to end the search. If found, returns the last position
-   * matching in the string.
-   * @return Returns 0 if no match is found.
+   * @param begin Position to begin the search within `d_str`.
+   * @param end Character position index to end the search within `d_str`.
+   *            Specify -1 to match any virtual positions past the end of the string.
+   * @return If match found, returns character positions of the matches.
    */
-  __device__ inline int32_t find(int32_t const thread_idx,
-                                 string_view const d_str,
-                                 cudf::size_type& begin,
-                                 cudf::size_type& end) const;
+  [[nodiscard]] __device__ inline match_result find(int32_t const thread_idx,
+                                                    string_view const d_str,
+                                                    string_view::const_iterator begin,
+                                                    cudf::size_type end = -1) const;
 
   /**
    * @brief Does an extract evaluation using the compiled expression on the given string.
    *
-   * This will find a specific match within the string when more than match occurs.
+   * This will find a specific capture group within the string.
    * The find() function should be called first to locate the begin/end bounds of the
    * the matched section.
    *
    * @param thread_idx The index used for mapping the state memory for this string in global memory.
    * @param d_str The string to search.
-   * @param begin Position index to begin the search. If found, returns the position found
-   * in the string.
-   * @param end Position index to end the search. If found, returns the last position
-   * matching in the string.
+   * @param begin Position to begin the search within `d_str`.
+   * @param end Character position index to end the search within `d_str`.
    * @param group_id The specific group to return its matching position values.
    * @return If valid, returns the character position of the matched group in the given string,
    */
-  __device__ inline match_result extract(int32_t const thread_idx,
-                                         string_view const d_str,
-                                         cudf::size_type begin,
-                                         cudf::size_type end,
-                                         cudf::size_type const group_id) const;
+  [[nodiscard]] __device__ inline match_result extract(int32_t const thread_idx,
+                                                       string_view const d_str,
+                                                       string_view::const_iterator begin,
+                                                       cudf::size_type end,
+                                                       cudf::size_type const group_id) const;
 
  private:
   struct reljunk {
@@ -231,48 +226,49 @@ class reprog_device {
   /**
    * @brief Returns the regex instruction object for a given id.
    */
-  __device__ inline reinst get_inst(int32_t id) const;
+  [[nodiscard]] __device__ inline reinst get_inst(int32_t id) const;
 
   /**
    * @brief Returns the regex class object for a given id.
    */
-  __device__ inline reclass_device get_class(int32_t id) const;
+  [[nodiscard]] __device__ inline reclass_device get_class(int32_t id) const;
 
   /**
    * @brief Executes the regex pattern on the given string.
    */
-  __device__ inline int32_t regexec(string_view const d_str,
-                                    reljunk jnk,
-                                    cudf::size_type& begin,
-                                    cudf::size_type& end,
-                                    cudf::size_type const group_id = 0) const;
+  [[nodiscard]] __device__ inline match_result regexec(string_view const d_str,
+                                                       reljunk jnk,
+                                                       string_view::const_iterator begin,
+                                                       cudf::size_type end,
+                                                       cudf::size_type const group_id = 0) const;
 
   /**
    * @brief Utility wrapper to setup state memory structures for calling regexec
    */
-  __device__ inline int32_t call_regexec(int32_t const thread_idx,
-                                         string_view const d_str,
-                                         cudf::size_type& begin,
-                                         cudf::size_type& end,
-                                         cudf::size_type const group_id = 0) const;
+  [[nodiscard]] __device__ inline match_result call_regexec(
+    int32_t const thread_idx,
+    string_view const d_str,
+    string_view::const_iterator begin,
+    cudf::size_type end,
+    cudf::size_type const group_id = 0) const;
 
   reprog_device(reprog const&);
 
-  int32_t _startinst_id;              // first instruction id
-  int32_t _num_capturing_groups;      // instruction groups
-  int32_t _insts_count;               // number of instructions
-  int32_t _starts_count;              // number of start-insts ids
-  int32_t _classes_count;             // number of classes
-  int32_t _max_insts;                 // for partitioning working memory
+  int32_t _startinst_id;          // first instruction id
+  int32_t _num_capturing_groups;  // instruction groups
+  int32_t _insts_count;           // number of instructions
+  int32_t _starts_count;          // number of start-insts ids
+  int32_t _classes_count;         // number of classes
+  int32_t _max_insts;             // for partitioning working memory
 
   uint8_t const* _codepoint_flags{};  // table of character types
   reinst const* _insts{};             // array of regex instructions
   int32_t const* _startinst_ids{};    // array of start instruction ids
   reclass_device const* _classes{};   // array of regex classes
 
-  std::size_t _prog_size{};           // total size of this instance
-  void* _buffer{};                    // working memory buffer
-  int32_t _thread_count{};            // threads available in working memory
+  std::size_t _prog_size{};  // total size of this instance
+  void* _buffer{};           // working memory buffer
+  int32_t _thread_count{};   // threads available in working memory
 };
 
 /**
@@ -284,6 +280,30 @@ class reprog_device {
  * @return Number of bytes needed for working memory
  */
 std::size_t compute_working_memory_size(int32_t num_threads, int32_t insts_count);
+
+/**
+ * @brief Converts a match_pair from character positions to byte positions
+ */
+__device__ __forceinline__ match_pair match_positions_to_bytes(match_pair const result,
+                                                               string_view d_str,
+                                                               string_view::const_iterator last)
+{
+  if (d_str.length() == d_str.size_bytes()) { return result; }
+  auto const begin = (last + (result.first - last.position())).byte_offset();
+  auto const end   = (last + (result.second - last.position())).byte_offset();
+  return {begin, end};
+}
+
+/**
+ * @brief Creates a string_view from a match result
+ */
+__device__ __forceinline__ string_view string_from_match(match_pair const result,
+                                                         string_view d_str,
+                                                         string_view::const_iterator last)
+{
+  auto const [begin, end] = match_positions_to_bytes(result, d_str, last);
+  return {d_str.data() + begin, end - begin};
+}
 
 }  // namespace detail
 }  // namespace strings

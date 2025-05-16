@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,18 +18,20 @@
 
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/export.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
-namespace cudf {
-namespace tdigest {
-namespace detail {
+namespace CUDF_EXPORT cudf {
+namespace tdigest::detail {
 
 /**
- * @brief Generate a tdigest column from a grouped set of numeric input values.
+ * @brief Generate a tdigest column from a grouped, sorted set of numeric input values.
  *
- * The tdigest column produced is of the following structure:
+ * The input is expected to be sorted in ascending order within each group, with
+ * nulls at the end.
  *
  * struct {
  *   // centroids for the digest
@@ -69,7 +71,7 @@ std::unique_ptr<column> group_tdigest(column_view const& values,
                                       size_type num_groups,
                                       int max_centroids,
                                       rmm::cuda_stream_view stream,
-                                      rmm::mr::device_memory_resource* mr);
+                                      rmm::device_async_resource_ref mr);
 
 /**
  * @brief Merges tdigests within the same group to generate a new tdigest.
@@ -112,7 +114,7 @@ std::unique_ptr<column> group_merge_tdigest(column_view const& values,
                                             size_type num_groups,
                                             int max_centroids,
                                             rmm::cuda_stream_view stream,
-                                            rmm::mr::device_memory_resource* mr);
+                                            rmm::device_async_resource_ref mr);
 
 /**
  * @brief Create a tdigest column from its constituent components.
@@ -138,123 +140,36 @@ std::unique_ptr<column> make_tdigest_column(size_type num_rows,
                                             std::unique_ptr<column>&& min_values,
                                             std::unique_ptr<column>&& max_values,
                                             rmm::cuda_stream_view stream,
-                                            rmm::mr::device_memory_resource* mr);
+                                            rmm::device_async_resource_ref mr);
 
 /**
- * @brief Create an empty tdigest column.
+ * @brief Create a tdigest column of empty tdigests.
  *
- * An empty tdigest column contains a single row of length 0
+ * The column created contains the specified number of rows of empty tdigests.
  *
+ * @param num_rows The number of rows in the output column.
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned column's device memory.
  *
- * @returns An empty tdigest column.
+ * @returns A tdigest column of empty clusters.
  */
-std::unique_ptr<column> make_empty_tdigest_column(rmm::cuda_stream_view stream,
-                                                  rmm::mr::device_memory_resource* mr);
+CUDF_EXPORT
+std::unique_ptr<column> make_empty_tdigests_column(size_type num_rows,
+                                                   rmm::cuda_stream_view stream,
+                                                   rmm::device_async_resource_ref mr);
 
 /**
- * @brief Create an empty tdigest scalar.
+ * @brief Create a scalar of an empty tdigest cluster.
  *
- * An empty tdigest scalar is a struct_scalar that contains a single row of length 0
+ * The returned scalar is a struct_scalar that contains a single row of an empty cluster.
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned column's device memory.
  *
- * @returns An empty tdigest scalar.
+ * @returns A scalar of an empty tdigest cluster.
  */
 std::unique_ptr<scalar> make_empty_tdigest_scalar(rmm::cuda_stream_view stream,
-                                                  rmm::mr::device_memory_resource* mr);
-
-/**
- * @brief Generate a tdigest column from a grouped, sorted set of numeric input values.
- *
- * The input is expected to be sorted in ascending order within each group, with
- * nulls at the end.
- *
- * The tdigest column produced is of the following structure:
- ** struct {
- *   // centroids for the digest
- *   list {
- *    struct {
- *      double    // mean
- *      double    // weight
- *    },
- *    ...
- *   }
- *   // these are from the input stream, not the centroids. they are used
- *   // during the percentile_approx computation near the beginning or
- *   // end of the quantiles
- *   double       // min
- *   double       // max
- * }
- *
- * Each output row is a single tdigest.  The length of the row is the "size" of the
- * tdigest, each element of which represents a weighted centroid (mean, weight).
- *
- * @param values Grouped (and sorted) values to merge.
- * @param group_offsets Offsets of groups' starting points within @p values.
- * @param group_labels 0-based ID of group that the corresponding value belongs to
- * @param group_valid_counts Per-group counts of valid elements.
- * @param num_groups Number of groups.
- * @param max_centroids Parameter controlling the level of compression of the tdigest. Higher
- * values result in a larger, more precise tdigest.
- * @param stream CUDA stream used for device memory operations and kernel launches.
- * @param mr Device memory resource used to allocate the returned column's device memory
- *
- * @returns tdigest column, with 1 tdigest per row
- */
-std::unique_ptr<column> group_tdigest(column_view const& values,
-                                      cudf::device_span<size_type const> group_offsets,
-                                      cudf::device_span<size_type const> group_labels,
-                                      cudf::device_span<size_type const> group_valid_counts,
-                                      size_type num_groups,
-                                      int max_centroids,
-                                      rmm::cuda_stream_view stream,
-                                      rmm::mr::device_memory_resource* mr);
-
-/**
- * @brief Merges tdigests within the same group to generate a new tdigest.
- *
- * The tdigest column produced is of the following structure:
- *
- * struct {
- *   // centroids for the digest
- *   list {
- *    struct {
- *      double    // mean
- *      double    // weight
- *    },
- *    ...
- *   }
- *   // these are from the input stream, not the centroids. they are used
- *   // during the percentile_approx computation near the beginning or
- *   // end of the quantiles
- *   double       // min
- *   double       // max
- * }
- *
- * Each output row is a single tdigest.  The length of the row is the "size" of the
- * tdigest, each element of which represents a weighted centroid (mean, weight).
- *
- * @param values Grouped tdigests to merge.
- * @param group_offsets Offsets of groups' starting points within @p values.
- * @param group_labels 0-based ID of group that the corresponding value belongs to
- * @param num_groups Number of groups.
- * @param max_centroids Parameter controlling the level of compression of the tdigest. Higher
- * values result in a larger, more precise tdigest.
- * @param stream CUDA stream used for device memory operations and kernel launches.
- * @param mr Device memory resource used to allocate the returned column's device memory
- *
- * @returns tdigest column, with 1 tdigest per row
- */
-std::unique_ptr<column> group_merge_tdigest(column_view const& values,
-                                            cudf::device_span<size_type const> group_offsets,
-                                            cudf::device_span<size_type const> group_labels,
-                                            size_type num_groups,
-                                            int max_centroids,
-                                            rmm::cuda_stream_view stream,
-                                            rmm::mr::device_memory_resource* mr);
+                                                  rmm::device_async_resource_ref mr);
 
 /**
  * @brief Generate a tdigest scalar from a set of numeric input values.
@@ -288,7 +203,7 @@ std::unique_ptr<column> group_merge_tdigest(column_view const& values,
 std::unique_ptr<scalar> reduce_tdigest(column_view const& values,
                                        int max_centroids,
                                        rmm::cuda_stream_view stream,
-                                       rmm::mr::device_memory_resource* mr);
+                                       rmm::device_async_resource_ref mr);
 
 /**
  * @brief Merges multiple tdigest columns to generate a new tdigest scalar.
@@ -322,8 +237,7 @@ std::unique_ptr<scalar> reduce_tdigest(column_view const& values,
 std::unique_ptr<scalar> reduce_merge_tdigest(column_view const& input,
                                              int max_centroids,
                                              rmm::cuda_stream_view stream,
-                                             rmm::mr::device_memory_resource* mr);
+                                             rmm::device_async_resource_ref mr);
 
-}  // namespace detail
-}  // namespace tdigest
-}  // namespace cudf
+}  // namespace tdigest::detail
+}  // namespace CUDF_EXPORT cudf

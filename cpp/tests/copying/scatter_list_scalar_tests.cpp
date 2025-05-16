@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,7 +21,6 @@
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/null_mask.hpp>
-#include <cudf/scalar/scalar_factories.hpp>
 
 using mask_vector = std::vector<cudf::valid_type>;
 using size_column = cudf::test::fixed_width_column_wrapper<cudf::size_type>;
@@ -307,7 +306,7 @@ TYPED_TEST_SUITE(ScatterListOfStructScalarTest, cudf::test::FixedWidthTypesWitho
 TYPED_TEST(ScatterListOfStructScalarTest, Basic)
 {
   using LCW      = cudf::test::lists_column_wrapper<TypeParam, int32_t>;
-  using offset_t = cudf::test::fixed_width_column_wrapper<cudf::offset_type>;
+  using offset_t = cudf::test::fixed_width_column_wrapper<cudf::size_type>;
 
   auto data =
     this->make_test_structs({{42, 42, 42}, {1, 0, 1}},
@@ -346,7 +345,7 @@ TYPED_TEST(ScatterListOfStructScalarTest, Basic)
 TYPED_TEST(ScatterListOfStructScalarTest, EmptyValidScalar)
 {
   using LCW      = cudf::test::lists_column_wrapper<TypeParam, int32_t>;
-  using offset_t = cudf::test::fixed_width_column_wrapper<cudf::offset_type>;
+  using offset_t = cudf::test::fixed_width_column_wrapper<cudf::size_type>;
 
   auto data = this->make_test_structs({}, {}, LCW{}, {});
   auto slr  = std::make_unique<cudf::list_scalar>(data, true);
@@ -379,7 +378,7 @@ TYPED_TEST(ScatterListOfStructScalarTest, EmptyValidScalar)
 TYPED_TEST(ScatterListOfStructScalarTest, NullScalar)
 {
   using LCW      = cudf::test::lists_column_wrapper<TypeParam, int32_t>;
-  using offset_t = cudf::test::fixed_width_column_wrapper<cudf::offset_type>;
+  using offset_t = cudf::test::fixed_width_column_wrapper<cudf::size_type>;
 
   auto data = this->make_test_structs({}, {}, {}, {});
   auto slr  = std::make_unique<cudf::list_scalar>(data, false);
@@ -411,7 +410,7 @@ TYPED_TEST(ScatterListOfStructScalarTest, NullScalar)
 TYPED_TEST(ScatterListOfStructScalarTest, NullableTargetRow)
 {
   using LCW      = cudf::test::lists_column_wrapper<TypeParam, int32_t>;
-  using offset_t = cudf::test::fixed_width_column_wrapper<cudf::offset_type>;
+  using offset_t = cudf::test::fixed_width_column_wrapper<cudf::size_type>;
 
   auto data =
     this->make_test_structs({{42, 42, 42}, {1, 0, 1}},

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,13 +20,13 @@
 #include <cudf/detail/repeat.hpp>
 #include <cudf/detail/reshape.hpp>
 #include <cudf/filling.hpp>
-#include <cudf/join.hpp>
+#include <cudf/join/join.hpp>
 #include <cudf/reshape.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
-#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -40,7 +40,7 @@ namespace detail {
 std::unique_ptr<cudf::table> cross_join(cudf::table_view const& left,
                                         cudf::table_view const& right,
                                         rmm::cuda_stream_view stream,
-                                        rmm::mr::device_memory_resource* mr)
+                                        rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS(0 != left.num_columns(), "Left table is empty");
   CUDF_EXPECTS(0 != right.num_columns(), "Right table is empty");
@@ -74,10 +74,11 @@ std::unique_ptr<cudf::table> cross_join(cudf::table_view const& left,
 
 std::unique_ptr<cudf::table> cross_join(cudf::table_view const& left,
                                         cudf::table_view const& right,
-                                        rmm::mr::device_memory_resource* mr)
+                                        rmm::cuda_stream_view stream,
+                                        rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::cross_join(left, right, cudf::get_default_stream(), mr);
+  return detail::cross_join(left, right, stream, mr);
 }
 
 }  // namespace cudf

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,12 +17,14 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/offsets_iterator_factory.cuh>
 #include <cudf/strings/detail/utf8.hpp>
 #include <cudf/strings/reverse.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
@@ -37,7 +39,7 @@ namespace {
  */
 struct reverse_characters_fn {
   column_device_view const d_strings;
-  offset_type const* d_offsets;
+  cudf::detail::input_offsetalator d_offsets;
   char* d_chars;
 
   __device__ void operator()(size_type idx)
@@ -57,15 +59,15 @@ struct reverse_characters_fn {
 
 std::unique_ptr<column> reverse(strings_column_view const& input,
                                 rmm::cuda_stream_view stream,
-                                rmm::mr::device_memory_resource* mr)
+                                rmm::device_async_resource_ref mr)
 {
   if (input.is_empty()) { return make_empty_column(type_id::STRING); }
 
   // copy the column; replace data in the chars column
-  auto result = std::make_unique<column>(input.parent(), stream, mr);
-  auto const d_offsets =
-    result->view().child(strings_column_view::offsets_column_index).data<offset_type>();
-  auto d_chars = result->mutable_view().child(strings_column_view::chars_column_index).data<char>();
+  auto result          = std::make_unique<column>(input.parent(), stream, mr);
+  auto sv              = strings_column_view(result->view());
+  auto const d_offsets = cudf::detail::offsetalator_factory::make_input_iterator(sv.offsets());
+  auto d_chars         = result->mutable_view().head<char>();
 
   auto const d_column = column_device_view::create(input.parent(), stream);
   thrust::for_each_n(rmm::exec_policy(stream),
@@ -79,10 +81,11 @@ std::unique_ptr<column> reverse(strings_column_view const& input,
 }  // namespace detail
 
 std::unique_ptr<column> reverse(strings_column_view const& input,
-                                rmm::mr::device_memory_resource* mr)
+                                rmm::cuda_stream_view stream,
+                                rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::reverse(input, cudf::get_default_stream(), mr);
+  return detail::reverse(input, stream, mr);
 }
 
 }  // namespace strings

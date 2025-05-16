@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,7 +17,7 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/cudf_gtest.hpp>
+#include <cudf_test/testing_main.hpp>
 #include <cudf_test/type_list_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
@@ -32,6 +32,7 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <numeric>
 #include <random>
@@ -41,7 +42,7 @@ struct TypedColumnTest : public cudf::test::BaseFixture {
   cudf::data_type type() { return cudf::data_type{cudf::type_to_id<T>()}; }
 
   TypedColumnTest(rmm::cuda_stream_view stream = cudf::get_default_stream())
-    : data{_num_elements * cudf::size_of(type()), stream},
+    : data{_num_elements * sizeof(T), stream},
       mask{cudf::bitmask_allocation_size_bytes(_num_elements), stream}
   {
     std::vector<char> h_data(std::max(data.size(), mask.size()));
@@ -92,7 +93,8 @@ void verify_column_views(cudf::column col)
 
 TYPED_TEST(TypedColumnTest, DefaultNullCountNoMask)
 {
-  cudf::column col{this->type(), this->num_elements(), std::move(this->data)};
+  cudf::column col{
+    this->type(), this->num_elements(), std::move(this->data), rmm::device_buffer{}, 0};
   EXPECT_FALSE(col.nullable());
   EXPECT_FALSE(col.has_nulls());
   EXPECT_EQ(0, col.null_count());
@@ -100,7 +102,8 @@ TYPED_TEST(TypedColumnTest, DefaultNullCountNoMask)
 
 TYPED_TEST(TypedColumnTest, DefaultNullCountEmptyMask)
 {
-  cudf::column col{this->type(), this->num_elements(), std::move(this->data), rmm::device_buffer{}};
+  cudf::column col{
+    this->type(), this->num_elements(), std::move(this->data), rmm::device_buffer{}, 0};
   EXPECT_FALSE(col.nullable());
   EXPECT_FALSE(col.has_nulls());
   EXPECT_EQ(0, col.null_count());
@@ -109,7 +112,7 @@ TYPED_TEST(TypedColumnTest, DefaultNullCountEmptyMask)
 TYPED_TEST(TypedColumnTest, DefaultNullCountAllValid)
 {
   cudf::column col{
-    this->type(), this->num_elements(), std::move(this->data), std::move(this->all_valid_mask)};
+    this->type(), this->num_elements(), std::move(this->data), std::move(this->all_valid_mask), 0};
   EXPECT_TRUE(col.nullable());
   EXPECT_FALSE(col.has_nulls());
   EXPECT_EQ(0, col.null_count());
@@ -126,8 +129,11 @@ TYPED_TEST(TypedColumnTest, ExplicitNullCountAllValid)
 
 TYPED_TEST(TypedColumnTest, DefaultNullCountAllNull)
 {
-  cudf::column col{
-    this->type(), this->num_elements(), std::move(this->data), std::move(this->all_null_mask)};
+  cudf::column col{this->type(),
+                   this->num_elements(),
+                   std::move(this->data),
+                   std::move(this->all_null_mask),
+                   this->num_elements()};
   EXPECT_TRUE(col.nullable());
   EXPECT_TRUE(col.has_nulls());
   EXPECT_EQ(this->num_elements(), col.null_count());
@@ -147,13 +153,15 @@ TYPED_TEST(TypedColumnTest, ExplicitNullCountAllNull)
 
 TYPED_TEST(TypedColumnTest, SetNullCountNoMask)
 {
-  cudf::column col{this->type(), this->num_elements(), std::move(this->data)};
+  cudf::column col{
+    this->type(), this->num_elements(), std::move(this->data), rmm::device_buffer{}, 0};
   EXPECT_THROW(col.set_null_count(1), cudf::logic_error);
 }
 
 TYPED_TEST(TypedColumnTest, SetEmptyNullMaskNonZeroNullCount)
 {
-  cudf::column col{this->type(), this->num_elements(), std::move(this->data)};
+  cudf::column col{
+    this->type(), this->num_elements(), std::move(this->data), rmm::device_buffer{}, 0};
   rmm::device_buffer empty_null_mask{};
   EXPECT_THROW(col.set_null_mask(std::move(empty_null_mask), this->num_elements()),
                cudf::logic_error);
@@ -161,7 +169,8 @@ TYPED_TEST(TypedColumnTest, SetEmptyNullMaskNonZeroNullCount)
 
 TYPED_TEST(TypedColumnTest, SetInvalidSizeNullMaskNonZeroNullCount)
 {
-  cudf::column col{this->type(), this->num_elements(), std::move(this->data)};
+  cudf::column col{
+    this->type(), this->num_elements(), std::move(this->data), rmm::device_buffer{}, 0};
   auto invalid_size_null_mask =
     create_null_mask(std::min(this->num_elements() - 50, 0), cudf::mask_state::ALL_VALID);
   EXPECT_THROW(
@@ -171,30 +180,37 @@ TYPED_TEST(TypedColumnTest, SetInvalidSizeNullMaskNonZeroNullCount)
 
 TYPED_TEST(TypedColumnTest, SetNullCountEmptyMask)
 {
-  cudf::column col{this->type(), this->num_elements(), std::move(this->data), rmm::device_buffer{}};
+  cudf::column col{
+    this->type(), this->num_elements(), std::move(this->data), rmm::device_buffer{}, 0};
   EXPECT_THROW(col.set_null_count(1), cudf::logic_error);
 }
 
 TYPED_TEST(TypedColumnTest, SetNullCountAllValid)
 {
   cudf::column col{
-    this->type(), this->num_elements(), std::move(this->data), std::move(this->all_valid_mask)};
+    this->type(), this->num_elements(), std::move(this->data), std::move(this->all_valid_mask), 0};
   EXPECT_NO_THROW(col.set_null_count(0));
   EXPECT_EQ(0, col.null_count());
 }
 
 TYPED_TEST(TypedColumnTest, SetNullCountAllNull)
 {
-  cudf::column col{
-    this->type(), this->num_elements(), std::move(this->data), std::move(this->all_null_mask)};
+  cudf::column col{this->type(),
+                   this->num_elements(),
+                   std::move(this->data),
+                   std::move(this->all_null_mask),
+                   this->num_elements()};
   EXPECT_NO_THROW(col.set_null_count(this->num_elements()));
   EXPECT_EQ(this->num_elements(), col.null_count());
 }
 
 TYPED_TEST(TypedColumnTest, ResetNullCountAllNull)
 {
-  cudf::column col{
-    this->type(), this->num_elements(), std::move(this->data), std::move(this->all_null_mask)};
+  cudf::column col{this->type(),
+                   this->num_elements(),
+                   std::move(this->data),
+                   std::move(this->all_null_mask),
+                   this->num_elements()};
 
   EXPECT_EQ(this->num_elements(), col.null_count());
 }
@@ -202,13 +218,14 @@ TYPED_TEST(TypedColumnTest, ResetNullCountAllNull)
 TYPED_TEST(TypedColumnTest, ResetNullCountAllValid)
 {
   cudf::column col{
-    this->type(), this->num_elements(), std::move(this->data), std::move(this->all_valid_mask)};
+    this->type(), this->num_elements(), std::move(this->data), std::move(this->all_valid_mask), 0};
   EXPECT_EQ(0, col.null_count());
 }
 
 TYPED_TEST(TypedColumnTest, CopyDataNoMask)
 {
-  cudf::column col{this->type(), this->num_elements(), std::move(this->data)};
+  cudf::column col{
+    this->type(), this->num_elements(), std::move(this->data), rmm::device_buffer{}, 0};
   EXPECT_EQ(this->type(), col.type());
   EXPECT_FALSE(col.nullable());
   EXPECT_EQ(0, col.null_count());
@@ -226,7 +243,8 @@ TYPED_TEST(TypedColumnTest, CopyDataNoMask)
 TYPED_TEST(TypedColumnTest, MoveDataNoMask)
 {
   void* original_data = this->data.data();
-  cudf::column col{this->type(), this->num_elements(), std::move(this->data)};
+  cudf::column col{
+    this->type(), this->num_elements(), std::move(this->data), rmm::device_buffer{}, 0};
   EXPECT_EQ(this->type(), col.type());
   EXPECT_FALSE(col.nullable());
   EXPECT_EQ(0, col.null_count());
@@ -245,7 +263,8 @@ TYPED_TEST(TypedColumnTest, CopyDataAndMask)
   cudf::column col{this->type(),
                    this->num_elements(),
                    rmm::device_buffer{this->data, cudf::get_default_stream()},
-                   rmm::device_buffer{this->all_valid_mask, cudf::get_default_stream()}};
+                   rmm::device_buffer{this->all_valid_mask, cudf::get_default_stream()},
+                   0};
   EXPECT_EQ(this->type(), col.type());
   EXPECT_TRUE(col.nullable());
   EXPECT_EQ(0, col.null_count());
@@ -267,7 +286,7 @@ TYPED_TEST(TypedColumnTest, MoveDataAndMask)
   void* original_data = this->data.data();
   void* original_mask = this->all_valid_mask.data();
   cudf::column col{
-    this->type(), this->num_elements(), std::move(this->data), std::move(this->all_valid_mask)};
+    this->type(), this->num_elements(), std::move(this->data), std::move(this->all_valid_mask), 0};
   EXPECT_EQ(this->type(), col.type());
   EXPECT_TRUE(col.nullable());
   EXPECT_EQ(0, col.null_count());
@@ -284,7 +303,8 @@ TYPED_TEST(TypedColumnTest, MoveDataAndMask)
 
 TYPED_TEST(TypedColumnTest, CopyConstructorNoMask)
 {
-  cudf::column original{this->type(), this->num_elements(), std::move(this->data)};
+  cudf::column original{
+    this->type(), this->num_elements(), std::move(this->data), rmm::device_buffer{}, 0};
   cudf::column copy{original};
   verify_column_views(copy);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(original, copy);
@@ -298,7 +318,7 @@ TYPED_TEST(TypedColumnTest, CopyConstructorNoMask)
 TYPED_TEST(TypedColumnTest, CopyConstructorWithMask)
 {
   cudf::column original{
-    this->type(), this->num_elements(), std::move(this->data), std::move(this->all_valid_mask)};
+    this->type(), this->num_elements(), std::move(this->data), std::move(this->all_valid_mask), 0};
   cudf::column copy{original};
   verify_column_views(copy);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(original, copy);
@@ -312,13 +332,14 @@ TYPED_TEST(TypedColumnTest, CopyConstructorWithMask)
 
 TYPED_TEST(TypedColumnTest, MoveConstructorNoMask)
 {
-  cudf::column original{this->type(), this->num_elements(), std::move(this->data)};
+  cudf::column original{
+    this->type(), this->num_elements(), std::move(this->data), rmm::device_buffer{}, 0};
 
   auto original_data = original.view().head();
 
   cudf::column moved_to{std::move(original)};
 
-  EXPECT_EQ(0, original.size());
+  EXPECT_EQ(0, original.size());  // NOLINT
   EXPECT_EQ(cudf::data_type{cudf::type_id::EMPTY}, original.type());
 
   verify_column_views(moved_to);
@@ -331,13 +352,13 @@ TYPED_TEST(TypedColumnTest, MoveConstructorNoMask)
 TYPED_TEST(TypedColumnTest, MoveConstructorWithMask)
 {
   cudf::column original{
-    this->type(), this->num_elements(), std::move(this->data), std::move(this->all_valid_mask)};
+    this->type(), this->num_elements(), std::move(this->data), std::move(this->all_valid_mask), 0};
   auto original_data = original.view().head();
   auto original_mask = original.view().null_mask();
   cudf::column moved_to{std::move(original)};
   verify_column_views(moved_to);
 
-  EXPECT_EQ(0, original.size());
+  EXPECT_EQ(0, original.size());  // NOLINT
   EXPECT_EQ(cudf::data_type{cudf::type_id::EMPTY}, original.type());
 
   // Verify move
@@ -352,9 +373,9 @@ TYPED_TEST(TypedColumnTest, DeviceUvectorConstructorNoMask)
                                                  this->num_elements());
 
   auto original = cudf::detail::make_device_uvector_async(
-    data, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
+    data, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
   auto original_data = original.data();
-  cudf::column moved_to{std::move(original)};
+  cudf::column moved_to{std::move(original), rmm::device_buffer{}, 0};
   verify_column_views(moved_to);
 
   // Verify move
@@ -368,10 +389,10 @@ TYPED_TEST(TypedColumnTest, DeviceUvectorConstructorWithMask)
                                                  this->num_elements());
 
   auto original = cudf::detail::make_device_uvector_async(
-    data, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
+    data, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
   auto original_data = original.data();
   auto original_mask = this->all_valid_mask.data();
-  cudf::column moved_to{std::move(original), std::move(this->all_valid_mask)};
+  cudf::column moved_to{std::move(original), std::move(this->all_valid_mask), 0};
   verify_column_views(moved_to);
 
   // Verify move
@@ -388,12 +409,14 @@ TYPED_TEST(TypedColumnTest, ConstructWithChildren)
     cudf::data_type{cudf::type_id::INT8},
     42,
     rmm::device_buffer{this->data, cudf::get_default_stream()},
-    rmm::device_buffer{this->all_valid_mask, cudf::get_default_stream()}));
+    rmm::device_buffer{this->all_valid_mask, cudf::get_default_stream()},
+    0));
   children.emplace_back(std::make_unique<cudf::column>(
     cudf::data_type{cudf::type_id::FLOAT64},
     314,
     rmm::device_buffer{this->data, cudf::get_default_stream()},
-    rmm::device_buffer{this->all_valid_mask, cudf::get_default_stream()}));
+    rmm::device_buffer{this->all_valid_mask, cudf::get_default_stream()},
+    0));
   cudf::column col{this->type(),
                    this->num_elements(),
                    rmm::device_buffer{this->data, cudf::get_default_stream()},
@@ -412,7 +435,7 @@ TYPED_TEST(TypedColumnTest, ConstructWithChildren)
 TYPED_TEST(TypedColumnTest, ReleaseNoChildren)
 {
   cudf::column col{
-    this->type(), this->num_elements(), std::move(this->data), std::move(this->all_valid_mask)};
+    this->type(), this->num_elements(), std::move(this->data), std::move(this->all_valid_mask), 0};
   auto original_data = col.view().head();
   auto original_mask = col.view().null_mask();
 
@@ -433,12 +456,14 @@ TYPED_TEST(TypedColumnTest, ReleaseWithChildren)
     this->type(),
     this->num_elements(),
     rmm::device_buffer{this->data, cudf::get_default_stream()},
-    rmm::device_buffer{this->all_valid_mask, cudf::get_default_stream()}));
+    rmm::device_buffer{this->all_valid_mask, cudf::get_default_stream()},
+    0));
   children.emplace_back(std::make_unique<cudf::column>(
     this->type(),
     this->num_elements(),
     rmm::device_buffer{this->data, cudf::get_default_stream()},
-    rmm::device_buffer{this->all_valid_mask, cudf::get_default_stream()}));
+    rmm::device_buffer{this->all_valid_mask, cudf::get_default_stream()},
+    0));
   cudf::column col{this->type(),
                    this->num_elements(),
                    rmm::device_buffer{this->data, cudf::get_default_stream()},
@@ -462,7 +487,7 @@ TYPED_TEST(TypedColumnTest, ReleaseWithChildren)
 TYPED_TEST(TypedColumnTest, ColumnViewConstructorWithMask)
 {
   cudf::column original{
-    this->type(), this->num_elements(), std::move(this->data), std::move(this->all_valid_mask)};
+    this->type(), this->num_elements(), std::move(this->data), std::move(this->all_valid_mask), 0};
   cudf::column_view original_view = original;
   cudf::column copy{original_view};
   verify_column_views(copy);

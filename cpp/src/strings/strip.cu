@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@
 #include <cudf/strings/strip.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
@@ -60,7 +61,7 @@ std::unique_ptr<column> strip(strings_column_view const& input,
                               side_type side,
                               string_scalar const& to_strip,
                               rmm::cuda_stream_view stream,
-                              rmm::mr::device_memory_resource* mr)
+                              rmm::device_async_resource_ref mr)
 {
   if (input.is_empty()) return make_empty_column(type_id::STRING);
 
@@ -86,10 +87,11 @@ std::unique_ptr<column> strip(strings_column_view const& input,
 std::unique_ptr<column> strip(strings_column_view const& input,
                               side_type side,
                               string_scalar const& to_strip,
-                              rmm::mr::device_memory_resource* mr)
+                              rmm::cuda_stream_view stream,
+                              rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::strip(input, side, to_strip, cudf::get_default_stream(), mr);
+  return detail::strip(input, side, to_strip, stream, mr);
 }
 
 }  // namespace strings

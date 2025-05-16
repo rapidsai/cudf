@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2023, NVIDIA CORPORATION.
+# Copyright (c) 2019-2025, NVIDIA CORPORATION.
 
 import cupy as cp
 import numpy as np
@@ -13,11 +13,21 @@ import dask_cudf
 
 
 @pytest.mark.parametrize("ascending", [True, False])
-@pytest.mark.parametrize("by", ["a", "b", "c", "d", ["a", "b"], ["c", "d"]])
+@pytest.mark.parametrize(
+    "by",
+    [
+        "a",
+        "b",
+        "c",
+        "d",
+        ["a", "b"],
+        ["c", "d"],
+    ],
+)
 @pytest.mark.parametrize("nelem", [10, 500])
 @pytest.mark.parametrize("nparts", [1, 10])
 def test_sort_values(nelem, nparts, by, ascending):
-    np.random.seed(0)
+    _ = np.random.default_rng(seed=0)
     df = cudf.DataFrame()
     df["a"] = np.ascontiguousarray(np.arange(nelem)[::-1])
     df["b"] = np.arange(100, nelem + 100)
@@ -70,7 +80,7 @@ def test_sort_repartition():
     ],
 )
 def test_sort_values_with_nulls(data, by, ascending, na_position):
-    np.random.seed(0)
+    _ = np.random.default_rng(seed=0)
     cp.random.seed(0)
     df = cudf.DataFrame(data)
     ddf = dd.from_pandas(df, npartitions=5)
@@ -114,3 +124,10 @@ def test_sort_values_empty_string(by):
     if "a" in by:
         expect = df.sort_values(by)
         assert dd.assert_eq(got, expect, check_index=False)
+
+
+def test_disk_shuffle():
+    df = cudf.DataFrame({"a": [1, 2, 3] * 20, "b": [4, 5, 6, 7] * 15})
+    ddf = dd.from_pandas(df, npartitions=4)
+    got = dd.DataFrame.shuffle(ddf, "a", shuffle_method="disk")
+    dd.assert_eq(got, df)

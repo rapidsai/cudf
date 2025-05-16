@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,7 +29,7 @@ struct StringsConvertTest : public cudf::test::BaseFixture {};
 
 TEST_F(StringsConvertTest, IPv4ToIntegers)
 {
-  std::vector<const char*> h_strings{
+  std::vector<char const*> h_strings{
     nullptr, "", "hello", "41.168.0.1", "127.0.0.1", "41.197.0.1", "192.168.0.1"};
   cudf::test::strings_column_wrapper strings(
     h_strings.cbegin(),
@@ -40,8 +40,8 @@ TEST_F(StringsConvertTest, IPv4ToIntegers)
   auto strings_view = cudf::strings_column_view(strings);
   auto results      = cudf::strings::ipv4_to_integers(strings_view);
 
-  std::vector<int64_t> h_expected{0, 0, 0, 698875905, 2130706433, 700776449, 3232235521};
-  cudf::test::fixed_width_column_wrapper<int64_t> expected(
+  std::vector<uint32_t> h_expected{0, 0, 0, 698875905, 2130706433, 700776449, 3232235521};
+  cudf::test::fixed_width_column_wrapper<uint32_t> expected(
     h_expected.cbegin(),
     h_expected.cend(),
     thrust::make_transform_iterator(h_strings.begin(),
@@ -51,7 +51,7 @@ TEST_F(StringsConvertTest, IPv4ToIntegers)
 
 TEST_F(StringsConvertTest, IntegersToIPv4)
 {
-  std::vector<const char*> h_strings{
+  std::vector<char const*> h_strings{
     "192.168.0.1", "10.0.0.1", nullptr, "0.0.0.0", "41.186.0.1", "41.197.0.1"};
   cudf::test::strings_column_wrapper strings(
     h_strings.cbegin(),
@@ -59,8 +59,8 @@ TEST_F(StringsConvertTest, IntegersToIPv4)
     thrust::make_transform_iterator(h_strings.begin(),
                                     [](auto const str) { return str != nullptr; }));
 
-  std::vector<int64_t> h_column{3232235521, 167772161, 0, 0, 700055553, 700776449};
-  cudf::test::fixed_width_column_wrapper<int64_t> column(
+  std::vector<uint32_t> h_column{3232235521, 167772161, 0, 0, 700055553, 700776449};
+  cudf::test::fixed_width_column_wrapper<uint32_t> column(
     h_column.cbegin(),
     h_column.cend(),
     thrust::make_transform_iterator(h_strings.begin(),
@@ -72,7 +72,8 @@ TEST_F(StringsConvertTest, IntegersToIPv4)
 
 TEST_F(StringsConvertTest, ZeroSizeStringsColumnIPV4)
 {
-  cudf::column_view zero_size_column(cudf::data_type{cudf::type_id::INT64}, 0, nullptr, nullptr, 0);
+  auto const zero_size_column = cudf::make_empty_column(cudf::type_id::INT64)->view();
+
   auto results = cudf::strings::integers_to_ipv4(zero_size_column);
   cudf::test::expect_column_empty(results->view());
   results = cudf::strings::ipv4_to_integers(results->view());
@@ -87,7 +88,7 @@ TEST_F(StringsConvertTest, IPv4Error)
 
 TEST_F(StringsConvertTest, IsIPv4)
 {
-  std::vector<const char*> h_strings{"",
+  std::vector<char const*> h_strings{"",
                                      "123.456.789.10",
                                      nullptr,
                                      "0.0.0.0",
@@ -103,8 +104,9 @@ TEST_F(StringsConvertTest, IsIPv4)
     h_strings.begin(),
     h_strings.end(),
     thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
-  cudf::test::fixed_width_column_wrapper<bool> expected({0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0},
-                                                        {1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1});
+  cudf::test::fixed_width_column_wrapper<bool> expected(
+    {0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0},
+    {true, true, false, true, true, true, true, true, true, true, true, true});
   auto results = cudf::strings::is_ipv4(cudf::strings_column_view(strings));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }

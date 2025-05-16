@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,31 +14,33 @@
  * limitations under the License.
  */
 
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_utilities.hpp>
+#include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/iterator_utilities.hpp>
+#include <cudf_test/table_utilities.hpp>
+#include <cudf_test/testing_main.hpp>
+
 #include <cudf/column/column.hpp>
-#include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/copying.hpp>
-#include <cudf/detail/null_mask.hpp>
-#include <cudf/detail/structs/utilities.hpp>
 #include <cudf/dictionary/encode.hpp>
-#include <cudf/join.hpp>
-#include <cudf/scalar/scalar_factories.hpp>
+#include <cudf/join/hash_join.hpp>
+#include <cudf/join/join.hpp>
+#include <cudf/join/sort_merge_join.hpp>
 #include <cudf/sorting.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
-#include <cudf_test/base_fixture.hpp>
-#include <cudf_test/column_utilities.hpp>
-#include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/iterator_utilities.hpp>
-#include <cudf_test/table_utilities.hpp>
-#include <cudf_test/type_lists.hpp>
+#include <rmm/cuda_stream_view.hpp>
 
 #include <limits>
 
+namespace {
 template <typename T>
 using column_wrapper = cudf::test::fixed_width_column_wrapper<T>;
 using strcol_wrapper = cudf::test::strings_column_wrapper;
@@ -46,19 +48,18 @@ using CVector        = std::vector<std::unique_ptr<cudf::column>>;
 using Table          = cudf::table;
 constexpr cudf::size_type NoneValue =
   std::numeric_limits<cudf::size_type>::min();  // TODO: how to test if this isn't public?
+enum class algorithm { HASH, SORT_MERGE, MERGE };
 
-// This function is a wrapper around cudf's join APIs that takes the gather map
-// from join APIs and materializes the table that would be created by gathering
-// from the joined tables. Join APIs originally returned tables like this, but
-// they were modified in https://github.com/rapidsai/cudf/pull/7454. This
-// helper function allows us to avoid rewriting all our tests in terms of
-// gather maps.
+using JoinResult = std::pair<std::unique_ptr<rmm::device_uvector<cudf::size_type>>,
+                             std::unique_ptr<rmm::device_uvector<cudf::size_type>>>;
+
 template <std::pair<std::unique_ptr<rmm::device_uvector<cudf::size_type>>,
                     std::unique_ptr<rmm::device_uvector<cudf::size_type>>> (*join_impl)(
             cudf::table_view const& left_keys,
             cudf::table_view const& right_keys,
             cudf::null_equality compare_nulls,
-            rmm::mr::device_memory_resource* mr),
+            rmm::cuda_stream_view stream,
+            rmm::device_async_resource_ref mr),
           cudf::out_of_bounds_policy oob_policy = cudf::out_of_bounds_policy::DONT_CHECK>
 std::unique_ptr<cudf::table> join_and_gather(
   cudf::table_view const& left_input,
@@ -66,12 +67,13 @@ std::unique_ptr<cudf::table> join_and_gather(
   std::vector<cudf::size_type> const& left_on,
   std::vector<cudf::size_type> const& right_on,
   cudf::null_equality compare_nulls,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
 {
   auto left_selected  = left_input.select(left_on);
   auto right_selected = right_input.select(right_on);
   auto const [left_join_indices, right_join_indices] =
-    join_impl(left_selected, right_selected, compare_nulls, mr);
+    join_impl(left_selected, right_selected, compare_nulls, stream, mr);
 
   auto left_indices_span  = cudf::device_span<cudf::size_type const>{*left_join_indices};
   auto right_indices_span = cudf::device_span<cudf::size_type const>{*right_join_indices};
@@ -95,8 +97,16 @@ std::unique_ptr<cudf::table> inner_join(
   cudf::table_view const& right_input,
   std::vector<cudf::size_type> const& left_on,
   std::vector<cudf::size_type> const& right_on,
-  cudf::null_equality compare_nulls = cudf::null_equality::EQUAL)
+  cudf::null_equality compare_nulls = cudf::null_equality::EQUAL,
+  algorithm algo                    = algorithm::HASH)
 {
+  if (algo == algorithm::SORT_MERGE) {
+    return join_and_gather<cudf::sort_merge_inner_join>(
+      left_input, right_input, left_on, right_on, compare_nulls);
+  } else if (algo == algorithm::MERGE) {
+    return join_and_gather<cudf::merge_inner_join>(
+      left_input, right_input, left_on, right_on, compare_nulls);
+  }
   return join_and_gather<cudf::inner_join>(
     left_input, right_input, left_on, right_on, compare_nulls);
 }
@@ -123,6 +133,8 @@ std::unique_ptr<cudf::table> full_join(
     full_input, right_input, full_on, right_on, compare_nulls);
 }
 
+}  // anonymous namespace
+
 struct JoinTest : public cudf::test::BaseFixture {
   std::pair<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::table>> gather_maps_as_tables(
     cudf::column_view const& expected_left_map,
@@ -133,10 +145,14 @@ struct JoinTest : public cudf::test::BaseFixture {
     auto result_table =
       cudf::table_view({cudf::column_view{cudf::data_type{cudf::type_id::INT32},
                                           static_cast<cudf::size_type>(result.first->size()),
-                                          result.first->data()},
+                                          result.first->data(),
+                                          nullptr,
+                                          0},
                         cudf::column_view{cudf::data_type{cudf::type_id::INT32},
                                           static_cast<cudf::size_type>(result.second->size()),
-                                          result.second->data()}});
+                                          result.second->data(),
+                                          nullptr,
+                                          0}});
     auto result_sort_order = cudf::sorted_order(result_table);
     auto sorted_result     = cudf::gather(result_table, *result_sort_order);
 
@@ -148,8 +164,111 @@ struct JoinTest : public cudf::test::BaseFixture {
   }
 };
 
-TEST_F(JoinTest, EmptySentinelRepro)
+// Disabled for now, waiting on upstream cuco updates
+TEST_F(JoinTest, DISABLED_InvalidLoadFactor)
 {
+  column_wrapper<int32_t> col0_0{{3, 1, 2, 0, 3}};
+  strcol_wrapper col0_1({"s0", "s1", "s2", "s4", "s1"});
+
+  CVector cols0;
+  cols0.push_back(col0_0.release());
+  cols0.push_back(col0_1.release());
+
+  Table t0(std::move(cols0));
+
+  // Test load factor of -0.1
+  EXPECT_THROW(cudf::hash_join(t0, cudf::nullable_join::NO, cudf::null_equality::EQUAL, -0.1),
+               std::invalid_argument);
+  // Test load factor of 0
+  EXPECT_THROW(cudf::hash_join(t0, cudf::nullable_join::NO, cudf::null_equality::EQUAL, 0.0),
+               std::invalid_argument);
+  // Test load factor > 1
+  EXPECT_THROW(cudf::hash_join(t0, cudf::nullable_join::NO, cudf::null_equality::EQUAL, 1.5),
+               std::invalid_argument);
+}
+
+struct JoinParameterizedTest : public JoinTest, public testing::WithParamInterface<algorithm> {};
+struct JoinParameterizedTestSortedInput : public JoinTest,
+                                          public testing::WithParamInterface<algorithm> {};
+
+// Parametrize qualifying join tests for supported algorithms
+INSTANTIATE_TEST_CASE_P(InnerJoinParameterizedTest,
+                        JoinParameterizedTest,
+                        ::testing::Values(algorithm::HASH, algorithm::SORT_MERGE));
+
+INSTANTIATE_TEST_CASE_P(InnerJoinParameterizedTestSortedInput,
+                        JoinParameterizedTestSortedInput,
+                        ::testing::Values(algorithm::HASH, algorithm::MERGE));
+
+TEST_P(JoinParameterizedTestSortedInput, SortedKeys)
+{
+  auto algo = GetParam();
+  column_wrapper<int32_t> col0_0{{0, 1, 2, 2, 3}};
+  strcol_wrapper col0_1({"s4", "s1", "s0", "s0", "s1"});
+  column_wrapper<int32_t> col0_2{{4, 1, 2, 1, 0}};
+
+  column_wrapper<int32_t> col1_0{{0, 2, 2, 3, 4}};
+  strcol_wrapper col1_1({"s1", "s1", "s0", "s1", "s2"});
+  column_wrapper<int32_t> col1_2{{1, 1, 0, 1, 2}};
+
+  CVector cols0, cols1;
+  cols0.push_back(col0_0.release());
+  cols0.push_back(col0_1.release());
+  cols0.push_back(col0_2.release());
+  cols1.push_back(col1_0.release());
+  cols1.push_back(col1_1.release());
+  cols1.push_back(col1_2.release());
+
+  Table t0(std::move(cols0));
+  Table t1(std::move(cols1));
+
+  auto result            = inner_join(t0, t1, {0}, {0}, cudf::null_equality::EQUAL, algo);
+  auto result_sort_order = cudf::sorted_order(result->view());
+  auto sorted_result     = cudf::gather(result->view(), *result_sort_order);
+
+  column_wrapper<int32_t> col_gold_0{{3, 2, 2, 0, 2, 2}};
+  strcol_wrapper col_gold_1({"s1", "s0", "s0", "s4", "s0", "s0"});
+  column_wrapper<int32_t> col_gold_2{{0, 2, 2, 4, 1, 1}};
+  column_wrapper<int32_t> col_gold_3{{3, 2, 2, 0, 2, 2}};
+  strcol_wrapper col_gold_4({"s1", "s1", "s0", "s1", "s1", "s0"});
+  column_wrapper<int32_t> col_gold_5{{1, 1, 0, 1, 1, 0}};
+  CVector cols_gold;
+  cols_gold.push_back(col_gold_0.release());
+  cols_gold.push_back(col_gold_1.release());
+  cols_gold.push_back(col_gold_2.release());
+  cols_gold.push_back(col_gold_3.release());
+  cols_gold.push_back(col_gold_4.release());
+  cols_gold.push_back(col_gold_5.release());
+  Table gold(std::move(cols_gold));
+
+  auto gold_sort_order = cudf::sorted_order(gold.view());
+  auto sorted_gold     = cudf::gather(gold.view(), *gold_sort_order);
+  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*sorted_gold, *sorted_result);
+}
+
+TEST_P(JoinParameterizedTest, InvalidInput)
+{
+  auto algo                  = GetParam();
+  auto const left_first_col  = cudf::test::fixed_width_column_wrapper<int32_t>{1197};
+  auto const left_second_col = cudf::test::strings_column_wrapper{"201812"};
+
+  auto const right_first_col  = cudf::test::fixed_width_column_wrapper<int32_t>{1197};
+  auto const right_second_col = cudf::test::strings_column_wrapper{"201812"};
+  auto const right_third_col  = cudf::test::fixed_width_column_wrapper<int64_t>{2550000371};
+
+  cudf::table_view left({left_first_col, left_second_col});
+  cudf::table_view right({right_first_col, right_second_col, right_third_col});
+
+  EXPECT_THROW(inner_join(left, right, {0, 1}, {0, 1, 2}, cudf::null_equality::EQUAL, algo),
+               cudf::logic_error);
+
+  EXPECT_THROW(inner_join(left, right, {}, {0, 1, 2}, cudf::null_equality::EQUAL, algo),
+               cudf::logic_error);
+}
+
+TEST_P(JoinParameterizedTest, EmptySentinelRepro)
+{
+  auto algo = GetParam();
   // This test reproduced an implementation specific behavior where the combination of these
   // particular values ended up hashing to the empty key sentinel value used by the hash join
   // This test may no longer be relevant if the implementation ever changes.
@@ -164,7 +283,7 @@ TEST_F(JoinTest, EmptySentinelRepro)
   cudf::table_view left({left_first_col, left_second_col, left_third_col});
   cudf::table_view right({right_first_col, right_second_col, right_third_col});
 
-  auto result = inner_join(left, right, {0, 1, 2}, {0, 1, 2});
+  auto result = inner_join(left, right, {0, 1, 2}, {0, 1, 2}, cudf::null_equality::EQUAL, algo);
 
   EXPECT_EQ(result->num_rows(), 1);
 }
@@ -194,12 +313,14 @@ TEST_F(JoinTest, LeftJoinNoNullsWithNoCommon)
   auto result_sort_order = cudf::sorted_order(result->view());
   auto sorted_result     = cudf::gather(result->view(), *result_sort_order);
 
-  column_wrapper<int32_t> col_gold_0{{3, 1, 2, 2, 0, 3}, {1, 1, 1, 1, 1, 1}};
-  strcol_wrapper col_gold_1({"s0", "s1", "s2", "s2", "s4", "s1"}, {1, 1, 1, 1, 1, 1});
-  column_wrapper<int32_t> col_gold_2{{0, 1, 2, 2, 4, 1}, {1, 1, 1, 1, 1, 1}};
-  column_wrapper<int32_t> col_gold_3{{3, -1, 2, 2, 0, 3}, {1, 0, 1, 1, 1, 1}};
-  strcol_wrapper col_gold_4({"s1", "", "s1", "s0", "s1", "s1"}, {1, 0, 1, 1, 1, 1});
-  column_wrapper<int32_t> col_gold_5{{1, -1, 1, 0, 1, 1}, {1, 0, 1, 1, 1, 1}};
+  column_wrapper<int32_t> col_gold_0{{3, 1, 2, 2, 0, 3}, {true, true, true, true, true, true}};
+  strcol_wrapper col_gold_1({"s0", "s1", "s2", "s2", "s4", "s1"},
+                            {true, true, true, true, true, true});
+  column_wrapper<int32_t> col_gold_2{{0, 1, 2, 2, 4, 1}, {true, true, true, true, true, true}};
+  column_wrapper<int32_t> col_gold_3{{3, -1, 2, 2, 0, 3}, {true, false, true, true, true, true}};
+  strcol_wrapper col_gold_4({"s1", "", "s1", "s0", "s1", "s1"},
+                            {true, false, true, true, true, true});
+  column_wrapper<int32_t> col_gold_5{{1, -1, 1, 0, 1, 1}, {true, false, true, true, true, true}};
   CVector cols_gold;
   cols_gold.push_back(col_gold_0.release());
   cols_gold.push_back(col_gold_1.release());
@@ -240,14 +361,18 @@ TEST_F(JoinTest, FullJoinNoNulls)
   auto result_sort_order = cudf::sorted_order(result->view());
   auto sorted_result     = cudf::gather(result->view(), *result_sort_order);
 
-  column_wrapper<int32_t> col_gold_0{{3, 1, 2, 0, 3, -1, -1, -1, -1}, {1, 1, 1, 1, 1, 0, 0, 0, 0}};
+  column_wrapper<int32_t> col_gold_0{{3, 1, 2, 0, 3, -1, -1, -1, -1},
+                                     {true, true, true, true, true, false, false, false, false}};
   strcol_wrapper col_gold_1({"s0", "s1", "s2", "s4", "s1", "", "", "", ""},
-                            {1, 1, 1, 1, 1, 0, 0, 0, 0});
-  column_wrapper<int32_t> col_gold_2{{0, 1, 2, 4, 1, -1, -1, -1, -1}, {1, 1, 1, 1, 1, 0, 0, 0, 0}};
-  column_wrapper<int32_t> col_gold_3{{-1, -1, -1, -1, 3, 2, 2, 0, 4}, {0, 0, 0, 0, 1, 1, 1, 1, 1}};
+                            {true, true, true, true, true, false, false, false, false});
+  column_wrapper<int32_t> col_gold_2{{0, 1, 2, 4, 1, -1, -1, -1, -1},
+                                     {true, true, true, true, true, false, false, false, false}};
+  column_wrapper<int32_t> col_gold_3{{-1, -1, -1, -1, 3, 2, 2, 0, 4},
+                                     {false, false, false, false, true, true, true, true, true}};
   strcol_wrapper col_gold_4({"", "", "", "", "s1", "s1", "s0", "s1", "s2"},
-                            {0, 0, 0, 0, 1, 1, 1, 1, 1});
-  column_wrapper<int32_t> col_gold_5{{-1, -1, -1, -1, 1, 1, 0, 1, 2}, {0, 0, 0, 0, 1, 1, 1, 1, 1}};
+                            {false, false, false, false, true, true, true, true, true});
+  column_wrapper<int32_t> col_gold_5{{-1, -1, -1, -1, 1, 1, 0, 1, 2},
+                                     {false, false, false, false, true, true, true, true, true}};
 
   CVector cols_gold;
   cols_gold.push_back(col_gold_0.release());
@@ -270,7 +395,7 @@ TEST_F(JoinTest, FullJoinWithNulls)
   strcol_wrapper col0_1({"s0", "s1", "s2", "s4", "s1"});
   column_wrapper<int32_t> col0_2{{0, 1, 2, 4, 1}};
 
-  column_wrapper<int32_t> col1_0{{2, 2, 0, 4, 3}, {1, 1, 1, 0, 1}};
+  column_wrapper<int32_t> col1_0{{2, 2, 0, 4, 3}, {true, true, true, false, true}};
   strcol_wrapper col1_1{{"s1", "s0", "s1", "s2", "s1"}};
   column_wrapper<int32_t> col1_2{{1, 0, 1, 2, 1}};
 
@@ -289,14 +414,18 @@ TEST_F(JoinTest, FullJoinWithNulls)
   auto result_sort_order = cudf::sorted_order(result->view());
   auto sorted_result     = cudf::gather(result->view(), *result_sort_order);
 
-  column_wrapper<int32_t> col_gold_0{{3, 1, 2, 0, 3, -1, -1, -1, -1}, {1, 1, 1, 1, 1, 0, 0, 0, 0}};
+  column_wrapper<int32_t> col_gold_0{{3, 1, 2, 0, 3, -1, -1, -1, -1},
+                                     {true, true, true, true, true, false, false, false, false}};
   strcol_wrapper col_gold_1({"s0", "s1", "s2", "s4", "s1", "", "", "", ""},
-                            {1, 1, 1, 1, 1, 0, 0, 0, 0});
-  column_wrapper<int32_t> col_gold_2{{0, 1, 2, 4, 1, -1, -1, -1, -1}, {1, 1, 1, 1, 1, 0, 0, 0, 0}};
-  column_wrapper<int32_t> col_gold_3{{-1, -1, -1, -1, 3, 2, 2, 0, 4}, {0, 0, 0, 0, 1, 1, 1, 1, 0}};
+                            {true, true, true, true, true, false, false, false, false});
+  column_wrapper<int32_t> col_gold_2{{0, 1, 2, 4, 1, -1, -1, -1, -1},
+                                     {true, true, true, true, true, false, false, false, false}};
+  column_wrapper<int32_t> col_gold_3{{-1, -1, -1, -1, 3, 2, 2, 0, 4},
+                                     {false, false, false, false, true, true, true, true, false}};
   strcol_wrapper col_gold_4({"", "", "", "", "s1", "s1", "s0", "s1", "s2"},
-                            {0, 0, 0, 0, 1, 1, 1, 1, 1});
-  column_wrapper<int32_t> col_gold_5{{-1, -1, -1, -1, 1, 1, 0, 1, 2}, {0, 0, 0, 0, 1, 1, 1, 1, 1}};
+                            {false, false, false, false, true, true, true, true, true});
+  column_wrapper<int32_t> col_gold_5{{-1, -1, -1, -1, 1, 1, 0, 1, 2},
+                                     {false, false, false, false, true, true, true, true, true}};
 
   CVector cols_gold;
   cols_gold.push_back(col_gold_0.release());
@@ -317,12 +446,12 @@ TEST_F(JoinTest, FullJoinOnNulls)
 {
   // clang-format off
   column_wrapper<int32_t> col0_0{{  3,    1 },
-                                 {  1,    0  }};
+                                 {  true,    false  }};
   strcol_wrapper          col0_1({"s0", "s1" });
   column_wrapper<int32_t> col0_2{{  0,    1 }};
 
   column_wrapper<int32_t> col1_0{{  2,    5,    3,    7 },
-                                 {  1,    1,    1,    0 }};
+                                 {  true,    true,    true,    false }};
   strcol_wrapper          col1_1({"s1", "s0", "s0", "s1" });
   column_wrapper<int32_t> col1_2{{  1,    4,    2,    8 }};
 
@@ -342,13 +471,13 @@ TEST_F(JoinTest, FullJoinOnNulls)
   auto sorted_result     = cudf::gather(result->view(), *result_sort_order);
 
   column_wrapper<int32_t> col_gold_0{{   3,   -1,   -1,    -1},
-                                     {   1,    0,    0,     0}};
+                                     {   true,    false,    false,     false}};
   strcol_wrapper          col_gold_1{{ "s0", "s1",  "",    ""},
-                                     {   1,    1,    0,     0}};
+                                     {   true,    true,    false,     false}};
   column_wrapper<int32_t> col_gold_2{{   0,    1,   -1,    -1},
-                                     {   1,    1,    0,     0}};
+                                     {   true,    true,    false,     false}};
   column_wrapper<int32_t> col_gold_3{{   3,   -1,    2,     5},
-                                     {   1,    0,    1,     1}};
+                                     {   true,    false,    true,     true}};
   strcol_wrapper          col_gold_4{{ "s0", "s1", "s1",  "s0"}};
   column_wrapper<int32_t> col_gold_5{{   2,    8,    1,     4}};
 
@@ -375,17 +504,17 @@ TEST_F(JoinTest, FullJoinOnNulls)
   sorted_result     = cudf::gather(result->view(), *result_sort_order);
 
   col_gold_0 =               {{   3,   -1,   -1,    -1,   -1},
-                              {   1,    0,    0,     0,    0}};
+                              {   true,    false,    false,     false,    false}};
   col_gold_1 = strcol_wrapper{{ "s0", "s1",   "",    "",   ""},
-                              {   1,    1,    0,     0,    0}};
+                              {   true,    true,    false,     false,    false}};
   col_gold_2 =               {{   0,    1,   -1,    -1,   -1},
-                              {   1,    1,    0,     0,    0}};
+                              {   true,    true,    false,     false,    false}};
   col_gold_3 =               {{   3,   -1,    2,     5,   -1},
-                              {   1,    0,    1,     1,    0}};
+                              {   true,    false,    true,     true,    false}};
   col_gold_4 = strcol_wrapper{{ "s0",  "",  "s1",  "s0",  "s1"},
-                              {   1,    0,    1,     1,    1}};
+                              {   true,    false,    true,     true,    true}};
   col_gold_5 =               {{   2,   -1,    1,     4,    8},
-                              {   1,    0,    1,     1,    1}};
+                              {   true,    false,    true,     true,    true}};
 
   // clang-format on
 
@@ -433,9 +562,9 @@ TEST_F(JoinTest, LeftJoinNoNulls)
   column_wrapper<int32_t> col_gold_0({3, 1, 2, 0, 3});
   strcol_wrapper col_gold_1({"s0", "s1", "s2", "s4", "s1"});
   column_wrapper<int32_t> col_gold_2({0, 1, 2, 4, 1});
-  column_wrapper<int32_t> col_gold_3{{-1, -1, -1, -1, 3}, {0, 0, 0, 0, 1}};
-  strcol_wrapper col_gold_4{{"", "", "", "", "s1"}, {0, 0, 0, 0, 1}};
-  column_wrapper<int32_t> col_gold_5{{-1, -1, -1, -1, 1}, {0, 0, 0, 0, 1}};
+  column_wrapper<int32_t> col_gold_3{{-1, -1, -1, -1, 3}, {false, false, false, false, true}};
+  strcol_wrapper col_gold_4{{"", "", "", "", "s1"}, {false, false, false, false, true}};
+  column_wrapper<int32_t> col_gold_5{{-1, -1, -1, -1, 1}, {false, false, false, false, true}};
   CVector cols_gold;
   cols_gold.push_back(col_gold_0.release());
   cols_gold.push_back(col_gold_1.release());
@@ -453,12 +582,12 @@ TEST_F(JoinTest, LeftJoinNoNulls)
 TEST_F(JoinTest, LeftJoinWithNulls)
 {
   column_wrapper<int32_t> col0_0{{3, 1, 2, 0, 2}};
-  strcol_wrapper col0_1({"s1", "s1", "", "s4", "s0"}, {1, 1, 0, 1, 1});
+  strcol_wrapper col0_1({"s1", "s1", "", "s4", "s0"}, {true, true, false, true, true});
   column_wrapper<int32_t> col0_2{{0, 1, 2, 4, 1}};
 
   column_wrapper<int32_t> col1_0{{2, 2, 0, 4, 3}};
   strcol_wrapper col1_1({"s1", "s0", "s1", "s2", "s1"});
-  column_wrapper<int32_t> col1_2{{1, 0, 1, 2, 1}, {1, 0, 1, 1, 1}};
+  column_wrapper<int32_t> col1_2{{1, 0, 1, 2, 1}, {true, false, true, true, true}};
 
   CVector cols0, cols1;
   cols0.push_back(col0_0.release());
@@ -475,12 +604,12 @@ TEST_F(JoinTest, LeftJoinWithNulls)
   auto result_sort_order = cudf::sorted_order(result->view());
   auto sorted_result     = cudf::gather(result->view(), *result_sort_order);
 
-  column_wrapper<int32_t> col_gold_0{{3, 1, 2, 0, 2}, {1, 1, 1, 1, 1}};
-  strcol_wrapper col_gold_1({"s1", "s1", "", "s4", "s0"}, {1, 1, 0, 1, 1});
-  column_wrapper<int32_t> col_gold_2{{0, 1, 2, 4, 1}, {1, 1, 1, 1, 1}};
-  column_wrapper<int32_t> col_gold_3{{3, -1, -1, -1, 2}, {1, 0, 0, 0, 1}};
-  strcol_wrapper col_gold_4{{"s1", "", "", "", "s0"}, {1, 0, 0, 0, 1}};
-  column_wrapper<int32_t> col_gold_5{{1, -1, -1, -1, -1}, {1, 0, 0, 0, 0}};
+  column_wrapper<int32_t> col_gold_0{{3, 1, 2, 0, 2}, {true, true, true, true, true}};
+  strcol_wrapper col_gold_1({"s1", "s1", "", "s4", "s0"}, {true, true, false, true, true});
+  column_wrapper<int32_t> col_gold_2{{0, 1, 2, 4, 1}, {true, true, true, true, true}};
+  column_wrapper<int32_t> col_gold_3{{3, -1, -1, -1, 2}, {true, false, false, false, true}};
+  strcol_wrapper col_gold_4{{"s1", "", "", "", "s0"}, {true, false, false, false, true}};
+  column_wrapper<int32_t> col_gold_5{{1, -1, -1, -1, -1}, {true, false, false, false, false}};
 
   CVector cols_gold;
   cols_gold.push_back(col_gold_0.release());
@@ -499,25 +628,27 @@ TEST_F(JoinTest, LeftJoinWithNulls)
 TEST_F(JoinTest, LeftJoinWithStructsAndNulls)
 {
   column_wrapper<int32_t> col0_0{{3, 1, 2, 0, 2}};
-  strcol_wrapper col0_1({"s1", "s1", "", "s4", "s0"}, {1, 1, 0, 1, 1});
+  strcol_wrapper col0_1({"s1", "s1", "", "s4", "s0"}, {true, true, false, true, true});
   column_wrapper<int32_t> col0_2{{0, 1, 2, 4, 1}};
   auto col0_names_col = strcol_wrapper{
     "Samuel Vimes", "Carrot Ironfoundersson", "Detritus", "Samuel Vimes", "Angua von Überwald"};
   auto col0_ages_col = column_wrapper<int32_t>{{48, 27, 351, 31, 25}};
 
-  auto col0_is_human_col = column_wrapper<bool>{{true, true, false, false, false}, {1, 1, 0, 1, 0}};
+  auto col0_is_human_col =
+    column_wrapper<bool>{{true, true, false, false, false}, {true, true, false, true, false}};
 
   auto col0_3 =
     cudf::test::structs_column_wrapper{{col0_names_col, col0_ages_col, col0_is_human_col}};
 
   column_wrapper<int32_t> col1_0{{2, 2, 0, 4, 3}};
   strcol_wrapper col1_1({"s1", "s0", "s1", "s2", "s1"});
-  column_wrapper<int32_t> col1_2{{1, 0, 1, 2, 1}, {1, 0, 1, 1, 1}};
+  column_wrapper<int32_t> col1_2{{1, 0, 1, 2, 1}, {true, false, true, true, true}};
   auto col1_names_col = strcol_wrapper{
     "Samuel Vimes", "Detritus", "Detritus", "Carrot Ironfoundersson", "Angua von Überwald"};
   auto col1_ages_col = column_wrapper<int32_t>{{48, 35, 351, 22, 25}};
 
-  auto col1_is_human_col = column_wrapper<bool>{{true, true, false, false, true}, {1, 1, 0, 1, 1}};
+  auto col1_is_human_col =
+    column_wrapper<bool>{{true, true, false, false, true}, {true, true, false, true, true}};
 
   auto col1_3 =
     cudf::test::structs_column_wrapper{{col1_names_col, col1_ages_col, col1_is_human_col}};
@@ -539,22 +670,22 @@ TEST_F(JoinTest, LeftJoinWithStructsAndNulls)
   auto result_sort_order = cudf::sorted_order(result->view());
   auto sorted_result     = cudf::gather(result->view(), *result_sort_order);
 
-  column_wrapper<int32_t> col_gold_0{{3, 2, 1, 0, 2}, {1, 1, 1, 1, 1}};
-  strcol_wrapper col_gold_1({"s1", "", "s1", "s4", "s0"}, {1, 0, 1, 1, 1});
-  column_wrapper<int32_t> col_gold_2{{0, 2, 1, 4, 1}, {1, 1, 1, 1, 1}};
+  column_wrapper<int32_t> col_gold_0{{3, 2, 1, 0, 2}, {true, true, true, true, true}};
+  strcol_wrapper col_gold_1({"s1", "", "s1", "s4", "s0"}, {true, false, true, true, true});
+  column_wrapper<int32_t> col_gold_2{{0, 2, 1, 4, 1}, {true, true, true, true, true}};
   auto col0_gold_names_col = strcol_wrapper{
     "Samuel Vimes", "Detritus", "Carrot Ironfoundersson", "Samuel Vimes", "Angua von Überwald"};
   auto col0_gold_ages_col = column_wrapper<int32_t>{{48, 351, 27, 31, 25}};
 
   auto col0_gold_is_human_col =
-    column_wrapper<bool>{{true, false, true, false, false}, {1, 0, 1, 1, 0}};
+    column_wrapper<bool>{{true, false, true, false, false}, {true, false, true, true, false}};
 
   auto col_gold_3 = cudf::test::structs_column_wrapper{
     {col0_gold_names_col, col0_gold_ages_col, col0_gold_is_human_col}};
 
-  column_wrapper<int32_t> col_gold_4{{2, 0, -1, -1, -1}, {1, 1, 0, 0, 0}};
-  strcol_wrapper col_gold_5{{"s1", "s1", "", "", ""}, {1, 1, 0, 0, 0}};
-  column_wrapper<int32_t> col_gold_6{{1, 1, -1, -1, -1}, {1, 1, 0, 0, 0}};
+  column_wrapper<int32_t> col_gold_4{{2, 0, -1, -1, -1}, {true, true, false, false, false}};
+  strcol_wrapper col_gold_5{{"s1", "s1", "", "", ""}, {true, true, false, false, false}};
+  column_wrapper<int32_t> col_gold_6{{1, 1, -1, -1, -1}, {true, true, false, false, false}};
   auto col1_gold_names_col = strcol_wrapper{{
                                               "Samuel Vimes",
                                               "Detritus",
@@ -562,14 +693,16 @@ TEST_F(JoinTest, LeftJoinWithStructsAndNulls)
                                               "",
                                               "",
                                             },
-                                            {1, 1, 0, 0, 0}};
-  auto col1_gold_ages_col  = column_wrapper<int32_t>{{48, 351, -1, -1, -1}, {1, 1, 0, 0, 0}};
+                                            {true, true, false, false, false}};
+  auto col1_gold_ages_col =
+    column_wrapper<int32_t>{{48, 351, -1, -1, -1}, {true, true, false, false, false}};
 
   auto col1_gold_is_human_col =
-    column_wrapper<bool>{{true, false, false, false, false}, {1, 0, 0, 0, 0}};
+    column_wrapper<bool>{{true, false, false, false, false}, {true, false, false, false, false}};
 
   auto col_gold_7 = cudf::test::structs_column_wrapper{
-    {col1_gold_names_col, col1_gold_ages_col, col1_gold_is_human_col}, {1, 1, 0, 0, 0}};
+    {col1_gold_names_col, col1_gold_ages_col, col1_gold_is_human_col},
+    {true, true, false, false, false}};
 
   CVector cols_gold;
   cols_gold.push_back(col_gold_0.release());
@@ -591,12 +724,12 @@ TEST_F(JoinTest, LeftJoinOnNulls)
 {
   // clang-format off
   column_wrapper<int32_t> col0_0{{  3,    1,    2},
-                                 {  1,    0,    1}};
+                                 {  true,    false,    true}};
   strcol_wrapper          col0_1({"s0", "s1", "s2" });
   column_wrapper<int32_t> col0_2{{  0,    1,    2 }};
 
   column_wrapper<int32_t> col1_0{{  2,    5,    3,    7 },
-                                 {  1,    1,    1,    0 }};
+                                 {  true,    true,    true,    false }};
   strcol_wrapper          col1_1({"s1", "s0", "s0", "s1" });
   column_wrapper<int32_t> col1_2{{  1,    4,    2,    8 }};
 
@@ -616,17 +749,17 @@ TEST_F(JoinTest, LeftJoinOnNulls)
   auto sorted_result     = cudf::gather(result->view(), *result_sort_order);
 
   column_wrapper<int32_t> col_gold_0{{   3,    -1,    2},
-                                     {   1,     0,    1}};
+                                     {   true,     false,    true}};
   strcol_wrapper          col_gold_1({ "s0",  "s1", "s2"},
-                                     {   1,     1,    1});
+                                     {   true,     true,    true});
   column_wrapper<int32_t> col_gold_2{{   0,     1,    2},
-                                     {   1,     1,    1}};
+                                     {   true,     true,    true}};
   column_wrapper<int32_t> col_gold_3{{   3,    -1,   -1},
-                                     {   1,     0,    0}};
+                                     {   true,     false,    false}};
   strcol_wrapper          col_gold_4({ "s0",  "s1",  ""},
-                                     {   1,     1,    0});
+                                     {   true,     true,    false});
   column_wrapper<int32_t> col_gold_5{{   2,     8,   -1},
-                                     {   1,     1,    0}};
+                                     {   true,     true,    false}};
 
   CVector cols_gold;
   cols_gold.push_back(col_gold_0.release());
@@ -651,17 +784,17 @@ TEST_F(JoinTest, LeftJoinOnNulls)
 
 
   col_gold_0 = {{   3,    -1,    2},
-                {   1,     0,    1}};
+                {   true,     false,    true}};
   col_gold_1 = {{ "s0",  "s1", "s2"},
-                {   1,     1,    1}};
+                {   true,     true,    true}};
   col_gold_2 = {{   0,     1,    2},
-                {   1,     1,    1}};
+                {   true,     true,    true}};
   col_gold_3 = {{   3,    -1,   -1},
-                {   1,     0,    0}};
+                {   true,     false,    false}};
   col_gold_4 = {{ "s0",   "",   ""},
-                {   1,     0,    0}};
+                {   true,     false,    false}};
   col_gold_5 = {{   2,    -1,   -1},
-                {   1,     0,    0}};
+                {   true,     false,    false}};
 
   // clang-format on
   CVector cols_gold_nulls_unequal;
@@ -677,8 +810,9 @@ TEST_F(JoinTest, LeftJoinOnNulls)
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*sorted_gold, *sorted_result);
 }
 
-TEST_F(JoinTest, InnerJoinNoNulls)
+TEST_P(JoinParameterizedTest, InnerJoinNoNulls)
 {
+  auto algo = GetParam();
   column_wrapper<int32_t> col0_0{{3, 1, 2, 0, 2}};
   strcol_wrapper col0_1({"s1", "s1", "s0", "s4", "s0"});
   column_wrapper<int32_t> col0_2{{0, 1, 2, 4, 1}};
@@ -698,39 +832,70 @@ TEST_F(JoinTest, InnerJoinNoNulls)
   Table t0(std::move(cols0));
   Table t1(std::move(cols1));
 
-  auto result            = inner_join(t0, t1, {0, 1}, {0, 1});
-  auto result_sort_order = cudf::sorted_order(result->view());
-  auto sorted_result     = cudf::gather(result->view(), *result_sort_order);
+  for (const auto eq : {cudf::null_equality::EQUAL, cudf::null_equality::UNEQUAL}) {
+    // single column
+    {
+      auto result            = inner_join(t0, t1, {0}, {0}, eq, algo);
+      auto result_sort_order = cudf::sorted_order(result->view());
+      auto sorted_result     = cudf::gather(result->view(), *result_sort_order);
 
-  column_wrapper<int32_t> col_gold_0{{3, 2, 2}};
-  strcol_wrapper col_gold_1({"s1", "s0", "s0"});
-  column_wrapper<int32_t> col_gold_2{{0, 2, 1}};
-  column_wrapper<int32_t> col_gold_3{{3, 2, 2}};
-  strcol_wrapper col_gold_4({"s1", "s0", "s0"});
-  column_wrapper<int32_t> col_gold_5{{1, 0, 0}};
-  CVector cols_gold;
-  cols_gold.push_back(col_gold_0.release());
-  cols_gold.push_back(col_gold_1.release());
-  cols_gold.push_back(col_gold_2.release());
-  cols_gold.push_back(col_gold_3.release());
-  cols_gold.push_back(col_gold_4.release());
-  cols_gold.push_back(col_gold_5.release());
-  Table gold(std::move(cols_gold));
+      column_wrapper<int32_t> col_gold_0{{3, 2, 2, 0, 2, 2}};
+      strcol_wrapper col_gold_1({"s1", "s0", "s0", "s4", "s0", "s0"});
+      column_wrapper<int32_t> col_gold_2{{0, 2, 2, 4, 1, 1}};
+      column_wrapper<int32_t> col_gold_3{{3, 2, 2, 0, 2, 2}};
+      strcol_wrapper col_gold_4({"s1", "s1", "s0", "s1", "s1", "s0"});
+      column_wrapper<int32_t> col_gold_5{{1, 1, 0, 1, 1, 0}};
+      CVector cols_gold;
+      cols_gold.push_back(col_gold_0.release());
+      cols_gold.push_back(col_gold_1.release());
+      cols_gold.push_back(col_gold_2.release());
+      cols_gold.push_back(col_gold_3.release());
+      cols_gold.push_back(col_gold_4.release());
+      cols_gold.push_back(col_gold_5.release());
+      Table gold(std::move(cols_gold));
 
-  auto gold_sort_order = cudf::sorted_order(gold.view());
-  auto sorted_gold     = cudf::gather(gold.view(), *gold_sort_order);
-  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*sorted_gold, *sorted_result);
+      auto gold_sort_order = cudf::sorted_order(gold.view());
+      auto sorted_gold     = cudf::gather(gold.view(), *gold_sort_order);
+      CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*sorted_gold, *sorted_result);
+    }
+    // multi column
+    {
+      auto result            = inner_join(t0, t1, {0, 1}, {0, 1}, eq, algo);
+      auto result_sort_order = cudf::sorted_order(result->view());
+      auto sorted_result     = cudf::gather(result->view(), *result_sort_order);
+
+      column_wrapper<int32_t> col_gold_0{{3, 2, 2}};
+      strcol_wrapper col_gold_1({"s1", "s0", "s0"});
+      column_wrapper<int32_t> col_gold_2{{0, 2, 1}};
+      column_wrapper<int32_t> col_gold_3{{3, 2, 2}};
+      strcol_wrapper col_gold_4({"s1", "s0", "s0"});
+      column_wrapper<int32_t> col_gold_5{{1, 0, 0}};
+      CVector cols_gold;
+      cols_gold.push_back(col_gold_0.release());
+      cols_gold.push_back(col_gold_1.release());
+      cols_gold.push_back(col_gold_2.release());
+      cols_gold.push_back(col_gold_3.release());
+      cols_gold.push_back(col_gold_4.release());
+      cols_gold.push_back(col_gold_5.release());
+      Table gold(std::move(cols_gold));
+
+      auto gold_sort_order = cudf::sorted_order(gold.view());
+      auto sorted_gold     = cudf::gather(gold.view(), *gold_sort_order);
+      CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*sorted_gold, *sorted_result);
+    }
+  }
 }
 
-TEST_F(JoinTest, InnerJoinWithNulls)
+TEST_P(JoinParameterizedTest, InnerJoinWithNulls)
 {
+  auto algo = GetParam();
   column_wrapper<int32_t> col0_0{{3, 1, 2, 0, 2}};
-  strcol_wrapper col0_1({"s1", "s1", "s0", "s4", "s0"}, {1, 1, 0, 1, 1});
+  strcol_wrapper col0_1({"s1", "s1", "s0", "s4", "s0"}, {true, true, false, true, true});
   column_wrapper<int32_t> col0_2{{0, 1, 2, 4, 1}};
 
   column_wrapper<int32_t> col1_0{{2, 2, 0, 4, 3}};
   strcol_wrapper col1_1({"s1", "s0", "s1", "s2", "s1"});
-  column_wrapper<int32_t> col1_2{{1, 0, 1, 2, 1}, {1, 0, 1, 1, 1}};
+  column_wrapper<int32_t> col1_2{{1, 0, 1, 2, 1}, {true, false, true, true, true}};
 
   CVector cols0, cols1;
   cols0.push_back(col0_0.release());
@@ -743,16 +908,16 @@ TEST_F(JoinTest, InnerJoinWithNulls)
   Table t0(std::move(cols0));
   Table t1(std::move(cols1));
 
-  auto result            = inner_join(t0, t1, {0, 1}, {0, 1});
+  auto result            = inner_join(t0, t1, {0, 1}, {0, 1}, cudf::null_equality::EQUAL, algo);
   auto result_sort_order = cudf::sorted_order(result->view());
   auto sorted_result     = cudf::gather(result->view(), *result_sort_order);
 
   column_wrapper<int32_t> col_gold_0{{3, 2}};
-  strcol_wrapper col_gold_1({"s1", "s0"}, {1, 1});
+  strcol_wrapper col_gold_1({"s1", "s0"}, {true, true});
   column_wrapper<int32_t> col_gold_2{{0, 1}};
   column_wrapper<int32_t> col_gold_3{{3, 2}};
-  strcol_wrapper col_gold_4({"s1", "s0"}, {1, 1});
-  column_wrapper<int32_t> col_gold_5{{1, -1}, {1, 0}};
+  strcol_wrapper col_gold_4({"s1", "s0"}, {true, true});
+  column_wrapper<int32_t> col_gold_5{{1, -1}, {true, false}};
   CVector cols_gold;
   cols_gold.push_back(col_gold_0.release());
   cols_gold.push_back(col_gold_1.release());
@@ -767,24 +932,27 @@ TEST_F(JoinTest, InnerJoinWithNulls)
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*sorted_gold, *sorted_result);
 }
 
-TEST_F(JoinTest, InnerJoinWithStructsAndNulls)
+// TODO: add unequal nulls case here
+TEST_P(JoinParameterizedTest, InnerJoinWithStructsAndNulls)
 {
+  auto algo = GetParam();
   column_wrapper<int32_t> col0_0{{3, 1, 2, 0, 2}};
-  strcol_wrapper col0_1({"s1", "s1", "s0", "s4", "s0"}, {1, 1, 0, 1, 1});
+  strcol_wrapper col0_1({"s1", "s1", "s0", "s4", "s0"}, {true, true, false, true, true});
   column_wrapper<int32_t> col0_2{{0, 1, 2, 4, 1}};
   std::initializer_list<std::string> col0_names = {
     "Samuel Vimes", "Carrot Ironfoundersson", "Detritus", "Samuel Vimes", "Angua von Überwald"};
   auto col0_names_col = strcol_wrapper{col0_names.begin(), col0_names.end()};
   auto col0_ages_col  = column_wrapper<int32_t>{{48, 27, 351, 31, 25}};
 
-  auto col0_is_human_col = column_wrapper<bool>{{true, true, false, false, false}, {1, 1, 0, 1, 0}};
+  auto col0_is_human_col =
+    column_wrapper<bool>{{true, true, false, false, false}, {true, true, false, true, false}};
 
   auto col0_3 =
     cudf::test::structs_column_wrapper{{col0_names_col, col0_ages_col, col0_is_human_col}};
 
   column_wrapper<int32_t> col1_0{{2, 2, 0, 4, 3}};
   strcol_wrapper col1_1({"s1", "s0", "s1", "s2", "s1"});
-  column_wrapper<int32_t> col1_2{{1, 0, 1, 2, 1}, {1, 0, 1, 1, 1}};
+  column_wrapper<int32_t> col1_2{{1, 0, 1, 2, 1}, {true, false, true, true, true}};
   std::initializer_list<std::string> col1_names = {"Carrot Ironfoundersson",
                                                    "Angua von Überwald",
                                                    "Detritus",
@@ -793,7 +961,8 @@ TEST_F(JoinTest, InnerJoinWithStructsAndNulls)
   auto col1_names_col = strcol_wrapper{col1_names.begin(), col1_names.end()};
   auto col1_ages_col  = column_wrapper<int32_t>{{351, 25, 27, 31, 48}};
 
-  auto col1_is_human_col = column_wrapper<bool>{{true, false, false, false, true}, {1, 0, 0, 1, 1}};
+  auto col1_is_human_col =
+    column_wrapper<bool>{{true, false, false, false, true}, {true, false, false, true, true}};
 
   auto col1_3 =
     cudf::test::structs_column_wrapper{{col1_names_col, col1_ages_col, col1_is_human_col}};
@@ -811,28 +980,28 @@ TEST_F(JoinTest, InnerJoinWithStructsAndNulls)
   Table t0(std::move(cols0));
   Table t1(std::move(cols1));
 
-  auto result            = inner_join(t0, t1, {0, 1, 3}, {0, 1, 3});
+  auto result = inner_join(t0, t1, {0, 1, 3}, {0, 1, 3}, cudf::null_equality::EQUAL, algo);
   auto result_sort_order = cudf::sorted_order(result->view());
   auto sorted_result     = cudf::gather(result->view(), *result_sort_order);
 
   column_wrapper<int32_t> col_gold_0{{3, 2}};
-  strcol_wrapper col_gold_1({"s1", "s0"}, {1, 1});
+  strcol_wrapper col_gold_1({"s1", "s0"}, {true, true});
   column_wrapper<int32_t> col_gold_2{{0, 1}};
   auto col_gold_3_names_col = strcol_wrapper{"Samuel Vimes", "Angua von Überwald"};
   auto col_gold_3_ages_col  = column_wrapper<int32_t>{{48, 25}};
 
-  auto col_gold_3_is_human_col = column_wrapper<bool>{{true, false}, {1, 0}};
+  auto col_gold_3_is_human_col = column_wrapper<bool>{{true, false}, {true, false}};
 
   auto col_gold_3 = cudf::test::structs_column_wrapper{
     {col_gold_3_names_col, col_gold_3_ages_col, col_gold_3_is_human_col}};
 
   column_wrapper<int32_t> col_gold_4{{3, 2}};
-  strcol_wrapper col_gold_5({"s1", "s0"}, {1, 1});
-  column_wrapper<int32_t> col_gold_6{{1, -1}, {1, 0}};
+  strcol_wrapper col_gold_5({"s1", "s0"}, {true, true});
+  column_wrapper<int32_t> col_gold_6{{1, -1}, {true, false}};
   auto col_gold_7_names_col = strcol_wrapper{"Samuel Vimes", "Angua von Überwald"};
   auto col_gold_7_ages_col  = column_wrapper<int32_t>{{48, 25}};
 
-  auto col_gold_7_is_human_col = column_wrapper<bool>{{true, false}, {1, 0}};
+  auto col_gold_7_is_human_col = column_wrapper<bool>{{true, false}, {true, false}};
 
   auto col_gold_7 = cudf::test::structs_column_wrapper{
     {col_gold_7_names_col, col_gold_7_ages_col, col_gold_7_is_human_col}};
@@ -853,17 +1022,18 @@ TEST_F(JoinTest, InnerJoinWithStructsAndNulls)
 }
 
 // // Test to check join behavior when join keys are null.
-TEST_F(JoinTest, InnerJoinOnNulls)
+TEST_P(JoinParameterizedTest, InnerJoinOnNulls)
 {
+  auto algo = GetParam();
   // clang-format off
   column_wrapper<int32_t> col0_0{{  3,    1,    2,    0,    2}};
   strcol_wrapper          col0_1({"s1", "s1", "s8", "s4", "s0"},
-                                 {  1,    1,    0,    1,    1});
+                                 {  true,    true,    false,    true,    true});
   column_wrapper<int32_t> col0_2{{  0,    1,    2,    4,    1}};
 
   column_wrapper<int32_t> col1_0{{  2,    2,    0,    4,    3}};
   strcol_wrapper          col1_1({"s1", "s0", "s1", "s2", "s1"},
-                                 {  1,    0,    1,    1,    1});
+                                 {  true,    false,    true,    true,    true});
   column_wrapper<int32_t> col1_2{{  1,    0,    1,    2,    1}};
 
   CVector cols0, cols1;
@@ -877,17 +1047,17 @@ TEST_F(JoinTest, InnerJoinOnNulls)
   Table t0(std::move(cols0));
   Table t1(std::move(cols1));
 
-  auto result            = inner_join(t0, t1, {0, 1}, {0, 1});
+  auto result            = inner_join(t0, t1, {0, 1}, {0, 1}, cudf::null_equality::EQUAL, algo);
   auto result_sort_order = cudf::sorted_order(result->view());
   auto sorted_result     = cudf::gather(result->view(), *result_sort_order);
 
   column_wrapper<int32_t> col_gold_0 {{  3,    2}};
   strcol_wrapper          col_gold_1 ({"s1", "s0"},
-                                      {  1,    0});
+                                      {  true,    false});
   column_wrapper<int32_t> col_gold_2{{   0,    2}};
   column_wrapper<int32_t> col_gold_3 {{  3,    2}};
   strcol_wrapper          col_gold_4 ({"s1", "s0"},
-                                      {  1,    0});
+                                      {  true,    false});
   column_wrapper<int32_t> col_gold_5{{   1,    0}};
   CVector cols_gold;
   cols_gold.push_back(col_gold_0.release());
@@ -906,17 +1076,17 @@ TEST_F(JoinTest, InnerJoinOnNulls)
   // Repeat test with compare_nulls_equal=false,
   // as per SQL standard.
 
-  result            = inner_join(t0, t1, {0, 1}, {0, 1},  cudf::null_equality::UNEQUAL);
+  result            = inner_join(t0, t1, {0, 1}, {0, 1}, cudf::null_equality::UNEQUAL, algo);
   result_sort_order = cudf::sorted_order(result->view());
   sorted_result     = cudf::gather(result->view(), *result_sort_order);
 
   col_gold_0 =               {{  3}};
   col_gold_1 = strcol_wrapper({"s1"},
-                              {  1});
+                              {  true});
   col_gold_2 =               {{  0}};
   col_gold_3 =               {{  3}};
   col_gold_4 = strcol_wrapper({"s1"},
-                              {  1});
+                              {  true});
   col_gold_5 =               {{  1}};
 
   // clang-format on
@@ -936,13 +1106,14 @@ TEST_F(JoinTest, InnerJoinOnNulls)
 }
 
 // Empty Left Table
-TEST_F(JoinTest, EmptyLeftTableInnerJoin)
+TEST_P(JoinParameterizedTest, EmptyLeftTableInnerJoin)
 {
+  auto algo = GetParam();
   column_wrapper<int32_t> col0_0;
   column_wrapper<int32_t> col0_1;
 
   column_wrapper<int32_t> col1_0{{2, 2, 0, 4, 3}};
-  column_wrapper<int32_t> col1_1{{1, 0, 1, 2, 1}, {1, 0, 1, 1, 1}};
+  column_wrapper<int32_t> col1_1{{1, 0, 1, 2, 1}, {true, false, true, true, true}};
 
   CVector cols0, cols1;
   cols0.push_back(col0_0.release());
@@ -953,7 +1124,7 @@ TEST_F(JoinTest, EmptyLeftTableInnerJoin)
   Table empty0(std::move(cols0));
   Table t1(std::move(cols1));
 
-  auto result = inner_join(empty0, t1, {0, 1}, {0, 1});
+  auto result = inner_join(empty0, t1, {0, 1}, {0, 1}, cudf::null_equality::EQUAL, algo);
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(empty0, *result);
 }
 
@@ -963,7 +1134,7 @@ TEST_F(JoinTest, EmptyLeftTableLeftJoin)
   column_wrapper<int32_t> col0_1;
 
   column_wrapper<int32_t> col1_0{{2, 2, 0, 4, 3}};
-  column_wrapper<int32_t> col1_1{{1, 0, 1, 2, 1}, {1, 0, 1, 1, 1}};
+  column_wrapper<int32_t> col1_1{{1, 0, 1, 2, 1}, {true, false, true, true, true}};
 
   CVector cols0, cols1;
   cols0.push_back(col0_0.release());
@@ -984,7 +1155,7 @@ TEST_F(JoinTest, EmptyLeftTableFullJoin)
   column_wrapper<int32_t> col0_1;
 
   column_wrapper<int32_t> col1_0{{2, 2, 0, 4, 3}};
-  column_wrapper<int32_t> col1_1{{1, 0, 1, 2, 1}, {1, 0, 1, 1, 1}};
+  column_wrapper<int32_t> col1_1{{1, 0, 1, 2, 1}, {true, false, true, true, true}};
 
   CVector cols0, cols1;
   cols0.push_back(col0_0.release());
@@ -999,10 +1170,10 @@ TEST_F(JoinTest, EmptyLeftTableFullJoin)
   auto result_sort_order = cudf::sorted_order(result->view());
   auto sorted_result     = cudf::gather(result->view(), *result_sort_order);
 
-  column_wrapper<int32_t> col_gold_0{{-1, -1, -1, -1, -1}, {0, 0, 0, 0, 0}};
-  column_wrapper<int32_t> col_gold_1{{-1, -1, -1, -1, -1}, {0, 0, 0, 0, 0}};
+  column_wrapper<int32_t> col_gold_0{{-1, -1, -1, -1, -1}, {false, false, false, false, false}};
+  column_wrapper<int32_t> col_gold_1{{-1, -1, -1, -1, -1}, {false, false, false, false, false}};
   column_wrapper<int32_t> col_gold_2{{2, 2, 0, 4, 3}};
-  column_wrapper<int32_t> col_gold_3{{1, 0, 1, 2, 1}, {1, 0, 1, 1, 1}};
+  column_wrapper<int32_t> col_gold_3{{1, 0, 1, 2, 1}, {true, false, true, true, true}};
 
   CVector cols_gold;
   cols_gold.push_back(col_gold_0.release());
@@ -1018,10 +1189,11 @@ TEST_F(JoinTest, EmptyLeftTableFullJoin)
 }
 
 // Empty Right Table
-TEST_F(JoinTest, EmptyRightTableInnerJoin)
+TEST_P(JoinParameterizedTest, EmptyRightTableInnerJoin)
 {
+  auto algo = GetParam();
   column_wrapper<int32_t> col0_0{{2, 2, 0, 4, 3}};
-  column_wrapper<int32_t> col0_1{{1, 0, 1, 2, 1}, {1, 0, 1, 1, 1}};
+  column_wrapper<int32_t> col0_1{{1, 0, 1, 2, 1}, {true, false, true, true, true}};
 
   column_wrapper<int32_t> col1_0;
   column_wrapper<int32_t> col1_1;
@@ -1036,7 +1208,7 @@ TEST_F(JoinTest, EmptyRightTableInnerJoin)
   Table empty1(std::move(cols1));
 
   {
-    auto result = inner_join(t0, empty1, {0, 1}, {0, 1});
+    auto result = inner_join(t0, empty1, {0, 1}, {0, 1}, cudf::null_equality::EQUAL, algo);
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(empty1, *result);
   }
 
@@ -1059,8 +1231,8 @@ TEST_F(JoinTest, EmptyRightTableInnerJoin)
 
 TEST_F(JoinTest, EmptyRightTableLeftJoin)
 {
-  column_wrapper<int32_t> col0_0{{2, 2, 0, 4, 3}, {1, 1, 1, 1, 1}};
-  column_wrapper<int32_t> col0_1{{1, 0, 1, 2, 1}, {1, 0, 1, 1, 1}};
+  column_wrapper<int32_t> col0_0{{2, 2, 0, 4, 3}, {true, true, true, true, true}};
+  column_wrapper<int32_t> col0_1{{1, 0, 1, 2, 1}, {true, false, true, true, true}};
 
   column_wrapper<int32_t> col1_0;
   column_wrapper<int32_t> col1_1;
@@ -1099,7 +1271,7 @@ TEST_F(JoinTest, EmptyRightTableLeftJoin)
 TEST_F(JoinTest, EmptyRightTableFullJoin)
 {
   column_wrapper<int32_t> col0_0{{2, 2, 0, 4, 3}};
-  column_wrapper<int32_t> col0_1{{1, 0, 1, 2, 1}, {1, 0, 1, 1, 1}};
+  column_wrapper<int32_t> col0_1{{1, 0, 1, 2, 1}, {true, false, true, true, true}};
 
   column_wrapper<int32_t> col1_0;
   column_wrapper<int32_t> col1_1;
@@ -1136,8 +1308,9 @@ TEST_F(JoinTest, EmptyRightTableFullJoin)
 }
 
 // Both tables empty
-TEST_F(JoinTest, BothEmptyInnerJoin)
+TEST_P(JoinParameterizedTest, BothEmptyInnerJoin)
 {
+  auto algo = GetParam();
   column_wrapper<int32_t> col0_0;
   column_wrapper<int32_t> col0_1;
 
@@ -1153,7 +1326,7 @@ TEST_F(JoinTest, BothEmptyInnerJoin)
   Table t0(std::move(cols0));
   Table empty1(std::move(cols1));
 
-  auto result = inner_join(t0, empty1, {0, 1}, {0, 1});
+  auto result = inner_join(t0, empty1, {0, 1}, {0, 1}, cudf::null_equality::EQUAL, algo);
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(empty1, *result);
 }
 
@@ -1201,8 +1374,9 @@ TEST_F(JoinTest, BothEmptyFullJoin)
 
 // // EqualValues X Inner,Left,Full
 
-TEST_F(JoinTest, EqualValuesInnerJoin)
+TEST_P(JoinParameterizedTest, EqualValuesInnerJoin)
 {
+  auto algo = GetParam();
   column_wrapper<int32_t> col0_0{{0, 0}};
   strcol_wrapper col0_1({"s0", "s0"});
 
@@ -1218,7 +1392,7 @@ TEST_F(JoinTest, EqualValuesInnerJoin)
   Table t0(std::move(cols0));
   Table t1(std::move(cols1));
 
-  auto result = inner_join(t0, t1, {0, 1}, {0, 1});
+  auto result = inner_join(t0, t1, {0, 1}, {0, 1}, cudf::null_equality::EQUAL, algo);
 
   column_wrapper<int32_t> col_gold_0{{0, 0, 0, 0}};
   strcol_wrapper col_gold_1({"s0", "s0", "s0", "s0"});
@@ -1255,10 +1429,10 @@ TEST_F(JoinTest, EqualValuesLeftJoin)
 
   auto result = left_join(t0, t1, {0, 1}, {0, 1});
 
-  column_wrapper<int32_t> col_gold_0{{0, 0, 0, 0}, {1, 1, 1, 1}};
-  strcol_wrapper col_gold_1({"s0", "s0", "s0", "s0"}, {1, 1, 1, 1});
-  column_wrapper<int32_t> col_gold_2{{0, 0, 0, 0}, {1, 1, 1, 1}};
-  strcol_wrapper col_gold_3({"s0", "s0", "s0", "s0"}, {1, 1, 1, 1});
+  column_wrapper<int32_t> col_gold_0{{0, 0, 0, 0}, {true, true, true, true}};
+  strcol_wrapper col_gold_1({"s0", "s0", "s0", "s0"}, {true, true, true, true});
+  column_wrapper<int32_t> col_gold_2{{0, 0, 0, 0}, {true, true, true, true}};
+  strcol_wrapper col_gold_3({"s0", "s0", "s0", "s0"}, {true, true, true, true});
 
   CVector cols_gold;
   cols_gold.push_back(col_gold_0.release());
@@ -1304,8 +1478,9 @@ TEST_F(JoinTest, EqualValuesFullJoin)
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(gold, *result);
 }
 
-TEST_F(JoinTest, InnerJoinCornerCase)
+TEST_P(JoinParameterizedTest, InnerJoinCornerCase)
 {
+  auto algo = GetParam();
   column_wrapper<int64_t> col0_0{{4, 1, 3, 2, 2, 2, 2}};
   column_wrapper<int64_t> col1_0{{2}};
 
@@ -1316,7 +1491,7 @@ TEST_F(JoinTest, InnerJoinCornerCase)
   Table t0(std::move(cols0));
   Table t1(std::move(cols1));
 
-  auto result            = inner_join(t0, t1, {0}, {0});
+  auto result            = inner_join(t0, t1, {0}, {0}, cudf::null_equality::EQUAL, algo);
   auto result_sort_order = cudf::sorted_order(result->view());
   auto sorted_result     = cudf::gather(result->view(), *result_sort_order);
 
@@ -1340,66 +1515,80 @@ TEST_F(JoinTest, HashJoinSequentialProbes)
 
   Table t1(std::move(cols1));
 
-  cudf::hash_join hash_join(t1, cudf::nullable_join::NO, cudf::null_equality::EQUAL);
+  // Test with different load factors
+  std::vector<double> load_factors = {0.5, 1.0};
 
-  {
-    CVector cols0;
-    cols0.emplace_back(column_wrapper<int32_t>{{3, 1, 2, 0, 3}}.release());
-    cols0.emplace_back(strcol_wrapper({"s0", "s1", "s2", "s4", "s1"}).release());
+  for (auto desired_load_factor : load_factors) {
+    cudf::hash_join hash_join(
+      t1, cudf::nullable_join::NO, cudf::null_equality::EQUAL, desired_load_factor);
 
-    Table t0(std::move(cols0));
+    // Test full join
+    {
+      CVector cols0;
+      cols0.emplace_back(column_wrapper<int32_t>{{3, 1, 2, 0, 3}}.release());
+      cols0.emplace_back(strcol_wrapper({"s0", "s1", "s2", "s4", "s1"}).release());
 
-    auto output_size                         = hash_join.full_join_size(t0);
-    std::optional<std::size_t> optional_size = output_size;
+      Table t0(std::move(cols0));
 
-    std::size_t const size_gold = 9;
-    EXPECT_EQ(output_size, size_gold);
+      auto output_size                         = hash_join.full_join_size(t0);
+      std::optional<std::size_t> optional_size = output_size;
 
-    auto result = hash_join.full_join(t0, optional_size);
-    column_wrapper<int32_t> col_gold_0{{NoneValue, NoneValue, NoneValue, NoneValue, 4, 0, 1, 2, 3}};
-    column_wrapper<int32_t> col_gold_1{{0, 1, 2, 3, 4, NoneValue, NoneValue, NoneValue, NoneValue}};
-    auto const [sorted_gold, sorted_result] = gather_maps_as_tables(col_gold_0, col_gold_1, result);
-    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*sorted_gold, *sorted_result);
-  }
+      std::size_t const size_gold = 9;
+      EXPECT_EQ(output_size, size_gold);
 
-  {
-    CVector cols0;
-    cols0.emplace_back(column_wrapper<int32_t>{{3, 1, 2, 0, 3}}.release());
-    cols0.emplace_back(strcol_wrapper({"s0", "s1", "s2", "s4", "s1"}).release());
+      auto result = hash_join.full_join(t0, optional_size);
+      column_wrapper<int32_t> col_gold_0{
+        {NoneValue, NoneValue, NoneValue, NoneValue, 4, 0, 1, 2, 3}};
+      column_wrapper<int32_t> col_gold_1{
+        {0, 1, 2, 3, 4, NoneValue, NoneValue, NoneValue, NoneValue}};
+      auto const [sorted_gold, sorted_result] =
+        gather_maps_as_tables(col_gold_0, col_gold_1, result);
+      CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*sorted_gold, *sorted_result);
+    }
 
-    Table t0(std::move(cols0));
+    // Test left join
+    {
+      CVector cols0;
+      cols0.emplace_back(column_wrapper<int32_t>{{3, 1, 2, 0, 3}}.release());
+      cols0.emplace_back(strcol_wrapper({"s0", "s1", "s2", "s4", "s1"}).release());
 
-    auto output_size                         = hash_join.left_join_size(t0);
-    std::optional<std::size_t> optional_size = output_size;
+      Table t0(std::move(cols0));
 
-    std::size_t const size_gold = 5;
-    EXPECT_EQ(output_size, size_gold);
+      auto output_size                         = hash_join.left_join_size(t0);
+      std::optional<std::size_t> optional_size = output_size;
 
-    auto result = hash_join.left_join(t0, optional_size);
-    column_wrapper<int32_t> col_gold_0{{0, 1, 2, 3, 4}};
-    column_wrapper<int32_t> col_gold_1{{NoneValue, NoneValue, NoneValue, NoneValue, 4}};
-    auto const [sorted_gold, sorted_result] = gather_maps_as_tables(col_gold_0, col_gold_1, result);
-    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*sorted_gold, *sorted_result);
-  }
+      std::size_t const size_gold = 5;
+      EXPECT_EQ(output_size, size_gold);
 
-  {
-    CVector cols0;
-    cols0.emplace_back(column_wrapper<int32_t>{{3, 1, 2, 0, 2}}.release());
-    cols0.emplace_back(strcol_wrapper({"s1", "s1", "s0", "s4", "s0"}).release());
+      auto result = hash_join.left_join(t0, optional_size);
+      column_wrapper<int32_t> col_gold_0{{0, 1, 2, 3, 4}};
+      column_wrapper<int32_t> col_gold_1{{NoneValue, NoneValue, NoneValue, NoneValue, 4}};
+      auto const [sorted_gold, sorted_result] =
+        gather_maps_as_tables(col_gold_0, col_gold_1, result);
+      CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*sorted_gold, *sorted_result);
+    }
 
-    Table t0(std::move(cols0));
+    // Test inner join
+    {
+      CVector cols0;
+      cols0.emplace_back(column_wrapper<int32_t>{{3, 1, 2, 0, 2}}.release());
+      cols0.emplace_back(strcol_wrapper({"s1", "s1", "s0", "s4", "s0"}).release());
 
-    auto output_size                         = hash_join.inner_join_size(t0);
-    std::optional<std::size_t> optional_size = output_size;
+      Table t0(std::move(cols0));
 
-    std::size_t const size_gold = 3;
-    EXPECT_EQ(output_size, size_gold);
+      auto output_size                         = hash_join.inner_join_size(t0);
+      std::optional<std::size_t> optional_size = output_size;
 
-    auto result = hash_join.inner_join(t0, optional_size);
-    column_wrapper<int32_t> col_gold_0{{2, 4, 0}};
-    column_wrapper<int32_t> col_gold_1{{1, 1, 4}};
-    auto const [sorted_gold, sorted_result] = gather_maps_as_tables(col_gold_0, col_gold_1, result);
-    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*sorted_gold, *sorted_result);
+      std::size_t const size_gold = 3;
+      EXPECT_EQ(output_size, size_gold);
+
+      auto result = hash_join.inner_join(t0, optional_size);
+      column_wrapper<int32_t> col_gold_0{{2, 4, 0}};
+      column_wrapper<int32_t> col_gold_1{{1, 1, 4}};
+      auto const [sorted_gold, sorted_result] =
+        gather_maps_as_tables(col_gold_0, col_gold_1, result);
+      CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*sorted_gold, *sorted_result);
+    }
   }
 }
 
@@ -1409,7 +1598,8 @@ TEST_F(JoinTest, HashJoinWithStructsAndNulls)
     "Samuel Vimes", "Carrot Ironfoundersson", "Detritus", "Samuel Vimes", "Angua von Überwald"};
   auto col0_ages_col = column_wrapper<int32_t>{{48, 27, 351, 31, 25}};
 
-  auto col0_is_human_col = column_wrapper<bool>{{true, true, false, false, false}, {1, 1, 0, 1, 0}};
+  auto col0_is_human_col =
+    column_wrapper<bool>{{true, true, false, false, false}, {true, true, false, true, false}};
 
   auto col0 =
     cudf::test::structs_column_wrapper{{col0_names_col, col0_ages_col, col0_is_human_col}};
@@ -1418,7 +1608,8 @@ TEST_F(JoinTest, HashJoinWithStructsAndNulls)
     "Samuel Vimes", "Detritus", "Detritus", "Carrot Ironfoundersson", "Angua von Überwald"};
   auto col1_ages_col = column_wrapper<int32_t>{{48, 35, 351, 22, 25}};
 
-  auto col1_is_human_col = column_wrapper<bool>{{true, true, false, false, true}, {1, 1, 0, 1, 1}};
+  auto col1_is_human_col =
+    column_wrapper<bool>{{true, true, false, false, true}, {true, true, false, true, true}};
 
   auto col1 =
     cudf::test::structs_column_wrapper{{col1_names_col, col1_ages_col, col1_is_human_col}};
@@ -1433,7 +1624,8 @@ TEST_F(JoinTest, HashJoinWithStructsAndNulls)
                            ? cudf::nullable_join::YES
                            : cudf::nullable_join::NO;
 
-  auto hash_join = cudf::hash_join(t1, has_nulls, cudf::null_equality::EQUAL);
+  double constexpr desired_load_factor = 0.5;
+  auto hash_join = cudf::hash_join(t1, has_nulls, cudf::null_equality::EQUAL, desired_load_factor);
 
   {
     auto output_size = hash_join.left_join_size(t0);
@@ -1493,10 +1685,14 @@ TEST_F(JoinTest, HashJoinWithNullsOneSide)
   auto const sort_result = [](auto const& result) {
     auto const left_cv  = cudf::column_view{cudf::data_type{cudf::type_id::INT32},
                                            static_cast<cudf::size_type>(result.first->size()),
-                                           result.first->data()};
+                                           result.first->data(),
+                                           nullptr,
+                                           0};
     auto const right_cv = cudf::column_view{cudf::data_type{cudf::type_id::INT32},
                                             static_cast<cudf::size_type>(result.second->size()),
-                                            result.second->data()};
+                                            result.second->data(),
+                                            nullptr,
+                                            0};
     auto sorted_left    = cudf::sort(cudf::table_view{{left_cv}});
     auto sorted_right   = cudf::sort(cudf::table_view{{right_cv}});
     return std::pair{std::move(sorted_left), std::move(sorted_right)};
@@ -1577,9 +1773,12 @@ TEST_F(JoinTest, HashJoinLargeOutputSize)
   rmm::device_buffer zeroes(col_size * sizeof(int32_t), cudf::get_default_stream());
   CUDF_CUDA_TRY(
     cudaMemsetAsync(zeroes.data(), 0, zeroes.size(), cudf::get_default_stream().value()));
-  cudf::column_view col_zeros(cudf::data_type{cudf::type_id::INT32}, col_size, zeroes.data());
+  cudf::column_view col_zeros(
+    cudf::data_type{cudf::type_id::INT32}, col_size, zeroes.data(), nullptr, 0);
   cudf::table_view tview{{col_zeros}};
-  cudf::hash_join hash_join(tview, cudf::nullable_join::NO, cudf::null_equality::UNEQUAL);
+  double constexpr desired_load_factor = 0.5;
+  cudf::hash_join hash_join(
+    tview, cudf::nullable_join::NO, cudf::null_equality::UNEQUAL, desired_load_factor);
   std::size_t output_size = hash_join.inner_join_size(tview);
   EXPECT_EQ(col_size * col_size, output_size);
 }
@@ -1626,13 +1825,13 @@ TEST_F(JoinDictionaryTest, LeftJoinNoNulls)
 TEST_F(JoinDictionaryTest, LeftJoinWithNulls)
 {
   column_wrapper<int32_t> col0_0{{3, 1, 2, 0, 2}};
-  strcol_wrapper col0_1({"s1", "s1", "s0", "s4", "s0"}, {1, 1, 0, 1, 1});
+  strcol_wrapper col0_1({"s1", "s1", "s0", "s4", "s0"}, {true, true, false, true, true});
   column_wrapper<int32_t> col0_2_w{{0, 1, 2, 4, 1}};
   auto col0_2 = cudf::dictionary::encode(col0_2_w);
 
   column_wrapper<int32_t> col1_0{{2, 2, 0, 4, 3}};
   strcol_wrapper col1_1({"s1", "s0", "s1", "s2", "s1"});
-  column_wrapper<int32_t> col1_2_w{{1, 0, 1, 2, 1}, {1, 0, 1, 1, 1}};
+  column_wrapper<int32_t> col1_2_w{{1, 0, 1, 2, 1}, {true, false, true, true, true}};
   auto col1_2 = cudf::dictionary::encode(col1_2_w);
 
   auto t0 = cudf::table_view({col0_0, col0_1, col0_2->view()});
@@ -1660,8 +1859,9 @@ TEST_F(JoinDictionaryTest, LeftJoinWithNulls)
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*sorted_gold, *sorted_result);
 }
 
-TEST_F(JoinDictionaryTest, InnerJoinNoNulls)
+TEST_P(JoinParameterizedTest, DictionaryInnerJoinNoNulls)
 {
+  auto algo = GetParam();
   column_wrapper<int32_t> col0_0{{3, 1, 2, 0, 2}};
   strcol_wrapper col0_1_w({"s1", "s1", "s0", "s4", "s0"});
   auto col0_1 = cudf::dictionary::encode(col0_1_w);
@@ -1675,7 +1875,7 @@ TEST_F(JoinDictionaryTest, InnerJoinNoNulls)
   auto t0 = cudf::table_view({col0_0, col0_1->view(), col0_2});
   auto t1 = cudf::table_view({col1_0, col1_1->view(), col1_2});
 
-  auto result      = inner_join(t0, t1, {0, 1}, {0, 1});
+  auto result      = inner_join(t0, t1, {0, 1}, {0, 1}, cudf::null_equality::EQUAL, algo);
   auto result_view = result->view();
   auto decoded1    = cudf::dictionary::decode(result_view.column(1));
   auto decoded4    = cudf::dictionary::decode(result_view.column(4));
@@ -1697,22 +1897,23 @@ TEST_F(JoinDictionaryTest, InnerJoinNoNulls)
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*sorted_gold, *sorted_result);
 }
 
-TEST_F(JoinDictionaryTest, InnerJoinWithNulls)
+TEST_P(JoinParameterizedTest, DictionaryInnerJoinWithNulls)
 {
+  auto algo = GetParam();
   column_wrapper<int32_t> col0_0{{3, 1, 2, 0, 2}};
-  strcol_wrapper col0_1({"s1", "s1", "s0", "s4", "s0"}, {1, 1, 0, 1, 1});
+  strcol_wrapper col0_1({"s1", "s1", "s0", "s4", "s0"}, {true, true, false, true, true});
   column_wrapper<int32_t> col0_2_w{{0, 1, 2, 4, 1}};
   auto col0_2 = cudf::dictionary::encode(col0_2_w);
 
   column_wrapper<int32_t> col1_0{{2, 2, 0, 4, 3}};
   strcol_wrapper col1_1({"s1", "s0", "s1", "s2", "s1"});
-  column_wrapper<int32_t> col1_2_w{{1, 0, 1, 2, 1}, {1, 0, 1, 1, 1}};
+  column_wrapper<int32_t> col1_2_w{{1, 0, 1, 2, 1}, {true, false, true, true, true}};
   auto col1_2 = cudf::dictionary::encode(col1_2_w);
 
   auto t0 = cudf::table_view({col0_0, col0_1, col0_2->view()});
   auto t1 = cudf::table_view({col1_0, col1_1, col1_2->view()});
 
-  auto result      = inner_join(t0, t1, {0, 1}, {0, 1});
+  auto result      = inner_join(t0, t1, {0, 1}, {0, 1}, cudf::null_equality::EQUAL, algo);
   auto result_view = result->view();
   auto decoded2    = cudf::dictionary::decode(result_view.column(2));
   auto decoded5    = cudf::dictionary::decode(result_view.column(5));
@@ -1778,7 +1979,7 @@ TEST_F(JoinDictionaryTest, FullJoinWithNulls)
   strcol_wrapper col0_1({"s0", "s1", "s2", "s4", "s1"});
   column_wrapper<int32_t> col0_2{{0, 1, 2, 4, 1}};
 
-  column_wrapper<int32_t> col1_0_w{{2, 2, 0, 4, 3}, {1, 1, 1, 0, 1}};
+  column_wrapper<int32_t> col1_0_w{{2, 2, 0, 4, 3}, {true, true, true, false, true}};
   auto col1_0 = cudf::dictionary::encode(col1_0_w);
   strcol_wrapper col1_1{{"s1", "s0", "s1", "s2", "s1"}};
   column_wrapper<int32_t> col1_2{{1, 0, 1, 2, 1}};
@@ -1822,12 +2023,13 @@ TEST_F(JoinTest, FullJoinWithStructsAndNulls)
   auto col0_names_col = strcol_wrapper{col0_names.begin(), col0_names.end()};
   auto col0_ages_col  = column_wrapper<int32_t>{{48, 27, 25, 31, 351}};
 
-  auto col0_is_human_col = column_wrapper<bool>{{true, true, false, false, false}, {1, 1, 0, 1, 1}};
+  auto col0_is_human_col =
+    column_wrapper<bool>{{true, true, false, false, false}, {true, true, false, true, true}};
 
   auto col0_3 = cudf::test::structs_column_wrapper{
-    {col0_names_col, col0_ages_col, col0_is_human_col}, {1, 1, 1, 1, 1}};
+    {col0_names_col, col0_ages_col, col0_is_human_col}, {true, true, true, true, true}};
 
-  column_wrapper<int32_t> col1_0{{2, 2, 0, 4, 3}, {1, 1, 1, 0, 1}};
+  column_wrapper<int32_t> col1_0{{2, 2, 0, 4, 3}, {true, true, true, false, true}};
   strcol_wrapper col1_1{{"s1", "s0", "s1", "s2", "s1"}};
   column_wrapper<int32_t> col1_2{{1, 0, 1, 2, 1}};
 
@@ -1839,7 +2041,8 @@ TEST_F(JoinTest, FullJoinWithStructsAndNulls)
   auto col1_names_col = strcol_wrapper{col1_names.begin(), col1_names.end()};
   auto col1_ages_col  = column_wrapper<int32_t>{{27, 48, 27, 25, 27}};
 
-  auto col1_is_human_col = column_wrapper<bool>{{true, true, true, false, true}, {1, 1, 1, 0, 1}};
+  auto col1_is_human_col =
+    column_wrapper<bool>{{true, true, true, false, true}, {true, true, true, false, true}};
 
   auto col1_3 =
     cudf::test::structs_column_wrapper{{col1_names_col, col1_ages_col, col1_is_human_col}};
@@ -1861,59 +2064,69 @@ TEST_F(JoinTest, FullJoinWithStructsAndNulls)
   auto result_sort_order = cudf::sorted_order(result->view());
   auto sorted_result     = cudf::gather(result->view(), *result_sort_order);
 
-  column_wrapper<int32_t> col_gold_0{{3, 1, 2, 0, 3, -1, -1, -1, -1, -1},
-                                     {1, 1, 1, 1, 1, 0, 0, 0, 0, 0}};
+  column_wrapper<int32_t> col_gold_0{
+    {3, 1, 2, 0, 3, -1, -1, -1, -1, -1},
+    {true, true, true, true, true, false, false, false, false, false}};
   strcol_wrapper col_gold_1({"s0", "s1", "s2", "s4", "s1", "", "", "", "", ""},
-                            {1, 1, 1, 1, 1, 0, 0, 0, 0, 0});
-  column_wrapper<int32_t> col_gold_2{{0, 1, 2, 4, 1, -1, -1, -1, -1, -1},
-                                     {1, 1, 1, 1, 1, 0, 0, 0, 0, 0}};
-  auto gold_names0_col = strcol_wrapper{{"Samuel Vimes",
-                                         "Carrot Ironfoundersson",
-                                         "Angua von Überwald",
-                                         "Detritus",
-                                         "Carrot Ironfoundersson",
-                                         "",
-                                         "",
-                                         "",
-                                         "",
-                                         ""},
-                                        {1, 1, 1, 1, 1, 0, 0, 0, 0, 0}};
-  auto gold_ages0_col  = column_wrapper<int32_t>{{48, 27, 25, 31, 351, -1, -1, -1, -1, -1},
-                                                 {1, 1, 1, 1, 1, 0, 0, 0, 0, 0}};
+                            {true, true, true, true, true, false, false, false, false, false});
+  column_wrapper<int32_t> col_gold_2{
+    {0, 1, 2, 4, 1, -1, -1, -1, -1, -1},
+    {true, true, true, true, true, false, false, false, false, false}};
+  auto gold_names0_col =
+    strcol_wrapper{{"Samuel Vimes",
+                    "Carrot Ironfoundersson",
+                    "Angua von Überwald",
+                    "Detritus",
+                    "Carrot Ironfoundersson",
+                    "",
+                    "",
+                    "",
+                    "",
+                    ""},
+                   {true, true, true, true, true, false, false, false, false, false}};
+  auto gold_ages0_col =
+    column_wrapper<int32_t>{{48, 27, 25, 31, 351, -1, -1, -1, -1, -1},
+                            {true, true, true, true, true, false, false, false, false, false}};
 
   auto gold_is_human0_col =
     column_wrapper<bool>{{true, true, false, false, false, false, false, false, false, false},
-                         {1, 1, 0, 1, 1, 0, 0, 0, 0, 0}};
+                         {true, true, false, true, true, false, false, false, false, false}};
 
   auto col_gold_3 = cudf::test::structs_column_wrapper{
-    {gold_names0_col, gold_ages0_col, gold_is_human0_col}, {1, 1, 1, 1, 1, 0, 0, 0, 0, 0}};
+    {gold_names0_col, gold_ages0_col, gold_is_human0_col},
+    {true, true, true, true, true, false, false, false, false, false}};
 
-  column_wrapper<int32_t> col_gold_4{{-1, -1, -1, -1, -1, 3, 2, 2, 0, 4},
-                                     {0, 0, 0, 0, 0, 1, 1, 1, 1, 0}};
+  column_wrapper<int32_t> col_gold_4{
+    {-1, -1, -1, -1, -1, 3, 2, 2, 0, 4},
+    {false, false, false, false, false, true, true, true, true, false}};
   strcol_wrapper col_gold_5({"", "", "", "", "", "s1", "s1", "s0", "s1", "s2"},
-                            {0, 0, 0, 0, 0, 1, 1, 1, 1, 1});
-  column_wrapper<int32_t> col_gold_6{{-1, -1, -1, -1, -1, 1, 1, 0, 1, 2},
-                                     {0, 0, 0, 0, 0, 1, 1, 1, 1, 1}};
-  auto gold_names1_col = strcol_wrapper{{"",
-                                         "",
-                                         "",
-                                         "",
-                                         "",
-                                         "Carrot Ironfoundersson",
-                                         "Carrot Ironfoundersson",
-                                         "Samuel Vimes",
-                                         "Carrot Ironfoundersson",
-                                         "Angua von Überwald"},
-                                        {0, 0, 0, 0, 0, 1, 1, 1, 1, 1}};
-  auto gold_ages1_col  = column_wrapper<int32_t>{{-1, -1, -1, -1, -1, 27, 27, 48, 27, 25},
-                                                 {0, 0, 0, 0, 0, 1, 1, 1, 1, 1}};
+                            {false, false, false, false, false, true, true, true, true, true});
+  column_wrapper<int32_t> col_gold_6{
+    {-1, -1, -1, -1, -1, 1, 1, 0, 1, 2},
+    {false, false, false, false, false, true, true, true, true, true}};
+  auto gold_names1_col =
+    strcol_wrapper{{"",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "Carrot Ironfoundersson",
+                    "Carrot Ironfoundersson",
+                    "Samuel Vimes",
+                    "Carrot Ironfoundersson",
+                    "Angua von Überwald"},
+                   {false, false, false, false, false, true, true, true, true, true}};
+  auto gold_ages1_col =
+    column_wrapper<int32_t>{{-1, -1, -1, -1, -1, 27, 27, 48, 27, 25},
+                            {false, false, false, false, false, true, true, true, true, true}};
 
   auto gold_is_human1_col =
     column_wrapper<bool>{{false, false, false, false, false, true, true, true, true, false},
-                         {0, 0, 0, 0, 0, 1, 1, 1, 1, 0}};
+                         {false, false, false, false, false, true, true, true, true, false}};
 
   auto col_gold_7 = cudf::test::structs_column_wrapper{
-    {gold_names1_col, gold_ages1_col, gold_is_human1_col}, {0, 0, 0, 0, 0, 1, 1, 1, 1, 1}};
+    {gold_names1_col, gold_ages1_col, gold_is_human1_col},
+    {false, false, false, false, false, true, true, true, true, true}};
 
   CVector cols_gold;
   cols_gold.push_back(col_gold_0.release());
@@ -1930,62 +2143,6 @@ TEST_F(JoinTest, FullJoinWithStructsAndNulls)
   auto gold_sort_order = cudf::sorted_order(gold.view());
   auto sorted_gold     = cudf::gather(gold.view(), *gold_sort_order);
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*sorted_gold, *sorted_result);
-}
-
-TEST_F(JoinTest, Repro_StructsWithoutNullsPushedDown)
-{
-  // When joining on a STRUCT column, if the parent nulls are not reflected in
-  // the children, the join might produce incorrect results.
-  //
-  // In this test, a fact table of structs is joined against a dimension table.
-  // Both tables must match (only) on the NULL row. This will fail if the fact table's
-  // nulls are not pushed down into its children.
-  using ints    = column_wrapper<int32_t>;
-  using structs = cudf::test::structs_column_wrapper;
-  using namespace cudf::test::iterators;
-
-  auto make_table = [](auto&& col) {
-    auto columns = CVector{};
-    columns.push_back(std::move(col));
-    return cudf::table{std::move(columns)};
-  };
-
-  auto const fact_table = [make_table] {
-    auto fact_ints    = ints{0, 1, 2, 3, 4};
-    auto fact_structs = structs{{fact_ints}, no_nulls()}.release();
-    // Now set struct validity to invalidate index#3.
-    cudf::detail::set_null_mask(
-      fact_structs->mutable_view().null_mask(), 3, 4, false, cudf::get_default_stream());
-    // Struct row#3 is null, but Struct.child has a non-null value.
-    return make_table(std::move(fact_structs));
-  }();
-
-  auto const dimension_table = [make_table] {
-    auto dim_ints    = ints{999};
-    auto dim_structs = structs{{dim_ints}, null_at(0)};
-    return make_table(dim_structs.release());
-  }();
-
-  auto const result = inner_join(fact_table.view(), dimension_table.view(), {0}, {0});
-  EXPECT_EQ(result->num_rows(), 1);  // The null STRUCT rows should match.
-
-  // Note: Join result might not have nulls pushed down, since it's an output of gather().
-  // Must superimpose parent nulls before comparisons.
-  auto [superimposed_results, _] = cudf::structs::detail::push_down_nulls(
-    *result, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
-
-  auto const expected = [] {
-    auto fact_ints    = ints{0};
-    auto fact_structs = structs{{fact_ints}, null_at(0)};
-    auto dim_ints     = ints{0};
-    auto dim_structs  = structs{{dim_ints}, null_at(0)};
-    auto columns      = CVector{};
-    columns.push_back(fact_structs.release());
-    columns.push_back(dim_structs.release());
-    return cudf::table{std::move(columns)};
-  }();
-
-  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(superimposed_results, expected);
 }
 
 using lcw = cudf::test::lists_column_wrapper<int32_t>;
@@ -2042,7 +2199,11 @@ struct JoinTestLists : public cudf::test::BaseFixture {
     auto const probe_tv = cudf::table_view{{probe}};
 
     auto const [left_result_map, right_result_map] =
-      join_func(build_tv, probe_tv, nulls_equal, rmm::mr::get_current_device_resource());
+      join_func(build_tv,
+                probe_tv,
+                nulls_equal,
+                cudf::get_default_stream(),
+                cudf::get_current_device_resource_ref());
 
     auto const left_result_table =
       sort_and_gather(build_tv, column_view_from_device_uvector(*left_result_map), oob_policy);
@@ -2090,18 +2251,47 @@ struct JoinTestLists : public cudf::test::BaseFixture {
   }
 };
 
-TEST_F(JoinTestLists, ListWithNullsEqualInnerJoin)
+struct JoinParameterizedTestLists : public JoinTestLists,
+                                    public testing::WithParamInterface<algorithm> {
+  void inner_join(cudf::column_view left_gold_map,
+                  cudf::column_view right_gold_map,
+                  cudf::null_equality nulls_equal,
+                  algorithm algo)
+  {
+    auto join_lambda = [](cudf::table_view const& left,
+                          cudf::table_view const& right,
+                          cudf::null_equality compare_nulls,
+                          rmm::cuda_stream_view stream,
+                          rmm::device_async_resource_ref mr) -> JoinResult {
+      cudf::sort_merge_join obj(right, cudf::sorted::NO, compare_nulls, stream);
+      return obj.inner_join(left, cudf::sorted::NO, stream, mr);
+    };
+    join(left_gold_map,
+         right_gold_map,
+         nulls_equal,
+         algo == algorithm::HASH ? cudf::inner_join : join_lambda,
+         cudf::out_of_bounds_policy::DONT_CHECK);
+  }
+};
+// Parametrize qualifying join tests for supported algorithms
+INSTANTIATE_TEST_CASE_P(InnerJoinParameterizedTestLists,
+                        JoinParameterizedTestLists,
+                        ::testing::Values(algorithm::HASH, algorithm::SORT_MERGE));
+
+TEST_P(JoinParameterizedTestLists, ListWithNullsEqualInnerJoin)
 {
+  auto algo                 = GetParam();
   auto const left_gold_map  = column_wrapper<int32_t>({0, 1, 2, 3});
   auto const right_gold_map = column_wrapper<int32_t>({0, 2, 3, 4});
-  this->inner_join(left_gold_map, right_gold_map, cudf::null_equality::EQUAL);
+  this->inner_join(left_gold_map, right_gold_map, cudf::null_equality::EQUAL, algo);
 }
 
-TEST_F(JoinTestLists, ListWithNullsUnequalInnerJoin)
+TEST_P(JoinParameterizedTestLists, ListWithNullsUnequalInnerJoin)
 {
+  auto algo                 = GetParam();
   auto const left_gold_map  = column_wrapper<int32_t>({1, 3});
   auto const right_gold_map = column_wrapper<int32_t>({0, 3});
-  this->inner_join(left_gold_map, right_gold_map, cudf::null_equality::UNEQUAL);
+  this->inner_join(left_gold_map, right_gold_map, cudf::null_equality::UNEQUAL, algo);
 }
 
 TEST_F(JoinTestLists, ListWithNullsEqualFullJoin)

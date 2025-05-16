@@ -1,23 +1,55 @@
-# Copyright (c) 2019-2023, NVIDIA CORPORATION.
+# Copyright (c) 2019-2025, NVIDIA CORPORATION.
+from __future__ import annotations
 
+import io
+import itertools
 import math
+import operator
 import shutil
 import tempfile
 import warnings
 from collections import defaultdict
 from contextlib import ExitStack
-from typing import Dict, List, Optional, Tuple
+from functools import partial, reduce
+from typing import TYPE_CHECKING, Any, Literal
 from uuid import uuid4
 
+import numpy as np
 import pandas as pd
-from pyarrow import dataset as ds, parquet as pq
+import pyarrow as pa
 
-import cudf
-from cudf._lib import parquet as libparquet
+import pylibcudf as plc
+
 from cudf.api.types import is_list_like
-from cudf.core.column import build_categorical_column, column_empty, full
+from cudf.core.buffer import acquire_spill_lock
+from cudf.core.column import ColumnBase, as_column, column_empty
+from cudf.core.column.categorical import CategoricalColumn, as_unsigned_codes
+from cudf.core.dataframe import DataFrame
+from cudf.core.dtypes import (
+    CategoricalDtype,
+    DecimalDtype,
+    ListDtype,
+    StructDtype,
+)
+from cudf.core.index import Index, RangeIndex
+from cudf.core.multiindex import MultiIndex
+from cudf.core.reshape import concat
+from cudf.options import get_option
 from cudf.utils import ioutils
-from cudf.utils.utils import _cudf_nvtx_annotate
+from cudf.utils.performance_tracking import _performance_tracking
+
+try:
+    import ujson as json  # type: ignore[import-untyped]
+except ImportError:
+    import json
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Hashable
+
+    from typing_extensions import Self
+
+    from cudf.core.series import Series
+
 
 BYTE_SIZES = {
     "kb": 1000,
@@ -45,23 +77,202 @@ BYTE_SIZES = {
 }
 
 
-@_cudf_nvtx_annotate
+@acquire_spill_lock()
+def _plc_write_parquet(
+    table,
+    filepaths_or_buffers,
+    index: bool | None = None,
+    compression: Literal["snappy", "ZSTD", "ZLIB", "LZ4", None] = "snappy",
+    statistics: Literal["ROWGROUP", "PAGE", "COLUMN", "NONE"] = "ROWGROUP",
+    metadata_file_path: str | None = None,
+    int96_timestamps: bool = False,
+    row_group_size_bytes: int | None = None,
+    row_group_size_rows: int | None = None,
+    max_page_size_bytes: int | None = None,
+    max_page_size_rows: int | None = None,
+    max_dictionary_size: int | None = None,
+    partitions_info=None,
+    force_nullable_schema: bool = False,
+    header_version: Literal["1.0", "2.0"] = "1.0",
+    use_dictionary: bool = True,
+    skip_compression: set[Hashable] | None = None,
+    column_encoding: dict[
+        Hashable,
+        Literal[
+            "PLAIN",
+            "DICTIONARY",
+            "DELTA_BINARY_PACKED",
+            "DELTA_LENGTH_BYTE_ARRAY",
+            "DELTA_BYTE_ARRAY",
+            "BYTE_STREAM_SPLIT",
+            "USE_DEFAULT",
+        ],
+    ]
+    | None = None,
+    column_type_length: dict | None = None,
+    output_as_binary: set[Hashable] | None = None,
+    write_arrow_schema: bool = False,
+) -> np.ndarray | None:
+    """
+    Cython function to call into libcudf API, see `write_parquet`.
+
+    See Also
+    --------
+    cudf.io.parquet.write_parquet
+    """
+    if index is True or (
+        index is None and not isinstance(table.index, RangeIndex)
+    ):
+        columns = itertools.chain(table.index._columns, table._columns)
+        plc_table = plc.Table(
+            [col.to_pylibcudf(mode="read") for col in columns]
+        )
+        tbl_meta = plc.io.types.TableInputMetadata(plc_table)
+        for level, idx_name in enumerate(table.index.names):
+            tbl_meta.column_metadata[level].set_name(
+                ioutils._index_level_name(idx_name, level, table._column_names)
+            )
+        num_index_cols_meta = len(table.index.names)
+    else:
+        plc_table = plc.Table(
+            [col.to_pylibcudf(mode="read") for col in table._columns]
+        )
+        tbl_meta = plc.io.types.TableInputMetadata(plc_table)
+        num_index_cols_meta = 0
+
+    for i, name in enumerate(table._column_names, num_index_cols_meta):
+        if not isinstance(name, str):
+            if get_option("mode.pandas_compatible"):
+                tbl_meta.column_metadata[i].set_name(str(name))
+            else:
+                raise ValueError(
+                    "Writing a Parquet file requires string column names"
+                )
+        else:
+            tbl_meta.column_metadata[i].set_name(name)
+
+        _set_col_metadata(
+            table[name]._column,
+            tbl_meta.column_metadata[i],
+            force_nullable_schema,
+            None,
+            skip_compression,
+            column_encoding,
+            column_type_length,
+            output_as_binary,
+        )
+    if partitions_info is not None:
+        user_data = [
+            {
+                "pandas": ioutils.generate_pandas_metadata(
+                    table.iloc[start_row : start_row + num_row].copy(
+                        deep=False
+                    ),
+                    index,
+                )
+            }
+            for start_row, num_row in partitions_info
+        ]
+    else:
+        user_data = [
+            {"pandas": ioutils.generate_pandas_metadata(table, index)}
+        ]
+
+    if header_version not in ("1.0", "2.0"):
+        raise ValueError(
+            f"Invalid parquet header version: {header_version}. "
+            "Valid values are '1.0' and '2.0'"
+        )
+
+    dict_policy = (
+        plc.io.types.DictionaryPolicy.ADAPTIVE
+        if use_dictionary
+        else plc.io.types.DictionaryPolicy.NEVER
+    )
+
+    comp_type = _get_comp_type(compression)
+    stat_freq = _get_stat_freq(statistics)
+    options = (
+        plc.io.parquet.ParquetWriterOptions.builder(
+            plc.io.SinkInfo(filepaths_or_buffers), plc_table
+        )
+        .metadata(tbl_meta)
+        .key_value_metadata(user_data)
+        .compression(comp_type)
+        .stats_level(stat_freq)
+        .int96_timestamps(int96_timestamps)
+        .write_v2_headers(header_version == "2.0")
+        .dictionary_policy(dict_policy)
+        .utc_timestamps(False)
+        .write_arrow_schema(write_arrow_schema)
+        .build()
+    )
+    if partitions_info is not None:
+        options.set_partitions(
+            [
+                plc.io.types.PartitionInfo(part[0], part[1])
+                for part in partitions_info
+            ]
+        )
+    if metadata_file_path is not None:
+        if is_list_like(metadata_file_path):
+            options.set_column_chunks_file_paths(metadata_file_path)
+        else:
+            options.set_column_chunks_file_paths([metadata_file_path])
+    if row_group_size_bytes is not None:
+        options.set_row_group_size_bytes(row_group_size_bytes)
+    if row_group_size_rows is not None:
+        options.set_row_group_size_rows(row_group_size_rows)
+    if max_page_size_bytes is not None:
+        options.set_max_page_size_bytes(max_page_size_bytes)
+    if max_page_size_rows is not None:
+        options.set_max_page_size_rows(max_page_size_rows)
+    if max_dictionary_size is not None:
+        options.set_max_dictionary_size(max_dictionary_size)
+    blob = plc.io.parquet.write_parquet(options)
+    if metadata_file_path is not None:
+        return np.asarray(blob.obj)
+    else:
+        return None
+
+
+@_performance_tracking
 def _write_parquet(
     df,
     paths,
-    compression="snappy",
-    index=None,
-    statistics="ROWGROUP",
-    metadata_file_path=None,
-    int96_timestamps=False,
-    row_group_size_bytes=ioutils._ROW_GROUP_SIZE_BYTES_DEFAULT,
-    row_group_size_rows=None,
-    max_page_size_bytes=None,
-    max_page_size_rows=None,
+    compression: Literal["snappy", "ZSTD", "ZLIB", "LZ4", None] = "snappy",
+    index: bool | None = None,
+    statistics: Literal["ROWGROUP", "PAGE", "COLUMN", "NONE"] = "ROWGROUP",
+    metadata_file_path: str | None = None,
+    int96_timestamps: bool = False,
+    row_group_size_bytes: int | None = None,
+    row_group_size_rows: int | None = None,
+    max_page_size_bytes: int | None = None,
+    max_page_size_rows: int | None = None,
+    max_dictionary_size: int | None = None,
     partitions_info=None,
     storage_options=None,
-    force_nullable_schema=False,
-):
+    force_nullable_schema: bool = False,
+    header_version: Literal["1.0", "2.0"] = "1.0",
+    use_dictionary: bool = True,
+    skip_compression: set[Hashable] | None = None,
+    column_encoding: dict[
+        Hashable,
+        Literal[
+            "PLAIN",
+            "DICTIONARY",
+            "DELTA_BINARY_PACKED",
+            "DELTA_LENGTH_BYTE_ARRAY",
+            "DELTA_BYTE_ARRAY",
+            "BYTE_STREAM_SPLIT",
+            "USE_DEFAULT",
+        ],
+    ]
+    | None = None,
+    column_type_length: dict | None = None,
+    output_as_binary: set[Hashable] | None = None,
+    write_arrow_schema: bool = True,
+) -> np.ndarray | None:
     if is_list_like(paths) and len(paths) > 1:
         if partitions_info is None:
             ValueError("partition info is required for multiple paths")
@@ -89,8 +300,16 @@ def _write_parquet(
         "row_group_size_rows": row_group_size_rows,
         "max_page_size_bytes": max_page_size_bytes,
         "max_page_size_rows": max_page_size_rows,
+        "max_dictionary_size": max_dictionary_size,
         "partitions_info": partitions_info,
         "force_nullable_schema": force_nullable_schema,
+        "header_version": header_version,
+        "use_dictionary": use_dictionary,
+        "skip_compression": skip_compression,
+        "column_encoding": column_encoding,
+        "column_type_length": column_type_length,
+        "output_as_binary": output_as_binary,
+        "write_arrow_schema": write_arrow_schema,
     }
     if all(ioutils.is_fsspec_open_file(buf) for buf in paths_or_bufs):
         with ExitStack() as stack:
@@ -98,11 +317,11 @@ def _write_parquet(
             file_objs = [
                 ioutils.get_IOBase_writer(file_obj) for file_obj in fsspec_objs
             ]
-            write_parquet_res = libparquet.write_parquet(
+            write_parquet_res = _plc_write_parquet(
                 df, filepaths_or_buffers=file_objs, **common_args
             )
     else:
-        write_parquet_res = libparquet.write_parquet(
+        write_parquet_res = _plc_write_parquet(
             df, filepaths_or_buffers=paths_or_bufs, **common_args
         )
 
@@ -111,24 +330,43 @@ def _write_parquet(
 
 # Logic chosen to match: https://arrow.apache.org/
 # docs/_modules/pyarrow/parquet.html#write_to_dataset
-@_cudf_nvtx_annotate
+@_performance_tracking
 def write_to_dataset(
     df,
     root_path,
-    compression="snappy",
+    compression: Literal["snappy", "ZSTD", "ZLIB", "LZ4", None] = "snappy",
     filename=None,
     partition_cols=None,
     fs=None,
-    preserve_index=False,
-    return_metadata=False,
-    statistics="ROWGROUP",
-    int96_timestamps=False,
-    row_group_size_bytes=ioutils._ROW_GROUP_SIZE_BYTES_DEFAULT,
-    row_group_size_rows=None,
-    max_page_size_bytes=None,
-    max_page_size_rows=None,
+    preserve_index: bool = False,
+    return_metadata: bool = False,
+    statistics: Literal["ROWGROUP", "PAGE", "COLUMN", "NONE"] = "ROWGROUP",
+    int96_timestamps: bool = False,
+    row_group_size_bytes: int | None = None,
+    row_group_size_rows: int | None = None,
+    max_page_size_bytes: int | None = None,
+    max_page_size_rows: int | None = None,
     storage_options=None,
-    force_nullable_schema=False,
+    force_nullable_schema: bool = False,
+    header_version: Literal["1.0", "2.0"] = "1.0",
+    use_dictionary: bool = True,
+    skip_compression: set[Hashable] | None = None,
+    column_encoding: dict[
+        Hashable,
+        Literal[
+            "PLAIN",
+            "DICTIONARY",
+            "DELTA_BINARY_PACKED",
+            "DELTA_LENGTH_BYTE_ARRAY",
+            "DELTA_BYTE_ARRAY",
+            "BYTE_STREAM_SPLIT",
+            "USE_DEFAULT",
+        ],
+    ]
+    | None = None,
+    column_type_length: dict | None = None,
+    output_as_binary: set[Hashable] | None = None,
+    store_schema=False,
 ):
     """Wraps `to_parquet` to write partitioned Parquet datasets.
     For each combination of partition group and value,
@@ -172,7 +410,7 @@ def write_to_dataset(
         If ``False``, timestamps will not be altered.
     row_group_size_bytes: integer or None, default None
         Maximum size of each stripe of the output.
-        If None, 134217728 (128MB) will be used.
+        If None, no limit on row group stripe size will be used.
     row_group_size_rows: integer or None, default None
         Maximum number of rows of each stripe of the output.
         If None, 1000000 will be used.
@@ -193,13 +431,39 @@ def write_to_dataset(
         If True, writes all columns as `null` in schema.
         If False, columns are written as `null` if they contain null values,
         otherwise as `not null`.
+    header_version : {{'1.0', '2.0'}}, default "1.0"
+        Controls whether to use version 1.0 or version 2.0 page headers when
+        encoding. Version 1.0 is more portable, but version 2.0 enables the
+        use of newer encoding schemes.
+    force_nullable_schema : bool, default False.
+        If True, writes all columns as `null` in schema.
+        If False, columns are written as `null` if they contain null values,
+        otherwise as `not null`.
+    skip_compression : set, optional, default None
+        If a column name is present in the set, that column will not be compressed,
+        regardless of the ``compression`` setting.
+    column_encoding : dict, optional, default None
+        Sets the page encoding to use on a per-column basis. The key is a column
+        name, and the value is one of: 'PLAIN', 'DICTIONARY', 'DELTA_BINARY_PACKED',
+        'DELTA_LENGTH_BYTE_ARRAY', 'DELTA_BYTE_ARRAY', 'BYTE_STREAM_SPLIT', or
+        'USE_DEFAULT'.
+    column_type_length : dict, optional, default None
+        Specifies the width in bytes of ``FIXED_LEN_BYTE_ARRAY`` column elements.
+        The key is a column name and the value is an integer. The named column
+        will be output as unannotated binary (i.e. the column will behave as if
+        ``output_as_binary`` was set).
+    output_as_binary : set, optional, default None
+        If a column name is present in the set, that column will be output as
+        unannotated binary, rather than the default 'UTF-8'.
+    store_schema : bool, default False
+        If ``True``, enable computing and writing arrow schema to Parquet
+        file footer's key-value metadata section for faithful round-tripping.
     """
 
     fs = ioutils._ensure_filesystem(fs, root_path, storage_options)
     fs.mkdirs(root_path, exist_ok=True)
 
     if partition_cols is not None and len(partition_cols) > 0:
-
         (
             full_paths,
             metadata_file_paths,
@@ -231,6 +495,13 @@ def write_to_dataset(
             max_page_size_bytes=max_page_size_bytes,
             max_page_size_rows=max_page_size_rows,
             force_nullable_schema=force_nullable_schema,
+            header_version=header_version,
+            use_dictionary=use_dictionary,
+            skip_compression=skip_compression,
+            column_encoding=column_encoding,
+            column_type_length=column_type_length,
+            output_as_binary=output_as_binary,
+            store_schema=store_schema,
         )
 
     else:
@@ -252,26 +523,85 @@ def write_to_dataset(
             max_page_size_bytes=max_page_size_bytes,
             max_page_size_rows=max_page_size_rows,
             force_nullable_schema=force_nullable_schema,
+            header_version=header_version,
+            use_dictionary=use_dictionary,
+            skip_compression=skip_compression,
+            column_encoding=column_encoding,
+            column_type_length=column_type_length,
+            output_as_binary=output_as_binary,
+            store_schema=store_schema,
         )
 
     return metadata
 
 
+def _parse_metadata(meta) -> tuple[bool, Any, None | np.dtype]:
+    file_is_range_index = False
+    file_index_cols = None
+    file_column_dtype = None
+
+    if "index_columns" in meta and len(meta["index_columns"]) > 0:
+        file_index_cols = meta["index_columns"]
+
+        if (
+            isinstance(file_index_cols[0], dict)
+            and file_index_cols[0]["kind"] == "range"
+        ):
+            file_is_range_index = True
+    if "column_indexes" in meta and len(meta["column_indexes"]) == 1:
+        file_column_dtype = np.dtype(meta["column_indexes"][0]["numpy_type"])
+    return file_is_range_index, file_index_cols, file_column_dtype
+
+
 @ioutils.doc_read_parquet_metadata()
-@_cudf_nvtx_annotate
-def read_parquet_metadata(path):
+@_performance_tracking
+def read_parquet_metadata(
+    filepath_or_buffer,
+) -> tuple[int, int, list[Hashable], int, list[dict[str, int]]]:
     """{docstring}"""
 
-    pq_file = pq.ParquetFile(path)
+    # List of filepaths or buffers
+    filepaths_or_buffers = ioutils.get_reader_filepath_or_buffer(
+        path_or_data=filepath_or_buffer,
+        bytes_per_thread=None,
+    )
 
-    num_rows = pq_file.metadata.num_rows
-    num_row_groups = pq_file.num_row_groups
-    col_names = pq_file.schema.names
+    parquet_metadata = plc.io.parquet_metadata.read_parquet_metadata(
+        plc.io.SourceInfo(filepaths_or_buffers)
+    )
 
-    return num_rows, num_row_groups, col_names
+    # read all column names including index column, if any
+    col_names = [
+        info.name() for info in parquet_metadata.schema().root().children()
+    ]
+
+    index_col_names = set()
+    json_str = parquet_metadata.metadata()["pandas"]
+    if json_str != "":
+        meta = json.loads(json_str)
+        file_is_range_index, index_col, _ = _parse_metadata(meta)
+        if not file_is_range_index and index_col is not None:
+            columns = meta["columns"]
+            for idx_col in index_col:
+                for c in columns:
+                    if c["field_name"] == idx_col:
+                        index_col_names.add(idx_col)
+
+    # remove the index column from the list of column names
+    # only if index_col_names is not None
+    if len(index_col_names) >= 0:
+        col_names = [name for name in col_names if name not in index_col_names]
+
+    return (
+        parquet_metadata.num_rows(),
+        parquet_metadata.num_rowgroups(),
+        col_names,
+        len(col_names),
+        parquet_metadata.rowgroup_metadata(),
+    )
 
 
-@_cudf_nvtx_annotate
+@_performance_tracking
 def _process_dataset(
     paths,
     fs,
@@ -291,14 +621,27 @@ def _process_dataset(
     # dataset API), (2) to apply row-group filters, and (3)
     # to discover directory-partitioning information
 
+    # Lazily import pyarrow.dataset due to import time
+    import pyarrow.dataset as ds
+
     # Deal with case that the user passed in a directory name
     file_list = paths
     if len(paths) == 1 and ioutils.is_directory(paths[0]):
         paths = ioutils.stringify_pathlike(paths[0])
+    elif (
+        filters is None
+        and isinstance(dataset_kwargs, dict)
+        and dataset_kwargs.get("partitioning") is None
+    ):
+        # Skip dataset processing if we have no filters
+        # or hive/directory partitioning to deal with.
+        return paths, row_groups, [], {}
 
     # Convert filters to ds.Expression
     if filters is not None:
-        filters = pq.filters_to_expression(filters)
+        from pyarrow.parquet import filters_to_expression
+
+        filters = filters_to_expression(filters)
 
     # Initialize ds.FilesystemDataset
     # TODO: Remove the if len(paths) workaround after following bug is fixed:
@@ -424,36 +767,30 @@ def _process_dataset(
 
 
 @ioutils.doc_read_parquet()
-@_cudf_nvtx_annotate
+@_performance_tracking
 def read_parquet(
     filepath_or_buffer,
     engine="cudf",
     columns=None,
     storage_options=None,
+    filesystem=None,
     filters=None,
     row_groups=None,
-    strings_to_categorical=False,
     use_pandas_metadata=True,
-    use_python_file_object=True,
     categorical_partitions=True,
-    open_file_options=None,
     bytes_per_thread=None,
     dataset_kwargs=None,
+    nrows=None,
+    skip_rows=None,
+    allow_mismatched_pq_schemas=False,
     *args,
     **kwargs,
 ):
     """{docstring}"""
-
-    # Do not allow the user to set file-opening options
-    # when `use_python_file_object=False` is specified
-    if use_python_file_object is False:
-        if open_file_options:
-            raise ValueError(
-                "open_file_options is not currently supported when "
-                "use_python_file_object is set to False."
-            )
-        open_file_options = {}
-
+    if engine not in {"cudf", "pyarrow"}:
+        raise ValueError(
+            f"Only supported engines are {{'cudf', 'pyarrow'}}, got {engine=}"
+        )
     if bytes_per_thread is None:
         bytes_per_thread = ioutils._BYTES_PER_THREAD_DEFAULT
 
@@ -478,8 +815,13 @@ def read_parquet(
     # Start by trying construct a filesystem object, so we
     # can apply filters on remote file-systems
     fs, paths = ioutils._get_filesystem_and_paths(
-        path_or_data=filepath_or_buffer, storage_options=storage_options
+        path_or_data=filepath_or_buffer,
+        storage_options=storage_options,
+        filesystem=filesystem,
     )
+
+    # Normalize and validate filters
+    filters = _normalize_filters(filters)
 
     # Use pyarrow dataset to detect/process directory-partitioned
     # data and apply filters. Note that we can only support partitioned
@@ -501,37 +843,54 @@ def read_parquet(
             categorical_partitions=categorical_partitions,
             dataset_kwargs=dataset_kwargs,
         )
-    elif filters is not None:
-        raise ValueError("cudf cannot apply filters to open file objects.")
     filepath_or_buffer = paths if paths else filepath_or_buffer
 
-    filepaths_or_buffers = []
-    if use_python_file_object:
-        open_file_options = _default_open_file_options(
-            open_file_options=open_file_options,
-            columns=columns,
-            row_groups=row_groups,
-            fs=fs,
-        )
-    for source in filepath_or_buffer:
-        tmp_source, compression = ioutils.get_reader_filepath_or_buffer(
-            path_or_data=source,
-            compression=None,
-            fs=fs,
-            use_python_file_object=use_python_file_object,
-            open_file_options=open_file_options,
-            storage_options=storage_options,
-            bytes_per_thread=bytes_per_thread,
-        )
-
-        if compression is not None:
-            raise ValueError(
-                "URL content-encoding decompression is not supported"
+    # Prepare remote-IO options
+    prefetch_options = kwargs.pop("prefetch_options", {})
+    if not ioutils._is_local_filesystem(fs):
+        # The default prefetch method depends on the
+        # `row_groups` argument. In most cases we will use
+        # method="all" by default, because it is fastest
+        # when we need to read most of the file(s).
+        # If a (simple) `row_groups` selection is made, we
+        # use method="parquet" to avoid transferring the
+        # entire file over the network
+        method = prefetch_options.get("method")
+        _row_groups = None
+        if method in (None, "parquet"):
+            if row_groups is None:
+                # If the user didn't specify a method, don't use
+                # 'parquet' prefetcher for column projection alone.
+                method = method or "all"
+            elif all(r == row_groups[0] for r in row_groups):
+                # Row group selection means we are probably
+                # reading half the file or less. We should
+                # avoid a full file transfer by default.
+                method = "parquet"
+                _row_groups = row_groups[0]
+            elif (method := method or "all") == "parquet":
+                raise ValueError(
+                    "The 'parquet' prefetcher requires a uniform "
+                    "row-group selection for all paths within the "
+                    "same `read_parquet` call. "
+                    "Got: {row_groups}"
+                )
+        if method == "parquet":
+            prefetch_options = prefetch_options.update(
+                {
+                    "method": method,
+                    "columns": columns,
+                    "row_groups": _row_groups,
+                }
             )
-        if isinstance(tmp_source, list):
-            filepath_or_buffer.extend(tmp_source)
-        else:
-            filepaths_or_buffers.append(tmp_source)
+
+    filepaths_or_buffers = ioutils.get_reader_filepath_or_buffer(
+        path_or_data=filepath_or_buffer,
+        fs=fs,
+        storage_options=storage_options,
+        bytes_per_thread=bytes_per_thread,
+        prefetch_options=prefetch_options,
+    )
 
     # Warn user if they are not using cudf for IO
     # (There is a good chance this was not the intention)
@@ -547,22 +906,153 @@ def read_parquet(
                 "for full CPU-based filtering functionality."
             )
 
-    return _parquet_to_frame(
+    # Make sure we read in the columns needed for row-wise
+    # filtering after IO. This means that one or more columns
+    # will be dropped almost immediately after IO. However,
+    # we do NEED these columns for accurate filtering.
+    projected_columns = None
+    if columns and filters:
+        projected_columns = columns
+        columns = sorted(
+            set(v[0] for v in itertools.chain.from_iterable(filters))
+            | set(columns)
+        )
+
+    # Convert parquet data to a cudf.DataFrame
+    df = _parquet_to_frame(
         filepaths_or_buffers,
         engine,
         *args,
         columns=columns,
         row_groups=row_groups,
-        strings_to_categorical=strings_to_categorical,
         use_pandas_metadata=use_pandas_metadata,
         partition_keys=partition_keys,
         partition_categories=partition_categories,
         dataset_kwargs=dataset_kwargs,
+        nrows=nrows,
+        skip_rows=skip_rows,
+        allow_mismatched_pq_schemas=allow_mismatched_pq_schemas,
         **kwargs,
     )
+    # Apply filters row-wise (if any are defined), and return
+    df = _apply_post_filters(df, filters)
+    if projected_columns:
+        # Elements of `projected_columns` may now be in the index.
+        # We must filter these names from our projection
+        projected_columns = [
+            col for col in projected_columns if col in df._column_names
+        ]
+        return df[projected_columns]
+    return df
 
 
-@_cudf_nvtx_annotate
+def _normalize_filters(filters: list | None) -> list[list[tuple]] | None:
+    # Utility to normalize and validate the `filters`
+    # argument to `read_parquet`
+    if not filters:
+        return None
+
+    msg = (
+        f"filters must be None, or non-empty List[Tuple] "
+        f"or List[List[Tuple]]. Got {filters}"
+    )
+    if not isinstance(filters, list):
+        raise TypeError(msg)
+
+    def _validate_predicate(item):
+        if not isinstance(item, tuple) or len(item) != 3:
+            raise TypeError(
+                f"Predicate must be Tuple[str, str, Any], got {predicate}."
+            )
+
+    filters = filters if isinstance(filters[0], list) else [filters]
+    for conjunction in filters:
+        if not conjunction or not isinstance(conjunction, list):
+            raise TypeError(msg)
+        for predicate in conjunction:
+            _validate_predicate(predicate)
+
+    return filters
+
+
+def _apply_post_filters(
+    df: DataFrame, filters: list[list[tuple]] | None
+) -> DataFrame:
+    """Apply DNF filters to an in-memory DataFrame
+
+    Disjunctive normal form (DNF) means that the inner-most
+    tuple describes a single column predicate. These inner
+    predicates are combined with an AND conjunction into a
+    larger predicate. The outer-most list then combines all
+    of the combined filters with an OR disjunction.
+    """
+
+    if not filters:
+        # No filters to apply
+        return df
+
+    def _handle_in(column: Series, value, *, negate) -> Series:
+        if not isinstance(value, (list, set, tuple)):
+            raise TypeError(
+                "Value of 'in'/'not in' filter must be a list, set, or tuple."
+            )
+        return ~column.isin(value) if negate else column.isin(value)
+
+    def _handle_is(column: Series, value, *, negate) -> Series:
+        if value not in {np.nan, None}:
+            raise TypeError(
+                "Value of 'is'/'is not' filter must be np.nan or None."
+            )
+        return ~column.isna() if negate else column.isna()
+
+    handlers: dict[str, Callable] = {
+        "==": operator.eq,
+        "!=": operator.ne,
+        "<": operator.lt,
+        "<=": operator.le,
+        ">": operator.gt,
+        ">=": operator.ge,
+        "in": partial(_handle_in, negate=False),
+        "not in": partial(_handle_in, negate=True),
+        "is": partial(_handle_is, negate=False),
+        "is not": partial(_handle_is, negate=True),
+    }
+
+    # Can re-set the index before returning if we filter
+    # out rows from a DataFrame with a default RangeIndex
+    # (to reduce memory usage)
+    reset_index = (
+        isinstance(df.index, RangeIndex)
+        and df.index.name is None
+        and df.index.start == 0
+        and df.index.step == 1
+    )
+
+    try:
+        selection: Series = reduce(
+            operator.or_,
+            (
+                reduce(
+                    operator.and_,
+                    (
+                        handlers[op](df[column], value)
+                        for (column, op, value) in expr
+                    ),
+                )
+                for expr in filters
+            ),
+        )
+        if reset_index:
+            return df[selection].reset_index(drop=True)
+        return df[selection]
+    except (KeyError, TypeError):
+        warnings.warn(
+            f"Row-wise filtering failed in read_parquet for {filters}"
+        )
+        return df
+
+
+@_performance_tracking
 def _parquet_to_frame(
     paths_or_buffers,
     *args,
@@ -570,23 +1060,31 @@ def _parquet_to_frame(
     partition_keys=None,
     partition_categories=None,
     dataset_kwargs=None,
+    nrows=None,
+    skip_rows=None,
     **kwargs,
 ):
-
     # If this is not a partitioned read, only need
     # one call to `_read_parquet`
     if not partition_keys:
         return _read_parquet(
             paths_or_buffers,
+            nrows=nrows,
+            skip_rows=skip_rows,
             *args,
             row_groups=row_groups,
             **kwargs,
         )
 
+    if nrows is not None or skip_rows is not None:
+        raise NotImplementedError(
+            "nrows/skip_rows is not supported when reading a partitioned parquet dataset"
+        )
+
     partition_meta = None
     partitioning = (dataset_kwargs or {}).get("partitioning", None)
     if hasattr(partitioning, "schema"):
-        partition_meta = cudf.DataFrame.from_arrow(
+        partition_meta = DataFrame.from_arrow(
             partitioning.schema.empty_table()
         )
 
@@ -616,66 +1114,67 @@ def _parquet_to_frame(
             )
         )
         # Add partition columns to the last DataFrame
-        for (name, value) in part_key:
+        for name, value in part_key:
             _len = len(dfs[-1])
             if partition_categories and name in partition_categories:
                 # Build the categorical column from `codes`
-                codes = full(
-                    size=_len,
-                    fill_value=partition_categories[name].index(value),
+                codes = as_column(
+                    partition_categories[name].index(value),
+                    length=_len,
                 )
-                dfs[-1][name] = build_categorical_column(
-                    categories=partition_categories[name],
-                    codes=codes,
+                codes = as_unsigned_codes(
+                    len(partition_categories[name]), codes
+                )
+                col = CategoricalColumn(
+                    data=None,
                     size=codes.size,
+                    dtype=CategoricalDtype(
+                        categories=partition_categories[name], ordered=False
+                    ),
                     offset=codes.offset,
-                    ordered=False,
+                    children=(codes,),
                 )
             else:
                 # Not building categorical columns, so
                 # `value` is already what we want
-                _dtype = (
-                    partition_meta[name].dtype
-                    if partition_meta is not None
-                    else None
-                )
                 if pd.isna(value):
-                    dfs[-1][name] = column_empty(
-                        row_count=_len,
-                        dtype=_dtype,
-                        masked=True,
-                    )
+                    col = column_empty(row_count=_len)
                 else:
-                    dfs[-1][name] = full(
-                        size=_len,
-                        fill_value=value,
-                        dtype=_dtype,
-                    )
+                    col = as_column(value, length=_len)
+                if partition_meta is not None:
+                    col = col.astype(partition_meta[name].dtype)
+            dfs[-1][name] = col
 
-    # Concatenate dfs and return.
-    # Assume we can ignore the index if it has no name.
-    return (
-        cudf.concat(dfs, ignore_index=dfs[-1].index.name is None)
-        if len(dfs) > 1
-        else dfs[0]
-    )
+    if len(dfs) > 1:
+        # Concatenate dfs and return.
+        # Assume we can ignore the index if it has no name.
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", FutureWarning)
+            res = concat(dfs, ignore_index=dfs[-1].index.name is None)
+        return res
+    else:
+        return dfs[0]
 
 
-@_cudf_nvtx_annotate
+@_performance_tracking
 def _read_parquet(
     filepaths_or_buffers,
     engine,
     columns=None,
     row_groups=None,
-    strings_to_categorical=None,
     use_pandas_metadata=None,
+    nrows: int | None = None,
+    skip_rows: int | None = None,
+    allow_mismatched_pq_schemas: bool = False,
     *args,
     **kwargs,
-):
+) -> DataFrame:
     # Simple helper function to dispatch between
     # cudf and pyarrow to read parquet data
     if engine == "cudf":
-        if kwargs:
+        if set(kwargs.keys()).difference(
+            set(("_chunk_read_limit", "_pass_read_limit"))
+        ):
             raise ValueError(
                 "cudf engine doesn't support the "
                 f"following keyword arguments: {list(kwargs.keys())}"
@@ -685,42 +1184,174 @@ def _read_parquet(
                 "cudf engine doesn't support the "
                 f"following positional arguments: {list(args)}"
             )
-        return libparquet.read_parquet(
-            filepaths_or_buffers,
-            columns=columns,
-            row_groups=row_groups,
-            strings_to_categorical=strings_to_categorical,
-            use_pandas_metadata=use_pandas_metadata,
-        )
+        if nrows is None:
+            nrows = -1
+        if skip_rows is None:
+            skip_rows = 0
+        if get_option("io.parquet.low_memory"):
+            # Note: If this function ever takes accepts filters
+            # allow_range_index needs to be False when a filter is passed
+            # (see read_parquet)
+            allow_range_index = columns is not None and len(columns) != 0
+
+            options = (
+                plc.io.parquet.ParquetReaderOptions.builder(
+                    plc.io.SourceInfo(filepaths_or_buffers)
+                )
+                .use_pandas_metadata(use_pandas_metadata)
+                .allow_mismatched_pq_schemas(allow_mismatched_pq_schemas)
+                .build()
+            )
+            if row_groups is not None:
+                options.set_row_groups(row_groups)
+            if nrows > -1:
+                options.set_num_rows(nrows)
+            if skip_rows != 0:
+                options.set_skip_rows(skip_rows)
+            if columns is not None:
+                options.set_columns(columns)
+
+            reader = plc.io.parquet.ChunkedParquetReader(
+                options,
+                chunk_read_limit=kwargs.get("_chunk_read_limit", 0),
+                pass_read_limit=kwargs.get("_pass_read_limit", 1024000000),
+            )
+
+            tbl_w_meta = reader.read_chunk()
+            column_names = tbl_w_meta.column_names(include_children=False)
+            child_names = tbl_w_meta.child_names
+            per_file_user_data = tbl_w_meta.per_file_user_data
+            concatenated_columns = tbl_w_meta.tbl.columns()
+
+            # save memory
+            del tbl_w_meta
+
+            while reader.has_next():
+                tbl = reader.read_chunk().tbl
+
+                for i in range(tbl.num_columns()):
+                    concatenated_columns[i] = plc.concatenate.concatenate(
+                        [concatenated_columns[i], tbl._columns[i]]
+                    )
+                    # Drop residual columns to save memory
+                    tbl._columns[i] = None
+
+            data = {
+                name: ColumnBase.from_pylibcudf(col)
+                for name, col in zip(column_names, concatenated_columns)
+            }
+            df = DataFrame._from_data(data)
+            ioutils._add_df_col_struct_names(df, child_names)
+            df = _process_metadata(
+                df,
+                column_names,
+                per_file_user_data,
+                row_groups,
+                filepaths_or_buffers,
+                allow_range_index,
+                use_pandas_metadata,
+                nrows=nrows,
+                skip_rows=skip_rows,
+            )
+            return df
+        else:
+            allow_range_index = True
+            filters = kwargs.get("filters", None)
+            if columns is not None and len(columns) == 0 or filters:
+                allow_range_index = False
+
+            options = (
+                plc.io.parquet.ParquetReaderOptions.builder(
+                    plc.io.SourceInfo(filepaths_or_buffers)
+                )
+                .use_pandas_metadata(use_pandas_metadata)
+                .allow_mismatched_pq_schemas(allow_mismatched_pq_schemas)
+                .build()
+            )
+            if row_groups is not None:
+                options.set_row_groups(row_groups)
+            if nrows > -1:
+                options.set_num_rows(nrows)
+            if skip_rows != 0:
+                options.set_skip_rows(skip_rows)
+            if columns is not None:
+                options.set_columns(columns)
+            if filters is not None:
+                options.set_filter(filters)
+
+            tbl_w_meta = plc.io.parquet.read_parquet(options)
+            df = DataFrame.from_pylibcudf(tbl_w_meta)
+            df = _process_metadata(
+                df,
+                tbl_w_meta.column_names(include_children=False),
+                tbl_w_meta.per_file_user_data,
+                row_groups,
+                filepaths_or_buffers,
+                allow_range_index,
+                use_pandas_metadata,
+                nrows=nrows,
+                skip_rows=skip_rows,
+            )
+            return df
     else:
-        return cudf.DataFrame.from_arrow(
-            pq.ParquetDataset(filepaths_or_buffers).read_pandas(
-                columns=columns, *args, **kwargs
+        if (
+            isinstance(filepaths_or_buffers, list)
+            and len(filepaths_or_buffers) == 1
+        ):
+            filepaths_or_buffers = filepaths_or_buffers[0]
+
+        return DataFrame.from_pandas(
+            pd.read_parquet(
+                filepaths_or_buffers,
+                columns=columns,
+                engine=engine,
+                *args,
+                **kwargs,
             )
         )
 
 
 @ioutils.doc_to_parquet()
-@_cudf_nvtx_annotate
+@_performance_tracking
 def to_parquet(
     df,
     path,
     engine="cudf",
-    compression="snappy",
-    index=None,
+    compression: Literal["snappy", "ZSTD", "ZLIB", "LZ4", None] = "snappy",
+    index: bool | None = None,
     partition_cols=None,
     partition_file_name=None,
     partition_offsets=None,
-    statistics="ROWGROUP",
-    metadata_file_path=None,
-    int96_timestamps=False,
-    row_group_size_bytes=ioutils._ROW_GROUP_SIZE_BYTES_DEFAULT,
-    row_group_size_rows=None,
-    max_page_size_bytes=None,
-    max_page_size_rows=None,
+    statistics: Literal["ROWGROUP", "PAGE", "COLUMN", "NONE"] = "ROWGROUP",
+    metadata_file_path: str | None = None,
+    int96_timestamps: bool = False,
+    row_group_size_bytes: int | None = None,
+    row_group_size_rows: int | None = None,
+    max_page_size_bytes: int | None = None,
+    max_page_size_rows: int | None = None,
+    max_dictionary_size: int | None = None,
     storage_options=None,
-    return_metadata=False,
-    force_nullable_schema=False,
+    return_metadata: bool = False,
+    force_nullable_schema: bool = False,
+    header_version: Literal["1.0", "2.0"] = "1.0",
+    use_dictionary: bool = True,
+    skip_compression: set[Hashable] | None = None,
+    column_encoding: dict[
+        Hashable,
+        Literal[
+            "PLAIN",
+            "DICTIONARY",
+            "DELTA_BINARY_PACKED",
+            "DELTA_LENGTH_BYTE_ARRAY",
+            "DELTA_BYTE_ARRAY",
+            "BYTE_STREAM_SPLIT",
+            "USE_DEFAULT",
+        ],
+    ]
+    | None = None,
+    column_type_length: dict | None = None,
+    output_as_binary: set[Hashable] | None = None,
+    store_schema=False,
     *args,
     **kwargs,
 ):
@@ -770,13 +1401,17 @@ def to_parquet(
                 return_metadata=return_metadata,
                 storage_options=storage_options,
                 force_nullable_schema=force_nullable_schema,
+                header_version=header_version,
+                use_dictionary=use_dictionary,
+                skip_compression=skip_compression,
+                column_encoding=column_encoding,
+                column_type_length=column_type_length,
+                output_as_binary=output_as_binary,
+                store_schema=store_schema,
             )
 
         partition_info = (
-            [
-                (i, j - i)
-                for i, j in zip(partition_offsets, partition_offsets[1:])
-            ]
+            [(i, j - i) for i, j in itertools.pairwise(partition_offsets)]
             if partition_offsets is not None
             else None
         )
@@ -792,12 +1427,22 @@ def to_parquet(
             row_group_size_rows=row_group_size_rows,
             max_page_size_bytes=max_page_size_bytes,
             max_page_size_rows=max_page_size_rows,
+            max_dictionary_size=max_dictionary_size,
             partitions_info=partition_info,
             storage_options=storage_options,
             force_nullable_schema=force_nullable_schema,
+            header_version=header_version,
+            use_dictionary=use_dictionary,
+            skip_compression=skip_compression,
+            column_encoding=column_encoding,
+            column_type_length=column_type_length,
+            output_as_binary=output_as_binary,
+            write_arrow_schema=store_schema,
         )
 
     else:
+        import pyarrow.parquet as pq
+
         if partition_offsets is not None:
             warnings.warn(
                 "partition_offsets will be ignored when engine is not cudf"
@@ -807,15 +1452,10 @@ def to_parquet(
         if index is None:
             index = True
 
-        # Convert partition_file_name to a call back
-        if partition_file_name:
-            partition_file_name = lambda x: partition_file_name  # noqa: E731
-
         pa_table = df.to_arrow(preserve_index=index)
         return pq.write_to_dataset(
             pa_table,
             root_path=path,
-            partition_filename_cb=partition_file_name,
             partition_cols=partition_cols,
             *args,
             **kwargs,
@@ -823,10 +1463,11 @@ def to_parquet(
 
 
 @ioutils.doc_merge_parquet_filemetadata()
-def merge_parquet_filemetadata(filemetadata_list):
+def merge_parquet_filemetadata(filemetadata_list: list) -> np.ndarray:
     """{docstring}"""
-
-    return libparquet.merge_filemetadata(filemetadata_list)
+    return np.asarray(
+        plc.io.parquet.merge_row_group_metadata(filemetadata_list).obj
+    )
 
 
 def _generate_filename():
@@ -850,7 +1491,7 @@ def _get_estimated_file_size(df):
     return file_size
 
 
-@_cudf_nvtx_annotate
+@_performance_tracking
 def _get_partitioned(
     df,
     root_path,
@@ -888,14 +1529,13 @@ def _get_partitioned(
     return full_paths, metadata_file_paths, grouped_df, part_offsets, filename
 
 
-@_cudf_nvtx_annotate
+@_performance_tracking
 def _get_groups_and_offsets(
     df,
     partition_cols,
     preserve_index=False,
     **kwargs,
 ):
-
     if not (set(df._data) - set(partition_cols)):
         warnings.warn("No data left to save outside partition columns")
 
@@ -915,10 +1555,204 @@ def _get_groups_and_offsets(
     return part_names, grouped_df, part_offsets
 
 
-ParquetWriter = libparquet.ParquetWriter
+class ParquetWriter:
+    """
+    ParquetWriter lets you incrementally write out a Parquet file from a series
+    of cudf tables
+
+    Parameters
+    ----------
+    filepath_or_buffer : str, io.IOBase, os.PathLike, or list
+        File path or buffer to write to. The argument may also correspond
+        to a list of file paths or buffers.
+    index : bool or None, default None
+        If ``True``, include a dataframe's index(es) in the file output.
+        If ``False``, they will not be written to the file. If ``None``,
+        index(es) other than RangeIndex will be saved as columns.
+    compression : {'snappy', None}, default 'snappy'
+        Name of the compression to use. Use ``None`` for no compression.
+    statistics : {'ROWGROUP', 'PAGE', 'COLUMN', 'NONE'}, default 'ROWGROUP'
+        Level at which column statistics should be included in file.
+    row_group_size_bytes: int, default ``uint64 max``
+        Maximum size of each stripe of the output.
+        By default, a virtually infinite size equal to ``uint64 max`` will be used.
+    row_group_size_rows: int, default 1000000
+        Maximum number of rows of each stripe of the output.
+        By default, 1000000 (10^6 rows) will be used.
+    max_page_size_bytes: int, default 524288
+        Maximum uncompressed size of each page of the output.
+        By default, 524288 (512KB) will be used.
+    max_page_size_rows: int, default 20000
+        Maximum number of rows of each page of the output.
+        By default, 20000 will be used.
+    max_dictionary_size: int, default 1048576
+        Maximum size of the dictionary page for each output column chunk. Dictionary
+        encoding for column chunks that exceeds this limit will be disabled.
+        By default, 1048576 (1MB) will be used.
+    use_dictionary : bool, default True
+        If ``True``, enable dictionary encoding for Parquet page data
+        subject to ``max_dictionary_size`` constraints.
+        If ``False``, disable dictionary encoding for Parquet page data.
+    store_schema : bool, default False
+        If ``True``, enable computing and writing arrow schema to Parquet
+        file footer's key-value metadata section for faithful round-tripping.
+
+    See Also
+    --------
+    cudf.io.parquet.write_parquet
+    """
+
+    def __init__(
+        self,
+        filepath_or_buffer,
+        index: bool | None = None,
+        compression: Literal["snappy", "ZSTD", "ZLIB", "LZ4", None] = "snappy",
+        statistics: Literal["ROWGROUP", "PAGE", "COLUMN", "NONE"] = "ROWGROUP",
+        row_group_size_bytes: int = int(np.iinfo(np.uint64).max),
+        row_group_size_rows: int = 1000000,
+        max_page_size_bytes: int = 524288,
+        max_page_size_rows: int = 20000,
+        max_dictionary_size: int = 1048576,
+        use_dictionary: bool = True,
+        store_schema: bool = False,
+    ):
+        filepaths_or_buffers = (
+            list(filepath_or_buffer)
+            if is_list_like(filepath_or_buffer)
+            else [filepath_or_buffer]
+        )
+        self.sink = plc.io.SinkInfo(filepaths_or_buffers)
+        self.statistics = statistics
+        self.compression = compression
+        self.index = index
+        self.initialized = False
+        self.row_group_size_bytes = row_group_size_bytes
+        self.row_group_size_rows = row_group_size_rows
+        self.max_page_size_bytes = max_page_size_bytes
+        self.max_page_size_rows = max_page_size_rows
+        self.max_dictionary_size = max_dictionary_size
+        self.use_dictionary = use_dictionary
+        self.write_arrow_schema = store_schema
+
+    def write_table(self, table, partitions_info=None) -> None:
+        """Writes a single table to the file"""
+        if not self.initialized:
+            self._initialize_chunked_state(
+                table,
+                num_partitions=len(partitions_info) if partitions_info else 1,
+            )
+        if self.index is not False and (
+            table.index.name is not None or isinstance(table.index, MultiIndex)
+        ):
+            columns = itertools.chain(table.index._columns, table._columns)
+            plc_table = plc.Table(
+                [col.to_pylibcudf(mode="read") for col in columns]
+            )
+        else:
+            plc_table = plc.Table(
+                [col.to_pylibcudf(mode="read") for col in table._columns]
+            )
+        self.writer.write(plc_table, partitions_info)
+
+    def close(self, metadata_file_path=None) -> np.ndarray | None:
+        if not self.initialized:
+            return None
+        column_chunks_file_paths = []
+        if metadata_file_path is not None:
+            if is_list_like(metadata_file_path):
+                column_chunks_file_paths = list(metadata_file_path)
+            else:
+                column_chunks_file_paths = [metadata_file_path]
+        blob = self.writer.close(column_chunks_file_paths)
+        if metadata_file_path is not None:
+            return np.asarray(blob.obj)
+        return None
+
+    def __enter__(self) -> Self:
+        return self
+
+    def __exit__(self, *args) -> None:
+        self.close()
+
+    def _initialize_chunked_state(
+        self, table, num_partitions: int = 1
+    ) -> None:
+        """Prepares all the values required to build the
+        chunked_parquet_writer_options and creates a writer
+        """
+
+        # Set the table_metadata
+        num_index_cols_meta = 0
+        plc_table = plc.Table(
+            [col.to_pylibcudf(mode="read") for col in table._columns]
+        )
+        self.tbl_meta = plc.io.types.TableInputMetadata(plc_table)
+        if self.index is not False:
+            if isinstance(table.index, MultiIndex):
+                plc_table = plc.Table(
+                    [
+                        col.to_pylibcudf(mode="read")
+                        for col in itertools.chain(
+                            table.index._columns, table._columns
+                        )
+                    ]
+                )
+                self.tbl_meta = plc.io.types.TableInputMetadata(plc_table)
+                for level, idx_name in enumerate(table.index.names):
+                    self.tbl_meta.column_metadata[level].set_name(idx_name)
+                num_index_cols_meta = len(table.index.names)
+            else:
+                if table.index.name is not None:
+                    plc_table = plc.Table(
+                        [
+                            col.to_pylibcudf(mode="read")
+                            for col in itertools.chain(
+                                table.index._columns, table._columns
+                            )
+                        ]
+                    )
+                    self.tbl_meta = plc.io.types.TableInputMetadata(plc_table)
+                    self.tbl_meta.column_metadata[0].set_name(table.index.name)
+                    num_index_cols_meta = 1
+
+        for i, name in enumerate(table._column_names, num_index_cols_meta):
+            self.tbl_meta.column_metadata[i].set_name(name)
+            _set_col_metadata(
+                table[name]._column,
+                self.tbl_meta.column_metadata[i],
+            )
+
+        index = False if isinstance(table.index, RangeIndex) else self.index
+        user_data = [
+            {"pandas": ioutils.generate_pandas_metadata(table, index)}
+        ] * num_partitions
+        comp_type = _get_comp_type(self.compression)
+        stat_freq = _get_stat_freq(self.statistics)
+        dict_policy = (
+            plc.io.types.DictionaryPolicy.ADAPTIVE
+            if self.use_dictionary
+            else plc.io.types.DictionaryPolicy.NEVER
+        )
+        options = (
+            plc.io.parquet.ChunkedParquetWriterOptions.builder(self.sink)
+            .metadata(self.tbl_meta)
+            .key_value_metadata(user_data)
+            .compression(comp_type)
+            .stats_level(stat_freq)
+            .row_group_size_bytes(self.row_group_size_bytes)
+            .row_group_size_rows(self.row_group_size_rows)
+            .max_page_size_bytes(self.max_page_size_bytes)
+            .max_page_size_rows(self.max_page_size_rows)
+            .max_dictionary_size(self.max_dictionary_size)
+            .write_arrow_schema(self.write_arrow_schema)
+            .build()
+        )
+        options.set_dictionary_policy(dict_policy)
+        self.writer = plc.io.parquet.ParquetChunkedWriter.from_options(options)
+        self.initialized = True
 
 
-def _parse_bytes(s):
+def _parse_bytes(s: str) -> int:
     """Parse byte string to numbers
 
     Utility function vendored from Dask.
@@ -1049,23 +1883,23 @@ class ParquetDatasetWriter:
 
     """
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def __init__(
         self,
         path,
         partition_cols,
         index=None,
-        compression="snappy",
-        statistics="ROWGROUP",
+        compression: Literal["snappy", "ZSTD", "ZLIB", "LZ4", None] = "snappy",
+        statistics: Literal["ROWGROUP", "PAGE", "COLUMN", "NONE"] = "ROWGROUP",
         max_file_size=None,
         file_name_prefix=None,
         storage_options=None,
     ) -> None:
         if isinstance(path, str) and path.startswith("s3://"):
             self.fs_meta = {"is_s3": True, "actual_path": path}
-            self.dir_: Optional[
-                tempfile.TemporaryDirectory
-            ] = tempfile.TemporaryDirectory()
+            self.dir_: tempfile.TemporaryDirectory | None = (
+                tempfile.TemporaryDirectory()
+            )
             self.path = self.dir_.name
         else:
             self.fs_meta = {}
@@ -1080,12 +1914,10 @@ class ParquetDatasetWriter:
         self.partition_cols = partition_cols
         # Collection of `ParquetWriter`s, and the corresponding
         # partition_col values they're responsible for
-        self._chunked_writers: List[
-            Tuple[libparquet.ParquetWriter, List[str], str]
-        ] = []
+        self._chunked_writers: list[tuple[ParquetWriter, list[str], str]] = []
         # Map of partition_col values to their ParquetWriter's index
         # in self._chunked_writers for reverse lookup
-        self.path_cw_map: Dict[str, int] = {}
+        self.path_cw_map: dict[str, int] = {}
         self.storage_options = storage_options
         self.filename = file_name_prefix
         self.max_file_size = max_file_size
@@ -1097,14 +1929,14 @@ class ParquetDatasetWriter:
                 )
             self.max_file_size = _parse_bytes(max_file_size)
 
-        self._file_sizes: Dict[str, int] = {}
+        self._file_sizes: dict[str, int] = {}
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def write_table(self, df):
         """
         Write a dataframe to the file/dataset
         """
-        (part_names, grouped_df, part_offsets,) = _get_groups_and_offsets(
+        part_names, grouped_df, part_offsets = _get_groups_and_offsets(
             df=df,
             partition_cols=self.partition_cols,
             preserve_index=self.common_args["index"],
@@ -1192,7 +2024,7 @@ class ParquetDatasetWriter:
         )
         existing_cw_batch = defaultdict(dict)
         new_cw_paths = []
-        partition_info = [(i, j - i) for i, j in zip(offsets, offsets[1:])]
+        partition_info = [(i, j - i) for i, j in itertools.pairwise(offsets)]
 
         for path, part_info, meta_path in zip(
             paths,
@@ -1230,7 +2062,7 @@ class ParquetDatasetWriter:
             self.path_cw_map.update({k: new_cw_idx for k in new_paths})
             self._chunked_writers[-1][0].write_table(grouped_df, part_info)
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def close(self, return_metadata=False):
         """
         Close all open files and optionally return footer metadata as a binary
@@ -1268,46 +2100,258 @@ class ParquetDatasetWriter:
         self.close()
 
 
-def _default_open_file_options(
-    open_file_options, columns, row_groups, fs=None
-):
-    """
-    Set default fields in open_file_options.
-
-    Copies and updates `open_file_options` to
-    include column and row-group information
-    under the "precache_options" key. By default,
-    we set "method" to "parquet", but precaching
-    will be disabled if the user chooses `method=None`
-
-    Parameters
-    ----------
-    open_file_options : dict or None
-    columns : list
-    row_groups : list
-    fs : fsspec.AbstractFileSystem, Optional
-    """
-    if fs and ioutils._is_local_filesystem(fs):
-        # Quick return for local fs
-        return open_file_options or {}
-    # Assume remote storage if `fs` was not specified
-    open_file_options = (open_file_options or {}).copy()
-    precache_options = open_file_options.pop("precache_options", {}).copy()
-    if precache_options.get("method", "parquet") == "parquet":
-        precache_options.update(
-            {
-                "method": "parquet",
-                "engine": precache_options.get("engine", "pyarrow"),
-                "columns": columns,
-                "row_groups": row_groups,
-            }
-        )
-    open_file_options["precache_options"] = precache_options
-    return open_file_options
-
-
 def _hive_dirname(name, val):
     # Simple utility to produce hive directory name
     if pd.isna(val):
         val = "__HIVE_DEFAULT_PARTITION__"
     return f"{name}={val}"
+
+
+def _set_col_metadata(
+    col: ColumnBase,
+    col_meta: plc.io.types.ColumnInMetadata,
+    force_nullable_schema: bool = False,
+    path: str | None = None,
+    skip_compression: set[Hashable] | None = None,
+    column_encoding: dict[
+        Hashable,
+        Literal[
+            "PLAIN",
+            "DICTIONARY",
+            "DELTA_BINARY_PACKED",
+            "DELTA_LENGTH_BYTE_ARRAY",
+            "DELTA_BYTE_ARRAY",
+            "BYTE_STREAM_SPLIT",
+            "USE_DEFAULT",
+        ],
+    ]
+    | None = None,
+    column_type_length: dict | None = None,
+    output_as_binary: set[Hashable] | None = None,
+) -> None:
+    need_path = (
+        skip_compression is not None
+        or column_encoding is not None
+        or column_type_length is not None
+        or output_as_binary is not None
+    )
+    name = col_meta.get_name() if need_path else None
+    full_path = (
+        path + "." + name if (path is not None and name is not None) else name
+    )
+
+    if force_nullable_schema:
+        # Only set nullability if `force_nullable_schema`
+        # is true.
+        col_meta.set_nullability(True)
+
+    if skip_compression is not None and full_path in skip_compression:
+        col_meta.set_skip_compression(True)
+
+    if column_encoding is not None and full_path in column_encoding:
+        encoding = column_encoding[full_path]
+        if encoding is None:
+            c_encoding = plc.io.types.ColumnEncoding.USE_DEFAULT
+        else:
+            enc = str(encoding).upper()
+            c_encoding = getattr(plc.io.types.ColumnEncoding, enc, None)
+            if c_encoding is None:
+                raise ValueError("Unsupported `column_encoding` type")
+        col_meta.set_encoding(c_encoding)
+
+    if column_type_length is not None and full_path in column_type_length:
+        col_meta.set_output_as_binary(True)
+        col_meta.set_type_length(column_type_length[full_path])
+
+    if output_as_binary is not None and full_path in output_as_binary:
+        col_meta.set_output_as_binary(True)
+
+    if isinstance(col.dtype, StructDtype):
+        for i, (child_col, name) in enumerate(
+            zip(col.children, list(col.dtype.fields))
+        ):
+            col_meta.child(i).set_name(name)
+            _set_col_metadata(
+                child_col,
+                col_meta.child(i),
+                force_nullable_schema,
+                full_path,
+                skip_compression,
+                column_encoding,
+                column_type_length,
+                output_as_binary,
+            )
+    elif isinstance(col.dtype, ListDtype):
+        if full_path is not None:
+            full_path = full_path + ".list"
+            col_meta.child(1).set_name("element")
+        _set_col_metadata(
+            col.children[1],
+            col_meta.child(1),
+            force_nullable_schema,
+            full_path,
+            skip_compression,
+            column_encoding,
+            column_type_length,
+            output_as_binary,
+        )
+    elif isinstance(col.dtype, DecimalDtype):
+        col_meta.set_decimal_precision(col.dtype.precision)
+
+
+def _get_comp_type(
+    compression: Literal["snappy", "ZSTD", "ZLIB", "LZ4", None],
+) -> plc.io.types.CompressionType:
+    if compression is None:
+        return plc.io.types.CompressionType.NONE
+    result = getattr(plc.io.types.CompressionType, compression.upper(), None)
+    if result is None:
+        raise ValueError("Unsupported `compression` type")
+    return result
+
+
+def _get_stat_freq(
+    statistics: Literal["ROWGROUP", "PAGE", "COLUMN", "NONE"],
+) -> plc.io.types.StatisticsFreq:
+    result = getattr(
+        plc.io.types.StatisticsFreq, f"STATISTICS_{statistics.upper()}", None
+    )
+    if result is None:
+        raise ValueError("Unsupported `statistics_freq` type")
+    return result
+
+
+def _process_metadata(
+    df: DataFrame,
+    names: list[Hashable],
+    per_file_user_data: list,
+    row_groups,
+    filepaths_or_buffers,
+    allow_range_index: bool,
+    use_pandas_metadata: bool,
+    nrows: int = -1,
+    skip_rows: int = 0,
+) -> DataFrame:
+    index_col = None
+    is_range_index = True
+    column_index_type = None
+    index_col_names = None
+    meta = None
+    for single_file in per_file_user_data:
+        if b"pandas" not in single_file:
+            continue
+        json_str = single_file[b"pandas"].decode("utf-8")
+        meta = json.loads(json_str)
+        file_is_range_index, index_col, column_index_type = _parse_metadata(
+            meta
+        )
+        is_range_index &= file_is_range_index
+
+        if (
+            not file_is_range_index
+            and index_col is not None
+            and index_col_names is None
+        ):
+            index_col_names = {}
+            for idx_col in index_col:
+                for c in meta["columns"]:
+                    if c["field_name"] == idx_col:
+                        index_col_names[idx_col] = c["name"]
+
+    if meta is not None:
+        # Book keep each column metadata as the order
+        # of `meta["columns"]` and `column_names` are not
+        # guaranteed to be deterministic and same always.
+        meta_data_per_column = {
+            col_meta["name"]: col_meta for col_meta in meta["columns"]
+        }
+
+        # update the decimal precision of each column
+        for col in names:
+            if isinstance(df._data[col].dtype, DecimalDtype):
+                df._data[col].dtype.precision = meta_data_per_column[col][
+                    "metadata"
+                ]["precision"]
+
+    # Set the index column
+    if index_col is not None and len(index_col) > 0:
+        if is_range_index:
+            if not allow_range_index:
+                return df
+
+            if len(per_file_user_data) > 1:
+                range_index_meta = {
+                    "kind": "range",
+                    "name": None,
+                    "start": 0,
+                    "stop": len(df),
+                    "step": 1,
+                }
+            else:
+                range_index_meta = index_col[0]
+
+            if row_groups is not None:
+                per_file_metadata = [
+                    pa.parquet.read_metadata(
+                        # Pyarrow cannot read directly from bytes
+                        io.BytesIO(s) if isinstance(s, bytes) else s
+                    )
+                    for s in filepaths_or_buffers
+                ]
+
+                filtered_idx = []
+                for i, file_meta in enumerate(per_file_metadata):
+                    row_groups_i = []
+                    start = 0
+                    for row_group in range(file_meta.num_row_groups):
+                        stop = start + file_meta.row_group(row_group).num_rows
+                        row_groups_i.append((start, stop))
+                        start = stop
+
+                    for rg in row_groups[i]:
+                        filtered_idx.append(
+                            RangeIndex(
+                                start=row_groups_i[rg][0],
+                                stop=row_groups_i[rg][1],
+                                step=range_index_meta["step"],
+                            )
+                        )
+
+                if len(filtered_idx) > 0:
+                    idx = concat(filtered_idx)
+                else:
+                    idx = Index._from_column(column_empty(0))
+            else:
+                start = range_index_meta["start"] + skip_rows  # type: ignore[operator]
+                stop = range_index_meta["stop"]
+                if nrows > -1:
+                    stop = start + nrows
+                idx = RangeIndex(
+                    start=start,
+                    stop=stop,
+                    step=range_index_meta["step"],
+                    name=range_index_meta["name"],
+                )
+
+            df.index = idx
+        elif set(index_col).issubset(names):
+            index_data = df[index_col]
+            actual_index_names = iter(index_col_names.values())
+            if index_data._num_columns == 1:
+                idx = Index._from_column(
+                    index_data._columns[0], name=next(actual_index_names)
+                )
+            else:
+                idx = MultiIndex.from_frame(
+                    index_data, names=list(actual_index_names)
+                )
+            df.drop(columns=index_col, inplace=True)
+            df.index = idx
+        else:
+            if use_pandas_metadata:
+                df.index.names = index_col
+
+    if df._num_columns == 0 and column_index_type is not None:
+        df._data.label_dtype = column_index_type
+
+    return df

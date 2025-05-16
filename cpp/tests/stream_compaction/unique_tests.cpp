@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,22 +14,16 @@
  * limitations under the License.
  */
 
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/iterator_utilities.hpp>
+#include <cudf_test/table_utilities.hpp>
+
 #include <cudf/copying.hpp>
-#include <cudf/sorting.hpp>
 #include <cudf/stream_compaction.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
-
-#include <cudf_test/base_fixture.hpp>
-#include <cudf_test/column_utilities.hpp>
-#include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/iterator_utilities.hpp>
-#include <cudf_test/table_utilities.hpp>
-#include <cudf_test/type_lists.hpp>
-
-#include <algorithm>
-#include <cmath>
 
 using cudf::nan_policy;
 using cudf::null_equality;
@@ -43,7 +37,6 @@ auto constexpr KEEP_ANY     = cudf::duplicate_keep_option::KEEP_ANY;
 auto constexpr KEEP_FIRST   = cudf::duplicate_keep_option::KEEP_FIRST;
 auto constexpr KEEP_LAST    = cudf::duplicate_keep_option::KEEP_LAST;
 auto constexpr KEEP_NONE    = cudf::duplicate_keep_option::KEEP_NONE;
-auto constexpr NULL_EQUAL   = cudf::null_equality::EQUAL;
 auto constexpr NULL_UNEQUAL = cudf::null_equality::UNEQUAL;
 
 using int32s_col  = cudf::test::fixed_width_column_wrapper<int32_t>;
@@ -56,15 +49,17 @@ struct Unique : public cudf::test::BaseFixture {};
 
 TEST_F(Unique, StringKeyColumn)
 {
-  cudf::test::fixed_width_column_wrapper<int32_t> col{{5, 4, 4, 5, 5, 8, 1}, {1, 0, 0, 1, 1, 1, 1}};
+  cudf::test::fixed_width_column_wrapper<int32_t> col{{5, 4, 4, 5, 5, 8, 1},
+                                                      {true, false, false, true, true, true, true}};
   cudf::test::strings_column_wrapper key_col{{"all", "new", "new", "all", "new", "the", "strings"},
-                                             {1, 1, 1, 1, 0, 1, 1}};
+                                             {true, true, true, true, false, true, true}};
   cudf::table_view input{{col, key_col}};
   std::vector<cudf::size_type> keys{1};
 
-  cudf::test::fixed_width_column_wrapper<int32_t> exp_col{{5, 4, 5, 5, 8, 1}, {1, 0, 1, 1, 1, 1}};
+  cudf::test::fixed_width_column_wrapper<int32_t> exp_col{{5, 4, 5, 5, 8, 1},
+                                                          {true, false, true, true, true, true}};
   cudf::test::strings_column_wrapper exp_key_col{{"all", "new", "all", "new", "the", "strings"},
-                                                 {1, 1, 1, 0, 1, 1}};
+                                                 {true, true, true, false, true, true}};
   cudf::table_view expected{{exp_col, exp_key_col}};
 
   auto got = unique(input, keys, cudf::duplicate_keep_option::KEEP_LAST);
@@ -92,7 +87,8 @@ TEST_F(Unique, NoColumnInputTable)
 
 TEST_F(Unique, EmptyKeys)
 {
-  cudf::test::fixed_width_column_wrapper<int32_t> col{{5, 4, 3, 5, 8, 1}, {1, 0, 1, 1, 1, 1}};
+  cudf::test::fixed_width_column_wrapper<int32_t> col{{5, 4, 3, 5, 8, 1},
+                                                      {true, false, true, true, true, true}};
   cudf::test::fixed_width_column_wrapper<int32_t> empty_col{};
   cudf::table_view input{{col}};
   std::vector<cudf::size_type> keys{};
@@ -151,17 +147,18 @@ TEST_F(Unique, NonNullTable)
 
 TEST_F(Unique, KeepFirstWithNull)
 {
-  cudf::test::fixed_width_column_wrapper<int32_t> col{{5, 4, 3, 2, 5, 8, 1}, {1, 0, 1, 1, 1, 1, 1}};
+  cudf::test::fixed_width_column_wrapper<int32_t> col{{5, 4, 3, 2, 5, 8, 1},
+                                                      {true, false, true, true, true, true, true}};
   cudf::test::fixed_width_column_wrapper<int32_t> key{{20, 20, 20, 20, 19, 21, 19},
-                                                      {1, 1, 0, 0, 1, 1, 1}};
+                                                      {true, true, false, false, true, true, true}};
   cudf::table_view input{{col, key}};
   std::vector<cudf::size_type> keys{1};
 
   // nulls are equal
-  cudf::test::fixed_width_column_wrapper<int32_t> exp_col_first_equal{{5, 3, 5, 8, 1},
-                                                                      {1, 1, 1, 1, 1}};
-  cudf::test::fixed_width_column_wrapper<int32_t> exp_key_col_first_equal{{20, 20, 19, 21, 19},
-                                                                          {1, 0, 1, 1, 1}};
+  cudf::test::fixed_width_column_wrapper<int32_t> exp_col_first_equal{
+    {5, 3, 5, 8, 1}, {true, true, true, true, true}};
+  cudf::test::fixed_width_column_wrapper<int32_t> exp_key_col_first_equal{
+    {20, 20, 19, 21, 19}, {true, false, true, true, true}};
   cudf::table_view expected_first_equal{{exp_col_first_equal, exp_key_col_first_equal}};
   auto got_first_equal =
     unique(input, keys, cudf::duplicate_keep_option::KEEP_FIRST, null_equality::EQUAL);
@@ -169,10 +166,10 @@ TEST_F(Unique, KeepFirstWithNull)
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected_first_equal, got_first_equal->view());
 
   // nulls are unequal
-  cudf::test::fixed_width_column_wrapper<int32_t> exp_col_first_unequal{{5, 3, 2, 5, 8, 1},
-                                                                        {1, 1, 1, 1, 1, 1}};
+  cudf::test::fixed_width_column_wrapper<int32_t> exp_col_first_unequal{
+    {5, 3, 2, 5, 8, 1}, {true, true, true, true, true, true}};
   cudf::test::fixed_width_column_wrapper<int32_t> exp_key_col_first_unequal{
-    {20, 20, 20, 19, 21, 19}, {1, 0, 0, 1, 1, 1}};
+    {20, 20, 20, 19, 21, 19}, {true, false, false, true, true, true}};
   cudf::table_view expected_first_unequal{{exp_col_first_unequal, exp_key_col_first_unequal}};
   auto got_first_unequal =
     unique(input, keys, cudf::duplicate_keep_option::KEEP_FIRST, null_equality::UNEQUAL);
@@ -182,17 +179,18 @@ TEST_F(Unique, KeepFirstWithNull)
 
 TEST_F(Unique, KeepLastWithNull)
 {
-  cudf::test::fixed_width_column_wrapper<int32_t> col{{5, 4, 3, 2, 5, 8, 1}, {1, 0, 1, 1, 1, 1, 1}};
+  cudf::test::fixed_width_column_wrapper<int32_t> col{{5, 4, 3, 2, 5, 8, 1},
+                                                      {true, false, true, true, true, true, true}};
   cudf::test::fixed_width_column_wrapper<int32_t> key{{20, 20, 20, 20, 19, 21, 19},
-                                                      {1, 1, 0, 0, 1, 1, 1}};
+                                                      {true, true, false, false, true, true, true}};
   cudf::table_view input{{col, key}};
   std::vector<cudf::size_type> keys{1};
 
   // nulls are equal
-  cudf::test::fixed_width_column_wrapper<int32_t> exp_col_last_equal{{4, 2, 5, 8, 1},
-                                                                     {0, 1, 1, 1, 1}};
-  cudf::test::fixed_width_column_wrapper<int32_t> exp_key_col_last_equal{{20, 20, 19, 21, 19},
-                                                                         {1, 0, 1, 1, 1}};
+  cudf::test::fixed_width_column_wrapper<int32_t> exp_col_last_equal{
+    {4, 2, 5, 8, 1}, {false, true, true, true, true}};
+  cudf::test::fixed_width_column_wrapper<int32_t> exp_key_col_last_equal{
+    {20, 20, 19, 21, 19}, {true, false, true, true, true}};
   cudf::table_view expected_last_equal{{exp_col_last_equal, exp_key_col_last_equal}};
   auto got_last_equal =
     unique(input, keys, cudf::duplicate_keep_option::KEEP_LAST, null_equality::EQUAL);
@@ -200,10 +198,10 @@ TEST_F(Unique, KeepLastWithNull)
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected_last_equal, got_last_equal->view());
 
   // nulls are unequal
-  cudf::test::fixed_width_column_wrapper<int32_t> exp_col_last_unequal{{4, 3, 2, 5, 8, 1},
-                                                                       {0, 1, 1, 1, 1, 1}};
-  cudf::test::fixed_width_column_wrapper<int32_t> exp_key_col_last_unequal{{20, 20, 20, 19, 21, 19},
-                                                                           {1, 0, 0, 1, 1, 1}};
+  cudf::test::fixed_width_column_wrapper<int32_t> exp_col_last_unequal{
+    {4, 3, 2, 5, 8, 1}, {false, true, true, true, true, true}};
+  cudf::test::fixed_width_column_wrapper<int32_t> exp_key_col_last_unequal{
+    {20, 20, 20, 19, 21, 19}, {true, false, false, true, true, true}};
   cudf::table_view expected_last_unequal{{exp_col_last_unequal, exp_key_col_last_unequal}};
   auto got_last_unequal =
     unique(input, keys, cudf::duplicate_keep_option::KEEP_LAST, null_equality::UNEQUAL);
@@ -213,15 +211,18 @@ TEST_F(Unique, KeepLastWithNull)
 
 TEST_F(Unique, KeepNoneWithNull)
 {
-  cudf::test::fixed_width_column_wrapper<int32_t> col{{5, 4, 3, 2, 5, 8, 1}, {1, 0, 1, 1, 1, 1, 1}};
+  cudf::test::fixed_width_column_wrapper<int32_t> col{{5, 4, 3, 2, 5, 8, 1},
+                                                      {true, false, true, true, true, true, true}};
   cudf::test::fixed_width_column_wrapper<int32_t> key{{20, 20, 20, 20, 19, 21, 19},
-                                                      {1, 1, 0, 0, 1, 1, 1}};
+                                                      {true, true, false, false, true, true, true}};
   cudf::table_view input{{col, key}};
   std::vector<cudf::size_type> keys{1};
 
   // nulls are equal
-  cudf::test::fixed_width_column_wrapper<int32_t> exp_col_unique_equal{{5, 8, 1}, {1, 1, 1}};
-  cudf::test::fixed_width_column_wrapper<int32_t> exp_key_col_unique_equal{{19, 21, 19}, {1, 1, 1}};
+  cudf::test::fixed_width_column_wrapper<int32_t> exp_col_unique_equal{{5, 8, 1},
+                                                                       {true, true, true}};
+  cudf::test::fixed_width_column_wrapper<int32_t> exp_key_col_unique_equal{{19, 21, 19},
+                                                                           {true, true, true}};
   cudf::table_view expected_unique_equal{{exp_col_unique_equal, exp_key_col_unique_equal}};
   auto got_unique_equal =
     unique(input, keys, cudf::duplicate_keep_option::KEEP_NONE, null_equality::EQUAL);
@@ -229,10 +230,10 @@ TEST_F(Unique, KeepNoneWithNull)
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected_unique_equal, got_unique_equal->view());
 
   // nulls are unequal
-  cudf::test::fixed_width_column_wrapper<int32_t> exp_col_unique_unequal{{3, 2, 5, 8, 1},
-                                                                         {1, 1, 1, 1, 1}};
-  cudf::test::fixed_width_column_wrapper<int32_t> exp_key_col_unique_unequal{{20, 20, 19, 21, 19},
-                                                                             {0, 0, 1, 1, 1}};
+  cudf::test::fixed_width_column_wrapper<int32_t> exp_col_unique_unequal{
+    {3, 2, 5, 8, 1}, {true, true, true, true, true}};
+  cudf::test::fixed_width_column_wrapper<int32_t> exp_key_col_unique_unequal{
+    {20, 20, 19, 21, 19}, {false, false, true, true, true}};
   cudf::table_view expected_unique_unequal{{exp_col_unique_unequal, exp_key_col_unique_unequal}};
   auto got_unique_unequal =
     unique(input, keys, cudf::duplicate_keep_option::KEEP_NONE, null_equality::UNEQUAL);
@@ -345,77 +346,81 @@ TEST_F(Unique, NullableListsKeepFirstLastNone)
   auto const key_idx = std::vector<cudf::size_type>{1};
 
   // KEEP FIRST
-  {// Nulls are equal.
-   {auto const exp_idx = int32s_col{0, 2, 1, 3, 5, 6, 4};
-  auto const exp_keys = lists_col{{{}, {1, 1}, {1}, {} /*NULL*/, {2}, {2, 1}, {2, 2}}, null_at(3)};
-  auto const expected = cudf::table_view{{exp_idx, exp_keys}};
+  {  // Nulls are equal.
+    {
+      auto const exp_idx = int32s_col{0, 2, 1, 3, 5, 6, 4};
+      auto const exp_keys =
+        lists_col{{{}, {1, 1}, {1}, {} /*NULL*/, {2}, {2, 1}, {2, 2}}, null_at(3)};
+      auto const expected = cudf::table_view{{exp_idx, exp_keys}};
 
-  auto const result = cudf::unique(input, key_idx, KEEP_FIRST);
+      auto const result = cudf::unique(input, key_idx, KEEP_FIRST);
 
-  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, *result);
-}
+      CUDF_TEST_EXPECT_TABLES_EQUAL(expected, *result);
+    }
 
-// Nulls are unequal.
-{
-  auto const exp_idx = int32s_col{0, 2, 1, 3, 4, 5, 6, 4};
-  auto const exp_keys =
-    lists_col{{{}, {1, 1}, {1}, {} /*NULL*/, {} /*NULL*/, {2}, {2, 1}, {2, 2}}, nulls_at({3, 4})};
-  auto const expected = cudf::table_view{{exp_idx, exp_keys}};
+    // Nulls are unequal.
+    {
+      auto const exp_idx  = int32s_col{0, 2, 1, 3, 4, 5, 6, 4};
+      auto const exp_keys = lists_col{
+        {{}, {1, 1}, {1}, {} /*NULL*/, {} /*NULL*/, {2}, {2, 1}, {2, 2}}, nulls_at({3, 4})};
+      auto const expected = cudf::table_view{{exp_idx, exp_keys}};
 
-  auto const result = cudf::unique(input, key_idx, KEEP_FIRST, NULL_UNEQUAL);
+      auto const result = cudf::unique(input, key_idx, KEEP_FIRST, NULL_UNEQUAL);
 
-  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, *result);
-}
-}
-
-// KEEP LAST
-{// Nulls are equal.
- {auto const exp_idx = int32s_col{1, 2, 2, 4, 6, 6, 5};
-auto const exp_keys = lists_col{{{}, {1, 1}, {1}, {} /*NULL*/, {2}, {2, 1}, {2, 2}}, null_at(3)};
-auto const expected = cudf::table_view{{exp_idx, exp_keys}};
-
-auto const result = cudf::unique(input, key_idx, KEEP_LAST);
-
-CUDF_TEST_EXPECT_TABLES_EQUAL(expected, *result);
-}
-
-// Nulls are unequal.
-{
-  auto const exp_idx = int32s_col{1, 2, 2, 3, 4, 6, 6, 5};
-  auto const exp_keys =
-    lists_col{{{}, {1, 1}, {1}, {} /*NULL*/, {} /*NULL*/, {2}, {2, 1}, {2, 2}}, nulls_at({3, 4})};
-  auto const expected = cudf::table_view{{exp_idx, exp_keys}};
-
-  auto const result = cudf::unique(input, key_idx, KEEP_LAST, NULL_UNEQUAL);
-
-  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, *result);
-}
-}
-
-// KEEP NONE
-{
-  // Nulls are equal.
-  {
-    auto const exp_idx  = int32s_col{2, 6};
-    auto const exp_keys = lists_col{{{1, 1}, {2, 1}}, nulls_at({})};
-    auto const expected = cudf::table_view{{exp_idx, exp_keys}};
-
-    auto const result = cudf::unique(input, key_idx, KEEP_NONE);
-
-    CUDF_TEST_EXPECT_TABLES_EQUAL(expected, *result);
+      CUDF_TEST_EXPECT_TABLES_EQUAL(expected, *result);
+    }
   }
 
-  // Nulls are unequal.
-  {
-    auto const exp_idx  = int32s_col{2, 3, 4, 6};
-    auto const exp_keys = lists_col{{{1, 1}, {} /*NULL*/, {} /*NULL*/, {2, 1}}, nulls_at({1, 2})};
-    auto const expected = cudf::table_view{{exp_idx, exp_keys}};
+  // KEEP LAST
+  {  // Nulls are equal.
+    {
+      auto const exp_idx = int32s_col{1, 2, 2, 4, 6, 6, 5};
+      auto const exp_keys =
+        lists_col{{{}, {1, 1}, {1}, {} /*NULL*/, {2}, {2, 1}, {2, 2}}, null_at(3)};
+      auto const expected = cudf::table_view{{exp_idx, exp_keys}};
 
-    auto const result = cudf::unique(input, key_idx, KEEP_NONE, NULL_UNEQUAL);
+      auto const result = cudf::unique(input, key_idx, KEEP_LAST);
 
-    CUDF_TEST_EXPECT_TABLES_EQUAL(expected, *result);
+      CUDF_TEST_EXPECT_TABLES_EQUAL(expected, *result);
+    }
+
+    // Nulls are unequal.
+    {
+      auto const exp_idx  = int32s_col{1, 2, 2, 3, 4, 6, 6, 5};
+      auto const exp_keys = lists_col{
+        {{}, {1, 1}, {1}, {} /*NULL*/, {} /*NULL*/, {2}, {2, 1}, {2, 2}}, nulls_at({3, 4})};
+      auto const expected = cudf::table_view{{exp_idx, exp_keys}};
+
+      auto const result = cudf::unique(input, key_idx, KEEP_LAST, NULL_UNEQUAL);
+
+      CUDF_TEST_EXPECT_TABLES_EQUAL(expected, *result);
+    }
   }
-}
+
+  // KEEP NONE
+  {
+    // Nulls are equal.
+    {
+      auto const exp_idx  = int32s_col{2, 6};
+      auto const exp_keys = lists_col{{{1, 1}, {2, 1}}, nulls_at({})};
+      auto const expected = cudf::table_view{{exp_idx, exp_keys}};
+
+      auto const result = cudf::unique(input, key_idx, KEEP_NONE);
+
+      CUDF_TEST_EXPECT_TABLES_EQUAL(expected, *result);
+    }
+
+    // Nulls are unequal.
+    {
+      auto const exp_idx  = int32s_col{2, 3, 4, 6};
+      auto const exp_keys = lists_col{{{1, 1}, {} /*NULL*/, {} /*NULL*/, {2, 1}}, nulls_at({1, 2})};
+      auto const expected = cudf::table_view{{exp_idx, exp_keys}};
+
+      auto const result = cudf::unique(input, key_idx, KEEP_NONE, NULL_UNEQUAL);
+
+      CUDF_TEST_EXPECT_TABLES_EQUAL(expected, *result);
+    }
+  }
 }
 
 TEST_F(Unique, ListsOfStructsKeepAny)

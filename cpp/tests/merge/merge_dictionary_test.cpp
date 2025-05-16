@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,16 +14,14 @@
  * limitations under the License.
  */
 
-#include <cudf/dictionary/dictionary_column_view.hpp>
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_utilities.hpp>
+#include <cudf_test/column_wrapper.hpp>
+
 #include <cudf/dictionary/encode.hpp>
 #include <cudf/merge.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
-
-#include <cudf_test/base_fixture.hpp>
-#include <cudf_test/column_utilities.hpp>
-#include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/cudf_gtest.hpp>
 
 #include <vector>
 
@@ -101,18 +99,19 @@ TEST_F(MergeDictionaryTest, Merge2Columns)
 
 TEST_F(MergeDictionaryTest, WithNulls)
 {
-  cudf::test::fixed_width_column_wrapper<int8_t> left_w1({1, 2, 2, 4, 4, 5, 0},
-                                                         {1, 1, 1, 1, 1, 1, 0});
+  cudf::test::fixed_width_column_wrapper<int8_t> left_w1(
+    {1, 2, 2, 4, 4, 5, 0}, {true, true, true, true, true, true, false});
   auto left1 = cudf::dictionary::encode(left_w1);
-  cudf::test::fixed_width_column_wrapper<int64_t> left_w2({1000, 1000, 800, 500, 500, 100, 0},
-                                                          {1, 1, 1, 1, 1, 1, 0});
+  cudf::test::fixed_width_column_wrapper<int64_t> left_w2(
+    {1000, 1000, 800, 500, 500, 100, 0}, {true, true, true, true, true, true, false});
   auto left2 = cudf::dictionary::encode(left_w2);
   cudf::table_view left_view{{left1->view(), left2->view()}};
 
-  cudf::test::fixed_width_column_wrapper<int8_t> right_w1({1, 1, 2, 4, 5, 0}, {1, 1, 1, 1, 1, 0});
+  cudf::test::fixed_width_column_wrapper<int8_t> right_w1({1, 1, 2, 4, 5, 0},
+                                                          {true, true, true, true, true, false});
   auto right1 = cudf::dictionary::encode(right_w1);
   cudf::test::fixed_width_column_wrapper<int64_t> right_w2({1000, 800, 800, 400, 100, 0},
-                                                           {1, 1, 1, 1, 1, 0});
+                                                           {true, true, true, true, true, false});
   auto right2 = cudf::dictionary::encode(right_w2);
   cudf::table_view right_view{{right1->view(), right2->view()}};
 
@@ -125,10 +124,11 @@ TEST_F(MergeDictionaryTest, WithNulls)
   auto decoded2 = cudf::dictionary::decode(result->get_column(1).view());
 
   cudf::test::fixed_width_column_wrapper<int8_t> expected_1(
-    {1, 1, 1, 2, 2, 2, 4, 4, 4, 5, 5, 0, 0}, {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0});
+    {1, 1, 1, 2, 2, 2, 4, 4, 4, 5, 5, 0, 0},
+    {true, true, true, true, true, true, true, true, true, true, true, false, false});
   cudf::test::fixed_width_column_wrapper<int64_t> expected_2(
     {1000, 1000, 800, 1000, 800, 800, 500, 500, 400, 100, 100, 0, 0},
-    {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0});
+    {true, true, true, true, true, true, true, true, true, true, true, false, false});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_1, decoded1->view());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_2, decoded2->view());
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,11 +18,17 @@
 
 #include <cudf/dictionary/detail/iterator.cuh>
 #include <cudf/reduction/detail/reduction.cuh>
+#include <cudf/reduction/detail/reduction_operators.cuh>
 #include <cudf/scalar/scalar_factories.hpp>
+#include <cudf/utilities/error.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <thrust/iterator/transform_iterator.h>
+
+#include <stdexcept>
+#include <type_traits>
 
 namespace cudf {
 namespace reduction {
@@ -48,13 +54,21 @@ std::unique_ptr<scalar> compound_reduction(column_view const& col,
                                            data_type const output_dtype,
                                            size_type ddof,
                                            rmm::cuda_stream_view stream,
-                                           rmm::mr::device_memory_resource* mr)
+                                           rmm::device_async_resource_ref mr)
 {
   auto const valid_count = col.size() - col.null_count();
 
+  // All null input produces all null output
+  if (valid_count == 0 ||
+      // Only care about ddof for standard deviation and variance right now
+      valid_count <= ddof && (std::is_same_v<Op, cudf::reduction::detail::op::standard_deviation> ||
+                              std::is_same_v<Op, cudf::reduction::detail::op::variance>)) {
+    auto result = cudf::make_fixed_width_scalar(output_dtype, stream, mr);
+    result->set_valid_async(false, stream);
+    return result;
+  }
   // reduction by iterator
   auto dcol = cudf::column_device_view::create(col, stream);
-  std::unique_ptr<scalar> result;
   Op compound_op{};
 
   if (!cudf::is_dictionary(col.type())) {
@@ -62,25 +76,21 @@ std::unique_ptr<scalar> compound_reduction(column_view const& col,
       auto it = thrust::make_transform_iterator(
         dcol->pair_begin<ElementType, true>(),
         compound_op.template get_null_replacing_element_transformer<ResultType>());
-      result = cudf::reduction::detail::reduce<Op, decltype(it), ResultType>(
+      return cudf::reduction::detail::reduce<Op, decltype(it), ResultType>(
         it, col.size(), compound_op, valid_count, ddof, stream, mr);
     } else {
       auto it = thrust::make_transform_iterator(
         dcol->begin<ElementType>(), compound_op.template get_element_transformer<ResultType>());
-      result = cudf::reduction::detail::reduce<Op, decltype(it), ResultType>(
+      return cudf::reduction::detail::reduce<Op, decltype(it), ResultType>(
         it, col.size(), compound_op, valid_count, ddof, stream, mr);
     }
   } else {
     auto it = thrust::make_transform_iterator(
       cudf::dictionary::detail::make_dictionary_pair_iterator<ElementType>(*dcol, col.has_nulls()),
       compound_op.template get_null_replacing_element_transformer<ResultType>());
-    result = cudf::reduction::detail::reduce<Op, decltype(it), ResultType>(
+    return cudf::reduction::detail::reduce<Op, decltype(it), ResultType>(
       it, col.size(), compound_op, valid_count, ddof, stream, mr);
   }
-
-  // set scalar is valid
-  result->set_valid_async(col.null_count() < col.size(), stream);
-  return result;
 };
 
 // @brief result type dispatcher for compound reduction (a.k.a. mean, var, std)
@@ -101,7 +111,7 @@ struct result_type_dispatcher {
                                      cudf::data_type const output_dtype,
                                      size_type ddof,
                                      rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr)
+                                     rmm::device_async_resource_ref mr)
   {
     return compound_reduction<ElementType, ResultType, Op>(col, output_dtype, ddof, stream, mr);
   }
@@ -111,7 +121,7 @@ struct result_type_dispatcher {
                                      cudf::data_type const output_dtype,
                                      size_type ddof,
                                      rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr)
+                                     rmm::device_async_resource_ref mr)
   {
     CUDF_FAIL("Unsupported output data type");
   }
@@ -134,8 +144,9 @@ struct element_type_dispatcher {
                                      cudf::data_type const output_dtype,
                                      size_type ddof,
                                      rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr)
+                                     rmm::device_async_resource_ref mr)
   {
+    CUDF_EXPECTS(ddof >= 0, "ddof must be non-negative", std::domain_error);
     return cudf::type_dispatcher(
       output_dtype, result_type_dispatcher<ElementType, Op>(), col, output_dtype, ddof, stream, mr);
   }
@@ -145,7 +156,7 @@ struct element_type_dispatcher {
                                      cudf::data_type const output_dtype,
                                      size_type ddof,
                                      rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr)
+                                     rmm::device_async_resource_ref mr)
   {
     CUDF_FAIL(
       "Reduction operators other than `min` and `max`"

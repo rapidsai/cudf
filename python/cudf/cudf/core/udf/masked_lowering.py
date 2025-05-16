@@ -243,6 +243,7 @@ for binary_op in arith_ops + bitwise_ops + comparison_ops:
 # register all lowering at init
 for unary_op in unary_ops:
     register_unary_op(unary_op)
+register_unary_op(abs)
 
 
 @cuda_lower(operator.is_, MaskedType, NAType)

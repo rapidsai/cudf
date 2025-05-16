@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,14 +16,16 @@
 #pragma once
 
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/export.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/device_buffer.hpp>
-#include <rmm/mr/device/per_device_resource.hpp>
 
 #include <vector>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 
 /**
  * @addtogroup column_nullmask
@@ -34,7 +36,9 @@ namespace cudf {
 
 /**
  * @brief Returns the null count for a null mask of the specified `state`
- * representing `size` elements.
+ * representing `size` elements
+ *
+ * @throw std::invalid_argument if state is UNINITIALIZED
  *
  * @param state The state of the null mask
  * @param size The number of elements represented by the mask
@@ -44,7 +48,7 @@ size_type state_null_count(mask_state state, size_type size);
 
 /**
  * @brief Computes the required bytes necessary to represent the specified
- * number of bits with a given padding boundary.
+ * number of bits with a given padding boundary
  *
  * @note The Arrow specification for the null bitmask requires a 64B padding
  * boundary.
@@ -59,7 +63,7 @@ std::size_t bitmask_allocation_size_bytes(size_type number_of_bits,
 
 /**
  * @brief Returns the number of `bitmask_type` words required to represent the
- * specified number of bits.
+ * specified number of bits
  *
  * Unlike `bitmask_allocation_size_bytes`, which returns the number of *bytes*
  * needed for a bitmask allocation (including padding), this function returns
@@ -74,10 +78,11 @@ size_type num_bitmask_words(size_type number_of_bits);
 
 /**
  * @brief Creates a `device_buffer` for use as a null value indicator bitmask of
- * a `column`.
+ * a `column`
  *
  * @param size The number of elements to be represented by the mask
  * @param state The desired state of the mask
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned device_buffer
  * @return A `device_buffer` for use as a null bitmask
  * satisfying the desired size and state
@@ -85,25 +90,52 @@ size_type num_bitmask_words(size_type number_of_bits);
 rmm::device_buffer create_null_mask(
   size_type size,
   mask_state state,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Sets a pre-allocated bitmask buffer to a given state in the range
- *  `[begin_bit, end_bit)`
+ * `[begin_bit, end_bit)`
  *
  * Sets `[begin_bit, end_bit)` bits of bitmask to valid if `valid==true`
  * or null otherwise.
  *
- * @param bitmask Pointer to bitmask (e.g. returned by `column_viewnull_mask()`)
+ * @param bitmask Pointer to bitmask (e.g. returned by `column_view::null_mask()`)
  * @param begin_bit Index of the first bit to set (inclusive)
  * @param end_bit Index of the last bit to set (exclusive)
  * @param valid If true set all entries to valid; otherwise, set all to null
+ * @param stream CUDA stream used for device memory operations and kernel launches
  */
-void set_null_mask(bitmask_type* bitmask, size_type begin_bit, size_type end_bit, bool valid);
+void set_null_mask(bitmask_type* bitmask,
+                   size_type begin_bit,
+                   size_type end_bit,
+                   bool valid,
+                   rmm::cuda_stream_view stream = cudf::get_default_stream());
+
+/**
+ * @brief Sets a vector of pre-allocated bitmask buffers to given states in the corresponding ranges
+ * in bulk
+ *
+ * Sets bit ranges `[begin_bit, end_bit)` of given bitmasks to specified valid states. The bitmask
+ * bit ranges must be non-aliasing. i.e., attempting to concurrently set bits within the same
+ * physical word across bitmasks will result in undefined behavior. This utility is optimized for
+ * bulk operation on 16 or more bitmasks sized 2^24 bits or less.
+ *
+ * @param bitmasks Pointers to bitmasks (e.g. returned by `column_view::null_mask()`)
+ * @param begin_bits Indices of the first bits to set (inclusive)
+ * @param end_bits Indices of the last bits to set (exclusive)
+ * @param valids Booleans indicating if the corresponding bitmasks should be set to valid or null
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ */
+void set_null_masks(cudf::host_span<bitmask_type*> bitmasks,
+                    cudf::host_span<size_type const> begin_bits,
+                    cudf::host_span<size_type const> end_bits,
+                    cudf::host_span<bool const> valids,
+                    rmm::cuda_stream_view stream = cudf::get_default_stream());
 
 /**
  * @brief Creates a `device_buffer` from a slice of bitmask defined by a range
- * of indices `[begin_bit, end_bit)`.
+ * of indices `[begin_bit, end_bit)`
  *
  * Returns empty `device_buffer` if `bitmask == nullptr`.
  *
@@ -113,6 +145,7 @@ void set_null_mask(bitmask_type* bitmask, size_type begin_bit, size_type end_bit
  * @param mask Bitmask residing in device memory whose bits will be copied
  * @param begin_bit Index of the first bit to be copied (inclusive)
  * @param end_bit Index of the last bit to be copied (exclusive)
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned device_buffer
  * @return A `device_buffer` containing the bits
  * `[begin_bit, end_bit)` from `mask`.
@@ -121,7 +154,8 @@ rmm::device_buffer copy_bitmask(
   bitmask_type const* mask,
   size_type begin_bit,
   size_type end_bit,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Copies `view`'s bitmask from the bits
@@ -130,43 +164,69 @@ rmm::device_buffer copy_bitmask(
  * Returns empty `device_buffer` if the column is not nullable
  *
  * @param view Column view whose bitmask needs to be copied
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned device_buffer
  * @return A `device_buffer` containing the bits
  * `[view.offset(), view.offset() + view.size())` from `view`'s bitmask.
  */
 rmm::device_buffer copy_bitmask(
   column_view const& view,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Performs bitwise AND of the bitmasks of columns of a table. Returns
- * a pair of resulting mask and count of unset bits.
+ * a pair of resulting mask and count of unset bits
  *
  * If any of the columns isn't nullable, it is considered all valid.
  * If no column in the table is nullable, an empty bitmask is returned.
  *
  * @param view The table of columns
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned device_buffer
  * @return A pair of resulting bitmask and count of unset bits
  */
 std::pair<rmm::device_buffer, size_type> bitmask_and(
   table_view const& view,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Performs bitwise OR of the bitmasks of columns of a table. Returns
- * a pair of resulting mask and count of unset bits.
+ * a pair of resulting mask and count of unset bits
  *
  * If any of the columns isn't nullable, it is considered all valid.
  * If no column in the table is nullable, an empty bitmask is returned.
  *
  * @param view The table of columns
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned device_buffer
  * @return A pair of resulting bitmask and count of unset bits
  */
 std::pair<rmm::device_buffer, size_type> bitmask_or(
   table_view const& view,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
+/**
+ * @brief Given a validity bitmask, counts the number of null elements (unset bits)
+ * in the range `[start, stop)`
+ *
+ * If `bitmask == nullptr`, all elements are assumed to be valid and the
+ * function returns ``.
+ *
+ * @throws cudf::logic_error if `start > stop`
+ * @throws cudf::logic_error if `start < 0`
+ *
+ * @param bitmask Validity bitmask residing in device memory.
+ * @param start Index of the first bit to count (inclusive).
+ * @param stop Index of the last bit to count (exclusive).
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @return The number of null elements in the specified range.
+ */
+cudf::size_type null_count(bitmask_type const* bitmask,
+                           size_type start,
+                           size_type stop,
+                           rmm::cuda_stream_view stream = cudf::get_default_stream());
 /** @} */  // end of group
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

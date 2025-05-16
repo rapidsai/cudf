@@ -218,11 +218,11 @@ reads a JSON object as a single line and then extracts the
 # first read the JSON object with line=True
 >>> df = cudf.read_json(j, lines=True)
 >>> df
-             metadata                                            records
+             metadata                                            results
 0  {'vehicle': 'car'}  [{'id': 0, 'distance': 1.2}, {'id': 1, 'distan...
 
-# then explode the 'records' column
->>> df = df['records'].explode().struct.explode()
+# then explode the 'results' column
+>>> df = df['results'].explode().struct.explode()
 >>> df
    id  distance
 0   0       1.2

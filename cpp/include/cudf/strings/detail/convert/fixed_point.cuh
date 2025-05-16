@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,10 +17,10 @@
 
 #include <cudf/fixed_point/temporary.hpp>
 
-#include <thrust/optional.h>
-#include <thrust/pair.h>
-
+#include <cuda/std/limits>
+#include <cuda/std/optional>
 #include <cuda/std/type_traits>
+#include <thrust/pair.h>
 
 namespace cudf {
 namespace strings {
@@ -42,12 +42,12 @@ namespace detail {
  */
 template <typename UnsignedDecimalType>
 __device__ inline thrust::pair<UnsignedDecimalType, int32_t> parse_integer(
-  char const*& iter, char const* iter_end, const char decimal_pt_char = '.')
+  char const*& iter, char const* iter_end, char const decimal_pt_char = '.')
 {
   // highest value where another decimal digit cannot be appended without an overflow;
   // this preserves the most digits when scaling the final result for this type
   constexpr UnsignedDecimalType decimal_max =
-    (std::numeric_limits<UnsignedDecimalType>::max() - 9L) / 10L;
+    (cuda::std::numeric_limits<UnsignedDecimalType>::max() - 9L) / 10L;
 
   __uint128_t value  = 0;  // for checking overflow
   int32_t exp_offset = 0;
@@ -89,9 +89,10 @@ __device__ inline thrust::pair<UnsignedDecimalType, int32_t> parse_integer(
  * @return Integer value of the exponent
  */
 template <bool check_only = false>
-__device__ thrust::optional<int32_t> parse_exponent(char const* iter, char const* iter_end)
+__device__ cuda::std::optional<int32_t> parse_exponent(char const* iter, char const* iter_end)
 {
-  constexpr uint32_t exponent_max = static_cast<uint32_t>(std::numeric_limits<int32_t>::max());
+  constexpr uint32_t exponent_max =
+    static_cast<uint32_t>(cuda::std::numeric_limits<int32_t>::max());
 
   // get optional exponent sign
   int32_t const exp_sign = [&iter] {
@@ -106,12 +107,12 @@ __device__ thrust::optional<int32_t> parse_exponent(char const* iter, char const
   while (iter < iter_end) {
     auto const ch = *iter++;
     if (ch < '0' || ch > '9') {
-      if (check_only) { return thrust::nullopt; }
+      if (check_only) { return cuda::std::nullopt; }
       break;
     }
 
     uint32_t exp_check = static_cast<uint32_t>(exp_ten * 10) + static_cast<uint32_t>(ch - '0');
-    if (check_only && (exp_check > exponent_max)) { return thrust::nullopt; }  // check overflow
+    if (check_only && (exp_check > exponent_max)) { return cuda::std::nullopt; }  // check overflow
     exp_ten = static_cast<int32_t>(exp_check);
   }
 

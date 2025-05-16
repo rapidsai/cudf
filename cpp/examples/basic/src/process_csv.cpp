@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@
 #include <cudf/io/csv.hpp>
 #include <cudf/table/table.hpp>
 
+#include <rmm/cuda_device.hpp>
 #include <rmm/mr/device/cuda_memory_resource.hpp>
 #include <rmm/mr/device/device_memory_resource.hpp>
 #include <rmm/mr/device/pool_memory_resource.hpp>
@@ -82,14 +83,14 @@ int main(int argc, char** argv)
   // Construct a memory pool using the CUDA memory resource
   // Using a memory pool for device memory allocations is important for good performance in libcudf.
   // The pool defaults to allocating half of the available GPU memory.
-  rmm::mr::pool_memory_resource mr{&cuda_mr};
+  rmm::mr::pool_memory_resource mr{&cuda_mr, rmm::percent_of_free_device_memory(50)};
 
   // Set the pool resource to be used by default for all device memory allocations
   // Note: It is the user's responsibility to ensure the `mr` object stays alive for the duration of
   // it being set as the default
   // Also, call this before the first libcudf API call to ensure all data is allocated by the same
   // memory resource.
-  rmm::mr::set_current_device_resource(&mr);
+  cudf::set_current_device_resource(&mr);
 
   // Read data
   auto stock_table_with_metadata = read_csv("4stock_5day.csv");

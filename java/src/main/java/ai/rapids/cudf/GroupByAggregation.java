@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2021, NVIDIA CORPORATION.
+ *  Copyright (c) 2021-2025, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -278,6 +278,15 @@ public final class GroupByAggregation {
   }
 
   /**
+   * Execute an aggregation using a host-side user-defined function (UDF).
+   * @param wrapper The wrapper for the native host UDF instance.
+   * @return A new GroupByAggregation instance
+   */
+  public static GroupByAggregation hostUDF(HostUDFWrapper wrapper) {
+    return new GroupByAggregation(Aggregation.hostUDF(wrapper));
+  }
+
+  /**
    * Merge the partial sets produced by multiple CollectSetAggregations.
    *
    * @param nullEquality Flag to specify whether null entries within each list should be considered equal.
@@ -314,5 +323,48 @@ public final class GroupByAggregation {
    */
   public static GroupByAggregation mergeTDigest(int delta) {
     return new GroupByAggregation(Aggregation.mergeTDigest(delta));
+  }
+
+  /**
+   * Histogram aggregation, computing the frequencies for each unique row.
+   *
+   * A histogram is given as a lists column, in which the first child stores unique rows from
+   * the input values and the second child stores their corresponding frequencies.
+   *
+   * @return A lists of structs column in which each list contains a histogram corresponding to
+   *         an input key.
+   */
+  public static GroupByAggregation histogram() {
+    return new GroupByAggregation(Aggregation.histogram());
+  }
+
+  /**
+   * MergeHistogram aggregation, to merge multiple histograms.
+   *
+   * @return A new histogram in which the frequencies of the unique rows are sum up.
+   */
+  public static GroupByAggregation mergeHistogram() {
+    return new GroupByAggregation(Aggregation.mergeHistogram());
+  }
+
+  /**
+   * Bitwise AND aggregation, computing the bitwise AND of all non-null values in a group.
+   */
+  public static GroupByAggregation bitAnd() {
+    return new GroupByAggregation(Aggregation.bitAnd());
+  }
+
+  /**
+   * Bitwise OR aggregation, computing the bitwise OR of all non-null values in a group.
+   */
+  public static GroupByAggregation bitOr() {
+    return new GroupByAggregation(Aggregation.bitOr());
+  }
+
+  /**
+   * Bitwise XOR aggregation, computing the bitwise XOR of all non-null values in a group.
+   */
+  public static GroupByAggregation bitXor() {
+    return new GroupByAggregation(Aggregation.bitXor());
   }
 }

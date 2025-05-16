@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,8 @@
 #pragma once
 
 #include <cudf/io/json.hpp>
+#include <cudf/utilities/export.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -110,11 +112,13 @@ enum token_t : PdaTokenT {
   ValueEnd,
   /// Beginning-of-error token (on first encounter of a parsing error)
   ErrorBegin,
+  /// Delimiting a JSON line for error recovery
+  LineEnd,
   /// Total number of tokens
   NUM_TOKENS
 };
 
-namespace detail {
+namespace CUDF_EXPORT detail {
 
 /**
  * @brief Parses the given JSON string and emits a sequence of tokens that demarcate relevant
@@ -131,8 +135,8 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> ge
   device_span<SymbolT const> json_in,
   cudf::io::json_reader_options const& options,
   rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr);
+  rmm::device_async_resource_ref mr);
 
-}  // namespace detail
+}  // namespace CUDF_EXPORT detail
 
 }  // namespace cudf::io::json

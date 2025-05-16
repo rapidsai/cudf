@@ -1,23 +1,56 @@
-# Copyright (c) 2022-2023, NVIDIA CORPORATION.
+# Copyright (c) 2022-2024, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
 import threading
 from contextlib import ContextDecorator
-from typing import Any, Dict, Optional, Tuple, Union
+from typing import Any
 
-from cudf.core.buffer.buffer import Buffer, cuda_array_interface_wrapper
-from cudf.core.buffer.cow_buffer import CopyOnWriteBuffer
+from cudf.core.buffer.buffer import (
+    Buffer,
+    BufferOwner,
+    cuda_array_interface_wrapper,
+    get_ptr_and_size,
+)
+from cudf.core.buffer.exposure_tracked_buffer import ExposureTrackedBuffer
 from cudf.core.buffer.spill_manager import get_global_manager
-from cudf.core.buffer.spillable_buffer import SpillLock, as_spillable_buffer
+from cudf.core.buffer.spillable_buffer import (
+    SpillableBuffer,
+    SpillableBufferOwner,
+    SpillLock,
+)
 from cudf.options import get_option
 
 
+def get_buffer_owner(data: Any) -> BufferOwner | None:
+    """Get the owner of `data`, if one exists
+
+    Search through the stack of data owners in order to find an
+    owner BufferOwner (incl. subclasses).
+
+    Parameters
+    ----------
+    data
+        The data object to search for a BufferOwner instance
+
+    Return
+    ------
+    BufferOwner or None
+        The owner of `data` if found otherwise None.
+    """
+
+    if isinstance(data, BufferOwner):
+        return data
+    if hasattr(data, "owner"):
+        return get_buffer_owner(data.owner)
+    return None
+
+
 def as_buffer(
-    data: Union[int, Any],
+    data: int | Any,
     *,
-    size: int = None,
-    owner: object = None,
+    size: int | None = None,
+    owner: object | None = None,
     exposed: bool = False,
 ) -> Buffer:
     """Factory function to wrap `data` in a Buffer object.
@@ -30,7 +63,17 @@ def as_buffer(
 
     If `data` is an integer, it is assumed to point to device memory.
 
-    Raises ValueError if data isn't C-contiguous.
+    Raises ValueError if `data` isn't C-contiguous.
+
+    If copy-on-write is enabled, an ExposureTrackedBuffer is returned.
+
+    If spilling is enabled, a SpillableBuffer that refers to a
+    SpillableBufferOwner is returned. If `data` is owned by a spillable buffer,
+    it must either be "exposed" or spill locked (called within an
+    acquire_spill_lock context). This is to guarantee that the memory of `data`
+    isn't spilled before this function gets to calculate the offset of the new
+    SpillableBuffer.
+
 
     Parameters
     ----------
@@ -45,9 +88,9 @@ def as_buffer(
         Python object to which the lifetime of the memory allocation is tied.
         A reference to this object is kept in the returned Buffer.
     exposed : bool, optional
-        Mark the buffer as permanently exposed (unspillable). This is ignored
-        unless spilling is enabled and the data represents device memory, see
-        SpillableBuffer.
+        Mark the buffer as permanently exposed. This is used by
+        ExposureTrackedBuffer to determine when a deep copy is required and
+        by SpillableBuffer to mark the buffer unspillable.
 
     Return
     ------
@@ -73,23 +116,52 @@ def as_buffer(
             "`data` is a buffer-like or array-like object"
         )
 
-    if get_option("copy_on_write"):
-        if isinstance(data, Buffer) or hasattr(
-            data, "__cuda_array_interface__"
-        ):
-            return CopyOnWriteBuffer._from_device_memory(data, exposed=exposed)
+    # Find the buffer types to return based on the current config
+    owner_class: type[BufferOwner]
+    buffer_class: type[Buffer]
+    if get_global_manager() is not None:
+        owner_class = SpillableBufferOwner
+        buffer_class = SpillableBuffer
+    elif get_option("copy_on_write"):
+        owner_class = BufferOwner
+        buffer_class = ExposureTrackedBuffer
+    else:
+        owner_class = BufferOwner
+        buffer_class = Buffer
+
+    # Handle host memory,
+    if not hasattr(data, "__cuda_array_interface__"):
         if exposed:
             raise ValueError("cannot created exposed host memory")
-        return CopyOnWriteBuffer._from_host_memory(data)
-    if get_global_manager() is not None:
-        return as_spillable_buffer(data, exposed=exposed)
+        return buffer_class(owner=owner_class.from_host_memory(data))
 
-    if hasattr(data, "__cuda_array_interface__"):
-        return Buffer._from_device_memory(data)
-    return Buffer._from_host_memory(data)
+    # Check if `data` is owned by a known class
+    owner = get_buffer_owner(data)
+    if owner is None:  # `data` is new device memory
+        return buffer_class(
+            owner=owner_class.from_device_memory(data, exposed=exposed)
+        )
+
+    # At this point, we know that `data` is owned by a known class, which
+    # should be the same class as specified by the current config (see above)
+    assert owner.__class__ is owner_class
+    if (
+        isinstance(owner, SpillableBufferOwner)
+        and not owner.exposed
+        and get_spill_lock() is None
+    ):
+        raise ValueError(
+            "An owning spillable buffer must "
+            "either be exposed or spill locked."
+        )
+    ptr, size = get_ptr_and_size(data.__cuda_array_interface__)
+    base_ptr = owner.get_ptr(mode="read")
+    if size > 0 and base_ptr == 0:
+        raise ValueError("Cannot create a non-empty slice of a null buffer")
+    return buffer_class(owner=owner, offset=ptr - base_ptr, size=size)
 
 
-_thread_spill_locks: Dict[int, Tuple[Optional[SpillLock], int]] = {}
+_thread_spill_locks: dict[int, tuple[SpillLock | None, int]] = {}
 
 
 def _push_thread_spill_lock() -> None:
@@ -121,7 +193,7 @@ class acquire_spill_lock(ContextDecorator):
     pushing and popping from `_thread_spill_locks` using its thread ID.
     """
 
-    def __enter__(self) -> Optional[SpillLock]:
+    def __enter__(self) -> SpillLock | None:
         _push_thread_spill_lock()
         return get_spill_lock()
 
@@ -129,7 +201,7 @@ class acquire_spill_lock(ContextDecorator):
         _pop_thread_spill_lock()
 
 
-def get_spill_lock() -> Union[SpillLock, None]:
+def get_spill_lock() -> SpillLock | None:
     """Return a spill lock within the context of `acquire_spill_lock` or None
 
     Returns None, if spilling is disabled.

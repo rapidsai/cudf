@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,11 +17,14 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/lists/lists_column_view.hpp>
+#include <cudf/stream_compaction.hpp>
+#include <cudf/utilities/export.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/mr/device/device_memory_resource.hpp>
-#include <rmm/mr/device/per_device_resource.hpp>
 
-namespace cudf::lists {
+namespace CUDF_EXPORT cudf {
+namespace lists {
 
 /**
  * @addtogroup lists_filtering
@@ -54,13 +57,15 @@ namespace cudf::lists {
  *
  * @param input The input list column view to be filtered
  * @param boolean_mask A nullable list of bools column used to filter `input` elements
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned table's device memory
  * @return List column of the same type as `input`, containing filtered list rows
  */
 std::unique_ptr<column> apply_boolean_mask(
   lists_column_view const& input,
   lists_column_view const& boolean_mask,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Create a new list column without duplicate elements in each list.
@@ -78,15 +83,49 @@ std::unique_ptr<column> apply_boolean_mask(
  * @param input The input lists column
  * @param nulls_equal Flag to specify whether null elements should be considered as equal
  * @param nans_equal Flag to specify whether floating-point NaNs should be considered as equal
+ * @param keep_option Flag to specify which element to keep (first, last, any)
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned object
  * @return The resulting lists column containing lists without duplicates
  */
 std::unique_ptr<column> distinct(
   lists_column_view const& input,
-  null_equality nulls_equal           = null_equality::EQUAL,
-  nan_equality nans_equal             = nan_equality::ALL_EQUAL,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  null_equality nulls_equal         = null_equality::EQUAL,
+  nan_equality nans_equal           = nan_equality::ALL_EQUAL,
+  duplicate_keep_option keep_option = duplicate_keep_option::KEEP_ANY,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
+/**
+ * @brief Create a new list column without duplicate elements in each list.
+ *
+ * Given a lists column `input`, distinct elements of each list are copied to the corresponding
+ * output list. The order of lists is preserved while the order of elements within each list is not
+ * guaranteed.
+ *
+ * @deprecated Deprecated in 25.06, to be removed in 25.08
+ *
+ * Example:
+ * @code{.pseudo}
+ * input  = { {0, 1, 2, 3, 2}, {3, 1, 2}, null, {4, null, null, 5} }
+ * result = { {0, 1, 2, 3}, {3, 1, 2}, null, {4, null, 5} }
+ * @endcode
+ *
+ * @param input The input lists column
+ * @param nulls_equal Flag to specify whether null elements should be considered as equal
+ * @param nans_equal Flag to specify whether floating-point NaNs should be considered as equal
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned object
+ * @return The resulting lists column containing lists without duplicates
+ */
+[[deprecated]] std::unique_ptr<column> distinct(
+  lists_column_view const& input,
+  null_equality nulls_equal,
+  nan_equality nans_equal,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /** @} */  // end of group
 
-}  // namespace cudf::lists
+}  // namespace lists
+}  // namespace CUDF_EXPORT cudf

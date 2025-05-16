@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,7 +17,7 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/cudf_gtest.hpp>
+#include <cudf_test/testing_main.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/detail/iterator.cuh>
@@ -358,8 +358,8 @@ TEST_F(FillErrorTestFixture, DTypeMismatch)
 
   auto destination_view = cudf::mutable_column_view{destination};
 
-  EXPECT_THROW(cudf::fill_in_place(destination_view, 0, 10, *p_val), cudf::logic_error);
-  EXPECT_THROW(auto p_ret = cudf::fill(destination, 0, 10, *p_val), cudf::logic_error);
+  EXPECT_THROW(cudf::fill_in_place(destination_view, 0, 10, *p_val), cudf::data_type_error);
+  EXPECT_THROW(auto p_ret = cudf::fill(destination, 0, 10, *p_val), cudf::data_type_error);
 }
 
 template <typename T>

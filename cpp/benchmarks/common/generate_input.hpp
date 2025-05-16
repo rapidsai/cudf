@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -182,9 +182,17 @@ struct distribution_params<T, std::enable_if_t<std::is_same_v<T, cudf::struct_vi
   cudf::size_type max_depth;
 };
 
-// Present for compilation only. To be implemented once reader/writers support the fixed width type.
+/**
+ * @brief Fixed-point values are parameterized with a distribution type, scale, and bounds of the
+ * same type.
+ */
 template <typename T>
-struct distribution_params<T, std::enable_if_t<cudf::is_fixed_point<T>()>> {};
+struct distribution_params<T, std::enable_if_t<cudf::is_fixed_point<T>()>> {
+  distribution_id id;
+  typename T::rep lower_bound;
+  typename T::rep upper_bound;
+  std::optional<numeric::scale_type> scale;
+};
 
 /**
  * @brief Returns a vector of types, corresponding to the input type or a type group.
@@ -223,10 +231,10 @@ class data_profile {
   std::map<cudf::type_id, distribution_params<double>> float_params;
   distribution_params<cudf::string_view> string_dist_desc{{distribution_id::NORMAL, 0, 32}};
   distribution_params<cudf::list_view> list_dist_desc{
-    cudf::type_id::INT32, {distribution_id::GEOMETRIC, 0, 100}, 2};
+    cudf::type_id::INT32, {distribution_id::GEOMETRIC, 0, 64}, 2};
   distribution_params<cudf::struct_view> struct_dist_desc{
     {cudf::type_id::INT32, cudf::type_id::FLOAT32, cudf::type_id::STRING}, 2};
-  std::map<cudf::type_id, distribution_params<__uint128_t>> decimal_params;
+  std::map<cudf::type_id, distribution_params<numeric::decimal128>> decimal_params;
 
   double bool_probability_true           = 0.5;
   std::optional<double> null_probability = 0.01;
@@ -300,21 +308,27 @@ class data_profile {
   }
 
   template <typename T, std::enable_if_t<cudf::is_fixed_point<T>()>* = nullptr>
-  distribution_params<typename T::rep> get_distribution_params() const
+  distribution_params<T> get_distribution_params() const
   {
     using rep = typename T::rep;
     auto it   = decimal_params.find(cudf::type_to_id<T>());
     if (it == decimal_params.end()) {
       auto const range = default_range<rep>();
-      return distribution_params<rep>{default_distribution_id<rep>(), range.first, range.second};
+      auto const scale = std::optional<numeric::scale_type>{};
+      return distribution_params<T>{
+        default_distribution_id<rep>(), range.first, range.second, scale};
     } else {
       auto& desc = it->second;
-      return {desc.id, static_cast<rep>(desc.lower_bound), static_cast<rep>(desc.upper_bound)};
+      return {desc.id,
+              static_cast<rep>(desc.lower_bound),
+              static_cast<rep>(desc.upper_bound),
+              desc.scale};
     }
   }
 
-  auto get_bool_probability_true() const { return bool_probability_true; }
-  auto get_null_probability() const { return null_probability; };
+  [[nodiscard]] auto get_bool_probability_true() const { return bool_probability_true; }
+  [[nodiscard]] auto get_null_probability() const { return null_probability; };
+  [[nodiscard]] auto get_valid_probability() const { return 1. - null_probability.value_or(0.); };
   [[nodiscard]] auto get_cardinality() const { return cardinality; };
   [[nodiscard]] auto get_avg_run_length() const { return avg_run_length; };
 
@@ -355,6 +369,23 @@ class data_profile {
     for (auto tid : get_type_or_group(static_cast<int32_t>(type_or_group))) {
       float_params[tid] = {
         dist, static_cast<double>(lower_bound), static_cast<double>(upper_bound)};
+    }
+  }
+
+  // Users should pass integral values for bounds when setting the parameters for fixed-point.
+  // Otherwise the call with have no effect.
+  template <typename T,
+            typename Type_enum,
+            std::enable_if_t<cuda::std::is_integral_v<T>, T>* = nullptr>
+  void set_distribution_params(Type_enum type_or_group,
+                               distribution_id dist,
+                               T lower_bound,
+                               T upper_bound,
+                               numeric::scale_type scale)
+  {
+    for (auto tid : get_type_or_group(static_cast<int32_t>(type_or_group))) {
+      decimal_params[tid] = {
+        dist, static_cast<__int128_t>(lower_bound), static_cast<__int128_t>(upper_bound), scale};
     }
   }
 
@@ -640,6 +671,18 @@ std::unique_ptr<cudf::column> create_random_column(cudf::type_id dtype_id,
                                                    unsigned seed                   = 1);
 
 /**
+ * @brief Deterministically generates a large string column filled with data with the given
+ * parameters.
+ *
+ * @param num_rows Number of rows in the output column
+ * @param row_width Width of each string in the column
+ * @param hit_rate The hit rate percentage, ranging from 0 to 100
+ */
+std::unique_ptr<cudf::column> create_string_column(cudf::size_type num_rows,
+                                                   cudf::size_type row_width,
+                                                   int32_t hit_rate);
+
+/**
  * @brief Generate sequence columns starting with value 0 in first row and increasing by 1 in
  * subsequent rows.
  *
@@ -666,6 +709,21 @@ std::unique_ptr<cudf::table> create_sequence_table(
  */
 std::vector<cudf::type_id> cycle_dtypes(std::vector<cudf::type_id> const& dtype_ids,
                                         cudf::size_type num_cols);
+
+/**
+ * @brief Repeat the given two data types with a given ratio of a:b.
+ *
+ * The first dtype will have 'first_num' columns and the second will have 'num_cols - first_num'
+ * columns.
+ *
+ * @param dtype_ids Pair of requested column types
+ * @param num_cols Total number of columns in the output vector
+ * @param first_num Total number of columns of type `dtype_ids.first`
+ * @return A vector of type_ids
+ */
+std::vector<cudf::type_id> mix_dtypes(std::pair<cudf::type_id, cudf::type_id> const& dtype_ids,
+                                      cudf::size_type num_cols,
+                                      int first_num);
 /**
  * @brief Create a random null mask object
  *

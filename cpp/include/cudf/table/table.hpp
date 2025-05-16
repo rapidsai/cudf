@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,9 +18,9 @@
 #include <cudf/column/column.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/mr/device/per_device_resource.hpp>
 
 #include <memory>
 #include <vector>
@@ -30,7 +30,7 @@
  * @brief Class definition for cudf::table
  */
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 
 /**
  * @brief A set of cudf::column's of the same size.
@@ -48,10 +48,16 @@ class table {
   /**
    * @brief Construct a new table by copying the contents of another table.
    *
+   * Uses the specified `stream` and device_memory_resource for all allocations
+   * and copies.
+   *
    * @param other The table to copy
+   * @param stream CUDA stream used for device memory operations.
+   * @param mr Device memory resource to use for all device memory allocations
    */
-  table(table const& other);
-
+  explicit table(table const& other,
+                 rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+                 rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
   /**
    * @brief Moves the contents from a vector of `unique_ptr`s to columns to
    * construct a new table.
@@ -69,8 +75,8 @@ class table {
    * @param mr Device memory resource used for allocating the device memory for the new columns
    */
   table(table_view view,
-        rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-        rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+        rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+        rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
   /**
    * @brief Returns the number of columns in the table
@@ -85,6 +91,15 @@ class table {
    * @return  The number of rows
    */
   [[nodiscard]] size_type num_rows() const noexcept { return _num_rows; }
+
+  /**
+   * @brief Returns the total device allocation size of the table's columns in bytes
+   *
+   * @see cudf::column::alloc_size
+   *
+   * @return The total allocation size in bytes
+   */
+  [[nodiscard]] std::size_t alloc_size() const;
 
   /**
    * @brief Returns an immutable, non-owning `table_view` of the contents of
@@ -137,12 +152,12 @@ class table {
    */
 
   template <typename InputIterator>
-  table_view select(InputIterator begin, InputIterator end) const
+  [[nodiscard]] table_view select(InputIterator begin, InputIterator end) const
   {
     std::vector<column_view> columns(std::distance(begin, end));
     std::transform(
       begin, end, columns.begin(), [this](auto index) { return _columns.at(index)->view(); });
-    return table_view(columns);
+    return table_view{columns};
   }
 
   /**
@@ -187,4 +202,4 @@ class table {
   size_type _num_rows{};
 };
 
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

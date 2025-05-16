@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -521,10 +521,26 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
   private static native long makeStructScalar(long[] viewHandles, boolean isValid);
   private static native long repeatString(long scalarHandle, int repeatTimes);
 
-  Scalar(DType type, long scalarHandle) {
+  /**
+   * Constructor to create a scalar from a native handle and a type.
+   *
+   * @param type The type of the scalar
+   * @param scalarHandle The native handle (pointer address) to the scalar data
+   */
+  public Scalar(DType type, long scalarHandle) {
     this.type = type;
     this.offHeap = new OffHeapState(scalarHandle);
+    MemoryCleaner.register(this, offHeap);
     incRefCount();
+  }
+
+  /**
+   * Get the native handle (native pointer address) for the scalar.
+   *
+   * @return The native handle
+   */
+  public long getScalarHandle() {
+    return offHeap.scalarHandle;
   }
 
   /**
@@ -536,12 +552,9 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
       offHeap.logRefCountDebug("INC AFTER CLOSE " + this);
       throw new IllegalStateException("Scalar is already closed");
     }
+    offHeap.addRef();
     ++refCount;
     return this;
-  }
-
-  long getScalarHandle() {
-    return offHeap.scalarHandle;
   }
 
   /**
@@ -677,26 +690,7 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
     assert DType.STRUCT.equals(type) : "Cannot get table for the vector of type " + type;
 
     long[] childHandles = getChildrenFromStructScalar(getScalarHandle());
-    ColumnView[] children = new ColumnView[childHandles.length];
-    try {
-      for (int i = 0; i < children.length; i++) {
-        children[i] = new ColumnView(childHandles[i]);
-      }
-    } catch (Exception ex) {
-      // close all created ColumnViews if exception thrown
-      for (ColumnView child : children) {
-        // We closed all created ColumnViews when we hit null. Therefore we exit the loop.
-        if (child == null) break;
-        // make sure the close process is exception-free
-        try {
-          child.close();
-        } catch (Exception suppressed) {
-          ex.addSuppressed(suppressed);
-        }
-      }
-      throw ex;
-    }
-    return children;
+    return ColumnView.getColumnViewsFromPointers(childHandles);
   }
 
   @Override

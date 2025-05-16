@@ -1,4 +1,4 @@
-# Copyright (c) 2022, NVIDIA CORPORATION.
+# Copyright (c) 2022-2024, NVIDIA CORPORATION.
 
 import operator
 
@@ -21,10 +21,11 @@ def _make_empty_frame(npartitions=2):
 
 
 def _make_random_frame_float(nelem, npartitions=2):
+    rng = np.random.default_rng(seed=0)
     df = pd.DataFrame(
         {
-            "x": np.random.randint(0, 5, size=nelem),
-            "y": np.random.normal(size=nelem) + 1,
+            "x": rng.integers(0, 5, size=nelem),
+            "y": rng.normal(size=nelem) + 1,
         }
     )
     gdf = cudf.from_pandas(df)
@@ -51,7 +52,6 @@ _binops = [
 
 @pytest.mark.parametrize("binop", _binops)
 def test_series_binops_integer(binop):
-    np.random.seed(0)
     size = 1000
     lhs_df, lhs_gdf = _make_random_frame(size)
     rhs_df, rhs_gdf = _make_random_frame(size)
@@ -62,7 +62,6 @@ def test_series_binops_integer(binop):
 
 @pytest.mark.parametrize("binop", _binops)
 def test_series_binops_float(binop):
-    np.random.seed(0)
     size = 1000
     lhs_df, lhs_gdf = _make_random_frame_float(size)
     rhs_df, rhs_gdf = _make_random_frame_float(size)
@@ -73,10 +72,10 @@ def test_series_binops_float(binop):
 
 @pytest.mark.parametrize("operator", _binops)
 def test_df_series_bind_ops(operator):
-    np.random.seed(0)
+    rng = np.random.default_rng(seed=0)
     size = 1000
     lhs_df, lhs_gdf = _make_random_frame_float(size)
-    rhs = np.random.rand()
+    rhs = rng.random()
 
     for col in lhs_gdf.columns:
         got = getattr(lhs_gdf[col], operator.__name__)(rhs)

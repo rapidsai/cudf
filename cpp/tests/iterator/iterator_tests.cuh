@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,22 +19,23 @@
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/utilities/functional.hpp>
 #include <cudf/detail/utilities/transform_unary_functions.cuh>  // for meanvar
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <thrust/distance.h>
+#include <cub/device/device_reduce.cuh>
+#include <cuda/functional>
+#include <cuda/std/iterator>
 #include <thrust/equal.h>
 #include <thrust/execution_policy.h>
-#include <thrust/functional.h>
 #include <thrust/host_vector.h>
 #include <thrust/logical.h>
 #include <thrust/transform.h>
-
-#include <cub/device/device_reduce.cuh>
 
 #include <bitset>
 #include <cstdint>
@@ -59,7 +60,7 @@ struct IteratorTest : public cudf::test::BaseFixture {
                               d_in,
                               dev_result.begin(),
                               num_items,
-                              thrust::minimum{},
+                              cudf::detail::minimum{},
                               init,
                               cudf::get_default_stream().value());
 
@@ -72,7 +73,7 @@ struct IteratorTest : public cudf::test::BaseFixture {
                               d_in,
                               dev_result.begin(),
                               num_items,
-                              thrust::minimum{},
+                              cudf::detail::minimum{},
                               init,
                               cudf::get_default_stream().value());
 
@@ -86,9 +87,9 @@ struct IteratorTest : public cudf::test::BaseFixture {
                             int num_items)
   {
     InputIterator d_in_last = d_in + num_items;
-    EXPECT_EQ(thrust::distance(d_in, d_in_last), num_items);
-    auto dev_expected = cudf::detail::make_device_uvector_sync(
-      expected, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
+    EXPECT_EQ(cuda::std::distance(d_in, d_in_last), num_items);
+    auto dev_expected = cudf::detail::make_device_uvector(
+      expected, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
 
     // using a temporary vector and calling transform and all_of separately is
     // equivalent to thrust::equal but compiles ~3x faster
@@ -98,27 +99,27 @@ struct IteratorTest : public cudf::test::BaseFixture {
                       d_in_last,
                       dev_expected.begin(),
                       dev_results.begin(),
-                      thrust::equal_to{});
+                      cuda::std::equal_to{});
     auto result = thrust::all_of(rmm::exec_policy(cudf::get_default_stream()),
                                  dev_results.begin(),
                                  dev_results.end(),
-                                 thrust::identity<bool>{});
+                                 cuda::std::identity{});
     EXPECT_TRUE(result) << "thrust test";
   }
 
   template <typename T_output>
   void evaluate(T_output expected,
                 rmm::device_uvector<T_output> const& dev_result,
-                const char* msg = nullptr)
+                char const* msg = nullptr)
   {
-    auto host_result = cudf::detail::make_host_vector_sync(dev_result, cudf::get_default_stream());
+    auto host_result = cudf::detail::make_host_vector(dev_result, cudf::get_default_stream());
 
     EXPECT_EQ(expected, host_result[0]) << msg;
   }
 
   template <typename T_output>
   void values_equal_test(thrust::host_vector<T_output> const& expected,
-                         const cudf::column_device_view& col)
+                         cudf::column_device_view const& col)
   {
     if (col.nullable()) {
       auto it_dev = cudf::detail::make_null_replacement_iterator(

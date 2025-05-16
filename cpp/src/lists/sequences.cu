@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,12 +23,15 @@
 #include <cudf/lists/filling.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/error.hpp>
+#include <cudf/utilities/memory_resource.hpp>
+#include <cudf/utilities/type_checks.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/std/iterator>
 #include <thrust/binary_search.h>
-#include <thrust/distance.h>
 #include <thrust/execution_policy.h>
 #include <thrust/scan.h>
 #include <thrust/tabulate.h>
@@ -47,7 +50,7 @@ struct tabulator {
 
   T const* const starts;
   T const* const steps;
-  offset_type const* const offsets;
+  size_type const* const offsets;
 
   template <typename U>
   static std::enable_if_t<!cudf::is_duration<U>(), T> __device__ multiply(U x, size_type times)
@@ -64,7 +67,7 @@ struct tabulator {
   auto __device__ operator()(size_type idx) const
   {
     auto const list_idx_end = thrust::upper_bound(thrust::seq, offsets, offsets + n_lists, idx);
-    auto const list_idx     = thrust::distance(offsets, list_idx_end) - 1;
+    auto const list_idx     = cuda::std::distance(offsets, list_idx_end) - 1;
     auto const list_offset  = offsets[list_idx];
     auto const list_step    = steps ? steps[list_idx] : T{1};
     return starts[list_idx] + multiply(list_step, idx - list_offset);
@@ -86,9 +89,9 @@ struct sequences_dispatcher {
                                      size_type n_elements,
                                      column_view const& starts,
                                      std::optional<column_view> const& steps,
-                                     offset_type const* offsets,
+                                     size_type const* offsets,
                                      rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr)
+                                     rmm::device_async_resource_ref mr)
   {
     return sequences_functor<T>::invoke(n_lists, n_elements, starts, steps, offsets, stream, mr);
   }
@@ -106,9 +109,9 @@ struct sequences_functor<T, std::enable_if_t<is_supported<T>()>> {
                                         size_type n_elements,
                                         column_view const& starts,
                                         std::optional<column_view> const& steps,
-                                        offset_type const* offsets,
+                                        size_type const* offsets,
                                         rmm::cuda_stream_view stream,
-                                        rmm::mr::device_memory_resource* mr)
+                                        rmm::device_async_resource_ref mr)
   {
     auto result =
       make_fixed_width_column(starts.type(), n_elements, mask_state::UNALLOCATED, stream, mr);
@@ -132,37 +135,34 @@ std::unique_ptr<column> sequences(column_view const& starts,
                                   std::optional<column_view> const& steps,
                                   column_view const& sizes,
                                   rmm::cuda_stream_view stream,
-                                  rmm::mr::device_memory_resource* mr)
+                                  rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS(!starts.has_nulls() && !sizes.has_nulls(),
                "starts and sizes input columns must not have nulls.");
   CUDF_EXPECTS(starts.size() == sizes.size(),
                "starts and sizes input columns must have the same number of rows.");
-  CUDF_EXPECTS(cudf::is_index_type(sizes.type()), "Input sizes column must be of integer types.");
+  CUDF_EXPECTS(cudf::is_index_type(sizes.type()),
+               "Input sizes column must be of integer types.",
+               cudf::data_type_error);
 
   if (steps) {
     auto const& steps_cv = steps.value();
     CUDF_EXPECTS(!steps_cv.has_nulls(), "steps input column must not have nulls.");
     CUDF_EXPECTS(starts.size() == steps_cv.size(),
                  "starts and steps input columns must have the same number of rows.");
-    CUDF_EXPECTS(starts.type() == steps_cv.type(),
-                 "starts and steps input columns must have the same type.");
+    CUDF_EXPECTS(cudf::have_same_types(starts, steps_cv),
+                 "starts and steps input columns must have the same type.",
+                 cudf::data_type_error);
   }
 
   auto const n_lists = starts.size();
-  if (n_lists == 0) { return make_empty_lists_column(starts.type(), stream, mr); }
+  if (n_lists == 0) { return cudf::make_empty_lists_column(starts.type(), stream, mr); }
 
-  // Generate list offsets for the output.
-  auto list_offsets = make_numeric_column(
-    data_type(type_to_id<offset_type>()), n_lists + 1, mask_state::UNALLOCATED, stream, mr);
-  auto const offsets_begin  = list_offsets->mutable_view().template begin<offset_type>();
   auto const sizes_input_it = cudf::detail::indexalator_factory::make_input_iterator(sizes);
-
-  auto const n_elements = cudf::detail::sizes_to_offsets(
-    sizes_input_it, sizes_input_it + n_lists + 1, offsets_begin, stream);
-  CUDF_EXPECTS(n_elements <= static_cast<int64_t>(std::numeric_limits<size_type>::max()),
-               "Size of output exceeds column size limit",
-               std::overflow_error);
+  // Generate list offsets for the output.
+  auto [list_offsets, n_elements] = cudf::detail::make_offsets_child_column(
+    sizes_input_it, sizes_input_it + sizes.size(), stream, mr);
+  auto const offsets_begin = list_offsets->view().template begin<size_type>();
 
   auto child = type_dispatcher(starts.type(),
                                sequences_dispatcher{},
@@ -188,7 +188,7 @@ std::unique_ptr<column> sequences(column_view const& starts,
 std::unique_ptr<column> sequences(column_view const& starts,
                                   column_view const& sizes,
                                   rmm::cuda_stream_view stream,
-                                  rmm::mr::device_memory_resource* mr)
+                                  rmm::device_async_resource_ref mr)
 {
   return sequences(starts, std::nullopt, sizes, stream, mr);
 }
@@ -197,7 +197,7 @@ std::unique_ptr<column> sequences(column_view const& starts,
                                   column_view const& steps,
                                   column_view const& sizes,
                                   rmm::cuda_stream_view stream,
-                                  rmm::mr::device_memory_resource* mr)
+                                  rmm::device_async_resource_ref mr)
 {
   return sequences(starts, std::optional<column_view>{steps}, sizes, stream, mr);
 }
@@ -206,19 +206,21 @@ std::unique_ptr<column> sequences(column_view const& starts,
 
 std::unique_ptr<column> sequences(column_view const& starts,
                                   column_view const& sizes,
-                                  rmm::mr::device_memory_resource* mr)
+                                  rmm::cuda_stream_view stream,
+                                  rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::sequences(starts, sizes, cudf::get_default_stream(), mr);
+  return detail::sequences(starts, sizes, stream, mr);
 }
 
 std::unique_ptr<column> sequences(column_view const& starts,
                                   column_view const& steps,
                                   column_view const& sizes,
-                                  rmm::mr::device_memory_resource* mr)
+                                  rmm::cuda_stream_view stream,
+                                  rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::sequences(starts, steps, sizes, cudf::get_default_stream(), mr);
+  return detail::sequences(starts, steps, sizes, stream, mr);
 }
 
 }  // namespace cudf::lists

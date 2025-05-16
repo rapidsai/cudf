@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,7 +17,6 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
@@ -332,7 +331,7 @@ TYPED_TEST(TypedCopyIfElseNestedTest, ListsWithStructs)
   using strings = cudf::test::strings_column_wrapper;
   using structs = cudf::test::structs_column_wrapper;
   using bools   = cudf::test::fixed_width_column_wrapper<bool, int32_t>;
-  using offsets = cudf::test::fixed_width_column_wrapper<cudf::offset_type, int32_t>;
+  using offsets = cudf::test::fixed_width_column_wrapper<cudf::size_type, int32_t>;
 
   auto const null_at_0 = null_at(0);
   auto const null_at_3 = null_at(3);
@@ -386,22 +385,12 @@ TYPED_TEST(TypedCopyIfElseNestedTest, ScalarListBothInvalid)
   using bools = cudf::test::fixed_width_column_wrapper<bool, int32_t>;
   using lcw   = cudf::test::lists_column_wrapper<T, int32_t>;
 
-  auto lhs_scalar = cudf::list_scalar{ints{33, 33, 33}, false};
-  auto rhs_scalar = cudf::list_scalar{ints{22, 22}, false};
+  auto lhs_scalar = cudf::list_scalar{ints{}, false};
+  auto rhs_scalar = cudf::list_scalar{ints{}, false};
 
   auto selector_column = bools{1, 1, 0, 1, 1, 0, 1}.release();
 
-  auto expected = lcw{{
-                        {-33, -33, -33},
-                        {-33, -33, -33},
-                        {-22, -22},
-                        {-33, -33, -33},
-                        {-33, -33, -33},
-                        {-22, -22},
-                        {-33, -33, -33},
-                      },
-                      all_nulls()}
-                    .release();
+  auto expected = lcw{{lcw{}, lcw{}, lcw{}, lcw{}, lcw{}, lcw{}, lcw{}}, all_nulls()}.release();
 
   auto result = cudf::copy_if_else(lhs_scalar, rhs_scalar, selector_column->view());
 

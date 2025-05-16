@@ -1,12 +1,10 @@
 #
-# Copyright (c) 2021-2023, NVIDIA CORPORATION.
+# Copyright (c) 2021-2025, NVIDIA CORPORATION.
 #
 import argparse
 import os
-import sys
-import xml.etree.ElementTree as ET
+import re
 from pathlib import Path
-from xml.dom import minidom
 
 parser = argparse.ArgumentParser()
 parser.add_argument(
@@ -16,7 +14,7 @@ parser.add_argument(
     "--fmt",
     type=str,
     default="csv",
-    choices=["csv", "xml", "html"],
+    choices=["csv", "html"],
     help="output format (to stdout)",
 )
 parser.add_argument(
@@ -36,6 +34,7 @@ args = parser.parse_args()
 log_file = args.log_file
 output_fmt = args.fmt
 cmp_file = args.cmp_log
+
 
 # build a map of the log entries
 def build_log_map(log_file):
@@ -66,37 +65,6 @@ def build_log_map(log_file):
             entries[entry[0]] = (entry[1], entry[2], entry[3])
 
     return entries
-
-
-# output results in XML format
-def output_xml(entries, sorted_list, args):
-    root = ET.Element("testsuites")
-    testsuite = ET.Element(
-        "testsuite",
-        attrib={
-            "name": "build-time",
-            "tests": str(len(sorted_list)),
-            "failures": str(0),
-            "errors": str(0),
-        },
-    )
-    root.append(testsuite)
-    for name in sorted_list:
-        entry = entries[name]
-        build_time = float(entry[1] - entry[0]) / 1000
-        item = ET.Element(
-            "testcase",
-            attrib={
-                "classname": "BuildTime",
-                "name": name,
-                "time": str(build_time),
-            },
-        )
-        testsuite.append(item)
-
-    tree = ET.ElementTree(root)
-    xmlstr = minidom.parseString(ET.tostring(root)).toprettyxml(indent="   ")
-    print(xmlstr)
 
 
 # utility converts a millisecond value to a column width in pixels
@@ -174,6 +142,16 @@ def format_file_size(input_size):
     if input_size < 0:
         file_size_str = "-" + file_size_str
     return file_size_str
+
+
+def replace_placeholder_patterns(input_string: str) -> str:
+    pattern = r"(_h_env_placehold)[_placehold]+"
+    return re.sub(pattern, r"\1...", input_string)
+
+
+# adjust name for display
+def format_file_name(name: str) -> str:
+    return replace_placeholder_patterns(name)
 
 
 # Output chart results in HTML format
@@ -255,7 +233,8 @@ def output_html(entries, sorted_list, cmp_entries, args):
             print("<td height='20px' width='", size, "px' ", sep="", end="")
             # title text is shown as hover-text by most browsers
             print(color, "title='", end="")
-            print(name, "\n", build_time_str, "' ", sep="", end="")
+            display_name = format_file_name(name)
+            print(display_name, "\n", build_time_str, "' ", sep="", end="")
             # centers the name if it fits in the box
             print("align='center' nowrap>", end="")
             # use a slightly smaller, fixed-width font
@@ -299,7 +278,8 @@ def output_html(entries, sorted_list, cmp_entries, args):
         file_size_str = format_file_size(file_size)
 
         # output entry row
-        print("<tr ", color, "><td>", name, "</td>", sep="", end="")
+        display_name = format_file_name(name)
+        print("<tr ", color, "><td>", display_name, "</td>", sep="", end="")
         print("<td align='right'>", build_time_str, "</td>", sep="", end="")
         print("<td align='right'>", file_size_str, "</td>", sep="", end="")
         # output diff column
@@ -353,7 +333,7 @@ def output_html(entries, sorted_list, cmp_entries, args):
         print(
             "<tr><td",
             white,
-            ">time change &lt; 20%% or build time &lt; 1 minute</td></tr>",
+            ">time change &lt; 20% or build time &lt; 1 minute</td></tr>",
         )
         print("</table>")
 
@@ -396,9 +376,7 @@ sorted_list = sorted(
 # load the comparison build log if available
 cmp_entries = build_log_map(cmp_file) if cmp_file else None
 
-if output_fmt == "xml":
-    output_xml(entries, sorted_list, args)
-elif output_fmt == "html":
+if output_fmt == "html":
     output_html(entries, sorted_list, cmp_entries, args)
 else:
     output_csv(entries, sorted_list, cmp_entries, args)

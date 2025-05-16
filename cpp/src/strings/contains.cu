@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
-#include <strings/count_matches.hpp>
-#include <strings/regex/regex_program_impl.h>
-#include <strings/regex/utilities.cuh>
+#include "strings/count_matches.hpp"
+#include "strings/regex/regex_program_impl.h"
+#include "strings/regex/utilities.cuh"
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
@@ -27,6 +27,7 @@
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -50,10 +51,9 @@ struct contains_fn {
     if (d_strings.is_null(idx)) return false;
     auto const d_str = d_strings.element<string_view>(idx);
 
-    size_type begin = 0;
-    size_type end   = beginning_only ? 1    // match only the beginning of the string;
-                                     : -1;  // match anywhere in the string
-    return static_cast<bool>(prog.find(thread_idx, d_str, begin, end));
+    size_type end = beginning_only ? 1    // match only the beginning of the string;
+                                   : -1;  // match anywhere in the string
+    return prog.find(thread_idx, d_str, d_str.begin(), end).has_value();
   }
 };
 
@@ -61,7 +61,7 @@ std::unique_ptr<column> contains_impl(strings_column_view const& input,
                                       regex_program const& prog,
                                       bool const beginning_only,
                                       rmm::cuda_stream_view stream,
-                                      rmm::mr::device_memory_resource* mr)
+                                      rmm::device_async_resource_ref mr)
 {
   auto results = make_numeric_column(data_type{type_id::BOOL8},
                                      input.size(),
@@ -89,7 +89,7 @@ std::unique_ptr<column> contains_impl(strings_column_view const& input,
 std::unique_ptr<column> contains_re(strings_column_view const& input,
                                     regex_program const& prog,
                                     rmm::cuda_stream_view stream,
-                                    rmm::mr::device_memory_resource* mr)
+                                    rmm::device_async_resource_ref mr)
 {
   return contains_impl(input, prog, false, stream, mr);
 }
@@ -97,7 +97,7 @@ std::unique_ptr<column> contains_re(strings_column_view const& input,
 std::unique_ptr<column> matches_re(strings_column_view const& input,
                                    regex_program const& prog,
                                    rmm::cuda_stream_view stream,
-                                   rmm::mr::device_memory_resource* mr)
+                                   rmm::device_async_resource_ref mr)
 {
   return contains_impl(input, prog, true, stream, mr);
 }
@@ -105,14 +105,14 @@ std::unique_ptr<column> matches_re(strings_column_view const& input,
 std::unique_ptr<column> count_re(strings_column_view const& input,
                                  regex_program const& prog,
                                  rmm::cuda_stream_view stream,
-                                 rmm::mr::device_memory_resource* mr)
+                                 rmm::device_async_resource_ref mr)
 {
   // create device object from regex_program
   auto d_prog = regex_device_builder::create_prog_device(prog, stream);
 
   auto const d_strings = column_device_view::create(input.parent(), stream);
 
-  auto result = count_matches(*d_strings, *d_prog, input.size(), stream, mr);
+  auto result = count_matches(*d_strings, *d_prog, stream, mr);
   if (input.has_nulls()) {
     result->set_null_mask(cudf::detail::copy_bitmask(input.parent(), stream, mr),
                           input.null_count());
@@ -124,28 +124,31 @@ std::unique_ptr<column> count_re(strings_column_view const& input,
 
 // external APIs
 
-std::unique_ptr<column> contains_re(strings_column_view const& strings,
+std::unique_ptr<column> contains_re(strings_column_view const& input,
                                     regex_program const& prog,
-                                    rmm::mr::device_memory_resource* mr)
+                                    rmm::cuda_stream_view stream,
+                                    rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::contains_re(strings, prog, cudf::get_default_stream(), mr);
+  return detail::contains_re(input, prog, stream, mr);
 }
 
-std::unique_ptr<column> matches_re(strings_column_view const& strings,
+std::unique_ptr<column> matches_re(strings_column_view const& input,
                                    regex_program const& prog,
-                                   rmm::mr::device_memory_resource* mr)
+                                   rmm::cuda_stream_view stream,
+                                   rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::matches_re(strings, prog, cudf::get_default_stream(), mr);
+  return detail::matches_re(input, prog, stream, mr);
 }
 
-std::unique_ptr<column> count_re(strings_column_view const& strings,
+std::unique_ptr<column> count_re(strings_column_view const& input,
                                  regex_program const& prog,
-                                 rmm::mr::device_memory_resource* mr)
+                                 rmm::cuda_stream_view stream,
+                                 rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::count_re(strings, prog, cudf::get_default_stream(), mr);
+  return detail::count_re(input, prog, stream, mr);
 }
 
 }  // namespace strings

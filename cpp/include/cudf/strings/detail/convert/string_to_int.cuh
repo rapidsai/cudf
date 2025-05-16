@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,7 +34,7 @@ __device__ inline int64_t string_to_integer(string_view const& d_str)
   int64_t value   = 0;
   size_type bytes = d_str.size_bytes();
   if (bytes == 0) return value;
-  const char* ptr = d_str.data();
+  char const* ptr = d_str.data();
   int sign        = 1;
   if (*ptr == '-' || *ptr == '+') {
     sign = (*ptr == '-' ? -1 : 1);

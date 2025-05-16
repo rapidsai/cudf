@@ -1,12 +1,12 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 
 import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pytest
+from pandas.core.arrays.arrow.extension_types import ArrowIntervalType
 
 import cudf
-from cudf.core._compat import PANDAS_GE_150
 from cudf.core.column import ColumnBase
 from cudf.core.dtypes import (
     CategoricalDtype,
@@ -17,13 +17,8 @@ from cudf.core.dtypes import (
     ListDtype,
     StructDtype,
 )
-from cudf.testing._utils import assert_eq
-from cudf.utils.dtypes import np_to_pa_dtype
-
-if PANDAS_GE_150:
-    from pandas.core.arrays.arrow.extension_types import ArrowIntervalType
-else:
-    from pandas.core.arrays._arrow_utils import ArrowIntervalType
+from cudf.testing import assert_eq
+from cudf.utils.dtypes import cudf_dtype_to_pa_type
 
 
 def test_cdt_basic():
@@ -72,7 +67,7 @@ def test_cdf_to_pandas(data, ordered):
     ],
 )
 def test_list_dtype_pyarrow_round_trip(value_type):
-    pa_type = pa.list_(cudf.utils.dtypes.np_to_pa_dtype(np.dtype(value_type)))
+    pa_type = pa.list_(cudf_dtype_to_pa_type(cudf.dtype(value_type)))
     expect = pa_type
     got = ListDtype.from_arrow(expect).to_arrow()
     assert expect.equals(got)
@@ -104,10 +99,7 @@ def test_list_nested_dtype():
 )
 def test_struct_dtype_pyarrow_round_trip(fields):
     pa_type = pa.struct(
-        {
-            k: cudf.utils.dtypes.np_to_pa_dtype(np.dtype(v))
-            for k, v in fields.items()
-        }
+        {k: pa.from_numpy_dtype(np.dtype(v)) for k, v in fields.items()}
     )
     expect = pa_type
     got = StructDtype.from_arrow(expect).to_arrow()
@@ -220,7 +212,7 @@ def assert_column_array_dtype_equal(column: ColumnBase, array: pa.array):
     elif isinstance(column.dtype, CategoricalDtype):
         raise NotImplementedError()
     else:
-        return array.type.equals(np_to_pa_dtype(column.dtype))
+        return array.type.equals(cudf_dtype_to_pa_type(column.dtype))
 
 
 @pytest.mark.parametrize(
@@ -346,7 +338,6 @@ def test_dtype(in_dtype, expect):
         np.complex128,
         complex,
         "S",
-        "a",
         "V",
         "float16",
         np.float16,
@@ -359,12 +350,3 @@ def test_dtype(in_dtype, expect):
 def test_dtype_raise(in_dtype):
     with pytest.raises(TypeError):
         cudf.dtype(in_dtype)
-
-
-def test_dtype_np_bool_to_pa_bool():
-    """This test case captures that utility np_to_pa_dtype
-    should map np.bool_ to pa.bool_, nuances on bit width
-    difference should be handled elsewhere.
-    """
-
-    assert np_to_pa_dtype(np.dtype("bool")) == pa.bool_()

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,6 @@
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/table_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
@@ -24,6 +23,8 @@
 #include <cudf/quantiles.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+
+#include <stdexcept>
 
 template <typename T>
 struct QuantilesTest : public cudf::test::BaseFixture {};
@@ -104,9 +105,10 @@ TYPED_TEST(QuantilesTest, TestMultiColumnArithmeticInterpolation)
   cudf::test::fixed_width_column_wrapper<T> input_b({});
   auto input = cudf::table_view({input_a});
 
-  EXPECT_THROW(cudf::quantiles(input, {0.0f}, cudf::interpolation::LINEAR), cudf::logic_error);
+  EXPECT_THROW(cudf::quantiles(input, {0.0f}, cudf::interpolation::LINEAR), std::invalid_argument);
 
-  EXPECT_THROW(cudf::quantiles(input, {0.0f}, cudf::interpolation::MIDPOINT), cudf::logic_error);
+  EXPECT_THROW(cudf::quantiles(input, {0.0f}, cudf::interpolation::MIDPOINT),
+               std::invalid_argument);
 }
 
 TYPED_TEST(QuantilesTest, TestMultiColumnUnsorted)
@@ -116,7 +118,8 @@ TYPED_TEST(QuantilesTest, TestMultiColumnUnsorted)
   auto input_a = cudf::test::strings_column_wrapper(
     {"C", "B", "A", "A", "D", "B", "D", "B", "D", "C", "C", "C",
      "D", "B", "D", "B", "C", "C", "A", "D", "B", "A", "A", "A"},
-    {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1});
+    {true, true, true, true, true, true, true, true, true, true, true, true,
+     true, true, true, true, true, true, true, true, true, true, true, true});
 
   cudf::test::fixed_width_column_wrapper<T, int32_t> input_b(
     {4, 3, 5, 0, 1, 0, 4, 1, 5, 3, 0, 5, 2, 4, 3, 2, 1, 2, 3, 0, 5, 1, 4, 2},
@@ -130,7 +133,8 @@ TYPED_TEST(QuantilesTest, TestMultiColumnUnsorted)
                                 cudf::sorted::NO,
                                 {cudf::order::ASCENDING, cudf::order::DESCENDING});
 
-  auto expected_a = cudf::test::strings_column_wrapper({"A", "C", "C", "B", "D"}, {1, 1, 1, 1, 1});
+  auto expected_a =
+    cudf::test::strings_column_wrapper({"A", "C", "C", "B", "D"}, {true, true, true, true, true});
 
   cudf::test::fixed_width_column_wrapper<T, int32_t> expected_b({5, 5, 1, 5, 0}, {1, 1, 1, 1, 1});
 
@@ -146,7 +150,8 @@ TYPED_TEST(QuantilesTest, TestMultiColumnAssumedSorted)
   auto input_a = cudf::test::strings_column_wrapper(
     {"C", "B", "A", "A", "D", "B", "D", "B", "D", "C", "C", "C",
      "D", "B", "D", "B", "C", "C", "A", "D", "B", "A", "A", "A"},
-    {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1});
+    {true, true, true, true, true, true, true, true, true, true, true, true,
+     true, true, true, true, true, true, true, true, true, true, true, true});
 
   cudf::test::fixed_width_column_wrapper<T, int32_t> input_b(
     {4, 3, 5, 0, 1, 0, 4, 1, 5, 3, 0, 5, 2, 4, 3, 2, 1, 2, 3, 0, 5, 1, 4, 2},
@@ -157,7 +162,8 @@ TYPED_TEST(QuantilesTest, TestMultiColumnAssumedSorted)
   auto actual = cudf::quantiles(
     input, {0.0f, 0.5f, 0.7f, 0.25f, 1.0f}, cudf::interpolation::NEAREST, cudf::sorted::YES);
 
-  auto expected_a = cudf::test::strings_column_wrapper({"C", "D", "C", "D", "A"}, {1, 1, 1, 1, 1});
+  auto expected_a =
+    cudf::test::strings_column_wrapper({"C", "D", "C", "D", "A"}, {true, true, true, true, true});
 
   cudf::test::fixed_width_column_wrapper<T, int32_t> expected_b({4, 2, 1, 4, 2}, {1, 1, 1, 1, 1});
 

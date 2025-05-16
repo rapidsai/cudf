@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,20 +14,23 @@
  * limitations under the License.
  */
 
-#include <cudf/column/column.hpp>
-#include <cudf/column/column_view.hpp>
-#include <cudf/dictionary/encode.hpp>
-#include <cudf/join.hpp>
-#include <cudf/sorting.hpp>
-#include <cudf/table/table.hpp>
-#include <cudf/table/table_view.hpp>
-#include <cudf/types.hpp>
-
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/table_utilities.hpp>
+
+#include <cudf/column/column.hpp>
+#include <cudf/column/column_view.hpp>
+#include <cudf/join/join.hpp>
+#include <cudf/sorting.hpp>
+#include <cudf/table/table.hpp>
+#include <cudf/table/table_view.hpp>
+#include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/memory_resource.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
 
 #include <thrust/iterator/transform_iterator.h>
 
@@ -50,18 +53,20 @@ template <std::unique_ptr<rmm::device_uvector<cudf::size_type>> (*join_impl)(
   cudf::table_view const& left_keys,
   cudf::table_view const& right_keys,
   cudf::null_equality compare_nulls,
-  rmm::mr::device_memory_resource* mr)>
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)>
 std::unique_ptr<cudf::table> join_and_gather(
   cudf::table_view const& left_input,
   cudf::table_view const& right_input,
   std::vector<cudf::size_type> const& left_on,
   std::vector<cudf::size_type> const& right_on,
   cudf::null_equality compare_nulls,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
 {
   auto left_selected      = left_input.select(left_on);
   auto right_selected     = right_input.select(right_on);
-  auto const join_indices = join_impl(left_selected, right_selected, compare_nulls, mr);
+  auto const join_indices = join_impl(left_selected, right_selected, compare_nulls, stream, mr);
 
   auto left_indices_span = cudf::device_span<cudf::size_type const>{*join_indices};
   auto left_indices_col  = cudf::column_view{left_indices_span};
@@ -100,8 +105,11 @@ TEST_F(JoinTest, TestSimple)
   auto right = cudf::table_view{{right_col0}};
 
   auto result    = left_semi_join(left, right);
-  auto result_cv = cudf::column_view(
-    cudf::data_type{cudf::type_to_id<cudf::size_type>()}, result->size(), result->data());
+  auto result_cv = cudf::column_view(cudf::data_type{cudf::type_to_id<cudf::size_type>()},
+                                     result->size(),
+                                     result->data(),
+                                     nullptr,
+                                     0);
   column_wrapper<cudf::size_type> expected{0, 1};
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result_cv);
 }
@@ -109,8 +117,8 @@ TEST_F(JoinTest, TestSimple)
 std::pair<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::table>> get_saj_tables(
   std::vector<bool> const& left_is_human_nulls, std::vector<bool> const& right_is_human_nulls)
 {
-  column_wrapper<int32_t> col0_0{{99, 1, 2, 0, 2}, {0, 1, 1, 1, 1}};
-  strcol_wrapper col0_1({"s1", "s1", "s0", "s4", "s0"}, {1, 1, 0, 1, 1});
+  column_wrapper<int32_t> col0_0{{99, 1, 2, 0, 2}, {false, true, true, true, true}};
+  strcol_wrapper col0_1({"s1", "s1", "s0", "s4", "s0"}, {true, true, false, true, true});
   column_wrapper<int32_t> col0_2{{0, 1, 2, 4, 1}};
   auto col0_names_col = strcol_wrapper{
     "Samuel Vimes", "Carrot Ironfoundersson", "Detritus", "Samuel Vimes", "Angua von Überwald"};
@@ -120,11 +128,11 @@ std::pair<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::table>> get_saj_ta
     column_wrapper<bool>{{true, true, false, false, false}, left_is_human_nulls.begin()};
 
   auto col0_3 = cudf::test::structs_column_wrapper{
-    {col0_names_col, col0_ages_col, col0_is_human_col}, {1, 1, 1, 1, 1}};
+    {col0_names_col, col0_ages_col, col0_is_human_col}, {true, true, true, true, true}};
 
-  column_wrapper<int32_t> col1_0{{2, 2, 0, 4, -99}, {1, 1, 1, 1, 0}};
+  column_wrapper<int32_t> col1_0{{2, 2, 0, 4, -99}, {true, true, true, true, false}};
   strcol_wrapper col1_1({"s1", "s0", "s1", "s2", "s1"});
-  column_wrapper<int32_t> col1_2{{1, 0, 1, 2, 1}, {1, 0, 1, 1, 1}};
+  column_wrapper<int32_t> col1_2{{1, 0, 1, 2, 1}, {true, false, true, true, true}};
   auto col1_names_col = strcol_wrapper{"Carrot Ironfoundersson",
                                        "Angua von Überwald",
                                        "Detritus",
@@ -153,20 +161,20 @@ std::pair<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::table>> get_saj_ta
 
 TEST_F(JoinTest, SemiJoinWithStructsAndNulls)
 {
-  auto tables = get_saj_tables({1, 1, 0, 1, 0}, {1, 0, 0, 1, 1});
+  auto tables = get_saj_tables({true, true, false, true, false}, {true, false, false, true, true});
 
   auto result =
     left_semi_join(*tables.first, *tables.second, {0, 1, 3}, {0, 1, 3}, cudf::null_equality::EQUAL);
   auto result_sort_order = cudf::sorted_order(result->view());
   auto sorted_result     = cudf::gather(result->view(), *result_sort_order);
 
-  column_wrapper<int32_t> col_gold_0{{99, 2}, {0, 1}};
-  strcol_wrapper col_gold_1({"s1", "s0"}, {1, 1});
+  column_wrapper<int32_t> col_gold_0{{99, 2}, {false, true}};
+  strcol_wrapper col_gold_1({"s1", "s0"}, {true, true});
   column_wrapper<int32_t> col_gold_2{{0, 1}};
   auto col_gold_3_names_col = strcol_wrapper{"Samuel Vimes", "Angua von Überwald"};
   auto col_gold_3_ages_col  = column_wrapper<int32_t>{{48, 25}};
 
-  auto col_gold_3_is_human_col = column_wrapper<bool>{{true, false}, {1, 0}};
+  auto col_gold_3_is_human_col = column_wrapper<bool>{{true, false}, {true, false}};
 
   auto col_gold_3 = cudf::test::structs_column_wrapper{
     {col_gold_3_names_col, col_gold_3_ages_col, col_gold_3_is_human_col}};
@@ -185,20 +193,20 @@ TEST_F(JoinTest, SemiJoinWithStructsAndNulls)
 
 TEST_F(JoinTest, SemiJoinWithStructsAndNullsNotEqual)
 {
-  auto tables = get_saj_tables({1, 1, 0, 1, 1}, {1, 1, 0, 1, 1});
+  auto tables = get_saj_tables({true, true, false, true, true}, {true, true, false, true, true});
 
   auto result = left_semi_join(
     *tables.first, *tables.second, {0, 1, 3}, {0, 1, 3}, cudf::null_equality::UNEQUAL);
   auto result_sort_order = cudf::sorted_order(result->view());
   auto sorted_result     = cudf::gather(result->view(), *result_sort_order);
 
-  column_wrapper<int32_t> col_gold_0{{2}, {1}};
-  strcol_wrapper col_gold_1({"s0"}, {1});
+  column_wrapper<int32_t> col_gold_0{{2}, {true}};
+  strcol_wrapper col_gold_1({"s0"}, {true});
   column_wrapper<int32_t> col_gold_2{{1}};
   auto col_gold_3_names_col = strcol_wrapper{"Angua von Überwald"};
   auto col_gold_3_ages_col  = column_wrapper<int32_t>{{25}};
 
-  auto col_gold_3_is_human_col = column_wrapper<bool>{{false}, {1}};
+  auto col_gold_3_is_human_col = column_wrapper<bool>{{false}, {true}};
 
   auto col_gold_3 = cudf::test::structs_column_wrapper{
     {col_gold_3_names_col, col_gold_3_ages_col, col_gold_3_is_human_col}};
@@ -218,20 +226,20 @@ TEST_F(JoinTest, SemiJoinWithStructsAndNullsNotEqual)
 
 TEST_F(JoinTest, AntiJoinWithStructsAndNulls)
 {
-  auto tables = get_saj_tables({1, 1, 0, 1, 0}, {1, 0, 0, 1, 1});
+  auto tables = get_saj_tables({true, true, false, true, false}, {true, false, false, true, true});
 
   auto result =
     left_anti_join(*tables.first, *tables.second, {0, 1, 3}, {0, 1, 3}, cudf::null_equality::EQUAL);
   auto result_sort_order = cudf::sorted_order(result->view());
   auto sorted_result     = cudf::gather(result->view(), *result_sort_order);
 
-  column_wrapper<int32_t> col_gold_0{{1, 2, 0}, {1, 1, 1}};
-  strcol_wrapper col_gold_1({"s1", "s0", "s4"}, {1, 0, 1});
+  column_wrapper<int32_t> col_gold_0{{1, 2, 0}, {true, true, true}};
+  strcol_wrapper col_gold_1({"s1", "s0", "s4"}, {true, false, true});
   column_wrapper<int32_t> col_gold_2{{1, 2, 4}};
   auto col_gold_3_names_col = strcol_wrapper{"Carrot Ironfoundersson", "Detritus", "Samuel Vimes"};
   auto col_gold_3_ages_col  = column_wrapper<int32_t>{{27, 351, 31}};
 
-  auto col_gold_3_is_human_col = column_wrapper<bool>{{true, false, false}, {1, 0, 1}};
+  auto col_gold_3_is_human_col = column_wrapper<bool>{{true, false, false}, {true, false, true}};
 
   auto col_gold_3 = cudf::test::structs_column_wrapper{
     {col_gold_3_names_col, col_gold_3_ages_col, col_gold_3_is_human_col}};
@@ -251,21 +259,22 @@ TEST_F(JoinTest, AntiJoinWithStructsAndNulls)
 
 TEST_F(JoinTest, AntiJoinWithStructsAndNullsNotEqual)
 {
-  auto tables = get_saj_tables({1, 1, 0, 1, 1}, {1, 1, 0, 1, 1});
+  auto tables = get_saj_tables({true, true, false, true, true}, {true, true, false, true, true});
 
   auto result = left_anti_join(
     *tables.first, *tables.second, {0, 1, 3}, {0, 1, 3}, cudf::null_equality::UNEQUAL);
   auto result_sort_order = cudf::sorted_order(result->view());
   auto sorted_result     = cudf::gather(result->view(), *result_sort_order);
 
-  column_wrapper<int32_t> col_gold_0{{99, 1, 2, 0}, {0, 1, 1, 1}};
-  strcol_wrapper col_gold_1({"s1", "s1", "s0", "s4"}, {1, 1, 0, 1});
+  column_wrapper<int32_t> col_gold_0{{99, 1, 2, 0}, {false, true, true, true}};
+  strcol_wrapper col_gold_1({"s1", "s1", "s0", "s4"}, {true, true, false, true});
   column_wrapper<int32_t> col_gold_2{{0, 1, 2, 4}};
   auto col_gold_3_names_col =
     strcol_wrapper{"Samuel Vimes", "Carrot Ironfoundersson", "Detritus", "Samuel Vimes"};
   auto col_gold_3_ages_col = column_wrapper<int32_t>{{48, 27, 351, 31}};
 
-  auto col_gold_3_is_human_col = column_wrapper<bool>{{true, true, false, false}, {1, 1, 0, 1}};
+  auto col_gold_3_is_human_col =
+    column_wrapper<bool>{{true, true, false, false}, {true, true, false, true}};
 
   auto col_gold_3 = cudf::test::structs_column_wrapper{
     {col_gold_3_names_col, col_gold_3_ages_col, col_gold_3_is_human_col}};

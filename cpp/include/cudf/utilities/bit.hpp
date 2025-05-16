@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,16 +16,18 @@
 
 #pragma once
 
-#include <cassert>
-#include <cuda/std/climits>
 #include <cudf/types.hpp>
+
+#include <cuda/std/climits>
+
+#include <cassert>
 
 /**
  * @file bit.hpp
  * @brief Utilities for bit and bitmask operations.
  */
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace detail {
 // @cond
 // Work around a bug in NVRTC that fails to compile assert() in constexpr
@@ -215,4 +217,4 @@ __device__ inline void clear_bit(bitmask_type* bitmask, size_type bit_index)
 }
 #endif
 /** @} */  // end of group
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

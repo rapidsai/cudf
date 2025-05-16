@@ -1,17 +1,24 @@
 #!/bin/bash
-# Copyright (c) 2022-2023, NVIDIA CORPORATION.
+# Copyright (c) 2022-2025, NVIDIA CORPORATION.
 
 set -euo pipefail
 
 . /opt/conda/etc/profile.d/conda.sh
 
+rapids-logger "Downloading artifacts from previous jobs"
+CPP_CHANNEL=$(rapids-download-conda-from-github cpp)
+
 rapids-logger "Generate Java testing dependencies"
+
+ENV_YAML_DIR="$(mktemp -d)"
+
 rapids-dependency-file-generator \
   --output conda \
-  --file_key test_java \
-  --matrix "cuda=${RAPIDS_CUDA_VERSION%.*};arch=$(arch)" | tee env.yaml
+  --file-key test_java \
+  --prepend-channel "${CPP_CHANNEL}" \
+  --matrix "cuda=${RAPIDS_CUDA_VERSION%.*};arch=$(arch)" | tee "${ENV_YAML_DIR}/env.yaml"
 
-rapids-mamba-retry env create --force -f env.yaml -n test
+rapids-mamba-retry env create --yes -f "${ENV_YAML_DIR}/env.yaml" -n test
 
 export CMAKE_GENERATOR=Ninja
 
@@ -22,19 +29,15 @@ set -u
 
 rapids-print-env
 
-rapids-logger "Downloading artifacts from previous jobs"
-CPP_CHANNEL=$(rapids-download-conda-from-s3 cpp)
-
-rapids-mamba-retry install \
-  --channel "${CPP_CHANNEL}" \
-  libcudf
-
 rapids-logger "Check GPU usage"
 nvidia-smi
 
 EXITCODE=0
 trap "EXITCODE=1" ERR
 set +e
+
+# disable large strings
+export LIBCUDF_LARGE_STRINGS_ENABLED=0
 
 rapids-logger "Run Java tests"
 pushd java

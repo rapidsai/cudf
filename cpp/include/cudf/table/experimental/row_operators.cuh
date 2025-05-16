@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,11 +17,11 @@
 #pragma once
 
 #include <cudf/column/column_device_view.cuh>
-#include <cudf/detail/hashing.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/detail/utilities/assert.cuh>
-#include <cudf/detail/utilities/hash_functions.cuh>
+#include <cudf/hashing/detail/default_hash.cuh>
+#include <cudf/hashing/detail/hashing.hpp>
 #include <cudf/lists/detail/dremel.hpp>
 #include <cudf/lists/list_device_view.cuh>
 #include <cudf/lists/lists_column_device_view.cuh>
@@ -33,6 +33,11 @@
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
+#include <cuda/std/functional>
+#include <cuda/std/limits>
+#include <cuda/std/optional>
+#include <cuda/std/tuple>
+#include <cuda/std/utility>
 #include <thrust/detail/use_default.h>
 #include <thrust/equal.h>
 #include <thrust/execution_policy.h>
@@ -46,15 +51,17 @@
 #include <thrust/swap.h>
 #include <thrust/transform_reduce.h>
 
-#include <cuda/std/tuple>
-#include <cuda/std/utility>
-
-#include <limits>
 #include <memory>
-#include <optional>
-#include <utility>
+#include <type_traits>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
+
+namespace row::primitive {
+class row_equality_comparator;  // Forward declaration
+
+template <template <typename> class Hash>
+class row_hasher;  // Forward declaration
+}  // namespace row::primitive
 
 namespace experimental {
 
@@ -211,7 +218,7 @@ struct sorting_physical_element_comparator {
   }
 };
 
-using optional_dremel_view = thrust::optional<detail::dremel_device_view const>;
+using optional_dremel_view = cuda::std::optional<detail::dremel_device_view const>;
 
 // The has_nested_columns template parameter of the device_row_comparator is
 // necessary to help the compiler optimize our code. Without it, the list and
@@ -223,12 +230,12 @@ using optional_dremel_view = thrust::optional<detail::dremel_device_view const>;
 // std::optional<device_span<dremel_device_view>> in the
 // preprocessed_table/device_row_comparator (which is always valid when
 // has_nested_columns and is otherwise invalid) that is then unpacked to a
-// thrust::optional<dremel_device_view> at the element_comparator level (which
+// cuda::std::optional<dremel_device_view> at the element_comparator level (which
 // is always valid for a list column and otherwise invalid).  We cannot use an
 // additional template parameter for the element_comparator on a per-column
 // basis because we cannot conditionally define dremel_device_view member
 // variables without jumping through extra hoops with inheritance, so the
-// thrust::optional<dremel_device_view> member must be an optional rather than
+// cuda::std::optional<dremel_device_view> member must be an optional rather than
 // a raw dremel_device_view.
 /**
  * @brief Computes the lexicographic comparison between 2 rows.
@@ -252,7 +259,7 @@ using optional_dremel_view = thrust::optional<detail::dremel_device_view const>;
  *
  * @tparam has_nested_columns compile-time optimization for primitive types.
  *         This template parameter is to be used by the developer by querying
- *         `cudf::detail::has_nested_columns(input)`. `true` compiles operator
+ *         `cudf::has_nested_columns(input)`. `true` compiles operator
  *         overloads for nested types, while `false` only compiles operator
  *         overloads for primitive types.
  * @tparam Nullate A cudf::nullate type describing whether to check for nulls.
@@ -264,6 +271,7 @@ template <bool has_nested_columns,
           typename Nullate,
           typename PhysicalElementComparator = sorting_physical_element_comparator>
 class device_row_comparator {
+ public:
   friend class self_comparator;       ///< Allow self_comparator to access private members
   friend class two_table_comparator;  ///< Allow two_table_comparator to access private members
 
@@ -274,6 +282,8 @@ class device_row_comparator {
    * @param check_nulls Indicates if any input column contains nulls.
    * @param lhs The first table
    * @param rhs The second table (may be the same table as `lhs`)
+   * @param l_dremel_device_views lhs table dremel device view for list type
+   * @param r_dremel_device_views rhs table dremel device view for list type
    * @param depth Optional, device array the same length as a row that contains starting depths of
    * columns if they're nested, and 0 otherwise.
    * @param column_order Optional, device array the same length as a row that indicates the desired
@@ -284,21 +294,60 @@ class device_row_comparator {
    * `null_order::BEFORE` for all columns.
    * @param comparator Physical element relational comparison functor.
    */
-  device_row_comparator(Nullate check_nulls,
-                        table_device_view lhs,
-                        table_device_view rhs,
-                        device_span<detail::dremel_device_view const> l_dremel_device_views,
-                        device_span<detail::dremel_device_view const> r_dremel_device_views,
-                        std::optional<device_span<int const>> depth                  = std::nullopt,
-                        std::optional<device_span<order const>> column_order         = std::nullopt,
-                        std::optional<device_span<null_order const>> null_precedence = std::nullopt,
-                        PhysicalElementComparator comparator                         = {}) noexcept
+  device_row_comparator(
+    Nullate check_nulls,
+    table_device_view lhs,
+    table_device_view rhs,
+    device_span<detail::dremel_device_view const> l_dremel_device_views,
+    device_span<detail::dremel_device_view const> r_dremel_device_views,
+    cuda::std::optional<device_span<int const>> depth                  = cuda::std::nullopt,
+    cuda::std::optional<device_span<order const>> column_order         = cuda::std::nullopt,
+    cuda::std::optional<device_span<null_order const>> null_precedence = cuda::std::nullopt,
+    PhysicalElementComparator comparator                               = {}) noexcept
     : _lhs{lhs},
       _rhs{rhs},
       _l_dremel(l_dremel_device_views),
       _r_dremel(r_dremel_device_views),
       _check_nulls{check_nulls},
       _depth{depth},
+      _column_order{column_order},
+      _null_precedence{null_precedence},
+      _comparator{comparator}
+  {
+  }
+
+  /**
+   * @brief Construct a function object for performing a lexicographic
+   * comparison between the rows of two tables.
+   * This is a special overload to allow device-side construction of the
+   * comparator for cases where no preprocessing is needed, i.e. tables with
+   * non-nested type columns.
+   *
+   * @param check_nulls Indicates if any input column contains nulls.
+   * @param lhs The first table
+   * @param rhs The second table (may be the same table as `lhs`)
+   * @param column_order Optional, device array the same length as a row that indicates the desired
+   * ascending/descending order of each column in a row. If `nullopt`, it is assumed all columns are
+   * sorted in ascending order.
+   * @param null_precedence Optional, device array the same length as a row and indicates how null
+   * values compare to all other for every column. If `nullopt`, then null precedence would be
+   * `null_order::BEFORE` for all columns.
+   * @param comparator Physical element relational comparison functor.
+   */
+  template <bool nested_disable = not has_nested_columns, CUDF_ENABLE_IF(nested_disable)>
+  __device__ device_row_comparator(
+    Nullate check_nulls,
+    table_device_view lhs,
+    table_device_view rhs,
+    cuda::std::optional<device_span<order const>> column_order         = cuda::std::nullopt,
+    cuda::std::optional<device_span<null_order const>> null_precedence = cuda::std::nullopt,
+    PhysicalElementComparator comparator                               = {}) noexcept
+    : _lhs{lhs},
+      _rhs{rhs},
+      _l_dremel{},
+      _r_dremel{},
+      _check_nulls{check_nulls},
+      _depth{},
       _column_order{column_order},
       _null_precedence{null_precedence},
       _comparator{comparator}
@@ -323,6 +372,8 @@ class device_row_comparator {
      * @param depth The depth of the column if part of a nested column @see
      * preprocessed_table::depths
      * @param comparator Physical element relational comparison functor.
+     * @param l_dremel_device_view <>
+     * @param r_dremel_device_view <>
      */
     __device__ element_comparator(Nullate check_nulls,
                                   column_device_view lhs,
@@ -367,9 +418,16 @@ class device_row_comparator {
 
       return cuda::std::pair(_comparator(_lhs.element<Element>(lhs_element_index),
                                          _rhs.element<Element>(rhs_element_index)),
-                             std::numeric_limits<int>::max());
+                             cuda::std::numeric_limits<int>::max());
     }
 
+    /**
+     * @brief Throws run-time error when columns types cannot be compared
+     *        or if this class is instantiated with `has_nested_columns = false` but
+     *        passed tables with nested columns
+     *
+     * @return Ordering
+     */
     template <typename Element,
               CUDF_ENABLE_IF(not cudf::is_relationally_comparable<Element, Element>() and
                              (not has_nested_columns or not cudf::is_nested<Element>()))>
@@ -379,6 +437,14 @@ class device_row_comparator {
       CUDF_UNREACHABLE("Attempted to compare elements of uncomparable types.");
     }
 
+    /**
+     * @brief Compares two struct-type columns
+     *
+     * @param lhs_element_index The index of the first element
+     * @param rhs_element_index The index of the second element
+     * @return Indicates the relationship between the elements in the `lhs` and `rhs` columns, along
+     * with the depth at which a null value was encountered.
+     */
     template <typename Element,
               CUDF_ENABLE_IF(has_nested_columns and std::is_same_v<Element, cudf::struct_view>)>
     __device__ cuda::std::pair<weak_ordering, int> operator()(
@@ -397,7 +463,7 @@ class device_row_comparator {
         }
 
         if (lcol.num_child_columns() == 0) {
-          return cuda::std::pair(weak_ordering::EQUIVALENT, std::numeric_limits<int>::max());
+          return cuda::std::pair(weak_ordering::EQUIVALENT, cuda::std::numeric_limits<int>::max());
         }
 
         // Non-empty structs have been modified to only have 1 child when using this.
@@ -413,6 +479,14 @@ class device_row_comparator {
         rhs_element_index);
     }
 
+    /**
+     * @brief Compares two list-type columns
+     *
+     * @param lhs_element_index The index of the first element
+     * @param rhs_element_index The index of the second element
+     * @return Indicates the relationship between the elements in the `lhs` and `rhs` columns, along
+     * with the depth at which a null value was encountered.
+     */
     template <typename Element,
               CUDF_ENABLE_IF(has_nested_columns and std::is_same_v<Element, cudf::list_view>)>
     __device__ cuda::std::pair<weak_ordering, int> operator()(size_type lhs_element_index,
@@ -541,9 +615,11 @@ class device_row_comparator {
   __device__ constexpr weak_ordering operator()(size_type const lhs_index,
                                                 size_type const rhs_index) const noexcept
   {
-    int last_null_depth = std::numeric_limits<int>::max();
-    size_type list_column_index{0};
+    int last_null_depth = cuda::std::numeric_limits<int>::max();
+    size_type list_column_index{-1};
     for (size_type i = 0; i < _lhs.num_columns(); ++i) {
+      if (_lhs.column(i).type().id() == type_id::LIST) { ++list_column_index; }
+
       int const depth = _depth.has_value() ? (*_depth)[i] : 0;
       if (depth > last_null_depth) { continue; }
 
@@ -556,15 +632,12 @@ class device_row_comparator {
       // TODO: At what point do we verify that the columns of lhs and rhs are
       // all of the same types? I assume that it's already happened before
       // here, otherwise the current code would be failing.
-      auto [l_dremel_i, r_dremel_i] = [&]() {
-        if (_lhs.column(i).type().id() == type_id::LIST) {
-          auto idx = list_column_index++;
-          return std::make_tuple(optional_dremel_view(_l_dremel[idx]),
-                                 optional_dremel_view(_r_dremel[idx]));
-        } else {
-          return std::make_tuple(optional_dremel_view{}, optional_dremel_view{});
-        }
-      }();
+      auto const [l_dremel_i, r_dremel_i] =
+        _lhs.column(i).type().id() == type_id::LIST
+          ? cuda::std::make_tuple(optional_dremel_view(_l_dremel[list_column_index]),
+                                  optional_dremel_view(_r_dremel[list_column_index]))
+          : cuda::std::make_tuple(optional_dremel_view{}, optional_dremel_view{});
+
       auto element_comp = element_comparator{_check_nulls,
                                              _lhs.column(i),
                                              _rhs.column(i),
@@ -593,9 +666,9 @@ class device_row_comparator {
   device_span<detail::dremel_device_view const> const _l_dremel;
   device_span<detail::dremel_device_view const> const _r_dremel;
   Nullate const _check_nulls;
-  std::optional<device_span<int const>> const _depth;
-  std::optional<device_span<order const>> const _column_order;
-  std::optional<device_span<null_order const>> const _null_precedence;
+  cuda::std::optional<device_span<int const>> const _depth;
+  cuda::std::optional<device_span<order const>> const _column_order;
+  cuda::std::optional<device_span<null_order const>> const _null_precedence;
   PhysicalElementComparator const _comparator;
 };  // class device_row_comparator
 
@@ -679,16 +752,22 @@ struct preprocessed_table {
    * @brief Preprocess table for use with lexicographical comparison
    *
    * Sets up the table for use with lexicographical comparison. The resulting preprocessed table can
-   * be passed to the constructor of `lexicographic::self_comparator` to avoid preprocessing again.
+   * be passed to the constructor of `lexicographic::self_comparator` or
+   * `lexicographic::two_table_comparator` to avoid preprocessing again.
+   *
+   * Note that the output of this factory function should not be used in `two_table_comparator` if
+   * the input table contains lists-of-structs. In such cases, please use the overload
+   * `preprocessed_table::create(table_view const&, table_view const&,...)` to preprocess both input
+   * tables at the same time.
    *
    * @param table The table to preprocess
    * @param column_order Optional, host array the same length as a row that indicates the desired
-   * ascending/descending order of each column in a row. If empty, it is assumed all columns are
-   * sorted in ascending order.
-   * @param null_precedence Optional, device array the same length as a row and indicates how null
-   * values compare to all other for every column. If it is nullptr, then null precedence would be
-   * `null_order::BEFORE` for all columns.
-   * @param stream The stream to launch kernels and h->d copies on while preprocessing.
+   *        ascending/descending order of each column in a row. If empty, it is assumed all columns
+   *        are sorted in ascending order.
+   * @param null_precedence Optional, an array having the same length as the number of columns in
+   *        the input tables that indicates how null values compare to all other. If it is empty,
+   *        the order `null_order::BEFORE` will be used for all columns.
+   * @param stream The stream to launch kernels and h->d copies on while preprocessing
    * @return A shared pointer to a preprocessed table
    */
   static std::shared_ptr<preprocessed_table> create(table_view const& table,
@@ -696,9 +775,65 @@ struct preprocessed_table {
                                                     host_span<null_order const> null_precedence,
                                                     rmm::cuda_stream_view stream);
 
+  /**
+   * @brief Preprocess tables for use with lexicographical comparison
+   *
+   * Sets up the tables for use with lexicographical comparison. The resulting preprocessed tables
+   * can be passed to the constructor of `lexicographic::self_comparator` or
+   * `lexicographic::two_table_comparator` to avoid preprocessing again.
+   *
+   * This factory function performs some extra operations to guarantee that its output can be used
+   * in `two_table_comparator` for all cases.
+   *
+   * @param lhs The lhs table to preprocess
+   * @param rhs The rhs table to preprocess
+   * @param column_order Optional, host array the same length as a row that indicates the desired
+   *        ascending/descending order of each column in a row. If empty, it is assumed all columns
+   *        are sorted in ascending order.
+   * @param null_precedence Optional, an array having the same length as the number of columns in
+   *        the input tables that indicates how null values compare to all other. If it is empty,
+   *        the order `null_order::BEFORE` will be used for all columns.
+   * @param stream The stream to launch kernels and h->d copies on while preprocessing
+   * @return A pair of shared pointers to the preprocessed tables
+   */
+  static std::pair<std::shared_ptr<preprocessed_table>, std::shared_ptr<preprocessed_table>> create(
+    table_view const& lhs,
+    table_view const& rhs,
+    host_span<order const> column_order,
+    host_span<null_order const> null_precedence,
+    rmm::cuda_stream_view stream);
+
  private:
   friend class self_comparator;       ///< Allow self_comparator to access private members
   friend class two_table_comparator;  ///< Allow two_table_comparator to access private members
+
+  /**
+   * @brief Create the output preprocessed table from intermediate preprocessing results
+   *
+   * @param preprocessed_input The table resulted from preprocessing
+   * @param verticalized_col_depths The depths of each column resulting from decomposing struct
+   *        columns in the original input table
+   * @param transformed_columns Store the intermediate columns generated from transforming
+   *        nested children columns into integers columns using `cudf::rank()`
+   * @param column_order Optional, host array the same length as a row that indicates the desired
+   *        ascending/descending order of each column in a row. If empty, it is assumed all columns
+   *        are sorted in ascending order.
+   * @param null_precedence Optional, an array having the same length as the number of columns in
+   *        the input tables that indicates how null values compare to all other. If it is empty,
+   *        the order `null_order::BEFORE` will be used for all columns.
+   * @param has_ranked_children Flag indicating if the input table was preprocessed to transform
+   *        any nested child column into an integer column using `cudf::rank`
+   * @param stream The stream to launch kernels and h->d copies on while preprocessing
+   * @return A shared pointer to a preprocessed table
+   */
+  static std::shared_ptr<preprocessed_table> create(
+    table_view const& preprocessed_input,
+    std::vector<int>&& verticalized_col_depths,
+    std::vector<std::unique_ptr<column>>&& transformed_columns,
+    host_span<order const> column_order,
+    host_span<null_order const> null_precedence,
+    bool has_ranked_children,
+    rmm::cuda_stream_view stream);
 
   /**
    * @brief Construct a preprocessed table for use with lexicographical comparison
@@ -708,43 +843,39 @@ struct preprocessed_table {
    *
    * @param table The table to preprocess
    * @param column_order Optional, device array the same length as a row that indicates the desired
-   * ascending/descending order of each column in a row. If empty, it is assumed all columns are
-   * sorted in ascending order.
+   *        ascending/descending order of each column in a row. If empty, it is assumed all columns
+   *        are sorted in ascending order.
    * @param null_precedence Optional, device array the same length as a row and indicates how null
-   * values compare to all other for every column. If it is nullptr, then null precedence would be
-   * `null_order::BEFORE` for all columns.
+   *        values compare to all other for every column. If it is nullptr, then null precedence
+   *        would be `null_order::BEFORE` for all columns.
    * @param depths The depths of each column resulting from decomposing struct columns.
    * @param dremel_data The dremel data for each list column. The length of this object is the
-   * number of list columns in the table.
+   *        number of list columns in the table.
    * @param dremel_device_views Device views into the dremel_data structs contained in the
-   * `dremel_data` parameter. For columns that are not list columns, this uvector will should
-   * contain an empty `dremel_device_view`. As such, this uvector has as many elements as there are
-   * columns in the table (unlike the `dremel_data` parameter, which is only as long as the number
-   * of list columns).
+   *        `dremel_data` parameter. For columns that are not list columns, this uvector will should
+   *        contain an empty `dremel_device_view`. As such, this uvector has as many elements as
+   *        there are columns in the table (unlike the `dremel_data` parameter, which is only as
+   *        long as the number of list columns).
+   * @param transformed_columns Store the intermediate columns generated from transforming
+   *        nested children columns into integers columns using `cudf::rank()`
+   * @param has_ranked_children Flag indicating if the input table was preprocessed to transform
+   *        any lists-of-structs column having floating-point children using `cudf::rank`
    */
   preprocessed_table(table_device_view_owner&& table,
                      rmm::device_uvector<order>&& column_order,
                      rmm::device_uvector<null_order>&& null_precedence,
                      rmm::device_uvector<size_type>&& depths,
                      std::vector<detail::dremel_data>&& dremel_data,
-                     rmm::device_uvector<detail::dremel_device_view>&& dremel_device_views)
-    : _t(std::move(table)),
-      _column_order(std::move(column_order)),
-      _null_precedence(std::move(null_precedence)),
-      _depths(std::move(depths)),
-      _dremel_data(std::move(dremel_data)),
-      _dremel_device_views(std::move(dremel_device_views)){};
+                     rmm::device_uvector<detail::dremel_device_view>&& dremel_device_views,
+                     std::vector<std::unique_ptr<column>>&& transformed_columns,
+                     bool has_ranked_children);
 
   preprocessed_table(table_device_view_owner&& table,
                      rmm::device_uvector<order>&& column_order,
                      rmm::device_uvector<null_order>&& null_precedence,
-                     rmm::device_uvector<size_type>&& depths)
-    : _t(std::move(table)),
-      _column_order(std::move(column_order)),
-      _null_precedence(std::move(null_precedence)),
-      _depths(std::move(depths)),
-      _dremel_data{},
-      _dremel_device_views{} {};
+                     rmm::device_uvector<size_type>&& depths,
+                     std::vector<std::unique_ptr<column>>&& transformed_columns,
+                     bool has_ranked_children);
 
   /**
    * @brief Implicit conversion operator to a `table_device_view` of the preprocessed table.
@@ -759,10 +890,10 @@ struct preprocessed_table {
    * @return Device array containing respective column orders. If no explicit column orders were
    * specified during the creation of this object then this will be `nullopt`.
    */
-  [[nodiscard]] std::optional<device_span<order const>> column_order() const
+  [[nodiscard]] cuda::std::optional<device_span<order const>> column_order() const
   {
-    return _column_order.size() ? std::optional<device_span<order const>>(_column_order)
-                                : std::nullopt;
+    return _column_order.size() ? cuda::std::optional<device_span<order const>>(_column_order)
+                                : cuda::std::nullopt;
   }
 
   /**
@@ -772,10 +903,11 @@ struct preprocessed_table {
    * @return Device array containing respective column null precedence. If no explicit column null
    * precedences were specified during the creation of this object then this will be `nullopt`.
    */
-  [[nodiscard]] std::optional<device_span<null_order const>> null_precedence() const
+  [[nodiscard]] cuda::std::optional<device_span<null_order const>> null_precedence() const
   {
-    return _null_precedence.size() ? std::optional<device_span<null_order const>>(_null_precedence)
-                                   : std::nullopt;
+    return _null_precedence.size()
+             ? cuda::std::optional<device_span<null_order const>>(_null_precedence)
+             : cuda::std::nullopt;
   }
 
   /**
@@ -786,9 +918,10 @@ struct preprocessed_table {
    * @return std::optional<device_span<int const>> Device array containing respective column depths.
    * If there are no nested columns in the table then this will be `nullopt`.
    */
-  [[nodiscard]] std::optional<device_span<int const>> depths() const
+  [[nodiscard]] cuda::std::optional<device_span<int const>> depths() const
   {
-    return _depths.size() ? std::optional<device_span<int const>>(_depths) : std::nullopt;
+    return _depths.size() ? cuda::std::optional<device_span<int const>>(_depths)
+                          : cuda::std::nullopt;
   }
 
   [[nodiscard]] device_span<detail::dremel_device_view const> dremel_device_views() const
@@ -800,6 +933,16 @@ struct preprocessed_table {
     }
   }
 
+  template <typename PhysicalElementComparator>
+  void check_physical_element_comparator()
+  {
+    if constexpr (!std::is_same_v<PhysicalElementComparator, sorting_physical_element_comparator>) {
+      CUDF_EXPECTS(!_has_ranked_children,
+                   "The input table has nested type children and they were transformed using a "
+                   "different type of physical element comparator.");
+    }
+  }
+
  private:
   table_device_view_owner const _t;
   rmm::device_uvector<order> const _column_order;
@@ -807,8 +950,16 @@ struct preprocessed_table {
   rmm::device_uvector<size_type> const _depths;
 
   // Dremel encoding of list columns used for the comparison algorithm
-  std::optional<std::vector<detail::dremel_data>> _dremel_data;
-  std::optional<rmm::device_uvector<detail::dremel_device_view>> _dremel_device_views;
+  cuda::std::optional<std::vector<detail::dremel_data>> _dremel_data;
+  cuda::std::optional<rmm::device_uvector<detail::dremel_device_view>> _dremel_device_views;
+
+  // Intermediate columns generated from transforming nested children columns into
+  // integers columns using `cudf::rank()`, need to be kept alive.
+  std::vector<std::unique_ptr<column>> _transformed_columns;
+
+  // Flag to record if the input table was preprocessed to transform any nested children column(s)
+  // into integer column(s) using `cudf::rank`.
+  bool const _has_ranked_children;
 };
 
 /**
@@ -832,13 +983,13 @@ class self_comparator {
    *
    * @param t The table to compare
    * @param column_order Optional, host array the same length as a row that indicates the desired
-   * ascending/descending order of each column in a row. If empty, it is assumed all columns are
-   * sorted in ascending order.
+   *        ascending/descending order of each column in a row. If empty, it is assumed all columns
+   *        are sorted in ascending order.
    * @param null_precedence Optional, device array the same length as a row and indicates how null
-   * values compare to all other for every column. If empty, then null precedence would be
-   * `null_order::BEFORE` for all columns.
+   *        values compare to all other for every column. If empty, then null precedence would be
+   *        `null_order::BEFORE` for all columns.
    * @param stream The stream to construct this object on. Not the stream that will be used for
-   * comparisons using this object.
+   *        comparisons using this object.
    */
   self_comparator(table_view const& t,
                   host_span<order const> column_order         = {},
@@ -867,19 +1018,22 @@ class self_comparator {
    * `F(i,j)` returns true if and only if row `i` compares lexicographically less than row `j`.
    *
    * @note The operator overloads in sub-class `element_comparator` are templated via the
-   *        `type_dispatcher` to help select an overload instance for each column in a table.
-   *        So, `cudf::is_nested<Element>` will return `true` if the table has nested-type columns,
-   *        but it will be a runtime error if template parameter `has_nested_columns != true`.
+   *       `type_dispatcher` to help select an overload instance for each column in a table.
+   *       So, `cudf::is_nested<Element>` will return `true` if the table has nested-type columns,
+   *       but it will be a runtime error if template parameter `has_nested_columns != true`.
    *
    * @tparam has_nested_columns compile-time optimization for primitive types.
    *         This template parameter is to be used by the developer by querying
-   *         `cudf::detail::has_nested_columns(input)`. `true` compiles operator
+   *         `cudf::has_nested_columns(input)`. `true` compiles operator
    *         overloads for nested types, while `false` only compiles operator
    *         overloads for primitive types.
    * @tparam Nullate A cudf::nullate type describing whether to check for nulls.
    * @tparam PhysicalElementComparator A relational comparator functor that compares individual
-   * values rather than logical elements, defaults to `NaN` aware relational comparator that
-   * evaluates `NaN` as greater than all other values.
+   *         values rather than logical elements, defaults to `NaN` aware relational comparator
+   *         that evaluates `NaN` as greater than all other values.
+   * @throw cudf::logic_error if the input table was preprocessed to transform any nested children
+   *        columns into integer columns but `PhysicalElementComparator` is not
+   *        `sorting_physical_element_comparator`.
    * @param nullate Indicates if any input column contains nulls.
    * @param comparator Physical element relational comparison functor.
    * @return A binary callable object.
@@ -887,8 +1041,10 @@ class self_comparator {
   template <bool has_nested_columns,
             typename Nullate,
             typename PhysicalElementComparator = sorting_physical_element_comparator>
-  auto less(Nullate nullate = {}, PhysicalElementComparator comparator = {}) const noexcept
+  auto less(Nullate nullate = {}, PhysicalElementComparator comparator = {}) const
   {
+    d_t->check_physical_element_comparator<PhysicalElementComparator>();
+
     return less_comparator{
       device_row_comparator<has_nested_columns, Nullate, PhysicalElementComparator>{
         nullate,
@@ -906,9 +1062,10 @@ class self_comparator {
   template <bool has_nested_columns,
             typename Nullate,
             typename PhysicalElementComparator = sorting_physical_element_comparator>
-  auto less_equivalent(Nullate nullate                      = {},
-                       PhysicalElementComparator comparator = {}) const noexcept
+  auto less_equivalent(Nullate nullate = {}, PhysicalElementComparator comparator = {}) const
   {
+    d_t->check_physical_element_comparator<PhysicalElementComparator>();
+
     return less_equivalent_comparator{
       device_row_comparator<has_nested_columns, Nullate, PhysicalElementComparator>{
         nullate,
@@ -983,13 +1140,13 @@ class two_table_comparator {
    * @param left The left table to compare
    * @param right The right table to compare
    * @param column_order Optional, host array the same length as a row that indicates the desired
-   * ascending/descending order of each column in a row. If empty, it is assumed all columns are
-   * sorted in ascending order.
+   *        ascending/descending order of each column in a row. If empty, it is assumed all columns
+   *        are sorted in ascending order.
    * @param null_precedence Optional, device array the same length as a row and indicates how null
-   * values compare to all other for every column. If empty, then null precedence would be
-   * `null_order::BEFORE` for all columns.
+   *        values compare to all other for every column. If empty, then null precedence would be
+   *        `null_order::BEFORE` for all columns.
    * @param stream The stream to construct this object on. Not the stream that will be used for
-   * comparisons using this object.
+   *        comparisons using this object.
    */
   two_table_comparator(table_view const& left,
                        table_view const& right,
@@ -1003,6 +1160,10 @@ class two_table_comparator {
    *
    * This constructor allows independently constructing a `preprocessed_table` and sharing it among
    * multiple comparators.
+   *
+   * The preprocessed_table(s) should have been pre-generated together using the factory function
+   * `preprocessed_table::create(table_view const&, table_view const&)`. Otherwise, the comparison
+   * results between two tables may be incorrect.
    *
    * @param left A table preprocessed for lexicographic comparison
    * @param right A table preprocessed for lexicographic comparison
@@ -1029,19 +1190,22 @@ class two_table_comparator {
    * `j` of the left table.
    *
    * @note The operator overloads in sub-class `element_comparator` are templated via the
-   *        `type_dispatcher` to help select an overload instance for each column in a table.
-   *        So, `cudf::is_nested<Element>` will return `true` if the table has nested-type columns,
-   *        but it will be a runtime error if template parameter `has_nested_columns != true`.
+   *       `type_dispatcher` to help select an overload instance for each column in a table.
+   *       So, `cudf::is_nested<Element>` will return `true` if the table has nested-type columns,
+   *       but it will be a runtime error if template parameter `has_nested_columns != true`.
    *
    * @tparam has_nested_columns compile-time optimization for primitive types.
    *         This template parameter is to be used by the developer by querying
-   *         `cudf::detail::has_nested_columns(input)`. `true` compiles operator
+   *         `cudf::has_nested_columns(input)`. `true` compiles operator
    *         overloads for nested types, while `false` only compiles operator
    *         overloads for primitive types.
    * @tparam Nullate A cudf::nullate type describing whether to check for nulls.
    * @tparam PhysicalElementComparator A relational comparator functor that compares individual
-   * values rather than logical elements, defaults to `NaN` aware relational comparator that
-   * evaluates `NaN` as greater than all other values.
+   *         values rather than logical elements, defaults to `NaN` aware relational comparator
+   *         that evaluates `NaN` as greater than all other values.
+   * @throw cudf::logic_error if the input tables were preprocessed to transform any nested children
+   *        columns into integer columns but `PhysicalElementComparator` is not
+   *        `sorting_physical_element_comparator`.
    * @param nullate Indicates if any input column contains nulls.
    * @param comparator Physical element relational comparison functor.
    * @return A binary callable object.
@@ -1049,8 +1213,11 @@ class two_table_comparator {
   template <bool has_nested_columns,
             typename Nullate,
             typename PhysicalElementComparator = sorting_physical_element_comparator>
-  auto less(Nullate nullate = {}, PhysicalElementComparator comparator = {}) const noexcept
+  auto less(Nullate nullate = {}, PhysicalElementComparator comparator = {}) const
   {
+    d_left_table->check_physical_element_comparator<PhysicalElementComparator>();
+    d_right_table->check_physical_element_comparator<PhysicalElementComparator>();
+
     return less_comparator{strong_index_comparator_adapter{
       device_row_comparator<has_nested_columns, Nullate, PhysicalElementComparator>{
         nullate,
@@ -1068,9 +1235,11 @@ class two_table_comparator {
   template <bool has_nested_columns,
             typename Nullate,
             typename PhysicalElementComparator = sorting_physical_element_comparator>
-  auto less_equivalent(Nullate nullate                      = {},
-                       PhysicalElementComparator comparator = {}) const noexcept
+  auto less_equivalent(Nullate nullate = {}, PhysicalElementComparator comparator = {}) const
   {
+    d_left_table->check_physical_element_comparator<PhysicalElementComparator>();
+    d_right_table->check_physical_element_comparator<PhysicalElementComparator>();
+
     return less_equivalent_comparator{strong_index_comparator_adapter{
       device_row_comparator<has_nested_columns, Nullate, PhysicalElementComparator>{
         nullate,
@@ -1167,7 +1336,7 @@ struct nan_equal_physical_equality_comparator {
  *
  * @tparam has_nested_columns compile-time optimization for primitive types.
  *         This template parameter is to be used by the developer by querying
- *         `cudf::detail::has_nested_columns(input)`. `true` compiles operator
+ *         `cudf::has_nested_columns(input)`. `true` compiles operator
  *         overloads for nested types, while `false` only compiles operator
  *         overloads for primitive types.
  * @tparam Nullate A cudf::nullate type describing whether to check for nulls.
@@ -1193,7 +1362,7 @@ class device_row_comparator {
   __device__ constexpr bool operator()(size_type const lhs_index,
                                        size_type const rhs_index) const noexcept
   {
-    auto equal_elements = [=](column_device_view l, column_device_view r) {
+    auto equal_elements = [lhs_index, rhs_index, this](column_device_view l, column_device_view r) {
       return cudf::type_dispatcher(
         l.type(),
         element_comparator{check_nulls, l, r, nulls_are_equal, comparator},
@@ -1305,9 +1474,9 @@ class device_row_comparator {
           auto rvalid = detail::make_validity_iterator<true>(rcol);
           if (nulls_are_equal == null_equality::UNEQUAL) {
             if (thrust::any_of(
-                  thrust::seq, lvalid, lvalid + lcol.size(), thrust::logical_not<bool>()) or
+                  thrust::seq, lvalid, lvalid + lcol.size(), cuda::std::logical_not<bool>()) or
                 thrust::any_of(
-                  thrust::seq, rvalid, rvalid + rcol.size(), thrust::logical_not<bool>())) {
+                  thrust::seq, rvalid, rvalid + rcol.size(), cuda::std::logical_not<bool>())) {
               return false;
             }
           } else {
@@ -1365,7 +1534,7 @@ class device_row_comparator {
         return thrust::all_of(thrust::seq,
                               thrust::make_counting_iterator(0),
                               thrust::make_counting_iterator(0) + size,
-                              [=](auto i) { return comp.template operator()<Element>(i, i); });
+                              [this](auto i) { return comp.template operator()<Element>(i, i); });
       }
 
       template <typename Element,
@@ -1415,6 +1584,11 @@ struct preprocessed_table {
   friend class self_comparator;       ///< Allow self_comparator to access private members
   friend class two_table_comparator;  ///< Allow two_table_comparator to access private members
   friend class hash::row_hasher;      ///< Allow row_hasher to access private members
+  /// Allow primitive equality comparator to access private members
+  friend class ::cudf::row::primitive::row_equality_comparator;
+
+  template <template <typename> class Hash>
+  friend class ::cudf::row::primitive::row_hasher;
 
   using table_device_view_owner =
     std::invoke_result_t<decltype(table_device_view::create), table_view, rmm::cuda_stream_view>;
@@ -1484,7 +1658,7 @@ class self_comparator {
    *
    * @tparam has_nested_columns compile-time optimization for primitive types.
    *         This template parameter is to be used by the developer by querying
-   *         `cudf::detail::has_nested_columns(input)`. `true` compiles operator
+   *         `cudf::has_nested_columns(input)`. `true` compiles operator
    *         overloads for nested types, while `false` only compiles operator
    *         overloads for primitive types.
    * @tparam Nullate A cudf::nullate type describing whether to check for nulls.
@@ -1598,7 +1772,7 @@ class two_table_comparator {
    *
    * @tparam has_nested_columns compile-time optimization for primitive types.
    *         This template parameter is to be used by the developer by querying
-   *         `cudf::detail::has_nested_columns(input)`. `true` compiles operator
+   *         `cudf::has_nested_columns(input)`. `true` compiles operator
    *         overloads for nested types, while `false` only compiles operator
    *         overloads for primitive types.
    * @tparam Nullate A cudf::nullate type describing whether to check for nulls.
@@ -1649,7 +1823,7 @@ class element_hasher {
   __device__ element_hasher(
     Nullate nulls,
     uint32_t seed             = DEFAULT_HASH_SEED,
-    hash_value_type null_hash = std::numeric_limits<hash_value_type>::max()) noexcept
+    hash_value_type null_hash = cuda::std::numeric_limits<hash_value_type>::max()) noexcept
     : _check_nulls(nulls), _seed(seed), _null_hash(null_hash)
   {
   }
@@ -1709,17 +1883,18 @@ class device_row_hasher {
    */
   __device__ auto operator()(size_type row_index) const noexcept
   {
-    auto it = thrust::make_transform_iterator(_table.begin(), [=](auto const& column) {
-      return cudf::type_dispatcher<dispatch_storage_type>(
-        column.type(),
-        element_hasher_adapter<hash_function>{_check_nulls, _seed},
-        column,
-        row_index);
-    });
+    auto it =
+      thrust::make_transform_iterator(_table.begin(), [row_index, this](auto const& column) {
+        return cudf::type_dispatcher<dispatch_storage_type>(
+          column.type(),
+          element_hasher_adapter<hash_function>{_check_nulls, _seed},
+          column,
+          row_index);
+      });
 
     // Hash each element and combine all the hash values together
     return detail::accumulate(it, it + _table.num_columns(), _seed, [](auto hash, auto h) {
-      return cudf::detail::hash_combine(hash, h);
+      return cudf::hashing::detail::hash_combine(hash, h);
     });
   }
 
@@ -1733,7 +1908,7 @@ class device_row_hasher {
    */
   template <template <typename> class hash_fn>
   class element_hasher_adapter {
-    static constexpr hash_value_type NULL_HASH     = std::numeric_limits<hash_value_type>::max();
+    static constexpr hash_value_type NULL_HASH = cuda::std::numeric_limits<hash_value_type>::max();
     static constexpr hash_value_type NON_NULL_HASH = 0;
 
    public:
@@ -1760,7 +1935,8 @@ class device_row_hasher {
           auto validity_it = detail::make_validity_iterator<true>(curr_col);
           hash             = detail::accumulate(
             validity_it, validity_it + curr_col.size(), hash, [](auto hash, auto is_valid) {
-              return cudf::detail::hash_combine(hash, is_valid ? NON_NULL_HASH : NULL_HASH);
+              return cudf::hashing::detail::hash_combine(hash,
+                                                         is_valid ? NON_NULL_HASH : NULL_HASH);
             });
         }
         if (curr_col.type().id() == type_id::STRUCT) {
@@ -1772,13 +1948,13 @@ class device_row_hasher {
           auto list_sizes = make_list_size_iterator(list_col);
           hash            = detail::accumulate(
             list_sizes, list_sizes + list_col.size(), hash, [](auto hash, auto size) {
-              return cudf::detail::hash_combine(hash, hash_fn<size_type>{}(size));
+              return cudf::hashing::detail::hash_combine(hash, hash_fn<size_type>{}(size));
             });
           curr_col = list_col.get_sliced_child();
         }
       }
       for (int i = 0; i < curr_col.size(); ++i) {
-        hash = cudf::detail::hash_combine(
+        hash = cudf::hashing::detail::hash_combine(
           hash,
           type_dispatcher<dispatch_void_if_nested>(curr_col.type(), _element_hasher, curr_col, i));
       }
@@ -1847,10 +2023,10 @@ class row_hasher {
    * @param seed The seed to use for the hash function
    * @return A hash operator to use on the device
    */
-  template <template <typename> class hash_function = detail::default_hash,
-            template <template <typename> class, typename>
-            class DeviceRowHasher = device_row_hasher,
-            typename Nullate>
+  template <
+    template <typename> class hash_function = cudf::hashing::detail::default_hash,
+    template <template <typename> class, typename> class DeviceRowHasher = device_row_hasher,
+    typename Nullate>
   DeviceRowHasher<hash_function, Nullate> device_hasher(Nullate nullate = {},
                                                         uint32_t seed   = DEFAULT_HASH_SEED) const
   {
@@ -1866,4 +2042,4 @@ class row_hasher {
 }  // namespace row
 
 }  // namespace experimental
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

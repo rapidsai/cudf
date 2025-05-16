@@ -11,4 +11,4 @@ When no argument is provided,
 all options are printed.
 To set value to a option, use {py:func}`cudf.set_option`.
 
-See the [API reference](api.options) for more details.
+See the [options API reference](api.options) for descriptions of the available options.

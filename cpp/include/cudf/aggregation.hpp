@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 #pragma once
 
 #include <cudf/types.hpp>
+#include <cudf/utilities/export.hpp>
 
 #include <functional>
 #include <memory>
@@ -31,7 +32,7 @@
  * individual function documentation to see what aggregations are supported.
  */
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 /**
  * @addtogroup aggregation_factories
  * @{
@@ -70,6 +71,15 @@ enum class rank_percentage : int32_t {
 };
 
 /**
+ * @brief Bitwise operations to use for BITWISE_AGG aggregations on numeric columns.
+ */
+enum class bitwise_op : int32_t {
+  AND,  ///< bitwise AND operation
+  OR,   ///< bitwise OR operation
+  XOR   ///< bitwise XOR operation
+};
+
+/**
  * @brief Abstract base class for specifying the desired aggregation in an
  * `aggregation_request`.
  *
@@ -83,40 +93,45 @@ class aggregation {
    * @brief Possible aggregation operations
    */
   enum Kind {
-    SUM,             ///< sum reduction
-    PRODUCT,         ///< product reduction
-    MIN,             ///< min reduction
-    MAX,             ///< max reduction
-    COUNT_VALID,     ///< count number of valid elements
-    COUNT_ALL,       ///< count number of elements
-    ANY,             ///< any reduction
-    ALL,             ///< all reduction
-    SUM_OF_SQUARES,  ///< sum of squares reduction
-    MEAN,            ///< arithmetic mean reduction
-    M2,              ///< sum of squares of differences from the mean
-    VARIANCE,        ///< variance
-    STD,             ///< standard deviation
-    MEDIAN,          ///< median reduction
-    QUANTILE,        ///< compute specified quantile(s)
-    ARGMAX,          ///< Index of max element
-    ARGMIN,          ///< Index of min element
-    NUNIQUE,         ///< count number of unique elements
-    NTH_ELEMENT,     ///< get the nth element
-    ROW_NUMBER,      ///< get row-number of current index (relative to rolling window)
-    RANK,            ///< get rank of current index
-    COLLECT_LIST,    ///< collect values into a list
-    COLLECT_SET,     ///< collect values into a list without duplicate entries
-    LEAD,            ///< window function, accesses row at specified offset following current row
-    LAG,             ///< window function, accesses row at specified offset preceding current row
-    PTX,             ///< PTX  UDF based reduction
-    CUDA,            ///< CUDA UDF based reduction
-    MERGE_LISTS,     ///< merge multiple lists values into one list
-    MERGE_SETS,      ///< merge multiple lists values into one list then drop duplicate entries
-    MERGE_M2,        ///< merge partial values of M2 aggregation,
-    COVARIANCE,      ///< covariance between two sets of elements
-    CORRELATION,     ///< correlation between two sets of elements
-    TDIGEST,         ///< create a tdigest from a set of input values
-    MERGE_TDIGEST    ///< create a tdigest by merging multiple tdigests together
+    SUM,              ///< sum reduction
+    PRODUCT,          ///< product reduction
+    MIN,              ///< min reduction
+    MAX,              ///< max reduction
+    COUNT_VALID,      ///< count number of valid elements
+    COUNT_ALL,        ///< count number of elements
+    ANY,              ///< any reduction
+    ALL,              ///< all reduction
+    SUM_OF_SQUARES,   ///< sum of squares reduction
+    MEAN,             ///< arithmetic mean reduction
+    M2,               ///< sum of squares of differences from the mean
+    VARIANCE,         ///< variance
+    STD,              ///< standard deviation
+    MEDIAN,           ///< median reduction
+    QUANTILE,         ///< compute specified quantile(s)
+    ARGMAX,           ///< Index of max element
+    ARGMIN,           ///< Index of min element
+    NUNIQUE,          ///< count number of unique elements
+    NTH_ELEMENT,      ///< get the nth element
+    ROW_NUMBER,       ///< get row-number of current index (relative to rolling window)
+    EWMA,             ///< get exponential weighted moving average at current index
+    RANK,             ///< get rank of current index
+    COLLECT_LIST,     ///< collect values into a list
+    COLLECT_SET,      ///< collect values into a list without duplicate entries
+    LEAD,             ///< window function, accesses row at specified offset following current row
+    LAG,              ///< window function, accesses row at specified offset preceding current row
+    PTX,              ///< PTX  based UDF aggregation
+    CUDA,             ///< CUDA based UDF aggregation
+    HOST_UDF,         ///< host based UDF aggregation
+    MERGE_LISTS,      ///< merge multiple lists values into one list
+    MERGE_SETS,       ///< merge multiple lists values into one list then drop duplicate entries
+    MERGE_M2,         ///< merge partial values of M2 aggregation,
+    COVARIANCE,       ///< covariance between two sets of elements
+    CORRELATION,      ///< correlation between two sets of elements
+    TDIGEST,          ///< create a tdigest from a set of input values
+    MERGE_TDIGEST,    ///< create a tdigest by merging multiple tdigests together
+    HISTOGRAM,        ///< compute frequency of each element
+    MERGE_HISTOGRAM,  ///< merge partial values of HISTOGRAM aggregation
+    BITWISE_AGG       ///< bitwise aggregation on numeric columns
   };
 
   aggregation() = delete;
@@ -248,6 +263,8 @@ class segmented_reduce_aggregation : public virtual aggregation {
 enum class udf_type : bool { CUDA, PTX };
 /// Type of correlation method.
 enum class correlation_type : int32_t { PEARSON, KENDALL, SPEARMAN };
+/// Type of treatment of EWM input values' first value
+enum class ewm_history : int32_t { INFINITE, FINITE };
 
 /// Factory to create a SUM aggregation
 /// @return A SUM aggregation object
@@ -287,6 +304,11 @@ std::unique_ptr<Base> make_any_aggregation();
 /// @return A ALL aggregation object
 template <typename Base = aggregation>
 std::unique_ptr<Base> make_all_aggregation();
+
+/// Factory to create a HISTOGRAM aggregation
+/// @return A HISTOGRAM aggregation object
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_histogram_aggregation();
 
 /// Factory to create a SUM_OF_SQUARES aggregation
 /// @return A SUM_OF_SQUARES aggregation object
@@ -403,6 +425,42 @@ std::unique_ptr<Base> make_nth_element_aggregation(
 /// @return A ROW_NUMBER aggregation object
 template <typename Base = aggregation>
 std::unique_ptr<Base> make_row_number_aggregation();
+
+/**
+ * @brief Factory to create an EWMA aggregation
+ *
+ * `EWMA` returns a non-nullable column with the same type as the input,
+ * whose values are the exponentially weighted moving average of the input
+ * sequence. Let these values be known as the y_i.
+ *
+ * EWMA aggregations are parameterized by a center of mass (`com`) which
+ * affects the contribution of the previous values (y_0 ... y_{i-1}) in
+ * computing the y_i.
+ *
+ * EWMA aggregations are also parameterized by a history `cudf::ewm_history`.
+ * Special considerations have to be given to the mathematical treatment of
+ * the first value of the input sequence. There are two approaches to this,
+ * one which considers the first value of the sequence to be the exponential
+ * weighted moving average of some infinite history of data, and one which
+ * takes the first value to be the only datapoint known. These assumptions
+ * lead to two different formulas for the y_i. `ewm_history` selects which.
+ *
+ * EWMA aggregations have special null handling. Nulls have two effects. The
+ * first is to propagate forward the last valid value as far as it has been
+ * computed. This could be thought of as the nulls not affecting the average
+ * in any way. The second effect changes the way the y_i are computed. Since
+ * a moving average is conceptually designed to weight contributing values by
+ * their recency, nulls ought to count as valid periods even though they do
+ * not change the average. For example, if the input sequence is {1, NULL, 3}
+ * then when computing y_2 one should weigh y_0 as if it occurs two periods
+ * before y_2 rather than just one.
+ *
+ * @param center_of_mass the center of mass.
+ * @param history which assumption to make about the first value
+ * @return A EWM aggregation object
+ */
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_ewma_aggregation(double const center_of_mass, ewm_history history);
 
 /**
  * @brief Factory to create a RANK aggregation
@@ -552,6 +610,18 @@ std::unique_ptr<Base> make_udf_aggregation(udf_type type,
                                            std::string const& user_defined_aggregator,
                                            data_type output_type);
 
+// Forward declaration of `host_udf_base` for the factory function of `HOST_UDF` aggregation.
+class host_udf_base;
+
+/**
+ * @brief Factory to create a HOST_UDF aggregation.
+ *
+ * @param host_udf An instance of a class derived from `host_udf_base` to perform aggregation
+ * @return A HOST_UDF aggregation object
+ */
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_host_udf_aggregation(std::unique_ptr<host_udf_base> host_udf);
+
 /**
  * @brief Factory to create a MERGE_LISTS aggregation.
  *
@@ -609,6 +679,17 @@ std::unique_ptr<Base> make_merge_sets_aggregation(
  */
 template <typename Base = aggregation>
 std::unique_ptr<Base> make_merge_m2_aggregation();
+
+/**
+ * @brief Factory to create a MERGE_HISTOGRAM aggregation
+ *
+ * Merges the results of `HISTOGRAM` aggregations on independent sets into a new `HISTOGRAM` value
+ * equivalent to if a single `HISTOGRAM` aggregation was done across all of the sets at once.
+ *
+ * @return A MERGE_HISTOGRAM aggregation object
+ */
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_merge_histogram_aggregation();
 
 /**
  * @brief Factory to create a COVARIANCE aggregation
@@ -712,5 +793,23 @@ std::unique_ptr<Base> make_tdigest_aggregation(int max_centroids = 1000);
 template <typename Base>
 std::unique_ptr<Base> make_merge_tdigest_aggregation(int max_centroids = 1000);
 
+/**
+ * @brief Factory to create a BITWISE_AGG aggregation.
+ *
+ * @param op The bitwise operation to perform on the input column
+ * @return A BITWISE_AGG aggregation object
+ */
+template <typename Base>
+std::unique_ptr<Base> make_bitwise_aggregation(bitwise_op op);
+
+/**
+ * @brief Indicate if an aggregation is supported for a source datatype.
+ *
+ * @param source Type of the column to perform the aggregation on
+ * @param kind The kind of the aggregation
+ * @returns true if the aggregation is supported
+ */
+bool is_valid_aggregation(data_type source, aggregation::Kind kind);
+
 /** @} */  // end of group
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

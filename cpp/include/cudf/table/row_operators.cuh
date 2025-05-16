@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,23 +17,20 @@
 #pragma once
 
 #include <cudf/column/column_device_view.cuh>
-#include <cudf/detail/hashing.hpp>
 #include <cudf/detail/utilities/assert.cuh>
-#include <cudf/detail/utilities/hash_functions.cuh>
-#include <cudf/sorting.hpp>
+#include <cudf/hashing/detail/hash_functions.cuh>
+#include <cudf/hashing/detail/hashing.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
+#include <cuda/std/limits>
 #include <thrust/equal.h>
 #include <thrust/execution_policy.h>
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/swap.h>
 #include <thrust/transform_reduce.h>
 
-#include <limits>
-
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 
 /**
  * @brief Result type of the `element_relational_comparator` function object.
@@ -105,9 +102,9 @@ inline __device__ auto null_compare(bool lhs_is_null, bool rhs_is_null, null_ord
 {
   if (lhs_is_null and rhs_is_null) {  // null <? null
     return weak_ordering::EQUIVALENT;
-  } else if (lhs_is_null) {           // null <? x
+  } else if (lhs_is_null) {  // null <? x
     return (null_precedence == null_order::BEFORE) ? weak_ordering::LESS : weak_ordering::GREATER;
-  } else if (rhs_is_null) {           // x <? null
+  } else if (rhs_is_null) {  // x <? null
     return (null_precedence == null_order::AFTER) ? weak_ordering::LESS : weak_ordering::GREATER;
   }
   return weak_ordering::EQUIVALENT;
@@ -227,7 +224,7 @@ class element_equality_comparator {
 };
 
 /**
- * @brief Performs a relational comparison between two elements in two columns.
+ * @brief Performs a relational comparison between two elements in two tables.
  *
  * @tparam Nullate A cudf::nullate type describing how to check for nulls
  */
@@ -260,7 +257,8 @@ class row_equality_comparator {
    */
   __device__ bool operator()(size_type lhs_row_index, size_type rhs_row_index) const noexcept
   {
-    auto equal_elements = [=](column_device_view l, column_device_view r) {
+    auto equal_elements = [lhs_row_index, rhs_row_index, this](column_device_view l,
+                                                               column_device_view r) {
       return cudf::type_dispatcher(l.type(),
                                    element_equality_comparator{nulls, l, r, nulls_are_equal},
                                    lhs_row_index,
@@ -470,7 +468,9 @@ class element_hasher {
   template <typename T, CUDF_ENABLE_IF(column_device_view::has_element_accessor<T>())>
   __device__ hash_value_type operator()(column_device_view col, size_type row_index) const
   {
-    if (has_nulls && col.is_null(row_index)) { return std::numeric_limits<hash_value_type>::max(); }
+    if (has_nulls && col.is_null(row_index)) {
+      return cuda::std::numeric_limits<hash_value_type>::max();
+    }
     return hash_function<T>{}(col.element<T>(row_index));
   }
 
@@ -554,7 +554,7 @@ class element_hasher_with_seed {
 
  private:
   uint32_t _seed{DEFAULT_HASH_SEED};
-  hash_value_type _null_hash{std::numeric_limits<hash_value_type>::max()};
+  hash_value_type _null_hash{cuda::std::numeric_limits<hash_value_type>::max()};
   Nullate _has_nulls;
 };
 
@@ -600,7 +600,7 @@ class row_hasher {
   __device__ auto operator()(size_type row_index) const
   {
     // Hash the first column w/ the seed
-    auto const initial_hash = cudf::detail::hash_combine(
+    auto const initial_hash = cudf::hashing::detail::hash_combine(
       hash_value_type{0},
       type_dispatcher<dispatch_storage_type>(
         _table.column(0).type(),
@@ -609,7 +609,7 @@ class row_hasher {
         row_index));
 
     // Hashes an element in a column
-    auto hasher = [=](size_type column_index) {
+    auto hasher = [row_index, this](size_type column_index) {
       return cudf::type_dispatcher<dispatch_storage_type>(
         _table.column(column_index).type(),
         element_hasher<hash_function, Nullate>{_has_nulls},
@@ -626,7 +626,7 @@ class row_hasher {
       hasher,
       initial_hash,
       [](hash_value_type lhs, hash_value_type rhs) {
-        return cudf::detail::hash_combine(lhs, rhs);
+        return cudf::hashing::detail::hash_combine(lhs, rhs);
       });
   }
 
@@ -636,4 +636,4 @@ class row_hasher {
   uint32_t _seed{DEFAULT_HASH_SEED};
 };
 
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

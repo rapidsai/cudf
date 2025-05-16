@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 
 import datetime
 import operator
@@ -9,8 +9,8 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.testing import _utils as utils
-from cudf.testing._utils import assert_eq, assert_exceptions_equal
+from cudf.testing import _utils as utils, assert_eq
+from cudf.testing._utils import assert_exceptions_equal
 
 _TIMEDELTA_DATA = [
     [1000000, 200000, 3000000],
@@ -55,6 +55,15 @@ _TIMEDELTA_DATA_NON_OVERFLOW = [
     [12, 11, 2.32, 2234.32411, 2343.241, 23432.4, 23234],
     [1.321, 1132.324, 23223231.11, 233.41, 0.2434, 332, 323],
     [12, 11, 2.32, 2234.32411, 2343.241, 23432.4, 23234],
+]
+
+_cmpops = [
+    operator.lt,
+    operator.gt,
+    operator.le,
+    operator.ge,
+    operator.eq,
+    operator.ne,
 ]
 
 
@@ -518,125 +527,6 @@ def test_timedelta_series_mod_with_scalar_zero(reverse):
         [1],
         [12, 11, 232, 223432411, 2343241, 234324, 23234],
         [12, 11, 2.32, 2234.32411, 2343.241, 23432.4, 23234],
-        [1.321, 1132.324, 23223231.11, 233.41, 332, 323],
-        [12, 11, 2.32, 2234.32411, 2343.241, 23432.4, 23234],
-    ],
-)
-@pytest.mark.parametrize(
-    "cpu_scalar",
-    [
-        datetime.timedelta(seconds=768),
-        datetime.timedelta(microseconds=7),
-        np.timedelta64(4, "s"),
-        np.timedelta64("nat", "s"),
-        np.timedelta64(1, "s"),
-        np.timedelta64(1, "ms"),
-        np.timedelta64(1, "us"),
-        np.timedelta64("nat", "ns"),
-        np.timedelta64(1, "ns"),
-    ],
-)
-@pytest.mark.parametrize("dtype", utils.TIMEDELTA_TYPES)
-@pytest.mark.parametrize(
-    "op",
-    [
-        "add",
-        "sub",
-        "truediv",
-        "mod",
-        "floordiv",
-    ],
-)
-def test_timedelta_series_ops_with_cudf_scalars(data, cpu_scalar, dtype, op):
-    gpu_scalar = cudf.Scalar(cpu_scalar)
-
-    gsr = cudf.Series(data=data, dtype=dtype)
-    psr = gsr.to_pandas()
-
-    if op == "add":
-        expected = psr + cpu_scalar
-        actual = gsr + gpu_scalar
-    elif op == "sub":
-        expected = psr - cpu_scalar
-        actual = gsr - gpu_scalar
-    elif op == "truediv":
-        expected = psr / cpu_scalar
-        actual = gsr / gpu_scalar
-    elif op == "floordiv":
-        expected = psr // cpu_scalar
-        actual = gsr // gpu_scalar
-    elif op == "mod":
-        expected = psr % cpu_scalar
-        actual = gsr % gpu_scalar
-
-    assert_eq(expected, actual)
-
-    if op == "add":
-        expected = cpu_scalar + psr
-        actual = gpu_scalar + gsr
-    elif op == "sub":
-        expected = cpu_scalar - psr
-        actual = gpu_scalar - gsr
-    elif op == "truediv":
-        expected = cpu_scalar / psr
-        actual = gpu_scalar / gsr
-    elif op == "floordiv":
-        expected = cpu_scalar // psr
-        actual = gpu_scalar // gsr
-    elif op == "mod":
-        expected = cpu_scalar % psr
-        actual = gpu_scalar % gsr
-
-    assert_eq(expected, actual)
-
-
-@pytest.mark.parametrize(
-    "reverse",
-    [
-        False,
-        pytest.param(
-            True,
-            marks=pytest.mark.xfail(
-                strict=True,
-                reason=(
-                    "timedelta modulo by zero is dubiously defined in "
-                    "both pandas and cuDF "
-                    "(see https://github.com/rapidsai/cudf/issues/5938)"
-                ),
-            ),
-        ),
-    ],
-)
-def test_timedelta_series_mod_with_cudf_scalar_zero(reverse):
-    gsr = cudf.Series(data=[0.2434], dtype=np.timedelta64(1, "ns"))
-    psr = gsr.to_pandas()
-    scalar = datetime.timedelta(days=768)
-    gpu_scalar = cudf.Scalar(scalar)
-    if reverse:
-        expected = scalar % psr
-        actual = gpu_scalar % gsr
-    else:
-        expected = psr % scalar
-        actual = gsr % gpu_scalar
-    assert_eq(expected, actual)
-
-
-@pytest.mark.parametrize(
-    "data",
-    [
-        [1000000, 200000, 3000000],
-        [1000000, 200000, None],
-        [],
-        [None],
-        [None, None, None, None, None],
-        [12, 12, 22, 343, 4353534, 435342],
-        np.array([10, 20, 30, None, 100]),
-        cp.asarray([10, 20, 30, 100]),
-        [1000000, 200000, 3000000],
-        [1000000, 200000, None],
-        [1],
-        [12, 11, 232, 223432411, 2343241, 234324, 23234],
-        [12, 11, 2.32, 2234.32411, 2343.241, 23432.4, 23234],
         [1.321, 1132.324, 23223231.11, 233.41, 0.2434, 332, 323],
         [12, 11, 2.32, 2234.32411, 2343.241, 23432.4, 23234],
     ],
@@ -693,31 +583,31 @@ def test_timedelta_dt_properties(data, dtype):
     gsr = cudf.Series(data, dtype=dtype)
     psr = gsr.to_pandas()
 
-    def local_assert(expected, actual):
+    def local_assert(expected, actual, **kwargs):
         if gsr.isnull().any():
-            assert_eq(expected, actual.astype("float"))
+            assert_eq(expected, actual.astype("float"), **kwargs)
         else:
-            assert_eq(expected, actual)
+            assert_eq(expected, actual, **kwargs)
 
     expected_days = psr.dt.days
     actual_days = gsr.dt.days
 
-    local_assert(expected_days, actual_days)
+    local_assert(expected_days, actual_days, check_dtype=False)
 
     expected_seconds = psr.dt.seconds
     actual_seconds = gsr.dt.seconds
 
-    local_assert(expected_seconds, actual_seconds)
+    local_assert(expected_seconds, actual_seconds, check_dtype=False)
 
     expected_microseconds = psr.dt.microseconds
     actual_microseconds = gsr.dt.microseconds
 
-    local_assert(expected_microseconds, actual_microseconds)
+    local_assert(expected_microseconds, actual_microseconds, check_dtype=False)
 
     expected_nanoseconds = psr.dt.nanoseconds
     actual_nanoseconds = gsr.dt.nanoseconds
 
-    local_assert(expected_nanoseconds, actual_nanoseconds)
+    local_assert(expected_nanoseconds, actual_nanoseconds, check_dtype=False)
 
 
 @pytest.mark.parametrize(
@@ -887,81 +777,6 @@ def test_timedelta_index_ops_with_scalars(
     assert_eq(expected, actual)
 
 
-@pytest.mark.parametrize("data", _TIMEDELTA_DATA_NON_OVERFLOW)
-@pytest.mark.parametrize(
-    "cpu_scalar",
-    [
-        pd.Timedelta(1513393355.5, unit="s"),
-        datetime.timedelta(seconds=768),
-        datetime.timedelta(microseconds=7),
-        np.timedelta64(1, "s"),
-        np.timedelta64(1, "ms"),
-        np.timedelta64(1, "us"),
-        np.timedelta64(1, "ns"),
-    ],
-)
-@pytest.mark.parametrize("dtype", utils.TIMEDELTA_TYPES)
-@pytest.mark.parametrize(
-    "op",
-    [
-        "add",
-        "sub",
-        "truediv",
-        "floordiv",
-    ],
-)
-def test_timedelta_index_ops_with_cudf_scalars(
-    request, data, cpu_scalar, dtype, op
-):
-    gtdi = cudf.Index(data=data, dtype=dtype)
-    ptdi = gtdi.to_pandas()
-
-    gpu_scalar = cudf.Scalar(cpu_scalar)
-
-    if op == "add":
-        expected = ptdi + cpu_scalar
-        actual = gtdi + gpu_scalar
-    elif op == "sub":
-        expected = ptdi - cpu_scalar
-        actual = gtdi - gpu_scalar
-    elif op == "truediv":
-        expected = ptdi / cpu_scalar
-        actual = gtdi / gpu_scalar
-    elif op == "floordiv":
-        expected = ptdi // cpu_scalar
-        actual = gtdi // gpu_scalar
-
-    assert_eq(expected, actual)
-
-    if op == "add":
-        expected = cpu_scalar + ptdi
-        actual = gpu_scalar + gtdi
-    elif op == "sub":
-        expected = cpu_scalar - ptdi
-        actual = gpu_scalar - gtdi
-    elif op == "truediv":
-        expected = cpu_scalar / ptdi
-        actual = gpu_scalar / gtdi
-    elif op == "floordiv":
-        expected = cpu_scalar // ptdi
-        actual = gpu_scalar // gtdi
-
-    # Division by zero for datetime or timedelta is
-    # dubiously defined in both pandas (Any // 0 -> 0 in
-    # pandas) and cuDF (undefined behaviour)
-    request.applymarker(
-        pytest.mark.xfail(
-            condition=(
-                op == "floordiv"
-                and 0 in ptdi.astype("int")
-                and np.timedelta64(cpu_scalar).item() is not None
-            ),
-            reason="https://github.com/rapidsai/cudf/issues/5938",
-        )
-    )
-    assert_eq(expected, actual)
-
-
 @pytest.mark.parametrize("data", _TIMEDELTA_DATA)
 @pytest.mark.parametrize("dtype", utils.TIMEDELTA_TYPES)
 @pytest.mark.parametrize("name", ["abcd", None])
@@ -970,7 +785,7 @@ def test_timedelta_index_properties(data, dtype, name):
     pdi = gdi.to_pandas()
 
     def local_assert(expected, actual):
-        if actual._values.null_count:
+        if actual._column.null_count:
             assert_eq(expected, actual.astype("float64"))
         else:
             assert_eq(expected, actual)
@@ -1015,12 +830,12 @@ def test_timedelta_index_properties(data, dtype, name):
     [
         np.timedelta64(4, "s"),
         np.timedelta64(456, "D"),
-        np.timedelta64(46, "h"),
         np.timedelta64("nat"),
         np.timedelta64(1, "s"),
         np.timedelta64(1, "ms"),
         np.timedelta64(1, "us"),
         np.timedelta64(1, "ns"),
+        "NaT",
     ],
 )
 def test_timedelta_fillna(data, dtype, fill_value):
@@ -1176,7 +991,6 @@ def test_timedelta_fillna(data, dtype, fill_value):
     ],
 )
 def test_timedelta_str_roundtrip(gsr, expected_series):
-
     actual_series = gsr.astype("str")
 
     assert_eq(expected_series, actual_series)
@@ -1315,7 +1129,7 @@ def test_numeric_to_timedelta(data, dtype, timedelta_dtype):
     psr = sr.to_pandas()
 
     actual = sr.astype(timedelta_dtype)
-    expected = pd.Series(psr.to_numpy().astype(timedelta_dtype))
+    expected = psr.astype(timedelta_dtype)
 
     assert_eq(expected, actual)
 
@@ -1397,10 +1211,7 @@ def test_timedelta_reductions(data, op, dtype):
 
 def test_error_values():
     s = cudf.Series([1, 2, 3], dtype="timedelta64[ns]")
-    with pytest.raises(
-        NotImplementedError,
-        match="TimeDelta Arrays is not yet implemented in cudf",
-    ):
+    with pytest.raises(NotImplementedError, match="cupy does not support"):
         s.values
 
 
@@ -1426,3 +1237,111 @@ def test_timedelta_constructor(data, dtype):
     actual = cudf.TimedeltaIndex(data=cudf.Series(data), dtype=dtype)
 
     assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize("op", [operator.add, operator.sub])
+def test_timdelta_binop_tz_timestamp(op):
+    s = cudf.Series([1, 2, 3], dtype="timedelta64[ns]")
+    pd_tz_timestamp = pd.Timestamp("1970-01-01 00:00:00.000000001", tz="utc")
+    with pytest.raises(NotImplementedError):
+        op(s, pd_tz_timestamp)
+    date_tz_scalar = datetime.datetime.now(datetime.timezone.utc)
+    with pytest.raises(NotImplementedError):
+        op(s, date_tz_scalar)
+
+
+def test_timedelta_getitem_na():
+    s = cudf.Series([1, 2, None, 3], dtype="timedelta64[ns]")
+    assert s[2] is cudf.NaT
+
+
+@pytest.mark.parametrize("data1", [[123, 456, None, 321, None]])
+@pytest.mark.parametrize("data2", [[123, 456, 789, None, None]])
+@pytest.mark.parametrize("op", _cmpops)
+def test_timedelta_series_cmpops_pandas_compatibility(data1, data2, op):
+    gsr1 = cudf.Series(data=data1, dtype="timedelta64[ns]")
+    psr1 = gsr1.to_pandas()
+
+    gsr2 = cudf.Series(data=data2, dtype="timedelta64[ns]")
+    psr2 = gsr2.to_pandas()
+
+    expect = op(psr1, psr2)
+    with cudf.option_context("mode.pandas_compatible", True):
+        got = op(gsr1, gsr2)
+
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "method, kwargs",
+    [
+        ["sum", {}],
+        ["mean", {}],
+        ["median", {}],
+        ["std", {}],
+        ["std", {"ddof": 0}],
+    ],
+)
+def test_tdi_reductions(method, kwargs):
+    pd_tdi = pd.TimedeltaIndex(["1 day", "2 days", "3 days"])
+    cudf_tdi = cudf.from_pandas(pd_tdi)
+
+    result = getattr(pd_tdi, method)(**kwargs)
+    expected = getattr(cudf_tdi, method)(**kwargs)
+    assert result == expected
+
+
+def test_tdi_asi8():
+    pd_tdi = pd.TimedeltaIndex(["1 day", "2 days", "3 days"])
+    cudf_tdi = cudf.from_pandas(pd_tdi)
+
+    result = pd_tdi.asi8
+    expected = cudf_tdi.asi8
+    assert_eq(result, expected)
+
+
+def test_tdi_unit():
+    pd_tdi = pd.TimedeltaIndex(
+        ["1 day", "2 days", "3 days"], dtype="timedelta64[ns]"
+    )
+    cudf_tdi = cudf.from_pandas(pd_tdi)
+
+    result = pd_tdi.unit
+    expected = cudf_tdi.unit
+    assert result == expected
+
+
+@pytest.mark.parametrize("data", _TIMEDELTA_DATA)
+@pytest.mark.parametrize("dtype", utils.TIMEDELTA_TYPES)
+def test_timedelta_series_total_seconds(data, dtype):
+    gsr = cudf.Series(data, dtype=dtype)
+    psr = gsr.to_pandas()
+
+    expected = psr.dt.total_seconds()
+    actual = gsr.dt.total_seconds()
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize("data", _TIMEDELTA_DATA)
+@pytest.mark.parametrize("dtype", utils.TIMEDELTA_TYPES)
+def test_timedelta_index_total_seconds(request, data, dtype):
+    gi = cudf.Index(data, dtype=dtype)
+    pi = gi.to_pandas()
+
+    expected = pi.total_seconds()
+    actual = gi.total_seconds()
+    assert_eq(expected, actual)
+
+
+def test_writable_numpy_array():
+    gi = cudf.Index([1, 2, 3], dtype="timedelta64[ns]")
+    expected_flags = pd.Index(
+        [1, 2, 3], dtype="timedelta64[ns]"
+    )._data._ndarray.flags
+
+    actual_flags = gi.to_pandas()._data._ndarray.flags
+    assert expected_flags.c_contiguous == actual_flags.c_contiguous
+    assert expected_flags.f_contiguous == actual_flags.f_contiguous
+    assert expected_flags.writeable == actual_flags.writeable
+    assert expected_flags.aligned == actual_flags.aligned
+    assert expected_flags.writebackifcopy == actual_flags.writebackifcopy

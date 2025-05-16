@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,12 +18,12 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/scalar/scalar.hpp>
-
-#include <rmm/mr/device/per_device_resource.hpp>
+#include <cudf/utilities/export.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <memory>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 
 /**
  * @addtogroup transformation_binaryops
@@ -76,6 +76,8 @@ enum class binary_operator : int32_t {
   GREATER_EQUAL,         ///< operator >=
   NULL_EQUALS,           ///< Returns true when both operands are null; false when one is null; the
                          ///< result of equality when both are non-null
+  NULL_NOT_EQUALS,       ///< Returns false when both operands are null; true when one is null; the
+                         ///< result of inequality when both are non-null
   NULL_MAX,              ///< Returns max of operands when both are non-null; returns the non-null
                          ///< operand when one is null; or invalid when both are null
   NULL_MIN,              ///< Returns min of operands when both are non-null; returns the non-null
@@ -88,6 +90,56 @@ enum class binary_operator : int32_t {
                      ///< (null, false) is null, and (valid, valid) == LOGICAL_OR(valid, valid)
   INVALID_BINARY     ///< invalid operation
 };
+
+/// Binary operation common type default
+template <typename L, typename R, typename = void>
+struct binary_op_common_type {};
+
+/// Binary operation common type specialization
+template <typename L, typename R>
+struct binary_op_common_type<L, R, std::enable_if_t<has_common_type_v<L, R>>> {
+  /// The common type of the template parameters
+  using type = std::common_type_t<L, R>;
+};
+
+/// Binary operation common type specialization
+template <typename L, typename R>
+struct binary_op_common_type<
+  L,
+  R,
+  std::enable_if_t<is_fixed_point<L>() && cuda::std::is_floating_point_v<R>>> {
+  /// The common type of the template parameters
+  using type = L;
+};
+
+/// Binary operation common type specialization
+template <typename L, typename R>
+struct binary_op_common_type<
+  L,
+  R,
+  std::enable_if_t<is_fixed_point<R>() && cuda::std::is_floating_point_v<L>>> {
+  /// The common type of the template parameters
+  using type = R;
+};
+
+/// Binary operation common type helper
+template <typename L, typename R>
+using binary_op_common_type_t = typename binary_op_common_type<L, R>::type;
+
+namespace detail {
+template <typename AlwaysVoid, typename L, typename R>
+struct binary_op_has_common_type_impl : std::false_type {};
+
+template <typename L, typename R>
+struct binary_op_has_common_type_impl<std::void_t<binary_op_common_type_t<L, R>>, L, R>
+  : std::true_type {};
+}  // namespace detail
+
+/// Checks if binary operation types have a common type
+template <typename L, typename R>
+constexpr inline bool binary_op_has_common_type_v =
+  detail::binary_op_has_common_type_impl<void, L, R>::value;
+
 /**
  * @brief Performs a binary operation between a scalar and a column.
  *
@@ -102,6 +154,7 @@ enum class binary_operator : int32_t {
  * @param rhs         The right operand column
  * @param op          The binary operator
  * @param output_type The desired data type of the output column
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr          Device memory resource used to allocate the returned column's device memory
  * @return            Output column of `output_type` type containing the result of
  *                    the binary operation
@@ -115,7 +168,8 @@ std::unique_ptr<column> binary_operation(
   column_view const& rhs,
   binary_operator op,
   data_type output_type,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Performs a binary operation between a column and a scalar.
@@ -131,6 +185,7 @@ std::unique_ptr<column> binary_operation(
  * @param rhs         The right operand scalar
  * @param op          The binary operator
  * @param output_type The desired data type of the output column
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr          Device memory resource used to allocate the returned column's device memory
  * @return            Output column of `output_type` type containing the result of
  *                    the binary operation
@@ -144,7 +199,8 @@ std::unique_ptr<column> binary_operation(
   scalar const& rhs,
   binary_operator op,
   data_type output_type,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Performs a binary operation between two columns.
@@ -158,6 +214,7 @@ std::unique_ptr<column> binary_operation(
  * @param rhs         The right operand column
  * @param op          The binary operator
  * @param output_type The desired data type of the output column
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr          Device memory resource used to allocate the returned column's device memory
  * @return            Output column of `output_type` type containing the result of
  *                    the binary operation
@@ -172,7 +229,8 @@ std::unique_ptr<column> binary_operation(
   column_view const& rhs,
   binary_operator op,
   data_type output_type,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Performs a binary operation between two columns using a
@@ -189,6 +247,7 @@ std::unique_ptr<column> binary_operation(
  * @param output_type The desired data type of the output column. It is assumed
  *                    that output_type is compatible with the output data type
  *                    of the function in the PTX code
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr          Device memory resource used to allocate the returned column's device memory
  * @return            Output column of `output_type` type containing the result of
  *                    the binary operation
@@ -201,7 +260,8 @@ std::unique_ptr<column> binary_operation(
   column_view const& rhs,
   std::string const& ptx,
   data_type output_type,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Computes the `scale` for a `fixed_point` number based on given binary operator `op`
@@ -230,6 +290,17 @@ cudf::data_type binary_operation_fixed_point_output_type(binary_operator op,
 namespace binops {
 
 /**
+ * @brief Returns true if the binary operator is supported for the given input types.
+ *
+ * @param out The output data type
+ * @param lhs The left-hand cudf::data_type
+ * @param rhs The right-hand cudf::data_type
+ * @param op The binary operator
+ * @return true if the binary operator is supported for the given input types
+ */
+bool is_supported_operation(data_type out, data_type lhs, data_type rhs, binary_operator op);
+
+/**
  * @brief Computes output valid mask for op between a column and a scalar
  *
  * @param col     Column to compute the valid mask from
@@ -241,11 +312,16 @@ namespace binops {
 std::pair<rmm::device_buffer, size_type> scalar_col_valid_mask_and(
   column_view const& col,
   scalar const& s,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
-namespace compiled {
-namespace detail {
+}  // namespace binops
+
+/** @} */  // end of group
+}  // namespace CUDF_EXPORT cudf
+
+namespace CUDF_EXPORT cudf {
+namespace binops::compiled::detail {
 
 /**
  * @brief struct binary operation using `NaN` aware sorting physical element comparators
@@ -265,9 +341,5 @@ void apply_sorting_struct_binary_op(mutable_column_view& out,
                                     bool is_rhs_scalar,
                                     binary_operator op,
                                     rmm::cuda_stream_view stream);
-}  // namespace detail
-}  // namespace compiled
-}  // namespace binops
-
-/** @} */  // end of group
-}  // namespace cudf
+}  // namespace binops::compiled::detail
+}  // namespace CUDF_EXPORT cudf

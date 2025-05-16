@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2023, NVIDIA CORPORATION.
+# Copyright (c) 2019-2024, NVIDIA CORPORATION.
 
 import gzip
 import os
@@ -14,6 +14,42 @@ from dask import dataframe as dd
 import cudf
 
 import dask_cudf
+
+
+@pytest.fixture
+def csv_begin_bad_lines(tmp_path):
+    lines = """x
+    x
+    x
+    A, B, C, D
+    1, 2, 3, 4
+    2, 3, 5, 1
+    4, 5, 2, 5"""
+
+    file = tmp_path / "test_read_csv_begin.csv"
+
+    with open(file, "w") as fp:
+        fp.write(lines)
+
+    return file
+
+
+@pytest.fixture
+def csv_end_bad_lines(tmp_path):
+    lines = """A, B, C, D
+    1, 2, 3, 4
+    2, 3, 5, 1
+    4, 5, 2, 5
+    x
+    x
+    x"""
+
+    file = tmp_path / "test_read_csv_end.csv"
+
+    with open(file, "w") as fp:
+        fp.write(lines)
+
+    return file
 
 
 def test_csv_roundtrip_backend_dispatch(tmp_path):
@@ -149,11 +185,6 @@ def test_read_csv_blocksize_none(tmp_path, compression, size):
     df2 = dask_cudf.read_csv(path, blocksize=None, dtype=typ)
     dd.assert_eq(df, df2)
 
-    # Test chunksize deprecation
-    with pytest.warns(FutureWarning, match="deprecated"):
-        df3 = dask_cudf.read_csv(path, chunksize=None, dtype=typ)
-    dd.assert_eq(df, df3)
-
 
 @pytest.mark.parametrize("dtype", [{"b": str, "c": int}, None])
 def test_csv_reader_usecols(tmp_path, dtype):
@@ -170,3 +201,72 @@ def test_csv_reader_usecols(tmp_path, dtype):
     ddf2 = dask_cudf.read_csv(csv_path, usecols=["b", "c"], dtype=dtype)
 
     dd.assert_eq(ddf, ddf2, check_divisions=False, check_index=False)
+
+
+def test_read_csv_skiprows(csv_begin_bad_lines):
+    # Repro from Issue#13552
+    ddf_cpu = dd.read_csv(csv_begin_bad_lines, skiprows=3).compute()
+    ddf_gpu = dask_cudf.read_csv(csv_begin_bad_lines, skiprows=3).compute()
+
+    dd.assert_eq(ddf_cpu, ddf_gpu)
+
+
+def test_read_csv_skiprows_error(csv_begin_bad_lines):
+    # Repro from Issue#13552
+    with pytest.raises(ValueError):
+        dask_cudf.read_csv(
+            csv_begin_bad_lines, skiprows=3, blocksize="100 MiB"
+        ).compute()
+
+
+def test_read_csv_skipfooter(csv_end_bad_lines):
+    # Repro from Issue#13552
+    with dask.config.set({"dataframe.convert-string": False}):
+        ddf_cpu = dd.read_csv(csv_end_bad_lines, skipfooter=3).compute()
+        ddf_gpu = dask_cudf.read_csv(csv_end_bad_lines, skipfooter=3).compute()
+
+        dd.assert_eq(ddf_cpu, ddf_gpu, check_dtype=False)
+
+
+def test_read_csv_skipfooter_arrow_string_fail(request, csv_end_bad_lines):
+    request.applymarker(
+        pytest.mark.xfail(
+            reason="https://github.com/rapidsai/cudf/issues/14915",
+        )
+    )
+    ddf_cpu = dd.read_csv(csv_end_bad_lines, skipfooter=3).compute()
+    ddf_gpu = dask_cudf.read_csv(csv_end_bad_lines, skipfooter=3).compute()
+
+    dd.assert_eq(ddf_cpu, ddf_gpu, check_dtype=False)
+
+
+def test_read_csv_skipfooter_error(csv_end_bad_lines):
+    with pytest.raises(ValueError):
+        dask_cudf.read_csv(
+            csv_end_bad_lines, skipfooter=3, blocksize="100 MiB"
+        ).compute()
+
+
+def test_read_csv_nrows(csv_end_bad_lines):
+    ddf_cpu = pd.read_csv(csv_end_bad_lines, nrows=2)
+    ddf_gpu = dask_cudf.read_csv(csv_end_bad_lines, nrows=2).compute()
+
+    dd.assert_eq(ddf_cpu, ddf_gpu)
+
+
+def test_read_csv_nrows_error(csv_end_bad_lines):
+    with pytest.raises(ValueError):
+        dask_cudf.read_csv(
+            csv_end_bad_lines, nrows=2, blocksize="100 MiB"
+        ).compute()
+
+
+def test_deprecated_api_paths(tmp_path):
+    csv_path = str(tmp_path / "data-*.csv")
+    df = dask_cudf.DataFrame.from_dict({"a": range(100)}, npartitions=1)
+    df.to_csv(csv_path, index=False)
+
+    # Encourage top-level read_csv import only
+    with pytest.warns(match="dask_cudf.io.read_csv is now deprecated"):
+        df2 = dask_cudf.io.read_csv(csv_path)
+    dd.assert_eq(df, df2, check_divisions=False)

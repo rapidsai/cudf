@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,7 +24,7 @@
 
 #include <nvbench/nvbench.cuh>
 
-// Size of the data in the the benchmark dataframe; chosen to be low enough to allow benchmarks to
+// Size of the data in the benchmark dataframe; chosen to be low enough to allow benchmarks to
 // run on most GPUs, but large enough to allow highest throughput
 constexpr size_t data_size         = 512 << 20;
 constexpr cudf::size_type num_cols = 64;
@@ -52,7 +52,7 @@ void json_write_common(cudf::io::json_writer_options const& write_opts,
   state.add_buffer_size(source_sink.size(), "encoded_file_size", "encoded_file_size");
 }
 
-template <cudf::io::io_type IO>
+template <io_type IO>
 void BM_json_write_io(nvbench::state& state, nvbench::type_list<nvbench::enum_type<IO>>)
 {
   auto const d_type = get_type_or_group({static_cast<int32_t>(data_type::INTEGRAL),
@@ -72,13 +72,24 @@ void BM_json_write_io(nvbench::state& state, nvbench::type_list<nvbench::enum_ty
 
   cuio_source_sink_pair source_sink(source_type);
   cudf::io::json_writer_options write_opts =
-    cudf::io::json_writer_options::builder(source_sink.make_sink_info(), view).na_rep("null");
+    cudf::io::json_writer_options::builder(source_sink.make_sink_info(), view)
+      .na_rep("null")
+      .rows_per_chunk(view.num_rows() / 10);
 
   json_write_common(write_opts, source_sink, data_size, state);
 }
 
 void BM_json_writer_options(nvbench::state& state)
 {
+  auto const source_type    = io_type::HOST_BUFFER;
+  bool const json_lines     = state.get_int64("json_lines");
+  bool const include_nulls  = state.get_int64("include_nulls");
+  auto const rows_per_chunk = state.get_int64("rows_per_chunk");
+
+  if ((json_lines or include_nulls) and rows_per_chunk != 1 << 20) {
+    state.skip("Skipping for unrequired rows_per_chunk combinations");
+    return;
+  }
   auto const d_type = get_type_or_group({static_cast<int32_t>(data_type::INTEGRAL),
                                          static_cast<int32_t>(data_type::FLOAT),
                                          static_cast<int32_t>(data_type::DECIMAL),
@@ -87,11 +98,6 @@ void BM_json_writer_options(nvbench::state& state)
                                          static_cast<int32_t>(data_type::STRING),
                                          static_cast<int32_t>(data_type::LIST),
                                          static_cast<int32_t>(data_type::STRUCT)});
-
-  auto const source_type    = io_type::HOST_BUFFER;
-  bool const json_lines     = state.get_int64("json_lines");
-  bool const include_nulls  = state.get_int64("include_nulls");
-  auto const rows_per_chunk = state.get_int64("rows_per_chunk");
 
   auto const tbl = create_random_table(
     cycle_dtypes(d_type, num_cols), table_size_bytes{data_size}, data_profile_builder());
@@ -108,9 +114,8 @@ void BM_json_writer_options(nvbench::state& state)
   json_write_common(write_opts, source_sink, data_size, state);
 }
 
-using io_list = nvbench::enum_type_list<cudf::io::io_type::FILEPATH,
-                                        cudf::io::io_type::HOST_BUFFER,
-                                        cudf::io::io_type::DEVICE_BUFFER>;
+using io_list =
+  nvbench::enum_type_list<io_type::FILEPATH, io_type::HOST_BUFFER, io_type::DEVICE_BUFFER>;
 
 NVBENCH_BENCH_TYPES(BM_json_write_io, NVBENCH_TYPE_AXES(io_list))
   .set_name("json_write_io")
@@ -122,4 +127,4 @@ NVBENCH_BENCH(BM_json_writer_options)
   .set_min_samples(4)
   .add_int64_axis("json_lines", {false, true})
   .add_int64_axis("include_nulls", {false, true})
-  .add_int64_power_of_two_axis("rows_per_chunk", nvbench::range(10, 20, 2));
+  .add_int64_power_of_two_axis("rows_per_chunk", {10, 15, 16, 18, 20});

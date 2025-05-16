@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,18 +14,18 @@
  * limitations under the License.
  */
 
-#include <fstream>
-
-#include "file_io_utilities.hpp"
+#include <cudf/io/config_utils.hpp>
 #include <cudf/io/data_sink.hpp>
+#include <cudf/logger.hpp>
 #include <cudf/utilities/error.hpp>
-#include <io/utilities/config_utils.hpp>
 
 #include <kvikio/file_handle.hpp>
+
 #include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
 namespace io {
+
 /**
  * @brief Implementation class for storing data into a local file.
  */
@@ -33,37 +33,35 @@ class file_sink : public data_sink {
  public:
   explicit file_sink(std::string const& filepath)
   {
-    _output_stream.open(filepath, std::ios::out | std::ios::binary | std::ios::trunc);
-    CUDF_EXPECTS(_output_stream.is_open(), "Cannot open output file");
-
-    if (detail::cufile_integration::is_kvikio_enabled()) {
-      _kvikio_file = kvikio::FileHandle(filepath, "w");
-    } else {
-      _cufile_out = detail::make_cufile_output(filepath);
-    }
+    kvikio_integration::set_up_kvikio();
+    _kvikio_file = kvikio::FileHandle(filepath, "w");
+    CUDF_EXPECTS(!_kvikio_file.closed(), "KvikIO did not open the file successfully.");
+    CUDF_LOG_INFO("Writing a file using kvikIO, with compatibility mode %s.",
+                  _kvikio_file.get_compat_mode_manager().is_compat_mode_preferred() ? "on" : "off");
   }
 
-  virtual ~file_sink() { flush(); }
+  // Marked as NOLINT because we are calling a virtual method in the destructor
+  ~file_sink() override { flush(); }  // NOLINT
 
   void host_write(void const* data, size_t size) override
   {
-    _output_stream.seekp(_bytes_written);
-    _output_stream.write(static_cast<char const*>(data), size);
+    _kvikio_file.pwrite(data, size, _bytes_written).get();
     _bytes_written += size;
   }
 
-  void flush() override { _output_stream.flush(); }
+  void flush() override
+  {
+    // kvikio::FileHandle::pwrite() makes system calls that reach the kernel buffer cache. This
+    // process does not involve application buffer. Therefore calls to ::fflush() or
+    // ofstream::flush() do not apply.
+  }
 
   size_t bytes_written() override { return _bytes_written; }
 
-  [[nodiscard]] bool supports_device_write() const override
-  {
-    return !_kvikio_file.closed() || _cufile_out != nullptr;
-  }
+  [[nodiscard]] bool supports_device_write() const override { return true; }
 
   [[nodiscard]] bool is_device_write_preferred(size_t size) const override
   {
-    if (size < _gds_write_preferred_threshold) { return false; }
     return supports_device_write();
   }
 
@@ -73,17 +71,14 @@ class file_sink : public data_sink {
   {
     if (!supports_device_write()) CUDF_FAIL("Device writes are not supported for this file.");
 
-    size_t offset = _bytes_written;
+    size_t const offset = _bytes_written;
     _bytes_written += size;
 
-    if (!_kvikio_file.closed()) {
-      // KvikIO's `pwrite()` returns a `std::future<size_t>` so we convert it
-      // to `std::future<void>`
-      return std::async(std::launch::deferred, [this, gpu_data, size, offset] {
-        _kvikio_file.pwrite(gpu_data, size, offset).get();
-      });
-    }
-    return _cufile_out->write_async(gpu_data, offset, size);
+    // KvikIO's `pwrite()` returns a `std::future<size_t>` so we convert it
+    // to `std::future<void>`
+    return std::async(std::launch::deferred, [this, gpu_data, size, offset]() -> void {
+      _kvikio_file.pwrite(gpu_data, size, offset).get();
+    });
   }
 
   void device_write(void const* gpu_data, size_t size, rmm::cuda_stream_view stream) override
@@ -92,12 +87,8 @@ class file_sink : public data_sink {
   }
 
  private:
-  std::ofstream _output_stream;
   size_t _bytes_written = 0;
-  std::unique_ptr<detail::cufile_output_impl> _cufile_out;
   kvikio::FileHandle _kvikio_file;
-  // The write size above which GDS is faster then d2h-copy + posix-write
-  static constexpr size_t _gds_write_preferred_threshold = 128 << 10;  // 128KB
 };
 
 /**
@@ -107,7 +98,8 @@ class host_buffer_sink : public data_sink {
  public:
   explicit host_buffer_sink(std::vector<char>* buffer) : buffer_(buffer) {}
 
-  virtual ~host_buffer_sink() { flush(); }
+  // Marked as NOLINT because we are calling a virtual method in the destructor
+  ~host_buffer_sink() override { flush(); }  // NOLINT
 
   void host_write(void const* data, size_t size) override
   {
@@ -130,11 +122,13 @@ class void_sink : public data_sink {
  public:
   explicit void_sink() {}
 
-  virtual ~void_sink() {}
+  ~void_sink() override {}
 
   void host_write(void const* data, size_t size) override { _bytes_written += size; }
 
   [[nodiscard]] bool supports_device_write() const override { return true; }
+
+  [[nodiscard]] bool is_device_write_preferred(size_t size) const override { return true; }
 
   void device_write(void const* gpu_data, size_t size, rmm::cuda_stream_view stream) override
   {
@@ -146,7 +140,7 @@ class void_sink : public data_sink {
                                        rmm::cuda_stream_view stream) override
   {
     _bytes_written += size;
-    return std::async(std::launch::deferred, [] {});
+    return std::async(std::launch::deferred, []() -> void {});
   }
 
   void flush() override {}
@@ -154,14 +148,14 @@ class void_sink : public data_sink {
   size_t bytes_written() override { return _bytes_written; }
 
  private:
-  size_t _bytes_written;
+  size_t _bytes_written{};
 };
 
 class user_sink_wrapper : public data_sink {
  public:
   explicit user_sink_wrapper(cudf::io::data_sink* const user_sink_) : user_sink(user_sink_) {}
 
-  virtual ~user_sink_wrapper() {}
+  ~user_sink_wrapper() override {}
 
   void host_write(void const* data, size_t size) override { user_sink->host_write(data, size); }
 
@@ -186,6 +180,11 @@ class user_sink_wrapper : public data_sink {
     return user_sink->device_write_async(gpu_data, size, stream);
   }
 
+  [[nodiscard]] bool is_device_write_preferred(size_t size) const override
+  {
+    return user_sink->is_device_write_preferred(size);
+  }
+
   void flush() override { user_sink->flush(); }
 
   size_t bytes_written() override { return user_sink->bytes_written(); }
@@ -194,7 +193,7 @@ class user_sink_wrapper : public data_sink {
   cudf::io::data_sink* const user_sink;
 };
 
-std::unique_ptr<data_sink> data_sink::create(const std::string& filepath)
+std::unique_ptr<data_sink> data_sink::create(std::string const& filepath)
 {
   return std::make_unique<file_sink>(filepath);
 }

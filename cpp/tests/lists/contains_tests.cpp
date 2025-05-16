@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,16 +15,15 @@
  *
  */
 
-#include <cudf/column/column_factories.hpp>
-#include <cudf/detail/copy.hpp>
-#include <cudf/lists/contains.hpp>
-#include <cudf/scalar/scalar_factories.hpp>
-
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
+
+#include <cudf/column/column_factories.hpp>
+#include <cudf/lists/contains.hpp>
+#include <cudf/scalar/scalar_factories.hpp>
 
 namespace {
 template <typename T, std::enable_if_t<cudf::is_numeric<T>(), void>* = nullptr>
@@ -224,9 +223,8 @@ TYPED_TEST(TypedContainsTest, SlicedLists)
 
   {
     // First Slice.
-    auto sliced_column_1 =
-      cudf::detail::slice(search_space, {1, 8}, cudf::get_default_stream()).front();
-    auto search_key_one = create_scalar_search_key<T>(1);
+    auto sliced_column_1 = cudf::slice(search_space, {1, 8}, cudf::get_default_stream()).front();
+    auto search_key_one  = create_scalar_search_key<T>(1);
     {
       // CONTAINS
       auto result          = cudf::lists::contains(sliced_column_1, *search_key_one);
@@ -257,9 +255,8 @@ TYPED_TEST(TypedContainsTest, SlicedLists)
 
   {
     // Second Slice.
-    auto sliced_column_2 =
-      cudf::detail::slice(search_space, {3, 10}, cudf::get_default_stream()).front();
-    auto search_key_one = create_scalar_search_key<T>(1);
+    auto sliced_column_2 = cudf::slice(search_space, {3, 10}, cudf::get_default_stream()).front();
+    auto search_key_one  = create_scalar_search_key<T>(1);
     {
       // CONTAINS
       auto result          = cudf::lists::contains(sliced_column_2, *search_key_one);
@@ -385,7 +382,7 @@ TEST_F(ContainsTest, BoolScalarWithNullsInLists)
     std::move(null_mask));
 
   // Search space: [ [x], [1,1], [x,1,1,x], [], x, [1,1,x], [x], [1,1,x,1] ]
-  auto search_key_one = create_scalar_search_key<T>(1);
+  auto search_key_one = create_scalar_search_key<T>(true);
   {
     // CONTAINS
     auto result   = cudf::lists::contains(search_space->view(), *search_key_one);
@@ -859,13 +856,13 @@ TYPED_TEST_SUITE(TypedContainsNaNsTest, cudf::test::FloatingPointTypes);
 
 namespace {
 template <typename T>
-T get_nan(const char* nan_contents)
+T get_nan(char const* nan_contents)
 {
   return std::nan(nan_contents);
 }
 
 template <>
-float get_nan<float>(const char* nan_contents)
+float get_nan<float>(char const* nan_contents)
 {
   return std::nanf(nan_contents);
 }
@@ -1053,10 +1050,10 @@ TYPED_TEST(TypedContainsDecimalsTest, VectorKey)
     return cudf::make_lists_column(10, list_offsets.release(), decimals.release(), 0, {});
   }();
 
-  auto search_key = cudf::test::fixed_point_column_wrapper<typename T::rep>{
-    {1, 2, 3, 1, 2, 3, 1, 2, 3, 1},
-    numeric::scale_type{
-      0}}.release();
+  auto search_key =
+    cudf::test::fixed_point_column_wrapper<typename T::rep>{{1, 2, 3, 1, 2, 3, 1, 2, 3, 1},
+                                                            numeric::scale_type{0}}
+      .release();
 
   // Search space: [ [0,1,2], [3,4,5], [6,7,8], [9,0,1], [2,3,4], [5,6,7], [8,9,0], [], [1,2,3], []
   // ] Search keys:  [  1,       2,       3,       1,       2,       3,       1,       2,  3, 1 ]

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,10 +16,6 @@
 
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/strings/detail/char_tables.hpp>
-#include <cudf/strings/detail/utf8.hpp>
-#include <cudf/strings/string_view.cuh>
-
-#include <thrust/optional.h>
 
 namespace cudf {
 namespace strings {
@@ -85,12 +81,11 @@ struct alignas(8) relist {
     return true;
   }
 
-  __device__ __forceinline__ restate get_state(int16_t idx) const
+  [[nodiscard]] __device__ __forceinline__ restate get_state(int16_t idx) const
   {
     return restate{ranges[idx * stride], inst_ids[idx * stride]};
   }
-
-  __device__ __forceinline__ int16_t get_size() const { return size; }
+  [[nodiscard]] __device__ __forceinline__ int16_t get_size() const { return size; }
 
  private:
   int16_t size{};
@@ -106,7 +101,7 @@ struct alignas(8) relist {
     mask[pos >> 3] |= uc;
   }
 
-  __device__ __forceinline__ bool readMask(int32_t pos) const
+  [[nodiscard]] __device__ __forceinline__ bool readMask(int32_t pos) const
   {
     u_char const uc = mask[pos >> 3];
     return static_cast<bool>((uc >> (pos & 7)) & 1);
@@ -132,6 +127,16 @@ __device__ __forceinline__ void reprog_device::reljunk::swaplist()
 }
 
 /**
+ * @brief Check for supported new-line characters
+ *
+ * '\n, \r, \u0085, \u2028, or \u2029'
+ */
+constexpr bool is_newline(char32_t const ch)
+{
+  return (ch == '\n' || ch == '\r' || ch == 0x00c285 || ch == 0x00e280a8 || ch == 0x00e280a9);
+}
+
+/**
  * @brief Utility to check a specific character against this class instance.
  *
  * @param ch A 4-byte UTF-8 character.
@@ -150,17 +155,17 @@ __device__ __forceinline__ bool reclass_device::is_match(char32_t const ch,
   uint32_t codept = utf8_to_codepoint(ch);
   if (codept > 0x00'FFFF) return false;
   int8_t fl = codepoint_flags[codept];
-  if ((builtins & CCLASS_W) && ((ch == '_') || IS_ALPHANUM(fl)))                    // \w
+  if ((builtins & CCLASS_W) && ((ch == '_') || IS_ALPHANUM(fl)))  // \w
     return true;
-  if ((builtins & CCLASS_S) && IS_SPACE(fl))                                        // \s
+  if ((builtins & CCLASS_S) && IS_SPACE(fl))  // \s
     return true;
-  if ((builtins & CCLASS_D) && IS_DIGIT(fl))                                        // \d
+  if ((builtins & CCLASS_D) && IS_DIGIT(fl))  // \d
     return true;
   if ((builtins & NCCLASS_W) && ((ch != '\n') && (ch != '_') && !IS_ALPHANUM(fl)))  // \W
     return true;
-  if ((builtins & NCCLASS_S) && !IS_SPACE(fl))                                      // \S
+  if ((builtins & NCCLASS_S) && !IS_SPACE(fl))  // \S
     return true;
-  if ((builtins & NCCLASS_D) && ((ch != '\n') && !IS_DIGIT(fl)))                    // \D
+  if ((builtins & NCCLASS_D) && ((ch != '\n') && !IS_DIGIT(fl)))  // \D
     return true;
   //
   return false;
@@ -221,6 +226,15 @@ __device__ __forceinline__ reprog_device reprog_device::load(reprog_device const
                                             : reinterpret_cast<reprog_device*>(buffer)[0];
 }
 
+__device__ __forceinline__ static string_view::const_iterator find_char(
+  cudf::char_utf8 chr, string_view const d_str, string_view::const_iterator itr)
+{
+  while (itr.byte_offset() < d_str.size_bytes() && *itr != chr) {
+    ++itr;
+  }
+  return itr;
+}
+
 /**
  * @brief Evaluate a specific string against regex pattern compiled to this instance.
  *
@@ -235,20 +249,18 @@ __device__ __forceinline__ reprog_device reprog_device::load(reprog_device const
  * @param group_id Index of the group to match in a multi-group regex pattern.
  * @return >0 if match found
  */
-__device__ __forceinline__ int32_t reprog_device::regexec(string_view const dstr,
-                                                          reljunk jnk,
-                                                          cudf::size_type& begin,
-                                                          cudf::size_type& end,
-                                                          cudf::size_type const group_id) const
+__device__ __forceinline__ match_result reprog_device::regexec(string_view const dstr,
+                                                               reljunk jnk,
+                                                               string_view::const_iterator itr,
+                                                               cudf::size_type end,
+                                                               cudf::size_type const group_id) const
 {
   int32_t match       = 0;
+  auto begin          = itr.position();
   auto pos            = begin;
   auto eos            = end;
-  char_utf8 c         = 0;
   auto checkstart     = jnk.starttype != 0;
   auto last_character = false;
-
-  string_view::const_iterator itr = string_view::const_iterator(dstr, pos);
 
   jnk.list1->reset();
   do {
@@ -256,19 +268,22 @@ __device__ __forceinline__ int32_t reprog_device::regexec(string_view const dstr
     if (checkstart) {
       auto startchar = static_cast<char_utf8>(jnk.startchar);
       switch (jnk.starttype) {
-        case BOL:
-          if (pos == 0) break;
-          if (jnk.startchar != '^') { return match; }
-          --pos;
+        case BOL: {
+          if (pos == 0) { break; }
+          if (startchar != '^' && startchar != 'S') { return cuda::std::nullopt; }
+          if (startchar != '\n') { break; }
+          --itr;
           startchar = static_cast<char_utf8>('\n');
+          [[fallthrough]];
+        }
         case CHAR: {
-          auto const fidx = dstr.find(startchar, pos);
-          if (fidx == string_view::npos) { return match; }
-          pos = fidx + (jnk.starttype == BOL);
+          auto const find_itr = find_char(startchar, dstr, itr);
+          if (find_itr.byte_offset() >= dstr.size_bytes()) { return cuda::std::nullopt; }
+          itr = find_itr + (jnk.starttype == BOL);
+          pos = itr.position();
           break;
         }
       }
-      itr += (pos - itr.position());  // faster to increment position
     }
 
     if (((eos < 0) || (pos < eos)) && match == 0) {
@@ -279,7 +294,7 @@ __device__ __forceinline__ int32_t reprog_device::regexec(string_view const dstr
 
     last_character = itr.byte_offset() >= dstr.size_bytes();
 
-    c = last_character ? 0 : *itr;
+    char_utf8 const c = last_character ? 0 : *itr;
 
     // expand the non-character types like: LBRA, RBRA, BOL, EOL, BOW, NBOW, and OR
     bool expanded = false;
@@ -310,26 +325,34 @@ __device__ __forceinline__ int32_t reprog_device::regexec(string_view const dstr
             id_activate = inst.u2.next_id;
             expanded    = true;
             break;
-          case BOL:
-            if ((pos == 0) || ((inst.u1.c == '^') && (dstr[pos - 1] == '\n'))) {
+          case BOL: {
+            auto titr         = itr;
+            auto const prev_c = pos > 0 ? *(--titr) : 0;
+            if ((pos == 0) || ((inst.u1.c == '^') && (prev_c == '\n')) ||
+                ((inst.u1.c == 'S') && (is_newline(prev_c)))) {
               id_activate = inst.u2.next_id;
               expanded    = true;
             }
             break;
-          case EOL:
+          }
+          case EOL: {
             // after the last character OR:
             // - for MULTILINE, if current character is new-line
             // - for non-MULTILINE, the very last character of the string can also be a new-line
+            bool const nl = (inst.u1.c == 'S' || inst.u1.c == 'N') ? is_newline(c) : (c == '\n');
             if (last_character ||
-                ((c == '\n') && (inst.u1.c != 'Z') &&
-                 ((inst.u1.c == '$') || (itr.byte_offset() + 1 == dstr.size_bytes())))) {
+                (nl && (inst.u1.c != 'Z') &&
+                 ((inst.u1.c == '$' || inst.u1.c == 'S') ||
+                  (itr.byte_offset() + bytes_in_char_utf8(c) == dstr.size_bytes())))) {
               id_activate = inst.u2.next_id;
               expanded    = true;
             }
             break;
+          }
           case BOW:
           case NBOW: {
-            auto const prev_c       = pos > 0 ? dstr[pos - 1] : 0;
+            auto titr               = itr;
+            auto const prev_c       = pos > 0 ? *(--titr) : 0;
             auto const word_class   = reclass_device{CCLASS_W};
             bool const curr_is_word = word_class.is_match(c, _codepoint_flags);
             bool const prev_is_word = word_class.is_match(prev_c, _codepoint_flags);
@@ -364,9 +387,10 @@ __device__ __forceinline__ int32_t reprog_device::regexec(string_view const dstr
         case CHAR:
           if (inst.u1.c == c) id_activate = inst.u2.next_id;
           break;
-        case ANY:
-          if (c != '\n') id_activate = inst.u2.next_id;
-          break;
+        case ANY: {
+          if ((c == '\n') || ((inst.u1.c == 'N') && is_newline(c))) { break; }
+          [[fallthrough]];
+        }
         case ANYNL: id_activate = inst.u2.next_id; break;
         case NCCLASS:
         case CCLASS: {
@@ -394,35 +418,33 @@ __device__ __forceinline__ int32_t reprog_device::regexec(string_view const dstr
     checkstart = jnk.list1->get_size() == 0;
   } while (!last_character && (!checkstart || !match));
 
-  return match;
+  return match ? match_result({begin, end}) : cuda::std::nullopt;
 }
 
-__device__ __forceinline__ int32_t reprog_device::find(int32_t const thread_idx,
-                                                       string_view const dstr,
-                                                       cudf::size_type& begin,
-                                                       cudf::size_type& end) const
+__device__ __forceinline__ match_result reprog_device::find(int32_t const thread_idx,
+                                                            string_view const dstr,
+                                                            string_view::const_iterator begin,
+                                                            cudf::size_type end) const
 {
-  auto const rtn = call_regexec(thread_idx, dstr, begin, end);
-  if (rtn <= 0) begin = end = -1;
-  return rtn;
+  return call_regexec(thread_idx, dstr, begin, end);
 }
 
 __device__ __forceinline__ match_result reprog_device::extract(int32_t const thread_idx,
                                                                string_view const dstr,
-                                                               cudf::size_type begin,
+                                                               string_view::const_iterator begin,
                                                                cudf::size_type end,
                                                                cudf::size_type const group_id) const
 {
-  end = begin + 1;
-  return call_regexec(thread_idx, dstr, begin, end, group_id + 1) > 0 ? match_result({begin, end})
-                                                                      : thrust::nullopt;
+  end = begin.position() + 1;
+  return call_regexec(thread_idx, dstr, begin, end, group_id + 1);
 }
 
-__device__ __forceinline__ int32_t reprog_device::call_regexec(int32_t const thread_idx,
-                                                               string_view const dstr,
-                                                               cudf::size_type& begin,
-                                                               cudf::size_type& end,
-                                                               cudf::size_type const group_id) const
+__device__ __forceinline__ match_result
+reprog_device::call_regexec(int32_t const thread_idx,
+                            string_view const dstr,
+                            string_view::const_iterator begin,
+                            cudf::size_type end,
+                            cudf::size_type const group_id) const
 {
   auto gp_ptr = reinterpret_cast<u_char*>(_buffer);
   relist list1(static_cast<int16_t>(_max_insts), _thread_count, gp_ptr, thread_idx);

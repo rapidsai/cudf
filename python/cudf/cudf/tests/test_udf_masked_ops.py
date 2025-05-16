@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2023, NVIDIA CORPORATION.
+# Copyright (c) 2021-2024, NVIDIA CORPORATION.
 import math
 import operator
 
@@ -7,6 +7,7 @@ import pytest
 from numba import cuda
 
 import cudf
+from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.core.missing import NA
 from cudf.core.udf._ops import (
     arith_ops,
@@ -16,9 +17,9 @@ from cudf.core.udf._ops import (
 )
 from cudf.core.udf.api import Masked
 from cudf.core.udf.utils import precompiled
+from cudf.testing import assert_eq
 from cudf.testing._utils import (
     _decimal_series,
-    assert_eq,
     parametrize_numeric_dtypes_pairwise,
     sv_to_udf_str,
 )
@@ -64,9 +65,9 @@ def substr(request):
     return request.param
 
 
-def run_masked_udf_test(func, data, args=(), **kwargs):
+def run_masked_udf_test(func, data, args=(), nullable=True, **kwargs):
     gdf = data
-    pdf = data.to_pandas(nullable=True)
+    pdf = data.to_pandas(nullable=nullable)
 
     expect = pdf.apply(func, args=args, axis=1)
     obtain = gdf.apply(func, args=args, axis=1)
@@ -74,7 +75,6 @@ def run_masked_udf_test(func, data, args=(), **kwargs):
 
 
 def run_masked_string_udf_test(func, data, args=(), **kwargs):
-
     gdf = data
     pdf = data.to_pandas(nullable=True)
 
@@ -184,7 +184,17 @@ def test_arith_masked_vs_masked_datelike(op, dtype_l, dtype_r):
     )
     gdf["a"] = gdf["a"].astype(dtype_l)
     gdf["b"] = gdf["b"].astype(dtype_r)
-    run_masked_udf_test(func, gdf, check_dtype=False)
+
+    pdf = gdf.to_pandas()
+    expect = op(pdf["a"], pdf["b"])
+    obtain = gdf.apply(func, axis=1)
+    assert_eq(expect, obtain, check_dtype=False)
+    # TODO: After the following pandas issue is
+    # fixed, uncomment the following line and delete
+    # through `to_pandas()` statement.
+    # https://github.com/pandas-dev/pandas/issues/52411
+
+    # run_masked_udf_test(func, gdf, nullable=False, check_dtype=False)
 
 
 @pytest.mark.parametrize("op", comparison_ops)
@@ -473,6 +483,10 @@ def test_series_apply_basic(data, name):
     run_masked_udf_series(func, data, check_dtype=False)
 
 
+@pytest.mark.xfail(
+    PANDAS_VERSION >= PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="https://github.com/pandas-dev/pandas/issues/57390",
+)
 def test_series_apply_null_conditional():
     def func(x):
         if x is NA:
@@ -497,6 +511,10 @@ def test_series_arith_masked_vs_masked(op):
     run_masked_udf_series(func, data, check_dtype=False)
 
 
+@pytest.mark.xfail(
+    PANDAS_VERSION >= PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="https://github.com/pandas-dev/pandas/issues/57390",
+)
 @pytest.mark.parametrize("op", comparison_ops)
 def test_series_compare_masked_vs_masked(op):
     """
@@ -553,6 +571,10 @@ def test_series_arith_masked_vs_constant_reflected(request, op, constant):
     run_masked_udf_series(func, data, check_dtype=False)
 
 
+@pytest.mark.xfail(
+    PANDAS_VERSION >= PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="https://github.com/pandas-dev/pandas/issues/57390",
+)
 def test_series_masked_is_null_conditional():
     def func(x):
         if x is NA:
@@ -636,7 +658,7 @@ def test_masked_udf_subset_selection(data):
             ["1.0", "2.0", "3.0"], dtype=cudf.Decimal64Dtype(2, 1)
         ),
         cudf.Series([1, 2, 3], dtype="category"),
-        cudf.interval_range(start=0, end=3, closed=True),
+        cudf.interval_range(start=0, end=3),
         [[1, 2], [3, 4], [5, 6]],
         [{"a": 1}, {"a": 2}, {"a": 3}],
     ],
@@ -733,8 +755,16 @@ def test_mask_udf_scalar_args_binops_series(data, op):
     ],
 )
 @pytest.mark.parametrize("op", arith_ops + comparison_ops)
-def test_masked_udf_scalar_args_binops_multiple_series(data, op):
+def test_masked_udf_scalar_args_binops_multiple_series(request, data, op):
     data = cudf.Series(data)
+    request.applymarker(
+        pytest.mark.xfail(
+            op in comparison_ops
+            and PANDAS_VERSION >= PANDAS_CURRENT_SUPPORTED_VERSION
+            and data.dtype.kind != "b",
+            reason="https://github.com/pandas-dev/pandas/issues/57390",
+        )
+    )
 
     def func(data, c, k):
         x = op(data, c)
@@ -775,6 +805,19 @@ def test_masked_udf_caching():
 
     assert precompiled.currsize == 1
 
+    # validate that changing the type of a scalar arg
+    # results in a miss
+    precompiled.clear()
+
+    def f(x, c):
+        return x + c
+
+    data.apply(f, args=(1,))
+    assert precompiled.currsize == 1
+
+    data.apply(f, args=(1.5,))
+    assert precompiled.currsize == 2
+
 
 @pytest.mark.parametrize(
     "data", [[1.0, 0.0, 1.5], [1, 0, 2], [True, False, True]]
@@ -785,6 +828,42 @@ def test_masked_udf_casting(operator, data):
 
     def func(x):
         return operator(x)
+
+    run_masked_udf_series(func, data, check_dtype=False)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        np.array(
+            [0, 1, -1, 0, np.iinfo("int64").min, np.iinfo("int64").max],
+            dtype="int64",
+        ),
+        np.array([0, 0, 1, np.iinfo("uint64").max], dtype="uint64"),
+        np.array(
+            [
+                0,
+                0.0,
+                -1.0,
+                1.5,
+                -1.5,
+                np.finfo("float64").min,
+                np.finfo("float64").max,
+                np.nan,
+                np.inf,
+                -np.inf,
+            ],
+            dtype="float64",
+        ),
+        [False, True, False, cudf.NA],
+    ],
+)
+def test_masked_udf_abs(data):
+    data = cudf.Series(data)
+    data[0] = cudf.NA
+
+    def func(x):
+        return abs(x)
 
     run_masked_udf_series(func, data, check_dtype=False)
 

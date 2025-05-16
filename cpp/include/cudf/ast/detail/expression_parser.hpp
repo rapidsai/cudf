@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,21 +15,22 @@
  */
 #pragma once
 
+#include <cudf/ast/detail/operators.hpp>
 #include <cudf/ast/expressions.hpp>
-#include <cudf/scalar/scalar_device_view.cuh>
+#include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/memory_resource.hpp>
+#include <cudf/utilities/span.hpp>
 
-#include <thrust/optional.h>
 #include <thrust/scan.h>
 
 #include <functional>
 #include <numeric>
 #include <optional>
 
-namespace cudf {
-namespace ast {
-namespace detail {
+namespace CUDF_EXPORT cudf {
+namespace ast::detail {
 
 /**
  * @brief Node data reference types.
@@ -67,28 +68,10 @@ struct alignas(8) device_data_reference {
 
   bool operator==(device_data_reference const& rhs) const
   {
-    return std::tie(data_index, reference_type, table_source) ==
-           std::tie(rhs.data_index, rhs.reference_type, rhs.table_source);
+    return std::tie(data_index, data_type, reference_type, table_source) ==
+           std::tie(rhs.data_index, rhs.data_type, rhs.reference_type, rhs.table_source);
   }
 };
-
-// Type trait for wrapping nullable types in a thrust::optional. Non-nullable
-// types are returned as is.
-template <typename T, bool has_nulls>
-struct possibly_null_value;
-
-template <typename T>
-struct possibly_null_value<T, true> {
-  using type = thrust::optional<T>;
-};
-
-template <typename T>
-struct possibly_null_value<T, false> {
-  using type = T;
-};
-
-template <typename T, bool has_nulls>
-using possibly_null_value_t = typename possibly_null_value<T, has_nulls>::type;
 
 // Type used for intermediate storage in expression evaluation.
 template <bool has_nulls>
@@ -106,6 +89,7 @@ struct expression_device_view {
   device_span<detail::device_data_reference const> data_references;
   device_span<generic_scalar_device_view const> literals;
   device_span<ast_operator const> operators;
+  device_span<cudf::size_type const> operator_arities;
   device_span<cudf::size_type const> operator_source_indices;
   cudf::size_type num_intermediates;
 };
@@ -136,7 +120,7 @@ class expression_parser {
                     std::optional<std::reference_wrapper<cudf::table_view const>> right,
                     bool has_nulls,
                     rmm::cuda_stream_view stream,
-                    rmm::mr::device_memory_resource* mr)
+                    rmm::device_async_resource_ref mr)
     : _left{left},
       _right{right},
       _expression_count{0},
@@ -157,7 +141,7 @@ class expression_parser {
                     cudf::table_view const& table,
                     bool has_nulls,
                     rmm::cuda_stream_view stream,
-                    rmm::mr::device_memory_resource* mr)
+                    rmm::device_async_resource_ref mr)
     : expression_parser(expr, table, {}, has_nulls, stream, mr)
   {
   }
@@ -193,6 +177,13 @@ class expression_parser {
    */
   cudf::size_type visit(operation const& expr);
 
+  /**
+   * @brief Visit a column name reference expression.
+   *
+   * @param expr Column name reference expression.
+   * @return cudf::size_type Index of device data reference for the expression.
+   */
+  cudf::size_type visit(column_name_reference const& expr);
   /**
    * @brief Internal class used to track the utilization of intermediate storage locations.
    *
@@ -240,39 +231,55 @@ class expression_parser {
    * @param[in]  v  The `std::vector` containing components (operators, literals, etc).
    * @param[in,out]  sizes  The `std::vector` containing the size of each data buffer.
    * @param[in,out]  data_pointers  The `std::vector` containing pointers to each data buffer.
+   * @param[in,out]  alignment  The maximum alignment needed for all the extracted size and pointers
    */
   template <typename T>
   void extract_size_and_pointer(std::vector<T> const& v,
                                 std::vector<cudf::size_type>& sizes,
-                                std::vector<void const*>& data_pointers)
+                                std::vector<void const*>& data_pointers,
+                                cudf::size_type& alignment)
   {
+    // sub-type alignment will only work provided the alignment is lesser or equal to
+    // alignof(max_align_t) which is the maximum alignment provided by rmm's device buffers
+    static_assert(alignof(T) <= alignof(max_align_t));
     auto const data_size = sizeof(T) * v.size();
     sizes.push_back(data_size);
     data_pointers.push_back(v.data());
+    alignment = std::max(alignment, static_cast<cudf::size_type>(alignof(T)));
   }
 
-  void move_to_device(rmm::cuda_stream_view stream, rmm::mr::device_memory_resource* mr)
+  void move_to_device(rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
   {
     std::vector<cudf::size_type> sizes;
     std::vector<void const*> data_pointers;
+    // use a minimum of 4-byte alignment
+    cudf::size_type buffer_alignment = 4;
 
-    extract_size_and_pointer(_data_references, sizes, data_pointers);
-    extract_size_and_pointer(_literals, sizes, data_pointers);
-    extract_size_and_pointer(_operators, sizes, data_pointers);
-    extract_size_and_pointer(_operator_source_indices, sizes, data_pointers);
+    extract_size_and_pointer(_data_references, sizes, data_pointers, buffer_alignment);
+    extract_size_and_pointer(_literals, sizes, data_pointers, buffer_alignment);
+    extract_size_and_pointer(_operators, sizes, data_pointers, buffer_alignment);
+    extract_size_and_pointer(_operator_arities, sizes, data_pointers, buffer_alignment);
+    extract_size_and_pointer(_operator_source_indices, sizes, data_pointers, buffer_alignment);
 
     // Create device buffer
-    auto const buffer_size = std::accumulate(sizes.cbegin(), sizes.cend(), 0);
-    auto buffer_offsets    = std::vector<int>(sizes.size());
-    thrust::exclusive_scan(sizes.cbegin(), sizes.cend(), buffer_offsets.begin(), 0);
+    auto buffer_offsets = std::vector<cudf::size_type>(sizes.size());
+    thrust::exclusive_scan(sizes.cbegin(),
+                           sizes.cend(),
+                           buffer_offsets.begin(),
+                           cudf::size_type{0},
+                           [buffer_alignment](auto a, auto b) {
+                             // align each component of the AST program
+                             return cudf::util::round_up_safe(a + b, buffer_alignment);
+                           });
 
-    auto h_data_buffer = std::vector<char>(buffer_size);
+    auto const buffer_size = buffer_offsets.empty() ? 0 : (buffer_offsets.back() + sizes.back());
+    auto host_data_buffer  = std::vector<char>(buffer_size);
+
     for (unsigned int i = 0; i < data_pointers.size(); ++i) {
-      std::memcpy(h_data_buffer.data() + buffer_offsets[i], data_pointers[i], sizes[i]);
+      std::memcpy(host_data_buffer.data() + buffer_offsets[i], data_pointers[i], sizes[i]);
     }
 
-    _device_data_buffer = rmm::device_buffer(h_data_buffer.data(), buffer_size, stream, mr);
-
+    _device_data_buffer = rmm::device_buffer(host_data_buffer.data(), buffer_size, stream, mr);
     stream.synchronize();
 
     // Create device pointers to components of plan
@@ -288,8 +295,11 @@ class expression_parser {
     device_expression_data.operators = device_span<ast_operator const>(
       reinterpret_cast<ast_operator const*>(device_data_buffer_ptr + buffer_offsets[2]),
       _operators.size());
-    device_expression_data.operator_source_indices = device_span<cudf::size_type const>(
+    device_expression_data.operator_arities = device_span<cudf::size_type const>(
       reinterpret_cast<cudf::size_type const*>(device_data_buffer_ptr + buffer_offsets[3]),
+      _operators.size());
+    device_expression_data.operator_source_indices = device_span<cudf::size_type const>(
+      reinterpret_cast<cudf::size_type const*>(device_data_buffer_ptr + buffer_offsets[4]),
       _operator_source_indices.size());
     device_expression_data.num_intermediates = _intermediate_counter.get_max_used();
     shmem_per_thread                         = static_cast<int>(
@@ -311,7 +321,7 @@ class expression_parser {
    * @return The indices of the operands stored in the data references.
    */
   std::vector<cudf::size_type> visit_operands(
-    std::vector<std::reference_wrapper<expression const>> operands);
+    cudf::host_span<std::reference_wrapper<cudf::ast::expression const> const> operands);
 
   /**
    * @brief Add a data reference to the internal list.
@@ -333,12 +343,11 @@ class expression_parser {
   bool _has_nulls;
   std::vector<detail::device_data_reference> _data_references;
   std::vector<ast_operator> _operators;
+  std::vector<cudf::size_type> _operator_arities;
   std::vector<cudf::size_type> _operator_source_indices;
   std::vector<generic_scalar_device_view> _literals;
 };
 
-}  // namespace detail
+}  // namespace ast::detail
 
-}  // namespace ast
-
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,7 +34,7 @@
 //    0 - decimal
 //
 
-const uint8_t g_character_codepoint_flags[] = {
+uint8_t const g_character_codepoint_flags[] = {
   0,   0,   0,   0,   0,   0,   0,   0,   0,   16,  16,  16,  16,  16,  0,   0,   0,   0,   0,
   0,   0,   0,   0,   0,   0,   0,   0,   0,   16,  16,  16,  16,  16,  0,   0,   0,   0,   0,
   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   7,   7,   7,   7,   7,   7,   7,   7,   7,

@@ -1,7 +1,8 @@
-# Copyright (c) 2019-2022, NVIDIA CORPORATION.
+# Copyright (c) 2019-2025, NVIDIA CORPORATION.
 
-import cudf
-from cudf import _lib as libcudf
+import pylibcudf as plc
+
+from cudf.core.dataframe import DataFrame
 from cudf.utils import ioutils
 
 
@@ -15,25 +16,32 @@ def read_avro(
 ):
     """{docstring}"""
 
-    is_single_filepath_or_buffer = ioutils.ensure_single_filepath_or_buffer(
+    filepath_or_buffer = ioutils.get_reader_filepath_or_buffer(
         path_or_data=filepath_or_buffer,
         storage_options=storage_options,
     )
-    if not is_single_filepath_or_buffer:
-        raise NotImplementedError(
-            "`read_avro` does not yet support reading multiple files"
-        )
-
-    filepath_or_buffer, compression = ioutils.get_reader_filepath_or_buffer(
-        path_or_data=filepath_or_buffer,
-        compression=None,
-        storage_options=storage_options,
+    filepath_or_buffer = ioutils._select_single_source(
+        filepath_or_buffer, "read_avro"
     )
-    if compression is not None:
-        ValueError("URL content-encoding decompression is not supported")
 
-    return cudf.DataFrame._from_data(
-        *libcudf.avro.read_avro(
-            filepath_or_buffer, columns, skiprows, num_rows
+    num_rows = -1 if num_rows is None else num_rows
+    skip_rows = 0 if skiprows is None else skiprows
+
+    if not isinstance(num_rows, int) or num_rows < -1:
+        raise TypeError("num_rows must be an int >= -1")
+    if not isinstance(skip_rows, int) or skip_rows < 0:
+        raise TypeError("skip_rows must be an int >= 0")
+
+    options = (
+        plc.io.avro.AvroReaderOptions.builder(
+            plc.io.types.SourceInfo([filepath_or_buffer])
         )
+        .skip_rows(skip_rows)
+        .num_rows(num_rows)
+        .build()
     )
+
+    if columns is not None and len(columns) > 0:
+        options.set_columns(columns)
+
+    return DataFrame.from_pylibcudf(plc.io.avro.read_avro(options))

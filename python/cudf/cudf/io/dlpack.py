@@ -1,13 +1,18 @@
-# Copyright (c) 2019-2022, NVIDIA CORPORATION.
+# Copyright (c) 2019-2025, NVIDIA CORPORATION.
+from __future__ import annotations
 
+import pylibcudf as plc
 
-import cudf
-from cudf._lib import interop as libdlpack
 from cudf.core.column import ColumnBase
+from cudf.core.column_accessor import ColumnAccessor
+from cudf.core.dataframe import DataFrame
+from cudf.core.index import BaseIndex
+from cudf.core.series import Series
 from cudf.utils import ioutils
+from cudf.utils.dtypes import find_common_type, is_dtype_obj_numeric
 
 
-def from_dlpack(pycapsule_obj):
+def from_dlpack(pycapsule_obj) -> Series | DataFrame:
     """Converts from a DLPack tensor to a cuDF object.
 
     DLPack is an open-source memory tensor structure:
@@ -33,18 +38,25 @@ def from_dlpack(pycapsule_obj):
     cuDF from_dlpack() assumes column-major (Fortran order) input. If the input
     tensor is row-major, transpose it before passing it to this function.
     """
+    plc_table = plc.interop.from_dlpack(pycapsule_obj)
+    data = ColumnAccessor(
+        dict(
+            enumerate(
+                (ColumnBase.from_pylibcudf(col) for col in plc_table.columns())
+            )
+        ),
+        verify=False,
+        rangeindex=True,
+    )
 
-    columns = libdlpack.from_dlpack(pycapsule_obj)
-    column_names = range(len(columns))
-
-    if len(columns) == 1:
-        return cudf.Series._from_columns(columns, column_names=column_names)
+    if len(data) == 1:
+        return Series._from_data(data)
     else:
-        return cudf.DataFrame._from_columns(columns, column_names=column_names)
+        return DataFrame._from_data(data)
 
 
 @ioutils.doc_to_dlpack()
-def to_dlpack(cudf_obj):
+def to_dlpack(cudf_obj: Series | DataFrame | BaseIndex):
     """Converts a cuDF object to a DLPack tensor.
 
     DLPack is an open-source memory tensor structure:
@@ -68,10 +80,10 @@ def to_dlpack(cudf_obj):
     cuDF to_dlpack() produces column-major (Fortran order) output. If the
     output tensor needs to be row major, transpose the output of this function.
     """
-    if isinstance(cudf_obj, (cudf.DataFrame, cudf.Series, cudf.BaseIndex)):
+    if isinstance(cudf_obj, (DataFrame, Series, BaseIndex)):
         gdf = cudf_obj
     elif isinstance(cudf_obj, ColumnBase):
-        gdf = cudf_obj.as_frame()
+        gdf = Series._from_column(cudf_obj)
     else:
         raise TypeError(
             f"Input of type {type(cudf_obj)} cannot be converted "
@@ -79,14 +91,15 @@ def to_dlpack(cudf_obj):
         )
 
     if any(
-        not cudf.api.types._is_non_decimal_numeric_dtype(col.dtype)
-        for col in gdf._data.columns
+        not is_dtype_obj_numeric(dtype, include_decimal=False)
+        for _, dtype in gdf._dtypes  # type: ignore[union-attr]
     ):
         raise TypeError("non-numeric data not yet supported")
 
-    dtype = cudf.utils.dtypes.find_common_type(
-        [col.dtype for col in gdf._data.columns]
+    dtype = find_common_type(
+        [dtype for _, dtype in gdf._dtypes]  # type: ignore[union-attr]
     )
     gdf = gdf.astype(dtype)
-
-    return libdlpack.to_dlpack([*gdf._columns])
+    return plc.interop.to_dlpack(
+        plc.Table([col.to_pylibcudf(mode="read") for col in gdf._columns])
+    )

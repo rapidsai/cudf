@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,12 +23,12 @@
 
 #include <nvbench/nvbench.cuh>
 
-// Size of the data in the the benchmark dataframe; chosen to be low enough to allow benchmarks to
+// Size of the data in the benchmark dataframe; chosen to be low enough to allow benchmarks to
 // run on most GPUs, but large enough to allow highest throughput
 constexpr size_t data_size         = 256 << 20;
 constexpr cudf::size_type num_cols = 64;
 
-template <data_type DataType, cudf::io::io_type IO>
+template <data_type DataType, io_type IO>
 void BM_csv_write_dtype_io(nvbench::state& state,
                            nvbench::type_list<nvbench::enum_type<DataType>, nvbench::enum_type<IO>>)
 {
@@ -112,9 +112,7 @@ using d_type_list = nvbench::enum_type_list<data_type::INTEGRAL,
                                             data_type::DURATION,
                                             data_type::STRING>;
 
-using io_list = nvbench::enum_type_list<cudf::io::io_type::FILEPATH,
-                                        cudf::io::io_type::HOST_BUFFER,
-                                        cudf::io::io_type::VOID>;
+using io_list = nvbench::enum_type_list<io_type::FILEPATH, io_type::HOST_BUFFER, io_type::VOID>;
 
 NVBENCH_BENCH_TYPES(BM_csv_write_dtype_io, NVBENCH_TYPE_AXES(d_type_list, io_list))
   .set_name("csv_write_dtype_io")

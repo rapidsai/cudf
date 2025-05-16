@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2022, NVIDIA CORPORATION.
+# Copyright (c) 2019-2025, NVIDIA CORPORATION.
 
 import itertools
 import os
@@ -11,7 +11,7 @@ import pytest
 import rmm  # noqa: F401
 
 import cudf
-from cudf.testing._utils import assert_eq
+from cudf.testing import assert_eq
 
 _CURRENT_DIRECTORY = str(pathlib.Path(__file__).resolve().parent)
 
@@ -176,3 +176,21 @@ def pytest_runtest_makereport(item, call):
     # Set a report attribute for each phase of a call, which can
     # be "setup", "call", "teardown"
     setattr(item, "report", {rep.when: rep})
+
+
+@pytest.fixture(
+    params=[
+        {
+            "LIBCUDF_HOST_DECOMPRESSION": "OFF",
+            "LIBCUDF_NVCOMP_POLICY": "ALWAYS",
+        },
+        {"LIBCUDF_HOST_DECOMPRESSION": "OFF", "LIBCUDF_NVCOMP_POLICY": "OFF"},
+        {"LIBCUDF_HOST_DECOMPRESSION": "ON"},
+    ],
+)
+def set_decomp_env_vars(monkeypatch, request):
+    env_vars = request.param
+    with monkeypatch.context() as m:
+        for key, value in env_vars.items():
+            m.setenv(key, value)
+        yield

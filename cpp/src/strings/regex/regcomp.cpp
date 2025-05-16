@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <strings/regex/regcomp.h>
+#include "strings/regex/regcomp.h"
 
 #include <cudf/strings/detail/utf8.hpp>
 #include <cudf/utilities/error.hpp>
@@ -35,7 +35,7 @@ namespace strings {
 namespace detail {
 namespace {
 // Bitmask of all operators
-#define OPERATOR_MASK 0200
+enum { OPERATOR_MASK = 0200 };
 enum OperatorType : int32_t {
   START        = 0200,  // Start, used for marker on stack
   LBRA_NC      = 0203,  // non-capturing group
@@ -50,7 +50,7 @@ enum OperatorType : int32_t {
   COUNTED_LAZY = 0215,
   NOP          = 0302,  // No operation, internal use only
 };
-#define ITEM_MASK 0300
+enum { ITEM_MASK = 0300 };
 
 static reclass cclass_w(CCLASS_W);   // \w
 static reclass cclass_s(CCLASS_S);   // \s
@@ -60,10 +60,10 @@ static reclass cclass_S(NCCLASS_S);  // \S
 static reclass cclass_D(NCCLASS_D);  // \D
 
 // Tables for analyzing quantifiers
-const std::array<int, 5> valid_preceding_inst_types{{CHAR, CCLASS, NCCLASS, ANY, ANYNL}};
-const std::array<char, 5> quantifiers{{'*', '?', '+', '{', '|'}};
+std::array<int, 5> const valid_preceding_inst_types{{CHAR, CCLASS, NCCLASS, ANY, ANYNL}};
+std::array<char, 5> const quantifiers{{'*', '?', '+', '{', '|'}};
 // Valid regex characters that can be escaped and used as literals
-const std::array<char, 33> escapable_chars{
+std::array<char, 33> const escapable_chars{
   {'.', '-', '+',  '*', '\\', '?', '^', '$', '|', '{', '}', '(', ')', '[', ']', '<', '>',
    '"', '~', '\'', '`', '_',  '@', '=', ';', ':', '!', '#', '%', '&', ',', '/', ' '}};
 
@@ -80,16 +80,16 @@ const std::array<char, 33> escapable_chars{
  */
 std::vector<char32_t> string_to_char32_vector(std::string_view pattern)
 {
-  size_type size  = static_cast<size_type>(pattern.size());
-  size_type count = std::count_if(pattern.cbegin(), pattern.cend(), [](char ch) {
+  auto size             = static_cast<size_type>(pattern.size());
+  size_type const count = std::count_if(pattern.cbegin(), pattern.cend(), [](char ch) {
     return is_begin_utf8_char(static_cast<uint8_t>(ch));
   });
   std::vector<char32_t> result(count + 1);
   char32_t* output_ptr  = result.data();
-  const char* input_ptr = pattern.data();
+  char const* input_ptr = pattern.data();
   for (size_type idx = 0; idx < size; ++idx) {
     char_utf8 output_character = 0;
-    size_type ch_width         = to_char_utf8(input_ptr, output_character);
+    size_type const ch_width   = to_char_utf8(input_ptr, output_character);
     input_ptr += ch_width;
     idx += ch_width - 1;
     *output_ptr++ = output_character;
@@ -102,7 +102,7 @@ std::vector<char32_t> string_to_char32_vector(std::string_view pattern)
 
 int32_t reprog::add_inst(int32_t t)
 {
-  reinst inst;
+  reinst inst{};
   inst.type        = t;
   inst.u2.left_id  = 0;
   inst.u1.right_id = 0;
@@ -165,8 +165,8 @@ class regex_parser {
         int16_t m;
       } count;
     } d;
-    Item(int32_t type, char32_t chr) : type{type}, d{chr} {}
-    Item(int32_t type, int32_t id) : type{type}, d{.cclass_id{id}} {}
+    Item(int32_t type, char32_t chr) : type{type}, d{.chr = chr} {}
+    Item(int32_t type, int32_t id) : type{type}, d{.cclass_id = id} {}
     Item(int32_t type, int16_t n, int16_t m) : type{type}, d{.count{n, m}} {}
   };
 
@@ -184,9 +184,9 @@ class regex_parser {
   int32_t _id_cclass_d{-1};  // digits [0-9]
   int32_t _id_cclass_D{-1};  // not digits
 
-  char32_t _chr{};           // last lex'd char
-  int32_t _cclass_id{};      // last lex'd class
-  int16_t _min_count{};      // data for counted operators
+  char32_t _chr{};       // last lex'd char
+  int32_t _cclass_id{};  // last lex'd class
+  int16_t _min_count{};  // data for counted operators
   int16_t _max_count{};
 
   std::vector<Item> _items;
@@ -361,9 +361,9 @@ class regex_parser {
         auto [q, n_chr] = next_char();
         if (n_chr == 0) { return 0; }  // malformed: '[x-'
 
-        if (!q && n_chr == ']') {      // handles: '[x-]'
+        if (!q && n_chr == ']') {  // handles: '[x-]'
           literals.push_back(chr);
-          literals.push_back(chr);     // add '-' as literal
+          literals.push_back(chr);  // add '-' as literal
           break;
         }
         // normal case: '[a-z]'
@@ -539,15 +539,26 @@ class regex_parser {
                                                          : static_cast<int32_t>(LBRA);
       case ')': return RBRA;
       case '^': {
-        _chr = is_multiline(_flags) ? chr : '\n';
+        if (is_ext_newline(_flags)) {
+          _chr = is_multiline(_flags) ? 'S' : 'N';
+        } else {
+          _chr = is_multiline(_flags) ? chr : '\n';
+        }
         return BOL;
       }
       case '$': {
-        _chr = is_multiline(_flags) ? chr : '\n';
+        if (is_ext_newline(_flags)) {
+          _chr = is_multiline(_flags) ? 'S' : 'N';
+        } else {
+          _chr = is_multiline(_flags) ? chr : '\n';
+        }
         return EOL;
       }
       case '[': return build_cclass();
-      case '.': return dot_type;
+      case '.': {
+        _chr = is_ext_newline(_flags) ? 'N' : chr;
+        return dot_type;
+      }
     }
 
     if (std::find(quantifiers.begin(), quantifiers.end(), static_cast<char>(chr)) ==
@@ -692,26 +703,24 @@ class regex_parser {
     return CHAR;
   }
 
-  std::vector<regex_parser::Item> expand_counted_items() const
+  [[nodiscard]] std::vector<regex_parser::Item> expand_counted_items() const
   {
     std::vector<regex_parser::Item> const& in = _items;
     std::vector<regex_parser::Item> out;
     std::stack<int> lbra_stack;
     auto repeat_start_index = -1;
 
-    for (std::size_t index = 0; index < in.size(); index++) {
-      auto const item = in[index];
-
+    for (auto const item : in) {
       if (item.type != COUNTED && item.type != COUNTED_LAZY) {
         out.push_back(item);
         if (item.type == LBRA || item.type == LBRA_NC) {
-          lbra_stack.push(index);
+          lbra_stack.push(out.size() - 1);
           repeat_start_index = -1;
         } else if (item.type == RBRA) {
           repeat_start_index = lbra_stack.top();
           lbra_stack.pop();
         } else if ((item.type & ITEM_MASK) != OPERATOR_MASK) {
-          repeat_start_index = index;
+          repeat_start_index = out.size() - 1;
         }
       } else {
         // item is of type COUNTED or COUNTED_LAZY
@@ -720,38 +729,52 @@ class regex_parser {
         CUDF_EXPECTS(repeat_start_index >= 0, "regex: invalid counted quantifier location");
 
         // range of affected item(s) to repeat
-        auto const begin = in.begin() + repeat_start_index;
-        auto const end   = in.begin() + index;
+        auto const begin = out.begin() + repeat_start_index;
+        auto const end   = out.end();
+
         // count range values
         auto const n = item.d.count.n;  // minimum count
         auto const m = item.d.count.m;  // maximum count
-
         assert(n >= 0 && "invalid repeat count value n");
         // zero-repeat edge-case: need to erase the previous items
-        if (n == 0) { out.erase(out.end() - (index - repeat_start_index), out.end()); }
+        if (n == 0) { out.erase(begin, end); }
 
-        // minimum repeats (n)
-        for (int j = 1; j < n; j++) {
-          out.insert(out.end(), begin, end);
+        std::vector<regex_parser::Item> repeat_copy(begin, end);
+        // special handling for quantified capture groups
+        if ((n > 1) && (*begin).type == LBRA) {
+          (*begin).type = LBRA_NC;  // change first one to non-capture
+          // add intermediate groups as non-capture
+          std::vector<regex_parser::Item> ncg_copy(begin, end);
+          for (int j = 1; j < (n - 1); j++) {
+            out.insert(out.end(), ncg_copy.begin(), ncg_copy.end());
+          }
+          // add the last entry as a regular capture-group
+          out.insert(out.end(), repeat_copy.begin(), repeat_copy.end());
+        } else {
+          // minimum repeats (n)
+          for (int j = 1; j < n; j++) {
+            out.insert(out.end(), repeat_copy.begin(), repeat_copy.end());
+          }
         }
 
         // optional maximum repeats (m)
         if (m >= 0) {
           for (int j = n; j < m; j++) {
-            out.push_back(regex_parser::Item{LBRA_NC, 0});
-            out.insert(out.end(), begin, end);
+            out.emplace_back(LBRA_NC, 0);
+            out.insert(out.end(), repeat_copy.begin(), repeat_copy.end());
           }
           for (int j = n; j < m; j++) {
-            out.push_back(regex_parser::Item{RBRA, 0});
-            out.push_back(regex_parser::Item{item.type == COUNTED ? QUEST : QUEST_LAZY, 0});
+            out.emplace_back(RBRA, 0);
+            out.emplace_back(item.type == COUNTED ? QUEST : QUEST_LAZY, 0);
           }
         } else {
           // infinite repeats
           if (n > 0) {  // append '+' after last repetition
-            out.push_back(regex_parser::Item{item.type == COUNTED ? PLUS : PLUS_LAZY, 0});
-          } else {      // copy it once then append '*'
-            out.insert(out.end(), begin, end);
-            out.push_back(regex_parser::Item{item.type == COUNTED ? STAR : STAR_LAZY, 0});
+            out.emplace_back(item.type == COUNTED ? PLUS : PLUS_LAZY, 0);
+          } else {
+            // copy it once then append '*'
+            out.insert(out.end(), repeat_copy.begin(), repeat_copy.end());
+            out.emplace_back(item.type == COUNTED ? STAR : STAR_LAZY, 0);
           }
         }
       }
@@ -760,7 +783,7 @@ class regex_parser {
   }
 
  public:
-  regex_parser(const char32_t* pattern,
+  regex_parser(char32_t const* pattern,
                regex_flags const flags,
                capture_groups const capture,
                reprog& prog)
@@ -780,7 +803,7 @@ class regex_parser {
     }
   }
 
-  std::vector<regex_parser::Item> get_items() const
+  [[nodiscard]] std::vector<regex_parser::Item> get_items() const
   {
     return _has_counted ? expand_counted_items() : _items;
   }
@@ -803,8 +826,8 @@ class regex_compiler {
   reprog& _prog;
   std::stack<and_node> _and_stack;
   std::stack<re_operator> _operator_stack;
-  bool _last_was_and;
-  int _bracket_count;
+  bool _last_was_and{false};
+  int _bracket_count{0};
   regex_flags _flags;
 
   inline void push_and(int first, int last) { _and_stack.push({first, last}); }
@@ -945,7 +968,7 @@ class regex_compiler {
     }
     if (token != RBRA) { push_operator(token, subid); }
 
-    static std::vector<int> tokens{STAR, STAR_LAZY, QUEST, QUEST_LAZY, PLUS, PLUS_LAZY, RBRA};
+    static std::vector<int> const tokens{STAR, STAR_LAZY, QUEST, QUEST_LAZY, PLUS, PLUS_LAZY, RBRA};
     _last_was_and =
       std::any_of(tokens.cbegin(), tokens.cend(), [token](auto t) { return t == token; });
   }
@@ -959,7 +982,7 @@ class regex_compiler {
       _prog.inst_at(inst_id).u1.cls_id = class_id;
     } else if (token == CHAR) {
       _prog.inst_at(inst_id).u1.c = yy;
-    } else if (token == BOL || token == EOL) {
+    } else if (token == BOL || token == EOL || token == ANY) {
       _prog.inst_at(inst_id).u1.c = yy;
     }
     push_and(inst_id, inst_id);
@@ -967,11 +990,11 @@ class regex_compiler {
   }
 
  public:
-  regex_compiler(const char32_t* pattern,
+  regex_compiler(char32_t const* pattern,
                  regex_flags const flags,
                  capture_groups const capture,
                  reprog& prog)
-    : _prog(prog), _last_was_and(false), _bracket_count(0), _flags(flags)
+    : _prog(prog), _flags(flags)
   {
     // Parse pattern into items
     auto const items = regex_parser(pattern, _flags, capture, _prog).get_items();
@@ -1023,7 +1046,7 @@ reprog reprog::create_from(std::string_view pattern,
 {
   reprog rtn;
   auto pattern32 = string_to_char32_vector(pattern);
-  regex_compiler compiler(pattern32.data(), flags, capture, rtn);
+  regex_compiler const compiler(pattern32.data(), flags, capture, rtn);
   // for debugging, it can be helpful to call rtn.print(flags) here to dump
   // out the instructions that have been created from the given pattern
   return rtn;
@@ -1091,11 +1114,11 @@ void reprog::build_start_ids()
   std::stack<int> ids;
   ids.push(_startinst_id);
   while (!ids.empty()) {
-    int id = ids.top();
+    int const id = ids.top();
     ids.pop();
-    const reinst& inst = _insts[id];
+    reinst const& inst = _insts[id];
     if (inst.type == OR) {
-      if (inst.u2.left_id != id)   // prevents infinite while-loop here
+      if (inst.u2.left_id != id)  // prevents infinite while-loop here
         ids.push(inst.u2.left_id);
       if (inst.u1.right_id != id)  // prevents infinite while-loop here
         ids.push(inst.u1.right_id);
@@ -1174,7 +1197,7 @@ void reprog::print(regex_flags const flags)
   printf("Flags = 0x%08x\n", static_cast<uint32_t>(flags));
   printf("Instructions:\n");
   for (std::size_t i = 0; i < _insts.size(); i++) {
-    const reinst& inst = _insts[i];
+    reinst const& inst = _insts[i];
     printf("%3zu: ", i);
     switch (inst.type) {
       default: printf("Unknown instruction: %d, next=%d", inst.type, inst.u2.next_id); break;
@@ -1194,7 +1217,7 @@ void reprog::print(regex_flags const flags)
       case STAR: printf("   STAR next=%d", inst.u2.next_id); break;
       case PLUS: printf("   PLUS next=%d", inst.u2.next_id); break;
       case QUEST: printf("  QUEST next=%d", inst.u2.next_id); break;
-      case ANY: printf("    ANY next=%d", inst.u2.next_id); break;
+      case ANY: printf("    ANY '%c', next=%d", inst.u1.c, inst.u2.next_id); break;
       case ANYNL: printf("  ANYNL next=%d", inst.u2.next_id); break;
       case NOP: printf("    NOP next=%d", inst.u2.next_id); break;
       case BOL: {
@@ -1238,7 +1261,7 @@ void reprog::print(regex_flags const flags)
   int count = static_cast<int>(_classes.size());
   printf("\nClasses %d\n", count);
   for (int i = 0; i < count; i++) {
-    const reclass& cls = _classes[i];
+    reclass const& cls = _classes[i];
     auto const size    = static_cast<int>(cls.literals.size());
     printf("%2d: ", i);
     for (int j = 0; j < size; ++j) {

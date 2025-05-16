@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@
 #include "in_reg_array.cuh"
 
 #include <cub/cub.cuh>
+#include <cuda/functional>
 
 #include <cstdint>
 
@@ -37,6 +38,11 @@ struct AgentDFAPolicy {
 
   // The number of symbols processed by each thread
   static constexpr int32_t ITEMS_PER_THREAD = _ITEMS_PER_THREAD;
+
+  // If the shared memory-backed write buffer exceeds this threshold, the FST will skip buffering
+  // the output in a write buffer and instead immediately write out to global memory, potentially
+  // resulting in non-coalesced writes
+  static constexpr std::size_t SMEM_THRESHOLD = 24 * 1024;
 };
 
 /**
@@ -49,7 +55,7 @@ struct DeviceFSMPolicy {
   struct Policy900 : cub::ChainedPolicy<900, Policy900, Policy900> {
     enum {
       BLOCK_THREADS    = 128,
-      ITEMS_PER_THREAD = 32,
+      ITEMS_PER_THREAD = 16,
     };
 
     using AgentDFAPolicy = AgentDFAPolicy<BLOCK_THREADS, ITEMS_PER_THREAD>;
@@ -67,7 +73,7 @@ struct DeviceFSMPolicy {
  * @return
  */
 template <typename TileState>
-__global__ void initialization_pass_kernel(TileState items_state, uint32_t num_tiles)
+CUDF_KERNEL void initialization_pass_kernel(TileState items_state, uint32_t num_tiles)
 {
   items_state.InitializeStatus(num_tiles);
 }
@@ -204,29 +210,25 @@ struct DispatchFSM : DeviceFSMPolicy {
                             FstScanTileStateT fst_tile_state)
 
   {
-    cudaError_t error = cudaSuccess;
-    cub::KernelConfig dfa_simulation_config;
-
     using PolicyT = typename ActivePolicyT::AgentDFAPolicy;
-    if (CubDebug(error = dfa_simulation_config.Init<PolicyT>(dfa_kernel))) return error;
 
     // Kernel invocation
     uint32_t grid_size = std::max(
-      1u, CUB_QUOTIENT_CEILING(num_chars, PolicyT::BLOCK_THREADS * PolicyT::ITEMS_PER_THREAD));
-    uint32_t block_threads = dfa_simulation_config.block_threads;
+      1u, cuda::ceil_div<uint32_t>(num_chars, PolicyT::BLOCK_THREADS * PolicyT::ITEMS_PER_THREAD));
 
-    dfa_kernel<<<grid_size, block_threads, 0, stream>>>(dfa,
-                                                        d_chars_in,
-                                                        num_chars,
-                                                        seed_state,
-                                                        d_thread_state_transition,
-                                                        tile_state,
-                                                        fst_tile_state,
-                                                        transduced_out_it,
-                                                        transduced_out_idx_it,
-                                                        d_num_transduced_out_it);
+    dfa_kernel<<<grid_size, PolicyT::BLOCK_THREADS, 0, stream>>>(dfa,
+                                                                 d_chars_in,
+                                                                 num_chars,
+                                                                 seed_state,
+                                                                 d_thread_state_transition,
+                                                                 tile_state,
+                                                                 fst_tile_state,
+                                                                 transduced_out_it,
+                                                                 transduced_out_idx_it,
+                                                                 d_num_transduced_out_it);
 
     // Check for errors
+    cudaError_t error = cudaSuccess;
     if (CubDebug(error = cudaPeekAtLastError())) return error;
 
     return error;
@@ -348,8 +350,9 @@ struct DispatchFSM : DeviceFSMPolicy {
       NUM_SYMBOLS_PER_BLOCK = BLOCK_THREADS * SYMBOLS_PER_THREAD
     };
 
-    BlockOffsetT num_blocks = std::max(1u, CUB_QUOTIENT_CEILING(num_chars, NUM_SYMBOLS_PER_BLOCK));
-    size_t num_threads      = num_blocks * BLOCK_THREADS;
+    BlockOffsetT num_blocks =
+      std::max<uint32_t>(1u, cuda::ceil_div<uint32_t>(num_chars, NUM_SYMBOLS_PER_BLOCK));
+    size_t num_threads = num_blocks * BLOCK_THREADS;
 
     //------------------------------------------------------------------------------
     // TEMPORARY MEMORY REQUIREMENTS
@@ -389,8 +392,8 @@ struct DispatchFSM : DeviceFSMPolicy {
 
     // Alias the temporary allocations from the single storage blob (or compute the necessary size
     // of the blob)
-    error =
-      cub::AliasTemporaries(d_temp_storage, temp_storage_bytes, allocations, allocation_sizes);
+    error = cub::detail::AliasTemporaries(
+      d_temp_storage, temp_storage_bytes, allocations, allocation_sizes);
     if (error != cudaSuccess) return error;
 
     // Return if the caller is simply requesting the size of the storage allocation
@@ -410,7 +413,7 @@ struct DispatchFSM : DeviceFSMPolicy {
         num_blocks, allocations[MEM_FST_OFFSET], allocation_sizes[MEM_FST_OFFSET]);
       if (error != cudaSuccess) return error;
       constexpr uint32_t FST_INIT_TPB = 256;
-      uint32_t num_fst_init_blocks    = CUB_QUOTIENT_CEILING(num_blocks, FST_INIT_TPB);
+      uint32_t num_fst_init_blocks    = cuda::ceil_div(num_blocks, FST_INIT_TPB);
       initialization_pass_kernel<<<num_fst_init_blocks, FST_INIT_TPB, 0, stream>>>(
         fst_offset_tile_state, num_blocks);
     }
@@ -425,7 +428,7 @@ struct DispatchFSM : DeviceFSMPolicy {
         num_blocks, allocations[MEM_SINGLE_PASS_STV], allocation_sizes[MEM_SINGLE_PASS_STV]);
       if (error != cudaSuccess) return error;
       constexpr uint32_t STV_INIT_TPB = 256;
-      uint32_t num_stv_init_blocks    = CUB_QUOTIENT_CEILING(num_blocks, STV_INIT_TPB);
+      uint32_t num_stv_init_blocks    = cuda::ceil_div(num_blocks, STV_INIT_TPB);
       initialization_pass_kernel<<<num_stv_init_blocks, STV_INIT_TPB, 0, stream>>>(stv_tile_state,
                                                                                    num_blocks);
     } else {

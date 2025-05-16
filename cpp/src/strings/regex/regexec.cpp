@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,17 +14,18 @@
  * limitations under the License.
  */
 
-#include <strings/regex/regcomp.h>
-#include <strings/regex/regex.cuh>
+#include "strings/regex/regcomp.h"
+#include "strings/regex/regex.cuh"
 
+#include <cudf/detail/utilities/cuda_memcpy.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/strings/detail/char_tables.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
 
-#include <algorithm>
 #include <functional>
 #include <numeric>
 
@@ -55,25 +56,26 @@ std::unique_ptr<reprog_device, std::function<void(reprog_device*)>> reprog_devic
   // compute size of each section
   auto insts_size    = insts_count * sizeof(_insts[0]);
   auto startids_size = starts_count * sizeof(_startinst_ids[0]);
-  auto classes_size  = std::transform_reduce(
-    h_prog.classes_data(),
-    h_prog.classes_data() + h_prog.classes_count(),
-    classes_count * sizeof(_classes[0]),
-    std::plus<std::size_t>{},
-    [&h_prog](auto& cls) { return cls.literals.size() * sizeof(reclass_range); });
+  auto classes_size =
+    std::transform_reduce(h_prog.classes_data(),
+                          h_prog.classes_data() + h_prog.classes_count(),
+                          classes_count * sizeof(_classes[0]),
+                          std::plus<std::size_t>{},
+                          [](auto& cls) { return cls.literals.size() * sizeof(reclass_range); });
   // make sure each section is aligned for the subsequent section's data type
   auto const memsize = cudf::util::round_up_safe(insts_size, sizeof(_startinst_ids[0])) +
                        cudf::util::round_up_safe(startids_size, sizeof(_classes[0])) +
                        cudf::util::round_up_safe(classes_size, sizeof(char32_t));
 
   // allocate memory to store all the prog data in a flat contiguous buffer
-  std::vector<u_char> h_buffer(memsize);                        // copy everything into here;
-  auto h_ptr    = h_buffer.data();                              // this is our running host ptr;
-  auto d_buffer = new rmm::device_buffer(memsize, stream);      // output device memory;
-  auto d_ptr    = reinterpret_cast<u_char*>(d_buffer->data());  // running device pointer
+  auto h_buffer =
+    cudf::detail::make_host_vector<u_char>(memsize, stream);  // copy everything into here;
+  auto h_ptr    = h_buffer.data();                            // this is our running host ptr;
+  auto d_buffer = new rmm::device_uvector<u_char>(memsize, stream);  // output device memory;
+  auto d_ptr    = d_buffer->data();                                  // running device pointer
 
   // create our device object; this is managed separately and returned to the caller
-  reprog_device* d_prog = new reprog_device(h_prog);
+  auto* d_prog = new reprog_device(h_prog);
 
   // copy the instructions array first (fixed-sized structs)
   memcpy(h_ptr, h_prog.insts_data(), insts_size);
@@ -100,9 +102,9 @@ std::unique_ptr<reprog_device, std::function<void(reprog_device*)>> reprog_devic
   // place each class and append the variable length data
   for (int32_t idx = 0; idx < classes_count; ++idx) {
     auto const& h_class = h_prog.class_at(idx);
-    reclass_device d_class{h_class.builtins,
-                           static_cast<int32_t>(h_class.literals.size()),
-                           reinterpret_cast<reclass_range*>(d_end)};
+    reclass_device const d_class{h_class.builtins,
+                                 static_cast<int32_t>(h_class.literals.size()),
+                                 reinterpret_cast<reclass_range*>(d_end)};
     *classes++ = d_class;
     memcpy(h_end, h_class.literals.data(), h_class.literals.size() * sizeof(reclass_range));
     h_end += h_class.literals.size() * sizeof(reclass_range);
@@ -114,8 +116,7 @@ std::unique_ptr<reprog_device, std::function<void(reprog_device*)>> reprog_devic
   d_prog->_prog_size = memsize + sizeof(reprog_device);
 
   // copy flat prog to device memory
-  CUDF_CUDA_TRY(
-    cudaMemcpyAsync(d_buffer->data(), h_buffer.data(), memsize, cudaMemcpyDefault, stream.value()));
+  cudf::detail::cuda_memcpy_async<u_char>(*d_buffer, h_buffer, stream);
 
   // build deleter to cleanup device memory
   auto deleter = [d_buffer](reprog_device* t) {

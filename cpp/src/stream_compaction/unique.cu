@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,7 +15,6 @@
  */
 
 #include "stream_compaction_common.cuh"
-#include "stream_compaction_common.hpp"
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
@@ -32,13 +31,15 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/std/functional>
+#include <cuda/std/iterator>
 #include <thrust/copy.h>
-#include <thrust/distance.h>
 #include <thrust/execution_policy.h>
 #include <thrust/iterator/counting_iterator.h>
 
@@ -52,7 +53,7 @@ std::unique_ptr<table> unique(table_view const& input,
                               duplicate_keep_option keep,
                               null_equality nulls_equal,
                               rmm::cuda_stream_view stream,
-                              rmm::mr::device_memory_resource* mr)
+                              rmm::device_async_resource_ref mr)
 {
   // If keep is KEEP_ANY, just alias it to KEEP_FIRST.
   if (keep == duplicate_keep_option::KEEP_ANY) { keep = duplicate_keep_option::KEEP_FIRST; }
@@ -87,8 +88,9 @@ std::unique_ptr<table> unique(table_view const& input,
                                         itr + num_rows,
                                         d_results.begin(),
                                         mutable_view->begin<size_type>(),
-                                        thrust::identity<bool>{});
-      return static_cast<size_type>(thrust::distance(mutable_view->begin<size_type>(), result_end));
+                                        cuda::std::identity{});
+      return static_cast<size_type>(
+        cuda::std::distance(mutable_view->begin<size_type>(), result_end));
     } else {
       // Using thrust::unique_copy with the comparator directly will compile more slowly but
       // improves runtime by up to 2x over the transform/copy_if approach above.
@@ -100,7 +102,8 @@ std::unique_ptr<table> unique(table_view const& input,
                                     row_equal,
                                     keep,
                                     stream);
-      return static_cast<size_type>(thrust::distance(mutable_view->begin<size_type>(), result_end));
+      return static_cast<size_type>(
+        cuda::std::distance(mutable_view->begin<size_type>(), result_end));
     }
   }();
   auto indices_view = cudf::detail::slice(column_view(*unique_indices), 0, unique_size, stream);
@@ -119,10 +122,11 @@ std::unique_ptr<table> unique(table_view const& input,
                               std::vector<size_type> const& keys,
                               duplicate_keep_option const keep,
                               null_equality nulls_equal,
-                              rmm::mr::device_memory_resource* mr)
+                              rmm::cuda_stream_view stream,
+                              rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::unique(input, keys, keep, nulls_equal, cudf::get_default_stream(), mr);
+  return detail::unique(input, keys, keep, nulls_equal, stream, mr);
 }
 
 }  // namespace cudf

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,9 +15,9 @@
  */
 
 #include <cudf_test/base_fixture.hpp>
-#include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/iterator_utilities.hpp>
+#include <cudf_test/testing_main.hpp>
 #include <cudf_test/type_list_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
@@ -147,13 +147,13 @@ auto empty<cudf::string_view>()
 template <>
 auto nulls_after<cudf::string_view>()
 {
-  return cudf::test::strings_column_wrapper({"identical", "identical"}, {1, 0});
+  return cudf::test::strings_column_wrapper({"identical", "identical"}, {true, false});
 }
 
 template <>
 auto nulls_before<cudf::string_view>()
 {
-  return cudf::test::strings_column_wrapper({"identical", "identical"}, {0, 1});
+  return cudf::test::strings_column_wrapper({"identical", "identical"}, {false, true});
 }
 
 // ----- struct_view {"nestedInt" : {"Int" : 0 }, "float" : 1}
@@ -212,7 +212,7 @@ auto nulls_after<cudf::struct_view>()
   auto int_col = cudf::test::fixed_width_column_wrapper<int32_t>({1, 1});
   auto col1    = cudf::test::structs_column_wrapper{{int_col}};
   auto col2    = cudf::test::fixed_width_column_wrapper<float>({1, 1});
-  return cudf::test::structs_column_wrapper{{col1, col2}, {1, 0}};
+  return cudf::test::structs_column_wrapper{{col1, col2}, {true, false}};
 }
 
 template <>
@@ -221,7 +221,7 @@ auto nulls_before<cudf::struct_view>()
   auto int_col = cudf::test::fixed_width_column_wrapper<int32_t>({1, 1});
   auto col1    = cudf::test::structs_column_wrapper{{int_col}};
   auto col2    = cudf::test::fixed_width_column_wrapper<float>({1, 1});
-  return cudf::test::structs_column_wrapper{{col1, col2}, {0, 1}};
+  return cudf::test::structs_column_wrapper{{col1, col2}, {false, true}};
 }
 
 using lcw = cudf::test::lists_column_wrapper<int32_t>;

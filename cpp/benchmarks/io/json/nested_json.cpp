@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,19 +14,18 @@
  * limitations under the License.
  */
 
+#include "io/json/nested_json.hpp"
+
 #include <benchmarks/common/generate_input.hpp>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
-#include <benchmarks/fixture/rmm_pool_raii.hpp>
-
-#include <nvbench/nvbench.cuh>
-
-#include <io/json/nested_json.hpp>
-
 #include <tests/io/fst/common.hpp>
 
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/strings/repeat_strings.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/memory_resource.hpp>
+
+#include <nvbench/nvbench.cuh>
 
 #include <string>
 #include <vector>
@@ -78,7 +77,7 @@ std::string generate_row(
   int num_columns, int max_depth, int max_list_size, int max_struct_size, size_t max_bytes)
 {
   std::string s = "{";
-  const std::vector<std::string> elems{
+  std::vector<std::string> const elems{
     R"(1)", R"(-2)", R"(3.4)", R"("5")", R"("abcdefghij")", R"(true)", R"(null)"};
   for (int i = 0; i < num_columns; i++) {
     s += R"("col)" + num_to_string(i) + R"(": )";
@@ -141,7 +140,7 @@ auto make_test_json_data(cudf::size_type string_size, rmm::cuda_stream_view stre
                       {"a":1,"b":Infinity,"c":[null], "d": {"year":-600,"author": "Kaniyan"}},
                       {"a": 1, "b": 8.0, "d": { "author": "Jean-Jacques Rousseau"}},)";
 
-  const cudf::size_type repeat_times = string_size / input.size();
+  cudf::size_type const repeat_times = string_size / input.size();
 
   auto d_input_scalar   = cudf::make_string_scalar(input, stream);
   auto& d_string_scalar = static_cast<cudf::string_scalar&>(*d_input_scalar);
@@ -172,7 +171,7 @@ void BM_NESTED_JSON(nvbench::state& state)
       cudf::device_span<char const>{input->data(), static_cast<size_t>(input->size())},
       default_options,
       cudf::get_default_stream(),
-      rmm::mr::get_current_device_resource());
+      cudf::get_current_device_resource_ref());
   });
 
   auto const time = state.get_summary("nv/cold/time/gpu/mean").get_float64("value");
@@ -192,7 +191,7 @@ void BM_NESTED_JSON_DEPTH(nvbench::state& state)
 
   auto d_scalar = cudf::string_scalar(
     generate_json(100'000'000, 10, depth, 10, 10, string_size), true, cudf::get_default_stream());
-  auto input = cudf::device_span<const char>(d_scalar.data(), d_scalar.size());
+  auto input = cudf::device_span<char const>(d_scalar.data(), d_scalar.size());
 
   state.add_element_count(input.size());
   auto const default_options = cudf::io::json_reader_options{};
@@ -203,7 +202,7 @@ void BM_NESTED_JSON_DEPTH(nvbench::state& state)
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
     // Allocate device-side temporary storage & run algorithm
     cudf::io::json::detail::device_parse_nested_json(
-      input, default_options, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
+      input, default_options, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
   });
 
   auto const time = state.get_summary("nv/cold/time/gpu/mean").get_float64("value");

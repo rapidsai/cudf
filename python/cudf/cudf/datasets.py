@@ -1,13 +1,11 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 import numpy as np
 import pandas as pd
 
 import cudf
-from cudf._lib.transform import bools_to_mask
-from cudf.core.column_accessor import ColumnAccessor
 
-__all__ = ["timeseries", "randomdata"]
+__all__ = ["randomdata", "timeseries"]
 
 
 # TODO:
@@ -42,8 +40,8 @@ def timeseries(
 
     Examples
     --------
-    >>> import cudf as gd
-    >>> gdf = gd.datasets.timeseries()
+    >>> import cudf
+    >>> gdf = cudf.datasets.timeseries()
     >>> gdf.head()  # doctest: +SKIP
               timestamp    id     name         x         y
     2000-01-01 00:00:00   967    Jerry -0.031348 -0.040633
@@ -71,11 +69,9 @@ def timeseries(
             size=len(index),
             p=[1 - nulls_frequency, nulls_frequency],
         )
-        mask_buf = bools_to_mask(cudf.core.column.as_column(mask))
+        mask_buf = cudf.core.column.as_column(mask).as_mask()
         masked_col = gdf[col]._column.set_mask(mask_buf)
-        gdf[col] = cudf.Series._from_data(
-            ColumnAccessor({None: masked_col}), index=gdf.index
-        )
+        gdf[col] = cudf.Series._from_column(masked_col, index=gdf.index)
 
     return gdf
 
@@ -97,8 +93,8 @@ def randomdata(nrows=10, dtypes=None, seed=None):
 
     Examples
     --------
-    >>> import cudf as gd
-    >>> gdf = gd.datasets.randomdata()
+    >>> import cudf
+    >>> gdf = cudf.datasets.randomdata()
     >>> cdf.head()  # doctest: +SKIP
             id                  x                   y
     0  1014 0.28361267466770146 -0.44274170661264334

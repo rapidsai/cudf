@@ -1,18 +1,17 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 import os
 import socket
 from contextlib import contextmanager
-from io import BytesIO
+from io import BytesIO, StringIO
 
 import numpy as np
 import pandas as pd
-import pyarrow.fs as pa_fs
 import pytest
 from fsspec.core import get_fs_token_paths
 
 import cudf
-from cudf.testing._utils import assert_eq
+from cudf.testing import assert_eq
 
 moto = pytest.importorskip("moto", minversion="3.1.6")
 boto3 = pytest.importorskip("boto3")
@@ -70,6 +69,7 @@ def s3_base(endpoint_ip, endpoint_port):
         # with an S3 endpoint on localhost
 
         endpoint_uri = f"http://{endpoint_ip}:{endpoint_port}/"
+        os.environ["AWS_ENDPOINT_URL"] = endpoint_uri
 
         server = ThreadedMotoServer(ip_address=endpoint_ip, port=endpoint_port)
         server.start()
@@ -104,6 +104,15 @@ def s3_context(s3_base, bucket, files=None):
                 client.delete_object(Bucket=bucket, Key=f)
             except Exception:
                 pass
+
+
+@pytest.fixture(
+    params=[True, False],
+    ids=["kvikio=ON", "kvikio=OFF"],
+)
+def kvikio_remote_io(request):
+    with cudf.option_context("kvikio_remote_io", request.param):
+        yield request.param
 
 
 @pytest.fixture
@@ -143,40 +152,12 @@ def test_read_csv(s3_base, s3so, pdf, bytes_per_thread):
             f"s3://{bucket}/{fname}",
             storage_options=s3so,
             bytes_per_thread=bytes_per_thread,
-            use_python_file_object=False,
         )
-    assert_eq(pdf, got)
-
-    # Use Arrow PythonFile object
-    with s3_context(s3_base=s3_base, bucket=bucket, files={fname: buffer}):
-        got = cudf.read_csv(
-            f"s3://{bucket}/{fname}",
-            storage_options=s3so,
-            use_python_file_object=True,
-        )
-    assert_eq(pdf, got)
-
-
-def test_read_csv_arrow_nativefile(s3_base, s3so, pdf):
-    # Write to buffer
-    fname = "test_csv_reader_arrow_nativefile.csv"
-    bucket = "csv"
-    buffer = pdf.to_csv(index=False)
-    with s3_context(s3_base=s3_base, bucket=bucket, files={fname: buffer}):
-        fs = pa_fs.S3FileSystem(
-            endpoint_override=s3so["client_kwargs"]["endpoint_url"],
-        )
-        with fs.open_input_file(f"{bucket}/{fname}") as fil:
-            got = cudf.read_csv(fil)
-
     assert_eq(pdf, got)
 
 
 @pytest.mark.parametrize("bytes_per_thread", [32, 1024])
-@pytest.mark.parametrize("use_python_file_object", [True, False])
-def test_read_csv_byte_range(
-    s3_base, s3so, pdf, bytes_per_thread, use_python_file_object
-):
+def test_read_csv_byte_range(s3_base, s3so, pdf, bytes_per_thread):
     # Write to buffer
     fname = "test_csv_reader_byte_range.csv"
     bucket = "csv"
@@ -188,12 +169,9 @@ def test_read_csv_byte_range(
             f"s3://{bucket}/{fname}",
             storage_options=s3so,
             byte_range=(74, 73),
-            bytes_per_thread=bytes_per_thread
-            if not use_python_file_object
-            else None,
+            bytes_per_thread=bytes_per_thread,
             header=None,
             names=["Integer", "Float", "Integer2", "String", "Boolean"],
-            use_python_file_object=use_python_file_object,
         )
 
     assert_eq(pdf.iloc[-2:].reset_index(drop=True), got)
@@ -222,16 +200,13 @@ def test_write_csv(s3_base, s3so, pdf, chunksize):
 
 @pytest.mark.parametrize("bytes_per_thread", [32, 1024])
 @pytest.mark.parametrize("columns", [None, ["Float", "String"]])
-@pytest.mark.parametrize("precache", [None, "parquet"])
-@pytest.mark.parametrize("use_python_file_object", [True, False])
 def test_read_parquet(
     s3_base,
     s3so,
+    kvikio_remote_io,
     pdf,
     bytes_per_thread,
     columns,
-    precache,
-    use_python_file_object,
 ):
     fname = "test_parquet_reader.parquet"
     bucket = "parquet"
@@ -243,15 +218,9 @@ def test_read_parquet(
     with s3_context(s3_base=s3_base, bucket=bucket, files={fname: buffer}):
         got1 = cudf.read_parquet(
             f"s3://{bucket}/{fname}",
-            open_file_options=(
-                {"precache_options": {"method": precache}}
-                if use_python_file_object
-                else None
-            ),
             storage_options=s3so,
             bytes_per_thread=bytes_per_thread,
             columns=columns,
-            use_python_file_object=use_python_file_object,
         )
     expect = pdf[columns] if columns else pdf
     assert_eq(expect, got1)
@@ -267,9 +236,55 @@ def test_read_parquet(
                 f,
                 bytes_per_thread=bytes_per_thread,
                 columns=columns,
-                use_python_file_object=use_python_file_object,
             )
     assert_eq(expect, got2)
+
+
+@pytest.mark.parametrize("method", ["all", "parquet"])
+@pytest.mark.parametrize("blocksize", [1024 * 1024, 1024])
+def test_read_parquet_prefetch_options(
+    s3_base,
+    s3so,
+    pdf,
+    method,
+    blocksize,
+):
+    bucket = "parquet"
+    fname_1 = "test_parquet_reader_prefetch_options_1.parquet"
+    buffer_1 = BytesIO()
+    pdf.to_parquet(path=buffer_1)
+    buffer_1.seek(0)
+
+    fname_2 = "test_parquet_reader_prefetch_options_2.parquet"
+    buffer_2 = BytesIO()
+    pdf_2 = pdf.copy()
+    pdf_2["Integer"] += 1
+    pdf_2.to_parquet(path=buffer_2)
+    buffer_2.seek(0)
+
+    with s3_context(
+        s3_base=s3_base,
+        bucket=bucket,
+        files={
+            fname_1: buffer_1,
+            fname_2: buffer_2,
+        },
+    ):
+        got = cudf.read_parquet(
+            [
+                f"s3://{bucket}/{fname_1}",
+                f"s3://{bucket}/{fname_2}",
+            ],
+            storage_options=s3so,
+            prefetch_options={
+                "method": method,
+                "blocksize": blocksize,
+            },
+            columns=["String", "Integer"],
+        )
+
+    expect = pd.concat([pdf, pdf_2], ignore_index=True)[["String", "Integer"]]
+    assert_eq(expect, got)
 
 
 @pytest.mark.parametrize("bytes_per_thread", [32, 1024])
@@ -312,6 +327,28 @@ def test_read_parquet_ext(
     assert_eq(expect, got1)
 
 
+def test_read_parquet_filesystem(s3_base, s3so, pdf):
+    fname = "data.0.parquet"
+    # NOTE: Need a unique bucket name when a glob pattern
+    # is used, otherwise fsspec seems to cache the bucket
+    # contents, and later tests using the same bucket name
+    # will fail.
+    bucket = "test_read_parquet_filesystem"
+    buffer = BytesIO()
+    pdf.to_parquet(path=buffer)
+    buffer.seek(0)
+    fs = get_fs_token_paths("s3://", mode="rb", storage_options=s3so)[0]
+    with s3_context(
+        s3_base=s3_base,
+        bucket=bucket,
+        files={fname: buffer},
+    ):
+        # Check that a glob pattern works
+        path = f"s3://{bucket}/{'data.*.parquet'}"
+        got = cudf.read_parquet(path, filesystem=fs)
+    assert_eq(pdf, got)
+
+
 def test_read_parquet_multi_file(s3_base, s3so, pdf):
     fname_1 = "test_parquet_reader_multi_file_1.parquet"
     buffer_1 = BytesIO()
@@ -344,27 +381,7 @@ def test_read_parquet_multi_file(s3_base, s3so, pdf):
     assert_eq(expect, got)
 
 
-@pytest.mark.parametrize("columns", [None, ["Float", "String"]])
-def test_read_parquet_arrow_nativefile(s3_base, s3so, pdf, columns):
-    # Write to buffer
-    fname = "test_parquet_reader_arrow_nativefile.parquet"
-    bucket = "parquet"
-    buffer = BytesIO()
-    pdf.to_parquet(path=buffer)
-    buffer.seek(0)
-    with s3_context(s3_base=s3_base, bucket=bucket, files={fname: buffer}):
-        fs = pa_fs.S3FileSystem(
-            endpoint_override=s3so["client_kwargs"]["endpoint_url"],
-        )
-        with fs.open_input_file(f"{bucket}/{fname}") as fil:
-            got = cudf.read_parquet(fil, columns=columns)
-
-    expect = pdf[columns] if columns else pdf
-    assert_eq(expect, got)
-
-
-@pytest.mark.parametrize("precache", [None, "parquet"])
-def test_read_parquet_filters(s3_base, s3so, pdf_ext, precache):
+def test_read_parquet_filters(s3_base, s3so, pdf_ext):
     fname = "test_parquet_reader_filters.parquet"
     bucket = "parquet"
     buffer = BytesIO()
@@ -376,7 +393,6 @@ def test_read_parquet_filters(s3_base, s3so, pdf_ext, precache):
             f"s3://{bucket}/{fname}",
             storage_options=s3so,
             filters=filters,
-            open_file_options={"precache_options": {"method": precache}},
         )
 
     # All row-groups should be filtered out
@@ -433,13 +449,12 @@ def test_read_json(s3_base, s3so):
             storage_options=s3so,
         )
 
-    expect = pd.read_json(buffer, lines=True)
+    expect = pd.read_json(StringIO(buffer), lines=True)
     assert_eq(expect, got)
 
 
-@pytest.mark.parametrize("use_python_file_object", [False, True])
 @pytest.mark.parametrize("columns", [None, ["string1"]])
-def test_read_orc(s3_base, s3so, datadir, use_python_file_object, columns):
+def test_read_orc(s3_base, s3so, datadir, columns):
     source_file = str(datadir / "orc" / "TestOrcFile.testSnappy.orc")
     fname = "test_orc_reader.orc"
     bucket = "orc"
@@ -453,30 +468,7 @@ def test_read_orc(s3_base, s3so, datadir, use_python_file_object, columns):
             f"s3://{bucket}/{fname}",
             columns=columns,
             storage_options=s3so,
-            use_python_file_object=use_python_file_object,
         )
-
-    if columns:
-        expect = expect[columns]
-    assert_eq(expect, got)
-
-
-@pytest.mark.parametrize("columns", [None, ["string1"]])
-def test_read_orc_arrow_nativefile(s3_base, s3so, datadir, columns):
-    source_file = str(datadir / "orc" / "TestOrcFile.testSnappy.orc")
-    fname = "test_orc_reader.orc"
-    bucket = "orc"
-    expect = pd.read_orc(source_file)
-
-    with open(source_file, "rb") as f:
-        buffer = f.read()
-
-    with s3_context(s3_base=s3_base, bucket=bucket, files={fname: buffer}):
-        fs = pa_fs.S3FileSystem(
-            endpoint_override=s3so["client_kwargs"]["endpoint_url"],
-        )
-        with fs.open_input_file(f"{bucket}/{fname}") as fil:
-            got = cudf.read_orc(fil, columns=columns)
 
     if columns:
         expect = expect[columns]
@@ -533,3 +525,18 @@ def test_write_chunked_parquet(s3_base, s3so):
             actual.sort_values(["b"]).reset_index(drop=True),
             cudf.concat([df1, df2]).sort_values(["b"]).reset_index(drop=True),
         )
+
+
+def test_no_s3fs_on_cudf_import():
+    import subprocess
+    import sys
+
+    output = subprocess.check_output(
+        [
+            sys.executable,
+            "-c",
+            "import cudf; import sys; print('pyarrow._s3fs' in sys.modules)",
+        ],
+        cwd="/",
+    )
+    assert output.strip() == b"False"

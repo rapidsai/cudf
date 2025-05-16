@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,8 +19,6 @@
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
-#include <string>
-
 namespace cudf {
 namespace jit {
 struct get_data_ptr_functor {
@@ -30,7 +28,7 @@ struct get_data_ptr_functor {
   template <typename T, CUDF_ENABLE_IF(is_rep_layout_compatible<T>())>
   void const* operator()(column_view const& view)
   {
-    return static_cast<const void*>(view.template data<T>());
+    return static_cast<void const*>(view.template data<T>());
   }
 
   template <typename T, CUDF_ENABLE_IF(not is_rep_layout_compatible<T>())>
@@ -47,7 +45,7 @@ struct get_data_ptr_functor {
   {
     using ScalarType = scalar_type_t<T>;
     auto s1          = static_cast<ScalarType const*>(&s);
-    return static_cast<const void*>(s1->data());
+    return static_cast<void const*>(s1->data());
   }
 
   template <typename T, CUDF_ENABLE_IF(not is_rep_layout_compatible<T>())>
@@ -57,12 +55,12 @@ struct get_data_ptr_functor {
   }
 };
 
-const void* get_data_ptr(column_view const& view)
+void const* get_data_ptr(column_view const& view)
 {
   return type_dispatcher<dispatch_storage_type>(view.type(), get_data_ptr_functor{}, view);
 }
 
-const void* get_data_ptr(scalar const& s)
+void const* get_data_ptr(scalar const& s)
 {
   return type_dispatcher<dispatch_storage_type>(s.type(), get_data_ptr_functor{}, s);
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,14 +22,22 @@
 #include <cudf/utilities/error.hpp>
 
 #include <cstdint>
+#include <memory>
+#include <vector>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace ast {
+/**
+ * @addtogroup expressions
+ * @{
+ * @file
+ */
 
 // Forward declaration.
 namespace detail {
 class expression_parser;
-}
+class expression_transformer;
+}  // namespace detail
 
 /**
  * @brief A generic expression that can be evaluated to return a value.
@@ -45,6 +53,15 @@ struct expression {
    * @return Index of device data reference for this instance
    */
   virtual cudf::size_type accept(detail::expression_parser& visitor) const = 0;
+
+  /**
+   * @brief Accepts a visitor class.
+   *
+   * @param visitor The `expression_transformer` transforming this expression tree
+   * @return Reference wrapper of transformed expression
+   */
+  virtual std::reference_wrapper<expression const> accept(
+    detail::expression_transformer& visitor) const = 0;
 
   /**
    * @brief Returns true if the expression may evaluate to null.
@@ -112,6 +129,7 @@ enum class ast_operator : int32_t {
                      ///< LOGICAL_OR(valid, valid)
   // Unary operators
   IDENTITY,        ///< Identity function
+  IS_NULL,         ///< Check if operand is null
   SIN,             ///< Trigonometric sine
   COS,             ///< Trigonometric cosine
   TAN,             ///< Trigonometric tangent
@@ -300,12 +318,15 @@ class literal : public expression {
   [[nodiscard]] generic_scalar_device_view get_value() const { return value; }
 
   /**
-   * @brief Accepts a visitor class.
-   *
-   * @param visitor The `expression_parser` parsing this expression tree
-   * @return Index of device data reference for this instance
+   * @copydoc expression::accept
    */
   cudf::size_type accept(detail::expression_parser& visitor) const override;
+
+  /**
+   * @copydoc expression::accept
+   */
+  std::reference_wrapper<expression const> accept(
+    detail::expression_transformer& visitor) const override;
 
   [[nodiscard]] bool may_evaluate_null(table_view const& left,
                                        table_view const& right,
@@ -396,12 +417,15 @@ class column_reference : public expression {
   }
 
   /**
-   * @brief Accepts a visitor class.
-   *
-   * @param visitor The `expression_parser` parsing this expression tree
-   * @return Index of device data reference for this instance
+   * @copydoc expression::accept
    */
   cudf::size_type accept(detail::expression_parser& visitor) const override;
+
+  /**
+   * @copydoc expression::accept
+   */
+  std::reference_wrapper<expression const> accept(
+    detail::expression_transformer& visitor) const override;
 
   [[nodiscard]] bool may_evaluate_null(table_view const& left,
                                        table_view const& right,
@@ -456,15 +480,21 @@ class operation : public expression {
    *
    * @return Vector of operands
    */
-  std::vector<std::reference_wrapper<expression const>> get_operands() const { return operands; }
+  [[nodiscard]] std::vector<std::reference_wrapper<expression const>> const& get_operands() const
+  {
+    return operands;
+  }
 
   /**
-   * @brief Accepts a visitor class.
-   *
-   * @param visitor The `expression_parser` parsing this expression tree
-   * @return Index of device data reference for this instance
+   * @copydoc expression::accept
    */
   cudf::size_type accept(detail::expression_parser& visitor) const override;
+
+  /**
+   * @copydoc expression::accept
+   */
+  std::reference_wrapper<expression const> accept(
+    detail::expression_transformer& visitor) const override;
 
   [[nodiscard]] bool may_evaluate_null(table_view const& left,
                                        table_view const& right,
@@ -478,10 +508,144 @@ class operation : public expression {
   };
 
  private:
-  ast_operator const op;
-  std::vector<std::reference_wrapper<expression const>> const operands;
+  ast_operator op;
+  std::vector<std::reference_wrapper<expression const>> operands;
 };
 
+/**
+ * @brief A expression referring to data from a column in a table.
+ */
+class column_name_reference : public expression {
+ public:
+  /**
+   * @brief Construct a new column name reference object
+   *
+   * @param column_name Name of this column in the table metadata (provided when the expression is
+   * evaluated).
+   */
+  column_name_reference(std::string column_name) : column_name(std::move(column_name)) {}
+
+  /**
+   * @brief Get the column name.
+   *
+   * @return The name of this column reference
+   */
+  [[nodiscard]] std::string get_column_name() const { return column_name; }
+
+  /**
+   * @copydoc expression::accept
+   */
+  cudf::size_type accept(detail::expression_parser& visitor) const override;
+
+  /**
+   * @copydoc expression::accept
+   */
+  std::reference_wrapper<expression const> accept(
+    detail::expression_transformer& visitor) const override;
+
+  [[nodiscard]] bool may_evaluate_null(table_view const& left,
+                                       table_view const& right,
+                                       rmm::cuda_stream_view stream) const override
+  {
+    return true;
+  }
+
+ private:
+  std::string column_name;
+};
+
+/**
+ * @brief An AST expression tree. It owns and contains multiple dependent expressions. All the
+ * expressions are destroyed when the tree is destroyed.
+ */
+class tree {
+ public:
+  /**
+   * @brief construct an empty ast tree
+   */
+  tree() = default;
+
+  /**
+   * @brief Moves the ast tree
+   */
+  tree(tree&&) = default;
+
+  /**
+   * @brief move-assigns the AST tree
+   * @returns a reference to the move-assigned tree
+   */
+  tree& operator=(tree&&) = default;
+
+  ~tree() = default;
+
+  // the tree is not copyable
+  tree(tree const&)            = delete;
+  tree& operator=(tree const&) = delete;
+
+  /**
+   * @brief Add an expression to the AST tree
+   * @param args Arguments to use to construct the ast expression
+   * @returns a reference to the added expression
+   */
+  template <typename Expr, typename... Args>
+  std::enable_if_t<std::is_base_of_v<expression, Expr>, Expr const&> emplace(Args&&... args)
+  {
+    auto expr            = std::make_unique<Expr>(std::forward<Args>(args)...);
+    Expr const& expr_ref = *expr;
+    expressions.emplace_back(std::move(expr));
+    return expr_ref;
+  }
+
+  /**
+   * @brief Add an expression to the AST tree
+   * @param expr AST expression to be added
+   * @returns a reference to the added expression
+   */
+  template <typename Expr>
+  decltype(auto) push(Expr expr)
+  {
+    return emplace<Expr>(std::move(expr));
+  }
+
+  /**
+   * @brief get the first expression in the tree
+   * @returns the first inserted expression into the tree
+   */
+  [[nodiscard]] expression const& front() const { return *expressions.front(); }
+
+  /**
+   * @brief get the last expression in the tree
+   * @returns the last inserted expression into the tree
+   */
+  [[nodiscard]] expression const& back() const { return *expressions.back(); }
+
+  /**
+   * @brief get the number of expressions added to the tree
+   * @returns the number of expressions added to the tree
+   */
+  [[nodiscard]] size_t size() const { return expressions.size(); }
+
+  /**
+   * @brief get the expression at an index in the tree. Index is checked.
+   * @param index index of expression in the ast tree
+   * @returns the expression at the specified index
+   */
+  expression const& at(size_t index) { return *expressions.at(index); }
+
+  /**
+   * @brief get the expression at an index in the tree. Index is unchecked.
+   * @param index index of expression in the ast tree
+   * @returns the expression at the specified index
+   */
+  expression const& operator[](size_t index) const { return *expressions[index]; }
+
+ private:
+  // TODO: use better ownership semantics, the unique_ptr here is redundant. Consider using a bump
+  // allocator with type-erased deleters.
+  std::vector<std::unique_ptr<expression>> expressions;
+};
+
+/** @} */  // end of group
 }  // namespace ast
 
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

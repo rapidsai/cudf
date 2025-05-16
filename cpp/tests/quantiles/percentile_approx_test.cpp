@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,9 +29,11 @@
 #include <cudf/transform.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <arrow/util/tdigest.h>
 
+namespace {
 std::unique_ptr<cudf::column> arrow_percentile_approx(cudf::column_view const& _values,
                                                       int delta,
                                                       std::vector<double> const& percentages)
@@ -314,6 +316,7 @@ cudf::data_type get_appropriate_type()
   if constexpr (cudf::is_fixed_point<T>()) { return cudf::data_type{cudf::type_to_id<T>(), -7}; }
   return cudf::data_type{cudf::type_to_id<T>()};
 }
+}  // namespace
 
 using PercentileApproxTypes =
   cudf::test::Concat<cudf::test::NumericTypes, cudf::test::FixedPointTypes>;
@@ -370,8 +373,8 @@ struct PercentileApproxTest : public cudf::test::BaseFixture {};
 
 TEST_F(PercentileApproxTest, EmptyInput)
 {
-  auto empty_ = cudf::tdigest::detail::make_empty_tdigest_column(
-    cudf::get_default_stream(), rmm::mr::get_current_device_resource());
+  auto empty_ = cudf::tdigest::detail::make_empty_tdigests_column(
+    1, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
   cudf::test::fixed_width_column_wrapper<double> percentiles{0.0, 0.25, 0.3};
 
   std::vector<cudf::column_view> input;
@@ -383,8 +386,8 @@ TEST_F(PercentileApproxTest, EmptyInput)
   cudf::tdigest::tdigest_column_view tdv(*empty);
   auto result = cudf::percentile_approx(tdv, percentiles);
 
-  cudf::test::fixed_width_column_wrapper<cudf::offset_type> offsets{0, 0, 0, 0};
-  std::vector<bool> nulls{0, 0, 0};
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> offsets{0, 0, 0, 0};
+  std::vector<bool> nulls{false, false, false};
   auto [null_mask, null_count] = cudf::test::detail::make_null_mask(nulls.begin(), nulls.end());
 
   auto expected = cudf::make_lists_column(3,
@@ -415,8 +418,8 @@ TEST_F(PercentileApproxTest, EmptyPercentiles)
   cudf::tdigest::tdigest_column_view tdv(*tdigest_column.second[0].results[0]);
   auto result = cudf::percentile_approx(tdv, percentiles);
 
-  cudf::test::fixed_width_column_wrapper<cudf::offset_type> offsets{0, 0, 0};
-  std::vector<bool> nulls{0, 0};
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> offsets{0, 0, 0};
+  std::vector<bool> nulls{false, false};
   auto [null_mask, null_count] = cudf::test::detail::make_null_mask(nulls.begin(), nulls.end());
 
   auto expected = cudf::make_lists_column(2,
@@ -444,10 +447,11 @@ TEST_F(PercentileApproxTest, NullPercentiles)
 
   cudf::tdigest::tdigest_column_view tdv(*tdigest_column.second[0].results[0]);
 
-  cudf::test::fixed_width_column_wrapper<double> npercentiles{{0.5, 0.5, 1.0, 1.0}, {0, 0, 1, 1}};
+  cudf::test::fixed_width_column_wrapper<double> npercentiles{{0.5, 0.5, 1.0, 1.0},
+                                                              {false, false, true, true}};
   auto result = cudf::percentile_approx(tdv, npercentiles);
 
-  std::vector<bool> valids{0, 0, 1, 1};
+  std::vector<bool> valids{false, false, true, true};
   cudf::test::lists_column_wrapper<double> expected{{{99, 99, 4, 4}, valids.begin()},
                                                     {{99, 99, 8, 8}, valids.begin()}};
 

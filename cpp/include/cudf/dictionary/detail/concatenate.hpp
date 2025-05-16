@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,13 +18,13 @@
 #include <cudf/column/column.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
-namespace cudf {
-namespace dictionary {
-namespace detail {
+namespace CUDF_EXPORT cudf {
+namespace dictionary::detail {
 /**
  * @brief Returns a single column by vertically concatenating the given vector of
  * dictionary columns.
@@ -39,8 +39,7 @@ namespace detail {
  */
 std::unique_ptr<column> concatenate(host_span<column_view const> columns,
                                     rmm::cuda_stream_view stream,
-                                    rmm::mr::device_memory_resource* mr);
+                                    rmm::device_async_resource_ref mr);
 
-}  // namespace detail
-}  // namespace dictionary
-}  // namespace cudf
+}  // namespace dictionary::detail
+}  // namespace CUDF_EXPORT cudf

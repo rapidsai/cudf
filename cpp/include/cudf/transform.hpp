@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,12 +18,13 @@
 
 #include <cudf/ast/expressions.hpp>
 #include <cudf/types.hpp>
-
-#include <rmm/mr/device/per_device_resource.hpp>
+#include <cudf/utilities/export.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <memory>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
+
 /**
  * @addtogroup transformation_transform
  * @{
@@ -32,29 +33,42 @@ namespace cudf {
  */
 
 /**
- * @brief Creates a new column by applying a unary function against every
- * element of an input column.
+ * @brief Creates a new column by applying a transform function against every
+ * element of the input columns.
  *
  * Computes:
- * `out[i] = F(in[i])`
+ * `out[i] = F(inputs[i]...)`.
  *
- * The output null mask is the same is the input null mask so if input[i] is
- * null then output[i] is also null
+ * Note that for every scalar in `inputs` (columns of size 1), `input[i] == input[0]`
  *
- * @param input         An immutable view of the input column to transform
- * @param unary_udf     The PTX/CUDA string of the unary function to apply
+ *
+ * @throws std::invalid_argument if any of the input columns have different sizes (except scalars of
+ * size 1)
+ * @throws std::invalid_argument if `output_type` or any of the inputs are not fixed-width or string
+ * types
+ * @throws std::invalid_argument if any of the input columns have nulls
+ * @throws std::logic_error if JIT is not supported by the runtime
+ *
+ * The size of the resulting column is the size of the largest column.
+ *
+ * @param inputs        Immutable views of the input columns to transform
+ * @param transform_udf The PTX/CUDA string of the transform function to apply
  * @param output_type   The output type that is compatible with the output type in the UDF
  * @param is_ptx        true: the UDF is treated as PTX code; false: the UDF is treated as CUDA code
+ * @param user_data     User-defined device data to pass to the UDF.
+ * @param stream        CUDA stream used for device memory operations and kernel launches
  * @param mr            Device memory resource used to allocate the returned column's device memory
- * @return              The column resulting from applying the unary function to
+ * @return              The column resulting from applying the transform function to
  *                      every element of the input
  */
 std::unique_ptr<column> transform(
-  column_view const& input,
-  std::string const& unary_udf,
+  std::vector<column_view> const& inputs,
+  std::string const& transform_udf,
   data_type output_type,
   bool is_ptx,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  std::optional<void*> user_data    = std::nullopt,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Creates a null_mask from `input` by converting `NaN` to null and
@@ -62,14 +76,16 @@ std::unique_ptr<column> transform(
  *
  * @throws cudf::logic_error if `input.type()` is a non-floating type
  *
- * @param input         An immutable view of the input column of floating-point type
- * @param mr            Device memory resource used to allocate the returned bitmask
- * @return A pair containing a `device_buffer` with the new bitmask and it's
+ * @param input  An immutable view of the input column of floating-point type
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr     Device memory resource used to allocate the returned bitmask
+ * @return A pair containing a `device_buffer` with the new bitmask and its
  * null count obtained by replacing `NaN` in `input` with null.
  */
 std::pair<std::unique_ptr<rmm::device_buffer>, size_type> nans_to_nulls(
   column_view const& input,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Compute a new column by evaluating an expression tree on a table.
@@ -81,13 +97,15 @@ std::pair<std::unique_ptr<rmm::device_buffer>, size_type> nans_to_nulls(
  *
  * @param table The table used for expression evaluation
  * @param expr The root of the expression tree
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource
  * @return Output column
  */
 std::unique_ptr<column> compute_column(
   table_view const& table,
   ast::expression const& expr,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Creates a bitmask from a column of boolean elements.
@@ -98,15 +116,17 @@ std::unique_ptr<column> compute_column(
  *
  * @throws cudf::logic_error if `input.type()` is a non-boolean type
  *
- * @param input        Boolean elements to convert to a bitmask
- * @param mr           Device memory resource used to allocate the returned bitmask
- * @return A pair containing a `device_buffer` with the new bitmask and it's
+ * @param input  Boolean elements to convert to a bitmask
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr     Device memory resource used to allocate the returned bitmask
+ * @return A pair containing a `device_buffer` with the new bitmask and its
  * null count obtained from input considering `true` represent `valid`/`1` and
  * `false` represent `invalid`/`0`.
  */
 std::pair<std::unique_ptr<rmm::device_buffer>, cudf::size_type> bools_to_mask(
   column_view const& input,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Encode the rows of the given table as integers
@@ -128,13 +148,15 @@ std::pair<std::unique_ptr<rmm::device_buffer>, cudf::size_type> bools_to_mask(
  * @endcode
  *
  * @param input Table containing values to be encoded
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned table's device memory
  * @return A pair containing the distinct row of the input table in sorter order,
  * and a column of integer indices representing the encoded rows.
  */
 std::pair<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::column>> encode(
   cudf::table_view const& input,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Encodes `input` by generating a new column for each value in `categories` indicating the
@@ -160,13 +182,15 @@ std::pair<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::column>> encode(
  *
  * @param input Column containing values to be encoded
  * @param categories Column containing categories
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned table's device memory
  * @return A pair containing the owner to all encoded data and a table view into the data
  */
 std::pair<std::unique_ptr<column>, table_view> one_hot_encode(
   column_view const& input,
   column_view const& categories,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Creates a boolean column from given bitmask.
@@ -186,6 +210,7 @@ std::pair<std::unique_ptr<column>, table_view> one_hot_encode(
  * @param bitmask A device pointer to the bitmask which needs to be converted
  * @param begin_bit position of the bit from which the conversion should start
  * @param end_bit position of the bit before which the conversion should stop
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned columns' device memory
  * @return A boolean column representing the given mask from [begin_bit, end_bit)
  */
@@ -193,7 +218,8 @@ std::unique_ptr<column> mask_to_bools(
   bitmask_type const* bitmask,
   size_type begin_bit,
   size_type end_bit,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Returns an approximate cumulative size in bits of all columns in the `table_view` for
@@ -217,12 +243,39 @@ std::unique_ptr<column> mask_to_bools(
  * row_bit_count(column(x)) >= row_bit_count(gather(column(x)))
  *
  * @param t The table view to perform the computation on
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned columns' device memory
  * @return A 32-bit integer column containing the per-row bit counts
  */
 std::unique_ptr<column> row_bit_count(
   table_view const& t,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
+/**
+ * @brief Returns an approximate cumulative size in bits of all columns in the `table_view` for
+ * each segment of rows.
+ *
+ * This is similar to counting bit size per row for the input table in `cudf::row_bit_count`,
+ * except that row sizes are accumulated by segments.
+ *
+ * Currently, only fixed-length segments are supported. In case the input table has number of rows
+ * not divisible by `segment_length`, its last segment is considered as shorter than the others.
+ *
+ * @throw std::invalid_argument if the input `segment_length` is non-positive or larger than the
+ * number of rows in the input table.
+ *
+ * @param t The table view to perform the computation on
+ * @param segment_length The number of rows in each segment for which the total size is computed
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned columns' device memory
+ * @return A 32-bit integer column containing the bit counts for each segment of rows
+ */
+std::unique_ptr<column> segmented_row_bit_count(
+  table_view const& t,
+  size_type segment_length,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /** @} */  // end of group
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

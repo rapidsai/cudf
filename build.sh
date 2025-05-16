@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright (c) 2019-2023, NVIDIA CORPORATION.
+# Copyright (c) 2019-2025, NVIDIA CORPORATION.
 
 # cuDF build script
 
@@ -17,12 +17,14 @@ ARGS=$*
 # script, and that this script resides in the repo dir!
 REPODIR=$(cd $(dirname $0); pwd)
 
-VALIDARGS="clean libcudf cudf cudfjar dask_cudf benchmarks tests libcudf_kafka cudf_kafka custreamz -v -g -n -l --allgpuarch --disable_nvtx --opensource_nvcomp  --show_depr_warn --ptds -h --build_metrics --incl_cache_stats"
-HELP="$0 [clean] [libcudf] [cudf] [cudfjar] [dask_cudf] [benchmarks] [tests] [libcudf_kafka] [cudf_kafka] [custreamz] [-v] [-g] [-n] [-h] [--cmake-args=\\\"<args>\\\"]
+VALIDARGS="clean libcudf pylibcudf cudf cudf_polars cudfjar dask_cudf benchmarks tests libcudf_kafka cudf_kafka custreamz -v -g -n --pydevelop -l --allgpuarch --disable_nvtx --opensource_nvcomp  --show_depr_warn --ptds -h --build_metrics --incl_cache_stats --disable_large_strings"
+HELP="$0 [clean] [libcudf] [pylibcudf] [cudf] [cudf_polars] [cudfjar] [dask_cudf] [benchmarks] [tests] [libcudf_kafka] [cudf_kafka] [custreamz] [-v] [-g] [-n] [-h] [--cmake-args=\\\"<args>\\\"]
    clean                         - remove all existing build artifacts and configuration (start
                                    over)
    libcudf                       - build the cudf C++ code only
+   pylibcudf                     - build the pylibcudf Python package
    cudf                          - build the cudf Python package
+   cudf_polars                   - build the cudf_polars Python package
    cudfjar                       - build cudf JAR with static libcudf using devtoolset toolchain
    dask_cudf                     - build the dask_cudf Python package
    benchmarks                    - build benchmarks
@@ -32,29 +34,31 @@ HELP="$0 [clean] [libcudf] [cudf] [cudfjar] [dask_cudf] [benchmarks] [tests] [li
    custreamz                     - build the custreamz Python package
    -v                            - verbose build mode
    -g                            - build for debug
-   -n                            - no install step
+   -n                            - no install step (does not affect Python)
+   --pydevelop                   - Install Python packages in editable mode
    --allgpuarch                  - build for all supported GPU architectures
    --disable_nvtx                - disable inserting NVTX profiling ranges
    --opensource_nvcomp           - disable use of proprietary nvcomp extensions
    --show_depr_warn              - show cmake deprecation warnings
    --ptds                        - enable per-thread default stream
+   --disable_large_strings       - disable large strings support
    --build_metrics               - generate build metrics report for libcudf
    --incl_cache_stats            - include cache statistics in build metrics report
    --cmake-args=\\\"<args>\\\"   - pass arbitrary list of CMake configuration options (escape all quotes in argument)
    -h | --h[elp]                 - print this text
 
-   default action (no args) is to build and install 'libcudf' then 'cudf'
-   then 'dask_cudf' targets
+   default action (no args) is to build and install 'libcudf', 'pylibcudf', 'cudf', 'cudf_polars', and 'dask_cudf' targets
 "
 LIB_BUILD_DIR=${LIB_BUILD_DIR:=${REPODIR}/cpp/build}
 KAFKA_LIB_BUILD_DIR=${KAFKA_LIB_BUILD_DIR:=${REPODIR}/cpp/libcudf_kafka/build}
 CUDF_KAFKA_BUILD_DIR=${REPODIR}/python/cudf_kafka/build
 CUDF_BUILD_DIR=${REPODIR}/python/cudf/build
 DASK_CUDF_BUILD_DIR=${REPODIR}/python/dask_cudf/build
+PYLIBCUDF_BUILD_DIR=${REPODIR}/python/pylibcudf/build
 CUSTREAMZ_BUILD_DIR=${REPODIR}/python/custreamz/build
 CUDF_JAR_JAVA_BUILD_DIR="$REPODIR/java/target"
 
-BUILD_DIRS="${LIB_BUILD_DIR} ${CUDF_BUILD_DIR} ${DASK_CUDF_BUILD_DIR} ${KAFKA_LIB_BUILD_DIR} ${CUDF_KAFKA_BUILD_DIR} ${CUSTREAMZ_BUILD_DIR} ${CUDF_JAR_JAVA_BUILD_DIR}"
+BUILD_DIRS="${LIB_BUILD_DIR} ${CUDF_BUILD_DIR} ${DASK_CUDF_BUILD_DIR} ${KAFKA_LIB_BUILD_DIR} ${CUDF_KAFKA_BUILD_DIR} ${CUSTREAMZ_BUILD_DIR} ${CUDF_JAR_JAVA_BUILD_DIR} ${PYLIBCUDF_BUILD_DIR}"
 
 # Set defaults for vars modified by flags to this script
 VERBOSE_FLAG=""
@@ -68,7 +72,9 @@ BUILD_DISABLE_DEPRECATION_WARNINGS=ON
 BUILD_PER_THREAD_DEFAULT_STREAM=OFF
 BUILD_REPORT_METRICS=OFF
 BUILD_REPORT_INCL_CACHE_STATS=OFF
+BUILD_DISABLE_LARGE_STRINGS=OFF
 USE_PROPRIETARY_NVCOMP=ON
+PYTHON_ARGS_FOR_INSTALL="-m pip install --no-build-isolation --no-deps --config-settings rapidsai.disable-cuda=true"
 
 # Set defaults for vars that may not have been defined externally
 #  FIXME: if INSTALL_PREFIX is not set, check PREFIX, then check
@@ -107,8 +113,8 @@ function buildAll {
 }
 
 function buildLibCudfJniInDocker {
-    local cudaVersion="11.5.0"
-    local imageName="cudf-build:${cudaVersion}-devel-centos7"
+    local cudaVersion="11.8.0"
+    local imageName="cudf-build:${cudaVersion}-devel-rocky8"
     local CMAKE_GENERATOR="${CMAKE_GENERATOR:-Ninja}"
     local workspaceDir="/rapids"
     local localMavenRepo=${LOCAL_MAVEN_REPO:-"$HOME/.m2/repository"}
@@ -118,7 +124,7 @@ function buildLibCudfJniInDocker {
     mkdir -p "$CUDF_JAR_JAVA_BUILD_DIR/libcudf-cmake-build"
     mkdir -p "$HOME/.ccache" "$HOME/.m2"
     nvidia-docker build \
-        -f java/ci/Dockerfile.centos7 \
+        -f java/ci/Dockerfile.rocky \
         --build-arg CUDA_VERSION=${cudaVersion} \
         -t $imageName .
     nvidia-docker run -it -u $(id -u):$(id -g) --rm \
@@ -151,10 +157,13 @@ function buildLibCudfJniInDocker {
                 -DCUDF_ENABLE_ARROW_S3=OFF \
                 -DBUILD_TESTS=OFF \
                 -DCUDF_USE_PER_THREAD_DEFAULT_STREAM=ON \
+                -DCUDF_LARGE_STRINGS_DISABLED=ON \
                 -DRMM_LOGGING_LEVEL=OFF \
-                -DBUILD_SHARED_LIBS=OFF && \
+                -DBUILD_SHARED_LIBS=OFF \
+                -DCUDF_EXPORT_NVCOMP=ON && \
              cmake --build . --parallel ${PARALLEL_LEVEL} && \
              cd $workspaceRepoDir/java && \
+             CUDF_CPP_BUILD_DIR=$workspaceRepoDir/java/target/libcudf-cmake-build \
              mvn ${MVN_PHASES:-"package"} \
                 -Dmaven.repo.local=$workspaceMavenRepoDir \
                 -DskipTests=${SKIP_TESTS:-false} \
@@ -163,13 +172,12 @@ function buildLibCudfJniInDocker {
                                      -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
                                      -DCMAKE_CUDA_COMPILER_LAUNCHER=ccache \
                                      -DCMAKE_CXX_LINKER_LAUNCHER=ccache' \
-                -DCUDF_CPP_BUILD_DIR=$workspaceRepoDir/java/target/libcudf-cmake-build \
                 -DCUDA_STATIC_RUNTIME=ON \
                 -DCUDF_USE_PER_THREAD_DEFAULT_STREAM=ON \
                 -DUSE_GDS=ON \
-                -DGPU_ARCHS=${CUDF_CMAKE_CUDA_ARCHITECTURES} \
+                -DCMAKE_CUDA_ARCHITECTURES=${CUDF_CMAKE_CUDA_ARCHITECTURES} \
                 -DCUDF_JNI_LIBCUDF_STATIC=ON \
-                -Dtest=*,!CuFileTest,!CudaFatalTest"
+                -Dtest=*,!CuFileTest,!CudaFatalTest,!ColumnViewNonEmptyNullsTest"
 }
 
 if hasArg -h || hasArg --h || hasArg --help; then
@@ -228,12 +236,13 @@ fi
 if hasArg --incl_cache_stats; then
     BUILD_REPORT_INCL_CACHE_STATS=ON
 fi
-
-# Append `-DFIND_CUDF_CPP=ON` to EXTRA_CMAKE_ARGS unless a user specified the option.
-if [[ "${EXTRA_CMAKE_ARGS}" != *"DFIND_CUDF_CPP"* ]]; then
-    EXTRA_CMAKE_ARGS="${EXTRA_CMAKE_ARGS} -DFIND_CUDF_CPP=ON"
+if hasArg --pydevelop; then
+    PYTHON_ARGS_FOR_INSTALL="${PYTHON_ARGS_FOR_INSTALL} -e"
 fi
 
+if hasArg --disable_large_strings; then
+    BUILD_DISABLE_LARGE_STRINGS="ON"
+fi
 
 # If clean given, run it prior to any other steps
 if hasArg clean; then
@@ -257,7 +266,7 @@ fi
 ################################################################################
 # Configure, build, and install libcudf
 
-if buildAll || hasArg libcudf || hasArg cudf || hasArg cudfjar; then
+if buildAll || hasArg libcudf || hasArg pylibcudf || hasArg cudf || hasArg cudfjar; then
     if (( ${BUILD_ALL_GPU_ARCH} == 0 )); then
         CUDF_CMAKE_CUDA_ARCHITECTURES="${CUDF_CMAKE_CUDA_ARCHITECTURES:-NATIVE}"
         if [[ "$CUDF_CMAKE_CUDA_ARCHITECTURES" == "NATIVE" ]]; then
@@ -287,6 +296,7 @@ if buildAll || hasArg libcudf; then
           -DBUILD_BENCHMARKS=${BUILD_BENCHMARKS} \
           -DDISABLE_DEPRECATION_WARNINGS=${BUILD_DISABLE_DEPRECATION_WARNINGS} \
           -DCUDF_USE_PER_THREAD_DEFAULT_STREAM=${BUILD_PER_THREAD_DEFAULT_STREAM} \
+          -DCUDF_LARGE_STRINGS_DISABLED=${BUILD_DISABLE_LARGE_STRINGS} \
           -DCMAKE_BUILD_TYPE=${BUILD_TYPE} \
           ${EXTRA_CMAKE_ARGS}
 
@@ -328,27 +338,34 @@ if buildAll || hasArg libcudf; then
     fi
 fi
 
+# Build and install the pylibcudf Python package
+if buildAll || hasArg pylibcudf; then
+
+    cd ${REPODIR}/python/pylibcudf
+    SKBUILD_CMAKE_ARGS="-DCMAKE_PREFIX_PATH=${INSTALL_PREFIX};-DCMAKE_LIBRARY_PATH=${LIBCUDF_BUILD_DIR};-DCMAKE_CUDA_ARCHITECTURES=${CUDF_CMAKE_CUDA_ARCHITECTURES};${EXTRA_CMAKE_ARGS}" \
+        python ${PYTHON_ARGS_FOR_INSTALL} .
+fi
+
 # Build and install the cudf Python package
 if buildAll || hasArg cudf; then
 
     cd ${REPODIR}/python/cudf
-    python setup.py build_ext --inplace -- -DCMAKE_PREFIX_PATH=${INSTALL_PREFIX} -DCMAKE_LIBRARY_PATH=${LIBCUDF_BUILD_DIR} -DCMAKE_CUDA_ARCHITECTURES=${CUDF_CMAKE_CUDA_ARCHITECTURES} ${EXTRA_CMAKE_ARGS} -- -j${PARALLEL_LEVEL:-1}
-    if [[ ${INSTALL_TARGET} != "" ]]; then
-        python setup.py install --single-version-externally-managed --record=record.txt  -- -DCMAKE_PREFIX_PATH=${INSTALL_PREFIX} -DCMAKE_LIBRARY_PATH=${LIBCUDF_BUILD_DIR} ${EXTRA_CMAKE_ARGS} -- -j${PARALLEL_LEVEL:-1}
-    fi
+    SKBUILD_CMAKE_ARGS="-DCMAKE_PREFIX_PATH=${INSTALL_PREFIX};-DCMAKE_LIBRARY_PATH=${LIBCUDF_BUILD_DIR};-DCMAKE_CUDA_ARCHITECTURES=${CUDF_CMAKE_CUDA_ARCHITECTURES};${EXTRA_CMAKE_ARGS}" \
+        python ${PYTHON_ARGS_FOR_INSTALL} .
 fi
 
+# Build and install the cudf_polars Python package
+if buildAll || hasArg cudf_polars; then
+
+    cd ${REPODIR}/python/cudf_polars
+    python ${PYTHON_ARGS_FOR_INSTALL} .
+fi
 
 # Build and install the dask_cudf Python package
 if buildAll || hasArg dask_cudf; then
 
     cd ${REPODIR}/python/dask_cudf
-    if [[ ${INSTALL_TARGET} != "" ]]; then
-        PARALLEL_LEVEL=${PARALLEL_LEVEL} python setup.py build_ext --inplace -j${PARALLEL_LEVEL}
-        python setup.py install --single-version-externally-managed --record=record.txt
-    else
-        PARALLEL_LEVEL=${PARALLEL_LEVEL} python setup.py build_ext --inplace -j${PARALLEL_LEVEL}
-    fi
+    python ${PYTHON_ARGS_FOR_INSTALL} .
 fi
 
 if hasArg cudfjar; then
@@ -375,21 +392,12 @@ fi
 # build cudf_kafka Python package
 if hasArg cudf_kafka; then
     cd ${REPODIR}/python/cudf_kafka
-    if [[ ${INSTALL_TARGET} != "" ]]; then
-        PARALLEL_LEVEL=${PARALLEL_LEVEL} python setup.py build_ext --inplace -j${PARALLEL_LEVEL}
-        python setup.py install --single-version-externally-managed --record=record.txt
-    else
-        PARALLEL_LEVEL=${PARALLEL_LEVEL} python setup.py build_ext --inplace -j${PARALLEL_LEVEL} --library-dir=${LIBCUDF_BUILD_DIR}
-    fi
+    SKBUILD_CMAKE_ARGS="-DCMAKE_PREFIX_PATH=${INSTALL_PREFIX};-DCMAKE_LIBRARY_PATH=${LIBCUDF_BUILD_DIR};${EXTRA_CMAKE_ARGS}"
+        python ${PYTHON_ARGS_FOR_INSTALL} .
 fi
 
 # build custreamz Python package
 if hasArg custreamz; then
     cd ${REPODIR}/python/custreamz
-    if [[ ${INSTALL_TARGET} != "" ]]; then
-        PARALLEL_LEVEL=${PARALLEL_LEVEL} python setup.py build_ext --inplace -j${PARALLEL_LEVEL}
-        python setup.py install --single-version-externally-managed --record=record.txt
-    else
-        PARALLEL_LEVEL=${PARALLEL_LEVEL} python setup.py build_ext --inplace -j${PARALLEL_LEVEL} --library-dir=${LIBCUDF_BUILD_DIR}
-    fi
+    python ${PYTHON_ARGS_FOR_INSTALL} .
 fi

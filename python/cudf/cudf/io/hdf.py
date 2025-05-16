@@ -1,10 +1,10 @@
-# Copyright (c) 2019, NVIDIA CORPORATION.
+# Copyright (c) 2019-2025, NVIDIA CORPORATION.
 
 import warnings
 
 import pandas as pd
 
-import cudf
+from cudf.core.dataframe import from_pandas
 from cudf.utils import ioutils
 
 
@@ -16,7 +16,7 @@ def read_hdf(path_or_buf, *args, **kwargs):
         "be GPU accelerated in the future"
     )
     pd_value = pd.read_hdf(path_or_buf, *args, **kwargs)
-    return cudf.from_pandas(pd_value)
+    return from_pandas(pd_value)
 
 
 @ioutils.doc_to_hdf()
@@ -27,4 +27,4 @@ def to_hdf(path_or_buf, key, value, *args, **kwargs):
         "be GPU accelerated in the future"
     )
     pd_value = value.to_pandas()
-    pd.io.pytables.to_hdf(path_or_buf, key, pd_value, *args, **kwargs)
+    pd_value.to_hdf(path_or_buf, key=key, *args, **kwargs)

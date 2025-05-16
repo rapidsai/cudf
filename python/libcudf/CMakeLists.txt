@@ -1,0 +1,75 @@
+# =============================================================================
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
+#
+# Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
+# in compliance with the License. You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software distributed under the License
+# is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express
+# or implied. See the License for the specific language governing permissions and limitations under
+# the License.
+# =============================================================================
+
+cmake_minimum_required(VERSION 3.30.4 FATAL_ERROR)
+
+include(../../cmake/rapids_config.cmake)
+
+project(
+  libcudf-python
+  VERSION "${RAPIDS_VERSION}"
+  LANGUAGES CXX
+)
+
+option(USE_NVCOMP_RUNTIME_WHEEL "Use the nvcomp wheel at runtime instead of the system library" OFF)
+
+# TODO(nvcomp): when `nvcomp` supports Python 3.13 and we de-vendor `nvcomp` from `kvikio` this
+# option should be removed https://github.com/rapidsai/build-planning/issues/171
+option(USE_NVCOMP_FROM_LIBKVIKIO_WHEEL "Use nvcomp bundled with libkvikio" OFF)
+
+# Check if cudf is already available. If so, it is the user's responsibility to ensure that the
+# CMake package is also available at build time of the Python cudf package.
+find_package(cudf "${RAPIDS_VERSION}")
+
+if(cudf_FOUND)
+  return()
+endif()
+
+unset(cudf_FOUND)
+
+set(BUILD_TESTS OFF)
+set(BUILD_BENCHMARKS OFF)
+set(CUDF_BUILD_TESTUTIL OFF)
+set(CUDF_BUILD_STREAMS_TEST_UTIL OFF)
+
+# TODO(nvcomp): when `nvcomp` supports Python 3.13 and we de-vendor `nvcomp` from `kvikio` the
+# libkvikio branch should be removed
+if(USE_NVCOMP_RUNTIME_WHEEL OR USE_NVCOMP_FROM_LIBKVIKIO_WHEEL)
+  set(CUDF_EXPORT_NVCOMP OFF)
+endif()
+set(CUDA_STATIC_RUNTIME ON)
+
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/lib)
+
+add_subdirectory(../../cpp cudf-cpp)
+
+if(USE_NVCOMP_RUNTIME_WHEEL)
+  set(rpaths "$ORIGIN/../../nvidia/nvcomp")
+  set_property(
+    TARGET cudf
+    PROPERTY INSTALL_RPATH ${rpaths}
+    APPEND
+  )
+endif()
+
+# TODO(nvcomp): when `nvcomp` supports Python 3.13 and we de-vendor `nvcomp` from `kvikio` this
+# block should be removed
+if(USE_NVCOMP_FROM_LIBKVIKIO_WHEEL)
+  set(rpaths "$ORIGIN/../../libkvikio/lib64")
+  set_property(
+    TARGET cudf
+    PROPERTY INSTALL_RPATH ${rpaths}
+    APPEND
+  )
+endif()

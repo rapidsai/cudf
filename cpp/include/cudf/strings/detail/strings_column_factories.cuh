@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,12 +22,14 @@
 #include <cudf/strings/detail/gather.cuh>
 #include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/functional>
+#include <cuda/std/iterator>
 #include <thrust/copy.h>
-#include <thrust/distance.h>
 #include <thrust/for_each.h>
 #include <thrust/functional.h>
 #include <thrust/iterator/counting_iterator.h>
@@ -45,17 +47,7 @@ namespace detail {
  * @brief Basic type expected for iterators passed to `make_strings_column` that represent string
  * data in device memory.
  */
-using string_index_pair = thrust::pair<const char*, size_type>;
-
-/**
- * @brief Average string byte-length threshold for deciding character-level
- * vs. row-level parallel algorithm.
- *
- * This value was determined by running the factory_benchmark against different
- * string lengths and observing the point where the performance is faster for
- * long strings.
- */
-constexpr size_type FACTORY_BYTES_PER_ROW_THRESHOLD = 64;
+using string_index_pair = thrust::pair<char const*, size_type>;
 
 /**
  * @brief Create a strings-type column from iterators of pointer/size pairs
@@ -72,20 +64,20 @@ template <typename IndexPairIterator>
 std::unique_ptr<column> make_strings_column(IndexPairIterator begin,
                                             IndexPairIterator end,
                                             rmm::cuda_stream_view stream,
-                                            rmm::mr::device_memory_resource* mr)
+                                            rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  size_type strings_count = thrust::distance(begin, end);
+  size_type strings_count = cuda::std::distance(begin, end);
   if (strings_count == 0) return make_empty_column(type_id::STRING);
 
   // build offsets column from the strings sizes
-  auto offsets_transformer = [] __device__(string_index_pair item) -> size_type {
-    return (item.first != nullptr ? static_cast<size_type>(item.second) : size_type{0});
-  };
+  auto offsets_transformer =
+    cuda::proclaim_return_type<size_type>([] __device__(string_index_pair item) -> size_type {
+      return (item.first != nullptr ? static_cast<size_type>(item.second) : size_type{0});
+    });
   auto offsets_transformer_itr = thrust::make_transform_iterator(begin, offsets_transformer);
-  auto [offsets_column, bytes] = cudf::detail::make_offsets_child_column(
+  auto [offsets_column, bytes] = cudf::strings::detail::make_offsets_child_column(
     offsets_transformer_itr, offsets_transformer_itr + strings_count, stream, mr);
-  auto offsets_view = offsets_column->view();
 
   // create null mask
   auto validator = [] __device__(string_index_pair const item) { return item.first != nullptr; };
@@ -95,46 +87,12 @@ std::unique_ptr<column> make_strings_column(IndexPairIterator begin,
     (null_count > 0) ? std::move(new_nulls.first) : rmm::device_buffer{0, stream, mr};
 
   // build chars column
-  std::unique_ptr<column> chars_column =
-    [offsets_view, bytes = bytes, begin, strings_count, null_count, stream, mr] {
-      auto const avg_bytes_per_row = bytes / std::max(strings_count - null_count, 1);
-      // use a character-parallel kernel for long string lengths
-      if (avg_bytes_per_row > FACTORY_BYTES_PER_ROW_THRESHOLD) {
-        auto const d_data = offsets_view.template data<size_type>();
-        auto const d_offsets =
-          device_span<size_type const>{d_data, static_cast<std::size_t>(offsets_view.size())};
-        auto const str_begin = thrust::make_transform_iterator(begin, [] __device__(auto ip) {
-          return string_view{ip.first, ip.second};
-        });
-
-        return gather_chars(str_begin,
-                            thrust::make_counting_iterator<size_type>(0),
-                            thrust::make_counting_iterator<size_type>(strings_count),
-                            d_offsets,
-                            bytes,
-                            stream,
-                            mr);
-      } else {
-        // this approach is 2-3x faster for a large number of smaller string lengths
-        auto chars_column = create_chars_child_column(bytes, stream, mr);
-        auto d_chars      = chars_column->mutable_view().template data<char>();
-        auto copy_chars   = [d_chars] __device__(auto item) {
-          string_index_pair const str = thrust::get<0>(item);
-          size_type const offset      = thrust::get<1>(item);
-          if (str.first != nullptr) memcpy(d_chars + offset, str.first, str.second);
-        };
-        thrust::for_each_n(rmm::exec_policy(stream),
-                           thrust::make_zip_iterator(
-                             thrust::make_tuple(begin, offsets_view.template begin<int32_t>())),
-                           strings_count,
-                           copy_chars);
-        return chars_column;
-      }
-    }();
+  auto chars_data =
+    make_chars_buffer(offsets_column->view(), bytes, begin, strings_count, stream, mr);
 
   return make_strings_column(strings_count,
                              std::move(offsets_column),
-                             std::move(chars_column),
+                             chars_data.release(),
                              null_count,
                              std::move(null_mask));
 }
@@ -163,33 +121,27 @@ std::unique_ptr<column> make_strings_column(CharIterator chars_begin,
                                             size_type null_count,
                                             rmm::device_buffer&& null_mask,
                                             rmm::cuda_stream_view stream,
-                                            rmm::mr::device_memory_resource* mr)
+                                            rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  size_type strings_count = thrust::distance(offsets_begin, offsets_end) - 1;
-  size_type bytes         = std::distance(chars_begin, chars_end) * sizeof(char);
-  if (strings_count == 0) return make_empty_column(type_id::STRING);
+  size_type strings_count = cuda::std::distance(offsets_begin, offsets_end) - 1;
+  if (strings_count == 0) { return make_empty_column(type_id::STRING); }
 
+  int64_t const bytes = std::distance(chars_begin, chars_end) * sizeof(char);
   CUDF_EXPECTS(bytes >= 0, "invalid offsets data");
 
   // build offsets column -- this is the number of strings + 1
-  auto offsets_column = make_numeric_column(
-    data_type{type_to_id<size_type>()}, strings_count + 1, mask_state::UNALLOCATED, stream, mr);
-  auto offsets_view = offsets_column->mutable_view();
-  thrust::transform(rmm::exec_policy(stream),
-                    offsets_begin,
-                    offsets_end,
-                    offsets_view.data<int32_t>(),
-                    [] __device__(auto offset) { return static_cast<int32_t>(offset); });
+  auto [offsets_column, computed_bytes] =
+    cudf::strings::detail::make_offsets_child_column(offsets_begin, offsets_end, stream, mr);
+  CUDF_EXPECTS(bytes == computed_bytes, "unexpected byte count");
 
   // build chars column
-  auto chars_column = strings::detail::create_chars_child_column(bytes, stream, mr);
-  auto chars_view   = chars_column->mutable_view();
-  thrust::copy(rmm::exec_policy(stream), chars_begin, chars_end, chars_view.data<char>());
+  rmm::device_uvector<char> chars_data(bytes, stream, mr);
+  thrust::copy(rmm::exec_policy(stream), chars_begin, chars_end, chars_data.begin());
 
   return make_strings_column(strings_count,
                              std::move(offsets_column),
-                             std::move(chars_column),
+                             chars_data.release(),
                              null_count,
                              std::move(null_mask));
 }

@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 from itertools import product
 from math import floor
@@ -9,7 +9,8 @@ import pytest
 
 import cudf
 from cudf import Series
-from cudf.testing._utils import assert_eq, assert_exceptions_equal
+from cudf.testing import assert_eq
+from cudf.testing._utils import assert_exceptions_equal
 
 
 def test_series_map_basic():
@@ -46,8 +47,8 @@ def test_series_map_callable_numeric_basic():
 @pytest.mark.parametrize("nelem", list(product([2, 10, 100, 1000])))
 def test_series_map_callable_numeric_random(nelem):
     # Generate data
-    np.random.seed(0)
-    data = np.random.random(nelem) * 100
+    rng = np.random.default_rng(seed=0)
+    data = rng.random(nelem) * 100
 
     sr = Series(data)
     pdsr = pd.Series(data)

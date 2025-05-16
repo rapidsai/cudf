@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,17 +20,19 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/hashing/detail/murmurhash3_x86_32.cuh>
 #include <cudf/table/experimental/row_operators.cuh>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 
-#include <cub/cub.cuh>
-
 #include <thrust/iterator/counting_iterator.h>
 
-namespace cudf {
-namespace detail {
+#include <memory>
+#include <utility>
+
+namespace cudf::detail {
 /**
  * @brief Remaps a hash value to a new value if it is equal to the specified sentinel value.
  *
@@ -77,7 +79,7 @@ class row_is_valid {
  public:
   row_is_valid(bitmask_type const* row_bitmask) : _row_bitmask{row_bitmask} {}
 
-  __device__ __inline__ bool operator()(const size_type& i) const noexcept
+  __device__ bool operator()(size_type const& i) const noexcept
   {
     return cudf::bit_is_set(_row_bitmask, i);
   }
@@ -147,7 +149,7 @@ std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
 get_trivial_left_join_indices(table_view const& left,
                               rmm::cuda_stream_view stream,
-                              rmm::mr::device_memory_resource* mr);
+                              rmm::device_async_resource_ref mr);
 
 /**
  * @brief Builds the hash table based on the given `build_table`.
@@ -155,14 +157,13 @@ get_trivial_left_join_indices(table_view const& left,
  * @tparam MultimapType The type of the hash table
  *
  * @param build Table of columns used to build join hash.
- * @param preprocessed_build shared_ptr to cudf::experimental::row::equality::preprocessed_table for
- *                           build
+ * @param preprocessed_build shared_ptr to cudf::experimental::row::equality::preprocessed_table
+ * for build
  * @param hash_table Build hash table.
  * @param has_nulls Flag to denote if build or probe tables have nested nulls
  * @param nulls_equal Flag to denote nulls are equal or not.
  * @param bitmask Bitmask to denote whether a row is valid.
  * @param stream CUDA stream used for device memory operations and kernel launches.
- *
  */
 template <typename MultimapType>
 void build_join_hash_table(
@@ -246,7 +247,7 @@ get_left_join_indices_complement(std::unique_ptr<rmm::device_uvector<size_type>>
                                  size_type left_table_row_count,
                                  size_type right_table_row_count,
                                  rmm::cuda_stream_view stream,
-                                 rmm::mr::device_memory_resource* mr);
+                                 rmm::device_async_resource_ref mr);
 
 /**
  * @brief Device functor to determine if an index is contained in a range.
@@ -254,74 +255,11 @@ get_left_join_indices_complement(std::unique_ptr<rmm::device_uvector<size_type>>
 template <typename T>
 struct valid_range {
   T start, stop;
-  __host__ __device__ valid_range(const T begin, const T end) : start(begin), stop(end) {}
+  __host__ __device__ valid_range(T const begin, T const end) : start(begin), stop(end) {}
 
-  __host__ __device__ __forceinline__ bool operator()(const T index)
+  __host__ __device__ __forceinline__ bool operator()(T const index)
   {
     return ((index >= start) && (index < stop));
   }
 };
-
-/**
- * @brief Adds a pair of indices to the shared memory cache
- *
- * @param[in] first The first index in the pair
- * @param[in] second The second index in the pair
- * @param[in,out] current_idx_shared Pointer to shared index that determines
- * where in the shared memory cache the pair will be written
- * @param[in] warp_id The ID of the warp of the calling the thread
- * @param[out] joined_shared_l Pointer to the shared memory cache for left indices
- * @param[out] joined_shared_r Pointer to the shared memory cache for right indices
- */
-__inline__ __device__ void add_pair_to_cache(const size_type first,
-                                             const size_type second,
-                                             size_type* current_idx_shared,
-                                             const int warp_id,
-                                             size_type* joined_shared_l,
-                                             size_type* joined_shared_r)
-{
-  size_type my_current_idx{atomicAdd(current_idx_shared + warp_id, size_type(1))};
-
-  // its guaranteed to fit into the shared cache
-  joined_shared_l[my_current_idx] = first;
-  joined_shared_r[my_current_idx] = second;
-}
-
-template <int num_warps, cudf::size_type output_cache_size>
-__device__ void flush_output_cache(const unsigned int activemask,
-                                   const cudf::size_type max_size,
-                                   const int warp_id,
-                                   const int lane_id,
-                                   cudf::size_type* current_idx,
-                                   cudf::size_type current_idx_shared[num_warps],
-                                   size_type join_shared_l[num_warps][output_cache_size],
-                                   size_type join_shared_r[num_warps][output_cache_size],
-                                   size_type* join_output_l,
-                                   size_type* join_output_r)
-{
-  // count how many active threads participating here which could be less than warp_size
-  int num_threads               = __popc(activemask);
-  cudf::size_type output_offset = 0;
-
-  if (0 == lane_id) { output_offset = atomicAdd(current_idx, current_idx_shared[warp_id]); }
-
-  // No warp sync is necessary here because we are assuming that ShuffleIndex
-  // is internally using post-CUDA 9.0 synchronization-safe primitives
-  // (__shfl_sync instead of __shfl). __shfl is technically not guaranteed to
-  // be safe by the compiler because it is not required by the standard to
-  // converge divergent branches before executing.
-  output_offset = cub::ShuffleIndex<detail::warp_size>(output_offset, 0, activemask);
-
-  for (int shared_out_idx = lane_id; shared_out_idx < current_idx_shared[warp_id];
-       shared_out_idx += num_threads) {
-    cudf::size_type thread_offset = output_offset + shared_out_idx;
-    if (thread_offset < max_size) {
-      join_output_l[thread_offset] = join_shared_l[warp_id][shared_out_idx];
-      join_output_r[thread_offset] = join_shared_r[warp_id][shared_out_idx];
-    }
-  }
-}
-
-}  // namespace detail
-
-}  // namespace cudf
+}  // namespace cudf::detail

@@ -1,39 +1,39 @@
 #!/bin/bash
-# Copyright (c) 2022-2023, NVIDIA CORPORATION.
+# Copyright (c) 2022-2025, NVIDIA CORPORATION.
 
-source "$(dirname "$0")/test_cpp_common.sh"
+# Support invoking test_cpp.sh outside the script directory
+cd "$(dirname "$(realpath "${BASH_SOURCE[0]}")")"/../
+
+source ./ci/test_cpp_common.sh
 
 EXITCODE=0
 trap "EXITCODE=1" ERR
 set +e
 
-# Get library for finding incorrect default stream usage.
-STREAM_IDENTIFY_LIB_MODE_CUDF="${CONDA_PREFIX}/lib/libcudf_identify_stream_usage_mode_cudf.so"
-STREAM_IDENTIFY_LIB_MODE_TESTING="${CONDA_PREFIX}/lib/libcudf_identify_stream_usage_mode_testing.so"
-
-echo "STREAM_IDENTIFY_LIB=${STREAM_IDENTIFY_LIB_MODE_CUDF}"
-
 # Run libcudf and libcudf_kafka gtests from libcudf-tests package
-rapids-logger "Run gtests"
-
-cd $CONDA_PREFIX/bin/gtests/libcudf/
-export GTEST_CUDF_STREAM_MODE="new_cudf_default"
 export GTEST_OUTPUT=xml:${RAPIDS_TESTS_DIR}/
-export LD_PRELOAD=${STREAM_IDENTIFY_LIB_MODE_CUDF}
 
-ctest -E SPAN_TEST -j20 --output-on-failure
-
-# This one test is specifically designed to test using a thrust device vector,
-# so we expect and allow it to include default stream usage.
-_allowlist_filter="SpanTest.CanConstructFromDeviceContainers"
-GTEST_FILTER="-${_allowlist_filter}" ctest -R SPAN_TEST -VV
-LD_PRELOAD= GTEST_CUDF_STREAM_MODE=default GTEST_FILTER="${_allowlist_filter}" ctest -R SPAN_TEST -VV
-
+rapids-logger "Run libcudf gtests"
+./ci/run_cudf_ctests.sh -j20
 SUITEERROR=$?
 
-if (( ${SUITEERROR} == 0 )); then
-    cd $CONDA_PREFIX/bin/gtests/libcudf_kafka/
-    ctest -j20 --output-on-failure
+if (( SUITEERROR == 0 )); then
+    rapids-logger "Run libcudf examples"
+    ./ci/run_cudf_examples.sh
+    SUITEERROR=$?
+fi
+
+if (( SUITEERROR == 0 )); then
+    rapids-logger "Run libcudf_kafka gtests"
+    ./ci/run_cudf_kafka_ctests.sh -j20
+    SUITEERROR=$?
+fi
+
+# Ensure that benchmarks are runnable
+rapids-logger "Run tests of libcudf benchmarks"
+
+if (( SUITEERROR == 0 )); then
+    ./ci/run_cudf_benchmark_smoketests.sh
     SUITEERROR=$?
 fi
 

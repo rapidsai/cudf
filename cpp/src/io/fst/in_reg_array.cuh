@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -62,16 +62,12 @@ class MultiFragmentInRegArray {
   /**
    * @brief Returns the \p num_bits bits starting at \p bit_start
    */
-  CUDF_HOST_DEVICE [[nodiscard]] uint32_t bfe(const uint32_t& data,
+  CUDF_HOST_DEVICE [[nodiscard]] uint32_t bfe(uint32_t const& data,
                                               uint32_t bit_start,
                                               uint32_t num_bits) const
   {
-#if CUB_PTX_ARCH > 0
-    return cub::BFE(data, bit_start, num_bits);
-#else
-    const uint32_t MASK = (1 << num_bits) - 1;
+    uint32_t const MASK = (1 << num_bits) - 1;
     return (data >> bit_start) & MASK;
-#endif
   }
 
   /**
@@ -83,15 +79,11 @@ class MultiFragmentInRegArray {
                             uint32_t bit_start,
                             uint32_t num_bits) const
   {
-#if CUB_PTX_ARCH > 0
-    cub::BFI(data, data, bits, bit_start, num_bits);
-#else
     uint32_t x      = bits << bit_start;
     uint32_t y      = data;
     uint32_t MASK_X = ((1 << num_bits) - 1) << bit_start;
     uint32_t MASK_Y = ~MASK_X;
     data            = (y & MASK_Y) | (x & MASK_X);
-#endif
   }
 
   BackingFragmentT data[FRAGMENTS_PER_ITEM];

@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 import copy
 import io
@@ -6,14 +6,13 @@ import logging
 import random
 
 import numpy as np
-import pyorc
+import pyarrow as pa
 
 import cudf
 from cudf._fuzz_testing.io import IOFuzz
 from cudf._fuzz_testing.utils import (
     ALL_POSSIBLE_VALUES,
     _generate_rand_meta,
-    pandas_to_orc,
     pyarrow_to_pandas,
 )
 from cudf.testing import dataset_generator as dg
@@ -63,13 +62,11 @@ class OrcReader(IOFuzz):
                 - cudf.utils.dtypes.UNSIGNED_TYPES
                 - {"datetime64[ns]"}
             )
-
-            dtypes_meta, num_rows, num_cols = _generate_rand_meta(
-                self, dtypes_list
-            )
-
-            self._current_params["dtypes_meta"] = dtypes_meta
             seed = random.randint(0, 2**32 - 1)
+            dtypes_meta, num_rows, num_cols = _generate_rand_meta(
+                self, dtypes_list, seed
+            )
+            self._current_params["dtypes_meta"] = dtypes_meta
             self._current_params["seed"] = seed
             self._current_params["num_rows"] = num_rows
             self._current_params["num_cols"] = num_cols
@@ -82,12 +79,7 @@ class OrcReader(IOFuzz):
         logging.info(f"Shape of DataFrame generated: {table.shape}")
         self._df = df
         file_obj = io.BytesIO()
-        pandas_to_orc(
-            df,
-            file_io_obj=file_obj,
-            stripe_size=self._rand(len(df)),
-            arrow_table_schema=table.schema,
-        )
+        pa.orc.write_table(table, file_obj, stripe_size=self._rand(len(df)))
         file_obj.seek(0)
         buf = file_obj.read()
         self._current_buffer = copy.copy(buf)
@@ -100,42 +92,41 @@ class OrcReader(IOFuzz):
 
     def set_rand_params(self, params):
         params_dict = {}
+        rng = np.random.default_rng(seed=None)
         for param, values in params.items():
             if values == ALL_POSSIBLE_VALUES:
                 if param == "columns":
                     col_size = self._rand(len(self._df.columns))
                     params_dict[param] = list(
-                        np.unique(np.random.choice(self._df.columns, col_size))
+                        np.unique(rng.choice(self._df.columns, col_size))
                     )
                 elif param == "stripes":
                     f = io.BytesIO(self._current_buffer)
-                    reader = pyorc.Reader(f)
-                    stripes = [i for i in range(reader.num_of_stripes)]
-                    params_dict[param] = np.random.choice(
+                    orcFile = pa.orc.ORCFile(f)
+                    stripes = list(range(orcFile.nstripes))
+                    params_dict[param] = rng.choice(
                         [
                             None,
                             list(
                                 map(
                                     int,
                                     np.unique(
-                                        np.random.choice(
-                                            stripes, reader.num_of_stripes
-                                        )
+                                        rng.choice(stripes, orcFile.nstripes)
                                     ),
                                 )
                             ),
                         ]
                     )
                 elif param == "use_index":
-                    params_dict[param] = np.random.choice([True, False])
+                    params_dict[param] = rng.choice([True, False])
                 elif param in ("skiprows", "num_rows"):
-                    params_dict[param] = np.random.choice(
+                    params_dict[param] = rng.choice(
                         [None, self._rand(len(self._df))]
                     )
             else:
                 if not isinstance(values, list):
                     raise TypeError("values must be of type list")
-                params_dict[param] = np.random.choice(values)
+                params_dict[param] = rng.choice(values)
         self._current_params["test_kwargs"] = self.process_kwargs(params_dict)
 
 
@@ -183,12 +174,11 @@ class OrcWriter(IOFuzz):
                 # https://github.com/rapidsai/cudf/issues/7355
                 - cudf.utils.dtypes.DATETIME_TYPES
             )
-
+            seed = random.randint(0, 2**32 - 1)
             dtypes_meta, num_rows, num_cols = _generate_rand_meta(
-                self, dtypes_list
+                self, dtypes_list, seed
             )
             self._current_params["dtypes_meta"] = dtypes_meta
-            seed = random.randint(0, 2**32 - 1)
             self._current_params["seed"] = seed
             self._current_params["num_rows"] = num_rows
             self._current_params["num_cols"] = num_cols

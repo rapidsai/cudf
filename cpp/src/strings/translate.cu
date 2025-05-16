@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,6 +25,7 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/translate.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
@@ -51,13 +52,14 @@ struct translate_fn {
   column_device_view const d_strings;
   rmm::device_uvector<translate_table>::iterator table_begin;
   rmm::device_uvector<translate_table>::iterator table_end;
-  int32_t* d_offsets{};
+  size_type* d_sizes{};
   char* d_chars{};
+  cudf::detail::input_offsetalator d_offsets;
 
   __device__ void operator()(size_type idx)
   {
     if (d_strings.is_null(idx)) {
-      if (!d_chars) d_offsets[idx] = 0;
+      if (!d_chars) { d_sizes[idx] = 0; }
       return;
     }
     string_view const d_str = d_strings.element<string_view>(idx);
@@ -79,7 +81,7 @@ struct translate_fn {
       }
       if (chr && out_ptr) out_ptr += from_char_utf8(chr, out_ptr);
     }
-    if (!d_chars) d_offsets[idx] = bytes;
+    if (!d_chars) { d_sizes[idx] = bytes; }
   }
 };
 
@@ -89,13 +91,13 @@ struct translate_fn {
 std::unique_ptr<column> translate(strings_column_view const& strings,
                                   std::vector<std::pair<char_utf8, char_utf8>> const& chars_table,
                                   rmm::cuda_stream_view stream,
-                                  rmm::mr::device_memory_resource* mr)
+                                  rmm::device_async_resource_ref mr)
 {
   if (strings.is_empty()) return make_empty_column(type_id::STRING);
 
   size_type table_size = static_cast<size_type>(chars_table.size());
   // convert input table
-  thrust::host_vector<translate_table> htable(table_size);
+  auto htable = cudf::detail::make_host_vector<translate_table>(table_size, stream);
   std::transform(chars_table.begin(), chars_table.end(), htable.begin(), [](auto entry) {
     return translate_table{entry.first, entry.second};
   });
@@ -105,17 +107,17 @@ std::unique_ptr<column> translate(strings_column_view const& strings,
     return lhs.first < rhs.first;
   });
   // copy translate table to device memory
-  rmm::device_uvector<translate_table> table =
-    cudf::detail::make_device_uvector_async(htable, stream, rmm::mr::get_current_device_resource());
+  rmm::device_uvector<translate_table> table = cudf::detail::make_device_uvector_async(
+    htable, stream, cudf::get_current_device_resource_ref());
 
   auto d_strings = column_device_view::create(strings.parent(), stream);
 
-  auto children = make_strings_children(
+  auto [offsets_column, chars] = make_strings_children(
     translate_fn{*d_strings, table.begin(), table.end()}, strings.size(), stream, mr);
 
   return make_strings_column(strings.size(),
-                             std::move(children.first),
-                             std::move(children.second),
+                             std::move(offsets_column),
+                             chars.release(),
                              strings.null_count(),
                              cudf::detail::copy_bitmask(strings.parent(), stream, mr));
 }
@@ -124,12 +126,13 @@ std::unique_ptr<column> translate(strings_column_view const& strings,
 
 // external APIs
 
-std::unique_ptr<column> translate(strings_column_view const& strings,
+std::unique_ptr<column> translate(strings_column_view const& input,
                                   std::vector<std::pair<uint32_t, uint32_t>> const& chars_table,
-                                  rmm::mr::device_memory_resource* mr)
+                                  rmm::cuda_stream_view stream,
+                                  rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::translate(strings, chars_table, cudf::get_default_stream(), mr);
+  return detail::translate(input, chars_table, stream, mr);
 }
 
 }  // namespace strings

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,6 +14,15 @@
  * limitations under the License.
  */
 
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_utilities.hpp>
+#include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/cudf_gtest.hpp>
+#include <cudf_test/iterator_utilities.hpp>
+#include <cudf_test/table_utilities.hpp>
+#include <cudf_test/testing_main.hpp>
+#include <cudf_test/type_lists.hpp>
+
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/merge.hpp>
@@ -23,15 +32,7 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
-#include <cudf_test/base_fixture.hpp>
-#include <cudf_test/column_utilities.hpp>
-#include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/cudf_gtest.hpp>
-#include <cudf_test/table_utilities.hpp>
-#include <cudf_test/type_lists.hpp>
-
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/merge.h>
 
 #include <vector>
 
@@ -346,7 +347,7 @@ TYPED_TEST(MergeTest_, Merge1KeyColumns)
   cudf::test::fixed_width_column_wrapper<TypeParam, typename decltype(seq_out1)::value_type>
     expectedDataWrap1(seq_out1, seq_out1 + outputRows);
 
-  auto seq_out2 = cudf::detail::make_counting_transform_iterator(0, [outputRows](auto row) {
+  auto seq_out2 = cudf::detail::make_counting_transform_iterator(0, [](auto row) {
     if (cudf::type_to_id<TypeParam>() == cudf::type_id::BOOL8)
       return 0;
     else
@@ -449,7 +450,7 @@ TYPED_TEST(MergeTest_, Merge1KeyNullColumns)
   cudf::size_type inputRows = 40;
 
   // data: 0  2  4  6 | valid: 1 1 1 0
-  auto sequence1       = cudf::detail::make_counting_transform_iterator(0, [inputRows](auto row) {
+  auto sequence1       = cudf::detail::make_counting_transform_iterator(0, [](auto row) {
     if (cudf::type_to_id<TypeParam>() == cudf::type_id::BOOL8) {
       return 0;  // <- no shortcut to this can avoid compiler errors
     } else {
@@ -462,7 +463,7 @@ TYPED_TEST(MergeTest_, Merge1KeyNullColumns)
     leftColWrap1(sequence1, sequence1 + inputRows, valid_sequence1);
 
   // data: 1  3  5  7 | valid: 1 1 1 0
-  auto sequence2 = cudf::detail::make_counting_transform_iterator(0, [inputRows](auto row) {
+  auto sequence2 = cudf::detail::make_counting_transform_iterator(0, [](auto row) {
     if (cudf::type_to_id<TypeParam>() == cudf::type_id::BOOL8) {
       return 1;
     } else
@@ -872,6 +873,117 @@ TEST_F(MergeTest, StructsNestedWithNulls)
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected, *result);
 
   // clang-format on
+}
+
+using lcw = cudf::test::lists_column_wrapper<int32_t>;
+using cudf::test::iterators::null_at;
+using cudf::test::iterators::nulls_at;
+
+TEST_F(MergeTest, Lists)
+{
+  auto col1 = lcw{lcw{1}, lcw{3}, lcw{5}, lcw{7}};
+  auto col2 = lcw{lcw{2}, lcw{4}, lcw{6}, lcw{8}};
+
+  auto tbl1 = cudf::table_view{{col1}};
+  auto tbl2 = cudf::table_view{{col2}};
+
+  auto result = cudf::merge({tbl1, tbl2}, {0}, {cudf::order::ASCENDING});
+
+  auto expected_col = lcw{lcw{1}, lcw{2}, lcw{3}, lcw{4}, lcw{5}, lcw{6}, lcw{7}, lcw{8}};
+  auto expected_tbl = cudf::table_view{{expected_col}};
+
+  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_tbl, *result);
+}
+
+TEST_F(MergeTest, NestedListsWithNulls)
+{
+  auto col1 = lcw{{lcw{lcw{1}}, lcw{lcw{3}}, lcw{lcw{5}}, lcw{lcw{7}}}, null_at(3)};
+  auto col2 = lcw{{lcw{lcw{2}}, lcw{lcw{4}}, lcw{lcw{6}}, lcw{lcw{8}}}, null_at(3)};
+
+  auto tbl1 = cudf::table_view{{col1}};
+  auto tbl2 = cudf::table_view{{col2}};
+
+  auto result = cudf::merge({tbl1, tbl2}, {0}, {cudf::order::ASCENDING}, {cudf::null_order::AFTER});
+
+  auto expected_col = lcw{{lcw{lcw{1}},
+                           lcw{lcw{2}},
+                           lcw{lcw{3}},
+                           lcw{lcw{4}},
+                           lcw{lcw{5}},
+                           lcw{lcw{6}},
+                           lcw{lcw{7}},
+                           lcw{lcw{8}}},
+                          nulls_at({6, 7})};
+  auto expected_tbl = cudf::table_view{{expected_col}};
+
+  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_tbl, *result);
+}
+
+TEST_F(MergeTest, NestedListsofStructs)
+{
+  // [ {1},    {2},   {3} ]
+  // [ {5}                ]
+  // [ {7},    {8}        ]
+  // [ {10}               ]
+  auto const col1 = [] {
+    auto const get_structs = [] {
+      auto child0 = cudf::test::fixed_width_column_wrapper<int32_t>{1, 2, 3, 5, 7, 8, 10};
+      return cudf::test::structs_column_wrapper{{child0}};
+    };
+    return cudf::make_lists_column(
+      4,
+      cudf::test::fixed_width_column_wrapper<int32_t>{0, 3, 4, 6, 7}.release(),
+      get_structs().release(),
+      0,
+      {});
+  }();
+
+  // [ {4}                ]
+  // [ {6}                ]
+  // [ {9}                ]
+  // [ {11}               ]
+  auto const col2 = [] {
+    auto const get_structs = [] {
+      auto child0 = cudf::test::fixed_width_column_wrapper<int32_t>{4, 6, 9, 11};
+      return cudf::test::structs_column_wrapper{{child0}};
+    };
+    return cudf::make_lists_column(
+      4,
+      cudf::test::fixed_width_column_wrapper<int32_t>{0, 1, 2, 3, 4}.release(),
+      get_structs().release(),
+      0,
+      {});
+  }();
+
+  auto tbl1 = cudf::table_view{{*col1}};
+  auto tbl2 = cudf::table_view{{*col2}};
+
+  auto result = cudf::merge({tbl1, tbl2}, {0}, {cudf::order::ASCENDING}, {cudf::null_order::AFTER});
+
+  // [ {1},    {2},   {3} ]
+  // [ {4}                ]
+  // [ {5}                ]
+  // [ {6}                ]
+  // [ {7},    {8}        ]
+  // [ {9}                ]
+  // [ {10}               ]
+  // [ {11}               ]
+  auto const expected_col = [] {
+    auto const get_structs = [] {
+      auto child0 =
+        cudf::test::fixed_width_column_wrapper<int32_t>{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11};
+      return cudf::test::structs_column_wrapper{{child0}};
+    };
+    return cudf::make_lists_column(
+      8,
+      cudf::test::fixed_width_column_wrapper<int32_t>{0, 3, 4, 5, 6, 8, 9, 10, 11}.release(),
+      get_structs().release(),
+      0,
+      {});
+  }();
+  auto expected_tbl = cudf::table_view{{*expected_col}};
+
+  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_tbl, *result);
 }
 
 template <typename T>

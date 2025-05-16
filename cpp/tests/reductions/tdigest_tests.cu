@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,6 +25,7 @@ template <typename T>
 struct ReductionTDigestAllTypes : public cudf::test::BaseFixture {};
 TYPED_TEST_SUITE(ReductionTDigestAllTypes, cudf::test::NumericTypes);
 
+namespace {
 struct reduce_op {
   std::unique_ptr<cudf::column> operator()(cudf::column_view const& values, int delta) const
   {
@@ -60,6 +61,7 @@ struct reduce_merge_op {
     return cudf::make_structs_column(tbl.num_rows(), std::move(cols), 0, rmm::device_buffer());
   }
 };
+}  // namespace
 
 TYPED_TEST(ReductionTDigestAllTypes, Simple)
 {
@@ -94,7 +96,7 @@ TEST_F(ReductionTDigestMerge, FewHeavyCentroids)
   cudf::test::fixed_width_column_wrapper<double> c0c{1.0, 2.0};
   cudf::test::fixed_width_column_wrapper<double> c0w{100.0, 50.0};
   cudf::test::structs_column_wrapper c0s({c0c, c0w});
-  cudf::test::fixed_width_column_wrapper<cudf::offset_type> c0_offsets{0, 2};
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> c0_offsets{0, 2};
   auto c0l =
     cudf::make_lists_column(1, c0_offsets.release(), c0s.release(), 0, rmm::device_buffer{});
   cudf::test::fixed_width_column_wrapper<double> c0min{1.0};
@@ -111,7 +113,7 @@ TEST_F(ReductionTDigestMerge, FewHeavyCentroids)
   cudf::test::fixed_width_column_wrapper<double> c1c{3.0, 4.0};
   cudf::test::fixed_width_column_wrapper<double> c1w{200.0, 50.0};
   cudf::test::structs_column_wrapper c1s({c1c, c1w});
-  cudf::test::fixed_width_column_wrapper<cudf::offset_type> c1_offsets{0, 2};
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> c1_offsets{0, 2};
   auto c1l =
     cudf::make_lists_column(1, c1_offsets.release(), c1s.release(), 0, rmm::device_buffer{});
   cudf::test::fixed_width_column_wrapper<double> c1min{3.0};
@@ -147,7 +149,7 @@ TEST_F(ReductionTDigestMerge, FewHeavyCentroids)
   cudf::test::fixed_width_column_wrapper<double> ec{1.0, 2.0, 3.0, 4.0};
   cudf::test::fixed_width_column_wrapper<double> ew{100.0, 50.0, 200.0, 50.0};
   cudf::test::structs_column_wrapper es({ec, ew});
-  cudf::test::fixed_width_column_wrapper<cudf::offset_type> e_offsets{0, 4};
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> e_offsets{0, 4};
   auto el = cudf::make_lists_column(1, e_offsets.release(), es.release(), 0, rmm::device_buffer{});
   cudf::test::fixed_width_column_wrapper<double> emin{1.0};
   cudf::test::fixed_width_column_wrapper<double> emax{4.0};

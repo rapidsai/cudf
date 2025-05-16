@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,24 +23,22 @@
 /**
  * @file orc_field_writer.hpp
  * @brief Struct to encapsulate common functionality required to implement
- * `ProtobufWriter::write(...)` functions
+ * `protobuf_writer::write(...)` functions
  */
 
-namespace cudf {
-namespace io {
-namespace orc {
+namespace cudf::io::orc::detail {
 
-struct ProtobufWriter::ProtobufFieldWriter {
-  int struct_size;
-  ProtobufWriter* p;
+struct protobuf_writer::protobuf_field_writer {
+  int struct_size{0};
+  protobuf_writer* p;
 
-  ProtobufFieldWriter(ProtobufWriter* pbw) : struct_size(0), p(pbw) {}
+  protobuf_field_writer(protobuf_writer* pbw) : p(pbw) {}
 
   /**
    * @brief Function to write a unsigned integer to the internal buffer
    */
   template <typename T>
-  void field_uint(int field, const T& value)
+  void field_uint(int field, T const& value)
   {
     struct_size += p->put_uint(encode_field_number<T>(field));
     struct_size += p->put_uint(static_cast<uint64_t>(value));
@@ -51,7 +49,7 @@ struct ProtobufWriter::ProtobufFieldWriter {
    * buffer
    */
   template <typename T>
-  void field_packed_uint(int field, const std::vector<T>& value)
+  void field_packed_uint(int field, std::vector<T> const& value)
   {
     struct_size += p->put_uint(encode_field_number<std::vector<T>>(field));
     auto lpos = p->m_buff.size();
@@ -81,7 +79,7 @@ struct ProtobufWriter::ProtobufFieldWriter {
    * @brief Function to write a struct to the internal buffer
    */
   template <typename T>
-  void field_struct(int field, const T& value)
+  void field_struct(int field, T const& value)
   {
     struct_size += p->put_uint(encode_field_number(field, ProtofType::FIXEDLEN));
     auto lpos = p->m_buff.size();
@@ -96,9 +94,9 @@ struct ProtobufWriter::ProtobufFieldWriter {
   /**
    * @brief Function to write a vector of strings to the internal buffer
    */
-  void field_repeated_string(int field, const std::vector<std::string>& value)
+  void field_repeated_string(int field, std::vector<std::string> const& value)
   {
-    for (const auto& elem : value)
+    for (auto const& elem : value)
       field_blob(field, elem);
   }
 
@@ -106,9 +104,9 @@ struct ProtobufWriter::ProtobufFieldWriter {
    * @brief Function to write a vector of structs to the internal buffer
    */
   template <typename T>
-  void field_repeated_struct(int field, const std::vector<T>& value)
+  void field_repeated_struct(int field, std::vector<T> const& value)
   {
-    for (const auto& elem : value)
+    for (auto const& elem : value)
       field_struct(field, elem);
   }
 
@@ -117,9 +115,9 @@ struct ProtobufWriter::ProtobufFieldWriter {
    * buffer
    */
   template <typename T>
-  void field_repeated_struct_blob(int field, const std::vector<T>& value)
+  void field_repeated_struct_blob(int field, std::vector<T> const& value)
   {
-    for (const auto& elem : value)
+    for (auto const& elem : value)
       field_blob(field, elem);
   }
 
@@ -129,6 +127,4 @@ struct ProtobufWriter::ProtobufFieldWriter {
   size_t value() { return struct_size; }
 };
 
-}  // namespace orc
-}  // namespace io
-}  // namespace cudf
+}  // namespace cudf::io::orc::detail

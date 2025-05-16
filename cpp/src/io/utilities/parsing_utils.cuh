@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,8 +16,9 @@
 
 #pragma once
 
-#include <io/csv/datetime.cuh>
-#include <io/utilities/trie.cuh>
+#include "column_type_histogram.hpp"
+#include "io/csv/datetime.cuh"
+#include "io/utilities/trie.cuh"
 
 #include <cudf/io/types.hpp>
 #include <cudf/lists/list_view.hpp>
@@ -27,15 +28,16 @@
 #include <cudf/utilities/span.hpp>
 #include <cudf/utilities/traits.hpp>
 
-#include "column_type_histogram.hpp"
-
 #include <rmm/device_uvector.hpp>
 
+#include <cuda/std/iterator>
+#include <cuda/std/limits>
+#include <cuda/std/optional>
+#include <cuda/std/type_traits>
+#include <cuda/std/utility>
 #include <thrust/execution_policy.h>
 #include <thrust/iterator/reverse_iterator.h>
 #include <thrust/mismatch.h>
-
-#include <optional>
 
 using cudf::device_span;
 
@@ -64,9 +66,12 @@ struct parse_options_view {
   char thousands;
   char comment;
   bool keepquotes;
+  bool detect_whitespace_around_quotes;
   bool doublequote;
   bool dayfirst;
   bool skipblanklines;
+  bool normalize_whitespace;
+  bool mixed_types_as_string;
   cudf::detail::trie_view trie_true;
   cudf::detail::trie_view trie_false;
   cudf::detail::trie_view trie_na;
@@ -81,9 +86,12 @@ struct parse_options {
   char thousands;
   char comment;
   bool keepquotes;
+  bool detect_whitespace_around_quotes;
   bool doublequote;
   bool dayfirst;
   bool skipblanklines;
+  bool normalize_whitespace;
+  bool mixed_types_as_string;
   cudf::detail::optional_trie trie_true;
   cudf::detail::optional_trie trie_false;
   cudf::detail::optional_trie trie_na;
@@ -106,15 +114,40 @@ struct parse_options {
             thousands,
             comment,
             keepquotes,
+            detect_whitespace_around_quotes,
             doublequote,
             dayfirst,
             skipblanklines,
+            normalize_whitespace,
+            mixed_types_as_string,
             cudf::detail::make_trie_view(trie_true),
             cudf::detail::make_trie_view(trie_false),
             cudf::detail::make_trie_view(trie_na),
             multi_delimiter};
   }
 };
+
+/**
+ * @brief Returns the escaped characters for a given character.
+ *
+ * @param escaped_char The character to escape.
+ * @return The escaped characters for a given character.
+ */
+__device__ __forceinline__ thrust::pair<char, char> get_escaped_char(char escaped_char)
+{
+  switch (escaped_char) {
+    case '"': return {'\\', '"'};
+    case '\\': return {'\\', '\\'};
+    case '/': return {'\\', '/'};
+    case '\b': return {'\\', 'b'};
+    case '\f': return {'\\', 'f'};
+    case '\n': return {'\\', 'n'};
+    case '\r': return {'\\', 'r'};
+    case '\t': return {'\\', 't'};
+    // case 'u': return UNICODE_SEQ;
+    default: return {'\0', escaped_char};
+  }
+}
 
 /**
  * @brief Returns the numeric value of an ASCII/UTF-8 character.
@@ -129,7 +162,7 @@ struct parse_options {
  * @return uint8_t Numeric value of the character, or `0`
  */
 template <typename T, bool as_hex = false>
-constexpr uint8_t decode_digit(char c, bool* valid_flag)
+__device__ constexpr uint8_t decode_digit(char c, bool* valid_flag)
 {
   if (c >= '0' && c <= '9') return c - '0';
   if constexpr (as_hex and std::is_integral_v<T>) {
@@ -142,7 +175,10 @@ constexpr uint8_t decode_digit(char c, bool* valid_flag)
 }
 
 // Converts character to lowercase.
-constexpr char to_lower(char const c) { return c >= 'A' && c <= 'Z' ? c + ('a' - 'A') : c; }
+CUDF_HOST_DEVICE constexpr char to_lower(char const c)
+{
+  return c >= 'A' && c <= 'Z' ? c + ('a' - 'A') : c;
+}
 
 /**
  * @brief Checks if string is infinity, case insensitive with/without sign
@@ -153,7 +189,7 @@ constexpr char to_lower(char const c) { return c >= 'A' && c <= 'Z' ? c + ('a' -
  * @param end Pointer to the first element after the string
  * @return true if string is valid infinity, else false.
  */
-constexpr bool is_infinity(char const* begin, char const* end)
+CUDF_HOST_DEVICE constexpr bool is_infinity(char const* begin, char const* end)
 {
   if (*begin == '-' || *begin == '+') begin++;
   char const* cinf = "infinity";
@@ -178,9 +214,9 @@ constexpr bool is_infinity(char const* begin, char const* end)
  * @return The parsed and converted value
  */
 template <typename T, int base = 10>
-__host__ __device__ std::optional<T> parse_numeric(char const* begin,
-                                                   char const* end,
-                                                   parse_options_view const& opts)
+CUDF_HOST_DEVICE cuda::std::optional<T> parse_numeric(char const* begin,
+                                                      char const* end,
+                                                      parse_options_view const& opts)
 {
   T value{};
   bool all_digits_valid = true;
@@ -190,8 +226,8 @@ __host__ __device__ std::optional<T> parse_numeric(char const* begin,
   int32_t sign = (*begin == '-') ? -1 : 1;
 
   // Handle infinity
-  if (std::is_floating_point_v<T> && is_infinity(begin, end)) {
-    return sign * std::numeric_limits<T>::infinity();
+  if (cuda::std::is_floating_point_v<T> && is_infinity(begin, end)) {
+    return sign * cuda::std::numeric_limits<T>::infinity();
   }
   if (*begin == '-' || *begin == '+') begin++;
 
@@ -212,7 +248,7 @@ __host__ __device__ std::optional<T> parse_numeric(char const* begin,
     ++begin;
   }
 
-  if (std::is_floating_point_v<T>) {
+  if (cuda::std::is_floating_point_v<T>) {
     // Handle fractional part of the number if necessary
     double divisor = 1;
     while (begin < end) {
@@ -237,7 +273,7 @@ __host__ __device__ std::optional<T> parse_numeric(char const* begin,
       if (exponent != 0) { value *= exp10(double(exponent * exponent_sign)); }
     }
   }
-  if (!all_digits_valid) { return std::optional<T>{}; }
+  if (!all_digits_valid) { return cuda::std::optional<T>{}; }
 
   return value * sign;
 }
@@ -391,82 +427,6 @@ __device__ __inline__ cudf::size_type* infer_integral_field_counter(char const* 
 }  // namespace gpu
 
 /**
- * @brief Searches the input character array for each of characters in a set.
- * Sums up the number of occurrences. If the 'positions' parameter is not void*,
- * positions of all occurrences are stored in the output device array.
- *
- * @param[in] d_data Input character array in device memory
- * @param[in] keys Vector containing the keys to count in the buffer
- * @param[in] result_offset Offset to add to the output positions
- * @param[out] positions Array containing the output positions
- * @param[in] stream CUDA stream used for device memory operations and kernel launches
- *
- * @return cudf::size_type total number of occurrences
- */
-template <class T>
-cudf::size_type find_all_from_set(device_span<char const> data,
-                                  std::vector<char> const& keys,
-                                  uint64_t result_offset,
-                                  T* positions,
-                                  rmm::cuda_stream_view stream);
-
-/**
- * @brief Searches the input character array for each of characters in a set.
- * Sums up the number of occurrences. If the 'positions' parameter is not void*,
- * positions of all occurrences are stored in the output device array.
- *
- * Does not load the entire file into the GPU memory at any time, so it can
- * be used to parse large files. Output array needs to be preallocated.
- *
- * @param[in] h_data Pointer to the input character array
- * @param[in] h_size Number of bytes in the input array
- * @param[in] keys Vector containing the keys to count in the buffer
- * @param[in] result_offset Offset to add to the output positions
- * @param[out] positions Array containing the output positions
- * @param[in] stream CUDA stream used for device memory operations and kernel launches
- *
- * @return cudf::size_type total number of occurrences
- */
-template <class T>
-cudf::size_type find_all_from_set(host_span<char const> data,
-                                  std::vector<char> const& keys,
-                                  uint64_t result_offset,
-                                  T* positions,
-                                  rmm::cuda_stream_view stream);
-
-/**
- * @brief Searches the input character array for each of characters in a set
- * and sums up the number of occurrences.
- *
- * @param d_data Input data buffer in device memory
- * @param keys Vector containing the keys to count in the buffer
- * @param stream CUDA stream used for device memory operations and kernel launches
- *
- * @return cudf::size_type total number of occurrences
- */
-cudf::size_type count_all_from_set(device_span<char const> data,
-                                   std::vector<char> const& keys,
-                                   rmm::cuda_stream_view stream);
-
-/**
- * @brief Searches the input character array for each of characters in a set
- * and sums up the number of occurrences.
- *
- * Does not load the entire buffer into the GPU memory at any time, so it can
- * be used with buffers of any size.
- *
- * @param h_data Pointer to the data in host memory
- * @param h_size Size of the input data, in bytes
- * @param keys Vector containing the keys to count in the buffer
- * @param stream CUDA stream used for device memory operations and kernel launches
- *
- * @return cudf::size_type total number of occurrences
- */
-cudf::size_type count_all_from_set(host_span<char const> data,
-                                   std::vector<char> const& keys,
-                                   rmm::cuda_stream_view stream);
-
-/**
  * @brief Checks whether the given character is a whitespace character.
  *
  * @param ch The character to check
@@ -493,7 +453,7 @@ __inline__ __device__ It skip_character(It const& it, char ch)
  *
  * @return Trimmed range
  */
-__inline__ __device__ std::pair<char const*, char const*> trim_whitespaces_quotes(
+__inline__ __device__ cuda::std::pair<char const*, char const*> trim_whitespaces_quotes(
   char const* begin, char const* end, char quotechar = '\0')
 {
   auto not_whitespace = [] __device__(auto c) { return !is_whitespace(c); };
@@ -515,8 +475,8 @@ __inline__ __device__ std::pair<char const*, char const*> trim_whitespaces_quote
  *
  * @return Trimmed range
  */
-__inline__ __device__ std::pair<char const*, char const*> trim_whitespaces(char const* begin,
-                                                                           char const* end)
+__inline__ __device__ cuda::std::pair<char const*, char const*> trim_whitespaces(char const* begin,
+                                                                                 char const* end)
 {
   auto not_whitespace = [] __device__(auto c) { return !is_whitespace(c); };
 
@@ -539,14 +499,14 @@ __inline__ __device__ std::pair<char const*, char const*> trim_whitespaces(char 
  *
  * @return Trimmed range
  */
-__inline__ __device__ std::pair<char const*, char const*> trim_quotes(char const* begin,
-                                                                      char const* end,
-                                                                      char quotechar)
+__inline__ __device__ cuda::std::pair<char const*, char const*> trim_quotes(char const* begin,
+                                                                            char const* end,
+                                                                            char quotechar)
 {
-  if ((thrust::distance(begin, end) >= 2 && *begin == quotechar &&
-       *thrust::prev(end) == quotechar)) {
-    thrust::advance(begin, 1);
-    thrust::advance(end, -1);
+  if ((cuda::std::distance(begin, end) >= 2 && *begin == quotechar &&
+       *cuda::std::prev(end) == quotechar)) {
+    cuda::std::advance(begin, 1);
+    cuda::std::advance(end, -1);
   }
   return {begin, end};
 }
@@ -562,15 +522,15 @@ struct ConvertFunctor {
   template <typename T,
             CUDF_ENABLE_IF(std::is_integral_v<T> and !std::is_same_v<T, bool> and
                            !cudf::is_fixed_point<T>())>
-  __host__ __device__ __forceinline__ bool operator()(char const* begin,
-                                                      char const* end,
-                                                      void* out_buffer,
-                                                      size_t row,
-                                                      data_type const output_type,
-                                                      parse_options_view const& opts,
-                                                      bool as_hex = false)
+  __device__ __forceinline__ bool operator()(char const* begin,
+                                             char const* end,
+                                             void* out_buffer,
+                                             size_t row,
+                                             data_type const output_type,
+                                             parse_options_view const& opts,
+                                             bool as_hex = false)
   {
-    auto const value = [as_hex, &opts, begin, end]() -> std::optional<T> {
+    auto const value = [as_hex, &opts, begin, end]() -> cuda::std::optional<T> {
       // Check for user-specified true/false values
       auto const field_len = static_cast<size_t>(end - begin);
       if (serialized_trie_contains(opts.trie_true, {begin, field_len})) { return 1; }
@@ -611,15 +571,15 @@ struct ConvertFunctor {
    * @brief Dispatch for boolean type types.
    */
   template <typename T, CUDF_ENABLE_IF(std::is_same_v<T, bool>)>
-  __host__ __device__ __forceinline__ bool operator()(char const* begin,
-                                                      char const* end,
-                                                      void* out_buffer,
-                                                      size_t row,
-                                                      data_type const output_type,
-                                                      parse_options_view const& opts,
-                                                      bool as_hex)
+  __device__ __forceinline__ bool operator()(char const* begin,
+                                             char const* end,
+                                             void* out_buffer,
+                                             size_t row,
+                                             data_type const output_type,
+                                             parse_options_view const& opts,
+                                             bool as_hex)
   {
-    auto const value = [&opts, begin, end]() -> std::optional<T> {
+    auto const value = [&opts, begin, end]() -> cuda::std::optional<T> {
       // Check for user-specified true/false values
       auto const field_len = static_cast<size_t>(end - begin);
       if (serialized_trie_contains(opts.trie_true, {begin, field_len})) {
@@ -640,15 +600,15 @@ struct ConvertFunctor {
    * is not valid. In such case, the validity mask is set to zero too.
    */
   template <typename T, CUDF_ENABLE_IF(std::is_floating_point_v<T>)>
-  __host__ __device__ __forceinline__ bool operator()(char const* begin,
-                                                      char const* end,
-                                                      void* out_buffer,
-                                                      size_t row,
-                                                      data_type const output_type,
-                                                      parse_options_view const& opts,
-                                                      bool as_hex)
+  __device__ __forceinline__ bool operator()(char const* begin,
+                                             char const* end,
+                                             void* out_buffer,
+                                             size_t row,
+                                             data_type const output_type,
+                                             parse_options_view const& opts,
+                                             bool as_hex)
   {
-    auto const value = [&opts, begin, end]() -> std::optional<T> {
+    auto const value = [&opts, begin, end]() -> cuda::std::optional<T> {
       // Check for user-specified true/false values
       auto const field_len = static_cast<size_t>(end - begin);
       if (serialized_trie_contains(opts.trie_true, {begin, field_len})) {

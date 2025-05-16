@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,18 +18,20 @@
 
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/text/detail/multistate.hpp>
+#include <cudf/utilities/export.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/mr/device/device_memory_resource.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <algorithm>
 #include <queue>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <vector>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace io {
 namespace text {
 namespace detail {
@@ -127,7 +129,7 @@ struct trie {
     /**
      * @brief Insert the string in to the trie tree, growing the trie as necessary
      */
-    void insert(std::string s) { insert(s.c_str(), s.size(), 0); }
+    void insert(std::string_view s) { insert(s.data(), s.size(), 0); }
 
    private:
     trie_builder_node& insert(char const* s, uint16_t size, uint8_t depth)
@@ -163,12 +165,12 @@ struct trie {
    * @param mr Memory resource to use for the device memory allocation
    * @return The trie.
    */
-  static trie create(std::string const& pattern,
+  static trie create(std::string pattern,
                      rmm::cuda_stream_view stream,
-                     rmm::mr::device_memory_resource* mr)
+                     rmm::device_async_resource_ref mr)
 
   {
-    return create(std::vector<std::string>{pattern}, stream, mr);
+    return create(std::vector<std::string>{std::move(pattern)}, stream, mr);
   }
 
   /**
@@ -181,7 +183,7 @@ struct trie {
    */
   static trie create(std::vector<std::string> const& patterns,
                      rmm::cuda_stream_view stream,
-                     rmm::mr::device_memory_resource* mr)
+                     rmm::device_async_resource_ref mr)
   {
     std::vector<char> tokens;
     std::vector<uint8_t> transitions;
@@ -222,11 +224,11 @@ struct trie {
 
     match_length.emplace_back(0);
 
-    std::vector<trie_node> trie_nodes;
     auto token_counts = std::unordered_map<cudf::size_type, int32_t>();
+    auto trie_nodes   = cudf::detail::make_empty_host_vector<trie_node>(tokens.size(), stream);
 
     for (uint32_t i = 0; i < tokens.size(); i++) {
-      trie_nodes.emplace_back(trie_node{tokens[i], match_length[i], transitions[i]});
+      trie_nodes.push_back(trie_node{tokens[i], match_length[i], transitions[i]});
       token_counts[tokens[i]]++;
     }
 
@@ -237,8 +239,7 @@ struct trie {
 
     auto max_duplicate_tokens = most_common_token->second;
 
-    return trie{max_duplicate_tokens,
-                cudf::detail::make_device_uvector_sync(trie_nodes, stream, mr)};
+    return trie{max_duplicate_tokens, cudf::detail::make_device_uvector(trie_nodes, stream, mr)};
   }
 
   [[nodiscard]] trie_device_view view() const { return trie_device_view{_nodes}; }
@@ -247,4 +248,4 @@ struct trie {
 }  // namespace detail
 }  // namespace text
 }  // namespace io
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

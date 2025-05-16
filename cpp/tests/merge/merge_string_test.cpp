@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,7 +14,11 @@
  * limitations under the License.
  */
 
-#include <cudf/column/column_factories.hpp>
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_utilities.hpp>
+#include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/type_lists.hpp>
+
 #include <cudf/detail/iterator.cuh>
 #include <cudf/merge.hpp>
 #include <cudf/table/table.hpp>
@@ -22,20 +26,10 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
-#include <cudf_test/base_fixture.hpp>
-#include <cudf_test/column_utilities.hpp>
-#include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/cudf_gtest.hpp>
-#include <cudf_test/type_lists.hpp>
+#include <gtest/gtest.h>
 
-#include <algorithm>
-#include <cassert>
-#include <initializer_list>
-#include <limits>
 #include <memory>
 #include <vector>
-
-#include <gtest/gtest.h>
 
 using cudf::test::fixed_width_column_wrapper;
 using cudf::test::strings_column_wrapper;
@@ -97,7 +91,7 @@ TYPED_TEST(MergeStringTest, Merge1StringKeyColumns)
                                             "hi",
                                             "hj"});
 
-  auto seq_out2 = cudf::detail::make_counting_transform_iterator(0, [outputRows](auto row) {
+  auto seq_out2 = cudf::detail::make_counting_transform_iterator(0, [](auto row) {
     if (cudf::type_to_id<TypeParam>() == cudf::type_id::BOOL8)
       return 0;
     else
@@ -228,7 +222,7 @@ TYPED_TEST(MergeStringTest, Merge1StringKeyNullColumns)
 {
   // data: "ab", "bc", "cd", "de" | valid: 1 1 1 0
   strings_column_wrapper leftColWrap1({"ab", "bc", "cd", "de", "ef", "fg", "gh", "hi"},
-                                      {1, 1, 1, 1, 1, 1, 1, 0});
+                                      {true, true, true, true, true, true, true, false});
 
   cudf::size_type inputRows = static_cast<cudf::column_view const&>(leftColWrap1).size();
 
@@ -245,7 +239,7 @@ TYPED_TEST(MergeStringTest, Merge1StringKeyNullColumns)
 
   // data: "ac", "bd", "ce", "df" | valid: 1 1 1 0
   strings_column_wrapper rightColWrap1({"ac", "bd", "ce", "df", "eg", "fh", "gi", "hj"},
-                                       {1, 1, 1, 1, 1, 1, 1, 0});
+                                       {true, true, true, true, true, true, true, false});
   fixed_width_column_wrapper<TypeParam, typename decltype(sequence0)::value_type> rightColWrap2(
     sequence0, sequence0 + inputRows);
 
@@ -280,8 +274,23 @@ TYPED_TEST(MergeStringTest, Merge1StringKeyNullColumns)
                                             "gi",
                                             "hi",
                                             "hj"},
-                                           {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0});
-  auto seq_out2 = cudf::detail::make_counting_transform_iterator(0, [outputRows](auto row) {
+                                           {true,
+                                            true,
+                                            true,
+                                            true,
+                                            true,
+                                            true,
+                                            true,
+                                            true,
+                                            true,
+                                            true,
+                                            true,
+                                            true,
+                                            true,
+                                            true,
+                                            false,
+                                            false});
+  auto seq_out2 = cudf::detail::make_counting_transform_iterator(0, [](auto row) {
     if (cudf::type_to_id<TypeParam>() == cudf::type_id::BOOL8)
       return 0;
     else
@@ -303,9 +312,9 @@ TYPED_TEST(MergeStringTest, Merge1StringKeyNullColumns)
 TYPED_TEST(MergeStringTest, Merge2StringKeyNullColumns)
 {
   strings_column_wrapper leftColWrap1({"ab", "bc", "cd", "de", "ef", "fg", "gh", "hi"},
-                                      {1, 1, 1, 1, 1, 1, 1, 0});
+                                      {true, true, true, true, true, true, true, false});
   strings_column_wrapper leftColWrap3({"zy", "yx", "xw", "wv", "vu", "ut", "ts", "sr"},
-                                      {1, 1, 1, 1, 1, 1, 1, 0});
+                                      {true, true, true, true, true, true, true, false});
 
   cudf::size_type inputRows = static_cast<cudf::column_view const&>(leftColWrap1).size();
 
@@ -324,7 +333,7 @@ TYPED_TEST(MergeStringTest, Merge2StringKeyNullColumns)
   cudf::table_view left_view{{leftColWrap1, leftColWrap2, leftColWrap3}};
 
   strings_column_wrapper rightColWrap1({"ac", "bd", "ce", "df", "eg", "fh", "gi", "hj"},
-                                       {1, 1, 1, 1, 1, 1, 1, 0});
+                                       {true, true, true, true, true, true, true, false});
 
   EXPECT_EQ(inputRows, static_cast<cudf::column_view const&>(rightColWrap1).size());
 
@@ -338,7 +347,7 @@ TYPED_TEST(MergeStringTest, Merge2StringKeyNullColumns)
     sequence_r, sequence_r + inputRows);
 
   strings_column_wrapper rightColWrap3({"zx", "yw", "xv", "wu", "vt", "us", "tr", "sp"},
-                                       {1, 1, 1, 1, 1, 1, 1, 0});
+                                       {true, true, true, true, true, true, true, false});
 
   EXPECT_EQ(inputRows, static_cast<cudf::column_view const&>(rightColWrap3).size());
 
@@ -371,7 +380,22 @@ TYPED_TEST(MergeStringTest, Merge2StringKeyNullColumns)
                                             "gi",
                                             "hi",
                                             "hj"},
-                                           {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0});
+                                           {true,
+                                            true,
+                                            true,
+                                            true,
+                                            true,
+                                            true,
+                                            true,
+                                            true,
+                                            true,
+                                            true,
+                                            true,
+                                            true,
+                                            true,
+                                            true,
+                                            false,
+                                            false});
 
   auto seq_out2 = cudf::detail::make_counting_transform_iterator(
     0, [bool8 = (cudf::type_to_id<TypeParam>() == cudf::type_id::BOOL8)](auto row) {
@@ -397,7 +421,22 @@ TYPED_TEST(MergeStringTest, Merge2StringKeyNullColumns)
                                             "tr",
                                             "sr",
                                             "sp"},
-                                           {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0});
+                                           {true,
+                                            true,
+                                            true,
+                                            true,
+                                            true,
+                                            true,
+                                            true,
+                                            true,
+                                            true,
+                                            true,
+                                            true,
+                                            true,
+                                            true,
+                                            true,
+                                            false,
+                                            false});
 
   auto expected_column_view1{static_cast<cudf::column_view const&>(expectedDataWrap1)};
   auto expected_column_view2{static_cast<cudf::column_view const&>(expectedDataWrap2)};

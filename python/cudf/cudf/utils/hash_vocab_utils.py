@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 # This function is from the rapidsai/clx repo at below link
 # https://github.com/rapidsai/clx/blob/267c6d30805c9dcbf80840f222bf31c5c4b7068a/python/clx/analytics/_perfect_hash.py
 import numpy as np
@@ -7,8 +7,8 @@ PRIME = np.uint64(281474976710677)
 
 # Coefficients ranges for inner hash - This are important to set to be
 # large so that we have randomness in the bottom bits when modding
-A_SECOND_LEVEL_POW = np.uint8(48)
-B_SECOND_LEVEL_POW = np.uint8(7)
+A_SECOND_LEVEL_POW = np.uint64(48)
+B_SECOND_LEVEL_POW = np.uint64(7)
 
 A_LBOUND_SECOND_LEVEL_HASH = 2**16
 A_HBOUND_SECOND_LEVEL_HASH = 2**A_SECOND_LEVEL_POW
@@ -23,11 +23,11 @@ MAX_SIZE_FOR_INITIAL_BIN = 2**8 - 1
 
 
 # Shifts for bit packing
-A_SECOND_LEVEL_SHIFT_AMT = np.uint8(64 - A_SECOND_LEVEL_POW)
-B_SECOND_LEVEL_SHIFT_AMT = np.uint8(
+A_SECOND_LEVEL_SHIFT_AMT = np.uint64(64 - A_SECOND_LEVEL_POW)
+B_SECOND_LEVEL_SHIFT_AMT = np.uint64(
     64 - A_SECOND_LEVEL_POW - B_SECOND_LEVEL_POW
 )
-BITS_FOR_INNER_TABLE_SIZE = np.uint8(8)
+BITS_FOR_INNER_TABLE_SIZE = np.uint64(8)
 
 NOT_FOUND = -1
 
@@ -69,34 +69,35 @@ def _get_space_util(bins, init_bins):
     return sum(_new_bin_length(len(b)) for b in bins) + 2 * init_bins
 
 
-def _pick_initial_a_b(data, max_constant, init_bins):
+def _pick_initial_a_b(data, max_constant, init_bins, rng):
     while True:
-        a = np.random.randint(2**12, 2**15)
-        b = np.random.randint(2**12, 2**15)
+        a = rng.integers(2**12, 2**15)
+        b = rng.integers(2**12, 2**15)
         bins = _make_bins(data, init_bins, a, b)
         score = _get_space_util(bins, init_bins) / len(data)
 
         longest = _new_bin_length(_longest_bin_length(bins))
 
         if score <= max_constant and longest <= MAX_SIZE_FOR_INITIAL_BIN:
-            print(f"Attempting to build table using {score:.6f}n space")
-            print(f"Longest bin was {longest}")
+            print(f"Attempting to build table using {score:.6f}n space")  # noqa: T201
+            print(f"Longest bin was {longest}")  # noqa: T201
             break
 
     return bins, a, b
 
 
-def _find_hash_for_internal(hash_bin):
+def _find_hash_for_internal(hash_bin, rng):
     if not hash_bin:
         return [[], 0, 0]
 
     new_length = _new_bin_length(len(hash_bin))
 
     while True:
-        a = np.random.randint(
-            A_LBOUND_SECOND_LEVEL_HASH, A_HBOUND_SECOND_LEVEL_HASH
+        a = rng.integers(
+            A_LBOUND_SECOND_LEVEL_HASH,
+            A_HBOUND_SECOND_LEVEL_HASH,
         )
-        b = np.random.randint(
+        b = rng.integers(
             B_LBOUND_SECOND_LEVEL_HASH, B_HBOUND_SECOND_LEVEL_HASH
         )
         bins = _make_bins(hash_bin, new_length, a, b)
@@ -107,11 +108,11 @@ def _find_hash_for_internal(hash_bin):
             return bins, a, b
 
 
-def _perfect_hash(integers, max_constant):
+def _perfect_hash(integers, max_constant, rng):
     num_top_level_bins = len(integers) // 4
 
     init_bins, init_a, init_b = _pick_initial_a_b(
-        integers, max_constant, num_top_level_bins
+        integers, max_constant, num_top_level_bins, rng
     )
     flattened_bins = []
 
@@ -125,27 +126,27 @@ def _perfect_hash(integers, max_constant):
     max_bin_length = 0
     for i, b in enumerate(init_bins):
         if i % 500 == 0:
-            print(f"Processing bin {i} / {len(init_bins)} of size = {len(b)}")
-        internal_table, coeff_a, coeff_b = _find_hash_for_internal(b)
+            print(f"Processing bin {i} / {len(init_bins)} of size = {len(b)}")  # noqa: T201
+        internal_table, coeff_a, coeff_b = _find_hash_for_internal(b, rng)
         bin_length = len(internal_table)
         max_bin_length = max(bin_length, max_bin_length)
         internal_table_coeffs[i] = (
-            coeff_a << A_SECOND_LEVEL_SHIFT_AMT
-            | coeff_b << B_SECOND_LEVEL_SHIFT_AMT
-            | bin_length
+            np.uint64(coeff_a) << A_SECOND_LEVEL_SHIFT_AMT
+            | np.uint64(coeff_b) << B_SECOND_LEVEL_SHIFT_AMT
+            | np.uint64(bin_length)
         )
-        offset_into_flattened_table[i + 1] = (
-            offset_into_flattened_table[i] + bin_length
-        )
+        offset_into_flattened_table[i + 1] = offset_into_flattened_table[
+            i
+        ] + np.uint64(bin_length)
         flattened_bins.extend(internal_table)
 
-    print(
+    print(  # noqa: T201
         "Final table size {} elements compared to {} for original".format(
             len(flattened_bins), len(integers)
         )
     )
 
-    print("Max bin length was", max_bin_length)
+    print("Max bin length was", max_bin_length)  # noqa: T201
 
     return (
         init_a,
@@ -158,7 +159,6 @@ def _perfect_hash(integers, max_constant):
 
 
 def _pack_keys_and_values(flattened_hash_table, original_dict):
-
     for i in range(len(flattened_hash_table)):
         if flattened_hash_table[i] in original_dict:
             value = original_dict[flattened_hash_table[i]]
@@ -189,7 +189,6 @@ def _store_func(
     first_token_id,
     sep_token_id,
 ):
-
     with open(out_name, mode="w+") as f:
         f.write(f"{outer_a}\n")
         f.write(f"{outer_b}\n")
@@ -215,7 +214,6 @@ def _retrieve(
     inner_table_coeffs,
     offsets_into_ht,
 ):
-
     bin_hash = _hash_func(k, outer_a, outer_b, num_outer_bins)
     start_offset_in_ht = offsets_into_ht[bin_hash]
     inner_table_values = inner_table_coeffs[bin_hash]
@@ -247,7 +245,7 @@ def hash_vocab(
     """
     Write the vocab vocabulary hashtable to the output_path
     """
-    np.random.seed(1243342)
+    rng = np.random.default_rng(seed=1243342)
     vocab = _load_vocab_dict(vocab_path)
     keys = list(map(_sdbm_hash, vocab.keys()))
 
@@ -266,7 +264,7 @@ def hash_vocab(
         hash_table,
         inner_table_coeffs,
         offsets_into_ht,
-    ) = _perfect_hash(keys, 10)
+    ) = _perfect_hash(keys, 10, rng)
 
     _pack_keys_and_values(hash_table, hashed_vocab)
     _store_func(
@@ -292,8 +290,8 @@ def hash_vocab(
             inner_table_coeffs,
             offsets_into_ht,
         )
-        assert (
-            val == value
-        ), f"Incorrect value found. Got {val} expected {value}"
+        assert val == value, (
+            f"Incorrect value found. Got {val} expected {value}"
+        )
 
-    print("All present tokens return correct value.")
+    print("All present tokens return correct value.")  # noqa: T201

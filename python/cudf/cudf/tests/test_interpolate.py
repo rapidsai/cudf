@@ -1,9 +1,11 @@
-# Copyright (c) 2021-2022, NVIDIA CORPORATION.
+# Copyright (c) 2021-2024, NVIDIA CORPORATION.
 
 import pytest
 
 import cudf
-from cudf.testing._utils import assert_eq, assert_exceptions_equal
+from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
+from cudf.testing import assert_eq
+from cudf.testing._utils import assert_exceptions_equal, expect_warning_if
 
 
 @pytest.mark.parametrize(
@@ -30,6 +32,10 @@ def test_interpolate_dataframe(data, method, axis):
     assert_eq(expect, got)
 
 
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="warning not present in older pandas versions",
+)
 @pytest.mark.parametrize(
     "data",
     [
@@ -49,8 +55,11 @@ def test_interpolate_series(data, method, axis):
     gsr = cudf.Series(data)
     psr = gsr.to_pandas()
 
-    expect = psr.interpolate(method=method, axis=axis)
-    got = gsr.interpolate(method=method, axis=axis)
+    is_str_dtype = psr.dtype == "object"
+    with expect_warning_if(is_str_dtype):
+        expect = psr.interpolate(method=method, axis=axis)
+    with expect_warning_if(is_str_dtype):
+        got = gsr.interpolate(method=method, axis=axis)
 
     assert_eq(expect, got, check_dtype=psr.dtype != "object")
 
@@ -68,6 +77,10 @@ def test_interpolate_series_unsorted_index(data, index):
     assert_eq(expect, got)
 
 
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="warning not present in older pandas versions",
+)
 @pytest.mark.parametrize(
     "data",
     [
@@ -87,8 +100,11 @@ def test_interpolate_series_values_or_index(data, index, method):
     gsr = cudf.Series(data, index=index)
     psr = gsr.to_pandas()
 
-    expect = psr.interpolate(method=method)
-    got = gsr.interpolate(method=method)
+    is_str_dtype = gsr.dtype == "object"
+    with expect_warning_if(is_str_dtype):
+        expect = psr.interpolate(method=method)
+    with expect_warning_if(is_str_dtype):
+        got = gsr.interpolate(method=method)
 
     assert_eq(expect, got, check_dtype=psr.dtype != "object")
 
@@ -100,14 +116,18 @@ def test_interpolate_series_values_or_index(data, index, method):
             {"A": ["a", "b", "c"], "B": ["d", "e", "f"]},
             {"axis": 0, "method": "linear"},
         ),
-        ({"A": [1, 2, 3]}, {"method": "pad", "limit_direction": "backward"}),
-        ({"A": [1, 2, 3]}, {"method": "ffill", "limit_direction": "backward"}),
-        ({"A": [1, 2, 3]}, {"method": "bfill", "limit_direction": "forward"}),
+        ({"A": [1, 2, 3]}, {"method": "pad", "limit_direction": "forward"}),
+        ({"A": [1, 2, 3]}, {"method": "ffill", "limit_direction": "forward"}),
+        ({"A": [1, 2, 3]}, {"method": "bfill", "limit_direction": "backward"}),
         (
             {"A": [1, 2, 3]},
-            {"method": "backfill", "limit_direction": "forward"},
+            {"method": "backfill", "limit_direction": "backward"},
         ),
     ],
+)
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="Does not fail on older versions of pandas",
 )
 def test_interpolate_dataframe_error_cases(data, kwargs):
     gsr = cudf.DataFrame(data)
@@ -119,3 +139,9 @@ def test_interpolate_dataframe_error_cases(data, kwargs):
         lfunc_args_and_kwargs=([], kwargs),
         rfunc_args_and_kwargs=([], kwargs),
     )
+
+
+def test_interpolate_noop_new_column():
+    ser = cudf.Series([1.0, 2.0, 3.0])
+    result = ser.interpolate()
+    assert ser._column is not result._column

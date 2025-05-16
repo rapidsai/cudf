@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,7 +21,6 @@
 
 #include <cudf/concatenate.hpp>
 #include <cudf/copying.hpp>
-#include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/groupby.hpp>
 #include <cudf/lists/sorting.hpp>
 #include <cudf/sorting.hpp>
@@ -42,7 +41,7 @@ auto merge_sets(vcol_views const& keys_cols, vcol_views const& values_cols)
   auto const values = cudf::concatenate(values_cols);
 
   std::vector<cudf::groupby::aggregation_request> requests;
-  requests.emplace_back(cudf::groupby::aggregation_request());
+  requests.emplace_back();
   requests[0].values = *values;
   requests[0].aggregations.emplace_back(
     cudf::make_merge_sets_aggregation<cudf::groupby_aggregation>());
@@ -333,7 +332,7 @@ TEST_F(GroupbyMergeSetsTest, StringsColumnInput)
     lists_col{{"" /*NULL*/, "" /*NULL*/, "" /*NULL*/}, all_nulls()}  // key = "dog"
   };
   auto const lists3 = lists_col{
-    lists_col{"Fuji", "Red Delicious"},           // key = "apple"
+    lists_col{"Fuji", "Red Delicious"},  // key = "apple"
     lists_col{{"" /*NULL*/, "Corgi", "German Shepherd", "" /*NULL*/, "Golden Retriever"},
               nulls_at({0, 3})},                  // key = "dog"
     lists_col{{"Seeedless", "Mini"}, no_nulls()}  // key = "water melon"
@@ -343,14 +342,14 @@ TEST_F(GroupbyMergeSetsTest, StringsColumnInput)
     merge_sets(vcol_views{keys1, keys2, keys3}, vcol_views{lists1, lists2, lists3});
   auto const expected_keys  = strings_col{"apple", "banana", "dog", "unknown", "water melon"};
   auto const expected_lists = lists_col{
-    lists_col{"Fuji", "Honey Bee", "Red Delicious"},                         // key = "apple"
-    lists_col{"Green", "Yellow"},                                            // key = "banana"
+    lists_col{"Fuji", "Honey Bee", "Red Delicious"},  // key = "apple"
+    lists_col{"Green", "Yellow"},                     // key = "banana"
     lists_col{{
                 "Corgi", "German Shepherd", "Golden Retriever", "Poodle", "" /*NULL*/
               },
-              null_at(4)},                                                   // key = "dog"
-    lists_col{{"Polar Bear", "Whale", "" /*NULL*/}, null_at(2)},             // key = "unknown"
-    lists_col{{"Mini", "Seeedless"}, no_nulls()}                             // key = "water melon"
+              null_at(4)},                                        // key = "dog"
+    lists_col{{"Polar Bear", "Whale", "" /*NULL*/}, null_at(2)},  // key = "unknown"
+    lists_col{{"Mini", "Seeedless"}, no_nulls()}                  // key = "water melon"
   };
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_keys, *out_keys, verbosity);

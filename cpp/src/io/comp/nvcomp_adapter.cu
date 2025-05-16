@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@
  */
 #include "nvcomp_adapter.cuh"
 
+#include <cudf/detail/utilities/functional.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
 
 #include <rmm/exec_policy.hpp>
@@ -23,7 +24,7 @@
 #include <thrust/transform.h>
 #include <thrust/tuple.h>
 
-namespace cudf::io::nvcomp {
+namespace cudf::io::detail::nvcomp {
 
 batched_args create_batched_nvcomp_args(device_span<device_span<uint8_t const> const> inputs,
                                         device_span<device_span<uint8_t> const> outputs,
@@ -122,9 +123,9 @@ std::pair<size_t, size_t> max_chunk_and_total_input_size(device_span<size_t cons
                                   input_sizes.begin(),
                                   input_sizes.end(),
                                   0ul,
-                                  thrust::maximum<size_t>());
+                                  cudf::detail::maximum<size_t>());
   auto const sum = thrust::reduce(rmm::exec_policy(stream), input_sizes.begin(), input_sizes.end());
   return {max, sum};
 }
 
-}  // namespace cudf::io::nvcomp
+}  // namespace cudf::io::detail::nvcomp

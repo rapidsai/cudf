@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,8 +19,6 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/type_lists.hpp>
-
-#include <cudf/detail/aggregation/aggregation.hpp>
 
 template <typename V>
 struct groupby_collect_list_test : public cudf::test::BaseFixture {};
@@ -127,8 +125,9 @@ TYPED_TEST(groupby_collect_list_test, CollectListsWithNullExclusion)
   using LCW = cudf::test::lists_column_wrapper<V, int32_t>;
 
   cudf::test::fixed_width_column_wrapper<K, int32_t> keys{1, 1, 2, 2, 3, 3, 4, 4};
-  const bool validity_mask[] = {true, false, false, true, true, true, false, false};
-  LCW values{{{1, 2}, {3, 4}, {5, 6, 7}, LCW{}, {9, 10}, {11}, {20, 30, 40}, LCW{}}, validity_mask};
+  std::array const validity_mask{true, false, false, true, true, true, false, false};
+  LCW values{{{1, 2}, {3, 4}, {5, 6, 7}, LCW{}, {9, 10}, {11}, {20, 30, 40}, LCW{}},
+             validity_mask.data()};
 
   cudf::test::fixed_width_column_wrapper<K, int32_t> expect_keys{1, 2, 3, 4};
 
@@ -146,7 +145,7 @@ TYPED_TEST(groupby_collect_list_test, CollectOnEmptyInputLists)
 
   using LCW = cudf::test::lists_column_wrapper<V, int32_t>;
 
-  auto offsets = cudf::data_type{cudf::type_to_id<cudf::offset_type>()};
+  auto offsets = cudf::data_type{cudf::type_to_id<cudf::size_type>()};
 
   cudf::test::fixed_width_column_wrapper<K, int32_t> keys{};
   auto values =
@@ -176,7 +175,7 @@ TYPED_TEST(groupby_collect_list_test, CollectOnEmptyInputListsOfStructs)
 
   auto values =
     cudf::make_lists_column(0,
-                            cudf::make_empty_column(cudf::type_to_id<cudf::offset_type>()),
+                            cudf::make_empty_column(cudf::type_to_id<cudf::size_type>()),
                             struct_column.release(),
                             0,
                             {});
@@ -188,13 +187,13 @@ TYPED_TEST(groupby_collect_list_test, CollectOnEmptyInputListsOfStructs)
 
   auto expect_child =
     cudf::make_lists_column(0,
-                            cudf::make_empty_column(cudf::type_to_id<cudf::offset_type>()),
+                            cudf::make_empty_column(cudf::type_to_id<cudf::size_type>()),
                             expect_struct_column.release(),
                             0,
                             {});
   auto expect_values =
     cudf::make_lists_column(0,
-                            cudf::make_empty_column(cudf::type_to_id<cudf::offset_type>()),
+                            cudf::make_empty_column(cudf::type_to_id<cudf::size_type>()),
                             std::move(expect_child),
                             0,
                             {});

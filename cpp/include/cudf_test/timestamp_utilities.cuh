@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,15 +16,16 @@
 
 #pragma once
 
-#include <cudf/detail/iterator.cuh>
-#include <cudf/wrappers/timestamps.hpp>
-
 #include <cudf_test/column_wrapper.hpp>
+
+#include <cudf/detail/iterator.cuh>
+#include <cudf/utilities/export.hpp>
+#include <cudf/wrappers/timestamps.hpp>
 
 #include <thrust/logical.h>
 #include <thrust/sequence.h>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace test {
 using time_point_ms =
   cuda::std::chrono::time_point<cuda::std::chrono::system_clock, cuda::std::chrono::milliseconds>;
@@ -75,4 +76,4 @@ inline cudf::test::fixed_width_column_wrapper<T, int64_t> generate_timestamps(in
 }
 
 }  // namespace test
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

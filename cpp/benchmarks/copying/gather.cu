@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,8 +31,8 @@ class Gather : public cudf::benchmark {};
 template <class TypeParam, bool coalesce>
 void BM_gather(benchmark::State& state)
 {
-  const cudf::size_type source_size{(cudf::size_type)state.range(0)};
-  const auto n_cols = (cudf::size_type)state.range(1);
+  cudf::size_type const source_size{(cudf::size_type)state.range(0)};
+  auto const n_cols = (cudf::size_type)state.range(1);
 
   // Gather indices
   auto gather_map_table =
@@ -71,5 +71,5 @@ void BM_gather(benchmark::State& state)
     ->Ranges({{1 << 10, 1 << 26}, {1, 8}})                     \
     ->UseManualTime();
 
-GBM_BENCHMARK_DEFINE(double_coalesce_x, double, true);
-GBM_BENCHMARK_DEFINE(double_coalesce_o, double, false);
+GBM_BENCHMARK_DEFINE(double_coalesced, double, true);
+GBM_BENCHMARK_DEFINE(double_shuffled, double, false);

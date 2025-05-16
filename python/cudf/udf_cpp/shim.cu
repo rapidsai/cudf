@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,9 +23,8 @@
 #include <cudf/strings/udf/strip.cuh>
 #include <cudf/strings/udf/udf_string.cuh>
 
-#include <cuda/atomic>
-
 #include <cooperative_groups.h>
+#include <cuda/atomic>
 
 #include <limits>
 #include <type_traits>
@@ -388,26 +387,30 @@ __device__ bool are_all_nans(cooperative_groups::thread_block const& block,
   return count == 0;
 }
 
-template <typename T>
-__device__ void device_sum(cooperative_groups::thread_block const& block,
-                           T const* data,
-                           int64_t size,
-                           T* sum)
+template <typename T, typename AccumT = std::conditional_t<std::is_integral_v<T>, int64_t, T>>
+__device__ AccumT device_sum(cooperative_groups::thread_block const& block,
+                             T const* data,
+                             int64_t size)
 {
-  T local_sum = 0;
+  __shared__ AccumT block_sum;
+  if (block.thread_rank() == 0) { block_sum = 0; }
+  block.sync();
+
+  AccumT local_sum = 0;
 
   for (int64_t idx = block.thread_rank(); idx < size; idx += block.size()) {
-    local_sum += data[idx];
+    local_sum += static_cast<AccumT>(data[idx]);
   }
 
-  cuda::atomic_ref<T, cuda::thread_scope_block> ref{*sum};
+  cuda::atomic_ref<AccumT, cuda::thread_scope_block> ref{block_sum};
   ref.fetch_add(local_sum, cuda::std::memory_order_relaxed);
 
   block.sync();
+  return block_sum;
 }
 
-template <typename T>
-__device__ T BlockSum(T const* data, int64_t size)
+template <typename T, typename AccumT = std::conditional_t<std::is_integral_v<T>, int64_t, T>>
+__device__ AccumT BlockSum(T const* data, int64_t size)
 {
   auto block = cooperative_groups::this_thread_block();
 
@@ -415,11 +418,7 @@ __device__ T BlockSum(T const* data, int64_t size)
     if (are_all_nans(block, data, size)) { return 0; }
   }
 
-  __shared__ T block_sum;
-  if (block.thread_rank() == 0) { block_sum = 0; }
-  block.sync();
-
-  device_sum<T>(block, data, size, &block_sum);
+  auto block_sum = device_sum<T>(block, data, size);
   return block_sum;
 }
 
@@ -428,46 +427,54 @@ __device__ double BlockMean(T const* data, int64_t size)
 {
   auto block = cooperative_groups::this_thread_block();
 
-  __shared__ T block_sum;
-  if (block.thread_rank() == 0) { block_sum = 0; }
+  auto block_sum = device_sum<T>(block, data, size);
+  return static_cast<double>(block_sum) / static_cast<double>(size);
+}
+
+template <typename T>
+__device__ double BlockCoVar(T const* lhs, T const* rhs, int64_t size)
+{
+  auto block = cooperative_groups::this_thread_block();
+
+  __shared__ double block_covar;
+
+  if (block.thread_rank() == 0) { block_covar = 0; }
   block.sync();
 
-  device_sum<T>(block, data, size, &block_sum);
-  return static_cast<double>(block_sum) / static_cast<double>(size);
+  auto block_sum_lhs = device_sum<T>(block, lhs, size);
+
+  auto const mu_l = static_cast<double>(block_sum_lhs) / static_cast<double>(size);
+  auto const mu_r = [=]() {
+    if (lhs == rhs) {
+      // If the lhs and rhs are the same, this is calculating variance.
+      // Thus we can assume mu_r = mu_l.
+      return mu_l;
+    } else {
+      auto block_sum_rhs = device_sum<T>(block, rhs, size);
+      return static_cast<double>(block_sum_rhs) / static_cast<double>(size);
+    }
+  }();
+
+  double local_covar = 0;
+
+  for (int64_t idx = block.thread_rank(); idx < size; idx += block.size()) {
+    local_covar += (static_cast<double>(lhs[idx]) - mu_l) * (static_cast<double>(rhs[idx]) - mu_r);
+  }
+
+  cuda::atomic_ref<double, cuda::thread_scope_block> ref{block_covar};
+  ref.fetch_add(local_covar, cuda::std::memory_order_relaxed);
+  block.sync();
+
+  if (block.thread_rank() == 0) { block_covar /= static_cast<double>(size - 1); }
+  block.sync();
+
+  return block_covar;
 }
 
 template <typename T>
 __device__ double BlockVar(T const* data, int64_t size)
 {
-  auto block = cooperative_groups::this_thread_block();
-
-  __shared__ double block_var;
-  __shared__ T block_sum;
-  if (block.thread_rank() == 0) {
-    block_var = 0;
-    block_sum = 0;
-  }
-  block.sync();
-
-  T local_sum      = 0;
-  double local_var = 0;
-
-  device_sum<T>(block, data, size, &block_sum);
-
-  auto const mean = static_cast<double>(block_sum) / static_cast<double>(size);
-
-  for (int64_t idx = block.thread_rank(); idx < size; idx += block.size()) {
-    auto const delta = static_cast<double>(data[idx]) - mean;
-    local_var += delta * delta;
-  }
-
-  cuda::atomic_ref<double, cuda::thread_scope_block> ref{block_var};
-  ref.fetch_add(local_var, cuda::std::memory_order_relaxed);
-  block.sync();
-
-  if (block.thread_rank() == 0) { block_var = block_var / static_cast<double>(size - 1); }
-  block.sync();
-  return block_var;
+  return BlockCoVar<T>(data, data, size);
 }
 
 template <typename T>
@@ -620,6 +627,18 @@ __device__ int64_t BlockIdxMin(T const* data, int64_t* index, int64_t size)
   return block_idx_min;
 }
 
+template <typename T>
+__device__ double BlockCorr(T* const lhs_ptr, T* const rhs_ptr, int64_t size)
+{
+  auto numerator   = BlockCoVar(lhs_ptr, rhs_ptr, size);
+  auto denominator = BlockStd(lhs_ptr, size) * BlockStd<T>(rhs_ptr, size);
+  if (denominator == 0.0) {
+    return std::numeric_limits<double>::quiet_NaN();
+  } else {
+    return numerator / denominator;
+  }
+}
+
 extern "C" {
 #define make_definition(name, cname, type, return_type)                                          \
   __device__ int name##_##cname(return_type* numba_return_value, type* const data, int64_t size) \
@@ -630,17 +649,34 @@ extern "C" {
     return 0;                                                                                    \
   }
 
+make_definition(BlockSum, int32, int32_t, int64_t);
 make_definition(BlockSum, int64, int64_t, int64_t);
+make_definition(BlockSum, float32, float, float);
 make_definition(BlockSum, float64, double, double);
+
+make_definition(BlockMean, int32, int32_t, double);
 make_definition(BlockMean, int64, int64_t, double);
+make_definition(BlockMean, float32, float, float);
 make_definition(BlockMean, float64, double, double);
+
+make_definition(BlockStd, int32, int32_t, double);
 make_definition(BlockStd, int64, int64_t, double);
+make_definition(BlockStd, float32, float, float);
 make_definition(BlockStd, float64, double, double);
+
 make_definition(BlockVar, int64, int64_t, double);
+make_definition(BlockVar, int32, int32_t, double);
+make_definition(BlockVar, float32, float, float);
 make_definition(BlockVar, float64, double, double);
+
+make_definition(BlockMin, int32, int32_t, int32_t);
 make_definition(BlockMin, int64, int64_t, int64_t);
+make_definition(BlockMin, float32, float, float);
 make_definition(BlockMin, float64, double, double);
+
+make_definition(BlockMax, int32, int32_t, int32_t);
 make_definition(BlockMax, int64, int64_t, int64_t);
+make_definition(BlockMax, float32, float, float);
 make_definition(BlockMax, float64, double, double);
 #undef make_definition
 }
@@ -656,9 +692,31 @@ extern "C" {
     return 0;                                                                    \
   }
 
+make_definition_idx(BlockIdxMin, int32, int32_t);
 make_definition_idx(BlockIdxMin, int64, int64_t);
+make_definition_idx(BlockIdxMin, float32, float);
 make_definition_idx(BlockIdxMin, float64, double);
+
+make_definition_idx(BlockIdxMax, int32, int32_t);
 make_definition_idx(BlockIdxMax, int64, int64_t);
+make_definition_idx(BlockIdxMax, float32, float);
 make_definition_idx(BlockIdxMax, float64, double);
 #undef make_definition_idx
+}
+
+extern "C" {
+#define make_definition_corr(name, cname, type)                                 \
+  __device__ int name##_##cname##_##cname(                                      \
+    double* numba_return_value, type* const lhs, type* const rhs, int64_t size) \
+  {                                                                             \
+    double const res    = name<type>(lhs, rhs, size);                           \
+    *numba_return_value = res;                                                  \
+    __syncthreads();                                                            \
+    return 0;                                                                   \
+  }
+
+make_definition_corr(BlockCorr, int32, int32_t);
+make_definition_corr(BlockCorr, int64, int64_t);
+
+#undef make_definition_corr
 }

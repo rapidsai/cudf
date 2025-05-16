@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,12 +17,12 @@
 #pragma once
 
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/utilities/cast_functor.cuh>
 #include <cudf/detail/utilities/device_operators.cuh>
 #include <cudf/detail/utilities/transform_unary_functions.cuh>
 #include <cudf/types.hpp>  //for CUDF_HOST_DEVICE
 
 #include <cmath>
-#include <thrust/functional.h>
 
 namespace cudf {
 namespace reduction {
@@ -30,17 +30,41 @@ namespace detail {
 // intermediate data structure to compute `var`, `std`
 template <typename ResultType>
 struct var_std {
-  ResultType value;          /// the value
-  ResultType value_squared;  /// the value of squared
+  // Uses the pairwise approach of Chan, Golub, and LeVeque,
+  // _Algorithms for computing the sample variance: analysis and
+  // recommendations_ (1983)
+  // https://doi.org/10.1080/00031305.1983.10483115
+  // Also http://www.cs.yale.edu/publications/techreports/tr222.pdf
+  // This is a modification of Youngs and Cramer's online approach.
+  ResultType running_sum;
+  ResultType running_square_deviations;
+  size_type count;
 
-  CUDF_HOST_DEVICE inline var_std(ResultType _value = 0, ResultType _value_squared = 0)
-    : value(_value), value_squared(_value_squared){};
+  CUDF_HOST_DEVICE inline var_std(ResultType t = 0, ResultType s = 0, size_type n = 0)
+    : running_sum(t), running_square_deviations(s), count(n){};
 
   using this_t = var_std<ResultType>;
 
   CUDF_HOST_DEVICE inline this_t operator+(this_t const& rhs) const
   {
-    return this_t((this->value + rhs.value), (this->value_squared + rhs.value_squared));
+    // Updates as per equations 1.5a and 1.5b in the paper
+    // T_{1,m+n} = T_{1,m} + T_{m+1,n+1}
+    // S_{1,m+n} = S_{1,m} + S_{m+1,n+1} + m/(n(m+n)) * (n/m T_{1,m} - T_{m+1,n+1})**2
+    // Here the first m samples are in this, the remaining n samples are in rhs.
+    auto const m = this->count;
+    auto const n = rhs.count;
+    // Avoid division by zero.
+    if (m == 0) { return rhs; }
+    if (n == 0) { return *this; }
+    auto const tm   = this->running_sum;
+    auto const tn   = rhs.running_sum;
+    auto const sm   = this->running_square_deviations;
+    auto const sn   = rhs.running_square_deviations;
+    auto const tmn  = tm + tn;
+    auto const diff = ((static_cast<ResultType>(n) / m) * tm) - tn;
+    // Computing m/n(m+n) as m/n/(m+n) to avoid integer overflow
+    auto const smn = sm + sn + ((static_cast<ResultType>(m) / n) / (m + n)) * diff * diff;
+    return {tmn, smn, m + n};
   };
 };
 
@@ -49,10 +73,7 @@ template <typename ResultType>
 struct transformer_var_std {
   using OutputType = var_std<ResultType>;
 
-  CUDF_HOST_DEVICE inline OutputType operator()(ResultType const& value)
-  {
-    return OutputType(value, value * value);
-  };
+  CUDF_HOST_DEVICE inline OutputType operator()(ResultType const& value) { return {value, 0, 1}; };
 };
 
 // ------------------------------------------------------------------------
@@ -134,7 +155,7 @@ struct sum : public simple_op<sum> {
   using op = cudf::DeviceSum;
 
   template <typename ResultType>
-  using transformer = thrust::identity<ResultType>;
+  using transformer = cudf::detail::cast_fn<ResultType>;
 };
 
 // operator for `product`
@@ -142,7 +163,7 @@ struct product : public simple_op<product> {
   using op = cudf::DeviceProduct;
 
   template <typename ResultType>
-  using transformer = thrust::identity<ResultType>;
+  using transformer = cudf::detail::cast_fn<ResultType>;
 };
 
 // operator for `sum_of_squares`
@@ -158,7 +179,7 @@ struct min : public simple_op<min> {
   using op = cudf::DeviceMin;
 
   template <typename ResultType>
-  using transformer = thrust::identity<ResultType>;
+  using transformer = cudf::detail::cast_fn<ResultType>;
 };
 
 // operator for `max`
@@ -166,7 +187,31 @@ struct max : public simple_op<max> {
   using op = cudf::DeviceMax;
 
   template <typename ResultType>
-  using transformer = thrust::identity<ResultType>;
+  using transformer = cudf::detail::cast_fn<ResultType>;
+};
+
+// operator for `bit_and`
+struct bit_and : public simple_op<bit_and> {
+  using op = cudf::DeviceBitAnd;
+
+  template <typename ResultType>
+  using transformer = cudf::detail::cast_fn<ResultType>;
+};
+
+// operator for `bit_or`
+struct bit_or : public simple_op<bit_or> {
+  using op = cudf::DeviceBitOr;
+
+  template <typename ResultType>
+  using transformer = cudf::detail::cast_fn<ResultType>;
+};
+
+// operator for `bit_xor`
+struct bit_xor : public simple_op<bit_xor> {
+  using op = cudf::DeviceBitXor;
+
+  template <typename ResultType>
+  using transformer = cudf::detail::cast_fn<ResultType>;
 };
 
 /**
@@ -183,7 +228,7 @@ struct compound_op : public simple_op<Derived> {
    * @copydoc simple_op<Derived>::template get_null_replacing_element_transformer<ResultType>()
    */
   template <typename ResultType>
-  auto get_null_replacing_element_transformer() override
+  auto get_null_replacing_element_transformer()
   {
     using element_transformer = typename Derived::transformer<ResultType>;
     using OutputType          = typename Derived::intermediate<ResultType>::IntermediateType;
@@ -202,9 +247,9 @@ struct compound_op : public simple_op<Derived> {
    * @return transformed output result of compound operator
    */
   template <typename ResultType, typename IntermediateType>
-  CUDF_HOST_DEVICE inline static ResultType compute_result(const IntermediateType& input,
-                                                           const cudf::size_type& count,
-                                                           const cudf::size_type& ddof)
+  CUDF_HOST_DEVICE inline static ResultType compute_result(IntermediateType const& input,
+                                                           cudf::size_type const& count,
+                                                           cudf::size_type const& ddof)
   {
     // Enforced interface
     return Derived::template intermediate<ResultType>::compute_result(input, count, ddof);
@@ -224,16 +269,16 @@ struct mean : public compound_op<mean> {
   using op = cudf::DeviceSum;
 
   template <typename ResultType>
-  using transformer = thrust::identity<ResultType>;
+  using transformer = cudf::detail::cast_fn<ResultType>;
 
   template <typename ResultType>
   struct intermediate {
     using IntermediateType = ResultType;  // sum value
 
     // compute `mean` from intermediate type `IntermediateType`
-    CUDF_HOST_DEVICE inline static ResultType compute_result(const IntermediateType& input,
-                                                             const cudf::size_type& count,
-                                                             const cudf::size_type& ddof)
+    CUDF_HOST_DEVICE inline static ResultType compute_result(IntermediateType const& input,
+                                                             cudf::size_type const& count,
+                                                             cudf::size_type const& ddof)
     {
       return (input / count);
     };
@@ -252,16 +297,11 @@ struct variance : public compound_op<variance> {
     using IntermediateType = var_std<ResultType>;  // with sum of value, and sum of squared value
 
     // compute `variance` from intermediate type `IntermediateType`
-    CUDF_HOST_DEVICE inline static ResultType compute_result(const IntermediateType& input,
-                                                             const cudf::size_type& count,
-                                                             const cudf::size_type& ddof)
+    CUDF_HOST_DEVICE inline static ResultType compute_result(IntermediateType const& input,
+                                                             cudf::size_type const& count,
+                                                             cudf::size_type const& ddof)
     {
-      ResultType mean     = input.value / count;
-      ResultType asum     = input.value_squared;
-      cudf::size_type div = count - ddof;
-      ResultType var      = asum / div - ((mean * mean) * count) / div;
-
-      return var;
+      return input.running_square_deviations / (count - ddof);
     };
   };
 };
@@ -278,9 +318,9 @@ struct standard_deviation : public compound_op<standard_deviation> {
     using IntermediateType = var_std<ResultType>;  // with sum of value, and sum of squared value
 
     // compute `standard deviation` from intermediate type `IntermediateType`
-    CUDF_HOST_DEVICE inline static ResultType compute_result(const IntermediateType& input,
-                                                             const cudf::size_type& count,
-                                                             const cudf::size_type& ddof)
+    CUDF_HOST_DEVICE inline static ResultType compute_result(IntermediateType const& input,
+                                                             cudf::size_type const& count,
+                                                             cudf::size_type const& ddof)
     {
       using intermediateOp = variance::template intermediate<ResultType>;
       ResultType var       = intermediateOp::compute_result(input, count, ddof);

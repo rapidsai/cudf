@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,6 +14,8 @@
  */
 #include <tests/iterator/pair_iterator_test.cuh>
 
+#include <cudf_test/random.hpp>
+
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/iterator/transform_iterator.h>
@@ -21,16 +23,6 @@
 #include <thrust/reduce.h>
 
 using TestingTypes = cudf::test::NumericTypes;
-
-namespace cudf {
-// To print meanvar for debug.
-// Needs to be in the cudf namespace for ADL
-template <typename T>
-std::ostream& operator<<(std::ostream& os, cudf::meanvar<T> const& rhs)
-{
-  return os << "[" << rhs.value << ", " << rhs.value_squared << ", " << rhs.count << "] ";
-};
-}  // namespace cudf
 
 template <typename T>
 struct NumericPairIteratorTest : public IteratorTest<T> {};
@@ -51,10 +43,11 @@ struct transformer_pair_meanvar {
   };
 };
 
+namespace {
 struct sum_if_not_null {
   template <typename T>
-  CUDF_HOST_DEVICE inline thrust::pair<T, bool> operator()(const thrust::pair<T, bool>& lhs,
-                                                           const thrust::pair<T, bool>& rhs)
+  CUDF_HOST_DEVICE inline thrust::pair<T, bool> operator()(thrust::pair<T, bool> const& lhs,
+                                                           thrust::pair<T, bool> const& rhs)
   {
     if (lhs.second & rhs.second)
       return {lhs.first + rhs.first, true};
@@ -64,6 +57,7 @@ struct sum_if_not_null {
       return {rhs};
   }
 };
+}  // namespace
 
 // TODO: enable this test also at __CUDACC_DEBUG__
 // This test causes fatal compilation error only at device debug mode.
@@ -77,7 +71,7 @@ TYPED_TEST(NumericPairIteratorTest, mean_var_output)
   using T_output = cudf::meanvar<T>;
   transformer_pair_meanvar<T> transformer{};
 
-  const int column_size{5000};
+  int const column_size{5000};
   const T init{0};
 
   // data and valid arrays

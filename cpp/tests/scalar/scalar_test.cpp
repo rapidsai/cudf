@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/table_utilities.hpp>
+#include <cudf_test/testing_main.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/scalar/scalar.hpp>
@@ -33,7 +34,7 @@ TYPED_TEST_SUITE(TypedScalarTestWithoutFixedPoint, cudf::test::FixedWidthTypesWi
 TYPED_TEST(TypedScalarTest, DefaultValidity)
 {
   using Type = cudf::device_storage_type_t<TypeParam>;
-  Type value = cudf::test::make_type_param_scalar<TypeParam>(7);
+  Type value = static_cast<Type>(cudf::test::make_type_param_scalar<TypeParam>(7));
   cudf::scalar_type_t<TypeParam> s(value);
 
   EXPECT_TRUE(s.is_valid());
@@ -71,7 +72,7 @@ TYPED_TEST(TypedScalarTestWithoutFixedPoint, SetNull)
 TYPED_TEST(TypedScalarTest, CopyConstructor)
 {
   using Type = cudf::device_storage_type_t<TypeParam>;
-  Type value = cudf::test::make_type_param_scalar<TypeParam>(8);
+  Type value = static_cast<Type>(cudf::test::make_type_param_scalar<TypeParam>(8));
   cudf::scalar_type_t<TypeParam> s(value);
   auto s2 = s;
 
@@ -189,7 +190,7 @@ TEST_F(ListScalarTest, MoveConstructorNonNested)
 
   EXPECT_EQ(mask_ptr, s2.validity_data());
   EXPECT_EQ(data_ptr, s2.view().data<int32_t>());
-  EXPECT_EQ(s.view().data<int32_t>(), nullptr);
+  EXPECT_EQ(s.view().data<int32_t>(), nullptr);  // NOLINT
 }
 
 TEST_F(ListScalarTest, MoveConstructorNested)
@@ -204,8 +205,8 @@ TEST_F(ListScalarTest, MoveConstructorNested)
   EXPECT_EQ(mask_ptr, s2.validity_data());
   EXPECT_EQ(offset_ptr, s2.view().child(0).data<cudf::size_type>());
   EXPECT_EQ(data_ptr, s2.view().child(1).data<int32_t>());
-  EXPECT_EQ(s.view().data<int32_t>(), nullptr);
-  EXPECT_EQ(s.view().num_children(), 0);
+  EXPECT_EQ(s.view().data<int32_t>(), nullptr);  // NOLINT
+  EXPECT_EQ(s.view().num_children(), 0);         // NOLINT
 }
 
 struct StructScalarTest : public cudf::test::BaseFixture {};
@@ -247,7 +248,7 @@ TEST_F(StructScalarTest, BasicNulls)
   src_columns.push_back(std::make_unique<cudf::column>(src_children[0]));
   src_columns.push_back(std::make_unique<cudf::column>(src_children[1]));
   src_columns.push_back(std::make_unique<cudf::column>(src_children[2]));
-  cudf::test::structs_column_wrapper valid_struct_col(std::move(src_columns), {1});
+  cudf::test::structs_column_wrapper valid_struct_col(std::move(src_columns), {true});
   cudf::column_view vcv = static_cast<cudf::column_view>(valid_struct_col);
   std::vector<cudf::column_view> valid_children(vcv.child_begin(), vcv.child_end());
 
@@ -255,7 +256,7 @@ TEST_F(StructScalarTest, BasicNulls)
   src_columns.push_back(std::make_unique<cudf::column>(src_children[0]));
   src_columns.push_back(std::make_unique<cudf::column>(src_children[1]));
   src_columns.push_back(std::make_unique<cudf::column>(src_children[2]));
-  cudf::test::structs_column_wrapper invalid_struct_col(std::move(src_columns), {0});
+  cudf::test::structs_column_wrapper invalid_struct_col(std::move(src_columns), {false});
   cudf::column_view icv = static_cast<cudf::column_view>(invalid_struct_col);
   std::vector<cudf::column_view> invalid_children(icv.child_begin(), icv.child_end());
 

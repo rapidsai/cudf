@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,6 +13,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_utilities.hpp>
+#include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/random.hpp>
+#include <cudf_test/testing_main.hpp>
+
 #include <cudf/concatenate.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/null_mask.hpp>
@@ -21,14 +27,13 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
-#include <cudf_test/base_fixture.hpp>
-#include <cudf_test/column_utilities.hpp>
-#include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/cudf_gtest.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
+
+#include <stdexcept>
 
 struct BitmaskUtilitiesTest : public cudf::test::BaseFixture {};
 
@@ -37,6 +42,7 @@ TEST_F(BitmaskUtilitiesTest, StateNullCount)
   EXPECT_EQ(0, cudf::state_null_count(cudf::mask_state::UNALLOCATED, 42));
   EXPECT_EQ(42, cudf::state_null_count(cudf::mask_state::ALL_NULL, 42));
   EXPECT_EQ(0, cudf::state_null_count(cudf::mask_state::ALL_VALID, 42));
+  EXPECT_THROW(cudf::state_null_count(cudf::mask_state::UNINITIALIZED, 42), std::invalid_argument);
 }
 
 TEST_F(BitmaskUtilitiesTest, BitmaskAllocationSize)
@@ -83,8 +89,8 @@ TEST_F(CountBitmaskTest, NullMask)
 rmm::device_uvector<cudf::bitmask_type> make_mask(cudf::size_type size, bool fill_valid = false)
 {
   if (!fill_valid) {
-    return cudf::detail::make_zeroed_device_uvector_sync<cudf::bitmask_type>(
-      size, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
+    return cudf::detail::make_zeroed_device_uvector<cudf::bitmask_type>(
+      size, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
   } else {
     auto ret = rmm::device_uvector<cudf::bitmask_type>(size, cudf::get_default_stream());
     CUDF_CUDA_TRY(cudaMemsetAsync(ret.data(),
@@ -106,10 +112,10 @@ TEST_F(CountBitmaskTest, NegativeStart)
   std::vector<cudf::size_type> indices = {0, 16, -1, 32};
   EXPECT_THROW(
     cudf::detail::segmented_count_set_bits(mask.data(), indices, cudf::get_default_stream()),
-    cudf::logic_error);
+    std::out_of_range);
   EXPECT_THROW(
     cudf::detail::segmented_valid_count(mask.data(), indices, cudf::get_default_stream()),
-    cudf::logic_error);
+    std::out_of_range);
 }
 
 TEST_F(CountBitmaskTest, StartLargerThanStop)
@@ -123,10 +129,10 @@ TEST_F(CountBitmaskTest, StartLargerThanStop)
   std::vector<cudf::size_type> indices = {0, 16, 31, 30};
   EXPECT_THROW(
     cudf::detail::segmented_count_set_bits(mask.data(), indices, cudf::get_default_stream()),
-    cudf::logic_error);
+    std::invalid_argument);
   EXPECT_THROW(
     cudf::detail::segmented_valid_count(mask.data(), indices, cudf::get_default_stream()),
-    cudf::logic_error);
+    std::invalid_argument);
 }
 
 TEST_F(CountBitmaskTest, EmptyRange)
@@ -581,7 +587,7 @@ TEST_F(CopyBitmaskTest, TestZeroOffset)
     validity_bit.begin() + begin_bit, validity_bit.begin() + end_bit));
 
   auto splice_mask = cudf::copy_bitmask(
-    static_cast<const cudf::bitmask_type*>(input_mask.data()), begin_bit, end_bit);
+    static_cast<cudf::bitmask_type const*>(input_mask.data()), begin_bit, end_bit);
 
   cleanEndWord(splice_mask, begin_bit, end_bit);
   auto number_of_bits = end_bit - begin_bit;
@@ -604,7 +610,7 @@ TEST_F(CopyBitmaskTest, TestNonZeroOffset)
     validity_bit.begin() + begin_bit, validity_bit.begin() + end_bit));
 
   auto splice_mask = cudf::copy_bitmask(
-    static_cast<const cudf::bitmask_type*>(input_mask.data()), begin_bit, end_bit);
+    static_cast<cudf::bitmask_type const*>(input_mask.data()), begin_bit, end_bit);
 
   cleanEndWord(splice_mask, begin_bit, end_bit);
   auto number_of_bits = end_bit - begin_bit;
@@ -620,14 +626,15 @@ TEST_F(CopyBitmaskTest, TestCopyColumnViewVectorContiguous)
   for (auto& m : validity_bit) {
     m = this->generate();
   }
-  auto gold_mask =
-    std::get<0>(cudf::test::detail::make_null_mask(validity_bit.begin(), validity_bit.end()));
+  auto [gold_mask, null_count] =
+    cudf::test::detail::make_null_mask(validity_bit.begin(), validity_bit.end());
 
   rmm::device_buffer copy_mask{gold_mask, cudf::get_default_stream()};
   cudf::column original{t,
                         num_elements,
                         rmm::device_buffer{num_elements * sizeof(int), cudf::get_default_stream()},
-                        std::move(copy_mask)};
+                        std::move(copy_mask),
+                        null_count};
   std::vector<cudf::size_type> indices{0,
                                        104,
                                        104,

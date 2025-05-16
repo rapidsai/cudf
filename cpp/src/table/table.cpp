@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,15 +21,18 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <numeric>
+
 namespace cudf {
 
 // Copy the columns from another table
-table::table(table const& other) : _num_rows{other.num_rows()}
+table::table(table const& other, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
+  : _num_rows{other.num_rows()}
 {
   CUDF_FUNC_RANGE();
   _columns.reserve(other._columns.size());
   for (auto const& c : other._columns) {
-    _columns.emplace_back(std::make_unique<column>(*c));
+    _columns.emplace_back(std::make_unique<column>(*c, stream, mr));
   }
 }
 
@@ -50,7 +53,7 @@ table::table(std::vector<std::unique_ptr<column>>&& columns) : _columns{std::mov
 }
 
 // Copy the contents of a `table_view`
-table::table(table_view view, rmm::cuda_stream_view stream, rmm::mr::device_memory_resource* mr)
+table::table(table_view view, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
   : _num_rows{view.num_rows()}
 {
   CUDF_FUNC_RANGE();
@@ -58,6 +61,14 @@ table::table(table_view view, rmm::cuda_stream_view stream, rmm::mr::device_memo
   for (auto const& c : view) {
     _columns.emplace_back(std::make_unique<column>(c, stream, mr));
   }
+}
+
+std::size_t table::alloc_size() const
+{
+  return std::transform_reduce(
+    _columns.begin(), _columns.end(), size_t{0}, std::plus{}, [](auto const& c) {
+      return c->alloc_size();
+    });
 }
 
 // Create immutable view

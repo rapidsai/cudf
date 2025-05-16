@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,10 +16,9 @@
 
 #pragma once
 
+#include "io/utilities/hostdevice_vector.hpp"
 #include "orc.hpp"
 #include "orc_gpu.hpp"
-
-#include <io/utilities/hostdevice_vector.hpp>
 
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/io/data_sink.hpp>
@@ -39,43 +38,14 @@
 #include <string>
 #include <vector>
 
-namespace cudf {
-namespace io {
-namespace detail {
-namespace orc {
+namespace cudf::io::orc::detail {
 // Forward internal classes
-class orc_column_view;
+class orc_table_view;
 
-using namespace cudf::io::orc;
-using namespace cudf::io;
+using namespace cudf::io::detail;
 using cudf::detail::device_2dspan;
 using cudf::detail::host_2dspan;
 using cudf::detail::hostdevice_2dvector;
-
-/**
- * Non-owning view of a cuDF table that includes ORC-related information.
- *
- * Columns hierarchy is flattened and stored in pre-order.
- */
-struct orc_table_view {
-  std::vector<orc_column_view> columns;
-  rmm::device_uvector<orc_column_device_view> d_columns;
-  std::vector<uint32_t> string_column_indices;
-  rmm::device_uvector<uint32_t> d_string_column_indices;
-
-  auto num_columns() const noexcept { return columns.size(); }
-  [[nodiscard]] size_type num_rows() const noexcept;
-  auto num_string_columns() const noexcept { return string_column_indices.size(); }
-
-  auto& column(uint32_t idx) { return columns.at(idx); }
-  [[nodiscard]] auto const& column(uint32_t idx) const { return columns.at(idx); }
-
-  auto& string_column(uint32_t idx) { return columns.at(string_column_indices.at(idx)); }
-  [[nodiscard]] auto const& string_column(uint32_t idx) const
-  {
-    return columns.at(string_column_indices.at(idx));
-  }
-};
 
 /**
  * @brief Indices of rowgroups contained in a stripe.
@@ -83,10 +53,9 @@ struct orc_table_view {
  * Provides a container-like interface to iterate over rowgroup indices.
  */
 struct stripe_rowgroups {
-  uint32_t id;     // stripe id
-  uint32_t first;  // first rowgroup in the stripe
-  uint32_t size;   // number of rowgroups in the stripe
-  stripe_rowgroups(uint32_t id, uint32_t first, uint32_t size) : id{id}, first{first}, size{size} {}
+  size_type id;     // stripe id
+  size_type first;  // first rowgroup in the stripe
+  size_type size;   // number of rowgroups in the stripe
   [[nodiscard]] auto cbegin() const { return thrust::make_counting_iterator(first); }
   [[nodiscard]] auto cend() const { return thrust::make_counting_iterator(first + size); }
 };
@@ -96,8 +65,9 @@ struct stripe_rowgroups {
  */
 struct encoder_decimal_info {
   std::map<uint32_t, rmm::device_uvector<uint32_t>>
-    elem_sizes;                                        ///< Column index -> per-element size map
-  std::map<uint32_t, std::vector<uint32_t>> rg_sizes;  ///< Column index -> per-rowgroup size map
+    elem_sizes;  ///< Column index -> per-element size map
+  std::map<uint32_t, cudf::detail::host_vector<uint32_t>>
+    rg_sizes;  ///< Column index -> per-rowgroup size map
 };
 
 /**
@@ -130,7 +100,7 @@ class orc_streams {
  */
 struct file_segmentation {
   hostdevice_2dvector<rowgroup_rows> rowgroups;
-  std::vector<stripe_rowgroups> stripes;
+  cudf::detail::host_vector<stripe_rowgroups> stripes;
 
   auto num_rowgroups() const noexcept { return rowgroups.size().first; }
   auto num_stripes() const noexcept { return stripes.size(); }
@@ -141,7 +111,7 @@ struct file_segmentation {
  */
 struct encoded_data {
   std::vector<std::vector<rmm::device_uvector<uint8_t>>> data;  // Owning array of the encoded data
-  hostdevice_2dvector<gpu::encoder_chunk_streams> streams;  // streams of encoded data, per chunk
+  hostdevice_2dvector<encoder_chunk_streams> streams;  // streams of encoded data, per chunk
 };
 
 /**
@@ -171,9 +141,11 @@ struct stripe_size_limits {
 struct intermediate_statistics {
   explicit intermediate_statistics(rmm::cuda_stream_view stream) : stripe_stat_chunks(0, stream) {}
 
-  intermediate_statistics(std::vector<ColStatsBlob> rb,
+  intermediate_statistics(orc_table_view const& table, rmm::cuda_stream_view stream);
+
+  intermediate_statistics(std::vector<col_stats_blob> rb,
                           rmm::device_uvector<statistics_chunk> sc,
-                          hostdevice_vector<statistics_merge_group> smg,
+                          cudf::detail::hostdevice_vector<statistics_merge_group> smg,
                           std::vector<statistics_dtype> sdt,
                           std::vector<data_type> sct)
     : rowgroup_blobs(std::move(rb)),
@@ -185,10 +157,10 @@ struct intermediate_statistics {
   }
 
   // blobs for the rowgroups. Not persisted
-  std::vector<ColStatsBlob> rowgroup_blobs;
+  std::vector<col_stats_blob> rowgroup_blobs;
 
   rmm::device_uvector<statistics_chunk> stripe_stat_chunks;
-  hostdevice_vector<statistics_merge_group> stripe_stat_merge;
+  cudf::detail::hostdevice_vector<statistics_merge_group> stripe_stat_merge;
   std::vector<statistics_dtype> stats_dtypes;
   std::vector<data_type> col_types;
 };
@@ -209,12 +181,12 @@ struct persisted_statistics {
   }
 
   void persist(int num_table_rows,
-               bool single_write_mode,
-               intermediate_statistics& intermediate_stats,
+               single_write_mode write_mode,
+               intermediate_statistics&& intermediate_stats,
                rmm::cuda_stream_view stream);
 
   std::vector<rmm::device_uvector<statistics_chunk>> stripe_stat_chunks;
-  std::vector<hostdevice_vector<statistics_merge_group>> stripe_stat_merge;
+  std::vector<cudf::detail::hostdevice_vector<statistics_merge_group>> stripe_stat_merge;
   std::vector<rmm::device_uvector<char>> string_pools;
   std::vector<statistics_dtype> stats_dtypes;
   std::vector<data_type> col_types;
@@ -226,8 +198,16 @@ struct persisted_statistics {
  *
  */
 struct encoded_footer_statistics {
-  std::vector<ColStatsBlob> stripe_level;
-  std::vector<ColStatsBlob> file_level;
+  std::vector<col_stats_blob> stripe_level;
+  std::vector<col_stats_blob> file_level;
+};
+
+enum class writer_state {
+  NO_DATA_WRITTEN,  // No table data has been written to the sink; if the writer is closed or
+                    // destroyed in this state, it should not write the footer.
+  DATA_WRITTEN,     // At least one table has been written to the sink; when the writer is closed,
+                    // it should write the footer.
+  CLOSED            // Writer has been closed; no further writes are allowed.
 };
 
 /**
@@ -235,7 +215,7 @@ struct encoded_footer_statistics {
  */
 class writer::impl {
   // ORC datasets start with a 3 byte header
-  static constexpr const char* MAGIC = "ORC";
+  static constexpr char const* MAGIC = "ORC";
 
  public:
   /**
@@ -248,7 +228,7 @@ class writer::impl {
    */
   explicit impl(std::unique_ptr<data_sink> sink,
                 orc_writer_options const& options,
-                SingleWriteMode mode,
+                single_write_mode mode,
                 rmm::cuda_stream_view stream);
 
   /**
@@ -261,18 +241,13 @@ class writer::impl {
    */
   explicit impl(std::unique_ptr<data_sink> sink,
                 chunked_orc_writer_options const& options,
-                SingleWriteMode mode,
+                single_write_mode mode,
                 rmm::cuda_stream_view stream);
 
   /**
    * @brief Destructor to complete any incomplete write and release resources.
    */
   ~impl();
-
-  /**
-   * @brief Begins the chunked/streamed write process.
-   */
-  void init_state();
 
   /**
    * @brief Writes a single subtable as part of a larger ORC file/table write.
@@ -291,29 +266,29 @@ class writer::impl {
    * @brief Write the intermediate ORC data into the data sink.
    *
    * The intermediate data is generated from processing (compressing/encoding) an cuDF input table
-   * by `process_for_write` called in the `write()` function.
+   * by `convert_table_to_orc_data` called in the `write()` function.
    *
-   * @param streams List of stream descriptors
-   * @param comp_results Status of data compression
-   * @param strm_descs List of stream descriptors
-   * @param enc_data ORC per-chunk streams of encoded data
-   * @param segmentation Description of how the ORC file is segmented into stripes and rowgroups
-   * @param stripes List of stripe description
-   * @param orc_table Non-owning view of a cuDF table that includes ORC-related information
-   * @param compressed_data Compressed stream data
-   * @param intermediate_stats Statistics data stored between calls to write
-   * @param stream_output Temporary host output buffer
+   * @param[in] enc_data ORC per-chunk streams of encoded data
+   * @param[in] segmentation Description of how the ORC file is segmented into stripes and rowgroups
+   * @param[in] orc_table Non-owning view of a cuDF table that includes ORC-related information
+   * @param[in] compressed_data Compressed stream data
+   * @param[in] comp_results Status of data compression
+   * @param[in] strm_descs List of stream descriptors
+   * @param[in] rg_stats row group level statistics
+   * @param[in,out] streams List of stream descriptors
+   * @param[in,out] stripes List of stripe description
+   * @param[out] bounce_buffer Temporary host output buffer
    */
-  void write_orc_data_to_sink(orc_streams& streams,
-                              hostdevice_vector<compression_result> const& comp_results,
-                              hostdevice_2dvector<gpu::StripeStream> const& strm_descs,
-                              encoded_data const& enc_data,
+  void write_orc_data_to_sink(encoded_data const& enc_data,
                               file_segmentation const& segmentation,
-                              std::vector<StripeInformation>& stripes,
                               orc_table_view const& orc_table,
-                              rmm::device_buffer const& compressed_data,
-                              intermediate_statistics& intermediate_stats,
-                              uint8_t* stream_output);
+                              device_span<uint8_t const> compressed_data,
+                              host_span<compression_result const> comp_results,
+                              host_2dspan<stripe_stream const> strm_descs,
+                              host_span<col_stats_blob const> rg_stats,
+                              orc_streams& streams,
+                              host_span<StripeInformation> stripes,
+                              host_span<uint8_t> bounce_buffer);
 
   /**
    * @brief Add the processed table data into the internal file footer.
@@ -324,6 +299,17 @@ class writer::impl {
   void add_table_to_footer_data(orc_table_view const& orc_table,
                                 std::vector<StripeInformation>& stripes);
 
+  /**
+   * @brief Update writer-level statistics with data from the current table.
+   *
+   * @param num_rows Number of rows in the current table
+   * @param single_table_stats Statistics data from the current table
+   * @param compression_stats Compression statistics from the current table
+   */
+  void update_statistics(size_type num_rows,
+                         intermediate_statistics&& single_table_stats,
+                         std::optional<writer_compression_statistics> const& compression_stats);
+
  private:
   // CUDA stream.
   rmm::cuda_stream_view const _stream;
@@ -331,12 +317,14 @@ class writer::impl {
   // Writer options.
   stripe_size_limits const _max_stripe_size;
   size_type const _row_index_stride;
-  CompressionKind const _compression_kind;
+  compression_type const _compression;
   size_t const _compression_blocksize;
+  std::shared_ptr<writer_compression_statistics> _compression_statistics;  // Optional output
   statistics_freq const _stats_freq;
-  bool const _single_write_mode;  // Special parameter only used by `write()` to indicate that
-                                  // we are guaranteeing a single table write. This enables some
-                                  // internal optimizations.
+  bool const _sort_dictionaries;
+  single_write_mode const _single_write_mode;  // Special parameter only used by `write()` to
+                                               // indicate that we are guaranteeing a single table
+                                               // write. This enables some internal optimizations.
   std::map<std::string, std::string> const _kv_meta;  // Optional user metadata.
   std::unique_ptr<data_sink> const _out_sink;
 
@@ -345,13 +333,10 @@ class writer::impl {
 
   // Internal states, filled during `write()` and written to sink during `write` and `close()`.
   std::unique_ptr<table_input_metadata> _table_meta;
-  cudf::io::orc::FileFooter _ffooter;
-  cudf::io::orc::Metadata _orc_meta;
+  Footer _footer;
+  Metadata _orc_meta;
   persisted_statistics _persisted_stripe_statistics;  // Statistics data saved between calls.
-  bool _closed = false;  // To track if the output has been written to sink.
+  writer_state _state = writer_state::NO_DATA_WRITTEN;
 };
 
-}  // namespace orc
-}  // namespace detail
-}  // namespace io
-}  // namespace cudf
+}  // namespace cudf::io::orc::detail

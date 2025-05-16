@@ -1,142 +1,16 @@
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2023, NVIDIA CORPORATION.
 
 from pickle import dumps
 
 import cachetools
-import numpy as np
 from numba import cuda
 from numba.np import numpy_support
 
-import cudf
+from cudf.utils._numba import _CUDFNumbaConfig
 
 #
 # Misc kernels
 #
-
-
-# Find segments
-
-
-@cuda.jit
-def gpu_mark_found_int(arr, val, out, not_found):
-    i = cuda.grid(1)
-    if i < arr.size:
-        if arr[i] == val:
-            out[i] = i
-        else:
-            out[i] = not_found
-
-
-@cuda.jit
-def gpu_mark_found_float(arr, val, out, not_found):
-    i = cuda.grid(1)
-    if i < arr.size:
-        # TODO: Remove val typecast to float(val)
-        # once numba minimum version is pinned
-        # at 0.51.1, this will have a very slight
-        # performance improvement. Related
-        # discussion in : https://github.com/rapidsai/cudf/pull/6073
-        val = float(val)
-
-        # NaN-aware equality comparison.
-        if (arr[i] == val) or (arr[i] != arr[i] and val != val):
-            out[i] = i
-        else:
-            out[i] = not_found
-
-
-@cuda.jit
-def gpu_mark_gt(arr, val, out, not_found):
-    i = cuda.grid(1)
-    if i < arr.size:
-        if arr[i] > val:
-            out[i] = i
-        else:
-            out[i] = not_found
-
-
-@cuda.jit
-def gpu_mark_lt(arr, val, out, not_found):
-    i = cuda.grid(1)
-    if i < arr.size:
-        if arr[i] < val:
-            out[i] = i
-        else:
-            out[i] = not_found
-
-
-def find_index_of_val(arr, val, mask=None, compare="eq"):
-    """
-    Returns the indices of the occurrence of *val* in *arr*
-    as per *compare*, if not found it will be filled with
-    size of *arr*
-
-    Parameters
-    ----------
-    arr : device array
-    val : scalar
-    mask : mask of the array
-    compare: str ('gt', 'lt', or 'eq' (default))
-    """
-    found = cuda.device_array(shape=(arr.shape), dtype="int32")
-    if found.size > 0:
-        if compare == "gt":
-            gpu_mark_gt.forall(found.size)(arr, val, found, arr.size)
-        elif compare == "lt":
-            gpu_mark_lt.forall(found.size)(arr, val, found, arr.size)
-        else:
-            if arr.dtype in ("float32", "float64"):
-                gpu_mark_found_float.forall(found.size)(
-                    arr, val, found, arr.size
-                )
-            else:
-                gpu_mark_found_int.forall(found.size)(
-                    arr, val, found, arr.size
-                )
-
-    return cudf.core.column.column.as_column(found).set_mask(mask)
-
-
-def find_first(arr, val, mask=None, compare="eq"):
-    """
-    Returns the index of the first occurrence of *val* in *arr*..
-    Or the first occurrence of *arr* *compare* *val*, if *compare* is not eq
-    Otherwise, returns -1.
-
-    Parameters
-    ----------
-    arr : device array
-    val : scalar
-    mask : mask of the array
-    compare: str ('gt', 'lt', or 'eq' (default))
-    """
-
-    found_col = find_index_of_val(arr, val, mask=mask, compare=compare)
-    found_col = found_col.find_and_replace([arr.size], [None], True)
-
-    min_index = found_col.min()
-    return -1 if min_index is None or np.isnan(min_index) else min_index
-
-
-def find_last(arr, val, mask=None, compare="eq"):
-    """
-    Returns the index of the last occurrence of *val* in *arr*.
-    Or the last occurrence of *arr* *compare* *val*, if *compare* is not eq
-    Otherwise, returns -1.
-
-    Parameters
-    ----------
-    arr : device array
-    val : scalar
-    mask : mask of the array
-    compare: str ('gt', 'lt', or 'eq' (default))
-    """
-
-    found_col = find_index_of_val(arr, val, mask=mask, compare=compare)
-    found_col = found_col.find_and_replace([arr.size], [None], True)
-
-    max_index = found_col.max()
-    return -1 if max_index is None or np.isnan(max_index) else max_index
 
 
 @cuda.jit
@@ -154,9 +28,10 @@ def gpu_window_sizes_from_offset(arr, window_sizes, offset):
 def window_sizes_from_offset(arr, offset):
     window_sizes = cuda.device_array(shape=(arr.shape), dtype="int32")
     if arr.size > 0:
-        gpu_window_sizes_from_offset.forall(arr.size)(
-            arr, window_sizes, offset
-        )
+        with _CUDFNumbaConfig():
+            gpu_window_sizes_from_offset.forall(arr.size)(
+                arr, window_sizes, offset
+            )
     return window_sizes
 
 
@@ -177,9 +52,10 @@ def gpu_grouped_window_sizes_from_offset(
 def grouped_window_sizes_from_offset(arr, group_starts, offset):
     window_sizes = cuda.device_array(shape=(arr.shape), dtype="int32")
     if arr.size > 0:
-        gpu_grouped_window_sizes_from_offset.forall(arr.size)(
-            arr, window_sizes, group_starts, offset
-        )
+        with _CUDFNumbaConfig():
+            gpu_grouped_window_sizes_from_offset.forall(arr.size)(
+                arr, window_sizes, group_starts, offset
+            )
     return window_sizes
 
 

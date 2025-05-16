@@ -522,7 +522,11 @@ public class ColumnWriterOptions {
    * Maps are List columns with a Struct named 'key_value' with a child named 'key' and a child
    * named 'value'. The caller of this method doesn't need to worry about this as this method will
    * take care of this without the knowledge of the caller.
+   *
+   * Note: This method always returns a nullabe column, cannot return non-nullable column.
+   * Do not use this, use the next function with the parameter `isNullable`.
    */
+  @Deprecated
   public static ColumnWriterOptions mapColumn(String name, ColumnWriterOptions key,
                                               ColumnWriterOptions value) {
     StructColumnWriterOptions struct = structBuilder("key_value").build();
@@ -531,6 +535,32 @@ public class ColumnWriterOptions {
     }
     struct.childColumnOptions = new ColumnWriterOptions[]{key, value};
     ColumnWriterOptions opt = listBuilder(name)
+        .withStructColumn(struct)
+        .build();
+    opt.isMap = true;
+    return opt;
+  }
+
+  /**
+   * Add a Map Column to the schema.
+   * <p>
+   * Maps are List columns with a Struct named 'key_value' with a child named 'key' and a child
+   * named 'value'. The caller of this method doesn't need to worry about this as this method will
+   * take care of this without the knowledge of the caller.
+   *
+   * Note: If this map column is a key of another map, should pass isNullable = false.
+   * e.g.: map1(map2(int, int), int) the map2 should be non-nullable.
+   *
+   * @param isNullable is the returned map nullable.
+   */
+  public static ColumnWriterOptions mapColumn(String name, ColumnWriterOptions key,
+                                              ColumnWriterOptions value, Boolean isNullable) {
+    if (key.isNullable) {
+      throw new IllegalArgumentException("key column can not be nullable");
+    }
+    StructColumnWriterOptions struct = structBuilder("key_value").build();
+    struct.childColumnOptions = new ColumnWriterOptions[]{key, value};
+    ColumnWriterOptions opt = listBuilder(name, isNullable)
         .withStructColumn(struct)
         .build();
     opt.isMap = true;

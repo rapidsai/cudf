@@ -1,4 +1,4 @@
-# Copyright (c) 2023, NVIDIA CORPORATION.
+# Copyright (c) 2023-2025, NVIDIA CORPORATION.
 
 import os
 import subprocess
@@ -26,7 +26,7 @@ def cuda_gdb(request):
         return gdb
     else:
         output = subprocess.run(
-            [gdb, "--version"], capture_output=True, text=True
+            [gdb, "--version"], capture_output=True, text=True, cwd="/"
         )
         if output.returncode != 0:
             request.applymarker(
@@ -66,14 +66,15 @@ def test_cudf_import_no_cuinit(cuda_gdb):
         env=env,
         capture_output=True,
         text=True,
+        cwd="/",
     )
 
     cuInit_called = output.stdout.find("in cuInit ()")
-    print("Command output:\n")
-    print("*** STDOUT ***")
-    print(output.stdout)
-    print("*** STDERR ***")
-    print(output.stderr)
+    print("Command output:\n")  # noqa: T201
+    print("*** STDOUT ***")  # noqa: T201
+    print(output.stdout)  # noqa: T201
+    print("*** STDERR ***")  # noqa: T201
+    print(output.stderr)  # noqa: T201
     assert output.returncode == 0
     assert cuInit_called < 0
 
@@ -97,13 +98,14 @@ def test_cudf_create_series_cuinit(cuda_gdb):
         env=env,
         capture_output=True,
         text=True,
+        cwd="/",
     )
 
     cuInit_called = output.stdout.find("in cuInit ()")
-    print("Command output:\n")
-    print("*** STDOUT ***")
-    print(output.stdout)
-    print("*** STDERR ***")
-    print(output.stderr)
+    print("Command output:\n")  # noqa: T201
+    print("*** STDOUT ***")  # noqa: T201
+    print(output.stdout)  # noqa: T201
+    print("*** STDERR ***")  # noqa: T201
+    print(output.stderr)  # noqa: T201
     assert output.returncode == 0
     assert cuInit_called >= 0

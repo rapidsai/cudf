@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,12 +22,8 @@
  * @brief Standalone string functions.
  */
 
-namespace cudf {
-
-using char_utf8 = uint32_t;  ///< UTF-8 characters are 1-4 bytes
-
-namespace strings {
-namespace detail {
+namespace CUDF_EXPORT cudf {
+namespace strings::detail {
 
 /**
  * @brief This will return true if passed a continuation byte of a UTF-8 character.
@@ -35,7 +31,7 @@ namespace detail {
  * @param chr Any single byte from a valid UTF-8 character
  * @return true if this is not the first byte of the character
  */
-constexpr bool is_utf8_continuation_char(unsigned char chr)
+CUDF_HOST_DEVICE constexpr bool is_utf8_continuation_char(unsigned char chr)
 {
   // The (0xC0 & 0x80) bit pattern identifies a continuation byte of a character.
   return (chr & 0xC0) == 0x80;
@@ -47,7 +43,10 @@ constexpr bool is_utf8_continuation_char(unsigned char chr)
  * @param chr Any single byte from a valid UTF-8 character
  * @return true if this the first byte of the character
  */
-constexpr bool is_begin_utf8_char(unsigned char chr) { return not is_utf8_continuation_char(chr); }
+CUDF_HOST_DEVICE constexpr bool is_begin_utf8_char(unsigned char chr)
+{
+  return not is_utf8_continuation_char(chr);
+}
 
 /**
  * @brief This will return true if the passed in byte could be the start of
@@ -59,7 +58,7 @@ constexpr bool is_begin_utf8_char(unsigned char chr) { return not is_utf8_contin
  * @param byte The byte to be tested
  * @return true if this can be the first byte of a character
  */
-constexpr bool is_valid_begin_utf8_char(uint8_t byte)
+CUDF_HOST_DEVICE constexpr bool is_valid_begin_utf8_char(uint8_t byte)
 {
   // to be the first byte of a valid (up to 4 byte) UTF-8 char, byte must be one of:
   //  0b0vvvvvvv a 1 byte character
@@ -76,7 +75,7 @@ constexpr bool is_valid_begin_utf8_char(uint8_t byte)
  * @param character Single character
  * @return Number of bytes
  */
-constexpr size_type bytes_in_char_utf8(char_utf8 character)
+CUDF_HOST_DEVICE constexpr size_type bytes_in_char_utf8(char_utf8 character)
 {
   return 1 + static_cast<size_type>((character & 0x0000'FF00u) > 0) +
          static_cast<size_type>((character & 0x00FF'0000u) > 0) +
@@ -93,7 +92,7 @@ constexpr size_type bytes_in_char_utf8(char_utf8 character)
  * @param byte Byte from an encoded character.
  * @return Number of bytes.
  */
-constexpr size_type bytes_in_utf8_byte(uint8_t byte)
+CUDF_HOST_DEVICE constexpr size_type bytes_in_utf8_byte(uint8_t byte)
 {
   return 1 + static_cast<size_type>((byte & 0xF0) == 0xF0)  // 4-byte character prefix
          + static_cast<size_type>((byte & 0xE0) == 0xE0)    // 3-byte character prefix
@@ -108,7 +107,7 @@ constexpr size_type bytes_in_utf8_byte(uint8_t byte)
  * @param[out] character Single char_utf8 value.
  * @return The number of bytes in the character
  */
-constexpr size_type to_char_utf8(const char* str, char_utf8& character)
+CUDF_HOST_DEVICE constexpr size_type to_char_utf8(char const* str, char_utf8& character)
 {
   size_type const chr_width = bytes_in_utf8_byte(static_cast<uint8_t>(*str));
 
@@ -135,7 +134,7 @@ constexpr size_type to_char_utf8(const char* str, char_utf8& character)
  * @param[out] str Output array.
  * @return The number of bytes in the character
  */
-constexpr inline size_type from_char_utf8(char_utf8 character, char* str)
+CUDF_HOST_DEVICE constexpr inline size_type from_char_utf8(char_utf8 character, char* str)
 {
   size_type const chr_width = bytes_in_char_utf8(character);
   for (size_type idx = 0; idx < chr_width; ++idx) {
@@ -152,21 +151,21 @@ constexpr inline size_type from_char_utf8(char_utf8 character, char* str)
  * @param utf8_char Single UTF-8 character to convert.
  * @return Code-point for the UTF-8 character.
  */
-constexpr uint32_t utf8_to_codepoint(cudf::char_utf8 utf8_char)
+CUDF_HOST_DEVICE constexpr uint32_t utf8_to_codepoint(cudf::char_utf8 utf8_char)
 {
   uint32_t unchr = 0;
-  if (utf8_char < 0x0000'0080)                // single-byte pass thru
+  if (utf8_char < 0x0000'0080)  // single-byte pass thru
     unchr = utf8_char;
-  else if (utf8_char < 0x0000'E000)           // two bytes
+  else if (utf8_char < 0x0000'E000)  // two bytes
   {
-    unchr = (utf8_char & 0x1F00) >> 2;        // shift and
-    unchr |= (utf8_char & 0x003F);            // unmask
-  } else if (utf8_char < 0x00F0'0000)         // three bytes
+    unchr = (utf8_char & 0x1F00) >> 2;  // shift and
+    unchr |= (utf8_char & 0x003F);      // unmask
+  } else if (utf8_char < 0x00F0'0000)   // three bytes
   {
-    unchr = (utf8_char & 0x0F'0000) >> 4;     // get upper 4 bits
-    unchr |= (utf8_char & 0x00'3F00) >> 2;    // shift and
-    unchr |= (utf8_char & 0x00'003F);         // unmask
-  } else if (utf8_char <= 0xF800'0000u)       // four bytes
+    unchr = (utf8_char & 0x0F'0000) >> 4;   // get upper 4 bits
+    unchr |= (utf8_char & 0x00'3F00) >> 2;  // shift and
+    unchr |= (utf8_char & 0x00'003F);       // unmask
+  } else if (utf8_char <= 0xF800'0000u)     // four bytes
   {
     unchr = (utf8_char & 0x0300'0000) >> 6;   // upper 3 bits
     unchr |= (utf8_char & 0x003F'0000) >> 4;  // next 6 bits
@@ -182,23 +181,23 @@ constexpr uint32_t utf8_to_codepoint(cudf::char_utf8 utf8_char)
  * @param unchr Character code-point to convert.
  * @return Single UTF-8 character.
  */
-constexpr cudf::char_utf8 codepoint_to_utf8(uint32_t unchr)
+CUDF_HOST_DEVICE constexpr cudf::char_utf8 codepoint_to_utf8(uint32_t unchr)
 {
   cudf::char_utf8 utf8 = 0;
-  if (unchr < 0x0000'0080)               // single byte utf8
+  if (unchr < 0x0000'0080)  // single byte utf8
     utf8 = unchr;
-  else if (unchr < 0x0000'0800)          // double byte utf8
+  else if (unchr < 0x0000'0800)  // double byte utf8
   {
-    utf8 = (unchr << 2) & 0x1F00;        // shift bits for
-    utf8 |= (unchr & 0x3F);              // utf8 encoding
+    utf8 = (unchr << 2) & 0x1F00;  // shift bits for
+    utf8 |= (unchr & 0x3F);        // utf8 encoding
     utf8 |= 0x0000'C080;
-  } else if (unchr < 0x0001'0000)        // triple byte utf8
+  } else if (unchr < 0x0001'0000)  // triple byte utf8
   {
-    utf8 = (unchr << 4) & 0x0F'0000;     // upper 4 bits
-    utf8 |= (unchr << 2) & 0x00'3F00;    // next 6 bits
-    utf8 |= (unchr & 0x3F);              // last 6 bits
+    utf8 = (unchr << 4) & 0x0F'0000;   // upper 4 bits
+    utf8 |= (unchr << 2) & 0x00'3F00;  // next 6 bits
+    utf8 |= (unchr & 0x3F);            // last 6 bits
     utf8 |= 0x00E0'8080;
-  } else if (unchr < 0x0011'0000)        // quadruple byte utf8
+  } else if (unchr < 0x0011'0000)  // quadruple byte utf8
   {
     utf8 = (unchr << 6) & 0x0700'0000;   // upper 3 bits
     utf8 |= (unchr << 4) & 0x003F'0000;  // next 6 bits
@@ -209,6 +208,5 @@ constexpr cudf::char_utf8 codepoint_to_utf8(uint32_t unchr)
   return utf8;
 }
 
-}  // namespace detail
-}  // namespace strings
-}  // namespace cudf
+}  // namespace strings::detail
+}  // namespace CUDF_EXPORT cudf

@@ -1,32 +1,229 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
+from __future__ import annotations
 
+import copy
+import functools
 import itertools
-import pickle
 import textwrap
+import types
 import warnings
 from collections import abc
-from functools import cached_property
-from typing import Any, Iterable, List, Optional, Tuple, Union
+from functools import cached_property, singledispatch
+from typing import TYPE_CHECKING, Any, Literal
 
+# Needed to make Sphinx happy for typing purposes
+import cupy
 import cupy as cp
+import numpy
 import numpy as np
 import pandas as pd
+import pyarrow as pa
+
+import pylibcudf as plc
 
 import cudf
-from cudf._lib import groupby as libgroupby
-from cudf._lib.null_mask import bitmask_or
-from cudf._lib.reshape import interleave_columns
-from cudf._lib.sort import segmented_sort_by_key
-from cudf._lib.types import size_type_dtype
-from cudf._typing import AggType, DataFrameOrSeries, MultiColumnAggType
-from cudf.api.types import is_list_like
+from cudf.api.extensions import no_default
+from cudf.api.types import is_list_like, is_scalar
+from cudf.core._compat import PANDAS_LT_300
+from cudf.core._internals import aggregation, sorting, stream_compaction
 from cudf.core.abc import Serializable
-from cudf.core.column.column import ColumnBase, arange, as_column
+from cudf.core.buffer import acquire_spill_lock
+from cudf.core.column.column import (
+    ColumnBase,
+    as_column,
+    column_empty,
+    deserialize_columns,
+    serialize_columns,
+)
+from cudf.core.column.struct import StructColumn
 from cudf.core.column_accessor import ColumnAccessor
-from cudf.core.mixins import Reducible, Scannable
+from cudf.core.common import pipe
+from cudf.core.copy_types import GatherMap
+from cudf.core.dtypes import (
+    CategoricalDtype,
+    DecimalDtype,
+    IntervalDtype,
+    ListDtype,
+    StructDtype,
+)
+from cudf.core.index import _index_from_data
+from cudf.core.join._join_helpers import _match_join_keys
+from cudf.core.mixins import GetAttrGetItemMixin, Reducible, Scannable
 from cudf.core.multiindex import MultiIndex
-from cudf.core.udf.groupby_utils import jit_groupby_apply
-from cudf.utils.utils import GetAttrGetItemMixin, _cudf_nvtx_annotate
+from cudf.core.scalar import pa_scalar_to_plc_scalar
+from cudf.core.udf.groupby_utils import _can_be_jitted, jit_groupby_apply
+from cudf.utils.dtypes import (
+    CUDF_STRING_DTYPE,
+    SIZE_TYPE_DTYPE,
+    cudf_dtype_to_pa_type,
+    is_dtype_obj_numeric,
+)
+from cudf.utils.performance_tracking import _performance_tracking
+
+if TYPE_CHECKING:
+    from collections.abc import Generator, Hashable, Iterable, Sequence
+
+    from cudf._typing import (
+        AggType,
+        DataFrameOrSeries,
+        MultiColumnAggType,
+        ScalarLike,
+    )
+
+# The sets below define the possible aggregations that can be performed on
+# different dtypes. These strings must be elements of the AggregationKind enum.
+# The libcudf infrastructure exists for "COLLECT" support on
+# categoricals, but the dtype support in python does not.
+_CATEGORICAL_AGGS = {"COUNT", "NUNIQUE", "SIZE", "UNIQUE"}
+_STRING_AGGS = {
+    "COLLECT",
+    "COUNT",
+    "MAX",
+    "MIN",
+    "NTH",
+    "NUNIQUE",
+    "SIZE",
+    "UNIQUE",
+}
+_LIST_AGGS = {"COLLECT"}
+_STRUCT_AGGS = {"COLLECT", "CORRELATION", "COVARIANCE"}
+_INTERVAL_AGGS = {"COLLECT"}
+_DECIMAL_AGGS = {
+    "ARGMIN",
+    "ARGMAX",
+    "COLLECT",
+    "COUNT",
+    "MAX",
+    "MIN",
+    "NTH",
+    "NUNIQUE",
+    "SUM",
+}
+
+
+@singledispatch
+def get_valid_aggregation(dtype):
+    if dtype == CUDF_STRING_DTYPE:
+        return _STRING_AGGS
+    return "ALL"
+
+
+@get_valid_aggregation.register
+def _(dtype: ListDtype):
+    return _LIST_AGGS
+
+
+@get_valid_aggregation.register
+def _(dtype: CategoricalDtype):
+    return _CATEGORICAL_AGGS
+
+
+@get_valid_aggregation.register
+def _(dtype: ListDtype):
+    return _LIST_AGGS
+
+
+@get_valid_aggregation.register
+def _(dtype: StructDtype):
+    return _STRUCT_AGGS
+
+
+@get_valid_aggregation.register
+def _(dtype: IntervalDtype):
+    return _INTERVAL_AGGS
+
+
+@get_valid_aggregation.register
+def _(dtype: DecimalDtype):
+    return _DECIMAL_AGGS
+
+
+@singledispatch
+def _is_unsupported_agg_for_type(dtype, str_agg: str) -> bool:
+    return False
+
+
+@_is_unsupported_agg_for_type.register
+def _(dtype: np.dtype, str_agg: str) -> bool:
+    # string specifically
+    cumulative_agg = str_agg in {"cumsum", "cummin", "cummax"}
+    basic_agg = any(
+        a in str_agg
+        for a in (
+            "count",
+            "max",
+            "min",
+            "first",
+            "last",
+            "nunique",
+            "unique",
+            "nth",
+        )
+    )
+    return (
+        dtype.kind == "O"
+        and str_agg not in _STRING_AGGS
+        and (cumulative_agg or not (basic_agg or str_agg == "<class 'list'>"))
+    )
+
+
+@_is_unsupported_agg_for_type.register
+def _(dtype: CategoricalDtype, str_agg: str) -> bool:
+    cumulative_agg = str_agg in {"cumsum", "cummin", "cummax"}
+    not_basic_agg = not any(
+        a in str_agg for a in ("count", "max", "min", "unique")
+    )
+    return str_agg not in _CATEGORICAL_AGGS and (
+        cumulative_agg or not_basic_agg
+    )
+
+
+def _is_all_scan_aggregate(all_aggs: list[list[str]]) -> bool:
+    """
+    Returns True if all are scan aggregations.
+
+    Raises
+    ------
+    NotImplementedError
+        If both reduction aggregations and scan aggregations are present.
+    """
+    groupby_scans = {
+        "cumcount",
+        "cumsum",
+        "cummin",
+        "cummax",
+        "cumprod",
+        "rank",
+    }
+
+    def get_name(agg):
+        return agg.__name__ if callable(agg) else agg
+
+    all_scan = all(
+        get_name(agg_name) in groupby_scans
+        for aggs in all_aggs
+        for agg_name in aggs
+    )
+    any_scan = any(
+        get_name(agg_name) in groupby_scans
+        for aggs in all_aggs
+        for agg_name in aggs
+    )
+
+    if not all_scan and any_scan:
+        raise NotImplementedError(
+            "Cannot perform both aggregation and scan in one operation"
+        )
+    return all_scan and any_scan
+
+
+def _deprecate_collect():
+    warnings.warn(
+        "Groupby.collect is deprecated and "
+        "will be removed in a future version. "
+        "Use `.agg(list)` instead.",
+        FutureWarning,
+    )
 
 
 # The three functions below return the quantiles [25%, 50%, 75%]
@@ -42,6 +239,43 @@ def _quantile_50(x):
 
 def _quantile_75(x):
     return x.quantile(0.75)
+
+
+def _is_row_of(chunk, obj):
+    return (
+        isinstance(chunk, cudf.Series)
+        and isinstance(obj, cudf.DataFrame)
+        and len(chunk.index) == len(obj._column_names)
+        and (chunk.index.to_pandas() == pd.Index(obj._column_names)).all()
+    )
+
+
+NamedAgg = pd.NamedAgg
+
+
+NamedAgg.__doc__ = """
+Helper for column specific aggregation with control over output column names.
+
+Subclass of typing.NamedTuple.
+
+Parameters
+----------
+column : Hashable
+    Column label in the DataFrame to apply aggfunc.
+aggfunc : function or str
+    Function to apply to the provided column.
+
+Examples
+--------
+>>> df = cudf.DataFrame({"key": [1, 1, 2], "a": [-1, 0, 1], 1: [10, 11, 12]})
+>>> agg_a = cudf.NamedAgg(column="a", aggfunc="min")
+>>> agg_1 = cudf.NamedAgg(column=1, aggfunc=lambda x: x.mean())
+>>> df.groupby("key", sort=True).agg(result_a=agg_a, result_1=agg_1)
+        result_a  result_1
+key
+1          -1      10.5
+2           1      12.0
+"""
 
 
 groupby_doc_template = textwrap.dedent(
@@ -94,11 +328,11 @@ Falcon    350.0
 Parrot     30.0
 Parrot     20.0
 Name: Max Speed, dtype: float64
->>> ser.groupby(level=0).mean()
+>>> ser.groupby(level=0, sort=True).mean()
 Falcon    370.0
 Parrot     25.0
 Name: Max Speed, dtype: float64
->>> ser.groupby(ser > 100).mean()
+>>> ser.groupby(ser > 100, sort=True).mean()
 Max Speed
 False     25.0
 True     370.0
@@ -118,7 +352,7 @@ Name: Max Speed, dtype: float64
 1  Falcon      370.0
 2  Parrot       24.0
 3  Parrot       26.0
->>> df.groupby(['Animal']).mean()
+>>> df.groupby(['Animal'], sort=True).mean()
         Max Speed
 Animal
 Falcon      375.0
@@ -136,22 +370,22 @@ Falcon Captive      390.0
         Wild         350.0
 Parrot Captive       30.0
         Wild          20.0
->>> df.groupby(level=0).mean()
+>>> df.groupby(level=0, sort=True).mean()
         Max Speed
 Animal
 Falcon      370.0
 Parrot       25.0
->>> df.groupby(level="Type").mean()
+>>> df.groupby(level="Type", sort=True).mean()
         Max Speed
 Type
-Wild         185.0
 Captive      210.0
+Wild         185.0
 
 >>> df = cudf.DataFrame({{'A': 'a a b'.split(),
 ...                      'B': [1,2,3],
 ...                      'C': [4,6,5]}})
->>> g1 = df.groupby('A', group_keys=False)
->>> g2 = df.groupby('A', group_keys=True)
+>>> g1 = df.groupby('A', group_keys=False, sort=True)
+>>> g2 = df.groupby('A', group_keys=True, sort=True)
 
 Notice that ``g1`` have ``g2`` have two groups, ``a`` and ``b``, and only
 differ in their ``group_keys`` argument. Calling `apply` in various ways,
@@ -197,6 +431,7 @@ class GroupBy(Serializable, Reducible, Scannable):
 
     _VALID_SCANS = {
         "cumsum",
+        "cumprod",
         "cummin",
         "cummax",
     }
@@ -204,6 +439,7 @@ class GroupBy(Serializable, Reducible, Scannable):
     # Necessary because the function names don't directly map to the docs.
     _SCAN_DOCSTRINGS = {
         "cumsum": {"op_name": "Cumulative sum"},
+        "cumprod": {"op_name": "Cumulative product"},
         "cummin": {"op_name": "Cumulative min"},
         "cummax": {"op_name": "Cumulative max"},
     }
@@ -248,39 +484,53 @@ class GroupBy(Serializable, Reducible, Scannable):
         dropna : bool, optional
             If True (default), do not include the "null" group.
         """
+        if cudf.get_option("mode.pandas_compatible"):
+            obj = obj.nans_to_nulls()
         self.obj = obj
         self._as_index = as_index
-        self._by = by
+        self._by = by.copy(deep=True) if isinstance(by, _Grouping) else by
         self._level = level
         self._sort = sort
         self._dropna = dropna
         self._group_keys = group_keys
 
-        if isinstance(by, _Grouping):
-            by._obj = self.obj
-            self.grouping = by
+        if isinstance(self._by, _Grouping):
+            self._by._obj = self.obj
+            self.grouping = self._by
         else:
-            self.grouping = _Grouping(obj, by, level)
+            self.grouping = _Grouping(obj, self._by, level)
 
     def __iter__(self):
-        if isinstance(self._by, list) and len(self._by) == 1:
-            warnings.warn(
-                "In a future version of cudf, a length 1 tuple will be "
-                "returned when iterating over a groupby with a grouper equal "
-                "to a list of length 1. To avoid this warning, do not supply "
-                "a list with a single grouper.",
-                FutureWarning,
-            )
         group_names, offsets, _, grouped_values = self._grouped()
         if isinstance(group_names, cudf.BaseIndex):
             group_names = group_names.to_pandas()
         for i, name in enumerate(group_names):
-            yield name, grouped_values[offsets[i] : offsets[i + 1]]
+            yield (
+                (name,)
+                if isinstance(self._by, list) and len(self._by) == 1
+                else name,
+                grouped_values[offsets[i] : offsets[i + 1]],
+            )
+
+    def __len__(self) -> int:
+        return self.ngroups
+
+    @property
+    def ngroups(self) -> int:
+        _, offsets, _, _ = self._grouped()
+        return len(offsets) - 1
+
+    @property
+    def ndim(self) -> int:
+        return self.obj.ndim
 
     @property
     def dtypes(self):
         """
         Return the dtypes in this group.
+
+        .. deprecated:: 24.04
+           Use `.dtypes` on base object instead.
 
         Returns
         -------
@@ -293,18 +543,21 @@ class GroupBy(Serializable, Reducible, Scannable):
         >>> df = cudf.DataFrame({'a': [1, 2, 3, 3], 'b': ['x', 'y', 'z', 'a'],
         ...                      'c':[10, 11, 12, 12]})
         >>> df.groupby("a").dtypes
-                b      c
+               a       b      c
         a
-        1  object  int64
-        2  object  int64
-        3  object  int64
+        1  int64  object  int64
+        2  int64  object  int64
+        3  int64  object  int64
         """
-        index = self.grouping.keys.unique().to_pandas()
+        warnings.warn(
+            f"{type(self).__name__}.dtypes is deprecated and will be "
+            "removed in a future version. Check the dtypes on the "
+            "base object instead",
+            FutureWarning,
+        )
+        index = self.grouping.keys.unique().sort_values().to_pandas()
         return pd.DataFrame(
-            {
-                name: [self.obj._dtypes[name]] * len(index)
-                for name in self.grouping.values._column_names
-            },
+            {name: [dtype] * len(index) for name, dtype in self.obj._dtypes},
             index=index,
         )
 
@@ -326,6 +579,41 @@ class GroupBy(Serializable, Reducible, Scannable):
             zip(group_names.to_pandas(), grouped_index._split(offsets[1:-1]))
         )
 
+    @cached_property
+    def indices(self) -> dict[ScalarLike, cupy.ndarray]:
+        """
+        Dict {group name -> group indices}.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> data = [[10, 20, 30], [10, 30, 40], [40, 50, 30]]
+        >>> df = cudf.DataFrame(data, columns=["a", "b", "c"])
+        >>> df
+            a   b   c
+        0  10  20  30
+        1  10  30  40
+        2  40  50  30
+        >>> df.groupby(by=["a"]).indices  # doctest: +SKIP
+        {10: array([0, 1]), 40: array([2])}
+        """
+        offsets, group_keys, (indices,) = self._groups(
+            [as_column(range(len(self.obj)), dtype=SIZE_TYPE_DTYPE)]
+        )
+
+        group_keys = [
+            ColumnBase.from_pylibcudf(col)
+            for col in stream_compaction.drop_duplicates(group_keys)
+        ]
+        if len(group_keys) > 1:
+            index = cudf.MultiIndex.from_arrays(group_keys)
+        else:
+            index = cudf.Index._from_column(group_keys[0])
+        return dict(
+            zip(index.to_pandas(), cp.split(indices.values, offsets[1:-1]))
+        )
+
+    @_performance_tracking
     def get_group(self, name, obj=None):
         """
         Construct DataFrame from group with provided name.
@@ -360,38 +648,60 @@ class GroupBy(Serializable, Reducible, Scannable):
         """
         if obj is None:
             obj = self.obj
+        else:
+            warnings.warn(
+                "obj is deprecated and will be removed in a future version. "
+                "Use ``df.iloc[gb.indices.get(name)]`` "
+                "instead of ``gb.get_group(name, obj=df)``.",
+                FutureWarning,
+            )
+        if is_list_like(self._by) and len(self._by) == 1:
+            if isinstance(name, tuple) and len(name) == 1:
+                name = name[0]
+            else:
+                raise KeyError(name)
+        return obj.iloc[self.indices[name]]
 
-        return obj.loc[self.groups[name]]
-
+    @_performance_tracking
     def size(self):
         """
         Return the size of each group.
         """
-        return (
-            cudf.Series(
-                cudf.core.column.column_empty(
-                    len(self.obj), "int8", masked=False
-                )
-            )
+        col = column_empty(len(self.obj), np.dtype(np.int8))
+        result = (
+            cudf.Series._from_column(col, name=getattr(self.obj, "name", None))
             .groupby(self.grouping, sort=self._sort, dropna=self._dropna)
             .agg("size")
         )
+        if not self._as_index:
+            result = result.rename("size").reset_index()
+        return result
 
-    def cumcount(self):
+    @_performance_tracking
+    def cumcount(self, ascending: bool = True):
         """
         Return the cumulative count of keys in each group.
+
+        Parameters
+        ----------
+        ascending : bool, default True
+            If False, number in reverse, from length of group - 1 to 0.
+            Currently not supported
         """
+        if ascending is not True:
+            raise NotImplementedError(
+                "ascending is currently not implemented."
+            )
         return (
-            cudf.Series(
-                cudf.core.column.column_empty(
-                    len(self.obj), "int8", masked=False
-                ),
+            cudf.Series._from_column(
+                column_empty(len(self.obj), np.dtype(np.int8)),
                 index=self.obj.index,
             )
             .groupby(self.grouping, sort=self._sort)
             .agg("cumcount")
         )
 
+    @_performance_tracking
     def rank(
         self,
         method="average",
@@ -406,6 +716,23 @@ class GroupBy(Serializable, Reducible, Scannable):
         if not axis == 0:
             raise NotImplementedError("Only axis=0 is supported.")
 
+        if na_option not in {"keep", "top", "bottom"}:
+            raise ValueError(
+                f"na_option must be one of 'keep', 'top', or 'bottom', "
+                f"but got {na_option}"
+            )
+
+        # TODO: in pandas compatibility mode, we should convert any
+        # NaNs to nulls in any float value columns, as Pandas
+        # treats NaNs the way we treat nulls.
+        if cudf.get_option("mode.pandas_compatible"):
+            if any(
+                col.dtype.kind == "f" for col in self.grouping.values._columns
+            ):
+                raise NotImplementedError(
+                    "NaNs are not supported in groupby.rank."
+                )
+
         def rank(x):
             return getattr(x, "rank")(
                 method=method,
@@ -414,16 +741,150 @@ class GroupBy(Serializable, Reducible, Scannable):
                 pct=pct,
             )
 
-        return self.agg(rank)
+        result = self.agg(rank)
+
+        if cudf.get_option("mode.pandas_compatible"):
+            # pandas always returns floats:
+            return result.astype(np.dtype(np.float64))
+
+        return result
 
     @cached_property
-    def _groupby(self):
-        return libgroupby.GroupBy(
-            [*self.grouping.keys._columns], dropna=self._dropna
+    def _groupby(self) -> types.SimpleNamespace:
+        with acquire_spill_lock() as spill_lock:
+            plc_groupby = plc.groupby.GroupBy(
+                plc.Table(
+                    [
+                        col.to_pylibcudf(mode="read")
+                        for col in self.grouping._key_columns
+                    ]
+                ),
+                plc.types.NullPolicy.EXCLUDE
+                if self._dropna
+                else plc.types.NullPolicy.INCLUDE,
+            )
+            # Do we need this because we just check _spill_locks in test_spillable_df_groupby?
+            return types.SimpleNamespace(
+                plc_groupby=plc_groupby, _spill_locks=spill_lock
+            )
+
+    def _groups(
+        self, values: Iterable[ColumnBase]
+    ) -> tuple[list[int], list[ColumnBase], list[ColumnBase]]:
+        plc_columns = [col.to_pylibcudf(mode="read") for col in values]
+        if not plc_columns:
+            plc_table = None
+        else:
+            plc_table = plc.Table(plc_columns)
+        offsets, grouped_keys, grouped_values = (
+            self._groupby.plc_groupby.get_groups(plc_table)
         )
 
-    @_cudf_nvtx_annotate
-    def agg(self, func):
+        return (
+            offsets,
+            [ColumnBase.from_pylibcudf(col) for col in grouped_keys.columns()],
+            (
+                [
+                    ColumnBase.from_pylibcudf(col)
+                    for col in grouped_values.columns()
+                ]
+                if grouped_values is not None
+                else []
+            ),
+        )
+
+    def _aggregate(
+        self, values: tuple[ColumnBase, ...], aggregations
+    ) -> tuple[
+        list[list[ColumnBase]],
+        list[ColumnBase],
+        list[list[tuple[str, str]]],
+    ]:
+        included_aggregations = []
+        column_included = []
+        requests = []
+        result_columns: list[list[ColumnBase]] = []
+        for i, (col, aggs) in enumerate(zip(values, aggregations)):
+            valid_aggregations = get_valid_aggregation(col.dtype)
+            included_aggregations_i = []
+            col_aggregations = []
+            for agg in aggs:
+                str_agg = str(agg)
+                if _is_unsupported_agg_for_type(col.dtype, str_agg):
+                    raise TypeError(
+                        f"{col.dtype} type does not support {agg} operations"
+                    )
+                agg_obj = aggregation.make_aggregation(agg)
+                if (
+                    valid_aggregations == "ALL"
+                    or agg_obj.kind in valid_aggregations
+                ):
+                    included_aggregations_i.append((agg, agg_obj.kind))
+                    col_aggregations.append(agg_obj.plc_obj)
+            included_aggregations.append(included_aggregations_i)
+            result_columns.append([])
+            if col_aggregations:
+                requests.append(
+                    plc.groupby.GroupByRequest(
+                        col.to_pylibcudf(mode="read"), col_aggregations
+                    )
+                )
+                column_included.append(i)
+
+        if not requests and any(len(v) > 0 for v in aggregations):
+            raise pd.errors.DataError(
+                "All requested aggregations are unsupported."
+            )
+
+        keys, results = (
+            self._groupby.plc_groupby.scan(requests)
+            if _is_all_scan_aggregate(aggregations)
+            else self._groupby.plc_groupby.aggregate(requests)
+        )
+
+        for i, result in zip(column_included, results):
+            result_columns[i] = [
+                ColumnBase.from_pylibcudf(col) for col in result.columns()
+            ]
+
+        return (
+            result_columns,
+            [ColumnBase.from_pylibcudf(key) for key in keys.columns()],
+            included_aggregations,
+        )
+
+    def _shift(
+        self, values: tuple[ColumnBase, ...], periods: int, fill_values: list
+    ) -> Generator[ColumnBase]:
+        _, shifts = self._groupby.plc_groupby.shift(
+            plc.table.Table([col.to_pylibcudf(mode="read") for col in values]),
+            [periods] * len(values),
+            [
+                pa_scalar_to_plc_scalar(
+                    pa.scalar(val, type=cudf_dtype_to_pa_type(col.dtype))
+                )
+                for val, col in zip(fill_values, values)
+            ],
+        )
+        return (ColumnBase.from_pylibcudf(col) for col in shifts.columns())
+
+    def _replace_nulls(
+        self, values: tuple[ColumnBase, ...], method: str
+    ) -> Generator[ColumnBase]:
+        _, replaced = self._groupby.plc_groupby.replace_nulls(
+            plc.Table([col.to_pylibcudf(mode="read") for col in values]),
+            [
+                plc.replace.ReplacePolicy.PRECEDING
+                if method == "ffill"
+                else plc.replace.ReplacePolicy.FOLLOWING
+            ]
+            * len(values),
+        )
+
+        return (ColumnBase.from_pylibcudf(col) for col in replaced.columns())
+
+    @_performance_tracking
+    def agg(self, func=None, *args, engine=None, engine_kwargs=None, **kwargs):
         """
         Apply aggregation(s) to the groups.
 
@@ -458,11 +919,11 @@ class GroupBy(Serializable, Reducible, Scannable):
         ...     'b': [1, 2, 3],
         ...     'c': [2, 2, 1]
         ... })
-        >>> a.groupby('a').agg('sum')
+        >>> a.groupby('a', sort=True).agg('sum')
            b  c
         a
-        2  3  1
         1  3  4
+        2  3  1
 
         Specifying a list of aggregations to perform on each column.
 
@@ -472,12 +933,12 @@ class GroupBy(Serializable, Reducible, Scannable):
         ...     'b': [1, 2, 3],
         ...     'c': [2, 2, 1]
         ... })
-        >>> a.groupby('a').agg(['sum', 'min'])
+        >>> a.groupby('a', sort=True).agg(['sum', 'min'])
             b       c
           sum min sum min
         a
-        2   3   3   1   1
         1   3   1   4   2
+        2   3   3   1   1
 
         Using a dict to specify aggregations to perform per column.
 
@@ -487,12 +948,12 @@ class GroupBy(Serializable, Reducible, Scannable):
         ...     'b': [1, 2, 3],
         ...     'c': [2, 2, 1]
         ... })
-        >>> a.groupby('a').agg({'a': 'max', 'b': ['min', 'mean']})
+        >>> a.groupby('a', sort=True).agg({'a': 'max', 'b': ['min', 'mean']})
             a   b
           max min mean
         a
-        2   2   3  3.0
         1   1   1  1.5
+        2   2   3  3.0
 
         Using lambdas/callables to specify aggregations taking parameters.
 
@@ -511,17 +972,33 @@ class GroupBy(Serializable, Reducible, Scannable):
         1  1.5  1.75  2.0   2.0
         2  3.0  3.00  1.0   1.0
         """
-        column_names, columns, normalized_aggs = self._normalize_aggs(func)
+        if engine is not None:
+            raise NotImplementedError(
+                "engine is non-functional and added for compatibility with pandas"
+            )
+        if engine_kwargs is not None:
+            raise NotImplementedError(
+                "engine_kwargs is non-functional added for compatibility with pandas"
+            )
+        if args:
+            raise NotImplementedError(
+                "Passing args to func is currently not supported."
+            )
+
+        column_names, columns, normalized_aggs = self._normalize_aggs(
+            func, **kwargs
+        )
         orig_dtypes = tuple(c.dtype for c in columns)
 
         # Note: When there are no key columns, the below produces
-        # a Float64Index, while Pandas returns an Int64Index
+        # an Index with float64 dtype, while Pandas returns
+        # an Index with int64 dtype.
         # (GH: 6945)
         (
             result_columns,
             grouped_key_cols,
             included_aggregations,
-        ) = self._groupby.aggregate(columns, normalized_aggs)
+        ) = self._aggregate(columns, normalized_aggs)
 
         result_index = self.grouping.keys._from_columns_like_self(
             grouped_key_cols,
@@ -535,9 +1012,10 @@ class GroupBy(Serializable, Reducible, Scannable):
             result_columns,
             orig_dtypes,
         ):
-            for agg, col in zip(aggs, cols):
+            for agg_tuple, col in zip(aggs, cols):
+                agg, agg_kind = agg_tuple
+                agg_name = agg.__name__ if callable(agg) else agg
                 if multilevel:
-                    agg_name = agg.__name__ if callable(agg) else agg
                     key = (col_name, agg_name)
                 else:
                     key = col_name
@@ -547,7 +1025,30 @@ class GroupBy(Serializable, Reducible, Scannable):
                 ):
                     # Structs lose their labels which we reconstruct here
                     col = col._with_type_metadata(cudf.ListDtype(orig_dtype))
-                data[key] = col
+
+                if agg_kind in {"COUNT", "SIZE", "ARGMIN", "ARGMAX"}:
+                    data[key] = col.astype(np.dtype(np.int64))
+                elif (
+                    self.obj.empty
+                    and (
+                        isinstance(agg_name, str)
+                        and agg_name in Reducible._SUPPORTED_REDUCTIONS
+                    )
+                    and len(col) == 0
+                    and not isinstance(
+                        col.dtype,
+                        (
+                            cudf.ListDtype,
+                            cudf.StructDtype,
+                            cudf.Decimal32Dtype,
+                            cudf.Decimal64Dtype,
+                            cudf.Decimal128Dtype,
+                        ),
+                    )
+                ):
+                    data[key] = col.astype(orig_dtype)
+                else:
+                    data[key] = col
         data = ColumnAccessor(data, multiindex=multilevel)
         if not multilevel:
             data = data.rename_levels({np.nan: None}, level=0)
@@ -555,14 +1056,68 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         if self._sort:
             result = result.sort_index()
+        else:
+            if cudf.get_option(
+                "mode.pandas_compatible"
+            ) and not _is_all_scan_aggregate(normalized_aggs):
+                # Even with `sort=False`, pandas guarantees that
+                # groupby preserves the order of rows within each group.
+                left_cols = self.grouping.keys.drop_duplicates()._columns
+                right_cols = result_index._columns
+                join_keys = [
+                    _match_join_keys(lcol, rcol, "inner")
+                    for lcol, rcol in zip(left_cols, right_cols)
+                ]
+                # TODO: In future, see if we can centralize
+                # logic else where that has similar patterns.
+                join_keys = map(list, zip(*join_keys))
+                # By construction, left and right keys are related by
+                # a permutation, so we can use an inner join.
+                with acquire_spill_lock():
+                    plc_tables = [
+                        plc.Table(
+                            [col.to_pylibcudf(mode="read") for col in cols]
+                        )
+                        for cols in join_keys
+                    ]
+                    left_plc, right_plc = plc.join.inner_join(
+                        plc_tables[0],
+                        plc_tables[1],
+                        plc.types.NullEquality.EQUAL,
+                    )
+                    left_order = ColumnBase.from_pylibcudf(left_plc)
+                    right_order = ColumnBase.from_pylibcudf(right_plc)
+                # left order is some permutation of the ordering we
+                # want, and right order is a matching gather map for
+                # the result table. Get the correct order by sorting
+                # the right gather map.
+                right_order = sorting.sort_by_key(
+                    [right_order],
+                    [left_order],
+                    [True],
+                    ["first"],
+                    stable=False,
+                )[0]
+                result = result._gather(
+                    GatherMap.from_column_unchecked(
+                        ColumnBase.from_pylibcudf(right_order),
+                        len(result),
+                        nullify=False,
+                    )
+                )
 
         if not self._as_index:
             result = result.reset_index()
-        if libgroupby._is_all_scan_aggregate(normalized_aggs):
+        if _is_all_scan_aggregate(normalized_aggs):
             # Scan aggregations return rows in original index order
             return self._mimic_pandas_order(result)
 
         return result
+
+    def _reduce_numeric_only(self, op: str):
+        raise NotImplementedError(
+            f"numeric_only is not implemented for {type(self)}"
+        )
 
     def _reduce(
         self,
@@ -589,19 +1144,18 @@ class GroupBy(Serializable, Reducible, Scannable):
         Series or DataFrame
             Computed {op} of values within each group.
 
-        Notes
-        -----
-        Difference from pandas:
-            * Not supporting: numeric_only, min_count
+        .. pandas-compat::
+            :meth:`pandas.core.groupby.DataFrameGroupBy.{op}`,
+             :meth:`pandas.core.groupby.SeriesGroupBy.{op}`
+
+            The numeric_only, min_count
         """
-        if numeric_only:
-            raise NotImplementedError(
-                "numeric_only parameter is not implemented yet"
-            )
         if min_count != 0:
             raise NotImplementedError(
                 "min_count parameter is not implemented yet"
             )
+        if numeric_only:
+            return self._reduce_numeric_only(op)
         return self.agg(op)
 
     def _scan(self, op: str, *args, **kwargs):
@@ -639,7 +1193,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         # aggregation scheme in libcudf. This is probably "fast
         # enough" for most reasonable input sizes.
         _, offsets, _, group_values = self._grouped()
-        group_offsets = np.asarray(offsets, dtype=size_type_dtype)
+        group_offsets = np.asarray(offsets, dtype=SIZE_TYPE_DTYPE)
         size_per_group = np.diff(group_offsets)
         # "Out of bounds" n for the group size either means no entries
         # (negative) or all the entries (positive)
@@ -653,7 +1207,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             group_offsets = group_offsets[:-1]
         else:
             group_offsets = group_offsets[1:] - size_per_group
-        to_take = np.arange(size_per_group.sum(), dtype=size_type_dtype)
+        to_take = np.arange(size_per_group.sum(), dtype=SIZE_TYPE_DTYPE)
         fixup = np.empty_like(size_per_group)
         fixup[0] = 0
         np.cumsum(size_per_group[:-1], out=fixup[1:])
@@ -664,8 +1218,8 @@ class GroupBy(Serializable, Reducible, Scannable):
             # Can't use _mimic_pandas_order because we need to
             # subsample the gather map from the full input ordering,
             # rather than permuting the gather map of the output.
-            _, (ordering,), _ = self._groupby.groups(
-                [arange(0, self.obj._data.nrows)]
+            _, _, (ordering,) = self._groups(
+                [as_column(range(0, len(self.obj)))]
             )
             # Invert permutation from original order to groups on the
             # subset of entries we want.
@@ -674,7 +1228,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         else:
             return result
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def head(self, n: int = 5, *, preserve_order: bool = True):
         """Return first n rows of each group
 
@@ -727,7 +1281,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             n, take_head=True, preserve_order=preserve_order
         )
 
-    @_cudf_nvtx_annotate
+    @_performance_tracking
     def tail(self, n: int = 5, *, preserve_order: bool = True):
         """Return last n rows of each group
 
@@ -781,15 +1335,29 @@ class GroupBy(Serializable, Reducible, Scannable):
             n, take_head=False, preserve_order=preserve_order
         )
 
-    def nth(self, n):
+    @_performance_tracking
+    def nth(self, n, dropna: Literal["any", "all", None] = None):
         """
         Return the nth row from each group.
         """
-        result = self.agg(lambda x: x.nth(n)).sort_index()
-        sizes = self.size().sort_index()
+        if dropna is not None:
+            raise NotImplementedError("dropna is not currently supported.")
+        self.obj["__groupbynth_order__"] = range(0, len(self.obj))  # type: ignore[index]
+        # We perform another groupby here to have the grouping columns
+        # be a part of dataframe columns.
+        result = self.obj.groupby(self.grouping.keys).agg(lambda x: x.nth(n))
+        sizes = self.size().reindex(result.index)
 
-        return result[sizes > n]
+        result = result[sizes > n]
 
+        result.index = self.obj.index.take(
+            result._data["__groupbynth_order__"]
+        )
+        del result._data["__groupbynth_order__"]
+        del self.obj._data["__groupbynth_order__"]
+        return result
+
+    @_performance_tracking
     def ngroup(self, ascending=True):
         """
         Number each group from 0 to the number of groups - 1.
@@ -849,36 +1417,35 @@ class GroupBy(Serializable, Reducible, Scannable):
         5    0
         dtype: int64
         """
-        num_groups = len(index := self.grouping.keys.unique())
-        _, has_null_group = bitmask_or([*index._columns])
-
+        index = self.grouping.keys.unique().sort_values()
+        num_groups = len(index)
+        has_null_group = any(col.has_nulls() for col in index._columns)
         if ascending:
-            if has_null_group:
-                group_ids = cudf.Series._from_data(
-                    {None: cp.arange(-1, num_groups - 1)}
-                )
-            else:
-                group_ids = cudf.Series._from_data(
-                    {None: cp.arange(num_groups)}
-                )
+            # Count ascending from 0 to num_groups - 1
+            groups = range(num_groups)
+        elif has_null_group:
+            # Count descending from num_groups - 1 to 0, but subtract one more
+            # for the null group making it num_groups - 2 to -1.
+            groups = range(num_groups - 2, -2, -1)
         else:
-            group_ids = cudf.Series._from_data(
-                {None: cp.arange(num_groups - 1, -1, -1)}
-            )
+            # Count descending from num_groups - 1 to 0
+            groups = range(num_groups - 1, -1, -1)
+
+        group_ids = cudf.Series._from_column(as_column(groups))
 
         if has_null_group:
-            group_ids.iloc[0] = cudf.NA
+            group_ids.iloc[-1] = cudf.NA
 
-        group_ids._index = index
+        group_ids.index = index
         return self._broadcast(group_ids)
 
     def sample(
         self,
-        n: Optional[int] = None,
-        frac: Optional[float] = None,
+        n: int | None = None,
+        frac: float | None = None,
         replace: bool = False,
-        weights: Union[abc.Sequence, "cudf.Series", None] = None,
-        random_state: Union[np.random.RandomState, int, None] = None,
+        weights: Sequence | "cudf.Series" | None = None,
+        random_state: numpy.random.RandomState | int | None = None,
     ):
         """Return a random sample of items in each group.
 
@@ -941,11 +1508,11 @@ class GroupBy(Serializable, Reducible, Scannable):
         # into a numpy array directly, rather than a list.
         # TODO: this uses the sort-based groupby, could one use hash-based?
         _, offsets, _, group_values = self._grouped()
-        group_offsets = np.asarray(offsets, dtype=size_type_dtype)
+        group_offsets = np.asarray(offsets, dtype=SIZE_TYPE_DTYPE)
         size_per_group = np.diff(group_offsets)
         if n is not None:
             samples_per_group = np.broadcast_to(
-                size_type_dtype.type(n), size_per_group.shape
+                SIZE_TYPE_DTYPE.type(n), size_per_group.shape
             )
             if not replace and (minsize := size_per_group.min()) < n:
                 raise ValueError(
@@ -958,7 +1525,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             # which is round-to-nearest, ties to sgn(x) * inf).
             samples_per_group = np.round(
                 size_per_group * frac, decimals=0
-            ).astype(size_type_dtype)
+            ).astype(SIZE_TYPE_DTYPE)
         if replace:
             # We would prefer to use cupy here, but their rng.integers
             # interface doesn't take array-based low and high
@@ -966,7 +1533,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             low = 0
             high = np.repeat(size_per_group, samples_per_group)
             rng = np.random.default_rng(seed=random_state)
-            indices = rng.integers(low, high, dtype=size_type_dtype)
+            indices = rng.integers(low, high, dtype=SIZE_TYPE_DTYPE)
             indices += np.repeat(group_offsets[:-1], samples_per_group)
         else:
             # Approach: do a segmented argsort of the index array and take
@@ -974,7 +1541,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             # We will shuffle the group indices and then pick them out
             # from the grouped dataframe index.
             nrows = len(group_values)
-            indices = cp.arange(nrows, dtype=size_type_dtype)
+            indices = cp.arange(nrows, dtype=SIZE_TYPE_DTYPE)
             if len(size_per_group) < 500:
                 # Empirically shuffling with cupy is faster at this scale
                 rs = cp.random.get_random_state()
@@ -982,17 +1549,23 @@ class GroupBy(Serializable, Reducible, Scannable):
                 for off, size in zip(group_offsets, size_per_group):
                     rs.shuffle(indices[off : off + size])
             else:
-                rng = cp.random.default_rng(seed=random_state)
-                (indices,) = segmented_sort_by_key(
-                    [as_column(indices)],
-                    [as_column(rng.random(size=nrows))],
-                    as_column(group_offsets),
-                    [],
-                    [],
+                keys = cp.random.default_rng(seed=random_state).random(
+                    size=nrows
                 )
+                with acquire_spill_lock():
+                    plc_table = plc.sorting.stable_segmented_sort_by_key(
+                        plc.Table(
+                            [as_column(indices).to_pylibcudf(mode="read")]
+                        ),
+                        plc.Table([as_column(keys).to_pylibcudf(mode="read")]),
+                        as_column(group_offsets).to_pylibcudf(mode="read"),
+                        [plc.types.Order.ASCENDING],
+                        [plc.types.NullOrder.AFTER],
+                    )
+                    indices = ColumnBase.from_pylibcudf(plc_table.columns()[0])
                 indices = cp.asarray(indices.data_array_view(mode="read"))
             # Which indices are we going to want?
-            want = np.arange(samples_per_group.sum(), dtype=size_type_dtype)
+            want = np.arange(samples_per_group.sum(), dtype=SIZE_TYPE_DTYPE)
             scan = np.empty_like(samples_per_group)
             scan[0] = 0
             np.cumsum(samples_per_group[:-1], out=scan[1:])
@@ -1012,7 +1585,7 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         obj_header, obj_frames = self.obj.serialize()
         header["obj"] = obj_header
-        header["obj_type"] = pickle.dumps(type(self.obj))
+        header["obj_type_name"] = type(self.obj).__name__
         header["num_obj_frames"] = len(obj_frames)
         frames.extend(obj_frames)
 
@@ -1027,7 +1600,7 @@ class GroupBy(Serializable, Reducible, Scannable):
     def deserialize(cls, header, frames):
         kwargs = header["kwargs"]
 
-        obj_type = pickle.loads(header["obj_type"])
+        obj_type = Serializable._name_type_map[header["obj_type_name"]]
         obj = obj_type.deserialize(
             header["obj"], frames[: header["num_obj_frames"]]
         )
@@ -1036,29 +1609,34 @@ class GroupBy(Serializable, Reducible, Scannable):
         )
         return cls(obj, grouping, **kwargs)
 
-    def _grouped(self):
-        grouped_key_cols, grouped_value_cols, offsets = self._groupby.groups(
-            [*self.obj._index._columns, *self.obj._columns]
+    def _grouped(self, *, include_groups: bool = True):
+        offsets, grouped_key_cols, grouped_value_cols = self._groups(
+            itertools.chain(self.obj.index._columns, self.obj._columns)
         )
-        grouped_keys = cudf.core.index._index_from_columns(grouped_key_cols)
+        grouped_keys = _index_from_data(dict(enumerate(grouped_key_cols)))
         if isinstance(self.grouping.keys, cudf.MultiIndex):
             grouped_keys.names = self.grouping.keys.names
+            to_drop = self.grouping.keys.names
         else:
             grouped_keys.name = self.grouping.keys.name
+            to_drop = (self.grouping.keys.name,)
         grouped_values = self.obj._from_columns_like_self(
             grouped_value_cols,
             column_names=self.obj._column_names,
             index_names=self.obj._index_names,
         )
-        group_names = grouped_keys.unique()
+        if not include_groups:
+            for col_name in to_drop:
+                del grouped_values[col_name]
+        group_names = grouped_keys.unique().sort_values()
         return (group_names, offsets, grouped_keys, grouped_values)
 
     def _normalize_aggs(
-        self, aggs: MultiColumnAggType
-    ) -> Tuple[Iterable[Any], Tuple[ColumnBase, ...], List[List[AggType]]]:
+        self, aggs: MultiColumnAggType, **kwargs
+    ) -> tuple[Iterable[Any], tuple[ColumnBase, ...], list[list[AggType]]]:
         """
         Normalize aggs to a list of list of aggregations, where `out[i]`
-        is a list of aggregations for column `self.obj[i]`. We support three
+        is a list of aggregations for column `self.obj[i]`. We support four
         different form of `aggs` input here:
         - A single agg, such as "sum". This agg is applied to all value
         columns.
@@ -1067,25 +1645,68 @@ class GroupBy(Serializable, Reducible, Scannable):
         - A mapping of column name to aggs, such as
         {"a": ["sum"], "b": ["mean"]}, the aggs are applied to specified
         column.
+        - Pairs of column name and agg tuples passed as kwargs
+        eg. col1=("a", "sum"), col2=("b", "prod"). The output column names are
+        the keys. The aggs are applied to the corresponding column in the tuple.
         Each agg can be string or lambda functions.
         """
+        aggs_per_column: Iterable[AggType | Iterable[AggType]]
+        # TODO: Remove isinstance condition when the legacy dask_cudf API is removed.
+        # See https://github.com/rapidsai/cudf/pull/16528#discussion_r1715482302 for information.
+        if aggs or isinstance(aggs, dict):
+            if isinstance(aggs, dict):
+                if any(
+                    is_list_like(values) and len(set(values)) != len(values)  # type: ignore[arg-type]
+                    for values in aggs.values()
+                ):
+                    if cudf.get_option("mode.pandas_compatible"):
+                        raise NotImplementedError(
+                            "Duplicate aggregations per column are currently not supported."
+                        )
+                    else:
+                        warnings.warn(
+                            "Duplicate aggregations per column found. "
+                            "The resulting duplicate columns will be dropped.",
+                            UserWarning,
+                        )
+                column_names, aggs_per_column = aggs.keys(), aggs.values()
+                columns = tuple(self.obj._data[col] for col in column_names)
+            else:
+                values = self.grouping.values
+                column_names = values._column_names
+                columns = values._columns
+                aggs_per_column = (aggs,) * len(columns)
+        elif not aggs and kwargs:
+            column_names = kwargs.keys()
 
-        aggs_per_column: Iterable[Union[AggType, Iterable[AggType]]]
-        if isinstance(aggs, dict):
-            column_names, aggs_per_column = aggs.keys(), aggs.values()
-            columns = tuple(self.obj._data[col] for col in column_names)
+            def _raise_invalid_type(x):
+                raise TypeError(
+                    f"Invalid keyword argument {x} of type {type(x)} was passed to agg"
+                )
+
+            columns, aggs_per_column = zip(
+                *(
+                    (self.obj._data[x[0]], x[1])
+                    if isinstance(x, tuple)
+                    else _raise_invalid_type(x)
+                    for x in kwargs.values()
+                )
+            )
         else:
-            values = self.grouping.values
-            column_names = values._column_names
-            columns = values._columns
-            aggs_per_column = (aggs,) * len(columns)
+            raise TypeError("Must provide at least one aggregation function.")
 
+        # is_list_like performs type narrowing but type-checkers don't
+        # know it. One could add a TypeGuard annotation to
+        # is_list_like (see PEP647), but that is less useful than it
+        # seems because unlike the builtin narrowings it only performs
+        # narrowing in the positive case.
         normalized_aggs = [
-            list(agg) if is_list_like(agg) else [agg]
+            list(agg) if is_list_like(agg) else [agg]  # type: ignore
             for agg in aggs_per_column
         ]
         return column_names, columns, normalized_aggs
 
+    @_performance_tracking
     def pipe(self, func, *args, **kwargs):
         """
         Apply a function `func` with arguments to this GroupBy
@@ -1132,35 +1753,26 @@ class GroupBy(Serializable, Reducible, Scannable):
         To get the difference between each groups maximum and minimum value
         in one pass, you can do
 
-        >>> df.groupby('A').pipe(lambda x: x.max() - x.min())
+        >>> df.groupby('A', sort=True).pipe(lambda x: x.max() - x.min())
            B
         A
         a  2
         b  2
         """
-        return cudf.core.common.pipe(self, func, *args, **kwargs)
+        return pipe(self, func, *args, **kwargs)
 
+    @_performance_tracking
     def _jit_groupby_apply(
         self, function, group_names, offsets, group_keys, grouped_values, *args
     ):
-        # Nulls are not yet supported
-        for colname in self.grouping.values._data.keys():
-            if self.obj._data[colname].has_nulls():
-                raise ValueError(
-                    "Nulls not yet supported with groupby JIT engine"
-                )
-
         chunk_results = jit_groupby_apply(
             offsets, grouped_values, function, *args
         )
-        result = cudf.Series._from_data(
-            {None: chunk_results}, index=group_names
+        return self._post_process_chunk_results(
+            chunk_results, group_names, group_keys, grouped_values
         )
-        result.index.names = self.grouping.names
-        result = result.reset_index()
-        result[None] = result.pop(0)
-        return result
 
+    @_performance_tracking
     def _iterative_groupby_apply(
         self, function, group_names, offsets, group_keys, grouped_values, *args
     ):
@@ -1173,42 +1785,95 @@ class GroupBy(Serializable, Reducible, Scannable):
                 RuntimeWarning,
             )
 
-        chunks = [
-            grouped_values[s:e] for s, e in zip(offsets[:-1], offsets[1:])
-        ]
+        chunks = [grouped_values[s:e] for s, e in itertools.pairwise(offsets)]
         chunk_results = [function(chk, *args) for chk in chunks]
+        return self._post_process_chunk_results(
+            chunk_results, group_names, group_keys, grouped_values
+        )
+
+    def _post_process_chunk_results(
+        self, chunk_results, group_names, group_keys, grouped_values
+    ):
         if not len(chunk_results):
             return self.obj.head(0)
-
-        if cudf.api.types.is_scalar(chunk_results[0]):
-            result = cudf.Series._from_data(
-                {None: chunk_results}, index=group_names
+        if isinstance(chunk_results, ColumnBase) or is_scalar(
+            chunk_results[0]
+        ):
+            data = ColumnAccessor(
+                {None: as_column(chunk_results)}, verify=False
             )
+            ty = cudf.Series if self._as_index else cudf.DataFrame
+            result = ty._from_data(data, index=group_names)
             result.index.names = self.grouping.names
+            return result
+
         elif isinstance(chunk_results[0], cudf.Series) and isinstance(
             self.obj, cudf.DataFrame
         ):
-            result = cudf.concat(chunk_results, axis=1).T
-            result.index.names = self.grouping.names
+            # When the UDF is like df.sum(), the result for each
+            # group is a row-like "Series" where the index labels
+            # are the same as the original calling DataFrame
+            if _is_row_of(chunk_results[0], self.obj):
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore", FutureWarning)
+                    result = cudf.concat(chunk_results, axis=1).T
+                result.index = group_names
+                result.index.names = self.grouping.names
+            # When the UDF is like df.x + df.y, the result for each
+            # group is the same length as the original group
+            elif (total_rows := sum(len(chk) for chk in chunk_results)) in {
+                len(self.obj),
+                len(group_names),
+            }:
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore", FutureWarning)
+                    result = cudf.concat(chunk_results)
+                if total_rows == len(group_names):
+                    result.index = group_names
+                    # TODO: Is there a better way to determine what
+                    # the column name should be, especially if we applied
+                    # a nameless UDF.
+                    result = result.to_frame(
+                        name=grouped_values._column_names[0]
+                    )
+                else:
+                    index_data = group_keys._data.copy(deep=True)
+                    index_data[None] = grouped_values.index._column
+                    result.index = cudf.MultiIndex._from_data(index_data)
+            elif len(chunk_results) == len(group_names):
+                result = cudf.concat(chunk_results, axis=1).T
+                result.index = group_names
+                result.index.names = self.grouping.names
+            else:
+                raise TypeError(
+                    "Error handling Groupby apply output with input of "
+                    f"type {type(self.obj)} and output of "
+                    f"type {type(chunk_results[0])}"
+                )
         else:
-            result = cudf.concat(chunk_results)
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", FutureWarning)
+                result = cudf.concat(chunk_results)
             if self._group_keys:
                 index_data = group_keys._data.copy(deep=True)
                 index_data[None] = grouped_values.index._column
                 result.index = cudf.MultiIndex._from_data(index_data)
         return result
 
-    def apply(self, function, *args, engine="cudf"):
+    @_performance_tracking
+    def apply(
+        self, func, *args, engine="auto", include_groups: bool = True, **kwargs
+    ):
         """Apply a python transformation function over the grouped chunk.
 
         Parameters
         ----------
-        function : callable
+        func : callable
           The python transformation function that will be applied
           on the grouped chunk.
         args : tuple
             Optional positional arguments to pass to the function.
-        engine: {'cudf', 'jit'}, default 'cudf'
+        engine: 'auto', 'cudf', or 'jit', default 'auto'
           Selects the GroupBy.apply implementation. Use `jit` to
           select the numba JIT pipeline. Only certain operations are allowed
           within the function when using this option: min, max, sum, mean, var,
@@ -1217,6 +1882,18 @@ class GroupBy(Serializable, Reducible, Scannable):
           `df['x'] * 2` is not yet allowed.
           For more information, see the `cuDF guide to user defined functions
           <https://docs.rapids.ai/api/cudf/stable/user_guide/guide-to-udfs.html>`__.
+          Use `cudf` to select the iterative groupby apply algorithm which aims
+          to provide maximum flexibility at the expense of performance.
+          The default value `auto` will attempt to use the numba JIT pipeline
+          where possible and will fall back to the iterative algorithm if
+          necessary.
+        include_groups : bool, default True
+            When True, will attempt to apply ``func`` to the groupings in
+            the case that they are columns of the DataFrame. In the future,
+            this will default to ``False``.
+        kwargs : dict
+            Optional keyword arguments to pass to the function.
+            Currently not supported
 
         Examples
         --------
@@ -1250,7 +1927,8 @@ class GroupBy(Serializable, Reducible, Scannable):
           6    2    6   12
 
         .. pandas-compat::
-            **groupby.apply**
+            :meth:`pandas.core.groupby.DataFrameGroupBy.apply`,
+             :meth:`pandas.core.groupby.SeriesGroupBy.apply`
 
             cuDF's ``groupby.apply`` is limited compared to pandas.
             In some situations, Pandas returns the grouped keys as part of
@@ -1265,15 +1943,15 @@ class GroupBy(Serializable, Reducible, Scannable):
                 ...     'c': [1, 2, 3, 4],
                 ... })
                 >>> gdf = cudf.from_pandas(df)
-                >>> df.groupby('a').apply(lambda x: x.iloc[[0]])
-                     a  b  c
+                >>> df.groupby('a')[["b", "c"]].apply(lambda x: x.iloc[[0]])
+                     b  c
                 a
-                1 0  1  1  1
-                2 2  2  1  3
-                >>> gdf.groupby('a').apply(lambda x: x.iloc[[0]])
-                   a  b  c
-                0  1  1  1
-                2  2  1  3
+                1 0  1  1
+                2 2  1  3
+                >>> gdf.groupby('a')[["b", "c"]].apply(lambda x: x.iloc[[0]])
+                   b  c
+                0  1  1
+                2  1  3
 
         ``engine='jit'`` may be used to accelerate certain functions,
         initially those that contain reductions and arithmetic operations
@@ -1285,18 +1963,45 @@ class GroupBy(Serializable, Reducible, Scannable):
         ...   lambda group: group['b'].max() - group['b'].min(),
         ...   engine='jit'
         ... )
-           a  None
-        0  1     1
-        1  2     1
-        2  3     1
-        """
-        if not callable(function):
-            raise TypeError(f"type {type(function)} is not callable")
-        group_names, offsets, group_keys, grouped_values = self._grouped()
+        a
+        1    1
+        2    1
+        3    1
+        dtype: int64
 
+        """
+        if kwargs:
+            raise NotImplementedError(
+                "Passing kwargs to func is currently not supported."
+            )
+        if self.obj.empty:
+            if func in {"count", "size", "idxmin", "idxmax"}:
+                res = cudf.Series([], dtype=np.dtype(np.int64))
+            else:
+                res = self.obj.copy(deep=True)
+            res.index = self.grouping.keys
+            if func in {"sum", "product"}:
+                # For `sum` & `product`, boolean types
+                # will need to result in `int64` type.
+                for name, col in res._column_labels_and_values:
+                    if col.dtype.kind == "b":
+                        res._data[name] = col.astype(np.dtype(np.int64))
+            return res
+
+        if not callable(func):
+            raise TypeError(f"type {type(func)} is not callable")
+        group_names, offsets, group_keys, grouped_values = self._grouped(
+            include_groups=include_groups
+        )
+
+        if engine == "auto":
+            if _can_be_jitted(grouped_values, func, args):
+                engine = "jit"
+            else:
+                engine = "cudf"
         if engine == "jit":
             result = self._jit_groupby_apply(
-                function,
+                func,
                 group_names,
                 offsets,
                 group_keys,
@@ -1305,7 +2010,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             )
         elif engine == "cudf":
             result = self._iterative_groupby_apply(
-                function,
+                func,
                 group_names,
                 offsets,
                 group_keys,
@@ -1317,8 +2022,11 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         if self._sort:
             result = result.sort_index()
+        if self._as_index is False:
+            result = result.reset_index()
         return result
 
+    @_performance_tracking
     def apply_grouped(self, function, **kwargs):
         """Apply a transformation function over the grouped chunk.
 
@@ -1457,7 +2165,8 @@ class GroupBy(Serializable, Reducible, Scannable):
         kwargs.update({"chunks": offsets})
         return grouped_values.apply_chunks(function, **kwargs)
 
-    def _broadcast(self, values):
+    @_performance_tracking
+    def _broadcast(self, values: cudf.Series) -> cudf.Series:
         """
         Broadcast the results of an aggregation to the group
 
@@ -1480,12 +2189,15 @@ class GroupBy(Serializable, Reducible, Scannable):
             values.index = self.obj.index
         return values
 
-    def transform(self, function):
+    @_performance_tracking
+    def transform(
+        self, func, *args, engine=None, engine_kwargs=None, **kwargs
+    ):
         """Apply an aggregation, then broadcast the result to the group size.
 
         Parameters
         ----------
-        function: str or callable
+        func: str or callable
             Aggregation to apply to each group. Note that the set of
             operations currently supported by `transform` is identical
             to that supported by the `agg` method.
@@ -1514,13 +2226,40 @@ class GroupBy(Serializable, Reducible, Scannable):
         --------
         agg
         """
+        if engine is not None:
+            raise NotImplementedError(
+                "engine is non-functional and added for compatibility with pandas"
+            )
+        if engine_kwargs is not None:
+            raise NotImplementedError(
+                "engine_kwargs is non-functional added for compatibility with pandas"
+            )
+        if args:
+            raise NotImplementedError(
+                "Passing args to func is currently not supported."
+            )
+        if kwargs:
+            raise NotImplementedError(
+                "Passing kwargs to func is currently not supported."
+            )
+
+        if not (isinstance(func, str) or callable(func)):
+            raise TypeError(
+                "Aggregation must be a named aggregation or a callable"
+            )
         try:
-            result = self.agg(function)
+            result = self.agg(func)
         except TypeError as e:
             raise NotImplementedError(
                 "Currently, `transform()` supports only aggregations."
             ) from e
-
+        # If the aggregation is a scan, don't broadcast
+        if _is_all_scan_aggregate([[func]]):
+            if len(result) != len(self.obj):
+                raise AssertionError(
+                    "Unexpected result length for scan transform"
+                )
+            return result
         return self._broadcast(result)
 
     def rolling(self, *args, **kwargs):
@@ -1530,10 +2269,11 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         See Also
         --------
-        cudf.core.window.Rolling
+        cudf.core.window.rolling.RollingGroupby
         """
         return cudf.core.window.rolling.RollingGroupby(self, *args, **kwargs)
 
+    @_performance_tracking
     def count(self, dropna=True):
         """Compute the number of values in each column.
 
@@ -1548,7 +2288,8 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         return self.agg(func)
 
-    def describe(self, include=None, exclude=None):
+    @_performance_tracking
+    def describe(self, percentiles=None, include=None, exclude=None):
         """
         Generate descriptive statistics that summarizes the central tendency,
         dispersion and shape of a dataset's distribution, excluding NaN values.
@@ -1557,6 +2298,10 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         Parameters
         ----------
+        percentiles : list-like of numbers, optional
+            The percentiles to include in the output.
+            Currently not supported.
+
         include: 'all', list-like of dtypes or None (default), optional
             list of data types to include in the result.
             Ignored for Series.
@@ -1593,8 +2338,12 @@ class GroupBy(Serializable, Reducible, Scannable):
         90        1   24.0  <NA>   24.0   24.0   24.0   24.0   24.0
 
         """
-        if exclude is not None and include is not None:
-            raise NotImplementedError
+        if percentiles is not None:
+            raise NotImplementedError("percentiles is currently not supported")
+        if exclude is not None:
+            raise NotImplementedError("exclude is currently not supported")
+        if include is not None:
+            raise NotImplementedError("include is currently not supported")
 
         res = self.agg(
             [
@@ -1619,68 +2368,8 @@ class GroupBy(Serializable, Reducible, Scannable):
         )
         return res
 
-    def corr(self, method="pearson", min_periods=1):
-        """
-        Compute pairwise correlation of columns, excluding NA/null values.
-
-        Parameters
-        ----------
-        method: {"pearson", "kendall", "spearman"} or callable,
-            default "pearson". Currently only the pearson correlation
-            coefficient is supported.
-
-        min_periods: int, optional
-            Minimum number of observations required per pair of columns
-            to have a valid result.
-
-        Returns
-        -------
-        DataFrame
-            Correlation matrix.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> gdf = cudf.DataFrame({
-        ...             "id": ["a", "a", "a", "b", "b", "b", "c", "c", "c"],
-        ...             "val1": [5, 4, 6, 4, 8, 7, 4, 5, 2],
-        ...             "val2": [4, 5, 6, 1, 2, 9, 8, 5, 1],
-        ...             "val3": [4, 5, 6, 1, 2, 9, 8, 5, 1]})
-        >>> gdf
-           id  val1  val2  val3
-        0  a     5     4     4
-        1  a     4     5     5
-        2  a     6     6     6
-        3  b     4     1     1
-        4  b     8     2     2
-        5  b     7     9     9
-        6  c     4     8     8
-        7  c     5     5     5
-        8  c     2     1     1
-        >>> gdf.groupby("id").corr(method="pearson")
-                    val1      val2      val3
-        id
-        a   val1  1.000000  0.500000  0.500000
-            val2  0.500000  1.000000  1.000000
-            val3  0.500000  1.000000  1.000000
-        b   val1  1.000000  0.385727  0.385727
-            val2  0.385727  1.000000  1.000000
-            val3  0.385727  1.000000  1.000000
-        c   val1  1.000000  0.714575  0.714575
-            val2  0.714575  1.000000  1.000000
-            val3  0.714575  1.000000  1.000000
-        """
-
-        if not method.lower() in ("pearson",):
-            raise NotImplementedError(
-                "Only pearson correlation is currently supported"
-            )
-
-        return self._cov_or_corr(
-            lambda x: x.corr(method, min_periods), "Correlation"
-        )
-
-    def cov(self, min_periods=0, ddof=1):
+    @_performance_tracking
+    def cov(self, min_periods=0, ddof=1, numeric_only: bool = False):
         """
         Compute the pairwise covariance among the columns of a DataFrame,
         excluding NA/null values.
@@ -1764,6 +2453,10 @@ class GroupBy(Serializable, Reducible, Scannable):
            val2  3.833333  12.333333  12.333333
            val3  3.833333  12.333333  12.333333
         """
+        if numeric_only is not False:
+            raise NotImplementedError(
+                "numeric_only is currently not supported."
+            )
 
         return self._cov_or_corr(
             lambda x: x.cov(min_periods, ddof), "Covariance"
@@ -1778,7 +2471,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         # create expanded dataframe consisting all combinations of the
         # struct columns-pairs to be used in the correlation or covariance
         # i.e. (('col1', 'col1'), ('col1', 'col2'), ('col2', 'col2'))
-        column_names = self.grouping.values._column_names
+        column_names = self.grouping._values_column_names
         num_cols = len(column_names)
 
         column_pair_structs = {}
@@ -1801,15 +2494,19 @@ class GroupBy(Serializable, Reducible, Scannable):
                 )
                 x, y = str(x), str(y)
 
-            column_pair_structs[(x, y)] = cudf.core.column.build_struct_column(
-                names=(x, y),
+            column_pair_structs[(x, y)] = StructColumn(
+                data=None,
+                dtype=StructDtype(
+                    fields={x: self.obj._data[x].dtype, y: self.obj._data[y]}
+                ),
                 children=(self.obj._data[x], self.obj._data[y]),
                 size=len(self.obj),
+                offset=0,
             )
 
         column_pair_groupby = cudf.DataFrame._from_data(
             column_pair_structs
-        ).groupby(by=self.grouping.keys)
+        ).groupby(by=self.grouping)
 
         try:
             gb_cov_corr = column_pair_groupby.agg(func)
@@ -1833,6 +2530,17 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         # interleave: combines the correlation or covariance results for each
         # column-pair into a single column
+
+        @acquire_spill_lock()
+        def interleave_columns(source_columns):
+            return ColumnBase.from_pylibcudf(
+                plc.reshape.interleave_columns(
+                    plc.Table(
+                        [c.to_pylibcudf(mode="read") for c in source_columns]
+                    )
+                )
+            )
+
         res = cudf.DataFrame._from_data(
             {
                 x: interleave_columns([gb_cov_corr._data[y] for y in ys])
@@ -1854,7 +2562,14 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         return res
 
-    def var(self, ddof=1):
+    @_performance_tracking
+    def var(
+        self,
+        ddof=1,
+        engine=None,
+        engine_kwargs=None,
+        numeric_only: bool = False,
+    ):
         """Compute the column-wise variance of the values in each group.
 
         Parameters
@@ -1863,13 +2578,48 @@ class GroupBy(Serializable, Reducible, Scannable):
             The delta degrees of freedom. N - ddof is the divisor used to
             normalize the variance.
         """
+        if engine is not None:
+            raise NotImplementedError(
+                "engine is non-functional and added for compatibility with pandas"
+            )
+        if engine_kwargs is not None:
+            raise NotImplementedError(
+                "engine_kwargs is non-functional added for compatibility with pandas"
+            )
+        if numeric_only is not False:
+            raise NotImplementedError(
+                "numeric_only is currently not supported."
+            )
 
         def func(x):
             return getattr(x, "var")(ddof=ddof)
 
         return self.agg(func)
 
-    def std(self, ddof=1):
+    @_performance_tracking
+    def nunique(self, dropna: bool = True):
+        """
+        Return number of unique elements in the group.
+
+        Parameters
+        ----------
+        dropna : bool, default True
+            Don't include NaN in the counts.
+        """
+
+        def func(x):
+            return getattr(x, "nunique")(dropna=dropna)
+
+        return self.agg(func)
+
+    @_performance_tracking
+    def std(
+        self,
+        ddof=1,
+        engine=None,
+        engine_kwargs=None,
+        numeric_only: bool = False,
+    ):
         """Compute the column-wise std of the values in each group.
 
         Parameters
@@ -1878,13 +2628,28 @@ class GroupBy(Serializable, Reducible, Scannable):
             The delta degrees of freedom. N - ddof is the divisor used to
             normalize the standard deviation.
         """
+        if engine is not None:
+            raise NotImplementedError(
+                "engine is non-functional and added for compatibility with pandas"
+            )
+        if engine_kwargs is not None:
+            raise NotImplementedError(
+                "engine_kwargs is non-functional added for compatibility with pandas"
+            )
+        if numeric_only is not False:
+            raise NotImplementedError(
+                "numeric_only is currently not supported."
+            )
 
         def func(x):
             return getattr(x, "std")(ddof=ddof)
 
         return self.agg(func)
 
-    def quantile(self, q=0.5, interpolation="linear"):
+    @_performance_tracking
+    def quantile(
+        self, q=0.5, interpolation="linear", numeric_only: bool = False
+    ):
         """Compute the column-wise quantiles of the values in each group.
 
         Parameters
@@ -1894,21 +2659,32 @@ class GroupBy(Serializable, Reducible, Scannable):
         interpolation : {"linear", "lower", "higher", "midpoint", "nearest"}
             The interpolation method to use when the desired quantile lies
             between two data points. Defaults to "linear".
+        numeric_only : bool, default False
+            Include only `float`, `int` or `boolean` data.
+            Currently not supported
         """
+        if numeric_only is not False:
+            raise NotImplementedError(
+                "numeric_only is not currently supported."
+            )
 
         def func(x):
             return getattr(x, "quantile")(q=q, interpolation=interpolation)
 
         return self.agg(func)
 
+    @_performance_tracking
     def collect(self):
         """Get a list of all the values for each column in each group."""
-        return self.agg("collect")
+        _deprecate_collect()
+        return self.agg(list)
 
+    @_performance_tracking
     def unique(self):
         """Get a list of the unique values for each column in each group."""
         return self.agg("unique")
 
+    @_performance_tracking
     def diff(self, periods=1, axis=0):
         """Get the difference between the values in each group.
 
@@ -1929,43 +2705,23 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         if not axis == 0:
             raise NotImplementedError("Only axis=0 is supported.")
-
-        values = self.obj.__class__._from_data(
-            self.grouping.values._data, self.obj.index
-        )
+        values = self.grouping.values
+        values.index = self.obj.index
         return values - self.shift(periods=periods)
 
     def _scan_fill(self, method: str, limit: int) -> DataFrameOrSeries:
         """Internal implementation for `ffill` and `bfill`"""
         values = self.grouping.values
-        result = self.obj._from_columns(
-            self._groupby.replace_nulls([*values._columns], method),
-            values._column_names,
+        result = self.obj._from_data(
+            dict(
+                zip(
+                    values._column_names,
+                    self._replace_nulls(values._columns, method),
+                )
+            )
         )
         result = self._mimic_pandas_order(result)
         return result._copy_type_metadata(values)
-
-    def pad(self, limit=None):
-        """Forward fill NA values.
-
-        .. deprecated:: 23.06
-           `pad` is deprecated, use `ffill` instead.
-
-        Parameters
-        ----------
-        limit : int, default None
-            Unsupported
-        """
-
-        if limit is not None:
-            raise NotImplementedError("Does not support limit param yet.")
-
-        warnings.warn(
-            "pad is deprecated and will be removed in a future version. "
-            "Use ffill instead.",
-            FutureWarning,
-        )
-        return self._scan_fill("ffill", limit)
 
     def ffill(self, limit=None):
         """Forward fill NA values.
@@ -1981,27 +2737,6 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         return self._scan_fill("ffill", limit)
 
-    def backfill(self, limit=None):
-        """Backward fill NA values.
-
-        .. deprecated:: 23.06
-           `backfill` is deprecated, use `bfill` instead.
-
-        Parameters
-        ----------
-        limit : int, default None
-            Unsupported
-        """
-        if limit is not None:
-            raise NotImplementedError("Does not support limit param yet.")
-
-        warnings.warn(
-            "backfill is deprecated and will be removed in a future version. "
-            "Use bfill instead.",
-            FutureWarning,
-        )
-        return self._scan_fill("bfill", limit)
-
     def bfill(self, limit=None):
         """Backward fill NA values.
 
@@ -2015,6 +2750,7 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         return self._scan_fill("bfill", limit)
 
+    @_performance_tracking
     def fillna(
         self,
         value=None,
@@ -2030,11 +2766,11 @@ class GroupBy(Serializable, Reducible, Scannable):
         ----------
         value : scalar, dict
             Value to use to fill the holes. Cannot be specified with method.
-        method : {'backfill', 'bfill', 'pad', 'ffill', None}, default None
+        method : { 'bfill', 'ffill', None}, default None
             Method to use for filling holes in reindexed Series
 
-            - pad/ffill: propagate last valid observation forward to next valid
-            - backfill/bfill: use next valid observation to fill gap
+            - ffill: propagate last valid observation forward to next valid
+            - bfill: use next valid observation to fill gap
         axis : {0 or 'index', 1 or 'columns'}
             Unsupported
         inplace : bool, default False
@@ -2049,6 +2785,12 @@ class GroupBy(Serializable, Reducible, Scannable):
         -------
         DataFrame or Series
         """
+        warnings.warn(
+            "groupby fillna is deprecated and "
+            "will be removed in a future version. Use groupby ffill "
+            "or groupby bfill for forward or backward filling instead.",
+            FutureWarning,
+        )
         if inplace:
             raise NotImplementedError("Does not support inplace yet.")
         if limit is not None:
@@ -2064,21 +2806,25 @@ class GroupBy(Serializable, Reducible, Scannable):
             raise ValueError("Cannot specify both 'value' and 'method'.")
 
         if method is not None:
-            if method not in {"pad", "ffill", "backfill", "bfill"}:
-                raise ValueError(
-                    "Method can only be of 'pad', 'ffill',"
-                    "'backfill', 'bfill'."
-                )
+            if method not in {"ffill", "bfill"}:
+                raise ValueError("Method can only be of 'ffill', 'bfill'.")
             return getattr(self, method, limit)()
 
-        values = self.obj.__class__._from_data(
-            self.grouping.values._data, self.obj.index
-        )
+        values = self.grouping.values
+        values.index = self.obj.index
         return values.fillna(
             value=value, inplace=inplace, axis=axis, limit=limit
         )
 
-    def shift(self, periods=1, freq=None, axis=0, fill_value=None):
+    @_performance_tracking
+    def shift(
+        self,
+        periods: int = 1,
+        freq=None,
+        axis=0,
+        fill_value=None,
+        suffix: str | None = None,
+    ):
         """
         Shift each group by ``periods`` positions.
 
@@ -2100,41 +2846,60 @@ class GroupBy(Serializable, Reducible, Scannable):
               the list. The length of the list should match the number of
               columns shifted. Each value should match the data type of the
               column to fill.
+        suffix : str, optional
+            A string to add to each shifted column if there are multiple periods.
+            Ignored otherwise.
+            Currently not supported.
 
         Returns
         -------
         Series or DataFrame
             Object shifted within each group.
 
-        Notes
-        -----
-        Parameter ``freq`` is unsupported.
+        .. pandas-compat::
+            :meth:`pandas.core.groupby.DataFrameGroupBy.shift`,
+             :meth:`pandas.core.groupby.SeriesGroupBy.shift`
+
+            Parameter ``freq`` is unsupported.
         """
 
         if freq is not None:
             raise NotImplementedError("Parameter freq is unsupported.")
 
-        if not axis == 0:
+        if axis != 0:
             raise NotImplementedError("Only axis=0 is supported.")
+
+        if suffix is not None:
+            raise NotImplementedError("shift is not currently supported.")
 
         values = self.grouping.values
         if is_list_like(fill_value):
-            if len(fill_value) != len(values._data):
+            if len(fill_value) != values._num_columns:
                 raise ValueError(
                     "Mismatched number of columns and values to fill."
                 )
         else:
-            fill_value = [fill_value] * len(values._data)
+            fill_value = [fill_value] * values._num_columns
 
-        result = self.obj.__class__._from_columns(
-            self._groupby.shift([*values._columns], periods, fill_value)[0],
-            values._column_names,
+        result = self.obj.__class__._from_data(
+            dict(
+                zip(
+                    values._column_names,
+                    self._shift(values._columns, periods, fill_value),
+                )
+            )
         )
         result = self._mimic_pandas_order(result)
         return result._copy_type_metadata(values)
 
+    @_performance_tracking
     def pct_change(
-        self, periods=1, fill_method="ffill", axis=0, limit=None, freq=None
+        self,
+        periods=1,
+        fill_method=no_default,
+        axis=0,
+        limit=no_default,
+        freq=None,
     ):
         """
         Calculates the percent change between sequential elements
@@ -2146,9 +2911,16 @@ class GroupBy(Serializable, Reducible, Scannable):
             Periods to shift for forming percent change.
         fill_method : str, default 'ffill'
             How to handle NAs before computing percent changes.
+
+            .. deprecated:: 24.04
+                All options of `fill_method` are deprecated
+                except `fill_method=None`.
         limit : int, optional
             The number of consecutive NAs to fill before stopping.
             Not yet implemented.
+
+            .. deprecated:: 24.04
+                `limit` is deprecated.
         freq : str, optional
             Increment to use from time series API.
             Not yet implemented.
@@ -2160,25 +2932,37 @@ class GroupBy(Serializable, Reducible, Scannable):
         """
         if not axis == 0:
             raise NotImplementedError("Only axis=0 is supported.")
-        if limit is not None:
+        if limit is not no_default:
             raise NotImplementedError("limit parameter not supported yet.")
         if freq is not None:
             raise NotImplementedError("freq parameter not supported yet.")
-        elif fill_method not in {"ffill", "pad", "bfill", "backfill"}:
-            raise ValueError(
-                "fill_method must be one of 'ffill', 'pad', "
-                "'bfill', or 'backfill'."
-            )
+        elif fill_method not in {no_default, None, "ffill", "bfill"}:
+            raise ValueError("fill_method must be one of 'ffill', or'bfill'.")
 
-        if fill_method in ("pad", "backfill"):
-            alternative = "ffill" if fill_method == "pad" else "bfill"
+        if fill_method not in (no_default, None) or limit is not no_default:
+            # Do not remove until pandas 3.0 support is added.
+            assert PANDAS_LT_300, (
+                "Need to drop after pandas-3.0 support is added."
+            )
             warnings.warn(
-                f"{fill_method} is deprecated and will be removed in a future "
-                f"version. Use f{alternative} instead.",
+                "The 'fill_method' keyword being not None and the 'limit' "
+                f"keywords in {type(self).__name__}.pct_change are "
+                "deprecated and will be removed in a future version. "
+                "Either fill in any non-leading NA values prior "
+                "to calling pct_change or specify 'fill_method=None' "
+                "to not fill NA values.",
                 FutureWarning,
             )
 
-        filled = self.fillna(method=fill_method, limit=limit)
+        if fill_method in (no_default, None):
+            fill_method = "ffill"
+        if limit is no_default:
+            limit = None
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            filled = self.fillna(method=fill_method, limit=limit)
+
         fill_grp = filled.groupby(self.grouping)
         shifted = fill_grp.shift(periods=periods, freq=freq)
         return (filled / shifted) - 1
@@ -2191,13 +2975,105 @@ class GroupBy(Serializable, Reducible, Scannable):
         """
         # TODO: copy metadata after this method is a common pattern, should
         # merge in this method.
-        _, order_cols, _ = self._groupby.groups(
-            [arange(0, result._data.nrows)]
-        )
-        gather_map = order_cols[0].argsort()
-        result = result.take(gather_map)
+
+        # This function is used to reorder the results of scan-based
+        # groupbys which have the same output size as input size.
+        # However, if the grouping key has NAs and dropna=True, the
+        # result coming back from libcudf has null_count few rows than
+        # the input, so we must produce an ordering from the full
+        # input range.
+        _, _, (ordering,) = self._groups([as_column(range(0, len(self.obj)))])
+        if self._dropna and any(
+            c.has_nulls(include_nan=True) > 0
+            for c in self.grouping._key_columns
+        ):
+            # Scan aggregations with null/nan keys put nulls in the
+            # corresponding output rows in pandas, to do that here
+            # expand the result by reindexing.
+            ri = cudf.RangeIndex(0, len(self.obj))
+            result.index = cudf.Index._from_column(ordering)
+            # This reorders and expands
+            result = result.reindex(ri)
+        else:
+            # Just reorder according to the groupings
+            result = result.take(ordering.argsort())
+        # Now produce the actual index we first thought of
         result.index = self.obj.index
         return result
+
+    def ohlc(self):
+        """
+        Compute open, high, low and close values of a group, excluding missing values.
+
+        Currently not implemented.
+        """
+        raise NotImplementedError("ohlc is currently not implemented")
+
+    @property
+    def plot(self):
+        """
+        Make plots of a grouped Series or DataFrame.
+
+        Currently not implemented.
+        """
+        raise NotImplementedError("plot is currently not implemented")
+
+    def resample(self, rule, *args, include_groups: bool = True, **kwargs):
+        """
+        Provide resampling when using a TimeGrouper.
+
+        Currently not implemented.
+        """
+        raise NotImplementedError("resample is currently not implemented")
+
+    def take(self, indices):
+        """
+        Return the elements in the given *positional* indices in each group.
+
+        Currently not implemented.
+        """
+        raise NotImplementedError("take is currently not implemented")
+
+    def filter(self, func, dropna: bool = True, *args, **kwargs):
+        """
+        Filter elements from groups that don't satisfy a criterion.
+
+        Currently not implemented.
+        """
+        raise NotImplementedError("filter is currently not implemented")
+
+    def expanding(self, *args, **kwargs):
+        """
+        Return an expanding grouper, providing expanding
+        functionality per group.
+
+        Currently not implemented.
+        """
+        raise NotImplementedError("expanding is currently not implemented")
+
+    def ewm(self, *args, **kwargs):
+        """
+        Return an ewm grouper, providing ewm functionality per group.
+
+        Currently not implemented.
+        """
+        raise NotImplementedError("expanding is currently not implemented")
+
+    def any(self, skipna: bool = True):
+        """
+        Return True if any value in the group is truthful, else False.
+
+        Currently not implemented.
+        """
+        raise NotImplementedError("any is currently not implemented")
+
+    def all(self, skipna: bool = True):
+        """
+        Return True if all values in the group are truthful, else False.
+
+        Currently not implemented.
+        """
+        raise NotImplementedError("all is currently not implemented")
 
 
 class DataFrameGroupBy(GroupBy, GetAttrGetItemMixin):
@@ -2205,13 +3081,292 @@ class DataFrameGroupBy(GroupBy, GetAttrGetItemMixin):
 
     _PROTECTED_KEYS = frozenset(("obj",))
 
+    def _reduce_numeric_only(self, op: str):
+        columns = list(
+            name
+            for name, dtype in self.obj._dtypes
+            if (
+                is_dtype_obj_numeric(dtype) and name not in self.grouping.names
+            )
+        )
+        return self[columns].agg(op)
+
     def __getitem__(self, key):
         return self.obj[key].groupby(
             by=self.grouping.keys,
             dropna=self._dropna,
             sort=self._sort,
             group_keys=self._group_keys,
+            as_index=self._as_index,
         )
+
+    def value_counts(
+        self,
+        subset=None,
+        normalize: bool = False,
+        sort: bool = True,
+        ascending: bool = False,
+        dropna: bool = True,
+    ) -> DataFrameOrSeries:
+        """
+        Return a Series or DataFrame containing counts of unique rows.
+
+        Parameters
+        ----------
+        subset : list-like, optional
+            Columns to use when counting unique combinations.
+        normalize : bool, default False
+            Return proportions rather than frequencies.
+        sort : bool, default True
+            Sort by frequencies.
+        ascending : bool, default False
+            Sort in ascending order.
+        dropna : bool, default True
+            Don't include counts of rows that contain NA values.
+
+        Returns
+        -------
+        Series or DataFrame
+            Series if the groupby as_index is True, otherwise DataFrame.
+
+        See Also
+        --------
+        SeriesGroupBy.value_counts: Equivalent method on SeriesGroupBy.
+
+        Notes
+        -----
+        - If the groupby as_index is True then the returned Series will have a
+          MultiIndex with one level per input column.
+        - If the groupby as_index is False then the returned DataFrame will
+          have an additional column with the value_counts. The column is
+          labelled 'count' or 'proportion', depending on the ``normalize``
+          parameter.
+
+        By default, rows that contain any NA values are omitted from
+        the result.
+
+        By default, the result will be in descending order so that the
+        first element of each group is the most frequently-occurring row.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({
+        ...    'gender': ['male', 'male', 'female', 'male', 'female', 'male'],
+        ...    'education': ['low', 'medium', 'high', 'low', 'high', 'low'],
+        ...    'country': ['US', 'FR', 'US', 'FR', 'FR', 'FR']
+        ... })
+
+        >>> df
+                gender  education   country
+        0       male    low         US
+        1       male    medium      FR
+        2       female  high        US
+        3       male    low         FR
+        4       female  high        FR
+        5       male    low         FR
+
+        >>> df.groupby('gender').value_counts()
+        gender  education  country
+        female  high       FR         1
+                           US         1
+        male    low        FR         2
+                           US         1
+                medium     FR         1
+        Name: count, dtype: int64
+
+        >>> df.groupby('gender').value_counts(ascending=True)
+        gender  education  country
+        female  high       FR         1
+                           US         1
+        male    low        US         1
+                medium     FR         1
+                low        FR         2
+        Name: count, dtype: int64
+
+        >>> df.groupby('gender').value_counts(normalize=True)
+        gender  education  country
+        female  high       FR         0.50
+                           US         0.50
+        male    low        FR         0.50
+                           US         0.25
+                medium     FR         0.25
+        Name: proportion, dtype: float64
+
+        >>> df.groupby('gender', as_index=False).value_counts()
+           gender education country  count
+        0  female      high      FR      1
+        1  female      high      US      1
+        2    male       low      FR      2
+        3    male       low      US      1
+        4    male    medium      FR      1
+
+        >>> df.groupby('gender', as_index=False).value_counts(normalize=True)
+           gender education country  proportion
+        0  female      high      FR        0.50
+        1  female      high      US        0.50
+        2    male       low      FR        0.50
+        3    male       low      US        0.25
+        4    male    medium      FR        0.25
+        """
+
+        df = cudf.DataFrame.copy(self.obj)
+        groupings = self.grouping.names
+        name = "proportion" if normalize else "count"
+
+        if subset is None:
+            subset = [i for i in df._column_names if i not in groupings]
+        # Check subset exists in dataframe
+        elif set(subset) - set(df._column_names):
+            raise ValueError(
+                f"Keys {set(subset) - set(df._column_names)} in subset "
+                f"do not exist in the DataFrame."
+            )
+        # Catch case where groupby and subset share an element
+        elif set(subset) & set(groupings):
+            raise ValueError(
+                f"Keys {set(subset) & set(groupings)} in subset "
+                "cannot be in the groupby column keys."
+            )
+
+        df["__placeholder"] = 1
+        result = (
+            df.groupby(groupings + list(subset), dropna=dropna)[
+                "__placeholder"
+            ]
+            .count()
+            .sort_index()
+            .astype(np.dtype(np.int64))
+        )
+
+        if normalize:
+            levels = list(range(len(groupings), result.index.nlevels))
+            result /= result.groupby(
+                result.index.droplevel(levels),
+            ).transform("sum")
+
+        if sort:
+            result = result.sort_values(ascending=ascending).sort_index(
+                level=range(len(groupings)), sort_remaining=False
+            )
+
+        if not self._as_index:
+            if name in df._column_names:
+                raise ValueError(
+                    f"Column label '{name}' is duplicate of result column"
+                )
+            result.name = name
+            result = result.to_frame().reset_index()
+        else:
+            result.name = name
+
+        return result
+
+    @_performance_tracking
+    def corr(
+        self, method="pearson", min_periods=1, numeric_only: bool = False
+    ):
+        """
+        Compute pairwise correlation of columns, excluding NA/null values.
+
+        Parameters
+        ----------
+        method: {"pearson", "kendall", "spearman"} or callable,
+            default "pearson". Currently only the pearson correlation
+            coefficient is supported.
+
+        min_periods: int, optional
+            Minimum number of observations required per pair of columns
+            to have a valid result.
+
+        Returns
+        -------
+        DataFrame
+            Correlation matrix.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> gdf = cudf.DataFrame({
+        ...             "id": ["a", "a", "a", "b", "b", "b", "c", "c", "c"],
+        ...             "val1": [5, 4, 6, 4, 8, 7, 4, 5, 2],
+        ...             "val2": [4, 5, 6, 1, 2, 9, 8, 5, 1],
+        ...             "val3": [4, 5, 6, 1, 2, 9, 8, 5, 1]})
+        >>> gdf
+           id  val1  val2  val3
+        0  a     5     4     4
+        1  a     4     5     5
+        2  a     6     6     6
+        3  b     4     1     1
+        4  b     8     2     2
+        5  b     7     9     9
+        6  c     4     8     8
+        7  c     5     5     5
+        8  c     2     1     1
+        >>> gdf.groupby("id").corr(method="pearson")
+                    val1      val2      val3
+        id
+        a   val1  1.000000  0.500000  0.500000
+            val2  0.500000  1.000000  1.000000
+            val3  0.500000  1.000000  1.000000
+        b   val1  1.000000  0.385727  0.385727
+            val2  0.385727  1.000000  1.000000
+            val3  0.385727  1.000000  1.000000
+        c   val1  1.000000  0.714575  0.714575
+            val2  0.714575  1.000000  1.000000
+            val3  0.714575  1.000000  1.000000
+        """
+
+        if method != "pearson":
+            raise NotImplementedError(
+                "Only pearson correlation is currently supported"
+            )
+        if numeric_only is not False:
+            raise NotImplementedError(
+                "numeric_only is currently not supported."
+            )
+
+        return self._cov_or_corr(
+            lambda x: x.corr(method, min_periods), "Correlation"
+        )
+
+    def hist(
+        self,
+        column=None,
+        by=None,
+        grid: bool = True,
+        xlabelsize: int | None = None,
+        xrot: float | None = None,
+        ylabelsize: int | None = None,
+        yrot: float | None = None,
+        ax=None,
+        sharex: bool = False,
+        sharey: bool = False,
+        figsize: tuple[float, float] | None = None,
+        layout: tuple[int, int] | None = None,
+        bins: int | Sequence[int] = 10,
+        backend: str | None = None,
+        legend: bool = False,
+        **kwargs,
+    ):
+        raise NotImplementedError("hist is not currently implemented")
+
+    def boxplot(
+        self,
+        subplots: bool = True,
+        column=None,
+        fontsize: int | None = None,
+        rot: int = 0,
+        grid: bool = True,
+        ax=None,
+        figsize: tuple[float, float] | None = None,
+        layout=None,
+        sharex: bool = False,
+        sharey: bool = True,
+        backend=None,
+        **kwargs,
+    ):
+        raise NotImplementedError("boxplot is not currently implemented")
 
 
 DataFrameGroupBy.__doc__ = groupby_doc_template.format(ret="")
@@ -2220,8 +3375,10 @@ DataFrameGroupBy.__doc__ = groupby_doc_template.format(ret="")
 class SeriesGroupBy(GroupBy):
     obj: "cudf.core.series.Series"
 
-    def agg(self, func):
-        result = super().agg(func)
+    def agg(self, func, *args, engine=None, engine_kwargs=None, **kwargs):
+        result = super().agg(
+            func, *args, engine=engine, engine_kwargs=engine_kwargs, **kwargs
+        )
 
         # downcast the result to a Series:
         if len(result._data):
@@ -2230,17 +3387,100 @@ class SeriesGroupBy(GroupBy):
 
         # drop the first level if we have a multiindex
         if result._data.nlevels > 1:
-            result.columns = result._data.to_pandas_index().droplevel(0)
+            result.columns = result._data.to_pandas_index.droplevel(0)
 
         return result
 
-    def apply(self, func, *args):
-        result = super().apply(func, *args)
+    aggregate = agg
+
+    def apply(self, func, *args, **kwargs):
+        result = super().apply(func, *args, **kwargs)
 
         # apply Series name to result
         result.name = self.obj.name
 
         return result
+
+    @property
+    def dtype(self) -> pd.Series:
+        raise NotImplementedError("dtype is currently not implemented.")
+
+    def hist(
+        self,
+        by=None,
+        ax=None,
+        grid: bool = True,
+        xlabelsize: int | None = None,
+        xrot: float | None = None,
+        ylabelsize: int | None = None,
+        yrot: float | None = None,
+        figsize: tuple[float, float] | None = None,
+        bins: int | Sequence[int] = 10,
+        backend: str | None = None,
+        legend: bool = False,
+        **kwargs,
+    ):
+        raise NotImplementedError("hist is currently not implemented.")
+
+    @property
+    def is_monotonic_increasing(self) -> cudf.Series:
+        """
+        Return whether each group's values are monotonically increasing.
+
+        Currently not implemented
+        """
+        raise NotImplementedError(
+            "is_monotonic_increasing is currently not implemented."
+        )
+
+    @property
+    def is_monotonic_decreasing(self) -> cudf.Series:
+        """
+        Return whether each group's values are monotonically decreasing.
+
+        Currently not implemented
+        """
+        raise NotImplementedError(
+            "is_monotonic_decreasing is currently not implemented."
+        )
+
+    def nlargest(
+        self, n: int = 5, keep: Literal["first", "last", "all"] = "first"
+    ) -> cudf.Series:
+        """
+        Return the largest n elements.
+
+        Currently not implemented
+        """
+        raise NotImplementedError("nlargest is currently not implemented.")
+
+    def nsmallest(
+        self, n: int = 5, keep: Literal["first", "last", "all"] = "first"
+    ) -> cudf.Series:
+        """
+        Return the smallest n elements.
+
+        Currently not implemented
+        """
+        raise NotImplementedError("nsmallest is currently not implemented.")
+
+    def value_counts(
+        self,
+        normalize: bool = False,
+        sort: bool = True,
+        ascending: bool = False,
+        bins=None,
+        dropna: bool = True,
+    ) -> cudf.Series | cudf.DataFrame:
+        raise NotImplementedError("value_counts is currently not implemented.")
+
+    def corr(
+        self,
+        other: cudf.Series,
+        method: str = "pearson",
+        min_periods: int | None = None,
+    ) -> cudf.Series:
+        raise NotImplementedError("corr is currently not implemented.")
 
 
 SeriesGroupBy.__doc__ = groupby_doc_template.format(ret="")
@@ -2285,7 +3525,9 @@ class _Grouping(Serializable):
                 self._handle_level(level)
         else:
             by_list = by if isinstance(by, list) else [by]
-
+            if not len(self._obj) and not len(by_list):
+                # We pretend to groupby an empty column
+                by_list = [cudf.Index._from_column(column_empty(0))]
             for by in by_list:
                 if callable(by):
                     self._handle_callable(by)
@@ -2307,21 +3549,24 @@ class _Grouping(Serializable):
                     except (KeyError, TypeError):
                         self._handle_misc(by)
 
-    @property
+    @functools.cached_property
     def keys(self):
         """Return grouping key columns as index"""
-        nkeys = len(self._key_columns)
-
-        if nkeys == 0:
-            return cudf.core.index.as_index([], name=None)
-        elif nkeys > 1:
+        if len(self._key_columns) > 1:
             return cudf.MultiIndex._from_data(
-                dict(zip(range(nkeys), self._key_columns))
+                dict(enumerate(self._key_columns))
             )._set_names(self.names)
         else:
-            return cudf.core.index.as_index(
+            return cudf.Index._from_column(
                 self._key_columns[0], name=self.names[0]
             )
+
+    @property
+    def _values_column_names(self) -> list[Hashable]:
+        # If the key columns are in `obj`, filter them out
+        return [
+            x for x in self._obj._column_names if x not in self._named_columns
+        ]
 
     @property
     def values(self) -> cudf.core.frame.Frame:
@@ -2333,11 +3578,9 @@ class _Grouping(Serializable):
 
         This is mainly used in transform-like operations.
         """
-        # If the key columns are in `obj`, filter them out
-        value_column_names = [
-            x for x in self._obj._data.names if x not in self._named_columns
-        ]
-        value_columns = self._obj._data.select_by_label(value_column_names)
+        value_columns = self._obj._data.select_by_label(
+            self._values_column_names
+        )
         return self._obj.__class__._from_data(value_columns)
 
     def _handle_callable(self, by):
@@ -2350,8 +3593,8 @@ class _Grouping(Serializable):
         self.names.append(by.name)
 
     def _handle_index(self, by):
-        self._key_columns.extend(by._data.columns)
-        self.names.extend(by._data.names)
+        self._key_columns.extend(by._columns)
+        self.names.extend(by._column_names)
 
     def _handle_mapping(self, by):
         by = cudf.Series(by.values(), index=by.keys())
@@ -2362,8 +3605,8 @@ class _Grouping(Serializable):
             self._key_columns.append(self._obj._data[by])
         except KeyError as e:
             # `by` can be index name(label) too.
-            if by in self._obj._index.names:
-                self._key_columns.append(self._obj._index._data[by])
+            if by in self._obj.index.names:
+                self._key_columns.append(self._obj.index._data[by])
             else:
                 raise e
         self.names.append(by)
@@ -2382,11 +3625,11 @@ class _Grouping(Serializable):
 
     def _handle_level(self, by):
         level_values = self._obj.index.get_level_values(by)
-        self._key_columns.append(level_values._values)
+        self._key_columns.append(level_values._column)
         self.names.append(level_values.name)
 
     def _handle_misc(self, by):
-        by = cudf.core.column.as_column(by)
+        by = as_column(by)
         if len(by) != len(self._obj):
             raise ValueError("Grouper and object must have same length")
         self._key_columns.append(by)
@@ -2395,26 +3638,29 @@ class _Grouping(Serializable):
     def serialize(self):
         header = {}
         frames = []
-        header["names"] = pickle.dumps(self.names)
-        header["_named_columns"] = pickle.dumps(self._named_columns)
-        column_header, column_frames = cudf.core.column.serialize_columns(
-            self._key_columns
-        )
+        header["names"] = self.names
+        header["_named_columns"] = self._named_columns
+        column_header, column_frames = serialize_columns(self._key_columns)
         header["columns"] = column_header
         frames.extend(column_frames)
         return header, frames
 
     @classmethod
     def deserialize(cls, header, frames):
-        names = pickle.loads(header["names"])
-        _named_columns = pickle.loads(header["_named_columns"])
-        key_columns = cudf.core.column.deserialize_columns(
-            header["columns"], frames
-        )
+        names = header["names"]
+        _named_columns = header["_named_columns"]
+        key_columns = deserialize_columns(header["columns"], frames)
         out = _Grouping.__new__(_Grouping)
         out.names = names
         out._named_columns = _named_columns
         out._key_columns = key_columns
+        return out
+
+    def copy(self, deep=True):
+        out = _Grouping.__new__(_Grouping)
+        out.names = copy.deepcopy(self.names)
+        out._named_columns = copy.deepcopy(self._named_columns)
+        out._key_columns = [col.copy(deep=deep) for col in self._key_columns]
         return out
 
 

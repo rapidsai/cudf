@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,14 +20,13 @@
 
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
-
-#include <rmm/mr/device/per_device_resource.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <memory>
 #include <string>
 #include <vector>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace io {
 /**
  * @addtogroup io_readers
@@ -56,7 +55,7 @@ class avro_reader_options {
    *
    * @param src source information used to read avro file
    */
-  explicit avro_reader_options(source_info const& src) : _source(src) {}
+  explicit avro_reader_options(source_info src) : _source{std::move(src)} {}
 
   friend avro_reader_options_builder;
 
@@ -123,7 +122,7 @@ class avro_reader_options {
    * @param src source information used to read avro file
    * @returns builder to build reader options
    */
-  static avro_reader_options_builder builder(source_info const& src);
+  static avro_reader_options_builder builder(source_info src);
 };
 
 /**
@@ -145,7 +144,7 @@ class avro_reader_options_builder {
    *
    * @param src The source information used to read avro file
    */
-  explicit avro_reader_options_builder(source_info const& src) : options(src) {}
+  explicit avro_reader_options_builder(source_info src) : options{std::move(src)} {}
 
   /**
    * @brief Set names of the column to be read.
@@ -209,6 +208,7 @@ class avro_reader_options_builder {
  * @endcode
  *
  * @param options Settings for controlling reading behavior
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate device memory of the table in the returned
  * table_with_metadata
  *
@@ -216,8 +216,9 @@ class avro_reader_options_builder {
  */
 table_with_metadata read_avro(
   avro_reader_options const& options,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /** @} */  // end of group
 }  // namespace io
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

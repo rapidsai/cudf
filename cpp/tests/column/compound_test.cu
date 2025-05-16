@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,13 +14,14 @@
  * limitations under the License.
  */
 
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/cudf_gtest.hpp>
+
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_view.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/utilities/default_stream.hpp>
-#include <cudf_test/base_fixture.hpp>
-#include <cudf_test/cudf_gtest.hpp>
 
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
@@ -33,6 +34,7 @@
 
 struct CompoundColumnTest : public cudf::test::BaseFixture {};
 
+namespace {
 template <typename ColumnDeviceView>
 struct checker_for_level1 {
   ColumnDeviceView d_column;
@@ -61,6 +63,7 @@ struct checker_for_level2 {
     return bcheck;
   }
 };
+}  // namespace
 
 TEST_F(CompoundColumnTest, ChildrenLevel1)
 {

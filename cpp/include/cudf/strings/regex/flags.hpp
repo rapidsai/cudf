@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,9 +15,11 @@
  */
 #pragma once
 
+#include <cudf/utilities/export.hpp>
+
 #include <cstdint>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace strings {
 
 /**
@@ -33,10 +35,11 @@ namespace strings {
  * and to match the Python flag values.
  */
 enum regex_flags : uint32_t {
-  DEFAULT   = 0,   ///< default
-  MULTILINE = 8,   ///< the '^' and '$' honor new-line characters
-  DOTALL    = 16,  ///< the '.' matching includes new-line characters
-  ASCII     = 256  ///< use only ASCII when matching built-in character classes
+  DEFAULT     = 0,    ///< default
+  MULTILINE   = 8,    ///< the '^' and '$' honor new-line characters
+  DOTALL      = 16,   ///< the '.' matching includes new-line characters
+  ASCII       = 256,  ///< use only ASCII when matching built-in character classes
+  EXT_NEWLINE = 512   ///< new-line matches extended characters
 };
 
 /**
@@ -73,6 +76,17 @@ constexpr bool is_ascii(regex_flags const f)
 }
 
 /**
+ * @brief Returns true if the given flags contain EXT_NEWLINE
+ *
+ * @param f Regex flags to check
+ * @return true if `f` includes EXT_NEWLINE
+ */
+constexpr bool is_ext_newline(regex_flags const f)
+{
+  return (f & regex_flags::EXT_NEWLINE) == regex_flags::EXT_NEWLINE;
+}
+
+/**
  * @brief Capture groups setting
  *
  * For processing a regex pattern containing capture groups.
@@ -86,4 +100,4 @@ enum class capture_groups : uint32_t {
 
 /** @} */  // end of doxygen group
 }  // namespace strings
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

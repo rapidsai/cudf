@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include <reductions/struct_minmax_util.cuh>
+#include "reductions/nested_type_minmax_util.cuh"
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
@@ -26,15 +26,18 @@
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
+#include <cudf/detail/structs/utilities.hpp>
+#include <cudf/detail/utilities/cast_functor.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/types.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <thrust/functional.h>
+#include <cuda/std/functional>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/scan.h>
@@ -59,7 +62,7 @@ struct group_scan_dispatcher {
                                      size_type num_groups,
                                      cudf::device_span<cudf::size_type const> group_labels,
                                      rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr)
+                                     rmm::device_async_resource_ref mr)
   {
     return group_scan_functor<K, T>::invoke(values, num_groups, group_labels, stream, mr);
   }
@@ -73,6 +76,8 @@ static constexpr bool is_group_scan_supported()
 {
   if (K == aggregation::SUM)
     return cudf::is_numeric<T>() || cudf::is_duration<T>() || cudf::is_fixed_point<T>();
+  else if (K == aggregation::PRODUCT)
+    return cudf::is_numeric<T>();
   else if (K == aggregation::MIN or K == aggregation::MAX)
     return not cudf::is_dictionary<T>() and
            (is_relationally_comparable<T, T>() or std::is_same_v<T, cudf::struct_view>);
@@ -86,7 +91,7 @@ struct group_scan_functor<K, T, std::enable_if_t<is_group_scan_supported<K, T>()
                                         size_type num_groups,
                                         cudf::device_span<cudf::size_type const> group_labels,
                                         rmm::cuda_stream_view stream,
-                                        rmm::mr::device_memory_resource* mr)
+                                        rmm::device_async_resource_ref mr)
   {
     using DeviceType       = device_storage_type_t<T>;
     using OpType           = cudf::detail::corresponding_operator_t<K>;
@@ -103,7 +108,10 @@ struct group_scan_functor<K, T, std::enable_if_t<is_group_scan_supported<K, T>()
     if (values.is_empty()) { return result; }
 
     auto result_table = mutable_table_view({*result});
-    cudf::detail::initialize_with_identity(result_table, {K}, stream);
+    // Need an address of the aggregation kind to pass to the span
+    auto const kind = K;
+    cudf::detail::initialize_with_identity(
+      result_table, host_span<aggregation::Kind const>(&kind, 1), stream);
 
     auto result_view = mutable_column_device_view::create(result->mutable_view(), stream);
     auto values_view = column_device_view::create(values, stream);
@@ -115,19 +123,19 @@ struct group_scan_functor<K, T, std::enable_if_t<is_group_scan_supported<K, T>()
                                     group_labels.end(),
                                     inp_iter,
                                     out_iter,
-                                    thrust::equal_to{},
+                                    cuda::std::equal_to{},
                                     binop);
     };
 
     if (values.has_nulls()) {
       auto input = thrust::make_transform_iterator(
         make_null_replacement_iterator(*values_view, OpType::template identity<DeviceType>()),
-        thrust::identity<ResultDeviceType>{});
+        cudf::detail::cast_fn<ResultDeviceType>{});
       do_scan(input, result_view->begin<ResultDeviceType>(), OpType{});
       result->set_null_mask(cudf::detail::copy_bitmask(values, stream, mr), values.null_count());
     } else {
       auto input = thrust::make_transform_iterator(values_view->begin<DeviceType>(),
-                                                   thrust::identity<ResultDeviceType>{});
+                                                   cudf::detail::cast_fn<ResultDeviceType>{});
       do_scan(input, result_view->begin<ResultDeviceType>(), OpType{});
     }
     return result;
@@ -142,7 +150,7 @@ struct group_scan_functor<K,
                                         size_type num_groups,
                                         cudf::device_span<cudf::size_type const> group_labels,
                                         rmm::cuda_stream_view stream,
-                                        rmm::mr::device_memory_resource* mr)
+                                        rmm::device_async_resource_ref mr)
   {
     using OpType = cudf::detail::corresponding_operator_t<K>;
 
@@ -160,7 +168,7 @@ struct group_scan_functor<K,
                                     group_labels.end(),
                                     inp_iter,
                                     out_iter,
-                                    thrust::equal_to{},
+                                    cuda::std::equal_to{},
                                     binop);
     };
 
@@ -188,7 +196,7 @@ struct group_scan_functor<K,
                                         size_type num_groups,
                                         cudf::device_span<cudf::size_type const> group_labels,
                                         rmm::cuda_stream_view stream,
-                                        rmm::mr::device_memory_resource* mr)
+                                        rmm::device_async_resource_ref mr)
   {
     if (values.is_empty()) { return cudf::empty_like(values); }
 
@@ -202,7 +210,7 @@ struct group_scan_functor<K,
                                   group_labels.end(),
                                   thrust::make_counting_iterator<size_type>(0),
                                   gather_map.begin(),
-                                  thrust::equal_to{},
+                                  cuda::std::equal_to{},
                                   binop_generator.binop());
 
     //

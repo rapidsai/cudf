@@ -95,7 +95,7 @@ for documenting C++ code in libcudf.
      */
 
     /**
-     * @brief One sentence description of the class.
+     * @brief One line description of the class
      *
      * @ingroup optional_predefined_group_id
      *
@@ -111,7 +111,7 @@ for documenting C++ code in libcudf.
       void set_my_int( int value ); ///< Try to use descriptive member names
 
       /**
-       * @brief Short, one sentence description of the member function.
+       * @brief Short, one line description of the member function
        *
        * A more detailed description of what this function does and what
        * its logic does.
@@ -139,7 +139,7 @@ for documenting C++ code in libcudf.
     };
 
     /**
-     * @brief Short, one sentence description of this free function.
+     * @brief Short, one line description of this free function
      *
      * @ingroup optional_predefined_group_id
      *
@@ -170,7 +170,7 @@ for documenting C++ code in libcudf.
     }
 
     /**
-     * @brief Short, one sentence description.
+     * @brief Short, one line description
      *
      * @ingroup optional_predefined_group_id
      *
@@ -192,14 +192,15 @@ Also, try to include a short [example](#inline-examples) if possible.
 
 ### @brief
 
-The [\@brief](https://www.doxygen.nl/manual/commands.html#cmdbrief) text should be a short, one sentence description.
+The [\@brief](https://www.doxygen.nl/manual/commands.html#cmdbrief) text should be a short, one line description.
 Doxygen does not provide much space to show this text in the output pages.
-Always follow the \@brief line with a blank comment line.
+Always follow the \@brief line with a blank comment line. Normally this is like a title and not sentence
+and therefore does not need a period. Only use a period if it is a sentence.
 
 The longer description is the rest of the comment text that is not tagged with any doxygen command.
 
     /**
-     * @brief Short description.
+     * @brief Short description or title
      *
      * Long description.
      *
@@ -279,6 +280,7 @@ Also include append `[in]`, `[out]` or `[in,out]` to the `@param` if it is not c
      *
 
 It is also recommended to vertically aligning the 3 columns of text if possible to make it easier to read in a source code editor.
+Finally, the description is normally like a title and only needs a period if it is a sentence.
 
 #### @return
 
@@ -363,7 +365,7 @@ Here is an example of a doxygen description comment for a namespace declaration.
      *
      * This is the top-level namespace which contains all cuDF functions and types.
      */
-    namespace cudf {
+    namespace CUDF_EXPORT cudf {
 
 A description comment should be included only once for each unique namespace declaration.
 Otherwise, if more than one description is found, doxygen aggregates the descriptions in an arbitrary order in the output pages.
@@ -385,7 +387,7 @@ The existing groups have been carefully structured and named, so new groups shou
 
 When creating a new API, specify its group using the [\@ingroup](https://www.doxygen.nl/manual/commands.html#cmdingroup) tag and the group reference id from the [doxygen_groups.h](../include/doxygen_groups.h) file.
 
-    namespace cudf {
+    namespace CUDF_EXPORT cudf {
 
     /**
      * @brief ...
@@ -401,7 +403,7 @@ When creating a new API, specify its group using the [\@ingroup](https://www.dox
 
 You can also use the \@addtogroup with a `@{ ... @}` pair to automatically include doxygen comment blocks as part of a group.
 
-    namespace cudf {
+    namespace CUDF_EXPORT cudf {
     /**
      * @addtogroup transformation_fill
      * @{

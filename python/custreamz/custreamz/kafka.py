@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 import confluent_kafka as ck
 from cudf_kafka._lib.kafka import KafkaDatasource
 
@@ -25,6 +25,7 @@ class CudfKafkaClient:
 
         self.kafka_configs = kafka_configs
         self.kafka_meta_client = KafkaDatasource(kafka_configs)
+        self.ck_consumer = ck.Consumer(kafka_configs)
 
     def list_topics(self, specific_topic=None):
         """
@@ -150,9 +151,14 @@ class Consumer(CudfKafkaClient):
             "parquet": cudf.io.read_parquet,
         }
 
-        result = cudf_readers[message_format](
-            kafka_datasource, engine="cudf", lines=True
-        )
+        if message_format == "json":
+            result = cudf_readers[message_format](
+                kafka_datasource, engine="cudf", lines=True
+            )
+        else:
+            result = cudf_readers[message_format](
+                kafka_datasource, engine="cudf"
+            )
 
         # Close up the cudf datasource instance
         # TODO: Ideally the C++ destructor should handle the
@@ -270,3 +276,21 @@ class Consumer(CudfKafkaClient):
             self.kafka_meta_client.commit_offset(
                 offs.topic.encode(), offs.partition, offs.offset
             )
+
+    def poll(self, timeout=None):
+        """
+        Consumes a single message, calls callbacks and returns events.
+
+        The application must check the returned Message object's
+        Message.error() method to distinguish between proper messages
+        (error() returns None), or an event or error
+        (see error().code() for specifics).
+
+        Parameters
+        ----------
+        timeout : float
+            Maximum time to block waiting for message, event or callback
+            (default: infinite (None translated into -1 in the
+            library)). (Seconds)
+        """
+        return self.ck_consumer.poll(timeout)

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,28 +14,23 @@
  * limitations under the License.
  */
 
-#include <io/utilities/row_selection.hpp>
-
-#include <cudf/utilities/error.hpp>
+#include "io/utilities/row_selection.hpp"
 
 #include <algorithm>
-#include <limits>
 
 namespace cudf::io::detail {
 
-std::pair<uint64_t, size_type> skip_rows_num_rows_from_options(
-  uint64_t skip_rows_opt, std::optional<size_type> const& num_rows_opt, uint64_t num_source_rows)
+std::pair<int64_t, int64_t> skip_rows_num_rows_from_options(int64_t skip_rows,
+                                                            std::optional<int64_t> const& num_rows,
+                                                            int64_t num_source_rows)
 {
-  auto const rows_to_skip = std::min(skip_rows_opt, num_source_rows);
-  if (not num_rows_opt.has_value()) {
-    CUDF_EXPECTS(num_source_rows - rows_to_skip <= std::numeric_limits<size_type>::max(),
-                 "The requested number of rows to read exceeds the largest cudf column size");
-    return {rows_to_skip, num_source_rows - rows_to_skip};
-  }
+  auto const rows_to_skip      = std::min(skip_rows, num_source_rows);
+  auto const num_rows_can_read = num_source_rows - rows_to_skip;
+
+  if (not num_rows.has_value()) { return {rows_to_skip, num_rows_can_read}; }
+
   // Limit the number of rows to the end of the input
-  return {rows_to_skip,
-          static_cast<size_type>(
-            std::min<uint64_t>(num_rows_opt.value(), num_source_rows - rows_to_skip))};
+  return {rows_to_skip, std::min(num_rows.value(), num_rows_can_read)};
 }
 
 }  // namespace cudf::io::detail

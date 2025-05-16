@@ -7,6 +7,23 @@ specifically the [`pytest-cov`](https://github.com/pytest-dev/pytest-cov) plugin
 Code coverage reports are uploaded to [Codecov](https://app.codecov.io/gh/rapidsai/cudf).
 Each PR also indicates whether it increases or decreases test coverage.
 
+### Configuring pytest
+
+Pytest will accept configuration in [multiple different
+files](https://docs.pytest.org/en/stable/reference/customize.html),
+with a specified discovery and precedence order. Note in particular
+that there is no automatic "include" mechanism, as soon as a matching
+configuration file is found, discovery stops.
+
+For preference, so that all tool configuration lives in the same
+place, we use `pyproject.toml`-based configuration. Test configuration
+for a given package should live in that package's `pyproject.toml`
+file.
+
+Where tests do not naturally belong to a project, for example the
+`cudf.pandas` integration tests and the cuDF benchmarks, use a
+`pytest.ini` file as close to the tests as possible.
+
 ## Test organization
 
 How tests are organized depends on which of the following two groups they fall into:
@@ -54,6 +71,8 @@ Excessive parametrization and branching increases complexity and obfuscates the 
 Typically, exception cases require specific assertions or other special logic, so they are best kept separate.
 The main exception to this rule is tests based on comparison to pandas.
 Such tests may test exceptional cases alongside more typical cases since the logic is generally identical.
+
+(test_parametrization)=
 
 ### Parametrization: custom fixtures and `pytest.mark.parametrize`
 
@@ -140,6 +159,8 @@ def test_odds():
 
 Other approaches are also possible, and the best solution should be discussed on a case-by-case basis during PR review.
 
+(xfailing_tests)=
+
 ### Tests with expected failures (`xfail`s)
 
 In some circumstances it makes sense to mark a test as _expected_ to
@@ -218,6 +239,8 @@ This way, when the bug is fixed, the test suite will fail at this
 point (and we will remember to update the test).
 
 
+(testing_warnings)=
+
 ### Testing code that throws warnings
 
 Some code may be expected to throw warnings.
@@ -249,3 +272,22 @@ In particular:
 - `testing._utils.assert_eq` is the biggest hammer to reach for. It can be used to compare any pair of objects.
 - For comparing specific objects, use `testing.testing.assert_[frame|series|index]_equal`.
 - For verifying that the expected assertions are raised, use `testing._utils.assert_exceptions_equal`.
+
+
+### Version testing
+
+It is recommended to have `cudf` pytests only work on the latest supported pandas version i.e., `PANDAS_CURRENT_SUPPORTED_VERSION`. Any anticipated failures should be either `skipped` or `xfailed`.
+
+For example:
+
+```python
+@pytest.mark.skipif(PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION, reason="bug in older version of pandas")
+def test_bug_from_older_pandas_versions(...):
+    ...
+
+@pytest.mark.xfail(PANDAS_VERSION >= PANDAS_CURRENT_SUPPORTED_VERSION, reason="bug in latest version of pandas")
+def test_bug_in_current_and_maybe_future_versions(...):
+    ...
+```
+
+If pandas makes a bugfix release and fixes this, then we'll see it in CI immediately, patch it, and bump `PANDAS_CURRENT_SUPPORTED_VERSION` which also usually happens during pandas upgrades.

@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ *  Copyright (c) 2021-2025, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -161,14 +161,14 @@ public final class ReductionAggregation {
   /**
    * Aggregate to compute the specified quantiles. Uses linear interpolation by default.
    */
-  public static ReductionAggregation quantile(double ... quantiles) {
+  public static ReductionAggregation quantile(double... quantiles) {
     return new ReductionAggregation(Aggregation.quantile(quantiles));
   }
 
   /**
    * Aggregate to compute various quantiles.
    */
-  public static ReductionAggregation quantile(QuantileMethod method, double ... quantiles) {
+  public static ReductionAggregation quantile(QuantileMethod method, double... quantiles) {
     return new ReductionAggregation(Aggregation.quantile(method, quantiles));
   }
 
@@ -256,7 +256,7 @@ public final class ReductionAggregation {
    * @param nanEquality  Flag to specify whether NaN values in floating point column should be considered equal.
    */
   public static ReductionAggregation collectSet(NullPolicy nullPolicy,
-      NullEquality nullEquality, NaNEquality nanEquality) {
+                                                NullEquality nullEquality, NaNEquality nanEquality) {
     return new ReductionAggregation(Aggregation.collectSet(nullPolicy, nullEquality, nanEquality));
   }
 
@@ -286,4 +286,52 @@ public final class ReductionAggregation {
     return new ReductionAggregation(Aggregation.mergeSets(nullEquality, nanEquality));
   }
 
+  /**
+   * Execute a reduction using a host-side user-defined function (UDF).
+   * @param wrapper The wrapper for the native host UDF instance.
+   * @return A new ReductionAggregation instance
+   */
+  public static ReductionAggregation hostUDF(HostUDFWrapper wrapper) {
+    return new ReductionAggregation(Aggregation.hostUDF(wrapper));
+  }
+
+  /**
+   * Create HistogramAggregation, computing the frequencies for each unique row.
+   *
+   * @return A structs column in which the first child stores unique rows from the input and the
+   *         second child stores their corresponding frequencies.
+   */
+  public static ReductionAggregation histogram() {
+    return new ReductionAggregation(Aggregation.histogram());
+  }
+
+  /**
+   * Create MergeHistogramAggregation, to merge multiple histograms.
+   *
+   * @return A new histogram in which the frequencies of the unique rows are sum up.
+   */
+  public static ReductionAggregation mergeHistogram() {
+    return new ReductionAggregation(Aggregation.mergeHistogram());
+  }
+
+  /**
+  * Bitwise AND aggregation, computing the bitwise AND of all non-null values.
+  */
+  public static ReductionAggregation bitAnd() {
+    return new ReductionAggregation(Aggregation.bitAnd());
+  }
+
+  /**
+   * Bitwise OR aggregation, computing the bitwise OR of all non-null values.
+   */
+  public static ReductionAggregation bitOr() {
+    return new ReductionAggregation(Aggregation.bitOr());
+  }
+
+  /**
+   * Bitwise XOR aggregation, computing the bitwise XOR of all non-null values.
+   */
+  public static ReductionAggregation bitXor() {
+    return new ReductionAggregation(Aggregation.bitXor());
+  }
 }

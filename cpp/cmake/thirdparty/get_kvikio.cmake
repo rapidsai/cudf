@@ -1,5 +1,5 @@
 # =============================================================================
-# Copyright (c) 2022, NVIDIA CORPORATION.
+# Copyright (c) 2022-2024, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License. You may obtain a copy of the License at
@@ -16,19 +16,21 @@
 function(find_and_configure_kvikio VERSION)
 
   rapids_cpm_find(
-    KvikIO ${VERSION}
+    kvikio ${VERSION}
     GLOBAL_TARGETS kvikio::kvikio
     CPM_ARGS
     GIT_REPOSITORY https://github.com/rapidsai/kvikio.git
     GIT_TAG branch-${VERSION}
     GIT_SHALLOW TRUE SOURCE_SUBDIR cpp
-    OPTIONS "KvikIO_BUILD_EXAMPLES OFF"
+    OPTIONS "KvikIO_BUILD_EXAMPLES OFF" "KvikIO_REMOTE_SUPPORT ${CUDF_KVIKIO_REMOTE_IO}"
   )
 
-  if(KvikIO_BINARY_DIR)
-    include("${rapids-cmake-dir}/export/find_package_root.cmake")
-    rapids_export_find_package_root(BUILD KvikIO "${KvikIO_BINARY_DIR}" cudf-exports)
-  endif()
+  include("${rapids-cmake-dir}/export/find_package_root.cmake")
+  rapids_export_find_package_root(
+    BUILD KvikIO "${KvikIO_BINARY_DIR}"
+    EXPORT_SET cudf-exports
+    CONDITION KvikIO_BINARY_DIR
+  )
 
 endfunction()
 

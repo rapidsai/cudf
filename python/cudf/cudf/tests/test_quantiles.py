@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 import re
 
@@ -6,7 +6,8 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.testing._utils import assert_eq, assert_exceptions_equal
+from cudf.testing import assert_eq
+from cudf.testing._utils import assert_exceptions_equal
 
 
 def test_single_q():
@@ -75,3 +76,34 @@ def test_quantile_q_type():
         ),
     ):
         gs.quantile(cudf.DataFrame())
+
+
+@pytest.mark.parametrize(
+    "interpolation", ["linear", "lower", "higher", "midpoint", "nearest"]
+)
+def test_quantile_type_int_float(interpolation):
+    data = [1, 3, 4]
+    psr = pd.Series(data)
+    gsr = cudf.Series(data)
+
+    expected = psr.quantile(0.5, interpolation=interpolation)
+    actual = gsr.quantile(0.5, interpolation=interpolation)
+
+    assert expected == actual
+    assert type(expected) is type(actual)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [float("nan"), float("nan"), 0.9],
+        [float("nan"), float("nan"), float("nan")],
+    ],
+)
+def test_ignore_nans(data):
+    psr = pd.Series(data)
+    gsr = cudf.Series(data, nan_as_null=False)
+
+    expected = gsr.quantile(0.9)
+    result = psr.quantile(0.9)
+    assert_eq(result, expected)

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,16 +20,17 @@
 #include <cudf/io/types.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
-
-#include <rmm/mr/device/per_device_resource.hpp>
+#include <cudf/utilities/export.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <memory>
 #include <optional>
 #include <string>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace io {
 /**
  * @addtogroup io_readers
@@ -40,6 +41,28 @@ namespace io {
 constexpr size_t default_stripe_size_bytes   = 64 * 1024 * 1024;  ///< 64MB default orc stripe size
 constexpr size_type default_stripe_size_rows = 1000000;  ///< 1M rows default orc stripe rows
 constexpr size_type default_row_index_stride = 10000;    ///< 10K rows default orc row index stride
+
+/**
+ * @brief Check if the compression type is supported for reading ORC files.
+ *
+ * @note This is a runtime check. Some compression types may not be supported because of the current
+ * system configuration.
+ *
+ * @param compression Compression type
+ * @return Boolean indicating if the compression type is supported
+ */
+[[nodiscard]] bool is_supported_read_orc(compression_type compression);
+
+/**
+ * @brief Check if the compression type is supported for writing ORC files.
+ *
+ * @note This is a runtime check. Some compression types may not be supported because of the current
+ * system configuration.
+ *
+ * @param compression Compression type
+ * @return Boolean indicating if the compression type is supported
+ */
+[[nodiscard]] bool is_supported_write_orc(compression_type compression);
 
 /**
  * @brief Builds settings to use for `read_orc()`.
@@ -57,10 +80,10 @@ class orc_reader_options {
 
   // List of individual stripes to read (ignored if empty)
   std::vector<std::vector<size_type>> _stripes;
-  // Rows to skip from the start; ORC stores the number of rows as uint64_t
-  uint64_t _skip_rows = 0;
+  // Rows to skip from the start
+  int64_t _skip_rows = 0;
   // Rows to read; `nullopt` is all
-  std::optional<size_type> _num_rows;
+  std::optional<int64_t> _num_rows;
 
   // Whether to use row index to speed-up reading
   bool _use_index = true;
@@ -80,7 +103,7 @@ class orc_reader_options {
    *
    * @param src source information used to read orc file
    */
-  explicit orc_reader_options(source_info const& src) : _source(src) {}
+  explicit orc_reader_options(source_info src) : _source{std::move(src)} {}
 
  public:
   /**
@@ -96,7 +119,7 @@ class orc_reader_options {
    * @param src Source information to read orc file
    * @return Builder to build reader options
    */
-  static orc_reader_options_builder builder(source_info const& src);
+  static orc_reader_options_builder builder(source_info src);
 
   /**
    * @brief Returns source info.
@@ -124,7 +147,7 @@ class orc_reader_options {
    *
    * @return Number of rows to skip from the start
    */
-  uint64_t get_skip_rows() const { return _skip_rows; }
+  [[nodiscard]] int64_t get_skip_rows() const { return _skip_rows; }
 
   /**
    * @brief Returns number of row to read.
@@ -132,35 +155,38 @@ class orc_reader_options {
    * @return Number of rows to read; `nullopt` if the option hasn't been set (in which case the file
    * is read until the end)
    */
-  std::optional<size_type> const& get_num_rows() const { return _num_rows; }
+  [[nodiscard]] std::optional<int64_t> const& get_num_rows() const { return _num_rows; }
 
   /**
    * @brief Whether to use row index to speed-up reading.
    *
    * @return `true` if row index is used to speed-up reading
    */
-  bool is_enabled_use_index() const { return _use_index; }
+  [[nodiscard]] bool is_enabled_use_index() const { return _use_index; }
 
   /**
    * @brief Whether to use numpy-compatible dtypes.
    *
    * @return `true` if numpy-compatible dtypes are used
    */
-  bool is_enabled_use_np_dtypes() const { return _use_np_dtypes; }
+  [[nodiscard]] bool is_enabled_use_np_dtypes() const { return _use_np_dtypes; }
 
   /**
    * @brief Returns timestamp type to which timestamp column will be cast.
    *
    * @return Timestamp type to which timestamp column will be cast
    */
-  data_type get_timestamp_type() const { return _timestamp_type; }
+  [[nodiscard]] data_type get_timestamp_type() const { return _timestamp_type; }
 
   /**
    * @brief Returns fully qualified names of columns that should be read as 128-bit Decimal.
    *
    * @return Fully qualified names of columns that should be read as 128-bit Decimal
    */
-  std::vector<std::string> const& get_decimal128_columns() const { return _decimal128_columns; }
+  [[nodiscard]] std::vector<std::string> const& get_decimal128_columns() const
+  {
+    return _decimal128_columns;
+  }
 
   // Setters
 
@@ -197,8 +223,9 @@ class orc_reader_options {
    * @throw cudf::logic_error if a negative value is passed
    * @throw cudf::logic_error if stripes have been previously set
    */
-  void set_skip_rows(uint64_t rows)
+  void set_skip_rows(int64_t rows)
   {
+    CUDF_EXPECTS(rows >= 0, "skip_rows cannot be negative");
     CUDF_EXPECTS(rows == 0 or _stripes.empty(), "Can't set both skip_rows along with stripes");
     _skip_rows = rows;
   }
@@ -211,7 +238,7 @@ class orc_reader_options {
    * @throw cudf::logic_error if a negative value is passed
    * @throw cudf::logic_error if stripes have been previously set
    */
-  void set_num_rows(size_type nrows)
+  void set_num_rows(int64_t nrows)
   {
     CUDF_EXPECTS(nrows >= 0, "num_rows cannot be negative");
     CUDF_EXPECTS(_stripes.empty(), "Can't set both num_rows and stripes");
@@ -269,7 +296,7 @@ class orc_reader_options_builder {
    *
    * @param src The source information used to read orc file
    */
-  explicit orc_reader_options_builder(source_info const& src) : options{src} {};
+  explicit orc_reader_options_builder(source_info src) : options{std::move(src)} {}
 
   /**
    * @brief Sets names of the column to read.
@@ -301,7 +328,7 @@ class orc_reader_options_builder {
    * @param rows Number of rows
    * @return this for chaining
    */
-  orc_reader_options_builder& skip_rows(uint64_t rows)
+  orc_reader_options_builder& skip_rows(int64_t rows)
   {
     options.set_skip_rows(rows);
     return *this;
@@ -313,7 +340,7 @@ class orc_reader_options_builder {
    * @param nrows Number of rows
    * @return this for chaining
    */
-  orc_reader_options_builder& num_rows(size_type nrows)
+  orc_reader_options_builder& num_rows(int64_t nrows)
   {
     options.set_num_rows(nrows);
     return *this;
@@ -393,6 +420,7 @@ class orc_reader_options_builder {
  * @endcode
  *
  * @param options Settings for controlling reading behavior
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate device memory of the table in the returned
  * table_with_metadata.
  *
@@ -400,7 +428,146 @@ class orc_reader_options_builder {
  */
 table_with_metadata read_orc(
   orc_reader_options const& options,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
+/**
+ * @brief The chunked orc reader class to read an ORC file iteratively into a series of
+ * tables, chunk by chunk.
+ *
+ * This class is designed to address the reading issue when reading very large ORC files such
+ * that sizes of their columns exceed the limit that can be stored in cudf columns. By reading the
+ * file content by chunks using this class, each chunk is guaranteed to have its size stay within
+ * the given limit.
+ */
+class chunked_orc_reader {
+ public:
+  /**
+   * @brief Default constructor, this should never be used.
+   *
+   * This is added just to satisfy cython.
+   */
+  chunked_orc_reader();
+
+  /**
+   * @brief Construct the reader from input/output size limits, output row granularity, along with
+   * other ORC reader options.
+   *
+   * The typical usage should be similar to this:
+   * ```
+   *  do {
+   *    auto const chunk = reader.read_chunk();
+   *    // Process chunk
+   *  } while (reader.has_next());
+   *
+   * ```
+   *
+   * If `chunk_read_limit == 0` (i.e., no output limit) and `pass_read_limit == 0` (no temporary
+   * memory size limit), a call to `read_chunk()` will read the whole data source and return a table
+   * containing all rows.
+   *
+   * The `chunk_read_limit` parameter controls the size of the output table to be returned per
+   * `read_chunk()` call. If the user specifies a 100 MB limit, the reader will attempt to return
+   * tables that have a total bytes size (over all columns) of 100 MB or less.
+   * This is a soft limit and the code will not fail if it cannot satisfy the limit.
+   *
+   * The `pass_read_limit` parameter controls how much temporary memory is used in the entire
+   * process of loading, decompressing and decoding of data. Again, this is also a soft limit and
+   * the reader will try to make the best effort.
+   *
+   * Finally, the parameter `output_row_granularity` controls the changes in row number of the
+   * output chunk. For each call to `read_chunk()`, with respect to the given `pass_read_limit`, a
+   * subset of stripes may be loaded, decompressed and decoded into an intermediate table. The
+   * reader will then subdivide that table into smaller tables for final output using
+   * `output_row_granularity` as the subdivision step.
+   *
+   * @param chunk_read_limit Limit on total number of bytes to be returned per `read_chunk()` call,
+   *        or `0` if there is no limit
+   * @param pass_read_limit Limit on temporary memory usage for reading the data sources,
+   *        or `0` if there is no limit
+   * @param output_row_granularity The granularity parameter used for subdividing the decoded
+   *        table for final output
+   * @param options Settings for controlling reading behaviors
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource to use for device memory allocation
+   *
+   * @throw cudf::logic_error if `output_row_granularity` is non-positive
+   */
+  explicit chunked_orc_reader(
+    std::size_t chunk_read_limit,
+    std::size_t pass_read_limit,
+    size_type output_row_granularity,
+    orc_reader_options const& options,
+    rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
+  /**
+   * @brief Construct the reader from input/output size limits along with other ORC reader options.
+   *
+   * This constructor implicitly call the other constructor with `output_row_granularity` set to
+   * `DEFAULT_OUTPUT_ROW_GRANULARITY` rows.
+   *
+   * @param chunk_read_limit Limit on total number of bytes to be returned per `read_chunk()` call,
+   *        or `0` if there is no limit
+   * @param pass_read_limit Limit on temporary memory usage for reading the data sources,
+   *        or `0` if there is no limit
+   * @param options Settings for controlling reading behaviors
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource to use for device memory allocation
+   */
+  explicit chunked_orc_reader(
+    std::size_t chunk_read_limit,
+    std::size_t pass_read_limit,
+    orc_reader_options const& options,
+    rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
+  /**
+   * @brief Construct the reader from output size limits along with other ORC reader options.
+   *
+   * This constructor implicitly call the other constructor with `pass_read_limit` set to `0` and
+   * `output_row_granularity` set to `DEFAULT_OUTPUT_ROW_GRANULARITY` rows.
+   *
+   * @param chunk_read_limit Limit on total number of bytes to be returned per `read_chunk()` call,
+   *        or `0` if there is no limit
+   * @param options Settings for controlling reading behaviors
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource to use for device memory allocation
+   */
+  explicit chunked_orc_reader(
+    std::size_t chunk_read_limit,
+    orc_reader_options const& options,
+    rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
+  /**
+   * @brief Destructor, destroying the internal reader instance.
+   */
+  ~chunked_orc_reader();
+
+  /**
+   * @brief Check if there is any data in the given data sources has not yet read.
+   *
+   * @return A boolean value indicating if there is any data left to read
+   */
+  [[nodiscard]] bool has_next() const;
+
+  /**
+   * @brief Read a chunk of rows in the given data sources.
+   *
+   * The sequence of returned tables, if concatenated by their order, guarantees to form a complete
+   * dataset as reading the entire given data sources at once.
+   *
+   * An empty table will be returned if the given sources are empty, or all the data has
+   * been read and returned by the previous calls.
+   *
+   * @return An output `cudf::table` along with its metadata
+   */
+  [[nodiscard]] table_with_metadata read_chunk() const;
+
+ private:
+  std::unique_ptr<cudf::io::orc::detail::chunked_reader> reader;
+};
 
 /** @} */  // end of group
 /**
@@ -433,7 +600,7 @@ class orc_writer_options {
   // Specify the sink to use for writer output
   sink_info _sink;
   // Specify the compression format to use
-  compression_type _compression = compression_type::AUTO;
+  compression_type _compression = compression_type::SNAPPY;
   // Specify frequency of statistics collection
   statistics_freq _stats_freq = ORC_STATISTICS_ROW_GROUP;
   // Maximum size of each stripe (unless smaller than a single row group)
@@ -445,9 +612,13 @@ class orc_writer_options {
   // Set of columns to output
   table_view _table;
   // Optional associated metadata
-  const table_input_metadata* _metadata = nullptr;
+  std::optional<table_input_metadata> _metadata;
   // Optional footer key_value_metadata
   std::map<std::string, std::string> _user_data;
+  // Optional compression statistics
+  std::shared_ptr<writer_compression_statistics> _compression_stats;
+  // Specify whether string dictionaries should be alphabetically sorted
+  bool _enable_dictionary_sort = true;
 
   friend orc_writer_options_builder;
 
@@ -457,8 +628,8 @@ class orc_writer_options {
    * @param sink The sink used for writer output
    * @param table Table to be written to output
    */
-  explicit orc_writer_options(sink_info const& sink, table_view const& table)
-    : _sink(sink), _table(table)
+  explicit orc_writer_options(sink_info sink, table_view table)
+    : _sink(std::move(sink)), _table(std::move(table))
   {
   }
 
@@ -530,7 +701,7 @@ class orc_writer_options {
    *
    * @return Row index stride
    */
-  auto get_row_index_stride() const
+  [[nodiscard]] auto get_row_index_stride() const
   {
     auto const unaligned_stride = std::min(_row_index_stride, get_stripe_size_rows());
     return unaligned_stride - unaligned_stride % 8;
@@ -548,7 +719,7 @@ class orc_writer_options {
    *
    * @return Associated metadata
    */
-  [[nodiscard]] table_input_metadata const* get_metadata() const { return _metadata; }
+  [[nodiscard]] auto const& get_metadata() const { return _metadata; }
 
   /**
    * @brief Returns Key-Value footer metadata information.
@@ -560,6 +731,23 @@ class orc_writer_options {
     return _user_data;
   }
 
+  /**
+   * @brief Returns a shared pointer to the user-provided compression statistics.
+   *
+   * @return Compression statistics
+   */
+  [[nodiscard]] std::shared_ptr<writer_compression_statistics> get_compression_statistics() const
+  {
+    return _compression_stats;
+  }
+
+  /**
+   * @brief Returns whether string dictionaries should be sorted.
+   *
+   * @return `true` if string dictionaries should be sorted
+   */
+  [[nodiscard]] bool get_enable_dictionary_sort() const { return _enable_dictionary_sort; }
+
   // Setters
 
   /**
@@ -567,7 +755,11 @@ class orc_writer_options {
    *
    * @param comp Compression type
    */
-  void set_compression(compression_type comp) { _compression = comp; }
+  void set_compression(compression_type comp)
+  {
+    _compression = comp;
+    if (comp == compression_type::AUTO) { _compression = compression_type::SNAPPY; }
+  }
 
   /**
    * @brief Choose granularity of statistics collection.
@@ -637,7 +829,7 @@ class orc_writer_options {
    *
    * @param meta Associated metadata
    */
-  void set_metadata(table_input_metadata const* meta) { _metadata = meta; }
+  void set_metadata(table_input_metadata meta) { _metadata = std::move(meta); }
 
   /**
    * @brief Sets metadata.
@@ -648,6 +840,23 @@ class orc_writer_options {
   {
     _user_data = std::move(metadata);
   }
+
+  /**
+   * @brief Sets the pointer to the output compression statistics.
+   *
+   * @param comp_stats Pointer to compression statistics to be updated after writing
+   */
+  void set_compression_statistics(std::shared_ptr<writer_compression_statistics> comp_stats)
+  {
+    _compression_stats = std::move(comp_stats);
+  }
+
+  /**
+   * @brief Sets whether string dictionaries should be sorted.
+   *
+   * @param val Boolean value to enable/disable
+   */
+  void set_enable_dictionary_sort(bool val) { _enable_dictionary_sort = val; }
 };
 
 /**
@@ -682,7 +891,7 @@ class orc_writer_options_builder {
    */
   orc_writer_options_builder& compression(compression_type comp)
   {
-    options._compression = comp;
+    options.set_compression(comp);
     return *this;
   }
 
@@ -757,9 +966,9 @@ class orc_writer_options_builder {
    * @param meta Associated metadata
    * @return this for chaining
    */
-  orc_writer_options_builder& metadata(table_input_metadata const* meta)
+  orc_writer_options_builder& metadata(table_input_metadata meta)
   {
-    options._metadata = meta;
+    options._metadata = std::move(meta);
     return *this;
   }
 
@@ -772,6 +981,31 @@ class orc_writer_options_builder {
   orc_writer_options_builder& key_value_metadata(std::map<std::string, std::string> metadata)
   {
     options._user_data = std::move(metadata);
+    return *this;
+  }
+
+  /**
+   * @brief Sets the pointer to the output compression statistics.
+   *
+   * @param comp_stats Pointer to compression statistics to be filled once writer is done
+   * @return this for chaining
+   */
+  orc_writer_options_builder& compression_statistics(
+    std::shared_ptr<writer_compression_statistics> const& comp_stats)
+  {
+    options._compression_stats = comp_stats;
+    return *this;
+  }
+
+  /**
+   * @brief Sets whether string dictionaries should be sorted.
+   *
+   * @param val Boolean value to enable/disable
+   * @return this for chaining
+   */
+  orc_writer_options_builder& enable_dictionary_sort(bool val)
+  {
+    options._enable_dictionary_sort = val;
     return *this;
   }
 
@@ -801,8 +1035,10 @@ class orc_writer_options_builder {
  * @endcode
  *
  * @param options Settings for controlling reading behavior
+ * @param stream CUDA stream used for device memory operations and kernel launches
  */
-void write_orc(orc_writer_options const& options);
+void write_orc(orc_writer_options const& options,
+               rmm::cuda_stream_view stream = cudf::get_default_stream());
 
 /**
  * @brief Builds settings to use for `write_orc_chunked()`.
@@ -816,7 +1052,7 @@ class chunked_orc_writer_options {
   // Specify the sink to use for writer output
   sink_info _sink;
   // Specify the compression format to use
-  compression_type _compression = compression_type::AUTO;
+  compression_type _compression = compression_type::SNAPPY;
   // Specify granularity of statistics collection
   statistics_freq _stats_freq = ORC_STATISTICS_ROW_GROUP;
   // Maximum size of each stripe (unless smaller than a single row group)
@@ -826,9 +1062,13 @@ class chunked_orc_writer_options {
   // Row index stride (maximum number of rows in each row group)
   size_type _row_index_stride = default_row_index_stride;
   // Optional associated metadata
-  const table_input_metadata* _metadata = nullptr;
+  std::optional<table_input_metadata> _metadata;
   // Optional footer key_value_metadata
   std::map<std::string, std::string> _user_data;
+  // Optional compression statistics
+  std::shared_ptr<writer_compression_statistics> _compression_stats;
+  // Specify whether string dictionaries should be alphabetically sorted
+  bool _enable_dictionary_sort = true;
 
   friend chunked_orc_writer_options_builder;
 
@@ -837,7 +1077,7 @@ class chunked_orc_writer_options {
    *
    * @param sink The sink used for writer output
    */
-  chunked_orc_writer_options(sink_info const& sink) : _sink(sink) {}
+  chunked_orc_writer_options(sink_info sink) : _sink(std::move(sink)) {}
 
  public:
   /**
@@ -896,7 +1136,7 @@ class chunked_orc_writer_options {
    *
    * @return Row index stride
    */
-  auto get_row_index_stride() const
+  [[nodiscard]] auto get_row_index_stride() const
   {
     auto const unaligned_stride = std::min(_row_index_stride, get_stripe_size_rows());
     return unaligned_stride - unaligned_stride % 8;
@@ -907,7 +1147,7 @@ class chunked_orc_writer_options {
    *
    * @return Associated metadata
    */
-  [[nodiscard]] table_input_metadata const* get_metadata() const { return _metadata; }
+  [[nodiscard]] auto const& get_metadata() const { return _metadata; }
 
   /**
    * @brief Returns Key-Value footer metadata information.
@@ -919,6 +1159,23 @@ class chunked_orc_writer_options {
     return _user_data;
   }
 
+  /**
+   * @brief Returns a shared pointer to the user-provided compression statistics.
+   *
+   * @return Compression statistics
+   */
+  [[nodiscard]] std::shared_ptr<writer_compression_statistics> get_compression_statistics() const
+  {
+    return _compression_stats;
+  }
+
+  /**
+   * @brief Returns whether string dictionaries should be sorted.
+   *
+   * @return `true` if string dictionaries should be sorted
+   */
+  [[nodiscard]] bool get_enable_dictionary_sort() const { return _enable_dictionary_sort; }
+
   // Setters
 
   /**
@@ -926,7 +1183,11 @@ class chunked_orc_writer_options {
    *
    * @param comp The compression type to use
    */
-  void set_compression(compression_type comp) { _compression = comp; }
+  void set_compression(compression_type comp)
+  {
+    _compression = comp;
+    if (comp == compression_type::AUTO) { _compression = compression_type::SNAPPY; }
+  }
 
   /**
    * @brief Choose granularity of statistics collection
@@ -989,7 +1250,7 @@ class chunked_orc_writer_options {
    *
    * @param meta Associated metadata
    */
-  void metadata(table_input_metadata const* meta) { _metadata = meta; }
+  void metadata(table_input_metadata meta) { _metadata = std::move(meta); }
 
   /**
    * @brief Sets Key-Value footer metadata.
@@ -1000,6 +1261,23 @@ class chunked_orc_writer_options {
   {
     _user_data = std::move(metadata);
   }
+
+  /**
+   * @brief Sets the pointer to the output compression statistics.
+   *
+   * @param comp_stats Pointer to compression statistics to be updated after writing
+   */
+  void set_compression_statistics(std::shared_ptr<writer_compression_statistics> comp_stats)
+  {
+    _compression_stats = std::move(comp_stats);
+  }
+
+  /**
+   * @brief Sets whether string dictionaries should be sorted.
+   *
+   * @param val Boolean value to enable/disable
+   */
+  void set_enable_dictionary_sort(bool val) { _enable_dictionary_sort = val; }
 };
 
 /**
@@ -1031,7 +1309,7 @@ class chunked_orc_writer_options_builder {
    */
   chunked_orc_writer_options_builder& compression(compression_type comp)
   {
-    options._compression = comp;
+    options.set_compression(comp);
     return *this;
   }
 
@@ -1094,9 +1372,9 @@ class chunked_orc_writer_options_builder {
    * @param meta Associated metadata
    * @return this for chaining
    */
-  chunked_orc_writer_options_builder& metadata(table_input_metadata const* meta)
+  chunked_orc_writer_options_builder& metadata(table_input_metadata meta)
   {
-    options._metadata = meta;
+    options._metadata = std::move(meta);
     return *this;
   }
 
@@ -1110,6 +1388,31 @@ class chunked_orc_writer_options_builder {
     std::map<std::string, std::string> metadata)
   {
     options._user_data = std::move(metadata);
+    return *this;
+  }
+
+  /**
+   * @brief Sets the pointer to the output compression statistics.
+   *
+   * @param comp_stats Pointer to compression statistics to be filled once writer is done
+   * @return this for chaining
+   */
+  chunked_orc_writer_options_builder& compression_statistics(
+    std::shared_ptr<writer_compression_statistics> const& comp_stats)
+  {
+    options._compression_stats = comp_stats;
+    return *this;
+  }
+
+  /**
+   * @brief Sets whether string dictionaries should be sorted.
+   *
+   * @param val Boolean value to enable/disable
+   * @return this for chaining
+   */
+  chunked_orc_writer_options_builder& enable_dictionary_sort(bool val)
+  {
+    options._enable_dictionary_sort = val;
     return *this;
   }
 
@@ -1155,14 +1458,21 @@ class orc_chunked_writer {
    * @brief Default constructor, this should never be used.
    *        This is added just to satisfy cython.
    */
-  orc_chunked_writer() = default;
+  orc_chunked_writer();
+
+  /**
+   * @brief virtual destructor, Added so we don't leak detail types.
+   */
+  ~orc_chunked_writer();
 
   /**
    * @brief Constructor with chunked writer options
    *
    * @param[in] options options used to write table
+   * @param[in] stream CUDA stream used for device memory operations and kernel launches
    */
-  orc_chunked_writer(chunked_orc_writer_options const& options);
+  orc_chunked_writer(chunked_orc_writer_options const& options,
+                     rmm::cuda_stream_view stream = cudf::get_default_stream());
 
   /**
    * @brief Writes table to output.
@@ -1178,9 +1488,9 @@ class orc_chunked_writer {
   void close();
 
   /// Unique pointer to impl writer class
-  std::unique_ptr<cudf::io::detail::orc::writer> writer;
+  std::unique_ptr<orc::detail::writer> writer;
 };
 
 /** @} */  // end of group
 }  // namespace io
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

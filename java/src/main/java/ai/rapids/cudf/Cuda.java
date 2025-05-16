@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,9 +14,6 @@
  * limitations under the License.
  */
 package ai.rapids.cudf;
-
-import ai.rapids.cudf.NvtxColor;
-import ai.rapids.cudf.NvtxRange;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -90,6 +87,21 @@ public class Cuda {
       this.id = -1;
     }
 
+    private Stream(long id) {
+      this.cleaner = null;
+      this.id = id;
+    }
+
+    /**
+     * Wrap a given stream ID to make it accessible.
+     */
+    static Stream wrap(long id) {
+      if (id == -1) {
+        return DEFAULT_STREAM;
+      }
+      return new Stream(id);
+    }
+
     /**
      * Have this stream not execute new work until the work recorded in event completes.
      * @param event the event to wait on.
@@ -122,7 +134,9 @@ public class Cuda {
         cleaner.delRef();
       }
       if (closed) {
-        cleaner.logRefCountDebug("double free " + this);
+        if (cleaner != null) {
+          cleaner.logRefCountDebug("double free " + this);
+        }
         throw new IllegalStateException("Close called too many times " + this);
       }
       if (cleaner != null) {

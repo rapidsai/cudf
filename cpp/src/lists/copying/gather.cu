@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,11 +16,12 @@
 
 #include <cudf/detail/gather.cuh>
 #include <cudf/lists/detail/gather.cuh>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <cuda/std/iterator>
 #include <thrust/binary_search.h>
-#include <thrust/distance.h>
 #include <thrust/execution_policy.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
@@ -78,7 +79,7 @@ struct list_gatherer {
     // "step 1" from above
     auto const bound =
       thrust::upper_bound(thrust::seq, upper_bound_start, upper_bound_start + offset_count, index);
-    size_type offset_index = thrust::distance(upper_bound_start, bound);
+    size_type offset_index = cuda::std::distance(upper_bound_start, bound);
     // "step 2" from above
     size_type offset_subindex = offset_index == 0 ? index : index - offsets[offset_index];
     // "step 3" from above
@@ -92,7 +93,7 @@ struct list_gatherer {
 std::unique_ptr<column> gather_list_leaf(column_view const& column,
                                          gather_data const& gd,
                                          rmm::cuda_stream_view stream,
-                                         rmm::mr::device_memory_resource* mr)
+                                         rmm::device_async_resource_ref mr)
 {
   // gather map iterator for this level (N)
   auto gather_map_begin = thrust::make_transform_iterator(
@@ -121,7 +122,7 @@ std::unique_ptr<column> gather_list_leaf(column_view const& column,
 std::unique_ptr<column> gather_list_nested(cudf::lists_column_view const& list,
                                            gather_data& gd,
                                            rmm::cuda_stream_view stream,
-                                           rmm::mr::device_memory_resource* mr)
+                                           rmm::device_async_resource_ref mr)
 {
   // gather map iterator for this level (N)
   auto gather_map_begin = thrust::make_transform_iterator(

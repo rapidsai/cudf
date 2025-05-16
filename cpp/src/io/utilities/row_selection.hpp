@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,27 +15,29 @@
  */
 #pragma once
 
-#include <cudf/types.hpp>
+#include <cudf/utilities/export.hpp>
 
 #include <cstdint>
 #include <optional>
 #include <utility>
 
-namespace cudf::io::detail {
+namespace CUDF_EXPORT cudf {
+namespace io::detail {
 
 /**
  * @brief Adjusts the input skip_rows and num_rows options to the actual number of rows to
  * skip/read, based on the number of rows in the ORC file(s).
  *
- * @param skip_rows_opt skip_rows as passed by the user
- * @param num_rows_opt num_rows as passed by the user
+ * @param skip_rows skip_rows as passed by the user
+ * @param num_rows Optional num_rows as passed by the user
  * @param num_source_rows number of rows in the ORC file(s)
  * @return A std::pair containing the number of rows to skip and the number of rows to read
  *
- * @throw cudf::logic_error when the requested number of rows to read exceeds the largest cudf
- * column size
+ * @throw std::overflow_exception The requested number of rows exceeds the column size limit
  */
-std::pair<uint64_t, size_type> skip_rows_num_rows_from_options(
-  uint64_t skip_rows_opt, std::optional<size_type> const& num_rows_opt, uint64_t num_source_rows);
+std::pair<int64_t, int64_t> skip_rows_num_rows_from_options(int64_t skip_rows,
+                                                            std::optional<int64_t> const& num_rows,
+                                                            int64_t num_source_rows);
 
-}  // namespace cudf::io::detail
+}  // namespace io::detail
+}  // namespace CUDF_EXPORT cudf

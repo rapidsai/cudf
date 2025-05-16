@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,13 +23,13 @@
 #include <cudf/structs/structs_column_view.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/types.hpp>
-
-#include <rmm/mr/device/per_device_resource.hpp>
+#include <cudf/utilities/export.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <memory>
 #include <vector>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 
 /**
  * @addtogroup column_copy
@@ -66,25 +66,27 @@ enum class out_of_bounds_policy : bool {
  * For dictionary columns, the keys column component is copied and not trimmed
  * if the gather results in abandoned key elements.
  *
- * @throws cudf::logic_error if gather_map contains null values.
+ * @throws std::invalid_argument if gather_map contains null values.
  *
- * @param[in] source_table The input columns whose rows will be gathered
- * @param[in] gather_map View into a non-nullable column of integral indices that maps the
+ * @param source_table The input columns whose rows will be gathered
+ * @param gather_map View into a non-nullable column of integral indices that maps the
  * rows in the source columns to rows in the destination columns.
- * @param[in] bounds_policy Policy to apply to account for possible out-of-bounds indices
+ * @param bounds_policy Policy to apply to account for possible out-of-bounds indices
  * `DONT_CHECK` skips all bounds checking for gather map values. `NULLIFY` coerces rows that
  * corresponds to out-of-bounds indices in the gather map to be null elements. Callers should
  * use `DONT_CHECK` when they are certain that the gather_map contains only valid indices for
  * better performance. If `policy` is set to `DONT_CHECK` and there are out-of-bounds indices
  * in the gather map, the behavior is undefined. Defaults to `DONT_CHECK`.
- * @param[in] mr Device memory resource used to allocate the returned table's device memory
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned table's device memory
  * @return Result of the gather
  */
 std::unique_ptr<table> gather(
   table_view const& source_table,
   column_view const& gather_map,
-  out_of_bounds_policy bounds_policy  = out_of_bounds_policy::DONT_CHECK,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  out_of_bounds_policy bounds_policy = out_of_bounds_policy::DONT_CHECK,
+  rmm::cuda_stream_view stream       = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr  = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Reverses the rows within a table.
@@ -97,12 +99,14 @@ std::unique_ptr<table> gather(
  * ```
  *
  * @param source_table Table that will be reversed
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned table's device memory
  * @return Reversed table
  */
 std::unique_ptr<table> reverse(
   table_view const& source_table,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Reverses the elements of a column
@@ -115,12 +119,14 @@ std::unique_ptr<table> reverse(
  * ```
  *
  * @param source_column Column that will be reversed
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned table's device memory
  * @return Reversed column
  */
 std::unique_ptr<column> reverse(
   column_view const& source_column,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Scatters the rows of the source table into a copy of the target table
@@ -146,6 +152,13 @@ std::unique_ptr<column> reverse(
  * A negative value `i` in the `scatter_map` is interpreted as `i+n`, where `n`
  * is the number of rows in the `target` table.
  *
+ * @throws std::invalid_argument if the number of columns in source does not match the number of
+ * columns in target
+ * @throws std::invalid_argument if the number of rows in source does not match the number of
+ * elements in scatter_map
+ * @throws cudf::data_type_error if the data types of the source and target columns do not match
+ * @throws std::invalid_argument if scatter_map contains null values
+ *
  * @param source The input columns containing values to be scattered into the
  * target columns
  * @param scatter_map A non-nullable column of integral indices that maps the
@@ -153,6 +166,7 @@ std::unique_ptr<column> reverse(
  * to or less than the number of elements in the source columns.
  * @param target The set of columns into which values from the source_table
  * are to be scattered
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned table's device memory
  * @return Result of scattering values from source to target
  */
@@ -160,7 +174,8 @@ std::unique_ptr<table> scatter(
   table_view const& source,
   column_view const& scatter_map,
   table_view const& target,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Scatters a row of scalar values into a copy of the target table
@@ -183,25 +198,32 @@ std::unique_ptr<table> scatter(
  * If any values in `scatter_map` are outside of the interval [-n, n) where `n`
  * is the number of rows in the `target` table, behavior is undefined.
  *
+ * @throws std::invalid_argument if the number of scalars does not match the number of columns in
+ * target
+ * @throws std::invalid_argument if indices contains null values
+ * @throws cudf::data_type_error if the data types of the scalars and target columns do not match
+ *
  * @param source The input scalars containing values to be scattered into the
  * target columns
  * @param indices A non-nullable column of integral indices that indicate
  * the rows in the target table to be replaced by source.
  * @param target The set of columns into which values from the source_table
  * are to be scattered
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned table's device memory
  * @return Result of scattering values from source to target
  */
 std::unique_ptr<table> scatter(
-  std::vector<std::reference_wrapper<const scalar>> const& source,
+  std::vector<std::reference_wrapper<scalar const>> const& source,
   column_view const& indices,
   table_view const& target,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Indicates when to allocate a mask, based on an existing mask.
  */
-enum class mask_allocation_policy {
+enum class mask_allocation_policy : int32_t {
   NEVER,   ///< Do not allocate a null mask, regardless of input
   RETAIN,  ///< Allocate a null mask if the input contains one
   ALWAYS   ///< Allocate a null mask, regardless of input
@@ -228,34 +250,46 @@ std::unique_ptr<column> empty_like(scalar const& input);
  *
  * Supports only fixed-width types.
  *
- * @param[in] input Immutable view of input column to emulate
- * @param[in] mask_alloc Optional, Policy for allocating null mask. Defaults to RETAIN
- * @param[in] mr Device memory resource used to allocate the returned column's device memory
+ * If the `mask_alloc` allocates a validity mask that mask is also uninitialized
+ * and the validity bits and the null count should be set by the caller.
+ *
+ * @throws cudf::data_type_error if input type is not of fixed width.
+ *
+ * @param input Immutable view of input column to emulate
+ * @param mask_alloc Optional, Policy for allocating null mask. Defaults to RETAIN
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @return A column with sufficient uninitialized capacity to hold the same
  * number of elements as `input` of the same type as `input.type()`
  */
 std::unique_ptr<column> allocate_like(
   column_view const& input,
-  mask_allocation_policy mask_alloc   = mask_allocation_policy::RETAIN,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  mask_allocation_policy mask_alloc = mask_allocation_policy::RETAIN,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Creates an uninitialized new column of the specified size and same type as the `input`.
  *
  * Supports only fixed-width types.
  *
- * @param[in] input Immutable view of input column to emulate
- * @param[in] size The desired number of elements that the new column should have capacity for
- * @param[in] mask_alloc Optional, Policy for allocating null mask. Defaults to RETAIN
- * @param[in] mr Device memory resource used to allocate the returned column's device memory
+ * If the `mask_alloc` allocates a validity mask that mask is also uninitialized
+ * and the validity bits and the null count should be set by the caller.
+ *
+ * @param input Immutable view of input column to emulate
+ * @param size The desired number of elements that the new column should have capacity for
+ * @param mask_alloc Optional, Policy for allocating null mask. Defaults to RETAIN
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
  * @return A column with sufficient uninitialized capacity to hold the specified number of elements
  * as `input` of the same type as `input.type()`
  */
 std::unique_ptr<column> allocate_like(
   column_view const& input,
   size_type size,
-  mask_allocation_policy mask_alloc   = mask_allocation_policy::RETAIN,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  mask_allocation_policy mask_alloc = mask_allocation_policy::RETAIN,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Creates a table of empty columns with the same types as the `input_table`
@@ -282,15 +316,15 @@ std::unique_ptr<table> empty_like(table_view const& input_table);
  * If @p source and @p target refer to the same elements and the ranges overlap,
  * the behavior is undefined.
  *
- * @throws cudf::logic_error if memory reallocation is required (e.g. for
+ * @throws cudf::data_type_error if memory reallocation is required (e.g. for
  * variable width types).
- * @throws cudf::logic_error for invalid range (if
+ * @throws std::out_of_range for invalid range (if
  * @p source_begin > @p source_end, @p source_begin < 0,
  * @p source_begin >= @p source.size(), @p source_end > @p source.size(),
  * @p target_begin < 0, target_begin >= @p target.size(), or
  * @p target_begin + (@p source_end - @p source_begin) > @p target.size()).
- * @throws cudf::logic_error if @p target and @p source have different types.
- * @throws cudf::logic_error if @p source has null values and @p target is not
+ * @throws cudf::data_type_error if @p target and @p source have different types.
+ * @throws std::invalid_argument if @p source has null values and @p target is not
  * nullable.
  *
  * @param source The column to copy from
@@ -299,12 +333,14 @@ std::unique_ptr<table> empty_like(table_view const& input_table);
  * @param source_end The index of the last element in the source range
  * (exclusive)
  * @param target_begin The starting index of the target range (inclusive)
+ * @param stream CUDA stream used for device memory operations and kernel launches
  */
 void copy_range_in_place(column_view const& source,
                          mutable_column_view& target,
                          size_type source_begin,
                          size_type source_end,
-                         size_type target_begin);
+                         size_type target_begin,
+                         rmm::cuda_stream_view stream = cudf::get_default_stream());
 
 /**
  * @brief Copies a range of elements out-of-place from one column to another.
@@ -319,12 +355,14 @@ void copy_range_in_place(column_view const& source,
  * If @p source and @p target refer to the same elements and the ranges overlap,
  * the behavior is undefined.
  *
- * @throws cudf::logic_error for invalid range (if
- * @p source_begin > @p source_end, @p source_begin < 0,
- * @p source_begin >= @p source.size(), @p source_end > @p source.size(),
- * @p target_begin < 0, target_begin >= @p target.size(), or
- * @p target_begin + (@p source_end - @p source_begin) > @p target.size()).
- * @throws cudf::logic_error if @p target and @p source have different types.
+ * A range is considered invalid if:
+ *   - Either the begin or end indices are out of bounds for the corresponding column
+ *   - Begin is greater than end for source or target
+ *   - The size of the source range would overflow the target column starting at target_begin
+ *
+ * @throws std::out_of_range for any invalid range.
+ * @throws cudf::data_type_error if @p target and @p source have different types.
+ * @throws cudf::data_type_error if the data type is not fixed width, string, or dictionary
  *
  * @param source The column to copy from inside the range
  * @param target The column to copy from outside the range
@@ -332,6 +370,7 @@ void copy_range_in_place(column_view const& source,
  * @param source_end The index of the last element in the source range
  * (exclusive)
  * @param target_begin The starting index of the target range (inclusive)
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return The result target column
  */
@@ -341,7 +380,8 @@ std::unique_ptr<column> copy_range(
   size_type source_begin,
   size_type source_end,
   size_type target_begin,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Creates a new column by shifting all values by an offset.
@@ -372,10 +412,11 @@ std::unique_ptr<column> copy_range(
  * @param input      Column to be shifted
  * @param offset     The offset by which to shift the input
  * @param fill_value Fill value for indeterminable outputs
+ * @param stream     CUDA stream used for device memory operations and kernel launches
  * @param mr         Device memory resource used to allocate the returned result's device memory
  *
- * @throw cudf::logic_error if @p input dtype is neither fixed-width nor string type
- * @throw cudf::logic_error if @p fill_value dtype does not match @p input dtype.
+ * @throw cudf::data_type_error if @p input dtype is neither fixed-width nor string type
+ * @throw cudf::data_type_error if @p fill_value dtype does not match @p input dtype.
  *
  * @return The shifted column
  */
@@ -383,7 +424,8 @@ std::unique_ptr<column> shift(
   column_view const& input,
   size_type offset,
   scalar const& fill_value,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Slices a `column_view` into a set of `column_view`s according to a set of indices.
@@ -406,21 +448,26 @@ std::unique_ptr<column> shift(
  * output:  {{12, 14}, {20, 22, 24, 26}, {14, 16}, {}}
  * @endcode
  *
- * @throws cudf::logic_error if `indices` size is not even.
- * @throws cudf::logic_error When the values in the pair are strictly decreasing.
- * @throws cudf::logic_error When any of the values in the pair don't belong to
+ * @throws std::invalid_argument if `indices` size is not even.
+ * @throws std::invalid_argument When the values in the pair are strictly decreasing.
+ * @throws std::out_of_range When any of the values in the pair don't belong to
  * the range [0, input.size()).
  *
  * @param input View of column to slice
  * @param indices Indices used to take slices of `input`
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @return Vector of views of `input` indicated by the ranges in `indices`
  */
-std::vector<column_view> slice(column_view const& input, host_span<size_type const> indices);
+std::vector<column_view> slice(column_view const& input,
+                               host_span<size_type const> indices,
+                               rmm::cuda_stream_view stream = cudf::get_default_stream());
 /**
  * @ingroup copy_slice
- * @copydoc cudf::slice(column_view const&, host_span<size_type const>)
+ * @copydoc cudf::slice(column_view const&, host_span<size_type const>, rmm::cuda_stream_view)
  */
-std::vector<column_view> slice(column_view const& input, std::initializer_list<size_type> indices);
+std::vector<column_view> slice(column_view const& input,
+                               std::initializer_list<size_type> indices,
+                               rmm::cuda_stream_view stream = cudf::get_default_stream());
 
 /**
  * @brief Slices a `table_view` into a set of `table_view`s according to a set of indices.
@@ -445,21 +492,26 @@ std::vector<column_view> slice(column_view const& input, std::initializer_list<s
  *           {{52, 54}, {60, 22, 24, 26}, {14, 16}, {}}]
  * @endcode
  *
- * @throws cudf::logic_error if `indices` size is not even.
- * @throws cudf::logic_error When the values in the pair are strictly decreasing.
- * @throws cudf::logic_error When any of the values in the pair don't belong to
+ * @throws std::invalid_argument if `indices` size is not even.
+ * @throws std::invalid_argument When the values in the pair are strictly decreasing.
+ * @throws std::out_of_range When any of the values in the pair don't belong to
  * the range [0, input.size()).
  *
  * @param input View of table to slice
  * @param indices Indices used to take slices of `input`
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @return Vector of views of `input` indicated by the ranges in `indices`
  */
-std::vector<table_view> slice(table_view const& input, host_span<size_type const> indices);
+std::vector<table_view> slice(table_view const& input,
+                              host_span<size_type const> indices,
+                              rmm::cuda_stream_view stream = cudf::get_default_stream());
 /**
  * @ingroup copy_slice
- * @copydoc cudf::slice(table_view const&, host_span<size_type const>)
+ * @copydoc cudf::slice(table_view const&, host_span<size_type const>, rmm::cuda_stream_view stream)
  */
-std::vector<table_view> slice(table_view const& input, std::initializer_list<size_type> indices);
+std::vector<table_view> slice(table_view const& input,
+                              std::initializer_list<size_type> indices,
+                              rmm::cuda_stream_view stream = cudf::get_default_stream());
 
 /**
  * @brief Splits a `column_view` into a set of `column_view`s according to a set of indices
@@ -485,20 +537,25 @@ std::vector<table_view> slice(table_view const& input, std::initializer_list<siz
  * output:  {{10, 12}, {14, 16, 18}, {20, 22, 24, 26}, {28}}
  * @endcode
  *
- * @throws cudf::logic_error if `splits` has end index > size of `input`.
- * @throws cudf::logic_error When the value in `splits` is not in the range [0, input.size()).
- * @throws cudf::logic_error When the values in the `splits` are 'strictly decreasing'.
+ * @throws std::out_of_range if `splits` has end index > size of `input`.
+ * @throws std::out_of_range When the value in `splits` is not in the range [0, input.size()).
+ * @throws std::invalid_argument When the values in the `splits` are 'strictly decreasing'.
  *
  * @param input View of column to split
  * @param splits Indices where the view will be split
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @return The set of requested views of `input` indicated by the `splits`
  */
-std::vector<column_view> split(column_view const& input, host_span<size_type const> splits);
+std::vector<column_view> split(column_view const& input,
+                               host_span<size_type const> splits,
+                               rmm::cuda_stream_view stream = cudf::get_default_stream());
 /**
  * @ingroup copy_split
- * @copydoc cudf::split(column_view const&, host_span<size_type const>)
+ * @copydoc cudf::split(column_view const&, host_span<size_type const>, rmm::cuda_stream_view)
  */
-std::vector<column_view> split(column_view const& input, std::initializer_list<size_type> splits);
+std::vector<column_view> split(column_view const& input,
+                               std::initializer_list<size_type> splits,
+                               rmm::cuda_stream_view stream = cudf::get_default_stream());
 
 /**
  * @brief Splits a `table_view` into a set of `table_view`s according to a set of indices
@@ -526,214 +583,25 @@ std::vector<column_view> split(column_view const& input, std::initializer_list<s
  *           {{50, 52}, {54, 56, 58}, {60, 62, 64, 66}, {68}}]
  * @endcode
  *
- * @throws cudf::logic_error if `splits` has end index > size of `input`.
- * @throws cudf::logic_error When the value in `splits` is not in the range [0, input.size()).
- * @throws cudf::logic_error When the values in the `splits` are 'strictly decreasing'.
+ * @throws std::out_of_range if `splits` has end index > size of `input`.
+ * @throws std::out_of_range When the value in `splits` is not in the range [0, input.size()).
+ * @throws std::invalid_argument When the values in the `splits` are 'strictly decreasing'.
  *
  * @param input View of a table to split
  * @param splits Indices where the view will be split
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @return The set of requested views of `input` indicated by the `splits`
  */
-std::vector<table_view> split(table_view const& input, host_span<size_type const> splits);
+std::vector<table_view> split(table_view const& input,
+                              host_span<size_type const> splits,
+                              rmm::cuda_stream_view stream = cudf::get_default_stream());
 /**
  * @ingroup copy_split
- * @copydoc cudf::split(table_view const&, host_span<size_type const>)
+ * @copydoc cudf::split(table_view const&, host_span<size_type const>, rmm::cuda_stream_view)
  */
-std::vector<table_view> split(table_view const& input, std::initializer_list<size_type> splits);
-
-/**
- * @brief Column data in a serialized format
- *
- * @ingroup copy_split
- *
- * Contains data from an array of columns in two contiguous buffers: one on host, which contains
- * table metadata and one on device which contains the table data.
- */
-struct packed_columns {
-  /**
-   * @brief Host-side metadata buffer used for reconstructing columns via unpack.
-   *
-   * @ingroup copy_split
-   */
-  struct metadata {
-    metadata() = default;
-
-    /**
-     * @brief Construct a new metadata object
-     *
-     * @param v Host-side buffer containing metadata
-     */
-    metadata(std::vector<uint8_t>&& v) : data_(std::move(v)) {}
-
-    /**
-     * @brief Returns pointer to the host-side metadata buffer data
-     *
-     * @return Pointer to the host-side metadata buffer
-     */
-    [[nodiscard]] uint8_t const* data() const { return data_.data(); }
-
-    /**
-     * @brief Returns size of the metadata buffer
-     *
-     * @return Size of the metadata buffer
-     */
-    [[nodiscard]] size_t size() const { return data_.size(); }
-
-   private:
-    std::vector<uint8_t> data_;
-  };
-
-  packed_columns()
-    : metadata_(std::make_unique<metadata>()), gpu_data(std::make_unique<rmm::device_buffer>())
-  {
-  }
-
-  /**
-   * @brief Construct a new packed columns object
-   *
-   * @param md Host-side metadata buffer
-   * @param gd Device-side data buffer
-   */
-  packed_columns(std::unique_ptr<metadata>&& md, std::unique_ptr<rmm::device_buffer>&& gd)
-    : metadata_(std::move(md)), gpu_data(std::move(gd))
-  {
-  }
-
-  std::unique_ptr<metadata> metadata_;           ///< Host-side metadata buffer
-  std::unique_ptr<rmm::device_buffer> gpu_data;  ///< Device-side data buffer
-};
-
-/**
- * @brief The result(s) of a cudf::contiguous_split
- *
- * @ingroup copy_split
- *
- * Each table_view resulting from a split operation performed by contiguous_split,
- * will be returned wrapped in a `packed_table`.  The table_view and internal
- * column_views in this struct are not owned by a top level cudf::table or cudf::column.
- * The backing memory and metadata is instead owned by the `data` field and is in one
- * contiguous block.
- *
- * The user is responsible for assuring that the `table` or any derived table_views do
- * not outlive the memory owned by `data`
- */
-struct packed_table {
-  cudf::table_view table;  ///< Result table_view of a cudf::contiguous_split
-  packed_columns data;     ///< Column data owned
-};
-
-/**
- * @brief Performs a deep-copy split of a `table_view` into a set of `table_view`s into a single
- * contiguous block of memory.
- *
- * @ingroup copy_split
- *
- * The memory for the output views is allocated in a single contiguous `rmm::device_buffer` returned
- * in the `packed_table`. There is no top-level owning table.
- *
- * The returned views of `input` are constructed from a vector of indices, that indicate
- * where each split should occur. The `i`th returned `table_view` is sliced as
- * `[0, splits[i])` if `i`=0, else `[splits[i], input.size())` if `i` is the last view and
- * `[splits[i-1], splits[i]]` otherwise.
- *
- * For all `i` it is expected `splits[i] <= splits[i+1] <= input.size()`
- * For a `splits` size N, there will always be N+1 splits in the output
- *
- * @note It is the caller's responsibility to ensure that the returned views
- * do not outlive the viewed device memory contained in the `all_data` field of the
- * returned packed_table.
- *
- * @code{.pseudo}
- * Example:
- * input:   [{10, 12, 14, 16, 18, 20, 22, 24, 26, 28},
- *           {50, 52, 54, 56, 58, 60, 62, 64, 66, 68}]
- * splits:  {2, 5, 9}
- * output:  [{{10, 12}, {14, 16, 18}, {20, 22, 24, 26}, {28}},
- *           {{50, 52}, {54, 56, 58}, {60, 62, 64, 66}, {68}}]
- * @endcode
- *
- *
- * @throws cudf::logic_error if `splits` has end index > size of `input`.
- * @throws cudf::logic_error When the value in `splits` is not in the range [0, input.size()).
- * @throws cudf::logic_error When the values in the `splits` are 'strictly decreasing'.
- *
- * @param input View of a table to split
- * @param splits A vector of indices where the view will be split
- * @param[in] mr Device memory resource used to allocate the returned result's device memory
- * @return The set of requested views of `input` indicated by the `splits` and the viewed memory
- * buffer.
- */
-std::vector<packed_table> contiguous_split(
-  cudf::table_view const& input,
-  std::vector<size_type> const& splits,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
-
-/**
- * @brief Deep-copy a `table_view` into a serialized contiguous memory format
- *
- * The metadata from the `table_view` is copied into a host vector of bytes and the data from the
- * `table_view` is copied into a `device_buffer`. Pass the output of this function into
- * `cudf::unpack` to deserialize.
- *
- * @param input View of the table to pack
- * @param[in] mr Optional, The resource to use for all returned device allocations
- * @return packed_columns A struct containing the serialized metadata and data in contiguous host
- *         and device memory respectively
- */
-packed_columns pack(cudf::table_view const& input,
-                    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
-
-/**
- * @brief Produce the metadata used for packing a table stored in a contiguous buffer.
- *
- * The metadata from the `table_view` is copied into a host vector of bytes which can be used to
- * construct a `packed_columns` or `packed_table` structure.  The caller is responsible for
- * guaranteeing that that all of the columns in the table point into `contiguous_buffer`.
- *
- * @param table View of the table to pack
- * @param contiguous_buffer A contiguous buffer of device memory which contains the data referenced
- * by the columns in `table`
- * @param buffer_size The size of `contiguous_buffer`
- * @return Vector of bytes representing the metadata used to `unpack` a packed_columns struct
- */
-packed_columns::metadata pack_metadata(table_view const& table,
-                                       uint8_t const* contiguous_buffer,
-                                       size_t buffer_size);
-
-/**
- * @brief Deserialize the result of `cudf::pack`
- *
- * Converts the result of a serialized table into a `table_view` that points to the data stored in
- * the contiguous device buffer contained in `input`.
- *
- * It is the caller's responsibility to ensure that the `table_view` in the output does not outlive
- * the data in the input.
- *
- * No new device memory is allocated in this function.
- *
- * @param input The packed columns to unpack
- * @return The unpacked `table_view`
- */
-table_view unpack(packed_columns const& input);
-
-/**
- * @brief Deserialize the result of `cudf::pack`
- *
- * Converts the result of a serialized table into a `table_view` that points to the data stored in
- * the contiguous device buffer contained in `gpu_data` using the metadata contained in the host
- * buffer `metadata`.
- *
- * It is the caller's responsibility to ensure that the `table_view` in the output does not outlive
- * the data in the input.
- *
- * No new device memory is allocated in this function.
- *
- * @param metadata The host-side metadata buffer resulting from the initial pack() call
- * @param gpu_data The device-side contiguous buffer storing the data that will be referenced by
- * the resulting `table_view`
- * @return The unpacked `table_view`
- */
-table_view unpack(uint8_t const* metadata, uint8_t const* gpu_data);
+std::vector<table_view> split(table_view const& input,
+                              std::initializer_list<size_type> splits,
+                              rmm::cuda_stream_view stream = cudf::get_default_stream());
 
 /**
  * @brief   Returns a new column, where each element is selected from either @p lhs or
@@ -742,15 +610,16 @@ table_view unpack(uint8_t const* metadata, uint8_t const* gpu_data);
  * Selects each element i in the output column from either @p rhs or @p lhs using the following
  * rule: `output[i] = (boolean_mask.valid(i) and boolean_mask[i]) ? lhs[i] : rhs[i]`
  *
- * @throws cudf::logic_error if lhs and rhs are not of the same type
- * @throws cudf::logic_error if lhs and rhs are not of the same length
- * @throws cudf::logic_error if boolean mask is not of type bool
- * @throws cudf::logic_error if boolean mask is not of the same length as lhs and rhs
- * @param[in] lhs left-hand column_view
- * @param[in] rhs right-hand column_view
- * @param[in] boolean_mask column of `type_id::BOOL8` representing "left (true) / right (false)"
+ * @throws cudf::data_type_error if lhs and rhs are not of the same type
+ * @throws std::invalid_argument if lhs and rhs are not of the same length
+ * @throws cudf::data_type_error if boolean mask is not of type bool
+ * @throws std::invalid_argument if boolean mask is not of the same length as lhs and rhs
+ * @param lhs left-hand column_view
+ * @param rhs right-hand column_view
+ * @param boolean_mask column of `type_id::BOOL8` representing "left (true) / right (false)"
  * boolean for each element. Null element represents false.
- * @param[in] mr Device memory resource used to allocate the returned column's device memory
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
  *
  * @returns new column with the selected elements
  */
@@ -758,7 +627,8 @@ std::unique_ptr<column> copy_if_else(
   column_view const& lhs,
   column_view const& rhs,
   column_view const& boolean_mask,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief   Returns a new column, where each element is selected from either @p lhs or
@@ -767,14 +637,15 @@ std::unique_ptr<column> copy_if_else(
  * Selects each element i in the output column from either @p rhs or @p lhs using the following
  * rule: `output[i] = (boolean_mask.valid(i) and boolean_mask[i]) ? lhs : rhs[i]`
  *
- * @throws cudf::logic_error if lhs and rhs are not of the same type
- * @throws cudf::logic_error if boolean mask is not of type bool
- * @throws cudf::logic_error if boolean mask is not of the same length as rhs
- * @param[in] lhs left-hand scalar
- * @param[in] rhs right-hand column_view
- * @param[in] boolean_mask column of `type_id::BOOL8` representing "left (true) / right (false)"
+ * @throws cudf::data_type_error if lhs and rhs are not of the same type
+ * @throws cudf::data_type_error if boolean mask is not of type bool
+ * @throws std::invalid_argument if boolean mask is not of the same length as lhs and rhs
+ * @param lhs left-hand scalar
+ * @param rhs right-hand column_view
+ * @param boolean_mask column of `type_id::BOOL8` representing "left (true) / right (false)"
  * boolean for each element. Null element represents false.
- * @param[in] mr Device memory resource used to allocate the returned column's device memory
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
  *
  * @returns new column with the selected elements
  */
@@ -782,7 +653,8 @@ std::unique_ptr<column> copy_if_else(
   scalar const& lhs,
   column_view const& rhs,
   column_view const& boolean_mask,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief   Returns a new column, where each element is selected from either @p lhs or
@@ -791,14 +663,15 @@ std::unique_ptr<column> copy_if_else(
  * Selects each element i in the output column from either @p rhs or @p lhs using the following
  * rule: `output[i] = (boolean_mask.valid(i) and boolean_mask[i]) ? lhs[i] : rhs`
  *
- * @throws cudf::logic_error if lhs and rhs are not of the same type
- * @throws cudf::logic_error if boolean mask is not of type bool
- * @throws cudf::logic_error if boolean mask is not of the same length as lhs
- * @param[in] lhs left-hand column_view
- * @param[in] rhs right-hand scalar
- * @param[in] boolean_mask column of `type_id::BOOL8` representing "left (true) / right (false)"
+ * @throws cudf::data_type_error if lhs and rhs are not of the same type
+ * @throws cudf::data_type_error if boolean mask is not of type bool
+ * @throws std::invalid_argument if boolean mask is not of the same length as lhs and rhs
+ * @param lhs left-hand column_view
+ * @param rhs right-hand scalar
+ * @param boolean_mask column of `type_id::BOOL8` representing "left (true) / right (false)"
  * boolean for each element. Null element represents false.
- * @param[in] mr Device memory resource used to allocate the returned column's device memory
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
  *
  * @returns new column with the selected elements
  */
@@ -806,7 +679,8 @@ std::unique_ptr<column> copy_if_else(
   column_view const& lhs,
   scalar const& rhs,
   column_view const& boolean_mask,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief   Returns a new column, where each element is selected from either @p lhs or
@@ -816,11 +690,12 @@ std::unique_ptr<column> copy_if_else(
  * rule: `output[i] = (boolean_mask.valid(i) and boolean_mask[i]) ? lhs : rhs`
  *
  * @throws cudf::logic_error if boolean mask is not of type bool
- * @param[in] lhs left-hand scalar
- * @param[in] rhs right-hand scalar
- * @param[in] boolean_mask column of `type_id::BOOL8` representing "left (true) / right (false)"
+ * @param lhs left-hand scalar
+ * @param rhs right-hand scalar
+ * @param boolean_mask column of `type_id::BOOL8` representing "left (true) / right (false)"
  * boolean for each element. null element represents false.
- * @param[in] mr Device memory resource used to allocate the returned column's device memory
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
  *
  * @returns new column with the selected elements
  */
@@ -828,7 +703,8 @@ std::unique_ptr<column> copy_if_else(
   scalar const& lhs,
   scalar const& rhs,
   column_view const& boolean_mask,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Scatters rows from the input table to rows of the output corresponding
@@ -853,16 +729,17 @@ std::unique_ptr<column> copy_if_else(
  * output:       {{   1,     2,     3,     4,    5,     6,    7,    8,    9,    10}}
  * @endcode
  *
- * @throw  cudf::logic_error if input.num_columns() != target.num_columns()
- * @throws cudf::logic_error if any `i`th input_column type != `i`th target_column type
- * @throws cudf::logic_error if boolean_mask.type() != bool
- * @throws cudf::logic_error if boolean_mask.size() != target.num_rows()
- * @throws cudf::logic_error if number of `true` in `boolean_mask` > input.num_rows()
+ * @throws std::invalid_argument if input.num_columns() != target.num_columns()
+ * @throws cudf::data_type_error if any `i`th input_column type != `i`th target_column type
+ * @throws cudf::data_type_error if boolean_mask.type() != bool
+ * @throws std::invalid_argument if boolean_mask.size() != target.num_rows()
+ * @throws std::invalid_argument if number of `true` in `boolean_mask` > input.num_rows()
  *
- * @param[in] input table_view (set of dense columns) to scatter
- * @param[in] target table_view to modify with scattered values from `input`
- * @param[in] boolean_mask column_view which acts as boolean mask
- * @param[in] mr Device memory resource used to allocate device memory of the returned table
+ * @param input table_view (set of dense columns) to scatter
+ * @param target table_view to modify with scattered values from `input`
+ * @param boolean_mask column_view which acts as boolean mask
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate device memory of the returned table
  *
  * @returns Returns a table by scattering `input` into `target` as per `boolean_mask`
  */
@@ -870,7 +747,8 @@ std::unique_ptr<table> boolean_mask_scatter(
   table_view const& input,
   table_view const& target,
   column_view const& boolean_mask,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Scatters scalar values to rows of the output corresponding
@@ -878,8 +756,8 @@ std::unique_ptr<table> boolean_mask_scatter(
  *
  * @ingroup copy_scatter
  *
- * The `i`th scalar in `input` will be written to all columns of the output
- * table at the location of the `i`th true value in `boolean_mask`.
+ * The `i`th scalar in `input` will be written to the ith column of the output
+ * table at the location of every true value in `boolean_mask`.
  * All other rows in the output will equal the same row in `target`.
  *
  * @code{.pseudo}
@@ -891,23 +769,25 @@ std::unique_ptr<table> boolean_mask_scatter(
  * output:       {{   11,    2,     3,     4,   11,    11,    7,   11,   11,    10}}
  * @endcode
  *
- * @throw  cudf::logic_error if input.size() != target.num_columns()
- * @throws cudf::logic_error if any `i`th input_scalar type != `i`th target_column type
- * @throws cudf::logic_error if boolean_mask.type() != bool
- * @throws cudf::logic_error if boolean_mask.size() != target.size()
+ * @throws std::invalid_argument if input.size() != target.num_columns()
+ * @throws cudf::data_type_error if any `i`th input_column type != `i`th target_column type
+ * @throws cudf::data_type_error if boolean_mask.type() != bool
+ * @throws std::invalid_argument if boolean_mask.size() != target.num_rows()
  *
- * @param[in] input scalars to scatter
- * @param[in] target table_view to modify with scattered values from `input`
- * @param[in] boolean_mask column_view which acts as boolean mask
- * @param[in] mr Device memory resource used to allocate device memory of the returned table
+ * @param input scalars to scatter
+ * @param target table_view to modify with scattered values from `input`
+ * @param boolean_mask column_view which acts as boolean mask
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate device memory of the returned table
  *
  * @returns Returns a table by scattering `input` into `target` as per `boolean_mask`
  */
 std::unique_ptr<table> boolean_mask_scatter(
-  std::vector<std::reference_wrapper<const scalar>> const& input,
+  std::vector<std::reference_wrapper<scalar const>> const& input,
   table_view const& target,
   column_view const& boolean_mask,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Get the element at specified index from a column
@@ -915,17 +795,19 @@ std::unique_ptr<table> boolean_mask_scatter(
  * @warning This function is expensive (invokes a kernel launch). So, it is not
  * recommended to be used in performance sensitive code or inside a loop.
  *
- * @throws cudf::logic_error if `index` is not within the range `[0, input.size())`
+ * @throws std::out_of_range if `index` is not within the range `[0, input.size())`
  *
  * @param input Column view to get the element from
  * @param index Index into `input` to get the element at
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned scalar's device memory
  * @return Scalar containing the single value
  */
 std::unique_ptr<scalar> get_element(
   column_view const& input,
   size_type index,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Indicates whether a row can be sampled more than once.
@@ -958,6 +840,7 @@ enum class sample_with_replacement : bool {
  * @param n non-negative number of samples expected from `input`
  * @param replacement Allow or disallow sampling of the same row more than once
  * @param seed Seed value to initiate random number generator
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned table's device memory
  *
  * @return Table containing samples from `input`
@@ -967,7 +850,8 @@ std::unique_ptr<table> sample(
   size_type const n,
   sample_with_replacement replacement = sample_with_replacement::FALSE,
   int64_t const seed                  = 0,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr   = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Checks if a column or its descendants have non-empty null rows
@@ -982,10 +866,12 @@ std::unique_ptr<table> sample(
  *
  * @param input The column which is (and whose descendants are) to be checked for
  * non-empty null rows.
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @return true If either the column or its descendants have non-empty null rows
  * @return false If neither the column or its descendants have non-empty null rows
  */
-bool has_nonempty_nulls(column_view const& input);
+bool has_nonempty_nulls(column_view const& input,
+                        rmm::cuda_stream_view stream = cudf::get_default_stream());
 
 /**
  * @brief Approximates if a column or its descendants *may* have non-empty null elements
@@ -1026,7 +912,7 @@ bool may_have_nonempty_nulls(column_view const& input);
  *
  * @code{.pseudo}
  * auto const lists   = lists_column_wrapper<int32_t>{ {0,1}, {2,3}, {4,5} }.release();
- * cudf::detail::set_null_mask(lists->null_mask(), 1, 2, false);
+ * cudf::set_null_mask(lists->null_mask(), 1, 2, false);
  *
  * lists[1] is now null, but the lists child column still stores `{2,3}`.
  * The lists column contents will be:
@@ -1042,7 +928,7 @@ bool may_have_nonempty_nulls(column_view const& input);
  *
  * @code{.pseudo}
  * auto const strings = strings_column_wrapper{ "AB", "CD", "EF" }.release();
- * cudf::detail::set_null_mask(strings->null_mask(), 1, 2, false);
+ * cudf::set_null_mask(strings->null_mask(), 1, 2, false);
  *
  * strings[1] is now null, but the strings column still stores `"CD"`.
  * The lists column contents will be:
@@ -1075,12 +961,14 @@ bool may_have_nonempty_nulls(column_view const& input);
  * @endcode
  *
  * @param input The column whose null rows are to be checked and purged
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return A new column with equivalent contents to `input`, but with null rows purged
  */
 std::unique_ptr<column> purge_nonempty_nulls(
   column_view const& input,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /** @} */
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

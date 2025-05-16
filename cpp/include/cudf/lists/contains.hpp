@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,10 +17,10 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/lists/lists_column_view.hpp>
+#include <cudf/utilities/export.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
-#include <rmm/mr/device/per_device_resource.hpp>
-
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace lists {
 /**
  * @addtogroup lists_contains
@@ -42,13 +42,15 @@ namespace lists {
  *
  * @param lists Lists column whose `n` rows are to be searched
  * @param search_key The scalar key to be looked up in each list row
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return BOOL8 column of `n` rows with the result of the lookup
  */
 std::unique_ptr<column> contains(
   cudf::lists_column_view const& lists,
   cudf::scalar const& search_key,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Create a column of `bool` values indicating whether the list rows of the first
@@ -63,14 +65,16 @@ std::unique_ptr<column> contains(
  *   2. The list row `lists[i]` is null
  *
  * @param lists Lists column whose `n` rows are to be searched
- * @param search_keys Column of elements to be looked up in each list row
+ * @param search_keys Column of elements to be looked up in each list row.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return BOOL8 column of `n` rows with the result of the lookup
  */
 std::unique_ptr<column> contains(
   cudf::lists_column_view const& lists,
   cudf::column_view const& search_keys,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Create a column of `bool` values indicating whether each row in the `lists` column
@@ -84,13 +88,15 @@ std::unique_ptr<column> contains(
  * A row with an empty list will always return false.
  * Nulls inside non-null nested elements (such as lists or structs) are not considered.
  *
- * @param lists Lists column whose `n` rows are to be searched
+ * @param lists Lists column whose `n` rows are to be searched.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return BOOL8 column of `n` rows with the result of the lookup
  */
 std::unique_ptr<column> contains_nulls(
   cudf::lists_column_view const& lists,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Option to choose whether `index_of()` returns the first or last match
@@ -125,14 +131,16 @@ enum class duplicate_find_option : int32_t {
  * @param search_key The scalar key to be looked up in each list row
  * @param find_option Whether to return the position of the first match (`FIND_FIRST`) or
  * last (`FIND_LAST`)
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return column of `n` rows with the location of the `search_key`
  */
 std::unique_ptr<column> index_of(
   cudf::lists_column_view const& lists,
   cudf::scalar const& search_key,
-  duplicate_find_option find_option   = duplicate_find_option::FIND_FIRST,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  duplicate_find_option find_option = duplicate_find_option::FIND_FIRST,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Create a column of values indicating the position of a search key
@@ -160,15 +168,17 @@ std::unique_ptr<column> index_of(
  * `lists`
  * @param find_option Whether to return the position of the first match (`FIND_FIRST`) or
  * last (`FIND_LAST`)
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return column of `n` rows with the location of the `search_key`
  */
 std::unique_ptr<column> index_of(
   cudf::lists_column_view const& lists,
   cudf::column_view const& search_keys,
-  duplicate_find_option find_option   = duplicate_find_option::FIND_FIRST,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  duplicate_find_option find_option = duplicate_find_option::FIND_FIRST,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /** @} */  // end of group
 }  // namespace lists
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

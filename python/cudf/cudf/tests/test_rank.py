@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 
 from itertools import chain, combinations_with_replacement, product
 
@@ -6,8 +6,10 @@ import numpy as np
 import pandas as pd
 import pytest
 
+import cudf
 from cudf import DataFrame
-from cudf.testing._utils import assert_eq, assert_exceptions_equal
+from cudf.testing import assert_eq
+from cudf.testing._utils import assert_exceptions_equal
 
 
 @pytest.fixture
@@ -55,13 +57,18 @@ def test_rank_all_arguments(
     assert_eq(gdf["col1"].rank(**kwargs), pdf["col1"].rank(**kwargs))
     assert_eq(gdf["col2"].rank(**kwargs), pdf["col2"].rank(**kwargs))
     if numeric_only:
-        with pytest.warns(FutureWarning):
-            expect = pdf["str"].rank(**kwargs)
-        got = gdf["str"].rank(**kwargs)
-        assert expect.empty == got.empty
-        expected = pdf.select_dtypes(include=np.number)
-    else:
-        expected = pdf.copy(deep=True)
+        assert_exceptions_equal(
+            lfunc=pdf["str"].rank,
+            rfunc=gdf["str"].rank,
+            lfunc_args_and_kwargs=(
+                [],
+                kwargs,
+            ),
+            rfunc_args_and_kwargs=(
+                [],
+                kwargs,
+            ),
+        )
 
     actual = gdf.rank(**kwargs)
     expected = pdf.rank(**kwargs)
@@ -119,33 +126,40 @@ def test_rank_error_arguments(pdf):
     )
 
 
-sort_group_args = [
-    np.full((3,), np.nan),
-    100 * np.random.random(10),
-    np.full((3,), np.inf),
-    np.full((3,), -np.inf),
-]
-sort_dtype_args = [np.int32, np.int64, np.float32, np.float64]
-
-
+@pytest.mark.filterwarnings("ignore:invalid value encountered in cast")
 @pytest.mark.parametrize(
     "elem,dtype",
     list(
         product(
-            combinations_with_replacement(sort_group_args, 4),
-            sort_dtype_args,
+            combinations_with_replacement(
+                [
+                    np.full((3,), np.nan),
+                    100 * np.random.default_rng(seed=0).random(10),
+                    np.full((3,), np.inf),
+                    np.full((3,), -np.inf),
+                ],
+                4,
+            ),
+            [np.int32, np.int64, np.float32, np.float64],
         )
     ),
 )
 def test_series_rank_combinations(elem, dtype):
-    np.random.seed(0)
-    gdf = DataFrame()
-    gdf["a"] = aa = np.fromiter(chain.from_iterable(elem), np.float64).astype(
-        dtype
-    )
+    aa = np.fromiter(chain.from_iterable(elem), np.float64).astype(dtype)
+    gdf = DataFrame({"a": aa})
+    df = pd.DataFrame({"a": aa})
     ranked_gs = gdf["a"].rank(method="first")
-    df = pd.DataFrame()
-    df["a"] = aa
     ranked_ps = df["a"].rank(method="first")
     # Check
-    assert_eq(ranked_ps, ranked_gs.to_pandas())
+    assert_eq(ranked_ps, ranked_gs)
+
+
+@pytest.mark.parametrize("klass", ["Series", "DataFrame"])
+def test_int_nan_pandas_compatible(klass):
+    data = [3, 6, 1, 1, None, 6]
+    pd_obj = getattr(pd, klass)(data)
+    cudf_obj = getattr(cudf, klass)(data)
+    with cudf.option_context("mode.pandas_compatible", True):
+        result = cudf_obj.rank()
+    expected = pd_obj.rank()
+    assert_eq(result, expected)

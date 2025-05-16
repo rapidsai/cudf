@@ -1,10 +1,14 @@
-# Copyright (c) 2022-2023, NVIDIA CORPORATION.
+# Copyright (c) 2022-2025, NVIDIA CORPORATION.
+from __future__ import annotations
 
 import os
 import textwrap
-from collections.abc import Container
+from contextlib import ContextDecorator
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, Optional
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Container
 
 
 @dataclass
@@ -15,7 +19,7 @@ class Option:
     validator: Callable
 
 
-_OPTIONS: Dict[str, Option] = {}
+_OPTIONS: dict[str, Option] = {}
 
 
 def _env_get_int(name, default):
@@ -122,7 +126,7 @@ def _build_option_description(name, opt):
     )
 
 
-def describe_option(name: Optional[str] = None):
+def describe_option(name: str | None = None):
     """Prints the description of an option.
 
     If `name` is unspecified, prints the description of all available options.
@@ -134,7 +138,7 @@ def describe_option(name: Optional[str] = None):
     """
     names = _OPTIONS.keys() if name is None else [name]
     for name in names:
-        print(_build_option_description(name, _OPTIONS[name]))
+        print(_build_option_description(name, _OPTIONS[name]))  # noqa: T201
 
 
 def _make_contains_validator(valid_options: Container) -> Callable:
@@ -151,11 +155,6 @@ def _make_contains_validator(valid_options: Container) -> Callable:
 
 
 def _cow_validator(val):
-    if get_option("spill") and val:
-        raise ValueError(
-            "Copy-on-write is not supported when spilling is enabled. "
-            "Please set `spill` to `False`"
-        )
     if val not in {False, True}:
         raise ValueError(
             f"{val} is not a valid option. Must be one of {{False, True}}."
@@ -163,14 +162,6 @@ def _cow_validator(val):
 
 
 def _spill_validator(val):
-    try:
-        if get_option("copy_on_write") and val:
-            raise ValueError(
-                "Spilling is not supported when copy-on-write is enabled. "
-                "Please set `copy_on_write` to `False`"
-            )
-    except KeyError:
-        pass
     if val not in {False, True}:
         raise ValueError(
             f"{val} is not a valid option. Must be one of {{False, True}}."
@@ -182,9 +173,7 @@ def _integer_validator(val):
         int(val)
         return True
     except ValueError:
-        raise ValueError(
-            f"{val} is not a valid option. " f"Must be an integer."
-        )
+        raise ValueError(f"{val} is not a valid option. Must be an integer.")
 
 
 def _integer_and_none_validator(val):
@@ -193,7 +182,7 @@ def _integer_and_none_validator(val):
             return
     except ValueError:
         raise ValueError(
-            f"{val} is not a valid option. " f"Must be an integer or None."
+            f"{val} is not a valid option. Must be an integer or None."
         )
 
 
@@ -304,3 +293,107 @@ _register_option(
     ),
     _integer_validator,
 )
+
+_register_option(
+    "mode.pandas_compatible",
+    False,
+    textwrap.dedent(
+        """
+        If set to `False`, retains `cudf` specific behavior.
+        If set to `True`, enables pandas compatibility mode,
+        which will try to match pandas API behaviors in case of
+        any inconsistency.
+        \tValid values are True or False. Default is False.
+    """
+    ),
+    _make_contains_validator([False, True]),
+)
+
+_register_option(
+    "memory_profiling",
+    _env_get_bool("CUDF_MEMORY_PROFILING", False),
+    textwrap.dedent(
+        """
+        If set to `False`, disables memory profiling.
+        If set to `True`, enables memory profiling.
+        Read more at: :ref:`memory-profiling-user-doc`
+        \tValid values are True or False. Default is False.
+    """
+    ),
+    _make_contains_validator([False, True]),
+)
+
+_register_option(
+    "io.parquet.low_memory",
+    False,
+    textwrap.dedent(
+        """
+        If set to `False`, reads entire parquet in one go.
+        If set to `True`, reads parquet file in chunks.
+        \tValid values are True or False. Default is False.
+    """
+    ),
+    _make_contains_validator([False, True]),
+)
+
+_register_option(
+    "io.json.low_memory",
+    False,
+    textwrap.dedent(
+        """
+        If set to `False`, reads entire json in one go.
+        If set to `True`, reads json file in chunks.
+        \tValid values are True or False. Default is False.
+    """
+    ),
+    _make_contains_validator([False, True]),
+)
+
+_register_option(
+    "kvikio_remote_io",
+    _env_get_bool("CUDF_KVIKIO_REMOTE_IO", False),
+    textwrap.dedent(
+        """
+        Whether to use KvikIO's remote IO backend or not.
+        \tWARN: this is experimental and may be removed at any time
+        \twithout warning or deprecation period.
+        \tSet KVIKIO_NTHREADS (default is 8) to change the number of
+        \tconcurrent tcp connections, which is important for good performance.
+        \tValid values are True or False. Default is False.
+    """
+    ),
+    _make_contains_validator([False, True]),
+)
+
+
+class option_context(ContextDecorator):
+    """
+    Context manager to temporarily set options in the `with` statement context.
+
+    You need to invoke as ``option_context(pat, val, [(pat, val), ...])``.
+
+
+    Examples
+    --------
+    >>> from cudf import option_context
+    >>> with option_context('mode.pandas_compatible', True, 'default_float_bitwidth', 32):
+    ...     pass
+    """
+
+    def __init__(self, *args) -> None:
+        if len(args) % 2 != 0:
+            raise ValueError(
+                "Need to invoke as option_context(pat, val, "
+                "[(pat, val), ...])."
+            )
+
+        self.ops = tuple(zip(args[::2], args[1::2]))
+
+    def __enter__(self) -> None:
+        self.undo = tuple((pat, get_option(pat)) for pat, _ in self.ops)
+        for pat, val in self.ops:
+            set_option(pat, val)
+
+    def __exit__(self, *args) -> None:
+        for pat, val in self.undo:
+            set_option(pat, val)

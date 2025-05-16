@@ -413,6 +413,14 @@ public final class DType {
   }
 
   /**
+   * Returns true for strictly Integer types not a type backed by
+   * ints
+   */
+  public boolean isIntegral() {
+    return INTEGRALS.contains(this.typeId);
+  }
+
+ /**
    * Returns true for nested types
    */
   public boolean isNestedType() {
@@ -505,5 +513,16 @@ public final class DType {
   private static final EnumSet<DTypeEnum> OFFSETS_TYPE = EnumSet.of(
       DTypeEnum.STRING,
       DTypeEnum.LIST
+  );
+
+  private static final EnumSet<DTypeEnum> INTEGRALS = EnumSet.of(
+    DTypeEnum.INT8,
+    DTypeEnum.INT16,
+    DTypeEnum.INT32,
+    DTypeEnum.INT64,
+    DTypeEnum.UINT8,
+    DTypeEnum.UINT16,
+    DTypeEnum.UINT32,
+    DTypeEnum.UINT64
   );
 }

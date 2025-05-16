@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include <cudf/detail/tdigest/tdigest.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/structs/structs_column_view.hpp>
 #include <cudf/tdigest/tdigest_column_view.hpp>
@@ -30,14 +29,14 @@ tdigest_column_view::tdigest_column_view(column_view const& col) : column_view(c
   CUDF_EXPECTS(col.offset() == 0, "Encountered a sliced tdigest column");
   CUDF_EXPECTS(not col.nullable(), "Encountered nullable tdigest column");
 
-  structs_column_view scv(col);
+  structs_column_view const scv(col);
   CUDF_EXPECTS(scv.num_children() == 3, "Encountered invalid tdigest column");
   CUDF_EXPECTS(scv.child(min_column_index).type().id() == type_id::FLOAT64,
                "Encountered invalid tdigest column");
   CUDF_EXPECTS(scv.child(max_column_index).type().id() == type_id::FLOAT64,
                "Encountered invalid tdigest column");
 
-  lists_column_view lcv(scv.child(centroid_column_index));
+  lists_column_view const lcv(scv.child(centroid_column_index));
   auto data = lcv.child();
   CUDF_EXPECTS(data.type().id() == type_id::STRUCT, "Encountered invalid tdigest column");
   CUDF_EXPECTS(data.num_children() == 2,
@@ -53,14 +52,14 @@ lists_column_view tdigest_column_view::centroids() const { return child(centroid
 column_view tdigest_column_view::means() const
 {
   auto c = centroids();
-  structs_column_view inner(c.parent().child(lists_column_view::child_column_index));
+  structs_column_view const inner(c.parent().child(lists_column_view::child_column_index));
   return inner.child(mean_column_index);
 }
 
 column_view tdigest_column_view::weights() const
 {
   auto c = centroids();
-  structs_column_view inner(c.parent().child(lists_column_view::child_column_index));
+  structs_column_view const inner(c.parent().child(lists_column_view::child_column_index));
   return inner.child(weight_column_index);
 }
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,7 +21,6 @@
 
 #include <cudf/concatenate.hpp>
 #include <cudf/copying.hpp>
-#include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/groupby.hpp>
 #include <cudf/table/table_view.hpp>
 
@@ -40,7 +39,7 @@ auto merge_lists(vcol_views const& keys_cols, vcol_views const& values_cols)
   auto const values = cudf::concatenate(values_cols);
 
   std::vector<cudf::groupby::aggregation_request> requests;
-  requests.emplace_back(cudf::groupby::aggregation_request());
+  requests.emplace_back();
   requests[0].values = *values;
   requests[0].aggregations.emplace_back(
     cudf::make_merge_lists_aggregation<cudf::groupby_aggregation>());
@@ -374,7 +373,7 @@ TEST_F(GroupbyMergeListsTest, StringsColumnInput)
                 "" /*NULL*/,
                 "" /*NULL*/,
                 "German Shepherd",
-                ""                                                /*NULL*/
+                "" /*NULL*/
               },
               nulls_at({3, 4, 5, 7})},                            // key = "dog"
     lists_col{{"Whale", "" /*NULL*/, "Polar Bear"}, null_at(1)},  // key = "unknown"

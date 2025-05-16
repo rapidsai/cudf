@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2023, NVIDIA CORPORATION.
+# Copyright (c) 2021-2025, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -11,10 +11,11 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+from __future__ import annotations
+
 import datetime
 import io
 import pathlib
-from typing import Optional
 
 import fastavro
 import numpy as np
@@ -22,7 +23,8 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.testing._utils import assert_eq
+from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
+from cudf.testing import assert_eq
 from cudf.testing.dataset_generator import rand_dataframe
 
 
@@ -125,7 +127,6 @@ def test_can_detect_dtype_from_avro_type_nested(
     ],
 )
 def test_can_parse_single_value(avro_type, cudf_type, avro_val, cudf_val):
-
     schema_root = {
         "name": "root",
         "type": "record",
@@ -147,7 +148,6 @@ def test_can_parse_single_value(avro_type, cudf_type, avro_val, cudf_val):
 
 @pytest.mark.parametrize("avro_type, cudf_type", avro_type_params)
 def test_can_parse_single_null(avro_type, cudf_type):
-
     schema_root = {
         "name": "root",
         "type": "record",
@@ -167,7 +167,6 @@ def test_can_parse_single_null(avro_type, cudf_type):
 
 @pytest.mark.parametrize("avro_type, cudf_type", avro_type_params)
 def test_can_parse_no_data(avro_type, cudf_type):
-
     schema_root = {
         "name": "root",
         "type": "record",
@@ -188,7 +187,6 @@ def test_can_parse_no_data(avro_type, cudf_type):
 )
 @pytest.mark.parametrize("avro_type, cudf_type", avro_type_params)
 def test_can_parse_no_fields(avro_type, cudf_type):
-
     schema_root = {
         "name": "root",
         "type": "record",
@@ -205,7 +203,6 @@ def test_can_parse_no_fields(avro_type, cudf_type):
 
 
 def test_can_parse_no_schema():
-
     schema_root = None
     records = []
     actual = cudf_from_avro_util(schema_root, records)
@@ -215,7 +212,7 @@ def test_can_parse_no_schema():
 
 @pytest.mark.parametrize("rows", [0, 1, 10, 1000])
 @pytest.mark.parametrize("codec", ["null", "deflate", "snappy"])
-def test_avro_compression(rows, codec):
+def test_avro_decompression(set_decomp_env_vars, rows, codec):
     schema = {
         "name": "root",
         "type": "record",
@@ -239,6 +236,8 @@ def test_avro_compression(rows, codec):
             },
         ],
         rows,
+        seed=0,
+        use_threads=False,
     )
     expected_df = cudf.DataFrame.from_arrow(df)
 
@@ -297,7 +296,7 @@ def test_can_detect_dtypes_from_avro_logical_type(
     assert_eq(expected, actual)
 
 
-def get_days_from_epoch(date: Optional[datetime.date]) -> Optional[int]:
+def get_days_from_epoch(date: datetime.date | None) -> int | None:
     if date is None:
         return None
     return (date - datetime.date(1970, 1, 1)).days
@@ -306,8 +305,11 @@ def get_days_from_epoch(date: Optional[datetime.date]) -> Optional[int]:
 @pytest.mark.parametrize("namespace", [None, "root_ns"])
 @pytest.mark.parametrize("nullable", [True, False])
 @pytest.mark.parametrize("prepend_null", [True, False])
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="Fails in older versions of pandas (datetime(9999, ...) too large)",
+)
 def test_can_parse_avro_date_logical_type(namespace, nullable, prepend_null):
-
     avro_type = {"logicalType": "date", "type": "int"}
     if nullable:
         if prepend_null:
@@ -599,12 +601,12 @@ def test_avro_reader_multiblock(
     else:
         assert dtype in ("float32", "float64")
         avro_type = "float" if dtype == "float32" else "double"
-
+        rng = np.random.default_rng(seed=0)
         # We don't use rand_dataframe() here, because it increases the
         # execution time of each test by a factor of 10 or more (it appears
         # to use a very costly approach to generating random data).
         # See also: https://github.com/rapidsai/cudf/issues/13128
-        values = np.random.rand(total_rows).astype(dtype)
+        values = rng.random(total_rows).astype(dtype)
         bytes_per_row = values.dtype.itemsize
 
     # The sync_interval is the number of bytes between sync blocks.  We know

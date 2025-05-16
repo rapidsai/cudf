@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 import cupy as cp
 import pytest
@@ -64,7 +64,14 @@ def test_buffer_creation_from_any():
     assert isinstance(b, Buffer)
     assert ary.data.ptr == b.get_ptr(mode="read")
     assert ary.nbytes == b.size
-    assert b.owner.owner is ary
+    assert b.owner.owner.owner is ary
+
+
+@pytest.mark.parametrize("size", [10, 2**10 + 500, 2**20])
+def test_buffer_str(size):
+    ary = cp.arange(size, dtype="uint8")
+    buf = as_buffer(ary)
+    assert f"size={size}" in repr(buf)
 
 
 @pytest.mark.parametrize(
@@ -73,7 +80,7 @@ def test_buffer_creation_from_any():
 def test_buffer_repr(size, expect):
     ary = cp.arange(size, dtype="uint8")
     buf = as_buffer(ary)
-    assert f"size={expect}" in repr(buf)
+    assert f"size={expect}" in str(buf)
 
 
 @pytest.mark.parametrize(

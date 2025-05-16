@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,7 @@
 
 #include <stdexcept>
 
-__global__ void kernel() { printf("The kernel ran!\n"); }
+__global__ static void kernel() { printf("The kernel ran!\n"); }
 
 void test_cudaLaunchKernel()
 {
@@ -33,6 +33,7 @@ void test_cudaLaunchKernel()
   } catch (std::runtime_error&) {
     return;
   }
+  if (getenv("LIBCUDF_MEMCHECK_ENABLED")) { return; }
   throw std::runtime_error("No exception raised for kernel on default stream!");
 }
 

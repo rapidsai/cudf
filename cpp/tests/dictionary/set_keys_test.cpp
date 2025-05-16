@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,12 +14,14 @@
  * limitations under the License.
  */
 
-#include <cudf/dictionary/dictionary_column_view.hpp>
-#include <cudf/dictionary/encode.hpp>
-#include <cudf/dictionary/update_keys.hpp>
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
+
+#include <cudf/dictionary/dictionary_column_view.hpp>
+#include <cudf/dictionary/encode.hpp>
+#include <cudf/dictionary/update_keys.hpp>
+#include <cudf/utilities/error.hpp>
 
 #include <thrust/iterator/transform_iterator.h>
 
@@ -36,7 +38,7 @@ TEST_F(DictionarySetKeysTest, StringsKeys)
   cudf::test::strings_column_wrapper new_keys{"aaa", "ccc", "eee", "fff"};
   auto result = cudf::dictionary::set_keys(dictionary->view(), new_keys);
 
-  std::vector<const char*> h_expected{
+  std::vector<char const*> h_expected{
     "eee", "aaa", nullptr, nullptr, "ccc", "ccc", "ccc", "eee", "aaa"};
   cudf::test::strings_column_wrapper expected(
     h_expected.begin(),
@@ -55,22 +57,24 @@ TEST_F(DictionarySetKeysTest, FloatKeys)
   auto result = cudf::dictionary::set_keys(dictionary->view(), new_keys);
 
   cudf::test::fixed_width_column_wrapper<float> expected{{4.25, 7.125, 0.5, 0., 7.125, 0.5},
-                                                         {1, 1, 1, 0, 1, 1}};
+                                                         {true, true, true, false, true, true}};
   auto decoded = cudf::dictionary::decode(result->view());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*decoded, expected);
 }
 
 TEST_F(DictionarySetKeysTest, WithNulls)
 {
-  cudf::test::fixed_width_column_wrapper<int64_t> input{{444, 0, 333, 111, 222, 222, 222, 444, 0},
-                                                        {1, 1, 1, 1, 1, 0, 1, 1, 1}};
+  cudf::test::fixed_width_column_wrapper<int64_t> input{
+    {444, 0, 333, 111, 222, 222, 222, 444, 0},
+    {true, true, true, true, true, false, true, true, true}};
   auto dictionary = cudf::dictionary::encode(input);
 
   cudf::test::fixed_width_column_wrapper<int64_t> new_keys{0, 222, 333, 444};
   auto result = cudf::dictionary::set_keys(dictionary->view(), new_keys);
 
   cudf::test::fixed_width_column_wrapper<int64_t> expected{
-    {444, 0, 333, 111, 222, 222, 222, 444, 0}, {1, 1, 1, 0, 1, 0, 1, 1, 1}};
+    {444, 0, 333, 111, 222, 222, 222, 444, 0},
+    {true, true, true, false, true, false, true, true, true}};
   auto decoded = cudf::dictionary::decode(result->view());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*decoded, expected);
 }
@@ -81,8 +85,8 @@ TEST_F(DictionarySetKeysTest, Errors)
   auto dictionary = cudf::dictionary::encode(input);
 
   cudf::test::fixed_width_column_wrapper<float> new_keys{1.0, 2.0, 3.0};
-  EXPECT_THROW(cudf::dictionary::set_keys(dictionary->view(), new_keys), cudf::logic_error);
-  cudf::test::fixed_width_column_wrapper<int64_t> null_keys{{1, 2, 3}, {1, 0, 1}};
+  EXPECT_THROW(cudf::dictionary::set_keys(dictionary->view(), new_keys), cudf::data_type_error);
+  cudf::test::fixed_width_column_wrapper<int64_t> null_keys{{1, 2, 3}, {true, false, true}};
   EXPECT_THROW(cudf::dictionary::set_keys(dictionary->view(), null_keys), cudf::logic_error);
 }
 

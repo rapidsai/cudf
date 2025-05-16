@@ -1,15 +1,53 @@
-# Copyright (c) 2023, NVIDIA CORPORATION.
+# Copyright (c) 2023-2025, NVIDIA CORPORATION.
+from __future__ import annotations
 
+import datetime
 import os
 import zoneinfo
 from functools import lru_cache
+from typing import TYPE_CHECKING, Literal
 
-from cudf._lib.timezone import build_timezone_transition_table
-from cudf.core.dataframe import DataFrame
+import numpy as np
+import pandas as pd
+
+import pylibcudf as plc
+
+import cudf
+
+if TYPE_CHECKING:
+    from cudf.core.column.datetime import DatetimeColumn
+    from cudf.core.column.timedelta import TimeDeltaColumn
+
+
+def get_compatible_timezone(dtype: pd.DatetimeTZDtype) -> pd.DatetimeTZDtype:
+    """Convert dtype.tz object to zoneinfo object if possible."""
+    tz = dtype.tz
+    if isinstance(tz, zoneinfo.ZoneInfo):
+        return dtype
+    if cudf.get_option("mode.pandas_compatible"):
+        raise NotImplementedError(
+            f"{tz} must be a zoneinfo.ZoneInfo object in pandas_compatible mode."
+        )
+    elif (tzname := getattr(tz, "zone", None)) is not None:
+        # pytz-like
+        key = tzname
+    elif (tz_file := getattr(tz, "_filename", None)) is not None:
+        # dateutil-like
+        key = tz_file.split("zoneinfo/")[-1]
+    elif isinstance(tz, datetime.tzinfo):
+        # Try to get UTC-like tzinfos
+        reference = datetime.datetime.now()
+        key = tz.tzname(reference)
+        if not (isinstance(key, str) and key.lower() == "utc"):
+            raise NotImplementedError(f"cudf does not support {tz}")
+    else:
+        raise NotImplementedError(f"cudf does not support {tz}")
+    new_tz = zoneinfo.ZoneInfo(key)
+    return pd.DatetimeTZDtype(dtype.unit, new_tz)
 
 
 @lru_cache(maxsize=20)
-def get_tz_data(zone_name):
+def get_tz_data(zone_name: str) -> tuple[DatetimeColumn, TimeDeltaColumn]:
     """
     Return timezone data (transition times and UTC offsets) for the
     given IANA time zone.
@@ -21,30 +59,35 @@ def get_tz_data(zone_name):
 
     Returns
     -------
-    DataFrame with two columns containing the transition times ("dt")
-    and corresponding UTC offsets ("offset").
+    Tuple with two columns containing the transition times
+    and corresponding UTC offsets.
     """
     try:
         # like zoneinfo, we first look in TZPATH
-        return _find_and_read_tzfile_tzpath(zone_name)
+        tz_table = _find_and_read_tzfile_tzpath(zone_name)
     except zoneinfo.ZoneInfoNotFoundError:
         # if that fails, we fall back to using `tzdata`
-        return _find_and_read_tzfile_tzdata(zone_name)
+        tz_table = _find_and_read_tzfile_tzdata(zone_name)
+    return tz_table
 
 
-def _find_and_read_tzfile_tzpath(zone_name):
+def _find_and_read_tzfile_tzpath(
+    zone_name: str,
+) -> tuple[DatetimeColumn, TimeDeltaColumn]:
     for search_path in zoneinfo.TZPATH:
         if os.path.isfile(os.path.join(search_path, zone_name)):
-            return _read_tzfile_as_frame(search_path, zone_name)
+            return _read_tzfile_as_columns(search_path, zone_name)
     raise zoneinfo.ZoneInfoNotFoundError(zone_name)
 
 
-def _find_and_read_tzfile_tzdata(zone_name):
+def _find_and_read_tzfile_tzdata(
+    zone_name: str,
+) -> tuple[DatetimeColumn, TimeDeltaColumn]:
     import importlib.resources
 
     package_base = "tzdata.zoneinfo"
     try:
-        return _read_tzfile_as_frame(
+        return _read_tzfile_as_columns(
             str(importlib.resources.files(package_base)), zone_name
         )
     # TODO: make it so that the call to libcudf raises a
@@ -66,6 +109,39 @@ def _find_and_read_tzfile_tzdata(zone_name):
         raise zoneinfo.ZoneInfoNotFoundError(zone_name)
 
 
-def _read_tzfile_as_frame(tzdir, zone_name):
-    dt, offsets = build_timezone_transition_table(tzdir, zone_name)
-    return DataFrame._from_columns([dt, offsets], ["dt", "offsets"])
+def _read_tzfile_as_columns(
+    tzdir: str, zone_name: str
+) -> tuple[DatetimeColumn, TimeDeltaColumn]:
+    plc_table = plc.io.timezone.make_timezone_transition_table(
+        tzdir, zone_name
+    )
+    transition_times_and_offsets = plc_table.columns()
+
+    if not transition_times_and_offsets:
+        from cudf.core.column.column import as_column
+
+        # this happens for UTC-like zones
+        min_date = np.int64(np.iinfo("int64").min + 1).astype(
+            np.dtype("M8[s]")
+        )
+        return (as_column([min_date]), as_column([np.timedelta64(0, "s")]))  # type: ignore[return-value]
+
+    from cudf.core.column import ColumnBase
+
+    return tuple(
+        ColumnBase.from_pylibcudf(col) for col in transition_times_and_offsets
+    )  # type: ignore[return-value]
+
+
+def check_ambiguous_and_nonexistent(
+    ambiguous: Literal["NaT"], nonexistent: Literal["NaT"]
+) -> tuple[Literal["NaT"], Literal["NaT"]]:
+    if ambiguous != "NaT":
+        raise NotImplementedError(
+            "Only ambiguous='NaT' is currently supported"
+        )
+    if nonexistent != "NaT":
+        raise NotImplementedError(
+            "Only nonexistent='NaT' is currently supported"
+        )
+    return ambiguous, nonexistent

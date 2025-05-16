@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 from libc.stdint cimport int32_t, int64_t
 from libcpp cimport bool
@@ -6,17 +6,16 @@ from libcpp.map cimport map
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
 from libcpp.vector cimport vector
+from pylibcudf.io.datasource cimport Datasource
+from pylibcudf.libcudf.io.datasource cimport datasource
 
-from cudf._lib.cpp.io.types cimport datasource
-from cudf._lib.io.datasource cimport Datasource
 
-
-cdef extern from "kafka_callback.hpp" \
+cdef extern from "cudf_kafka/kafka_callback.hpp" \
         namespace "cudf::io::external::kafka" nogil:
     ctypedef object (*python_callable_type)()
 
 
-cdef extern from "kafka_consumer.hpp" \
+cdef extern from "cudf_kafka/kafka_consumer.hpp" \
         namespace "cudf::io::external::kafka" nogil:
 
     cpdef cppclass kafka_consumer:

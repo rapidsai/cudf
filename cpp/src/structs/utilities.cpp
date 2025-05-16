@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,15 +17,14 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/null_mask.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/structs/utilities.hpp>
 #include <cudf/detail/unary.hpp>
 #include <cudf/structs/structs_column_view.hpp>
-#include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
-#include <cudf/utilities/traits.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
@@ -36,7 +35,7 @@ namespace cudf::structs::detail {
  * @copydoc cudf::structs::detail::extract_ordered_struct_children
  */
 std::vector<std::vector<column_view>> extract_ordered_struct_children(
-  host_span<column_view const> struct_cols)
+  host_span<column_view const> struct_cols, rmm::cuda_stream_view stream)
 {
   auto const num_children = struct_cols[0].num_children();
   auto const num_cols     = static_cast<size_type>(struct_cols.size());
@@ -48,7 +47,7 @@ std::vector<std::vector<column_view>> extract_ordered_struct_children(
     std::vector<column_view> children;
     children.reserve(num_cols);
     for (size_type col_index = 0; col_index < num_cols; col_index++) {
-      structs_column_view scv(struct_cols[col_index]);
+      structs_column_view const scv(struct_cols[col_index]);
 
       // all inputs must have the same # of children and they must all be of the
       // same type.
@@ -56,7 +55,7 @@ std::vector<std::vector<column_view>> extract_ordered_struct_children(
                    "Mismatch in number of children during struct concatenate");
       CUDF_EXPECTS(struct_cols[0].child(child_index).type() == scv.child(child_index).type(),
                    "Mismatch in child types during struct concatenate");
-      children.push_back(scv.get_sliced_child(child_index));
+      children.push_back(scv.get_sliced_child(child_index, stream));
     }
 
     result.push_back(std::move(children));
@@ -91,7 +90,7 @@ struct table_flattener {
   std::vector<null_order> const& null_precedence;
   column_nullability nullability;
   rmm::cuda_stream_view stream;
-  rmm::mr::device_memory_resource* mr;
+  rmm::device_async_resource_ref mr;
 
   temporary_nullable_data nullable_data;
   std::vector<std::unique_ptr<column>> validity_as_column;
@@ -104,7 +103,7 @@ struct table_flattener {
                   std::vector<null_order> const& null_precedence,
                   column_nullability nullability,
                   rmm::cuda_stream_view stream,
-                  rmm::mr::device_memory_resource* mr)
+                  rmm::device_async_resource_ref mr)
     : column_order{column_order},
       null_precedence{null_precedence},
       nullability{nullability},
@@ -112,7 +111,6 @@ struct table_flattener {
       mr{mr}
   {
     superimpose_nulls(input);
-    fail_if_unsupported_types(input);
   }
 
   /**
@@ -124,12 +122,6 @@ struct table_flattener {
     auto [table, tmp_nullable_data] = push_down_nulls(input_table, stream, mr);
     this->input                     = std::move(table);
     this->nullable_data             = std::move(tmp_nullable_data);
-  }
-
-  void fail_if_unsupported_types(table_view const& input) const
-  {
-    auto const has_lists = std::any_of(input.begin(), input.end(), is_or_has_nested_lists);
-    CUDF_EXPECTS(not has_lists, "Flattening LIST columns is not supported.");
   }
 
   // Convert null_mask to BOOL8 columns and flatten the struct children in order.
@@ -161,7 +153,7 @@ struct table_flattener {
       if (not null_precedence.empty()) { flat_null_precedence.push_back(col_null_order); }
     }
     for (decltype(col.num_children()) i = 0; i < col.num_children(); ++i) {
-      auto const& child = col.get_sliced_child(i);
+      auto const& child = col.get_sliced_child(i, stream);
       if (child.type().id() == type_id::STRUCT) {
         flatten_struct_column(structs_column_view{child}, col_order, col_null_order);
       } else {
@@ -208,7 +200,7 @@ std::unique_ptr<flattened_table> flatten_nested_columns(
   std::vector<null_order> const& null_precedence,
   column_nullability nullability,
   rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr)
+  rmm::device_async_resource_ref mr)
 {
   auto const has_struct = std::any_of(input.begin(), input.end(), is_struct);
   if (not has_struct) {
@@ -234,8 +226,9 @@ std::unique_ptr<column> superimpose_nulls_no_sanitize(bitmask_type const* null_m
                                                       size_type null_count,
                                                       std::unique_ptr<column>&& input,
                                                       rmm::cuda_stream_view stream,
-                                                      rmm::mr::device_memory_resource* mr)
+                                                      rmm::device_async_resource_ref mr)
 {
+  CUDF_FUNC_RANGE();
   if (input->type().id() == cudf::type_id::EMPTY) {
     // EMPTY columns should not have a null mask,
     // so don't superimpose null mask on empty columns.
@@ -265,18 +258,11 @@ std::unique_ptr<column> superimpose_nulls_no_sanitize(bitmask_type const* null_m
   // If the input is also a struct, repeat for all its children. Otherwise just return.
   if (input->type().id() != cudf::type_id::STRUCT) { return std::move(input); }
 
-  auto const current_mask   = input->view().null_mask();
   auto const new_null_count = input->null_count();  // this was just computed in the step above
   auto content              = input->release();
 
-  // Build new children columns.
-  std::for_each(
-    content.children.begin(), content.children.end(), [current_mask, stream, mr](auto& child) {
-      child = superimpose_nulls_no_sanitize(
-        current_mask, cudf::UNKNOWN_NULL_COUNT, std::move(child), stream, mr);
-    });
-
   // Replace the children columns.
+  // make_structs_column recursively calls superimpose_nulls
   return cudf::make_structs_column(num_rows,
                                    std::move(content.children),
                                    new_null_count,
@@ -292,7 +278,7 @@ std::unique_ptr<column> superimpose_nulls_no_sanitize(bitmask_type const* null_m
  * @copydoc cudf::structs::detail::push_down_nulls
  */
 std::pair<column_view, temporary_nullable_data> push_down_nulls_no_sanitize(
-  column_view const& input, rmm::cuda_stream_view stream, rmm::mr::device_memory_resource* mr)
+  column_view const& input, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
 {
   auto ret_nullable_data = temporary_nullable_data{};
   if (input.type().id() != type_id::STRUCT) {
@@ -304,7 +290,7 @@ std::pair<column_view, temporary_nullable_data> push_down_nulls_no_sanitize(
 
   // Function to rewrite child null mask.
   auto const child_with_new_mask = [&](auto const& child_idx) {
-    auto child = structs_view.get_sliced_child(child_idx);
+    auto child = structs_view.get_sliced_child(child_idx, stream);
 
     // If struct is not nullable, child null mask is retained. NOOP.
     if (not structs_view.nullable()) { return child; }
@@ -383,11 +369,11 @@ std::unique_ptr<column> superimpose_nulls(bitmask_type const* null_mask,
                                           size_type null_count,
                                           std::unique_ptr<column>&& input,
                                           rmm::cuda_stream_view stream,
-                                          rmm::mr::device_memory_resource* mr)
+                                          rmm::device_async_resource_ref mr)
 {
   input = superimpose_nulls_no_sanitize(null_mask, null_count, std::move(input), stream, mr);
 
-  if (auto const input_view = input->view(); has_nonempty_nulls(input_view, stream)) {
+  if (auto const input_view = input->view(); cudf::detail::has_nonempty_nulls(input_view, stream)) {
     // We can't call `purge_nonempty_nulls` for individual child column(s) that need to be
     // sanitized. Instead, we have to call it from the top level column.
     // This is to make sure all the columns (top level + all children) have consistent offsets.
@@ -401,11 +387,12 @@ std::unique_ptr<column> superimpose_nulls(bitmask_type const* null_mask,
 
 std::pair<column_view, temporary_nullable_data> push_down_nulls(column_view const& input,
                                                                 rmm::cuda_stream_view stream,
-                                                                rmm::mr::device_memory_resource* mr)
+                                                                rmm::device_async_resource_ref mr)
 {
   auto output = push_down_nulls_no_sanitize(input, stream, mr);
 
-  if (auto const output_view = output.first; has_nonempty_nulls(output_view, stream)) {
+  if (auto const output_view = output.first;
+      cudf::detail::has_nonempty_nulls(output_view, stream)) {
     output.second.new_columns.emplace_back(
       cudf::detail::purge_nonempty_nulls(output_view, stream, mr));
     output.first = output.second.new_columns.back()->view();
@@ -421,7 +408,7 @@ std::pair<column_view, temporary_nullable_data> push_down_nulls(column_view cons
 
 std::pair<table_view, temporary_nullable_data> push_down_nulls(table_view const& table,
                                                                rmm::cuda_stream_view stream,
-                                                               rmm::mr::device_memory_resource* mr)
+                                                               rmm::device_async_resource_ref mr)
 {
   auto processed_columns = std::vector<column_view>{};
   auto nullable_data     = temporary_nullable_data{};

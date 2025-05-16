@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 #pragma once
 
 #include <cudf/types.hpp>
+#include <cudf/utilities/export.hpp>
 #include <cudf/utilities/traits.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -25,7 +26,8 @@
 
 #include <type_traits>
 
-namespace cudf::test::print {
+namespace CUDF_EXPORT cudf {
+namespace test::print {
 
 constexpr int32_t hex_tag = 0;
 
@@ -103,7 +105,7 @@ CUDF_HOST_DEVICE void print_values(int32_t width, char delimiter, T arg, Ts... a
 }
 
 template <typename... Ts>
-__global__ void print_array_kernel(std::size_t count, int32_t width, char delimiter, Ts... args)
+CUDF_KERNEL void print_array_kernel(std::size_t count, int32_t width, char delimiter, Ts... args)
 {
   if (threadIdx.x == 0 && blockIdx.x == 0) {
     for (std::size_t i = 0; i < count; i++) {
@@ -137,4 +139,5 @@ void print_array(std::size_t count, rmm::cuda_stream_view stream, Ts... args)
   }
 }
 
-}  // namespace cudf::test::print
+}  // namespace test::print
+}  // namespace CUDF_EXPORT cudf

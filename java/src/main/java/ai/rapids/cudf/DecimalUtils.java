@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2022, NVIDIA CORPORATION.
+ *  Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -82,13 +82,13 @@ public class DecimalUtils {
     int leftScale = lhs.getType().getScale();
     int leftPrecision = lhs.getType().getDecimalMaxPrecision();
 
-    // First we have to round the scalar (rhs) to the same scale as lhs.  Because this is a
-    // less than and it is rhs that we are rounding, we will round away from 0 (UP)
-    // to make sure we always return the correct value.
-    // For example:
-    //      100.1 < 100.19
-    // If we rounded down the rhs 100.19 would become 100.1, and now 100.1 is not < 100.1
-    BigDecimal roundedRhs = rhs.setScale(-leftScale, BigDecimal.ROUND_UP);
+    // First we have to round the scalar (rhs) to the same scale as lhs.
+    // For comparing the two values they should be the same scale, we round the value to positive infinity to maintain
+    // the relation. Ex:
+    // 10.2 < 10.29 = true, after rounding rhs to ceiling ===> 10.2 < 10.3 = true, relation is maintained
+    // 10.3 < 10.29 = false, after rounding rhs to ceiling ===> 10.3 < 10.3 = false, relation is maintained
+    // 10.1 < 10.10 = false, after rounding rhs to ceiling ===> 10.1 < 10.1 = false, relation is maintained
+    BigDecimal roundedRhs = rhs.setScale(-leftScale, BigDecimal.ROUND_CEILING);
 
     if (roundedRhs.precision() > leftPrecision) {
       // converting rhs to the same precision as lhs would result in an overflow/error, but
@@ -136,13 +136,13 @@ public class DecimalUtils {
     int cvScale = lhs.getType().getScale();
     int maxPrecision = lhs.getType().getDecimalMaxPrecision();
 
-    // First we have to round the scalar (rhs) to the same scale as lhs.  Because this is a
-    // greater than and it is rhs that we are rounding, we will round towards 0 (DOWN)
-    // to make sure we always return the correct value.
-    // For example:
-    //      100.2 > 100.19
-    // If we rounded up the rhs 100.19 would become 100.2, and now 100.2 is not > 100.2
-    BigDecimal roundedRhs = rhs.setScale(-cvScale, BigDecimal.ROUND_DOWN);
+    // First we have to round the scalar (rhs) to the same scale as lhs.
+    // For comparing the two values they should be the same scale, we round the value to negative infinity to maintain
+    // the relation. Ex:
+    // 10.3 > 10.29 = true, after rounding rhs to floor ===> 10.3 > 10.2 = true, relation is maintained
+    // 10.2 > 10.29 = false, after rounding rhs to floor ===> 10.2 > 10.2 = false, relation is maintained
+    // 10.1 > 10.10 = false, after rounding rhs to floor ===> 10.1 > 10.1 = false, relation is maintained
+    BigDecimal roundedRhs = rhs.setScale(-cvScale, BigDecimal.ROUND_FLOOR);
 
     if (roundedRhs.precision() > maxPrecision) {
       // converting rhs to the same precision as lhs would result in an overflow/error, but

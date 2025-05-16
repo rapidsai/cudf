@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,7 +17,6 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/column/column_view.hpp>
@@ -56,11 +55,9 @@ TYPED_TEST(TypedScatterListsTest, SlicedInputLists)
 {
   using T = TypeParam;
 
-  auto src_list_column = cudf::test::lists_column_wrapper<T, int32_t>{
-    {0, 0, 0, 0},
-    {9, 9, 9, 9},
-    {8, 8, 8},
-    {7, 7, 7}}.release();
+  auto src_list_column =
+    cudf::test::lists_column_wrapper<T, int32_t>{{0, 0, 0, 0}, {9, 9, 9, 9}, {8, 8, 8}, {7, 7, 7}}
+      .release();
   auto src_sliced = cudf::slice(src_list_column->view(), {1, 3}).front();
 
   auto target_list_column =
@@ -235,7 +232,8 @@ TEST_F(ScatterListsTest, ListsOfStrings)
 TEST_F(ScatterListsTest, ListsOfNullableStrings)
 {
   auto src_strings_column = cudf::test::strings_column_wrapper{
-    {"all", "the", "leaves", "are", "brown", "california", "dreaming"}, {1, 1, 1, 0, 1, 0, 1}};
+    {"all", "the", "leaves", "are", "brown", "california", "dreaming"},
+    {true, true, true, false, true, false, true}};
 
   auto src_list_column = cudf::make_lists_column(
     2,
@@ -288,7 +286,8 @@ TEST_F(ScatterListsTest, ListsOfNullableStrings)
 TEST_F(ScatterListsTest, EmptyListsOfNullableStrings)
 {
   auto src_strings_column = cudf::test::strings_column_wrapper{
-    {"all", "the", "leaves", "are", "brown", "california", "dreaming"}, {1, 1, 1, 0, 1, 0, 1}};
+    {"all", "the", "leaves", "are", "brown", "california", "dreaming"},
+    {true, true, true, false, true, false, true}};
 
   auto src_list_column = cudf::make_lists_column(
     3,
@@ -339,7 +338,8 @@ TEST_F(ScatterListsTest, EmptyListsOfNullableStrings)
 TEST_F(ScatterListsTest, NullableListsOfNullableStrings)
 {
   auto src_strings_column = cudf::test::strings_column_wrapper{
-    {"all", "the", "leaves", "are", "brown", "california", "dreaming"}, {1, 1, 1, 0, 1, 0, 1}};
+    {"all", "the", "leaves", "are", "brown", "california", "dreaming"},
+    {true, true, true, false, true, false, true}};
 
   auto src_validity =
     cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 1; });

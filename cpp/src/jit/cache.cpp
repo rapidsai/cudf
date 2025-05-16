@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,14 +16,13 @@
 
 #include <cudf/utilities/error.hpp>
 
-#include <cuda.h>
 #include <jitify2.hpp>
 
-#include <cstddef>
 #include <filesystem>
 
 namespace cudf {
 namespace jit {
+namespace {
 
 // Get the directory in home to use for storing the cache
 std::filesystem::path get_user_home_cache_dir()
@@ -32,7 +31,7 @@ std::filesystem::path get_user_home_cache_dir()
   if (home_dir != nullptr) {
     return std::filesystem::path(home_dir) / ".cudf";
   } else {
-    return std::filesystem::path();
+    return {};
   }
 }
 
@@ -74,22 +73,22 @@ std::filesystem::path get_cache_dir()
 
     // Make per device cache based on compute capability. This is to avoid multiple devices of
     // different compute capability to access the same kernel cache.
-    int device;
-    int cc_major;
-    int cc_minor;
+    int device   = 0;
+    int cc_major = 0;
+    int cc_minor = 0;
     CUDF_CUDA_TRY(cudaGetDevice(&device));
     CUDF_CUDA_TRY(cudaDeviceGetAttribute(&cc_major, cudaDevAttrComputeCapabilityMajor, device));
     CUDF_CUDA_TRY(cudaDeviceGetAttribute(&cc_minor, cudaDevAttrComputeCapabilityMinor, device));
-    int cc = cc_major * 10 + cc_minor;
+    int const cc = cc_major * 10 + cc_minor;
 
     kernel_cache_path /= std::to_string(cc);
 
     try {
       // `mkdir -p` the kernel cache path if it doesn't exist
       std::filesystem::create_directories(kernel_cache_path);
-    } catch (const std::exception& e) {
+    } catch (std::exception const& e) {
       // if directory creation fails for any reason, return empty path
-      return std::filesystem::path();
+      return {};
     }
   }
   return kernel_cache_path;
@@ -109,13 +108,14 @@ std::size_t try_parse_numeric_env_var(char const* const env_name, std::size_t de
   auto const value = std::getenv(env_name);
   return value != nullptr ? std::stoull(value) : default_val;
 }
+}  // namespace
 
 jitify2::ProgramCache<>& get_program_cache(jitify2::PreprocessedProgramData preprog)
 {
   static std::mutex caches_mutex{};
   static std::unordered_map<std::string, std::unique_ptr<jitify2::ProgramCache<>>> caches{};
 
-  std::lock_guard<std::mutex> caches_lock(caches_mutex);
+  std::lock_guard<std::mutex> const caches_lock(caches_mutex);
 
   auto existing_cache = caches.find(preprog.name());
 

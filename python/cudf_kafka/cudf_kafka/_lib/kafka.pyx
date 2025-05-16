@@ -1,12 +1,12 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 from libc.stdint cimport int32_t, int64_t
 from libcpp cimport bool, nullptr
 from libcpp.map cimport map
 from libcpp.memory cimport make_unique, unique_ptr
 from libcpp.string cimport string
-
-from cudf._lib.cpp.io.types cimport datasource
+from libcpp.utility cimport move
+from pylibcudf.libcudf.io.datasource cimport datasource
 
 from cudf_kafka._lib.kafka cimport kafka_consumer
 
@@ -50,20 +50,20 @@ cdef class KafkaDatasource(Datasource):
 
         if topic != b"" and partition != -1:
             self.c_datasource = <unique_ptr[datasource]> \
-                make_unique[kafka_consumer](configs,
-                                            python_callable,
-                                            python_callable_wrapper,
-                                            topic,
-                                            partition,
-                                            start_offset,
-                                            end_offset,
-                                            batch_timeout,
-                                            delimiter)
+                move(make_unique[kafka_consumer](configs,
+                                                 python_callable,
+                                                 python_callable_wrapper,
+                                                 topic,
+                                                 partition,
+                                                 start_offset,
+                                                 end_offset,
+                                                 batch_timeout,
+                                                 delimiter))
         else:
             self.c_datasource = <unique_ptr[datasource]> \
-                make_unique[kafka_consumer](configs,
-                                            python_callable,
-                                            python_callable_wrapper)
+                move(make_unique[kafka_consumer](configs,
+                                                 python_callable,
+                                                 python_callable_wrapper))
 
     cdef datasource* get_datasource(self) nogil:
         return <datasource *> self.c_datasource.get()

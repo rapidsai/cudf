@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
 
 import numpy as np
@@ -23,10 +23,9 @@ def _generic_function(a):
     ],
 )
 def test_apply_python_lambda(dtype, udf, testfunc):
-
     size = 500
-
-    lhs_arr = np.random.random(size).astype(dtype)
+    rng = np.random.default_rng(seed=0)
+    lhs_arr = rng.random(size).astype(dtype)
     lhs_ser = Series(lhs_arr)
 
     out_ser = lhs_ser.apply(udf)

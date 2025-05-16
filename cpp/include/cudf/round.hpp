@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,10 +17,11 @@
 #pragma once
 
 #include <cudf/column/column.hpp>
+#include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/export.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
-#include <rmm/mr/device/per_device_resource.hpp>
-
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 
 /**
  * @addtogroup transformation_unaryops
@@ -32,8 +33,9 @@ namespace cudf {
 /**
  * @brief Different rounding methods for `cudf::round`
  *
- * Info on HALF_UP   rounding: https://en.wikipedia.org/wiki/Rounding#Round_half_up
- * Info on HALF_EVEN rounding: https://en.wikipedia.org/wiki/Rounding#Round_half_to_even
+ * Info on HALF_EVEN rounding: https://en.wikipedia.org/wiki/Rounding#Rounding_half_to_even
+ * Info on HALF_UP   rounding: https://en.wikipedia.org/wiki/Rounding#Rounding_half_away_from_zero
+ * Note: HALF_UP means up in MAGNITUDE: Away from zero! Because of how Java and python define it
  */
 enum class rounding_method : int32_t { HALF_UP, HALF_EVEN };
 
@@ -65,15 +67,17 @@ enum class rounding_method : int32_t { HALF_UP, HALF_EVEN };
  * @param decimal_places Number of decimal places to round to (default 0). If negative, this
  * specifies the number of positions to the left of the decimal point.
  * @param method         Rounding method
+ * @param stream         CUDA stream used for device memory operations and kernel launches
  * @param mr             Device memory resource used to allocate the returned column's device memory
  *
  * @return Column with each of the values rounded
  */
 std::unique_ptr<column> round(
   column_view const& input,
-  int32_t decimal_places              = 0,
-  rounding_method method              = rounding_method::HALF_UP,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  int32_t decimal_places            = 0,
+  rounding_method method            = rounding_method::HALF_UP,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /** @} */  // end of group
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

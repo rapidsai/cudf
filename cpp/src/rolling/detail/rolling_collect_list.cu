@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,8 @@
 
 #include <cudf/detail/get_value.cuh>
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/utilities/functional.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/device_uvector.hpp>
 
@@ -52,6 +54,7 @@ std::unique_ptr<column> get_list_child_to_list_row_mapping(cudf::column_view con
   //   offsets        == [0, 2, 5, 5, 8, 11, 13]
   //   scatter result == [0, 0, 1, 0, 0, 2, 0, 0, 1, 0, 0, 1, 0]
   //
+
   auto const num_child_rows{
     cudf::detail::get_value<size_type>(offsets, offsets.size() - 1, stream)};
   auto per_row_mapping = make_fixed_width_column(
@@ -82,7 +85,7 @@ std::unique_ptr<column> get_list_child_to_list_row_mapping(cudf::column_view con
                          per_row_mapping_begin,
                          per_row_mapping_begin + num_child_rows,
                          per_row_mapping_begin,
-                         thrust::maximum{});
+                         cudf::detail::maximum{});
   return per_row_mapping;
 }
 
@@ -114,7 +117,7 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> purge_null_entries(
   column_view const& offsets,
   size_type num_child_nulls,
   rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr)
+  rmm::device_async_resource_ref mr)
 {
   auto input_device_view = column_device_view::create(input, stream);
 
@@ -140,8 +143,8 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> purge_null_entries(
   thrust::tabulate(rmm::exec_policy(stream),
                    new_sizes->mutable_view().template begin<size_type>(),
                    new_sizes->mutable_view().template end<size_type>(),
-                   [d_gather_map  = gather_map.template begin<offset_type>(),
-                    d_old_offsets = offsets.template begin<offset_type>(),
+                   [d_gather_map  = gather_map.template begin<size_type>(),
+                    d_old_offsets = offsets.template begin<size_type>(),
                     input_row_not_null] __device__(auto i) {
                      return thrust::count_if(thrust::seq,
                                              d_gather_map + d_old_offsets[i],

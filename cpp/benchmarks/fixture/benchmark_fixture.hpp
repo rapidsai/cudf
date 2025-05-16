@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,12 +16,15 @@
 
 #pragma once
 
-#include <benchmark/benchmark.h>
+#include <cudf/utilities/memory_resource.hpp>
+
+#include <rmm/cuda_device.hpp>
 #include <rmm/mr/device/cuda_memory_resource.hpp>
 #include <rmm/mr/device/owning_wrapper.hpp>
-#include <rmm/mr/device/per_device_resource.hpp>
 #include <rmm/mr/device/pool_memory_resource.hpp>
 #include <rmm/mr/device/statistics_resource_adaptor.hpp>
+
+#include <benchmark/benchmark.h>
 
 namespace cudf {
 
@@ -33,7 +36,8 @@ inline auto make_pool_instance()
 {
   static rmm::mr::cuda_memory_resource cuda_mr;
   static auto pool_mr =
-    std::make_shared<rmm::mr::pool_memory_resource<rmm::mr::cuda_memory_resource>>(&cuda_mr);
+    std::make_shared<rmm::mr::pool_memory_resource<rmm::mr::cuda_memory_resource>>(
+      &cuda_mr, rmm::percent_of_free_device_memory(50));
   return pool_mr;
 }
 }  // namespace
@@ -73,28 +77,28 @@ class benchmark : public ::benchmark::Fixture {
  public:
   benchmark() : ::benchmark::Fixture()
   {
-    const char* env_iterations = std::getenv("CUDF_BENCHMARK_ITERATIONS");
+    char const* env_iterations = std::getenv("CUDF_BENCHMARK_ITERATIONS");
     if (env_iterations != nullptr) { this->Iterations(std::max(0L, atol(env_iterations))); }
   }
 
-  void SetUp(const ::benchmark::State& state) override
+  void SetUp(::benchmark::State const& state) override
   {
     mr = make_pool_instance();
-    rmm::mr::set_current_device_resource(mr.get());  // set default resource to pool
+    cudf::set_current_device_resource(mr.get());  // set default resource to pool
   }
 
-  void TearDown(const ::benchmark::State& state) override
+  void TearDown(::benchmark::State const& state) override
   {
     // reset default resource to the initial resource
-    rmm::mr::set_current_device_resource(nullptr);
+    cudf::set_current_device_resource(nullptr);
     mr.reset();
   }
 
   // eliminate partial override warnings (see benchmark/benchmark.h)
-  void SetUp(::benchmark::State& st) override { SetUp(const_cast<const ::benchmark::State&>(st)); }
+  void SetUp(::benchmark::State& st) override { SetUp(const_cast<::benchmark::State const&>(st)); }
   void TearDown(::benchmark::State& st) override
   {
-    TearDown(const_cast<const ::benchmark::State&>(st));
+    TearDown(const_cast<::benchmark::State const&>(st));
   }
 
   std::shared_ptr<rmm::mr::device_memory_resource> mr;
@@ -103,13 +107,13 @@ class benchmark : public ::benchmark::Fixture {
 class memory_stats_logger {
  public:
   memory_stats_logger()
-    : existing_mr(rmm::mr::get_current_device_resource()),
-      statistics_mr(rmm::mr::make_statistics_adaptor(existing_mr))
+    : existing_mr(cudf::get_current_device_resource()),
+      statistics_mr(rmm::mr::statistics_resource_adaptor(existing_mr))
   {
-    rmm::mr::set_current_device_resource(&statistics_mr);
+    cudf::set_current_device_resource(&statistics_mr);
   }
 
-  ~memory_stats_logger() { rmm::mr::set_current_device_resource(existing_mr); }
+  ~memory_stats_logger() { cudf::set_current_device_resource(existing_mr); }
 
   [[nodiscard]] size_t peak_memory_usage() const noexcept
   {
@@ -117,6 +121,7 @@ class memory_stats_logger {
   }
 
  private:
+  // TODO change to resource_ref once set_current_device_resource supports it
   rmm::mr::device_memory_resource* existing_mr;
   rmm::mr::statistics_resource_adaptor<rmm::mr::device_memory_resource> statistics_mr;
 };

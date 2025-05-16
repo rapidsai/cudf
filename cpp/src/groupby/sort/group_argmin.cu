@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,12 +14,14 @@
  * limitations under the License.
  */
 
-#include <groupby/sort/group_single_pass_reduction_util.cuh>
+#include "groupby/sort/group_single_pass_reduction_util.cuh"
 
 #include <cudf/detail/gather.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_uvector.hpp>
 
 #include <thrust/gather.h>
 
@@ -31,7 +33,7 @@ std::unique_ptr<column> group_argmin(column_view const& values,
                                      cudf::device_span<size_type const> group_labels,
                                      column_view const& key_sort_order,
                                      rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr)
+                                     rmm::device_async_resource_ref mr)
 {
   auto indices = type_dispatcher(values.type(),
                                  group_reduction_dispatcher<aggregation::ARGMIN>{},
@@ -41,22 +43,21 @@ std::unique_ptr<column> group_argmin(column_view const& values,
                                  stream,
                                  mr);
 
-  // The functor returns the index of minimum in the sorted values.
-  // We need the index of minimum in the original unsorted values.
-  // So use indices to gather the sort order used to sort `values`.
-  // The values in data buffer of indices corresponding to null values was
-  // initialized to ARGMIN_SENTINEL. Using gather_if.
-  // This can't use gather because nulls in gathered column will not store ARGMIN_SENTINEL.
-  auto indices_view = indices->mutable_view();
-  thrust::gather_if(rmm::exec_policy(stream),
-                    indices_view.begin<size_type>(),    // map first
-                    indices_view.end<size_type>(),      // map last
-                    indices_view.begin<size_type>(),    // stencil
-                    key_sort_order.begin<size_type>(),  // input
-                    indices_view.begin<size_type>(),    // result
-                    [] __device__(auto i) { return (i != cudf::detail::ARGMIN_SENTINEL); });
-
-  return indices;
+  // The functor returns the indices of minimums based on the sorted keys.
+  // We need the indices of minimums from the original unsorted keys
+  // so we use these and the key_sort_order to map to the correct indices.
+  // We do not use cudf::gather since we can move the null-mask separately.
+  auto indices_view = indices->view();
+  auto output       = rmm::device_uvector<size_type>(indices_view.size(), stream, mr);
+  thrust::gather(rmm::exec_policy_nosync(stream),
+                 indices_view.begin<size_type>(),    // map first
+                 indices_view.end<size_type>(),      // map last
+                 key_sort_order.begin<size_type>(),  // input
+                 output.data()                       // result (must not overlap map)
+  );
+  auto null_count = indices_view.null_count();
+  auto null_mask  = indices->release().null_mask.release();
+  return std::make_unique<column>(std::move(output), std::move(*null_mask), null_count);
 }
 
 }  // namespace detail

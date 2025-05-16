@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2023, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
 import os
 from string import ascii_letters
@@ -9,31 +9,29 @@ import pyarrow as pa
 import pytest
 
 import cudf
-from cudf.testing._utils import NUMERIC_TYPES, assert_eq
+from cudf.testing import assert_eq
+from cudf.testing._utils import NUMERIC_TYPES
 
 
 @pytest.fixture(params=[0, 1, 10, 100])
 def pdf(request):
-    types = NUMERIC_TYPES + ["bool"]
-    typer = {"col_" + val: val for val in types}
-    ncols = len(types)
+    rng = np.random.default_rng(seed=0)
+    types = [*NUMERIC_TYPES, "bool"]
     nrows = request.param
 
     # Create a pandas dataframe with random data of mixed types
     test_pdf = pd.DataFrame(
-        [list(range(ncols * i, ncols * (i + 1))) for i in range(nrows)],
-        columns=pd.Index([f"col_{typ}" for typ in types], name="foo"),
+        {
+            f"col_{typ}": rng.integers(0, nrows, nrows).astype(typ)
+            for typ in types
+        }
     )
     # Delete the name of the column index, and rename the row index
     test_pdf.columns.name = None
     test_pdf.index.name = "index"
 
-    # Cast all the column dtypes to objects, rename them, and then cast to
-    # appropriate types
-    test_pdf = test_pdf.astype("object").astype(typer)
-
     # Create non-numeric categorical data otherwise may get typecasted
-    data = [ascii_letters[np.random.randint(0, 52)] for i in range(nrows)]
+    data = [ascii_letters[rng.integers(0, 52)] for i in range(nrows)]
     test_pdf["col_category"] = pd.Series(data, dtype="category")
 
     # Feather can't handle indexes properly

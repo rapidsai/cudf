@@ -1,6 +1,11 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 
-cmake_minimum_required(VERSION 3.23.1)
+cmake_minimum_required(VERSION 3.30.4 FATAL_ERROR)
+
+include(../set_cuda_architecture.cmake)
+
+# initialize cuda architecture
+rapids_cuda_init_architectures(basic_example)
 
 project(
   basic_example
@@ -8,25 +13,15 @@ project(
   LANGUAGES CXX CUDA
 )
 
-set(CPM_DOWNLOAD_VERSION v0.35.3)
-file(
-  DOWNLOAD
-  https://github.com/cpm-cmake/CPM.cmake/releases/download/${CPM_DOWNLOAD_VERSION}/get_cpm.cmake
-  ${CMAKE_BINARY_DIR}/cmake/get_cpm.cmake
-)
-include(${CMAKE_BINARY_DIR}/cmake/get_cpm.cmake)
+include(../fetch_dependencies.cmake)
 
-set(CUDF_TAG branch-23.06)
-CPMFindPackage(
-  NAME cudf GIT_REPOSITORY https://github.com/rapidsai/cudf
-  GIT_TAG ${CUDF_TAG}
-  GIT_SHALLOW
-    TRUE
-    SOURCE_SUBDIR
-    cpp
-)
+include(rapids-cmake)
+rapids_cmake_build_type("Release")
 
 # Configure your project here
 add_executable(basic_example src/process_csv.cpp)
 target_link_libraries(basic_example PRIVATE cudf::cudf)
 target_compile_features(basic_example PRIVATE cxx_std_17)
+
+install(TARGETS basic_example DESTINATION bin/examples/libcudf)
+install(FILES ${CMAKE_CURRENT_LIST_DIR}/4stock_5day.csv DESTINATION bin/examples/libcudf)

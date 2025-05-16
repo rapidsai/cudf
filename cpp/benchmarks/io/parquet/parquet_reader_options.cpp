@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,32 +16,32 @@
 
 #include <benchmarks/common/generate_input.hpp>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
-#include <benchmarks/fixture/rmm_pool_raii.hpp>
 #include <benchmarks/io/cuio_common.hpp>
 #include <benchmarks/io/nvbench_helpers.hpp>
 
+#include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/io/parquet.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
 #include <nvbench/nvbench.cuh>
 
-// Size of the data in the the benchmark dataframe; chosen to be low enough to allow benchmarks to
+// Size of the data in the benchmark dataframe; chosen to be low enough to allow benchmarks to
 // run on most GPUs, but large enough to allow highest throughput
-constexpr std::size_t data_size      = 512 << 20;
-constexpr std::size_t row_group_size = 128 << 20;
+constexpr std::size_t data_size = 512 << 20;
+// The number of separate read calls to use when reading files in multiple chunks
+// Each call reads roughly equal amounts of data
+constexpr int32_t chunked_read_num_chunks = 4;
 
 std::vector<std::string> get_top_level_col_names(cudf::io::source_info const& source)
 {
-  cudf::io::parquet_reader_options const read_options =
-    cudf::io::parquet_reader_options::builder(source);
-  auto const schema = cudf::io::read_parquet(read_options).metadata.schema_info;
+  auto const top_lvl_cols = cudf::io::read_parquet_metadata(source).schema().root().children();
+  std::vector<std::string> col_names;
+  std::transform(top_lvl_cols.cbegin(),
+                 top_lvl_cols.cend(),
+                 std::back_inserter(col_names),
+                 [](auto const& col_meta) { return col_meta.name(); });
 
-  std::vector<std::string> names;
-  names.reserve(schema.size());
-  std::transform(schema.cbegin(), schema.cend(), std::back_inserter(names), [](auto const& c) {
-    return c.name;
-  });
-  return names;
+  return col_names;
 }
 
 template <column_selection ColSelection,
@@ -56,6 +56,8 @@ void BM_parquet_read_options(nvbench::state& state,
                                                 nvbench::enum_type<UsesPandasMetadata>,
                                                 nvbench::enum_type<Timestamp>>)
 {
+  auto const num_chunks = RowSelection == row_selection::ALL ? 1 : chunked_read_num_chunks;
+
   auto constexpr str_to_categories = ConvertsStrings == converts_strings::YES;
   auto constexpr uses_pd_metadata  = UsesPandasMetadata == uses_pandas_metadata::YES;
 
@@ -64,6 +66,7 @@ void BM_parquet_read_options(nvbench::state& state,
   auto const data_types =
     dtypes_for_column_selection(get_type_or_group({static_cast<int32_t>(data_type::INTEGRAL),
                                                    static_cast<int32_t>(data_type::FLOAT),
+                                                   static_cast<int32_t>(data_type::BOOL8),
                                                    static_cast<int32_t>(data_type::DECIMAL),
                                                    static_cast<int32_t>(data_type::TIMESTAMP),
                                                    static_cast<int32_t>(data_type::DURATION),
@@ -81,6 +84,7 @@ void BM_parquet_read_options(nvbench::state& state,
 
   auto const cols_to_read =
     select_column_names(get_top_level_col_names(source_sink.make_source_info()), ColSelection);
+  cudf::size_type const expected_num_cols = cols_to_read.size();
   cudf::io::parquet_reader_options read_options =
     cudf::io::parquet_reader_options::builder(source_sink.make_source_info())
       .columns(cols_to_read)
@@ -88,39 +92,38 @@ void BM_parquet_read_options(nvbench::state& state,
       .use_pandas_metadata(uses_pd_metadata)
       .timestamp_type(ts_type);
 
-  // TODO: add read_parquet_metadata to properly calculate #row_groups
-  auto constexpr num_row_groups = data_size / row_group_size;
-  auto constexpr num_chunks     = 1;
+  auto const num_row_groups = read_parquet_metadata(source_sink.make_source_info()).num_rowgroups();
+  auto const chunk_row_cnt  = cudf::util::div_rounding_up_unsafe(view.num_rows(), num_chunks);
 
   auto mem_stats_logger = cudf::memory_stats_logger();
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
   state.exec(
     nvbench::exec_tag::sync | nvbench::exec_tag::timer, [&](nvbench::launch& launch, auto& timer) {
       try_drop_l3_cache();
-
+      cudf::size_type num_rows_read = 0;
       timer.start();
-      cudf::size_type rows_read = 0;
       for (int32_t chunk = 0; chunk < num_chunks; ++chunk) {
-        auto const is_last_chunk = chunk == (num_chunks - 1);
         switch (RowSelection) {
           case row_selection::ALL: break;
           case row_selection::ROW_GROUPS: {
-            auto row_groups_to_read = segments_in_chunk(num_row_groups, num_chunks, chunk);
-            if (is_last_chunk) {
-              // Need to assume that an additional "overflow" row group is present
-              row_groups_to_read.push_back(num_row_groups);
-            }
-            read_options.set_row_groups({row_groups_to_read});
+            read_options.set_row_groups({segments_in_chunk(num_row_groups, num_chunks, chunk)});
           } break;
-          case row_selection::NROWS: [[fallthrough]];
+          case row_selection::NROWS:
+            read_options.set_skip_rows(chunk * chunk_row_cnt);
+            read_options.set_num_rows(chunk_row_cnt);
+            break;
           default: CUDF_FAIL("Unsupported row selection method");
         }
 
-        rows_read += cudf::io::read_parquet(read_options).tbl->num_rows();
+        auto const result = cudf::io::read_parquet(read_options);
+
+        num_rows_read += result.tbl->num_rows();
+        CUDF_EXPECTS(result.tbl->num_columns() == expected_num_cols,
+                     "Unexpected number of columns");
       }
 
-      CUDF_EXPECTS(rows_read == view.num_rows(), "Benchmark did not read the entire table");
       timer.stop();
+      CUDF_EXPECTS(num_rows_read == view.num_rows(), "Benchmark did not read the entire table");
     });
 
   auto const elapsed_time   = state.get_summary("nv/cold/time/gpu/mean").get_float64("value");
@@ -131,14 +134,26 @@ void BM_parquet_read_options(nvbench::state& state,
   state.add_buffer_size(source_sink.size(), "encoded_file_size", "encoded_file_size");
 }
 
+using row_selections =
+  nvbench::enum_type_list<row_selection::ALL, row_selection::NROWS, row_selection::ROW_GROUPS>;
+NVBENCH_BENCH_TYPES(BM_parquet_read_options,
+                    NVBENCH_TYPE_AXES(nvbench::enum_type_list<column_selection::ALL>,
+                                      row_selections,
+                                      nvbench::enum_type_list<converts_strings::YES>,
+                                      nvbench::enum_type_list<uses_pandas_metadata::YES>,
+                                      nvbench::enum_type_list<cudf::type_id::EMPTY>))
+  .set_name("parquet_read_row_selection")
+  .set_type_axes_names({"column_selection",
+                        "row_selection",
+                        "str_to_categories",
+                        "uses_pandas_metadata",
+                        "timestamp_type"})
+  .set_min_samples(4);
+
 using col_selections = nvbench::enum_type_list<column_selection::ALL,
                                                column_selection::ALTERNATE,
                                                column_selection::FIRST_HALF,
                                                column_selection::SECOND_HALF>;
-
-// TODO: row_selection::ROW_GROUPS disabled until we add an API to read metadata from a parquet file
-// and determine num row groups. https://github.com/rapidsai/cudf/pull/9963#issuecomment-1004832863
-
 NVBENCH_BENCH_TYPES(BM_parquet_read_options,
                     NVBENCH_TYPE_AXES(col_selections,
                                       nvbench::enum_type_list<row_selection::ALL>,

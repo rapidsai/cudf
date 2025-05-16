@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,19 +16,19 @@
 
 #pragma once
 
-#include <cudf/detail/sequence.hpp>
 #include <cudf/filling.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace detail {
 /**
  * @copydoc cudf::sequence(size_type size, scalar const& init, scalar const& step,
- *                                       rmm::mr::device_memory_resource* mr =
- *rmm::mr::get_current_device_resource())
+ *                                       rmm::device_async_resource_ref mr =
+ *cudf::get_current_device_resource_ref())
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
@@ -36,25 +36,25 @@ std::unique_ptr<column> sequence(size_type size,
                                  scalar const& init,
                                  scalar const& step,
                                  rmm::cuda_stream_view stream,
-                                 rmm::mr::device_memory_resource* mr);
+                                 rmm::device_async_resource_ref mr);
 
 /**
  * @copydoc cudf::sequence(size_type size, scalar const& init,
-                                         rmm::mr::device_memory_resource* mr =
- rmm::mr::get_current_device_resource())
+                                         rmm::device_async_resource_ref mr =
+ cudf::get_current_device_resource_ref())
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<column> sequence(size_type size,
                                  scalar const& init,
                                  rmm::cuda_stream_view stream,
-                                 rmm::mr::device_memory_resource* mr);
+                                 rmm::device_async_resource_ref mr);
 
 /**
  * @copydoc cudf::calendrical_month_sequence(size_type size,
  *                                           scalar const& init,
  *                                           size_type months,
- *                                           rmm::mr::device_memory_resource* mr)
+ *                                           rmm::device_async_resource_ref mr)
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
@@ -62,7 +62,7 @@ std::unique_ptr<cudf::column> calendrical_month_sequence(size_type size,
                                                          scalar const& init,
                                                          size_type months,
                                                          rmm::cuda_stream_view stream,
-                                                         rmm::mr::device_memory_resource* mr);
+                                                         rmm::device_async_resource_ref mr);
 
 }  // namespace detail
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

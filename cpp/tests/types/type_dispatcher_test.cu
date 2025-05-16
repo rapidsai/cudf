@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,14 +14,17 @@
  * limitations under the License.
  */
 
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/cudf_gtest.hpp>
+#include <cudf_test/testing_main.hpp>
+#include <cudf_test/type_list_utilities.hpp>
+#include <cudf_test/type_lists.hpp>
+
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
-#include <cudf_test/base_fixture.hpp>
-#include <cudf_test/cudf_gtest.hpp>
-#include <cudf_test/type_list_utilities.hpp>
-#include <cudf_test/type_lists.hpp>
 
 #include <rmm/device_uvector.hpp>
 
@@ -47,6 +50,12 @@ TYPED_TEST(TypedDispatcherTest, TypeToId)
 {
   EXPECT_TRUE(cudf::type_dispatcher(cudf::data_type{cudf::type_to_id<TypeParam>()},
                                     type_tester<TypeParam>{}));
+  EXPECT_TRUE(cudf::type_dispatcher(cudf::data_type{cudf::type_to_id<TypeParam const>()},
+                                    type_tester<TypeParam>{}));
+  EXPECT_TRUE(cudf::type_dispatcher(cudf::data_type{cudf::type_to_id<TypeParam volatile>()},
+                                    type_tester<TypeParam>{}));
+  EXPECT_TRUE(cudf::type_dispatcher(cudf::data_type{cudf::type_to_id<TypeParam const volatile>()},
+                                    type_tester<TypeParam>{}));
 }
 
 namespace {
@@ -58,7 +67,7 @@ struct verify_dispatched_type {
   }
 };
 
-__global__ void dispatch_test_kernel(cudf::type_id id, bool* d_result)
+CUDF_KERNEL void dispatch_test_kernel(cudf::type_id id, bool* d_result)
 {
   if (0 == threadIdx.x + blockIdx.x * blockDim.x)
     *d_result = cudf::type_dispatcher(cudf::data_type{id}, verify_dispatched_type{}, id);
@@ -67,8 +76,8 @@ __global__ void dispatch_test_kernel(cudf::type_id id, bool* d_result)
 
 TYPED_TEST(TypedDispatcherTest, DeviceDispatch)
 {
-  auto result = cudf::detail::make_zeroed_device_uvector_sync<bool>(
-    1, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
+  auto result = cudf::detail::make_zeroed_device_uvector<bool>(
+    1, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
   dispatch_test_kernel<<<1, 1, 0, cudf::get_default_stream().value()>>>(
     cudf::type_to_id<TypeParam>(), result.data());
   CUDF_CUDA_TRY(cudaDeviceSynchronize());
@@ -118,7 +127,7 @@ struct verify_double_dispatched_type {
   }
 };
 
-__global__ void double_dispatch_test_kernel(cudf::type_id id1, cudf::type_id id2, bool* d_result)
+CUDF_KERNEL void double_dispatch_test_kernel(cudf::type_id id1, cudf::type_id id2, bool* d_result)
 {
   if (0 == threadIdx.x + blockIdx.x * blockDim.x)
     *d_result = cudf::double_type_dispatcher(
@@ -128,8 +137,8 @@ __global__ void double_dispatch_test_kernel(cudf::type_id id1, cudf::type_id id2
 
 TYPED_TEST(TypedDoubleDispatcherTest, DeviceDoubleDispatch)
 {
-  auto result = cudf::detail::make_zeroed_device_uvector_sync<bool>(
-    1, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
+  auto result = cudf::detail::make_zeroed_device_uvector<bool>(
+    1, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
   double_dispatch_test_kernel<<<1, 1, 0, cudf::get_default_stream().value()>>>(
     cudf::type_to_id<TypeParam>(), cudf::type_to_id<TypeParam>(), result.data());
   CUDF_CUDA_TRY(cudaDeviceSynchronize());

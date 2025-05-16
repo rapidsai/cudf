@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,15 +23,14 @@
 #include <cudf/detail/utilities/device_operators.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/device_uvector.hpp>
 
 #include <cub/device/device_reduce.cuh>
-
 #include <thrust/execution_policy.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
-#include <thrust/pair.h>
 #include <thrust/reduce.h>
 
 #include <random>
@@ -131,7 +130,7 @@ class Iterator : public cudf::benchmark {};
 template <class TypeParam, bool cub_or_thrust, bool raw_or_iterator>
 void BM_iterator(benchmark::State& state)
 {
-  const cudf::size_type column_size{(cudf::size_type)state.range(0)};
+  cudf::size_type const column_size{(cudf::size_type)state.range(0)};
   using T      = TypeParam;
   auto num_gen = thrust::counting_iterator<cudf::size_type>(0);
 
@@ -139,13 +138,13 @@ void BM_iterator(benchmark::State& state)
   cudf::column_view hasnull_F = wrap_hasnull_F;
 
   // Initialize dev_result to false
-  auto dev_result = cudf::detail::make_zeroed_device_uvector_sync<TypeParam>(
-    1, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
+  auto dev_result = cudf::detail::make_zeroed_device_uvector<TypeParam>(
+    1, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
   for (auto _ : state) {
     cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0
     if (cub_or_thrust) {
       if (raw_or_iterator) {
-        raw_stream_bench_cub<T>(hasnull_F, dev_result);       // driven by raw pointer
+        raw_stream_bench_cub<T>(hasnull_F, dev_result);  // driven by raw pointer
       } else {
         iterator_bench_cub<T, false>(hasnull_F, dev_result);  // driven by riterator without nulls
       }
@@ -156,68 +155,6 @@ void BM_iterator(benchmark::State& state)
         iterator_bench_thrust<T, false>(hasnull_F,
                                         dev_result);  // driven by riterator without nulls
       }
-    }
-  }
-  state.SetBytesProcessed(static_cast<int64_t>(state.iterations()) * column_size *
-                          sizeof(TypeParam));
-}
-
-// operator+ defined for pair iterator reduction
-template <typename T>
-__device__ thrust::pair<T, bool> operator+(thrust::pair<T, bool> lhs, thrust::pair<T, bool> rhs)
-{
-  return thrust::pair<T, bool>{lhs.first * lhs.second + rhs.first * rhs.second,
-                               lhs.second + rhs.second};
-}
-// -----------------------------------------------------------------------------
-template <typename T, bool has_null>
-void pair_iterator_bench_cub(cudf::column_view& col,
-                             rmm::device_uvector<thrust::pair<T, bool>>& result)
-{
-  thrust::pair<T, bool> init{0, false};
-  auto d_col    = cudf::column_device_view::create(col);
-  int num_items = col.size();
-  auto begin    = d_col->pair_begin<T, has_null>();
-  reduce_by_cub(result.begin(), begin, num_items, init);
-}
-
-template <typename T, bool has_null>
-void pair_iterator_bench_thrust(cudf::column_view& col,
-                                rmm::device_uvector<thrust::pair<T, bool>>& result)
-{
-  thrust::pair<T, bool> init{0, false};
-  auto d_col = cudf::column_device_view::create(col);
-  auto d_in  = d_col->pair_begin<T, has_null>();
-  auto d_end = d_in + col.size();
-  thrust::reduce(thrust::device, d_in, d_end, init, cudf::DeviceSum{});
-}
-
-template <class TypeParam, bool cub_or_thrust>
-void BM_pair_iterator(benchmark::State& state)
-{
-  const cudf::size_type column_size{(cudf::size_type)state.range(0)};
-  using T      = TypeParam;
-  auto num_gen = thrust::counting_iterator<cudf::size_type>(0);
-  auto null_gen =
-    thrust::make_transform_iterator(num_gen, [](cudf::size_type row) { return row % 2 == 0; });
-
-  cudf::test::fixed_width_column_wrapper<T> wrap_hasnull_F(num_gen, num_gen + column_size);
-  cudf::test::fixed_width_column_wrapper<T> wrap_hasnull_T(
-    num_gen, num_gen + column_size, null_gen);
-  cudf::column_view hasnull_F = wrap_hasnull_F;
-  cudf::column_view hasnull_T = wrap_hasnull_T;
-
-  // Initialize dev_result to false
-  auto dev_result = cudf::detail::make_zeroed_device_uvector_sync<thrust::pair<T, bool>>(
-    1, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
-  for (auto _ : state) {
-    cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0
-    if (cub_or_thrust) {
-      pair_iterator_bench_cub<T, false>(hasnull_T,
-                                        dev_result);  // driven by pair iterator with nulls
-    } else {
-      pair_iterator_bench_thrust<T, false>(hasnull_T,
-                                           dev_result);  // driven by pair iterator with nulls
     }
   }
   state.SetBytesProcessed(static_cast<int64_t>(state.iterations()) * column_size *
@@ -239,17 +176,3 @@ ITER_BM_BENCHMARK_DEFINE(double_cub_raw, double, true, true);
 ITER_BM_BENCHMARK_DEFINE(double_cub_iter, double, true, false);
 ITER_BM_BENCHMARK_DEFINE(double_thrust_raw, double, false, true);
 ITER_BM_BENCHMARK_DEFINE(double_thrust_iter, double, false, false);
-
-#define PAIRITER_BM_BENCHMARK_DEFINE(name, type, cub_or_thrust)  \
-  BENCHMARK_DEFINE_F(Iterator, name)(::benchmark::State & state) \
-  {                                                              \
-    BM_pair_iterator<type, cub_or_thrust>(state);                \
-  }                                                              \
-  BENCHMARK_REGISTER_F(Iterator, name)                           \
-    ->RangeMultiplier(10)                                        \
-    ->Range(1000, 10000000)                                      \
-    ->UseManualTime()                                            \
-    ->Unit(benchmark::kMillisecond);
-
-PAIRITER_BM_BENCHMARK_DEFINE(double_cub_pair, double, true);
-PAIRITER_BM_BENCHMARK_DEFINE(double_thrust_pair, double, false);

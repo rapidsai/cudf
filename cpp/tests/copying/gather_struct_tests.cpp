@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,27 +17,22 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/iterator.cuh>
-#include <cudf/lists/lists_column_view.hpp>
-#include <cudf/null_mask.hpp>
-#include <cudf/structs/structs_column_view.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
-#include <cudf/utilities/error.hpp>
 
 #include <rmm/device_buffer.hpp>
 
 #include <memory>
 
 using vector_of_columns = std::vector<std::unique_ptr<cudf::column>>;
-using gather_map_t      = std::vector<cudf::offset_type>;
+using gather_map_t      = std::vector<cudf::size_type>;
 using offsets           = cudf::test::fixed_width_column_wrapper<int32_t>;
 using structs           = cudf::test::structs_column_wrapper;
 using strings           = cudf::test::strings_column_wrapper;
@@ -54,7 +49,7 @@ using numerics = cudf::test::fixed_width_column_wrapper<T, int32_t>;
 template <typename T>
 using lists = cudf::test::lists_column_wrapper<T, int32_t>;
 
-auto constexpr null_index = std::numeric_limits<cudf::offset_type>::max();
+auto constexpr null_index = std::numeric_limits<cudf::size_type>::max();
 
 struct StructGatherTest : public cudf::test::BaseFixture {};
 
@@ -408,7 +403,7 @@ TYPED_TEST(TypedStructGatherTest, TestGatherStructOfListOfStructs)
       5, offsets{0, 2, 4, 6, 8, 10}.release(), std::move(expected_struct_col), 0, {});
     std::vector<std::unique_ptr<cudf::column>> expected_vector_of_columns;
     expected_vector_of_columns.push_back(std::move(expected_list_of_structs_column));
-    return structs{std::move(expected_vector_of_columns), {0, 1, 1, 1, 1}};
+    return structs{std::move(expected_vector_of_columns), {false, true, true, true, true}};
   }();
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_gather_result, gathered_structs->view());

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,16 +14,19 @@
  * limitations under the License.
  */
 
-#include <text/subword/detail/codepoint_metadata.ah>
-#include <text/subword/detail/tokenizer_utils.cuh>
-
-#include <nvtext/detail/load_hash_file.hpp>
+#include "text/subword/detail/codepoint_metadata.ah"
+#include "text/subword/detail/tokenizer_utils.cuh"
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/utilities/cuda_memcpy.hpp>
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/memory_resource.hpp>
+
+#include <nvtext/detail/load_hash_file.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
@@ -180,7 +183,7 @@ uint64_t str_to_uint64(std::string const& str, uint64_t line_no)
 std::unique_ptr<hashed_vocabulary> load_vocabulary_file(
   std::string const& filename_hashed_vocabulary,
   rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr)
+  rmm::device_async_resource_ref mr)
 {
   hashed_vocabulary result;
   std::ifstream hash_file(filename_hashed_vocabulary);
@@ -197,12 +200,12 @@ std::unique_ptr<hashed_vocabulary> load_vocabulary_file(
   std::getline(hash_file, line);
   result.num_bins = str_to_uint32(line, line_no++);
 
-  std::vector<uint64_t> bin_coefficients(result.num_bins);
-  std::vector<uint16_t> bin_offsets(result.num_bins);
+  auto bin_coefficients = cudf::detail::make_host_vector<uint64_t>(result.num_bins, stream);
+  auto bin_offsets      = cudf::detail::make_host_vector<uint16_t>(result.num_bins, stream);
 
   for (int i = 0; i < result.num_bins; ++i) {
     std::getline(hash_file, line);
-    size_t loc_of_space = line.find(" ");
+    size_t loc_of_space = line.find(' ');
     CUDF_EXPECTS(loc_of_space != line.npos, "invalid hash file format");
 
     std::string first_num  = line.substr(0, loc_of_space);
@@ -215,7 +218,7 @@ std::unique_ptr<hashed_vocabulary> load_vocabulary_file(
 
   std::getline(hash_file, line);
   uint64_t hash_table_length = str_to_uint64(line, line_no++);
-  std::vector<uint64_t> table(hash_table_length);
+  auto table                 = cudf::detail::make_host_vector<uint64_t>(hash_table_length, stream);
 
   std::generate(table.begin(), table.end(), [&hash_file, &line_no]() {
     std::string line;
@@ -238,43 +241,48 @@ std::unique_ptr<hashed_vocabulary> load_vocabulary_file(
                                            cudf::mask_state::UNALLOCATED,
                                            stream,
                                            mr);
-  CUDF_CUDA_TRY(cudaMemcpyAsync(result.table->mutable_view().data<uint64_t>(),
-                                table.data(),
-                                table.size() * sizeof(uint64_t),
-                                cudaMemcpyDefault,
-                                stream.value()));
+  cudf::detail::cuda_memcpy_async<uint64_t>(
+    cudf::device_span<uint64_t>(result.table->mutable_view().data<uint64_t>(), table.size()),
+    table,
+    stream);
 
   result.bin_coefficients = cudf::make_numeric_column(cudf::data_type{cudf::type_id::UINT64},
                                                       bin_coefficients.size(),
                                                       cudf::mask_state::UNALLOCATED,
                                                       stream,
                                                       mr);
-  CUDF_CUDA_TRY(cudaMemcpyAsync(result.bin_coefficients->mutable_view().data<uint64_t>(),
-                                bin_coefficients.data(),
-                                bin_coefficients.size() * sizeof(uint64_t),
-                                cudaMemcpyDefault,
-                                stream.value()));
+  cudf::detail::cuda_memcpy_async<uint64_t>(
+    cudf::device_span<uint64_t>(result.bin_coefficients->mutable_view().data<uint64_t>(),
+                                bin_coefficients.size()),
+    bin_coefficients,
+    stream);
 
   result.bin_offsets = cudf::make_numeric_column(cudf::data_type{cudf::type_id::UINT16},
                                                  bin_offsets.size(),
                                                  cudf::mask_state::UNALLOCATED,
                                                  stream,
                                                  mr);
-  CUDF_CUDA_TRY(cudaMemcpyAsync(result.bin_offsets->mutable_view().data<uint16_t>(),
-                                bin_offsets.data(),
-                                bin_offsets.size() * sizeof(uint16_t),
-                                cudaMemcpyDefault,
-                                stream.value()));
+  cudf::detail::cuda_memcpy_async<uint16_t>(
+    cudf::device_span<uint16_t>(result.bin_offsets->mutable_view().data<uint16_t>(),
+                                bin_offsets.size()),
+    bin_offsets,
+    stream);
 
   auto cp_metadata            = detail::get_codepoint_metadata(stream);
   auto const cp_metadata_size = static_cast<cudf::size_type>(cp_metadata.size());
-  result.cp_metadata          = std::make_unique<cudf::column>(
-    cudf::data_type{cudf::type_id::UINT32}, cp_metadata_size, cp_metadata.release());
+  result.cp_metadata = std::make_unique<cudf::column>(cudf::data_type{cudf::type_id::UINT32},
+                                                      cp_metadata_size,
+                                                      cp_metadata.release(),
+                                                      rmm::device_buffer{},
+                                                      0);
 
   auto aux_cp_table            = detail::get_aux_codepoint_data(stream);
   auto const aux_cp_table_size = static_cast<cudf::size_type>(aux_cp_table.size());
-  result.aux_cp_table          = std::make_unique<cudf::column>(
-    cudf::data_type{cudf::type_id::UINT64}, aux_cp_table_size, aux_cp_table.release());
+  result.aux_cp_table = std::make_unique<cudf::column>(cudf::data_type{cudf::type_id::UINT64},
+                                                       aux_cp_table_size,
+                                                       aux_cp_table.release(),
+                                                       rmm::device_buffer{},
+                                                       0);
 
   return std::make_unique<hashed_vocabulary>(std::move(result));
 }
@@ -282,10 +290,12 @@ std::unique_ptr<hashed_vocabulary> load_vocabulary_file(
 }  // namespace detail
 
 std::unique_ptr<hashed_vocabulary> load_vocabulary_file(
-  std::string const& filename_hashed_vocabulary, rmm::mr::device_memory_resource* mr)
+  std::string const& filename_hashed_vocabulary,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::load_vocabulary_file(filename_hashed_vocabulary, cudf::get_default_stream(), mr);
+  return detail::load_vocabulary_file(filename_hashed_vocabulary, stream, mr);
 }
 
 }  // namespace nvtext

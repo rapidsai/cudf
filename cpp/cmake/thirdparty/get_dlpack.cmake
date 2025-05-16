@@ -1,5 +1,5 @@
 # =============================================================================
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License. You may obtain a copy of the License at
@@ -36,6 +36,6 @@ function(find_and_configure_dlpack VERSION)
   endif()
 endfunction()
 
-set(CUDF_MIN_VERSION_dlpack 0.5)
+set(CUDF_MIN_VERSION_dlpack 0.8)
 
 find_and_configure_dlpack(${CUDF_MIN_VERSION_dlpack})

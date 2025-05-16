@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -206,7 +206,8 @@ public class Rmm {
    *                       {@link RmmAllocationMode#CUDA_DEFAULT},
    *                       {@link RmmAllocationMode#POOL},
    *                       {@link RmmAllocationMode#ARENA},
-   *                       {@link RmmAllocationMode#CUDA_ASYNC} and
+   *                       {@link RmmAllocationMode#CUDA_ASYNC},
+   *                       {@link RmmAllocationMode#CUDA_ASYNC_FABRIC} and
    *                       {@link RmmAllocationMode#CUDA_MANAGED_MEMORY}
    * @param logConf        How to do logging or null if you don't want to
    * @param poolSize       The initial pool size in bytes
@@ -221,6 +222,7 @@ public class Rmm {
     boolean isPool = (allocationMode & RmmAllocationMode.POOL) != 0;
     boolean isArena = (allocationMode & RmmAllocationMode.ARENA) != 0;
     boolean isAsync = (allocationMode & RmmAllocationMode.CUDA_ASYNC) != 0;
+    boolean isAsyncFabric = (allocationMode & RmmAllocationMode.CUDA_ASYNC_FABRIC) != 0;
     boolean isManaged = (allocationMode & RmmAllocationMode.CUDA_MANAGED_MEMORY) != 0;
 
     if (isAsync && isManaged) {
@@ -246,6 +248,9 @@ public class Rmm {
       } else if (isAsync) {
         resource = new RmmLimitingResourceAdaptor<>(
             new RmmCudaAsyncMemoryResource(poolSize, poolSize), poolSize, 512);
+      } else if (isAsyncFabric) {
+        resource = new RmmLimitingResourceAdaptor<>(
+            new RmmCudaAsyncMemoryResource(poolSize, poolSize, true), poolSize, 512);
       } else if (isManaged) {
         resource = new RmmManagedMemoryResource();
       } else {
@@ -265,6 +270,19 @@ public class Rmm {
       }
     }
   }
+
+  /**
+   * Sets the size of the cuDF default pinned pool.
+   *
+   * @note This has to be called before cuDF functions are executed.
+   *
+   * @param size initial and maximum size for the cuDF default pinned pool.
+   *        Pass size=0 to disable the default pool.
+   *
+   * @return true if we were able to setup the default resource, false if there was
+   *         a resource already set.
+   */
+  public static synchronized native boolean configureDefaultCudfPinnedPoolSize(long size);
 
   /**
    * Get the most recently set pool size or -1 if RMM has not been initialized or pooling is
@@ -508,7 +526,6 @@ public class Rmm {
 
   private static native long allocInternal(long size, long stream) throws RmmException;
 
-
   static native void free(long ptr, long length, long stream) throws RmmException;
 
   /**
@@ -549,7 +566,7 @@ public class Rmm {
 
   static native void releaseArenaMemoryResource(long handle);
 
-  static native long newCudaAsyncMemoryResource(long size, long release) throws RmmException;
+  static native long newCudaAsyncMemoryResource(long size, long release, boolean fabric) throws RmmException;
 
   static native void releaseCudaAsyncMemoryResource(long handle);
 
@@ -561,7 +578,6 @@ public class Rmm {
       boolean autoFlush) throws RmmException;
 
   static native void releaseLoggingResourceAdaptor(long handle);
-
 
   static native long newTrackingResourceAdaptor(long handle, long alignment) throws RmmException;
 
@@ -581,4 +597,20 @@ public class Rmm {
   static native long releaseEventHandlerResourceAdaptor(long handle, boolean debug);
 
   private static native void setCurrentDeviceResourceInternal(long newHandle);
+
+  public static native long newPinnedPoolMemoryResource(long initSize, long maxSize);
+
+  public static native long setCudfPinnedPoolMemoryResource(long poolPtr);
+
+  public static native void releasePinnedPoolMemoryResource(long poolPtr);
+
+  public static native long allocFromPinnedPool(long poolPtr, long size);
+
+  public static native void freeFromPinnedPool(long poolPtr, long ptr, long size);
+
+  // only for tests
+  public static native long allocFromFallbackPinnedPool(long size);
+
+  // only for tests
+  public static native void freeFromFallbackPinnedPool(long ptr, long size);
 }

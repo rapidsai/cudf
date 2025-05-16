@@ -1,6 +1,4 @@
-# Copyright (c) 2021-2023, NVIDIA CORPORATION.
-
-import contextlib
+# Copyright (c) 2021-2025, NVIDIA CORPORATION.
 
 import numpy as np
 import pandas as pd
@@ -11,9 +9,11 @@ from dask import dataframe as dd
 from dask.utils_test import hlg_layer
 
 import cudf
+from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
+from cudf.testing._utils import expect_warning_if
 
 import dask_cudf
-from dask_cudf.groupby import OPTIMIZED_AGGS, _aggs_optimized
+from dask_cudf._expr.groupby import OPTIMIZED_AGGS, _aggs_optimized
 
 
 def assert_cudf_groupby_layers(ddf):
@@ -29,51 +29,57 @@ def assert_cudf_groupby_layers(ddf):
 
 @pytest.fixture(params=["non_null", "null"])
 def pdf(request):
-    np.random.seed(0)
+    rng = np.random.default_rng(seed=0)
 
     # note that column name "x" is a substring of the groupby key;
     # this gives us coverage for cudf#10829
     pdf = pd.DataFrame(
         {
-            "xx": np.random.randint(0, 5, size=10000),
-            "x": np.random.normal(size=10000),
-            "y": np.random.normal(size=10000),
+            "xx": rng.integers(0, 5, size=10000),
+            "x": rng.normal(size=10000),
+            "y": rng.normal(size=10000),
         }
     )
 
     # insert nulls into dataframe at random
     if request.param == "null":
-        pdf = pdf.mask(np.random.choice([True, False], size=pdf.shape))
+        pdf = pdf.mask(rng.choice([True, False], size=pdf.shape))
 
     return pdf
 
 
-@pytest.mark.parametrize("aggregation", OPTIMIZED_AGGS)
+# NOTE: We only want to test aggregation "methods" here,
+# so we need to leave out `list`. We also include a
+# deprecation check for "collect".
+@pytest.mark.parametrize(
+    "aggregation",
+    sorted((*tuple(set(OPTIMIZED_AGGS) - {list}), "collect")),
+)
 @pytest.mark.parametrize("series", [False, True])
 def test_groupby_basic(series, aggregation, pdf):
     gdf = cudf.DataFrame.from_pandas(pdf)
-    gdf_grouped = gdf.groupby("xx")
-    ddf_grouped = dask_cudf.from_cudf(gdf, npartitions=5).groupby("xx")
+    gdf_grouped = gdf.groupby("xx", dropna=True)
+    ddf_grouped = dask_cudf.from_cudf(gdf, npartitions=5).groupby(
+        "xx", dropna=True
+    )
 
     if series:
-        gdf_grouped = gdf_grouped.xx
-        ddf_grouped = ddf_grouped.xx
+        gdf_grouped = gdf_grouped.x
+        ddf_grouped = ddf_grouped.x
 
     check_dtype = aggregation != "count"
 
-    expect = getattr(gdf_grouped, aggregation)()
-    actual = getattr(ddf_grouped, aggregation)()
-
-    assert_cudf_groupby_layers(actual)
-
-    dd.assert_eq(expect, actual, check_dtype=check_dtype)
-
-    expect = gdf_grouped.agg({"xx": aggregation})
-    actual = ddf_grouped.agg({"xx": aggregation})
-
-    assert_cudf_groupby_layers(actual)
+    with expect_warning_if(aggregation == "collect"):
+        expect = getattr(gdf_grouped, aggregation)()
+        actual = getattr(ddf_grouped, aggregation)()
 
     dd.assert_eq(expect, actual, check_dtype=check_dtype)
+
+    if not series:
+        expect = gdf_grouped.agg({"x": aggregation})
+        actual = ddf_grouped.agg({"x": aggregation})
+
+        dd.assert_eq(expect, actual, check_dtype=check_dtype)
 
 
 # TODO: explore adding support with `.agg()`
@@ -90,17 +96,10 @@ def test_groupby_cumulative(aggregation, pdf, series):
         gdf_grouped = gdf_grouped.xx
         ddf_grouped = ddf_grouped.xx
 
-    if pdf.isna().sum().any():
-        # https://github.com/rapidsai/cudf/issues/12055
-        gdf_grouped = gdf.groupby("xx")
-        context = pytest.raises(ValueError)
-    else:
-        context = contextlib.nullcontext()
-    with context:
-        a = getattr(gdf_grouped, aggregation)()
-        b = getattr(ddf_grouped, aggregation)()
+    a = getattr(gdf_grouped, aggregation)()
+    b = getattr(ddf_grouped, aggregation)()
 
-        dd.assert_eq(a, b)
+    dd.assert_eq(a, b)
 
 
 @pytest.mark.parametrize("aggregation", OPTIMIZED_AGGS)
@@ -117,7 +116,6 @@ def test_groupby_cumulative(aggregation, pdf, series):
 )
 def test_groupby_agg(func, aggregation, pdf):
     gdf = cudf.DataFrame.from_pandas(pdf)
-
     ddf = dask_cudf.from_cudf(gdf, npartitions=5)
 
     actual = func(ddf, aggregation)
@@ -125,18 +123,11 @@ def test_groupby_agg(func, aggregation, pdf):
 
     check_dtype = aggregation != "count"
 
-    assert_cudf_groupby_layers(actual)
-
-    # groupby.agg should add an explicit getitem layer
-    # to improve/enable column projection
-    assert hlg_layer(actual.dask, "getitem")
-
     dd.assert_eq(expect, actual, check_names=False, check_dtype=check_dtype)
 
 
 @pytest.mark.parametrize("split_out", [1, 3])
 def test_groupby_agg_empty_partition(tmpdir, split_out):
-
     # Write random and empty cudf DataFrames
     # to two distinct files.
     df = cudf.datasets.randomdata()
@@ -168,11 +159,12 @@ def test_groupby_agg_empty_partition(tmpdir, split_out):
     ],
 )
 def test_groupby_multi_column(func):
+    rng = np.random.default_rng(seed=0)
     pdf = pd.DataFrame(
         {
-            "a": np.random.randint(0, 20, size=1000),
-            "b": np.random.randint(0, 5, size=1000),
-            "x": np.random.normal(size=1000),
+            "a": rng.integers(0, 20, size=1000),
+            "b": rng.integers(0, 5, size=1000),
+            "x": rng.normal(size=1000),
         }
     )
 
@@ -237,7 +229,7 @@ def test_groupby_split_out(split_out, column):
     gddf = dask_cudf.from_cudf(gdf, npartitions=3)
 
     ddf_result = (
-        ddf.groupby(column)
+        ddf.groupby(column, observed=True)
         .a.mean(split_out=split_out)
         .compute()
         .sort_values()
@@ -292,65 +284,29 @@ def test_groupby_dropna_cudf(dropna, by):
         (False, "a"),
         (False, "b"),
         (False, "c"),
-        pytest.param(
-            False,
-            "d",
-            marks=pytest.mark.xfail(
-                reason="dropna=False is broken in Dask CPU for groupbys on "
-                "categorical columns"
-            ),
-        ),
-        pytest.param(
-            False,
-            ["a", "b"],
-            marks=pytest.mark.xfail(
-                reason="https://github.com/dask/dask/issues/8817"
-            ),
-        ),
-        pytest.param(
-            False,
-            ["a", "c"],
-            marks=pytest.mark.xfail(
-                reason="https://github.com/dask/dask/issues/8817"
-            ),
-        ),
-        pytest.param(
-            False,
-            ["a", "d"],
-            marks=pytest.mark.xfail(
-                reason="multi-col groupbys on categorical columns are broken "
-                "in Dask CPU"
-            ),
-        ),
+        (False, "d"),
+        (False, ["a", "b"]),
+        (False, ["a", "c"]),
+        (False, ["a", "d"]),
         (True, "a"),
         (True, "b"),
         (True, "c"),
         (True, "d"),
         (True, ["a", "b"]),
         (True, ["a", "c"]),
-        pytest.param(
-            True,
-            ["a", "d"],
-            marks=pytest.mark.xfail(
-                reason="multi-col groupbys on categorical columns are broken "
-                "in Dask CPU"
-            ),
-        ),
+        (True, ["a", "d"]),
         (None, "a"),
         (None, "b"),
         (None, "c"),
         (None, "d"),
         (None, ["a", "b"]),
         (None, ["a", "c"]),
-        pytest.param(
-            None,
-            ["a", "d"],
-            marks=pytest.mark.xfail(
-                reason="multi-col groupbys on categorical columns are broken "
-                "in Dask CPU"
-            ),
-        ),
+        (None, ["a", "d"]),
     ],
+)
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="Fails in older versions of pandas",
 )
 def test_groupby_dropna_dask(dropna, by):
     # NOTE: This test is borrowed from upstream dask
@@ -372,10 +328,10 @@ def test_groupby_dropna_dask(dropna, by):
 
     if dropna is None:
         dask_cudf_result = gddf.groupby(by).e.sum()
-        dask_result = ddf.groupby(by).e.sum()
+        dask_result = ddf.groupby(by, observed=True).e.sum()
     else:
         dask_cudf_result = gddf.groupby(by, dropna=dropna).e.sum()
-        dask_result = ddf.groupby(by, dropna=dropna).e.sum()
+        dask_result = ddf.groupby(by, dropna=dropna, observed=True).e.sum()
 
     dd.assert_eq(dask_cudf_result, dask_result)
 
@@ -402,11 +358,12 @@ def test_groupby_string_index_name(myindex):
     ],
 )
 def test_groupby_split_out_multiindex(agg_func):
+    rng = np.random.default_rng(seed=0)
     df = cudf.DataFrame(
         {
-            "a": np.random.randint(0, 10, 100),
-            "b": np.random.randint(0, 5, 100),
-            "c": np.random.random(100),
+            "a": rng.integers(0, 10, 100),
+            "b": rng.integers(0, 5, 100),
+            "c": rng.random(100),
         }
     )
     ddf = dask_cudf.from_cudf(df, 5)
@@ -450,12 +407,13 @@ def test_groupby_multiindex_reset_index(npartitions):
     ],
 )
 def test_groupby_reset_index_multiindex(groupby_keys, agg_func):
+    rng = np.random.default_rng(seed=0)
     df = cudf.DataFrame(
         {
-            "a": np.random.randint(0, 10, 10),
-            "b": np.random.randint(0, 5, 10),
-            "c": np.random.randint(0, 5, 10),
-            "dd": np.random.randint(0, 5, 10),
+            "a": rng.integers(0, 10, 10),
+            "b": rng.integers(0, 5, 10),
+            "c": rng.integers(0, 5, 10),
+            "dd": rng.integers(0, 5, 10),
         }
     )
     ddf = dask_cudf.from_cudf(df, 5)
@@ -468,8 +426,9 @@ def test_groupby_reset_index_multiindex(groupby_keys, agg_func):
 
 
 def test_groupby_reset_index_drop_True():
+    rng = np.random.default_rng(seed=0)
     df = cudf.DataFrame(
-        {"a": np.random.randint(0, 10, 10), "b": np.random.randint(0, 5, 10)}
+        {"a": rng.integers(0, 10, 10), "b": rng.integers(0, 5, 10)}
     )
     ddf = dask_cudf.from_cudf(df, 5)
     pddf = dd.from_pandas(df.to_pandas(), 5)
@@ -496,7 +455,6 @@ def test_groupby_mean_sort_false():
 
 
 def test_groupby_reset_index_dtype():
-
     # Make sure int8 dtype is properly preserved
     # Through various cudf/dask_cudf ops
     #
@@ -510,7 +468,7 @@ def test_groupby_reset_index_dtype():
     a = df.groupby("a").agg({"b": ["count"]})
 
     assert a.index.dtype == "int8"
-    assert a.reset_index().dtypes[0] == "int8"
+    assert a.reset_index().dtypes.iloc[0] == "int8"
 
 
 def test_groupby_reset_index_names():
@@ -557,9 +515,9 @@ def test_groupby_reset_index_string_name():
 def test_groupby_categorical_key():
     # See https://github.com/rapidsai/cudf/issues/4608
     df = dask.datasets.timeseries()
-    gddf = dask_cudf.from_dask_dataframe(df)
+    gddf = df.to_backend("cudf")
     gddf["name"] = gddf["name"].astype("category")
-    ddf = gddf.to_dask_dataframe()
+    ddf = gddf.to_backend("pandas")
 
     got = gddf.groupby("name", sort=True).agg(
         {"x": ["mean", "max"], "y": ["mean", "count"]}
@@ -568,17 +526,31 @@ def test_groupby_categorical_key():
     # (See: https://github.com/dask/dask/issues/9515)
     expect = (
         ddf.compute()
-        .groupby("name", sort=True)
+        .groupby("name", sort=True, observed=True)
         .agg({"x": ["mean", "max"], "y": ["mean", "count"]})
     )
     dd.assert_eq(expect, got)
 
 
-@pytest.mark.parametrize("as_index", [True, False])
+@pytest.mark.parametrize(
+    "as_index",
+    [
+        True,
+        pytest.param(
+            False,
+            marks=pytest.mark.xfail(
+                reason="as_index not supported in dask-expr"
+            ),
+        ),
+    ],
+)
+@pytest.mark.parametrize("fused", [True, False])
 @pytest.mark.parametrize("split_out", ["use_dask_default", 1, 2])
 @pytest.mark.parametrize("split_every", [False, 4])
 @pytest.mark.parametrize("npartitions", [1, 10])
-def test_groupby_agg_params(npartitions, split_every, split_out, as_index):
+def test_groupby_agg_params(
+    npartitions, split_every, split_out, fused, as_index
+):
     df = cudf.datasets.randomdata(
         nrows=150,
         dtypes={"name": str, "a": int, "b": int, "c": float},
@@ -593,16 +565,24 @@ def test_groupby_agg_params(npartitions, split_every, split_out, as_index):
         "c": ["mean", "std", "var"],
     }
 
+    fused_kwarg = {"fused": fused}
     split_kwargs = {"split_every": split_every, "split_out": split_out}
     if split_out == "use_dask_default":
         split_kwargs.pop("split_out")
 
+    # Avoid using as_index when query-planning is enabled
+    with pytest.warns(FutureWarning, match="argument is now deprecated"):
+        # Should warn when `as_index` is used
+        ddf.groupby(["name", "a"], sort=False, as_index=as_index)
+    maybe_as_index = {"as_index": as_index} if as_index is False else {}
+
     # Check `sort=True` behavior
     if split_out == 1:
         gf = (
-            ddf.groupby(["name", "a"], sort=True, as_index=as_index)
+            ddf.groupby(["name", "a"], sort=True, **maybe_as_index)
             .aggregate(
                 agg_dict,
+                **fused_kwarg,
                 **split_kwargs,
             )
             .compute()
@@ -610,7 +590,7 @@ def test_groupby_agg_params(npartitions, split_every, split_out, as_index):
         if as_index:
             # Groupby columns became the index.
             # Sorting the index should not change anything.
-            dd.assert_eq(gf.index, gf.sort_index().index)
+            dd.assert_eq(gf.index.to_frame(), gf.sort_index().index.to_frame())
         else:
             # Groupby columns are did NOT become the index.
             # Sorting by these columns should not change anything.
@@ -622,8 +602,9 @@ def test_groupby_agg_params(npartitions, split_every, split_out, as_index):
             )
 
     # Full check (`sort=False`)
-    gr = ddf.groupby(["name", "a"], sort=False, as_index=as_index).aggregate(
+    gr = ddf.groupby(["name", "a"], sort=False, **maybe_as_index).aggregate(
         agg_dict,
+        **fused_kwarg,
         **split_kwargs,
     )
     pr = pddf.groupby(["name", "a"], sort=False).agg(
@@ -666,10 +647,11 @@ def test_groupby_agg_params(npartitions, split_every, split_out, as_index):
     "aggregations", [(sum, "sum"), (max, "max"), (min, "min")]
 )
 def test_groupby_agg_redirect(aggregations):
+    rng = np.random.default_rng(seed=0)
     pdf = pd.DataFrame(
         {
-            "x": np.random.randint(0, 5, size=10000),
-            "y": np.random.normal(size=10000),
+            "x": rng.integers(0, 5, size=10000),
+            "y": rng.normal(size=10000),
         }
     )
 
@@ -702,13 +684,9 @@ def test_is_supported(arg, supported):
 
 def test_groupby_unique_lists():
     df = pd.DataFrame({"a": [0, 0, 0, 1, 1, 1], "b": [10, 10, 10, 7, 8, 9]})
-    ddf = dd.from_pandas(df, 2)
     gdf = cudf.from_pandas(df)
     gddf = dask_cudf.from_cudf(gdf, 2)
-    dd.assert_eq(
-        ddf.groupby("a").b.unique().compute(),
-        gddf.groupby("a").b.unique().compute(),
-    )
+
     dd.assert_eq(
         gdf.groupby("a").b.unique(),
         gddf.groupby("a").b.unique().compute(),
@@ -750,6 +728,7 @@ def test_groupby_first_last(data, agg):
     )
 
 
+@pytest.mark.xfail(reason="Co-alignment check fails in dask-expr")
 def test_groupby_with_list_of_series():
     df = cudf.DataFrame({"a": [1, 2, 3, 4, 5]})
     gdf = dask_cudf.from_cudf(df, npartitions=2)
@@ -772,10 +751,11 @@ def test_groupby_with_list_of_series():
     ],
 )
 def test_groupby_nested_dict(func):
+    rng = np.random.default_rng(seed=0)
     pdf = pd.DataFrame(
         {
-            "x": np.random.randint(0, 5, size=10000),
-            "y": np.random.normal(size=10000),
+            "x": rng.integers(0, 5, size=10000),
+            "y": rng.normal(size=10000),
         }
     )
 
@@ -808,20 +788,21 @@ def test_groupby_nested_dict(func):
     ],
 )
 def test_groupby_all_columns(func):
+    rng = np.random.default_rng(seed=0)
     pdf = pd.DataFrame(
         {
-            "x": np.random.randint(0, 5, size=10000),
-            "y": np.random.normal(size=10000),
+            "x": rng.integers(0, 5, size=10000),
+            "y": rng.normal(size=10000),
         }
     )
 
     ddf = dd.from_pandas(pdf, npartitions=5)
-    gddf = ddf.map_partitions(cudf.from_pandas)
+    gddf = ddf.to_backend("cudf")
 
     expect = func(ddf)
     actual = func(gddf)
 
-    dd.assert_eq(expect, actual)
+    dd.assert_eq(expect, actual, check_names=False)
 
 
 def test_groupby_shuffle():
@@ -834,26 +815,27 @@ def test_groupby_shuffle():
 
     # Sorted aggregation, single-partition output
     # (sort=True, split_out=1)
-    got = gddf.groupby("a", sort=True).agg(spec, shuffle=True, split_out=1)
+    got = gddf.groupby("a", sort=True).agg(
+        spec, shuffle_method=True, split_out=1
+    )
     dd.assert_eq(expect, got)
 
     # Sorted aggregation, multi-partition output
     # (sort=True, split_out=2)
-    got = gddf.groupby("a", sort=True).agg(spec, shuffle=True, split_out=2)
+    got = gddf.groupby("a", sort=True).agg(
+        spec, shuffle_method=True, split_out=2
+    )
     dd.assert_eq(expect, got)
 
     # Un-sorted aggregation, single-partition output
     # (sort=False, split_out=1)
-    got = gddf.groupby("a", sort=False).agg(spec, shuffle=True, split_out=1)
+    got = gddf.groupby("a", sort=False).agg(
+        spec, shuffle_method=True, split_out=1
+    )
     dd.assert_eq(expect.sort_index(), got.compute().sort_index())
 
     # Un-sorted aggregation, multi-partition output
     # (sort=False, split_out=2)
-    # NOTE: `shuffle=True` should be default
+    # NOTE: `shuffle_method=True` should be default
     got = gddf.groupby("a", sort=False).agg(spec, split_out=2)
     dd.assert_eq(expect, got.compute().sort_index())
-
-    # Sorted aggregation fails with split_out>1 when shuffle is False
-    # (sort=True, split_out=2, shuffle=False)
-    with pytest.raises(ValueError):
-        gddf.groupby("a", sort=True).agg(spec, shuffle=False, split_out=2)

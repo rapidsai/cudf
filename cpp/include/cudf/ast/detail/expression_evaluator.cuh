@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,13 +29,27 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
-#include <thrust/optional.h>
+#include <cuda/std/type_traits>
+#include <cuda/std/utility>
 
-namespace cudf {
+namespace cudf::ast::detail {
 
-namespace ast {
+CUDF_HOST_DEVICE constexpr bool is_complex_type(cudf::type_id type)
+{
+  return type == cudf::type_id::DECIMAL32 || type == cudf::type_id::DECIMAL64 ||
+         type == cudf::type_id::DECIMAL128 || type == cudf::type_id::STRING;
+}
 
-namespace detail {
+/**
+ * @brief Maps void for string and decimal types
+ *
+ * @tparam t The cudf::type_id to map to a C++ type or void
+ */
+template <cudf::type_id t>
+struct dispatch_void_if_complex {
+  // Default to void for non-primitive types
+  using type = cuda::std::conditional_t<is_complex_type(t), void, id_to_type<t>>;
+};
 
 /**
  * @brief A container for capturing the output of an evaluated expression.
@@ -99,7 +113,7 @@ struct value_expression_result
   __device__ inline void set_value(cudf::size_type index,
                                    possibly_null_value_t<Element, has_nulls> const& result)
   {
-    if constexpr (std::is_same_v<Element, T>) {
+    if constexpr (cuda::std::is_same_v<Element, T>) {
       _obj = result;
     } else {
       CUDF_UNREACHABLE("Output type does not match container type.");
@@ -216,7 +230,7 @@ struct single_dispatch_binary_operator {
   template <typename LHS, typename F, typename... Ts>
   __device__ inline auto operator()(F&& f, Ts&&... args)
   {
-    f.template operator()<LHS, LHS>(std::forward<Ts>(args)...);
+    f.template operator()<LHS, LHS>(cuda::std::forward<Ts>(args)...);
   }
 };
 
@@ -226,7 +240,7 @@ struct single_dispatch_binary_operator {
  * This class is designed for n-ary transform evaluation. It operates on two
  * tables.
  */
-template <bool has_nulls>
+template <bool has_nulls, bool has_complex_type = true>
 struct expression_evaluator {
  public:
   /**
@@ -278,7 +292,7 @@ struct expression_evaluator {
     detail::device_data_reference const& input_reference,
     IntermediateDataType<has_nulls>* thread_intermediate_storage,
     cudf::size_type left_row_index,
-    thrust::optional<cudf::size_type> right_row_index = {}) const
+    cudf::size_type right_row_index = {}) const
   {
     // TODO: Everywhere in the code assumes that the table reference is either
     // left or right. Should we error-check somewhere to prevent
@@ -291,7 +305,7 @@ struct expression_evaluator {
       // any case where input_reference.table_source == table_reference::RIGHT.
       // Otherwise, behavior is undefined.
       auto const row_index =
-        (input_reference.table_source == table_reference::LEFT) ? left_row_index : *right_row_index;
+        (input_reference.table_source == table_reference::LEFT) ? left_row_index : right_row_index;
       if constexpr (has_nulls) {
         return table.column(input_reference.data_index).is_valid(row_index)
                  ? ReturnType(table.column(input_reference.data_index).element<Element>(row_index))
@@ -329,7 +343,7 @@ struct expression_evaluator {
     detail::device_data_reference const& device_data_reference,
     IntermediateDataType<has_nulls>* thread_intermediate_storage,
     cudf::size_type left_row_index,
-    thrust::optional<cudf::size_type> right_row_index = {}) const
+    cudf::size_type right_row_index = {}) const
   {
     CUDF_UNREACHABLE("Unsupported type in resolve_input.");
   }
@@ -347,7 +361,11 @@ struct expression_evaluator {
    * @param output_row_index The row in the output to insert the result.
    * @param op The operator to act with.
    */
-  template <typename Input, typename ResultSubclass, typename T, bool result_has_nulls>
+  template <typename Input,
+            typename ResultSubclass,
+            typename T,
+            bool result_has_nulls,
+            CUDF_ENABLE_IF(!cuda::std::is_void_v<Input>)>
   __device__ inline void operator()(
     expression_result<ResultSubclass, T, result_has_nulls>& output_object,
     cudf::size_type const input_row_index,
@@ -358,7 +376,7 @@ struct expression_evaluator {
     IntermediateDataType<has_nulls>* thread_intermediate_storage) const
   {
     auto const typed_input =
-      resolve_input<Input>(input, thread_intermediate_storage, input_row_index);
+      resolve_input<Input>(input, thread_intermediate_storage, input_row_index, input_row_index);
     ast_operator_dispatcher(op,
                             unary_expression_output_handler<Input>{},
                             output_object,
@@ -366,6 +384,23 @@ struct expression_evaluator {
                             typed_input,
                             output,
                             thread_intermediate_storage);
+  }
+
+  template <typename Input,
+            typename ResultSubclass,
+            typename T,
+            bool result_has_nulls,
+            CUDF_ENABLE_IF(cuda::std::is_void_v<Input>)>
+  __device__ inline void operator()(
+    expression_result<ResultSubclass, T, result_has_nulls>& output_object,
+    cudf::size_type const input_row_index,
+    detail::device_data_reference const& input,
+    detail::device_data_reference const& output,
+    cudf::size_type const output_row_index,
+    ast_operator const op,
+    IntermediateDataType<has_nulls>* thread_intermediate_storage) const
+  {
+    CUDF_UNREACHABLE("Unsupported type in operator().");
   }
 
   /**
@@ -384,7 +419,12 @@ struct expression_evaluator {
    * @param output_row_index The row in the output to insert the result.
    * @param op The operator to act with.
    */
-  template <typename LHS, typename RHS, typename ResultSubclass, typename T, bool result_has_nulls>
+  template <typename LHS,
+            typename RHS,
+            typename ResultSubclass,
+            typename T,
+            bool result_has_nulls,
+            CUDF_ENABLE_IF(!cuda::std::is_void_v<LHS> && !cuda::std::is_void_v<RHS>)>
   __device__ inline void operator()(
     expression_result<ResultSubclass, T, result_has_nulls>& output_object,
     cudf::size_type const left_row_index,
@@ -408,6 +448,26 @@ struct expression_evaluator {
                             typed_rhs,
                             output,
                             thread_intermediate_storage);
+  }
+
+  template <typename LHS,
+            typename RHS,
+            typename ResultSubclass,
+            typename T,
+            bool result_has_nulls,
+            CUDF_ENABLE_IF(cuda::std::is_void_v<LHS> || cuda::std::is_void_v<RHS>)>
+  __device__ inline void operator()(
+    expression_result<ResultSubclass, T, result_has_nulls>& output_object,
+    cudf::size_type const left_row_index,
+    cudf::size_type const right_row_index,
+    detail::device_data_reference const& lhs,
+    detail::device_data_reference const& rhs,
+    detail::device_data_reference const& output,
+    cudf::size_type const output_row_index,
+    ast_operator const op,
+    IntermediateDataType<has_nulls>* thread_intermediate_storage) const
+  {
+    CUDF_UNREACHABLE("Unsupported type in operator().");
   }
 
   /**
@@ -454,7 +514,7 @@ struct expression_evaluator {
          ++operator_index) {
       // Execute operator
       auto const op    = plan.operators[operator_index];
-      auto const arity = ast_operator_arity(op);
+      auto const arity = plan.operator_arities[operator_index];
       if (arity == 1) {
         // Unary operator
         auto const& input =
@@ -463,15 +523,27 @@ struct expression_evaluator {
           plan.data_references[plan.operator_source_indices[operator_source_index++]];
         auto input_row_index =
           input.table_source == table_reference::LEFT ? left_row_index : right_row_index;
-        type_dispatcher(input.data_type,
-                        *this,
-                        output_object,
-                        input_row_index,
-                        input,
-                        output,
-                        output_row_index,
-                        op,
-                        thread_intermediate_storage);
+        if constexpr (has_complex_type) {
+          type_dispatcher(input.data_type,
+                          *this,
+                          output_object,
+                          input_row_index,
+                          input,
+                          output,
+                          output_row_index,
+                          op,
+                          thread_intermediate_storage);
+        } else {
+          type_dispatcher<dispatch_void_if_complex>(input.data_type,
+                                                    *this,
+                                                    output_object,
+                                                    input_row_index,
+                                                    input,
+                                                    output,
+                                                    output_row_index,
+                                                    op,
+                                                    thread_intermediate_storage);
+        }
       } else if (arity == 2) {
         // Binary operator
         auto const& lhs =
@@ -480,20 +552,33 @@ struct expression_evaluator {
           plan.data_references[plan.operator_source_indices[operator_source_index++]];
         auto const& output =
           plan.data_references[plan.operator_source_indices[operator_source_index++]];
-        type_dispatcher(lhs.data_type,
-                        detail::single_dispatch_binary_operator{},
-                        *this,
-                        output_object,
-                        left_row_index,
-                        right_row_index,
-                        lhs,
-                        rhs,
-                        output,
-                        output_row_index,
-                        op,
-                        thread_intermediate_storage);
-      } else {
-        CUDF_UNREACHABLE("Invalid operator arity.");
+        if constexpr (has_complex_type) {
+          type_dispatcher(lhs.data_type,
+                          detail::single_dispatch_binary_operator{},
+                          *this,
+                          output_object,
+                          left_row_index,
+                          right_row_index,
+                          lhs,
+                          rhs,
+                          output,
+                          output_row_index,
+                          op,
+                          thread_intermediate_storage);
+        } else {
+          type_dispatcher<dispatch_void_if_complex>(lhs.data_type,
+                                                    detail::single_dispatch_binary_operator{},
+                                                    *this,
+                                                    output_object,
+                                                    left_row_index,
+                                                    right_row_index,
+                                                    lhs,
+                                                    rhs,
+                                                    output,
+                                                    output_row_index,
+                                                    op,
+                                                    thread_intermediate_storage);
+        }
       }
     }
   }
@@ -591,9 +676,8 @@ struct expression_evaluator {
               typename ResultSubclass,
               typename T,
               bool result_has_nulls,
-              std::enable_if_t<
-                detail::is_valid_unary_op<detail::operator_functor<op, has_nulls>,
-                                          possibly_null_value_t<Input, has_nulls>>>* = nullptr>
+              CUDF_ENABLE_IF(detail::is_valid_unary_op<detail::operator_functor<op, has_nulls>,
+                                                       possibly_null_value_t<Input, has_nulls>>)>
     __device__ inline void operator()(
       expression_result<ResultSubclass, T, result_has_nulls>& output_object,
       cudf::size_type const output_row_index,
@@ -615,9 +699,8 @@ struct expression_evaluator {
               typename ResultSubclass,
               typename T,
               bool result_has_nulls,
-              std::enable_if_t<
-                !detail::is_valid_unary_op<detail::operator_functor<op, has_nulls>,
-                                           possibly_null_value_t<Input, has_nulls>>>* = nullptr>
+              CUDF_ENABLE_IF(!detail::is_valid_unary_op<detail::operator_functor<op, has_nulls>,
+                                                        possibly_null_value_t<Input, has_nulls>>)>
     __device__ inline void operator()(
       expression_result<ResultSubclass, T, result_has_nulls>& output_object,
       cudf::size_type const output_row_index,
@@ -655,10 +738,9 @@ struct expression_evaluator {
               typename ResultSubclass,
               typename T,
               bool result_has_nulls,
-              std::enable_if_t<detail::is_valid_binary_op<detail::operator_functor<op, has_nulls>,
-                                                          possibly_null_value_t<LHS, has_nulls>,
-                                                          possibly_null_value_t<RHS, has_nulls>>>* =
-                nullptr>
+              CUDF_ENABLE_IF(detail::is_valid_binary_op<detail::operator_functor<op, has_nulls>,
+                                                        possibly_null_value_t<LHS, has_nulls>,
+                                                        possibly_null_value_t<RHS, has_nulls>>)>
     __device__ inline void operator()(
       expression_result<ResultSubclass, T, result_has_nulls>& output_object,
       cudf::size_type const output_row_index,
@@ -681,10 +763,9 @@ struct expression_evaluator {
               typename ResultSubclass,
               typename T,
               bool result_has_nulls,
-              std::enable_if_t<
-                !detail::is_valid_binary_op<detail::operator_functor<op, has_nulls>,
-                                            possibly_null_value_t<LHS, has_nulls>,
-                                            possibly_null_value_t<RHS, has_nulls>>>* = nullptr>
+              CUDF_ENABLE_IF(!detail::is_valid_binary_op<detail::operator_functor<op, has_nulls>,
+                                                         possibly_null_value_t<LHS, has_nulls>,
+                                                         possibly_null_value_t<RHS, has_nulls>>)>
     __device__ inline void operator()(
       expression_result<ResultSubclass, T, result_has_nulls>& output_object,
       cudf::size_type const output_row_index,
@@ -703,8 +784,4 @@ struct expression_evaluator {
     plan;  ///< The container of device data representing the expression to evaluate.
 };
 
-}  // namespace detail
-
-}  // namespace ast
-
-}  // namespace cudf
+}  // namespace cudf::ast::detail

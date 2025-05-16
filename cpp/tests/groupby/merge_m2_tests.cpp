@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,6 +24,7 @@
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/groupby.hpp>
 #include <cudf/table/table_view.hpp>
+#include <cudf/unary.hpp>
 
 using namespace cudf::test::iterators;
 
@@ -57,7 +58,7 @@ using vcol_views  = std::vector<cudf::column_view>;
 auto compute_partial_results(cudf::column_view const& keys, cudf::column_view const& values)
 {
   std::vector<cudf::groupby::aggregation_request> requests;
-  requests.emplace_back(cudf::groupby::aggregation_request());
+  requests.emplace_back();
   requests[0].values = values;
   requests[0].aggregations.emplace_back(cudf::make_count_aggregation<cudf::groupby_aggregation>());
   requests[0].aggregations.emplace_back(cudf::make_mean_aggregation<cudf::groupby_aggregation>());
@@ -66,7 +67,11 @@ auto compute_partial_results(cudf::column_view const& keys, cudf::column_view co
   auto gb_obj                  = cudf::groupby::groupby(cudf::table_view({keys}));
   auto [out_keys, out_results] = gb_obj.aggregate(requests);
 
-  auto const num_output_rows = out_keys->num_rows();
+  // Cast the `COUNT_VALID` column to `INT64` type.
+  out_results[0].results.front() = cudf::cast(out_results[0].results.front()->view(),
+                                              cudf::data_type(cudf::type_id::INT64),
+                                              cudf::get_default_stream());
+  auto const num_output_rows     = out_keys->num_rows();
   return std::pair(std::move(out_keys->release()[0]),
                    cudf::make_structs_column(
                      num_output_rows, std::move(out_results[0].results), 0, rmm::device_buffer{}));
@@ -85,7 +90,7 @@ auto merge_M2(vcol_views const& keys_cols, vcol_views const& values_cols)
   auto const values = cudf::concatenate(values_cols);
 
   std::vector<cudf::groupby::aggregation_request> requests;
-  requests.emplace_back(cudf::groupby::aggregation_request());
+  requests.emplace_back();
   requests[0].values = *values;
   requests[0].aggregations.emplace_back(
     cudf::make_merge_m2_aggregation<cudf::groupby_aggregation>());
@@ -123,13 +128,15 @@ TYPED_TEST(GroupbyMergeM2TypedTest, InvalidInput)
     EXPECT_THROW(merge_M2({keys}, {vals}), cudf::logic_error);
   }
 
-  // The input column must be a structs column having types (int32_t, double, double).
+  // The input column must be a structs column having types (int64_t/double, double, double).
   {
-    auto vals1      = keys_col<T>{1, 2, 3};
-    auto vals2      = keys_col<T>{1, 2, 3};
-    auto vals3      = keys_col<T>{1, 2, 3};
-    auto const vals = structs_col{vals1, vals2, vals3};
-    EXPECT_THROW(merge_M2({keys}, {vals}), cudf::logic_error);
+    if constexpr (!std::is_same_v<T, double>) {
+      auto vals1      = keys_col<T>{1, 2, 3};
+      auto vals2      = keys_col<T>{1, 2, 3};
+      auto vals3      = keys_col<T>{1, 2, 3};
+      auto const vals = structs_col{vals1, vals2, vals3};
+      EXPECT_THROW(merge_M2({keys}, {vals}), cudf::logic_error);
+    }
   }
 }
 

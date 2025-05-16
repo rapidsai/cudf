@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,17 +16,18 @@
 
 #pragma once
 
+#include <cudf/detail/device_scalar.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/device_scalar.hpp>
 
-#include <thrust/distance.h>
+#include <cuda/std/iterator>
 
 namespace cudf {
 namespace detail {
@@ -44,13 +45,13 @@ namespace detail {
  * @param[out] valid_count The count of set bits in the output bitmask
  */
 template <size_type block_size, typename InputIterator, typename Predicate>
-__global__ void valid_if_kernel(
+CUDF_KERNEL void valid_if_kernel(
   bitmask_type* output, InputIterator begin, size_type size, Predicate p, size_type* valid_count)
 {
   constexpr size_type leader_lane{0};
   auto const lane_id{threadIdx.x % warp_size};
-  thread_index_type i            = threadIdx.x + blockIdx.x * blockDim.x;
-  thread_index_type const stride = blockDim.x * gridDim.x;
+  auto i            = cudf::detail::grid_1d::global_thread_id<block_size>();
+  auto const stride = cudf::detail::grid_1d::grid_stride<block_size>();
   size_type warp_valid_count{0};
 
   auto active_mask = __ballot_sync(0xFFFF'FFFFu, i < size);
@@ -81,26 +82,25 @@ __global__ void valid_if_kernel(
  * @param begin The beginning of the sequence
  * @param end The end of the sequence
  * @param p The predicate
- * @param stream CUDA stream used for device memory operations and kernel launches.
- * @return A pair containing a `device_buffer` with the new bitmask and it's
- * null count
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @return A pair containing a `device_buffer` with the new bitmask and its null count
  */
 template <typename InputIterator, typename Predicate>
 std::pair<rmm::device_buffer, size_type> valid_if(InputIterator begin,
                                                   InputIterator end,
                                                   Predicate p,
                                                   rmm::cuda_stream_view stream,
-                                                  rmm::mr::device_memory_resource* mr)
+                                                  rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS(begin <= end, "Invalid range.");
 
-  size_type size = thrust::distance(begin, end);
+  size_type size = cuda::std::distance(begin, end);
 
-  auto null_mask = detail::create_null_mask(size, mask_state::UNINITIALIZED, stream, mr);
+  auto null_mask = cudf::create_null_mask(size, mask_state::UNINITIALIZED, stream, mr);
 
   size_type null_count{0};
   if (size > 0) {
-    rmm::device_scalar<size_type> valid_count{0, stream};
+    cudf::detail::device_scalar<size_type> valid_count{0, stream};
 
     constexpr size_type block_size{256};
     grid_1d grid{size, block_size};
@@ -119,7 +119,7 @@ std::pair<rmm::device_buffer, size_type> valid_if(InputIterator begin,
 
  * Given a set of bitmasks, `masks`, the state of bit `j` in mask `i` is
  * determined by `p( *(begin1 + i), *(begin2 + j))`. If the predicate evaluates
- * to true, the the bit is set to `1`. If false, set to `0`.
+ * to true, the bit is set to `1`. If false, set to `0`.
  *
  * Example Arguments:
  * begin1:        zero-based counting iterator,
@@ -151,13 +151,13 @@ template <typename InputIterator1,
           typename InputIterator2,
           typename BinaryPredicate,
           int32_t block_size>
-__global__ void valid_if_n_kernel(InputIterator1 begin1,
-                                  InputIterator2 begin2,
-                                  BinaryPredicate p,
-                                  bitmask_type* masks[],
-                                  size_type mask_count,
-                                  size_type mask_num_bits,
-                                  size_type* valid_counts)
+CUDF_KERNEL void valid_if_n_kernel(InputIterator1 begin1,
+                                   InputIterator2 begin2,
+                                   BinaryPredicate p,
+                                   bitmask_type* masks[],
+                                   size_type mask_count,
+                                   size_type mask_num_bits,
+                                   size_type* valid_counts)
 {
   for (size_type mask_idx = 0; mask_idx < mask_count; mask_idx++) {
     auto const mask = masks[mask_idx];
