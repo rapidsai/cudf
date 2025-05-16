@@ -83,6 +83,16 @@ def dtype(arbitrary: Any) -> DtypeObj:
     #  Return the corresponding NumPy/cuDF type.
     pd_dtype = pd.api.types.pandas_dtype(arbitrary)  # noqa: TID251
     if is_pandas_nullable_extension_dtype(pd_dtype):
+        if isinstance(pd_dtype, pd.ArrowDtype):
+            arrow_type = getattr(pd_dtype, "pyarrow_dtype", None)
+            if arrow_type is not None and (
+                arrow_type == pa.date32()
+                or arrow_type == pa.binary()
+                or isinstance(arrow_type, pa.DictionaryType)
+            ):
+                raise NotImplementedError(
+                    f"cuDF does not yet support {pd_dtype}"
+                )
         if cudf.get_option("mode.pandas_compatible"):
             return pd_dtype
         elif isinstance(pd_dtype, pd.StringDtype):
