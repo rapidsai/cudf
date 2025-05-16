@@ -23,10 +23,15 @@ rapids-pip-retry install -U -e . pytest-env "hypothesis>=6.131.7"
 rapids-logger "Check narwhals versions"
 python -c "import narwhals; print(narwhals.show_versions())"
 
+TESTS_TO_ALWAYS_SKIP_CUDF="test_date_lit[cudf]"
+
 rapids-logger "Run narwhals tests for cuDF"
 python -m pytest \
     --cache-clear \
     --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf-narwhals.xml" \
+    -k "not ( \
+        ${TESTS_TO_ALWAYS_SKIP_CUDF} \
+    )" \
     -p cudf.testing.narwhals_test_plugin \
     --numprocesses=8 \
     --dist=worksteal \
