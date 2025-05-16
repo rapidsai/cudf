@@ -48,7 +48,6 @@ test = [
     "numpy>=1.23,<3.0a0",
     "pandas",
     "pytest-cov",
-    "pytest-rerunfailures",
     "pytest-xdist",
     "pytest<8",
     "xxhash",

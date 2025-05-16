@@ -897,7 +897,6 @@ dependencies:
           - pytest<8
           - pytest-cov
           - pytest-xdist
-          - pytest-rerunfailures
   test_python_cudf_common:
     specific:
       # Define additional constraints for testing with oldest dependencies.
@@ -1244,6 +1243,7 @@ dependencies:
           - nbconvert
           - nbformat
           - openpyxl
+          - pytest-rerunfailures
   depends_on_dask_cudf:
     common:
       - output_types: conda
