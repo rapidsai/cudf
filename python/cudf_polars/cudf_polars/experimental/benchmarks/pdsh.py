@@ -145,7 +145,7 @@ class RunConfig:
     )
     hardware: HardwareInfo = dataclasses.field(default_factory=HardwareInfo.collect)
     rapidsmpf_spill: bool
-    no_fuse: bool
+    task_fusion: bool
     spill_device: float
 
     @classmethod
@@ -171,7 +171,7 @@ class RunConfig:
             suffix=args.suffix,
             spill_device=args.spill_device,
             rapidsmpf_spill=args.rapidsmpf_spill,
-            no_fuse=args.no_fuse,
+            task_fusion=args.task_fusion,
         )
 
     def serialize(self) -> dict:
@@ -197,7 +197,7 @@ class RunConfig:
                     print(f"threads: {self.threads}")
                     print(f"spill_device: {self.spill_device}")
                     print(f"rapidsmpf_spill: {self.rapidsmpf_spill}")
-                    print(f"task-fusion: {not self.no_fuse}")
+                    print(f"task-fusion: {not self.task_fusion}")
             print(f"iterations: {self.iterations}")
             print("---------------------------------------")
             print(f"min time : {min([record.duration for record in records]):0.4f}")
@@ -1124,10 +1124,10 @@ parser.add_argument(
     default=False,
 )
 parser.add_argument(
-    "--no-fuse",
+    "--task-fusion",
     action=argparse.BooleanOptionalAction,
-    default=False,
-    help="Disable task fusion.",
+    default=True,
+    help="Enable task fusion.",
 )
 args = parser.parse_args()
 
@@ -1196,10 +1196,9 @@ def run(args: argparse.Namespace) -> None:
                         )
                     if run_config.rapidsmpf_spill:
                         executor_options["rapidsmpf_spill"] = run_config.rapidsmpf_spill
-                    if run_config.no_fuse:
-                        executor_options["task_fusion"] = False
                     if run_config.scheduler == "distributed":
                         executor_options["scheduler"] = "distributed"
+                    executor_options["task_fusion"] = run_config.task_fusion
 
                 engine = pl.GPUEngine(
                     raise_on_fail=True,
