@@ -662,10 +662,41 @@ and not test_setop_with_categorical[string-python-None-symmetric_difference] \
 and not test_setop_with_categorical[string-python-False-symmetric_difference] \
 and not test_setop_with_categorical[string-pyarrow-None-symmetric_difference] \
 and not test_setop_with_categorical[string-pyarrow-False-symmetric_difference] \
-and not test_slice_locs_negative_step[in_slice13--string[pyarrow_numpy]]"
+and not test_slice_locs_negative_step[in_slice13--string[pyarrow_numpy]] \
+and not test_reduce_series_numeric[uint8-kurt-False] \
+and not test_reduce_series_numeric[uint8-skew-False] \
+and not test_reduce_series_numeric[uint16-kurt-False] \
+and not test_reduce_series_numeric[uint16-skew-False] \
+and not test_reduce_series_numeric[uint32-kurt-False] \
+and not test_reduce_series_numeric[uint32-skew-False] \
+and not test_reduce_series_numeric[uint64-kurt-False] \
+and not test_reduce_series_numeric[uint64-skew-False] \
+and not test_reduce_series_numeric[int8-kurt-False] \
+and not test_reduce_series_numeric[int8-skew-False] \
+and not test_reduce_series_numeric[int16-kurt-False] \
+and not test_reduce_series_numeric[int16-skew-False] \
+and not test_reduce_series_numeric[int32-kurt-False] \
+and not test_reduce_series_numeric[int32-skew-False] \
+and not test_reduce_series_numeric[int64-kurt-False] \
+and not test_reduce_series_numeric[int64-skew-False] \
+and not test_reduce_series_numeric[float-kurt-False] \
+and not test_reduce_series_numeric[float-skew-False] \
+and not test_reduce_series_numeric[double-kurt-True] \
+and not test_reduce_series_numeric[double-kurt-False] \
+and not test_reduce_series_numeric[double-skew-True] \
+and not test_reduce_series_numeric[double-skew-False] \
+and not test_reduce_series_numeric[decimal128(7, 3)-kurt-False] \
+and not test_reduce_series_numeric[decimal128(7, 3)-skew-False] \
+and not test_reduce_series_numeric[bool-std-True] \
+and not test_reduce_series_numeric[bool-std-False] \
+and not test_reduce_series_numeric[bool-var-True] \
+and not test_reduce_series_numeric[bool-var-False] \
+and not test_reduce_series_numeric[bool-median-True] \
+and not test_reduce_series_numeric[bool-median-False] \
+and not test_reduce_series_numeric[bool-kurt-False] \
+and not test_reduce_series_numeric[bool-skew-False]"
 
-DESELECT_TESTS="--deselect tests/extension/test_arrow.py::TestArrowArray::test_reduce_series_numeric \
---deselect tests/arrays/interval/test_interval.py::TestSetitem::test_set_na[float64]"
+DESELECT_TESTS="--deselect tests/arrays/interval/test_interval.py::TestSetitem::test_set_na[float64]"
 
 PYTEST_IGNORES="--ignore=tests/io/parser/common/test_read_errors.py \
 --ignore=tests/io/test_clipboard.py" # crashes pytest workers (possibly due to fixture patching clipboard functionality)
