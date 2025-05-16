@@ -3507,6 +3507,9 @@ class DatetimeIndex(Index):
         if yearfirst is not False:
             raise NotImplementedError("yearfirst == True is not yet supported")
 
+        if freq is None and isinstance(data, type(self)):
+            freq = data.freq
+
         name = _getdefault_name(data, name=name)
         data = as_column(data)
 
