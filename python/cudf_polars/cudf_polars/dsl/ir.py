@@ -65,10 +65,14 @@ __all__ = [
     "HStack",
     "Join",
     "MapFunction",
+    "MergeSorted",
     "Projection",
     "PythonScan",
+    "Reduce",
+    "Rolling",
     "Scan",
     "Select",
+    "Sink",
     "Slice",
     "Sort",
     "Union",
@@ -868,6 +872,7 @@ class Sink(IR):
         options: dict[str, Any],
         df: DataFrame,
     ) -> DataFrame:
+        """Write the dataframe to a file."""
         target = plc.io.SinkInfo([path])
 
         if options.get("mkdir", False):
@@ -1220,6 +1225,7 @@ class Rolling(IR):
         zlice: Zlice | None,
         df: DataFrame,
     ) -> DataFrame:
+        """Evaluate and return a dataframe."""
         keys = broadcast(*(k.evaluate(df) for k in keys_in), target_length=df.num_rows)
         orderby = index.evaluate(df)
         # Polars casts integral orderby to int64, but only for calculating window bounds
@@ -2072,6 +2078,7 @@ class MergeSorted(IR):
 
     @classmethod
     def do_evaluate(cls, key: str, *dfs: DataFrame) -> DataFrame:
+        """Evaluate and return a dataframe."""
         left, right = dfs
         right = right.discard_columns(right.column_names_set - left.column_names_set)
         on_col_left = left.select_columns({key})[0]
