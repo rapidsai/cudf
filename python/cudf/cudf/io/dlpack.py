@@ -3,14 +3,16 @@ from __future__ import annotations
 
 import pylibcudf as plc
 
-import cudf
 from cudf.core.column import ColumnBase
 from cudf.core.column_accessor import ColumnAccessor
+from cudf.core.dataframe import DataFrame
+from cudf.core.index import BaseIndex
+from cudf.core.series import Series
 from cudf.utils import ioutils
 from cudf.utils.dtypes import find_common_type, is_dtype_obj_numeric
 
 
-def from_dlpack(pycapsule_obj) -> cudf.Series | cudf.DataFrame:
+def from_dlpack(pycapsule_obj) -> Series | DataFrame:
     """Converts from a DLPack tensor to a cuDF object.
 
     DLPack is an open-source memory tensor structure:
@@ -48,13 +50,13 @@ def from_dlpack(pycapsule_obj) -> cudf.Series | cudf.DataFrame:
     )
 
     if len(data) == 1:
-        return cudf.Series._from_data(data)
+        return Series._from_data(data)
     else:
-        return cudf.DataFrame._from_data(data)
+        return DataFrame._from_data(data)
 
 
 @ioutils.doc_to_dlpack()
-def to_dlpack(cudf_obj: cudf.Series | cudf.DataFrame | cudf.BaseIndex):
+def to_dlpack(cudf_obj: Series | DataFrame | BaseIndex):
     """Converts a cuDF object to a DLPack tensor.
 
     DLPack is an open-source memory tensor structure:
@@ -78,10 +80,10 @@ def to_dlpack(cudf_obj: cudf.Series | cudf.DataFrame | cudf.BaseIndex):
     cuDF to_dlpack() produces column-major (Fortran order) output. If the
     output tensor needs to be row major, transpose the output of this function.
     """
-    if isinstance(cudf_obj, (cudf.DataFrame, cudf.Series, cudf.BaseIndex)):
+    if isinstance(cudf_obj, (DataFrame, Series, BaseIndex)):
         gdf = cudf_obj
     elif isinstance(cudf_obj, ColumnBase):
-        gdf = cudf.Series._from_column(cudf_obj)
+        gdf = Series._from_column(cudf_obj)
     else:
         raise TypeError(
             f"Input of type {type(cudf_obj)} cannot be converted "

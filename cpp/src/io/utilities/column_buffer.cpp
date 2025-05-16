@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -98,6 +98,9 @@ void column_buffer_base<string_policy>::create_with_mask(size_type _size,
                                                          rmm::cuda_stream_view stream,
                                                          rmm::device_async_resource_ref mr)
 {
+  CUDF_EXPECTS(_size >= 0 and _size <= std::numeric_limits<cudf::size_type>::max(),
+               "Unexpected column buffer allocation size requested",
+               std::overflow_error);
   size = _size;
   _mr  = mr;
 
