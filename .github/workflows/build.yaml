@@ -65,7 +65,6 @@ jobs:
       branch: ${{ inputs.branch }}
       date: ${{ inputs.date }}
       sha: ${{ inputs.sha }}
-      skip_upload_pkgs: libcudf-example
   docs-build:
     if: github.ref_type == 'branch'
     needs: python-build
