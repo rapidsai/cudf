@@ -39,7 +39,11 @@ from cudf.utils.dtypes import (
     is_column_like,
 )
 from cudf.utils.performance_tracking import _performance_tracking
-from cudf.utils.utils import _external_only_api, _is_same_name
+from cudf.utils.utils import (
+    _external_only_api,
+    _is_same_name,
+    _warn_no_dask_cudf,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Generator, Hashable, MutableMapping
@@ -2219,3 +2223,8 @@ class MultiIndex(Index):
                 super()._repeat(self._columns, repeats, axis)
             )
         )
+
+    @_performance_tracking
+    @_warn_no_dask_cudf
+    def __dask_tokenize__(self):
+        return Frame.__dask_tokenize__(self)
