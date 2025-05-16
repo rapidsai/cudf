@@ -74,7 +74,7 @@ def _lower_ir_fallback(
             # Fall-back logic
             fallback = True
             child = Repartition(child.schema, child)
-            partition_info[child] = PartitionInfo(count=1)
+            partition_info[child] = PartitionInfo.new(child, partition_info, count=1)
         children.append(child)
 
     if fallback and msg:
@@ -84,7 +84,7 @@ def _lower_ir_fallback(
 
     # Reconstruct and return
     new_node = ir.reconstruct(children)
-    partition_info[new_node] = PartitionInfo(count=1)
+    partition_info[new_node] = PartitionInfo.new(new_node, partition_info)
     return new_node, partition_info
 
 

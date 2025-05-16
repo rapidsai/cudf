@@ -155,26 +155,18 @@ def _(
     groupby_key_columns = [ne.name for ne in ir.keys]
     shuffled = partition_info[child].partitioned_on == ir.keys
 
-    assert ir.config_options.executor.name == "streaming", (
-        "'in-memory' executor not supported in 'generate_ir_tasks'"
-    )
-
-    cardinality_factor = {
-        c: min(f, 1.0)
-        for c, f in ir.config_options.executor.cardinality_factor.items()
-        if c in groupby_key_columns
-    }
-    if cardinality_factor:
-        # The `cardinality_factor` dictionary can be used
-        # to specify a mapping between column names and
-        # cardinality "factors". Each factor estimates the
-        # fractional number of unique values in the column.
-        # Each value should be in the range (0, 1].
-        child_count = partition_info[child].count
-        post_aggregation_count = max(
-            int(max(cardinality_factor.values()) * child_count),
-            1,
-        )
+    if (table_stats := partition_info[child].table_stats) is not None:
+        cardinality_factor = {
+            c: max(min(stats.cardinality, 1.0), 0.0001)
+            for c, stats in table_stats.column_stats.items()
+            if c in groupby_key_columns
+        }
+        if cardinality_factor:
+            child_count = partition_info[child].count
+            post_aggregation_count = max(
+                int(max(cardinality_factor.values()) * child_count),
+                1,
+            )
 
     new_node: IR
     name_generator = unique_names(ir.schema.keys())
@@ -211,7 +203,7 @@ def _(
         child,
     )
     child_count = partition_info[child].count
-    partition_info[gb_pwise] = PartitionInfo(count=child_count)
+    partition_info[gb_pwise] = PartitionInfo.new(gb_pwise, partition_info)
 
     # Reduction
     gb_inter: GroupBy | Repartition | Shuffle
@@ -233,7 +225,11 @@ def _(
             ir.config_options,
             gb_pwise,
         )
-        partition_info[gb_inter] = PartitionInfo(count=post_aggregation_count)
+        partition_info[gb_inter] = PartitionInfo.new(
+            gb_inter,
+            partition_info,
+            count=post_aggregation_count,
+        )
     else:
         # N-ary tree reduction
         assert ir.config_options.executor.name == "streaming", (
@@ -246,7 +242,9 @@ def _(
         while count > post_aggregation_count:
             gb_inter = Repartition(gb_inter.schema, gb_inter)
             count = max(math.ceil(count / n_ary), post_aggregation_count)
-            partition_info[gb_inter] = PartitionInfo(count=count)
+            partition_info[gb_inter] = PartitionInfo.new(
+                gb_inter, partition_info, count=count
+            )
             if count > post_aggregation_count:
                 gb_inter = GroupBy(
                     reduction_schema,
@@ -257,7 +255,9 @@ def _(
                     ir.config_options,
                     gb_inter,
                 )
-                partition_info[gb_inter] = PartitionInfo(count=count)
+                partition_info[gb_inter] = PartitionInfo.new(
+                    gb_inter, partition_info, count=count
+                )
 
     # Final aggregation
     gb_reduce = GroupBy(
@@ -269,7 +269,7 @@ def _(
         ir.config_options,
         gb_inter,
     )
-    partition_info[gb_reduce] = PartitionInfo(count=post_aggregation_count)
+    partition_info[gb_reduce] = PartitionInfo.new(gb_reduce, partition_info)
 
     # Final Select phase
     new_node = Select(
@@ -281,8 +281,9 @@ def _(
         False,  # noqa: FBT003
         gb_reduce,
     )
-    partition_info[new_node] = PartitionInfo(
-        count=post_aggregation_count,
+    partition_info[new_node] = PartitionInfo.new(
+        new_node,
+        partition_info,
         partitioned_on=ir.keys,
     )
     return new_node, partition_info

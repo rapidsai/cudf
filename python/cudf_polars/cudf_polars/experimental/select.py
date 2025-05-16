@@ -88,9 +88,7 @@ def decompose_select(
             True,  # noqa: FBT003
             *selections,
         )
-        partition_info[new_ir] = PartitionInfo(
-            count=max(partition_info[c].count for c in selections)
-        )
+        partition_info[new_ir] = PartitionInfo.new(new_ir, partition_info)
     else:
         new_ir = selections[0]
 

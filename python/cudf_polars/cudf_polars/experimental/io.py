@@ -7,20 +7,18 @@ from __future__ import annotations
 import dataclasses
 import enum
 import math
-import random
 from enum import IntEnum
 from typing import TYPE_CHECKING, Any, TypeVar
 
 import pylibcudf as plc
 
 from cudf_polars.dsl.ir import IR, DataFrameScan, Scan, Union
-from cudf_polars.experimental.base import PartitionInfo
+from cudf_polars.experimental.base import ColumnStats, PartitionInfo, TableStats
 from cudf_polars.experimental.dispatch import lower_ir_node
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
 
-    import numpy as np
     import numpy.typing as npt
 
     from cudf_polars.containers import DataFrame
@@ -45,6 +43,7 @@ def _(
     nrows = max(ir.df.shape()[0], 1)
     count = math.ceil(nrows / rows_per_partition)
 
+    table_stats = _default_table_stats(ir, num_rows=nrows)
     if count > 1:
         length = math.ceil(nrows / count)
         slices = [
@@ -58,10 +57,10 @@ def _(
         ]
         new_node = Union(ir.schema, None, *slices)
         return new_node, {slice: PartitionInfo(count=1) for slice in slices} | {
-            new_node: PartitionInfo(count=count)
+            new_node: PartitionInfo(count=count, table_stats=table_stats)
         }
 
-    return ir, {ir: PartitionInfo(count=1)}
+    return ir, {ir: PartitionInfo(count=1, table_stats=table_stats)}
 
 
 class ScanPartitionFlavor(IntEnum):
@@ -84,17 +83,21 @@ class ScanPartitionPlan:
       - FUSED_FILES: `factor` is the number of files per partition.
     """
 
-    __slots__ = ("factor", "flavor")
+    __slots__ = ("factor", "flavor", "table_stats")
     factor: int
     flavor: ScanPartitionFlavor
+    table_stats: TableStats | None
 
-    def __init__(self, factor: int, flavor: ScanPartitionFlavor) -> None:
+    def __init__(
+        self, factor: int, flavor: ScanPartitionFlavor, table_stats: TableStats | None
+    ) -> None:
         if (
             flavor == ScanPartitionFlavor.SINGLE_FILE and factor != 1
         ):  # pragma: no cover
             raise ValueError(f"Expected factor == 1 for {flavor}, got: {factor}")
         self.factor = factor
         self.flavor = flavor
+        self.table_stats = table_stats
 
     @staticmethod
     def from_scan(ir: Scan) -> ScanPartitionPlan:
@@ -106,29 +109,25 @@ class ScanPartitionPlan:
             )
 
             blocksize: int = ir.config_options.executor.target_partition_size
-            # _sample_pq_statistics is generic over the bit-width of the array
-            # We don't care about that here, so we ignore it.
-            stats = _sample_pq_statistics(ir)  # type: ignore[var-annotated]
-            # Some columns (e.g., "include_file_paths") may be present in the schema
-            # but not in the Parquet statistics dict. We use stats.get(column, 0)
-            # to safely fall back to 0 in those cases.
-            file_size = sum(float(stats.get(column, 0)) for column in ir.schema)
+            file_size, table_stats = _sample_pq_statistics(ir)
             if file_size > 0:
                 if file_size > blocksize:
                     # Split large files
                     return ScanPartitionPlan(
                         math.ceil(file_size / blocksize),
                         ScanPartitionFlavor.SPLIT_FILES,
+                        table_stats,
                     )
                 else:
                     # Fuse small files
                     return ScanPartitionPlan(
                         max(blocksize // int(file_size), 1),
                         ScanPartitionFlavor.FUSED_FILES,
+                        table_stats,
                     )
 
         # TODO: Use file sizes for csv and json
-        return ScanPartitionPlan(1, ScanPartitionFlavor.SINGLE_FILE)
+        return ScanPartitionPlan(1, ScanPartitionFlavor.SINGLE_FILE, None)
 
 
 class SplitScan(IR):
@@ -257,33 +256,85 @@ class SplitScan(IR):
         )
 
 
-def _sample_pq_statistics(ir: Scan) -> dict[str, np.floating[T]]:
-    import itertools
-
+def _sample_pq_statistics(ir: Scan) -> tuple[int, TableStats]:
     import numpy as np
+    import pyarrow.compute as pa_c
+    import pyarrow.dataset as pa_ds
 
     # Use average total_uncompressed_size of three files
-    n_sample = min(3, len(ir.paths))
-    metadata = plc.io.parquet_metadata.read_parquet_metadata(
-        plc.io.SourceInfo(random.sample(ir.paths, n_sample))
-    )
+    # TODO: Use plc.io.parquet_metadata.read_parquet_metadata
+    n_sample = 5  # TODO: Make this configurable
+    file_count = len(ir.paths)
+    stride = max(1, int(file_count / n_sample))
+
+    total_num_rows = []
     column_sizes = {}
-    rowgroup_offsets_per_file = np.insert(
-        np.cumsum(metadata.num_rowgroups_per_file()), 0, 0
+    column_cardinalities = {}
+    ds = pa_ds.dataset(ir.paths[: stride * n_sample : stride], format="parquet")
+    real_sample = False  # Whether we read in a real file
+    for i, frag in enumerate(ds.get_fragments()):
+        md = frag.metadata
+        total_num_rows.append(0)
+        unique_available = True
+        for rg in range(md.num_row_groups):
+            row_group = md.row_group(rg)
+            num_rows = row_group.num_rows
+            total_num_rows[-1] += num_rows
+            for col in range(row_group.num_columns):
+                column = row_group.column(col)
+                name = column.path_in_schema
+                if name not in ir.schema:
+                    continue
+                if name not in column_sizes:
+                    column_sizes[name] = np.zeros(n_sample, dtype="int64")
+                    column_cardinalities[name] = np.zeros(n_sample, dtype="float64")
+                column_sizes[name][i] += column.total_uncompressed_size
+                if column.statistics.distinct_count:
+                    # Use 'distinct_count' statistic
+                    column_cardinalities[name][i] = (
+                        column.statistics.distinct_count / num_rows
+                    )
+                else:
+                    unique_available = False
+
+        # Use real data from first row-group if unique stats are missing
+        # TODO: Cache all these statistics!!!
+        if not (unique_available or real_sample):
+            real_sample = True  # Only do this once
+            t = frag.split_by_row_group()[0].to_table(columns=list(ir.schema))
+            t_num_rows = t.num_rows
+            for name in ir.schema:
+                cardinality = pa_c.count_distinct(t.column(name)).as_py() / t_num_rows
+                for j in range(n_sample):
+                    column_cardinalities[name][j] = cardinality
+
+    assert ir.config_options.executor.name == "streaming"
+    user_cardinalities = {
+        c: max(min(f, 1.0), 0.0001)
+        for c, f in ir.config_options.executor.cardinality_factor.items()
+    }
+
+    # Construct estimated TableStats
+    table_stats = TableStats(
+        column_stats={
+            name: ColumnStats(
+                dtype=dtype,
+                cardinality=user_cardinalities.get(
+                    name, np.mean(column_cardinalities[name])
+                ),
+                estimated=True,
+            )
+            for name, dtype in ir.schema.items()
+        },
+        num_rows=np.mean(total_num_rows) * file_count,
+        estimated=True,
     )
 
-    # For each column, calculate the `total_uncompressed_size` for each file
-    for name, uncompressed_sizes in metadata.columnchunk_metadata().items():
-        column_sizes[name] = np.array(
-            [
-                np.sum(uncompressed_sizes[start:end])
-                for (start, end) in itertools.pairwise(rowgroup_offsets_per_file)
-            ],
-            dtype="int64",
-        )
-
-    # Return the mean per-file `total_uncompressed_size` for each column
-    return {name: np.mean(sizes) for name, sizes in column_sizes.items()}
+    # Some columns (e.g., "include_file_paths") may be present in the schema
+    # but not in the Parquet statistics dict. We use get(name, [0])
+    # to safely fall back to 0 in those cases.
+    file_size = sum(np.mean(column_sizes.get(name, [0])) for name in ir.schema)
+    return file_size, table_stats
 
 
 @lower_ir_node.register(Scan)
@@ -325,7 +376,7 @@ def _(
                 )
             new_node = Union(ir.schema, None, *slices)
             partition_info = {slice: PartitionInfo(count=1) for slice in slices} | {
-                new_node: PartitionInfo(count=len(slices))
+                new_node: PartitionInfo(count=len(slices), table_stats=plan.table_stats)
             }
         else:
             groups: list[Scan] = [
@@ -347,8 +398,33 @@ def _(
             ]
             new_node = Union(ir.schema, None, *groups)
             partition_info = {group: PartitionInfo(count=1) for group in groups} | {
-                new_node: PartitionInfo(count=len(groups))
+                new_node: PartitionInfo(count=len(groups), table_stats=plan.table_stats)
             }
         return new_node, partition_info
 
-    return ir, {ir: PartitionInfo(count=1)}  # pragma: no cover
+    return ir, {
+        ir: PartitionInfo(count=1, table_stats=_default_table_stats(ir))
+    }  # pragma: no cover
+
+
+def _default_table_stats(
+    ir: Scan | DataFrameScan, num_rows: int | None = None
+) -> TableStats:
+    assert ir.config_options.executor.name == "streaming"
+    user_cardinalities = {
+        c: max(min(f, 1.0), 0.0001)
+        for c, f in ir.config_options.executor.cardinality_factor.items()
+        if c in ir.schema
+    }
+    return TableStats(
+        column_stats={
+            name: ColumnStats(
+                dtype=ir.schema[name],
+                cardinality=max(min(card, 1.0), 0.0001),
+                estimated=True,
+            )
+            for name, card in user_cardinalities.items()
+        },
+        num_rows=num_rows,
+        estimated=True,
+    )

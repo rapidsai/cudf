@@ -86,8 +86,9 @@ def lower_distinct(
             )
         if not shuffled:
             child = Shuffle(child.schema, shuffle_keys, config_options, child)
-            partition_info[child] = PartitionInfo(
-                count=child_count,
+            partition_info[child] = PartitionInfo.new(
+                child,
+                partition_info,
                 partitioned_on=shuffle_keys,
             )
             shuffled = True
@@ -121,23 +122,28 @@ def lower_distinct(
     # Partition-wise unique
     count = child_count
     new_node: IR = ir.reconstruct([child])
-    partition_info[new_node] = PartitionInfo(count=count)
+    partition_info[new_node] = PartitionInfo.new(new_node, partition_info)
 
     if shuffled or output_count == 1:
         # Tree reduction
         while count > output_count:
             new_node = Repartition(new_node.schema, new_node)
             count = max(math.ceil(count / n_ary), output_count)
-            partition_info[new_node] = PartitionInfo(count=count)
+            partition_info[new_node] = PartitionInfo.new(
+                new_node, partition_info, count=count
+            )
             new_node = ir.reconstruct([new_node])
-            partition_info[new_node] = PartitionInfo(count=count)
+            partition_info[new_node] = PartitionInfo.new(new_node, partition_info)
     else:
         # Shuffle
         new_node = Shuffle(new_node.schema, shuffle_keys, config_options, new_node)
-        partition_info[new_node] = PartitionInfo(count=output_count)
+        partition_info[new_node] = PartitionInfo.new(
+            new_node, partition_info, count=output_count
+        )
         new_node = ir.reconstruct([new_node])
-        partition_info[new_node] = PartitionInfo(
-            count=output_count,
+        partition_info[new_node] = PartitionInfo.new(
+            new_node,
+            partition_info,
             partitioned_on=shuffle_keys,
         )
 
@@ -150,24 +156,24 @@ def _(
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     # Extract child partitioning
     child, partition_info = rec(ir.children[0])
-    config_options = rec.state["config_options"]
-    assert config_options.executor.name == "streaming", (
-        "'in-memory' executor not supported in 'lower_ir_node'"
-    )
 
     subset: frozenset = ir.subset or frozenset(ir.schema)
-    cardinality_factor = {
-        c: max(min(f, 1.0), 0.00001)
-        for c, f in config_options.executor.cardinality_factor.items()
-        if c in subset
-    }
-    cardinality = max(cardinality_factor.values()) if cardinality_factor else None
+
+    cardinality: float | None = None
+    if (table_stats := partition_info[child].table_stats) is not None:
+        cardinality_factor = {
+            c: max(min(stats.cardinality, 1.0), 0.00001)
+            for c, stats in table_stats.column_stats.items()
+            if c in subset
+        }
+        cardinality = max(cardinality_factor.values()) if cardinality_factor else None
+
     try:
         return lower_distinct(
             ir,
             child,
             partition_info,
-            config_options,
+            rec.state["config_options"],
             cardinality=cardinality,
         )
     except NotImplementedError as err:

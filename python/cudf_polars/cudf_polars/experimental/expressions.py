@@ -112,12 +112,12 @@ def select(
         True,  # noqa: FBT003
         input_ir,
     )
-    partition_info[new_ir] = PartitionInfo(count=partition_info[input_ir].count)
+    partition_info[new_ir] = PartitionInfo.new(new_ir, partition_info)
 
     # Optionally collapse into one output partition
     if repartition:
         new_ir = Repartition(new_ir.schema, new_ir)
-        partition_info[new_ir] = PartitionInfo(count=1)
+        partition_info[new_ir] = PartitionInfo.new(new_ir, partition_info, count=1)
 
     columns = [Col(ne.value.dtype, ne.name) for ne in named_exprs]
     return columns, new_ir, partition_info
@@ -170,16 +170,14 @@ def _decompose_unique(
     )
     (column,) = columns
 
-    assert config_options.executor.name == "streaming", (
-        "'in-memory' executor not supported in '_decompose_unique'"
-    )
-
     cardinality: float | None = None
-    if cardinality_factor := {
-        max(min(v, 1.0), 0.00001)
-        for k, v in config_options.executor.cardinality_factor.items()
-        if k in _leaf_column_names(child)
-    }:
+    if (table_stats := partition_info[input_ir].table_stats) is not None and (
+        cardinality_factor := {
+            max(min(stats.cardinality, 1.0), 0.00001)
+            for k, stats in table_stats.column_stats.items()
+            if k in _leaf_column_names(child)
+        }
+    ):
         cardinality = max(cardinality_factor)
 
     input_ir, partition_info = lower_distinct(
@@ -309,8 +307,9 @@ def _decompose_agg_node(
                 config_options,
                 input_ir,
             )
-            partition_info[input_ir] = PartitionInfo(
-                count=pi.count,
+            partition_info[input_ir] = PartitionInfo.new(
+                input_ir,
+                partition_info,
                 partitioned_on=shuffle_on,
             )
 
@@ -444,7 +443,6 @@ def _decompose(
     # Assume the partition count is the maximum input-IR partition count
     input_ir: IR
     assert len(input_irs) > 0  # Must have at least one input IR
-    partition_count = max(partition_info[ir].count for ir in input_irs)
     unique_input_irs = [k for k in dict.fromkeys(input_irs) if not isinstance(k, Empty)]
     if len(unique_input_irs) > 1:
         # Need to make sure we only have a single input IR
@@ -459,7 +457,7 @@ def _decompose(
             True,  # noqa: FBT003
             *unique_input_irs,
         )
-        partition_info[input_ir] = PartitionInfo(count=partition_count)
+        partition_info[input_ir] = PartitionInfo.new(input_ir, partition_info)
     else:
         input_ir = unique_input_irs[0]
 

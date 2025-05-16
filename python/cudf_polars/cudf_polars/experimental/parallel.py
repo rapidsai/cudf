@@ -257,7 +257,7 @@ def _(
 
     # Return reconstructed node and partition-info dict
     new_node = ir.reconstruct(children)
-    partition_info[new_node] = PartitionInfo(count=count)
+    partition_info[new_node] = PartitionInfo.new(new_node, partition_info, count=count)
     return new_node, partition_info
 
 
@@ -306,15 +306,13 @@ def _lower_ir_pwise(
             msg=f"Class {type(ir)} does not support children with mismatched partition counts.",
         )
 
-    # Preserve child partition_info if possible
-    if preserve_partitioning and len(children) == 1:
-        partition = partition_info[children[0]]
-    else:
-        partition = PartitionInfo(count=max(counts))
-
     # Return reconstructed node and partition-info dict
     new_node = ir.reconstruct(children)
-    partition_info[new_node] = partition
+    partition_info[new_node] = PartitionInfo.new(
+        new_node,
+        partition_info,
+        inherit_partitioned_on=preserve_partitioning,
+    )
     return new_node, partition_info
 
 

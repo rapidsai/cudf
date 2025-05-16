@@ -35,10 +35,10 @@ def _(
         if partition_info[new_node].count > 1:
             # Collapse down to single partition
             inter = Repartition(new_node.schema, new_node)
-            partition_info[inter] = PartitionInfo(count=1)
+            partition_info[inter] = PartitionInfo.new(inter, partition_info, count=1)
             # Sort reduced partition
             new_node = ir.reconstruct([inter])
-            partition_info[new_node] = PartitionInfo(count=1)
+            partition_info[new_node] = PartitionInfo.new(new_node, partition_info)
         return new_node, partition_info
 
     # Fallback

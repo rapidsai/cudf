@@ -46,7 +46,9 @@ def _maybe_shuffle_frame(
             config_options,
             frame,
         )
-        partition_info[frame] = PartitionInfo(
+        partition_info[frame] = PartitionInfo.new(
+            frame,
+            partition_info,
             count=output_count,
             partitioned_on=on,
         )
@@ -86,7 +88,9 @@ def _make_hash_join(
         partitioned_on = ir.left_on
     elif ir.options[0] == "Right":
         partitioned_on = ir.right_on
-    partition_info[ir] = PartitionInfo(
+    partition_info[ir] = PartitionInfo.new(
+        ir,
+        partition_info,
         count=output_count,
         partitioned_on=partitioned_on,
     )
@@ -180,7 +184,9 @@ def _make_bcast_join(
             )
 
     new_node = ir.reconstruct([left, right])
-    partition_info[new_node] = PartitionInfo(count=output_count)
+    partition_info[new_node] = PartitionInfo.new(
+        new_node, partition_info, count=output_count
+    )
     return new_node, partition_info
 
 
@@ -208,17 +214,19 @@ def _(
     if left_count < right_count:
         if left_count > 1:
             left = Repartition(left.schema, left)
-            pi_left[left] = PartitionInfo(count=1)
+            pi_left[left] = PartitionInfo.new(left, pi_left, count=1)
             _fallback_inform(fallback_msg, rec.state["config_options"])
     elif right_count > 1:
         right = Repartition(left.schema, right)
-        pi_right[right] = PartitionInfo(count=1)
+        pi_right[right] = PartitionInfo.new(right, pi_right, count=1)
         _fallback_inform(fallback_msg, rec.state["config_options"])
 
     # Reconstruct and return
     new_node = ir.reconstruct([left, right])
     partition_info = reduce(operator.or_, (pi_left, pi_right))
-    partition_info[new_node] = PartitionInfo(count=output_count)
+    partition_info[new_node] = PartitionInfo.new(
+        new_node, partition_info, count=output_count
+    )
     return new_node, partition_info
 
 
@@ -234,7 +242,7 @@ def _(
     output_count = max(partition_info[left].count, partition_info[right].count)
     if output_count == 1:
         new_node = ir.reconstruct(children)
-        partition_info[new_node] = PartitionInfo(count=1)
+        partition_info[new_node] = PartitionInfo.new(new_node, partition_info, count=1)
         return new_node, partition_info
     elif ir.options[0] == "Cross":  # pragma: no cover
         return _lower_ir_fallback(
