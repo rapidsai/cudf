@@ -689,6 +689,14 @@ class Index(SingleColumnFrame):  # type: ignore[misc]
             else:
                 return right + 1
 
+    def shift(self, periods: int = 1, freq=None) -> Self:
+        """
+        Shift index by desired number of time frequency increments.
+        """
+        raise NotImplementedError(
+            f"Shift is not implemented yet for {type(self).__name__}"
+        )
+
     def _union(self, other, sort: bool | None = None) -> Index:
         # TODO: As a future optimization we should explore
         # not doing `to_frame`
