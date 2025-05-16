@@ -4468,23 +4468,26 @@ class TimedeltaIndex(Index):
             )
 
         name = _getdefault_name(data, name=name)
-        data = as_column(data)
+        col = as_column(data)
+        if col.dtype == CUDF_STRING_DTYPE:
+            # String -> Timedelta parsing via astype isn't rigorous enough yet
+            # to cover cudf.pandas test cases, go through pandas instead.
+            col = as_column(pd.to_timedelta(data))
 
         if dtype is not None:
             dtype = cudf.dtype(dtype)
             if dtype.kind != "m":
                 raise TypeError("dtype must be a timedelta type")
-            elif not isinstance(data.dtype, pd.DatetimeTZDtype):
-                data = data.astype(dtype)
-        elif data.dtype.kind != "m":
+            col = col.astype(dtype)
+        elif col.dtype.kind != "m":
             # nanosecond default matches pandas
-            data = data.astype(np.dtype("timedelta64[ns]"))
+            col = col.astype(np.dtype("timedelta64[ns]"))
 
         if copy:
-            data = data.copy()
+            col = col.copy()
 
         SingleColumnFrame.__init__(
-            self, ColumnAccessor({name: data}, verify=False)
+            self, ColumnAccessor({name: col}, verify=False)
         )
 
     @classmethod
@@ -5120,8 +5123,13 @@ class IntervalIndex(Index):
                 raise ValueError("closed keyword does not match dtype.closed")
             closed = dtype.closed
 
-        if closed is None and isinstance(dtype, IntervalDtype):
-            closed = dtype.closed
+        if closed is None:
+            if isinstance(dtype, IntervalDtype):
+                closed = dtype.closed
+            elif hasattr(data, "dtype") and isinstance(
+                data.dtype, (pd.IntervalDtype, IntervalDtype)
+            ):
+                closed = data.dtype.closed
 
         closed = closed or "right"
 
