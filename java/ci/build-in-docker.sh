@@ -95,7 +95,7 @@ if [ -f "$WORKSPACE/java/ci/settings.xml" ]; then
 fi
 
 cd "$WORKSPACE/java"
-CUDF_INSTALL_DIR="$LIBCUDF_BUILD_PATH" mvn -B clean package $BUILD_ARG
+CUDF_INSTALL_DIR="$INSTALL_PREFIX" mvn -B clean package $BUILD_ARG
 
 ###### Stash Jar files ######
 rm -rf $OUT_PATH
