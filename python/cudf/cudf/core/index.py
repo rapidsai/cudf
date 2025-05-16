@@ -4457,7 +4457,7 @@ class TimedeltaIndex(Index):
             )
 
         name = _getdefault_name(data, name=name)
-        data = as_column(data, dtype=dtype)
+        data = as_column(data)
 
         if dtype is not None:
             dtype = cudf.dtype(dtype)
@@ -4733,10 +4733,14 @@ class CategoricalIndex(Index):
             data = data
         elif isinstance(getattr(data, "dtype", None), pd.CategoricalDtype):
             data = as_column(data)
+        elif isinstance(data, (cudf.Series, Index)) and isinstance(
+            data.dtype, cudf.CategoricalDtype
+        ):
+            data = data._column
         else:
-            data = as_column(data)
-            if not isinstance(data.dtype, cudf.CategoricalDtype):
-                data = data.astype(cudf.CategoricalDtype())
+            data = as_column(
+                data, dtype=cudf.CategoricalDtype() if dtype is None else dtype
+            )
             # dtype has already been taken care
             dtype = None
 
