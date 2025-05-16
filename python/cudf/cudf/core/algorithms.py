@@ -2,15 +2,18 @@
 from __future__ import annotations
 
 import warnings
+from typing import TYPE_CHECKING
 
 import cupy as cp
 import pyarrow as pa
 
-import cudf
 from cudf.core.column import as_column
-from cudf.core.index import Index
+from cudf.core.dtypes import CategoricalDtype
 from cudf.options import get_option
 from cudf.utils.dtypes import can_convert_to_column, cudf_dtype_to_pa_type
+
+if TYPE_CHECKING:
+    from cudf.core.index import Index
 
 
 def factorize(
@@ -80,6 +83,7 @@ def factorize(
     >>> uniques
     Index([<NA>, 1.0, 2.0], dtype='float64')
     """
+    from cudf.core.index import Index
 
     return_cupy_array = isinstance(values, cp.ndarray)
 
@@ -218,7 +222,10 @@ def unique(values):
     >>> pd.unique(pd.Series([("a", "b"), ("b", "a"), ("a", "c"), ("b", "a")]).values)
     array([('a', 'b'), ('b', 'a'), ('a', 'c')], dtype=object)
     """
-    if not isinstance(values, (cudf.Series, cudf.Index, cp.ndarray)):
+    from cudf.core.index import Index
+    from cudf.core.series import Series
+
+    if not isinstance(values, (Series, Index, cp.ndarray)):
         raise ValueError(
             "Must pass cudf.Series, cudf.Index, or cupy.ndarray object"
         )
@@ -226,10 +233,10 @@ def unique(values):
         # pandas.unique will not sort the values in the result
         # while cupy.unique documents it will, so we pass cupy.ndarray
         # through cudf.Index to maintain the original order.
-        return cp.asarray(cudf.Index(values).unique())
-    if isinstance(values, cudf.Series):
+        return cp.asarray(Index(values).unique())
+    if isinstance(values, Series):
         if get_option("mode.pandas_compatible"):
-            if isinstance(values.dtype, cudf.CategoricalDtype):
+            if isinstance(values.dtype, CategoricalDtype):
                 raise NotImplementedError(
                     "cudf.Categorical is not implemented"
                 )

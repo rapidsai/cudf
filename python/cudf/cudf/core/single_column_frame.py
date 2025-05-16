@@ -8,12 +8,12 @@ from typing import TYPE_CHECKING, Any
 import cupy as cp
 from typing_extensions import Self
 
-import cudf
 from cudf.api.extensions import no_default
 from cudf.api.types import (
     _is_scalar_or_zero_d_array,
     is_integer,
 )
+from cudf.core.algorithms import factorize
 from cudf.core.column import ColumnBase, as_column, column_empty
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.frame import Frame
@@ -30,6 +30,8 @@ if TYPE_CHECKING:
     import pyarrow as pa
 
     from cudf._typing import Dtype, NotImplementedType, ScalarLike
+    from cudf.core.dataframe import DataFrame
+    from cudf.core.index import Index
 
 
 class SingleColumnFrame(Frame, NotIterable):
@@ -217,16 +219,16 @@ class SingleColumnFrame(Frame, NotIterable):
 
     to_list = tolist
 
-    def _to_frame(
-        self, name: Hashable, index: cudf.Index | None
-    ) -> cudf.DataFrame:
+    def _to_frame(self, name: Hashable, index: Index | None) -> DataFrame:
         """Helper function for Series.to_frame, Index.to_frame"""
+        from cudf.core.dataframe import DataFrame
+
         if name is no_default:
             col_name = 0 if self.name is None else self.name
         else:
             col_name = name
         ca = ColumnAccessor({col_name: self._column}, verify=False)
-        return cudf.DataFrame._from_data(ca, index=index)
+        return DataFrame._from_data(ca, index=index)
 
     @property  # type: ignore
     @_performance_tracking
@@ -279,7 +281,7 @@ class SingleColumnFrame(Frame, NotIterable):
     @_performance_tracking
     def factorize(
         self, sort: bool = False, use_na_sentinel: bool = True
-    ) -> tuple[cupy.ndarray, cudf.Index]:
+    ) -> tuple[cupy.ndarray, Index]:
         """Encode the input values as integer labels.
 
         Parameters
@@ -309,7 +311,7 @@ class SingleColumnFrame(Frame, NotIterable):
         >>> uniques
         Index(['a', 'c'], dtype='object')
         """
-        return cudf.core.algorithms.factorize(
+        return factorize(
             self,
             sort=sort,
             use_na_sentinel=use_na_sentinel,
@@ -344,6 +346,8 @@ class SingleColumnFrame(Frame, NotIterable):
         Dict[Optional[str], Tuple[ColumnBase, Any, bool, Any]]
             The operands to be passed to _colwise_binop.
         """
+        from cudf.core.index import RangeIndex
+
         # Get the appropriate name for output operations involving two objects
         # that are Series-like objects. The output shares the lhs's name unless
         # the rhs is a _differently_ named Series-like object.
@@ -359,7 +363,7 @@ class SingleColumnFrame(Frame, NotIterable):
         elif not _is_scalar_or_zero_d_array(other):
             if not hasattr(
                 other, "__cuda_array_interface__"
-            ) and not isinstance(other, cudf.RangeIndex):
+            ) and not isinstance(other, RangeIndex):
                 return NotImplemented
 
             # Non-scalar right operands are valid iff they convert to columns.
