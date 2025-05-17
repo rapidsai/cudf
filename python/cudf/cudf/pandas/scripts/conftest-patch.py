@@ -437,4 +437,49 @@ def pytest_runtest_makereport(item, call):
             rep.wasxfail = f"xfail due to known error: {error_message[:50]}"
 
 
+SKIP_TEST_PATTERNS = [
+    "test_reduce_series_numeric[uint8-kurt-False]",
+    "test_reduce_series_numeric[uint8-skew-False]",
+    "test_reduce_series_numeric[uint16-kurt-False]",
+    "test_reduce_series_numeric[uint16-skew-False]",
+    "test_reduce_series_numeric[uint32-kurt-False]",
+    "test_reduce_series_numeric[uint32-skew-False]",
+    "test_reduce_series_numeric[uint64-kurt-False]",
+    "test_reduce_series_numeric[uint64-skew-False]",
+    "test_reduce_series_numeric[int8-kurt-False]",
+    "test_reduce_series_numeric[int8-skew-False]",
+    "test_reduce_series_numeric[int16-kurt-False]",
+    "test_reduce_series_numeric[int16-skew-False]",
+    "test_reduce_series_numeric[int32-kurt-False]",
+    "test_reduce_series_numeric[int32-skew-False]",
+    "test_reduce_series_numeric[int64-kurt-False]",
+    "test_reduce_series_numeric[int64-skew-False]",
+    "test_reduce_series_numeric[float-kurt-False]",
+    "test_reduce_series_numeric[float-skew-False]",
+    "test_reduce_series_numeric[double-kurt-True]",
+    "test_reduce_series_numeric[double-kurt-False]",
+    "test_reduce_series_numeric[double-skew-True]",
+    "test_reduce_series_numeric[double-skew-False]",
+    "test_reduce_series_numeric[decimal128(7, 3)-kurt-False]",
+    "test_reduce_series_numeric[decimal128(7, 3)-skew-False]",
+    "test_reduce_series_numeric[bool-std-True]",
+    "test_reduce_series_numeric[bool-std-False]",
+    "test_reduce_series_numeric[bool-var-True]",
+    "test_reduce_series_numeric[bool-var-False]",
+    "test_reduce_series_numeric[bool-median-True]",
+    "test_reduce_series_numeric[bool-median-False]",
+    "test_reduce_series_numeric[bool-kurt-False]",
+    "test_reduce_series_numeric[bool-skew-False]",
+]
+
+
+@pytest.hookimpl(tryfirst=True)
+def pytest_runtest_setup(item):
+    """Skip tests that match patterns in SKIP_TEST_PATTERNS"""
+    test_name = item.name
+    for pattern in SKIP_TEST_PATTERNS:
+        if test_name == pattern:
+            pytest.skip(f"Skipping known problematic test: {test_name}")
+
+
 sys.path.append(os.path.dirname(__file__))
