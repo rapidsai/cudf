@@ -40,8 +40,8 @@ __device__ void e164_format(void* scratch,
                             cudf::string_view const phone_number,
                             [[maybe_unused]] int32_t scratch_size)
 {
-  auto const begin =
-    static_cast<char*>(scratch) + static_cast<size_t>(row) * static_cast<size_t>(scratch_size);
+  auto const begin = static_cast<char*>(scratch) +
+                     static_cast<ptrdiff_t>(row) * static_cast<ptrdiff_t>(scratch_size);
   auto const end = begin + scratch_size;
   auto it        = begin;
 

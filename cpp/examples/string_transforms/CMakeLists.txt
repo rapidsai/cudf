@@ -20,6 +20,12 @@ rapids_cmake_build_type("Release")
 
 list(APPEND CUDF_CUDA_FLAGS --expt-extended-lambda --expt-relaxed-constexpr)
 
+add_executable(int_output int_output.cpp)
+target_compile_features(int_output PRIVATE cxx_std_17)
+target_compile_options(int_output PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>")
+target_link_libraries(int_output PRIVATE cudf::cudf nvtx3::nvtx3-cpp)
+install(TARGETS int_output DESTINATION bin/examples/libcudf)
+
 add_executable(output output.cpp)
 target_compile_features(output PRIVATE cxx_std_17)
 target_compile_options(output PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>")
