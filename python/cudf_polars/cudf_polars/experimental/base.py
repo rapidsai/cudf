@@ -28,6 +28,8 @@ class ColumnStats:
     """Column data type."""
     cardinality: float
     """Known or estimated column cardinality."""
+    file_size: int | None
+    """Estimated file size for this column."""
     estimated: bool
     """Whether statistics are estimated."""
 

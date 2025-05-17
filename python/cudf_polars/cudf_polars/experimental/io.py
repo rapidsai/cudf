@@ -30,6 +30,10 @@ if TYPE_CHECKING:
     T = TypeVar("T", bound=npt.NBitBase)
 
 
+# Cache TableStats for each tuple of path names
+_TABLESTATS_CACHE: MutableMapping[tuple[str, ...], TableStats] = {}
+
+
 @lower_ir_node.register(DataFrameScan)
 def _(
     ir: DataFrameScan, rec: LowerIRTransformer
@@ -109,7 +113,12 @@ class ScanPartitionPlan:
             )
 
             blocksize: int = ir.config_options.executor.target_partition_size
-            file_size, table_stats = _sample_pq_statistics(ir)
+            table_stats = _sample_pq_statistics(ir)
+            file_size = sum(
+                cs.file_size
+                for name, cs in table_stats.column_stats.items()
+                if name in ir.schema and cs.file_size is not None
+            )
             if file_size > 0:
                 if file_size > blocksize:
                     # Split large files
@@ -256,7 +265,7 @@ class SplitScan(IR):
         )
 
 
-def _sample_pq_statistics(ir: Scan) -> tuple[int, TableStats]:
+def _sample_pq_statistics(ir: Scan) -> TableStats:
     import numpy as np
     import pyarrow.compute as pa_c
     import pyarrow.dataset as pa_ds
@@ -266,75 +275,105 @@ def _sample_pq_statistics(ir: Scan) -> tuple[int, TableStats]:
     n_sample = 5  # TODO: Make this configurable
     file_count = len(ir.paths)
     stride = max(1, int(file_count / n_sample))
+    paths = ir.paths[: stride * n_sample : stride]
 
-    total_num_rows = []
-    column_sizes = {}
-    column_cardinalities = {}
-    ds = pa_ds.dataset(ir.paths[: stride * n_sample : stride], format="parquet")
-    real_sample = False  # Whether we read in a real file
-    for i, frag in enumerate(ds.get_fragments()):
-        md = frag.metadata
-        total_num_rows.append(0)
-        unique_available = True
-        for rg in range(md.num_row_groups):
-            row_group = md.row_group(rg)
-            num_rows = row_group.num_rows
-            total_num_rows[-1] += num_rows
-            for col in range(row_group.num_columns):
-                column = row_group.column(col)
-                name = column.path_in_schema
-                if name not in ir.schema:
-                    continue
-                if name not in column_sizes:
-                    column_sizes[name] = np.zeros(n_sample, dtype="int64")
-                    column_cardinalities[name] = np.zeros(n_sample, dtype="float64")
-                column_sizes[name][i] += column.total_uncompressed_size
-                if column.statistics.distinct_count:
-                    # Use 'distinct_count' statistic
-                    column_cardinalities[name][i] = (
-                        column.statistics.distinct_count / num_rows
+    # Check cache table-stats cache
+    table_stats_cached: TableStats | None = None
+    table_stats_cached_schema: Schema = {}
+    try:
+        table_stats_cached = _TABLESTATS_CACHE[tuple(ir.paths)]
+        table_stats_cached_schema = {
+            name: stats.dtype for name, stats in table_stats_cached.column_stats.items()
+        }
+        table_stats = table_stats_cached
+    except KeyError:
+        pass
+
+    if need_schema := {
+        name: dtype
+        for name, dtype in ir.schema.items()
+        if name not in table_stats_cached_schema
+    }:
+        total_num_rows = []
+        column_sizes = {}
+        column_cardinalities = {}
+        ds = pa_ds.dataset(paths, format="parquet")
+        real_sample = False  # Whether we read in a real file
+        for i, frag in enumerate(ds.get_fragments()):
+            md = frag.metadata
+            total_num_rows.append(0)
+            unique_available = True
+            for rg in range(md.num_row_groups):
+                row_group = md.row_group(rg)
+                num_rows = row_group.num_rows
+                total_num_rows[-1] += num_rows
+                for col in range(row_group.num_columns):
+                    column = row_group.column(col)
+                    name = column.path_in_schema
+                    if name not in need_schema:
+                        continue
+                    if name not in column_sizes:
+                        column_sizes[name] = np.zeros(n_sample, dtype="int64")
+                        column_cardinalities[name] = np.zeros(n_sample, dtype="float64")
+                    column_sizes[name][i] += column.total_uncompressed_size
+                    if column.statistics.distinct_count:
+                        # Use 'distinct_count' statistic
+                        column_cardinalities[name][i] = (
+                            column.statistics.distinct_count / num_rows
+                        )
+                    else:
+                        unique_available = False
+
+            # Use real data from first row-group if unique stats are missing
+            # TODO: Cache all these statistics!!!
+            if not (unique_available or real_sample):
+                real_sample = True  # Only do this once
+                t = frag.split_by_row_group()[0].to_table(columns=list(need_schema))
+                t_num_rows = t.num_rows
+                for name in need_schema:
+                    cardinality = (
+                        pa_c.count_distinct(t.column(name)).as_py() / t_num_rows
                     )
-                else:
-                    unique_available = False
+                    for j in range(n_sample):
+                        column_cardinalities[name][j] = cardinality
 
-        # Use real data from first row-group if unique stats are missing
-        # TODO: Cache all these statistics!!!
-        if not (unique_available or real_sample):
-            real_sample = True  # Only do this once
-            t = frag.split_by_row_group()[0].to_table(columns=list(ir.schema))
-            t_num_rows = t.num_rows
-            for name in ir.schema:
-                cardinality = pa_c.count_distinct(t.column(name)).as_py() / t_num_rows
-                for j in range(n_sample):
-                    column_cardinalities[name][j] = cardinality
+        assert ir.config_options.executor.name == "streaming"
+        user_cardinalities = {
+            c: max(min(f, 1.0), 0.0001)
+            for c, f in ir.config_options.executor.cardinality_factor.items()
+        }
 
-    assert ir.config_options.executor.name == "streaming"
-    user_cardinalities = {
-        c: max(min(f, 1.0), 0.0001)
-        for c, f in ir.config_options.executor.cardinality_factor.items()
-    }
+        # Construct estimated TableStats
+        table_stats = TableStats(
+            column_stats={
+                name: ColumnStats(
+                    dtype=dtype,
+                    cardinality=user_cardinalities.get(
+                        name, np.mean(column_cardinalities[name])
+                    ),
+                    # Some columns (e.g., "include_file_paths") may be present in the schema
+                    # but not in the Parquet statistics dict. We use get(name, [0])
+                    # to safely fall back to 0 in those cases.
+                    file_size=np.mean(column_sizes.get(name, [0])),
+                    estimated=True,
+                )
+                for name, dtype in need_schema.items()
+            },
+            num_rows=np.mean(total_num_rows) * file_count,
+            estimated=True,
+        )
 
-    # Construct estimated TableStats
-    table_stats = TableStats(
-        column_stats={
-            name: ColumnStats(
-                dtype=dtype,
-                cardinality=user_cardinalities.get(
-                    name, np.mean(column_cardinalities[name])
-                ),
-                estimated=True,
+        if table_stats_cached:
+            combined_schema = table_stats_cached_schema | ir.schema
+            table_stats = TableStats.merge(
+                combined_schema, table_stats, table_stats_cached
             )
-            for name, dtype in ir.schema.items()
-        },
-        num_rows=np.mean(total_num_rows) * file_count,
-        estimated=True,
-    )
+        if len(_TABLESTATS_CACHE) > 10:
+            # Limit size of the cache (arbitrary count for now)
+            _TABLESTATS_CACHE.pop(next(iter(_TABLESTATS_CACHE.keys())))
+        _TABLESTATS_CACHE[tuple(ir.paths)] = table_stats
 
-    # Some columns (e.g., "include_file_paths") may be present in the schema
-    # but not in the Parquet statistics dict. We use get(name, [0])
-    # to safely fall back to 0 in those cases.
-    file_size = sum(np.mean(column_sizes.get(name, [0])) for name in ir.schema)
-    return file_size, table_stats
+    return table_stats
 
 
 @lower_ir_node.register(Scan)
@@ -421,6 +460,7 @@ def _default_table_stats(
             name: ColumnStats(
                 dtype=ir.schema[name],
                 cardinality=max(min(card, 1.0), 0.0001),
+                file_size=None,
                 estimated=True,
             )
             for name, card in user_cardinalities.items()
