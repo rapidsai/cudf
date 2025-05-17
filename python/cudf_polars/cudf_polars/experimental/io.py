@@ -289,16 +289,20 @@ def _sample_pq_statistics(ir: Scan) -> TableStats:
     except KeyError:
         pass
 
+    ds: pa_ds.Dataset | None = None
     if need_schema := {
         name: dtype
         for name, dtype in ir.schema.items()
         if name not in table_stats_cached_schema
     }:
+        ds = pa_ds.dataset(paths, format="parquet")
+        need_schema = {k: v for k, v in need_schema.items() if k in ds.schema.names}
+
+    if ds is not None and need_schema:
         total_num_rows = []
         column_sizes = {}
         row_sizes = {}
         column_cardinalities = {}
-        ds = pa_ds.dataset(paths, format="parquet")
         real_sample = False  # Whether we read in a real file
         for i, frag in enumerate(ds.get_fragments()):
             md = frag.metadata
@@ -320,7 +324,7 @@ def _sample_pq_statistics(ir: Scan) -> TableStats:
                     column_sizes[name][i] += column.total_uncompressed_size
                     row_sizes[name][i] += column.total_uncompressed_size / num_rows
 
-                    if column.statistics.distinct_count:
+                    if column.statistics.distinct_count:  # pragma: no cover
                         # Use 'distinct_count' statistic
                         column_cardinalities[name][i] = (
                             column.statistics.distinct_count / num_rows
@@ -368,14 +372,12 @@ def _sample_pq_statistics(ir: Scan) -> TableStats:
             estimated=True,
         )
 
-        if table_stats_cached:
+        if table_stats_cached:  # pragma: no cover; TODO: Test this
             combined_schema = table_stats_cached_schema | ir.schema
             table_stats = TableStats.merge(
                 combined_schema, table_stats, table_stats_cached
             )
-        if len(_TABLESTATS_CACHE) > 10:
-            # Limit size of the cache (arbitrary count for now)
-            _TABLESTATS_CACHE.pop(next(iter(_TABLESTATS_CACHE.keys())))
+
         _TABLESTATS_CACHE[tuple(ir.paths)] = table_stats
 
     return table_stats

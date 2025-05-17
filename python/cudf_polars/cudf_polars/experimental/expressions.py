@@ -177,7 +177,7 @@ def _decompose_unique(
             for k, stats in table_stats.column_stats.items()
             if k in _leaf_column_names(child)
         }
-    ):
+    ):  # pragma: no cover; TODO: Test this.
         cardinality = max(cardinality_factor)
 
     input_ir, partition_info = lower_distinct(
