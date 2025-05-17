@@ -296,6 +296,7 @@ def _sample_pq_statistics(ir: Scan) -> TableStats:
     }:
         total_num_rows = []
         column_sizes = {}
+        row_sizes = {}
         column_cardinalities = {}
         ds = pa_ds.dataset(paths, format="parquet")
         real_sample = False  # Whether we read in a real file
@@ -314,8 +315,11 @@ def _sample_pq_statistics(ir: Scan) -> TableStats:
                         continue
                     if name not in column_sizes:
                         column_sizes[name] = np.zeros(n_sample, dtype="int64")
+                        row_sizes[name] = np.zeros(n_sample, dtype="int64")
                         column_cardinalities[name] = np.zeros(n_sample, dtype="float64")
                     column_sizes[name][i] += column.total_uncompressed_size
+                    row_sizes[name][i] += column.total_uncompressed_size / num_rows
+
                     if column.statistics.distinct_count:
                         # Use 'distinct_count' statistic
                         column_cardinalities[name][i] = (
@@ -354,12 +358,13 @@ def _sample_pq_statistics(ir: Scan) -> TableStats:
                     # Some columns (e.g., "include_file_paths") may be present in the schema
                     # but not in the Parquet statistics dict. We use get(name, [0])
                     # to safely fall back to 0 in those cases.
-                    file_size=np.mean(column_sizes.get(name, [0])),
+                    row_size=int(np.mean(row_sizes.get(name, [0]))),
+                    file_size=int(np.mean(column_sizes.get(name, [0]))),
                     estimated=True,
                 )
                 for name, dtype in need_schema.items()
             },
-            num_rows=np.mean(total_num_rows) * file_count,
+            num_rows=int(np.mean(total_num_rows)) * file_count,
             estimated=True,
         )
 
@@ -460,6 +465,7 @@ def _default_table_stats(
             name: ColumnStats(
                 dtype=ir.schema[name],
                 cardinality=max(min(card, 1.0), 0.0001),
+                row_size=None,
                 file_size=None,
                 estimated=True,
             )

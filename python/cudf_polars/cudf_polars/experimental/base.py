@@ -28,6 +28,8 @@ class ColumnStats:
     """Column data type."""
     cardinality: float
     """Known or estimated column cardinality."""
+    row_size: int | None
+    """Estimated row size for this column."""
     file_size: int | None
     """Estimated file size for this column."""
     estimated: bool
@@ -55,10 +57,12 @@ class TableStats:
             column_stats.update(
                 {k: v for k, v in table_stats.column_stats.items() if k in schema}
             )
-            if isinstance(table_stats.num_rows, int):
+            if table_stats.num_rows is not None:
                 num_rows = max(num_rows, table_stats.num_rows)
             estimated = estimated or table_stats.estimated
-        return cls(column_stats, num_rows or None, estimated)
+        if num_rows is not None:
+            num_rows = int(num_rows)
+        return cls(column_stats, num_rows, estimated)
 
 
 class PartitionInfo:
