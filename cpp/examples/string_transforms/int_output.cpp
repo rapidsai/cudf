@@ -14,19 +14,19 @@
  * limitations under the License.
  */
 
- #include "common.hpp"
+#include "common.hpp"
 
- #include <cudf/table/table_view.hpp>
- #include <cudf/transform.hpp>
- 
- #include <rmm/cuda_stream_view.hpp>
- 
- std::unique_ptr<cudf::column> transform(cudf::table_view const& table)
- {
-   auto stream = rmm::cuda_stream_default;
-   auto mr     = cudf::get_current_device_resource_ref();
- 
-   auto udf = R"***(
+#include <cudf/table/table_view.hpp>
+#include <cudf/transform.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
+
+std::unique_ptr<cudf::column> transform(cudf::table_view const& table)
+{
+  auto stream = rmm::cuda_stream_default;
+  auto mr     = cudf::get_current_device_resource_ref();
+
+  auto udf = R"***(
  __device__ void checksum(uint16_t* out,
                           cudf::string_view const name,
                           cudf::string_view const email)
@@ -43,12 +43,12 @@
    *out = fletcher16(name) ^ fletcher16(email);
  }
    )***";
- 
-   return cudf::transform({table.column(0), table.column(1)},
-                          udf,
-                          cudf::data_type{cudf::type_id::UINT16},
-                          false,
-                          std::nullopt,
-                          stream,
-                          mr);
- }
+
+  return cudf::transform({table.column(0), table.column(1)},
+                         udf,
+                         cudf::data_type{cudf::type_id::UINT16},
+                         false,
+                         std::nullopt,
+                         stream,
+                         mr);
+}
