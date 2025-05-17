@@ -17,6 +17,7 @@
 #include "hybrid_scan_helpers.hpp"
 #include "hybrid_scan_impl.hpp"
 #include "io/parquet/parquet_gpu.hpp"
+#include "io/utilities/time_utils.cuh"
 
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/iterator.cuh>
@@ -63,6 +64,21 @@ namespace {
 using parquet::detail::chunk_page_info;
 using parquet::detail::ColumnChunkDesc;
 using parquet::detail::PageInfo;
+
+/**
+ * @brief Converts cuDF units to Parquet units.
+ *
+ * @return A tuple of Parquet clock rate and Parquet decimal type.
+ */
+[[nodiscard]] int32_t conversion_info(type_id column_type_id,
+                                      type_id timestamp_type_id,
+                                      std::optional<LogicalType> logical_type)
+{
+  int32_t const clock_rate =
+    is_chrono(data_type{column_type_id}) ? to_clockrate(timestamp_type_id) : 0;
+
+  return clock_rate;
+}
 
 /**
  * @brief Decode the dictionary page information from each column chunk
@@ -181,6 +197,13 @@ hybrid_scan_reader_impl::prepare_dictionaries(
       has_compressed_data =
         col_meta.codec != Compression::UNCOMPRESSED and col_meta.total_compressed_size > 0;
 
+      auto const clock_rate = conversion_info(
+        parquet::detail::to_type_id(schema,
+                                    options.is_enabled_convert_strings_to_categories(),
+                                    options.get_timestamp_type().id()),
+        options.get_timestamp_type().id(),
+        schema.logical_type);
+
       // Create a column chunk
       chunks[chunk_idx] = ColumnChunkDesc(static_cast<int64_t>(dict_page_data.size()),
                                           static_cast<uint8_t*>(dict_page_data.data()),
@@ -196,7 +219,7 @@ hybrid_scan_reader_impl::prepare_dictionaries(
                                           0,  // Not needed
                                           col_meta.codec,
                                           schema.logical_type,
-                                          0,  // Not needed
+                                          clock_rate,
                                           0,  // Not needed
                                           col_schema_idx,
                                           nullptr,  // Not needed

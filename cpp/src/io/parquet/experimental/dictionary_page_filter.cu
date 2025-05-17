@@ -56,6 +56,7 @@ auto constexpr int96_size        = 12;   ///< Size of INT96 physical type
 auto constexpr decode_block_size = 128;  ///< Must be a multiple of warp_size
 /// Maximum number of literals to evaluate while decoding column dictionaries
 auto constexpr max_inline_literals = 2;
+auto constexpr fp_error_tolerance  = 1e-5;  ///< Floating point error tolerance
 
 // cuCollections static set parameters
 using key_type = cudf::size_type;                  ///< Using column indices (size_type) as set keys
@@ -98,7 +99,11 @@ struct insert_equality_functor {
   __device__ __forceinline__ constexpr bool operator()(key_type lhs_idx,
                                                        key_type rhs_idx) const noexcept
   {
-    return decoded_data[lhs_idx] == decoded_data[rhs_idx];
+    if constexpr (cudf::is_floating_point<T>()) {
+      return cuda::std::abs(decoded_data[lhs_idx] - decoded_data[rhs_idx]) < fp_error_tolerance;
+    } else {
+      return decoded_data[lhs_idx] == decoded_data[rhs_idx];
+    }
   }
 };
 
@@ -126,7 +131,11 @@ struct query_equality_functor {
   cudf::device_span<T const> const decoded_data;
   __device__ __forceinline__ constexpr bool operator()(T const& lhs, key_type rhs) const noexcept
   {
-    return lhs == decoded_data[rhs];
+    if constexpr (cudf::is_floating_point<T>()) {
+      return cuda::std::abs(lhs - decoded_data[rhs]) < fp_error_tolerance;
+    } else {
+      return lhs == decoded_data[rhs];
+    }
   }
 };
 
@@ -168,6 +177,112 @@ __device__ __forceinline__ bool is_error_set(kernel_error::pointer error)
 {
   return cuda::atomic_ref<kernel_error::value_type, cuda::thread_scope_block>{*error}.load(
            cuda::std::memory_order_relaxed) != 0;
+}
+
+/**
+ * @brief Helper function to calculate the timestamp scale
+ *
+ * @param logical_type Logical type of the column
+ * @param clock_rate Clock rate of the column
+ * @return Timestamp scale
+ */
+__device__ __forceinline__ int32_t
+calc_timestamp_scale(std::optional<LogicalType> const& logical_type, int32_t clock_rate)
+{
+  auto timestamp_scale = 0;
+  // Adjust for timestamps
+  if (logical_type.has_value()) {
+    auto units = 0;
+    if (logical_type.value().is_timestamp_millis()) {
+      units = cudf::timestamp_ms::period::den;
+    } else if (logical_type.value().is_timestamp_micros()) {
+      units = cudf::timestamp_us::period::den;
+    } else if (logical_type.value().is_timestamp_nanos()) {
+      units = cudf::timestamp_ns::period::den;
+    }
+    if (units and units != clock_rate) {
+      timestamp_scale = (clock_rate < units) ? -(units / clock_rate) : (clock_rate / units);
+    }
+  }
+  return timestamp_scale;
+}
+
+/**
+ * @brief Helper function to get the length of INT32 physical type
+ *
+ * @param logical_type Logical type of the column
+ * @return Length of the INT32 physical type
+ */
+__device__ __forceinline__ int32_t
+get_int32_type_len(std::optional<LogicalType> const& logical_type)
+{
+  // Check for smaller bitwidths
+  if (logical_type.has_value()) {
+    if (logical_type.value().type == LogicalType::INTEGER) {
+      return logical_type.value().bit_width() / 8;
+    } else if (logical_type.value().is_time_millis()) {
+      // cudf outputs as INT64
+      return 8;
+    }
+  }
+  return sizeof(int32_t);
+}
+
+/**
+ * @brief Helper function to decode an INT96 value
+ *
+ * @param int96_value INT96 value to decode
+ * @param clock_rate Clock rate of the column
+ * @param timestamp64 Pointer to the timestamp64 value to store the decoded value
+ */
+__device__ __forceinline__ void decode_int96timestamp(cudf::string_view const int96_value,
+                                                      int32_t clock_rate,
+                                                      int64_t* timestamp64)
+{
+  auto nanos = int64_t{0};
+  auto days  = int64_t{0};
+  cuda::std::memcpy(&nanos, int96_value.data(), sizeof(int64_t));
+  cuda::std::memcpy(&days, int96_value.data() + sizeof(int64_t), sizeof(int32_t));
+
+  cudf::duration_D duration_days{days - 2440588};
+
+  *timestamp64 = [&]() {
+    switch (clock_rate) {
+      case 1:  // seconds
+        return cuda::std::chrono::duration_cast<cudf::duration_s>(duration_days).count() +
+               cuda::std::chrono::duration_cast<cudf::duration_s>(cudf::duration_ns{nanos}).count();
+      case 1'000:  // milliseconds
+        return cuda::std::chrono::duration_cast<cudf::duration_ms>(duration_days).count() +
+               cuda::std::chrono::duration_cast<cudf::duration_ms>(cudf::duration_ns{nanos})
+                 .count();
+      case 1'000'000:  // microseconds
+        return cuda::std::chrono::duration_cast<cudf::duration_us>(duration_days).count() +
+               cuda::std::chrono::duration_cast<cudf::duration_us>(cudf::duration_ns{nanos})
+                 .count();
+      case 1'000'000'000:  // nanoseconds
+      default:
+        return cuda::std::chrono::duration_cast<cudf::duration_ns>(duration_days).count() + nanos;
+    }
+  }();
+}
+
+/**
+ * @brief Helper function to convert a int64_t to a timestamp64
+ *
+ * @param value Value to convert
+ * @param timestamp_scale Timestamp scale
+ * @return Converted timestamp64 value
+ */
+__device__ __forceinline__ int64_t convert_to_timestamp64(int64_t const value,
+                                                          int32_t timestamp_scale)
+{
+  if (timestamp_scale < 0) {
+    // round towards negative infinity
+    int32_t const sign = (value < 0);
+    return ((value + sign) / -timestamp_scale) + sign;
+  } else {
+    return value * timestamp_scale;
+  }
 }
 
 /**
@@ -251,6 +366,165 @@ query_dictionaries(cudf::device_span<T> decoded_data,
 }
 
 /**
+ * @brief Decode a fixed width value from a page data buffer
+ *
+ * @tparam T Underlying data type of the cudf column
+ * @param page Dictionary page header information
+ * @param chunk Column chunk descriptor
+ * @param value_idx Index of the value to decode from page data buffer
+ * @param physical_type Parquet physical type of the column
+ * @param error Pointer to the kernel error code
+ * @return Decoded value
+ */
+template <typename T>
+__device__ std::enable_if_t<not std::is_same_v<T, bool> and not cudf::is_compound<T>(), T>
+decode_fixed_width_value(PageInfo const& page,
+                         ColumnChunkDesc const& chunk,
+                         int32_t value_idx,
+                         parquet::Type physical_type,
+                         kernel_error::pointer error)
+{
+  // Page data pointer
+  auto const& page_data = page.page_data;
+
+  // Calculate the timestamp scale if this chunk has a timestamp logical type
+  auto const timestamp_scale = calc_timestamp_scale(chunk.logical_type, chunk.ts_clock_rate);
+
+  // FLBA length (0 if not FLBA type)
+  auto const flba_length = chunk.type_length;
+
+  // Placeholder for the decoded value
+  auto decoded_value = T{};
+
+  // Decode the value based on the physical type
+  switch (physical_type) {
+    case parquet::Type::INT96: {
+      // Check if we have a stream overrun
+      if (is_stream_overrun(value_idx * int96_size, int96_size, page.uncompressed_page_size)) {
+        set_error(error, decode_error::DATA_STREAM_OVERRUN);
+        return {};
+      }
+      // Check if the flba length is valid
+      if (flba_length != int96_size or not cuda::std::is_same_v<T, int64_t>) {
+        set_error(error, decode_error::INVALID_DATA_TYPE);
+        return {};
+      }
+
+      // Decode the int96 value from the page data
+      auto const int96_value = cudf::string_view{
+        reinterpret_cast<char const*>(page_data) + value_idx * flba_length, flba_length};
+      decode_int96timestamp(
+        int96_value, chunk.ts_clock_rate, reinterpret_cast<int64_t*>(&decoded_value));
+      break;
+    }
+
+    case parquet::Type::FIXED_LEN_BYTE_ARRAY: {
+      // Check if we have a stream overrun
+      if (is_stream_overrun(value_idx * flba_length, flba_length, page.uncompressed_page_size)) {
+        set_error(error, decode_error::DATA_STREAM_OVERRUN);
+        return {};
+      }
+      // Check if the flba length is smaller than or equal to the underlying data type size
+      if (flba_length <= 0 or flba_length > sizeof(T)) {
+        set_error(error, decode_error::INVALID_DATA_TYPE);
+        return {};
+      }
+      // Decode the value from the page data
+      auto const flba_value = cudf::string_view{
+        reinterpret_cast<char const*>(page_data) + value_idx * flba_length, flba_length};
+      cuda::std::memcpy(
+        &decoded_value, flba_value.data(), cuda::std::min<size_t>(sizeof(T), flba_length));
+
+      if constexpr (cudf::is_integral<T>() and cudf::is_signed<T>()) {
+        // Shift the unscaled value up and back down to correctly represent negative numbers.
+        if (flba_length < sizeof(T)) {
+          decoded_value <<= (sizeof(T) - flba_length) * 8;
+          decoded_value >>= (sizeof(T) - flba_length) * 8;
+        }
+      }
+      break;
+    }
+    case parquet::Type::INT32: {
+      auto const int32_type_len = get_int32_type_len(chunk.logical_type);
+      // Check if we are overruning the data stream
+      if (is_stream_overrun(
+            value_idx * int32_type_len, int32_type_len, page.uncompressed_page_size)) {
+        set_error(error, decode_error::DATA_STREAM_OVERRUN);
+        return {};
+      }
+      // Copy the value from the page data
+      cuda::std::memcpy(&decoded_value, page_data + (value_idx * int32_type_len), int32_type_len);
+      break;
+    }
+    case parquet::Type::INT64: [[fallthrough]];
+    case parquet::Type::FLOAT: [[fallthrough]];
+    case parquet::Type::DOUBLE: {
+      // Check if we are overruning the data stream
+      if (is_stream_overrun(value_idx * sizeof(T), sizeof(T), page.uncompressed_page_size)) {
+        set_error(error, decode_error::DATA_STREAM_OVERRUN);
+        return {};
+      }
+      cuda::std::memcpy(&decoded_value, page_data + (value_idx * sizeof(T)), sizeof(T));
+      break;
+    }
+    default: {
+      // Parquet physical type is not fixed width so set the error code and break early
+      set_error(error, decode_error::INVALID_DATA_TYPE);
+      return {};
+    }
+  }
+
+  // timestamp_ms is represented as int64_t in cudf
+  if constexpr (cuda::std::is_same_v<T, int64_t>) {
+    if (timestamp_scale != 0) {
+      decoded_value = convert_to_timestamp64(decoded_value, timestamp_scale);
+    }
+  }
+
+  return decoded_value;
+}
+
+/**
+ * @brief Decode a string value from a page data buffer
+ *
+ * @param page_data Pointer to the page data buffer
+ * @param page_data_size Page data buffer size
+ * @param buffer_offset Current offset into the page data buffer
+ * @param error Pointer to the kernel error code
+ * @return Decoded string value
+ */
+__device__ cudf::string_view decode_string_value(uint8_t const* page_data,
+                                                 int32_t page_data_size,
+                                                 int32_t& buffer_offset,
+                                                 kernel_error::pointer error)
+{
+  if (is_stream_overrun(buffer_offset, sizeof(int32_t), page_data_size)) {
+    set_error(error, decode_error::DATA_STREAM_OVERRUN);
+    return {};
+  }
+
+  // Decode string length
+  auto const string_length = static_cast<int32_t>(*(page_data + buffer_offset));
+  buffer_offset += sizeof(int32_t);
+
+  // Check if we have a stream overrun
+  if (is_stream_overrun(buffer_offset, string_length, page_data_size)) {
+    set_error(error, decode_error::DATA_STREAM_OVERRUN);
+    return {};
+  }
+
+  // Decode cudf::string_view value
+  auto const decoded_value =
+    cudf::string_view{reinterpret_cast<char const*>(page_data + buffer_offset),
+                      static_cast<cudf::size_type>(string_length)};
+
+  // Update the buffer offset
+  buffer_offset += string_length;
+
+  return decoded_value;
+}
+
+/**
  * @brief Decode string column chunk dictionaries and build `cuco::static_set`s from them,
  * one hash set per dictionary
  *
@@ -319,36 +593,23 @@ __global__ void build_string_dictionaries(PageInfo const* pages,
 
     while (buffer_offset < page_data_size) {
       // Check if we have a stream overrun
-      if (num_values_decoded > page.num_input_values or
-          is_stream_overrun(buffer_offset, sizeof(int32_t), page_data_size)) {
-        set_error(error, decode_error::DATA_STREAM_OVERRUN);
-        break;
-      }
-
-      // Decode string length
-      auto const string_length = static_cast<int32_t>(*(page_data + buffer_offset));
-      buffer_offset += sizeof(int32_t);
-
-      // Check if we have a stream overrun
-      if (is_stream_overrun(buffer_offset, string_length, page_data_size)) {
+      if (num_values_decoded > page.num_input_values) {
         set_error(error, decode_error::DATA_STREAM_OVERRUN);
         break;
       }
 
       // Decode cudf::string_view value
       decoded_data[value_offset + num_values_decoded] =
-        cudf::string_view{reinterpret_cast<char const*>(page_data + buffer_offset),
-                          static_cast<cudf::size_type>(string_length)};
+        decode_string_value(page_data, page_data_size, buffer_offset, error);
+
+      // Break if an error has been set
+      if (is_error_set(error)) { break; }
 
       // Insert the key (decoded value's global index) into the cuco hash set
       set_insert_ref.insert(static_cast<key_type>(value_offset + num_values_decoded));
 
-      // Update the buffer offset and the number of values decoded
-      buffer_offset += string_length;
+      // Update the number of values decoded
       num_values_decoded++;
-
-      // Break if an error has been set
-      if (is_error_set(error)) { break; }
     }
   }
 }
@@ -359,6 +620,7 @@ __global__ void build_string_dictionaries(PageInfo const* pages,
  *
  * @tparam Underlying data type of the cudf column
  * @param pages Column chunk dictionary page headers
+ * @param chunks Column chunk descriptors
  * @param decoded_data Span of storage for decoded values from all dictionaries
  * @param set_storage Pointer to the start of the bulk storage for cuco hash sets
  * @param set_offsets Pointer to offsets into the bulk set storage for each dictionary
@@ -367,11 +629,11 @@ __global__ void build_string_dictionaries(PageInfo const* pages,
  * @param num_dictionary_columns Total number of columns with dictionaries
  * @param dictionary_col_idx Index of the current dictionary column
  * @param error Pointer to the kernel error code
- * @param flba_length Fixed length byte array length (0 if not FLBA type)
  */
 template <typename T>
 __global__ std::enable_if_t<not std::is_same_v<T, bool> and not cudf::is_compound<T>(), void>
 build_fixed_width_dictionaries(PageInfo const* pages,
+                               ColumnChunkDesc const* chunks,
                                cudf::device_span<T> decoded_data,
                                bucket_type* const set_storage,
                                cudf::size_type const* set_offsets,
@@ -379,8 +641,7 @@ build_fixed_width_dictionaries(PageInfo const* pages,
                                parquet::Type physical_type,
                                cudf::size_type num_dictionary_columns,
                                cudf::size_type dictionary_col_idx,
-                               kernel_error::pointer error,
-                               cudf::size_type flba_length = 0)
+                               kernel_error::pointer error)
 {
   // Each thread block (cg) decodes values from one dictionary page and inserts into the
   // corresponding cuco hash set
@@ -390,9 +651,9 @@ build_fixed_width_dictionaries(PageInfo const* pages,
   auto const row_group_idx = cg::this_grid().block_rank();
 
   // Global index of the current column chunk (dictionary page)
-  auto const chunk_idx  = dictionary_col_idx + (row_group_idx * num_dictionary_columns);
-  auto const& page      = pages[chunk_idx];
-  auto const& page_data = page.page_data;
+  auto const chunk_idx = dictionary_col_idx + (row_group_idx * num_dictionary_columns);
+  auto const& page     = pages[chunk_idx];
+  auto const& chunk    = chunks[chunk_idx];
 
   // If empty buffer or no input values, then return early
   if (page.num_input_values == 0 or page.uncompressed_page_size == 0) { return; }
@@ -419,74 +680,15 @@ build_fixed_width_dictionaries(PageInfo const* pages,
   // Decode values from the current dictionary page
   for (auto value_idx = group.thread_rank(); value_idx < page.num_input_values;
        value_idx += group.num_threads()) {
-    // Key (decoded value's global index) to insert into the cuco hash set
-    auto const insert_key = static_cast<key_type>(value_offset + value_idx);
-
-    // Initialize the decoded value to the default value of the underlying data type
-    decoded_data[value_offset + value_idx] = T{};
-
-    // Decode the value based on the physical type
-    switch (physical_type) {
-      case parquet::Type::INT96: {
-        // Check if we have a stream overrun
-        if (is_stream_overrun(value_idx * int96_size, int96_size, page.uncompressed_page_size)) {
-          set_error(error, decode_error::DATA_STREAM_OVERRUN);
-          break;
-        }
-        // Check if the flba length is valid
-        if (flba_length != int96_size) {
-          set_error(error, decode_error::UNSUPPORTED_ENCODING);
-          break;
-        }
-
-        // Decode the int96 value from the page data
-        auto const int96_value = cudf::string_view{
-          reinterpret_cast<char const*>(page_data) + value_idx * flba_length, flba_length};
-        cuda::std::memcpy(&decoded_data[value_offset + value_idx], int96_value.data(), sizeof(T));
-        break;
-      }
-
-      case parquet::Type::FIXED_LEN_BYTE_ARRAY: {
-        // Check if we have a stream overrun
-        if (is_stream_overrun(value_idx * flba_length, flba_length, page.uncompressed_page_size)) {
-          set_error(error, decode_error::DATA_STREAM_OVERRUN);
-          break;
-        }
-        // Check if the flba length is smaller than or equal to the underlying data type size
-        if (sizeof(T) <= flba_length) {
-          set_error(error, decode_error::UNSUPPORTED_ENCODING);
-          break;
-        }
-        // Decode the value from the page data
-        auto const flba_value = cudf::string_view{
-          reinterpret_cast<char const*>(page_data) + value_idx * flba_length, flba_length};
-        cuda::std::memcpy(&decoded_data[value_offset + value_idx],
-                          flba_value.data(),
-                          cuda::std::min<size_t>(sizeof(T), flba_length));
-        break;
-      }
-      case parquet::Type::INT32: [[fallthrough]];
-      case parquet::Type::INT64: [[fallthrough]];
-      case parquet::Type::FLOAT: [[fallthrough]];
-      case parquet::Type::DOUBLE: {
-        // Check if we are overruning the data stream
-        if (is_stream_overrun(value_idx * sizeof(T), sizeof(T), page.uncompressed_page_size)) {
-          set_error(error, decode_error::DATA_STREAM_OVERRUN);
-          break;
-        }
-        cuda::std::memcpy(
-          &decoded_data[value_offset + value_idx], page_data + (value_idx * sizeof(T)), sizeof(T));
-        break;
-      }
-      default: {
-        // Parquet physical type is not fixed width so set the error code and break early
-        set_error(error, decode_error::INVALID_DATA_TYPE);
-        break;
-      }
-    }
+    // Decode the value from the page data
+    decoded_data[value_offset + value_idx] =
+      decode_fixed_width_value<T>(page, chunk, value_idx, physical_type, error);
 
     // Return early if an error has been set
     if (is_error_set(error)) { return; }
+
+    // Key (decoded value's global index) to insert into the cuco hash set
+    auto const insert_key = static_cast<key_type>(value_offset + value_idx);
 
     // Insert the key (decoded value's global index) into the cuco hash set
     set_insert_ref.insert(insert_key);
@@ -559,24 +761,20 @@ __global__ void evaluate_some_string_literals(PageInfo const* pages,
 
     while (buffer_offset < page_data_size) {
       // Check if we have a stream overrun
-      if (num_values_decoded > page.num_input_values or
-          is_stream_overrun(buffer_offset, sizeof(int32_t), page_data_size)) {
-        set_error(error, decode_error::DATA_STREAM_OVERRUN);
-        break;
-      }
-
-      // Decode string length
-      auto const string_length = static_cast<int32_t>(*(page_data + buffer_offset));
-      buffer_offset += sizeof(int32_t);
-      if (is_stream_overrun(buffer_offset, string_length, page_data_size)) {
+      if (num_values_decoded > page.num_input_values) {
         set_error(error, decode_error::DATA_STREAM_OVERRUN);
         break;
       }
 
       // Decode cudf::string_view value
       auto const decoded_value =
-        cudf::string_view{reinterpret_cast<char const*>(page_data + buffer_offset),
-                          static_cast<cudf::size_type>(string_length)};
+        decode_string_value(page_data, page_data_size, buffer_offset, error);
+
+      // Break if an error has been set
+      if (is_error_set(error)) { break; }
+
+      // Update the number of values decoded
+      num_values_decoded++;
 
       // Evaluate all input predicates against the decoded string value
       for (auto scalar_idx = 0; scalar_idx < total_num_scalars; ++scalar_idx) {
@@ -590,13 +788,6 @@ __global__ void evaluate_some_string_literals(PageInfo const* pages,
                                                  : true;
         }
       }
-
-      // Update the buffer offset and the number of values decoded
-      buffer_offset += string_length;
-      num_values_decoded++;
-
-      // Return early if we have an error
-      if (is_error_set(error)) { return; }
 
       // If operator is NOT_EQUAL, check if we have more than one values in the dictionary (will
       // never evaluate to true so we can easily break) or if the decoded value was a match with the
@@ -622,6 +813,7 @@ __global__ void evaluate_some_string_literals(PageInfo const* pages,
  *
  * @tparam Underlying data type of the cudf column
  * @param pages Column chunk dictionary page headers
+ * @param chunks Column chunk descriptors
  * @param results Span of device vector start pointers to store query results, one per predicate
  * @param scalars Span of scalar device views, one per predicate
  * @param operators Span of corresponding (in)equality operators, one per predicate
@@ -630,11 +822,11 @@ __global__ void evaluate_some_string_literals(PageInfo const* pages,
  * @param num_dictionary_columns Total number of columns with dictionaries
  * @param dictionary_col_idx Index of the current dictionary column
  * @param error Pointer to the kernel error code
- * @param flba_length Fixed length byte array length (0 if not FLBA type)
  */
 template <typename T>
 __global__ std::enable_if_t<not std::is_same_v<T, bool> and not cudf::is_compound<T>(), void>
 evaluate_some_fixed_width_literals(PageInfo const* pages,
+                                   ColumnChunkDesc const* chunks,
                                    cudf::device_span<bool*> results,
                                    ast::generic_scalar_device_view const* scalars,
                                    ast::ast_operator const* operators,
@@ -642,8 +834,7 @@ evaluate_some_fixed_width_literals(PageInfo const* pages,
                                    cudf::size_type total_num_scalars,
                                    cudf::size_type num_dictionary_columns,
                                    cudf::size_type dictionary_col_idx,
-                                   kernel_error::pointer error,
-                                   cudf::size_type flba_length = 0)
+                                   kernel_error::pointer error)
 {
   // Each thread block decodes values from one dictionary page and evaluates all input predicates
   // against them
@@ -653,9 +844,9 @@ evaluate_some_fixed_width_literals(PageInfo const* pages,
   auto const row_group_idx = cg::this_grid().block_rank();
 
   // Global index of the current column chunk (dictionary page)
-  auto const chunk_idx  = dictionary_col_idx + (row_group_idx * num_dictionary_columns);
-  auto const& page      = pages[chunk_idx];
-  auto const& page_data = page.page_data;
+  auto const chunk_idx = dictionary_col_idx + (row_group_idx * num_dictionary_columns);
+  auto const& page     = pages[chunk_idx];
+  auto const& chunk    = chunks[chunk_idx];
 
   // If the page buffer is empty or has no values to decode, then return early
   if (page.num_input_values == 0 or page.uncompressed_page_size == 0) {
@@ -675,67 +866,11 @@ evaluate_some_fixed_width_literals(PageInfo const* pages,
   // Decode values from the current dictionary page with the current thread block
   for (auto value_idx = group.thread_rank(); value_idx < page.num_input_values;
        value_idx += group.num_threads()) {
-    // Initialize the decoded value to the default value of the underlying data type
-    auto decoded_value = T{};
+    // Decode the value from the page data
+    auto decoded_value = decode_fixed_width_value<T>(page, chunk, value_idx, physical_type, error);
 
-    // Decode the value based on the physical type
-    switch (physical_type) {
-      case parquet::Type::INT96: {
-        // Check if we have a stream overrun
-        if (is_stream_overrun(value_idx * int96_size, int96_size, page.uncompressed_page_size)) {
-          set_error(error, decode_error::DATA_STREAM_OVERRUN);
-          return;
-        }
-        // Check if the flba length is valid
-        if (flba_length != int96_size) {
-          set_error(error, decode_error::UNSUPPORTED_ENCODING);
-          return;
-        }
-
-        // Decode the int96 value from the page data
-        auto const int96_value = cudf::string_view{
-          reinterpret_cast<char const*>(page_data) + value_idx * flba_length, flba_length};
-        cuda::std::memcpy(&decoded_value, int96_value.data(), sizeof(T));
-        break;
-      }
-      case parquet::Type::FIXED_LEN_BYTE_ARRAY: {
-        // Check if we have a stream overrun
-        if (is_stream_overrun(value_idx * flba_length, flba_length, page.uncompressed_page_size)) {
-          set_error(error, decode_error::DATA_STREAM_OVERRUN);
-          return;
-        }
-        // Check if the flba length is smaller than or equal to the underlying data type size
-        if (sizeof(T) <= flba_length) {
-          set_error(error, decode_error::UNSUPPORTED_ENCODING);
-          return;
-        }
-
-        // Decode the value from the page data
-        auto const flba_value = cudf::string_view{
-          reinterpret_cast<char const*>(page_data) + value_idx * flba_length, flba_length};
-        cuda::std::memcpy(
-          &decoded_value, flba_value.data(), cuda::std::min<size_t>(sizeof(T), flba_length));
-        break;
-      }
-      case parquet::Type::INT32: [[fallthrough]];
-      case parquet::Type::INT64: [[fallthrough]];
-      case parquet::Type::FLOAT: [[fallthrough]];
-      case parquet::Type::DOUBLE: {
-        // Check if we have a stream overrun
-        if (is_stream_overrun(value_idx * sizeof(T), sizeof(T), page.uncompressed_page_size)) {
-          set_error(error, decode_error::DATA_STREAM_OVERRUN);
-          return;
-        }
-        // Simply copy over the decoded value bytes from page data
-        cuda::std::memcpy(&decoded_value, page_data + (value_idx * sizeof(T)), sizeof(T));
-        break;
-      }
-      default: {
-        // Parquet physical type is not fixed width so set the error code and break early
-        set_error(error, decode_error::INVALID_DATA_TYPE);
-        return;
-      }
-    }
+    // Return early if an error has been set
+    if (is_error_set(error)) { return; }
 
     // Evaluate all input predicates against the decoded value
     for (auto scalar_idx = 0; scalar_idx < total_num_scalars; ++scalar_idx) {
@@ -748,9 +883,6 @@ evaluate_some_fixed_width_literals(PageInfo const* pages,
           operators[scalar_idx] == ast::ast_operator::NOT_EQUAL ? page.num_input_values == 1 : true;
       }
     }
-
-    // Return early if we have an error
-    if (is_error_set(error)) { return; }
 
     // If operator is NOT_EQUAL, check if we have more than one values in the dictionary (will
     // never evaluate to true so we can easily break) or if the decoded value was a match with the
@@ -782,6 +914,13 @@ struct dictionary_caster {
   cudf::size_type dictionary_col_idx;
   rmm::cuda_stream_view stream;
 
+  /**
+   * @brief Build BOOL8 columns from dictionary membership results device buffers
+   *
+   * @param results_buffers Vector of dictionary membership results device buffers
+   *
+   * @return A vector of BOOL8 columns
+   */
   [[nodiscard]] std::vector<std::unique_ptr<cudf::column>> build_columns(
     cudf::host_span<rmm::device_buffer> results_buffers)
   {
@@ -896,9 +1035,9 @@ struct dictionary_caster {
     if constexpr (not cuda::std::is_same_v<T, cudf::string_view>) {
       // Decode fixed width dictionaries and insert them to cuco hash sets, one dictionary per
       // thread block
-      auto const flba_length = chunks[dictionary_col_idx].type_length;
       build_fixed_width_dictionaries<T>
         <<<total_row_groups, decode_block_size, 0, stream.value()>>>(pages.device_begin(),
+                                                                     chunks.device_begin(),
                                                                      decoded_data,
                                                                      set_storage.data(),
                                                                      set_offsets.data(),
@@ -906,8 +1045,7 @@ struct dictionary_caster {
                                                                      physical_type,
                                                                      num_dictionary_columns,
                                                                      dictionary_col_idx,
-                                                                     error_code.data(),
-                                                                     flba_length);
+                                                                     error_code.data());
 
     } else {
       // Check if the decode block size is a multiple of the warp size
@@ -941,8 +1079,8 @@ struct dictionary_caster {
       CUDF_FAIL("Dictionary decode failed with code(s) " + kernel_error::to_string(error));
     }
 
-    // Compute an optimal thread block size for the query kernel so that we can query all cuco hash
-    // sets of this column per thread block
+    // Compute an optimal thread block size for the query kernel so that we can query all cuco
+    // hash sets of this column per thread block
     auto query_block_size = [&]() {
       auto query_block_size = std::max<cudf::size_type>(cudf::detail::warp_size, total_row_groups);
       query_block_size      = cudf::size_type{1} << (31 - __builtin_clz(query_block_size));
@@ -1018,9 +1156,9 @@ struct dictionary_caster {
     if constexpr (not cuda::std::is_same_v<T, cudf::string_view>) {
       // Decode fixed width dictionaries and evaluate literals against them, one dictionary per
       // thread block
-      auto const flba_length = chunks[dictionary_col_idx].type_length;
       evaluate_some_fixed_width_literals<T>
         <<<total_row_groups, decode_block_size, 0, stream.value()>>>(pages.device_begin(),
+                                                                     chunks.device_begin(),
                                                                      results_ptrs,
                                                                      scalars.data(),
                                                                      d_operators.data(),
@@ -1028,8 +1166,7 @@ struct dictionary_caster {
                                                                      total_num_literals,
                                                                      num_dictionary_columns,
                                                                      dictionary_col_idx,
-                                                                     error_code.data(),
-                                                                     flba_length);
+                                                                     error_code.data());
     } else {
       static_assert(decode_block_size % cudf::detail::warp_size == 0,
                     "decoder block size must be a multiple of warp_size");
@@ -1041,7 +1178,8 @@ struct dictionary_caster {
       auto const num_blocks =
         cudf::util::div_rounding_up_safe<size_t>(total_row_groups, warps_per_block);
 
-      // Decode string dictionaries and evaluate all literals against them, one dictionary per warp
+      // Decode string dictionaries and evaluate all literals against them, one dictionary per
+      // warp
       evaluate_some_string_literals<<<num_blocks, decode_block_size, 0, stream.value()>>>(
         pages.device_begin(),
         results_ptrs,
@@ -1166,9 +1304,9 @@ class dictionary_expression_converter : public equality_literals_collector {
 
         auto const& value = _dictionary_expr.push(ast::column_reference{col_literal_offset});
 
-        // For NOT_EQUAL operator, simply evaluate boolean is_false(value) expression as NOT(value).
-        // The value indicates if the row group should be pruned (if the literal is present in the
-        // hash set and it's the only value in the hash set)
+        // For NOT_EQUAL operator, simply evaluate boolean is_false(value) expression as
+        // NOT(value). The value indicates if the row group should be pruned (if the literal is
+        // present in the hash set and it's the only value in the hash set)
         auto const& should_be_pruned =
           _dictionary_expr.push(ast::operation{ast_operator::NOT, value});
 
