@@ -1243,6 +1243,7 @@ dependencies:
           - nbconvert
           - nbformat
           - openpyxl
+          - pytest-rerunfailures
   depends_on_dask_cudf:
     common:
       - output_types: conda
