@@ -436,7 +436,7 @@ NVBENCH_BENCH_TYPES(BM_parquet_read_chunks, NVBENCH_TYPE_AXES(d_type_list))
   .add_int64_axis("data_size", {512 << 20});
 
 NVBENCH_BENCH_TYPES(BM_parquet_read_subrowgroup_chunks, NVBENCH_TYPE_AXES(d_type_list))
-  .set_name("parquet_read_chunks")
+  .set_name("parquet_read_subrowgroup_chunks")
   .add_string_axis("io_type", {"DEVICE_BUFFER"})
   .set_min_samples(4)
   .add_int64_axis("cardinality", {0, 1000})
