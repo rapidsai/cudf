@@ -262,7 +262,29 @@ hybrid_scan_reader_impl::filter_data_pages_with_stats(
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
-  return {};
+  CUDF_EXPECTS(not row_group_indices.empty(), "Empty input row group indices encountered");
+  CUDF_EXPECTS(options.get_filter().has_value(), "Encountered empty converted filter expression");
+
+  select_columns(read_mode::FILTER_COLUMNS, options);
+
+  table_metadata metadata;
+  populate_metadata(metadata);
+  auto expr_conv = named_to_reference_converter(options.get_filter(), metadata);
+  CUDF_EXPECTS(expr_conv.get_converted_expr().has_value(),
+               "Columns names in filter expression must be convertible to index references");
+  auto output_dtypes = get_output_types(_output_buffers_template);
+
+  auto row_mask = _metadata->filter_data_pages_with_stats(row_group_indices,
+                                                          output_dtypes,
+                                                          _output_column_schemas,
+                                                          expr_conv.get_converted_expr().value(),
+                                                          stream,
+                                                          mr);
+
+  auto data_page_mask = _metadata->compute_data_page_mask(
+    row_mask->view(), row_group_indices, output_dtypes, _output_column_schemas, stream);
+
+  return {std::move(row_mask), std::move(data_page_mask)};
 }
 
 std::pair<std::vector<byte_range_info>, std::vector<cudf::size_type>>

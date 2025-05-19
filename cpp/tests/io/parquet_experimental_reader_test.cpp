@@ -35,6 +35,7 @@
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
+#include <gtest/gtest.h>
 #include <src/io/parquet/parquet_gpu.hpp>
 
 // Base test fixture for tests
@@ -255,4 +256,81 @@ TEST_F(ParquetExperimentalReaderTest, TestFilterRowGroupWithStats)
   // Expect all row groups to be filtered out with stats
   EXPECT_EQ(stats_filtered_row_groups.size(), 0);
   EXPECT_EQ(reader->total_rows_in_row_groups(stats_filtered_row_groups), 0);
+}
+
+TEST_F(ParquetExperimentalReaderTest, TestFilterPagesWithPageIndexStats)
+{
+  srand(31337);
+
+  // A table concatenated multiple times by itself with result in a parquet file with a row group
+  // per concatenation with multiple pages per row group. Since all row groups will be identical, we
+  // can only prune pages based on `PageIndex` stats
+  auto constexpr num_concat = 2;
+  auto const file_buffer    = std::get<1>(create_parquet_with_stats<num_concat>());
+
+  // Input file buffer span
+  auto const file_buffer_span = cudf::host_span<uint8_t const>(
+    reinterpret_cast<uint8_t const*>(file_buffer.data()), file_buffer.size());
+
+  // Filtering AST - table[0] < 100
+  auto literal_value     = cudf::numeric_scalar<uint32_t>(100);
+  auto literal           = cudf::ast::literal(literal_value);
+  auto col_ref_0         = cudf::ast::column_name_reference("col_uint32");
+  auto filter_expression = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_0, literal);
+
+  // Create reader options with empty source info
+  cudf::io::parquet_reader_options options =
+    cudf::io::parquet_reader_options::builder().filter(filter_expression);
+
+  // Fetch footer and page index bytes from the buffer.
+  auto const footer_buffer = fetch_footer_bytes(file_buffer_span);
+
+  // Create hybrid scan reader with footer bytes
+  auto const reader =
+    std::make_unique<cudf::io::parquet::experimental::hybrid_scan_reader>(footer_buffer, options);
+
+  // Get all row groups from the reader
+  auto input_row_group_indices = reader->all_row_groups(options);
+
+  // Span to track current row group indices
+  auto current_row_group_indices = cudf::host_span<cudf::size_type>(input_row_group_indices);
+
+  auto const stream = cudf::get_default_stream();
+  auto const mr     = cudf::get_current_device_resource_ref();
+
+  // Calling `filter_data_pages_with_stats` before setting up the page index should raise an error
+  EXPECT_THROW(std::ignore = reader->filter_data_pages_with_stats(
+                 current_row_group_indices, options, stream, mr),
+               std::runtime_error);
+
+  // Set up the page index
+  auto const page_index_byte_range = reader->page_index_byte_range();
+  auto const page_index_buffer = fetch_page_index_bytes(file_buffer_span, page_index_byte_range);
+  reader->setup_page_index(page_index_buffer);
+
+  // Filter the data pages with page index stats
+  auto [row_mask, data_page_mask] =
+    reader->filter_data_pages_with_stats(current_row_group_indices, options, stream, mr);
+
+  // Checks
+  auto constexpr num_filter_columns = 1;
+  EXPECT_EQ(data_page_mask.size(), num_filter_columns);
+
+  auto const expected_num_rows = reader->total_rows_in_row_groups(current_row_group_indices);
+  EXPECT_EQ(row_mask->type().id(), cudf::type_id::BOOL8);
+  EXPECT_EQ(row_mask->size(), expected_num_rows);
+  EXPECT_EQ(row_mask->null_count(), 0);
+
+  // Half the pages should survive the page index filter
+  auto constexpr expected_num_pages_after_page_index_filter =
+    num_concat * (num_ordered_rows / page_size_for_ordered_tests) / 2;
+  // Count the number of pages that survive the page index filter
+  auto const num_pages_after_page_index_filter =
+    std::accumulate(data_page_mask.begin(),
+                    data_page_mask.end(),
+                    cudf::size_type{0},
+                    [](auto sum, auto const& page_mask) {
+                      return sum + std::count(page_mask.cbegin(), page_mask.cend(), true);
+                    });
+  EXPECT_EQ(num_pages_after_page_index_filter, expected_num_pages_after_page_index_filter);
 }
