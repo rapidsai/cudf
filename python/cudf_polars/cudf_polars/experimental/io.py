@@ -47,7 +47,7 @@ def _(
     nrows = max(ir.df.shape()[0], 1)
     count = math.ceil(nrows / rows_per_partition)
 
-    table_stats = _default_table_stats(ir, num_rows=nrows)
+    table_stats = _default_table_stats(ir, nrows)
     if count > 1:
         length = math.ceil(nrows / count)
         slices = [
@@ -301,8 +301,8 @@ def _sample_pq_statistics(ir: Scan) -> TableStats:
     if ds is not None and need_schema:
         total_num_rows = []
         column_sizes = {}
-        row_sizes = {}
-        column_cardinalities = {}
+        column_unique_counts = {}
+        element_sizes: dict[str, list[int]] = {}
         real_sample = False  # Whether we read in a real file
         for i, frag in enumerate(ds.get_fragments()):
             md = frag.metadata
@@ -319,16 +319,16 @@ def _sample_pq_statistics(ir: Scan) -> TableStats:
                         continue
                     if name not in column_sizes:
                         column_sizes[name] = np.zeros(n_sample, dtype="int64")
-                        row_sizes[name] = np.zeros(n_sample, dtype="int64")
-                        column_cardinalities[name] = np.zeros(n_sample, dtype="float64")
+                        column_unique_counts[name] = np.zeros(n_sample, dtype="float64")
+                        element_sizes[name] = []
                     column_sizes[name][i] += column.total_uncompressed_size
-                    row_sizes[name][i] += column.total_uncompressed_size / num_rows
+                    element_sizes[name].append(
+                        column.total_uncompressed_size / num_rows
+                    )
 
                     if column.statistics.distinct_count:  # pragma: no cover
                         # Use 'distinct_count' statistic
-                        column_cardinalities[name][i] = (
-                            column.statistics.distinct_count / num_rows
-                        )
+                        column_unique_counts[name][i] = column.statistics.distinct_count
                     else:
                         unique_available = False
 
@@ -337,39 +337,25 @@ def _sample_pq_statistics(ir: Scan) -> TableStats:
             if not (unique_available or real_sample):
                 real_sample = True  # Only do this once
                 t = frag.split_by_row_group()[0].to_table(columns=list(need_schema))
-                t_num_rows = t.num_rows
                 for name in need_schema:
-                    cardinality = (
-                        pa_c.count_distinct(t.column(name)).as_py() / t_num_rows
-                    )
+                    unique_count = pa_c.count_distinct(t.column(name)).as_py()
                     for j in range(n_sample):
-                        column_cardinalities[name][j] = cardinality
+                        column_unique_counts[name][j] = unique_count
 
         assert ir.config_options.executor.name == "streaming"
-        user_cardinalities = {
-            c: max(min(f, 1.0), 0.0001)
-            for c, f in ir.config_options.executor.cardinality_factor.items()
-        }
 
         # Construct estimated TableStats
         table_stats = TableStats(
             column_stats={
                 name: ColumnStats(
                     dtype=dtype,
-                    cardinality=user_cardinalities.get(
-                        name, np.mean(column_cardinalities[name])
-                    ),
-                    # Some columns (e.g., "include_file_paths") may be present in the schema
-                    # but not in the Parquet statistics dict. We use get(name, [0])
-                    # to safely fall back to 0 in those cases.
-                    row_size=int(np.mean(row_sizes.get(name, [0]))),
-                    file_size=int(np.mean(column_sizes.get(name, [0]))),
-                    estimated=True,
+                    unique_count=int(np.mean(column_unique_counts[name])),
+                    element_size=int(np.mean(element_sizes[name])),
+                    file_size=int(np.mean(column_sizes[name])),
                 )
                 for name, dtype in need_schema.items()
             },
             num_rows=int(np.mean(total_num_rows)) * file_count,
-            estimated=True,
         )
 
         if table_stats_cached:  # pragma: no cover; TODO: Test this
@@ -448,31 +434,8 @@ def _(
             }
         return new_node, partition_info
 
-    return ir, {
-        ir: PartitionInfo(count=1, table_stats=_default_table_stats(ir))
-    }  # pragma: no cover
+    return ir, {ir: PartitionInfo(count=1)}  # pragma: no cover
 
 
-def _default_table_stats(
-    ir: Scan | DataFrameScan, num_rows: int | None = None
-) -> TableStats:
-    assert ir.config_options.executor.name == "streaming"
-    user_cardinalities = {
-        c: max(min(f, 1.0), 0.0001)
-        for c, f in ir.config_options.executor.cardinality_factor.items()
-        if c in ir.schema
-    }
-    return TableStats(
-        column_stats={
-            name: ColumnStats(
-                dtype=ir.schema[name],
-                cardinality=max(min(card, 1.0), 0.0001),
-                row_size=None,
-                file_size=None,
-                estimated=True,
-            )
-            for name, card in user_cardinalities.items()
-        },
-        num_rows=num_rows,
-        estimated=True,
-    )
+def _default_table_stats(ir: Scan | DataFrameScan, num_rows: int) -> TableStats:
+    return TableStats(column_stats={}, num_rows=num_rows)

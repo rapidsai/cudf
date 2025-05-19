@@ -170,15 +170,17 @@ def _decompose_unique(
     )
     (column,) = columns
 
-    cardinality: float | None = None
-    if (table_stats := partition_info[input_ir].table_stats) is not None and (
-        cardinality_factor := {
-            max(min(stats.cardinality, 1.0), 0.00001)
-            for k, stats in table_stats.column_stats.items()
-            if k in _leaf_column_names(child)
-        }
-    ):  # pragma: no cover; TODO: Test this.
-        cardinality = max(cardinality_factor)
+    assert config_options.executor.name == "streaming", (
+        "'in-memory' executor not supported in '_decompose_unique'"
+    )
+
+    fraction_unique: float | None = None
+    if fraction_unique_dict := {
+        max(min(v, 1.0), 0.00001)
+        for k, v in config_options.executor.cardinality_factor.items()
+        if k in _leaf_column_names(child)
+    }:
+        fraction_unique = max(fraction_unique_dict) if fraction_unique_dict else None
 
     input_ir, partition_info = lower_distinct(
         Distinct(
@@ -192,7 +194,7 @@ def _decompose_unique(
         input_ir,
         partition_info,
         config_options,
-        cardinality=cardinality,
+        fraction_unique=fraction_unique,
     )
 
     return column, input_ir, partition_info

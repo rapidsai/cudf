@@ -22,47 +22,38 @@ if TYPE_CHECKING:
 
 @dataclasses.dataclass(frozen=True)
 class ColumnStats:
-    """Known or estimated column statistics."""
+    """Estimated column statistics."""
 
     dtype: plc.DataType
     """Column data type."""
-    cardinality: float
-    """Known or estimated column cardinality."""
-    row_size: int | None
-    """Estimated row size for this column."""
+    unique_count: int
+    """Estimated unique count for this column."""
+    element_size: int
+    """Estimated byte size for each element of this column."""
     file_size: int | None
-    """Estimated file size for this column."""
-    estimated: bool
-    """Whether statistics are estimated."""
+    """Estimated file size for this column (Optional)."""
 
 
 @dataclasses.dataclass(frozen=True)
 class TableStats:
-    """Known or estimated table statistics."""
+    """Estimated table statistics."""
 
     column_stats: dict[str, ColumnStats]
-    """Known or estimated column statistics."""
-    num_rows: int | None
-    """Known or estimated row count."""
-    estimated: bool
-    """Whether the row count is estimated."""
+    """Estimated column statistics."""
+    num_rows: int
+    """Estimated row count."""
 
     @classmethod
     def merge(cls, schema: Schema, *tables: TableStats) -> Self:
         """Merge multiple TableStats objects."""
         num_rows = 0
-        estimated = False
         column_stats: dict[str, ColumnStats] = {}
         for table_stats in tables:
             column_stats.update(
                 {k: v for k, v in table_stats.column_stats.items() if k in schema}
             )
-            if table_stats.num_rows is not None:
-                num_rows = max(num_rows, table_stats.num_rows)
-            estimated = estimated or table_stats.estimated
-        if num_rows is not None:
-            num_rows = int(num_rows)
-        return cls(column_stats, num_rows, estimated)
+            num_rows = max(num_rows, table_stats.num_rows)
+        return cls(column_stats, int(num_rows))
 
 
 class PartitionInfo:
@@ -74,7 +65,7 @@ class PartitionInfo:
     partitioned_on: tuple[NamedExpr, ...]
     """Columns the data is hash-partitioned on."""
     table_stats: TableStats | None
-    """Table statistics."""
+    """Table statistics (Optional)."""
 
     def __init__(
         self,

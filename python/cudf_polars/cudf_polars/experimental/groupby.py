@@ -150,32 +150,31 @@ def _(
             msg="group_by does not support multiple partitions for non-pointwise keys.",
         )
 
-    assert ir.config_options.executor.name == "streaming", (
-        "'in-memory' executor not supported in 'generate_ir_tasks'"
-    )
-
-    # Check if we are dealing with any high-cardinality columns
+    # Check if we are dealing with a high-cardinality output
     post_aggregation_count = 1  # Default tree reduction
     groupby_key_columns = [ne.name for ne in ir.keys]
     shuffled = partition_info[child].partitioned_on == ir.keys
 
-    if (table_stats := partition_info[child].table_stats) is not None:
-        cardinality_factor = {
-            c: max(min(stats.cardinality, 1.0), 0.0001)
-            for c, stats in table_stats.column_stats.items()
-            if c in groupby_key_columns
-        }
-        if cardinality_factor:
-            child_count = partition_info[child].count
-            post_aggregation_count = max(
-                int(max(cardinality_factor.values()) * child_count),
-                1,
-            )
-            if post_aggregation_count > ir.config_options.executor.broadcast_join_limit:
-                # We should avoid repartitioning to something
-                # larger than the broadcast join limit. This
-                # can induce re-shuffling on the same column.
-                post_aggregation_count = child_count
+    assert ir.config_options.executor.name == "streaming", (
+        "'in-memory' executor not supported in 'generate_ir_tasks'"
+    )
+
+    fraction_unique_dict = {
+        c: min(f, 1.0)
+        for c, f in ir.config_options.executor.cardinality_factor.items()
+        if c in groupby_key_columns
+    }
+    if fraction_unique_dict:
+        # The `fraction_uniques` dictionary can be used
+        # to specify a mapping between column names and
+        # cardinality "factors". Each factor estimates the
+        # fractional number of unique values in the column.
+        # Each value should be in the range (0, 1].
+        child_count = partition_info[child].count
+        post_aggregation_count = max(
+            int(max(fraction_unique_dict.values()) * child_count),
+            1,
+        )
 
     new_node: IR
     name_generator = unique_names(ir.schema.keys())

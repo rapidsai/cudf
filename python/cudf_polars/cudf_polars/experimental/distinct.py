@@ -29,7 +29,7 @@ def lower_distinct(
     partition_info: MutableMapping[IR, PartitionInfo],
     config_options: ConfigOptions,
     *,
-    cardinality: float | None = None,
+    fraction_unique: float | None = None,
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     """
     Lower a Distinct IR into partition-wise stages.
@@ -46,8 +46,8 @@ def lower_distinct(
         associated partitioning information.
     config_options
         GPUEngine configuration options.
-    cardinality
-        Cardinality factor to use for algorithm selection.
+    fraction_unique
+        Fractional unique count to use for algorithm selection.
 
     Returns
     -------
@@ -105,23 +105,14 @@ def lower_distinct(
             # partitions. For now, we raise an error to fall back
             # to one partition.
             raise NotImplementedError("Unsupported slice for multiple partitions.")
-    elif cardinality is not None:
-        assert config_options.executor.name == "streaming", (
-            "'in-memory' executor not supported in 'lower_distinct'"
-        )
-
-        # Use cardinality to determine partitioningcardinality
-        n_ary = min(max(int(1.0 / cardinality), 2), child_count)
-        output_count = max(int(cardinality * child_count), 1)
-        if output_count > config_options.executor.broadcast_join_limit:
-            # We should avoid repartitioning to something
-            # larger than the broadcast join limit. This
-            # can induce re-shuffling on the same column.
-            output_count = child_count
+    elif fraction_unique is not None:
+        # Use fraction_unique to determine partitioning
+        n_ary = min(max(int(1.0 / fraction_unique), 2), child_count)
+        output_count = max(int(fraction_unique * child_count), 1)
 
     if output_count > 1 and require_tree_reduction:
         # Need to reduce down to a single partition even
-        # if the cardinality is large.
+        # if fraction_unique is large.
         output_count = 1
         _fallback_inform(
             "Unsupported unique options for multiple partitions.",
@@ -165,25 +156,28 @@ def _(
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     # Extract child partitioning
     child, partition_info = rec(ir.children[0])
+    config_options = rec.state["config_options"]
+    assert config_options.executor.name == "streaming", (
+        "'in-memory' executor not supported in 'lower_ir_node'"
+    )
 
     subset: frozenset = ir.subset or frozenset(ir.schema)
-
-    cardinality: float | None = None
-    if (table_stats := partition_info[child].table_stats) is not None:
-        cardinality_factor = {
-            c: max(min(stats.cardinality, 1.0), 0.00001)
-            for c, stats in table_stats.column_stats.items()
-            if c in subset
-        }
-        cardinality = max(cardinality_factor.values()) if cardinality_factor else None
+    fraction_unique_dict = {
+        c: max(min(f, 1.0), 0.00001)
+        for c, f in config_options.executor.cardinality_factor.items()
+        if c in subset
+    }
+    fraction_unique = (
+        max(fraction_unique_dict.values()) if fraction_unique_dict else None
+    )
 
     try:
         return lower_distinct(
             ir,
             child,
             partition_info,
-            rec.state["config_options"],
-            cardinality=cardinality,
+            config_options,
+            fraction_unique=fraction_unique,
         )
     except NotImplementedError as err:
         return _lower_ir_fallback(ir, rec, msg=str(err))
