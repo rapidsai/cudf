@@ -1153,7 +1153,6 @@ def pivot(
             )
         ),
         verify=False,
-        # label_dtype=getattr(column_data, "dtype", None),
     )
     columns_index = cudf.DataFrame._from_data(ca)
 

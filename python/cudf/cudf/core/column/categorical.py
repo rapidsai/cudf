@@ -1233,7 +1233,7 @@ class CategoricalColumn(column.ColumnBase):
 
     def _with_type_metadata(self: Self, dtype: Dtype) -> Self:
         if isinstance(dtype, CategoricalDtype):
-            result = type(self)(
+            return type(self)(
                 data=self.data,  # type: ignore[arg-type]
                 size=self.codes.size,
                 dtype=dtype,
@@ -1242,10 +1242,8 @@ class CategoricalColumn(column.ColumnBase):
                 null_count=self.codes.null_count,
                 children=(self.codes,),
             )
-        else:
-            result = self
 
-        return result
+        return self
 
     def set_categories(
         self,

@@ -708,7 +708,7 @@ class NumericalColumn(NumericalBaseColumn):
             if dtype_to_pylibcudf_type(dtype) == dtype_to_pylibcudf_type(
                 self.dtype
             ):
-                self._dtype = dtype
+                self._dtype = cudf.dtype(dtype)
             else:
                 self._dtype = get_dtype_of_same_kind(dtype, self.dtype)
         return self

@@ -711,13 +711,13 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         elif (
             (
                 nullable
-                or isinstance(self.dtype, pd.core.dtypes.dtypes.ExtensionDtype)
+                or isinstance(self.dtype, pd.api.extensions.ExtensionDtype)
             )
             and isinstance(
                 pandas_nullable_dtype := np_dtypes_to_pandas_dtypes.get(
                     self.dtype, self.dtype
                 ),
-                pd.core.dtypes.dtypes.ExtensionDtype,
+                pd.api.extensions.ExtensionDtype,
             )
             and hasattr(pandas_nullable_dtype, "__from_arrow__")
         ):
@@ -926,7 +926,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                         result._dtype = array._pandas_type
                     elif isinstance(
                         array._pandas_type,
-                        pd.core.dtypes.dtypes.ExtensionDtype,
+                        pd.api.extensions.ExtensionDtype,
                     ):
                         result._dtype = array._pandas_type
                     return result
@@ -2092,10 +2092,8 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         the children of ``self``.
         """
         # For pandas dtypes, store them directly in the column's dtype property
-        if isinstance(
-            dtype, (pd.ArrowDtype, pd.core.dtypes.dtypes.ExtensionDtype)
-        ):
-            self._dtype = dtype
+        if isinstance(dtype, pd.ArrowDtype):
+            self._dtype = cudf.dtype(dtype)
         return self
 
     def _label_encoding(
@@ -2850,12 +2848,7 @@ def as_column(
             )
             if cudf.get_option("mode.pandas_compatible"):
                 # Store pandas extension dtype directly in the column's dtype property
-                if isinstance(arbitrary.dtype, pd.ArrowDtype):
-                    result._dtype = arbitrary.dtype
-                elif isinstance(
-                    arbitrary.dtype, pd.core.dtypes.dtypes.ExtensionDtype
-                ):
-                    result._dtype = arbitrary.dtype
+                result = result._with_type_metadata(arbitrary.dtype)
             return result
         elif isinstance(
             arbitrary.dtype, pd.api.extensions.ExtensionDtype

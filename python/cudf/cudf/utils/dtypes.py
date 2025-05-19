@@ -236,14 +236,14 @@ def _get_nan_for_dtype(dtype: DtypeObj) -> DtypeObj:
         return dtype.type("nat", time_unit)
     elif dtype.kind == "f":
         if is_pandas_nullable_extension_dtype(dtype):
-            return pd.NA
+            return dtype.na_value
         return dtype.type("nan")
     else:
         if (
             is_pandas_nullable_extension_dtype(dtype)
             and getattr(dtype, "kind", "c") in "biu"
         ):
-            return pd.NA
+            return dtype.na_value
         return np.float64("nan")
 
 

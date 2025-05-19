@@ -1488,11 +1488,19 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 nlevels = 1
             elif isinstance(arg, tuple):
                 nlevels = len(arg)
+
             if (
                 self._data.multiindex is False
                 or nlevels == self._data.nlevels
                 or (
-                    out._data.multiindex
+                    out._data.multiindex is False
+                    and self._data.multiindex is True
+                    and len(out._data.names)
+                    and all(n == "" for n in out._data.names)
+                )
+                or (
+                    out._data.multiindex is True
+                    and self._data.multiindex is True
                     and len(out._data.names)
                     and all(n == "" for n in out._data.names[0])
                 )
@@ -3508,8 +3516,8 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         value = as_column(value, nan_as_null=nan_as_null)
         if cudf.get_option("mode.pandas_compatible"):
             dtype = value.dtype
-            if len(self._data.names) > 0:
-                first_dtype = self._data[self._data.names[0]].dtype
+            if self._num_columns > 0:
+                _, first_dtype = next(self._dtypes)
                 dtype = get_dtype_of_same_kind(first_dtype, dtype)
                 value = value.astype(dtype)
         self._data.insert(name, value, loc=loc)

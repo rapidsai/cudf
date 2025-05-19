@@ -227,6 +227,11 @@ class ListColumn(ColumnBase):
                 null_count=self.null_count,
                 children=(self.base_children[0], elements),  # type: ignore[arg-type]
             )
+        # For pandas dtypes, store them directly in the column's dtype property
+        elif isinstance(dtype, pd.ArrowDtype) and isinstance(
+            dtype.pyarrow_dtype, pa.ListType
+        ):
+            self._dtype = dtype
 
         return self
 

@@ -6048,6 +6048,17 @@ class StringColumn(ColumnBase):
         other = [item] if is_scalar(item) else item
         return self.contains(as_column(other, dtype=self.dtype)).any()
 
+    def _with_type_metadata(self: StringColumn, dtype: Dtype) -> StringColumn:
+        """
+        Copies type metadata from self onto other, returning a new column.
+        """
+        # For pandas dtypes, store them directly in the column's dtype property
+        if (
+            isinstance(dtype, pd.ArrowDtype) and dtype.kind == "U"
+        ) or isinstance(dtype, pd.StringDtype):
+            self._dtype = dtype
+        return self
+
     def as_numerical_column(self, dtype: np.dtype) -> NumericalColumn:
         if dtype.kind == "b":
             with acquire_spill_lock():
