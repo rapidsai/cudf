@@ -300,6 +300,69 @@ class Frame(BinaryOperand, Scannable, Serializable):
         """
         return self._num_columns * self._num_rows
 
+    @property
+    @_performance_tracking
+    def empty(self):
+        """
+        Indicator whether DataFrame or Series is empty.
+
+        True if DataFrame/Series is entirely empty (no items),
+        meaning any of the axes are of length 0.
+
+        Returns
+        -------
+        out : bool
+            If DataFrame/Series is empty, return True, if not return False.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({'A' : []})
+        >>> df
+        Empty DataFrame
+        Columns: [A]
+        Index: []
+        >>> df.empty
+        True
+
+        If we only have `null` values in our DataFrame, it is
+        not considered empty! We will need to drop
+        the `null`'s to make the DataFrame empty:
+
+        >>> df = cudf.DataFrame({'A' : [None, None]})
+        >>> df
+              A
+        0  <NA>
+        1  <NA>
+        >>> df.empty
+        False
+        >>> df.dropna().empty
+        True
+
+        Non-empty and empty Series example:
+
+        >>> s = cudf.Series([1, 2, None])
+        >>> s
+        0       1
+        1       2
+        2    <NA>
+        dtype: int64
+        >>> s.empty
+        False
+        >>> s = cudf.Series([])
+        >>> s
+        Series([], dtype: float64)
+        >>> s.empty
+        True
+
+        .. pandas-compat::
+            :attr:`pandas.DataFrame.empty`, :attr:`pandas.Series.empty`
+
+            If DataFrame/Series contains only `null` values, it is still not
+            considered empty. See the example above.
+        """
+        return self.size == 0
+
     def memory_usage(self, deep: bool = False) -> int:
         """Return the memory usage of an object.
 
@@ -525,6 +588,15 @@ class Frame(BinaryOperand, Scannable, Serializable):
             return matrix
 
     @_performance_tracking
+    def to_pylibcudf(self) -> tuple[plc.Table, dict[str, Any]]:
+        """
+        Converts Frame to a pylibcudf.Table.
+        Note: This method should not be called directly on a Frame object
+        Instead, it should be called on subclasses like DataFrame/Series.
+        """
+        raise NotImplementedError(f"{type(self)} must implement to_pylibcudf")
+
+    @_performance_tracking
     def to_cupy(
         self,
         dtype: Dtype | None = None,
@@ -550,6 +622,51 @@ class Frame(BinaryOperand, Scannable, Serializable):
         -------
         cupy.ndarray
         """
+        if (
+            self._num_columns > 1
+            and na_value is None
+            and self._columns[0].dtype.kind in {"i", "u", "f", "b"}
+            and all(
+                not col.nullable and col.dtype == self._columns[0].dtype
+                for col in self._columns
+            )
+        ):
+            if dtype is None:
+                dtype = self._columns[0].dtype
+
+            shape = (len(self), self._num_columns)
+            out = cupy.empty(shape, dtype=dtype, order="F")
+
+            table = plc.Table(
+                [col.to_pylibcudf(mode="read") for col in self._columns]
+            )
+            plc.reshape.table_to_array(
+                table,
+                out.data.ptr,
+                out.nbytes,
+            )
+            return out
+        elif self._num_columns == 1:
+            col = self._columns[0]
+            final_dtype = col.dtype if dtype is None else dtype
+
+            if (
+                not copy
+                and col.dtype.kind in {"i", "u", "f", "b"}
+                and cupy.can_cast(col.dtype, final_dtype)
+            ):
+                if col.has_nulls():
+                    if na_value is not None:
+                        col = col.fillna(na_value)
+                    else:
+                        return self._to_array(
+                            lambda col: col.values,
+                            cupy,
+                            copy,
+                            dtype,
+                            na_value,
+                        )
+                return cupy.asarray(col, dtype=final_dtype).reshape((-1, 1))
         return self._to_array(
             lambda col: col.values,
             cupy,

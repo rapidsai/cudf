@@ -23,13 +23,17 @@ def bench_series_nsmallest(benchmark, series, n):
     benchmark(series.nsmallest, n)
 
 
-@benchmark_with_object(cls="series", dtype="int")
+@benchmark_with_object(cls="series", dtype="int", nulls=False)
 def bench_series_cp_asarray(benchmark, series):
-    series = series.dropna()
     benchmark(cupy.asarray, series)
 
 
-@benchmark_with_object(cls="series", dtype="int")
+@benchmark_with_object(cls="series", dtype="int", nulls=False)
+@pytest.mark.pandas_incompatible
+def bench_to_cupy(benchmark, series):
+    benchmark(lambda: series.values)
+
+
+@benchmark_with_object(cls="series", dtype="int", nulls=False)
 def bench_series_values(benchmark, series):
-    series = series.dropna()
     benchmark(lambda: series.values)

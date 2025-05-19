@@ -311,7 +311,7 @@ struct base_ws_split_tokenizer {
       cudf::device_span<int64_t const>(d_positions + d_delimiter_offsets[idx],
                                        d_delimiter_offsets[idx + 1] - d_delimiter_offsets[idx]);
     if (delimiters.size() == (d_str_offsets.second - d_str_offsets.first)) { return 0; }
-    if (delimiters.size() == 0) { return 1; }
+    if (delimiters.empty()) { return 1; }
 
     size_type token_count = (delimiters.front() != d_str_offsets.first);
     for (std::size_t i = 0; i < delimiters.size(); ++i) {
@@ -334,7 +334,7 @@ struct base_ws_split_tokenizer {
     auto const d_tokens =  // this string's tokens output
       cudf::device_span<string_index_pair>(d_all_tokens + d_tokens_offsets[idx],
                                            d_tokens_offsets[idx + 1] - d_tokens_offsets[idx]);
-    if (d_tokens.size() == 0) { return; }
+    if (d_tokens.empty()) { return; }
 
     auto const d_str_offsets = get_string_offsets(d_strings, idx);
 
@@ -347,7 +347,7 @@ struct base_ws_split_tokenizer {
       d_tokens[0] = string_index_pair{nullptr, 0};
       return;
     }
-    if (delimiters.size() == 0) {
+    if (delimiters.empty()) {
       auto const base_ptr = d_strings.head<char>();
       d_tokens[0]         = string_index_pair{base_ptr + d_str_offsets.first, str_bytes};
       return;
