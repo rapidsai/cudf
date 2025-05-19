@@ -106,9 +106,18 @@ def lower_distinct(
             # to one partition.
             raise NotImplementedError("Unsupported slice for multiple partitions.")
     elif cardinality is not None:
+        assert config_options.executor.name == "streaming", (
+            "'in-memory' executor not supported in 'lower_distinct'"
+        )
+
         # Use cardinality to determine partitioningcardinality
         n_ary = min(max(int(1.0 / cardinality), 2), child_count)
         output_count = max(int(cardinality * child_count), 1)
+        if output_count > config_options.executor.broadcast_join_limit:
+            # We should avoid repartitioning to something
+            # larger than the broadcast join limit. This
+            # can induce re-shuffling on the same column.
+            output_count = child_count
 
     if output_count > 1 and require_tree_reduction:
         # Need to reduce down to a single partition even

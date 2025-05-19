@@ -150,6 +150,10 @@ def _(
             msg="group_by does not support multiple partitions for non-pointwise keys.",
         )
 
+    assert ir.config_options.executor.name == "streaming", (
+        "'in-memory' executor not supported in 'generate_ir_tasks'"
+    )
+
     # Check if we are dealing with any high-cardinality columns
     post_aggregation_count = 1  # Default tree reduction
     groupby_key_columns = [ne.name for ne in ir.keys]
@@ -167,6 +171,11 @@ def _(
                 int(max(cardinality_factor.values()) * child_count),
                 1,
             )
+            if post_aggregation_count > ir.config_options.executor.broadcast_join_limit:
+                # We should avoid repartitioning to something
+                # larger than the broadcast join limit. This
+                # can induce re-shuffling on the same column.
+                post_aggregation_count = child_count
 
     new_node: IR
     name_generator = unique_names(ir.schema.keys())
@@ -232,10 +241,6 @@ def _(
         )
     else:
         # N-ary tree reduction
-        assert ir.config_options.executor.name == "streaming", (
-            "'in-memory' executor not supported in 'generate_ir_tasks'"
-        )
-
         n_ary = ir.config_options.executor.groupby_n_ary
         count = child_count
         gb_inter = gb_pwise
