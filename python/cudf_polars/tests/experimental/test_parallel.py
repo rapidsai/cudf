@@ -121,7 +121,7 @@ def test_preserve_partitioning():
             "max_rows_per_partition": 2,
             "scheduler": DEFAULT_SCHEDULER,
             "broadcast_join_limit": 2,
-            "cardinality_factor": {"a": 1.0},
+            "unique_fraction": {"a": 1.0},
         },
     )
     left = pl.LazyFrame({"a": [1, 2, 3, 4] * 5, "b": range(20)})

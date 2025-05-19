@@ -174,13 +174,13 @@ def _decompose_unique(
         "'in-memory' executor not supported in '_decompose_unique'"
     )
 
-    fraction_unique: float | None = None
-    if fraction_unique_dict := {
+    unique_fraction: float | None = None
+    if unique_fraction_dict := {
         max(min(v, 1.0), 0.00001)
-        for k, v in config_options.executor.cardinality_factor.items()
+        for k, v in config_options.executor.unique_fraction.items()
         if k in _leaf_column_names(child)
     }:
-        fraction_unique = max(fraction_unique_dict) if fraction_unique_dict else None
+        unique_fraction = max(unique_fraction_dict) if unique_fraction_dict else None
 
     input_ir, partition_info = lower_distinct(
         Distinct(
@@ -194,7 +194,7 @@ def _decompose_unique(
         input_ir,
         partition_info,
         config_options,
-        fraction_unique=fraction_unique,
+        unique_fraction=unique_fraction,
     )
 
     return column, input_ir, partition_info

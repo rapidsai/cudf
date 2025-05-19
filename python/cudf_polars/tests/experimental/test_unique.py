@@ -25,15 +25,15 @@ def df():
 @pytest.mark.parametrize("subset", [None, ("y",), ("y", "z")])
 @pytest.mark.parametrize("keep", ["first", "last", "any", "none"])
 @pytest.mark.parametrize("maintain_order", [True, False])
-@pytest.mark.parametrize("cardinality", [{}, {"y": 0.7}])
-def test_unique(df, keep, subset, maintain_order, cardinality):
+@pytest.mark.parametrize("unique_fraction", [{}, {"y": 0.7}])
+def test_unique(df, keep, subset, maintain_order, unique_fraction):
     engine = pl.GPUEngine(
         raise_on_fail=True,
         executor="streaming",
         executor_options={
             "max_rows_per_partition": 50,
             "scheduler": DEFAULT_SCHEDULER,
-            "cardinality_factor": cardinality,
+            "unique_fraction": unique_fraction,
             "fallback_mode": "silent",
         },
     )
@@ -54,7 +54,7 @@ def test_unique_fallback(df):
         executor_options={
             "max_rows_per_partition": 50,
             "scheduler": DEFAULT_SCHEDULER,
-            "cardinality_factor": {"y": 1.0},
+            "unique_fraction": {"y": 1.0},
             "fallback_mode": "raise",
         },
     )
@@ -64,15 +64,15 @@ def test_unique_fallback(df):
 
 
 @pytest.mark.parametrize("maintain_order", [True, False])
-@pytest.mark.parametrize("cardinality", [{}, {"y": 0.5}])
-def test_unique_select(df, maintain_order, cardinality):
+@pytest.mark.parametrize("unique_fraction", [{}, {"y": 0.5}])
+def test_unique_select(df, maintain_order, unique_fraction):
     engine = pl.GPUEngine(
         raise_on_fail=True,
         executor="streaming",
         executor_options={
             "max_rows_per_partition": 4,
             "scheduler": DEFAULT_SCHEDULER,
-            "cardinality_factor": cardinality,
+            "unique_fraction": unique_fraction,
             "fallback_mode": "silent",
         },
     )

@@ -159,20 +159,19 @@ def _(
         "'in-memory' executor not supported in 'generate_ir_tasks'"
     )
 
-    fraction_unique_dict = {
+    unique_fraction_dict = {
         c: min(f, 1.0)
-        for c, f in ir.config_options.executor.cardinality_factor.items()
+        for c, f in ir.config_options.executor.unique_fraction.items()
         if c in groupby_key_columns
     }
-    if fraction_unique_dict:
-        # The `fraction_uniques` dictionary can be used
-        # to specify a mapping between column names and
-        # cardinality "factors". Each factor estimates the
+    if unique_fraction_dict:
+        # The `unique_fraction` config can be used
+        # to specify a mapping between column names and the
         # fractional number of unique values in the column.
         # Each value should be in the range (0, 1].
         child_count = partition_info[child].count
         post_aggregation_count = max(
-            int(max(fraction_unique_dict.values()) * child_count),
+            int(max(unique_fraction_dict.values()) * child_count),
             1,
         )
 

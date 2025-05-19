@@ -29,7 +29,7 @@ def lower_distinct(
     partition_info: MutableMapping[IR, PartitionInfo],
     config_options: ConfigOptions,
     *,
-    fraction_unique: float | None = None,
+    unique_fraction: float | None = None,
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     """
     Lower a Distinct IR into partition-wise stages.
@@ -46,7 +46,7 @@ def lower_distinct(
         associated partitioning information.
     config_options
         GPUEngine configuration options.
-    fraction_unique
+    unique_fraction
         Fractional unique count to use for algorithm selection.
 
     Returns
@@ -105,14 +105,14 @@ def lower_distinct(
             # partitions. For now, we raise an error to fall back
             # to one partition.
             raise NotImplementedError("Unsupported slice for multiple partitions.")
-    elif fraction_unique is not None:
-        # Use fraction_unique to determine partitioning
-        n_ary = min(max(int(1.0 / fraction_unique), 2), child_count)
-        output_count = max(int(fraction_unique * child_count), 1)
+    elif unique_fraction is not None:
+        # Use unique_fraction to determine partitioning
+        n_ary = min(max(int(1.0 / unique_fraction), 2), child_count)
+        output_count = max(int(unique_fraction * child_count), 1)
 
     if output_count > 1 and require_tree_reduction:
         # Need to reduce down to a single partition even
-        # if fraction_unique is large.
+        # if unique_fraction is large.
         output_count = 1
         _fallback_inform(
             "Unsupported unique options for multiple partitions.",
@@ -162,13 +162,13 @@ def _(
     )
 
     subset: frozenset = ir.subset or frozenset(ir.schema)
-    fraction_unique_dict = {
+    unique_fraction_dict = {
         c: max(min(f, 1.0), 0.00001)
-        for c, f in config_options.executor.cardinality_factor.items()
+        for c, f in config_options.executor.unique_fraction.items()
         if c in subset
     }
-    fraction_unique = (
-        max(fraction_unique_dict.values()) if fraction_unique_dict else None
+    unique_fraction = (
+        max(unique_fraction_dict.values()) if unique_fraction_dict else None
     )
 
     try:
@@ -177,7 +177,7 @@ def _(
             child,
             partition_info,
             config_options,
-            fraction_unique=fraction_unique,
+            unique_fraction=unique_fraction,
         )
     except NotImplementedError as err:
         return _lower_ir_fallback(ir, rec, msg=str(err))
