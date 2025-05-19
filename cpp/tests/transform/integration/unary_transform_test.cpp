@@ -29,6 +29,83 @@
 #include <cudf/transform.hpp>
 
 namespace transformation {
+
+struct RuntimeSupportTest : public cudf::test::BaseFixture {
+ protected:
+  cudf::test::fixed_width_column_wrapper<float> a{1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+
+  cudf::test::fixed_width_column_wrapper<float> b{
+    0.1F, 0.25F, 0.5F, 0.1F, 0.4F, 0.75F, 0.2F, 0.33F, 0.45F, 0.66F};
+
+  cudf::test::fixed_width_column_wrapper<float> b_nulls{
+    {0.1F, 0.25F, 0.5F, 0.1F, 0.4F, 0.75F, 0.2F, 0.33F, 0.45F, 0.66F},
+    {true, true, true, true, true, true, true, true, true, false}};
+
+  cudf::test::fixed_width_column_wrapper<float> t{0.5f};
+
+  cudf::test::fixed_width_column_wrapper<float> bad_col{1, 2, 3, 4, 5, 6, 7, 8, 9};
+
+  cudf::test::structs_column_wrapper struct_col{a, b};
+
+  static constexpr char const* udf =
+    R"***(
+    __device__ inline void lerp(float* out, float a, float b, float t) { *out = a - t * a + t * b; }
+    )***";
+};
+
+struct AssertsTest : public RuntimeSupportTest {
+ protected:
+  void SetUp() override
+  {
+    if (!cudf::is_runtime_jit_supported()) {
+      GTEST_SKIP() << "Skipping tests that require runtime JIT support";
+    }
+  }
+};
+
+TEST_F(RuntimeSupportTest, RuntimeSupport)
+{
+  if (!cudf::is_runtime_jit_supported()) {
+    EXPECT_THROW(
+      cudf::transform({a, b, t}, udf, cudf::data_type{cudf::type_id::FLOAT32}, false, std::nullopt),
+      std::logic_error);
+  } else {
+    EXPECT_NO_THROW(cudf::transform(
+      {a, b, t}, udf, cudf::data_type{cudf::type_id::FLOAT32}, false, std::nullopt));
+  }
+}
+
+TEST_F(AssertsTest, TypeSupport)
+{
+  EXPECT_NO_THROW(
+    cudf::transform({a, b, t}, udf, cudf::data_type{cudf::type_id::FLOAT32}, false, std::nullopt));
+
+  EXPECT_THROW(
+    cudf::transform({a, b, t}, udf, cudf::data_type{cudf::type_id::STRUCT}, false, std::nullopt),
+    std::invalid_argument);
+
+  EXPECT_THROW(
+    cudf::transform(
+      {struct_col, t}, udf, cudf::data_type{cudf::type_id::FLOAT32}, false, std::nullopt),
+    std::invalid_argument);
+}
+
+TEST_F(AssertsTest, UnequalRowCount)
+{
+  EXPECT_THROW(
+    cudf::transform(
+      {a, b, bad_col}, udf, cudf::data_type{cudf::type_id::FLOAT32}, false, std::nullopt),
+    std::invalid_argument);
+}
+
+TEST_F(AssertsTest, NullSupport)
+{
+  EXPECT_THROW(
+    cudf::transform(
+      {a, b_nulls, t}, udf, cudf::data_type{cudf::type_id::FLOAT32}, false, std::nullopt),
+    std::invalid_argument);
+}
+
 struct UnaryOperationIntegrationTest : public cudf::test::BaseFixture {
  protected:
   void SetUp() override
@@ -487,6 +564,78 @@ TEST_F(StringOperationTest, MixedTypes)
   auto expected =
     cudf::test::fixed_width_column_wrapper<bool>{true, true, false, false, false, false};
   auto result = cudf::transform({a, b, c, d}, cuda, cudf::data_type(cudf::type_id::BOOL8), false);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
+TEST_F(StringOperationTest, Output)
+{
+  auto a = cudf::test::strings_column_wrapper{"this", "b", "c", "d", "e", "f"};
+  auto b = cudf::test::strings_column_wrapper{"aa", "is", "dd", "ddd", "e", "fff"};
+  auto c = cudf::test::strings_column_wrapper{"a", "b", "the", "dddd", "e", "fff"};
+  auto d = cudf::test::strings_column_wrapper{"a", "b", "d", "largest", "lexicographical", "test"};
+
+  std::string cuda = R"***(
+    __device__ void transform(cudf::string_view * out, cudf::string_view a, cudf::string_view b, cudf::string_view c, cudf::string_view d){
+      *out =  std::max(std::max(std::max(a, b), c), d);
+    }
+    )***";
+
+  auto expected =
+    cudf::test::strings_column_wrapper{"this", "is", "the", "largest", "lexicographical", "test"};
+  auto result = cudf::transform({a, b, c, d}, cuda, cudf::data_type(cudf::type_id::STRING), false);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
+TEST_F(StringOperationTest, StringConcat)
+{
+  auto first_name = cudf::test::strings_column_wrapper{
+    "John", "Mia", "Abd", "Mendes", "Arya", "John", u8"François", u8"José", u8"Søren", u8"张"};
+  auto last_name = cudf::test::strings_column_wrapper{
+    "Doe", "Folk", "Louis", "Xi", "Serenity", "Scott", u8"Ольга", u8"Łukasz", u8"Zoë", u8"伟"};
+  rmm::device_buffer scratch(100 * static_cast<cudf::column_view>(first_name).size(),
+                             cudf::get_default_stream());
+  auto scratch_sizes = cudf::test::fixed_width_column_wrapper<int32_t>{100};
+
+  std::string cuda = R"***(
+__device__ void transform(void* user_data, cudf::size_type row,
+                          cudf::string_view* out,
+                          cudf::string_view first_name,
+                          cudf::string_view last_name,
+                          int32_t size)
+{
+  char* it = static_cast<char*>(user_data) + static_cast<size_t>(row) * static_cast<size_t>(size);
+  char const* const begin = it;
+
+  memcpy(it, first_name.data(), first_name.size_bytes());
+  it += first_name.size_bytes();
+
+  memcpy(it, " ", 1);
+  it += 1;
+
+  memcpy(it, last_name.data(), last_name.size_bytes());
+  it += last_name.size_bytes();
+
+  *out = cudf::string_view{begin, static_cast<cudf::size_type>(it - begin)};
+}
+    )***";
+
+  auto expected = cudf::test::strings_column_wrapper{"John Doe",
+                                                     "Mia Folk",
+                                                     "Abd Louis",
+                                                     "Mendes Xi",
+                                                     "Arya Serenity",
+                                                     "John Scott",
+                                                     u8"François Ольга",
+                                                     u8"José Łukasz",
+                                                     u8"Søren Zoë",
+                                                     u8"张 伟"};
+  auto result   = cudf::transform({first_name, last_name, scratch_sizes},
+                                cuda,
+                                cudf::data_type(cudf::type_id::STRING),
+                                false,
+                                scratch.data());
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }

@@ -187,7 +187,7 @@ if(CUDF_CLANG_TIDY)
   # versions are skipped so we don't want to constrain to a patch version that the user can't
   # install.
   set(LLVM_VERSION "${CMAKE_MATCH_1}")
-  set(expected_clang_tidy_version 19.1)
+  set(expected_clang_tidy_version 20.1)
 
   if(NOT expected_clang_tidy_version VERSION_EQUAL LLVM_VERSION)
     message(
@@ -546,6 +546,7 @@ add_library(
   src/io/parquet/compact_protocol_reader.cpp
   src/io/parquet/compact_protocol_writer.cpp
   src/io/parquet/decode_preprocess.cu
+  src/io/parquet/experimental/dictionary_page_filter.cu
   src/io/parquet/experimental/hybrid_scan.cpp
   src/io/parquet/experimental/hybrid_scan_helpers.cpp
   src/io/parquet/experimental/hybrid_scan_impl.cpp

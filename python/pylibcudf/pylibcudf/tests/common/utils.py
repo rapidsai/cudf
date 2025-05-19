@@ -188,8 +188,7 @@ def assert_column_eq(
 
 def assert_table_eq(pa_table: pa.Table, plc_table: plc.Table) -> None:
     """Verify that a pylibcudf table and PyArrow table are equal."""
-    plc_shape = (plc_table.num_rows(), plc_table.num_columns())
-    assert plc_shape == pa_table.shape
+    assert plc_table.shape() == pa_table.shape
 
     for plc_col, pa_col in zip(plc_table.columns(), pa_table.columns):
         assert_column_eq(pa_col, plc_col)
@@ -206,9 +205,8 @@ def assert_table_and_meta_eq(
 
     plc_table = plc_table_w_meta.tbl
 
-    plc_shape = (plc_table.num_rows(), plc_table.num_columns())
-    assert plc_shape == pa_table.shape, (
-        f"{plc_shape} is not equal to {pa_table.shape}"
+    assert plc_table.shape() == pa_table.shape, (
+        f"{plc_table.shape()} is not equal to {pa_table.shape}"
     )
 
     if not check_types_if_empty and plc_table.num_rows() == 0:
