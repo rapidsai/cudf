@@ -39,7 +39,7 @@
  * @brief Main example function returns transformed string table.
  *
  * @param table Table to be transformed
- * @return Transformed string column
+ * @return Transformed result
  */
 std::unique_ptr<cudf::column> transform(cudf::table_view const& table);
 
