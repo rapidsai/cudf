@@ -25,13 +25,17 @@ from datetime import date, datetime, timezone
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
-import pynvml
 
 import polars as pl
 
-from cudf_polars.dsl.translate import Translator
-from cudf_polars.experimental.explain import explain_query
-from cudf_polars.experimental.parallel import evaluate_streaming
+try:
+    import pynvml
+
+    from cudf_polars.dsl.translate import Translator
+    from cudf_polars.experimental.explain import explain_query
+    from cudf_polars.experimental.parallel import evaluate_streaming
+except ImportError:
+    print("Assume CPU execution...")
 
 if TYPE_CHECKING:
     import pathlib
@@ -66,18 +70,18 @@ class PackageVersions:
         packages = [
             "cudf_polars",
             "polars",
+            "rapidsmpf",
         ]
         versions = {}
         for name in packages:
+            try:
+                package = importlib.import_module(name)
+                versions[name] = package.__version__
+            except (AttributeError, ImportError):
+                versions[name] = None
             package = importlib.import_module(name)
             versions[name] = package.__version__
         versions["python"] = ".".join(str(v) for v in sys.version_info[:3])
-        try:
-            import rapidsmpf
-
-            versions["rapidsmpf"] = rapidsmpf.__version__
-        except (AttributeError, ImportError):
-            versions["rapidsmpf"] = None
         return cls(**versions)
 
 
@@ -116,8 +120,12 @@ class HardwareInfo:
     @classmethod
     def collect(cls) -> HardwareInfo:
         """Collect the hardware information."""
-        pynvml.nvmlInit()
-        gpus = [GPUInfo.from_index(i) for i in range(pynvml.nvmlDeviceGetCount())]
+        try:
+            pynvml.nvmlInit()
+            gpus = [GPUInfo.from_index(i) for i in range(pynvml.nvmlDeviceGetCount())]
+        except NameError:
+            # No GPUs -- probably running in CPU mode
+            gpus = []
         return cls(gpus=gpus)
 
 
