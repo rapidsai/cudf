@@ -113,6 +113,7 @@ struct row_group_info {
  * @brief Class for parsing dataset metadata
  */
 struct metadata : public FileMetaData {
+  metadata() = default;
   explicit metadata(datasource* source);
   void sanitize_schema();
 };
@@ -134,6 +135,7 @@ struct surviving_row_group_metrics {
 };
 
 class aggregate_reader_metadata {
+ protected:
   std::vector<metadata> per_file_metadata;
   std::vector<std::unordered_map<std::string, std::string>> keyval_maps;
   std::vector<std::unordered_map<int32_t, int32_t>> schema_idx_maps;
@@ -252,7 +254,7 @@ class aggregate_reader_metadata {
    * @param filter AST expression to filter row groups based on bloom filter membership
    * @param stream CUDA stream used for device memory operations and kernel launches
    *
-   * @return Filtered row group indices if any is filtered
+   * @return Surviving row group indices if any of them are filtered.
    */
   [[nodiscard]] std::optional<std::vector<std::vector<size_type>>> apply_stats_filters(
     host_span<std::vector<size_type> const> input_row_group_indices,
@@ -270,19 +272,19 @@ class aggregate_reader_metadata {
    * @param literals Lists of equality literals, one per each input row group
    * @param total_row_groups Total number of row groups in `input_row_group_indices`
    * @param output_dtypes Datatypes of output columns
-   * @param equality_col_schemas schema indices of equality columns only
+   * @param bloom_filter_col_schemas Schema indices of bloom filter columns only
    * @param filter AST expression to filter row groups based on bloom filter membership
    * @param stream CUDA stream used for device memory operations and kernel launches
    *
-   * @return Filtered row group indices if any is filtered
+   * @return Surviving row group indices if any of them are filtered.
    */
   [[nodiscard]] std::optional<std::vector<std::vector<size_type>>> apply_bloom_filters(
-    std::vector<rmm::device_buffer>& bloom_filter_data,
+    cudf::host_span<rmm::device_buffer> bloom_filter_data,
     host_span<std::vector<size_type> const> input_row_group_indices,
     host_span<std::vector<ast::literal*> const> literals,
     size_type total_row_groups,
     host_span<data_type const> output_dtypes,
-    host_span<int const> equality_col_schemas,
+    host_span<int const> bloom_filter_col_schemas,
     std::reference_wrapper<ast::expression const> filter,
     rmm::cuda_stream_view stream) const;
 
@@ -321,9 +323,36 @@ class aggregate_reader_metadata {
    */
   [[nodiscard]] std::vector<std::unordered_map<std::string, int64_t>> get_rowgroup_metadata() const;
 
+  /**
+   * @brief Maps leaf column names to vectors of `total_uncompressed_size` fields from their all
+   *        column chunks
+   *
+   * @return Map of leaf column names to vectors of `total_uncompressed_size` fields from all their
+   *         column chunks
+   */
+  [[nodiscard]] std::unordered_map<std::string, std::vector<int64_t>> get_column_chunk_metadata()
+    const;
+
+  /**
+   * @brief Get total number of rows across all files
+   *
+   * @return Total number of rows across all files
+   */
   [[nodiscard]] auto get_num_rows() const { return num_rows; }
 
+  /**
+   * @brief Get total number of row groups across all files
+   *
+   * @return Total number of row groups across all files
+   */
   [[nodiscard]] auto get_num_row_groups() const { return num_row_groups; }
+
+  /**
+   * @brief Get the number of row groups per file
+   *
+   * @return Number of row groups per file
+   */
+  [[nodiscard]] std::vector<size_type> get_num_row_groups_per_file() const;
 
   /**
    * @brief Checks if a schema index from 0th source is mapped to the specified file index
@@ -477,7 +506,7 @@ class aggregate_reader_metadata {
    * @param strings_to_categorical Type conversion parameter
    * @param timestamp_type_id Type conversion parameter
    *
-   * @return input column information, output column information, list of output column schema
+   * @return input column information, output column buffers, list of output column schema
    * indices
    */
   [[nodiscard]] std::tuple<std::vector<input_column_info>,
@@ -545,7 +574,7 @@ class named_to_reference_converter : public ast::detail::expression_transformer 
  */
 class equality_literals_collector : public ast::detail::expression_transformer {
  public:
-  equality_literals_collector();
+  equality_literals_collector() = default;
 
   equality_literals_collector(ast::expression const& expr, cudf::size_type num_input_columns);
 
@@ -582,8 +611,6 @@ class equality_literals_collector : public ast::detail::expression_transformer {
     cudf::host_span<std::reference_wrapper<ast::expression const> const> operands);
 
   size_type _num_input_columns;
-
- private:
   std::vector<std::vector<ast::literal*>> _literals;
 };
 

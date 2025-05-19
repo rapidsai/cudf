@@ -9,22 +9,13 @@ from __future__ import annotations
 from functools import partial
 from typing import TYPE_CHECKING, Any, ClassVar
 
-import pyarrow as pa
-
 import pylibcudf as plc
 
 from cudf_polars.containers import Column
-from cudf_polars.dsl.expressions.base import (
-    AggInfo,
-    ExecutionContext,
-    Expr,
-)
+from cudf_polars.dsl.expressions.base import ExecutionContext, Expr
 from cudf_polars.dsl.expressions.literal import Literal
-from cudf_polars.dsl.expressions.unary import UnaryFunction
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
-
     from cudf_polars.containers import DataFrame
 
 __all__ = ["Agg"]
@@ -75,9 +66,13 @@ class Agg(Expr):
                 else plc.types.NullPolicy.INCLUDE
             )
         elif name == "quantile":
-            _, quantile = self.children
+            child, quantile = self.children
             if not isinstance(quantile, Literal):
                 raise NotImplementedError("Only support literal quantile values")
+            if options == "equiprobable":
+                raise NotImplementedError("Quantile with equiprobable interpolation")
+            if plc.traits.is_duration(child.dtype):
+                raise NotImplementedError("Quantile with duration data type")
             req = plc.aggregation.quantile(
                 quantiles=[quantile.value.as_py()], interp=Agg.interp_mapping[options]
             )
@@ -91,7 +86,9 @@ class Agg(Expr):
             op = partial(self._reduce, request=req)
         elif name in {"min", "max"}:
             op = partial(op, propagate_nans=options)
-        elif name in {"count", "sum", "first", "last"}:
+        elif name == "count":
+            op = partial(op, include_nulls=options)
+        elif name in {"sum", "first", "last"}:
             pass
         else:
             raise NotImplementedError(
@@ -124,38 +121,19 @@ class Agg(Expr):
         "linear": plc.types.Interpolation.LINEAR,
     }
 
-    def collect_agg(self, *, depth: int) -> AggInfo:
-        """Collect information about aggregations in groupbys."""
-        if depth >= 1:
-            raise NotImplementedError(
-                "Nested aggregations in groupby"
-            )  # pragma: no cover; check_agg trips first
-        if (isminmax := self.name in {"min", "max"}) and self.options:
-            raise NotImplementedError("Nan propagation in groupby for min/max")
-        (child,) = self.children
-        ((expr, _, _),) = child.collect_agg(depth=depth + 1).requests
-        request = self.request
-        # These are handled specially here because we don't set up the
-        # request for the whole-frame agg because we can avoid a
-        # reduce for these.
+    @property
+    def agg_request(self) -> plc.aggregation.Aggregation:  # noqa: D102
         if self.name == "first":
-            request = plc.aggregation.nth_element(
+            return plc.aggregation.nth_element(
                 0, null_handling=plc.types.NullPolicy.INCLUDE
             )
         elif self.name == "last":
-            request = plc.aggregation.nth_element(
+            return plc.aggregation.nth_element(
                 -1, null_handling=plc.types.NullPolicy.INCLUDE
             )
-        if request is None:
-            raise NotImplementedError(
-                f"Aggregation {self.name} in groupby"
-            )  # pragma: no cover; __init__ trips first
-        if isminmax and plc.traits.is_floating_point(self.dtype):
-            assert expr is not None
-            # Ignore nans in these groupby aggs, do this by masking
-            # nans in the input
-            expr = UnaryFunction(self.dtype, "mask_nans", (), expr)
-        return AggInfo([(expr, request, self)])
+        else:
+            assert self.request is not None, "Init should have raised"
+            return self.request
 
     def _reduce(
         self, column: Column, *, request: plc.aggregation.Aggregation
@@ -167,15 +145,11 @@ class Agg(Expr):
             )
         )
 
-    def _count(self, column: Column) -> Column:
+    def _count(self, column: Column, *, include_nulls: bool) -> Column:
+        null_count = column.null_count if not include_nulls else 0
         return Column(
             plc.Column.from_scalar(
-                plc.interop.from_arrow(
-                    pa.scalar(
-                        column.size - column.null_count,
-                        type=plc.interop.to_arrow(self.dtype),
-                    ),
-                ),
+                plc.Scalar.from_py(column.size - null_count, self.dtype),
                 1,
             )
         )
@@ -184,9 +158,7 @@ class Agg(Expr):
         if column.size == 0 or column.null_count == column.size:
             return Column(
                 plc.Column.from_scalar(
-                    plc.interop.from_arrow(
-                        pa.scalar(0, type=plc.interop.to_arrow(self.dtype))
-                    ),
+                    plc.Scalar.from_py(0, self.dtype),
                     1,
                 )
             )
@@ -196,9 +168,7 @@ class Agg(Expr):
         if propagate_nans and column.nan_count > 0:
             return Column(
                 plc.Column.from_scalar(
-                    plc.interop.from_arrow(
-                        pa.scalar(float("nan"), type=plc.interop.to_arrow(self.dtype))
-                    ),
+                    plc.Scalar.from_py(float("nan"), self.dtype),
                     1,
                 )
             )
@@ -210,9 +180,7 @@ class Agg(Expr):
         if propagate_nans and column.nan_count > 0:
             return Column(
                 plc.Column.from_scalar(
-                    plc.interop.from_arrow(
-                        pa.scalar(float("nan"), type=plc.interop.to_arrow(self.dtype))
-                    ),
+                    plc.Scalar.from_py(float("nan"), self.dtype),
                     1,
                 )
             )
@@ -228,11 +196,7 @@ class Agg(Expr):
         return Column(plc.copying.slice(column.obj, [n - 1, n])[0])
 
     def do_evaluate(
-        self,
-        df: DataFrame,
-        *,
-        context: ExecutionContext = ExecutionContext.FRAME,
-        mapping: Mapping[Expr, Column] | None = None,
+        self, df: DataFrame, *, context: ExecutionContext = ExecutionContext.FRAME
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
         if context is not ExecutionContext.FRAME:
@@ -243,4 +207,4 @@ class Agg(Expr):
         # Aggregations like quantiles may have additional children that were
         # preprocessed into pylibcudf requests.
         child = self.children[0]
-        return self.op(child.evaluate(df, context=context, mapping=mapping))
+        return self.op(child.evaluate(df, context=context))

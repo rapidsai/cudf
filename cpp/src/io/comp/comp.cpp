@@ -26,7 +26,6 @@
 #include <cudf/detail/utilities/host_worker_pool.hpp>
 #include <cudf/detail/utilities/stream_pool.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
-#include <cudf/fixed_point/detail/floating_conversion.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
@@ -143,7 +142,8 @@ uint8_t* emit_literal(uint8_t* out_begin, uint8_t const* literal_begin, uint8_t 
     // Fits into a single tag byte
     *out_it++ = n << 2;
   } else {
-    auto const log2_n = numeric::detail::count_significant_bits(static_cast<uint32_t>(n)) - 1;
+    // TODO: Use `std::countl_zero` instead of `__builtin_clz` once we migrate to C++20
+    auto const log2_n = 31 - __builtin_clz(static_cast<uint32_t>(n));
     auto const count  = (log2_n >> 3) + 1;
     *out_it++         = (59 + count) << 2;
     std::memcpy(out_it, &n, count);
@@ -339,15 +339,20 @@ void host_compress(compression_type compression,
     return h_inputs[a].size() > h_inputs[b].size();
   });
 
-  std::vector<std::future<size_t>> tasks;
+  auto h_results =
+    cudf::detail::make_pinned_vector_async<compression_result>(results.size(), stream);
+  cudf::detail::cuda_memcpy<compression_result>(h_results, results, stream);
+
+  std::vector<std::future<std::pair<size_t, size_t>>> tasks;
   auto const num_streams =
     std::min<std::size_t>(num_chunks, cudf::detail::host_worker_pool().get_thread_count());
   auto const streams = cudf::detail::fork_streams(stream, num_streams);
   for (size_t i = 0; i < num_chunks; ++i) {
     auto const idx        = task_order[i];
     auto const cur_stream = streams[i % streams.size()];
-    auto task =
-      [d_in = h_inputs[idx], d_out = h_outputs[idx], cur_stream, compression]() -> size_t {
+    if (h_results[task_order[i]].status == compression_status::SKIPPED) { continue; }
+
+    auto task = [d_in = h_inputs[idx], d_out = h_outputs[idx], cur_stream, compression, idx]() {
       auto h_in = cudf::detail::make_pinned_vector_async<uint8_t>(d_in.size(), cur_stream);
       cudf::detail::cuda_memcpy<uint8_t>(h_in, d_in, cur_stream);
 
@@ -355,18 +360,18 @@ void host_compress(compression_type compression,
       h_in.clear();
 
       cudf::detail::cuda_memcpy<uint8_t>(d_out.subspan(0, h_out.size()), h_out, cur_stream);
-      return h_out.size();
+      return std::pair<size_t, size_t>{idx, h_out.size()};
     };
     tasks.emplace_back(cudf::detail::host_worker_pool().submit_task(std::move(task)));
   }
-  auto h_results = cudf::detail::make_pinned_vector<compression_result>(num_chunks, stream);
-  for (auto i = 0ul; i < num_chunks; ++i) {
-    h_results[task_order[i]] = {tasks[i].get(), compression_status::SUCCESS};
+  for (auto& task : tasks) {
+    auto const [idx, bytes_written] = task.get();
+    h_results[idx]                  = {bytes_written, compression_status::SUCCESS};
   }
   cudf::detail::cuda_memcpy<compression_result>(results, h_results, stream);
 }
 
-[[nodiscard]] bool host_compression_supported(compression_type compression)
+[[nodiscard]] bool is_host_compression_supported(compression_type compression)
 {
   switch (compression) {
     case compression_type::GZIP:
@@ -377,7 +382,7 @@ void host_compress(compression_type compression,
   }
 }
 
-[[nodiscard]] bool device_compression_supported(compression_type compression)
+[[nodiscard]] bool is_device_compression_supported(compression_type compression)
 {
   auto const nvcomp_type = to_nvcomp_compression(compression);
   switch (compression) {
@@ -396,10 +401,12 @@ void host_compress(compression_type compression,
   [[maybe_unused]] device_span<device_span<uint8_t const> const> inputs,
   [[maybe_unused]] device_span<device_span<uint8_t> const> outputs)
 {
-  CUDF_EXPECTS(host_compression_supported(compression) or device_compression_supported(compression),
+  auto const has_host_support   = is_host_compression_supported(compression);
+  auto const has_device_support = is_device_compression_supported(compression);
+  CUDF_EXPECTS(has_host_support or has_device_support,
                "Unsupported compression type: " + compression_type_name(compression));
-  if (not host_compression_supported(compression)) { return false; }
-  if (not device_compression_supported(compression)) { return true; }
+  if (not has_host_support) { return false; }
+  if (not has_device_support) { return true; }
   // If both host and device compression are supported, dispatch based on the environment variable
 
   auto const env_var = getenv_or("LIBCUDF_HOST_COMPRESSION", std::string{"OFF"});
@@ -467,6 +474,11 @@ void compress(compression_type compression,
   } else {
     return device_compress(compression, inputs, outputs, results, stream);
   }
+}
+
+[[nodiscard]] bool is_compression_supported(compression_type compression)
+{
+  return is_host_compression_supported(compression) or is_device_compression_supported(compression);
 }
 
 }  // namespace cudf::io::detail

@@ -233,6 +233,9 @@ cdef extern from "cudf/io/json.hpp" \
         json_writer_options_builder& compression(
             cudf_io_types.compression_type comptype
         ) except +libcudf_exception_handler
+        json_writer_options_builder& utf8_escaped(
+            bool val
+        ) except +libcudf_exception_handler
 
         json_writer_options build() except +libcudf_exception_handler
 
@@ -243,4 +246,8 @@ cdef extern from "cudf/io/json.hpp" \
     cdef cudf_io_types.table_with_metadata write_json(
         json_writer_options &options,
         cuda_stream_view stream,
+    ) except +libcudf_exception_handler
+
+    cdef bool is_supported_write_json(
+        data_type type
     ) except +libcudf_exception_handler

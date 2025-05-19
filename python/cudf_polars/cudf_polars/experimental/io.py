@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import enum
 import math
 import random
@@ -35,10 +36,11 @@ if TYPE_CHECKING:
 def _(
     ir: DataFrameScan, rec: LowerIRTransformer
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
-    rows_per_partition = ir.config_options.get(
-        "executor_options.max_rows_per_partition",
-        default=1_000_000,
+    assert ir.config_options.executor.name == "streaming", (
+        "'in-memory' executor not supported in 'generate_ir_tasks'"
     )
+
+    rows_per_partition = ir.config_options.executor.max_rows_per_partition
 
     nrows = max(ir.df.shape()[0], 1)
     count = math.ceil(nrows / rows_per_partition)
@@ -99,10 +101,11 @@ class ScanPartitionPlan:
         """Extract the partitioning plan of a Scan operation."""
         if ir.typ == "parquet":
             # TODO: Use system info to set default blocksize
-            blocksize: int = ir.config_options.get(
-                "executor_options.parquet_blocksize",
-                default=1024**3,
+            assert ir.config_options.executor.name == "streaming", (
+                "'in-memory' executor not supported in 'generate_ir_tasks'"
             )
+
+            blocksize: int = ir.config_options.executor.target_partition_size
             # _sample_pq_statistics is generic over the bit-width of the array
             # We don't care about that here, so we ignore it.
             stats = _sample_pq_statistics(ir)  # type: ignore[var-annotated]
@@ -255,25 +258,31 @@ class SplitScan(IR):
 
 
 def _sample_pq_statistics(ir: Scan) -> dict[str, np.floating[T]]:
+    import itertools
+
     import numpy as np
-    import pyarrow.dataset as pa_ds
 
     # Use average total_uncompressed_size of three files
-    # TODO: Use plc.io.parquet_metadata.read_parquet_metadata
     n_sample = min(3, len(ir.paths))
+    metadata = plc.io.parquet_metadata.read_parquet_metadata(
+        plc.io.SourceInfo(random.sample(ir.paths, n_sample))
+    )
     column_sizes = {}
-    ds = pa_ds.dataset(random.sample(ir.paths, n_sample), format="parquet")
-    for i, frag in enumerate(ds.get_fragments()):
-        md = frag.metadata
-        for rg in range(md.num_row_groups):
-            row_group = md.row_group(rg)
-            for col in range(row_group.num_columns):
-                column = row_group.column(col)
-                name = column.path_in_schema
-                if name not in column_sizes:
-                    column_sizes[name] = np.zeros(n_sample, dtype="int64")
-                column_sizes[name][i] += column.total_uncompressed_size
+    rowgroup_offsets_per_file = np.insert(
+        np.cumsum(metadata.num_rowgroups_per_file()), 0, 0
+    )
 
+    # For each column, calculate the `total_uncompressed_size` for each file
+    for name, uncompressed_sizes in metadata.columnchunk_metadata().items():
+        column_sizes[name] = np.array(
+            [
+                np.sum(uncompressed_sizes[start:end])
+                for (start, end) in itertools.pairwise(rowgroup_offsets_per_file)
+            ],
+            dtype="int64",
+        )
+
+    # Return the mean per-file `total_uncompressed_size` for each column
     return {name: np.mean(sizes) for name, sizes in column_sizes.items()}
 
 
@@ -287,8 +296,11 @@ def _(
         paths = list(ir.paths)
         if plan.flavor == ScanPartitionFlavor.SPLIT_FILES:
             # Disable chunked reader when splitting files
-            config_options = ir.config_options.set(
-                name="parquet_options.chunked", value=False
+            config_options = dataclasses.replace(
+                ir.config_options,
+                parquet_options=dataclasses.replace(
+                    ir.config_options.parquet_options, chunked=False
+                ),
             )
 
             slices: list[SplitScan] = []

@@ -5,15 +5,24 @@
 
 from __future__ import annotations
 
-from collections.abc import Hashable, Mapping, MutableMapping
-from typing import TYPE_CHECKING, Any, Literal, Protocol, TypeVar, TypedDict, Union
+from collections.abc import Hashable, MutableMapping
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Literal,
+    NewType,
+    Protocol,
+    TypeVar,
+    TypedDict,
+    Union,
+)
 
 from polars.polars import _expr_nodes as pl_expr, _ir_nodes as pl_ir
 
 import pylibcudf as plc
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Mapping
     from typing import TypeAlias
 
     import polars as pl
@@ -22,6 +31,10 @@ if TYPE_CHECKING:
     from cudf_polars.dsl import expr, ir, nodebase
 
 __all__: list[str] = [
+    "ClosedInterval",
+    "ColumnHeader",
+    "ColumnOptions",
+    "DataFrameHeader",
     "ExprTransformer",
     "GenericTransformer",
     "IRTransformer",
@@ -29,6 +42,8 @@ __all__: list[str] = [
     "OptimizationArgs",
     "PolarsExpr",
     "PolarsIR",
+    "Schema",
+    "Slice",
 ]
 
 PolarsIR: TypeAlias = Union[
@@ -67,11 +82,15 @@ PolarsExpr: TypeAlias = Union[
     pl_expr.PyExprIR,
 ]
 
-Schema: TypeAlias = Mapping[str, plc.DataType]
+Schema: TypeAlias = dict[str, plc.DataType]
 
 Slice: TypeAlias = tuple[int, int | None]
 
 CSECache: TypeAlias = MutableMapping[int, tuple["DataFrame", int]]
+
+ClosedInterval: TypeAlias = Literal["left", "right", "both", "none"]
+
+Duration = NewType("Duration", tuple[int, int, int, int, bool, bool])
 
 
 class NodeTraverser(Protocol):
@@ -89,7 +108,7 @@ class NodeTraverser(Protocol):
         """Convert current plan node to python rep."""
         ...
 
-    def get_schema(self) -> Mapping[str, pl.DataType]:
+    def get_schema(self) -> Schema:
         """Get the schema of the current plan node."""
         ...
 

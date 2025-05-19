@@ -1490,12 +1490,7 @@ def test_groupby_datetime_multi_agg_multi_groupby():
     ],
 )
 def test_groupby_multi_agg_hash_groupby(agg):
-    alphabets = "abcdefghijklmnopqrstuvwxyz"
-    prefixes = alphabets[:10]
-    coll_dict = dict()
-    for prefix in prefixes:
-        for this_name in alphabets:
-            coll_dict[prefix + this_name] = float
+    coll_dict = {letter: float for letter in string.ascii_lowercase}
     coll_dict["id"] = int
     gdf = cudf.datasets.timeseries(
         start="2000",
@@ -4096,14 +4091,14 @@ def test_size_as_index_false():
     df = pd.DataFrame({"a": [1, 2, 1], "b": [1, 2, 3]}, columns=["a", "b"])
     expected = df.groupby("a", as_index=False).size()
     result = cudf.from_pandas(df).groupby("a", as_index=False).size()
-    assert_eq(result, expected)
+    assert_groupby_results_equal(result, expected, as_index=False, by="a")
 
 
 def test_size_series_with_name():
     ser = pd.Series(range(3), name="foo")
     expected = ser.groupby(ser).size()
     result = cudf.from_pandas(ser).groupby(ser).size()
-    assert_eq(result, expected)
+    assert_groupby_results_equal(result, expected)
 
 
 @pytest.mark.parametrize("op", ["cumsum", "cumprod", "cummin", "cummax"])
@@ -4131,4 +4126,4 @@ def test_agg_duplicate_aggs_pandas_compat_raises():
         index=cudf.Index([1, 2], name="a"),
         columns=pd.MultiIndex.from_tuples([("b", "mean")]),
     )
-    assert_eq(result, expected)
+    assert_groupby_results_equal(result, expected)

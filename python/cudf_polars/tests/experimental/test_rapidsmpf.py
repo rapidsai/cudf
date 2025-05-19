@@ -10,11 +10,15 @@ import polars as pl
 from cudf_polars.testing.asserts import assert_gpu_result_equal
 
 
+@pytest.mark.parametrize("rapidsmpf_spill", [False, True])
 @pytest.mark.parametrize("max_rows_per_partition", [1, 5])
-def test_join_rapidsmpf(max_rows_per_partition: int) -> None:
+def test_join_rapidsmpf(
+    max_rows_per_partition: int,
+    rapidsmpf_spill: bool,  # noqa: FBT001
+) -> None:
     # Check that we have a distributed cluster running.
     # This tests must be run with:
-    # --executor='dask-experimental' --dask-cluster
+    # --executor='streaming' --scheduler='distributed'
     distributed = pytest.importorskip("distributed")
     try:
         client = distributed.get_client()
@@ -37,11 +41,13 @@ def test_join_rapidsmpf(max_rows_per_partition: int) -> None:
     # Setup the GPUEngine config
     engine = pl.GPUEngine(
         raise_on_fail=True,
-        executor="dask-experimental",
+        executor="streaming",
         executor_options={
             "max_rows_per_partition": max_rows_per_partition,
             "broadcast_join_limit": 2,
             "shuffle_method": "rapidsmpf",
+            "scheduler": "distributed",
+            "rapidsmpf_spill": rapidsmpf_spill,
         },
     )
 

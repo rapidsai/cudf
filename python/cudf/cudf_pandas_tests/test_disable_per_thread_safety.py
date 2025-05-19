@@ -4,6 +4,7 @@ from concurrent.futures import ThreadPoolExecutor
 from time import sleep
 
 import pandas as pd
+import pytest
 
 from cudf.pandas.fast_slow_proxy import _FastSlowProxyMeta
 from cudf.pandas.module_accelerator import disable_module_accelerator
@@ -37,6 +38,7 @@ def per_thread_work(_):
     assert is_enabled(pd.DataFrame())
 
 
+@pytest.mark.flaky(reruns=3, reruns_delay=30)
 def test_disable_pandas_accelerator_multi_threaded():
     num_threads = 20
     with ThreadPoolExecutor(max_workers=num_threads) as executor:

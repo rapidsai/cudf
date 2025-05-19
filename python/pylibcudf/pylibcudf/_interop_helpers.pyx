@@ -4,13 +4,31 @@ from cpython.pycapsule cimport PyCapsule_GetPointer
 
 from pylibcudf.libcudf.interop cimport (
     ArrowArray,
+    ArrowDeviceArray,
     ArrowSchema,
     column_metadata,
     release_arrow_array_raw,
+    release_arrow_device_array_raw,
     release_arrow_schema_raw,
 )
 
 from dataclasses import dataclass, field
+
+
+class _ArrowLikeMeta(type):
+    # We cannot separate these types via singledispatch because the dispatch
+    # will often be ambiguous when objects expose multiple protocols.
+    def __subclasscheck__(cls, other):
+        return (
+            hasattr(other, "__arrow_c_stream__")
+            or hasattr(other, "__arrow_c_device_stream__")
+            or hasattr(other, "__arrow_c_array__")
+            or hasattr(other, "__arrow_c_device_array__")
+        )
+
+
+class ArrowLike(metaclass=_ArrowLikeMeta):
+    pass
 
 
 @dataclass
@@ -37,6 +55,14 @@ cdef void _release_array(object array_capsule) noexcept:
         array_capsule, 'arrow_array'
     )
     release_arrow_array_raw(array)
+
+
+cdef void _release_device_array(object array_capsule) noexcept:
+    """Release the ArrowDeviceArray object stored in a PyCapsule."""
+    cdef ArrowDeviceArray* array = <ArrowDeviceArray*>PyCapsule_GetPointer(
+        array_capsule, 'arrow_device_array'
+    )
+    release_arrow_device_array_raw(array)
 
 
 cdef column_metadata _metadata_to_libcudf(metadata):

@@ -62,7 +62,7 @@ def test_write_json_nulls(na_rep, include_nulls):
         [pa.array([1.0, 2.0, None]), pa.array([True, None, False])],
         names=names,
     )
-    plc_tbl = plc.interop.from_arrow(pa_tbl)
+    plc_tbl = plc.Table(pa_tbl)
     plc_tbl_w_meta = plc.io.types.TableWithMetadata(
         plc_tbl, column_names=[(name, []) for name in names]
     )
@@ -110,7 +110,7 @@ def test_write_json_nulls(na_rep, include_nulls):
 def test_write_json_bool_opts(true_value, false_value):
     names = ["a"]
     pa_tbl = pa.Table.from_arrays([pa.array([True, None, False])], names=names)
-    plc_tbl = plc.interop.from_arrow(pa_tbl)
+    plc_tbl = plc.Table(pa_tbl)
     plc_tbl_w_meta = plc.io.types.TableWithMetadata(
         plc_tbl, column_names=[(name, []) for name in names]
     )
@@ -309,7 +309,7 @@ def test_read_json_lines_byte_range(source_or_sink, chunk_size):
     full_tbl = pa.concat_tables(tbls)
 
     full_tbl_plc = plc.io.TableWithMetadata(
-        plc.interop.from_arrow(full_tbl),
+        plc.Table(full_tbl),
         tbls_w_meta[0].column_names(include_children=True),
     )
     assert_table_and_meta_eq(pa.Table.from_pandas(exp), full_tbl_plc)
@@ -409,6 +409,26 @@ def test_read_json_from_device_buffers(table_data, num_buffers, stream):
         expected = expected.cast(pa.schema(new_fields))
 
     assert_table_and_meta_eq(expected, result, check_field_nullability=False)
+
+
+def test_utf8_escaped_json_writer(tmp_path):
+    arrow_table = pa.table({"a": ["C𝞵𝓓𝒻"]})
+    plc_table = plc.Table(arrow_table)
+
+    path = tmp_path / "out.json"
+
+    options = (
+        plc.io.json.JsonWriterOptions.builder(
+            plc.io.SinkInfo([path]), plc_table
+        )
+        .utf8_escaped(False)
+        .build()
+    )
+    plc.io.json.write_json(options)
+
+    output_string = path.read_text(encoding="utf-8").strip()
+
+    assert output_string == '[{"0":"C𝞵𝓓𝒻"}]'
 
 
 # TODO: Add tests for these!

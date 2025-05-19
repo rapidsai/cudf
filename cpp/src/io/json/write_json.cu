@@ -33,6 +33,7 @@
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/data_sink.hpp>
 #include <cudf/io/detail/json.hpp>
+#include <cudf/io/detail/utils.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/detail/combine.hpp>
@@ -78,6 +79,7 @@ namespace {
 struct escape_strings_fn {
   column_device_view const d_column;
   bool const append_colon{false};
+  bool const escaped_utf8{true};
   size_type* d_sizes{};
   char* d_chars{};
   cudf::detail::input_offsetalator d_offsets;
@@ -103,7 +105,7 @@ struct escape_strings_fn {
       d_buffer[2] = nibble_to_hex((codepoint >> 12) & 0x0F);
       d_buffer[3] = nibble_to_hex((codepoint >> 8) & 0x0F);
       d_buffer[4] = nibble_to_hex((codepoint >> 4) & 0x0F);
-      d_buffer[5] = nibble_to_hex((codepoint)&0x0F);
+      d_buffer[5] = nibble_to_hex((codepoint) & 0x0F);
       d_buffer += 6;
     } else {
       bytes += 6;
@@ -140,6 +142,11 @@ struct escape_strings_fn {
     if (quote_row) write_char(quote, d_buffer, bytes);
     for (auto utf8_char : d_str) {
       if (utf8_char > 0x0000'00FF) {
+        if (!escaped_utf8) {
+          // write original utf8 character if unescaping is enabled
+          write_char(utf8_char, d_buffer, bytes);
+          continue;
+        }
         // multi-byte char
         uint32_t codepoint = cudf::strings::detail::utf8_to_codepoint(utf8_char);
         if (codepoint <= 0x0000'FFFF) {
@@ -535,19 +542,6 @@ std::unique_ptr<column> join_list_of_strings(lists_column_view const& lists_stri
  * @brief Functor to convert a column to string representation for JSON format.
  */
 struct column_to_strings_fn {
-  /**
-   * @brief Returns true if the specified type is not supported by the JSON writer.
-   */
-  template <typename column_type>
-  constexpr static bool is_not_handled()
-  {
-    // Note: the case (not std::is_same_v<column_type, bool>)  is already covered by is_integral)
-    return not((std::is_same_v<column_type, cudf::string_view>) ||
-               (std::is_integral_v<column_type>) || (std::is_floating_point_v<column_type>) ||
-               (cudf::is_fixed_point<column_type>()) || (cudf::is_timestamp<column_type>()) ||
-               (cudf::is_duration<column_type>()));
-  }
-
   explicit column_to_strings_fn(json_writer_options const& options,
                                 rmm::cuda_stream_view stream,
                                 rmm::device_async_resource_ref mr)
@@ -574,8 +568,9 @@ struct column_to_strings_fn {
 
   // unsupported type of column:
   template <typename column_type>
-  std::enable_if_t<is_not_handled<column_type>(), std::unique_ptr<column>> operator()(
-    column_view const&) const
+  std::enable_if_t<!cudf::io::detail::is_convertible_to_string_column<column_type>(),
+                   std::unique_ptr<column>>
+  operator()(column_view const&) const
   {
     CUDF_FAIL("Unsupported column type.");
   }
@@ -597,7 +592,8 @@ struct column_to_strings_fn {
   operator()(column_view const& column_v) const
   {
     auto d_column = column_device_view::create(column_v, stream_);
-    return escape_strings_fn{*d_column}.get_escaped_strings(column_v, stream_, mr_);
+    return escape_strings_fn{*d_column, false, options_.is_enabled_utf8_escaped()}
+      .get_escaped_strings(column_v, stream_, mr_);
   }
 
   // ints:
