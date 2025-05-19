@@ -77,10 +77,8 @@ class PackageVersions:
             try:
                 package = importlib.import_module(name)
                 versions[name] = package.__version__
-            except (AttributeError, ImportError):
+            except (AttributeError, ImportError):  # noqa: PERF203
                 versions[name] = None
-            package = importlib.import_module(name)
-            versions[name] = package.__version__
         versions["python"] = ".".join(str(v) for v in sys.version_info[:3])
         return cls(**versions)
 
