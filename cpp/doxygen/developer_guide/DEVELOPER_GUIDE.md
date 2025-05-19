@@ -370,7 +370,7 @@ any type that cudf supports. For example, a `list_scalar` representing a list of
 |Value type|Scalar class|Notes|
 |-|-|-|
 |fixed-width|`fixed_width_scalar<T>`| `T` can be any fixed-width type|
-|numeric|`numeric_scalar<T>` | `T` can be `int8_t`, `int16_t`, `int32_t`, `int_64_t`, `float` or `double`|
+|numeric|`numeric_scalar<T>` | `T` can be `int8_t`, `int16_t`, `int32_t`, `int64_t`, `float` or `double`|
 |fixed-point|`fixed_point_scalar<T>` | `T` can be `numeric::decimal32` or `numeric::decimal64`|
 |timestamp|`timestamp_scalar<T>` | `T` can be `timestamp_D`, `timestamp_s`, etc.|
 |duration|`duration_scalar<T>` | `T` can be `duration_D`, `duration_s`, etc.|
@@ -879,7 +879,7 @@ thrust::lower_bound(rmm::exec_policy(stream),
                     values->begin<Element>(),
                     values->end<Element>(),
                     result_itr,
-                    thrust::less<Element>());
+                    cuda::std::less<Element>());
 ```
 
 ### Offset-normalizing iterators
@@ -1082,15 +1082,15 @@ initialization. If this setting is higher than the compile-time CMake variable, 
 in between the two settings will be excluded from the written log. The available levels are the same
 as for the CMake variable.
 * Global logger object exposed via `cudf::logger()` - sets the minimum logging level at runtime.
-For example, calling `cudf::logger().set_level(spdlog::level::err)`, will exclude any messages that
+For example, calling `cudf::default_logger().set_level(level_enum::err)`, will exclude any messages that
 are not errors or critical errors. This API should not be used within libcudf to manipulate logging,
 its purpose is to allow upstream users to configure libcudf logging to fit their application.
 
 By default, logging messages are output to stderr.
 Setting the environment variable `LIBCUDF_DEBUG_LOG_FILE` redirects the log to a file with the
 specified path (can be relative to the current directory).
-Upstream users can also manipulate `cudf::logger().sinks()` to add sinks or divert the log to
-standard output or even a custom spdlog sink.
+Upstream users can also manipulate `cudf::default_logger().sinks()` to add sinks or divert the log to
+standard output.
 
 # Data Types
 
@@ -1482,6 +1482,17 @@ and therefore `cudf::list_view` is the data type of a `cudf::column` of type `LI
 struct, and therefore `cudf::struct_view` is the data type of a `cudf::column` of type `STRUCT`.
 
 `cudf::type_dispatcher` dispatches to the `struct_view` data type when invoked on a `STRUCT` column.
+
+# Empty Columns
+
+The libcudf columns support empty, typed content. These columns have no data and no validity mask.
+Empty strings or lists columns may or may not contain a child offsets column.
+It is undefined behavior (UB) to access the offsets child of an empty strings or lists column.
+Nested columns like lists and structs may require other children columns to provide the
+nested structure of the empty types.
+
+Use `cudf::make_empty_column()` to create fixed-width and strings columns.
+Use `cudf::empty_like()` to create an empty column from an existing `cudf::column_view`.
 
 # cuIO: file reading and writing
 

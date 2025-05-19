@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,8 +35,9 @@
 #include <rmm/cuda_stream_view.hpp>
 
 #include <cuda/atomic>
+#include <cuda/std/functional>
+#include <cuda/std/iterator>
 #include <thrust/binary_search.h>
-#include <thrust/distance.h>
 #include <thrust/execution_policy.h>
 #include <thrust/find.h>
 #include <thrust/pair.h>
@@ -159,7 +160,7 @@ struct replace_tokens_fn : base_token_replacer_fn {
       // retrieve the corresponding replacement string or
       // if only one repl string, use that one for all targets
       auto const d_repl = [&] {
-        auto const repl_idx = thrust::distance(d_targets_begin, found_itr);
+        auto const repl_idx = cuda::std::distance(d_targets_begin, found_itr);
         return d_replacements.size() == 1 ? d_replacements.element<cudf::string_view>(0)
                                           : d_replacements.element<cudf::string_view>(repl_idx);
       }();
@@ -196,7 +197,7 @@ struct sub_offset_fn {
   {
     // keep delimiter search within this sub-block
     auto const end =
-      d_input_chars + std::min(last_offset, ((idx + 2) * LS_SUB_BLOCK_SIZE) + first_offset);
+      d_input_chars + cuda::std::min(last_offset, ((idx + 2) * LS_SUB_BLOCK_SIZE) + first_offset);
     // starting point of this sub-block
     auto itr = d_input_chars + first_offset + ((idx + 1) * LS_SUB_BLOCK_SIZE);
     while ((itr < end) &&
@@ -212,7 +213,7 @@ struct sub_offset_fn {
       if (tokenizer.is_delimiter(chr)) { break; }
       itr += chr_size;
     }
-    return (itr < end) ? thrust::distance(d_input_chars, itr) : 0L;
+    return (itr < end) ? cuda::std::distance(d_input_chars, itr) : 0L;
   }
 };
 
@@ -311,7 +312,7 @@ std::unique_ptr<cudf::column> replace_helper(ReplacerFn replacer,
     // remove 0s -- where sub-offset could not be computed
     auto const remove_end =
       thrust::remove(rmm::exec_policy_nosync(stream), sub_offsets.begin(), sub_offsets.end(), 0L);
-    sub_count = thrust::distance(sub_offsets.begin(), remove_end);
+    sub_count = cuda::std::distance(sub_offsets.begin(), remove_end);
 
     // merge them with input offsets
     thrust::merge(rmm::exec_policy_nosync(stream),

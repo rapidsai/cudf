@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -138,7 +138,7 @@ CUDF_KERNEL void compute_row_partition_numbers(row_hasher_t the_hasher,
   auto const stride = cudf::detail::grid_1d::grid_stride();
 
   // Initialize local histogram
-  size_type partition_number = threadIdx.x;
+  thread_index_type partition_number = threadIdx.x;
   while (partition_number < num_partitions) {
     shared_partition_sizes[partition_number] = 0;
     partition_number += blockDim.x;
@@ -207,7 +207,7 @@ CUDF_KERNEL void compute_row_output_locations(size_type* __restrict__ row_partit
   extern __shared__ size_type shared_partition_offsets[];
 
   // Initialize array of this blocks offsets from global array
-  size_type partition_number = threadIdx.x;
+  thread_index_type partition_number = threadIdx.x;
   while (partition_number < num_partitions) {
     shared_partition_offsets[partition_number] =
       block_partition_offsets[partition_number * gridDim.x + blockIdx.x];
@@ -303,7 +303,8 @@ CUDF_KERNEL void copy_block_partitions(InputIter input_iter,
 
   // Fetch the offset in the output buffer of each partition in this thread
   // block
-  for (size_type ipartition = threadIdx.x; ipartition < num_partitions; ipartition += blockDim.x) {
+  for (thread_index_type ipartition = threadIdx.x; ipartition < num_partitions;
+       ipartition += blockDim.x) {
     partition_offset_global[ipartition] =
       scanned_block_partition_sizes[ipartition * gridDim.x + blockIdx.x];
   }
@@ -695,7 +696,7 @@ struct dispatch_map_type {
       rmm::exec_policy(stream), histogram.begin(), histogram.end(), histogram.begin());
 
     // Copy offsets to host before the transform below modifies the histogram
-    auto const partition_offsets = cudf::detail::make_std_vector_sync(histogram, stream);
+    auto const partition_offsets = cudf::detail::make_std_vector(histogram, stream);
 
     // Unfortunately need to materialize the scatter map because
     // `detail::scatter` requires multiple passes through the iterator
@@ -834,10 +835,11 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> partition(
   table_view const& t,
   column_view const& partition_map,
   size_type num_partitions,
+  rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::partition(t, partition_map, num_partitions, cudf::get_default_stream(), mr);
+  return detail::partition(t, partition_map, num_partitions, stream, mr);
 }
 
 }  // namespace cudf

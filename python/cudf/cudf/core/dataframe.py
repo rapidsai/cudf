@@ -1,20 +1,27 @@
-# Copyright (c) 2018-2024, NVIDIA CORPORATION.
+# Copyright (c) 2018-2025, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
 import functools
 import inspect
 import itertools
+import json
 import numbers
 import os
-import pickle
 import re
 import sys
 import textwrap
 import warnings
 from collections import abc, defaultdict
-from collections.abc import Callable, Iterator
-from typing import TYPE_CHECKING, Any, Literal, MutableMapping, cast
+from collections.abc import (
+    Callable,
+    Hashable,
+    Iterator,
+    Mapping,
+    MutableMapping,
+    Sequence,
+)
+from typing import TYPE_CHECKING, Any, Literal
 
 import cupy
 import numba
@@ -26,23 +33,24 @@ from pandas.io.formats import console
 from pandas.io.formats.printing import pprint_thing
 from typing_extensions import Self, assert_never
 
+import pylibcudf as plc
+
 import cudf
-import cudf.core.common
-from cudf import _lib as libcudf
 from cudf.api.extensions import no_default
 from cudf.api.types import (
+    _is_categorical_dtype,
     _is_scalar_or_zero_d_array,
+    is_decimal32_dtype,
+    is_decimal64_dtype,
+    is_decimal128_dtype,
     is_dict_like,
     is_dtype_equal,
     is_list_like,
-    is_numeric_dtype,
-    is_object_dtype,
     is_scalar,
-    is_string_dtype,
 )
-from cudf.core import column, df_protocol, indexing_utils, reshape
+from cudf.core import indexing_utils, reshape
 from cudf.core._compat import PANDAS_LT_300
-from cudf.core.abc import Serializable
+from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import (
     CategoricalColumn,
     ColumnBase,
@@ -57,6 +65,7 @@ from cudf.core.copy_types import BooleanMask
 from cudf.core.groupby.groupby import DataFrameGroupBy, groupby_doc_template
 from cudf.core.index import (
     BaseIndex,
+    Index,
     RangeIndex,
     _index_from_data,
     ensure_index,
@@ -70,6 +79,7 @@ from cudf.core.indexed_frame import (
 )
 from cudf.core.join import Merge, MergeSemi
 from cudf.core.missing import NA
+from cudf.core.mixins import GetAttrGetItemMixin
 from cudf.core.multiindex import MultiIndex
 from cudf.core.resample import DataFrameResampler
 from cudf.core.series import Series
@@ -78,14 +88,25 @@ from cudf.errors import MixedTypeError
 from cudf.utils import applyutils, docutils, ioutils, queryutils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
+    CUDF_STRING_DTYPE,
+    SIZE_TYPE_DTYPE,
+    SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES,
     can_convert_to_column,
-    cudf_dtype_from_pydata_dtype,
     find_common_type,
     is_column_like,
+    is_dtype_obj_numeric,
     min_signed_type,
 )
+from cudf.utils.ioutils import (
+    _update_pandas_metadata_types_inplace,
+    buffer_write_lines,
+)
 from cudf.utils.performance_tracking import _performance_tracking
-from cudf.utils.utils import GetAttrGetItemMixin, _external_only_api
+from cudf.utils.utils import (
+    _EQUALITY_OPS,
+    _external_only_api,
+    _is_null_host_scalar,
+)
 
 if TYPE_CHECKING:
     from cudf._typing import ColumnLike, Dtype, NotImplementedType
@@ -108,6 +129,24 @@ def _shape_mismatch_error(x, y):
         f"could not be broadcast to indexing result of "
         f"shape {y}"
     )
+
+
+def _recursively_update_struct_names(
+    col: ColumnBase, child_names: dict
+) -> ColumnBase:
+    """Update a Column with struct names from pylibcudf.io.TableWithMetadata.child_names"""
+    if col.children:
+        children = list(col.children)
+        for i, (child, names) in enumerate(
+            zip(children, child_names.values())
+        ):
+            children[i] = _recursively_update_struct_names(child, names)
+        col.set_base_children(tuple(children))
+
+    if isinstance(col.dtype, cudf.StructDtype):
+        col = col._rename_fields(child_names.keys())  # type: ignore[attr-defined]
+
+    return col
 
 
 class _DataFrameIndexer(_FrameIndexer):
@@ -133,7 +172,7 @@ class _DataFrameIndexer(_FrameIndexer):
         return self._setitem_tuple_arg(key, value)
 
     @_performance_tracking
-    def _can_downcast_to_series(self, df, arg):
+    def _can_downcast_to_series(self, df: DataFrame, arg):
         """
         This method encapsulates the logic used
         to determine whether or not the result of a loc/iloc
@@ -158,8 +197,8 @@ class _DataFrameIndexer(_FrameIndexer):
                     arg[1], slice
                 ):
                     return True
-            dtypes = df.dtypes.values.tolist()
-            all_numeric = all(is_numeric_dtype(t) for t in dtypes)
+            dtypes = [dtype for _, dtype in df._dtypes]
+            all_numeric = all(is_dtype_obj_numeric(t) for t in dtypes)
             if all_numeric or (
                 len(dtypes) and all(t == dtypes[0] for t in dtypes)
             ):
@@ -206,11 +245,10 @@ class _DataFrameIndexer(_FrameIndexer):
             return df[df._column_names[0]]
         else:
             if df._num_columns > 0:
-                dtypes = df.dtypes.values.tolist()
-                normalized_dtype = np.result_type(*dtypes)
-                for name, col in df._column_labels_and_values:
-                    df[name] = col.astype(normalized_dtype)
-
+                normalized_dtype = find_common_type(
+                    [dtype for _, dtype in df._dtypes]
+                )
+                df = df.astype(normalized_dtype)
             sr = df.T
             return sr[sr._column_names[0]]
 
@@ -269,13 +307,11 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                     df = columns_df._slice(out)
                 else:
                     df = columns_df._apply_boolean_mask(
-                        BooleanMask.from_column_unchecked(
-                            cudf.core.column.as_column(out)
-                        )
+                        BooleanMask.from_column_unchecked(as_column(out))
                     )
             else:
                 tmp_arg = arg
-                if is_scalar(arg[0]):
+                if isinstance(arg, tuple) and is_scalar(arg[0]):
                     # If a scalar, there is possibility of having duplicates.
                     # Join would get all the duplicates. So, converting it to
                     # an array kind.
@@ -289,6 +325,8 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                                 "typecast to common dtype."
                             )
                     tmp_arg = ([tmp_arg[0]], tmp_arg[1])
+                elif all(is_scalar(a) for a in tmp_arg):
+                    tmp_arg = (tmp_arg, slice(None))
                 if len(tmp_arg[0]) == 0:
                     return columns_df._empty_like(keep_index=True)
                 tmp_arg = (
@@ -320,23 +358,18 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                         tmp_col_name = (tmp_col_name, *extra)
                         cantor_name = (cantor_name, *extra)
                     other_df = DataFrame(
-                        {
-                            tmp_col_name: column.as_column(
-                                range(len(tmp_arg[0]))
-                            )
-                        },
+                        {tmp_col_name: as_column(range(len(tmp_arg[0])))},
                         index=cudf.Index._from_column(tmp_arg[0]),
                     )
-                    columns_df[cantor_name] = column.as_column(
-                        range(len(columns_df))
-                    )
+                    columns_df = columns_df.copy(deep=False)
+                    columns_df[cantor_name] = as_column(range(len(columns_df)))
                     df = other_df.join(columns_df, how="inner")
                     # as join is not assigning any names to index,
                     # update it over here
                     df.index.name = columns_df.index.name
                     if not isinstance(
                         df.index, MultiIndex
-                    ) and is_numeric_dtype(df.index.dtype):
+                    ) and is_dtype_obj_numeric(df.index.dtype):
                         # Preserve the original index type.
                         df.index = df.index.astype(self._frame.index.dtype)
                     df = df.sort_values(by=[tmp_col_name, cantor_name])
@@ -579,7 +612,340 @@ class _DataFrameiAtIndexer(_DataFrameIlocIndexer):
     pass
 
 
-class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
+@_performance_tracking
+def _listlike_to_column_accessor(
+    data: Sequence,
+    columns: None | pd.Index,
+    index: None | cudf.Index,
+    nan_as_null: bool,
+) -> tuple[dict[Any, ColumnBase], cudf.Index, pd.Index]:
+    """
+    Convert a list-like to a dict for ColumnAccessor for DataFrame.__init__
+
+    Returns
+    -------
+    tuple[dict[Any, ColumnBase], cudf.Index, pd.Index]
+        - Mapping of column label: Column
+        - Resulting index (cudf.Index) from the data
+        - Resulting columns (pd.Index - store as host data) from the data
+    """
+    if len(data) == 0:
+        if index is None:
+            index = cudf.RangeIndex(0)
+        if columns is not None:
+            col_data = {
+                col_label: column_empty(len(index), dtype=CUDF_STRING_DTYPE)
+                for col_label in columns
+            }
+        else:
+            col_data = {}
+            columns = pd.RangeIndex(0)
+        return (col_data, index, columns)
+    # We assume that all elements in data are the same type as the first element
+    first_element = data[0]
+    if is_scalar(first_element):
+        if columns is not None:
+            if len(columns) != 1:
+                raise ValueError("Passed column must be of length 1")
+        else:
+            columns = pd.RangeIndex(1)
+        if index is not None:
+            if len(index) != len(data):
+                raise ValueError(
+                    "Passed index must be the same length as data."
+                )
+        else:
+            index = cudf.RangeIndex(len(data))
+
+        return (
+            {columns[0]: as_column(data, nan_as_null=nan_as_null)},
+            index,
+            columns,
+        )
+    elif isinstance(first_element, Series):
+        data_length = len(data)
+        if index is None:
+            index = _index_from_listlike_of_series(data)
+        else:
+            index_length = len(index)
+            if data_length != index_length:
+                # If the passed `index` length doesn't match
+                # length of Series objects in `data`, we must
+                # check if `data` can be duplicated/expanded
+                # to match the length of index. For that we
+                # check if the length of index is a factor
+                # of length of data.
+                #
+                # 1. If yes, we extend data
+                # until length of data is equal to length of index.
+                # 2. If no, we throw an error stating the
+                # shape of resulting `data` and `index`
+
+                # Simple example
+                # >>> import pandas as pd
+                # >>> s = pd.Series([1, 2, 3])
+                # >>> pd.DataFrame([s], index=['a', 'b'])
+                #    0  1  2
+                # a  1  2  3
+                # b  1  2  3
+                # >>> pd.DataFrame([s], index=['a', 'b', 'c'])
+                #    0  1  2
+                # a  1  2  3
+                # b  1  2  3
+                # c  1  2  3
+                if index_length % data_length == 0:
+                    data = list(
+                        itertools.chain.from_iterable(
+                            itertools.repeat(data, index_length // data_length)
+                        )
+                    )
+                    data_length = len(data)
+                else:
+                    raise ValueError(
+                        f"Length of values ({data_length}) does "
+                        f"not match length of index ({index_length})"
+                    )
+        if data_length > 1:
+            common_dtype = find_common_type([ser.dtype for ser in data])
+            data = [ser.astype(common_dtype) for ser in data]
+        if all(len(first_element) == len(ser) for ser in data):
+            if data_length == 1:
+                temp_index = first_element.index
+            else:
+                temp_index = cudf.Index._concat(
+                    [ser.index for ser in data]
+                ).drop_duplicates()
+
+            temp_data: dict[Hashable, ColumnBase] = {}
+            for i, ser in enumerate(data):
+                if not ser.index.is_unique:
+                    raise ValueError(
+                        "Reindexing only valid with uniquely valued Index "
+                        "objects"
+                    )
+                elif not ser.index.equals(temp_index):
+                    ser = ser.reindex(temp_index)
+                temp_data[i] = ser._column
+
+            temp_frame = DataFrame._from_data(
+                ColumnAccessor(
+                    temp_data,
+                    verify=False,
+                    rangeindex=True,
+                ),
+                index=temp_index,
+            )
+            transpose = temp_frame.T
+        else:
+            with warnings.catch_warnings():
+                warnings.filterwarnings(
+                    "ignore",
+                    message="The behavior of array concatenation",
+                    category=FutureWarning,
+                )
+                transpose = cudf.concat(data, axis=1).T
+
+        if columns is None:
+            columns = pd.RangeIndex(transpose._num_columns)
+            col_data = transpose._data
+        else:
+            col_data = {}
+            for col_label in columns:
+                try:
+                    col_data[col_label] = transpose._data[col_label]
+                except KeyError:
+                    col_data[col_label] = column_empty(
+                        len(index), dtype=np.dtype(np.float64)
+                    )
+        return (col_data, index, columns)
+    elif isinstance(first_element, dict):
+        from_pandas = DataFrame(
+            pd.DataFrame(data),
+            index=index,
+            columns=columns,
+            nan_as_null=nan_as_null,
+        )
+        return (
+            from_pandas._data,
+            from_pandas.index,
+            from_pandas._data.to_pandas_index,
+        )
+    elif not can_convert_to_column(first_element):
+        raise TypeError(f"Cannot convert {type(first_element)} to a column")
+    else:
+        if index is None:
+            index = cudf.RangeIndex(len(data))
+        data = list(itertools.zip_longest(*data))
+        if columns is None:
+            if isinstance(first_element, tuple) and hasattr(
+                first_element, "_fields"
+            ):
+                # pandas behavior is to use the fields from the first
+                # namedtuple as the column names
+                columns = pd.Index(first_element._fields)
+            else:
+                columns = pd.RangeIndex(len(data))
+        col_data = {
+            col_label: as_column(col_values, nan_as_null=nan_as_null)
+            for col_label, col_values in zip(columns, data, strict=True)
+        }
+        return (
+            col_data,
+            index,
+            columns,
+        )
+
+
+@_performance_tracking
+def _array_to_column_accessor(
+    data: np.ndarray | cupy.ndarray,
+    columns: None | pd.Index,
+    nan_as_null: bool,
+) -> ColumnAccessor:
+    """Convert a 1D or 2D numpy or cupy array to a ColumnAccessor for DataFrame.__init__"""
+    if data.ndim not in {1, 2}:
+        raise ValueError(
+            f"records dimension expected 1 or 2 but found: {data.ndim}"
+        )
+
+    if data.ndim == 1:
+        data = data.reshape(len(data), 1)
+    if columns is not None:
+        if len(columns) != data.shape[1]:
+            raise ValueError(
+                f"columns length expected {data.shape[1]} but "
+                f"found {len(columns)}"
+            )
+        columns_labels = columns
+    else:
+        columns_labels = pd.RangeIndex(data.shape[1])
+    return ColumnAccessor(
+        {
+            column_label: as_column(data[:, i], nan_as_null=nan_as_null)
+            for column_label, i in zip(columns_labels, range(data.shape[1]))
+        },
+        verify=False,
+        rangeindex=isinstance(columns_labels, pd.RangeIndex),
+        multiindex=isinstance(columns_labels, pd.MultiIndex),
+        label_dtype=columns_labels.dtype,
+        level_names=tuple(columns_labels.names),
+    )
+
+
+@_performance_tracking
+def _mapping_to_column_accessor(
+    data: Mapping,
+    index: None | cudf.Index,
+    nan_as_null: bool,
+) -> tuple[dict[Any, ColumnBase], cudf.Index, pd.Index]:
+    """
+    Convert a mapping (dict-like) to a dict for ColumnAccessor for DataFrame.__init__
+
+    Returns
+    -------
+    tuple[dict[Any, ColumnBase], cudf.Index, pd.Index]
+        - Mapping of column label: Column
+        - Resulting index from the data
+        - Resulting columns from the data
+    """
+    if len(data) == 0:
+        return (
+            {},
+            cudf.RangeIndex(0) if index is None else index,
+            pd.RangeIndex(0),
+        )
+    data = dict(data)
+
+    # 1) Align indexes of all data.values() that are Series/dicts
+    values_as_series = {
+        key: Series(val, nan_as_null=nan_as_null)
+        for key, val in data.items()
+        if isinstance(val, (pd.Series, Series, dict))
+    }
+    if values_as_series:
+        aligned_input_series = cudf.core.series._align_indices(
+            list(values_as_series.values())
+        )
+        data = data.copy()
+        for key, aligned_series in zip(
+            values_as_series.keys(), aligned_input_series
+        ):
+            if index is not None:
+                aligned_series = aligned_series.reindex(index=index)
+            data[key] = aligned_series
+        index_from_data = aligned_series.index
+    else:
+        index_from_data = None
+
+    value_lengths = set()
+    result_index = None
+    if index_from_data is not None:
+        value_lengths.add(len(index_from_data))
+        result_index = index_from_data
+    elif index is not None:
+        result_index = index
+
+    # 2) Convert all array-like data.values() to columns
+    scalar_keys = []
+    tuple_key_count = 0
+    tuple_key_lengths = set()
+    col_data = {}
+    for key, value in data.items():
+        if is_scalar(value):
+            scalar_keys.append(key)
+            col_data[key] = value
+        else:
+            if isinstance(key, tuple):
+                tuple_key_count += 1
+                tuple_key_lengths.add(len(key))
+            column = as_column(value, nan_as_null=nan_as_null)
+            value_lengths.add(len(column))
+            col_data[key] = column
+
+    if tuple_key_count not in {0, len(data)}:
+        raise ValueError("All dict keys must be tuples if a tuple key exists.")
+
+    if len(scalar_keys) != len(data) and len(value_lengths) > 1:
+        raise ValueError(
+            "Found varying value lengths when all values "
+            f"must have the same length: {value_lengths}"
+        )
+    elif len(scalar_keys) == len(data):
+        # All data.values() are scalars
+        if index is None:
+            raise ValueError(
+                "If using all scalar values, you must pass an index"
+            )
+        scalar_length = len(index)
+    else:
+        scalar_length = value_lengths.pop()
+
+    # 3) Convert all remaining scalar data.values() to columns
+    for key in scalar_keys:
+        scalar = col_data[key]
+        if scalar is None or scalar is cudf.NA:
+            scalar = pa.scalar(None, type=pa.string())
+        col_data[key] = as_column(
+            scalar, nan_as_null=nan_as_null, length=scalar_length
+        )
+
+    if tuple_key_count and len(tuple_key_lengths) > 1:
+        # All tuple keys must be the same length
+        final_length = max(tuple_key_lengths)
+        col_data = {
+            old_key
+            if len(old_key) == final_length
+            else old_key + ("",) * (final_length - len(old_key)): column
+            for old_key, column in col_data.items()
+        }
+
+    if result_index is None:
+        result_index = cudf.RangeIndex(scalar_length)
+
+    return col_data, result_index, pd.Index(col_data)
+
+
+class DataFrame(IndexedFrame, GetAttrGetItemMixin):
     """
     A GPU Dataframe object.
 
@@ -694,44 +1060,39 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     ):
         if copy is not None:
             raise NotImplementedError("copy is not currently implemented.")
-        super().__init__({}, index=cudf.Index([]))
         if nan_as_null is no_default:
             nan_as_null = not cudf.get_option("mode.pandas_compatible")
 
-        if isinstance(columns, (Series, cudf.BaseIndex)):
-            columns = columns.to_pandas()
+        if columns is not None:
+            if isinstance(
+                columns, (cudf.BaseIndex, cudf.Series, cupy.ndarray)
+            ):
+                columns = ensure_index(columns).to_pandas()
+            elif not isinstance(columns, pd.Index):
+                columns = pd.Index(columns)
+
+            if columns.nunique(dropna=False) != len(columns):
+                raise ValueError("Columns cannot contain duplicate values")
+
+        if index is not None:
+            index = ensure_index(index)
+
+        if isinstance(data, Iterator) and not is_scalar(data):
+            data = list(data)
+
+        second_index = None
+        second_columns = None
 
         if isinstance(data, (DataFrame, pd.DataFrame)):
             if isinstance(data, pd.DataFrame):
                 data = self.from_pandas(data, nan_as_null=nan_as_null)
-
-            if index is not None:
-                if not data.index.equals(index):
-                    data = data.reindex(index)
-                    index = data.index
-                else:
-                    index = ensure_index(index)
-            else:
-                index = data.index
-
-            self._index = index
-
-            if columns is not None:
-                self._data = data._data
-                self._reindex(
-                    column_names=columns, index=index, deep=False, inplace=True
-                )
-                if isinstance(
-                    columns, (range, pd.RangeIndex, cudf.RangeIndex)
-                ):
-                    self._data.rangeindex = True
-            else:
-                self._data = data._data
-                self._data.rangeindex = True
+            col_accessor = data._data
+            index, second_index = data.index, index
+            second_columns = columns
         elif isinstance(data, (cudf.Series, pd.Series)):
             if isinstance(data, pd.Series):
                 data = cudf.Series.from_pandas(data, nan_as_null=nan_as_null)
-
+            index, second_index = data.index, index
             # Series.name is not None and Series.name in columns
             #   -> align
             # Series.name is not None and Series.name not in columns
@@ -740,381 +1101,177 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             #   -> return 1 column DataFrame
             # Series.name is None and columns
             #   -> return 1 column DataFrame if len(columns) in {0, 1}
-            if data.name is None and columns is not None:
-                if len(columns) > 1:
-                    raise ValueError(
-                        "Length of columns must be less than 2 if "
-                        f"{type(data).__name__}.name is None."
-                    )
-                name = columns[0]
-            else:
-                name = data.name or 0
-            self._init_from_dict_like(
-                {name: data},
-                index=index,
-                columns=columns,
-                nan_as_null=nan_as_null,
-            )
-        elif data is None:
-            if index is None:
-                self._index = RangeIndex(0)
-            else:
-                self._index = ensure_index(index)
-            if columns is not None:
-                rangeindex = isinstance(
-                    columns, (range, pd.RangeIndex, cudf.RangeIndex)
-                )
-                label_dtype = getattr(columns, "dtype", None)
-                self._data = ColumnAccessor(
-                    {
-                        k: column.column_empty(
-                            len(self), dtype="object", masked=True
+            if data.name is None:
+                if columns is not None:
+                    if len(columns) > 1:
+                        raise ValueError(
+                            "Length of columns must be less than 2 if "
+                            f"{type(data).__name__}.name is None."
                         )
+                    name = columns[0]
+                    col_is_rangeindex = False
+                else:
+                    name = 0
+                    col_is_rangeindex = True
+                col_accessor = ColumnAccessor(
+                    {name: data._column},
+                    verify=False,
+                    rangeindex=col_is_rangeindex,
+                )
+            else:
+                if columns is not None and not columns.isin([data.name]).any():
+                    index = index[:0]
+                    col_accessor = ColumnAccessor(
+                        {
+                            col: column_empty(0, dtype=CUDF_STRING_DTYPE)
+                            for col in columns
+                        },
+                        verify=False,
+                    )
+                else:
+                    col_accessor = ColumnAccessor(
+                        {data.name: data._column}, verify=False
+                    )
+                    second_columns = columns
+        elif data is None or (
+            isinstance(data, dict)
+            and columns is not None
+            and (~columns.isin(data.keys())).all()
+        ):
+            if index is None:
+                index = RangeIndex(0)
+            if columns is not None:
+                col_accessor = ColumnAccessor(
+                    {
+                        k: column_empty(len(index), dtype=CUDF_STRING_DTYPE)
                         for k in columns
                     },
-                    level_names=tuple(columns.names)
-                    if isinstance(columns, pd.Index)
-                    else None,
-                    rangeindex=rangeindex,
-                    label_dtype=label_dtype,
                     verify=False,
+                    level_names=tuple(columns.names),
+                    multiindex=isinstance(columns, pd.MultiIndex),
+                    rangeindex=isinstance(columns, pd.RangeIndex),
+                    label_dtype=columns.dtype,
+                )
+            else:
+                col_accessor = ColumnAccessor(
+                    {}, verify=False, rangeindex=True
                 )
         elif isinstance(data, ColumnAccessor):
             raise TypeError(
-                "Use cudf.Series._from_data for constructing a Series from "
+                "Use cudf.DataFrame._from_data for constructing a DataFrame from "
                 "ColumnAccessor"
+            )
+        elif isinstance(data, ColumnBase):
+            raise TypeError(
+                "Use cudf.DataFrame._from_data({col_label: col}) for constructing with "
+                "a Column."
             )
         elif hasattr(data, "__cuda_array_interface__"):
             arr_interface = data.__cuda_array_interface__
-            # descr is an optional field of the _cuda_ary_iface_
+            # descr is an optional field
             if "descr" in arr_interface:
                 if len(arr_interface["descr"]) == 1:
-                    new_df = self._from_arrays(
-                        data, index=index, columns=columns
+                    col_accessor = _array_to_column_accessor(
+                        cupy.asarray(data, order="F"), columns, nan_as_null
                     )
                 else:
                     new_df = self.from_records(
                         data, index=index, columns=columns
                     )
+                    col_accessor = new_df._data
+                    index = new_df.index
             else:
-                new_df = self._from_arrays(data, index=index, columns=columns)
+                col_accessor = _array_to_column_accessor(
+                    cupy.asarray(data, order="F"), columns, nan_as_null
+                )
 
-            self._data = new_df._data
-            self._index = new_df._index
-            self._check_data_index_length_match()
+            if index is None:
+                index = cudf.RangeIndex(arr_interface["shape"][0])
         elif hasattr(data, "__array_interface__"):
             arr_interface = data.__array_interface__
             if len(arr_interface["descr"]) == 1:
-                # not record arrays
-                new_df = self._from_arrays(data, index=index, columns=columns)
+                col_accessor = _array_to_column_accessor(
+                    np.asarray(data, order="F"), columns, nan_as_null
+                )
+                if index is None:
+                    index = cudf.RangeIndex(arr_interface["shape"][0])
             else:
                 new_df = self.from_records(data, index=index, columns=columns)
-            self._data = new_df._data
-            self._index = new_df._index
-            self._check_data_index_length_match()
-        else:
-            if isinstance(data, Iterator):
-                data = list(data)
-            if is_list_like(data):
-                if len(data) > 0 and is_scalar(data[0]):
-                    if columns is not None:
-                        label_dtype = getattr(columns, "dtype", None)
-                        data = dict(zip(columns, [data]))
-                        rangeindex = isinstance(
-                            columns, (range, pd.RangeIndex, cudf.RangeIndex)
-                        )
-                    else:
-                        data = dict(enumerate([data]))
-                        rangeindex = True
-                        label_dtype = None
-                    new_df = DataFrame(data=data, index=index)
-
-                    self._data = new_df._data
-                    self._index = new_df._index
-                    self._data._level_names = (
-                        tuple(columns.names)
-                        if isinstance(columns, pd.Index)
-                        else self._data._level_names
-                    )
-                    self._data.rangeindex = rangeindex
-                    self._data.label_dtype = (
-                        cudf.dtype(label_dtype)
-                        if label_dtype is not None
-                        else None
-                    )
-                elif len(data) > 0 and isinstance(data[0], Series):
-                    self._init_from_series_list(
-                        data=data, columns=columns, index=index
-                    )
-                else:
-                    self._init_from_list_like(
-                        data, index=index, columns=columns
-                    )
-                self._check_data_index_length_match()
-            else:
-                if not is_dict_like(data):
-                    raise TypeError("data must be list or dict-like")
-
-                self._init_from_dict_like(
-                    data, index=index, columns=columns, nan_as_null=nan_as_null
+                col_accessor = new_df._data
+                index = new_df.index
+        elif is_scalar(data):
+            if index is None or columns is None:
+                raise ValueError(
+                    "index= and columns= must both not be None if data is a scalar."
                 )
-                self._check_data_index_length_match()
+            col_accessor = ColumnAccessor(
+                {
+                    col_label: as_column(
+                        data, nan_as_null=nan_as_null, length=len(index)
+                    )
+                    for col_label in columns
+                },
+                verify=False,
+                multiindex=isinstance(columns, pd.MultiIndex),
+                rangeindex=isinstance(columns, pd.RangeIndex),
+                level_names=tuple(columns.names),
+                label_dtype=columns.dtype,
+            )
+        elif isinstance(data, Mapping):
+            # Note: We excluded ColumnAccessor already above
+            result = _mapping_to_column_accessor(data, index, nan_as_null)
+            col_dict = result[0]
+            index = result[1]
+            columns, second_columns = result[2], columns
+            col_accessor = ColumnAccessor(
+                col_dict,
+                verify=False,
+                rangeindex=isinstance(columns, pd.RangeIndex),
+                multiindex=isinstance(columns, pd.MultiIndex),
+                level_names=tuple(columns.names),
+                label_dtype=columns.dtype,
+            )
+        elif is_list_like(data):
+            col_dict, index, columns = _listlike_to_column_accessor(
+                data, columns, index, nan_as_null
+            )
+            col_accessor = ColumnAccessor(
+                col_dict,
+                verify=False,
+                rangeindex=isinstance(columns, pd.RangeIndex),
+                multiindex=isinstance(columns, pd.MultiIndex),
+                level_names=tuple(columns.names),
+                label_dtype=columns.dtype,
+            )
+        else:
+            raise TypeError(
+                f"data must be list or dict-like, not {type(data).__name__}"
+            )
+
+        if second_columns is not None:
+            new_data = {
+                second_label: col_accessor[second_label]
+                if second_label in col_accessor
+                else column_empty(col_accessor.nrows, dtype=CUDF_STRING_DTYPE)
+                for second_label in second_columns
+            }
+            col_accessor = ColumnAccessor(
+                new_data,
+                verify=False,
+                rangeindex=isinstance(second_columns, pd.RangeIndex),
+                multiindex=isinstance(second_columns, pd.MultiIndex),
+                level_names=tuple(second_columns.names),
+                label_dtype=second_columns.dtype,
+            )
+
+        super().__init__(col_accessor, index=index)
+        if second_index is not None:
+            reindexed = self.reindex(index=second_index, copy=False)
+            self._data = reindexed._data
+            self._index = second_index
 
         if dtype:
             self._data = self.astype(dtype)._data
-
-        self._data.multiindex = self._data.multiindex or isinstance(
-            columns, pd.MultiIndex
-        )
-
-    @_performance_tracking
-    def _init_from_series_list(self, data, columns, index):
-        if index is None:
-            # When `index` is `None`, the final index of
-            # resulting dataframe will be union of
-            # all Series's names.
-            final_index = cudf.Index(_get_union_of_series_names(data))
-        else:
-            # When an `index` is passed, the final index of
-            # resulting dataframe will be whatever
-            # index passed, but will need
-            # shape validations - explained below
-            data_length = len(data)
-            index_length = len(index)
-            if data_length != index_length:
-                # If the passed `index` length doesn't match
-                # length of Series objects in `data`, we must
-                # check if `data` can be duplicated/expanded
-                # to match the length of index. For that we
-                # check if the length of index is a factor
-                # of length of data.
-                #
-                # 1. If yes, we extend data
-                # until length of data is equal to length of index.
-                # 2. If no, we throw an error stating the
-                # shape of resulting `data` and `index`
-
-                # Simple example
-                # >>> import pandas as pd
-                # >>> s = pd.Series([1, 2, 3])
-                # >>> pd.DataFrame([s], index=['a', 'b'])
-                #    0  1  2
-                # a  1  2  3
-                # b  1  2  3
-                # >>> pd.DataFrame([s], index=['a', 'b', 'c'])
-                #    0  1  2
-                # a  1  2  3
-                # b  1  2  3
-                # c  1  2  3
-                if index_length % data_length == 0:
-                    initial_data = data
-                    data = []
-                    for _ in range(int(index_length / data_length)):
-                        data.extend([o for o in initial_data])
-                else:
-                    raise ValueError(
-                        f"Length of values ({data_length}) does "
-                        f"not match length of index ({index_length})"
-                    )
-
-            final_index = ensure_index(index)
-
-        series_lengths = list(map(len, data))
-        common_dtype = find_common_type([obj.dtype for obj in data])
-        data = [obj.astype(common_dtype) for obj in data]
-        if series_lengths.count(series_lengths[0]) == len(series_lengths):
-            # Calculating the final dataframe columns by
-            # getting union of all `index` of the Series objects.
-            final_columns = _get_union_of_indices([d.index for d in data])
-            if isinstance(final_columns, cudf.RangeIndex):
-                self._data.rangeindex = True
-
-            for idx, series in enumerate(data):
-                if not series.index.is_unique:
-                    raise ValueError(
-                        "Reindexing only valid with uniquely valued Index "
-                        "objects"
-                    )
-                if not series.index.equals(final_columns):
-                    series = series.reindex(final_columns)
-                self._data[idx] = series._column
-
-            # Setting `final_columns` to self._index so
-            # that the resulting `transpose` will be have
-            # columns set to `final_columns`
-            self._index = cudf.Index(final_columns)
-
-            transpose = self.T
-        else:
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore", FutureWarning)
-                concat_df = cudf.concat(data, axis=1)
-
-            cols = concat_df._data.to_pandas_index()
-            if cols.dtype == "object":
-                concat_df.columns = cols.astype("str")
-
-            transpose = concat_df.T
-
-        transpose._index = final_index
-        self._data = transpose._data
-        self._index = transpose._index
-
-        # If `columns` is passed, the result dataframe
-        # contain a dataframe with only the
-        # specified `columns` in the same order.
-        if columns is not None:
-            for col_name in columns:
-                if col_name not in self._data:
-                    self._data[col_name] = column.column_empty(
-                        row_count=len(self), dtype=None, masked=True
-                    )
-            self._data._level_names = (
-                tuple(columns.names)
-                if isinstance(columns, pd.Index)
-                else self._data._level_names
-            )
-            self._data = self._data.select_by_label(columns)
-            self._data.rangeindex = isinstance(
-                columns, (range, cudf.RangeIndex, pd.RangeIndex)
-            )
-            self._data.label_dtype = pd.Index(columns).dtype
-        else:
-            self._data.rangeindex = True
-
-    @_performance_tracking
-    def _init_from_list_like(self, data, index=None, columns=None):
-        if index is None:
-            index = RangeIndex(start=0, stop=len(data))
-        else:
-            index = ensure_index(index)
-
-        self._index = index
-        # list-of-dicts case
-        if len(data) > 0 and isinstance(data[0], dict):
-            data = DataFrame.from_pandas(pd.DataFrame(data))
-            self._data = data._data
-        # interval in a list
-        elif len(data) > 0 and isinstance(data[0], pd.Interval):
-            data = DataFrame.from_pandas(pd.DataFrame(data))
-            self._data = data._data
-        elif any(
-            not isinstance(col, (abc.Iterable, abc.Sequence)) for col in data
-        ):
-            raise TypeError("Inputs should be an iterable or sequence.")
-        elif len(data) > 0 and not can_convert_to_column(data[0]):
-            raise ValueError("Must pass 2-d input.")
-        else:
-            if (
-                len(data) > 0
-                and columns is None
-                and isinstance(data[0], tuple)
-                and hasattr(data[0], "_fields")
-            ):
-                # pandas behavior is to use the fields from the first
-                # namedtuple as the column names
-                columns = data[0]._fields
-
-            data = list(itertools.zip_longest(*data))
-
-            if columns is not None and len(data) == 0:
-                data = [
-                    cudf.core.column.column_empty(row_count=0, dtype=None)
-                    for _ in columns
-                ]
-
-            for col_name, col in enumerate(data):
-                self._data[col_name] = column.as_column(col)
-            self._data.rangeindex = True
-
-        if columns is not None:
-            if len(columns) != len(data):
-                raise ValueError(
-                    f"Shape of passed values is ({len(index)}, {len(data)}), "
-                    f"indices imply ({len(index)}, {len(columns)})."
-                )
-
-            self.columns = columns
-            self._data.rangeindex = isinstance(
-                columns, (range, pd.RangeIndex, cudf.RangeIndex)
-            )
-            self._data.label_dtype = getattr(columns, "dtype", None)
-
-    @_performance_tracking
-    def _init_from_dict_like(
-        self, data, index=None, columns=None, nan_as_null=None
-    ):
-        label_dtype = None
-        if columns is not None:
-            label_dtype = getattr(columns, "dtype", None)
-            # remove all entries in data that are not in columns,
-            # inserting new empty columns for entries in columns that
-            # are not in data
-            if any(c in data for c in columns):
-                # Let the downstream logic determine the length of the
-                # empty columns here
-                empty_column = lambda: None  # noqa: E731
-            else:
-                # If keys is empty, none of the data keys match the
-                # columns, so we need to create an empty DataFrame. To
-                # match pandas, the size of the dataframe must match
-                # the provided index, so we need to return a masked
-                # array of nulls if an index is given.
-                empty_column = functools.partial(
-                    cudf.core.column.column_empty,
-                    row_count=(0 if index is None else len(index)),
-                    masked=index is not None,
-                )
-
-            data = {
-                c: data[c] if c in data else empty_column() for c in columns
-            }
-
-        data, index = self._align_input_series_indices(data, index=index)
-
-        if index is None:
-            num_rows = 0
-            if data:
-                keys, values, lengths = zip(
-                    *(
-                        (k, v, 1)
-                        if is_scalar(v)
-                        else (
-                            k,
-                            vc := as_column(v, nan_as_null=nan_as_null),
-                            len(vc),
-                        )
-                        for k, v in data.items()
-                    )
-                )
-                data = dict(zip(keys, values))
-                try:
-                    (num_rows,) = (set(lengths) - {1}) or {1}
-                except ValueError:
-                    raise ValueError("All arrays must be the same length")
-
-            self._index = RangeIndex(0, num_rows)
-        else:
-            self._index = ensure_index(index)
-
-        if len(data):
-            self._data.multiindex = True
-            for i, col_name in enumerate(data):
-                self._data.multiindex = self._data.multiindex and isinstance(
-                    col_name, tuple
-                )
-                self._insert(
-                    i,
-                    col_name,
-                    data[col_name],
-                    nan_as_null=nan_as_null,
-                )
-        self._data._level_names = (
-            tuple(columns.names)
-            if isinstance(columns, pd.Index)
-            else self._data._level_names
-        )
-        self._data.label_dtype = label_dtype
 
     @classmethod
     def _from_data(
@@ -1122,40 +1279,11 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         data: MutableMapping,
         index: BaseIndex | None = None,
         columns: Any = None,
-    ) -> DataFrame:
+    ) -> Self:
         out = super()._from_data(data=data, index=index)
         if columns is not None:
             out.columns = columns
         return out
-
-    @staticmethod
-    @_performance_tracking
-    def _align_input_series_indices(data, index):
-        input_series = [
-            Series(val)
-            for val in data.values()
-            if isinstance(val, (pd.Series, Series, dict))
-        ]
-
-        if input_series:
-            if index is not None:
-                aligned_input_series = [
-                    sr._align_to_index(index, how="right", sort=False)
-                    for sr in input_series
-                ]
-
-            else:
-                aligned_input_series = cudf.core.series._align_indices(
-                    input_series
-                )
-                index = aligned_input_series[0].index
-
-            data = data.copy()
-            for name, val in data.items():
-                if isinstance(val, (pd.Series, Series, dict)):
-                    data[name] = aligned_input_series.pop(0)
-
-        return data, index
 
     # The `constructor*` properties are used by `dask` (and `dask_cudf`)
     @property
@@ -1175,7 +1303,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     def serialize(self):
         header, frames = super().serialize()
 
-        header["index"], index_frames = self.index.serialize()
+        header["index"], index_frames = self.index.device_serialize()
         header["index_frame_count"] = len(index_frames)
         # For backwards compatibility with older versions of cuDF, index
         # columns are placed before data columns.
@@ -1190,8 +1318,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             header, frames[header["index_frame_count"] :]
         )
 
-        idx_typ = pickle.loads(header["index"]["type-serialized"])
-        index = idx_typ.deserialize(header["index"], frames[:index_nframes])
+        index = cls.device_deserialize(header["index"], frames[:index_nframes])
         obj.index = index
 
         return obj
@@ -1203,7 +1330,12 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         return self._num_rows, self._num_columns
 
     @property
-    def dtypes(self):
+    @_external_only_api(
+        "Use ._dtypes for an iterator over the column labels and dtypes. "
+        "Use pandas.Series(dict(self._dtypes)) if you need a pandas Series "
+        "of dtypes."
+    )
+    def dtypes(self) -> pd.Series:
         """
         Return the dtypes in this object.
 
@@ -1390,9 +1522,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     if is_scalar(value):
                         self._data[col_name][scatter_map] = value
                     else:
-                        self._data[col_name][scatter_map] = column.as_column(
-                            value
-                        )[scatter_map]
+                        self._data[col_name][scatter_map] = as_column(value)[
+                            scatter_map
+                        ]
         elif is_scalar(arg) or isinstance(arg, tuple):
             if isinstance(value, DataFrame):
                 _setitem_with_dataframe(
@@ -1404,13 +1536,13 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             else:
                 if arg in self._data:
                     if not is_scalar(value) and len(self) == 0:
-                        value = column.as_column(value)
+                        value = as_column(value)
                         length = len(value)
                         new_columns = (
                             value
                             if key == arg
-                            else column.column_empty_like(
-                                col, masked=True, newsize=length
+                            else column_empty(
+                                row_count=length, dtype=col.dtype
                             )
                             for key, col in self._column_labels_and_values
                         )
@@ -1445,7 +1577,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 mask = np.array(mask)
 
             if mask.dtype == "bool":
-                mask = column.as_column(arg)
+                mask = as_column(arg)
 
                 if isinstance(value, DataFrame):
                     _setitem_with_dataframe(
@@ -1456,7 +1588,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     )
                 else:
                     if not is_scalar(value):
-                        value = column.as_column(value)[mask]
+                        value = as_column(value)[mask]
                     for col_name in self._data:
                         self._data[col_name][mask] = value
             else:
@@ -1482,7 +1614,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                                 value, length=len(self)
                             )
                         else:
-                            self._data[col] = column.as_column(value)
+                            self._data[col] = as_column(value)
 
         else:
             raise TypeError(
@@ -1493,15 +1625,19 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         self._drop_column(name)
 
     @_performance_tracking
-    def memory_usage(self, index=True, deep=False) -> cudf.Series:
-        mem_usage = [col.memory_usage for col in self._columns]
-        names = [str(name) for name in self._column_names]
+    def memory_usage(
+        self, index: bool = True, deep: bool = False
+    ) -> cudf.Series:
+        mem_usage: abc.Iterable[int] = (
+            col.memory_usage for col in self._columns
+        )
+        result_index = self._data.to_pandas_index
         if index:
-            mem_usage.append(self.index.memory_usage())
-            names.append("Index")
+            mem_usage = itertools.chain([self.index.memory_usage()], mem_usage)
+            result_index = pd.Index(["Index"]).append(result_index.astype(str))
         return Series._from_column(
-            as_column(mem_usage),
-            index=cudf.Index(names),
+            as_column(list(mem_usage)),
+            index=cudf.Index(result_index),
         )
 
     @_performance_tracking
@@ -1560,11 +1696,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     @_performance_tracking
     def _get_numeric_data(self):
         """Return a dataframe with only numeric data types"""
-        columns = [
-            c
-            for c, dt in self.dtypes.items()
-            if dt != object and not isinstance(dt, cudf.CategoricalDtype)
-        ]
+        columns = [c for c, dt in self._dtypes if is_dtype_obj_numeric(dt)]
         return self[columns]
 
     @_performance_tracking
@@ -1778,11 +1910,56 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             )
 
         # Concatenate the Tables
-        out = cls._from_data(
-            *libcudf.concat.concat_tables(
-                tables, ignore_index=ignore_index or are_all_range_index
-            )
-        )
+        ignore = ignore_index or are_all_range_index
+        index_names = None if ignore else tables[0]._index_names
+        column_names = tables[0]._column_names
+        with acquire_spill_lock():
+            plc_tables = [
+                plc.Table(
+                    [
+                        c.to_pylibcudf(mode="read")
+                        for c in (
+                            table._columns
+                            if ignore
+                            else itertools.chain(
+                                table.index._columns, table._columns
+                            )
+                        )
+                    ]
+                )
+                for table in tables
+            ]
+            plc_result = plc.concatenate.concatenate(plc_tables)
+            if ignore:
+                index = None
+                data = {
+                    col_name: ColumnBase.from_pylibcudf(col)
+                    for col_name, col in zip(
+                        column_names, plc_result.columns(), strict=True
+                    )
+                }
+            else:
+                result_columns = [
+                    ColumnBase.from_pylibcudf(col)
+                    for col in plc_result.columns()
+                ]
+                index = _index_from_data(
+                    dict(
+                        zip(
+                            index_names,
+                            result_columns[: len(index_names)],
+                            strict=True,
+                        )
+                    )
+                )
+                data = dict(
+                    zip(
+                        column_names,
+                        result_columns[len(index_names) :],
+                        strict=True,
+                    )
+                )
+        out = cls._from_data(data=data, index=index)
 
         # If ignore_index is True, all input frames are empty, and at
         # least one input frame has an index, assign a new RangeIndex
@@ -1790,7 +1967,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         if empty_has_index and num_empty_input_frames == len(objs):
             out.index = cudf.RangeIndex(result_index_length)
         elif are_all_range_index and not ignore_index:
-            out.index = cudf.core.index.Index._concat([o.index for o in objs])
+            out.index = Index._concat([o.index for o in objs])
 
         # Reassign the categories for any categorical table cols
         _reassign_categories(
@@ -1826,21 +2003,25 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
     def astype(
         self,
-        dtype,
+        dtype: Dtype | dict[abc.Hashable, Dtype],
         copy: bool = False,
         errors: Literal["raise", "ignore"] = "raise",
-    ):
+    ) -> Self:
         if is_dict_like(dtype):
-            if len(set(dtype.keys()) - set(self._column_names)) > 0:
+            if len(set(dtype.keys()) - set(self._column_names)) > 0:  # type: ignore[union-attr]
                 raise KeyError(
                     "Only a column name can be used for the "
                     "key in a dtype mappings argument."
                 )
+            dtype = {
+                col_name: cudf.dtype(dtype)
+                for col_name, dtype in dtype.items()  # type: ignore[union-attr]
+            }
         else:
-            dtype = {cc: dtype for cc in self._column_names}
+            dtype = {cc: cudf.dtype(dtype) for cc in self._column_names}
         return super().astype(dtype, copy, errors)
 
-    def _clean_renderable_dataframe(self, output):
+    def _clean_renderable_dataframe(self, output: Self) -> str:
         """
         This method takes in partial/preprocessed dataframe
         and returns correct representation of it with correct
@@ -1875,41 +2056,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             )
         return "\n".join(lines)
 
-    def _clean_nulls_from_dataframe(self, df):
-        """
-        This function converts all ``null`` values to ``<NA>`` for
-        representation as a string in `__repr__`.
-
-        Since we utilize Pandas `__repr__` at all places in our code
-        for formatting purposes, we convert columns to `str` dtype for
-        filling with `<NA>` values.
-        """
-        for col in df._data:
-            if isinstance(
-                df._data[col].dtype, (cudf.StructDtype, cudf.ListDtype)
-            ):
-                # TODO we need to handle this
-                pass
-            elif df._data[col].has_nulls():
-                fill_value = (
-                    str(cudf.NaT)
-                    if isinstance(
-                        df._data[col],
-                        (
-                            cudf.core.column.DatetimeColumn,
-                            cudf.core.column.TimeDeltaColumn,
-                        ),
-                    )
-                    else str(cudf.NA)
-                )
-
-                df[col] = df._data[col].astype("str").fillna(fill_value)
-            else:
-                df[col] = df._data[col]
-
-        return df
-
-    def _get_renderable_dataframe(self):
+    def _get_renderable_dataframe(self) -> Self:
         """
         Takes rows and columns from pandas settings or estimation from size.
         pulls quadrants based off of some known parameters then style for
@@ -1917,9 +2064,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         for printing with the dataframe.
         """
         max_rows = pd.options.display.max_rows
-        nrows = np.max([len(self) if max_rows is None else max_rows, 1])
-        if pd.options.display.max_rows == 0:
-            nrows = len(self)
+        if max_rows in {0, None}:
+            max_rows = len(self)
+        nrows = max(max_rows, 1)
         ncols = (
             pd.options.display.max_columns
             if pd.options.display.max_columns
@@ -1927,7 +2074,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         )
 
         if len(self) <= nrows and self._num_columns <= ncols:
-            output = self.copy(deep=False)
+            output = self
         elif self.empty and len(self.index) > 0:
             max_seq_items = pd.options.display.max_seq_items
             # In case of Empty DataFrame with index, Pandas prints
@@ -1987,10 +2134,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 lower = cudf.concat([lower_left, lower_right], axis=1)
                 output = cudf.concat([upper, lower])
 
-        output = self._clean_nulls_from_dataframe(output)
-        output.index = output.index._clean_nulls_from_index()
-
-        return output
+        return output._pandas_repr_compatible()
 
     @_performance_tracking
     def __repr__(self):
@@ -2028,25 +2172,35 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         dict[str | None, tuple[ColumnBase, Any, bool, Any]]
         | NotImplementedType,
         BaseIndex | None,
-        bool,
+        dict[str, Any],
     ]:
         lhs, rhs = self._data, other
         index = self.index
         fill_requires_key = False
         left_default: Any = False
         equal_columns = False
-        can_use_self_column_name = True
+        ca_attributes: dict[str, Any] = {}
+
+        def _fill_same_ca_attributes(
+            attrs: dict[str, Any], ca: ColumnAccessor
+        ) -> dict[str, Any]:
+            attrs["rangeindex"] = ca.rangeindex
+            attrs["multiindex"] = ca.multiindex
+            attrs["label_dtype"] = ca.label_dtype
+            attrs["level_names"] = ca.level_names
+            return attrs
 
         if _is_scalar_or_zero_d_array(other):
             rhs = {name: other for name in self._data}
             equal_columns = True
+            ca_attributes = _fill_same_ca_attributes(ca_attributes, self._data)
         elif isinstance(other, Series):
             if (
-                not (self_pd_columns := self._data.to_pandas_index()).equals(
+                not (self_pd_columns := self._data.to_pandas_index).equals(
                     other_pd_index := other.index.to_pandas()
                 )
                 and not can_reindex
-                and fn in cudf.utils.utils._EQUALITY_OPS
+                and fn in _EQUALITY_OPS
             ):
                 raise ValueError(
                     "Can only compare DataFrame & Series objects "
@@ -2058,17 +2212,20 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             # NULL!) and the right value (result is NaN).
             left_default = as_column(np.nan, length=len(self))
             equal_columns = other_pd_index.equals(self_pd_columns)
-            can_use_self_column_name = (
-                equal_columns or other_pd_index.names == self_pd_columns.names
-            )
+            if equal_columns:
+                ca_attributes = _fill_same_ca_attributes(
+                    ca_attributes, self._data
+                )
+            elif other_pd_index.names == self_pd_columns.names:
+                ca_attributes["level_names"] = self._data.level_names
         elif isinstance(other, DataFrame):
             if (
                 not can_reindex
-                and fn in cudf.utils.utils._EQUALITY_OPS
+                and fn in _EQUALITY_OPS
                 and (
                     not self.index.equals(other.index)
-                    or not self._data.to_pandas_index().equals(
-                        other._data.to_pandas_index()
+                    or not self._data.to_pandas_index.equals(
+                        other._data.to_pandas_index
                     )
                 )
             ):
@@ -2083,17 +2240,19 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             # the fill value.
             left_default = fill_value
             equal_columns = self._column_names == other._column_names
-            can_use_self_column_name = (
-                equal_columns
-                or self._data._level_names == other._data._level_names
-            )
+            if self._data.to_pandas_index.equals(other._data.to_pandas_index):
+                ca_attributes = _fill_same_ca_attributes(
+                    ca_attributes, self._data
+                )
+            elif self._data._level_names == other._data._level_names:
+                ca_attributes["level_names"] = self._data.level_names
         elif isinstance(other, (dict, abc.Mapping)):
             # Need to fail early on host mapping types because we ultimately
             # convert everything to a dict.
-            return NotImplemented, None, True
+            return NotImplemented, None, ca_attributes
 
         if not isinstance(rhs, (dict, abc.Mapping)):
-            return NotImplemented, None, True
+            return NotImplemented, None, ca_attributes
 
         operands = {
             k: (
@@ -2112,19 +2271,19 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         if not equal_columns:
             if isinstance(other, DataFrame):
-                column_names_list = self._data.to_pandas_index().join(
-                    other._data.to_pandas_index(), how="outer"
+                column_names_list = self._data.to_pandas_index.join(
+                    other._data.to_pandas_index, how="outer"
                 )
             elif isinstance(other, Series):
-                column_names_list = self._data.to_pandas_index().join(
+                column_names_list = self._data.to_pandas_index.join(
                     other.index.to_pandas(), how="outer"
                 )
             else:
                 raise ValueError("other must be a DataFrame or Series.")
 
             sorted_dict = {key: operands[key] for key in column_names_list}
-            return sorted_dict, index, can_use_self_column_name
-        return operands, index, can_use_self_column_name
+            return sorted_dict, index, ca_attributes
+        return operands, index, ca_attributes
 
     @classmethod
     @_performance_tracking
@@ -2212,7 +2371,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         n1 n2
         a  b   1  3
            c   2  4
-        """  # noqa: E501
+        """
 
         orient = orient.lower()
         if orient == "index":
@@ -2369,7 +2528,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         >>> df.to_dict('records', into=dd)
         [defaultdict(<class 'list'>, {'col1': 1, 'col2': 0.5}),
          defaultdict(<class 'list'>, {'col1': 2, 'col2': 0.75})]
-        """  # noqa: E501
+        """
         orient = orient.lower()
 
         if orient == "series":
@@ -2430,20 +2589,16 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         # Convert float to integer
         if map_index.dtype.kind == "f":
-            map_index = map_index.astype(np.int32)
+            map_index = map_index.astype(SIZE_TYPE_DTYPE)
 
         # Convert string or categorical to integer
-        if isinstance(map_index, cudf.core.column.StringColumn):
-            cat_index = cast(
-                cudf.core.column.CategoricalColumn,
-                map_index.astype("category"),
-            )
-            map_index = cat_index.codes
+        if map_index.dtype == CUDF_STRING_DTYPE:
+            map_index = map_index._label_encoding(map_index.unique())
             warnings.warn(
                 "Using StringColumn for map_index in scatter_by_map. "
                 "Use an integer array/column for better performance."
             )
-        elif isinstance(map_index, cudf.core.column.CategoricalColumn):
+        elif isinstance(map_index.dtype, cudf.CategoricalDtype):
             map_index = map_index.codes
             warnings.warn(
                 "Using CategoricalColumn for map_index in scatter_by_map. "
@@ -2457,11 +2612,32 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     f"ERROR: map_size must be >= {count} (got {map_size})."
                 )
 
-        partitioned_columns, output_offsets = libcudf.partitioning.partition(
-            [*(self.index._columns if keep_index else ()), *self._columns],
-            map_index,
-            map_size,
+        source_columns = (
+            itertools.chain(self.index._columns, self._columns)
+            if keep_index
+            else self._columns
         )
+
+        if map_size is None:
+            map_size = map_index.distinct_count(dropna=True)
+
+        if map_index.size > 0:
+            lo, hi = map_index.minmax()
+            if lo < 0 or hi >= map_size:
+                raise ValueError("Partition map has invalid values")
+
+        with acquire_spill_lock():
+            plc_table, output_offsets = plc.partitioning.partition(
+                plc.Table(
+                    [col.to_pylibcudf(mode="read") for col in source_columns]
+                ),
+                map_index.to_pylibcudf(mode="read"),
+                map_size,
+            )
+            partitioned_columns = [
+                ColumnBase.from_pylibcudf(col) for col in plc_table.columns()
+            ]
+
         partitioned = self._from_columns_like_self(
             partitioned_columns,
             column_names=self._column_names,
@@ -2550,8 +2726,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         if not isinstance(other, DataFrame):
             other = DataFrame(other)
 
-        self_cols = self._data.to_pandas_index()
-        if not self_cols.equals(other._data.to_pandas_index()):
+        self_cols = self._data.to_pandas_index
+        if not self_cols.equals(other._data.to_pandas_index):
             other = other.reindex(self_cols, axis=1)
         if not self.index.equals(other.index):
             other = other.reindex(self.index, axis=0)
@@ -2587,7 +2763,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     def __contains__(self, item):
         # This must check against containment in the pandas Index and not
         # self._column_names to handle NA, None, nan, etc. correctly.
-        return item in self._data.to_pandas_index()
+        return item in self._data.to_pandas_index
 
     @_performance_tracking
     def items(self):
@@ -2597,16 +2773,13 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
     @_performance_tracking
     def equals(self, other) -> bool:
-        ret = super().equals(other)
-        # If all other checks matched, validate names.
-        if ret:
+        # Check that column labels match too
+        return super().equals(other) and all(
+            self_name == other_name
             for self_name, other_name in zip(
-                self._column_names, other._column_names
-            ):
-                if self_name != other_name:
-                    ret = False
-                    break
-        return ret
+                self._column_names, other._column_names, strict=True
+            )
+        )
 
     @property
     def iat(self):
@@ -2624,14 +2797,14 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
     @property  # type: ignore
     @_external_only_api(
-        "Use _column_names instead, or _data.to_pandas_index() if a pandas "
+        "Use _column_names instead, or _data.to_pandas_index if a pandas "
         "index is absolutely necessary. For checking if the columns are a "
         "MultiIndex, use _data.multiindex."
     )
     @_performance_tracking
     def columns(self):
         """Returns a tuple of columns"""
-        return self._data.to_pandas_index()
+        return self._data.to_pandas_index
 
     @columns.setter  # type: ignore
     @_performance_tracking
@@ -2840,7 +3013,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             df = self
         else:
             columns = cudf.Index(columns)
-            intersection = self._data.to_pandas_index().intersection(
+            intersection = self._data.to_pandas_index.intersection(
                 columns.to_pandas()
             )
             df = self.loc[:, intersection]
@@ -2962,7 +3135,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         if len(keys) == 0:
             raise ValueError("No valid columns to be added to index.")
         if append:
-            keys = [self.index] + keys
+            keys = [self.index, *keys]
 
         # Preliminary type check
         labels_not_found = []
@@ -3028,7 +3201,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     @_performance_tracking
     def fillna(
         self, value=None, method=None, axis=None, inplace=False, limit=None
-    ):  # noqa: D102
+    ):
         if isinstance(value, (pd.Series, pd.DataFrame)):
             value = cudf.from_pandas(value)
         if isinstance(value, cudf.Series):
@@ -3052,15 +3225,13 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         )
 
     @_performance_tracking
-    def where(self, cond, other=None, inplace=False, axis=None, level=None):
+    def where(
+        self, cond, other=None, inplace: bool = False, axis=None, level=None
+    ) -> Self | None:
         if axis is not None:
             raise NotImplementedError("axis is not supported.")
         elif level is not None:
             raise NotImplementedError("level is not supported.")
-
-        from cudf.core._internals.where import (
-            _check_and_cast_columns_with_other,
-        )
 
         # First process the condition.
         if isinstance(cond, Series):
@@ -3080,7 +3251,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         ):
             raise ValueError("conditional must be same shape as self")
         elif not isinstance(cond, DataFrame):
-            cond = cudf.DataFrame(cond)
+            cond = DataFrame(cond)
 
         if set(self._column_names).intersection(set(cond._column_names)):
             if not self.index.equals(cond.index):
@@ -3096,41 +3267,27 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         # If other was provided, process that next.
         if isinstance(other, DataFrame):
             other_cols = [other._data[col] for col in self._column_names]
-        elif cudf.api.types.is_scalar(other):
+        elif is_scalar(other):
             other_cols = [other] * len(self._column_names)
         elif isinstance(other, cudf.Series):
             other_cols = other.to_pandas()
         else:
             other_cols = other
 
-        if len(self._columns) != len(other_cols):
+        if self._num_columns != len(other_cols):
             raise ValueError(
-                """Replacement list length or number of data columns
-                should be equal to number of columns of self"""
+                "other must contain the same number of columns or elements "
+                f"as self ({self._num_columns})"
             )
 
         out = []
         for (name, col), other_col in zip(
             self._column_labels_and_values, other_cols
         ):
-            source_col, other_col = _check_and_cast_columns_with_other(
-                source_col=col,
-                other=other_col,
-                inplace=inplace,
-            )
-
             if cond_col := cond._data.get(name):
-                result = cudf._lib.copying.copy_if_else(
-                    source_col, other_col, cond_col
-                )
-
-                out.append(result._with_type_metadata(col.dtype))
+                out.append(col.where(cond_col, other_col, inplace))
             else:
-                out_mask = cudf._lib.null_mask.create_null_mask(
-                    len(source_col),
-                    state=cudf._lib.null_mask.MaskState.ALL_NULL,
-                )
-                out.append(source_col.set_mask(out_mask))
+                out.append(column_empty(len(col), dtype=col.dtype))
 
         return self._mimic_inplace(
             self._from_data_like_self(self._data._from_columns_like_self(out)),
@@ -3293,12 +3450,15 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             value = as_column(value)
 
         if _is_scalar_or_zero_d_array(value):
+            # TODO: as_column should be able to handle these outputs outright
             dtype = None
             if isinstance(value, (np.ndarray, cupy.ndarray)):
                 dtype = value.dtype
+                if dtype.kind == "U":
+                    dtype = CUDF_STRING_DTYPE
                 value = value.item()
-            if libcudf.scalar._is_null_host_scalar(value):
-                dtype = "str"
+            if _is_null_host_scalar(value):
+                dtype = CUDF_STRING_DTYPE
             value = as_column(
                 value,
                 length=len(self),
@@ -3313,10 +3473,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 if num_cols != 0:
                     ca = self._data._from_columns_like_self(
                         (
-                            column.column_empty_like(
-                                col_data, masked=True, newsize=length
-                            )
-                            for col_data in self._columns
+                            column_empty(row_count=length, dtype=dtype)
+                            for _, dtype in self._dtypes
                         ),
                         verify=False,
                     )
@@ -3332,7 +3490,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     self.index, how="right", sort=False
                 )
 
-        value = column.as_column(value, nan_as_null=nan_as_null)
+        value = as_column(value, nan_as_null=nan_as_null)
 
         self._data.insert(name, value, loc=loc)
 
@@ -3358,9 +3516,11 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             Index(['key', 'k2', 'val', 'temp'], dtype='object')]
 
         """
-        return [self.index, self._data.to_pandas_index()]
+        return [self.index, self._data.to_pandas_index]
 
-    def diff(self, periods=1, axis=0):
+    def diff(
+        self, periods: int = 1, axis: int | Literal["index", "columns"] = 0
+    ) -> Self:
         """
         First discrete difference of element.
 
@@ -3419,14 +3579,15 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             raise NotImplementedError("Only axis=0 is supported.")
 
         if abs(periods) > len(self):
-            df = cudf.DataFrame._from_data(
-                {
-                    name: column_empty(len(self), dtype=dtype, masked=True)
-                    for name, dtype in zip(self._column_names, self.dtypes)
-                }
+            return self._from_data_like_self(
+                self._data._from_columns_like_self(
+                    (
+                        column_empty(len(self), dtype=dtype)
+                        for _, dtype in self._dtypes
+                    ),
+                    verify=False,
+                )
             )
-            return df
-
         return self - self.shift(periods=periods)
 
     @_performance_tracking
@@ -3508,7 +3669,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         1  Yum Yum   cup     4.0
         2  Indomie   cup     3.5
         4  Indomie  pack     5.0
-        """  # noqa: E501
+        """
         outdf = super().drop_duplicates(
             subset=subset,
             keep=keep,
@@ -3730,14 +3891,14 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             * Not supporting: ``axis``, ``*args``, ``**kwargs``
 
         """
-        dtypes = [self[col].dtype for col in self._column_names]
+        dtypes = [dtype for _, dtype in self._dtypes]
         common_dtype = find_common_type(dtypes)
         if common_dtype.kind != "b" and any(
             dtype.kind == "b" for dtype in dtypes
         ):
             raise MixedTypeError("Cannot create a column with mixed types")
 
-        if any(is_string_dtype(dt) for dt in dtypes):
+        if any(dt == CUDF_STRING_DTYPE for dt in dtypes):
             raise NotImplementedError(
                 "DataFrame.agg() is not supported for "
                 "frames containing string columns"
@@ -3759,8 +3920,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         elif isinstance(aggs, str):
             if not hasattr(self, aggs):
                 raise AttributeError(
-                    f"{aggs} is not a valid function for "
-                    f"'DataFrame' object"
+                    f"{aggs} is not a valid function for 'DataFrame' object"
                 )
             result = DataFrame()
             result[aggs] = getattr(self, aggs)()
@@ -3801,9 +3961,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 result = DataFrame(index=idxs, columns=cols)
                 for key in aggs.keys():
                     col = self[key]
-                    col_empty = column_empty(
-                        len(idxs), dtype=col.dtype, masked=True
-                    )
+                    col_empty = column_empty(len(idxs), dtype=col.dtype)
                     ans = cudf.Series._from_column(
                         col_empty, index=cudf.Index(idxs)
                     )
@@ -4046,7 +4204,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         return result
 
     @_performance_tracking
-    def transpose(self):
+    def transpose(self) -> Self:
         """Transpose index and columns.
 
         Returns
@@ -4059,13 +4217,17 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             Not supporting *copy* because default and only behavior is
             copy=True
         """
-        index = self._data.to_pandas_index()
-        columns = self.index.copy(deep=False)
+        index = self._data.to_pandas_index
+        if not isinstance(index, pd.MultiIndex) and index.dtype == np.dtype(
+            np.object_
+        ):
+            # Potentially convert mixed objects to strings
+            index = index.astype(str)
         if self._num_columns == 0 or self._num_rows == 0:
-            return DataFrame(index=index, columns=columns)
+            return type(self)(index=index, columns=self.index)
 
         # No column from index is transposed with libcudf.
-        source_columns = [*self._columns]
+        source_columns = self._columns
         source_dtype = source_columns[0].dtype
         if isinstance(source_dtype, cudf.CategoricalDtype):
             if any(
@@ -4073,38 +4235,37 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 for c in source_columns
             ):
                 raise ValueError("Columns must all have the same dtype")
-            cats = list(c.categories for c in source_columns)
-            cats = cudf.core.column.concat_columns(cats).unique()
-            source_columns = [
-                col._set_categories(cats, is_unique=True).codes
+            cats = concat_columns(
+                [c.categories for c in source_columns]  # type: ignore[attr-defined]
+            ).unique()
+            source_columns = [  # type: ignore[assignment]
+                col._set_categories(cats, is_unique=True).codes  # type: ignore[attr-defined]
                 for col in source_columns
             ]
-
-        if any(c.dtype != source_columns[0].dtype for c in source_columns):
+            # TODO: Do we need to pass ordered=source_dtype.ordered as well?
+            source_dtype = cudf.CategoricalDtype(categories=cats)
+        elif any(col.dtype != source_dtype for col in source_columns):
             raise ValueError("Columns must all have the same dtype")
 
-        result_columns = libcudf.transpose.transpose(source_columns)
-
-        if isinstance(source_dtype, cudf.CategoricalDtype):
-            result_columns = [
-                codes._with_type_metadata(
-                    cudf.core.dtypes.CategoricalDtype(categories=cats)
-                )
-                for codes in result_columns
-            ]
-        else:
-            result_columns = [
-                result_column._with_type_metadata(source_dtype)
-                for result_column in result_columns
-            ]
+        result_table = plc.transpose.transpose(
+            plc.table.Table(
+                [col.to_pylibcudf(mode="read") for col in source_columns]
+            )
+        )
+        result_columns = (
+            ColumnBase.from_pylibcudf(
+                col, data_ptr_exposed=True
+            )._with_type_metadata(source_dtype)
+            for col in result_table.columns()
+        )
 
         # Set the old column names as the new index
-        result = self.__class__._from_data(
+        result = type(self)._from_data(
             ColumnAccessor(dict(enumerate(result_columns)), verify=False),
             index=cudf.Index(index),
         )
         # Set the old index as the new column names
-        result.columns = columns
+        result.columns = self.index
         return result
 
     T = property(transpose, doc=transpose.__doc__)
@@ -4143,9 +4304,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         out : DataFrame
             Melted result
         """
-        from cudf.core.reshape import melt
-
-        return melt(
+        return reshape.melt(
             self,
             id_vars=id_vars,
             value_vars=value_vars,
@@ -4183,7 +4342,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             If on is None and not merging on indexes then
             this defaults to the intersection of the columns
             in both DataFrames.
-        how : {'left', 'outer', 'inner', 'leftsemi', 'leftanti'}, \
+        how : {'left', 'right', 'outer', 'inner', 'cross', 'leftsemi', 'leftanti'}, \
             default 'inner'
             Type of merge to be performed.
 
@@ -4194,6 +4353,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
               full outer join.
             - inner : use intersection of keys from both frames, similar to
               a SQL inner join.
+            - cross: creates the cartesian product from both frames, preserves the order
+              of the left keys.
             - leftsemi : similar to ``inner`` join, but only returns columns
                from the left dataframe and ignores all columns from the
                right dataframe.
@@ -4314,8 +4475,18 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         Parameters
         ----------
         other : DataFrame
-        how : str
-            Only accepts "left", "right", "inner", "outer"
+        how : {'left', 'right', 'outer', 'inner', 'cross'}, default 'left'
+            How to handle the operation of the two objects.
+
+            * left: use calling frame's index (or column if on is specified)
+            * right: use `other`'s index.
+            * outer: form union of calling frame's index (or column if on is
+              specified) with `other`'s index, and sort it lexicographically.
+            * inner: form intersection of calling frame's index (or column if
+              on is specified) with `other`'s index, preserving the order
+              of the calling's one.
+            * cross: creates the cartesian product from both frames, preserves the order
+              of the left keys.
         lsuffix, rsuffix : str
             The suffices to add to the left (*lsuffix*) and right (*rsuffix*)
             column names when avoiding conflicts.
@@ -4780,7 +4951,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         if na_action not in {"ignore", None}:
             raise ValueError(
-                f"na_action must be 'ignore' or None. Got {repr(na_action)}"
+                f"na_action must be 'ignore' or None. Got {na_action!r}"
             )
 
         if na_action == "ignore":
@@ -4871,7 +5042,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         """
         for col in incols:
             current_col_dtype = self._data[col].dtype
-            if is_string_dtype(current_col_dtype) or isinstance(
+            if current_col_dtype == CUDF_STRING_DTYPE or isinstance(
                 current_col_dtype, cudf.CategoricalDtype
             ):
                 raise TypeError(
@@ -4956,7 +5127,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         )
 
     @_performance_tracking
-    def partition_by_hash(self, columns, nparts, keep_index=True):
+    def partition_by_hash(
+        self, columns, nparts: int, keep_index: bool = True
+    ) -> list[DataFrame]:
         """Partition the dataframe by the hashed value of data in *columns*.
 
         Parameters
@@ -4975,18 +5148,27 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         """
         key_indices = [self._column_names.index(k) for k in columns]
         if keep_index:
-            cols = [*self.index._columns, *self._columns]
+            cols: abc.Iterable[ColumnBase] = itertools.chain(
+                self.index._columns, self._columns
+            )
             key_indices = [i + len(self.index._columns) for i in key_indices]
         else:
-            cols = [*self._columns]
+            cols = self._columns
 
-        output_columns, offsets = libcudf.hash.hash_partition(
-            cols, key_indices, nparts
-        )
+        with acquire_spill_lock():
+            plc_table, offsets = plc.partitioning.hash_partition(
+                plc.Table([col.to_pylibcudf(mode="read") for col in cols]),
+                key_indices,
+                nparts,
+            )
+            output_columns = [
+                ColumnBase.from_pylibcudf(col) for col in plc_table.columns()
+            ]
+
         outdf = self._from_columns_like_self(
             output_columns,
             self._column_names,
-            self._index_names if keep_index else None,
+            self._index_names if keep_index else None,  # type: ignore[arg-type]
         )
         # Slice into partitions. Notice, `hash_partition` returns the start
         # offset of each partition thus we skip the first offset
@@ -5118,11 +5300,12 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         useful for big DataFrames and fine-tune memory optimization:
 
         >>> import numpy as np
-        >>> random_strings_array = np.random.choice(['a', 'b', 'c'], 10 ** 6)
+        >>> rng = np.random.default_rng(seed=0)
+        >>> random_strings_array = rng.choice(['a', 'b', 'c'], 10 ** 6)
         >>> df = cudf.DataFrame({
-        ...     'column_1': np.random.choice(['a', 'b', 'c'], 10 ** 6),
-        ...     'column_2': np.random.choice(['a', 'b', 'c'], 10 ** 6),
-        ...     'column_3': np.random.choice(['a', 'b', 'c'], 10 ** 6)
+        ...     'column_1': rng.choice(['a', 'b', 'c'], 10 ** 6),
+        ...     'column_2': rng.choice(['a', 'b', 'c'], 10 ** 6),
+        ...     'column_3': rng.choice(['a', 'b', 'c'], 10 ** 6)
         ... })
         >>> df.info(memory_usage='deep')
         <class 'cudf.core.dataframe.DataFrame'>
@@ -5153,7 +5336,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         if self._num_columns == 0:
             lines.append(f"Empty {type(self).__name__}")
-            cudf.utils.ioutils.buffer_write_lines(buf, lines)
+            buffer_write_lines(buf, lines)
             return
 
         cols = self._column_names
@@ -5216,7 +5399,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
             dtype_header = "Dtype"
             len_dtype = len(dtype_header)
-            max_dtypes = max(len(pprint_thing(k)) for k in self.dtypes)
+            max_dtypes = max(
+                len(pprint_thing(dtype)) for _, dtype in self._dtypes
+            )
             space_dtype = max(len_dtype, max_dtypes)
             header += (
                 _put_str(count_header, space_count)
@@ -5231,9 +5416,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 + _put_str("-" * len_dtype, space_dtype).rstrip()
             )
 
-            for i, col in enumerate(self._column_names):
-                dtype = self.dtypes.iloc[i]
-                col = pprint_thing(col)
+            for i, (col_name, col_dtype) in enumerate(self._dtypes):
+                col = pprint_thing(col_name)
 
                 line_no = _put_str(f" {i}", space_num)
                 count = ""
@@ -5244,7 +5428,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     line_no
                     + _put_str(col, space)
                     + _put_str(count_temp.format(count=count), space_count)
-                    + _put_str(dtype, space_dtype).rstrip()
+                    + _put_str(col_dtype, space_dtype).rstrip()
                 )
 
         def _non_verbose_repr():
@@ -5297,7 +5481,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 f"memory usage: {_sizeof_fmt(mem_usage, size_qualifier)}\n"
             )
 
-        cudf.utils.ioutils.buffer_write_lines(buf, lines)
+        buffer_write_lines(buf, lines)
 
     @_performance_tracking
     @docutils.doc_describe()
@@ -5446,7 +5630,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         }
 
         out_df = pd.DataFrame(out_data, index=out_index)
-        out_df.columns = self._data.to_pandas_index()
+        out_df.columns = self._data.to_pandas_index
 
         return out_df
 
@@ -5488,7 +5672,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         if isinstance(dataframe, pd.DataFrame):
             data = {
-                i: column.as_column(col_value.array, nan_as_null=nan_as_null)
+                i: as_column(col_value.array, nan_as_null=nan_as_null)
                 for i, (_, col_value) in enumerate(dataframe.items())
             }
             if isinstance(dataframe.index, pd.MultiIndex):
@@ -5503,10 +5687,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             # Checks duplicate columns and sets column metadata
             df.columns = dataframe.columns
             return df
-        elif hasattr(dataframe, "__dataframe__"):
-            # TODO: Probably should be handled in the constructor as
-            # this isn't pandas specific
-            return from_dataframe(dataframe, allow_copy=True)
         else:
             raise TypeError(
                 f"Could not construct DataFrame from {type(dataframe)}"
@@ -5514,14 +5694,14 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
     @classmethod
     @_performance_tracking
-    def from_arrow(cls, table):
+    def from_arrow(cls, table: pa.Table) -> Self:
         """
         Convert from PyArrow Table to DataFrame.
 
         Parameters
         ----------
-        table : PyArrow Table Object
-            PyArrow Table Object which has to be converted to cudf DataFrame.
+        table : pyarrow.Table
+            PyArrow Table to convert to a cudf DataFrame.
 
         Raises
         ------
@@ -5549,59 +5729,49 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             how :meth:`pyarrow.Table.to_pandas` works for PyArrow Tables i.e.
             it does not support automatically setting index column(s).
         """
-        index_col = None
-        col_index_names = None
-        physical_column_md = []
-        if isinstance(table, pa.Table) and isinstance(
-            table.schema.pandas_metadata, dict
-        ):
-            physical_column_md = table.schema.pandas_metadata["columns"]
-            index_col = table.schema.pandas_metadata["index_columns"]
-            if "column_indexes" in table.schema.pandas_metadata:
-                col_index_names = []
-                for col_meta in table.schema.pandas_metadata["column_indexes"]:
-                    col_index_names.append(col_meta["name"])
-
         out = super().from_arrow(table)
-        if col_index_names is not None:
-            out._data._level_names = col_index_names
-        if index_col:
-            if isinstance(index_col[0], dict):
-                range_meta = index_col[0]
-                idx = cudf.RangeIndex(
-                    start=range_meta["start"],
-                    stop=range_meta["stop"],
-                    step=range_meta["step"],
-                    name=range_meta["name"],
-                )
-                if len(idx) == len(out):
-                    # `idx` is generated from arrow `pandas_metadata`
-                    # which can get out of date with many of the
-                    # arrow operations. Hence verifying if the
-                    # lengths match, or else don't need to set
-                    # an index at all i.e., Default RangeIndex
-                    # will be set.
-                    # See more about the discussion here:
-                    # https://github.com/apache/arrow/issues/15178
-                    out = out.set_index(idx)
-            else:
-                out = out.set_index(index_col)
-
-        if (
-            "__index_level_0__" in out.index.names
-            and len(out.index.names) == 1
-        ):
-            real_index_name = None
-            for md in physical_column_md:
-                if md["field_name"] == "__index_level_0__":
-                    real_index_name = md["name"]
-                    break
-            out.index.name = real_index_name
-
+        if isinstance(table.schema.pandas_metadata, dict):
+            # Maybe set .index or .columns attributes
+            pd_meta = table.schema.pandas_metadata
+            if "column_indexes" in pd_meta:
+                out._data._level_names = [
+                    col_meta["name"] for col_meta in pd_meta["column_indexes"]
+                ]
+            if index_col := pd_meta["index_columns"]:
+                if isinstance(index_col[0], dict):
+                    range_meta = index_col[0]
+                    idx = cudf.RangeIndex(
+                        start=range_meta["start"],
+                        stop=range_meta["stop"],
+                        step=range_meta["step"],
+                        name=range_meta["name"],
+                    )
+                    if len(idx) == len(out):
+                        # `idx` is generated from arrow `pandas_metadata`
+                        # which can get out of date with many of the
+                        # arrow operations. Hence verifying if the
+                        # lengths match, or else don't need to set
+                        # an index at all i.e., Default RangeIndex
+                        # will be set.
+                        # See more about the discussion here:
+                        # https://github.com/apache/arrow/issues/15178
+                        out = out.set_index(idx)
+                else:
+                    out = out.set_index(index_col)
+            if (
+                len(out.index.names) == 1
+                and out.index.names[0] == "__index_level_0__"
+            ):
+                for col_meta in pd_meta["columns"]:
+                    if col_meta["field_name"] == "__index_level_0__":
+                        out.index.name = col_meta["name"]
+                        break
+                else:
+                    out.index.name = None
         return out
 
     @_performance_tracking
-    def to_arrow(self, preserve_index=None) -> pa.Table:
+    def to_arrow(self, preserve_index: bool | None = None) -> pa.Table:
         """
         Convert to a PyArrow Table.
 
@@ -5642,7 +5812,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         """
 
         data = self
-        index_descr = []
+        index_descr: Sequence[dict[str, Any]] | Sequence[str] = []
         write_index = preserve_index is not False
         keep_range_index = write_index and preserve_index is None
         index = self.index
@@ -5689,8 +5859,11 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             preserve_index=preserve_index,
             types=out.schema.types,
         )
+        md_dict = json.loads(metadata[b"pandas"])
 
-        return out.replace_schema_metadata(metadata)
+        _update_pandas_metadata_types_inplace(self, md_dict)
+
+        return out.replace_schema_metadata({b"pandas": json.dumps(md_dict)})
 
     @_performance_tracking
     def to_records(self, index=True, column_dtypes=None, index_dtypes=None):
@@ -5803,12 +5976,12 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         if data.ndim == 2:
             ca_data = {
-                k: column.as_column(data[:, i], nan_as_null=nan_as_null)
+                k: as_column(data[:, i], nan_as_null=nan_as_null)
                 for i, k in enumerate(names)
             }
         elif data.ndim == 1:
             ca_data = {
-                name: column.as_column(data[name], nan_as_null=nan_as_null)
+                name: as_column(data[name], nan_as_null=nan_as_null)
                 for name in names
             }
 
@@ -5849,7 +6022,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         index=None,
         columns=None,
         nan_as_null=False,
-    ):
+    ) -> Self:
         """
         Convert an object implementing an array interface to DataFrame.
 
@@ -5883,7 +6056,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 f"records dimension expected 1 or 2 but found: {array_data.ndim}"
             )
 
-        if data.ndim == 2:
+        if array_data.ndim == 2:
             num_cols = array_data.shape[1]
         else:
             # Since we validate ndim to be either 1 or 2 above,
@@ -5902,14 +6075,20 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 raise ValueError("Duplicate column names are not allowed")
             names = columns
 
+        # Mapping/MutableMapping are invariant in the key type, so
+        # dict[int, ColumnBase] (the inferred type of ca_data) is not
+        # a valid type to pass to a function accepting
+        # Mapping[Hashable, ColumnBase] even though int is Hashable.
+        # See: https://github.com/python/typing/issues/445
+        ca_data: dict[Hashable, ColumnBase]
         if array_data.ndim == 2:
             ca_data = {
-                k: column.as_column(array_data[:, i], nan_as_null=nan_as_null)
+                k: as_column(array_data[:, i], nan_as_null=nan_as_null)
                 for i, k in enumerate(names)
             }
         elif array_data.ndim == 1:
             ca_data = {
-                names[0]: column.as_column(array_data, nan_as_null=nan_as_null)
+                names[0]: as_column(array_data, nan_as_null=nan_as_null)
             }
 
         if index is not None:
@@ -5948,7 +6127,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         downcast=None,
         **kwargs,
     ):
-        if all(dt == np.dtype("object") for dt in self.dtypes):
+        if all(dt == CUDF_STRING_DTYPE for _, dt in self._dtypes):
             raise TypeError(
                 "Cannot interpolate with all object-dtype "
                 "columns in the DataFrame. Try setting at "
@@ -6048,7 +6227,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             non-numeric types and result is expected to be a Series in case of
             Pandas. cuDF will return a DataFrame as it doesn't support mixed
             types under Series.
-        """  # noqa: E501
+        """
         if axis not in (0, None):
             raise NotImplementedError("axis is not implemented yet")
 
@@ -6064,7 +6243,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         if isinstance(q, numbers.Number):
             q_is_number = True
             qs = [float(q)]
-        elif pd.api.types.is_list_like(q):
+        elif not is_scalar(q):
             q_is_number = False
             qs = q
         else:
@@ -6072,8 +6251,27 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             raise TypeError(msg)
 
         if method == "table":
-            interpolation = interpolation or "nearest"
-            result = self._quantile_table(qs, interpolation.upper())
+            with acquire_spill_lock():
+                plc_table = plc.quantiles.quantiles(
+                    plc.Table(
+                        [c.to_pylibcudf(mode="read") for c in self._columns]
+                    ),
+                    qs,
+                    plc.types.Interpolation[
+                        (interpolation or "nearest").upper()
+                    ],
+                    plc.types.Sorted.NO,
+                    [],
+                    [],
+                )
+                columns = [
+                    ColumnBase.from_pylibcudf(col)
+                    for col in plc_table.columns()
+                ]
+            result = self._from_columns_like_self(
+                columns,
+                column_names=self._column_names,
+            )
 
             if q_is_number:
                 result = result.transpose()
@@ -6094,9 +6292,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                         quant_index=False,
                     )._column
                     if len(res) == 0:
-                        res = column.column_empty_like(
-                            qs, dtype=ser.dtype, masked=True, newsize=len(qs)
-                        )
+                        res = column_empty(row_count=len(qs), dtype=ser.dtype)
                     result[k] = res
             result = DataFrame._from_data(result)
 
@@ -6169,10 +6365,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         # TODO: propagate nulls through isin
         # https://github.com/rapidsai/cudf/issues/7556
 
-        fill_value = cudf.Scalar(False)
-
         def make_false_column_like_self():
-            return column.as_column(fill_value, length=len(self), dtype="bool")
+            return as_column(False, length=len(self), dtype="bool")
 
         # Preprocess different input types into a mapping from column names to
         # a list of values to check.
@@ -6220,8 +6414,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     else:
                         # These checks must happen after the conversions above
                         # since numpy can't handle categorical dtypes.
-                        self_is_str = is_string_dtype(self_col.dtype)
-                        other_is_str = is_string_dtype(other_col.dtype)
+                        self_is_str = self_col.dtype == CUDF_STRING_DTYPE
+                        other_is_str = other_col.dtype == CUDF_STRING_DTYPE
 
                     if self_is_str != other_is_str:
                         # Strings can't compare to anything else.
@@ -6273,13 +6467,14 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         else:
             filtered = self.copy(deep=False)
 
-        is_pure_dt = all(dt.kind == "M" for dt in filtered.dtypes)
+        dtypes = [dtype for _, dtype in filtered._dtypes]
+        is_pure_dt = all(dt.kind == "M" for dt in dtypes)
 
-        common_dtype = find_common_type(filtered.dtypes)
+        common_dtype = find_common_type(dtypes)
         if (
             not numeric_only
-            and is_string_dtype(common_dtype)
-            and any(not is_string_dtype(dt) for dt in filtered.dtypes)
+            and common_dtype == CUDF_STRING_DTYPE
+            and any(dtype != CUDF_STRING_DTYPE for dtype in dtypes)
         ):
             raise TypeError(
                 f"Cannot perform row-wise {method} across mixed-dtype columns,"
@@ -6305,7 +6500,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         coerced = filtered.astype(common_dtype, copy=False)
         if is_pure_dt:
             # Further convert into cupy friendly types
-            coerced = coerced.astype("int64", copy=False)
+            coerced = coerced.astype(np.dtype(np.int64), copy=False)
         return coerced, mask, common_dtype
 
     @_performance_tracking
@@ -6344,7 +6539,20 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             raise NotImplementedError("Only axis=0 is currently supported.")
         length = len(self)
         return Series._from_column(
-            as_column([length - col.null_count for col in self._columns]),
+            as_column(
+                [
+                    length
+                    - (
+                        col.null_count
+                        + (
+                            col.nan_count
+                            if cudf.get_option("mode.pandas_compatible")
+                            else 0
+                        )
+                    )
+                    for col in self._columns
+                ]
+            ),
             index=cudf.Index(self._column_names),
         )
 
@@ -6389,12 +6597,14 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         if numeric_only:
             numeric_cols = (
-                name for name, dtype in self._dtypes if is_numeric_dtype(dtype)
+                name
+                for name, dtype in self._dtypes
+                if is_dtype_obj_numeric(dtype)
             )
             source = self._get_columns_by_label(numeric_cols)
             if source.empty:
                 return Series(
-                    index=self._data.to_pandas_index()[:0]
+                    index=self._data.to_pandas_index[:0]
                     if axis == 0
                     else source.index,
                     dtype="float64",
@@ -6420,7 +6630,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                         raise NotImplementedError(
                             f"Column {col_label} with type {col.dtype} does not support {op}"
                         ) from err
-                    elif not is_numeric_dtype(col.dtype):
+                    elif not is_dtype_obj_numeric(col.dtype):
                         raise TypeError(
                             "Non numeric columns passed with "
                             "`numeric_only=False`, pass `numeric_only=True` "
@@ -6436,9 +6646,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 source_dtypes = [dtype for _, dtype in source._dtypes]
                 common_dtype = find_common_type(source_dtypes)
                 if (
-                    is_object_dtype(common_dtype)
+                    common_dtype == CUDF_STRING_DTYPE
                     and any(
-                        not is_object_dtype(dtype) for dtype in source_dtypes
+                        dtype != CUDF_STRING_DTYPE for dtype in source_dtypes
                     )
                     or common_dtype.kind != "b"
                     and any(dtype.kind == "b" for dtype in source_dtypes)
@@ -6447,7 +6657,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                         "Columns must all have the same dtype to "
                         f"perform {op=} with {axis=}"
                     )
-                pd_index = source._data.to_pandas_index()
+                pd_index = source._data.to_pandas_index
                 if source._data.multiindex:
                     idx = MultiIndex.from_pandas(pd_index)
                 else:
@@ -6567,9 +6777,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             return DataFrame()
 
         with warnings.catch_warnings():
-            assert (
-                PANDAS_LT_300
-            ), "Need to drop after pandas-3.0 support is added."
+            assert PANDAS_LT_300, (
+                "Need to drop after pandas-3.0 support is added."
+            )
             warnings.simplefilter("ignore", FutureWarning)
             df = cudf.concat(mode_results, axis=1)
 
@@ -6582,12 +6792,20 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
     @_performance_tracking
     def all(self, axis=0, bool_only=None, skipna=True, **kwargs):
-        obj = self.select_dtypes(include="bool") if bool_only else self
+        obj = (
+            self.select_dtypes(include=np.dtype(np.bool_))
+            if bool_only
+            else self
+        )
         return super(DataFrame, obj).all(axis, skipna, **kwargs)
 
     @_performance_tracking
     def any(self, axis=0, bool_only=None, skipna=True, **kwargs):
-        obj = self.select_dtypes(include="bool") if bool_only else self
+        obj = (
+            self.select_dtypes(include=np.dtype(np.bool_))
+            if bool_only
+            else self
+        )
         return super(DataFrame, obj).any(axis, skipna, **kwargs)
 
     @_performance_tracking
@@ -6642,11 +6860,11 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 prepared._data[col] = (
                     prepared._data[col]
                     .astype(
-                        cudf.utils.dtypes.get_min_float_dtype(
-                            prepared._data[col]
+                        prepared._data[col]._min_column_type(
+                            np.dtype(np.float32)
                         )
                         if common_dtype.kind != "M"
-                        else cudf.dtype("float64")
+                        else np.dtype(np.float64)
                     )
                     .fillna(np.nan)
                 )
@@ -6675,11 +6893,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 or (common_dtype is not None and common_dtype.kind == "M")
                 else None
             )
-            result = column.as_column(result, dtype=result_dtype)
+            result = as_column(result, dtype=result_dtype)
             if mask is not None:
-                result = result.set_mask(
-                    cudf._lib.transform.bools_to_mask(mask._column)
-                )
+                result = result.set_mask(mask._column.as_mask())
             return Series._from_column(result, index=self.index)
         else:
             result_df = DataFrame(result, index=self.index)
@@ -6747,7 +6963,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         3  False  2.0
         4   True  1.0
         5  False  2.0
-        """  # noqa: E501
+        """
 
         # code modified from:
         # https://github.com/pandas-dev/pandas/blob/master/pandas/core/frame.py#L3196
@@ -6756,6 +6972,22 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             include = (include,) if include is not None else ()
         if not isinstance(exclude, (list, tuple)):
             exclude = (exclude,) if exclude is not None else ()
+
+        def cudf_dtype_from_pydata_dtype(dtype):
+            """Given a numpy or pandas dtype, converts it into the equivalent cuDF
+            Python dtype.
+            """
+            if _is_categorical_dtype(dtype):
+                return cudf.CategoricalDtype
+            elif is_decimal32_dtype(dtype):
+                return cudf.Decimal32Dtype
+            elif is_decimal64_dtype(dtype):
+                return cudf.Decimal64Dtype
+            elif is_decimal128_dtype(dtype):
+                return cudf.Decimal128Dtype
+            elif dtype in SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES:
+                return dtype.type
+            return pd.core.dtypes.common.infer_dtype_from_object(dtype)
 
         # cudf_dtype_from_pydata_dtype can distinguish between
         # np.float and np.number
@@ -6779,7 +7011,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         # include all subtypes
         include_subtypes = set()
-        for dtype in self.dtypes:
+        for _, dtype in self._dtypes:
             for i_dtype in include:
                 # category handling
                 if i_dtype == cudf.CategoricalDtype:
@@ -6791,7 +7023,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         # exclude all subtypes
         exclude_subtypes = set()
-        for dtype in self.dtypes:
+        for _, dtype in self._dtypes:
             for e_dtype in exclude:
                 # category handling
                 if e_dtype == cudf.CategoricalDtype:
@@ -6801,7 +7033,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     if issubclass(dtype.type, e_dtype):
                         exclude_subtypes.add(dtype.type)
 
-        include_all = {cudf_dtype_from_pydata_dtype(d) for d in self.dtypes}
+        include_all = {
+            cudf_dtype_from_pydata_dtype(dtype) for _, dtype in self._dtypes
+        }
 
         if include:
             inclusion = include_all & include_subtypes
@@ -6950,7 +7184,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         )
 
     @_performance_tracking
-    def stack(self, level=-1, dropna=no_default, future_stack=False):
+    def stack(
+        self, level=-1, dropna=no_default, future_stack=False
+    ) -> DataFrame | Series:
         """Stack the prescribed level(s) from columns to index
 
         Return a reshaped DataFrame or Series having a multi-level
@@ -7149,7 +7385,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         ]
         has_unnamed_levels = len(unnamed_levels_indices) > 0
 
-        column_name_idx = self._data.to_pandas_index()
+        column_name_idx = self._data.to_pandas_index
         # Construct new index from the levels specified by `level`
         named_levels = pd.MultiIndex.from_arrays(
             [column_name_idx.get_level_values(lv) for lv in level_indices]
@@ -7167,13 +7403,21 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         repeated_index = self.index.repeat(len(unique_named_levels))
 
         # Each column name should tile itself by len(df) times
-        tiled_index = libcudf.reshape.tile(
-            [
-                as_column(unique_named_levels.get_level_values(i))
-                for i in range(unique_named_levels.nlevels)
-            ],
-            self.shape[0],
-        )
+        with acquire_spill_lock():
+            plc_table = plc.reshape.tile(
+                plc.Table(
+                    [
+                        as_column(
+                            unique_named_levels.get_level_values(i)
+                        ).to_pylibcudf(mode="read")
+                        for i in range(unique_named_levels.nlevels)
+                    ]
+                ),
+                self.shape[0],
+            )
+            tiled_index = [
+                ColumnBase.from_pylibcudf(plc) for plc in plc_table.columns()
+            ]
 
         # Assemble the final index
         new_index_columns = [*repeated_index._columns, *tiled_index]
@@ -7187,13 +7431,14 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             data=range(self._num_columns), index=named_levels
         )
 
-        column_indices: list[list[int]] = []
         if has_unnamed_levels:
-            unnamed_level_values = list(
-                map(column_name_idx.get_level_values, unnamed_levels_indices)
-            )
             unnamed_level_values = pd.MultiIndex.from_arrays(
-                unnamed_level_values
+                list(
+                    map(
+                        column_name_idx.get_level_values,
+                        unnamed_levels_indices,
+                    )
+                )
             )
 
         def unnamed_group_generator():
@@ -7223,13 +7468,11 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 else:
                     yield column_idx_df.sort_index().values
 
-        column_indices = list(unnamed_group_generator())
-
         # For each of the group constructed from the unnamed levels,
         # invoke `interleave_columns` to stack the values.
         stacked = []
 
-        for column_idx in column_indices:
+        for column_idx in unnamed_group_generator():
             # Collect columns based on indices, append None for -1 indices.
             columns = [
                 None if i == -1 else self._data.select_by_index(i).columns[0]
@@ -7237,23 +7480,32 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             ]
 
             # Collect datatypes and cast columns as that type
-            common_type = np.result_type(
-                *(col.dtype for col in columns if col is not None)
+            common_type = find_common_type(
+                [col.dtype for col in columns if col is not None]
             )
 
             all_nulls = functools.cache(
-                functools.partial(
-                    column_empty, self.shape[0], common_type, masked=True
-                )
+                functools.partial(column_empty, self.shape[0], common_type)
             )
 
             # homogenize the dtypes of the columns
-            homogenized = [
+            homogenized = (
                 col.astype(common_type) if col is not None else all_nulls()
                 for col in columns
-            ]
+            )
 
-            stacked.append(libcudf.reshape.interleave_columns(homogenized))
+            with acquire_spill_lock():
+                interleaved_col = ColumnBase.from_pylibcudf(
+                    plc.reshape.interleave_columns(
+                        plc.Table(
+                            [
+                                col.to_pylibcudf(mode="read")
+                                for col in homogenized
+                            ]
+                        )
+                    )
+                )
+            stacked.append(interleaved_col)
 
         # Construct the resulting dataframe / series
         if not has_unnamed_levels:
@@ -7322,7 +7574,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             )
 
         cov = cupy.cov(self.values, ddof=ddof, rowvar=False)
-        cols = self._data.to_pandas_index()
+        cols = self._data.to_pandas_index
         df = DataFrame(cupy.asfortranarray(cov), index=cols)
         df._set_columns_like(self._data)
         return df
@@ -7365,7 +7617,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             )
 
         corr = cupy.corrcoef(values, rowvar=False)
-        cols = self._data.to_pandas_index()
+        cols = self._data.to_pandas_index
         df = DataFrame(cupy.asfortranarray(corr), index=cols)
         df._set_columns_like(self._data)
         return df
@@ -7434,7 +7686,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         >>> df.keys()
         Index([0, 1, 2, 3], dtype='int64')
         """
-        return self._data.to_pandas_index()
+        return self._data.to_pandas_index
 
     def itertuples(self, index=True, name="Pandas"):
         """
@@ -7467,9 +7719,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     @_performance_tracking
     @copy_docstring(reshape.pivot)
     def pivot(self, *, columns, index=no_default, values=no_default):
-        return cudf.core.reshape.pivot(
-            self, index=index, columns=columns, values=values
-        )
+        return reshape.pivot(self, index=index, columns=columns, values=values)
 
     @_performance_tracking
     @copy_docstring(reshape.pivot_table)
@@ -7486,7 +7736,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         observed=False,
         sort=True,
     ):
-        return cudf.core.reshape.pivot_table(
+        return reshape.pivot_table(
             self,
             values=values,
             index=index,
@@ -7503,7 +7753,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     @_performance_tracking
     @copy_docstring(reshape.unstack)
     def unstack(self, level=-1, fill_value=None, sort: bool = True):
-        return cudf.core.reshape.unstack(
+        return reshape.unstack(
             self, level=level, fill_value=fill_value, sort=sort
         )
 
@@ -7607,9 +7857,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         if fill_method not in (no_default, None) or limit is not no_default:
             # Do not remove until pandas 3.0 support is added.
-            assert (
-                PANDAS_LT_300
-            ), "Need to drop after pandas-3.0 support is added."
+            assert PANDAS_LT_300, (
+                "Need to drop after pandas-3.0 support is added."
+            )
             warnings.warn(
                 "The 'fill_method' and 'limit' keywords in "
                 f"{type(self).__name__}.pct_change are deprecated and will be "
@@ -7629,13 +7879,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         return data.diff(periods=periods) / data.shift(
             periods=periods, freq=freq, **kwargs
-        )
-
-    def __dataframe__(
-        self, nan_as_null: bool = False, allow_copy: bool = True
-    ):
-        return df_protocol.__dataframe__(
-            self, nan_as_null=nan_as_null, allow_copy=allow_copy
         )
 
     def nunique(self, axis=0, dropna: bool = True) -> Series:
@@ -7668,7 +7911,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             raise NotImplementedError("axis parameter is not supported yet.")
         counts = [col.distinct_count(dropna=dropna) for col in self._columns]
         return self._constructor_sliced(
-            counts, index=self._data.to_pandas_index()
+            counts, index=self._data.to_pandas_index
         )
 
     def _sample_axis_1(
@@ -7750,14 +7993,36 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             This method does not exist in pandas but it can be run
             as ``pd.Series(np.vstack(df.to_numpy()).reshape((-1,)))``.
         """
-        if ("category" == self.dtypes).any():
+        if any(
+            isinstance(dtype, cudf.CategoricalDtype)
+            for _, dtype in self._dtypes
+        ):
             raise ValueError(
                 "interleave_columns does not support 'category' dtype."
             )
+        with acquire_spill_lock():
+            result_col = ColumnBase.from_pylibcudf(
+                plc.reshape.interleave_columns(
+                    plc.Table(
+                        [
+                            col.to_pylibcudf(mode="read")
+                            for col in self._columns
+                        ]
+                    )
+                )
+            )
+        return self._constructor_sliced._from_column(result_col)
 
-        return self._constructor_sliced._from_column(
-            libcudf.reshape.interleave_columns([*self._columns])
+    @acquire_spill_lock()
+    def _compute_column(self, expr: str) -> ColumnBase:
+        """Helper function for eval"""
+        plc_column = plc.transform.compute_column(
+            plc.Table(
+                [col.to_pylibcudf(mode="read") for col in self._columns]
+            ),
+            plc.expressions.to_expression(expr, self._column_names),
         )
+        return ColumnBase.from_pylibcudf(plc_column)
 
     @_performance_tracking
     def eval(self, expr: str, inplace: bool = False, **kwargs):
@@ -7886,11 +8151,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 raise ValueError(
                     "Cannot operate inplace if there is no assignment"
                 )
-            return Series._from_column(
-                libcudf.transform.compute_column(
-                    [*self._columns], self._column_names, statements[0]
-                )
-            )
+            return Series._from_column(self._compute_column(statements[0]))
 
         targets = []
         exprs = []
@@ -7906,15 +8167,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             targets.append(t.strip())
             exprs.append(e.strip())
 
-        cols = (
-            libcudf.transform.compute_column(
-                [*self._columns], self._column_names, e
-            )
-            for e in exprs
-        )
         ret = self if inplace else self.copy(deep=False)
-        for name, col in zip(targets, cols):
-            ret._data[name] = col
+        for name, expr in zip(targets, exprs):
+            ret._data[name] = self._compute_column(expr)
         if not inplace:
             return ret
 
@@ -7983,7 +8238,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 dropna=dropna,
             )
             .size()
-            .astype("int64")
+            .astype(np.dtype(np.int64))
         )
         if sort:
             result = result.sort_values(ascending=ascending)
@@ -7995,28 +8250,118 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         result.name = "proportion" if normalize else "count"
         return result
 
+    @_performance_tracking
+    def to_pylibcudf(self, copy: bool = False) -> tuple[plc.Table, dict]:
+        """
+        Convert this DataFrame to a pylibcudf.Table.
 
-def from_dataframe(df, allow_copy: bool = False) -> DataFrame:
-    """
-    Build a :class:`DataFrame` from an object supporting the dataframe interchange protocol.
+        Parameters
+        ----------
+        copy : bool
+            Whether or not to generate a new copy of the underlying device data
 
-    .. note::
+        Returns
+        -------
+        pylibcudf.Table
+            A pylibcudf.Table referencing the same data.
+        dict
+            Dict of metadata (includes column names and dataframe indices)
 
-        If you have a ``pandas.DataFrame``, use :func:`from_pandas` instead.
+        Notes
+        -----
+        User requests to convert to pylibcudf must assume that the
+        data may be modified afterwards.
+        """
+        if copy:
+            raise NotImplementedError("copy=True is not supported")
+        metadata = {"index": self.index, "columns": self._data.to_pandas_index}
+        return plc.Table(
+            [col.to_pylibcudf(mode="write") for col in self._columns]
+        ), metadata
 
-    Parameters
-    ----------
-    df : DataFrameXchg
-        Object supporting the interchange protocol, i.e. ``__dataframe__`` method.
-    allow_copy : bool, default: True
-        Whether to allow copying the memory to perform the conversion
-        (if false then zero-copy approach is requested).
+    @classmethod
+    @_performance_tracking
+    def from_pylibcudf(
+        cls,
+        table: plc.Table | plc.io.TableWithMetadata,
+        metadata: dict[str, Any] | None = None,
+    ) -> Self:
+        """
+        Create a DataFrame from a pylibcudf.Table.
 
-    Returns
-    -------
-    :class:`DataFrame`
-    """
-    return df_protocol.from_dataframe(df, allow_copy=allow_copy)
+        Parameters
+        ----------
+        table : pylibcudf.Table, pylibcudf.io.TableWithMetadata
+            The input Table.
+        metadata : dict, default None
+            Metadata necessary to reconstruct the dataframe
+            if table is a pylibcudf.Table.
+
+        Returns
+        -------
+        table : cudf.DataFrame
+            A cudf.DataFrame referencing the columns in the pylibcudf.Table.
+
+        Notes
+        -----
+        This function will generate a DataFrame which contains a tuple of columns
+        pointing to the same columns the input table points to.  It will directly access
+        the data and mask buffers of the pylibcudf columns, so the newly created
+        object is not tied to the lifetime of the original pylibcudf.Table.
+        """
+        if isinstance(table, plc.io.TableWithMetadata):
+            tbl = table.tbl
+            if metadata is not None:
+                raise ValueError(
+                    "metadata must be None when table is a pylibcudf.io.TableWithMetadata"
+                )
+            column_names = table.column_names(include_children=False)
+            child_names = table.child_names
+            index = None
+        elif isinstance(table, plc.Table):
+            tbl = table
+            if not (
+                isinstance(metadata, dict)
+                and 1 <= len(metadata) <= 2
+                and "columns" in metadata
+                and (
+                    len(metadata) != 2 or {"columns", "index"} == set(metadata)
+                )
+            ):
+                raise ValueError(
+                    "Must pass a metadata dict with column names and optionally indices only "
+                    "when table is a pylibcudf.Table "
+                )
+            column_names = metadata["columns"]
+            # TODO: Allow user to include this in metadata?
+            child_names = None
+            index = metadata.get("index")
+        else:
+            raise ValueError(
+                "table must be a pylibcudf.Table or pylibcudf.io.TableWithMetadata"
+            )
+
+        plc_columns = tbl.columns()
+        cudf_cols = (
+            ColumnBase.from_pylibcudf(plc_col, data_ptr_exposed=True)
+            for plc_col in plc_columns
+        )
+        if child_names is not None:
+            cudf_cols = (
+                _recursively_update_struct_names(col, child_names)
+                for col, child_names in zip(
+                    cudf_cols, child_names.values(), strict=True
+                )
+            )
+        col_accessor = ColumnAccessor(
+            {
+                name: cudf_col
+                for name, cudf_col in zip(column_names, cudf_cols, strict=True)
+            },
+            verify=False,
+            rangeindex=len(plc_columns) == 0,
+        )
+        return cls._from_data(col_accessor, index=index)
 
 
 def make_binop_func(op, postprocess=None):
@@ -8348,11 +8693,9 @@ def _setitem_with_dataframe(
     for col_1, col_2 in zip(input_cols, replace_df._column_names):
         if col_1 in input_df._column_names:
             if mask is not None:
-                input_df._data[col_1][mask] = column.as_column(
-                    replace_df[col_2]
-                )
+                input_df._data[col_1][mask] = as_column(replace_df[col_2])
             else:
-                input_df._data[col_1] = column.as_column(replace_df[col_2])
+                input_df._data[col_1] = as_column(replace_df[col_2])
         else:
             if mask is not None:
                 raise ValueError("Can not insert new column with a bool mask")
@@ -8383,27 +8726,21 @@ def extract_col(df, col):
         return df.index._data[col]
 
 
-def _get_union_of_indices(indexes):
-    if len(indexes) == 1:
-        return indexes[0]
-    else:
-        merged_index = cudf.core.index.Index._concat(indexes)
-        return merged_index.drop_duplicates()
-
-
-def _get_union_of_series_names(series_list):
-    names_list = []
+def _index_from_listlike_of_series(
+    series_list: Sequence[Series],
+) -> cudf.Index:
+    names_list: Sequence[abc.Hashable] = []
     unnamed_count = 0
     for series in series_list:
         if series.name is None:
-            names_list.append(f"Unnamed {unnamed_count}")
+            names_list.append(f"Unnamed {unnamed_count}")  # type: ignore[attr-defined]
             unnamed_count += 1
         else:
-            names_list.append(series.name)
+            names_list.append(series.name)  # type: ignore[attr-defined]
     if unnamed_count == len(series_list):
         names_list = range(len(series_list))
 
-    return names_list
+    return cudf.Index(names_list)
 
 
 # Create a dictionary of the common, non-null columns
@@ -8444,12 +8781,10 @@ def _find_common_dtypes_and_categories(
         # default to the first non-null dtype
         dtypes[idx] = cols[0].dtype
         # If all the non-null dtypes are int/float, find a common dtype
-        if all(is_numeric_dtype(col.dtype) for col in cols):
+        if all(is_dtype_obj_numeric(col.dtype) for col in cols):
             dtypes[idx] = find_common_type([col.dtype for col in cols])
         # If all categorical dtypes, combine the categories
-        elif all(
-            isinstance(col, cudf.core.column.CategoricalColumn) for col in cols
-        ):
+        elif all(isinstance(col.dtype, cudf.CategoricalDtype) for col in cols):
             # Combine and de-dupe the categories
             categories[idx] = concat_columns(
                 [col.categories for col in cols]
@@ -8472,7 +8807,7 @@ def _cast_cols_to_common_dtypes(col_idxs, list_of_columns, dtypes, categories):
             # If column not in this df, fill with an all-null column
             if idx >= len(cols) or cols[idx] is None:
                 n = len(next(x for x in cols if x is not None))
-                cols[idx] = column_empty(row_count=n, dtype=dtype, masked=True)
+                cols[idx] = column_empty(row_count=n, dtype=dtype)
             else:
                 # If column is categorical, rebase the codes with the
                 # combined categories, and cast the new codes to the

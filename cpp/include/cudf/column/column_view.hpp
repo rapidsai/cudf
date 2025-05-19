@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,6 @@
 #pragma once
 
 #include <cudf/types.hpp>
-#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/prefetch.hpp>
 #include <cudf/utilities/span.hpp>
@@ -177,9 +176,13 @@ class column_view_base {
    *
    * @param[in] begin The starting index of the range (inclusive).
    * @param[in] end The index of the last element in the range (exclusive).
+   * @param[in] stream CUDA stream used for device memory operations and kernel launches
    * @return The count of null elements in the given range
    */
-  [[nodiscard]] size_type null_count(size_type begin, size_type end) const;
+  [[nodiscard]] size_type null_count(
+    size_type begin,
+    size_type end,
+    rmm::cuda_stream_view stream = cudf::get_default_stream()) const;
 
   /**
    * @brief Indicates if the column contains null elements,
@@ -199,12 +202,15 @@ class column_view_base {
    *
    * @param begin The starting index of the range (inclusive).
    * @param end The index of the last element in the range (exclusive).
+   * @param stream CUDA stream used for device memory operations and kernel launches
    * @return true One or more elements are null in the range [begin, end)
    * @return false All elements are valid in the range [begin, end)
    */
-  [[nodiscard]] bool has_nulls(size_type begin, size_type end) const
+  [[nodiscard]] bool has_nulls(size_type begin,
+                               size_type end,
+                               rmm::cuda_stream_view stream = cudf::get_default_stream()) const
   {
-    return null_count(begin, end) > 0;
+    return null_count(begin, end, stream) > 0;
   }
 
   /**
@@ -472,7 +478,7 @@ class column_view : public detail::column_view_base {
 
   std::vector<column_view> _children{};  ///< Based on element type, children
                                          ///< may contain additional data
-};                                       // namespace cudf
+};  // namespace cudf
 
 /**
  * @brief A non-owning, mutable view of device data as a column of elements,
@@ -498,7 +504,7 @@ class mutable_column_view : public detail::column_view_base {
  public:
   mutable_column_view() = default;
 
-  ~mutable_column_view() override{
+  ~mutable_column_view() override {
     // Needed so that the first instance of the implicit destructor for any TU isn't 'constructed'
     // from a host+device function marking the implicit version also as host+device
   };

@@ -1,21 +1,35 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
+
+from cython.operator cimport dereference
 
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
+from libcpp.vector cimport vector
 from libcpp.utility cimport move, pair
+
 from pylibcudf.libcudf cimport transform as cpp_transform
 from pylibcudf.libcudf.column.column cimport column
+from pylibcudf.libcudf.column.column_view cimport column_view
 from pylibcudf.libcudf.table.table cimport table
 from pylibcudf.libcudf.table.table_view cimport table_view
 from pylibcudf.libcudf.types cimport bitmask_type, size_type
 
-from rmm._lib.device_buffer cimport DeviceBuffer, device_buffer
+from rmm.librmm.device_buffer cimport device_buffer
+from rmm.pylibrmm.device_buffer cimport DeviceBuffer
 
 from .column cimport Column
 from .gpumemoryview cimport gpumemoryview
 from .types cimport DataType
-from .utils cimport int_to_bitmask_ptr
 
+__all__ = [
+    "bools_to_mask",
+    "compute_column",
+    "encode",
+    "mask_to_bools",
+    "nans_to_nulls",
+    "one_hot_encode",
+    "transform",
+]
 
 cpdef tuple[gpumemoryview, int] nans_to_nulls(Column input):
     """Create a null mask preserving existing nulls and converting nans to null.
@@ -34,12 +48,38 @@ cpdef tuple[gpumemoryview, int] nans_to_nulls(Column input):
     cdef pair[unique_ptr[device_buffer], size_type] c_result
 
     with nogil:
-        c_result = move(cpp_transform.nans_to_nulls(input.view()))
+        c_result = cpp_transform.nans_to_nulls(input.view())
 
     return (
         gpumemoryview(DeviceBuffer.c_from_unique_ptr(move(c_result.first))),
         c_result.second
     )
+
+
+cpdef Column compute_column(Table input, Expression expr):
+    """Create a column by evaluating an expression on a table.
+
+    For details see :cpp:func:`compute_column`.
+
+    Parameters
+    ----------
+    input : Table
+        Table used for expression evaluation
+    expr : Expression
+        Expression to evaluate
+
+    Returns
+    -------
+    Column of the evaluated expression
+    """
+    cdef unique_ptr[column] c_result
+
+    with nogil:
+        c_result = cpp_transform.compute_column(
+            input.view(), dereference(expr.c_obj.get())
+        )
+
+    return Column.from_libcudf(move(c_result))
 
 
 cpdef tuple[gpumemoryview, int] bools_to_mask(Column input):
@@ -58,7 +98,7 @@ cpdef tuple[gpumemoryview, int] bools_to_mask(Column input):
     cdef pair[unique_ptr[device_buffer], size_type] c_result
 
     with nogil:
-        c_result = move(cpp_transform.bools_to_mask(input.view()))
+        c_result = cpp_transform.bools_to_mask(input.view())
 
     return (
         gpumemoryview(DeviceBuffer.c_from_unique_ptr(move(c_result.first))),
@@ -84,24 +124,27 @@ cpdef Column mask_to_bools(Py_ssize_t bitmask, int begin_bit, int end_bit):
         Boolean column of the bitmask from [begin_bit, end_bit]
     """
     cdef unique_ptr[column] c_result
-    cdef bitmask_type * bitmask_ptr = int_to_bitmask_ptr(bitmask)
+    cdef bitmask_type * bitmask_ptr = <bitmask_type*>bitmask
 
     with nogil:
-        c_result = move(cpp_transform.mask_to_bools(bitmask_ptr, begin_bit, end_bit))
+        c_result = cpp_transform.mask_to_bools(bitmask_ptr, begin_bit, end_bit)
 
     return Column.from_libcudf(move(c_result))
 
 
-cpdef Column transform(Column input, str unary_udf, DataType output_type, bool is_ptx):
-    """Create a new column by applying a unary function against every
-       element of an input column.
+cpdef Column transform(list[Column] inputs,
+                       str transform_udf,
+                       DataType output_type,
+                       bool is_ptx):
+    """Create a new column by applying a transform function against
+       multiple input columns.
 
     Parameters
     ----------
-    input : Column
-        Column to transform.
-    unary_udf : str
-        The PTX/CUDA string of the unary function to apply.
+    inputs : list[Column]
+        Columns to transform.
+    transform_udf : str
+        The PTX/CUDA string of the transform function to apply.
     output_type : DataType
         The output type that is compatible with the output type in the unary_udf.
     is_ptx : bool
@@ -113,15 +156,17 @@ cpdef Column transform(Column input, str unary_udf, DataType output_type, bool i
     Column
         The transformed column having the UDF applied to each element.
     """
+    cdef vector[column_view] c_inputs
     cdef unique_ptr[column] c_result
-    cdef string c_unary_udf = unary_udf.encode()
+    cdef string c_transform_udf = transform_udf.encode()
     cdef bool c_is_ptx = is_ptx
 
+    for input in inputs:
+        c_inputs.push_back((<Column?>input).view())
+
     with nogil:
-        c_result = move(
-            cpp_transform.transform(
-                input.view(), c_unary_udf, output_type.c_obj, c_is_ptx
-            )
+        c_result = cpp_transform.transform(
+            c_inputs, c_transform_udf, output_type.c_obj, c_is_ptx
         )
 
     return Column.from_libcudf(move(c_result))
@@ -143,7 +188,7 @@ cpdef tuple[Table, Column] encode(Table input):
     cdef pair[unique_ptr[table], unique_ptr[column]] c_result
 
     with nogil:
-        c_result = move(cpp_transform.encode(input.view()))
+        c_result = cpp_transform.encode(input.view())
 
     return (
         Table.from_libcudf(move(c_result.first)),
@@ -171,7 +216,7 @@ cpdef Table one_hot_encode(Column input, Column categories):
     cdef Table owner_table
 
     with nogil:
-        c_result = move(cpp_transform.one_hot_encode(input.view(), categories.view()))
+        c_result = cpp_transform.one_hot_encode(input.view(), categories.view())
 
     owner_table = Table(
         [Column.from_libcudf(move(c_result.first))] * c_result.second.num_columns()

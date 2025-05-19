@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 
 import cupy as cp
 import numpy as np
@@ -7,8 +7,7 @@ import pyarrow as pa
 import pytest
 
 import cudf
-from cudf._lib.transform import mask_to_bools
-from cudf.core.column.column import as_column
+from cudf.core.column.column import _can_values_be_equal, as_column
 from cudf.testing import assert_eq
 from cudf.testing._utils import assert_exceptions_equal
 from cudf.utils import dtypes as dtypeutils
@@ -31,12 +30,13 @@ dtypes = sorted(
 @pytest.fixture(params=dtypes, ids=dtypes)
 def pandas_input(request):
     dtype = request.param
-    rng = np.random.default_rng()
+    rng = np.random.default_rng(seed=0)
     size = 100
 
     def random_ints(dtype, size):
         dtype_min = np.iinfo(dtype).min
         dtype_max = np.iinfo(dtype).max
+        rng = np.random.default_rng(seed=0)
         return rng.integers(dtype_min, dtype_max, size=size, dtype=dtype)
 
     try:
@@ -154,7 +154,9 @@ def test_column_slicing(pandas_input, offset, size):
     [cudf.Decimal128Dtype, cudf.Decimal64Dtype, cudf.Decimal32Dtype],
 )
 def test_decimal_column_slicing(offset, size, precision, scale, decimal_type):
-    col = cudf.core.column.as_column(pd.Series(np.random.rand(1000)))
+    col = cudf.core.column.as_column(
+        pd.Series(np.random.default_rng(seed=0).random(1000))
+    )
     col = col.astype(decimal_type(precision, scale))
     column_slicing_test(col, offset, size, True)
 
@@ -249,8 +251,12 @@ def test_column_chunked_array_creation():
     pyarrow_array = pa.array([1, 2, 3] * 1000)
     chunked_array = pa.chunked_array(pyarrow_array)
 
-    actual_column = cudf.core.column.as_column(chunked_array, dtype="float")
-    expected_column = cudf.core.column.as_column(pyarrow_array, dtype="float")
+    actual_column = cudf.core.column.as_column(
+        chunked_array, dtype=np.dtype(np.float64)
+    )
+    expected_column = cudf.core.column.as_column(
+        pyarrow_array, dtype=np.dtype(np.float64)
+    )
 
     assert_eq(
         cudf.Series._from_column(actual_column),
@@ -288,6 +294,8 @@ def test_column_chunked_array_creation():
     ],
 )
 def test_column_view_valid_numeric_to_numeric(data, from_dtype, to_dtype):
+    from_dtype = np.dtype(from_dtype)
+    to_dtype = np.dtype(to_dtype)
     cpu_data = np.asarray(data, dtype=from_dtype)
     gpu_data = as_column(data, dtype=from_dtype)
 
@@ -312,6 +320,8 @@ def test_column_view_valid_numeric_to_numeric(data, from_dtype, to_dtype):
     ],
 )
 def test_column_view_invalid_numeric_to_numeric(data, from_dtype, to_dtype):
+    from_dtype = np.dtype(from_dtype)
+    to_dtype = np.dtype(to_dtype)
     cpu_data = np.asarray(data, dtype=from_dtype)
     gpu_data = as_column(data, dtype=from_dtype)
 
@@ -335,6 +345,7 @@ def test_column_view_invalid_numeric_to_numeric(data, from_dtype, to_dtype):
     ],
 )
 def test_column_view_valid_string_to_numeric(data, to_dtype):
+    to_dtype = np.dtype(to_dtype)
     expect = cudf.Series._from_column(cudf.Series(data)._column.view(to_dtype))
     got = cudf.Series(str_host_view(data, to_dtype))
 
@@ -350,7 +361,7 @@ def test_column_view_nulls_widths_even():
 
     sr = cudf.Series(data, dtype="int32")
     expect = cudf.Series(expect_data, dtype="float32")
-    got = cudf.Series._from_column(sr._column.view("float32"))
+    got = cudf.Series._from_column(sr._column.view(np.dtype(np.float32)))
 
     assert_eq(expect, got)
 
@@ -362,7 +373,7 @@ def test_column_view_nulls_widths_even():
 
     sr = cudf.Series(data, dtype="float64")
     expect = cudf.Series(expect_data, dtype="int64")
-    got = cudf.Series._from_column(sr._column.view("int64"))
+    got = cudf.Series._from_column(sr._column.view(np.dtype(np.int64)))
 
     assert_eq(expect, got)
 
@@ -374,7 +385,7 @@ def test_column_view_numeric_slice(slc):
 
     expect = cudf.Series(data[slc].view("int64"))
     got = cudf.Series._from_column(
-        sr._column.slice(slc.start, slc.stop).view("int64")
+        sr._column.slice(slc.start, slc.stop).view(np.dtype(np.int64))
     )
 
     assert_eq(expect, got)
@@ -387,7 +398,9 @@ def test_column_view_string_slice(slc):
     data = ["a", "bcde", "cd", "efg", "h"]
 
     expect = cudf.Series._from_column(
-        cudf.Series(data)._column.slice(slc.start, slc.stop).view("int8")
+        cudf.Series(data)
+        ._column.slice(slc.start, slc.stop)
+        .view(np.dtype(np.int8))
     )
     got = cudf.Series(str_host_view(data[slc], "int8"))
 
@@ -399,19 +412,23 @@ def test_column_view_string_slice(slc):
     [
         (
             np.array([1, 2, 3, 4, 5], dtype="uint8"),
-            cudf.core.column.as_column([1, 2, 3, 4, 5], dtype="uint8"),
+            cudf.core.column.as_column(
+                [1, 2, 3, 4, 5], dtype=np.dtype(np.uint8)
+            ),
         ),
         (
             cp.array([1, 2, 3, 4, 5], dtype="uint8"),
-            cudf.core.column.as_column([1, 2, 3, 4, 5], dtype="uint8"),
+            cudf.core.column.as_column(
+                [1, 2, 3, 4, 5], dtype=np.dtype(np.uint8)
+            ),
         ),
         (
             cp.array([], dtype="uint8"),
-            cudf.core.column.column_empty(0, dtype="uint8"),
+            cudf.core.column.column_empty(0, dtype=np.dtype(np.uint8)),
         ),
         (
             cp.array([255], dtype="uint8"),
-            cudf.core.column.as_column([255], dtype="uint8"),
+            cudf.core.column.as_column([255], dtype=np.dtype(np.uint8)),
         ),
     ],
 )
@@ -486,9 +503,7 @@ def test_build_df_from_nullable_pandas_dtype(pd_dtype, expect_dtype):
 
     # check mask
     expect_mask = [x is not pd.NA for x in pd_data["a"]]
-    got_mask = mask_to_bools(
-        gd_data["a"]._column.base_mask, 0, len(gd_data)
-    ).values_host
+    got_mask = gd_data["a"]._column._get_mask_as_column().values_host
 
     np.testing.assert_array_equal(expect_mask, got_mask)
 
@@ -524,9 +539,7 @@ def test_build_series_from_nullable_pandas_dtype(pd_dtype, expect_dtype):
 
     # check mask
     expect_mask = [x is not pd.NA for x in pd_data]
-    got_mask = mask_to_bools(
-        gd_data._column.base_mask, 0, len(gd_data)
-    ).values_host
+    got_mask = gd_data._column._get_mask_as_column().values_host
 
     np.testing.assert_array_equal(expect_mask, got_mask)
 
@@ -556,3 +569,22 @@ def test_astype_with_aliases(alias, expect_dtype, data):
     gd_data = cudf.Series.from_pandas(pd_data)
 
     assert_eq(pd_data.astype(expect_dtype), gd_data.astype(alias))
+
+
+@pytest.mark.parametrize(
+    "left, right, expected",
+    [
+        (np.dtype(np.int64), np.dtype(np.int64), True),
+        (np.dtype(np.int64), np.dtype(np.float32), True),
+        (np.dtype(np.int64), cudf.Decimal64Dtype(10, 5), True),
+        (np.dtype(np.int64), np.dtype(object), False),
+        (np.dtype("datetime64[ns]"), np.dtype("datetime64[ms]"), True),
+        (np.dtype("timedelta64[ns]"), np.dtype("timedelta64[ms]"), True),
+        (np.dtype("timedelta64[ns]"), np.dtype("datetime64[ms]"), False),
+        (cudf.CategoricalDtype([1]), np.dtype(np.int64), True),
+        (cudf.CategoricalDtype([1]), np.dtype("datetime64[ms]"), False),
+    ],
+)
+def test__can_values_be_equal(left, right, expected):
+    assert _can_values_be_equal(left, right) is expected
+    assert _can_values_be_equal(right, left) is expected

@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2024, NVIDIA CORPORATION.
+# Copyright (c) 2018-2025, NVIDIA CORPORATION.
 
 import collections
 import datetime
@@ -77,21 +77,21 @@ def make_frame(
     extra_vals=(),
     with_datetime=False,
 ):
-    np.random.seed(seed)
+    rng = np.random.default_rng(seed=seed)
 
     df = dataframe_class()
 
-    df["x"] = np.random.randint(0, 5, nelem)
-    df["y"] = np.random.randint(0, 3, nelem)
+    df["x"] = rng.integers(0, 5, nelem)
+    df["y"] = rng.integers(0, 3, nelem)
     for lvl in extra_levels:
-        df[lvl] = np.random.randint(0, 2, nelem)
+        df[lvl] = rng.integers(0, 2, nelem)
 
-    df["val"] = np.random.random(nelem)
+    df["val"] = rng.random(nelem)
     for val in extra_vals:
-        df[val] = np.random.random(nelem)
+        df[val] = rng.random(nelem)
 
     if with_datetime:
-        df["datetime"] = np.random.randint(
+        df["datetime"] = rng.integers(
             _now, _tomorrow, nelem, dtype=np.int64
         ).astype("datetime64[ns]")
 
@@ -266,9 +266,10 @@ def test_groupby_getitem_getattr(as_index):
 
 
 def test_groupby_cats():
-    df = DataFrame()
-    df["cats"] = pd.Categorical(list("aabaacaab"))
-    df["vals"] = np.random.random(len(df))
+    rng = np.random.default_rng(seed=0)
+    df = DataFrame(
+        {"cats": pd.Categorical(list("aabaacaab")), "vals": rng.random(9)}
+    )
 
     cats = df["cats"].values_host
     vals = df["vals"].to_numpy()
@@ -285,13 +286,16 @@ def test_groupby_cats():
 
 
 def test_groupby_iterate_groups():
-    np.random.seed(0)
-    df = DataFrame()
+    rng = np.random.default_rng(seed=0)
     nelem = 20
-    df["key1"] = np.random.randint(0, 3, nelem)
-    df["key2"] = np.random.randint(0, 2, nelem)
-    df["val1"] = np.random.random(nelem)
-    df["val2"] = np.random.random(nelem)
+    df = DataFrame(
+        {
+            "key1": rng.integers(0, 3, nelem),
+            "key2": rng.integers(0, 2, nelem),
+            "val1": rng.random(nelem),
+            "val2": rng.random(nelem),
+        }
+    )
 
     def assert_values_equal(arr):
         np.testing.assert_array_equal(arr[0], arr)
@@ -307,13 +311,16 @@ def test_groupby_iterate_groups():
     reason="Fails in older versions of pandas",
 )
 def test_groupby_apply():
-    np.random.seed(0)
-    df = DataFrame()
+    rng = np.random.default_rng(seed=0)
     nelem = 20
-    df["key1"] = np.random.randint(0, 3, nelem)
-    df["key2"] = np.random.randint(0, 2, nelem)
-    df["val1"] = np.random.random(nelem)
-    df["val2"] = np.random.random(nelem)
+    df = DataFrame(
+        {
+            "key1": rng.integers(0, 3, nelem),
+            "key2": rng.integers(0, 2, nelem),
+            "val1": rng.random(nelem),
+            "val2": rng.random(nelem),
+        }
+    )
 
     expect_grpby = df.to_pandas().groupby(
         ["key1", "key2"], as_index=False, group_keys=False
@@ -351,13 +358,16 @@ def create_test_groupby_apply_args_params():
     reason="Fails in older versions of pandas",
 )
 def test_groupby_apply_args(func, args):
-    np.random.seed(0)
-    df = DataFrame()
+    rng = np.random.default_rng(seed=0)
     nelem = 20
-    df["key1"] = np.random.randint(0, 3, nelem)
-    df["key2"] = np.random.randint(0, 2, nelem)
-    df["val1"] = np.random.random(nelem)
-    df["val2"] = np.random.random(nelem)
+    df = DataFrame(
+        {
+            "key1": rng.integers(0, 3, nelem),
+            "key2": rng.integers(0, 2, nelem),
+            "val1": rng.random(nelem),
+            "val2": rng.random(nelem),
+        }
+    )
 
     expect_grpby = df.to_pandas().groupby(
         ["key1", "key2"], as_index=False, group_keys=False
@@ -369,7 +379,6 @@ def test_groupby_apply_args(func, args):
 
 
 def test_groupby_apply_grouped():
-    np.random.seed(0)
     df = DataFrame()
     nelem = 20
     df["key1"] = range(nelem)
@@ -908,7 +917,6 @@ def test_groupby_apply_return_col_from_df():
     # tests a UDF that consists of purely colwise
     # ops, such as `lambda group: group.x + group.y`
     # which returns a column
-    func = lambda group: group.x + group.y  # noqa:E731
     df = cudf.DataFrame(
         {
             "id": range(10),
@@ -1010,6 +1018,7 @@ def test_groupby_2keys_agg(nelem, func):
     # "func", ["min", "max", "idxmin", "idxmax", "count", "sum"],
 )
 def test_groupby_agg_decimal(num_groups, nelem_per_group, func):
+    rng = np.random.default_rng(seed=0)
     # The number of digits after the decimal to use.
     decimal_digits = 2
     # The number of digits before the decimal to use.
@@ -1026,8 +1035,8 @@ def test_groupby_agg_decimal(num_groups, nelem_per_group, func):
     # https://github.com/pandas-dev/pandas/issues/40685). However, if that is
     # ever enabled, then this issue will crop up again so we may as well have
     # it fixed now.
-    x = np.unique((np.random.rand(nelem) * scale).round(decimal_digits))
-    y = np.unique((np.random.rand(nelem) * scale).round(decimal_digits))
+    x = np.unique((rng.random(nelem) * scale).round(decimal_digits))
+    y = np.unique((rng.random(nelem) * scale).round(decimal_digits))
 
     if x.size < y.size:
         total_elements = x.size
@@ -1212,7 +1221,7 @@ def test_groupby_column_numeral():
         pd.Series([0, 2, 0]),
         pd.Series([0, 2, 0], index=[0, 2, 1]),
     ],
-)  # noqa: E501
+)
 def test_groupby_external_series(series):
     pdf = pd.DataFrame({"x": [1.0, 2.0, 3.0], "y": [1, 2, 1]})
     gdf = DataFrame.from_pandas(pdf)
@@ -1313,9 +1322,9 @@ def test_empty_groupby(func):
 
 
 def test_groupby_unsupported_columns():
-    np.random.seed(12)
+    rng = np.random.default_rng(seed=12)
     pd_cat = pd.Categorical(
-        pd.Series(np.random.choice(["a", "b", 1], 3), dtype="category")
+        pd.Series(rng.choice(["a", "b", 1], 3), dtype="category")
     )
     pdf = pd.DataFrame(
         {
@@ -1421,10 +1430,11 @@ def test_groupby_apply_basic_agg_single_column():
 
 
 def test_groupby_multi_agg_single_groupby_series():
+    rng = np.random.default_rng(seed=0)
     pdf = pd.DataFrame(
         {
-            "x": np.random.randint(0, 5, size=10000),
-            "y": np.random.normal(size=10000),
+            "x": rng.integers(0, 5, size=10000),
+            "y": rng.normal(size=10000),
         }
     )
     gdf = cudf.from_pandas(pdf)
@@ -1435,12 +1445,13 @@ def test_groupby_multi_agg_single_groupby_series():
 
 
 def test_groupby_multi_agg_multi_groupby():
+    rng = np.random.default_rng(seed=0)
     pdf = pd.DataFrame(
         {
-            "a": np.random.randint(0, 5, 10),
-            "b": np.random.randint(0, 5, 10),
-            "c": np.random.randint(0, 5, 10),
-            "d": np.random.randint(0, 5, 10),
+            "a": rng.integers(0, 5, 10),
+            "b": rng.integers(0, 5, 10),
+            "c": rng.integers(0, 5, 10),
+            "d": rng.integers(0, 5, 10),
         }
     )
     gdf = cudf.from_pandas(pdf)
@@ -1450,6 +1461,7 @@ def test_groupby_multi_agg_multi_groupby():
 
 
 def test_groupby_datetime_multi_agg_multi_groupby():
+    rng = np.random.default_rng(seed=0)
     pdf = pd.DataFrame(
         {
             "a": pd.date_range(
@@ -1457,9 +1469,9 @@ def test_groupby_datetime_multi_agg_multi_groupby():
                 datetime.datetime.now() + datetime.timedelta(9),
                 freq="D",
             ),
-            "b": np.random.randint(0, 5, 10),
-            "c": np.random.randint(0, 5, 10),
-            "d": np.random.randint(0, 5, 10),
+            "b": rng.integers(0, 5, 10),
+            "c": rng.integers(0, 5, 10),
+            "d": rng.integers(0, 5, 10),
         }
     )
     gdf = cudf.from_pandas(pdf)
@@ -1478,12 +1490,7 @@ def test_groupby_datetime_multi_agg_multi_groupby():
     ],
 )
 def test_groupby_multi_agg_hash_groupby(agg):
-    alphabets = "abcdefghijklmnopqrstuvwxyz"
-    prefixes = alphabets[:10]
-    coll_dict = dict()
-    for prefix in prefixes:
-        for this_name in alphabets:
-            coll_dict[prefix + this_name] = float
+    coll_dict = {letter: float for letter in string.ascii_lowercase}
     coll_dict["id"] = int
     gdf = cudf.datasets.timeseries(
         start="2000",
@@ -2003,8 +2010,8 @@ def test_multi_agg():
 @pytest.mark.parametrize(
     "agg",
     (
-        list(itertools.combinations(["count", "max", "min", "nunique"], 2))
-        + [
+        [
+            *itertools.combinations(["count", "max", "min", "nunique"], 2),
             {"b": "min", "c": "mean"},
             {"b": "max", "c": "mean"},
             {"b": "count", "c": "mean"},
@@ -2460,16 +2467,25 @@ def test_groupby_unique(by, data, dtype):
 def test_groupby_2keys_scan(nelem, func):
     pdf = make_frame(pd.DataFrame, nelem=nelem)
     expect_df = pdf.groupby(["x", "y"], sort=True).agg(func)
-    got_df = (
-        make_frame(DataFrame, nelem=nelem)
-        .groupby(["x", "y"], sort=True)
-        .agg(func)
-    )
+    gdf = cudf.from_pandas(pdf)
+    got_df = gdf.groupby(["x", "y"], sort=True).agg(func)
     # pd.groupby.cumcount returns a series.
     if isinstance(expect_df, pd.Series):
         expect_df = expect_df.to_frame("val")
 
     check_dtype = func not in _index_type_aggs
+    assert_groupby_results_equal(got_df, expect_df, check_dtype=check_dtype)
+
+    expect_df = getattr(pdf.groupby(["x", "y"], sort=True), func)()
+    got_df = getattr(gdf.groupby(["x", "y"], sort=True), func)()
+    assert_groupby_results_equal(got_df, expect_df, check_dtype=check_dtype)
+
+    expect_df = getattr(pdf.groupby(["x", "y"], sort=True)[["x"]], func)()
+    got_df = getattr(gdf.groupby(["x", "y"], sort=True)[["x"]], func)()
+    assert_groupby_results_equal(got_df, expect_df, check_dtype=check_dtype)
+
+    expect_df = getattr(pdf.groupby(["x", "y"], sort=True)["y"], func)()
+    got_df = getattr(gdf.groupby(["x", "y"], sort=True)["y"], func)()
     assert_groupby_results_equal(got_df, expect_df, check_dtype=check_dtype)
 
 
@@ -2682,7 +2698,7 @@ def test_groupby_shift_row_mixed(nelem, shift_perc, direction):
             42,
             "fill",
             np.datetime64(123, "ns"),
-            cudf.Scalar(456, dtype="timedelta64[ns]"),
+            np.timedelta64(456, "ns"),
         ]
     ],
 )
@@ -3948,8 +3964,8 @@ def test_group_by_value_counts_with_count_column():
 def test_groupby_internal_groups_empty(gdf):
     # test that we don't segfault when calling the internal
     # .groups() method with an empty list:
-    gb = gdf.groupby("y")._groupby
-    _, _, grouped_vals = gb.groups([])
+    gb = gdf.groupby("y")
+    _, _, grouped_vals = gb._groups([])
     assert grouped_vals == []
 
 
@@ -4046,3 +4062,68 @@ def test_ndim():
     pgb = pser.groupby([0, 0, 1])
     ggb = gser.groupby(cudf.Series([0, 0, 1]))
     assert pgb.ndim == ggb.ndim
+
+
+@pytest.mark.skipif(
+    not PANDAS_GE_220, reason="pandas behavior applicable in >=2.2"
+)
+def test_get_group_list_like():
+    df = cudf.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
+    result = df.groupby(["a"]).get_group((1,))
+    expected = df.to_pandas().groupby(["a"]).get_group((1,))
+    assert_eq(result, expected)
+
+    with pytest.raises(KeyError):
+        df.groupby(["a"]).get_group((1, 2))
+
+    with pytest.raises(KeyError):
+        df.groupby(["a"]).get_group([1])
+
+
+def test_get_group_list_like_len_2():
+    df = cudf.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6], "c": [3, 2, 1]})
+    result = df.groupby(["a", "b"]).get_group((1, 4))
+    expected = df.to_pandas().groupby(["a", "b"]).get_group((1, 4))
+    assert_eq(result, expected)
+
+
+def test_size_as_index_false():
+    df = pd.DataFrame({"a": [1, 2, 1], "b": [1, 2, 3]}, columns=["a", "b"])
+    expected = df.groupby("a", as_index=False).size()
+    result = cudf.from_pandas(df).groupby("a", as_index=False).size()
+    assert_groupby_results_equal(result, expected, as_index=False, by="a")
+
+
+def test_size_series_with_name():
+    ser = pd.Series(range(3), name="foo")
+    expected = ser.groupby(ser).size()
+    result = cudf.from_pandas(ser).groupby(ser).size()
+    assert_groupby_results_equal(result, expected)
+
+
+@pytest.mark.parametrize("op", ["cumsum", "cumprod", "cummin", "cummax"])
+def test_scan_int_null_pandas_compatible(op):
+    data = {"a": [1, 2, None, 3], "b": ["x"] * 4}
+    df_pd = pd.DataFrame(data)
+    df_cudf = cudf.DataFrame(data)
+    expected = getattr(df_pd.groupby("b")["a"], op)()
+    with cudf.option_context("mode.pandas_compatible", True):
+        result = getattr(df_cudf.groupby("b")["a"], op)()
+    assert_eq(result, expected)
+
+
+def test_agg_duplicate_aggs_pandas_compat_raises():
+    agg = {"b": ["mean", "mean"]}
+    dfgb = cudf.DataFrame({"a": [1, 1, 2], "b": [4, 5, 6]}).groupby(["a"])
+    with cudf.option_context("mode.pandas_compatible", True):
+        with pytest.raises(NotImplementedError):
+            dfgb.agg(agg)
+
+    with pytest.warns(UserWarning):
+        result = dfgb.agg(agg)
+    expected = cudf.DataFrame(
+        [4.5, 6.0],
+        index=cudf.Index([1, 2], name="a"),
+        columns=pd.MultiIndex.from_tuples([("b", "mean")]),
+    )
+    assert_groupby_results_equal(result, expected)

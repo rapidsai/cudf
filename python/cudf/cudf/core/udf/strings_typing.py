@@ -99,7 +99,7 @@ class StrViewArgHandler:
             ty.dtype, (StringView, UDFString)
         ):
             return types.uint64, val.ptr if isinstance(
-                val, rmm._lib.device_buffer.DeviceBuffer
+                val, rmm.pylibrmm.device_buffer.DeviceBuffer
             ) else val.get_ptr(mode="read")
         else:
             return ty, val

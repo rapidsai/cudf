@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,6 +24,7 @@
 #include <memory>
 
 namespace CUDF_EXPORT cudf {
+
 /**
  * @addtogroup transformation_transform
  * @{
@@ -32,29 +33,40 @@ namespace CUDF_EXPORT cudf {
  */
 
 /**
- * @brief Creates a new column by applying a unary function against every
- * element of an input column.
+ * @brief Creates a new column by applying a transform function against every
+ * element of the input columns.
  *
  * Computes:
- * `out[i] = F(in[i])`
+ * `out[i] = F(inputs[i]...)`.
  *
- * The output null mask is the same is the input null mask so if input[i] is
- * null then output[i] is also null
+ * Note that for every scalar in `inputs` (columns of size 1), `input[i] == input[0]`
  *
- * @param input         An immutable view of the input column to transform
- * @param unary_udf     The PTX/CUDA string of the unary function to apply
+ *
+ * @throws std::invalid_argument if any of the input columns have different sizes (except scalars of
+ * size 1)
+ * @throws std::invalid_argument if `output_type` or any of the inputs are not fixed-width or string
+ * types
+ * @throws std::invalid_argument if any of the input columns have nulls
+ * @throws std::logic_error if JIT is not supported by the runtime
+ *
+ * The size of the resulting column is the size of the largest column.
+ *
+ * @param inputs        Immutable views of the input columns to transform
+ * @param transform_udf The PTX/CUDA string of the transform function to apply
  * @param output_type   The output type that is compatible with the output type in the UDF
  * @param is_ptx        true: the UDF is treated as PTX code; false: the UDF is treated as CUDA code
+ * @param user_data     User-defined device data to pass to the UDF.
  * @param stream        CUDA stream used for device memory operations and kernel launches
  * @param mr            Device memory resource used to allocate the returned column's device memory
- * @return              The column resulting from applying the unary function to
+ * @return              The column resulting from applying the transform function to
  *                      every element of the input
  */
 std::unique_ptr<column> transform(
-  column_view const& input,
-  std::string const& unary_udf,
+  std::vector<column_view> const& inputs,
+  std::string const& transform_udf,
   data_type output_type,
   bool is_ptx,
+  std::optional<void*> user_data    = std::nullopt,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
@@ -64,10 +76,10 @@ std::unique_ptr<column> transform(
  *
  * @throws cudf::logic_error if `input.type()` is a non-floating type
  *
- * @param input         An immutable view of the input column of floating-point type
- * @param stream        CUDA stream used for device memory operations and kernel launches
- * @param mr            Device memory resource used to allocate the returned bitmask
- * @return A pair containing a `device_buffer` with the new bitmask and it's
+ * @param input  An immutable view of the input column of floating-point type
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr     Device memory resource used to allocate the returned bitmask
+ * @return A pair containing a `device_buffer` with the new bitmask and its
  * null count obtained by replacing `NaN` in `input` with null.
  */
 std::pair<std::unique_ptr<rmm::device_buffer>, size_type> nans_to_nulls(
@@ -104,10 +116,10 @@ std::unique_ptr<column> compute_column(
  *
  * @throws cudf::logic_error if `input.type()` is a non-boolean type
  *
- * @param input        Boolean elements to convert to a bitmask
- * @param stream       CUDA stream used for device memory operations and kernel launches
- * @param mr           Device memory resource used to allocate the returned bitmask
- * @return A pair containing a `device_buffer` with the new bitmask and it's
+ * @param input  Boolean elements to convert to a bitmask
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr     Device memory resource used to allocate the returned bitmask
+ * @return A pair containing a `device_buffer` with the new bitmask and its
  * null count obtained from input considering `true` represent `valid`/`1` and
  * `false` represent `invalid`/`0`.
  */

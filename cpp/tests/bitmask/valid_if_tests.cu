@@ -28,6 +28,7 @@
 
 struct ValidIfTest : public cudf::test::BaseFixture {};
 
+namespace {
 struct odds_valid {
   __host__ __device__ bool operator()(cudf::size_type i) { return i % 2; }
 };
@@ -37,6 +38,7 @@ struct all_valid {
 struct all_null {
   __host__ __device__ bool operator()(cudf::size_type i) { return false; }
 };
+}  // namespace
 
 TEST_F(ValidIfTest, EmptyRange)
 {

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -40,6 +40,10 @@
 #include <nanoarrow/nanoarrow.hpp>
 #include <nanoarrow/nanoarrow_device.h>
 
+#include <cstdint>
+#include <limits>
+#include <stdexcept>
+
 namespace cudf {
 
 namespace detail {
@@ -49,9 +53,7 @@ namespace {
 using dispatch_tuple_t = std::tuple<column_view, owned_columns_t>;
 
 struct dispatch_from_arrow_device {
-  template <typename T,
-            CUDF_ENABLE_IF(not is_rep_layout_compatible<T>() &&
-                           !std::is_same_v<T, numeric::decimal128>)>
+  template <typename T, CUDF_ENABLE_IF(not is_rep_layout_compatible<T>() && !is_fixed_point<T>())>
   dispatch_tuple_t operator()(ArrowSchemaView*,
                               ArrowArray const*,
                               data_type,
@@ -62,8 +64,7 @@ struct dispatch_from_arrow_device {
     CUDF_FAIL("Unsupported type in from_arrow_device", cudf::data_type_error);
   }
 
-  template <typename T,
-            CUDF_ENABLE_IF(is_rep_layout_compatible<T>() || std::is_same_v<T, numeric::decimal128>)>
+  template <typename T, CUDF_ENABLE_IF(is_rep_layout_compatible<T>() || is_fixed_point<T>())>
   dispatch_tuple_t operator()(ArrowSchemaView* schema,
                               ArrowArray const* input,
                               data_type type,
@@ -194,19 +195,12 @@ dispatch_tuple_t dispatch_from_arrow_device::operator()<cudf::dictionary32>(
     get_column(&keys_schema_view, input->dictionary, keys_type, true, stream, mr);
 
   auto const dict_indices_type = [&schema]() -> data_type {
-    // cudf dictionary requires an unsigned type for the indices,
-    // since it is invalid for an arrow dictionary to contain negative
-    // indices, we can safely use the unsigned equivalent without having
-    // to modify the buffers.
+    // cudf dictionary requires a signed type for the indices
     switch (schema->storage_type) {
-      case NANOARROW_TYPE_INT8:
-      case NANOARROW_TYPE_UINT8: return data_type(type_id::UINT8);
-      case NANOARROW_TYPE_INT16:
-      case NANOARROW_TYPE_UINT16: return data_type(type_id::UINT16);
-      case NANOARROW_TYPE_INT32:
-      case NANOARROW_TYPE_UINT32: return data_type(type_id::UINT32);
-      case NANOARROW_TYPE_INT64:
-      case NANOARROW_TYPE_UINT64: return data_type(type_id::UINT64);
+      case NANOARROW_TYPE_INT8: return data_type(type_id::INT8);
+      case NANOARROW_TYPE_INT16: return data_type(type_id::INT16);
+      case NANOARROW_TYPE_INT32: return data_type(type_id::INT32);
+      case NANOARROW_TYPE_INT64: return data_type(type_id::INT64);
       default: CUDF_FAIL("Unsupported type_id for dictionary indices", cudf::data_type_error);
     }
   }();
@@ -286,11 +280,14 @@ dispatch_tuple_t dispatch_from_arrow_device::operator()<cudf::list_view>(
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
+  CUDF_EXPECTS(schema->type != NANOARROW_TYPE_LARGE_LIST,
+               "Large list types are not supported",
+               cudf::data_type_error);
   size_type const num_rows   = input->length;
   size_type const offset     = input->offset;
   size_type const null_count = input->null_count;
   auto offsets_view          = column_view{data_type(type_id::INT32),
-                                  offset + num_rows + 1,
+                                  (num_rows == 0) ? 0 : (offset + num_rows + 1),
                                   input->buffers[fixed_width_data_buffer_idx],
                                   nullptr,
                                   0,
@@ -306,8 +303,9 @@ dispatch_tuple_t dispatch_from_arrow_device::operator()<cudf::list_view>(
   // in the scenario where we were sliced and there are more elements in the child_view
   // than can be referenced by the sliced offsets, we need to slice the child_view
   // so that when `get_sliced_child` is called, we still produce the right result
-  auto max_child_offset = cudf::detail::get_value<int32_t>(offsets_view, offset + num_rows, stream);
-  child_view            = cudf::slice(child_view, {0, max_child_offset}, stream).front();
+  auto max_child_offset =
+    num_rows == 0 ? 0 : cudf::detail::get_value<int32_t>(offsets_view, offset + num_rows, stream);
+  child_view = cudf::slice(child_view, {0, max_child_offset}, stream).front();
 
   return std::make_tuple<column_view, owned_columns_t>(
     {type,
@@ -327,6 +325,11 @@ dispatch_tuple_t get_column(ArrowSchemaView* schema,
                             rmm::cuda_stream_view stream,
                             rmm::device_async_resource_ref mr)
 {
+  CUDF_EXPECTS(
+    input->length <= static_cast<std::int64_t>(std::numeric_limits<cudf::size_type>::max()),
+    "Total number of rows in Arrow column exceeds the column size limit.",
+    std::overflow_error);
+
   return type.id() != type_id::EMPTY
            ? std::move(type_dispatcher(
                type, dispatch_from_arrow_device{}, schema, input, type, skip_mask, stream, mr))

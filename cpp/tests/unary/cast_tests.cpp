@@ -20,18 +20,15 @@
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/detail/iterator.cuh>
-#include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/unary.hpp>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/wrappers/timestamps.hpp>
 
-#include <cuda/std/limits>
 #include <thrust/host_vector.h>
 #include <thrust/iterator/counting_iterator.h>
 
-#include <type_traits>
 #include <vector>
 
 static auto const test_timestamps_D = std::vector<int32_t>{

@@ -6,6 +6,7 @@ from pylibcudf.column cimport Column
 from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.strings cimport find_multiple as cpp_find_multiple
 
+__all__ = ["find_multiple"]
 
 cpdef Column find_multiple(Column input, Column targets):
     """
@@ -29,11 +30,9 @@ cpdef Column find_multiple(Column input, Column targets):
     cdef unique_ptr[column] c_result
 
     with nogil:
-        c_result = move(
-            cpp_find_multiple.find_multiple(
-                input.view(),
-                targets.view()
-            )
+        c_result = cpp_find_multiple.find_multiple(
+            input.view(),
+            targets.view()
         )
 
     return Column.from_libcudf(move(c_result))

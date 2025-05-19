@@ -1,16 +1,17 @@
-# Copyright (c) 2019-2024, NVIDIA CORPORATION.
+# Copyright (c) 2019-2025, NVIDIA CORPORATION.
 
 import datetime
 import decimal
 import os
 import random
 from io import BytesIO
-from string import ascii_lowercase
+from string import ascii_letters, ascii_lowercase
 
 import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pytest
+from pyarrow import orc
 
 import cudf
 from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
@@ -45,8 +46,7 @@ def path_or_buf(datadir):
     except Exception as excpr:
         if type(excpr).__name__ == "FileNotFoundError":
             pytest.skip(".parquet file is not found")
-        else:
-            print(type(excpr).__name__)
+        raise excpr
 
     def _make_path_or_buf(src):
         if src == "filepath":
@@ -63,6 +63,53 @@ def path_or_buf(datadir):
         raise ValueError("Invalid source type")
 
     yield _make_path_or_buf
+
+
+@pytest.fixture(scope="module")
+def non_nested_pdf():
+    rng = np.random.default_rng(seed=0)
+    types = [
+        "bool",
+        "int8",
+        "int16",
+        "int32",
+        "int64",
+        "float32",
+        "float64",
+        "datetime64[ns]",
+        "str",
+    ]
+    nrows = 12345
+
+    # Create a pandas dataframe with random data of mixed types
+    test_pdf = pd.DataFrame(
+        {
+            f"col_{typ}": rng.integers(0, nrows, nrows).astype(typ)
+            for typ in types
+        },
+    )
+
+    for t in [
+        {
+            "name": "datetime64[ns]",
+            "nsDivisor": 1000,
+            "dayModulus": 86400000000,
+        },
+    ]:
+        data = [
+            rng.integers(0, (0x7FFFFFFFFFFFFFFF / t["nsDivisor"]))
+            for i in range(nrows)
+        ]
+
+        test_pdf["col_" + t["name"]] = pd.Series(
+            np.asarray(data, dtype=t["name"])
+        )
+
+    # Create non-numeric str data
+    data = [ascii_letters[rng.integers(0, 52)] for i in range(nrows)]
+    test_pdf["col_str"] = pd.Series(data, dtype="str")
+
+    return test_pdf
 
 
 @pytest.mark.filterwarnings("ignore:Using CPU")
@@ -606,7 +653,7 @@ def normalized_equals(value1, value2):
 def test_orc_write_statistics(tmpdir, datadir, nrows, stats_freq):
     from pyarrow import orc
 
-    supported_stat_types = supported_numpy_dtypes + ["str"]
+    supported_stat_types = [*supported_numpy_dtypes, "str"]
     # Writing bool columns to multiple row groups is disabled
     # until #6763 is fixed
     if nrows == 100000:
@@ -677,23 +724,20 @@ def test_orc_write_statistics(tmpdir, datadir, nrows, stats_freq):
 
 
 @pytest.mark.parametrize("stats_freq", ["STRIPE", "ROWGROUP"])
-@pytest.mark.parametrize("nrows", [2, 100, 200000])
+@pytest.mark.parametrize("nrows", [2, 100, 1024])
 def test_orc_chunked_write_statistics(tmpdir, datadir, nrows, stats_freq):
     from pyarrow import orc
 
-    np.random.seed(0)
-    supported_stat_types = supported_numpy_dtypes + ["str"]
+    supported_stat_types = [*supported_numpy_dtypes, "str"]
     # Writing bool columns to multiple row groups is disabled
     # until #6763 is fixed
-    if nrows == 200000:
+    if nrows == 1024:
         supported_stat_types.remove("bool")
 
     gdf_fname = tmpdir.join("chunked_stats.orc")
-    writer = ORCWriter(
-        gdf_fname, statistics=stats_freq, stripe_size_rows=30000
-    )
+    writer = ORCWriter(gdf_fname, statistics=stats_freq, stripe_size_rows=512)
 
-    max_char_length = 100 if nrows < 10000 else 10
+    max_char_length = 100 if nrows < 1000 else 10
 
     # Make a dataframe
     gdf = cudf.DataFrame(
@@ -704,6 +748,7 @@ def test_orc_chunked_write_statistics(tmpdir, datadir, nrows, stats_freq):
                 has_nulls=True,
                 low=0,
                 high=max_char_length,
+                seed=0,
             )
             for dtype in supported_stat_types
         }
@@ -845,7 +890,6 @@ def test_orc_reader_gmt_timestamps(datadir):
 
 
 def test_orc_bool_encode_fail():
-    np.random.seed(0)
     buffer = BytesIO()
 
     # Generate a boolean column longer than a single row group
@@ -927,7 +971,6 @@ def test_empty_string_columns(data):
     [cudf.Decimal32Dtype, cudf.Decimal64Dtype, cudf.Decimal128Dtype],
 )
 def test_orc_writer_decimal(tmpdir, scale, decimal_type):
-    np.random.seed(0)
     fname = tmpdir / "decimal.orc"
 
     expected = cudf.DataFrame({"dec_val": gen_rand_series("i", 100)})
@@ -986,9 +1029,9 @@ def test_orc_string_stream_offset_issue():
     assert_eq(df, cudf.read_orc(buffer))
 
 
-def generate_list_struct_buff(size=100_000):
+def generate_list_struct_buff(size=10_000):
     rd = random.Random(1)
-    np.random.seed(seed=1)
+    rng = np.random.default_rng(seed=1)
 
     buff = BytesIO()
 
@@ -999,12 +1042,12 @@ def generate_list_struct_buff(size=100_000):
                 [
                     [
                         [
-                            rd.choice([None, np.random.randint(1, 3)])
-                            for _ in range(np.random.randint(1, 3))
+                            rd.choice([None, rng.integers(1, 3)])
+                            for _ in range(rng.integers(1, 3))
                         ]
-                        for _ in range(np.random.randint(0, 3))
+                        for _ in range(rng.integers(0, 3))
                     ]
-                    for _ in range(np.random.randint(0, 3))
+                    for _ in range(rng.integers(0, 3))
                 ],
             ]
         )
@@ -1012,8 +1055,8 @@ def generate_list_struct_buff(size=100_000):
     ]
     lvl1_list = [
         [
-            rd.choice([None, np.random.randint(0, 3)])
-            for _ in range(np.random.randint(1, 4))
+            rd.choice([None, rng.integers(0, 3)])
+            for _ in range(rng.integers(1, 4))
         ]
         for _ in range(size)
     ]
@@ -1021,7 +1064,7 @@ def generate_list_struct_buff(size=100_000):
         rd.choice(
             [
                 None,
-                {"a": np.random.randint(0, 3), "b": np.random.randint(0, 3)},
+                {"a": rng.integers(0, 3), "b": rng.integers(0, 3)},
             ]
         )
         for _ in range(size)
@@ -1030,11 +1073,11 @@ def generate_list_struct_buff(size=100_000):
         rd.choice(
             [
                 None,
-                {"a": rd.choice([None, np.random.randint(0, 3)])},
+                {"a": rd.choice([None, rng.integers(0, 3)])},
                 {
                     "lvl1_struct": {
-                        "c": rd.choice([None, np.random.randint(0, 3)]),
-                        "d": np.random.randint(0, 3),
+                        "c": rd.choice([None, rng.integers(0, 3)]),
+                        "d": rng.integers(0, 3),
                     },
                 },
             ]
@@ -1044,7 +1087,7 @@ def generate_list_struct_buff(size=100_000):
     list_nests_struct = [
         [
             {"a": rd.choice(lvl1_struct), "b": rd.choice(lvl1_struct)}
-            for _ in range(np.random.randint(1, 4))
+            for _ in range(rng.integers(1, 4))
         ]
         for _ in range(size)
     ]
@@ -1052,7 +1095,7 @@ def generate_list_struct_buff(size=100_000):
         {"struct": lvl1_struct[x], "list": lvl1_list[x]} for x in range(size)
     ]
 
-    df = pd.DataFrame(
+    pa_table = pa.table(
         {
             "lvl3_list": lvl3_list,
             "lvl1_list": lvl1_list,
@@ -1062,9 +1105,8 @@ def generate_list_struct_buff(size=100_000):
             "struct_nests_list": struct_nests_list,
         }
     )
-
-    df.to_orc(buff, engine="pyarrow", engine_kwargs={"stripe_size": 1024})
-
+    with orc.ORCWriter(buff, stripe_size=1024) as writer:
+        writer.write(pa_table)
     return buff
 
 
@@ -1081,7 +1123,7 @@ def list_struct_buff():
         ["lvl2_struct", "lvl1_struct"],
     ],
 )
-@pytest.mark.parametrize("num_rows", [0, 15, 1005, 10561, 100_000])
+@pytest.mark.parametrize("num_rows", [0, 15, 1005, 10561, 10_000])
 @pytest.mark.parametrize("use_index", [True, False])
 def test_lists_struct_nests(columns, num_rows, use_index, list_struct_buff):
     from pyarrow import orc
@@ -1135,7 +1177,7 @@ def gen_map_buff(size):
     from pyarrow import orc
 
     rd = random.Random(1)
-    np.random.seed(seed=1)
+    rng = np.random.default_rng(seed=1)
 
     buff = BytesIO()
 
@@ -1146,7 +1188,7 @@ def gen_map_buff(size):
                     None,
                     {
                         rd.choice(al): rd.choice(
-                            [None, np.random.randint(1, 1500)]
+                            [None, rng.integers(1, 1500)]
                         ),
                     },
                 ]
@@ -1167,7 +1209,7 @@ def gen_map_buff(size):
                                     None,
                                     [
                                         rd.choice(
-                                            [None, np.random.randint(1, 1500)]
+                                            [None, rng.integers(1, 1500)]
                                         )
                                         for _ in range(5)
                                     ],
@@ -1194,10 +1236,10 @@ def gen_map_buff(size):
                                     None,
                                     {
                                         "a": rd.choice(
-                                            [None, np.random.randint(1, 1500)]
+                                            [None, rng.integers(1, 1500)]
                                         ),
                                         "b": rd.choice(
-                                            [None, np.random.randint(1, 1500)]
+                                            [None, rng.integers(1, 1500)]
                                         ),
                                     },
                                 ]
@@ -1370,15 +1412,15 @@ def dec(num):
     ],
 )
 def test_orc_writer_lists(data):
-    pdf_in = pd.DataFrame(data)
-
     buffer = BytesIO()
-    cudf.from_pandas(pdf_in).to_orc(
+    cudf.DataFrame(data).to_orc(
         buffer, stripe_size_rows=2048, row_index_stride=512
     )
-
-    pdf_out = pd.read_orc(buffer)
-    assert_eq(pdf_out, pdf_in)
+    # Read in as pandas but compare with pyarrow
+    # since pandas doesn't have a list type
+    pa_out = pa.Table.from_pandas(pd.read_orc(buffer))
+    pa_in = pa.table(data)
+    assert pa_out.equals(pa_in)
 
 
 def test_chunked_orc_writer_lists():
@@ -1620,14 +1662,12 @@ def test_orc_reader_zstd_compression(list_struct_buff):
     # save with ZSTD compression
     buffer = BytesIO()
     pyarrow_tbl = orc.ORCFile(list_struct_buff).read()
-    writer = orc.ORCWriter(buffer, compression="zstd")
-    writer.write(pyarrow_tbl)
-    writer.close()
-    try:
-        got = cudf.read_orc(buffer)
-        assert_eq(expected, got)
-    except RuntimeError:
-        pytest.mark.xfail(reason="zstd support is not enabled")
+    with orc.ORCWriter(buffer, compression="zstd") as writer:
+        writer.write(pyarrow_tbl)
+    got = cudf.read_orc(buffer)
+    # compare with pyarrow since pandas doesn't
+    # have a list or struct
+    assert expected.to_arrow().equals(got.to_arrow())
 
 
 def test_writer_protobuf_large_rowindexentry():
@@ -1972,3 +2012,43 @@ def test_row_group_alignment(datadir):
     got = cudf.read_orc(buffer)
 
     assert_eq(expected, got)
+
+
+@pytest.mark.parametrize(
+    "inputfile",
+    [
+        # These sample data have a single column my_timestamp of the TIMESTAMP type,
+        # 2660 rows, and 1536 rows per row group.
+        "TestOrcFile.timestamp.desynced.uncompressed.RLEv2.orc",
+        "TestOrcFile.timestamp.desynced.snappy.RLEv2.orc",
+        # These two data are the same with the above, except that every 100 rows start
+        # with a null value.
+        "TestOrcFile.timestamp.desynced.uncompressed.RLEv2.hasNull.orc",
+        "TestOrcFile.timestamp.desynced.snappy.RLEv2.hasNull.orc",
+    ],
+)
+def test_orc_reader_desynced_timestamp(datadir, inputfile):
+    # Test a special case where the DATA stream (second) in a TIMESTAMP column
+    # is progressed faster than the SECONDARY stream (nanosecond) at the start of a row
+    # group. In this case, the "run cache manager" in the decoder kernel is used to
+    # orchestrate the dual-stream processing.
+    # For more information, see https://github.com/rapidsai/cudf/issues/17155.
+
+    path = datadir / inputfile
+
+    expect = pd.read_orc(path)
+    got = cudf.read_orc(path)
+
+    assert_frame_equal(cudf.from_pandas(expect), got)
+
+
+@pytest.mark.parametrize("compression", ["LZ4", "SNAPPY", "ZLIB", "ZSTD"])
+def test_orc_decompression(set_decomp_env_vars, compression, non_nested_pdf):
+    # Write the DataFrame to a Parquet file
+    buffer = BytesIO()
+    non_nested_pdf.to_orc(buffer, engine_kwargs={"compression": compression})
+
+    # Read the Parquet file back into a DataFrame
+    got = cudf.read_orc(buffer)
+
+    assert_eq(non_nested_pdf, got)

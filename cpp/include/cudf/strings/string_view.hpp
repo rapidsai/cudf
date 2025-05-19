@@ -54,7 +54,7 @@ class string_view {
    *
    * @return The number of characters in this string
    */
-  __device__ [[nodiscard]] inline size_type length() const;
+  [[nodiscard]] __device__ inline size_type length() const;
   /**
    * @brief Return a pointer to the internal device array
    *
@@ -119,13 +119,13 @@ class string_view {
    *
    * @return new iterator pointing to the beginning of this string
    */
-  __device__ [[nodiscard]] inline const_iterator begin() const;
+  [[nodiscard]] __device__ inline const_iterator begin() const;
   /**
    * @brief Return new iterator pointing past the end of this string
    *
    * @return new iterator pointing past the end of this string
    */
-  __device__ [[nodiscard]] inline const_iterator end() const;
+  [[nodiscard]] __device__ inline const_iterator end() const;
 
   /**
    * @brief Return single UTF-8 character at the given character position
@@ -140,7 +140,7 @@ class string_view {
    * @param pos Character position
    * @return Byte offset from data() for a given character position
    */
-  __device__ [[nodiscard]] inline size_type byte_offset(size_type pos) const;
+  [[nodiscard]] __device__ inline size_type byte_offset(size_type pos) const;
 
   /**
    * @brief Comparing target string with this string. Each character is compared
@@ -155,7 +155,7 @@ class string_view {
    *            not match is greater in the arg string, or all compared characters
    *            match but the arg string is longer.
    */
-  __device__ [[nodiscard]] inline int compare(string_view const& str) const;
+  [[nodiscard]] __device__ inline int compare(string_view const& str) const;
   /**
    * @brief Comparing target string with this string. Each character is compared
    * as a UTF-8 code-point value.
@@ -225,7 +225,7 @@ class string_view {
    *              Specify -1 to indicate to the end of the string.
    * @return npos if str is not found in this string.
    */
-  __device__ [[nodiscard]] inline size_type find(string_view const& str,
+  [[nodiscard]] __device__ inline size_type find(string_view const& str,
                                                  size_type pos   = 0,
                                                  size_type count = -1) const;
   /**
@@ -253,7 +253,7 @@ class string_view {
    *              Specify -1 to indicate to the end of the string.
    * @return npos if arg string is not found in this string.
    */
-  __device__ [[nodiscard]] inline size_type find(char_utf8 character,
+  [[nodiscard]] __device__ inline size_type find(char_utf8 character,
                                                  size_type pos   = 0,
                                                  size_type count = -1) const;
   /**
@@ -266,7 +266,7 @@ class string_view {
    *              Specify -1 to indicate to the end of the string.
    * @return npos if arg string is not found in this string.
    */
-  __device__ [[nodiscard]] inline size_type rfind(string_view const& str,
+  [[nodiscard]] __device__ inline size_type rfind(string_view const& str,
                                                   size_type pos   = 0,
                                                   size_type count = -1) const;
   /**
@@ -294,7 +294,7 @@ class string_view {
    *              Specify -1 to indicate to the end of the string.
    * @return npos if arg string is not found in this string.
    */
-  __device__ [[nodiscard]] inline size_type rfind(char_utf8 character,
+  [[nodiscard]] __device__ inline size_type rfind(char_utf8 character,
                                                   size_type pos   = 0,
                                                   size_type count = -1) const;
 
@@ -306,7 +306,7 @@ class string_view {
    * @param length Number of characters from start to include in the sub-string.
    * @return New instance pointing to a subset of the characters within this instance.
    */
-  __device__ [[nodiscard]] inline string_view substr(size_type start, size_type length) const;
+  [[nodiscard]] __device__ inline string_view substr(size_type start, size_type length) const;
 
   /**
    * @brief Return minimum value associated with the string type
@@ -386,7 +386,7 @@ class string_view {
    * @param bytepos Byte position from start of _data.
    * @return The character position for the specified byte.
    */
-  __device__ [[nodiscard]] inline size_type character_offset(size_type bytepos) const;
+  [[nodiscard]] __device__ inline size_type character_offset(size_type bytepos) const;
 
   /**
    * @brief Common internal implementation for string_view::find and string_view::rfind.

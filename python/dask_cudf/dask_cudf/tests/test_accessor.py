@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2024, NVIDIA CORPORATION.
+# Copyright (c) 2019-2025, NVIDIA CORPORATION.
 
 import numpy as np
 import pandas as pd
@@ -13,7 +13,6 @@ from cudf.testing import assert_eq
 from cudf.testing._utils import does_not_raise
 
 import dask_cudf
-from dask_cudf.tests.utils import xfail_dask_expr
 
 #############################################################################
 #                        Datetime Accessor                                  #
@@ -25,7 +24,7 @@ def data_dt_1():
 
 
 def data_dt_2():
-    return np.random.randn(100)
+    return np.random.default_rng(seed=0).standard_normal(size=100)
 
 
 dt_fields = ["year", "month", "day", "hour", "minute", "second"]
@@ -112,7 +111,6 @@ def test_categorical_accessor_initialization2(data):
         dsr.cat
 
 
-@xfail_dask_expr("Newer dask version needed", lt_version="2024.5.0")
 @pytest.mark.parametrize("data", [data_cat_1()])
 def test_categorical_basic(data):
     cat = data.copy()
@@ -521,7 +519,6 @@ def test_dask_struct_field_Key_Error(data):
     struct_accessor_data_params,
 )
 def test_dask_struct_field_Int_Error(data):
-    # breakpoint()
     got = dask_cudf.from_cudf(Series(data), 2)
 
     with pytest.raises(IndexError):

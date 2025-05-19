@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,14 +14,13 @@
  * limitations under the License.
  */
 
-#include <tests/binaryop/util/runtime_support.h>
-
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/default_stream.hpp>
+#include <cudf_test/testing_main.hpp>
 
 #include <cudf/binaryop.hpp>
-#include <cudf/column/column_view.hpp>
+#include <cudf/jit/runtime_support.hpp>
 #include <cudf/scalar/scalar.hpp>
 
 class BinaryopTest : public cudf::test::BaseFixture {};
@@ -66,7 +65,9 @@ class BinaryopPTXTest : public BinaryopTest {
  protected:
   void SetUp() override
   {
-    if (!can_do_runtime_jit()) { GTEST_SKIP() << "Skipping tests that require 11.5 runtime"; }
+    if (!cudf::is_runtime_jit_supported()) {
+      GTEST_SKIP() << "Skipping tests that require runtime JIT support";
+    }
   }
 };
 
@@ -122,5 +123,8 @@ TEST_F(BinaryopPTXTest, ColumnColumnPTX)
 
   cudf::binary_operation(
     lhs, rhs, ptx, cudf::data_type(cudf::type_to_id<int32_t>()), cudf::test::get_default_stream());
-  cudf::binary_operation(lhs, rhs, ptx, cudf::data_type(cudf::type_to_id<int64_t>()));
+  cudf::binary_operation(
+    lhs, rhs, ptx, cudf::data_type(cudf::type_to_id<int64_t>()), cudf::test::get_default_stream());
 }
+
+CUDF_TEST_PROGRAM_MAIN()

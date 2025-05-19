@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -67,7 +67,7 @@ class datasource {
     /**
      * @brief Base class destructor
      */
-    virtual ~buffer() {}
+    virtual ~buffer() = default;
 
     /**
      * @brief Factory to construct a datasource buffer object from a container.
@@ -79,35 +79,28 @@ class datasource {
     template <typename Container>
     static std::unique_ptr<buffer> create(Container&& data_owner)
     {
-      return std::make_unique<owning_buffer<Container>>(std::move(data_owner));
+      return std::make_unique<owning_buffer<Container>>(std::forward<Container>(data_owner));
     }
   };
 
   /**
    * @brief Creates a source from a file path.
    *
-   * @note Parameters `offset`, `max_size_estimate` and `min_size_estimate` are hints to the
-   * `datasource` implementation about the expected range of the data that will be read. The
-   * implementation may use these hints to optimize the read operation. These parameters are usually
-   * based on the byte range option. In this case, `min_size_estimate` should be no greater than the
-   * byte range to avoid potential issues when reading adjacent ranges. `max_size_estimate` can
-   * include padding after the byte range, to include additional data that may be needed for
-   * processing.
-   *
-   @throws cudf::logic_error if the minimum size estimate is greater than the maximum size estimate
+   * Parameters `offset` and `max_size_estimate` are hints to the `datasource` implementation about
+   * the expected range of the data that will be read. The implementation may use these hints to
+   * optimize the read operation. These parameters are usually based on the byte range option. In
+   * this case, `max_size_estimate` can include padding after the byte range, to include additional
+   * data that may be needed for processing.
    *
    * @param[in] filepath Path to the file to use
    * @param[in] offset Starting byte offset from which data will be read (the default is zero)
    * @param[in] max_size_estimate Upper estimate of the data range that will be read (the default is
    * zero, which means the whole file after `offset`)
-   * @param[in] min_size_estimate Lower estimate of the data range that will be read (the default is
-   * zero, which means the whole file after `offset`)
    * @return Constructed datasource object
    */
   static std::unique_ptr<datasource> create(std::string const& filepath,
                                             size_t offset            = 0,
-                                            size_t max_size_estimate = 0,
-                                            size_t min_size_estimate = 0);
+                                            size_t max_size_estimate = 0);
 
   /**
    * @brief Creates a source from a host memory buffer.
@@ -163,7 +156,7 @@ class datasource {
   /**
    * @brief Base class destructor
    */
-  virtual ~datasource(){};
+  virtual ~datasource() = default;
 
   /**
    * @brief Returns a buffer with a subset of data from the source.
@@ -176,6 +169,21 @@ class datasource {
   virtual std::unique_ptr<datasource::buffer> host_read(size_t offset, size_t size) = 0;
 
   /**
+   * @brief Asynchronously reads a specified portion of data from the datasource.
+   *
+   * This function initiates an asynchronous read operation that reads `size` bytes of data
+   * starting from the given `offset` in the datasource. Depending on the concrete datasource
+   * implementation, the read operation may be deferred until the returned future is waited upon.
+   *
+   * @param offset The starting position in the datasource from which to read.
+   * @param size The number of bytes to read from the datasource.
+   * @return A std::future that will hold a unique pointer to a datasource::buffer containing
+   *         the read data once the operation completes.
+   */
+  virtual std::future<std::unique_ptr<datasource::buffer>> host_read_async(size_t offset,
+                                                                           size_t size);
+
+  /**
    * @brief Reads a selected range into a preallocated buffer.
    *
    * @param[in] offset Bytes from the start
@@ -185,6 +193,22 @@ class datasource {
    * @return The number of bytes read (can be smaller than size)
    */
   virtual size_t host_read(size_t offset, size_t size, uint8_t* dst) = 0;
+
+  /**
+   * @brief Asynchronously reads data from the source into the provided host memory buffer.
+   *
+   * This function initiates an asynchronous read operation from the data source starting at the
+   * specified offset and reads the specified number of bytes into the destination buffer. Depending
+   * on the concrete datasource implementation, the read operation may be deferred and will be
+   * executed when the returned future is waited upon.
+   *
+   * @param offset The starting position in the data source from which to read.
+   * @param size The number of bytes to read from the data source.
+   * @param dst Pointer to the destination buffer where the read data will be stored.
+   * @return A std::future object that will hold the number of bytes read once the operation
+   * completes.
+   */
+  virtual std::future<size_t> host_read_async(size_t offset, size_t size, uint8_t* dst);
 
   /**
    * @brief Whether or not this source supports reading directly into device memory.
@@ -272,6 +296,9 @@ class datasource {
    * @param offset Number of bytes from the start
    * @param size Number of bytes to read
    * @param dst Address of the existing device memory
+   *            It must not be used asynchronously before the returned future is completed,
+   *            because the implementation is not guaranteed to follow stream-ordering.
+   *            See https://github.com/rapidsai/cudf/pull/18279#issuecomment-2727726886
    * @param stream CUDA stream to use
    *
    * @return The number of bytes read as a future value (can be smaller than size)
@@ -303,7 +330,7 @@ class datasource {
    */
   class non_owning_buffer : public buffer {
    public:
-    non_owning_buffer() {}
+    non_owning_buffer() = default;
 
     /**
      * @brief Construct a new non owning buffer object
@@ -342,13 +369,19 @@ class datasource {
   template <typename Container>
   class owning_buffer : public buffer {
    public:
+    // Require that the argument passed to the constructor be an rvalue (Container&& being an rvalue
+    // reference).
+    static_assert(std::is_rvalue_reference_v<Container&&>,
+                  "The container argument passed to the constructor must be an rvalue.");
+
     /**
      * @brief Moves the input container into the newly created object.
      *
-     * @param data_owner The container to construct the buffer from (ownership is transferred)
+     * @param moved_data_owner The container to construct the buffer from. Callers should explicitly
+     * pass std::move(data_owner) to this function to transfer the ownership.
      */
-    owning_buffer(Container&& data_owner)
-      : _data(std::move(data_owner)), _data_ptr(_data.data()), _size(_data.size())
+    owning_buffer(Container&& moved_data_owner)
+      : _data(std::move(moved_data_owner)), _data_ptr(_data.data()), _size(_data.size())
     {
     }
 
@@ -356,12 +389,13 @@ class datasource {
      * @brief Moves the input container into the newly created object, and exposes a subspan of the
      * buffer.
      *
-     * @param data_owner The container to construct the buffer from (ownership is transferred)
+     * @param moved_data_owner The container to construct the buffer from. Callers should explicitly
+     * pass std::move(data_owner) to this function to transfer the ownership.
      * @param data_ptr Pointer to the start of the subspan
      * @param size The size of the subspan
      */
-    owning_buffer(Container&& data_owner, uint8_t const* data_ptr, size_t size)
-      : _data(std::move(data_owner)), _data_ptr(data_ptr), _size(size)
+    owning_buffer(Container&& moved_data_owner, uint8_t const* data_ptr, size_t size)
+      : _data(std::move(moved_data_owner)), _data_ptr(data_ptr), _size(size)
     {
     }
 

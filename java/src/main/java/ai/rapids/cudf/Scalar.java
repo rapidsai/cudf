@@ -521,11 +521,26 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
   private static native long makeStructScalar(long[] viewHandles, boolean isValid);
   private static native long repeatString(long scalarHandle, int repeatTimes);
 
-  Scalar(DType type, long scalarHandle) {
+  /**
+   * Constructor to create a scalar from a native handle and a type.
+   *
+   * @param type The type of the scalar
+   * @param scalarHandle The native handle (pointer address) to the scalar data
+   */
+  public Scalar(DType type, long scalarHandle) {
     this.type = type;
     this.offHeap = new OffHeapState(scalarHandle);
     MemoryCleaner.register(this, offHeap);
     incRefCount();
+  }
+
+  /**
+   * Get the native handle (native pointer address) for the scalar.
+   *
+   * @return The native handle
+   */
+  public long getScalarHandle() {
+    return offHeap.scalarHandle;
   }
 
   /**
@@ -540,10 +555,6 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
     offHeap.addRef();
     ++refCount;
     return this;
-  }
-
-  long getScalarHandle() {
-    return offHeap.scalarHandle;
   }
 
   /**

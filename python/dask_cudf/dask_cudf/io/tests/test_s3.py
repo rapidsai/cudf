@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 
 import os
 import socket
@@ -11,8 +11,9 @@ import pytest
 
 from dask.dataframe import assert_eq
 
+import cudf
+
 import dask_cudf
-from dask_cudf.tests.utils import QUERY_PLANNING_ON
 
 moto = pytest.importorskip("moto", minversion="3.1.6")
 boto3 = pytest.importorskip("boto3")
@@ -134,7 +135,7 @@ def test_read_parquet_open_file_options_raises():
         pytest.param(
             "arrow",
             marks=pytest.mark.skipif(
-                not QUERY_PLANNING_ON or not dask_cudf.backends.PYARROW_GE_15,
+                not dask_cudf.backends.PYARROW_GE_15,
                 reason="Not supported",
             ),
         ),
@@ -168,6 +169,8 @@ def test_read_parquet_filesystem(s3_base, s3so, pdf, filesystem):
                 filesystem=filesystem,
             )
         assert df.b.sum().compute() == 9
+        assert isinstance(df._meta, cudf.DataFrame)
+        assert isinstance(df.compute(), cudf.DataFrame)
 
 
 def test_read_parquet_filesystem_explicit(s3_base, s3so, pdf):

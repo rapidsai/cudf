@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 # Tell ruff it's OK that some imports occur after the sys.path.insert
 # ruff: noqa: E402
 import io
@@ -8,22 +8,38 @@ import sys
 
 import numpy as np
 import pyarrow as pa
-import pylibcudf as plc
 import pytest
+
+import pylibcudf as plc
 from pylibcudf.io.types import CompressionType
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "common"))
 
-from utils import ALL_PA_TYPES, DEFAULT_PA_TYPES, NUMERIC_PA_TYPES
+from utils import (
+    ALL_PA_TYPES,
+    DEFAULT_PA_TYPES,
+    NON_NESTED_PA_TYPES,
+    NUMERIC_PA_TYPES,
+)
 
 
-# This fixture defines the standard set of types that all tests should default to
+def _type_to_str(typ):
+    if isinstance(typ, pa.ListType):
+        return f"list[{_type_to_str(typ.value_type)}]"
+    elif isinstance(typ, pa.StructType):
+        return f"struct[{', '.join(_type_to_str(typ.field(i).type) for i in range(typ.num_fields))}]"
+    else:
+        return str(typ)
+
+
+# This fixture defines [the standard set of types that all tests should default to
 # running on. If there is a need for some tests to run on a different set of types, that
 # type list fixture should also be defined below here if it is likely to be reused
 # across modules. Otherwise it may be defined on a per-module basis.
 @pytest.fixture(
     scope="session",
     params=DEFAULT_PA_TYPES,
+    ids=_type_to_str,
 )
 def pa_type(request):
     return request.param
@@ -68,29 +84,13 @@ def _get_vals_of_type(pa_type, length, seed):
         )
 
 
-# TODO: Consider adding another fixture/adapting this
-# fixture to consider nullability
-@pytest.fixture(scope="session", params=[0, 100])
-def table_data(request):
-    """
-    Returns (TableWithMetadata, pa_table).
-
-    This is the default fixture you should be using for testing
-    pylibcudf I/O writers.
-
-    Contains one of each category (e.g. int, bool, list, struct)
-    of dtypes.
-    """
-    nrows = request.param
-
+# TODO: Consider adapting this helper function
+# to consider nullability
+def _generate_table_data(types, nrows, seed=42):
     table_dict = {}
-    # Colnames in the format expected by
-    # plc.io.TableWithMetadata
     colnames = []
 
-    seed = 42
-
-    for typ in ALL_PA_TYPES:
+    for typ in types:
         child_colnames = []
 
         def _generate_nested_data(typ):
@@ -136,8 +136,34 @@ def table_data(request):
     pa_table = pa.Table.from_pydict(table_dict)
 
     return plc.io.TableWithMetadata(
-        plc.interop.from_arrow(pa_table), column_names=colnames
+        plc.Table(pa_table), column_names=colnames
     ), pa_table
+
+
+@pytest.fixture(scope="session", params=[0, 100])
+def table_data(request):
+    """
+    Returns (TableWithMetadata, pa_table).
+
+    This is the default fixture you should be using for testing
+    pylibcudf I/O writers.
+
+    Contains one of each category (e.g. int, bool, list, struct)
+    of dtypes.
+    """
+    nrows = request.param
+    return _generate_table_data(ALL_PA_TYPES, nrows)
+
+
+@pytest.fixture(scope="session", params=[0, 100])
+def table_data_with_non_nested_pa_types(request):
+    """
+    Returns (TableWithMetadata, pa_table).
+
+    This fixture is for testing with non-nested PyArrow types.
+    """
+    nrows = request.param
+    return _generate_table_data(NON_NESTED_PA_TYPES, nrows)
 
 
 @pytest.fixture(params=[(0, 0), ("half", 0), (-1, "half")])

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include "text/normalize.cuh"
 #include "text/subword/detail/data_normalizer.hpp"
 #include "text/subword/detail/tokenizer_utils.cuh"
 
@@ -26,6 +27,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/std/functional>
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/pair.h>
@@ -36,81 +38,6 @@
 namespace nvtext {
 namespace detail {
 namespace {
-
-/**
- * @brief Bit used to filter out invalid code points.
- *
- * When normalizing characters to code point values, if this bit is set,
- * the code point should be filtered out before returning from the normalizer.
- */
-constexpr uint32_t FILTER_BIT = 22;
-
-/**
- * @brief Retrieve new code point from metadata value.
- *
- * @param metadata Value from the codepoint_metadata table.
- * @return The replacement character if appropriate.
- */
-__device__ uint32_t get_first_cp(uint32_t metadata) { return metadata & NEW_CP_MASK; }
-
-/**
- * @brief Retrieve token category from the metadata value.
- *
- * Category values are 0-5:
- * 0 - character should be padded
- * 1 - pad character if lower-case
- * 2 - character should be removed
- * 3 - remove character if lower-case
- * 4 - whitespace character -- always replace
- * 5 - uncategorized
- *
- * @param metadata Value from the codepoint_metadata table.
- * @return Category value.
- */
-__device__ uint32_t extract_token_cat(uint32_t metadata)
-{
-  return (metadata >> TOKEN_CAT_SHIFT) & TOKEN_CAT_MASK;
-}
-
-/**
- * @brief Return true if category of metadata value specifies the character should be replaced.
- */
-__device__ bool should_remove_cp(uint32_t metadata, bool lower_case)
-{
-  auto const cat = extract_token_cat(metadata);
-  return (cat == TOKEN_CAT_REMOVE_CHAR) || (lower_case && (cat == TOKEN_CAT_REMOVE_CHAR_IF_LOWER));
-}
-
-/**
- * @brief Return true if category of metadata value specifies the character should be padded.
- */
-__device__ bool should_add_spaces(uint32_t metadata, bool lower_case)
-{
-  auto const cat = extract_token_cat(metadata);
-  return (cat == TOKEN_CAT_ADD_SPACE) || (lower_case && (cat == TOKEN_CAT_ADD_SPACE_IF_LOWER));
-}
-
-/**
- * @brief Return true if category of metadata value specifies the character should be replaced.
- */
-__device__ bool always_replace(uint32_t metadata)
-{
-  return extract_token_cat(metadata) == TOKEN_CAT_ALWAYS_REPLACE;
-}
-
-/**
- * @brief Returns true if metadata value includes a multi-character transform bit equal to 1.
- */
-__device__ bool is_multi_char_transform(uint32_t metadata)
-{
-  return (metadata >> MULTICHAR_SHIFT) & MULTICHAR_MASK;
-}
-
-/**
- * @brief Returns true if the byte passed in could be a valid head byte for
- * a utf8 character. That is, not binary `10xxxxxx`
- */
-__device__ bool is_head_byte(unsigned char utf8_byte) { return (utf8_byte >> 6) != 2; }
 
 /**
  * @brief Converts a UTF-8 character into a unicode code point value.
@@ -134,8 +61,8 @@ extract_code_points_from_utf8(unsigned char const* strings,
   constexpr uint8_t max_utf8_blocks_for_char    = 4;
   uint8_t utf8_blocks[max_utf8_blocks_for_char] = {0};
 
-  for (int i = 0; i < std::min(static_cast<size_t>(max_utf8_blocks_for_char),
-                               total_bytes - start_byte_for_thread);
+  for (int i = 0; i < cuda::std::min(static_cast<size_t>(max_utf8_blocks_for_char),
+                                     total_bytes - start_byte_for_thread);
        ++i) {
     utf8_blocks[i] = strings[start_byte_for_thread + i];
   }
@@ -217,9 +144,8 @@ CUDF_KERNEL void kernel_data_normalizer(unsigned char const* strings,
   constexpr uint32_t init_val                     = (1 << FILTER_BIT);
   uint32_t replacement_code_points[MAX_NEW_CHARS] = {init_val, init_val, init_val};
 
-  cudf::thread_index_type const char_for_thread =
-    threadIdx.x + cudf::thread_index_type(blockIdx.x) * cudf::thread_index_type(blockDim.x);
-  uint32_t num_new_chars = 0;
+  auto const char_for_thread = cudf::detail::grid_1d::global_thread_id();
+  uint32_t num_new_chars     = 0;
 
   if (char_for_thread < total_bytes) {
     auto const code_point = extract_code_points_from_utf8(strings, total_bytes, char_for_thread);

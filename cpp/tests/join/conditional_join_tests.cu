@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,7 +21,8 @@
 #include <cudf/ast/expressions.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
-#include <cudf/join.hpp>
+#include <cudf/join/conditional_join.hpp>
+#include <cudf/join/join.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
@@ -34,6 +35,7 @@
 
 #include <algorithm>
 #include <iostream>
+#include <numeric>
 #include <random>
 #include <stdexcept>
 #include <tuple>
@@ -42,7 +44,7 @@
 
 namespace {
 using PairJoinReturn   = std::pair<std::unique_ptr<rmm::device_uvector<cudf::size_type>>,
-                                 std::unique_ptr<rmm::device_uvector<cudf::size_type>>>;
+                                   std::unique_ptr<rmm::device_uvector<cudf::size_type>>>;
 using SingleJoinReturn = std::unique_ptr<rmm::device_uvector<cudf::size_type>>;
 using NullMaskVector   = std::vector<bool>;
 
@@ -134,9 +136,9 @@ gen_random_nullable_repeated_columns(unsigned int N = 10000, unsigned int num_re
 struct index_pair {
   cudf::size_type first{};
   cudf::size_type second{};
-  __device__ index_pair(){};
+  __device__ index_pair() {};
   __device__ index_pair(cudf::size_type const& first, cudf::size_type const& second)
-    : first(first), second(second){};
+    : first(first), second(second) {};
 };
 
 __device__ inline bool operator<(index_pair const& lhs, index_pair const& rhs)
@@ -226,17 +228,14 @@ struct ConditionalJoinPairReturnTest : public ConditionalJoinTest<T> {
     EXPECT_EQ(result_size, expected_outputs.size());
 
     auto result     = this->join(left, right, predicate);
-    auto lhs_result = cudf::detail::make_std_vector_sync(*result.first, cudf::get_default_stream());
-    auto rhs_result =
-      cudf::detail::make_std_vector_sync(*result.second, cudf::get_default_stream());
+    auto lhs_result = cudf::detail::make_std_vector(*result.first, cudf::get_default_stream());
+    auto rhs_result = cudf::detail::make_std_vector(*result.second, cudf::get_default_stream());
     std::vector<std::pair<cudf::size_type, cudf::size_type>> result_pairs(lhs_result.size());
     std::transform(lhs_result.begin(),
                    lhs_result.end(),
                    rhs_result.begin(),
                    result_pairs.begin(),
-                   [](cudf::size_type lhs, cudf::size_type rhs) {
-                     return std::pair{lhs, rhs};
-                   });
+                   [](cudf::size_type lhs, cudf::size_type rhs) { return std::pair{lhs, rhs}; });
     std::sort(result_pairs.begin(), result_pairs.end());
     std::sort(expected_outputs.begin(), expected_outputs.end());
 
@@ -734,7 +733,7 @@ struct ConditionalJoinSingleReturnTest : public ConditionalJoinTest<T> {
     EXPECT_EQ(result_size, expected_outputs.size());
 
     auto result         = this->join(left, right, predicate);
-    auto result_indices = cudf::detail::make_std_vector_sync(*result, cudf::get_default_stream());
+    auto result_indices = cudf::detail::make_std_vector(*result, cudf::get_default_stream());
     std::sort(result_indices.begin(), result_indices.end());
     std::sort(expected_outputs.begin(), expected_outputs.end());
     EXPECT_TRUE(std::equal(result_indices.begin(),

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,15 +14,17 @@
  * limitations under the License.
  */
 
-#include "io/utilities/block_utils.cuh"
 #include "orc_gpu.hpp"
 
+#include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/io/orc_types.hpp>
 #include <cudf/strings/detail/convert/fixed_point_to_string.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
 
-namespace cudf::io::orc::gpu {
+#include <cuda/std/utility>
+
+namespace cudf::io::orc::detail {
 
 using strings::detail::fixed_point_string_size;
 
@@ -40,8 +42,9 @@ CUDF_KERNEL void __launch_bounds__(init_threads_per_block)
                              device_2dspan<rowgroup_rows const> rowgroup_bounds)
 {
   __shared__ __align__(4) statistics_group group_g[init_groups_per_block];
-  auto const col_id        = blockIdx.y;
-  auto const chunk_id      = (blockIdx.x * init_groups_per_block) + threadIdx.y;
+  auto const col_id = blockIdx.x % rowgroup_bounds.size().second;
+  auto const chunk_id =
+    (blockIdx.x / rowgroup_bounds.size().second * init_groups_per_block) + threadIdx.y;
   auto const t             = threadIdx.x;
   auto const num_rowgroups = rowgroup_bounds.size().first;
   statistics_group* group  = &group_g[threadIdx.y];
@@ -211,7 +214,7 @@ __device__ inline uint8_t* pb_put_fixed64(uint8_t* p, uint32_t id, void const* r
 }
 
 // Splits a nanosecond timestamp into milliseconds and nanoseconds
-__device__ std::pair<int64_t, int32_t> split_nanosecond_timestamp(int64_t nano_count)
+__device__ cuda::std::pair<int64_t, int32_t> split_nanosecond_timestamp(int64_t nano_count)
 {
   auto const ns           = cuda::std::chrono::nanoseconds(nano_count);
   auto const ms_floor     = cuda::std::chrono::floor<cuda::std::chrono::milliseconds>(ns);
@@ -452,10 +455,12 @@ void orc_init_statistics_groups(statistics_group* groups,
                                 device_2dspan<rowgroup_rows const> rowgroup_bounds,
                                 rmm::cuda_stream_view stream)
 {
-  dim3 dim_grid((rowgroup_bounds.size().first + init_groups_per_block - 1) / init_groups_per_block,
-                rowgroup_bounds.size().second);
+  auto const num_blocks =
+    cudf::util::div_rounding_up_safe<size_t>(rowgroup_bounds.size().first, init_groups_per_block) *
+    rowgroup_bounds.size().second;
+
   dim3 dim_block(init_threads_per_group, init_groups_per_block);
-  gpu_init_statistics_groups<<<dim_grid, dim_block, 0, stream.value()>>>(
+  gpu_init_statistics_groups<<<num_blocks, dim_block, 0, stream.value()>>>(
     groups, cols, rowgroup_bounds);
 }
 
@@ -490,11 +495,11 @@ void orc_encode_statistics(uint8_t* blob_bfr,
                            uint32_t statistics_count,
                            rmm::cuda_stream_view stream)
 {
-  unsigned int num_blocks =
-    (statistics_count + encode_chunks_per_block - 1) / encode_chunks_per_block;
+  auto const num_blocks =
+    cudf::util::div_rounding_up_safe(statistics_count, encode_chunks_per_block);
   dim3 dim_block(encode_threads_per_chunk, encode_chunks_per_block);
   gpu_encode_statistics<<<num_blocks, dim_block, 0, stream.value()>>>(
     blob_bfr, groups, chunks, statistics_count);
 }
 
-}  // namespace cudf::io::orc::gpu
+}  // namespace cudf::io::orc::detail

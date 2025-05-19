@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,12 +18,15 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/detail/transform.hpp>
+#include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/export.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
+
+#include <rmm/resource_ref.hpp>
 
 #include <utility>
 
@@ -36,6 +39,14 @@ struct ArrowSchema;
 struct ArrowArray;
 
 struct ArrowArrayStream;
+
+///@cond
+// These are types from arrow that we are forward declaring for our API to
+// avoid needing to include nanoarrow headers.
+typedef int32_t ArrowDeviceType;  // NOLINT
+
+#define ARROW_DEVICE_CUDA 2  // NOLINT
+///@endcond
 
 namespace CUDF_EXPORT cudf {
 /**
@@ -57,12 +68,14 @@ namespace CUDF_EXPORT cudf {
  * @throw cudf::logic_error if the any of the DLTensor fields are unsupported
  *
  * @param managed_tensor a 1D or 2D column-major (Fortran order) tensor
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned table's device memory
  *
  * @return Table with a copy of the tensor data
  */
 std::unique_ptr<table> from_dlpack(
   DLManagedTensor const* managed_tensor,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
@@ -79,12 +92,14 @@ std::unique_ptr<table> from_dlpack(
  * or if any of columns have non-zero null count
  *
  * @param input Table to convert to DLPack
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned DLPack tensor's device memory
  *
  * @return 1D or 2D DLPack tensor with a copy of the table data, or nullptr
  */
 DLManagedTensor* to_dlpack(
   table_view const& input,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /** @} */  // end of group
@@ -125,6 +140,329 @@ using unique_schema_t = std::unique_ptr<ArrowSchema, void (*)(ArrowSchema*)>;
  *
  */
 using unique_device_array_t = std::unique_ptr<ArrowDeviceArray, void (*)(ArrowDeviceArray*)>;
+
+/**
+ * @brief typedef for a vector of owning columns, used for conversion from ArrowDeviceArray
+ *
+ */
+using owned_columns_t = std::vector<std::unique_ptr<cudf::column>>;
+
+/**
+ * @brief functor for a custom deleter to a unique_ptr of table_view
+ *
+ * When converting from an ArrowDeviceArray, there are cases where data can't
+ * be zero-copy (i.e. bools or non-UINT32 dictionary indices). This custom deleter
+ * is used to maintain ownership over the data allocated since a `cudf::table_view`
+ * doesn't hold ownership.
+ */
+template <typename ViewType>
+struct custom_view_deleter {
+  /**
+   * @brief Construct a new custom view deleter object
+   *
+   * @param owned Vector of owning columns
+   */
+  explicit custom_view_deleter(owned_columns_t&& owned) : owned_mem_{std::move(owned)} {}
+
+  /**
+   * @brief operator to delete the unique_ptr
+   *
+   * @param ptr Pointer to the object to be deleted
+   */
+  void operator()(ViewType* ptr) const { delete ptr; }
+
+  owned_columns_t owned_mem_;  ///< Owned columns that must be deleted.
+};
+
+/**
+ * @brief typedef for a unique_ptr to a `cudf::table_view` with custom deleter
+ *
+ */
+using unique_table_view_t =
+  std::unique_ptr<cudf::table_view, custom_view_deleter<cudf::table_view>>;
+
+/**
+ * @brief typedef for a unique_ptr to a `cudf::column_view` with custom deleter
+ *
+ */
+using unique_column_view_t =
+  std::unique_ptr<cudf::column_view, custom_view_deleter<cudf::column_view>>;
+
+namespace interop {
+
+struct arrow_array_container;
+
+/**
+ * @brief Helper function to generate empty column metadata (column with no
+ * name) for arrow conversion.
+ *
+ * This function is helpful for internal conversions between host and device
+ * data using existing arrow functions. It is also convenient for external
+ * usage of the libcudf Arrow APIs to produce the canonical mapping from cudf
+ * column names to Arrow column names (i.e. empty names with appropriate
+ * nesting).
+ *
+ * @param input The column to generate metadata for
+ * @return The metadata for the column
+ */
+cudf::column_metadata get_column_metadata(cudf::column_view const& input);
+
+/**
+ * @brief Helper function to generate empty table metadata (all columns with no
+ * names) for arrow conversion.
+ *
+ * This function is helpful for internal conversions between host and device
+ * data using existing arrow functions. It is also convenient for external
+ * usage of the libcudf Arrow APIs to produce the canonical mapping from cudf
+ * column names to Arrow column names (i.e. empty names with appropriate
+ * nesting).
+ *
+ * @param input The table to generate metadata for
+ * @return The metadata for the table
+ */
+std::vector<cudf::column_metadata> get_table_metadata(cudf::table_view const& input);
+
+/**
+ * @brief A standard interchange medium for ArrowDeviceArray data in cudf.
+ *
+ * This class provides a way to work with ArrowDeviceArray data in cudf without
+ * sacrificing the APIs expected of a cudf column. On the other end, it
+ * provides the shared lifetime management expected by arrow consumers rather
+ * than the single-owner mechanism of cudf::column.
+ */
+class arrow_column {
+ public:
+  /**
+   * @brief Construct a new arrow column object
+   *
+   * The input column will be moved into the arrow_column, so it is no longer
+   * suitable for use afterwards.
+   *
+   * @param input cudf column to convert to arrow
+   * @param metadata Column metadata for the column
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource used for any allocations during conversion
+   */
+  arrow_column(cudf::column&& input,
+               column_metadata const& metadata,
+               rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+               rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
+  /**
+   * @brief Construct a new arrow column object
+   *
+   * The input array will be moved into the arrow_column, so it is no longer
+   * suitable for use afterwards. For consistency, this is done even if the
+   * source array points to host data.
+   *
+   * @param schema Arrow schema for the column
+   * @param input ArrowDeviceArray data for the column
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource used for any allocations during conversion
+   */
+  arrow_column(ArrowSchema&& schema,
+               ArrowDeviceArray&& input,
+               rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+               rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
+  /**
+   * @brief Construct a new arrow column object
+   *
+   * The input array will be released, so it is no longer suitable for use
+   * afterwards. This is done for consistency with other constructors of arrow_table even though the
+   * source data is always host data.
+   *
+   * @param schema Arrow schema for the column
+   * @param input ArrowArray data for the column
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource used for any allocations during conversion
+   */
+  arrow_column(ArrowSchema&& schema,
+               ArrowArray&& input,
+               rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+               rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
+  /**
+   * @brief Construct a new arrow column object
+   *
+   * The stream will be released after the column is created, so it is no longer
+   * suitable for use afterwards. This is done for consistency with other constructors of
+   * arrow_column even though the source data is always host data.
+   *
+   * @param input ArrowArrayStream data for the column
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource used for any allocations during conversion
+   */
+  arrow_column(ArrowArrayStream&& input,
+               rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+               rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
+  /**
+   * @brief Convert the column to an ArrowSchema
+   *
+   * The resulting schema is a deep copy of the arrow_column's schema and is
+   * not tied to its lifetime.
+   *
+   * @param output ArrowSchema to populate with the column's schema
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource used for any allocations during conversion
+   */
+  void to_arrow_schema(
+    ArrowSchema* output,
+    rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) const;
+
+  /**
+   * @brief Convert the column to an ArrowDeviceArray
+   *
+   * @param output ArrowDeviceArray to populate with the column's data
+   * @param device_type ArrowDeviceType to set on the output
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource used for any allocations during conversion
+   */
+  void to_arrow(ArrowDeviceArray* output,
+                ArrowDeviceType device_type       = ARROW_DEVICE_CUDA,
+                rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+                rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) const;
+
+  /**
+   * @brief Get a view of the column data
+   *
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource used for any allocations during conversion
+   * @return A view of the column data
+   */
+  [[nodiscard]] column_view view() const;
+
+ private:
+  std::shared_ptr<arrow_array_container>
+    container;  ///< Shared pointer to container for the ArrowDeviceArray data; shared_ptr allows
+                ///< re-export via to_arrow
+  owned_columns_t view_columns;  ///< Cached view that manages ownership of non-view-only data.
+  column_view cached_view;
+};
+
+/**
+ * @brief A standard interchange medium for ArrowDeviceArray data in cudf.
+ *
+ * This class provides a way to work with ArrowDeviceArray data in cudf without
+ * sacrificing the APIs expected of a cudf table. On the other end, it
+ * provides the shared lifetime management expected by arrow consumers rather
+ * than the single-owner mechanism of cudf::table.
+ */
+class arrow_table {
+ public:
+  /**
+   * @brief Construct a new arrow table object
+   *
+   * The input table will be moved into the arrow_table, so it is no longer
+   * suitable for use afterwards.
+   *
+   * @param input cudf table to convert to arrow
+   * @param metadata The hierarchy of names of columns and children
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource used for any allocations during conversion
+   */
+  arrow_table(cudf::table&& input,
+              cudf::host_span<column_metadata const> metadata,
+              rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+              rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
+  /**
+   * @brief Construct a new arrow table object
+   *
+   * The input array will be moved into the arrow_table, so it is no longer
+   * suitable for use afterwards. For consistency, this is done even if the
+   * source array points to host data.
+   *
+   * @param schema Arrow schema for the table
+   * @param input ArrowDeviceArray data for the table
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource used for any allocations during conversion
+   */
+  arrow_table(ArrowSchema&& schema,
+              ArrowDeviceArray&& input,
+              rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+              rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
+  /**
+   * @brief Construct a new arrow table object
+   *
+   * The input array will be released, so it is no longer suitable for use
+   * afterwards. This is done for consistency with other constructors of arrow_table even though the
+   * source data is always host data.
+   *
+   * @param schema Arrow schema for the table
+   * @param input ArrowArray data for the table
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource used for any allocations during conversion
+   */
+  arrow_table(ArrowSchema&& schema,
+              ArrowArray&& input,
+              rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+              rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
+  /**
+   * @brief Construct a new arrow table object
+   *
+   * The stream will be released after the table is created, so it is no longer
+   * suitable for use afterwards. This is done for consistency with other constructors of
+   * arrow_table even though the source data is always host data.
+   *
+   * @param input ArrowArrayStream data for the table
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource used for any allocations during conversion
+   */
+  arrow_table(ArrowArrayStream&& input,
+              rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+              rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
+  /**
+   * @brief Convert the table to an ArrowSchema
+   *
+   * The resulting schema is a deep copy of the arrow_column's schema and is
+   * not tied to its lifetime.
+   *
+   * @param output ArrowSchema to populate with the table's schema
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource used for any allocations during conversion
+   */
+  void to_arrow_schema(
+    ArrowSchema* output,
+    rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) const;
+
+  /**
+   * @brief Convert the table to an ArrowDeviceArray
+   *
+   * @param output ArrowDeviceArray to populate with the table's data
+   * @param device_type ArrowDeviceType to set on the output
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource used for any allocations during conversion
+   */
+  void to_arrow(ArrowDeviceArray* output,
+                ArrowDeviceType device_type       = ARROW_DEVICE_CUDA,
+                rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+                rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) const;
+
+  /**
+   * @brief Get a view of the table data
+   *
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource used for any allocations during conversion
+   * @return A view of the table data
+   */
+  [[nodiscard]] table_view view() const;
+
+ private:
+  std::shared_ptr<arrow_array_container>
+    container;  ///< Shared pointer to container for the ArrowDeviceArray data; shared_ptr allows
+                ///< re-export via to_arrow
+  owned_columns_t view_columns;  ///< Cached view that manages ownership of non-view-only data.
+  table_view cached_view;
+};
+
+}  // namespace interop
 
 /**
  * @brief Create ArrowSchema from cudf table and metadata
@@ -317,11 +655,33 @@ unique_device_array_t to_arrow_host(
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
+ * @brief Copy strings column data to host and create `ArrowDeviceArray` for it
+ * using the ArrowBinaryView format
+ *
+ * Populates the ArrowDeviceArray, copying the cudf data to the host. The
+ * returned ArrowDeviceArray will have a device_type of CPU and will have no ties
+ * to the memory referenced by the column view passed in. The deleter for the
+ * returned unique_ptr will call the release callback on the ArrowDeviceArray
+ * automatically.
+ *
+ * @param col Input strings column view
+ * @param stream CUDA stream used for the device memory operations and kernel launches
+ * @param mr Device memory resource used for any allocations during conversion
+ * @return ArrowDeviceArray generated from input column
+ */
+unique_device_array_t to_arrow_host_stringview(
+  cudf::strings_column_view const& col,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
+/**
  * @brief Create `cudf::table` from given ArrowArray and ArrowSchema input
  *
  * @throws std::invalid_argument if either schema or input are NULL
  *
  * @throws cudf::data_type_error if the input array is not a struct array.
+ *
+ * @throws std::overflow_error if the input arrow object exceeds the column size limit.
  *
  * The conversion will not call release on the input Array.
  *
@@ -363,6 +723,8 @@ std::unique_ptr<cudf::column> from_arrow_column(
  *
  * @throws std::invalid_argument if the device_type is not `ARROW_DEVICE_CPU`
  *
+ * @throws std::overflow_error if the input arrow object exceeds the column size limit.
+ *
  * @throws cudf::data_type_error if the input array is not a struct array,
  * non-struct arrays should be passed to `from_arrow_host_column` instead.
  *
@@ -399,6 +761,24 @@ std::unique_ptr<table> from_arrow_stream(
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
+ * @brief Create `cudf::column` from given ArrowArrayStream input
+ *
+ * @throws std::invalid_argument if input is NULL
+ *
+ * The conversion WILL release the input ArrayArrayStream and its constituent
+ * arrays or schema since Arrow streams are not suitable for multiple reads.
+ *
+ * @param input `ArrowArrayStream` pointer to object that will produce ArrowArray data
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to perform cuda allocation
+ * @return cudf column generated from the given Arrow data
+ */
+std::unique_ptr<column> from_arrow_stream_column(
+  ArrowArrayStream* input,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
+/**
  * @brief Create `cudf::column` from given ArrowDeviceArray input
  *
  * @throws std::invalid_argument if either schema or input are NULL
@@ -406,6 +786,8 @@ std::unique_ptr<table> from_arrow_stream(
  * @throws std::invalid_argument if the device_type is not `ARROW_DEVICE_CPU`
  *
  * @throws cudf::data_type_error if input arrow data type is not supported in cudf.
+ *
+ * @throws std::overflow_error if the input arrow object exceeds the column size limit.
  *
  * The conversion will not call release on the input Array.
  *
@@ -420,46 +802,6 @@ std::unique_ptr<column> from_arrow_host_column(
   ArrowDeviceArray const* input,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
-
-/**
- * @brief typedef for a vector of owning columns, used for conversion from ArrowDeviceArray
- *
- */
-using owned_columns_t = std::vector<std::unique_ptr<cudf::column>>;
-
-/**
- * @brief functor for a custom deleter to a unique_ptr of table_view
- *
- * When converting from an ArrowDeviceArray, there are cases where data can't
- * be zero-copy (i.e. bools or non-UINT32 dictionary indices). This custom deleter
- * is used to maintain ownership over the data allocated since a `cudf::table_view`
- * doesn't hold ownership.
- */
-template <typename ViewType>
-struct custom_view_deleter {
-  /**
-   * @brief Construct a new custom view deleter object
-   *
-   * @param owned Vector of owning columns
-   */
-  explicit custom_view_deleter(owned_columns_t&& owned) : owned_mem_{std::move(owned)} {}
-
-  /**
-   * @brief operator to delete the unique_ptr
-   *
-   * @param ptr Pointer to the object to be deleted
-   */
-  void operator()(ViewType* ptr) const { delete ptr; }
-
-  owned_columns_t owned_mem_;  ///< Owned columns that must be deleted.
-};
-
-/**
- * @brief typedef for a unique_ptr to a `cudf::table_view` with custom deleter
- *
- */
-using unique_table_view_t =
-  std::unique_ptr<cudf::table_view, custom_view_deleter<cudf::table_view>>;
 
 /**
  * @brief Create `cudf::table_view` from given `ArrowDeviceArray` and `ArrowSchema`
@@ -478,6 +820,8 @@ using unique_table_view_t =
  * arrays should be passed to `from_arrow_device_column` instead.
  *
  * @throws cudf::data_type_error if the input arrow data type is not supported.
+ *
+ * @throws std::overflow_error if the input arrow object exceeds the column size limit.
  *
  * Each child of the input struct will be the columns of the resulting table_view.
  *
@@ -503,13 +847,6 @@ unique_table_view_t from_arrow_device(
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
- * @brief typedef for a unique_ptr to a `cudf::column_view` with custom deleter
- *
- */
-using unique_column_view_t =
-  std::unique_ptr<cudf::column_view, custom_view_deleter<cudf::column_view>>;
-
-/**
  * @brief Create `cudf::column_view` from given `ArrowDeviceArray` and `ArrowSchema`
  *
  * Constructs a non-owning `cudf::column_view` using `ArrowDeviceArray` and `ArrowSchema`,
@@ -523,6 +860,8 @@ using unique_column_view_t =
  * or `ARROW_DEVICE_CUDA_MANAGED`
  *
  * @throws cudf::data_type_error input arrow data type is not supported.
+ *
+ * @throws std::overflow_error if the input arrow object exceeds the column size limit.
  *
  * @note The custom deleter used for the unique_ptr to the table_view maintains ownership
  * over any memory which is allocated, such as converting boolean columns from the bitmap

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,10 +19,7 @@
 #include <cudf/io/detail/tokenize_json.hpp>
 #include <cudf/io/types.hpp>
 #include <cudf/types.hpp>
-#include <cudf/utilities/bit.hpp>
-#include <cudf/utilities/error.hpp>
 #include <cudf/utilities/export.hpp>
-#include <cudf/utilities/memory_resource.hpp>
 
 #include <map>
 #include <vector>
@@ -103,6 +100,8 @@ struct json_column {
   json_column& operator=(json_column&&)      = default;
   json_column(json_column const&)            = delete;
   json_column& operator=(json_column const&) = delete;
+
+  json_column(json_col_t type) : type(type) {}
 
   /**
    * @brief Fills the rows up to the given \p up_to_row_offset with nulls.
@@ -405,21 +404,6 @@ void make_device_json_column(device_span<SymbolT const> input,
                              rmm::cuda_stream_view stream,
                              rmm::device_async_resource_ref mr);
 
-namespace experimental {
-/**
- * @copydoc cudf::io::json::detail::make_device_json_column
- */
-void make_device_json_column(device_span<SymbolT const> input,
-                             tree_meta_t const& tree,
-                             device_span<NodeIndexT const> col_ids,
-                             device_span<size_type const> row_offsets,
-                             device_json_column& root,
-                             bool is_array_of_arrays,
-                             cudf::io::json_reader_options const& options,
-                             rmm::cuda_stream_view stream,
-                             rmm::device_async_resource_ref mr);
-}  // namespace experimental
-
 /**
  * @brief Retrieves the parse_options to be used for type inference and type casting
  *
@@ -448,15 +432,39 @@ table_with_metadata device_parse_nested_json(device_span<SymbolT const> input,
                                              rmm::device_async_resource_ref mr);
 
 /**
- * @brief Get the path data type of a column by path if present in input schema
+ * @brief Create empty column of a given nested schema
  *
- * @param path path of the column
- * @param options json reader options which holds schema
- * @return data type of the column if present
+ * @param schema The schema of the column to create
+ * @param stream The CUDA stream to which kernels are dispatched
+ * @param mr resource with which to allocate
+ * @return The empty column
  */
-std::optional<data_type> get_path_data_type(
-  host_span<std::pair<std::string, cudf::io::json::NodeT> const> path,
-  cudf::io::json_reader_options const& options);
+std::unique_ptr<column> make_empty_column(schema_element const& schema,
+                                          rmm::cuda_stream_view stream,
+                                          rmm::device_async_resource_ref mr);
+
+/**
+ * @brief Create all null column of a given nested schema
+ *
+ * @param schema The schema of the column to create
+ * @param num_rows The number of rows in the column
+ * @param stream The CUDA stream to which kernels are dispatched
+ * @param mr resource with which to allocate
+ * @return The all null column
+ */
+std::unique_ptr<column> make_all_nulls_column(schema_element const& schema,
+                                              size_type num_rows,
+                                              rmm::cuda_stream_view stream,
+                                              rmm::device_async_resource_ref mr);
+
+/**
+ * @brief Create metadata for a column of a given schema
+ *
+ * @param schema The schema of the column
+ * @param col_name The name of the column
+ * @return column metadata for a given schema
+ */
+column_name_info make_column_name_info(schema_element const& schema, std::string const& col_name);
 
 /**
  * @brief Helper class to get path of a column by column id from reduced column tree

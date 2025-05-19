@@ -122,6 +122,7 @@ std::unique_ptr<bpe_merge_pairs> load_merge_pairs(
  * @param merges_pairs Created by a call to @ref nvtext::load_merge_pairs.
  * @param separator String used to build the output after encoding.
  *                  Default is a space.
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Memory resource to allocate any returned objects.
  * @return An encoded column of strings.
  */
@@ -129,6 +130,7 @@ std::unique_ptr<cudf::column> byte_pair_encoding(
   cudf::strings_column_view const& input,
   bpe_merge_pairs const& merges_pairs,
   cudf::string_scalar const& separator = cudf::string_scalar(" "),
+  rmm::cuda_stream_view stream         = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr    = cudf::get_current_device_resource_ref());
 
 /** @} */  // end of group

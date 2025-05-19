@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,13 +17,19 @@
 #include "generate_input.hpp"
 #include "random_distribution_factory.cuh"
 
+#include <cudf_test/column_wrapper.hpp>
+
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/copying.hpp>
 #include <cudf/detail/gather.hpp>
+#include <cudf/detail/offsets_iterator_factory.cuh>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/filling.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
+#include <cudf/strings/combine.hpp>
+#include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/table/table.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -40,7 +46,6 @@
 #include <thrust/execution_policy.h>
 #include <thrust/fill.h>
 #include <thrust/for_each.h>
-#include <thrust/functional.h>
 #include <thrust/gather.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
@@ -505,7 +510,7 @@ std::unique_ptr<cudf::column> create_random_column(data_profile const& profile,
   auto [result_bitmask, null_count] =
     cudf::detail::valid_if(null_mask.begin(),
                            null_mask.end(),
-                           thrust::identity<bool>{},
+                           cuda::std::identity{},
                            cudf::get_default_stream(),
                            cudf::get_current_device_resource_ref());
 
@@ -536,7 +541,7 @@ struct string_generator {
   // range 32-127 is ASCII; 127-136 will be multi-byte UTF-8
   {
   }
-  __device__ void operator()(thrust::tuple<cudf::size_type, cudf::size_type> str_begin_end)
+  __device__ void operator()(thrust::tuple<int64_t, int64_t> str_begin_end)
   {
     auto begin = thrust::get<0>(str_begin_end);
     auto end   = thrust::get<1>(str_begin_end);
@@ -565,6 +570,9 @@ std::unique_ptr<cudf::column> create_random_utf8_string_column(data_profile cons
     distribution_params<bool>{1. - profile.get_null_probability().value_or(0)});
   auto lengths   = len_dist(engine, num_rows + 1);
   auto null_mask = valid_dist(engine, num_rows + 1);
+  auto stream    = cudf::get_default_stream();
+  auto mr        = cudf::get_current_device_resource_ref();
+
   thrust::transform_if(
     thrust::device,
     lengths.begin(),
@@ -572,32 +580,30 @@ std::unique_ptr<cudf::column> create_random_utf8_string_column(data_profile cons
     null_mask.begin(),
     lengths.begin(),
     cuda::proclaim_return_type<cudf::size_type>([] __device__(auto) { return 0; }),
-    thrust::logical_not<bool>{});
+    cuda::std::logical_not<bool>{});
   auto valid_lengths = thrust::make_transform_iterator(
     thrust::make_zip_iterator(thrust::make_tuple(lengths.begin(), null_mask.begin())),
     valid_or_zero{});
-  rmm::device_uvector<cudf::size_type> offsets(num_rows + 1, cudf::get_default_stream());
-  thrust::exclusive_scan(
-    thrust::device, valid_lengths, valid_lengths + lengths.size(), offsets.begin());
-  // offsets are ready.
-  auto chars_length = *thrust::device_pointer_cast(offsets.end() - 1);
+
+  // offsets are created as INT32 or INT64 as appropriate
+  auto [offsets, chars_length] = cudf::strings::detail::make_offsets_child_column(
+    valid_lengths, valid_lengths + num_rows, stream, mr);
+  // use the offsetalator to normalize the offset values for use by the string_generator
+  auto offsets_itr = cudf::detail::offsetalator_factory::make_input_iterator(offsets->view());
   rmm::device_uvector<char> chars(chars_length, cudf::get_default_stream());
   thrust::for_each_n(thrust::device,
-                     thrust::make_zip_iterator(offsets.begin(), offsets.begin() + 1),
+                     thrust::make_zip_iterator(offsets_itr, offsets_itr + 1),
                      num_rows,
                      string_generator{chars.data(), engine});
+
   auto [result_bitmask, null_count] =
-    cudf::detail::valid_if(null_mask.begin(),
-                           null_mask.end() - 1,
-                           thrust::identity<bool>{},
-                           cudf::get_default_stream(),
-                           cudf::get_current_device_resource_ref());
+    profile.get_null_probability().has_value()
+      ? cudf::detail::valid_if(
+          null_mask.begin(), null_mask.end() - 1, cuda::std::identity{}, stream, mr)
+      : std::pair{rmm::device_buffer{}, 0};
+
   return cudf::make_strings_column(
-    num_rows,
-    std::make_unique<cudf::column>(std::move(offsets), rmm::device_buffer{}, 0),
-    chars.release(),
-    null_count,
-    profile.get_null_probability().has_value() ? std::move(result_bitmask) : rmm::device_buffer{});
+    num_rows, std::move(offsets), chars.release(), null_count, std::move(result_bitmask));
 }
 
 /**
@@ -686,7 +692,7 @@ std::unique_ptr<cudf::column> create_random_column<cudf::struct_view>(data_profi
           auto valids = valid_dist(engine, num_rows);
           return cudf::detail::valid_if(valids.begin(),
                                         valids.end(),
-                                        thrust::identity<bool>{},
+                                        cuda::std::identity{},
                                         cudf::get_default_stream(),
                                         cudf::get_current_device_resource_ref());
         }
@@ -780,7 +786,7 @@ std::unique_ptr<cudf::column> create_random_column<cudf::list_view>(data_profile
 
     auto [null_mask, null_count] = cudf::detail::valid_if(valids.begin(),
                                                           valids.end(),
-                                                          thrust::identity<bool>{},
+                                                          cuda::std::identity{},
                                                           cudf::get_default_stream(),
                                                           cudf::get_current_device_resource_ref());
     list_column                  = cudf::make_lists_column(
@@ -860,7 +866,7 @@ std::unique_ptr<cudf::table> create_random_table(std::vector<cudf::type_id> cons
                                                  unsigned seed)
 {
   auto const avg_row_bytes =
-    std::accumulate(dtype_ids.begin(), dtype_ids.end(), 0., [&](size_t sum, auto tid) {
+    std::accumulate(dtype_ids.begin(), dtype_ids.end(), double{0}, [&](auto sum, auto tid) {
       return sum + avg_element_size(profile, cudf::data_type(tid));
     });
   std::size_t const num_rows = std::lround(table_bytes.size / avg_row_bytes);
@@ -916,6 +922,58 @@ std::unique_ptr<cudf::table> create_sequence_table(std::vector<cudf::type_id> co
     return col;
   });
   return std::make_unique<cudf::table>(std::move(columns));
+}
+
+std::unique_ptr<cudf::column> create_string_column(cudf::size_type num_rows,
+                                                   cudf::size_type row_width,
+                                                   int32_t hit_rate)
+{
+  // build input table using the following data
+  auto raw_data = cudf::test::strings_column_wrapper(
+                    {
+                      "123 abc 4567890 DEFGHI 0987 5W43",  // matches both patterns;
+                      "012345 6789 01234 56789 0123 456",  // the rest do not match
+                      "abc 4567890 DEFGHI 0987 Wxyz 123",
+                      "abcdefghijklmnopqrstuvwxyz 01234",
+                      "",
+                      "AbcéDEFGHIJKLMNOPQRSTUVWXYZ 01",
+                      "9876543210,abcdefghijklmnopqrstU",
+                      "9876543210,abcdefghijklmnopqrstU",
+                      "123 édf 4567890 DéFG 0987 X5",
+                      "1",
+                    })
+                    .release();
+
+  if (row_width / 32 > 1) {
+    std::vector<cudf::column_view> columns;
+    for (int i = 0; i < row_width / 32; ++i) {
+      columns.push_back(raw_data->view());
+    }
+    raw_data = cudf::strings::concatenate(cudf::table_view(columns));
+  }
+  auto data_view = raw_data->view();
+
+  // compute number of rows in n_rows that should match
+  auto const num_matches = (static_cast<int64_t>(num_rows) * hit_rate) / 100;
+
+  // Create a randomized gather-map to build a column out of the strings in data.
+  data_profile gather_profile =
+    data_profile_builder().cardinality(0).null_probability(0.0).distribution(
+      cudf::type_id::INT32, distribution_id::UNIFORM, 1, data_view.size() - 1);
+  auto gather_table =
+    create_random_table({cudf::type_id::INT32}, row_count{num_rows}, gather_profile);
+  gather_table->get_column(0).set_null_mask(rmm::device_buffer{}, 0);
+
+  // Create scatter map by placing 0-index values throughout the gather-map
+  auto scatter_data = cudf::sequence(num_matches,
+                                     cudf::numeric_scalar<int32_t>(0),
+                                     cudf::numeric_scalar<int32_t>(num_rows / num_matches));
+  auto zero_scalar  = cudf::numeric_scalar<int32_t>(0);
+  auto table        = cudf::scatter({zero_scalar}, scatter_data->view(), gather_table->view());
+  auto gather_map   = table->view().column(0);
+  table             = cudf::gather(cudf::table_view({data_view}), gather_map);
+
+  return std::move(table->release().front());
 }
 
 std::pair<rmm::device_buffer, cudf::size_type> create_random_null_mask(

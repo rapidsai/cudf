@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 """A dataframe, with some properties."""
@@ -8,18 +8,19 @@ from __future__ import annotations
 from functools import cached_property
 from typing import TYPE_CHECKING, cast
 
-import pyarrow as pa
-import pylibcudf as plc
-
 import polars as pl
 
+import pylibcudf as plc
+
 from cudf_polars.containers import Column
-from cudf_polars.utils import dtypes
+from cudf_polars.utils import conversion
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping, Sequence, Set
 
-    from typing_extensions import Self
+    from typing_extensions import Any, Self
+
+    from cudf_polars.typing import ColumnOptions, DataFrameHeader, Slice
 
 
 __all__: list[str] = ["DataFrame"]
@@ -59,7 +60,7 @@ class DataFrame:
         # To guarantee we produce correct names, we therefore
         # serialise with names we control and rename with that map.
         name_map = {f"column_{i}": name for i, name in enumerate(self.column_map)}
-        table: pa.Table = plc.interop.to_arrow(
+        table = plc.interop.to_arrow(
             self.table,
             [plc.interop.ColumnMetadata(name=name) for name in name_map],
         )
@@ -105,17 +106,12 @@ class DataFrame:
         -------
         New dataframe representing the input.
         """
-        table = df.to_arrow()
-        schema = table.schema
-        for i, field in enumerate(schema):
-            schema = schema.set(
-                i, pa.field(field.name, dtypes.downcast_arrow_lists(field.type))
-            )
-        # No-op if the schema is unchanged.
-        d_table = plc.interop.from_arrow(table.cast(schema))
+        plc_table = plc.Table(df)
         return cls(
-            Column(column).copy_metadata(h_col)
-            for column, h_col in zip(d_table.columns(), df.iter_columns(), strict=True)
+            Column(d_col, name=name).copy_metadata(h_col)
+            for d_col, h_col, name in zip(
+                plc_table.columns(), df.iter_columns(), df.columns, strict=True
+            )
         )
 
     @classmethod
@@ -145,6 +141,73 @@ class DataFrame:
         return cls(
             Column(c, name=name) for c, name in zip(table.columns(), names, strict=True)
         )
+
+    @classmethod
+    def deserialize(
+        cls, header: DataFrameHeader, frames: tuple[memoryview, plc.gpumemoryview]
+    ) -> Self:
+        """
+        Create a DataFrame from a serialized representation returned by `.serialize()`.
+
+        Parameters
+        ----------
+        header
+            The (unpickled) metadata required to reconstruct the object.
+        frames
+            Two-tuple of frames (a memoryview and a gpumemoryview).
+
+        Returns
+        -------
+        DataFrame
+            The deserialized DataFrame.
+        """
+        packed_metadata, packed_gpu_data = frames
+        table = plc.contiguous_split.unpack_from_memoryviews(
+            packed_metadata, packed_gpu_data
+        )
+        return cls(
+            Column(c, **kw)
+            for c, kw in zip(table.columns(), header["columns_kwargs"], strict=True)
+        )
+
+    def serialize(
+        self,
+    ) -> tuple[DataFrameHeader, tuple[memoryview, plc.gpumemoryview]]:
+        """
+        Serialize the table into header and frames.
+
+        Follows the Dask serialization scheme with a picklable header (dict) and
+        a tuple of frames (in this case a contiguous host and device buffer).
+
+        To enable dask support, dask serializers must be registered
+
+            >>> from cudf_polars.experimental.dask_serialize import register
+            >>> register()
+
+        Returns
+        -------
+        header
+            A dict containing any picklable metadata required to reconstruct the object.
+        frames
+            Two-tuple of frames suitable for passing to `plc.contiguous_split.unpack_from_memoryviews`
+        """
+        packed = plc.contiguous_split.pack(self.table)
+
+        # Keyword arguments for `Column.__init__`.
+        columns_kwargs: list[ColumnOptions] = [
+            {
+                "is_sorted": col.is_sorted,
+                "order": col.order,
+                "null_order": col.null_order,
+                "name": col.name,
+            }
+            for col in self.columns
+        ]
+        header: DataFrameHeader = {
+            "columns_kwargs": columns_kwargs,
+            "frame_count": 2,
+        }
+        return header, packed.release()
 
     def sorted_like(
         self, like: DataFrame, /, *, subset: Set[str] | None = None
@@ -176,7 +239,9 @@ class DataFrame:
             for c, other in zip(self.columns, like.columns, strict=True)
         )
 
-    def with_columns(self, columns: Iterable[Column], *, replace_only=False) -> Self:
+    def with_columns(
+        self, columns: Iterable[Column], *, replace_only: bool = False
+    ) -> Self:
         """
         Return a new dataframe with extra columns.
 
@@ -205,7 +270,7 @@ class DataFrame:
         """Drop columns by name."""
         return type(self)(column for column in self.columns if column.name not in names)
 
-    def select(self, names: Sequence[str]) -> Self:
+    def select(self, names: Sequence[str] | Mapping[str, Any]) -> Self:
         """Select columns by name returning DataFrame."""
         try:
             return type(self)(self.column_map[name] for name in names)
@@ -225,7 +290,7 @@ class DataFrame:
         table = plc.stream_compaction.apply_boolean_mask(self.table, mask.obj)
         return type(self).from_table(table, self.column_names).sorted_like(self)
 
-    def slice(self, zlice: tuple[int, int] | None) -> Self:
+    def slice(self, zlice: Slice | None) -> Self:
         """
         Slice a dataframe.
 
@@ -241,14 +306,7 @@ class DataFrame:
         """
         if zlice is None:
             return self
-        start, length = zlice
-        if start < 0:
-            start += self.num_rows
-        # Polars implementation wraps negative start by num_rows, then
-        # adds length to start to get the end, then clamps both to
-        # [0, num_rows)
-        end = start + length
-        start = max(min(start, self.num_rows), 0)
-        end = max(min(end, self.num_rows), 0)
-        (table,) = plc.copying.slice(self.table, [start, end])
+        (table,) = plc.copying.slice(
+            self.table, conversion.from_polars_slice(zlice, num_rows=self.num_rows)
+        )
         return type(self).from_table(table, self.column_names).sorted_like(self)

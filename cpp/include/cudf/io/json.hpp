@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,8 @@
 
 #include "types.hpp"
 
+#include <cudf/detail/utilities/visitor_overload.hpp>
+#include <cudf/io/detail/utils.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
@@ -53,6 +55,11 @@ struct schema_element {
    * @brief Allows specifying this column's child columns target type
    */
   std::map<std::string, schema_element> child_types;
+
+  /**
+   * @brief Allows specifying the order of the columns
+   */
+  std::optional<std::vector<std::string>> column_order;
 };
 
 /**
@@ -87,13 +94,18 @@ enum class json_recovery_mode_t {
  * | `chunksize`          | use `byte_range_xxx` for chunking instead        |
  */
 class json_reader_options {
+ public:
+  using dtype_variant =
+    std::variant<std::vector<data_type>,
+                 std::map<std::string, data_type>,
+                 std::map<std::string, schema_element>,
+                 schema_element>;  ///< Variant type holding dtypes information for the columns
+
+ private:
   source_info _source;
 
   // Data types of the column; empty to infer dtypes
-  std::variant<std::vector<data_type>,
-               std::map<std::string, data_type>,
-               std::map<std::string, schema_element>>
-    _dtypes;
+  dtype_variant _dtypes;
   // Specify the compression format of the source or infer from file extension
   compression_type _compression = compression_type::AUTO;
 
@@ -178,13 +190,7 @@ class json_reader_options {
    *
    * @returns Data types of the columns
    */
-  [[nodiscard]] std::variant<std::vector<data_type>,
-                             std::map<std::string, data_type>,
-                             std::map<std::string, schema_element>> const&
-  get_dtypes() const
-  {
-    return _dtypes;
-  }
+  [[nodiscard]] dtype_variant const& get_dtypes() const { return _dtypes; }
 
   /**
    * @brief Returns compression format of the source.
@@ -228,7 +234,11 @@ class json_reader_options {
    */
   [[nodiscard]] size_t get_byte_range_padding() const
   {
-    auto const num_columns = std::visit([](auto const& dtypes) { return dtypes.size(); }, _dtypes);
+    auto const num_columns =
+      std::visit(cudf::detail::visitor_overload{
+                   [](auto const& dtypes) { return dtypes.size(); },
+                   [](schema_element const& dtypes) { return dtypes.child_types.size(); }},
+                 _dtypes);
 
     auto const max_row_bytes = 16 * 1024;  // 16KB
     auto const column_bytes  = 64;
@@ -389,6 +399,14 @@ class json_reader_options {
    * @param types Map of column names to schema_element to support arbitrary nesting of data types
    */
   void set_dtypes(std::map<std::string, schema_element> types) { _dtypes = std::move(types); }
+
+  /**
+   * @brief Set data types for a potentially nested column hierarchy.
+   *
+   * @param types schema element with column names and column order to support arbitrary nesting of
+   * data types
+   */
+  void set_dtypes(schema_element types);
 
   /**
    * @brief Set the compression type.
@@ -621,6 +639,18 @@ class json_reader_options_builder {
   json_reader_options_builder& dtypes(std::map<std::string, schema_element> types)
   {
     options._dtypes = std::move(types);
+    return *this;
+  }
+
+  /**
+   * @brief Set data types for columns to be read.
+   *
+   * @param types Struct schema_element with Column name -> schema_element with map and order
+   * @return this for chaining
+   */
+  json_reader_options_builder& dtypes(schema_element types)
+  {
+    options.set_dtypes(std::move(types));
     return *this;
   }
 
@@ -917,6 +947,8 @@ class json_writer_options_builder;
 class json_writer_options {
   // Specify the sink to use for writer output
   sink_info _sink;
+  // Specify the compression format of the sink
+  compression_type _compression = compression_type::NONE;
   // maximum number of rows to write in each chunk (limits memory use)
   size_type _rows_per_chunk = std::numeric_limits<size_type>::max();
   // Set of columns to output
@@ -933,6 +965,8 @@ class json_writer_options {
   std::string _false_value = std::string{"false"};
   // Names of all columns; if empty, writer will generate column names
   std::optional<table_metadata> _metadata;  // Optional column names
+  // Indicates whether to escape UTF-8 characters in JSON output
+  bool _enable_utf8_escaped = true;
 
   /**
    * @brief Constructor from sink and table.
@@ -994,6 +1028,13 @@ class json_writer_options {
   [[nodiscard]] std::string const& get_na_rep() const { return _na_rep; }
 
   /**
+   * @brief Returns compression type used for sink
+   *
+   * @return compression type for sink
+   */
+  [[nodiscard]] compression_type get_compression() const { return _compression; }
+
+  /**
    * @brief Whether to output nulls as 'null'.
    *
    * @return `true` if nulls are output as 'null'
@@ -1006,6 +1047,26 @@ class json_writer_options {
    * @return `true` if JSON lines is used for records format
    */
   [[nodiscard]] bool is_enabled_lines() const { return _lines; }
+
+  /**
+   * @brief Enable or disable writing escaped UTF-8 characters in JSON output.
+   *
+   * Example:
+   * With `enable_utf8_escaped(false)`, the string `"ẅ"` is written as-is instead of:
+   * `"\u1e85"`.
+   *
+   * @note Enabling this is useful for producing more human-readable JSON.
+   *
+   * @param val Boolean value to enable/disable UTF-8 escaped output
+   */
+  void enable_utf8_escaped(bool val) { _enable_utf8_escaped = val; }
+
+  /**
+   * @brief Check whether UTF-8 escaped output is enabled.
+   *
+   * @return true if UTF-8 escaped output is enabled, false otherwise
+   */
+  [[nodiscard]] bool is_enabled_utf8_escaped() const { return _enable_utf8_escaped; }
 
   /**
    * @brief Returns maximum number of rows to process for each file write.
@@ -1036,6 +1097,13 @@ class json_writer_options {
    * @param tbl Table for the output
    */
   void set_table(table_view tbl) { _table = tbl; }
+
+  /**
+   * @brief Sets compression type to be used
+   *
+   * @param comptype Compression type for sink
+   */
+  void set_compression(compression_type comptype) { _compression = comptype; }
 
   /**
    * @brief Sets metadata.
@@ -1125,6 +1193,18 @@ class json_writer_options_builder {
   }
 
   /**
+   * @brief Sets compression type of output sink
+   *
+   * @param comptype Compression type used
+   * @return this for chaining
+   */
+  json_writer_options_builder& compression(compression_type comptype)
+  {
+    options._compression = comptype;
+    return *this;
+  }
+
+  /**
    * @brief Sets optional metadata (with column names).
    *
    * @param metadata metadata (with column names)
@@ -1157,6 +1237,20 @@ class json_writer_options_builder {
   json_writer_options_builder& include_nulls(bool val)
   {
     options._include_nulls = val;
+    return *this;
+  }
+
+  /**
+   * @brief Enables/Disable UTF-8 escaped output for string fields.
+   *
+   * Default is `false`, which escapes all non-ASCII characters.
+   *
+   * @param val Boolean value to enable/disable escaped UTF-8 output
+   * @return this for chaining
+   */
+  json_writer_options_builder& utf8_escaped(bool val)
+  {
+    options._enable_utf8_escaped = val;
     return *this;
   }
 
@@ -1242,6 +1336,27 @@ class json_writer_options_builder {
  */
 void write_json(json_writer_options const& options,
                 rmm::cuda_stream_view stream = cudf::get_default_stream());
+
+/// @cond
+struct is_supported_json_write_type_fn {
+  template <typename T>
+  constexpr bool operator()() const
+  {
+    return cudf::io::detail::is_convertible_to_string_column<T>();
+  }
+};
+/// @endcond
+
+/**
+ * @brief Checks if a cudf::data_type is supported for JSON writing.
+ *
+ * @param type The data_type to check.
+ * @return true if the type is supported for JSON writing, false otherwise.
+ */
+constexpr bool is_supported_write_json(data_type type)
+{
+  return cudf::type_dispatcher(type, is_supported_json_write_type_fn{});
+}
 
 /** @} */  // end of group
 }  // namespace io

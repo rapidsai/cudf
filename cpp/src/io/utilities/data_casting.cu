@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,9 +20,11 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/device_scalar.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/offsets_iterator_factory.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/utilities/functional.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/strings/detail/strings_children.cuh>
@@ -36,6 +38,7 @@
 
 #include <cub/cub.cuh>
 #include <cuda/functional>
+#include <cuda/std/iterator>
 #include <thrust/copy.h>
 #include <thrust/functional.h>
 #include <thrust/transform_reduce.h>
@@ -144,7 +147,7 @@ __device__ __forceinline__ int32_t parse_unicode_hex(char const* str)
  * @brief Writes the UTF-8 byte sequence to \p out_it and returns the number of bytes written to
  * \p out_it
  */
-constexpr size_type write_utf8_char(char_utf8 character, char*& out_it)
+__device__ constexpr size_type write_utf8_char(char_utf8 character, char*& out_it)
 {
   auto const bytes = (out_it == nullptr) ? strings::detail::bytes_in_char_utf8(character)
                                          : strings::detail::from_char_utf8(character, out_it);
@@ -174,12 +177,12 @@ process_string(in_iterator_t in_begin,
                cudf::io::parse_options_view const& options)
 {
   int32_t bytes           = 0;
-  auto const num_in_chars = thrust::distance(in_begin, in_end);
+  auto const num_in_chars = cuda::std::distance(in_begin, in_end);
   // String values are indicated by keeping the quote character
   bool const is_string_value =
     num_in_chars >= 2LL &&
     (options.quotechar == '\0' ||
-     (*in_begin == options.quotechar) && (*thrust::prev(in_end) == options.quotechar));
+     (*in_begin == options.quotechar) && (*cuda::std::prev(in_end) == options.quotechar));
 
   // Copy literal/numeric value
   if (not is_string_value) {
@@ -236,7 +239,7 @@ process_string(in_iterator_t in_begin,
 
     // Make sure that there's at least 4 characters left from the
     // input, which are expected to be hex digits
-    if (thrust::distance(in_begin, in_end) < UNICODE_HEX_DIGIT_COUNT) {
+    if (cuda::std::distance(in_begin, in_end) < UNICODE_HEX_DIGIT_COUNT) {
       return {bytes, data_casting_result::PARSING_FAILURE};
     }
 
@@ -246,24 +249,24 @@ process_string(in_iterator_t in_begin,
     if (hex_val < 0) { return {bytes, data_casting_result::PARSING_FAILURE}; }
 
     // Skip over the four hex digits
-    thrust::advance(in_begin, UNICODE_HEX_DIGIT_COUNT);
+    cuda::std::advance(in_begin, UNICODE_HEX_DIGIT_COUNT);
 
     // If this may be a UTF-16 encoded surrogate pair:
     // we expect another \uXXXX sequence
     int32_t hex_low_val = 0;
     if (hex_val >= UTF16_HIGH_SURROGATE_BEGIN && hex_val < UTF16_HIGH_SURROGATE_END &&
-        thrust::distance(in_begin, in_end) >= NUM_UNICODE_ESC_SEQ_CHARS &&
-        *in_begin == backslash_char && *thrust::next(in_begin) == 'u') {
+        cuda::std::distance(in_begin, in_end) >= NUM_UNICODE_ESC_SEQ_CHARS &&
+        *in_begin == backslash_char && *cuda::std::next(in_begin) == 'u') {
       // Try to parse hex value following the '\' and 'u' characters from what may be a UTF16 low
       // surrogate
-      hex_low_val = parse_unicode_hex(thrust::next(in_begin, 2));
+      hex_low_val = parse_unicode_hex(cuda::std::next(in_begin, 2));
     }
 
     // This is indeed a UTF16 surrogate pair
     if (hex_val >= UTF16_HIGH_SURROGATE_BEGIN && hex_val < UTF16_HIGH_SURROGATE_END &&
         hex_low_val >= UTF16_LOW_SURROGATE_BEGIN && hex_low_val < UTF16_LOW_SURROGATE_END) {
       // Skip over the second \uXXXX sequence
-      thrust::advance(in_begin, NUM_UNICODE_ESC_SEQ_CHARS);
+      cuda::std::advance(in_begin, NUM_UNICODE_ESC_SEQ_CHARS);
 
       // Compute UTF16-encoded code point
       uint32_t unicode_code_point = 0x10000 + ((hex_val - UTF16_HIGH_SURROGATE_BEGIN) << 10) +
@@ -488,7 +491,7 @@ CUDF_KERNEL void parse_fn_string_parallel(str_tuple_it str_tuples,
     bool const is_string_value =
       num_in_chars >= 2LL &&
       (options.quotechar == '\0' ||
-       (*in_begin == options.quotechar) && (*thrust::prev(in_end) == options.quotechar));
+       (*in_begin == options.quotechar) && (*cuda::std::prev(in_end) == options.quotechar));
     char* d_buffer = d_chars ? d_chars + d_offsets[istring] : nullptr;
 
     // Copy literal/numeric value
@@ -800,7 +803,7 @@ template <typename string_view_pair_it>
 static std::unique_ptr<column> parse_string(string_view_pair_it str_tuples,
                                             size_type col_size,
                                             rmm::device_buffer&& null_mask,
-                                            rmm::device_scalar<size_type>& d_null_count,
+                                            cudf::detail::device_scalar<size_type>& d_null_count,
                                             cudf::io::parse_options_view const& options,
                                             rmm::cuda_stream_view stream,
                                             rmm::device_async_resource_ref mr)
@@ -813,7 +816,7 @@ static std::unique_ptr<column> parse_string(string_view_pair_it str_tuples,
     str_tuples + col_size,
     cuda::proclaim_return_type<std::size_t>([] __device__(auto t) { return t.second; }),
     size_type{0},
-    thrust::maximum<size_type>{});
+    cudf::detail::maximum<size_type>{});
 
   auto sizes           = rmm::device_uvector<size_type>(col_size, stream);
   auto d_sizes         = sizes.data();
@@ -930,7 +933,7 @@ std::unique_ptr<column> parse_data(
   CUDF_FUNC_RANGE();
 
   if (col_size == 0) { return make_empty_column(col_type); }
-  auto d_null_count    = rmm::device_scalar<size_type>(null_count, stream);
+  auto d_null_count    = cudf::detail::device_scalar<size_type>(null_count, stream);
   auto null_count_data = d_null_count.data();
   if (null_mask.is_empty()) {
     null_mask = cudf::create_null_mask(col_size, mask_state::ALL_VALID, stream, mr);

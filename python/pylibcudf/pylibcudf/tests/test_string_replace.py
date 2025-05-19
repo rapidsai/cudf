@@ -1,10 +1,11 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 import pyarrow as pa
 import pyarrow.compute as pc
-import pylibcudf as plc
 import pytest
 from utils import assert_column_eq
+
+import pylibcudf as plc
 
 
 @pytest.fixture(scope="module")
@@ -13,7 +14,7 @@ def data_col():
         ["a", "c", "A", "aa", None, "aaaaaaaaa", "AAAA", "ÁÁÁÁ"],
         type=pa.string(),
     )
-    return pa_data_col, plc.interop.from_arrow(pa_data_col)
+    return pa_data_col, plc.Column(pa_data_col)
 
 
 @pytest.fixture(scope="module", params=["a", "c", "A", "Á", "aa", "ÁÁÁ"])
@@ -36,7 +37,7 @@ def scalar_repl(request):
 )
 def col_repl_target(request):
     pa_target = pa.array(request.param, type=pa.string())
-    return (pa_target, plc.interop.from_arrow(pa_target))
+    return (pa_target, plc.Column(pa_target))
 
 
 @pytest.fixture(
@@ -52,7 +53,7 @@ def col_repl_target(request):
 )
 def col_repl(request):
     pa_repl = pa.array(request.param, type=pa.string())
-    return (pa_repl, plc.interop.from_arrow(pa_repl))
+    return (pa_repl, plc.Column(pa_repl))
 
 
 @pytest.mark.parametrize("maxrepl", [-1, 1, 2, 10])
@@ -64,14 +65,14 @@ def test_replace(data_col, scalar_repl_target, scalar_repl, maxrepl):
         plc_data_col, plc_target, plc_repl, maxrepl
     )
 
-    expected = pc.replace_substring(
+    expect = pc.replace_substring(
         pa_data_col,
         pattern=pa_target,
         replacement=pa_repl,
         max_replacements=maxrepl,
     )
 
-    assert_column_eq(expected, got)
+    assert_column_eq(expect, got)
 
 
 @pytest.mark.parametrize("startstop", [(0, -1), (0, 0), (1, 3)])
@@ -90,9 +91,9 @@ def test_replace_slice(data_col, scalar_repl, startstop):
         # count_characters on the input, take the max and set stop to that
         stop = 1000
 
-    expected = pc.utf8_replace_slice(pa_data_col, start, stop, pa_repl)
+    expect = pc.utf8_replace_slice(pa_data_col, start, stop, pa_repl)
 
-    assert_column_eq(expected, got)
+    assert_column_eq(expect, got)
 
 
 def test_replace_col(data_col, col_repl_target, col_repl):
@@ -115,7 +116,7 @@ def test_replace_col(data_col, col_repl_target, col_repl):
     targets = pa_target.to_pylist()
     repls = pa_repl.to_pylist()
 
-    expected = pa.array(
+    expect = pa.array(
         [
             replace_list(elem, targets, repls) if elem is not None else None
             for elem in pa_data_col.to_pylist()
@@ -123,4 +124,4 @@ def test_replace_col(data_col, col_repl_target, col_repl):
         type=pa.string(),
     )
 
-    assert_column_eq(expected, got)
+    assert_column_eq(expect, got)

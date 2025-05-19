@@ -14,6 +14,7 @@ from pylibcudf.strings.char_types cimport string_character_types
 
 from cython.operator import dereference
 
+__all__ = ["capitalize", "is_title", "title"]
 
 cpdef Column capitalize(
     Column input,

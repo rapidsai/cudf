@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -117,8 +117,11 @@ class hostdevice_vector {
     return d_data.element(element_index, stream);
   }
 
-  operator cudf::host_span<T>() { return {host_ptr(), size()}; }
-  operator cudf::host_span<T const>() const { return {host_ptr(), size()}; }
+  operator cudf::host_span<T>() { return host_span<T>{h_data}.subspan(0, size()); }
+  operator cudf::host_span<T const>() const
+  {
+    return host_span<T const>{h_data}.subspan(0, size());
+  }
 
   operator cudf::device_span<T>() { return {device_ptr(), size()}; }
   operator cudf::device_span<T const>() const { return {device_ptr(), size()}; }
@@ -128,38 +131,25 @@ class hostdevice_vector {
     cuda_memcpy_async<T>(d_data, h_data, stream);
   }
 
-  void host_to_device_sync(rmm::cuda_stream_view stream) { cuda_memcpy<T>(d_data, h_data, stream); }
+  void host_to_device(rmm::cuda_stream_view stream) { cuda_memcpy<T>(d_data, h_data, stream); }
 
   void device_to_host_async(rmm::cuda_stream_view stream)
   {
     cuda_memcpy_async<T>(h_data, d_data, stream);
   }
 
-  void device_to_host_sync(rmm::cuda_stream_view stream) { cuda_memcpy<T>(h_data, d_data, stream); }
+  void device_to_host(rmm::cuda_stream_view stream) { cuda_memcpy<T>(h_data, d_data, stream); }
 
   /**
    * @brief Converts a hostdevice_vector into a hostdevice_span.
    *
    * @return A typed hostdevice_span of the hostdevice_vector's data
    */
-  [[nodiscard]] operator hostdevice_span<T>()
-  {
-    return hostdevice_span<T>{h_data.data(), d_data.data(), size()};
-  }
+  [[nodiscard]] operator hostdevice_span<T>() { return {host_span<T>{h_data}, device_ptr()}; }
 
-  /**
-   * @brief Converts a part of a hostdevice_vector into a hostdevice_span.
-   *
-   * @param offset The offset of the first element in the subspan
-   * @param count The number of elements in the subspan
-   * @return A typed hostdevice_span of the hostdevice_vector's data
-   */
-  [[nodiscard]] hostdevice_span<T> subspan(size_t offset, size_t count)
+  [[nodiscard]] operator hostdevice_span<T const>() const
   {
-    CUDF_EXPECTS(offset < d_data.size(), "Offset is out of bounds.");
-    CUDF_EXPECTS(count <= d_data.size() - offset,
-                 "The span with given offset and count is out of bounds.");
-    return hostdevice_span<T>{h_data.data() + offset, d_data.data() + offset, count};
+    return {host_span<T const>{h_data}, device_ptr()};
   }
 
  private:
@@ -182,46 +172,55 @@ class hostdevice_2dvector {
   {
   }
 
-  operator device_2dspan<T>() { return {_data.device_ptr(), _size}; }
-  operator device_2dspan<T const>() const { return {_data.device_ptr(), _size}; }
+  operator device_2dspan<T>() { return {device_span<T>{_data}, _size.second}; }
+  operator device_2dspan<T const>() const { return {device_span<T const>{_data}, _size.second}; }
 
   device_2dspan<T> device_view() { return static_cast<device_2dspan<T>>(*this); }
-  device_2dspan<T> device_view() const { return static_cast<device_2dspan<T const>>(*this); }
+  [[nodiscard]] device_2dspan<T const> device_view() const
+  {
+    return static_cast<device_2dspan<T const>>(*this);
+  }
 
-  operator host_2dspan<T>() { return {_data.host_ptr(), _size}; }
-  operator host_2dspan<T const>() const { return {_data.host_ptr(), _size}; }
+  operator host_2dspan<T>() { return {host_span<T>{_data}, _size.second}; }
+  operator host_2dspan<T const>() const { return {host_span<T const>{_data}, _size.second}; }
 
   host_2dspan<T> host_view() { return static_cast<host_2dspan<T>>(*this); }
-  host_2dspan<T> host_view() const { return static_cast<host_2dspan<T const>>(*this); }
+  [[nodiscard]] host_2dspan<T const> host_view() const
+  {
+    return static_cast<host_2dspan<T const>>(*this);
+  }
 
   host_span<T> operator[](size_t row)
   {
-    return {_data.host_ptr() + host_2dspan<T>::flatten_index(row, 0, _size), _size.second};
+    return host_span<T>{_data}.subspan(row * _size.second, _size.second);
   }
 
   host_span<T const> operator[](size_t row) const
   {
-    return {_data.host_ptr() + host_2dspan<T>::flatten_index(row, 0, _size), _size.second};
+    return host_span<T const>{_data}.subspan(row * _size.second, _size.second);
   }
 
-  auto size() const noexcept { return _size; }
-  auto count() const noexcept { return _size.first * _size.second; }
-  auto is_empty() const noexcept { return count() == 0; }
+  [[nodiscard]] auto size() const noexcept { return _size; }
+  [[nodiscard]] auto count() const noexcept { return _size.first * _size.second; }
+  [[nodiscard]] auto is_empty() const noexcept { return count() == 0; }
 
   T* base_host_ptr(size_t offset = 0) { return _data.host_ptr(offset); }
   T* base_device_ptr(size_t offset = 0) { return _data.device_ptr(offset); }
 
-  T const* base_host_ptr(size_t offset = 0) const { return _data.host_ptr(offset); }
+  [[nodiscard]] T const* base_host_ptr(size_t offset = 0) const { return _data.host_ptr(offset); }
 
-  T const* base_device_ptr(size_t offset = 0) const { return _data.device_ptr(offset); }
+  [[nodiscard]] T const* base_device_ptr(size_t offset = 0) const
+  {
+    return _data.device_ptr(offset);
+  }
 
   [[nodiscard]] size_t size_bytes() const noexcept { return _data.size_bytes(); }
 
   void host_to_device_async(rmm::cuda_stream_view stream) { _data.host_to_device_async(stream); }
-  void host_to_device_sync(rmm::cuda_stream_view stream) { _data.host_to_device_sync(stream); }
+  void host_to_device(rmm::cuda_stream_view stream) { _data.host_to_device(stream); }
 
   void device_to_host_async(rmm::cuda_stream_view stream) { _data.device_to_host_async(stream); }
-  void device_to_host_sync(rmm::cuda_stream_view stream) { _data.device_to_host_sync(stream); }
+  void device_to_host(rmm::cuda_stream_view stream) { _data.device_to_host(stream); }
 
  private:
   hostdevice_vector<T> _data;

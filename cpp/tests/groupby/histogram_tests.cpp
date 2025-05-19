@@ -20,7 +20,6 @@
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/copying.hpp>
-#include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/groupby.hpp>
 #include <cudf/lists/sorting.hpp>
 #include <cudf/sorting.hpp>

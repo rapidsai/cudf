@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,10 +22,6 @@
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/text/data_chunk_source_factories.hpp>
 
-#include <rmm/device_buffer.hpp>
-
-#include <thrust/host_vector.h>
-
 #include <fstream>
 
 namespace cudf::io::text {
@@ -36,7 +32,7 @@ struct host_ticket {
   cudaEvent_t event{};  // tracks the completion of the last device-to-host copy.
   cudf::detail::host_vector<char> buffer;
 
-  host_ticket() : buffer{cudf::detail::make_pinned_vector_sync<char>(0, cudf::get_default_stream())}
+  host_ticket() : buffer{cudf::detail::make_pinned_vector<char>(0, cudf::get_default_stream())}
   {
     cudaEventCreate(&event);
   }
@@ -81,14 +77,16 @@ class datasource_chunk_reader : public data_chunk_reader {
 
       // resize the host buffer as necessary to contain the requested number of bytes
       if (h_ticket.buffer.size() < read_size) {
-        h_ticket.buffer = cudf::detail::make_pinned_vector_sync<char>(read_size, stream);
+        h_ticket.buffer = cudf::detail::make_pinned_vector<char>(read_size, stream);
       }
 
       _source->host_read(_offset, read_size, reinterpret_cast<uint8_t*>(h_ticket.buffer.data()));
 
       // copy the host-pinned data on to device
-      CUDF_CUDA_TRY(cudaMemcpyAsync(
-        chunk.data(), h_ticket.buffer.data(), read_size, cudaMemcpyDefault, stream.value()));
+      cudf::detail::cuda_memcpy_async<char>(
+        device_span<char>{chunk}.subspan(0, read_size),
+        host_span<char const>{h_ticket.buffer}.subspan(0, read_size),
+        stream);
 
       // record the host-to-device copy.
       CUDF_CUDA_TRY(cudaEventRecord(h_ticket.event, stream.value()));
@@ -140,7 +138,7 @@ class istream_data_chunk_reader : public data_chunk_reader {
 
     // resize the host buffer as necessary to contain the requested number of bytes
     if (h_ticket.buffer.size() < read_size) {
-      h_ticket.buffer = cudf::detail::make_pinned_vector_sync<char>(read_size, stream);
+      h_ticket.buffer = cudf::detail::make_pinned_vector<char>(read_size, stream);
     }
 
     // read data from the host istream in to the pinned host memory buffer
@@ -153,8 +151,10 @@ class istream_data_chunk_reader : public data_chunk_reader {
     auto chunk = rmm::device_uvector<char>(read_size, stream);
 
     // copy the host-pinned data on to device
-    CUDF_CUDA_TRY(cudaMemcpyAsync(
-      chunk.data(), h_ticket.buffer.data(), read_size, cudaMemcpyDefault, stream.value()));
+    cudf::detail::cuda_memcpy_async<char>(
+      device_span<char>{chunk}.subspan(0, read_size),
+      host_span<char const>{h_ticket.buffer}.subspan(0, read_size),
+      stream);
 
     // record the host-to-device copy.
     CUDF_CUDA_TRY(cudaEventRecord(h_ticket.event, stream.value()));
@@ -193,12 +193,10 @@ class host_span_data_chunk_reader : public data_chunk_reader {
     auto chunk = rmm::device_uvector<char>(read_size, stream);
 
     // copy the host data to device
-    CUDF_CUDA_TRY(cudaMemcpyAsync(  //
-      chunk.data(),
-      _data.data() + _position,
-      read_size,
-      cudaMemcpyDefault,
-      stream.value()));
+    cudf::detail::cuda_memcpy_async<char>(
+      cudf::device_span<char>{chunk}.subspan(0, read_size),
+      cudf::host_span<char const>{_data}.subspan(_position, read_size),
+      stream);
 
     _position += read_size;
 

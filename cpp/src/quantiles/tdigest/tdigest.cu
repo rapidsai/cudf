@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,8 +18,10 @@
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/tdigest/tdigest.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/utilities/functional.hpp>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/quantiles.hpp>
@@ -31,9 +33,8 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
-#include <thrust/advance.h>
+#include <cuda/std/iterator>
 #include <thrust/binary_search.h>
-#include <thrust/distance.h>
 #include <thrust/execution_policy.h>
 #include <thrust/fill.h>
 #include <thrust/functional.h>
@@ -112,7 +113,7 @@ CUDF_KERNEL void compute_percentiles_kernel(device_span<size_type const> tdigest
     }
 
     // determine what centroid this weighted quantile falls within.
-    size_type const centroid_index = static_cast<size_type>(thrust::distance(
+    size_type const centroid_index = static_cast<size_type>(cuda::std::distance(
       cumulative_weight,
       thrust::lower_bound(
         thrust::seq, cumulative_weight, cumulative_weight + tdigest_size, weighted_q)));
@@ -205,9 +206,9 @@ std::unique_ptr<column> compute_approx_percentiles(tdigest_column_view const& in
     cuda::proclaim_return_type<std::ptrdiff_t>(
       [offsets_begin = offsets.begin<size_type>(),
        offsets_end   = offsets.end<size_type>()] __device__(size_type i) {
-        return thrust::distance(
+        return cuda::std::distance(
           offsets_begin,
-          thrust::prev(thrust::upper_bound(thrust::seq, offsets_begin, offsets_end, i)));
+          cuda::std::prev(thrust::upper_bound(thrust::seq, offsets_begin, offsets_end, i)));
       }));
   thrust::inclusive_scan_by_key(rmm::exec_policy(stream),
                                 keys,
@@ -394,7 +395,7 @@ std::unique_ptr<column> percentile_approx(tdigest_column_view const& input,
       return std::pair<rmm::device_buffer, size_type>{rmm::device_buffer{}, null_count};
     }
     return cudf::detail::valid_if(
-      tdigest_is_empty, tdigest_is_empty + tdv.size(), thrust::logical_not{}, stream, mr);
+      tdigest_is_empty, tdigest_is_empty + tdv.size(), cuda::std::logical_not{}, stream, mr);
   }();
 
   return cudf::make_lists_column(input.size(),
@@ -410,10 +411,11 @@ std::unique_ptr<column> percentile_approx(tdigest_column_view const& input,
 
 std::unique_ptr<column> percentile_approx(tdigest_column_view const& input,
                                           column_view const& percentiles,
+                                          rmm::cuda_stream_view stream,
                                           rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return tdigest::percentile_approx(input, percentiles, cudf::get_default_stream(), mr);
+  return tdigest::percentile_approx(input, percentiles, stream, mr);
 }
 
 }  // namespace cudf

@@ -16,93 +16,48 @@
 
 #include <benchmarks/common/generate_input.hpp>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
-#include <benchmarks/synchronization/synchronization.hpp>
 
 #include <cudf/strings/convert/convert_fixed_point.hpp>
 #include <cudf/strings/convert/convert_floats.hpp>
 #include <cudf/types.hpp>
 
-namespace {
+#include <nvbench/nvbench.cuh>
 
-std::unique_ptr<cudf::column> get_strings_column(cudf::size_type rows)
+using Types = nvbench::type_list<numeric::decimal32, numeric::decimal64>;
+
+NVBENCH_DECLARE_TYPE_STRINGS(numeric::decimal32, "decimal32", "decimal32");
+NVBENCH_DECLARE_TYPE_STRINGS(numeric::decimal64, "decimal64", "decimal64");
+
+template <typename DataType>
+void bench_convert_fixed_point(nvbench::state& state, nvbench::type_list<DataType>)
 {
-  auto result =
-    create_random_column(cudf::type_id::FLOAT32, row_count{static_cast<cudf::size_type>(rows)});
-  return cudf::strings::from_floats(result->view());
-}
+  auto const num_rows = static_cast<cudf::size_type>(state.get_int64("num_rows"));
+  auto const from_num = state.get_string("dir") == "from";
 
-}  // anonymous namespace
+  auto const data_type = cudf::data_type{cudf::type_to_id<DataType>(), numeric::scale_type{-2}};
+  auto const fp_col    = create_random_column(data_type.id(), row_count{num_rows});
 
-class StringsToFixedPoint : public cudf::benchmark {};
+  auto const strings_col = cudf::strings::from_fixed_point(fp_col->view());
+  auto const sv          = cudf::strings_column_view(strings_col->view());
 
-template <typename fixed_point_type>
-void convert_to_fixed_point(benchmark::State& state)
-{
-  auto const rows         = static_cast<cudf::size_type>(state.range(0));
-  auto const strings_col  = get_strings_column(rows);
-  auto const strings_view = cudf::strings_column_view(strings_col->view());
-  auto const dtype = cudf::data_type{cudf::type_to_id<fixed_point_type>(), numeric::scale_type{-2}};
+  auto stream = cudf::get_default_stream();
+  state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
 
-  for (auto _ : state) {
-    cuda_event_timer raii(state, true);
-    auto volatile results = cudf::strings::to_fixed_point(strings_view, dtype);
+  if (from_num) {
+    state.add_global_memory_reads<int8_t>(num_rows * cudf::size_of(data_type));
+    state.add_global_memory_writes<int8_t>(sv.chars_size(stream));
+    state.exec(nvbench::exec_tag::sync,
+               [&](nvbench::launch& launch) { cudf::strings::to_fixed_point(sv, data_type); });
+  } else {
+    state.add_global_memory_reads<int8_t>(sv.chars_size(stream));
+    state.add_global_memory_writes<int8_t>(num_rows * cudf::size_of(data_type));
+    state.exec(nvbench::exec_tag::sync,
+               [&](nvbench::launch& launch) { cudf::strings::from_fixed_point(fp_col->view()); });
   }
-
-  // bytes_processed = bytes_input + bytes_output
-  state.SetBytesProcessed(
-    state.iterations() *
-    (strings_view.chars_size(cudf::get_default_stream()) + rows * cudf::size_of(dtype)));
 }
 
-class StringsFromFixedPoint : public cudf::benchmark {};
-
-template <typename fixed_point_type>
-void convert_from_fixed_point(benchmark::State& state)
-{
-  auto const rows        = static_cast<cudf::size_type>(state.range(0));
-  auto const strings_col = get_strings_column(rows);
-  auto const dtype = cudf::data_type{cudf::type_to_id<fixed_point_type>(), numeric::scale_type{-2}};
-  auto const fp_col =
-    cudf::strings::to_fixed_point(cudf::strings_column_view(strings_col->view()), dtype);
-
-  std::unique_ptr<cudf::column> results = nullptr;
-
-  for (auto _ : state) {
-    cuda_event_timer raii(state, true);
-    results = cudf::strings::from_fixed_point(fp_col->view());
-  }
-
-  // bytes_processed = bytes_input + bytes_output
-  state.SetBytesProcessed(
-    state.iterations() *
-    (cudf::strings_column_view(results->view()).chars_size(cudf::get_default_stream()) +
-     rows * cudf::size_of(dtype)));
-}
-
-#define CONVERT_TO_FIXED_POINT_BMD(name, fixed_point_type)                  \
-  BENCHMARK_DEFINE_F(StringsToFixedPoint, name)(::benchmark::State & state) \
-  {                                                                         \
-    convert_to_fixed_point<fixed_point_type>(state);                        \
-  }                                                                         \
-  BENCHMARK_REGISTER_F(StringsToFixedPoint, name)                           \
-    ->RangeMultiplier(4)                                                    \
-    ->Range(1 << 12, 1 << 24)                                               \
-    ->UseManualTime()                                                       \
-    ->Unit(benchmark::kMicrosecond);
-
-#define CONVERT_FROM_FIXED_POINT_BMD(name, fixed_point_type)                  \
-  BENCHMARK_DEFINE_F(StringsFromFixedPoint, name)(::benchmark::State & state) \
-  {                                                                           \
-    convert_from_fixed_point<fixed_point_type>(state);                        \
-  }                                                                           \
-  BENCHMARK_REGISTER_F(StringsFromFixedPoint, name)                           \
-    ->RangeMultiplier(4)                                                      \
-    ->Range(1 << 12, 1 << 24)                                                 \
-    ->UseManualTime()                                                         \
-    ->Unit(benchmark::kMicrosecond);
-
-CONVERT_TO_FIXED_POINT_BMD(strings_to_decimal32, numeric::decimal32);
-CONVERT_TO_FIXED_POINT_BMD(strings_to_decimal64, numeric::decimal64);
-
-CONVERT_FROM_FIXED_POINT_BMD(strings_from_decimal32, numeric::decimal32);
-CONVERT_FROM_FIXED_POINT_BMD(strings_from_decimal64, numeric::decimal64);
+NVBENCH_BENCH_TYPES(bench_convert_fixed_point, NVBENCH_TYPE_AXES(Types))
+  .set_name("fixed_point")
+  .set_type_axes_names({"DataType"})
+  .add_string_axis("dir", {"to", "from"})
+  .add_int64_axis("num_rows", {1 << 16, 1 << 18, 1 << 20, 1 << 22});

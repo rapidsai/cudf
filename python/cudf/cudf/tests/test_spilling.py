@@ -1,4 +1,4 @@
-# Copyright (c) 2022-2024, NVIDIA CORPORATION.
+# Copyright (c) 2022-2025, NVIDIA CORPORATION.
 from __future__ import annotations
 
 import contextlib
@@ -669,7 +669,7 @@ def test_statistics_expose(manager: SpillManager):
     # Expose the first buffer
     buffers[0].owner.mark_exposed()
     assert len(manager.statistics.exposes) == 1
-    stat = list(manager.statistics.exposes.values())[0]
+    stat = next(iter(manager.statistics.exposes.values()))
     assert stat.count == 1
     assert stat.total_nbytes == buffers[0].nbytes
     assert stat.spilled_nbytes == 0
@@ -784,3 +784,12 @@ def test_spilling_and_copy_on_write(manager: SpillManager):
         assert not a.is_spilled
         assert a.owner.exposed
         assert not b.owner.exposed
+
+
+def test_scatter_by_map():
+    data = range(10)
+    with cudf.option_context("spill", True):
+        df = cudf.DataFrame(data)
+        result = df.scatter_by_map(data)
+    for i, res in zip(data, result):
+        assert_eq(res, cudf.DataFrame([i], index=[i]))

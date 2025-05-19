@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -74,7 +74,7 @@ compute_segmented_row_bit_count(cudf::table_view const& input, cudf::size_type s
         // Since the number of rows may not divisible by segment_length,
         // the last segment may be shorter than the others.
         auto const size_begin = d_sizes + segment_idx * segment_length;
-        auto const size_end   = std::min(size_begin + segment_length, d_sizes + num_rows);
+        auto const size_end   = cuda::std::min(size_begin + segment_length, d_sizes + num_rows);
         return thrust::reduce(thrust::seq, size_begin, size_end);
       }));
 

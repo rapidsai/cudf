@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -73,15 +73,10 @@ CUDF_KERNEL void kernel_compute_tensor_metadata(
   uint32_t* attn_mask,
   uint32_t* metadata)
 {
-  cudf::thread_index_type const output_idx =
-    threadIdx.x + static_cast<cudf::thread_index_type>(blockIdx.x) *
-                    static_cast<cudf::thread_index_type>(blockDim.x);
-  if (output_idx >= (static_cast<cudf::thread_index_type>(nrows_tensor_token_ids) *
-                     static_cast<cudf::thread_index_type>(max_sequence_length))) {
-    return;
-  }
+  auto const output_idx = cudf::detail::grid_1d::global_thread_id();
 
-  uint32_t const absolute_row_id         = output_idx / max_sequence_length;
+  uint32_t const absolute_row_id = output_idx / max_sequence_length;
+  if (absolute_row_id >= nrows_tensor_token_ids) { return; }
   uint32_t const tensor_id               = row2tensor[absolute_row_id];
   uint32_t const row_within_tensor       = row2row_within_tensor[absolute_row_id];
   uint32_t const offset_token_ids_tensor = offsets[tensor_id];
@@ -214,7 +209,7 @@ tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
       return 1 + ((num_tokens - max_sequence_length + stride - 1) / stride);
     },
     uint32_t{0},
-    thrust::plus<uint32_t>());
+    cuda::std::plus<uint32_t>());
   // last element is the total number of output rows
   uint32_t const nrows_tensor_token_ids = offsets_per_tensor.element(strings_count, stream);
   // if there are no tokens at all, build a specific empty result
@@ -293,17 +288,12 @@ tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
                                   uint32_t stride,
                                   bool do_lower_case,
                                   bool do_truncate,
+                                  rmm::cuda_stream_view stream,
                                   rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::subword_tokenize(strings,
-                                  vocabulary_table,
-                                  max_sequence_length,
-                                  stride,
-                                  do_lower_case,
-                                  do_truncate,
-                                  cudf::get_default_stream(),
-                                  mr);
+  return detail::subword_tokenize(
+    strings, vocabulary_table, max_sequence_length, stride, do_lower_case, do_truncate, stream, mr);
 }
 
 }  // namespace nvtext

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,10 +17,12 @@
 
 #include <cudf/copying.hpp>
 #include <cudf/detail/iterator.cuh>
-#include <cudf/detail/join.hpp>
+#include <cudf/detail/join/hash_join.cuh>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/structs/utilities.hpp>
 #include <cudf/hashing/detail/helper_functions.cuh>
-#include <cudf/join.hpp>
+#include <cudf/join/hash_join.hpp>
+#include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/type_checks.hpp>
@@ -30,8 +32,9 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/std/functional>
+#include <cuda/std/iterator>
 #include <thrust/count.h>
-#include <thrust/functional.h>
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/discard_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
@@ -40,12 +43,12 @@
 #include <thrust/uninitialized_fill.h>
 
 #include <cstddef>
-#include <iostream>
-#include <numeric>
 
 namespace cudf {
 namespace detail {
 namespace {
+using multimap_type = cudf::hash_join::impl_type::map_type;
+
 /**
  * @brief Calculates the exact size of the join output produced when
  * joining two tables together.
@@ -218,7 +221,7 @@ probe_join_hash_table(
                                        stream.value());
 
       if (join == cudf::detail::join_kind::FULL_JOIN) {
-        auto const actual_size = thrust::distance(out1_zip_begin, out1_zip_end);
+        auto const actual_size = cuda::std::distance(out1_zip_begin, out1_zip_end);
         left_indices->resize(actual_size, stream);
         right_indices->resize(actual_size, stream);
       }
@@ -356,7 +359,7 @@ std::size_t get_full_join_size(
     left_join_complement_size = thrust::count_if(rmm::exec_policy(stream),
                                                  invalid_index_map->begin(),
                                                  invalid_index_map->end(),
-                                                 thrust::identity());
+                                                 cuda::std::identity());
   }
   return join_size + left_join_complement_size;
 }
@@ -367,10 +370,20 @@ hash_join<Hasher>::hash_join(cudf::table_view const& build,
                              bool has_nulls,
                              cudf::null_equality compare_nulls,
                              rmm::cuda_stream_view stream)
+  : hash_join{build, has_nulls, compare_nulls, CUCO_DESIRED_LOAD_FACTOR, stream}
+{
+}
+
+template <typename Hasher>
+hash_join<Hasher>::hash_join(cudf::table_view const& build,
+                             bool has_nulls,
+                             cudf::null_equality compare_nulls,
+                             double load_factor,
+                             rmm::cuda_stream_view stream)
   : _has_nulls(has_nulls),
     _is_empty{build.num_rows() == 0},
     _nulls_equal{compare_nulls},
-    _hash_table{compute_hash_table_size(build.num_rows()),
+    _hash_table{compute_hash_table_size(build.num_rows(), load_factor * 100),
                 cuco::empty_key{std::numeric_limits<hash_value_type>::max()},
                 cuco::empty_value{cudf::detail::JoinNoneValue},
                 stream.value(),
@@ -381,6 +394,9 @@ hash_join<Hasher>::hash_join(cudf::table_view const& build,
 {
   CUDF_FUNC_RANGE();
   CUDF_EXPECTS(0 != build.num_columns(), "Hash join build table is empty");
+  CUDF_EXPECTS(load_factor > 0 && load_factor <= 1,
+               "Invalid load factor: must be greater than 0 and less than or equal to 1.",
+               std::invalid_argument);
 
   if (_is_empty) { return; }
 
@@ -587,7 +603,8 @@ hash_join::hash_join(cudf::table_view const& build,
                      null_equality compare_nulls,
                      rmm::cuda_stream_view stream)
   // If we cannot know beforehand about null existence then let's assume that there are nulls.
-  : hash_join(build, nullable_join::YES, compare_nulls, stream)
+  : hash_join(
+      build, nullable_join::YES, compare_nulls, cudf::detail::CUCO_DESIRED_LOAD_FACTOR, stream)
 {
 }
 
@@ -597,6 +614,16 @@ hash_join::hash_join(cudf::table_view const& build,
                      rmm::cuda_stream_view stream)
   : _impl{std::make_unique<impl_type const>(
       build, has_nulls == nullable_join::YES, compare_nulls, stream)}
+{
+}
+
+hash_join::hash_join(cudf::table_view const& build,
+                     nullable_join has_nulls,
+                     null_equality compare_nulls,
+                     double load_factor,
+                     rmm::cuda_stream_view stream)
+  : _impl{std::make_unique<impl_type const>(
+      build, has_nulls == nullable_join::YES, compare_nulls, load_factor, stream)}
 {
 }
 

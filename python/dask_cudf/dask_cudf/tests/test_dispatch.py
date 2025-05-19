@@ -32,8 +32,9 @@ def test_pyarrow_conversion_dispatch(preserve_index, index):
         to_pyarrow_table_dispatch,
     )
 
+    rng = np.random.default_rng(seed=0)
     df1 = cudf.DataFrame(
-        np.random.randn(10, 3), columns=list("abc"), index=index
+        rng.standard_normal(size=(10, 3)), columns=list("abc"), index=index
     )
     df2 = from_pyarrow_table_dispatch(
         df1, to_pyarrow_table_dispatch(df1, preserve_index=preserve_index)
@@ -43,7 +44,7 @@ def test_pyarrow_conversion_dispatch(preserve_index, index):
     if not preserve_index and index is not None:
         df1.index.name = None
 
-    assert type(df1) == type(df2)
+    assert type(df1) is type(df2)
     assert_eq(df1, df2)
 
     # Check that preserve_index does not produce a RangeIndex
@@ -108,7 +109,8 @@ def test_pyarrow_schema_dispatch(preserve_index):
         to_pyarrow_table_dispatch,
     )
 
-    df = cudf.DataFrame(np.random.randn(10, 3), columns=list("abc"))
+    rng = np.random.default_rng(seed=0)
+    df = cudf.DataFrame(rng.standard_normal(size=(10, 3)), columns=list("abc"))
     df["d"] = cudf.Series(["cat", "dog"] * 5)
     table = to_pyarrow_table_dispatch(df, preserve_index=preserve_index)
     schema = pyarrow_schema_dispatch(df, preserve_index=preserve_index)

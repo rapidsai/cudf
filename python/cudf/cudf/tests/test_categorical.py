@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2024, NVIDIA CORPORATION.
+# Copyright (c) 2018-2025, NVIDIA CORPORATION.
 
 import operator
 import string
@@ -98,7 +98,7 @@ def test_categorical_compare_unordered():
     # test equal
     out = sr == sr
     assert out.dtype == np.bool_
-    assert type(out[0]) == np.bool_
+    assert type(out[0]) is np.bool_
     assert np.all(out.to_numpy())
     assert np.all(pdsr == pdsr)
 
@@ -134,7 +134,7 @@ def test_categorical_compare_ordered():
     # test equal
     out = sr1 == sr1
     assert out.dtype == np.bool_
-    assert type(out[0]) == np.bool_
+    assert type(out[0]) is np.bool_
     assert np.all(out.to_numpy())
     assert np.all(pdsr1 == pdsr1)
 
@@ -252,10 +252,10 @@ def test_cat_series_binop_error():
 @pytest.mark.parametrize("num_elements", [10, 100, 1000])
 def test_categorical_unique(num_elements):
     # create categorical series
-    np.random.seed(12)
+    rng = np.random.default_rng(seed=12)
     pd_cat = pd.Categorical(
         pd.Series(
-            np.random.choice(
+            rng.choice(
                 list(string.ascii_letters + string.digits), num_elements
             ),
             dtype="category",
@@ -264,7 +264,7 @@ def test_categorical_unique(num_elements):
 
     # gdf
     gdf = cudf.DataFrame()
-    gdf["a"] = cudf.Series.from_categorical(pd_cat)
+    gdf["a"] = cudf.Series.from_pandas(pd_cat)
     gdf_unique_sorted = np.sort(gdf["a"].unique().to_pandas())
 
     # pandas
@@ -279,19 +279,17 @@ def test_categorical_unique(num_elements):
 @pytest.mark.parametrize("nelem", [20, 50, 100])
 def test_categorical_unique_count(nelem):
     # create categorical series
-    np.random.seed(12)
+    rng = np.random.default_rng(seed=0)
     pd_cat = pd.Categorical(
         pd.Series(
-            np.random.choice(
-                list(string.ascii_letters + string.digits), nelem
-            ),
+            rng.choice(list(string.ascii_letters + string.digits), nelem),
             dtype="category",
         )
     )
 
     # gdf
     gdf = cudf.DataFrame()
-    gdf["a"] = cudf.Series.from_categorical(pd_cat)
+    gdf["a"] = cudf.Series.from_pandas(pd_cat)
     gdf_unique_count = gdf["a"].nunique()
 
     # pandas
@@ -321,7 +319,7 @@ def test_categorical_empty():
 def test_categorical_set_categories():
     cat = pd.Categorical(["a", "a", "b", "c", "a"], categories=["a", "b", "c"])
     psr = pd.Series(cat)
-    sr = cudf.Series.from_categorical(cat)
+    sr = cudf.Series.from_pandas(cat)
 
     # adding category
     expect = psr.cat.set_categories(["a", "b", "c", "d"])
@@ -770,7 +768,7 @@ def test_categorical_setitem_with_nan():
     assert_eq(gs, expected_series)
 
 
-@pytest.mark.parametrize("dtype", list(NUMERIC_TYPES) + ["object"])
+@pytest.mark.parametrize("dtype", [*list(NUMERIC_TYPES), "object"])
 @pytest.mark.parametrize("input_obj", [[1, cudf.NA, 3]])
 def test_series_construction_with_nulls(input_obj, dtype):
     dtype = cudf.dtype(dtype)
@@ -951,4 +949,14 @@ def test_index_set_categories(ordered):
 
     expected = pd_ci.set_categories([1, 2, 3, 4], ordered=ordered)
     result = cudf_ci.set_categories([1, 2, 3, 4], ordered=ordered)
+    assert_eq(result, expected)
+
+
+def test_categorical_interval_pandas_roundtrip():
+    expected = cudf.Series(cudf.interval_range(0, 5)).astype("category")
+    result = cudf.Series.from_pandas(expected.to_pandas())
+    assert_eq(result, expected)
+
+    expected = pd.Series(pd.interval_range(0, 5)).astype("category")
+    result = cudf.Series.from_pandas(expected).to_pandas()
     assert_eq(result, expected)

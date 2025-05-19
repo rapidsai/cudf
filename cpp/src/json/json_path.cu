@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,8 +19,10 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/copy.hpp>
+#include <cudf/detail/device_scalar.hpp>
 #include <cudf/detail/get_value.cuh>
 #include <cudf/detail/null_mask.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/offsets_iterator_factory.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
@@ -691,7 +693,7 @@ std::pair<cuda::std::optional<rmm::device_uvector<path_operator>>, int> build_co
 
   auto const is_empty = h_operators.size() == 1 && h_operators[0].type == path_operator_type::END;
   return is_empty ? std::pair(cuda::std::nullopt, 0)
-                  : std::pair(cuda::std::make_optional(cudf::detail::make_device_uvector_sync(
+                  : std::pair(cuda::std::make_optional(cudf::detail::make_device_uvector(
                                 h_operators, stream, cudf::get_current_device_resource_ref())),
                               max_stack_depth);
 }
@@ -926,7 +928,7 @@ __launch_bounds__(block_size) CUDF_KERNEL
                               get_json_object_options options)
 {
   auto tid          = cudf::detail::grid_1d::global_thread_id();
-  auto const stride = cudf::thread_index_type{blockDim.x} * cudf::thread_index_type{gridDim.x};
+  auto const stride = cudf::detail::grid_1d::grid_stride();
 
   size_type warp_valid_count{0};
 
@@ -1031,7 +1033,7 @@ std::unique_ptr<cudf::column> get_json_object(cudf::strings_column_view const& c
     cudf::detail::create_null_mask(col.size(), mask_state::UNINITIALIZED, stream, mr);
 
   // compute results
-  rmm::device_scalar<size_type> d_valid_count{0, stream};
+  cudf::detail::device_scalar<size_type> d_valid_count{0, stream};
 
   get_json_object_kernel<block_size>
     <<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(

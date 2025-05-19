@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2024, NVIDIA CORPORATION.
+# Copyright (c) 2018-2025, NVIDIA CORPORATION.
 #
 # cudf documentation build configuration file, created by
 # sphinx-quickstart on Wed May  3 10:59:22 2017.
@@ -26,16 +26,18 @@ import sys
 import tempfile
 import warnings
 import xml.etree.ElementTree as ET
-
-from docutils.nodes import Text
-from packaging.version import Version
-from sphinx.addnodes import pending_xref
-from sphinx.highlighting import lexers
-from sphinx.ext import intersphinx
-from pygments.lexer import RegexLexer
-from pygments.token import Text as PText
+from enum import IntEnum
+from typing import Any
 
 import cudf
+from docutils.nodes import Text
+from packaging.version import Version
+from pygments.lexer import RegexLexer
+from pygments.token import Text as PText
+from sphinx.addnodes import pending_xref
+from sphinx.ext import intersphinx
+from sphinx.ext.autodoc import ClassDocumenter
+from sphinx.highlighting import lexers
 
 
 class PseudoLexer(RegexLexer):
@@ -205,6 +207,7 @@ language = "en"
 exclude_patterns = [
     "venv",
     "**/includes/**",
+    "narwhals_test_plugin",
 ]
 
 # The name of the Pygments (syntax highlighting) style to use.
@@ -342,7 +345,10 @@ _reftarget_aliases = {
     "cudf.Series": ("cudf.core.series.Series", "cudf.Series"),
     "cudf.Index": ("cudf.core.index.Index", "cudf.Index"),
     "cupy.core.core.ndarray": ("cupy.ndarray", "cupy.ndarray"),
-    "DeviceBuffer": ("rmm._lib.device_buffer.DeviceBuffer", "rmm.DeviceBuffer"),
+    "DeviceBuffer": (
+        "rmm.pylibrmm.device_buffer.DeviceBuffer",
+        "rmm.DeviceBuffer",
+    ),
 }
 
 
@@ -373,12 +379,23 @@ def _generate_namespaces(namespaces):
 _all_namespaces = _generate_namespaces(
     {
         # Note that io::datasource is actually a nested class
-        "cudf": {"io", "io::datasource", "strings", "ast", "ast::expression", "io::text"},
+        "cudf": {
+            "io",
+            "io::datasource",
+            "strings",
+            "ast",
+            "ast::expression",
+            "io::text",
+        },
         "numeric": {},
         "nvtext": {},
     }
 )
 
+
+_names_to_skip_in_cudf = {
+    "cudf.core.window.rolling.RollingGroupby",
+}
 
 _names_to_skip_in_pylibcudf = {
     # Cython types that don't alias cleanly because of
@@ -388,6 +405,7 @@ _names_to_skip_in_pylibcudf = {
     "type_id",
     # Unknown base types
     "int32_t",
+    "uint64_t",
     "void",
 }
 
@@ -398,6 +416,7 @@ _names_to_skip_in_cpp = {
     "cuda",
     "arrow",
     "DLManagedTensor",
+    "ARROW_DEVICE_CUDA",
     # Unknown types
     "int8_t",
     "int16_t",
@@ -427,6 +446,8 @@ _names_to_skip_in_cpp = {
     # Sphinx doesn't know how to distinguish between the ORC and Parquet
     # definitions because Breathe doesn't to preserve namespaces for enums.
     "TypeKind",
+    # Span subclasses access base class members
+    "base::",
 }
 
 _domain_objects = None
@@ -483,6 +504,9 @@ def on_missing_reference(app, env, node, contnode):
         return contnode
 
     if any(toskip in reftarget for toskip in _names_to_skip_in_pylibcudf):
+        return contnode
+
+    if any(toskip in reftarget for toskip in _names_to_skip_in_cudf):
         return contnode
 
     if (refid := node.get("refid")) is not None and "hpp" in refid:
@@ -554,7 +578,10 @@ def on_missing_reference(app, env, node, contnode):
 
 
 nitpick_ignore = [
+    # Erroneously warned in ParquetColumnSchema.name
+    ("py:class", "unicode"),
     ("py:class", "SeriesOrIndex"),
+    ("py:class", "DataFrameOrSeries"),
     ("py:class", "Dtype"),
     # The following are erroneously warned due to
     # https://github.com/sphinx-doc/sphinx/issues/11225
@@ -566,9 +593,12 @@ nitpick_ignore = [
     ("py:obj", "cudf.Index.to_flat_index"),
     ("py:obj", "cudf.MultiIndex.to_flat_index"),
     ("py:meth", "pyarrow.Table.to_pandas"),
+    ("py:class", "abc.Hashable"),
     ("py:class", "pd.DataFrame"),
     ("py:class", "pandas.core.indexes.frozen.FrozenList"),
     ("py:class", "pa.Array"),
+    ("py:class", "pa.ListType"),
+    ("py:class", "pa.Decimal128Type"),
     ("py:class", "ScalarLike"),
     ("py:class", "ParentType"),
     ("py:class", "pyarrow.lib.DataType"),
@@ -576,10 +606,15 @@ nitpick_ignore = [
     ("py:class", "pyarrow.lib.Scalar"),
     ("py:class", "pyarrow.lib.ChunkedArray"),
     ("py:class", "pyarrow.lib.Array"),
+    ("py:class", "StringColumn"),
     ("py:class", "ColumnLike"),
+    ("py:class", "DtypeObj"),
+    ("py:class", "pa.StructType"),
     # TODO: Remove this when we figure out why typing_extensions doesn't seem
     # to map types correctly for intersphinx
     ("py:class", "typing_extensions.Self"),
+    ("py:class", "np.uint32"),
+    ("py:class", "np.uint64"),
 ]
 
 
@@ -640,8 +675,54 @@ def linkcode_resolve(domain, info) -> str | None:
         f"branch-{version}/python/cudf/cudf/{fn}{linespec}"
     )
 
+
 # Needed for avoid build warning for PandasCompat extension
 suppress_warnings = ["myst.domains"]
+
+
+class PLCIntEnumDocumenter(ClassDocumenter):
+    objtype = "enum"
+    directivetype = "attribute"
+    priority = 10 + ClassDocumenter.priority
+
+    option_spec = dict(ClassDocumenter.option_spec)
+
+    @classmethod
+    def can_document_member(
+        cls, member: Any, membername: str, isattr: bool, parent: Any
+    ) -> bool:
+        try:
+            return issubclass(
+                member, IntEnum
+            ) and member.__module__.startswith("pylibcudf")
+        except TypeError:
+            return False
+
+    def add_directive_header(self, sig: str) -> None:
+        self.directivetype = "attribute"
+        super().add_directive_header(sig)
+
+    def add_content(self, more_content) -> None:
+        doc_as_attr = self.doc_as_attr
+        self.doc_as_attr = False
+        super().add_content(more_content)
+        self.doc_as_attr = doc_as_attr
+        source_name = self.get_sourcename()
+        enum_object: IntEnum = self.object
+
+        if self.object.__name__ != "Kind":
+            self.add_line(
+                f"See also :cpp:enum:`cudf::{self.object.__name__}`.",
+                source_name,
+            )
+        self.add_line("", source_name)
+        self.add_line("Enum members", source_name)
+        self.add_line("", source_name)
+
+        for the_member_name in enum_object.__members__:  # type: ignore[attr-defined]
+            self.add_line(f"* ``{the_member_name}``", source_name)
+            self.add_line("", source_name)
+
 
 def setup(app):
     app.add_css_file("https://docs.rapids.ai/assets/css/custom.css")
@@ -650,3 +731,5 @@ def setup(app):
     )
     app.connect("doctree-read", resolve_aliases)
     app.connect("missing-reference", on_missing_reference)
+    app.setup_extension("sphinx.ext.autodoc")
+    app.add_autodocumenter(PLCIntEnumDocumenter)

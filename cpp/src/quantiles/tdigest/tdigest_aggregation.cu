@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,6 +27,7 @@
 #include <cudf/detail/sorting.hpp>
 #include <cudf/detail/tdigest/tdigest.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/utilities/functional.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/unary.hpp>
 #include <cudf/utilities/memory_resource.hpp>
@@ -36,9 +37,8 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
-#include <thrust/advance.h>
+#include <cuda/std/iterator>
 #include <thrust/binary_search.h>
-#include <thrust/distance.h>
 #include <thrust/execution_policy.h>
 #include <thrust/functional.h>
 #include <thrust/iterator/constant_iterator.h>
@@ -385,7 +385,7 @@ CUDF_KERNEL void generate_cluster_limits_kernel(int delta,
                                                 size_type const* group_cluster_offsets,
                                                 bool has_nulls)
 {
-  int const tid = threadIdx.x + blockIdx.x * blockDim.x;
+  auto const tid = cudf::detail::grid_1d::global_thread_id();
 
   auto const group_index = tid;
   if (group_index >= num_groups) { return; }
@@ -793,7 +793,7 @@ std::unique_ptr<column> compute_tdigests(int delta,
                         centroids_begin,                  // values
                         thrust::make_discard_iterator(),  // key output
                         output,                           // output
-                        thrust::equal_to{},               // key equality check
+                        cuda::std::equal_to{},            // key equality check
                         merge_centroids{});
 
   // create final tdigest column
@@ -1038,9 +1038,9 @@ struct group_key_func {
   __device__ size_type operator()(size_type index)
   {
     // what -original- tdigest index this absolute index corresponds to
-    auto const iter          = thrust::prev(thrust::upper_bound(
+    auto const iter          = cuda::std::prev(thrust::upper_bound(
       thrust::seq, tdigest_offsets, tdigest_offsets + num_tdigest_offsets, index));
-    auto const tdigest_index = thrust::distance(tdigest_offsets, iter);
+    auto const tdigest_index = cuda::std::distance(tdigest_offsets, iter);
 
     // what group index the original tdigest belongs to
     return group_labels[tdigest_index];
@@ -1088,7 +1088,7 @@ std::pair<rmm::device_uvector<double>, rmm::device_uvector<double>> generate_mer
         size_type i) { return tdigest_offsets[group_offsets[i]]; }));
 
   // perform the sort using the means as the key
-  size_t temp_size;
+  size_t temp_size = 0;
   CUDF_CUDA_TRY(cub::DeviceSegmentedSort::SortPairs(nullptr,
                                                     temp_size,
                                                     tdv.means().begin<double>(),
@@ -1126,12 +1126,8 @@ std::pair<rmm::device_uvector<double>, rmm::device_uvector<double>> generate_mer
  * `max` of 0.
  *
  * @param tdv input tdigests. The tdigests within this column are grouped by key.
- * @param h_group_offsets a host iterator of the offsets to the start of each group. A group is
- * counted as one even when the cluster is empty in it. The offsets should have the same values as
- * the ones in `group_offsets`.
  * @param group_offsets a device iterator of the offsets to the start of each group. A group is
- * counted as one even when the cluster is empty in it. The offsets should have the same values as
- * the ones in `h_group_offsets`.
+ * counted as one even when the cluster is empty in it.
  * @param group_labels a device iterator of the the group label for each tdigest cluster including
  * empty clusters.
  * @param num_group_labels the number of unique group labels.
@@ -1142,9 +1138,8 @@ std::pair<rmm::device_uvector<double>, rmm::device_uvector<double>> generate_mer
  *
  * @return A column containing the merged tdigests.
  */
-template <typename HGroupOffsetIter, typename GroupOffsetIter, typename GroupLabelIter>
+template <typename GroupOffsetIter, typename GroupLabelIter>
 std::unique_ptr<column> merge_tdigests(tdigest_column_view const& tdv,
-                                       HGroupOffsetIter h_group_offsets,
                                        GroupOffsetIter group_offsets,
                                        GroupLabelIter group_labels,
                                        size_t num_group_labels,
@@ -1166,8 +1161,8 @@ std::unique_ptr<column> merge_tdigests(tdigest_column_view const& tdv,
                         min_iter,
                         thrust::make_discard_iterator(),
                         merged_min_col->mutable_view().begin<double>(),
-                        thrust::equal_to{},  // key equality check
-                        thrust::minimum{});
+                        cuda::std::equal_to{},  // key equality check
+                        cudf::detail::minimum{});
 
   auto merged_max_col = cudf::make_numeric_column(
     data_type{type_id::FLOAT64}, num_groups, mask_state::UNALLOCATED, stream, mr);
@@ -1181,8 +1176,8 @@ std::unique_ptr<column> merge_tdigests(tdigest_column_view const& tdv,
                         max_iter,
                         thrust::make_discard_iterator(),
                         merged_max_col->mutable_view().begin<double>(),
-                        thrust::equal_to{},  // key equality check
-                        thrust::maximum{});
+                        cuda::std::equal_to{},  // key equality check
+                        cudf::detail::maximum{});
 
   auto tdigest_offsets = tdv.centroids().offsets();
 
@@ -1313,21 +1308,13 @@ std::unique_ptr<scalar> reduce_merge_tdigest(column_view const& input,
 
   if (input.size() == 0) { return cudf::tdigest::detail::make_empty_tdigest_scalar(stream, mr); }
 
-  auto group_offsets_  = group_offsets_fn{input.size()};
-  auto h_group_offsets = cudf::detail::make_counting_transform_iterator(0, group_offsets_);
-  auto group_offsets   = cudf::detail::make_counting_transform_iterator(0, group_offsets_);
-  auto group_labels    = thrust::make_constant_iterator(0);
-  return to_tdigest_scalar(merge_tdigests(tdv,
-                                          h_group_offsets,
-                                          group_offsets,
-                                          group_labels,
-                                          input.size(),
-                                          1,
-                                          max_centroids,
-                                          stream,
-                                          mr),
-                           stream,
-                           mr);
+  auto group_offsets_ = group_offsets_fn{input.size()};
+  auto group_offsets  = cudf::detail::make_counting_transform_iterator(0, group_offsets_);
+  auto group_labels   = thrust::make_constant_iterator(0);
+  return to_tdigest_scalar(
+    merge_tdigests(tdv, group_offsets, group_labels, input.size(), 1, max_centroids, stream, mr),
+    stream,
+    mr);
 }
 
 std::unique_ptr<column> group_tdigest(column_view const& col,
@@ -1376,16 +1363,7 @@ std::unique_ptr<column> group_merge_tdigest(column_view const& input,
     return cudf::tdigest::detail::make_empty_tdigests_column(num_groups, stream, mr);
   }
 
-  // bring group offsets back to the host
-  std::vector<size_type> h_group_offsets(group_offsets.size());
-  cudaMemcpyAsync(h_group_offsets.data(),
-                  group_offsets.begin(),
-                  sizeof(size_type) * group_offsets.size(),
-                  cudaMemcpyDefault,
-                  stream);
-
   return merge_tdigests(tdv,
-                        h_group_offsets.begin(),
                         group_offsets.data(),
                         group_labels.data(),
                         group_labels.size(),

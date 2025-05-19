@@ -35,6 +35,7 @@
 
 #include <cooperative_groups.h>
 #include <cooperative_groups/reduce.h>
+#include <cuda/std/utility>
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
@@ -140,14 +141,16 @@ CUDF_KERNEL void substring_from_kernel(column_device_view const d_strings,
     auto first_byte = start_counts.second;
     if (start_counts.first < start) {
       auto const sub_str = string_view(d_str.data() + first_byte, d_str.size_bytes() - first_byte);
-      first_byte += std::get<0>(bytes_to_character_position(sub_str, start - start_counts.first));
+      first_byte +=
+        cuda::std::get<0>(bytes_to_character_position(sub_str, start - start_counts.first));
     }
 
     stop           = min(stop, char_count);
     auto last_byte = stop_counts.second;
     if (stop_counts.first < stop) {
       auto const sub_str = string_view(d_str.data() + last_byte, d_str.size_bytes() - last_byte);
-      last_byte += std::get<0>(bytes_to_character_position(sub_str, stop - stop_counts.first));
+      last_byte +=
+        cuda::std::get<0>(bytes_to_character_position(sub_str, stop - stop_counts.first));
     }
 
     d_output[str_idx] = (first_byte < last_byte)

@@ -23,10 +23,10 @@
 template <typename TypeLhs, typename TypeRhs, typename TypeOut>
 void BM_compiled_binaryop(nvbench::state& state, cudf::binary_operator binop)
 {
-  auto const table_size = static_cast<cudf::size_type>(state.get_int64("table_size"));
+  auto const num_rows = static_cast<cudf::size_type>(state.get_int64("num_rows"));
 
   auto const source_table = create_random_table(
-    {cudf::type_to_id<TypeLhs>(), cudf::type_to_id<TypeRhs>()}, row_count{table_size});
+    {cudf::type_to_id<TypeLhs>(), cudf::type_to_id<TypeRhs>()}, row_count{num_rows});
 
   auto lhs = cudf::column_view(source_table->get_column(0));
   auto rhs = cudf::column_view(source_table->get_column(1));
@@ -37,9 +37,9 @@ void BM_compiled_binaryop(nvbench::state& state, cudf::binary_operator binop)
   cudf::binary_operation(lhs, rhs, binop, output_dtype);
 
   // use number of bytes read and written to global memory
-  state.add_global_memory_reads<TypeLhs>(table_size);
-  state.add_global_memory_reads<TypeRhs>(table_size);
-  state.add_global_memory_reads<TypeOut>(table_size);
+  state.add_global_memory_reads<TypeLhs>(num_rows);
+  state.add_global_memory_reads<TypeRhs>(num_rows);
+  state.add_global_memory_writes<TypeOut>(num_rows);
 
   state.exec(nvbench::exec_tag::sync,
              [&](nvbench::launch&) { cudf::binary_operation(lhs, rhs, binop, output_dtype); });
@@ -55,7 +55,7 @@ void BM_compiled_binaryop(nvbench::state& state, cudf::binary_operator binop)
   }                                                                           \
   NVBENCH_BENCH(name)                                                         \
     .set_name("compiled_binary_op_" BM_STRINGIFY(name))                       \
-    .add_int64_axis("table_size", {10'000, 100'000, 1'000'000, 10'000'000, 100'000'000})
+    .add_int64_axis("num_rows", {10'000, 100'000, 1'000'000, 10'000'000, 100'000'000})
 
 #define build_name(a, b, c, d) a##_##b##_##c##_##d
 

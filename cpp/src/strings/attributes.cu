@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -237,7 +237,7 @@ std::unique_ptr<column> code_points(strings_column_view const& input,
       if (!d_column.is_null(idx)) length = d_column.element<string_view>(idx).length();
       return length;
     }),
-    thrust::plus<size_type>());
+    cuda::std::plus<size_type>());
 
   offsets.set_element_to_zero_async(0, stream);
 
@@ -264,24 +264,27 @@ std::unique_ptr<column> code_points(strings_column_view const& input,
 // external APIS
 
 std::unique_ptr<column> count_characters(strings_column_view const& input,
+                                         rmm::cuda_stream_view stream,
                                          rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::count_characters(input, cudf::get_default_stream(), mr);
+  return detail::count_characters(input, stream, mr);
 }
 
 std::unique_ptr<column> count_bytes(strings_column_view const& input,
+                                    rmm::cuda_stream_view stream,
                                     rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::count_bytes(input, cudf::get_default_stream(), mr);
+  return detail::count_bytes(input, stream, mr);
 }
 
 std::unique_ptr<column> code_points(strings_column_view const& input,
+                                    rmm::cuda_stream_view stream,
                                     rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::code_points(input, cudf::get_default_stream(), mr);
+  return detail::code_points(input, stream, mr);
 }
 
 }  // namespace strings

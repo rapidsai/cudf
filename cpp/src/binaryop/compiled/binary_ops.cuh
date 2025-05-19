@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,21 +21,23 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_view.hpp>
-#include <cudf/detail/utilities/integer_utils.hpp>
+#include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/unary.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
+
+#include <cuda/std/type_traits>
 
 namespace cudf {
 namespace binops {
 namespace compiled {
 
 template <typename BinaryOperator, typename TypeLhs, typename TypeRhs>
-constexpr bool is_bool_result()
+CUDF_HOST_DEVICE constexpr bool is_bool_result()
 {
-  using ReturnType = std::invoke_result_t<BinaryOperator, TypeLhs, TypeRhs>;
-  return std::is_same_v<bool, ReturnType>;
+  using ReturnType = cuda::std::invoke_result_t<BinaryOperator, TypeLhs, TypeRhs>;
+  return cuda::std::is_same_v<bool, ReturnType>;
 }
 
 /**
@@ -51,7 +53,7 @@ struct type_casted_accessor {
   {
     if constexpr (column_device_view::has_element_accessor<Element>()) {
       auto const element = col.element<Element>(is_scalar ? 0 : i);
-      if constexpr (std::is_convertible_v<Element, CastType>) {
+      if constexpr (cuda::std::is_convertible_v<Element, CastType>) {
         return static_cast<CastType>(element);
       } else if constexpr (is_fixed_point<Element>() && cuda::std::is_floating_point_v<CastType>) {
         return convert_fixed_to_floating<CastType>(element);
@@ -75,7 +77,7 @@ struct typed_casted_writer {
                                     FromType val) const
   {
     if constexpr (mutable_column_device_view::has_element_accessor<Element>() and
-                  std::is_constructible_v<Element, FromType>) {
+                  cuda::std::is_constructible_v<Element, FromType>) {
       col.element<Element>(i) = static_cast<Element>(val);
     } else if constexpr (is_fixed_point<Element>()) {
       auto const scale = numeric::scale_type{col.type().scale()};
@@ -109,18 +111,18 @@ struct ops_wrapper {
   template <typename TypeCommon>
   __device__ void operator()(size_type i)
   {
-    if constexpr (std::is_invocable_v<BinaryOperator, TypeCommon, TypeCommon>) {
+    if constexpr (cuda::std::is_invocable_v<BinaryOperator, TypeCommon, TypeCommon>) {
       TypeCommon x =
         type_dispatcher(lhs.type(), type_casted_accessor<TypeCommon>{}, i, lhs, is_lhs_scalar);
       TypeCommon y =
         type_dispatcher(rhs.type(), type_casted_accessor<TypeCommon>{}, i, rhs, is_rhs_scalar);
       auto result = [&]() {
-        if constexpr (std::is_same_v<BinaryOperator, ops::NullEquals> or
-                      std::is_same_v<BinaryOperator, ops::NullNotEquals> or
-                      std::is_same_v<BinaryOperator, ops::NullLogicalAnd> or
-                      std::is_same_v<BinaryOperator, ops::NullLogicalOr> or
-                      std::is_same_v<BinaryOperator, ops::NullMax> or
-                      std::is_same_v<BinaryOperator, ops::NullMin>) {
+        if constexpr (cuda::std::is_same_v<BinaryOperator, ops::NullEquals> or
+                      cuda::std::is_same_v<BinaryOperator, ops::NullNotEquals> or
+                      cuda::std::is_same_v<BinaryOperator, ops::NullLogicalAnd> or
+                      cuda::std::is_same_v<BinaryOperator, ops::NullLogicalOr> or
+                      cuda::std::is_same_v<BinaryOperator, ops::NullMax> or
+                      cuda::std::is_same_v<BinaryOperator, ops::NullMin>) {
           bool output_valid = false;
           auto result       = BinaryOperator{}.template operator()<TypeCommon, TypeCommon>(
             x,
@@ -134,7 +136,7 @@ struct ops_wrapper {
           return BinaryOperator{}.template operator()<TypeCommon, TypeCommon>(x, y);
         }
         // To suppress nvcc warning
-        return std::invoke_result_t<BinaryOperator, TypeCommon, TypeCommon>{};
+        return cuda::std::invoke_result_t<BinaryOperator, TypeCommon, TypeCommon>{};
       }();
       if constexpr (is_bool_result<BinaryOperator, TypeCommon, TypeCommon>())
         out.element<decltype(result)>(i) = result;
@@ -161,16 +163,16 @@ struct ops2_wrapper {
   __device__ void operator()(size_type i)
   {
     if constexpr (!has_common_type_v<TypeLhs, TypeRhs> and
-                  std::is_invocable_v<BinaryOperator, TypeLhs, TypeRhs>) {
+                  cuda::std::is_invocable_v<BinaryOperator, TypeLhs, TypeRhs>) {
       TypeLhs x   = lhs.element<TypeLhs>(is_lhs_scalar ? 0 : i);
       TypeRhs y   = rhs.element<TypeRhs>(is_rhs_scalar ? 0 : i);
       auto result = [&]() {
-        if constexpr (std::is_same_v<BinaryOperator, ops::NullEquals> or
-                      std::is_same_v<BinaryOperator, ops::NullNotEquals> or
-                      std::is_same_v<BinaryOperator, ops::NullLogicalAnd> or
-                      std::is_same_v<BinaryOperator, ops::NullLogicalOr> or
-                      std::is_same_v<BinaryOperator, ops::NullMax> or
-                      std::is_same_v<BinaryOperator, ops::NullMin>) {
+        if constexpr (cuda::std::is_same_v<BinaryOperator, ops::NullEquals> or
+                      cuda::std::is_same_v<BinaryOperator, ops::NullNotEquals> or
+                      cuda::std::is_same_v<BinaryOperator, ops::NullLogicalAnd> or
+                      cuda::std::is_same_v<BinaryOperator, ops::NullLogicalOr> or
+                      cuda::std::is_same_v<BinaryOperator, ops::NullMax> or
+                      cuda::std::is_same_v<BinaryOperator, ops::NullMin>) {
           bool output_valid = false;
           auto result       = BinaryOperator{}.template operator()<TypeLhs, TypeRhs>(
             x,
@@ -184,7 +186,7 @@ struct ops2_wrapper {
           return BinaryOperator{}.template operator()<TypeLhs, TypeRhs>(x, y);
         }
         // To suppress nvcc warning
-        return std::invoke_result_t<BinaryOperator, TypeLhs, TypeRhs>{};
+        return cuda::std::invoke_result_t<BinaryOperator, TypeLhs, TypeRhs>{};
       }();
       if constexpr (is_bool_result<BinaryOperator, TypeLhs, TypeRhs>())
         out.element<decltype(result)>(i) = result;
@@ -244,49 +246,6 @@ struct binary_op_double_device_dispatcher {
   }
 };
 
-/**
- * @brief Simplified for_each kernel
- *
- * @param size number of elements to process.
- * @param f Functor object to call for each element.
- */
-template <typename Functor>
-CUDF_KERNEL void for_each_kernel(cudf::size_type size, Functor f)
-{
-  int tid    = threadIdx.x;
-  int blkid  = blockIdx.x;
-  int blksz  = blockDim.x;
-  int gridsz = gridDim.x;
-
-  int start = tid + blkid * blksz;
-  int step  = blksz * gridsz;
-
-#pragma unroll
-  for (cudf::size_type i = start; i < size; i += step) {
-    f(i);
-  }
-}
-
-/**
- * @brief Launches Simplified for_each kernel with maximum occupancy grid dimensions.
- *
- * @tparam Functor
- * @param stream CUDA stream used for device memory operations and kernel launches.
- * @param size number of elements to process.
- * @param f Functor object to call for each element.
- */
-template <typename Functor>
-void for_each(rmm::cuda_stream_view stream, cudf::size_type size, Functor f)
-{
-  int block_size;
-  int min_grid_size;
-  CUDF_CUDA_TRY(
-    cudaOccupancyMaxPotentialBlockSize(&min_grid_size, &block_size, for_each_kernel<decltype(f)>));
-  // 2 elements per thread.
-  int const grid_size = util::div_rounding_up_safe(size, 2 * block_size);
-  for_each_kernel<<<grid_size, block_size, 0, stream.value()>>>(size, std::forward<Functor&&>(f));
-}
-
 template <class BinaryOperator>
 void apply_binary_op(mutable_column_view& out,
                      column_view const& lhs,
@@ -303,16 +262,18 @@ void apply_binary_op(mutable_column_view& out,
   // Create binop functor instance
   if (common_dtype) {
     // Execute it on every element
-    for_each(stream,
-             out.size(),
-             binary_op_device_dispatcher<BinaryOperator>{
-               *common_dtype, *outd, *lhsd, *rhsd, is_lhs_scalar, is_rhs_scalar});
+    thrust::for_each_n(rmm::exec_policy_nosync(stream),
+                       thrust::counting_iterator<size_type>(0),
+                       out.size(),
+                       binary_op_device_dispatcher<BinaryOperator>{
+                         *common_dtype, *outd, *lhsd, *rhsd, is_lhs_scalar, is_rhs_scalar});
   } else {
     // Execute it on every element
-    for_each(stream,
-             out.size(),
-             binary_op_double_device_dispatcher<BinaryOperator>{
-               *outd, *lhsd, *rhsd, is_lhs_scalar, is_rhs_scalar});
+    thrust::for_each_n(rmm::exec_policy_nosync(stream),
+                       thrust::counting_iterator<size_type>(0),
+                       out.size(),
+                       binary_op_double_device_dispatcher<BinaryOperator>{
+                         *outd, *lhsd, *rhsd, is_lhs_scalar, is_rhs_scalar});
   }
 }
 

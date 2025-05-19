@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,28 +17,18 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/testing_main.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/column/column_factories.hpp>
-#include <cudf/copying.hpp>
 #include <cudf/detail/iterator.cuh>
-#include <cudf/detail/utilities/device_operators.cuh>
 #include <cudf/lists/lists_column_view.hpp>
-#include <cudf/null_mask.hpp>
-#include <cudf/structs/structs_column_view.hpp>
-#include <cudf/table/table.hpp>
-#include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/device_buffer.hpp>
 
-#include <thrust/host_vector.h>
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/scan.h>
-#include <thrust/sequence.h>
 
 #include <algorithm>
 #include <functional>
@@ -146,11 +136,11 @@ TYPED_TEST(TypedStructColumnWrapperTest, TestColumnWrapperConstruction)
   expected_children.emplace_back(
     cudf::test::strings_column_wrapper{names, {true, true, true, false, true, true}}.release());
   expected_children.emplace_back(cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>{
-    {48, 27, 25, 31, 351, 351},
-    {1, 1, 1, 0, 1, 0}}.release());
+    {48, 27, 25, 31, 351, 351}, {1, 1, 1, 0, 1, 0}}
+                                   .release());
   expected_children.emplace_back(cudf::test::fixed_width_column_wrapper<bool>{
-    {true, true, false, false, false, false},
-    {1, 1, 0, 0, 1, 0}}.release());
+    {true, true, false, false, false, false}, {1, 1, 0, 0, 1, 0}}
+                                   .release());
 
   std::for_each(thrust::make_counting_iterator(0),
                 thrust::make_counting_iterator(0) + expected_children.size(),
@@ -263,14 +253,15 @@ TYPED_TEST(TypedStructColumnWrapperTest, StructOfStructs)
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*expected_names_col, struct_2->child(1).child(0));
 
-  auto expected_ages_col = cudf::test::fixed_width_column_wrapper<int32_t>{
-    {48, 27, 25, 31, 351, 351},
-    {0, 1, 1, 1, 0, 0}}.release();
+  auto expected_ages_col =
+    cudf::test::fixed_width_column_wrapper<int32_t>{{48, 27, 25, 31, 351, 351}, {0, 1, 1, 1, 0, 0}}
+      .release();
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*expected_ages_col, struct_2->child(1).child(1));
 
-  auto expected_bool_col = cudf::test::fixed_width_column_wrapper<bool>{
-    {true, true, false, false, false, false},
-    {0, 1, 0, 1, 1, 0}}.release();
+  auto expected_bool_col =
+    cudf::test::fixed_width_column_wrapper<bool>{{true, true, false, false, false, false},
+                                                 {0, 1, 0, 1, 1, 0}}
+      .release();
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*expected_bool_col, struct_2->child(0));
 
@@ -342,14 +333,15 @@ TYPED_TEST(TypedStructColumnWrapperTest, TestNullMaskPropagationForNonNullStruct
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*expected_names_col, struct_2->child(1).child(0));
 
-  auto expected_ages_col = cudf::test::fixed_width_column_wrapper<int32_t>{
-    {48, 27, 25, 31, 351, 351},
-    {0, 1, 1, 1, 1, 1}}.release();
+  auto expected_ages_col =
+    cudf::test::fixed_width_column_wrapper<int32_t>{{48, 27, 25, 31, 351, 351}, {0, 1, 1, 1, 1, 1}}
+      .release();
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*expected_ages_col, struct_2->child(1).child(1));
 
-  auto expected_bool_col = cudf::test::fixed_width_column_wrapper<bool>{
-    {true, true, false, false, false, false},
-    {0, 1, 0, 1, 1, 0}}.release();
+  auto expected_bool_col =
+    cudf::test::fixed_width_column_wrapper<bool>{{true, true, false, false, false, false},
+                                                 {0, 1, 0, 1, 1, 0}}
+      .release();
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*expected_bool_col, struct_2->child(0));
 

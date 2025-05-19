@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,10 @@
 
 #include "join_common.hpp"
 
+#include <cudf/join/distinct_hash_join.hpp>
+
+double constexpr load_factor = 0.5;
+
 template <typename Key, bool Nullable>
 void distinct_inner_join(nvbench::state& state,
                          nvbench::type_list<Key, nvbench::enum_type<Nullable>>)
@@ -23,13 +27,8 @@ void distinct_inner_join(nvbench::state& state,
   auto join = [](cudf::table_view const& probe_input,
                  cudf::table_view const& build_input,
                  cudf::null_equality compare_nulls) {
-    auto const has_nulls =
-      cudf::has_nested_nulls(build_input) || cudf::has_nested_nulls(probe_input)
-        ? cudf::nullable_join::YES
-        : cudf::nullable_join::NO;
-    auto hj_obj = cudf::distinct_hash_join<cudf::has_nested::NO>{
-      build_input, probe_input, has_nulls, compare_nulls};
-    return hj_obj.inner_join();
+    auto hj_obj = cudf::distinct_hash_join{build_input, compare_nulls, load_factor};
+    return hj_obj.inner_join(probe_input);
   };
 
   BM_join<Key, Nullable>(state, join);
@@ -42,13 +41,8 @@ void distinct_left_join(nvbench::state& state,
   auto join = [](cudf::table_view const& probe_input,
                  cudf::table_view const& build_input,
                  cudf::null_equality compare_nulls) {
-    auto const has_nulls =
-      cudf::has_nested_nulls(build_input) || cudf::has_nested_nulls(probe_input)
-        ? cudf::nullable_join::YES
-        : cudf::nullable_join::NO;
-    auto hj_obj = cudf::distinct_hash_join<cudf::has_nested::NO>{
-      build_input, probe_input, has_nulls, compare_nulls};
-    return hj_obj.left_join();
+    auto hj_obj = cudf::distinct_hash_join{build_input, compare_nulls, load_factor};
+    return hj_obj.left_join(probe_input);
   };
 
   BM_join<Key, Nullable>(state, join);

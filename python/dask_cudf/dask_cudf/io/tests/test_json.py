@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2024, NVIDIA CORPORATION.
+# Copyright (c) 2019-2025, NVIDIA CORPORATION.
 
 import math
 import os
@@ -11,10 +11,6 @@ import dask.dataframe as dd
 from dask.utils import tmpfile
 
 import dask_cudf
-from dask_cudf.tests.utils import skip_dask_expr
-
-# No dask-expr support for dask<2024.4.0
-pytestmark = skip_dask_expr(lt_version="2024.4.0")
 
 
 def test_read_json_backend_dispatch(tmp_path):
@@ -126,3 +122,14 @@ def test_read_json_aggregate_files(tmp_path):
         assert name in df2.columns
         assert len(df2[name].compute().unique()) == df1.npartitions
         dd.assert_eq(df1, df2.drop(columns=[name]), check_index=False)
+
+
+def test_deprecated_api_paths(tmp_path):
+    path = str(tmp_path / "data-*.json")
+    df = dd.from_dict({"a": range(100)}, npartitions=1)
+    df.to_json(path)
+
+    # Encourage top-level read_json import only
+    with pytest.warns(match="dask_cudf.io.read_json is now deprecated"):
+        df2 = dask_cudf.io.read_json(path)
+    dd.assert_eq(df, df2, check_divisions=False)

@@ -1,18 +1,22 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2024, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION & AFFILIATES.
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 import collections
 import contextlib
 import copy
+import cProfile
 import datetime
 import operator
 import os
 import pathlib
 import pickle
+import pstats
 import subprocess
 import tempfile
+import time
 import types
+from collections.abc import Callable
 from io import BytesIO, StringIO
 
 import cupy as cp
@@ -30,11 +34,18 @@ from numba import (
 from packaging import version
 from pytz import utc
 
+from rmm import RMMError
+
 from cudf.core._compat import PANDAS_GE_210, PANDAS_GE_220, PANDAS_VERSION
 from cudf.pandas import LOADED, Profiler
 from cudf.pandas.fast_slow_proxy import (
-    ProxyFallbackError,
+    AttributeFallbackError,
+    FallbackError,
+    NotImplementedFallbackError,
+    OOMFallbackError,
+    TypeFallbackError,
     _Unusable,
+    as_proxy_object,
     is_proxy_object,
 )
 from cudf.testing import assert_eq
@@ -56,6 +67,10 @@ from pandas.tseries.holiday import (
     USPresidentsDay,
     USThanksgivingDay,
     get_calendar,
+)
+
+from cudf.pandas import (
+    is_proxy_instance,
 )
 
 # Accelerated pandas has the real pandas and cudf modules as attributes
@@ -426,26 +441,26 @@ def test_is_sparse():
     psa = pd.arrays.SparseArray([0, 0, 1, 0])
     xsa = xpd.arrays.SparseArray([0, 0, 1, 0])
 
-    assert pd.api.types.is_sparse(psa) == xpd.api.types.is_sparse(xsa)
+    assert pd.api.types.is_sparse(psa) == xpd.api.types.is_sparse(xsa)  # noqa: TID251
 
 
 def test_is_file_like():
-    assert pd.api.types.is_file_like("a") == xpd.api.types.is_file_like("a")
-    assert pd.api.types.is_file_like(BytesIO()) == xpd.api.types.is_file_like(
+    assert pd.api.types.is_file_like("a") == xpd.api.types.is_file_like("a")  # noqa: TID251
+    assert pd.api.types.is_file_like(BytesIO()) == xpd.api.types.is_file_like(  # noqa: TID251
         BytesIO()
     )
     assert pd.api.types.is_file_like(
         StringIO("abc")
-    ) == xpd.api.types.is_file_like(StringIO("abc"))
+    ) == xpd.api.types.is_file_like(StringIO("abc"))  # noqa: TID251
 
 
 def test_is_re_compilable():
     assert pd.api.types.is_re_compilable(
         ".^"
-    ) == xpd.api.types.is_re_compilable(".^")
+    ) == xpd.api.types.is_re_compilable(".^")  # noqa: TID251
     assert pd.api.types.is_re_compilable(
         ".*"
-    ) == xpd.api.types.is_re_compilable(".*")
+    ) == xpd.api.types.is_re_compilable(".*")  # noqa: TID251
 
 
 def test_module_attribute_types():
@@ -483,7 +498,7 @@ def test_options_mode():
 # Codecov and Profiler interfere with each-other,
 # hence we don't want to run code-cov on this test.
 @pytest.mark.no_cover
-def test_profiler():
+def test_cudf_pandas_profiler():
     pytest.importorskip("cudf")
 
     # test that the profiler correctly reports
@@ -1082,6 +1097,7 @@ def test_np_array_of_timestamps():
         xpd.Series([1, 2, 3]),
         # Index (doesn't support nullary construction)
         xpd.Index([1, 2, 3]),
+        xpd.RangeIndex(0, 10),
         xpd.Index(["a", "b", "c"]),
         # Complex index
         xpd.to_datetime(
@@ -1091,6 +1107,8 @@ def test_np_array_of_timestamps():
                 datetime.datetime(2018, 1, 1),
             ]
         ),
+        xpd.TimedeltaIndex([100, 200, 300], dtype="timedelta64[ns]"),
+        xpd.MultiIndex.from_tuples([(1, 2), (3, 4)]),
         # Objects where the underlying store is the slow type.
         xpd.Series(["a", 2, 3]),
         xpd.Index(["a", 2, 3]),
@@ -1102,18 +1120,13 @@ def test_np_array_of_timestamps():
         xpd.Timedelta(1, "D"),
     ],
 )
-def test_pickle(obj):
+@pytest.mark.parametrize("pickle_func", [pickle.dump, xpd.to_pickle])
+@pytest.mark.parametrize("read_pickle_func", [pickle.load, xpd.read_pickle])
+def test_pickle(obj, pickle_func, read_pickle_func):
     with tempfile.TemporaryFile() as f:
-        pickle.dump(obj, f)
+        pickle_func(obj, f)
         f.seek(0)
-        copy = pickle.load(f)
-
-    tm.assert_equal(obj, copy)
-
-    with tempfile.TemporaryFile() as f:
-        xpd.to_pickle(obj, f)
-        f.seek(0)
-        copy = xpd.read_pickle(f)
+        copy = read_pickle_func(f)
 
     tm.assert_equal(obj, copy)
 
@@ -1142,8 +1155,8 @@ def test_private_method_result_wrapped():
 
 
 def test_numpy_var():
-    np.random.seed(42)
-    data = np.random.rand(1000)
+    rng = np.random.default_rng(seed=42)
+    data = rng.random(1000)
     psr = pd.Series(data)
     sr = xpd.Series(data)
 
@@ -1208,25 +1221,6 @@ def test_intermediates_are_proxied():
     df = xpd.DataFrame({"a": [1, 2, 3]})
     grouper = df.groupby("a")
     assert isinstance(grouper, xpd.core.groupby.generic.DataFrameGroupBy)
-
-
-def test_from_dataframe():
-    cudf = pytest.importorskip("cudf")
-    from cudf.testing import assert_eq
-
-    data = {"foo": [1, 2, 3], "bar": [4, 5, 6]}
-
-    cudf_pandas_df = xpd.DataFrame(data)
-    cudf_df = cudf.DataFrame(data)
-
-    # test construction of a cuDF DataFrame from an cudf_pandas DataFrame
-    assert_eq(cudf_df, cudf.DataFrame.from_pandas(cudf_pandas_df))
-    assert_eq(cudf_df, cudf.from_dataframe(cudf_pandas_df))
-
-    # ideally the below would work as well, but currently segfaults
-
-    # pd_df = pd.DataFrame(data)
-    # assert_eq(pd_df, pd.api.interchange.from_dataframe(cudf_pandas_df))
 
 
 def test_multiindex_values_returns_1d_tuples():
@@ -1558,8 +1552,8 @@ def test_cudf_pandas_debugging_failed(monkeypatch):
     monkeypatch.setattr(xpd.Series.mean, "_fsproxy_slow", pd_mean)
 
 
-def test_excelwriter_pathlike():
-    assert isinstance(pd.ExcelWriter("foo.xlsx"), os.PathLike)
+def test_excelwriter_pathlike(tmpdir):
+    assert isinstance(pd.ExcelWriter(tmpdir.join("foo.xlsx")), os.PathLike)
 
 
 def test_is_proxy_object():
@@ -1582,8 +1576,8 @@ def test_numpy_cupy_flatiter(series):
     _, s = series
     arr = s.values
 
-    assert type(arr.flat._fsproxy_fast) == cp.flatiter
-    assert type(arr.flat._fsproxy_slow) == np.flatiter
+    assert type(arr.flat._fsproxy_fast) is cp.flatiter
+    assert type(arr.flat._fsproxy_slow) is np.flatiter
 
 
 @pytest.mark.xfail(
@@ -1700,9 +1694,9 @@ def test_notebook_slow_repr():
         "tbody",
         "</table>",
     }:
-        assert (
-            string in html_result
-        ), f"Expected string {string} not found in the output"
+        assert string in html_result, (
+            f"Expected string {string} not found in the output"
+        )
 
 
 def test_numpy_ndarray_isinstancecheck(array):
@@ -1757,5 +1751,348 @@ def test_numpy_ndarray_numba_cuda_ufunc(array):
 def test_fallback_raises_error(monkeypatch):
     with monkeypatch.context() as monkeycontext:
         monkeycontext.setenv("CUDF_PANDAS_FAIL_ON_FALLBACK", "True")
-        with pytest.raises(ProxyFallbackError):
+        with pytest.raises(FallbackError):
             pd.Series(range(2)).astype(object)
+
+
+def mock_mean_memory_error(self, *args, **kwargs):
+    raise MemoryError()
+
+
+def mock_mean_rmm_error(self, *args, **kwargs):
+    raise RMMError(1, "error")
+
+
+def mock_mean_not_impl_error(self, *args, **kwargs):
+    raise NotImplementedError()
+
+
+def mock_mean_attr_error(self, *args, **kwargs):
+    raise AttributeError()
+
+
+def mock_mean_type_error(self, *args, **kwargs):
+    raise TypeError()
+
+
+@pytest.mark.parametrize(
+    "mock_mean, err",
+    [
+        (
+            mock_mean_memory_error,
+            OOMFallbackError,
+        ),
+        (
+            mock_mean_rmm_error,
+            OOMFallbackError,
+        ),
+        (
+            mock_mean_not_impl_error,
+            NotImplementedFallbackError,
+        ),
+        (
+            mock_mean_attr_error,
+            AttributeFallbackError,
+        ),
+        (
+            mock_mean_type_error,
+            TypeFallbackError,
+        ),
+    ],
+)
+def test_fallback_raises_specific_error(
+    monkeypatch,
+    mock_mean,
+    err,
+):
+    with monkeypatch.context() as monkeycontext:
+        monkeypatch.setattr(xpd.Series.mean, "_fsproxy_fast", mock_mean)
+        monkeycontext.setenv("CUDF_PANDAS_FAIL_ON_FALLBACK", "True")
+        s = xpd.Series([1, 2])
+        with pytest.raises(err, match="Falling back to the slow path"):
+            assert s.mean() == 1.5
+
+    # Must explicitly undo the patch. Proxy dispatch doesn't work with monkeypatch contexts.
+    monkeypatch.setattr(xpd.Series.mean, "_fsproxy_fast", cudf.Series.mean)
+
+
+@pytest.mark.parametrize(
+    "attrs",
+    [
+        "_exceptions",
+        "version",
+        "_print_versions",
+        "capitalize_first_letter",
+        "_validators",
+        "_decorators",
+    ],
+)
+def test_cudf_pandas_util_version(attrs):
+    if not PANDAS_GE_220 and attrs == "capitalize_first_letter":
+        assert not hasattr(pd.util, attrs)
+    else:
+        assert hasattr(pd.util, attrs)
+
+
+def test_iteration_over_dataframe_dtypes_produces_proxy_objects(dataframe):
+    _, xdf = dataframe
+    xdf["b"] = xpd.IntervalIndex.from_arrays(xdf["a"], xdf["b"])
+    xdf["a"] = xpd.Series([1, 1, 1, 2, 3], dtype="category")
+    dtype_series = xdf.dtypes
+    assert all(is_proxy_object(x) for x in dtype_series)
+    assert isinstance(dtype_series.iloc[0], xpd.CategoricalDtype)
+    assert isinstance(dtype_series.iloc[1], xpd.IntervalDtype)
+
+
+def test_iter_doesnot_raise(monkeypatch):
+    s = xpd.Series([1, 2, 3])
+    with monkeypatch.context() as monkeycontext:
+        monkeycontext.setenv("CUDF_PANDAS_FAIL_ON_FALLBACK", "True")
+        for _ in s:
+            pass
+
+
+def test_dataframe_setitem_slowdown():
+    # We are explicitly testing the slowdown of the setitem operation
+    df = xpd.DataFrame(
+        {"a": [1, 2, 3] * 100000, "b": [1, 2, 3] * 100000}
+    ).astype("float64")
+    df = xpd.DataFrame({"a": df["a"].repeat(1000), "b": df["b"].repeat(1000)})
+    new_df = df + 1
+    start_time = time.time()
+    df[df.columns] = new_df
+    end_time = time.time()
+    delta = int(end_time - start_time)
+    if delta > 5:
+        pytest.fail(f"Test took too long to run, runtime: {delta}")
+
+
+def test_dataframe_setitem():
+    df = xpd.DataFrame({"a": [1, 2, 3], "b": [1, 2, 3]}).astype("float64")
+    new_df = df + 1
+    df[df.columns] = new_df
+    tm.assert_equal(df, new_df)
+
+
+def test_dataframe_get_fast_slow_methods():
+    df = xpd.DataFrame({"a": [1, 2, 3], "b": [1, 2, 3]})
+    assert isinstance(df.as_gpu_object(), cudf.DataFrame)
+    assert isinstance(df.as_cpu_object(), pd.DataFrame)
+
+
+def test_is_cudf_pandas():
+    s = xpd.Series([1, 2, 3])
+    df = xpd.DataFrame({"a": [1, 2, 3], "b": [1, 2, 3]})
+    index = xpd.Index([1, 2, 3])
+
+    assert is_proxy_instance(s, pd.Series)
+    assert is_proxy_instance(df, pd.DataFrame)
+    assert is_proxy_instance(index, pd.Index)
+    assert is_proxy_instance(index.values, np.ndarray)
+
+    for obj in [s, df, index, index.values]:
+        assert not is_proxy_instance(obj._fsproxy_slow, pd.Series)
+        assert not is_proxy_instance(obj._fsproxy_fast, pd.Series)
+
+        assert not is_proxy_instance(obj._fsproxy_slow, pd.DataFrame)
+        assert not is_proxy_instance(obj._fsproxy_fast, pd.DataFrame)
+
+        assert not is_proxy_instance(obj._fsproxy_slow, pd.Index)
+        assert not is_proxy_instance(obj._fsproxy_fast, pd.Index)
+
+        assert not is_proxy_instance(obj._fsproxy_slow, np.ndarray)
+        assert not is_proxy_instance(obj._fsproxy_fast, np.ndarray)
+
+
+def test_series_dtype_property():
+    s = pd.Series([1, 2, 3])
+    xs = xpd.Series([1, 2, 3])
+    expected = np.dtype(s)
+    actual = np.dtype(xs)
+    assert expected == actual
+
+
+def assert_functions_called(profiler, functions):
+    # Process profiling data
+    stream = StringIO()
+    stats = pstats.Stats(profiler, stream=stream)
+
+    # Get all called functions as (filename, lineno, func_name)
+    called_functions = {func[2] for func in stats.stats.keys()}
+    for func_str in functions:
+        assert func_str in called_functions
+
+
+def test_cudf_series_from_cudf_pandas():
+    s = xpd.Series([1, 2, 3])
+
+    with cProfile.Profile() as profiler:
+        gs = cudf.Series(s)
+
+    assert_functions_called(
+        profiler, ["as_gpu_object", "<method 'update' of 'dict' objects>"]
+    )
+
+    tm.assert_equal(s.as_gpu_object(), gs)
+
+
+def test_cudf_dataframe_from_cudf_pandas():
+    df = xpd.DataFrame({"a": [1, 2, 3], "b": [1, 2, 3]})
+
+    with cProfile.Profile() as profiler:
+        gdf = cudf.DataFrame(df)
+
+    assert_functions_called(
+        profiler, ["as_gpu_object", "<method 'update' of 'dict' objects>"]
+    )
+    tm.assert_frame_equal(df.as_gpu_object(), gdf)
+
+    df = xpd.DataFrame({"a": [1, 2, 3], "b": [1, 2, 3]})
+    gdf = cudf.DataFrame(
+        {"a": xpd.Series([1, 2, 3]), "b": xpd.Series([1, 2, 3])}
+    )
+
+    tm.assert_frame_equal(df.as_gpu_object(), gdf)
+
+    df = xpd.DataFrame({0: [1, 2, 3], 1: [1, 2, 3]})
+    gdf = cudf.DataFrame(
+        [xpd.Series([1, 1]), xpd.Series([2, 2]), xpd.Series([3, 3])]
+    )
+
+    tm.assert_frame_equal(df.as_gpu_object(), gdf)
+
+
+def test_cudf_index_from_cudf_pandas():
+    idx = xpd.Index([1, 2, 3])
+    with cProfile.Profile() as profiler:
+        gidx = cudf.Index(idx)
+    assert_functions_called(profiler, ["as_gpu_object"])
+
+    tm.assert_equal(idx.as_gpu_object(), gidx)
+
+
+def test_numpy_data_access():
+    s = pd.Series([1, 2, 3])
+    xs = xpd.Series([1, 2, 3])
+    expected = s.values.data
+    actual = xs.values.data
+
+    assert type(expected) is type(actual)
+
+
+@pytest.mark.parametrize(
+    "obj",
+    [
+        pd.DataFrame({"a": [1, 2, 3]}),
+        pd.Series([1, 2, 3]),
+        pd.Index([1, 2, 3]),
+        pd.Categorical([1, 2, 3]),
+        pd.to_datetime(["2021-01-01", "2021-01-02"]),
+        pd.to_timedelta(["1 days", "2 days"]),
+        xpd.DataFrame({"a": [1, 2, 3]}),
+        xpd.Series([1, 2, 3]),
+        xpd.Index([1, 2, 3]),
+        xpd.Categorical([1, 2, 3]),
+        xpd.to_datetime(["2021-01-01", "2021-01-02"]),
+        xpd.to_timedelta(["1 days", "2 days"]),
+        cudf.DataFrame({"a": [1, 2, 3]}),
+        cudf.Series([1, 2, 3]),
+        cudf.Index([1, 2, 3]),
+        cudf.Index([1, 2, 3], dtype="category"),
+        cudf.to_datetime(["2021-01-01", "2021-01-02"]),
+        cudf.Index([1, 2, 3], dtype="timedelta64[ns]"),
+        [1, 2, 3],
+        {"a": 1, "b": 2},
+        (1, 2, 3),
+    ],
+)
+def test_as_proxy_object(obj):
+    proxy_obj = as_proxy_object(obj)
+    if isinstance(
+        obj,
+        (
+            pd.DataFrame,
+            pd.Series,
+            pd.Index,
+            pd.Categorical,
+            xpd.DataFrame,
+            xpd.Series,
+            xpd.Index,
+            xpd.Categorical,
+            cudf.DataFrame,
+            cudf.Series,
+            cudf.Index,
+        ),
+    ):
+        assert is_proxy_object(proxy_obj)
+        if isinstance(proxy_obj, xpd.DataFrame):
+            tm.assert_frame_equal(proxy_obj, xpd.DataFrame(obj))
+        elif isinstance(proxy_obj, xpd.Series):
+            tm.assert_series_equal(proxy_obj, xpd.Series(obj))
+        elif isinstance(proxy_obj, xpd.Index):
+            tm.assert_index_equal(proxy_obj, xpd.Index(obj))
+        else:
+            tm.assert_equal(proxy_obj, obj)
+    else:
+        assert not is_proxy_object(proxy_obj)
+        assert proxy_obj == obj
+
+
+def test_as_proxy_object_doesnot_copy_series():
+    s = pd.Series([1, 2, 3])
+    proxy_obj = as_proxy_object(s)
+    s[0] = 10
+    assert proxy_obj[0] == 10
+    tm.assert_series_equal(s, proxy_obj)
+
+
+def test_as_proxy_object_doesnot_copy_dataframe():
+    df = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
+    proxy_obj = as_proxy_object(df)
+    df.iloc[0, 0] = 10
+    assert proxy_obj.iloc[0, 0] == 10
+    tm.assert_frame_equal(df, proxy_obj)
+
+
+def test_as_proxy_object_doesnot_copy_index():
+    idx = pd.Index([1, 2, 3])
+    proxy_obj = as_proxy_object(idx)
+    assert proxy_obj._fsproxy_wrapped is idx
+
+
+def test_as_proxy_object_no_op_for_intermediates():
+    s = pd.Series(["abc", "def", "ghi"])
+    str_attr = s.str
+    proxy_obj = as_proxy_object(str_attr)
+    assert proxy_obj is str_attr
+
+
+def test_pickle_round_trip_proxy_numpy_array(array):
+    arr, proxy_arr = array
+    pickled_arr = BytesIO()
+    pickled_proxy_arr = BytesIO()
+    pickle.dump(arr, pickled_arr)
+    pickle.dump(proxy_arr, pickled_proxy_arr)
+
+    pickled_arr.seek(0)
+    pickled_proxy_arr.seek(0)
+
+    np.testing.assert_equal(
+        pickle.load(pickled_proxy_arr), pickle.load(pickled_arr)
+    )
+
+
+def test_pandas_objects_not_callable():
+    series = xpd.Series([1, 2, 3])
+    dataframe = xpd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
+    index = xpd.Index([1, 2, 3])
+    range_index = xpd.RangeIndex(start=0, stop=10, step=1)
+    assert not isinstance(series, Callable)
+    assert not isinstance(dataframe, Callable)
+    assert not isinstance(index, Callable)
+    assert not isinstance(range_index, Callable)
+
+    assert isinstance(xpd.Series, Callable)
+    assert isinstance(xpd.DataFrame, Callable)
+    assert isinstance(xpd.Index, Callable)
+    assert isinstance(xpd.RangeIndex, Callable)

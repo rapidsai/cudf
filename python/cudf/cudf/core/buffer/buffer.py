@@ -1,12 +1,11 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
 import math
-import pickle
 import weakref
 from types import SimpleNamespace
-from typing import Any, Literal, Mapping
+from typing import TYPE_CHECKING, Any, Literal
 
 import numpy
 from typing_extensions import Self
@@ -14,9 +13,11 @@ from typing_extensions import Self
 import pylibcudf
 import rmm
 
-import cudf
 from cudf.core.abc import Serializable
-from cudf.utils.string import format_bytes
+from cudf.core.buffer.string import format_bytes
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
 
 
 def host_memory_allocation(nbytes: int) -> memoryview:
@@ -284,7 +285,7 @@ class BufferOwner(Serializable):
         """Read-only access to the buffer through host memory."""
         size = self._size if size is None else size
         host_buf = host_memory_allocation(size)
-        rmm._lib.device_buffer.copy_ptr_to_host(
+        rmm.pylibrmm.device_buffer.copy_ptr_to_host(
             self.get_ptr(mode="read") + offset, host_buf
         )
         return memoryview(host_buf).toreadonly()
@@ -395,7 +396,7 @@ class Buffer(Serializable):
             )
 
         # Otherwise, we create a new copy of the memory
-        owner = self._owner.from_device_memory(
+        owner = type(self._owner).from_device_memory(
             rmm.DeviceBuffer(
                 ptr=self._owner.get_ptr(mode="read") + self._offset,
                 size=self.size,
@@ -429,8 +430,7 @@ class Buffer(Serializable):
             second element is a list containing single frame.
         """
         header: dict[str, Any] = {}
-        header["type-serialized"] = pickle.dumps(type(self))
-        header["owner-type-serialized"] = pickle.dumps(type(self._owner))
+        header["owner-type-serialized-name"] = type(self._owner).__name__
         header["frame_count"] = 1
         frames = [self]
         return header, frames
@@ -457,7 +457,9 @@ class Buffer(Serializable):
         if isinstance(frame, cls):
             return frame  # The frame is already deserialized
 
-        owner_type: BufferOwner = pickle.loads(header["owner-type-serialized"])
+        owner_type: BufferOwner = Serializable._name_type_map[
+            header["owner-type-serialized-name"]
+        ]
         if hasattr(frame, "__cuda_array_interface__"):
             owner = owner_type.from_device_memory(frame, exposed=False)
         else:
@@ -501,7 +503,7 @@ def get_ptr_and_size(array_interface: Mapping) -> tuple[int, int]:
 
     shape = array_interface["shape"] or (1,)
     strides = array_interface["strides"]
-    itemsize = cudf.dtype(array_interface["typestr"]).itemsize
+    itemsize = numpy.dtype(array_interface["typestr"]).itemsize
     if strides is None or pylibcudf.column.is_c_contiguous(
         shape, strides, itemsize
     ):

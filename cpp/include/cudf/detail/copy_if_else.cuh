@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,14 +19,13 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/device_scalar.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
-#include <rmm/device_scalar.hpp>
-
+#include <cuda/std/iterator>
 #include <cuda/std/optional>
-#include <thrust/iterator/iterator_traits.h>
 
 namespace cudf {
 namespace detail {
@@ -45,10 +44,11 @@ __launch_bounds__(block_size) CUDF_KERNEL
                            mutable_column_device_view out,
                            size_type* __restrict__ const valid_count)
 {
-  auto tidx                      = cudf::detail::grid_1d::global_thread_id<block_size>();
-  auto const stride              = cudf::detail::grid_1d::grid_stride<block_size>();
-  int const warp_id              = tidx / cudf::detail::warp_size;
-  size_type const warps_per_grid = gridDim.x * block_size / cudf::detail::warp_size;
+  auto tidx = cudf::detail::grid_1d::global_thread_id<block_size>();
+
+  auto const stride         = cudf::detail::grid_1d::grid_stride<block_size>();
+  auto const warp_id        = tidx / cudf::detail::warp_size;
+  auto const warps_per_grid = stride / cudf::detail::warp_size;
 
   // begin/end indices for the column data
   size_type const begin = 0;
@@ -61,7 +61,7 @@ __launch_bounds__(block_size) CUDF_KERNEL
 
   // lane id within the current warp
   constexpr size_type leader_lane{0};
-  int const lane_id = threadIdx.x % cudf::detail::warp_size;
+  auto const lane_id = threadIdx.x % cudf::detail::warp_size;
 
   size_type warp_valid_count{0};
 
@@ -157,7 +157,7 @@ std::unique_ptr<column> copy_if_else(bool nullable,
                                      rmm::device_async_resource_ref mr)
 {
   // This is the type of the cuda::std::optional element in the passed iterators
-  using Element = typename thrust::iterator_traits<LeftIter>::value_type::value_type;
+  using Element = typename cuda::std::iter_value_t<LeftIter>::value_type;
 
   size_type size           = std::distance(lhs_begin, lhs_end);
   size_type num_els        = cudf::util::round_up_safe(size, cudf::detail::warp_size);
@@ -171,7 +171,7 @@ std::unique_ptr<column> copy_if_else(bool nullable,
 
   // if we have validity in the output
   if (nullable) {
-    rmm::device_scalar<size_type> valid_count{0, stream};
+    cudf::detail::device_scalar<size_type> valid_count{0, stream};
 
     // call the kernel
     copy_if_else_kernel<block_size, Element, LeftIter, RightIter, FilterFn, true>

@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2024, NVIDIA CORPORATION.
+# Copyright (c) 2018-2025, NVIDIA CORPORATION.
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Literal
@@ -7,13 +7,13 @@ import pandas as pd
 import pyarrow as pa
 
 import cudf
-from cudf.core.column import StructColumn, as_column
+from cudf.core.column.column import as_column, pa_mask_buffer_to_mask
+from cudf.core.column.struct import StructColumn
 from cudf.core.dtypes import IntervalDtype
 
 if TYPE_CHECKING:
     from typing_extensions import Self
 
-    from cudf._typing import ScalarLike
     from cudf.core.buffer import Buffer
     from cudf.core.column import ColumnBase
 
@@ -56,7 +56,7 @@ class IntervalColumn(StructColumn):
         dtype = IntervalDtype.from_arrow(data.type)
         mask = data.buffers()[0]
         if mask is not None:
-            mask = cudf.utils.utils.pa_mask_buffer_to_mask(mask, len(data))
+            mask = pa_mask_buffer_to_mask(mask, len(data))
 
         offset = data.offset
         null_count = data.null_count
@@ -105,9 +105,7 @@ class IntervalColumn(StructColumn):
         return IntervalColumn(  # type: ignore[return-value]
             data=None,
             size=struct_copy.size,
-            dtype=IntervalDtype(
-                struct_copy.dtype.fields["left"], self.dtype.closed
-            ),
+            dtype=IntervalDtype(self.dtype.subtype, self.dtype.closed),
             mask=struct_copy.base_mask,
             offset=struct_copy.offset,
             null_count=struct_copy.null_count,
@@ -163,7 +161,7 @@ class IntervalColumn(StructColumn):
         return IntervalColumn(  # type: ignore[return-value]
             data=None,
             size=self.size,
-            dtype=IntervalDtype(self.dtype.fields["left"], closed),
+            dtype=IntervalDtype(self.dtype.subtype, closed),
             mask=self.base_mask,
             offset=self.offset,
             null_count=self.null_count,
@@ -207,19 +205,6 @@ class IntervalColumn(StructColumn):
 
     def element_indexing(self, index: int):
         result = super().element_indexing(index)
-        if cudf.get_option("mode.pandas_compatible"):
-            return pd.Interval(**result, closed=self.dtype.closed)
-        return result
-
-    def _reduce(
-        self,
-        op: str,
-        skipna: bool | None = None,
-        min_count: int = 0,
-        *args,
-        **kwargs,
-    ) -> ScalarLike:
-        result = super()._reduce(op, skipna, min_count, *args, **kwargs)
         if cudf.get_option("mode.pandas_compatible"):
             return pd.Interval(**result, closed=self.dtype.closed)
         return result

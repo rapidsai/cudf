@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 """Callback for the polars collect function to execute on device."""
@@ -7,18 +7,22 @@ from __future__ import annotations
 
 import contextlib
 import os
+import time
 import warnings
 from functools import cache, partial
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal, overload
 
 import nvtx
+from typing_extensions import assert_never
 
 from polars.exceptions import ComputeError, PerformanceWarning
 
+import pylibcudf
 import rmm
 from rmm._cuda import gpu
 
-from cudf_polars.dsl.translate import translate_ir
+from cudf_polars.dsl.translate import Translator
+from cudf_polars.utils.timer import Timer
 
 if TYPE_CHECKING:
     from collections.abc import Generator
@@ -28,12 +32,31 @@ if TYPE_CHECKING:
 
     from cudf_polars.dsl.ir import IR
     from cudf_polars.typing import NodeTraverser
+    from cudf_polars.utils.config import ConfigOptions
 
 __all__: list[str] = ["execute_with_cudf"]
 
 
+_SUPPORTED_PREFETCHES = {
+    "column_view::get_data",
+    "mutable_column_view::get_data",
+    "gather",
+    "hash_join",
+}
+
+
+def _env_get_int(name: str, default: int) -> int:
+    try:
+        return int(os.getenv(name, default))
+    except (ValueError, TypeError):  # pragma: no cover
+        return default  # pragma: no cover
+
+
 @cache
-def default_memory_resource(device: int) -> rmm.mr.DeviceMemoryResource:
+def default_memory_resource(
+    device: int,
+    cuda_managed_memory: bool,  # noqa: FBT001
+) -> rmm.mr.DeviceMemoryResource:
     """
     Return the default memory resource for cudf-polars.
 
@@ -42,15 +65,35 @@ def default_memory_resource(device: int) -> rmm.mr.DeviceMemoryResource:
     device
         Disambiguating device id when selecting the device. Must be
         the active device when this function is called.
+    cuda_managed_memory
+        Whether to use managed memory or not.
 
     Returns
     -------
     rmm.mr.DeviceMemoryResource
         The default memory resource that cudf-polars uses. Currently
-        an async pool resource.
+        a managed memory resource, if `cuda_managed_memory` is `True`.
+        else, an async pool resource is returned.
     """
     try:
-        return rmm.mr.CudaAsyncMemoryResource()
+        if (
+            cuda_managed_memory
+            and pylibcudf.utils._is_concurrent_managed_access_supported()
+        ):
+            # Allocating 80% of the available memory for the pool.
+            # Leaving a 20% headroom to avoid OOM errors.
+            free_memory, _ = rmm.mr.available_device_memory()
+            free_memory = int(round(float(free_memory) * 0.80 / 256) * 256)
+            for key in _SUPPORTED_PREFETCHES:
+                pylibcudf.experimental.enable_prefetching(key)
+            mr = rmm.mr.PrefetchResourceAdaptor(
+                rmm.mr.PoolMemoryResource(
+                    rmm.mr.ManagedMemoryResource(),
+                    initial_pool_size=free_memory,
+                )
+            )
+        else:
+            mr = rmm.mr.CudaAsyncMemoryResource()
     except RuntimeError as e:  # pragma: no cover
         msg, *_ = e.args
         if (
@@ -64,6 +107,8 @@ def default_memory_resource(device: int) -> rmm.mr.DeviceMemoryResource:
             ) from None
         else:
             raise
+    else:
+        return mr
 
 
 @contextlib.contextmanager
@@ -89,10 +134,15 @@ def set_memory_resource(
     at entry. If a memory resource is provided, it must be valid to
     use with the currently active device.
     """
+    previous = rmm.mr.get_current_device_resource()
     if mr is None:
         device: int = gpu.getDevice()
-        mr = default_memory_resource(device)
-    previous = rmm.mr.get_current_device_resource()
+        mr = default_memory_resource(
+            device=device,
+            cuda_managed_memory=bool(
+                _env_get_int("POLARS_GPU_ENABLE_CUDA_MANAGED_MEMORY", default=1) != 0
+            ),
+        )
     rmm.mr.set_current_device_resource(mr)
     try:
         yield mr
@@ -127,32 +177,71 @@ def set_device(device: int | None) -> Generator[int, None, None]:
         gpu.setDevice(previous)
 
 
+@overload
 def _callback(
     ir: IR,
     with_columns: list[str] | None,
     pyarrow_predicate: str | None,
     n_rows: int | None,
+    should_time: Literal[False],
     *,
-    device: int | None,
-    memory_resource: int | None,
-) -> pl.DataFrame:
+    memory_resource: rmm.mr.DeviceMemoryResource | None,
+    config_options: ConfigOptions,
+    timer: Timer | None,
+) -> pl.DataFrame: ...
+
+
+@overload
+def _callback(
+    ir: IR,
+    with_columns: list[str] | None,
+    pyarrow_predicate: str | None,
+    n_rows: int | None,
+    should_time: Literal[True],
+    *,
+    memory_resource: rmm.mr.DeviceMemoryResource | None,
+    config_options: ConfigOptions,
+    timer: Timer | None,
+) -> tuple[pl.DataFrame, list[tuple[int, int, str]]]: ...
+
+
+def _callback(
+    ir: IR,
+    with_columns: list[str] | None,
+    pyarrow_predicate: str | None,
+    n_rows: int | None,
+    should_time: bool,  # noqa: FBT001
+    *,
+    memory_resource: rmm.mr.DeviceMemoryResource | None,
+    config_options: ConfigOptions,
+    timer: Timer | None,
+) -> pl.DataFrame | tuple[pl.DataFrame, list[tuple[int, int, str]]]:
     assert with_columns is None
     assert pyarrow_predicate is None
     assert n_rows is None
+    if timer is not None:
+        assert should_time
     with (
         nvtx.annotate(message="ExecuteIR", domain="cudf_polars"),
         # Device must be set before memory resource is obtained.
-        set_device(device),
+        set_device(config_options.device),
         set_memory_resource(memory_resource),
     ):
-        return ir.evaluate(cache={}).to_polars()
+        if config_options.executor.name == "in-memory":
+            df = ir.evaluate(cache={}, timer=timer).to_polars()
+            if timer is None:
+                return df
+            else:
+                return df, timer.timings
+        elif config_options.executor.name == "streaming":
+            from cudf_polars.experimental.parallel import evaluate_streaming
+
+            return evaluate_streaming(ir, config_options).to_polars()
+        assert_never(f"Unknown executor '{config_options.executor}'")
 
 
 def execute_with_cudf(
-    nt: NodeTraverser,
-    *,
-    config: GPUEngine,
-    exception: type[Exception] | tuple[type[Exception], ...] = Exception,
+    nt: NodeTraverser, duration_since_start: int | None, *, config: GPUEngine
 ) -> None:
     """
     A post optimization callback that attempts to execute the plan with cudf.
@@ -162,38 +251,68 @@ def execute_with_cudf(
     nt
         NodeTraverser
 
+    duration_since_start
+        Time since the user started executing the query (or None if no
+        profiling should occur).
+
     config
-        GPUEngine configuration object
+        GPUEngine object. Configuration is available as ``engine.config``.
 
-    exception
-        Optional exception, or tuple of exceptions, to catch during
-        translation. Defaults to ``Exception``.
+    Raises
+    ------
+    ValueError
+        If the config contains unsupported keys.
+    NotImplementedError
+        If translation of the plan is unsupported.
 
+    Notes
+    -----
     The NodeTraverser is mutated if the libcudf executor can handle the plan.
     """
-    device = config.device
+    if duration_since_start is None:
+        timer = None
+    else:
+        start = time.monotonic_ns()
+        timer = Timer(start - duration_since_start)
+
     memory_resource = config.memory_resource
-    raise_on_fail = config.config.get("raise_on_fail", False)
-    if unsupported := (config.config.keys() - {"raise_on_fail"}):
-        raise ValueError(
-            f"Engine configuration contains unsupported settings {unsupported}"
-        )
-    try:
-        with nvtx.annotate(message="ConvertIR", domain="cudf_polars"):
+
+    with nvtx.annotate(message="ConvertIR", domain="cudf_polars"):
+        translator = Translator(nt, config)
+        ir = translator.translate_ir()
+        ir_translation_errors = translator.errors
+        if timer is not None:
+            timer.store(start, time.monotonic_ns(), "gpu-ir-translation")
+
+        if (
+            memory_resource is None
+            and translator.config_options.executor.name == "streaming"
+            and translator.config_options.executor.scheduler == "distributed"
+        ):  # pragma: no cover; Requires distributed cluster
+            memory_resource = rmm.mr.get_current_device_resource()
+        if len(ir_translation_errors):
+            # TODO: Display these errors in user-friendly way.
+            # tracked in https://github.com/rapidsai/cudf/issues/17051
+            unique_errors = sorted(set(ir_translation_errors), key=str)
+            formatted_errors = "\n".join(
+                f"- {e.__class__.__name__}: {e}" for e in unique_errors
+            )
+            error_message = (
+                "Query execution with GPU not possible: unsupported operations."
+                f"\nThe errors were:\n{formatted_errors}"
+            )
+            exception = NotImplementedError(error_message, unique_errors)
+            if bool(int(os.environ.get("POLARS_VERBOSE", 0))):
+                warnings.warn(error_message, PerformanceWarning, stacklevel=2)
+            if translator.config_options.raise_on_fail:
+                raise exception
+        else:
             nt.set_udf(
                 partial(
                     _callback,
-                    translate_ir(nt),
-                    device=device,
+                    ir,
                     memory_resource=memory_resource,
+                    config_options=translator.config_options,
+                    timer=timer,
                 )
             )
-    except exception as e:
-        if bool(int(os.environ.get("POLARS_VERBOSE", 0))):
-            warnings.warn(
-                f"Query execution with GPU not supported, reason: {type(e)}: {e}",
-                PerformanceWarning,
-                stacklevel=2,
-            )
-        if raise_on_fail:
-            raise

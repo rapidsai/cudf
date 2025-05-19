@@ -51,9 +51,13 @@ def test_series_from_delayed():
 def test_dataframe_to_delayed():
     nelem = 100
 
-    df = cudf.DataFrame()
-    df["x"] = np.arange(nelem)
-    df["y"] = np.random.randint(nelem, size=nelem)
+    rng = np.random.default_rng(seed=0)
+    df = cudf.DataFrame(
+        {
+            "x": np.arange(nelem),
+            "y": rng.integers(nelem, size=nelem),
+        }
+    )
 
     ddf = dask_cudf.from_cudf(df, npartitions=5)
 
@@ -80,8 +84,8 @@ def test_dataframe_to_delayed():
 
 def test_series_to_delayed():
     nelem = 100
-
-    sr = cudf.Series(np.random.randint(nelem, size=nelem))
+    rng = np.random.default_rng(seed=0)
+    sr = cudf.Series(rng.integers(nelem, size=nelem))
 
     dsr = dask_cudf.from_cudf(sr, npartitions=5)
 
@@ -109,11 +113,13 @@ def test_series_to_delayed():
 
 def test_mixing_series_frame_error():
     nelem = 20
-
-    df = cudf.DataFrame()
-    df["x"] = np.arange(nelem)
-    df["y"] = np.random.randint(nelem, size=nelem)
-
+    rng = np.random.default_rng(seed=0)
+    df = cudf.DataFrame(
+        {
+            "x": np.arange(nelem),
+            "y": rng.integers(nelem, size=nelem),
+        }
+    )
     ddf = dask_cudf.from_cudf(df, npartitions=5)
 
     delay_frame = ddf.to_delayed()
@@ -128,10 +134,13 @@ def test_mixing_series_frame_error():
 
 def test_frame_extra_columns_error():
     nelem = 20
-
-    df = cudf.DataFrame()
-    df["x"] = np.arange(nelem)
-    df["y"] = np.random.randint(nelem, size=nelem)
+    rng = np.random.default_rng(seed=0)
+    df = cudf.DataFrame(
+        {
+            "x": np.arange(nelem),
+            "y": rng.integers(nelem, size=nelem),
+        }
+    )
     ddf1 = dask_cudf.from_cudf(df, npartitions=5)
 
     df["z"] = np.arange(nelem)

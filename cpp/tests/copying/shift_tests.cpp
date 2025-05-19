@@ -17,7 +17,6 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/copying.hpp>
@@ -30,7 +29,6 @@
 
 #include <limits>
 #include <memory>
-#include <stdexcept>
 
 using TestTypes = cudf::test::Types<int32_t>;
 

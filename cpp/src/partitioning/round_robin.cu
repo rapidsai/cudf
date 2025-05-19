@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -108,8 +108,7 @@ std::pair<std::unique_ptr<cudf::table>, std::vector<cudf::size_type>> degenerate
                                          stream,
                                          mr);
 
-    return std::pair(std::move(uniq_tbl),
-                     cudf::detail::make_std_vector_sync(partition_offsets, stream));
+    return std::pair(std::move(uniq_tbl), cudf::detail::make_std_vector(partition_offsets, stream));
   } else {  //( num_partitions > nrows )
     rmm::device_uvector<cudf::size_type> d_row_indices(nrows, stream);
 
@@ -146,8 +145,7 @@ std::pair<std::unique_ptr<cudf::table>, std::vector<cudf::size_type>> degenerate
                            nedges_iter_begin + num_partitions,
                            partition_offsets.begin());
 
-    return std::pair(std::move(uniq_tbl),
-                     cudf::detail::make_std_vector_sync(partition_offsets, stream));
+    return std::pair(std::move(uniq_tbl), cudf::detail::make_std_vector(partition_offsets, stream));
   }
 }
 }  // namespace
@@ -273,11 +271,11 @@ std::pair<std::unique_ptr<cudf::table>, std::vector<cudf::size_type>> round_robi
   table_view const& input,
   cudf::size_type num_partitions,
   cudf::size_type start_partition,
+  rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::round_robin_partition(
-    input, num_partitions, start_partition, cudf::get_default_stream(), mr);
+  return detail::round_robin_partition(input, num_partitions, start_partition, stream, mr);
 }
 
 }  // namespace cudf

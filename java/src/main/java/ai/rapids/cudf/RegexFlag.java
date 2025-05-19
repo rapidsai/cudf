@@ -28,7 +28,16 @@ public enum RegexFlag {
   DEFAULT(0),   // default
   MULTILINE(8), // the '^' and '$' honor new-line characters
   DOTALL(16),   // the '.' matching includes new-line characters
-  ASCII(256);   // use only ASCII when matching built-in character classes
+  ASCII(256),   // use only ASCII when matching built-in character classes
+  /**
+   * EXT_NEWLINE(512): Extends line delimiters to include the following Unicode characters
+   * - NEXT_LINE ('\u0085')
+   * - LINE_SEPARATOR ('\u2028')
+   * - PARAGRAPH_SEPARATOR ('\u2029')
+   * - CARRIAGE_RETURN ('\r')
+   * - NEW_LINE ('\n')
+   */
+  EXT_NEWLINE(512);
 
   final int nativeId; // Native id, for use with libcudf.
   private RegexFlag(int nativeId) { // Only constant values should be used

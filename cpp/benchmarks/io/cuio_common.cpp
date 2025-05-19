@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,13 +17,14 @@
 #include <benchmarks/io/cuio_common.hpp>
 
 #include <cudf/detail/utilities/integer_utils.hpp>
-#include <cudf/detail/utilities/logger.hpp>
+#include <cudf/logger.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/mr/pinned_host_memory_resource.hpp>
 
 #include <unistd.h>
 
+#include <array>
 #include <cstdio>
 #include <fstream>
 #include <numeric>
@@ -186,7 +187,7 @@ std::string exec_cmd(std::string_view cmd)
   std::fflush(nullptr);
   // Switch stderr and stdout to only capture stderr
   auto const redirected_cmd = std::string{"( "}.append(cmd).append(" 3>&2 2>&1 1>&3) 2>/dev/null");
-  std::unique_ptr<FILE, decltype(&pclose)> pipe(popen(redirected_cmd.c_str(), "r"), pclose);
+  std::unique_ptr<FILE, int (*)(FILE*)> pipe(popen(redirected_cmd.c_str(), "r"), pclose);
   CUDF_EXPECTS(pipe != nullptr, "popen() failed");
 
   std::array<char, 128> buffer;
@@ -215,6 +216,13 @@ void try_drop_l3_cache()
     log_l3_warning_once();
     return;
   }
+
+  // When data are written to a file, Linux first places them in dirty pages, and then uses a
+  // writeback mechanism to move them to the file system. sysctl vm.drop_caches=3 is only capable of
+  // dropping the clean cache. The dirty pages may still affect the performance of cold cache
+  // benchmark. A call to sync() triggers the writeback process and makes dirty pages clean, ready
+  // to be dropped. This function never fails and does not require sudo.
+  sync();
 
   std::array drop_cache_cmds{"/sbin/sysctl vm.drop_caches=3", "sudo /sbin/sysctl vm.drop_caches=3"};
   CUDF_EXPECTS(std::any_of(drop_cache_cmds.cbegin(),

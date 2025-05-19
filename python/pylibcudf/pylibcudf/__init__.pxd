@@ -1,4 +1,4 @@
-# Copyright (c) 2023-2024, NVIDIA CORPORATION.
+# Copyright (c) 2023-2025, NVIDIA CORPORATION.
 
 # TODO: Verify consistent usage of relative/absolute imports in pylibcudf.
 from . cimport (
@@ -6,13 +6,18 @@ from . cimport (
     binaryop,
     column_factories,
     concatenate,
+    contiguous_split,
     copying,
     datetime,
     experimental,
     expressions,
     filling,
     groupby,
+    hashing,
+    interop,
+    jit,
     join,
+    json,
     labeling,
     lists,
     merge,
@@ -34,6 +39,7 @@ from . cimport (
     transpose,
     types,
     unary,
+    utilities,
 )
 from .column cimport Column
 from .gpumemoryview cimport gpumemoryview
@@ -51,6 +57,7 @@ __all__ = [
     "aggregation",
     "binaryop",
     "column_factories",
+    "contiguous_split",
     "concatenate",
     "copying",
     "datetime",
@@ -59,7 +66,11 @@ __all__ = [
     "filling",
     "gpumemoryview",
     "groupby",
+    "hashing",
+    "interop",
+    "jit",
     "join",
+    "json",
     "lists",
     "merge",
     "null_mask",
@@ -80,4 +91,5 @@ __all__ = [
     "types",
     "unary",
     "nvtext",
+    "utilities",
 ]

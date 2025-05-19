@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,8 +27,7 @@ std::unique_ptr<column> cudf::io::detail::inline_column_buffer::make_string_colu
 {
   // if the size of _string_data is over the threshold for 64bit size_type, _data will contain
   // sizes rather than offsets. need special handling for that case.
-  auto const threshold = static_cast<size_t>(strings::detail::get_offset64_threshold());
-  if (_string_data.size() > threshold) {
+  if (is_large_strings_column()) {
     if (not strings::detail::is_large_strings_enabled()) {
       CUDF_FAIL("String column exceeds the column size limit", std::overflow_error);
     }
@@ -38,7 +37,8 @@ std::unique_ptr<column> cudf::io::detail::inline_column_buffer::make_string_colu
       data_type{type_id::INT64}, size + 1, mask_state::UNALLOCATED, stream, _mr);
     auto d_offsets64 = offsets_col->mutable_view().template data<int64_t>();
     // it's safe to call with size + 1 because _data is also sized that large
-    cudf::detail::sizes_to_offsets(offsets_ptr, offsets_ptr + size + 1, d_offsets64, stream);
+    cudf::detail::sizes_to_offsets(
+      offsets_ptr, offsets_ptr + size + 1, d_offsets64, initial_string_offset, stream);
     return make_strings_column(
       size, std::move(offsets_col), std::move(_string_data), null_count(), std::move(_null_mask));
   } else {

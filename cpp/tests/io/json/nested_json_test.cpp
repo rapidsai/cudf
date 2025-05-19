@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,24 +21,16 @@
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/cudf_gtest.hpp>
-#include <cudf_test/io_metadata_utilities.hpp>
 #include <cudf_test/random.hpp>
-#include <cudf_test/table_utilities.hpp>
 #include <cudf_test/testing_main.hpp>
 
-#include <cudf/io/datasource.hpp>
 #include <cudf/io/json.hpp>
-#include <cudf/io/parquet.hpp>
 #include <cudf/io/types.hpp>
-#include <cudf/lists/lists_column_view.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
-#include <rmm/exec_policy.hpp>
-
-#include <thrust/copy.h>
 #include <thrust/iterator/zip_iterator.h>
 
 #include <string>
@@ -903,7 +895,7 @@ TEST_P(JsonDelimiterParamTest, UTF_JSON)
   {"a":1,"b":Infinity,"c":[null], "d": {"year":-600,"author": "Kaniyan"}}])";
   std::replace(ascii_pass.begin(), ascii_pass.end(), '\n', delimiter);
 
-  auto const d_ascii_pass = cudf::detail::make_device_uvector_sync(
+  auto const d_ascii_pass = cudf::detail::make_device_uvector(
     cudf::host_span<char const>{ascii_pass.c_str(), ascii_pass.size()},
     stream,
     cudf::get_current_device_resource_ref());
@@ -920,7 +912,7 @@ TEST_P(JsonDelimiterParamTest, UTF_JSON)
   {"a":1,"b":Infinity,"c":[null], "d": {"year":-600,"author": "filip ʒakotɛ"}}])";
   std::replace(utf_failed.begin(), utf_failed.end(), '\n', delimiter);
 
-  auto const d_utf_failed = cudf::detail::make_device_uvector_sync(
+  auto const d_utf_failed = cudf::detail::make_device_uvector(
     cudf::host_span<char const>{utf_failed.c_str(), utf_failed.size()},
     stream,
     cudf::get_current_device_resource_ref());
@@ -937,7 +929,7 @@ TEST_P(JsonDelimiterParamTest, UTF_JSON)
   {"a":1,"b":NaN,"c":[null, null], "d": {"year": 2, "author": "filip ʒakotɛ"}}])";
   std::replace(utf_pass.begin(), utf_pass.end(), '\n', delimiter);
 
-  auto const d_utf_pass = cudf::detail::make_device_uvector_sync(
+  auto const d_utf_pass = cudf::detail::make_device_uvector(
     cudf::host_span<char const>{utf_pass.c_str(), utf_pass.size()},
     stream,
     cudf::get_current_device_resource_ref());
@@ -1032,9 +1024,9 @@ TEST_F(JsonParserTest, EmptyString)
 
   std::string const input = R"([])";
   auto const d_input =
-    cudf::detail::make_device_uvector_sync(cudf::host_span<char const>{input.c_str(), input.size()},
-                                           stream,
-                                           cudf::get_current_device_resource_ref());
+    cudf::detail::make_device_uvector(cudf::host_span<char const>{input.c_str(), input.size()},
+                                      stream,
+                                      cudf::get_current_device_resource_ref());
   // Get the JSON's tree representation
   auto const cudf_table = json_parser(d_input, default_options, stream, mr);
 

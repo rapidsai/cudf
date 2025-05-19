@@ -1,4 +1,4 @@
-# Copyright (c) 2022-2024, NVIDIA CORPORATION.
+# Copyright (c) 2022-2025, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -17,9 +17,9 @@ from typing import TYPE_CHECKING
 
 import rmm.mr
 
+from cudf.core.buffer.string import format_bytes
 from cudf.options import get_option
 from cudf.utils.performance_tracking import _performance_tracking
-from cudf.utils.string import format_bytes
 
 if TYPE_CHECKING:
     from cudf.core.buffer.spillable_buffer import SpillableBufferOwner
@@ -54,7 +54,7 @@ def get_rmm_memory_resource_stack(
     """
 
     if hasattr(mr, "upstream_mr"):
-        return [mr] + get_rmm_memory_resource_stack(mr.upstream_mr)
+        return [mr, *get_rmm_memory_resource_stack(mr.upstream_mr)]
     return [mr]
 
 
@@ -272,10 +272,10 @@ class SpillManager:
             return self._out_of_memory_handle(nbytes, retry_once=False)
 
         # TODO: write to log instead of stdout
-        print(
+        print(  # noqa: T201
             f"[WARNING] RMM allocation of {format_bytes(nbytes)} bytes "
             "failed, spill-on-demand couldn't find any device memory to "
-            f"spill:\n{repr(self)}\ntraceback:\n{get_traceback()}\n"
+            f"spill:\n{self!r}\ntraceback:\n{get_traceback()}\n"
             f"{self.statistics}"
         )
         return False  # Since we didn't find anything to spill, we give up

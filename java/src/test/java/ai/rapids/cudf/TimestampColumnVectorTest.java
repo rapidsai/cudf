@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -238,6 +238,69 @@ public class TimestampColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  public void getExtractMillis() {
+    try (ColumnVector timestampColumnVector = ColumnVector.timestampMilliSecondsFromLongs(TIMES_MS)) {
+      assert timestampColumnVector.getType().equals(DType.TIMESTAMP_MILLISECONDS);
+      try (ColumnVector tmp = timestampColumnVector.extractDateTimeComponent(DateTimeComponent.MILLISECOND);
+           HostColumnVector result = tmp.copyToHost()) {
+        assertEquals(238, result.getShort(0));
+        assertEquals(115, result.getShort(1));
+        assertEquals(929, result.getShort(2));
+      }
+    }
+
+    try (ColumnVector timestampColumnVector = ColumnVector.timestampSecondsFromLongs(TIMES_S);
+         ColumnVector tmp = timestampColumnVector.extractDateTimeComponent(DateTimeComponent.MILLISECOND);
+         HostColumnVector result = tmp.copyToHost()) {
+      assertEquals(0, result.getShort(0));
+      assertEquals(0, result.getShort(1));
+      assertEquals(0, result.getShort(2));
+    }
+  }
+
+  @Test
+  public void getExtractMicro() {
+    try (ColumnVector timestampColumnVector = ColumnVector.timestampMicroSecondsFromLongs(TIMES_US)) {
+      assert timestampColumnVector.getType().equals(DType.TIMESTAMP_MICROSECONDS);
+      try (ColumnVector tmp = timestampColumnVector.extractDateTimeComponent(DateTimeComponent.MICROSECOND);
+           HostColumnVector result = tmp.copyToHost()) {
+        assertEquals(297, result.getShort(0));
+        assertEquals(254, result.getShort(1));
+        assertEquals(861, result.getShort(2));
+      }
+    }
+
+    try (ColumnVector timestampColumnVector = ColumnVector.timestampSecondsFromLongs(TIMES_S);
+         ColumnVector tmp = timestampColumnVector.extractDateTimeComponent(DateTimeComponent.MICROSECOND);
+         HostColumnVector result = tmp.copyToHost()) {
+      assertEquals(0, result.getShort(0));
+      assertEquals(0, result.getShort(1));
+      assertEquals(0, result.getShort(2));
+    }
+  }
+
+  @Test
+  public void getExtractNano() {
+    try (ColumnVector timestampColumnVector = ColumnVector.timestampNanoSecondsFromLongs(TIMES_NS)) {
+      assert timestampColumnVector.getType().equals(DType.TIMESTAMP_NANOSECONDS);
+      try (ColumnVector tmp = timestampColumnVector.extractDateTimeComponent(DateTimeComponent.NANOSECOND);
+           HostColumnVector result = tmp.copyToHost()) {
+        assertEquals(531, result.getShort(0));
+        assertEquals(330, result.getShort(1));
+        assertEquals(604, result.getShort(2));
+      }
+    }
+
+    try (ColumnVector timestampColumnVector = ColumnVector.timestampSecondsFromLongs(TIMES_S);
+         ColumnVector tmp = timestampColumnVector.extractDateTimeComponent(DateTimeComponent.NANOSECOND);
+         HostColumnVector result = tmp.copyToHost()) {
+      assertEquals(0, result.getShort(0));
+      assertEquals(0, result.getShort(1));
+      assertEquals(0, result.getShort(2));
+    }
+  }
+
+  @Test
   public void testWeekDay() {
     try (ColumnVector timestampColumnVector = ColumnVector.timestampMilliSecondsFromLongs(TIMES_MS);
          ColumnVector result = timestampColumnVector.weekDay();
@@ -351,6 +414,59 @@ public class TimestampColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  public void testAddMonthsScalar() {
+    long[] EXPECTED = new long[]{
+        -129290327762L,   //'1965-11-26 14:01:12.238' Friday
+        1533384000115L,   //'2018-08-04 12:00:00.115' Saturday
+        1677310332929L,   //'2023-03-25 07:32:12.929' Saturday
+        -129290327762L,   //'1965-12-26 14:01:12.238' Sunday
+        1533384000115L};  //'2018-09-04 12:00:00.115' Tuesday
+    try (ColumnVector timestampColumnVector = ColumnVector.timestampMilliSecondsFromLongs(TIMES_MS);
+         Scalar months = Scalar.fromShort((short)1);
+         ColumnVector result = timestampColumnVector.addCalendricalMonths(months);
+         ColumnVector expected = ColumnVector.timestampMilliSecondsFromLongs(EXPECTED)) {
+      assertColumnsAreEqual(expected, result);
+    }
+  }
+
+  @Test
+  public void testDaysInMonth() {
+    Integer[] DAYS = new Integer[] {
+        0, // Jan 1, 1970
+        31, // Feb 1, 1970
+        59, // Mar 1, 1970
+        90, // Apr 1, 1970
+        120, // May 1, 1970
+        151, // June 1, 1970
+        181, // July 1, 1970
+        212, // Aug 1, 1970
+        243, // Sep 1, 1970
+        273, // OCt 1, 1970
+        304, // Nov 1, 1970
+        334 // Dec 1 1970
+    };
+    short[] EXPECTED = new short[]{
+        31, // Jan 1970
+        28, // Feb 1970
+        31, // Mar 1970
+        30, // Apr 1970
+        31, // May 1970
+        30, // June 1970
+        31, // July 1970
+        31, // Aug 1970
+        30, // Sep 1970
+        31, // Oct 1970
+        30, // Nov 1970
+        31 // Dec 1970
+    };
+    try (ColumnVector timestampColumnVector = ColumnVector.timestampDaysFromBoxedInts(DAYS);
+         ColumnVector result = timestampColumnVector.daysInMonth();
+         ColumnVector expected = ColumnVector.fromShorts(EXPECTED)) {
+      assertColumnsAreEqual(expected, result);
+    }
+  }
+
+  @Test
   public void testIsLeapYear() {
     Boolean[] EXPECTED = new Boolean[]{false, false, false, false, false};
     try (ColumnVector timestampColumnVector = ColumnVector.timestampMilliSecondsFromLongs(TIMES_MS);
@@ -379,6 +495,86 @@ public class TimestampColumnVectorTest extends CudfTestBase {
     try (ColumnVector timestampColumnVector = ColumnVector.timestampSecondsFromLongs(LEAP_TIMES_S);
          ColumnVector result = timestampColumnVector.isLeapYear();
          ColumnVector expected = ColumnVector.fromBoxedBooleans(true, true, false)) {
+      assertColumnsAreEqual(expected, result);
+    }
+  }
+
+  @Test
+  public void testCeilDays() {
+    long[] EXPECTED_NS = new long[]{
+        -131932800000000000L,   //'1965-10-27 00:00:00.000000000'
+        1530748800000000000L,   //'2018-07-05 00:00:00.000000000'
+        1674691200000000000L,   //'2023-01-26 00:00:00.000000000'
+        -131932800000000000L,   //'1965-10-27 00:00:00.000000000'
+        1530748800000000000L};  //'2018-07-05 00:00:00.000000000'
+    try (ColumnVector timestampColumnVector = ColumnVector.timestampNanoSecondsFromLongs(TIMES_NS);
+         ColumnVector result = timestampColumnVector.dateTimeCeil(DateTimeRoundingFrequency.DAY);
+         ColumnVector expected = ColumnVector.timestampNanoSecondsFromLongs(EXPECTED_NS)) {
+      assertColumnsAreEqual(expected, result);
+    }
+    long[] EXPECTED_US = new long[]{
+        -131932800000000L,   //'1965-10-27 00:00:00.000000'
+        1530748800000000L,   //'2018-07-05 00:00:00.000000'
+        1674691200000000L,   //'2023-01-26 00:00:00.000000'
+        -131932800000000L,   //'1965-10-27 00:00:00.000000'
+        1530748800000000L};  //'2018-07-05 00:00:00.000000'
+    try (ColumnVector timestampColumnVector = ColumnVector.timestampMicroSecondsFromLongs(TIMES_US);
+         ColumnVector result = timestampColumnVector.dateTimeCeil(DateTimeRoundingFrequency.DAY);
+         ColumnVector expected = ColumnVector.timestampMicroSecondsFromLongs(EXPECTED_US)) {
+      assertColumnsAreEqual(expected, result);
+    }
+  }
+
+  @Test
+  public void testFloorDays() {
+    long[] EXPECTED_NS = new long[]{
+        -132019200000000000L,   //'1965-10-26 00:00:00.000000000'
+        1530662400000000000L,   //'2018-07-04 00:00:00.000000000'
+        1674604800000000000L,   //'2023-01-25 00:00:00.000000000'
+        -132019200000000000L,   //'1965-10-26 00:00:00.000000000'
+        1530662400000000000L};  //'2018-07-04 00:00:00.000000000'
+    try (ColumnVector timestampColumnVector = ColumnVector.timestampNanoSecondsFromLongs(TIMES_NS);
+         ColumnVector result = timestampColumnVector.dateTimeFloor(DateTimeRoundingFrequency.DAY);
+         ColumnVector expected = ColumnVector.timestampNanoSecondsFromLongs(EXPECTED_NS)) {
+      assertColumnsAreEqual(expected, result);
+    }
+
+    long[] EXPECTED_US = new long[]{
+        -132019200000000L,   //'1965-10-26 00:00:00.000000'
+        1530662400000000L,   //'2018-07-04 00:00:00.000000'
+        1674604800000000L,   //'2023-01-25 00:00:00.000000'
+        -132019200000000L,   //'1965-10-26 00:00:00.000000'
+        1530662400000000L};  //'2018-07-04 00:00:00.000000'
+    try (ColumnVector timestampColumnVector = ColumnVector.timestampMicroSecondsFromLongs(TIMES_US);
+         ColumnVector result = timestampColumnVector.dateTimeFloor(DateTimeRoundingFrequency.DAY);
+         ColumnVector expected = ColumnVector.timestampMicroSecondsFromLongs(EXPECTED_US)) {
+      assertColumnsAreEqual(expected, result);
+    }
+  }
+
+  @Test
+  public void testRoundDays() {
+    long[] EXPECTED_NS = new long[]{
+        -131932800000000000L,   //'1965-10-27 00:00:00.000000000'
+        1530748800000000000L,   //'2018-07-05 00:00:00.000000000'
+        1674604800000000000L,   //'2023-01-25 00:00:00.000000000'
+        -131932800000000000L,   //'1965-10-27 00:00:00.000000000'
+        1530748800000000000L};  //'2018-07-05 00:00:00.000000000'
+    try (ColumnVector timestampColumnVector = ColumnVector.timestampNanoSecondsFromLongs(TIMES_NS);
+         ColumnVector result = timestampColumnVector.dateTimeRound(DateTimeRoundingFrequency.DAY);
+         ColumnVector expected = ColumnVector.timestampNanoSecondsFromLongs(EXPECTED_NS)) {
+      assertColumnsAreEqual(expected, result);
+    }
+
+    long[] EXPECTED_US = new long[]{
+        -131932800000000L,   //'1965-10-27 00:00:00.000000'
+        1530748800000000L,   //'2018-07-05 00:00:00.000000'
+        1674604800000000L,   //'2023-01-25 00:00:00.000000'
+        -131932800000000L,   //'1965-10-27 00:00:00.000000'
+        1530748800000000L};  //'2018-07-05 00:00:00.000000'
+    try (ColumnVector timestampColumnVector = ColumnVector.timestampMicroSecondsFromLongs(TIMES_US);
+         ColumnVector result = timestampColumnVector.dateTimeRound(DateTimeRoundingFrequency.DAY);
+         ColumnVector expected = ColumnVector.timestampMicroSecondsFromLongs(EXPECTED_US)) {
       assertColumnsAreEqual(expected, result);
     }
   }

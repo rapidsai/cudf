@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <cudf/aggregation/host_udf.hpp>
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
@@ -29,11 +30,9 @@
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/groupby.hpp>
 #include <cudf/reduction/detail/histogram.hpp>
-#include <cudf/strings/string_view.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
-#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/traits.hpp>
@@ -100,6 +99,8 @@ namespace {
 struct empty_column_constructor {
   column_view values;
   aggregation const& agg;
+  rmm::cuda_stream_view stream;
+  rmm::device_async_resource_ref mr;
 
   template <typename ValuesType, aggregation::Kind k>
   std::unique_ptr<cudf::column> operator()() const
@@ -109,7 +110,7 @@ struct empty_column_constructor {
 
     if constexpr (k == aggregation::Kind::COLLECT_LIST || k == aggregation::Kind::COLLECT_SET) {
       return make_lists_column(
-        0, make_empty_column(type_to_id<size_type>()), empty_like(values), 0, {});
+        0, make_empty_column(type_to_id<size_type>()), empty_like(values), 0, {}, stream, mr);
     }
 
     if constexpr (k == aggregation::Kind::HISTOGRAM) {
@@ -117,7 +118,9 @@ struct empty_column_constructor {
                                make_empty_column(type_to_id<size_type>()),
                                cudf::reduction::detail::make_empty_histogram_like(values),
                                0,
-                               {});
+                               {},
+                               stream,
+                               mr);
     }
     if constexpr (k == aggregation::Kind::MERGE_HISTOGRAM) { return empty_like(values); }
 
@@ -141,31 +144,44 @@ struct empty_column_constructor {
       return empty_like(values);
     }
 
+    if constexpr (k == aggregation::Kind::HOST_UDF) {
+      auto const& udf_base_ptr =
+        dynamic_cast<cudf::detail::host_udf_aggregation const&>(agg).udf_ptr;
+      auto const udf_ptr = dynamic_cast<groupby_host_udf const*>(udf_base_ptr.get());
+      CUDF_EXPECTS(udf_ptr != nullptr, "Invalid HOST_UDF instance for groupby aggregation.");
+      return udf_ptr->get_empty_output(stream, mr);
+    }
+
     return make_empty_column(target_type(values.type(), k));
   }
 };
 
 /// Make an empty table with appropriate types for requested aggs
 template <typename RequestType>
-auto empty_results(host_span<RequestType const> requests)
+auto empty_results(host_span<RequestType const> requests,
+                   rmm::cuda_stream_view stream,
+                   rmm::device_async_resource_ref mr)
 {
   std::vector<aggregation_result> empty_results;
 
-  std::transform(
-    requests.begin(), requests.end(), std::back_inserter(empty_results), [](auto const& request) {
-      std::vector<std::unique_ptr<column>> results;
+  std::transform(requests.begin(),
+                 requests.end(),
+                 std::back_inserter(empty_results),
+                 [stream, mr](auto const& request) {
+                   std::vector<std::unique_ptr<column>> results;
 
-      std::transform(
-        request.aggregations.begin(),
-        request.aggregations.end(),
-        std::back_inserter(results),
-        [&request](auto const& agg) {
-          return cudf::detail::dispatch_type_and_aggregation(
-            request.values.type(), agg->kind, empty_column_constructor{request.values, *agg});
-        });
+                   std::transform(request.aggregations.begin(),
+                                  request.aggregations.end(),
+                                  std::back_inserter(results),
+                                  [&request, stream, mr](auto const& agg) {
+                                    return cudf::detail::dispatch_type_and_aggregation(
+                                      request.values.type(),
+                                      agg->kind,
+                                      empty_column_constructor{request.values, *agg, stream, mr});
+                                  });
 
-      return aggregation_result{std::move(results)};
-    });
+                   return aggregation_result{std::move(results)};
+                 });
 
   return empty_results;
 }
@@ -194,13 +210,6 @@ void verify_valid_requests(host_span<RequestType const> requests)
 
 // Compute aggregation requests
 std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::aggregate(
-  host_span<aggregation_request const> requests, rmm::device_async_resource_ref mr)
-{
-  return aggregate(requests, cudf::get_default_stream(), mr);
-}
-
-// Compute aggregation requests
-std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::aggregate(
   host_span<aggregation_request const> requests,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
@@ -214,14 +223,16 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::aggr
 
   verify_valid_requests(requests);
 
-  if (_keys.num_rows() == 0) { return {empty_like(_keys), empty_results(requests)}; }
+  if (_keys.num_rows() == 0) { return {empty_like(_keys), empty_results(requests, stream, mr)}; }
 
   return dispatch_aggregation(requests, stream, mr);
 }
 
 // Compute scan requests
 std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::scan(
-  host_span<scan_request const> requests, rmm::device_async_resource_ref mr)
+  host_span<scan_request const> requests,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   CUDF_EXPECTS(
@@ -232,19 +243,22 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::scan
 
   verify_valid_requests(requests);
 
-  if (_keys.num_rows() == 0) { return std::pair(empty_like(_keys), empty_results(requests)); }
+  if (_keys.num_rows() == 0) {
+    return std::pair(empty_like(_keys), empty_results(requests, stream, mr));
+  }
 
-  return sort_scan(requests, cudf::get_default_stream(), mr);
+  return sort_scan(requests, stream, mr);
 }
 
-groupby::groups groupby::get_groups(table_view values, rmm::device_async_resource_ref mr)
+groupby::groups groupby::get_groups(table_view values,
+                                    rmm::cuda_stream_view stream,
+                                    rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  auto const stream = cudf::get_default_stream();
   auto grouped_keys = helper().sorted_keys(stream, mr);
 
   auto const& group_offsets       = helper().group_offsets(stream);
-  auto const group_offsets_vector = cudf::detail::make_std_vector_sync(group_offsets, stream);
+  auto const group_offsets_vector = cudf::detail::make_std_vector(group_offsets, stream);
 
   if (not values.is_empty()) {
     auto grouped_values = cudf::detail::gather(values,
@@ -263,6 +277,7 @@ groupby::groups groupby::get_groups(table_view values, rmm::device_async_resourc
 std::pair<std::unique_ptr<table>, std::unique_ptr<table>> groupby::replace_nulls(
   table_view const& values,
   host_span<cudf::replace_policy const> replace_policies,
+  rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
@@ -272,7 +287,6 @@ std::pair<std::unique_ptr<table>, std::unique_ptr<table>> groupby::replace_nulls
                "Size mismatch between num_columns and replace_policies.");
 
   if (values.is_empty()) { return std::pair(empty_like(_keys), empty_like(values)); }
-  auto const stream = cudf::get_default_stream();
 
   auto const& group_labels = helper().group_labels(stream);
   std::vector<std::unique_ptr<column>> results;
@@ -307,6 +321,7 @@ std::pair<std::unique_ptr<table>, std::unique_ptr<table>> groupby::shift(
   table_view const& values,
   host_span<size_type const> offsets,
   std::vector<std::reference_wrapper<scalar const>> const& fill_values,
+  rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
@@ -321,7 +336,6 @@ std::pair<std::unique_ptr<table>, std::unique_ptr<table>> groupby::shift(
                           }),
                "values and fill_value should have the same type.",
                cudf::data_type_error);
-  auto stream = cudf::get_default_stream();
   std::vector<std::unique_ptr<column>> results;
   auto const& group_offsets = helper().group_offsets(stream);
   std::transform(

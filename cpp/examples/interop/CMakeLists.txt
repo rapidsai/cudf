@@ -1,11 +1,10 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
-cmake_minimum_required(VERSION 3.26.4)
+cmake_minimum_required(VERSION 3.30.4 FATAL_ERROR)
 
 include(../set_cuda_architecture.cmake)
 
 rapids_cuda_init_architectures(interop_example)
-rapids_cuda_set_architectures(RAPIDS)
 
 project(
   interop_example
@@ -14,6 +13,9 @@ project(
 )
 
 include(../fetch_dependencies.cmake)
+
+include(rapids-cmake)
+rapids_cmake_build_type("Release")
 
 # The Arrow CMake is currently broken if the build type is not set
 set(CMAKE_BUILD_TYPE Release)

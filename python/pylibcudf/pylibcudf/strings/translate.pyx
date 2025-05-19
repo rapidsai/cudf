@@ -14,6 +14,7 @@ from cython.operator import dereference
 from pylibcudf.libcudf.strings.translate import \
     filter_type as FilterType  # no-cython-lint
 
+__all__ = ["FilterType", "filter_characters", "translate"]
 
 cdef vector[pair[char_utf8, char_utf8]] _table_to_c_table(dict table):
     """
@@ -62,11 +63,9 @@ cpdef Column translate(Column input, dict chars_table):
     )
 
     with nogil:
-        c_result = move(
-            cpp_translate.translate(
-                input.view(),
-                c_chars_table
-            )
+        c_result = cpp_translate.translate(
+            input.view(),
+            c_chars_table
         )
     return Column.from_libcudf(move(c_result))
 
@@ -111,12 +110,10 @@ cpdef Column filter_characters(
     )
 
     with nogil:
-        c_result = move(
-            cpp_translate.filter_characters(
-                input.view(),
-                c_characters_to_filter,
-                keep_characters,
-                dereference(c_replacement),
-            )
+        c_result = cpp_translate.filter_characters(
+            input.view(),
+            c_characters_to_filter,
+            keep_characters,
+            dereference(c_replacement),
         )
     return Column.from_libcudf(move(c_result))

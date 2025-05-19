@@ -1,12 +1,10 @@
-# Copyright (c) 2023-2024, NVIDIA CORPORATION.
+# Copyright (c) 2023-2025, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
+import pylibcudf as plc
+
 import cudf
-from cudf._lib.nvtext.tokenize import (
-    TokenizeVocabulary as cpp_tokenize_vocabulary,
-    tokenize_with_vocabulary as cpp_tokenize_with_vocabulary,
-)
 
 
 class TokenizeVocabulary:
@@ -19,8 +17,10 @@ class TokenizeVocabulary:
         Strings column of vocabulary terms
     """
 
-    def __init__(self, vocabulary: "cudf.Series"):
-        self.vocabulary = cpp_tokenize_vocabulary(vocabulary._column)
+    def __init__(self, vocabulary: cudf.Series) -> None:
+        self.vocabulary = plc.nvtext.tokenize.TokenizeVocabulary(
+            vocabulary._column.to_pylibcudf(mode="read")
+        )
 
     def tokenize(
         self, text, delimiter: str = "", default_id: int = -1
@@ -42,9 +42,8 @@ class TokenizeVocabulary:
         """
         if delimiter is None:
             delimiter = ""
-        delim = cudf.Scalar(delimiter, dtype="str")
-        result = cpp_tokenize_with_vocabulary(
-            text._column, self.vocabulary, delim, default_id
+        result = text._column.tokenize_with_vocabulary(
+            self.vocabulary, delimiter, default_id
         )
 
         return cudf.Series._from_column(result)

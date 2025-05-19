@@ -17,11 +17,8 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
-#include <cudf/detail/iterator.cuh>
-#include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/hashing.hpp>
 
 using NumericTypesNoBools =

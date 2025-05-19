@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,8 +23,6 @@
 #include <cudf/utilities/traits.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-
-#include <thrust/pair.h>
 
 namespace CUDF_EXPORT cudf {
 /**
@@ -379,6 +377,26 @@ std::unique_ptr<column> make_strings_column(
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
+ * @brief Construct a batch of STRING type columns given an array of device spans of pointer/size
+ * pairs.
+ *
+ * This function has input/output expectation similar to the `make_strings_column()` API that
+ * accepts only one device span of pointer/size pairs. The difference is that, this is designed to
+ * create many strings columns at once with minimal overhead of multiple kernel launches and
+ * stream synchronizations.
+ *
+ * @param input Array of device spans of pointer/size pairs, where each pointer is a device memory
+ *        address or `nullptr` (indicating a null string), and size is string length (in bytes)
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used for memory allocation of the output columns
+ * @return Array of constructed strings columns
+ */
+std::vector<std::unique_ptr<column>> make_strings_column_batch(
+  std::vector<cudf::device_span<thrust::pair<char const*, size_type> const>> const& input,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
+/**
  * @brief Construct a STRING type column given a device span of string_view.
  *
  * The total number of char bytes must not exceed the maximum size of size_type.
@@ -495,6 +513,21 @@ std::unique_ptr<cudf::column> make_lists_column(
   std::unique_ptr<column> child_column,
   size_type null_count,
   rmm::device_buffer&& null_mask,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
+/**
+ * @brief Create an empty LIST column
+ *
+ * A list column requires a child type and so cannot be created with `make_empty_column`.
+ *
+ * @param child_type The type used for the empty child column
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return New empty lists column
+ */
+std::unique_ptr<column> make_empty_lists_column(
+  data_type child_type,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 

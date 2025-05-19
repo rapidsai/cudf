@@ -32,11 +32,6 @@ static void bench_extract(nvbench::state& state)
   auto const num_rows  = static_cast<cudf::size_type>(state.get_int64("num_rows"));
   auto const row_width = static_cast<cudf::size_type>(state.get_int64("row_width"));
 
-  if (static_cast<std::size_t>(num_rows) * static_cast<std::size_t>(row_width) >=
-      static_cast<std::size_t>(std::numeric_limits<cudf::size_type>::max())) {
-    state.skip("Skip benchmarks greater than size_type limit");
-  }
-
   auto groups = static_cast<cudf::size_type>(state.get_int64("groups"));
 
   std::default_random_engine generator;
@@ -79,6 +74,6 @@ static void bench_extract(nvbench::state& state)
 
 NVBENCH_BENCH(bench_extract)
   .set_name("extract")
-  .add_int64_axis("row_width", {32, 64, 128, 256, 512, 1024, 2048})
-  .add_int64_axis("num_rows", {4096, 32768, 262144, 2097152, 16777216})
+  .add_int64_axis("row_width", {32, 64, 128, 256})
+  .add_int64_axis("num_rows", {32768, 262144, 2097152})
   .add_int64_axis("groups", {1, 2, 4});

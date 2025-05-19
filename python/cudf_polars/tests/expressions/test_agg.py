@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -96,7 +96,7 @@ def test_bool_agg(agg, request):
     assert_gpu_result_equal(q, check_exact=False)
 
 
-@pytest.mark.parametrize("cum_agg", expr.UnaryFunction._supported_cum_aggs)
+@pytest.mark.parametrize("cum_agg", sorted(expr.UnaryFunction._supported_cum_aggs))
 def test_cum_agg_reverse_unsupported(cum_agg):
     df = pl.LazyFrame({"a": [1, 2, 3]})
     expr = getattr(pl.col("a"), cum_agg)(reverse=True)
@@ -125,6 +125,18 @@ def test_quantile_invalid_q(df):
     assert_ir_translation_raises(q, NotImplementedError)
 
 
+def test_quantile_equiprobable_unsupported(df):
+    expr = pl.col("a").quantile(0.5, interpolation="equiprobable")
+    q = df.select(expr)
+    assert_ir_translation_raises(q, NotImplementedError)
+
+
+def test_quantile_duration_unsupported():
+    df = pl.LazyFrame({"a": pl.Series([1, 2, 3, 4], dtype=pl.Duration("ns"))})
+    q = df.select(pl.col("a").quantile(0.5))
+    assert_ir_translation_raises(q, NotImplementedError)
+
+
 @pytest.mark.parametrize(
     "op", [pl.Expr.min, pl.Expr.nan_min, pl.Expr.max, pl.Expr.nan_max]
 )
@@ -148,3 +160,23 @@ def test_agg_singleton(op):
     q = df.select(op(pl.col("a")))
 
     assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize("data", [[], [None], [None, 2, 3, None]])
+def test_sum_empty_zero(data):
+    df = pl.LazyFrame({"a": pl.Series(values=data, dtype=pl.Int32())})
+    q = df.select(pl.col("a").sum())
+    assert_gpu_result_equal(q)
+
+
+def test_implode_agg_unsupported():
+    df = pl.LazyFrame(
+        {
+            "a": pl.Series([1, 2, 3], dtype=pl.Int64()),
+            "b": pl.Series([3, 4, 2], dtype=pl.Int64()),
+            "c": pl.Series([1, None, 3], dtype=pl.Int64()),
+            "d": pl.Series([10, None, 11], dtype=pl.Int64()),
+        }
+    )
+    q = df.select(pl.col("b").implode())
+    assert_ir_translation_raises(q, NotImplementedError)

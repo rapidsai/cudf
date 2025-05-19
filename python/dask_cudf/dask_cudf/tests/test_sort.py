@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2024, NVIDIA CORPORATION.
+# Copyright (c) 2019-2025, NVIDIA CORPORATION.
 
 import cupy as cp
 import numpy as np
@@ -10,7 +10,6 @@ from dask import dataframe as dd
 import cudf
 
 import dask_cudf
-from dask_cudf.tests.utils import xfail_dask_expr
 
 
 @pytest.mark.parametrize("ascending", [True, False])
@@ -28,7 +27,7 @@ from dask_cudf.tests.utils import xfail_dask_expr
 @pytest.mark.parametrize("nelem", [10, 500])
 @pytest.mark.parametrize("nparts", [1, 10])
 def test_sort_values(nelem, nparts, by, ascending):
-    np.random.seed(0)
+    _ = np.random.default_rng(seed=0)
     df = cudf.DataFrame()
     df["a"] = np.ascontiguousarray(np.arange(nelem)[::-1])
     df["b"] = np.arange(100, nelem + 100)
@@ -67,7 +66,6 @@ def test_sort_repartition():
     dd.assert_eq(len(new_ddf), len(ddf))
 
 
-@xfail_dask_expr("missing null support", lt_version="2024.5.1")
 @pytest.mark.parametrize("na_position", ["first", "last"])
 @pytest.mark.parametrize("ascending", [True, False])
 @pytest.mark.parametrize("by", ["a", "b", ["a", "b"]])
@@ -82,7 +80,7 @@ def test_sort_repartition():
     ],
 )
 def test_sort_values_with_nulls(data, by, ascending, na_position):
-    np.random.seed(0)
+    _ = np.random.default_rng(seed=0)
     cp.random.seed(0)
     df = cudf.DataFrame(data)
     ddf = dd.from_pandas(df, npartitions=5)

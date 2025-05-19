@@ -52,4 +52,13 @@ def array_interface(self: _FastSlowProxy):
 
 
 def custom_iter(self: _FastSlowProxy):
-    return iter(self._fsproxy_slow)
+    """
+    Custom iter method to handle the case where only the slow
+    object's iter method is used.
+    """
+    # NOTE: Do not remove this method. This is required to avoid
+    # falling back to GPU for iter method.
+    return _maybe_wrap_result(
+        iter(self._fsproxy_slow),
+        None,  # type: ignore
+    )

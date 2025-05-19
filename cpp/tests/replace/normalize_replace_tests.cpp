@@ -19,7 +19,6 @@
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/testing_main.hpp>
 
-#include <cudf/column/column_factories.hpp>
 #include <cudf/replace.hpp>
 
 // This is the main test fixture

@@ -1,15 +1,11 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
-from typing import Union, overload
-
-from typing_extensions import Literal
+from typing import Literal, Union, overload
 
 import cudf
-import cudf.core.column
-import cudf.core.column_accessor
-from cudf.utils.utils import NotIterable
+from cudf.core.mixins import NotIterable
 
 ParentType = Union["cudf.Series", "cudf.core.index.Index"]
 
@@ -95,3 +91,9 @@ class ColumnMethods(NotIterable):
                 return cudf.Index._from_column(new_col, name=self._parent.name)
             else:
                 return self._parent._mimic_inplace(new_col, inplace=False)
+
+    def __setattr__(self, key, value):
+        if key in {"_parent", "_column"}:
+            super().__setattr__(key, value)
+        else:
+            raise AttributeError(f"You cannot add any new attribute '{key}'")

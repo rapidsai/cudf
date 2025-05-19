@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,11 +19,6 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
-
-#include <rmm/exec_policy.hpp>
-
-#include <thrust/for_each.h>
-#include <thrust/iterator/counting_iterator.h>
 
 #include <nanoarrow/nanoarrow.h>
 
@@ -46,8 +41,10 @@ data_type arrow_to_cudf_type(ArrowSchemaView const* arrow_view)
     case NANOARROW_TYPE_DOUBLE: return data_type(type_id::FLOAT64);
     case NANOARROW_TYPE_DATE32: return data_type(type_id::TIMESTAMP_DAYS);
     case NANOARROW_TYPE_STRING:
+    case NANOARROW_TYPE_STRING_VIEW:
     case NANOARROW_TYPE_LARGE_STRING: return data_type(type_id::STRING);
-    case NANOARROW_TYPE_LIST: return data_type(type_id::LIST);
+    case NANOARROW_TYPE_LIST:
+    case NANOARROW_TYPE_LARGE_LIST: return data_type(type_id::LIST);
     case NANOARROW_TYPE_DICTIONARY: return data_type(type_id::DICTIONARY32);
     case NANOARROW_TYPE_STRUCT: return data_type(type_id::STRUCT);
     case NANOARROW_TYPE_TIMESTAMP: {
@@ -68,6 +65,8 @@ data_type arrow_to_cudf_type(ArrowSchemaView const* arrow_view)
         default: CUDF_FAIL("Unsupported duration unit in arrow", cudf::data_type_error);
       }
     }
+    case NANOARROW_TYPE_DECIMAL32: return data_type{type_id::DECIMAL32, -arrow_view->decimal_scale};
+    case NANOARROW_TYPE_DECIMAL64: return data_type{type_id::DECIMAL64, -arrow_view->decimal_scale};
     case NANOARROW_TYPE_DECIMAL128:
       return data_type{type_id::DECIMAL128, -arrow_view->decimal_scale};
     default: CUDF_FAIL("Unsupported type_id conversion to cudf", cudf::data_type_error);
@@ -89,6 +88,8 @@ ArrowType id_to_arrow_type(cudf::type_id id)
     case cudf::type_id::FLOAT32: return NANOARROW_TYPE_FLOAT;
     case cudf::type_id::FLOAT64: return NANOARROW_TYPE_DOUBLE;
     case cudf::type_id::TIMESTAMP_DAYS: return NANOARROW_TYPE_DATE32;
+    case cudf::type_id::DECIMAL32: return NANOARROW_TYPE_DECIMAL32;
+    case cudf::type_id::DECIMAL64: return NANOARROW_TYPE_DECIMAL64;
     case cudf::type_id::DECIMAL128: return NANOARROW_TYPE_DECIMAL128;
     default: CUDF_FAIL("Unsupported type_id conversion to arrow type", cudf::data_type_error);
   }

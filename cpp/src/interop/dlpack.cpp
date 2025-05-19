@@ -16,11 +16,8 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/interop.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/lists/list_view.hpp>
-#include <cudf/structs/struct_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
-#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_checks.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
@@ -118,8 +115,8 @@ DLDataType data_type_to_DLDataType(data_type type)
 
 // Context object to own memory allocated for DLManagedTensor
 struct dltensor_context {
-  int64_t shape[2];    // NOLINT
-  int64_t strides[2];  // NOLINT
+  int64_t shape[2]{};    // NOLINT
+  int64_t strides[2]{};  // NOLINT
   rmm::device_buffer buffer;
 
   static void deleter(DLManagedTensor* arg)
@@ -300,16 +297,19 @@ DLManagedTensor* to_dlpack(table_view const& input,
 }  // namespace detail
 
 std::unique_ptr<table> from_dlpack(DLManagedTensor const* managed_tensor,
+                                   rmm::cuda_stream_view stream,
                                    rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::from_dlpack(managed_tensor, cudf::get_default_stream(), mr);
+  return detail::from_dlpack(managed_tensor, stream, mr);
 }
 
-DLManagedTensor* to_dlpack(table_view const& input, rmm::device_async_resource_ref mr)
+DLManagedTensor* to_dlpack(table_view const& input,
+                           rmm::cuda_stream_view stream,
+                           rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::to_dlpack(input, cudf::get_default_stream(), mr);
+  return detail::to_dlpack(input, stream, mr);
 }
 
 }  // namespace cudf

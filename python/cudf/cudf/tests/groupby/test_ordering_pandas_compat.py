@@ -14,9 +14,10 @@ def with_nulls(request):
 @pytest.mark.parametrize("nrows", [30, 300, 300_000])
 @pytest.mark.parametrize("nkeys", [1, 2, 4])
 def test_groupby_maintain_order_random(nrows, nkeys, with_nulls):
+    rng = np.random.default_rng(seed=0)
     key_names = [f"key{key}" for key in range(nkeys)]
-    key_values = [np.random.randint(100, size=nrows) for _ in key_names]
-    value = np.random.randint(-100, 100, size=nrows)
+    key_values = [rng.integers(100, size=nrows) for _ in key_names]
+    value = rng.integers(-100, 100, size=nrows)
     df = cudf.DataFrame(dict(zip(key_names, key_values), value=value))
     if with_nulls:
         for key in key_names:

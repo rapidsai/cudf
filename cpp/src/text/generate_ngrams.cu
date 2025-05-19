@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,7 +32,7 @@
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
-#include <nvtext/detail/generate_ngrams.hpp>
+#include <nvtext/generate_ngrams.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
@@ -40,6 +40,7 @@
 #include <cooperative_groups.h>
 #include <cooperative_groups/reduce.h>
 #include <cuda/functional>
+#include <cuda/std/iterator>
 #include <thrust/copy.h>
 #include <thrust/functional.h>
 #include <thrust/iterator/counting_iterator.h>
@@ -315,6 +316,7 @@ namespace {
  */
 CUDF_KERNEL void character_ngram_hash_kernel(cudf::column_device_view const d_strings,
                                              cudf::size_type ngrams,
+                                             uint32_t seed,
                                              cudf::size_type const* d_ngram_offsets,
                                              cudf::hash_value_type* d_results)
 {
@@ -332,7 +334,7 @@ CUDF_KERNEL void character_ngram_hash_kernel(cudf::column_device_view const d_st
   __shared__ cudf::hash_value_type hvs[block_size];  // temp store for hash values
 
   auto const ngram_offset = d_ngram_offsets[str_idx];
-  auto const hasher       = cudf::hashing::detail::MurmurHash3_x86_32<cudf::string_view>{0};
+  auto const hasher       = cudf::hashing::detail::MurmurHash3_x86_32<cudf::string_view>{seed};
 
   auto const end        = d_str.data() + d_str.size_bytes();
   auto const warp_count = (d_str.size_bytes() / cudf::detail::warp_size) + 1;
@@ -345,7 +347,7 @@ CUDF_KERNEL void character_ngram_hash_kernel(cudf::column_device_view const d_st
     if (itr < end && cudf::strings::detail::is_begin_utf8_char(*itr)) {
       // resolve ngram substring
       auto const sub_str =
-        cudf::string_view(itr, static_cast<cudf::size_type>(thrust::distance(itr, end)));
+        cudf::string_view(itr, static_cast<cudf::size_type>(cuda::std::distance(itr, end)));
       auto const [bytes, left] =
         cudf::strings::detail::bytes_to_character_position(sub_str, ngrams);
       if (left == 0) { hash = hasher(cudf::string_view(itr, bytes)); }
@@ -368,6 +370,7 @@ CUDF_KERNEL void character_ngram_hash_kernel(cudf::column_device_view const d_st
 
 std::unique_ptr<cudf::column> hash_character_ngrams(cudf::strings_column_view const& input,
                                                     cudf::size_type ngrams,
+                                                    uint32_t seed,
                                                     rmm::cuda_stream_view stream,
                                                     rmm::device_async_resource_ref mr)
 {
@@ -400,7 +403,7 @@ std::unique_ptr<cudf::column> hash_character_ngrams(cudf::strings_column_view co
   auto d_hashes = hashes->mutable_view().data<cudf::hash_value_type>();
 
   character_ngram_hash_kernel<<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
-    *d_strings, ngrams, d_offsets, d_hashes);
+    *d_strings, ngrams, seed, d_offsets, d_hashes);
 
   return make_lists_column(
     input.size(), std::move(offsets), std::move(hashes), 0, rmm::device_buffer{}, stream, mr);
@@ -419,11 +422,12 @@ std::unique_ptr<cudf::column> generate_character_ngrams(cudf::strings_column_vie
 
 std::unique_ptr<cudf::column> hash_character_ngrams(cudf::strings_column_view const& strings,
                                                     cudf::size_type ngrams,
+                                                    uint32_t seed,
                                                     rmm::cuda_stream_view stream,
                                                     rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::hash_character_ngrams(strings, ngrams, stream, mr);
+  return detail::hash_character_ngrams(strings, ngrams, seed, stream, mr);
 }
 
 }  // namespace nvtext

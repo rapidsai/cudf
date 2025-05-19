@@ -36,6 +36,23 @@ from .table cimport Table
 from .utils cimport _as_vector
 
 
+__all__ = [
+    "MaskAllocationPolicy",
+    "OutOfBoundsPolicy",
+    "allocate_like",
+    "boolean_mask_scatter",
+    "copy_if_else",
+    "copy_range",
+    "copy_range_in_place",
+    "empty_like",
+    "gather",
+    "get_element",
+    "scatter",
+    "shift",
+    "slice",
+    "split",
+]
+
 cpdef Table gather(
     Table source_table,
     Column gather_map,
@@ -67,13 +84,12 @@ cpdef Table gather(
     """
     cdef unique_ptr[table] c_result
     with nogil:
-        c_result = move(
-            cpp_copying.gather(
-                source_table.view(),
-                gather_map.view(),
-                bounds_policy
-            )
+        c_result = cpp_copying.gather(
+            source_table.view(),
+            gather_map.view(),
+            bounds_policy
         )
+
     return Table.from_libcudf(move(c_result))
 
 
@@ -121,22 +137,18 @@ cpdef Table scatter(
     cdef vector[reference_wrapper[const scalar]] source_scalars
     if TableOrListOfScalars is Table:
         with nogil:
-            c_result = move(
-                cpp_copying.scatter(
-                    source.view(),
-                    scatter_map.view(),
-                    target_table.view(),
-                )
+            c_result = cpp_copying.scatter(
+                source.view(),
+                scatter_map.view(),
+                target_table.view(),
             )
     else:
         source_scalars = _as_vector(source)
         with nogil:
-            c_result = move(
-                cpp_copying.scatter(
-                    source_scalars,
-                    scatter_map.view(),
-                    target_table.view(),
-                )
+            c_result = cpp_copying.scatter(
+                source_scalars,
+                scatter_map.view(),
+                target_table.view(),
             )
     return Table.from_libcudf(move(c_result))
 
@@ -160,11 +172,11 @@ cpdef ColumnOrTable empty_like(ColumnOrTable input):
     cdef unique_ptr[column] c_col_result
     if ColumnOrTable is Column:
         with nogil:
-            c_col_result = move(cpp_copying.empty_like(input.view()))
+            c_col_result = cpp_copying.empty_like(input.view())
         return Column.from_libcudf(move(c_col_result))
     else:
         with nogil:
-            c_tbl_result = move(cpp_copying.empty_like(input.view()))
+            c_tbl_result = cpp_copying.empty_like(input.view())
         return Table.from_libcudf(move(c_tbl_result))
 
 
@@ -195,13 +207,11 @@ cpdef Column allocate_like(
     cdef size_type c_size = size if size is not None else input_column.size()
 
     with nogil:
-        c_result = move(
-            cpp_copying.allocate_like(
+        c_result = cpp_copying.allocate_like(
                 input_column.view(),
                 c_size,
                 policy,
             )
-        )
 
     return Column.from_libcudf(move(c_result))
 
@@ -298,12 +308,12 @@ cpdef Column copy_range(
     cdef unique_ptr[column] c_result
 
     with nogil:
-        c_result = move(cpp_copying.copy_range(
+        c_result = cpp_copying.copy_range(
             input_column.view(),
             target_column.view(),
             input_begin,
             input_end,
-            target_begin)
+            target_begin
         )
 
     return Column.from_libcudf(move(c_result))
@@ -337,13 +347,11 @@ cpdef Column shift(Column input, size_type offset, Scalar fill_value):
     """
     cdef unique_ptr[column] c_result
     with nogil:
-        c_result = move(
-            cpp_copying.shift(
+        c_result = cpp_copying.shift(
                 input.view(),
                 offset,
                 dereference(fill_value.c_obj)
             )
-        )
     return Column.from_libcudf(move(c_result))
 
 
@@ -378,7 +386,7 @@ cpdef list slice(ColumnOrTable input, list indices):
     cdef int i
     if ColumnOrTable is Column:
         with nogil:
-            c_col_result = move(cpp_copying.slice(input.view(), c_indices))
+            c_col_result = cpp_copying.slice(input.view(), c_indices)
 
         return [
             Column.from_column_view(c_col_result[i], input)
@@ -386,7 +394,7 @@ cpdef list slice(ColumnOrTable input, list indices):
         ]
     else:
         with nogil:
-            c_tbl_result = move(cpp_copying.slice(input.view(), c_indices))
+            c_tbl_result = cpp_copying.slice(input.view(), c_indices)
 
         return [
             Table.from_table_view(c_tbl_result[i], input)
@@ -418,7 +426,7 @@ cpdef list split(ColumnOrTable input, list splits):
 
     if ColumnOrTable is Column:
         with nogil:
-            c_col_result = move(cpp_copying.split(input.view(), c_splits))
+            c_col_result = cpp_copying.split(input.view(), c_splits)
 
         return [
             Column.from_column_view(c_col_result[i], input)
@@ -426,7 +434,7 @@ cpdef list split(ColumnOrTable input, list splits):
         ]
     else:
         with nogil:
-            c_tbl_result = move(cpp_copying.split(input.view(), c_splits))
+            c_tbl_result = cpp_copying.split(input.view(), c_splits)
 
         return [
             Table.from_table_view(c_tbl_result[i], input)
@@ -472,29 +480,25 @@ cpdef Column copy_if_else(
 
     if LeftCopyIfElseOperand is Column and RightCopyIfElseOperand is Column:
         with nogil:
-            result = move(
-                cpp_copying.copy_if_else(lhs.view(), rhs.view(), boolean_mask.view())
+            result = cpp_copying.copy_if_else(
+                lhs.view(),
+                rhs.view(),
+                boolean_mask.view()
             )
     elif LeftCopyIfElseOperand is Column and RightCopyIfElseOperand is Scalar:
         with nogil:
-            result = move(
-                cpp_copying.copy_if_else(
-                    lhs.view(), dereference(rhs.c_obj), boolean_mask.view()
-                )
+            result = cpp_copying.copy_if_else(
+                lhs.view(), dereference(rhs.c_obj), boolean_mask.view()
             )
     elif LeftCopyIfElseOperand is Scalar and RightCopyIfElseOperand is Column:
         with nogil:
-            result = move(
-                cpp_copying.copy_if_else(
-                    dereference(lhs.c_obj), rhs.view(), boolean_mask.view()
-                )
+            result = cpp_copying.copy_if_else(
+                dereference(lhs.c_obj), rhs.view(), boolean_mask.view()
             )
     else:
         with nogil:
-            result = move(
-                cpp_copying.copy_if_else(
-                    dereference(lhs.c_obj), dereference(rhs.c_obj), boolean_mask.view()
-                )
+            result = cpp_copying.copy_if_else(
+                dereference(lhs.c_obj), dereference(rhs.c_obj), boolean_mask.view()
             )
 
     return Column.from_libcudf(move(result))
@@ -541,22 +545,18 @@ cpdef Table boolean_mask_scatter(
 
     if TableOrListOfScalars is Table:
         with nogil:
-            result = move(
-                cpp_copying.boolean_mask_scatter(
-                    input.view(),
-                    target.view(),
-                    boolean_mask.view()
-                )
+            result = cpp_copying.boolean_mask_scatter(
+                input.view(),
+                target.view(),
+                boolean_mask.view()
             )
     else:
         source_scalars = _as_vector(input)
         with nogil:
-            result = move(
-                cpp_copying.boolean_mask_scatter(
-                    source_scalars,
-                    target.view(),
-                    boolean_mask.view(),
-                )
+            result = cpp_copying.boolean_mask_scatter(
+                source_scalars,
+                target.view(),
+                boolean_mask.view(),
             )
 
     return Table.from_libcudf(move(result))
@@ -586,8 +586,6 @@ cpdef Scalar get_element(Column input_column, size_type index):
     """
     cdef unique_ptr[scalar] c_output
     with nogil:
-        c_output = move(
-            cpp_copying.get_element(input_column.view(), index)
-        )
+        c_output = cpp_copying.get_element(input_column.view(), index)
 
     return Scalar.from_libcudf(move(c_output))

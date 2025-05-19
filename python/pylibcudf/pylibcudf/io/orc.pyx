@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 from libcpp cimport bool
 from libcpp.string cimport string
 from libcpp.utility cimport move
@@ -6,11 +6,16 @@ from libcpp.vector cimport vector
 
 import datetime
 
-from pylibcudf.io.types cimport SourceInfo, TableWithMetadata
+from rmm.pylibrmm.stream cimport Stream
+
+from pylibcudf.io.types cimport SourceInfo, TableWithMetadata, SinkInfo
+
 from pylibcudf.libcudf.io.orc cimport (
     orc_reader_options,
     read_orc as cpp_read_orc,
+    write_orc as cpp_write_orc,
 )
+
 from pylibcudf.libcudf.io.orc_metadata cimport (
     binary_statistics,
     bucket_statistics,
@@ -25,11 +30,42 @@ from pylibcudf.libcudf.io.orc_metadata cimport (
     string_statistics,
     timestamp_statistics,
 )
-from pylibcudf.libcudf.io.types cimport table_with_metadata
+
+from pylibcudf.libcudf.io.types cimport (
+    table_with_metadata,
+    compression_type,
+    statistics_freq,
+)
+
+from pylibcudf.libcudf.io.orc cimport (
+    orc_chunked_writer,
+    orc_writer_options,
+    chunked_orc_writer_options,
+)
+
 from pylibcudf.libcudf.types cimport size_type
+
 from pylibcudf.types cimport DataType
+
 from pylibcudf.variant cimport get_if, holds_alternative
 
+from pylibcudf.utils cimport _get_stream
+
+
+__all__ = [
+    "OrcColumnStatistics",
+    "ParsedOrcStatistics",
+    "read_orc",
+    "read_parsed_orc_statistics",
+    "write_orc",
+    "OrcReaderOptions",
+    "OrcReaderOptionsBuilder",
+    "OrcWriterOptions",
+    "OrcWriterOptionsBuilder",
+    "OrcChunkedWriter",
+    "ChunkedOrcWriterOptions",
+    "ChunkedOrcWriterOptionsBuilder",
+]
 
 cdef class OrcColumnStatistics:
     def __init__(self):
@@ -38,6 +74,8 @@ cdef class OrcColumnStatistics:
             "being constructed in Cython from a preexisting libcudf object, "
             "use `OrcColumnStatistics.from_libcudf` instead."
         )
+
+    __hash__ = None
 
     @property
     def number_of_values(self):
@@ -183,6 +221,8 @@ cdef class OrcColumnStatistics:
 
 cdef class ParsedOrcStatistics:
 
+    __hash__ = None
+
     @property
     def column_names(self):
         return [name.decode() for name in self.c_obj.column_names]
@@ -211,86 +251,195 @@ cdef class ParsedOrcStatistics:
         return out
 
 
-cpdef TableWithMetadata read_orc(
-    SourceInfo source_info,
-    list columns = None,
-    list stripes = None,
-    size_type skip_rows = 0,
-    size_type nrows = -1,
-    bool use_index = True,
-    bool use_np_dtypes = True,
-    DataType timestamp_type = None,
-    list decimal128_columns = None,
-):
-    """Reads an ORC file into a :py:class:`~.types.TableWithMetadata`.
-
-    Parameters
-    ----------
-    source_info : SourceInfo
-        The SourceInfo object to read the Parquet file from.
-    columns : list, default None
-        The string names of the columns to be read.
-    stripes : list[list[size_type]], default None
-        List of stripes to be read.
-    skip_rows : int64_t, default 0
-        The number of rows to skip from the start of the file.
-    nrows : size_type, default -1
-        The number of rows to read. By default, read the entire file.
-    use_index : bool, default True
-        Whether to use the row index to speed up reading.
-    use_np_dtypes : bool, default True
-        Whether to use numpy compatible dtypes.
-    timestamp_type : DataType, default None
-        The timestamp type to use for the timestamp columns.
-    decimal128_columns : list, default None
-        List of column names to be read as 128-bit decimals.
-
-    Returns
-    -------
-    TableWithMetadata
-        The Table and its corresponding metadata (column names) that were read in.
+cdef class OrcReaderOptions:
     """
-    cdef orc_reader_options opts
-    cdef vector[vector[size_type]] c_stripes
-    opts = move(
-        orc_reader_options.builder(source_info.c_obj)
-        .use_index(use_index)
-        .build()
-    )
-    if nrows >= 0:
-        opts.set_num_rows(nrows)
-    if skip_rows >= 0:
-        opts.set_skip_rows(skip_rows)
-    if stripes is not None:
-        c_stripes = stripes
-        opts.set_stripes(c_stripes)
-    if timestamp_type is not None:
-        opts.set_timestamp_type(timestamp_type.c_obj)
+    The settings to use for ``read_orc``
 
-    cdef vector[string] c_decimal128_columns
-    if decimal128_columns is not None and len(decimal128_columns) > 0:
-        c_decimal128_columns.reserve(len(decimal128_columns))
-        for col in decimal128_columns:
+    For details, see :cpp:class:`cudf::io::orc_reader_options`
+    """
+    @staticmethod
+    def builder(SourceInfo source):
+        """
+        Create a OrcReaderOptionsBuilder object
+
+        For details, see :cpp:func:`cudf::io::orc_reader_options::builder`
+
+        Parameters
+        ----------
+        sink : SourceInfo
+            The source to read the ORC file from.
+
+        Returns
+        -------
+        OrcReaderOptionsBuilder
+            Builder to build OrcReaderOptions
+        """
+        cdef OrcReaderOptionsBuilder orc_builder = (
+            OrcReaderOptionsBuilder.__new__(OrcReaderOptionsBuilder)
+        )
+        orc_builder.c_obj = orc_reader_options.builder(source.c_obj)
+        orc_builder.source = source
+        return orc_builder
+
+    cpdef void set_num_rows(self, int64_t nrows):
+        """
+        Sets number of row to read.
+
+        Parameters
+        ----------
+        nrows: int64_t
+            Number of rows
+
+        Returns
+        -------
+        None
+        """
+        self.c_obj.set_num_rows(nrows)
+
+    cpdef void set_skip_rows(self, int64_t skip_rows):
+        """
+        Sets number of rows to skip from the start.
+
+        Parameters
+        ----------
+        skip_rows: int64_t
+            Number of rows
+
+        Returns
+        -------
+        None
+        """
+        self.c_obj.set_skip_rows(skip_rows)
+
+    cpdef void set_stripes(self, list stripes):
+        """
+        Sets list of stripes to read for each input source.
+
+        Parameters
+        ----------
+        stripes: list[list[size_type]]
+            List of lists, mapping stripes to read to input sources
+
+        Returns
+        -------
+        None
+        """
+        cdef vector[vector[size_type]] c_stripes
+        cdef vector[size_type] vec
+        for sub_list in stripes:
+            for x in sub_list:
+                vec.push_back(x)
+            c_stripes.push_back(vec)
+            vec.clear()
+        self.c_obj.set_stripes(c_stripes)
+
+    cpdef void set_decimal128_columns(self, list val):
+        """
+        Set columns that should be read as 128-bit Decimal.
+
+        Parameters
+        ----------
+        val: list[str]
+            List of fully qualified column names
+
+        Returns
+        -------
+        None
+        """
+        cdef vector[string] c_decimal128_columns
+        c_decimal128_columns.reserve(len(val))
+        for col in val:
             if not isinstance(col, str):
                 raise TypeError("Decimal 128 column names must be strings!")
             c_decimal128_columns.push_back(col.encode())
-        opts.set_decimal128_columns(c_decimal128_columns)
+        self.c_obj.set_decimal128_columns(c_decimal128_columns)
 
-    cdef vector[string] c_column_names
-    if columns is not None and len(columns) > 0:
-        c_column_names.reserve(len(columns))
-        for col in columns:
+    cpdef void set_timestamp_type(self, DataType type_):
+        """
+        Sets timestamp type to which timestamp column will be cast.
+
+        Parameters
+        ----------
+        type_: DataType
+            Type of timestamp
+
+        Returns
+        -------
+        None
+        """
+        self.c_obj.set_timestamp_type(type_.c_obj)
+
+    cpdef void set_columns(self, list col_names):
+        """
+        Sets names of the column to read.
+
+        Parameters
+        ----------
+        col_names: list[str]
+            List of column names
+
+        Returns
+        -------
+        None
+        """
+        cdef vector[string] c_column_names
+        c_column_names.reserve(len(col_names))
+        for col in col_names:
             if not isinstance(col, str):
                 raise TypeError("Column names must be strings!")
             c_column_names.push_back(col.encode())
-        opts.set_columns(c_column_names)
+        self.c_obj.set_columns(c_column_names)
 
+cdef class OrcReaderOptionsBuilder:
+    cpdef OrcReaderOptionsBuilder use_index(self, bool use):
+        """
+        Enable/Disable use of row index to speed-up reading.
+
+        Parameters
+        ----------
+        use : bool
+            Boolean value to enable/disable row index use
+
+        Returns
+        -------
+        OrcReaderOptionsBuilder
+        """
+        self.c_obj.use_index(use)
+        return self
+
+    cpdef OrcReaderOptions build(self):
+        """Create a OrcReaderOptions object"""
+        cdef OrcReaderOptions orc_options = OrcReaderOptions.__new__(
+            OrcReaderOptions
+        )
+        orc_options.c_obj = move(self.c_obj.build())
+        orc_options.source = self.source
+        return orc_options
+
+
+cpdef TableWithMetadata read_orc(OrcReaderOptions options, Stream stream = None):
+    """
+    Read from ORC format.
+
+    The source to read from and options are encapsulated
+    by the `options` object.
+
+    For details, see :cpp:func:`read_orc`.
+
+    Parameters
+    ----------
+    options: OrcReaderOptions
+        Settings for controlling reading behavior
+    stream: Stream
+        CUDA stream used for device memory operations and kernel launches
+    """
     cdef table_with_metadata c_result
+    cdef Stream s = _get_stream(stream)
 
     with nogil:
-        c_result = move(cpp_read_orc(opts))
+        c_result = move(cpp_read_orc(options.c_obj, s.view()))
 
-    return TableWithMetadata.from_libcudf(c_result)
+    return TableWithMetadata.from_libcudf(c_result, s)
 
 
 cpdef ParsedOrcStatistics read_parsed_orc_statistics(
@@ -300,3 +449,404 @@ cpdef ParsedOrcStatistics read_parsed_orc_statistics(
         cpp_read_parsed_orc_statistics(source_info.c_obj)
     )
     return ParsedOrcStatistics.from_libcudf(parsed)
+
+
+cdef class OrcWriterOptions:
+    cpdef void set_stripe_size_bytes(self, size_t size_bytes):
+        """
+        Sets the maximum stripe size, in bytes.
+
+        For details, see :cpp:func:`cudf::io::orc_writer_options::set_stripe_size_bytes`
+
+        Parameters
+        ----------
+        size_bytes: size_t
+            Sets the maximum stripe size, in bytes.
+
+        Returns
+        -------
+        None
+        """
+        self.c_obj.set_stripe_size_bytes(size_bytes)
+
+    cpdef void set_stripe_size_rows(self, size_type size_rows):
+        """
+        Sets the maximum stripe size, in rows.
+
+        If the stripe size is smaller that the row group size,
+        row group size will be reduced to math the stripe size.
+
+        For details, see :cpp:func:`cudf::io::orc_writer_options::set_stripe_size_rows`
+
+        Parameters
+        ----------
+        size_bytes: size_type
+            Maximum stripe size, in rows to be set
+
+        Returns
+        -------
+        None
+        """
+        self.c_obj.set_stripe_size_rows(size_rows)
+
+    cpdef void set_row_index_stride(self, size_type stride):
+        """
+        Sets the row index stride.
+
+        Rounded down to a multiple of 8.
+
+        For details, see :cpp:func:`cudf::io::orc_writer_options::set_row_index_stride`
+
+        Parameters
+        ----------
+        size_bytes: size_type
+            Maximum stripe size, in rows to be set
+
+        Returns
+        -------
+        None
+        """
+        self.c_obj.set_row_index_stride(stride)
+
+    @staticmethod
+    def builder(SinkInfo sink, Table table):
+        """
+        Create builder to create OrcWriterOptions.
+
+        For details, see :cpp:func:`cudf::io::orc_writer_options::builder`
+
+        Parameters
+        ----------
+        sink: SinkInfo
+            The sink used for writer output
+        table: Table
+            Table to be written to output
+
+        Returns
+        -------
+        OrcWriterOptionsBuilder
+        """
+        cdef OrcWriterOptionsBuilder orc_builder = OrcWriterOptionsBuilder.__new__(
+            OrcWriterOptionsBuilder
+        )
+        orc_builder.c_obj = orc_writer_options.builder(sink.c_obj, table.view())
+        orc_builder.table = table
+        orc_builder.sink = sink
+        return orc_builder
+
+
+cdef class OrcWriterOptionsBuilder:
+    cpdef OrcWriterOptionsBuilder compression(self, compression_type comp):
+        """
+        Sets compression type.
+
+        For details, see :cpp:func:`cudf::io::orc_writer_options_builder::compression`
+
+        Parameters
+        ----------
+        comp: CompressionType
+            The compression type to use
+
+        Returns
+        -------
+        OrcWriterOptionsBuilder
+        """
+        self.c_obj.compression(comp)
+        return self
+
+    cpdef OrcWriterOptionsBuilder enable_statistics(self, statistics_freq val):
+        """
+        Choose granularity of column statistics to be written.
+
+        For details, see :cpp:func:`enable_statistics`
+
+        Parameters
+        ----------
+        val: StatisticsFreq
+            Level of statistics collection
+
+        Returns
+        -------
+        OrcWriterOptionsBuilder
+        """
+        self.c_obj.enable_statistics(val)
+        return self
+
+    cpdef OrcWriterOptionsBuilder key_value_metadata(self, dict kvm):
+        """
+        Sets Key-Value footer metadata.
+
+        Parameters
+        ----------
+        kvm: dict
+            Key-Value footer metadata
+
+        Returns
+        -------
+        OrcWriterOptionsBuilder
+        """
+        self.c_obj.key_value_metadata(
+            {key.encode(): value.encode() for key, value in kvm.items()}
+        )
+        return self
+
+    cpdef OrcWriterOptionsBuilder metadata(self, TableInputMetadata meta):
+        """
+        Sets associated metadata.
+
+        For details, see :cpp:func:`cudf::io::orc_writer_options_builder::metadata`
+
+        Parameters
+        ----------
+        meta: TableInputMetadata
+            Associated metadata
+
+        Returns
+        -------
+        OrcWriterOptionsBuilder
+        """
+        self.c_obj.metadata(meta.c_obj)
+        return self
+
+    cpdef OrcWriterOptions build(self):
+        """Moves the ORC writer options builder"""
+        cdef OrcWriterOptions orc_options = OrcWriterOptions.__new__(
+            OrcWriterOptions
+        )
+        orc_options.c_obj = move(self.c_obj.build())
+        orc_options.table = self.table
+        orc_options.sink = self.sink
+        return orc_options
+
+
+cpdef void write_orc(OrcWriterOptions options, Stream stream = None):
+    """
+    Write to ORC format.
+
+    The table to write, output paths, and options are encapsulated
+    by the `options` object.
+
+    For details, see :cpp:func:`write_orc`.
+
+    Parameters
+    ----------
+    options: OrcWriterOptions
+        Settings for controlling writing behavior
+    stream: Stream
+        CUDA stream used for device memory operations and kernel launches
+
+    Returns
+    -------
+    None
+    """
+    cdef Stream s = _get_stream(stream)
+    with nogil:
+        cpp_write_orc(move(options.c_obj), s.view())
+
+
+cdef class OrcChunkedWriter:
+    cpdef void close(self):
+        """
+        Closes the chunked ORC writer.
+
+        Returns
+        -------
+        None
+        """
+        with nogil:
+            self.c_obj.get()[0].close()
+
+    cpdef void write(self, Table table):
+        """
+        Writes table to output.
+
+        Parameters
+        ----------
+        table: Table
+            able that needs to be written
+
+        Returns
+        -------
+        None
+        """
+        with nogil:
+            self.c_obj.get()[0].write(table.view())
+
+    @staticmethod
+    def from_options(ChunkedOrcWriterOptions options, Stream stream = None):
+        """
+        Creates a chunked ORC writer from options
+
+        Parameters
+        ----------
+        options: ChunkedOrcWriterOptions
+            Settings for controlling writing behavior
+        stream: Stream
+            CUDA stream used for device memory operations and kernel launches
+
+        Returns
+        -------
+        OrcChunkedWriter
+        """
+        cdef OrcChunkedWriter orc_writer = OrcChunkedWriter.__new__(
+            OrcChunkedWriter
+        )
+        cdef Stream s = _get_stream(stream)
+        orc_writer.c_obj.reset(new orc_chunked_writer(options.c_obj, s.view()))
+        return orc_writer
+
+
+cdef class ChunkedOrcWriterOptions:
+    cpdef void set_stripe_size_bytes(self, size_t size_bytes):
+        """
+        Sets the maximum stripe size, in bytes.
+
+        Parameters
+        ----------
+        size_bytes: size_t
+            Sets the maximum stripe size, in bytes.
+
+        Returns
+        -------
+        None
+        """
+        self.c_obj.set_stripe_size_bytes(size_bytes)
+
+    cpdef void set_stripe_size_rows(self, size_type size_rows):
+        """
+        Sets the maximum stripe size, in rows.
+
+        If the stripe size is smaller that the row group size,
+        row group size will be reduced to math the stripe size.
+
+        Parameters
+        ----------
+        size_bytes: size_type
+            Maximum stripe size, in rows to be set
+
+        Returns
+        -------
+        None
+        """
+        self.c_obj.set_stripe_size_rows(size_rows)
+
+    cpdef void set_row_index_stride(self, size_type stride):
+        """
+        Sets the row index stride.
+
+        Rounded down to a multiple of 8.
+
+        Parameters
+        ----------
+        size_bytes: size_type
+            Maximum stripe size, in rows to be set
+
+        Returns
+        -------
+        None
+        """
+        self.c_obj.set_row_index_stride(stride)
+
+    @staticmethod
+    def builder(SinkInfo sink):
+        """
+        Create builder to create ChunkedOrcWriterOptions.
+
+        Parameters
+        ----------
+        sink: SinkInfo
+            The sink used for writer output
+        table: Table
+            Table to be written to output
+
+        Returns
+        -------
+        ChunkedOrcWriterOptionsBuilder
+        """
+        cdef ChunkedOrcWriterOptionsBuilder orc_builder = \
+            ChunkedOrcWriterOptionsBuilder.__new__(
+                ChunkedOrcWriterOptionsBuilder
+            )
+        orc_builder.c_obj = chunked_orc_writer_options.builder(sink.c_obj)
+        orc_builder.sink = sink
+        return orc_builder
+
+
+cdef class ChunkedOrcWriterOptionsBuilder:
+    cpdef ChunkedOrcWriterOptionsBuilder compression(self, compression_type comp):
+        """
+        Sets compression type.
+
+        Parameters
+        ----------
+        comp: CompressionType
+            The compression type to use
+
+        Returns
+        -------
+        ChunkedOrcWriterOptionsBuilder
+        """
+        self.c_obj.compression(comp)
+        return self
+
+    cpdef ChunkedOrcWriterOptionsBuilder enable_statistics(self, statistics_freq val):
+        """
+        Choose granularity of column statistics to be written.
+
+        Parameters
+        ----------
+        val: StatisticsFreq
+            Level of statistics collection
+
+        Returns
+        -------
+        ChunkedOrcWriterOptionsBuilder
+        """
+        self.c_obj.enable_statistics(val)
+        return self
+
+    cpdef ChunkedOrcWriterOptionsBuilder key_value_metadata(
+        self,
+        dict kvm
+    ):
+        """
+        Sets Key-Value footer metadata.
+
+        Parameters
+        ----------
+        kvm: dict
+            Key-Value footer metadata
+
+        Returns
+        -------
+        ChunkedOrcWriterOptionsBuilder
+        """
+        self.c_obj.key_value_metadata(
+            {key.encode(): value.encode() for key, value in kvm.items()}
+        )
+        return self
+
+    cpdef ChunkedOrcWriterOptionsBuilder metadata(self, TableInputMetadata meta):
+        """
+        Sets associated metadata.
+
+        Parameters
+        ----------
+        meta: TableInputMetadata
+            Associated metadata
+
+        Returns
+        -------
+        ChunkedOrcWriterOptionsBuilder
+        """
+        self.c_obj.metadata(meta.c_obj)
+        return self
+
+    cpdef ChunkedOrcWriterOptions build(self):
+        """Create a OrcWriterOptions object"""
+        cdef ChunkedOrcWriterOptions orc_options = ChunkedOrcWriterOptions.__new__(
+            ChunkedOrcWriterOptions
+        )
+        orc_options.c_obj = move(self.c_obj.build())
+        orc_options.sink = self.sink
+        return orc_options

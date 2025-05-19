@@ -16,6 +16,8 @@
 #pragma once
 
 #include <cudf/column/column_device_view.cuh>
+#include <cudf/detail/utilities/cuda_memcpy.hpp>
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -251,7 +253,7 @@ auto contiguous_copy_column_device_views(HostTableView source_view, rmm::cuda_st
   // A buffer of CPU memory is allocated to hold the ColumnDeviceView
   // objects. Once filled, the CPU memory is then copied to device memory
   // and the pointer is set in the d_columns member.
-  std::vector<int8_t> h_buffer(padded_views_size_bytes);
+  auto h_buffer = cudf::detail::make_host_vector<int8_t>(padded_views_size_bytes, stream);
   // Each ColumnDeviceView instance may have child objects which may
   // require setting some internal device pointers before being copied
   // from CPU to device.
@@ -266,8 +268,10 @@ auto contiguous_copy_column_device_views(HostTableView source_view, rmm::cuda_st
   auto d_columns = detail::child_columns_to_device_array<ColumnDeviceView>(
     source_view.begin(), source_view.end(), h_ptr, d_ptr);
 
-  CUDF_CUDA_TRY(cudaMemcpyAsync(d_ptr, h_ptr, views_size_bytes, cudaMemcpyDefault, stream.value()));
-  stream.synchronize();
+  auto const h_span = host_span<int8_t const>{h_buffer}.subspan(
+    static_cast<int8_t const*>(h_ptr) - h_buffer.data(), views_size_bytes);
+  auto const d_span = device_span<int8_t>{static_cast<int8_t*>(d_ptr), views_size_bytes};
+  cudf::detail::cuda_memcpy(d_span, h_span, stream);
   return std::make_tuple(std::move(descendant_storage), d_columns);
 }
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,12 +17,12 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/default_stream.hpp>
-#include <cudf_test/type_lists.hpp>
+#include <cudf_test/testing_main.hpp>
 
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/rolling.hpp>
+#include <cudf/rolling/range_window_bounds.hpp>
 #include <cudf/scalar/scalar.hpp>
-#include <cudf/scalar/scalar_factories.hpp>
 
 class RollingTest : public cudf::test::BaseFixture {};
 
@@ -55,8 +55,8 @@ TEST_F(RollingTest, FixedSizeDefault)
 TEST_F(RollingTest, VariableSize)
 {
   cudf::test::fixed_width_column_wrapper<cudf::size_type> input({1, 2, 3, 4, 5, 6, 7, 8, 9});
-  cudf::test::fixed_width_column_wrapper<cudf::size_type> preceding({2, 2, 2, 2, 3, 3, 3, 3, 3});
-  cudf::test::fixed_width_column_wrapper<cudf::size_type> following({3, 3, 3, 3, 3, 2, 2, 2, 2});
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> preceding({1, 2, 2, 2, 3, 3, 3, 3, 3});
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> following({3, 3, 3, 3, 3, 2, 2, 1, 0});
 
   cudf::rolling_window(input,
                        preceding,
@@ -169,16 +169,18 @@ TEST_F(GroupedTimeRollingTest, FixedSize)
       {0, 1, 2, 3, 4, 5, 6, 7, 8, 9}, {0, 0, 0, 0, 1, 1, 1, 1, 1, 1}};
 
   auto const grouping_keys = cudf::table_view{std::vector<cudf::column_view>{grp_col}};
-  auto const preceding     = 1L;
-  auto const following     = 1L;
-  auto const min_periods   = 1L;
-  cudf::grouped_time_range_rolling_window(
+  auto const preceding =
+    cudf::duration_scalar<cudf::duration_D>(1L, true, cudf::test::get_default_stream());
+  auto const following =
+    cudf::duration_scalar<cudf::duration_D>(1L, true, cudf::test::get_default_stream());
+  auto const min_periods = 1L;
+  cudf::grouped_range_rolling_window(
     grouping_keys,
     time_col,
     cudf::order::ASCENDING,
     agg_col,
-    preceding,
-    following,
+    cudf::range_window_bounds::get(preceding, cudf::test::get_default_stream()),
+    cudf::range_window_bounds::get(following, cudf::test::get_default_stream()),
     min_periods,
     *cudf::make_count_aggregation<cudf::rolling_aggregation>(),
     cudf::test::get_default_stream());
@@ -195,17 +197,19 @@ TEST_F(GroupedTimeRollingTest, WindowBounds)
       {0, 1, 2, 3, 4, 5, 6, 7, 8, 9}, {0, 0, 0, 0, 1, 1, 1, 1, 1, 1}};
 
   auto const grouping_keys       = cudf::table_view{std::vector<cudf::column_view>{grp_col}};
-  auto const unbounded_preceding = cudf::window_bounds::unbounded();
-  auto const following           = cudf::window_bounds::get(1L);
+  auto const unbounded_preceding = cudf::range_window_bounds::unbounded(
+    cudf::data_type(cudf::type_to_id<cudf::duration_D>()), cudf::test::get_default_stream());
+  auto const following =
+    cudf::duration_scalar<cudf::duration_D>(1L, true, cudf::test::get_default_stream());
 
   auto const min_periods = 1L;
-  cudf::grouped_time_range_rolling_window(
+  cudf::grouped_range_rolling_window(
     grouping_keys,
     time_col,
     cudf::order::ASCENDING,
     agg_col,
     unbounded_preceding,
-    following,
+    cudf::range_window_bounds::get(following, cudf::test::get_default_stream()),
     min_periods,
     *cudf::make_count_aggregation<cudf::rolling_aggregation>(),
     cudf::test::get_default_stream());
@@ -244,3 +248,5 @@ TEST_F(GroupedRangeRollingTest, RangeWindowBounds)
                                      *cudf::make_count_aggregation<cudf::rolling_aggregation>(),
                                      cudf::test::get_default_stream());
 }
+
+CUDF_TEST_PROGRAM_MAIN()

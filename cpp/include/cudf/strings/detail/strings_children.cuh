@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/detail/offsets_iterator_factory.cuh>
 #include <cudf/detail/sizes_to_offsets_iterator.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
@@ -29,6 +30,8 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cub/device/device_memcpy.cuh>
+#include <cuda/functional>
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
 
@@ -37,6 +40,77 @@
 namespace cudf {
 namespace strings {
 namespace detail {
+
+template <typename Iter>
+struct string_offsets_fn {
+  Iter _begin;
+  size_type _strings_count;
+  constexpr string_offsets_fn(Iter begin, size_type strings_count)
+    : _begin{begin}, _strings_count{strings_count}
+  {
+  }
+
+  __device__ constexpr size_type operator()(size_type idx) const noexcept
+  {
+    return idx < _strings_count ? static_cast<size_type>(_begin[idx]) : size_type{0};
+  };
+};
+
+/**
+ * @brief Gather characters to create a strings column using the given string-index pair iterator
+ *
+ * @tparam IndexPairIterator iterator over type `pair<char const*,size_type>` values
+ *
+ * @param offsets The offsets for the output strings column
+ * @param chars_size The size (in bytes) of the chars data
+ * @param begin Iterator to the first string-index pair
+ * @param strings_count The number of strings
+ * @param stream CUDA stream used for device memory operations
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return An array of chars gathered from the input string-index pair iterator
+ */
+template <typename IndexPairIterator>
+rmm::device_uvector<char> make_chars_buffer(column_view const& offsets,
+                                            int64_t chars_size,
+                                            IndexPairIterator begin,
+                                            size_type strings_count,
+                                            rmm::cuda_stream_view stream,
+                                            rmm::device_async_resource_ref mr)
+{
+  auto chars_data      = rmm::device_uvector<char>(chars_size, stream, mr);
+  auto const d_offsets = cudf::detail::offsetalator_factory::make_input_iterator(offsets);
+
+  auto const src_ptrs = thrust::make_transform_iterator(
+    thrust::make_counting_iterator<uint32_t>(0),
+    cuda::proclaim_return_type<void*>([begin] __device__(uint32_t idx) {
+      // Due to a bug in cub (https://github.com/NVIDIA/cccl/issues/586),
+      // we have to use `const_cast` to remove `const` qualifier from the source pointer.
+      // This should be fine as long as we only read but not write anything to the source.
+      return reinterpret_cast<void*>(const_cast<char*>(begin[idx].first));
+    }));
+  auto const src_sizes = thrust::make_transform_iterator(
+    thrust::make_counting_iterator<uint32_t>(0),
+    cuda::proclaim_return_type<size_type>(
+      [begin] __device__(uint32_t idx) { return begin[idx].second; }));
+  auto const dst_ptrs = thrust::make_transform_iterator(
+    thrust::make_counting_iterator<uint32_t>(0),
+    cuda::proclaim_return_type<char*>([offsets = d_offsets, output = chars_data.data()] __device__(
+                                        uint32_t idx) { return output + offsets[idx]; }));
+
+  size_t temp_storage_bytes = 0;
+  CUDF_CUDA_TRY(cub::DeviceMemcpy::Batched(
+    nullptr, temp_storage_bytes, src_ptrs, dst_ptrs, src_sizes, strings_count, stream.value()));
+  rmm::device_buffer d_temp_storage(temp_storage_bytes, stream);
+  CUDF_CUDA_TRY(cub::DeviceMemcpy::Batched(d_temp_storage.data(),
+                                           temp_storage_bytes,
+                                           src_ptrs,
+                                           dst_ptrs,
+                                           src_sizes,
+                                           strings_count,
+                                           stream.value()));
+
+  return chars_data;
+}
 
 /**
  * @brief Create an offsets column to be a child of a compound column
@@ -74,14 +148,11 @@ std::pair<std::unique_ptr<column>, int64_t> make_offsets_child_column(
   // using exclusive-scan technically requires strings_count+1 input values even though
   // the final input value is never used.
   // The input iterator is wrapped here to allow the 'last value' to be safely read.
-  auto map_fn = cuda::proclaim_return_type<size_type>(
-    [begin, strings_count] __device__(size_type idx) -> size_type {
-      return idx < strings_count ? static_cast<size_type>(begin[idx]) : size_type{0};
-    });
-  auto input_itr = cudf::detail::make_counting_transform_iterator(0, map_fn);
+  auto input_itr =
+    cudf::detail::make_counting_transform_iterator(0, string_offsets_fn{begin, strings_count});
   // Use the sizes-to-offsets iterator to compute the total number of elements
   auto const total_bytes =
-    cudf::detail::sizes_to_offsets(input_itr, input_itr + strings_count + 1, d_offsets, stream);
+    cudf::detail::sizes_to_offsets(input_itr, input_itr + strings_count + 1, d_offsets, 0, stream);
 
   auto const threshold = cudf::strings::get_offset64_threshold();
   CUDF_EXPECTS(cudf::strings::is_large_strings_enabled() || (total_bytes < threshold),
@@ -92,7 +163,8 @@ std::pair<std::unique_ptr<column>, int64_t> make_offsets_child_column(
     offsets_column = make_numeric_column(
       data_type{type_id::INT64}, strings_count + 1, mask_state::UNALLOCATED, stream, mr);
     auto d_offsets64 = offsets_column->mutable_view().template data<int64_t>();
-    cudf::detail::sizes_to_offsets(input_itr, input_itr + strings_count + 1, d_offsets64, stream);
+    cudf::detail::sizes_to_offsets(
+      input_itr, input_itr + strings_count + 1, d_offsets64, 0, stream);
   }
 
   return std::pair(std::move(offsets_column), total_bytes);

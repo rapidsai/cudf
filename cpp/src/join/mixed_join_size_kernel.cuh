@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@
 
 #include <cudf/ast/detail/expression_evaluator.cuh>
 #include <cudf/ast/detail/expression_parser.hpp>
+#include <cudf/detail/device_scalar.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/export.hpp>
@@ -32,8 +33,6 @@
 namespace cudf {
 namespace detail {
 namespace cg = cooperative_groups;
-
-#pragma GCC diagnostic ignored "-Wattributes"
 
 template <int block_size, bool has_nulls>
 CUDF_KERNEL void __launch_bounds__(block_size)
@@ -61,8 +60,8 @@ CUDF_KERNEL void __launch_bounds__(block_size)
     intermediate_storage + (threadIdx.x * device_expression_data.num_intermediates);
 
   std::size_t thread_counter{0};
-  cudf::size_type const start_idx      = threadIdx.x + blockIdx.x * block_size;
-  cudf::size_type const stride         = block_size * gridDim.x;
+  auto const start_idx                 = cudf::detail::grid_1d::global_thread_id();
+  auto const stride                    = cudf::detail::grid_1d::grid_stride();
   cudf::size_type const left_num_rows  = left_table.num_rows();
   cudf::size_type const right_num_rows = right_table.num_rows();
   auto const outer_num_rows            = (swap_tables ? right_num_rows : left_num_rows);
@@ -79,7 +78,7 @@ CUDF_KERNEL void __launch_bounds__(block_size)
   auto count_equality = pair_expression_equality<has_nulls>{
     evaluator, thread_intermediate_storage, swap_tables, equality_probe};
 
-  for (cudf::size_type outer_row_index = start_idx; outer_row_index < outer_num_rows;
+  for (auto outer_row_index = start_idx; outer_row_index < outer_num_rows;
        outer_row_index += stride) {
     auto query_pair = pair_func(outer_row_index);
     if (join_type == join_kind::LEFT_JOIN || join_type == join_kind::FULL_JOIN) {
@@ -122,7 +121,7 @@ std::size_t launch_compute_mixed_join_output_size(
   rmm::device_async_resource_ref mr)
 {
   // Allocate storage for the counter used to get the size of the join output
-  rmm::device_scalar<std::size_t> size(0, stream, mr);
+  cudf::detail::device_scalar<std::size_t> size(0, stream, mr);
 
   compute_mixed_join_output_size<DEFAULT_JOIN_BLOCK_SIZE, has_nulls>
     <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(

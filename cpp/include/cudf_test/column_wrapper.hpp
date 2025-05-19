@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -39,8 +39,8 @@
 
 #include <rmm/device_buffer.hpp>
 
+#include <cuda/std/functional>
 #include <thrust/copy.h>
-#include <thrust/functional.h>
 #include <thrust/host_vector.h>
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
@@ -773,7 +773,7 @@ class strings_column_wrapper : public detail::column_wrapper {
     auto d_chars          = cudf::detail::make_device_uvector_async(
       chars, cudf::test::get_default_stream(), cudf::get_current_device_resource_ref());
     auto d_offsets = std::make_unique<cudf::column>(
-      cudf::detail::make_device_uvector_sync(
+      cudf::detail::make_device_uvector(
         offsets, cudf::test::get_default_stream(), cudf::get_current_device_resource_ref()),
       rmm::device_buffer{},
       0);
@@ -827,7 +827,7 @@ class strings_column_wrapper : public detail::column_wrapper {
         offsets, cudf::test::get_default_stream(), cudf::get_current_device_resource_ref()),
       rmm::device_buffer{},
       0);
-    auto d_bitmask = cudf::detail::make_device_uvector_sync(
+    auto d_bitmask = cudf::detail::make_device_uvector(
       null_mask, cudf::test::get_default_stream(), cudf::get_current_device_resource_ref());
     wrapped = cudf::make_strings_column(
       num_strings, std::move(d_offsets), d_chars.release(), null_count, d_bitmask.release());
@@ -974,7 +974,7 @@ class dictionary_column_wrapper : public detail::column_wrapper {
   {
     wrapped =
       cudf::dictionary::encode(fixed_width_column_wrapper<KeyElementTo, SourceElementT>(begin, end),
-                               cudf::data_type{type_id::UINT32},
+                               cudf::data_type{type_id::INT32},
                                cudf::test::get_default_stream());
   }
 
@@ -1009,7 +1009,7 @@ class dictionary_column_wrapper : public detail::column_wrapper {
   {
     wrapped = cudf::dictionary::encode(
       fixed_width_column_wrapper<KeyElementTo, SourceElementT>(begin, end, v),
-      cudf::data_type{type_id::UINT32},
+      cudf::data_type{type_id::INT32},
       cudf::test::get_default_stream());
   }
 
@@ -1173,7 +1173,7 @@ class dictionary_column_wrapper<std::string> : public detail::column_wrapper {
   dictionary_column_wrapper(StringsIterator begin, StringsIterator end) : column_wrapper{}
   {
     wrapped = cudf::dictionary::encode(strings_column_wrapper(begin, end),
-                                       cudf::data_type{type_id::UINT32},
+                                       cudf::data_type{type_id::INT32},
                                        cudf::test::get_default_stream());
   }
 
@@ -1210,7 +1210,7 @@ class dictionary_column_wrapper<std::string> : public detail::column_wrapper {
     : column_wrapper{}
   {
     wrapped = cudf::dictionary::encode(strings_column_wrapper(begin, end, v),
-                                       cudf::data_type{type_id::UINT32},
+                                       cudf::data_type{type_id::INT32},
                                        cudf::test::get_default_stream());
   }
 
@@ -1645,8 +1645,11 @@ class lists_column_wrapper : public detail::column_wrapper {
 
     // concatenate them together, skipping children that are null.
     std::vector<column_view> children;
-    thrust::copy_if(
-      std::cbegin(cols), std::cend(cols), valids, std::back_inserter(children), thrust::identity{});
+    thrust::copy_if(std::cbegin(cols),
+                    std::cend(cols),
+                    valids,
+                    std::back_inserter(children),
+                    cuda::std::identity{});
 
     auto data = children.empty() ? cudf::empty_like(expected_hierarchy)
                                  : cudf::concatenate(children,

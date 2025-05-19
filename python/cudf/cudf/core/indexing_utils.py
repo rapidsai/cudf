@@ -1,11 +1,9 @@
-# Copyright (c) 2023-2024, NVIDIA CORPORATION.
+# Copyright (c) 2023-2025, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, List, Union
-
-from typing_extensions import TypeAlias
+from typing import Any, TypeAlias
 
 import cudf
 from cudf.api.types import _is_scalar_or_zero_d_array, is_integer
@@ -46,11 +44,11 @@ class ScalarIndexer:
     key: GatherMap
 
 
-IndexingSpec: TypeAlias = Union[
-    EmptyIndexer, MapIndexer, MaskIndexer, ScalarIndexer, SliceIndexer
-]
+IndexingSpec: TypeAlias = (
+    EmptyIndexer | MapIndexer | MaskIndexer | ScalarIndexer | SliceIndexer
+)
 
-ColumnLabels: TypeAlias = List[str]
+ColumnLabels: TypeAlias = list[str]
 
 
 def destructure_iloc_key(
@@ -154,13 +152,12 @@ def destructure_dataframe_iloc_indexer(
         )
     except TypeError:
         raise TypeError(
-            "Column indices must be integers, slices, "
-            "or list-like of integers"
+            "Column indices must be integers, slices, or list-like of integers"
         )
     if scalar:
-        assert (
-            len(column_names) == 1
-        ), "Scalar column indexer should not produce more than one column"
+        assert len(column_names) == 1, (
+            "Scalar column indexer should not produce more than one column"
+        )
 
     return rows, (scalar, column_names)
 

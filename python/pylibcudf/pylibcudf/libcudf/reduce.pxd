@@ -1,8 +1,8 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
-
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport pair
+from pylibcudf.exception_handler cimport libcudf_exception_handler
 from pylibcudf.libcudf.aggregation cimport reduce_aggregation, scan_aggregation
 from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.column.column_view cimport column_view
@@ -15,7 +15,7 @@ cdef extern from "cudf/reduction.hpp" namespace "cudf" nogil:
         column_view col,
         const reduce_aggregation& agg,
         data_type type
-    ) except +
+    ) except +libcudf_exception_handler
 
     cpdef enum class scan_type(bool):
         INCLUSIVE "cudf::scan_type::INCLUSIVE",
@@ -25,9 +25,9 @@ cdef extern from "cudf/reduction.hpp" namespace "cudf" nogil:
         column_view col,
         const scan_aggregation& agg,
         scan_type inclusive
-    ) except +
+    ) except +libcudf_exception_handler
 
     cdef pair[unique_ptr[scalar],
               unique_ptr[scalar]] cpp_minmax "cudf::minmax" (
         column_view col
-    ) except +
+    ) except +libcudf_exception_handler

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,16 +28,12 @@
 static void bench_normalize(nvbench::state& state)
 {
   auto const num_rows       = static_cast<cudf::size_type>(state.get_int64("num_rows"));
-  auto const row_width      = static_cast<cudf::size_type>(state.get_int64("row_width"));
+  auto const min_width      = static_cast<cudf::size_type>(state.get_int64("min_width"));
+  auto const max_width      = static_cast<cudf::size_type>(state.get_int64("max_width"));
   auto const normalize_type = state.get_string("type");
 
-  if (static_cast<std::size_t>(num_rows) * static_cast<std::size_t>(row_width) >=
-      static_cast<std::size_t>(std::numeric_limits<cudf::size_type>::max())) {
-    state.skip("Skip benchmarks greater than size_type limit");
-  }
-
   data_profile const profile = data_profile_builder().distribution(
-    cudf::type_id::STRING, distribution_id::NORMAL, 0, row_width);
+    cudf::type_id::STRING, distribution_id::NORMAL, min_width, max_width);
   auto const column = create_random_column(cudf::type_id::STRING, row_count{num_rows}, profile);
   cudf::strings_column_view input(column->view());
 
@@ -52,14 +48,18 @@ static void bench_normalize(nvbench::state& state)
                [&](nvbench::launch& launch) { auto result = nvtext::normalize_spaces(input); });
   } else {
     bool const to_lower = (normalize_type == "to_lower");
+    // we expect the normalizer to be created once and re-used
+    // so creating it is not measured
+    auto normalizer = nvtext::create_character_normalizer(to_lower);
     state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
-      auto result = nvtext::normalize_characters(input, to_lower);
+      auto result = nvtext::normalize_characters(input, *normalizer);
     });
   }
 }
 
 NVBENCH_BENCH(bench_normalize)
   .set_name("normalize")
-  .add_int64_axis("row_width", {32, 64, 128, 256, 512, 1024})
-  .add_int64_axis("num_rows", {4096, 32768, 262144, 2097152, 16777216})
+  .add_int64_axis("min_width", {0})
+  .add_int64_axis("max_width", {128, 256})
+  .add_int64_axis("num_rows", {32768, 262144, 2097152})
   .add_string_axis("type", {"spaces", "characters", "to_lower"});

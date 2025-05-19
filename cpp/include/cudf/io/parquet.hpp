@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -47,6 +47,28 @@ constexpr size_type default_max_page_size_rows  = 20000;       ///< 20k rows per
 constexpr int32_t default_column_index_truncate_length = 64;   ///< truncate to 64 bytes
 constexpr size_t default_max_dictionary_size           = 1024 * 1024;  ///< 1MB dictionary size
 constexpr size_type default_max_page_fragment_size     = 5000;  ///< 5000 rows per page fragment
+
+/**
+ * @brief Check if the compression type is supported for reading Parquet files.
+ *
+ * @note This is a runtime check. Some compression types may not be supported because of the current
+ * system configuration.
+ *
+ * @param compression Compression type
+ * @return Boolean indicating if the compression type is supported
+ */
+[[nodiscard]] bool is_supported_read_parquet(compression_type compression);
+
+/**
+ * @brief Check if the compression type is supported for writing Parquet files.
+ *
+ * @note This is a runtime check. Some compression types may not be supported because of the current
+ * system configuration.
+ *
+ * @param compression Compression type
+ * @return Boolean indicating if the compression type is supported
+ */
+[[nodiscard]] bool is_supported_write_parquet(compression_type compression);
 
 class parquet_reader_options_builder;
 
@@ -96,16 +118,18 @@ class parquet_reader_options {
    * @brief Default constructor.
    *
    * This has been added since Cython requires a default constructor to create objects on stack.
+   * The `hybrid_scan_reader` also uses this to create `parquet_reader_options` without a source.
    */
   explicit parquet_reader_options() = default;
 
   /**
-   * @brief Creates a parquet_reader_options_builder which will build parquet_reader_options.
+   * @brief Creates a `parquet_reader_options_builder` to build `parquet_reader_options`.
+   *        By default, build with empty data source info.
    *
    * @param src Source information to read parquet file
    * @return Builder to build reader options
    */
-  static parquet_reader_options_builder builder(source_info src);
+  static parquet_reader_options_builder builder(source_info src = source_info{});
 
   /**
    * @brief Returns source info.
@@ -115,8 +139,7 @@ class parquet_reader_options {
   [[nodiscard]] source_info const& get_source() const { return _source; }
 
   /**
-   * @brief Returns true/false depending on whether strings should be converted to categories or
-   * not.
+   * @brief Returns boolean depending on whether strings should be converted to categories.
    *
    * @return `true` if strings should be converted to categories
    */
@@ -126,21 +149,21 @@ class parquet_reader_options {
   }
 
   /**
-   * @brief Returns true/false depending whether to use pandas metadata or not while reading.
+   * @brief Returns boolean depending on whether to use pandas metadata while reading.
    *
    * @return `true` if pandas metadata is used while reading
    */
   [[nodiscard]] bool is_enabled_use_pandas_metadata() const { return _use_pandas_metadata; }
 
   /**
-   * @brief Returns true/false depending whether to use arrow schema while reading.
+   * @brief Returns boolean depending on whether to use arrow schema while reading.
    *
    * @return `true` if arrow schema is used while reading
    */
   [[nodiscard]] bool is_enabled_use_arrow_schema() const { return _use_arrow_schema; }
 
   /**
-   * @brief Returns true/false depending on whether to read matching projected and filter columns
+   * @brief Returns boolean depending on whether to read matching projected and filter columns
    * from mismatched Parquet sources.
    *
    * @return `true` if mismatched projected and filter columns will be read from mismatched Parquet
@@ -205,16 +228,42 @@ class parquet_reader_options {
   [[nodiscard]] data_type get_timestamp_type() const { return _timestamp_type; }
 
   /**
-   * @brief Sets names of the columns to be read.
+   * @brief Sets the names of columns to be read from all input sources.
    *
-   * @param col_names Vector of column names
+   * Applies the same list of column names across all sources. Unlike `set_row_groups`,
+   * which allows per-source configuration, `set_columns` applies globally.
+   *
+   * Columns that do not exist in the input files will be ignored silently.
+   * The output table will only include the columns that are actually found.
+   *
+   * To select a nested column (e.g., a struct member), use dot notation.
+   *
+   * Example:
+   * To read only the `bar` and `baz` fields, call:
+   *   set_columns({"foo.bar", "foo.baz"});
+   *
+   * @note This function does not currently support per-source column selection.
+   *
+   * @param col_names A vector of column names to attempt to read from each input source.
    */
   void set_columns(std::vector<std::string> col_names) { _columns = std::move(col_names); }
 
   /**
-   * @brief Sets vector of individual row groups to read.
+   * @brief Specifies which row groups to read from each input source.
    *
-   * @param row_groups Vector of row groups to read
+   * When reading from multiple sources (e.g., multiple files), this function allows selecting
+   * specific row groups for each source individually. The outer vector corresponds to the list
+   * of input sources, and each inner vector contains the row group indices to read from the
+   * respective source.
+   *
+   * If no row groups should be read from a given source, its entry should be an empty vector.
+   *
+   * Example:
+   * To read row groups [0, 2] from the first input and [1] from the second input, call:
+   *   set_row_groups({{0, 2}, {1}});
+   *
+   * @param row_groups A vector of vectors, one per input source, each specifying the
+   *                   row group indices to read from that source.
    */
   void set_row_groups(std::vector<std::vector<size_type>> row_groups);
 
@@ -260,14 +309,14 @@ class parquet_reader_options {
   /**
    * @brief Sets to enable/disable use of pandas metadata to read.
    *
-   * @param val Boolean value whether to use pandas metadata
+   * @param val Boolean indicating whether to use pandas metadata
    */
   void enable_use_pandas_metadata(bool val) { _use_pandas_metadata = val; }
 
   /**
    * @brief Sets to enable/disable use of arrow schema to read.
    *
-   * @param val Boolean value whether to use arrow schema
+   * @param val Boolean indicating whether to use arrow schema
    */
   void enable_use_arrow_schema(bool val) { _use_arrow_schema = val; }
 
@@ -275,8 +324,8 @@ class parquet_reader_options {
    * @brief Sets to enable/disable reading of matching projected and filter columns from mismatched
    * Parquet sources.
    *
-   * @param val Boolean value whether to read matching projected and filter columns from mismatched
-   * Parquet sources.
+   * @param val Boolean indicating whether to read matching projected and filter columns from
+   * mismatched Parquet sources.
    */
   void enable_allow_mismatched_pq_schemas(bool val) { _allow_mismatched_pq_schemas = val; }
 
@@ -324,6 +373,7 @@ class parquet_reader_options_builder {
    * @brief Default constructor.
    *
    * This has been added since Cython requires a default constructor to create objects on stack.
+   * The `hybrid_scan_reader` also uses this to construct `parquet_reader_options` without a source.
    */
   parquet_reader_options_builder() = default;
 
@@ -410,6 +460,7 @@ class parquet_reader_options_builder {
    *
    * @param val Boolean value whether to read matching projected and filter columns from mismatched
    * Parquet sources.
+   *
    * @return this for chaining.
    */
   parquet_reader_options_builder& allow_mismatched_pq_schemas(bool val)

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,9 +22,10 @@
 #include <cudf/ast/expressions.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/hashing/detail/helper_functions.cuh>
-#include <cudf/join.hpp>
+#include <cudf/join/mixed_join.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
@@ -35,6 +36,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/std/iterator>
 #include <thrust/fill.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/scan.h>
@@ -184,7 +186,8 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
   auto const row_hash   = cudf::experimental::row::hash::row_hasher{preprocessed_probe};
   auto const hash_probe = row_hash.device_hasher(has_nulls);
 
-  hash_set_ref_type const row_set_ref = row_set.ref(cuco::contains).with_hash_function(hash_probe);
+  hash_set_ref_type const row_set_ref =
+    row_set.ref(cuco::contains).rebind_hash_function(hash_probe);
 
   // Vector used to indicate indices from left/probe table which are present in output
   auto left_table_keep_mask = rmm::device_uvector<bool>(probe.num_rows(), stream);
@@ -215,7 +218,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
                       return keep_row == (join_type == detail::join_kind::LEFT_SEMI_JOIN);
                     });
 
-  gather_map->resize(thrust::distance(gather_map->begin(), gather_map_end), stream);
+  gather_map->resize(cuda::std::distance(gather_map->begin(), gather_map_end), stream);
   return gather_map;
 }
 

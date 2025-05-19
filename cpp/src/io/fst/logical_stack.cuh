@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,6 +27,7 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cub/cub.cuh>
+#include <cuda/std/functional>
 #include <thrust/device_ptr.h>
 #include <thrust/execution_policy.h>
 #include <thrust/fill.h>
@@ -332,9 +333,8 @@ void sparse_stack_op_to_top_of_stack(StackSymbolItT d_symbols,
   // Transforming sequence of stack symbols to stack operations
   using StackSymbolToStackOpT = detail::StackSymbolToStackOp<StackOpT, StackSymbolToStackOpTypeT>;
 
-  // TransformInputIterator converting stack symbols to stack operations
-  using TransformInputItT =
-    cub::TransformInputIterator<StackOpT, StackSymbolToStackOpT, StackSymbolItT>;
+  // transform_iterator converting stack symbols to stack operations
+  using TransformInputItT = thrust::transform_iterator<StackSymbolToStackOpT, StackSymbolItT>;
 
   constexpr bool supports_reset_op = SupportResetOperation == stack_op_support::WITH_RESET_SUPPORT;
 
@@ -365,8 +365,8 @@ void sparse_stack_op_to_top_of_stack(StackSymbolItT d_symbols,
   // with the empty_stack_symbol
   StackOpT const empty_stack{0, empty_stack_symbol};
 
-  cub::TransformInputIterator<StackOpT, detail::RemapEmptyStack<StackOpT>, StackOpT*>
-    kv_ops_scan_in(nullptr, detail::RemapEmptyStack<StackOpT>{empty_stack});
+  thrust::transform_iterator<detail::RemapEmptyStack<StackOpT>, StackOpT*> kv_ops_scan_in(
+    nullptr, detail::RemapEmptyStack<StackOpT>{empty_stack});
   StackOpT* kv_ops_scan_out = nullptr;
 
   std::size_t stack_level_scan_bytes      = 0;
@@ -401,7 +401,7 @@ void sparse_stack_op_to_top_of_stack(StackSymbolItT d_symbols,
       d_kv_operations.Current(),
       detail::AddStackLevelFromStackOp<StackSymbolToStackOpTypeT>{symbol_to_stack_op},
       num_symbols_in,
-      cub::Equality{},
+      cuda::std::equal_to{},
       stream));
     stack_level_scan_bytes = std::max(gen_segments_scan_bytes, scan_by_key_bytes);
   } else {
@@ -500,7 +500,7 @@ void sparse_stack_op_to_top_of_stack(StackSymbolItT d_symbols,
       d_kv_operations.Current(),
       detail::AddStackLevelFromStackOp<StackSymbolToStackOpTypeT>{symbol_to_stack_op},
       num_symbols_in,
-      cub::Equality{},
+      cuda::std::equal_to{},
       stream));
   } else {
     CUDF_CUDA_TRY(cub::DeviceScan::InclusiveScan(
@@ -511,6 +511,12 @@ void sparse_stack_op_to_top_of_stack(StackSymbolItT d_symbols,
       detail::AddStackLevelFromStackOp<StackSymbolToStackOpTypeT>{symbol_to_stack_op},
       num_symbols_in,
       stream));
+  }
+
+  // Check if the last element of d_kv_operations is 0. If not, then we have a problem.
+  if (num_symbols_in && !supports_reset_op) {
+    StackOpT last_symbol = d_kv_ops_current.element(num_symbols_in - 1, stream);
+    CUDF_EXPECTS(last_symbol.stack_level == 0, "The logical stack is not empty!");
   }
 
   // Stable radix sort, sorting by stack level of the operations
@@ -526,7 +532,7 @@ void sparse_stack_op_to_top_of_stack(StackSymbolItT d_symbols,
                                                 end_bit,
                                                 stream));
 
-  // TransformInputIterator that remaps all operations on stack level 0 to the empty stack symbol
+  // transform_iterator that remaps all operations on stack level 0 to the empty stack symbol
   kv_ops_scan_in  = {reinterpret_cast<StackOpT*>(d_kv_operations_unsigned.Current()),
                      detail::RemapEmptyStack<StackOpT>{empty_stack}};
   kv_ops_scan_out = reinterpret_cast<StackOpT*>(d_kv_operations_unsigned.Alternate());
@@ -547,9 +553,9 @@ void sparse_stack_op_to_top_of_stack(StackSymbolItT d_symbols,
                thrust::device_ptr<StackSymbolT>{d_top_of_stack + num_symbols_out},
                read_symbol);
 
-  // Transform the stack operations to the stack symbol they represent
-  cub::TransformInputIterator<StackSymbolT, detail::StackOpToStackSymbol, StackOpT*>
-    kv_op_to_stack_sym_it(kv_ops_scan_out, detail::StackOpToStackSymbol{});
+  // transform_iterator the stack operations to the stack symbol they represent
+  thrust::transform_iterator<detail::StackOpToStackSymbol, StackOpT*> kv_op_to_stack_sym_it(
+    kv_ops_scan_out, detail::StackOpToStackSymbol{});
 
   // Scatter the stack symbols to the output tape (spots that are not scattered to have been
   // pre-filled with the read-symbol)

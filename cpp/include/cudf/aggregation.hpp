@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -71,6 +71,15 @@ enum class rank_percentage : int32_t {
 };
 
 /**
+ * @brief Bitwise operations to use for BITWISE_AGG aggregations on numeric columns.
+ */
+enum class bitwise_op : int32_t {
+  AND,  ///< bitwise AND operation
+  OR,   ///< bitwise OR operation
+  XOR   ///< bitwise XOR operation
+};
+
+/**
  * @brief Abstract base class for specifying the desired aggregation in an
  * `aggregation_request`.
  *
@@ -84,43 +93,45 @@ class aggregation {
    * @brief Possible aggregation operations
    */
   enum Kind {
-    SUM,             ///< sum reduction
-    PRODUCT,         ///< product reduction
-    MIN,             ///< min reduction
-    MAX,             ///< max reduction
-    COUNT_VALID,     ///< count number of valid elements
-    COUNT_ALL,       ///< count number of elements
-    ANY,             ///< any reduction
-    ALL,             ///< all reduction
-    SUM_OF_SQUARES,  ///< sum of squares reduction
-    MEAN,            ///< arithmetic mean reduction
-    M2,              ///< sum of squares of differences from the mean
-    VARIANCE,        ///< variance
-    STD,             ///< standard deviation
-    MEDIAN,          ///< median reduction
-    QUANTILE,        ///< compute specified quantile(s)
-    ARGMAX,          ///< Index of max element
-    ARGMIN,          ///< Index of min element
-    NUNIQUE,         ///< count number of unique elements
-    NTH_ELEMENT,     ///< get the nth element
-    ROW_NUMBER,      ///< get row-number of current index (relative to rolling window)
-    EWMA,            ///< get exponential weighted moving average at current index
-    RANK,            ///< get rank of current index
-    COLLECT_LIST,    ///< collect values into a list
-    COLLECT_SET,     ///< collect values into a list without duplicate entries
-    LEAD,            ///< window function, accesses row at specified offset following current row
-    LAG,             ///< window function, accesses row at specified offset preceding current row
-    PTX,             ///< PTX  UDF based reduction
-    CUDA,            ///< CUDA UDF based reduction
-    MERGE_LISTS,     ///< merge multiple lists values into one list
-    MERGE_SETS,      ///< merge multiple lists values into one list then drop duplicate entries
-    MERGE_M2,        ///< merge partial values of M2 aggregation,
-    COVARIANCE,      ///< covariance between two sets of elements
-    CORRELATION,     ///< correlation between two sets of elements
-    TDIGEST,         ///< create a tdigest from a set of input values
-    MERGE_TDIGEST,   ///< create a tdigest by merging multiple tdigests together
-    HISTOGRAM,       ///< compute frequency of each element
-    MERGE_HISTOGRAM  ///< merge partial values of HISTOGRAM aggregation,
+    SUM,              ///< sum reduction
+    PRODUCT,          ///< product reduction
+    MIN,              ///< min reduction
+    MAX,              ///< max reduction
+    COUNT_VALID,      ///< count number of valid elements
+    COUNT_ALL,        ///< count number of elements
+    ANY,              ///< any reduction
+    ALL,              ///< all reduction
+    SUM_OF_SQUARES,   ///< sum of squares reduction
+    MEAN,             ///< arithmetic mean reduction
+    M2,               ///< sum of squares of differences from the mean
+    VARIANCE,         ///< variance
+    STD,              ///< standard deviation
+    MEDIAN,           ///< median reduction
+    QUANTILE,         ///< compute specified quantile(s)
+    ARGMAX,           ///< Index of max element
+    ARGMIN,           ///< Index of min element
+    NUNIQUE,          ///< count number of unique elements
+    NTH_ELEMENT,      ///< get the nth element
+    ROW_NUMBER,       ///< get row-number of current index (relative to rolling window)
+    EWMA,             ///< get exponential weighted moving average at current index
+    RANK,             ///< get rank of current index
+    COLLECT_LIST,     ///< collect values into a list
+    COLLECT_SET,      ///< collect values into a list without duplicate entries
+    LEAD,             ///< window function, accesses row at specified offset following current row
+    LAG,              ///< window function, accesses row at specified offset preceding current row
+    PTX,              ///< PTX  based UDF aggregation
+    CUDA,             ///< CUDA based UDF aggregation
+    HOST_UDF,         ///< host based UDF aggregation
+    MERGE_LISTS,      ///< merge multiple lists values into one list
+    MERGE_SETS,       ///< merge multiple lists values into one list then drop duplicate entries
+    MERGE_M2,         ///< merge partial values of M2 aggregation,
+    COVARIANCE,       ///< covariance between two sets of elements
+    CORRELATION,      ///< correlation between two sets of elements
+    TDIGEST,          ///< create a tdigest from a set of input values
+    MERGE_TDIGEST,    ///< create a tdigest by merging multiple tdigests together
+    HISTOGRAM,        ///< compute frequency of each element
+    MERGE_HISTOGRAM,  ///< merge partial values of HISTOGRAM aggregation
+    BITWISE_AGG       ///< bitwise aggregation on numeric columns
   };
 
   aggregation() = delete;
@@ -599,6 +610,18 @@ std::unique_ptr<Base> make_udf_aggregation(udf_type type,
                                            std::string const& user_defined_aggregator,
                                            data_type output_type);
 
+// Forward declaration of `host_udf_base` for the factory function of `HOST_UDF` aggregation.
+class host_udf_base;
+
+/**
+ * @brief Factory to create a HOST_UDF aggregation.
+ *
+ * @param host_udf An instance of a class derived from `host_udf_base` to perform aggregation
+ * @return A HOST_UDF aggregation object
+ */
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_host_udf_aggregation(std::unique_ptr<host_udf_base> host_udf);
+
 /**
  * @brief Factory to create a MERGE_LISTS aggregation.
  *
@@ -769,6 +792,24 @@ std::unique_ptr<Base> make_tdigest_aggregation(int max_centroids = 1000);
  */
 template <typename Base>
 std::unique_ptr<Base> make_merge_tdigest_aggregation(int max_centroids = 1000);
+
+/**
+ * @brief Factory to create a BITWISE_AGG aggregation.
+ *
+ * @param op The bitwise operation to perform on the input column
+ * @return A BITWISE_AGG aggregation object
+ */
+template <typename Base>
+std::unique_ptr<Base> make_bitwise_aggregation(bitwise_op op);
+
+/**
+ * @brief Indicate if an aggregation is supported for a source datatype.
+ *
+ * @param source Type of the column to perform the aggregation on
+ * @param kind The kind of the aggregation
+ * @returns true if the aggregation is supported
+ */
+bool is_valid_aggregation(data_type source, aggregation::Kind kind);
 
 /** @} */  // end of group
 }  // namespace CUDF_EXPORT cudf

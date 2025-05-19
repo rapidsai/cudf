@@ -93,11 +93,15 @@ expected_equality
 @pytest.mark.parametrize("ncols", [0, 1, 10])
 @pytest.mark.parametrize("data_type", ALL_TYPES)
 def test_cudf_dataframe_copy(copy_fn, ncols, data_type):
-    pdf = pd.DataFrame()
-    for i in range(ncols):
-        pdf[chr(i + ord("a"))] = pd.Series(
-            np.random.randint(0, 1000, 20)
-        ).astype(data_type)
+    rng = np.random.default_rng(seed=0)
+    pdf = pd.DataFrame(
+        {
+            chr(i + ord("a")): pd.Series(rng.integers(0, 1000, 20)).astype(
+                data_type
+            )
+            for i in range(ncols)
+        }
+    )
     df = DataFrame.from_pandas(pdf)
     copy_df = copy_fn(df)
     assert_eq(df, copy_df)
@@ -116,18 +120,20 @@ def test_cudf_dataframe_copy(copy_fn, ncols, data_type):
 @pytest.mark.parametrize("ncols", [0, 1, 10])
 @pytest.mark.parametrize("data_type", ALL_TYPES)
 def test_cudf_dataframe_copy_then_insert(copy_fn, ncols, data_type):
-    pdf = pd.DataFrame()
-    for i in range(ncols):
-        pdf[chr(i + ord("a"))] = pd.Series(
-            np.random.randint(0, 1000, 20)
-        ).astype(data_type)
+    rng = np.random.default_rng(seed=0)
+    pdf = pd.DataFrame(
+        {
+            chr(i + ord("a")): pd.Series(rng.integers(0, 1000, 20)).astype(
+                data_type
+            )
+            for i in range(ncols)
+        }
+    )
     df = DataFrame.from_pandas(pdf)
     copy_df = copy_fn(df)
     copy_pdf = copy_fn(pdf)
-    copy_df["aa"] = pd.Series(np.random.randint(0, 1000, 20)).astype(data_type)
-    copy_pdf["aa"] = pd.Series(np.random.randint(0, 1000, 20)).astype(
-        data_type
-    )
+    copy_df["aa"] = pd.Series(rng.integers(0, 1000, 20)).astype(data_type)
+    copy_pdf["aa"] = pd.Series(rng.integers(0, 1000, 20)).astype(data_type)
     assert not copy_pdf.to_string().split() == pdf.to_string().split()
     assert not copy_df.to_string().split() == df.to_string().split()
 

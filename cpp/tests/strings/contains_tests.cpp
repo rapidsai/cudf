@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -293,10 +293,10 @@ TEST_F(StringsContainsTests, HexTest)
   std::vector<cudf::size_type> offsets(
     {thrust::make_counting_iterator<cudf::size_type>(0),
      thrust::make_counting_iterator<cudf::size_type>(0) + count + 1});
-  auto d_chars = cudf::detail::make_device_uvector_sync(
+  auto d_chars = cudf::detail::make_device_uvector(
     ascii_chars, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
   auto d_offsets = std::make_unique<cudf::column>(
-    cudf::detail::make_device_uvector_sync(
+    cudf::detail::make_device_uvector(
       offsets, cudf::get_default_stream(), cudf::get_current_device_resource_ref()),
     rmm::device_buffer{},
     0);
@@ -474,6 +474,54 @@ TEST_F(StringsContainsTests, FixedQuantifier)
   }
 }
 
+TEST_F(StringsContainsTests, ZeroRangeQuantifier)
+{
+  auto input = cudf::test::strings_column_wrapper({"a", "", "abc", "XYAZ", "ABC", "ZYXA"});
+  auto sv    = cudf::strings_column_view(input);
+
+  auto pattern = std::string("A{0,}");  // should match everyting
+  auto prog    = cudf::strings::regex_program::create(pattern);
+
+  {
+    auto expected = cudf::test::fixed_width_column_wrapper<bool>({1, 1, 1, 1, 1, 1});
+    auto results  = cudf::strings::contains_re(sv, *prog);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+  }
+  {
+    auto expected = cudf::test::fixed_width_column_wrapper<cudf::size_type>({2, 1, 4, 5, 4, 5});
+    auto results  = cudf::strings::count_re(sv, *prog);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+  }
+
+  pattern = std::string("(?:ab){0,3}");
+  prog    = cudf::strings::regex_program::create(pattern);
+
+  {
+    auto expected = cudf::test::fixed_width_column_wrapper<bool>({1, 1, 1, 1, 1, 1});
+    auto results  = cudf::strings::contains_re(sv, *prog);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+  }
+  {
+    auto expected = cudf::test::fixed_width_column_wrapper<cudf::size_type>({2, 1, 3, 5, 4, 5});
+    auto results  = cudf::strings::count_re(sv, *prog);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+  }
+}
+
+TEST_F(StringsContainsTests, NestedQuantifier)
+{
+  auto input   = cudf::test::strings_column_wrapper({"TEST12 1111 2222 3333 4444 5555",
+                                                     "0000 AAAA 9999 BBBB 8888",
+                                                     "7777 6666 4444 3333",
+                                                     "12345 3333 4444 1111 ABCD"});
+  auto sv      = cudf::strings_column_view(input);
+  auto pattern = std::string(R"((\d{4}\s){4})");
+  cudf::test::fixed_width_column_wrapper<bool> expected({true, false, false, true});
+  auto prog    = cudf::strings::regex_program::create(pattern);
+  auto results = cudf::strings::contains_re(sv, *prog);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+}
+
 TEST_F(StringsContainsTests, QuantifierErrors)
 {
   EXPECT_THROW(cudf::strings::regex_program::create("^+"), cudf::logic_error);
@@ -493,7 +541,7 @@ TEST_F(StringsContainsTests, QuantifierErrors)
 TEST_F(StringsContainsTests, OverlappedClasses)
 {
   auto input = cudf::test::strings_column_wrapper({"abcdefg", "defghí", "", "éééééé", "ghijkl"});
-  auto sv = cudf::strings_column_view(input);
+  auto sv    = cudf::strings_column_view(input);
 
   {
     auto pattern = std::string("[e-gb-da-c]");
@@ -514,7 +562,7 @@ TEST_F(StringsContainsTests, OverlappedClasses)
 TEST_F(StringsContainsTests, NegatedClasses)
 {
   auto input = cudf::test::strings_column_wrapper({"abcdefg", "def\tghí", "", "éeé\néeé", "ABC"});
-  auto sv = cudf::strings_column_view(input);
+  auto sv    = cudf::strings_column_view(input);
 
   {
     auto pattern = std::string("[^a-f]");
@@ -740,7 +788,7 @@ TEST_F(StringsContainsTests, DotAll)
 TEST_F(StringsContainsTests, ASCII)
 {
   auto input = cudf::test::strings_column_wrapper({"abc \t\f\r 12", "áé 　❽❽", "aZ ❽4", "XYZ　8"});
-  auto view = cudf::strings_column_view(input);
+  auto view  = cudf::strings_column_view(input);
 
   std::array patterns = {R"(\w+[\s]+\d+)",
                          R"([^\W]+\s+[^\D]+)",

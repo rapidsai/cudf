@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,7 +27,6 @@
 #include "ipc/Schema_generated.h"
 #include "writer_impl_helpers.hpp"
 
-#include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
@@ -251,13 +250,26 @@ struct dispatch_to_flatbuf {
   std::enable_if_t<cudf::is_fixed_point<T>(), void> operator()()
   {
     field_type_id = flatbuf::Type_Decimal;
-    field_offset  = flatbuf::CreateDecimal(fbb,
-                                          (col_meta.is_decimal_precision_set())
-                                             ? col_meta.get_decimal_precision()
-                                             : MAX_DECIMAL128_PRECISION,
-                                          col->type().scale(),
-                                          128)
-                     .Union();
+
+    auto const [max_precision, bitwidth] = []() constexpr -> std::pair<int32_t, int32_t> {
+      if constexpr (std::is_same_v<T, numeric::decimal32>) {
+        return {MAX_DECIMAL32_PRECISION, 32};
+      } else if constexpr (std::is_same_v<T, numeric::decimal64>) {
+        return {MAX_DECIMAL64_PRECISION, 64};
+      } else if constexpr (std::is_same_v<T, numeric::decimal128>) {
+        return {MAX_DECIMAL128_PRECISION, 128};
+      } else {
+        CUDF_FAIL("Unsupported fixed point type for arrow schema writer");
+      }
+    }();
+
+    field_offset =
+      flatbuf::CreateDecimal(
+        fbb,
+        (col_meta.is_decimal_precision_set()) ? col_meta.get_decimal_precision() : max_precision,
+        col->type().scale(),
+        bitwidth)
+        .Union();
   }
 
   template <typename T>
@@ -337,7 +349,7 @@ std::string construct_arrow_schema_ipc_message(cudf::detail::LinkedColVector con
 {
   // Lambda function to convert int32 to a string of uint8 bytes
   auto const convert_int32_to_byte_string = [&](int32_t const value) {
-    std::array<uint8_t, sizeof(int32_t)> buffer;
+    std::array<uint8_t, sizeof(int32_t)> buffer{};
     std::memcpy(buffer.data(), &value, sizeof(int32_t));
     return std::string(reinterpret_cast<char*>(buffer.data()), buffer.size());
   };

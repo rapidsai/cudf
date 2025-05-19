@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ *  Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -62,15 +62,17 @@ abstract class Aggregation {
         LAG(23),
         PTX(24),
         CUDA(25),
-        M2(26),
-        MERGE_M2(27),
-        RANK(28),
-        DENSE_RANK(29),
-        PERCENT_RANK(30),
-        TDIGEST(31), // This can take a delta argument for accuracy level
-        MERGE_TDIGEST(32), // This can take a delta argument for accuracy level
-        HISTOGRAM(33),
-        MERGE_HISTOGRAM(34);
+        HOST_UDF(26),
+        M2(27),
+        MERGE_M2(28),
+        RANK(29),
+        DENSE_RANK(30),
+        PERCENT_RANK(31),
+        TDIGEST(32), // This can take a delta argument for accuracy level
+        MERGE_TDIGEST(33), // This can take a delta argument for accuracy level
+        HISTOGRAM(34),
+        MERGE_HISTOGRAM(35),
+        BITWISE_AGG(36);
 
         final int nativeId;
 
@@ -382,6 +384,107 @@ abstract class Aggregation {
                 return o.nullEquality == this.nullEquality && o.nanEquality == this.nanEquality;
             }
             return false;
+        }
+    }
+
+    static final class HostUDFAggregation extends Aggregation {
+        private final HostUDFWrapper wrapper;
+
+        private HostUDFAggregation(HostUDFWrapper wrapper) {
+            super(Kind.HOST_UDF);
+            this.wrapper = wrapper;
+        }
+
+        @Override
+        long createNativeInstance() {
+            long udf = 0;
+            try {
+                udf = wrapper.createUDFInstance();
+                return Aggregation.createHostUDFAgg(udf);
+            } finally {
+                // a new UDF is cloned in `createHostUDFAgg`, here should close the UDF instance.
+                if (udf != 0) {
+                    HostUDFWrapper.closeUDFInstance(udf);
+                }
+            }
+        }
+
+        @Override
+        public int hashCode() {
+            return 31 * kind.hashCode() + wrapper.hashCode();
+        }
+
+        @Override
+        public boolean equals(Object other) {
+            if (this == other) {
+                return true;
+            } else if (other instanceof HostUDFAggregation) {
+                return wrapper.equals(((HostUDFAggregation) other).wrapper);
+            }
+            return false;
+        }
+    }
+
+    static final class BitAndAggregation extends Aggregation {
+        private BitAndAggregation() {
+            super(Kind.BITWISE_AGG);
+        }
+
+        @Override
+        long createNativeInstance() {
+            return Aggregation.createBitAndAgg();
+        }
+
+        @Override
+        public int hashCode() {
+            return 31 * kind.hashCode() + ("AND").hashCode();
+        }
+
+        @Override
+        public boolean equals(Object other) {
+            return other instanceof BitAndAggregation;
+        }
+    }
+
+    static final class BitOrAggregation extends Aggregation {
+        private BitOrAggregation() {
+            super(Kind.BITWISE_AGG);
+        }
+
+        @Override
+        long createNativeInstance() {
+            return Aggregation.createBitOrAgg();
+        }
+
+        @Override
+        public int hashCode() {
+            return 31 * kind.hashCode() + ("OR").hashCode();
+        }
+
+        @Override
+        public boolean equals(Object other) {
+            return other instanceof BitAndAggregation;
+        }
+    }
+
+    static final class BitXorAggregation extends Aggregation {
+        private BitXorAggregation() {
+            super(Kind.BITWISE_AGG);
+        }
+
+        @Override
+        long createNativeInstance() {
+            return Aggregation.createBitXorAgg();
+        }
+
+        @Override
+        public int hashCode() {
+            return 31 * kind.hashCode() + ("XOR").hashCode();
+        }
+
+        @Override
+        public boolean equals(Object other) {
+            return other instanceof BitAndAggregation;
         }
     }
 
@@ -837,6 +940,15 @@ abstract class Aggregation {
         return new MergeSetsAggregation(nullEquality, nanEquality);
     }
 
+    /**
+     * Host UDF aggregation, to execute a host-side user-defined function (UDF).
+     * @param wrapper The wrapper for the native host UDF instance.
+     * @return A new HostUDFAggregation instance
+     */
+    static HostUDFAggregation hostUDF(HostUDFWrapper wrapper) {
+        return new HostUDFAggregation(wrapper);
+    }
+
     static final class LeadAggregation extends LeadLagAggregation {
         private LeadAggregation(int offset, ColumnVector defaultOutput) {
             super(Kind.LEAD, offset, defaultOutput);
@@ -940,6 +1052,18 @@ abstract class Aggregation {
         return new MergeHistogramAggregation();
     }
 
+    static BitAndAggregation bitAnd() {
+        return new BitAndAggregation();
+    }
+
+    static BitOrAggregation bitOr() {
+        return new BitOrAggregation();
+    }
+
+    static BitXorAggregation bitXor() {
+        return new BitXorAggregation();
+    }
+
     /**
      * Create one of the aggregations that only needs a kind, no other parameters. This does not
      * work for all types and for code safety reasons each kind is added separately.
@@ -990,4 +1114,24 @@ abstract class Aggregation {
      * Create a TDigest aggregation.
      */
     private static native long createTDigestAgg(int kind, int delta);
+
+    /**
+     * Create a HOST_UDF aggregation.
+     */
+    private static native long createHostUDFAgg(long udfNativeHandle);
+
+    /**
+     * Create a bitwise AND aggregation.
+     */
+    private static native long createBitAndAgg();
+
+    /**
+     * Create a bitwise OR aggregation.
+     */
+    private static native long createBitOrAgg();
+
+    /**
+     * Create a bitwise XOR aggregation.
+     */
+    private static native long createBitXorAgg();
 }

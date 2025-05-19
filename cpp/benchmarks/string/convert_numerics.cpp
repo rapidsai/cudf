@@ -16,117 +16,67 @@
 
 #include <benchmarks/common/generate_input.hpp>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
-#include <benchmarks/synchronization/synchronization.hpp>
 
 #include <cudf/strings/convert/convert_floats.hpp>
 #include <cudf/strings/convert/convert_integers.hpp>
 #include <cudf/types.hpp>
 
+#include <nvbench/nvbench.cuh>
+
 namespace {
 
 template <typename NumericType>
-std::unique_ptr<cudf::column> get_numerics_column(cudf::size_type rows)
+std::unique_ptr<cudf::column> get_strings_column(cudf::column_view const& nv)
 {
-  return create_random_column(cudf::type_to_id<NumericType>(), row_count{rows});
-}
-
-template <typename NumericType>
-std::unique_ptr<cudf::column> get_strings_column(cudf::size_type rows)
-{
-  auto const numerics_col = get_numerics_column<NumericType>(rows);
   if constexpr (std::is_floating_point_v<NumericType>) {
-    return cudf::strings::from_floats(numerics_col->view());
+    return cudf::strings::from_floats(nv);
   } else {
-    return cudf::strings::from_integers(numerics_col->view());
+    return cudf::strings::from_integers(nv);
   }
 }
-}  // anonymous namespace
+}  // namespace
 
-class StringsToNumeric : public cudf::benchmark {};
+using Types = nvbench::type_list<float, double, int32_t, int64_t, uint8_t, uint16_t>;
 
 template <typename NumericType>
-void convert_to_number(benchmark::State& state)
+void bench_convert_number(nvbench::state& state, nvbench::type_list<NumericType>)
 {
-  auto const rows = static_cast<cudf::size_type>(state.range(0));
+  auto const num_rows = static_cast<cudf::size_type>(state.get_int64("num_rows"));
+  auto const from_num = state.get_string("dir") == "from";
 
-  auto const strings_col  = get_strings_column<NumericType>(rows);
-  auto const strings_view = cudf::strings_column_view(strings_col->view());
-  auto const col_type     = cudf::type_to_id<NumericType>();
+  auto const data_type = cudf::data_type(cudf::type_to_id<NumericType>());
+  auto const num_col   = create_random_column(data_type.id(), row_count{num_rows});
 
-  for (auto _ : state) {
-    cuda_event_timer raii(state, true);
-    if constexpr (std::is_floating_point_v<NumericType>) {
-      cudf::strings::to_floats(strings_view, cudf::data_type{col_type});
-    } else {
-      cudf::strings::to_integers(strings_view, cudf::data_type{col_type});
-    }
+  auto const strings_col = get_strings_column<NumericType>(num_col->view());
+  auto const sv          = cudf::strings_column_view(strings_col->view());
+
+  auto stream = cudf::get_default_stream();
+  state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
+
+  if (from_num) {
+    state.add_global_memory_reads<NumericType>(num_rows);
+    state.add_global_memory_writes<int8_t>(sv.chars_size(stream));
+    state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
+      if constexpr (std::is_floating_point_v<NumericType>) {
+        cudf::strings::to_floats(sv, data_type);
+      } else {
+        cudf::strings::to_integers(sv, data_type);
+      }
+    });
+  } else {
+    state.add_global_memory_reads<int8_t>(sv.chars_size(stream));
+    state.add_global_memory_writes<NumericType>(num_rows);
+    state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
+      if constexpr (std::is_floating_point_v<NumericType>)
+        cudf::strings::from_floats(num_col->view());
+      else
+        cudf::strings::from_integers(num_col->view());
+    });
   }
-
-  // bytes_processed = bytes_input + bytes_output
-  state.SetBytesProcessed(
-    state.iterations() *
-    (strings_view.chars_size(cudf::get_default_stream()) + rows * sizeof(NumericType)));
 }
 
-class StringsFromNumeric : public cudf::benchmark {};
-
-template <typename NumericType>
-void convert_from_number(benchmark::State& state)
-{
-  auto const rows = static_cast<cudf::size_type>(state.range(0));
-
-  auto const numerics_col  = get_numerics_column<NumericType>(rows);
-  auto const numerics_view = numerics_col->view();
-
-  std::unique_ptr<cudf::column> results = nullptr;
-
-  for (auto _ : state) {
-    cuda_event_timer raii(state, true);
-    if constexpr (std::is_floating_point_v<NumericType>)
-      results = cudf::strings::from_floats(numerics_view);
-    else
-      results = cudf::strings::from_integers(numerics_view);
-  }
-
-  // bytes_processed = bytes_input + bytes_output
-  state.SetBytesProcessed(
-    state.iterations() *
-    (cudf::strings_column_view(results->view()).chars_size(cudf::get_default_stream()) +
-     rows * sizeof(NumericType)));
-}
-
-#define CONVERT_TO_NUMERICS_BD(name, type)                               \
-  BENCHMARK_DEFINE_F(StringsToNumeric, name)(::benchmark::State & state) \
-  {                                                                      \
-    convert_to_number<type>(state);                                      \
-  }                                                                      \
-  BENCHMARK_REGISTER_F(StringsToNumeric, name)                           \
-    ->RangeMultiplier(4)                                                 \
-    ->Range(1 << 10, 1 << 17)                                            \
-    ->UseManualTime()                                                    \
-    ->Unit(benchmark::kMicrosecond);
-
-#define CONVERT_FROM_NUMERICS_BD(name, type)                               \
-  BENCHMARK_DEFINE_F(StringsFromNumeric, name)(::benchmark::State & state) \
-  {                                                                        \
-    convert_from_number<type>(state);                                      \
-  }                                                                        \
-  BENCHMARK_REGISTER_F(StringsFromNumeric, name)                           \
-    ->RangeMultiplier(4)                                                   \
-    ->Range(1 << 10, 1 << 17)                                              \
-    ->UseManualTime()                                                      \
-    ->Unit(benchmark::kMicrosecond);
-
-CONVERT_TO_NUMERICS_BD(strings_to_float32, float);
-CONVERT_TO_NUMERICS_BD(strings_to_float64, double);
-CONVERT_TO_NUMERICS_BD(strings_to_int32, int32_t);
-CONVERT_TO_NUMERICS_BD(strings_to_int64, int64_t);
-CONVERT_TO_NUMERICS_BD(strings_to_uint8, uint8_t);
-CONVERT_TO_NUMERICS_BD(strings_to_uint16, uint16_t);
-
-CONVERT_FROM_NUMERICS_BD(strings_from_float32, float);
-CONVERT_FROM_NUMERICS_BD(strings_from_float64, double);
-CONVERT_FROM_NUMERICS_BD(strings_from_int32, int32_t);
-CONVERT_FROM_NUMERICS_BD(strings_from_int64, int64_t);
-CONVERT_FROM_NUMERICS_BD(strings_from_uint8, uint8_t);
-CONVERT_FROM_NUMERICS_BD(strings_from_uint16, uint16_t);
+NVBENCH_BENCH_TYPES(bench_convert_number, NVBENCH_TYPE_AXES(Types))
+  .set_name("numeric")
+  .set_type_axes_names({"NumericType"})
+  .add_string_axis("dir", {"to", "from"})
+  .add_int64_axis("num_rows", {1 << 16, 1 << 18, 1 << 20, 1 << 22});

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,12 +21,12 @@
 
 #include "column_buffer.hpp"
 
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
-#include <iomanip>
 #include <sstream>
 
 namespace cudf::io::detail {
@@ -63,9 +63,11 @@ void cudf::io::detail::inline_column_buffer::allocate_strings_data(bool memset_d
 }
 
 void cudf::io::detail::inline_column_buffer::create_string_data(size_t num_bytes,
+                                                                bool is_large_strings_col,
                                                                 rmm::cuda_stream_view stream)
 {
-  _string_data = rmm::device_buffer(num_bytes, stream, _mr);
+  _is_large_strings_col = is_large_strings_col;
+  _string_data          = rmm::device_buffer(num_bytes, stream, _mr);
 }
 
 namespace {
@@ -96,6 +98,9 @@ void column_buffer_base<string_policy>::create_with_mask(size_type _size,
                                                          rmm::cuda_stream_view stream,
                                                          rmm::device_async_resource_ref mr)
 {
+  CUDF_EXPECTS(_size >= 0 and _size <= std::numeric_limits<cudf::size_type>::max(),
+               "Unexpected column buffer allocation size requested",
+               std::overflow_error);
   size = _size;
   _mr  = mr;
 

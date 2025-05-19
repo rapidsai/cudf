@@ -15,6 +15,14 @@ from pylibcudf.libcudf.replace import \
 from .column cimport Column
 from .scalar cimport Scalar
 
+__all__ = [
+    "ReplacePolicy",
+    "clamp",
+    "find_and_replace_all",
+    "normalize_nans_and_zeros",
+    "replace_nulls",
+]
+
 
 cpdef Column replace_nulls(Column source_column, ReplacementType replacement):
     """Replace nulls in source_column.
@@ -56,28 +64,23 @@ cpdef Column replace_nulls(Column source_column, ReplacementType replacement):
         if isinstance(replacement, ReplacePolicy):
             policy = replacement
             with nogil:
-                c_result = move(
-                    cpp_replace.replace_nulls(source_column.view(), policy)
-                )
+                c_result = cpp_replace.replace_nulls(source_column.view(), policy)
             return Column.from_libcudf(move(c_result))
         else:
             raise TypeError("replacement must be a Column, Scalar, or replace_policy")
 
     with nogil:
         if ReplacementType is Column:
-            c_result = move(
-                cpp_replace.replace_nulls(source_column.view(), replacement.view())
+            c_result = cpp_replace.replace_nulls(
+                source_column.view(),
+                replacement.view()
             )
         elif ReplacementType is Scalar:
-            c_result = move(
-                cpp_replace.replace_nulls(
-                    source_column.view(), dereference(replacement.c_obj)
-                )
+            c_result = cpp_replace.replace_nulls(
+                source_column.view(), dereference(replacement.c_obj)
             )
         elif ReplacementType is replace_policy:
-            c_result = move(
-                cpp_replace.replace_nulls(source_column.view(), replacement)
-            )
+            c_result = cpp_replace.replace_nulls(source_column.view(), replacement)
         else:
             assert False, "Internal error. Please contact pylibcudf developers"
     return Column.from_libcudf(move(c_result))
@@ -109,12 +112,10 @@ cpdef Column find_and_replace_all(
     """
     cdef unique_ptr[column] c_result
     with nogil:
-        c_result = move(
-            cpp_replace.find_and_replace_all(
-                source_column.view(),
-                values_to_replace.view(),
-                replacement_values.view(),
-            )
+        c_result = cpp_replace.find_and_replace_all(
+            source_column.view(),
+            values_to_replace.view(),
+            replacement_values.view(),
         )
     return Column.from_libcudf(move(c_result))
 
@@ -156,22 +157,18 @@ cpdef Column clamp(
     cdef unique_ptr[column] c_result
     with nogil:
         if lo_replace is None:
-            c_result = move(
-                cpp_replace.clamp(
-                    source_column.view(),
-                    dereference(lo.c_obj),
-                    dereference(hi.c_obj),
-                )
+            c_result = cpp_replace.clamp(
+                source_column.view(),
+                dereference(lo.c_obj),
+                dereference(hi.c_obj),
             )
         else:
-            c_result = move(
-                cpp_replace.clamp(
-                    source_column.view(),
-                    dereference(lo.c_obj),
-                    dereference(hi.c_obj),
-                    dereference(lo_replace.c_obj),
-                    dereference(hi_replace.c_obj),
-                )
+            c_result = cpp_replace.clamp(
+                source_column.view(),
+                dereference(lo.c_obj),
+                dereference(hi.c_obj),
+                dereference(lo_replace.c_obj),
+                dereference(hi_replace.c_obj),
             )
     return Column.from_libcudf(move(c_result))
 
@@ -199,9 +196,7 @@ cpdef Column normalize_nans_and_zeros(Column source_column, bool inplace=False):
         if inplace:
             cpp_replace.normalize_nans_and_zeros(source_column.mutable_view())
         else:
-            c_result = move(
-                cpp_replace.normalize_nans_and_zeros(source_column.view())
-            )
+            c_result = cpp_replace.normalize_nans_and_zeros(source_column.view())
 
     if not inplace:
         return Column.from_libcudf(move(c_result))

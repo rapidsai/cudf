@@ -1,16 +1,17 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 import pyarrow as pa
 import pyarrow.compute as pc
-import pylibcudf as plc
 import pytest
 from utils import assert_column_eq, assert_table_eq
+
+import pylibcudf as plc
 
 
 @pytest.fixture
 def data_col():
     pa_array = pa.array(["a_b_c", "d-e-f", None])
-    plc_column = plc.interop.from_arrow(pa_array)
+    plc_column = plc.Column(pa_array)
     return pa_array, plc_column
 
 
@@ -29,79 +30,79 @@ def re_delimiter():
 def test_split(data_col, delimiter):
     _, plc_column = data_col
     _, plc_delimiter = delimiter
-    result = plc.strings.split.split.split(plc_column, plc_delimiter, 1)
-    expected = pa.table(
+    got = plc.strings.split.split.split(plc_column, plc_delimiter, 1)
+    expect = pa.table(
         {
             "a": ["a", "d-e-f", None],
             "b": ["b_c", None, None],
         }
     )
-    assert_table_eq(expected, result)
+    assert_table_eq(expect, got)
 
 
 def test_rsplit(data_col, delimiter):
     _, plc_column = data_col
     _, plc_delimiter = delimiter
-    result = plc.strings.split.split.rsplit(plc_column, plc_delimiter, 1)
-    expected = pa.table(
+    got = plc.strings.split.split.rsplit(plc_column, plc_delimiter, 1)
+    expect = pa.table(
         {
             "a": ["a_b", "d-e-f", None],
             "b": ["c", None, None],
         }
     )
-    assert_table_eq(expected, result)
+    assert_table_eq(expect, got)
 
 
 def test_split_record(data_col, delimiter):
     pa_array, plc_column = data_col
     delim, plc_delim = delimiter
-    result = plc.strings.split.split.split_record(plc_column, plc_delim, 1)
-    expected = pc.split_pattern(pa_array, delim, max_splits=1)
-    assert_column_eq(expected, result)
+    got = plc.strings.split.split.split_record(plc_column, plc_delim, 1)
+    expect = pc.split_pattern(pa_array, delim, max_splits=1)
+    assert_column_eq(expect, got)
 
 
 def test_rsplit_record(data_col, delimiter):
     pa_array, plc_column = data_col
     delim, plc_delim = delimiter
-    result = plc.strings.split.split.split_record(plc_column, plc_delim, 1)
-    expected = pc.split_pattern(pa_array, delim, max_splits=1)
-    assert_column_eq(expected, result)
+    got = plc.strings.split.split.split_record(plc_column, plc_delim, 1)
+    expect = pc.split_pattern(pa_array, delim, max_splits=1)
+    assert_column_eq(expect, got)
 
 
 def test_split_re(data_col, re_delimiter):
     _, plc_column = data_col
-    result = plc.strings.split.split.split_re(
+    got = plc.strings.split.split.split_re(
         plc_column,
         plc.strings.regex_program.RegexProgram.create(
             re_delimiter, plc.strings.regex_flags.RegexFlags.DEFAULT
         ),
         1,
     )
-    expected = pa.table(
+    expect = pa.table(
         {
             "a": ["a", "d", None],
             "b": ["b_c", "e-f", None],
         }
     )
-    assert_table_eq(expected, result)
+    assert_table_eq(expect, got)
 
 
 def test_rsplit_re(data_col, re_delimiter):
     _, plc_column = data_col
-    result = plc.strings.split.split.rsplit_re(
+    got = plc.strings.split.split.rsplit_re(
         plc_column,
         plc.strings.regex_program.RegexProgram.create(
             re_delimiter, plc.strings.regex_flags.RegexFlags.DEFAULT
         ),
         1,
     )
-    expected = pa.table(
+    expect = pa.table(
         {
             "a": ["a_b", "d-e", None],
             "b": ["c", "f", None],
         }
     )
-    assert_table_eq(expected, result)
+    assert_table_eq(expect, got)
 
 
 def test_split_record_re(data_col, re_delimiter):
@@ -119,12 +120,12 @@ def test_split_record_re(data_col, re_delimiter):
 
 def test_rsplit_record_re(data_col, re_delimiter):
     pa_array, plc_column = data_col
-    result = plc.strings.split.split.rsplit_record_re(
+    got = plc.strings.split.split.rsplit_record_re(
         plc_column,
         plc.strings.regex_program.RegexProgram.create(
             re_delimiter, plc.strings.regex_flags.RegexFlags.DEFAULT
         ),
         -1,
     )
-    expected = pc.split_pattern_regex(pa_array, re_delimiter)
-    assert_column_eq(expected, result)
+    expect = pc.split_pattern_regex(pa_array, re_delimiter)
+    assert_column_eq(expect, got)

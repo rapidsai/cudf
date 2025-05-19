@@ -6,6 +6,7 @@ from pylibcudf.column cimport Column
 from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.strings.convert cimport convert_ipv4 as cpp_convert_ipv4
 
+__all__ = ["integers_to_ipv4", "ipv4_to_integers", "is_ipv4"]
 
 cpdef Column ipv4_to_integers(Column input):
     """
@@ -26,11 +27,7 @@ cpdef Column ipv4_to_integers(Column input):
     cdef unique_ptr[column] c_result
 
     with nogil:
-        c_result = move(
-            cpp_convert_ipv4.ipv4_to_integers(
-                input.view()
-            )
-        )
+        c_result = cpp_convert_ipv4.ipv4_to_integers(input.view())
 
     return Column.from_libcudf(move(c_result))
 
@@ -54,11 +51,7 @@ cpdef Column integers_to_ipv4(Column integers):
     cdef unique_ptr[column] c_result
 
     with nogil:
-        c_result = move(
-            cpp_convert_ipv4.integers_to_ipv4(
-                integers.view()
-            )
-        )
+        c_result = cpp_convert_ipv4.integers_to_ipv4(integers.view())
 
     return Column.from_libcudf(move(c_result))
 
@@ -83,10 +76,6 @@ cpdef Column is_ipv4(Column input):
     cdef unique_ptr[column] c_result
 
     with nogil:
-        c_result = move(
-            cpp_convert_ipv4.is_ipv4(
-                input.view()
-            )
-        )
+        c_result = cpp_convert_ipv4.is_ipv4(input.view())
 
     return Column.from_libcudf(move(c_result))

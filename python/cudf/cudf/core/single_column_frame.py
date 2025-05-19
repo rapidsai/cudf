@@ -1,10 +1,11 @@
-# Copyright (c) 2021-2024, NVIDIA CORPORATION.
+# Copyright (c) 2021-2025, NVIDIA CORPORATION.
 """Base class for Frame types that only have a single column."""
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+import cupy as cp
 from typing_extensions import Self
 
 import cudf
@@ -12,13 +13,14 @@ from cudf.api.extensions import no_default
 from cudf.api.types import (
     _is_scalar_or_zero_d_array,
     is_integer,
-    is_numeric_dtype,
 )
-from cudf.core.column import ColumnBase, as_column
+from cudf.core.column import ColumnBase, as_column, column_empty
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.frame import Frame
+from cudf.core.mixins import NotIterable
+from cudf.utils.dtypes import SIZE_TYPE_DTYPE, is_dtype_obj_numeric
 from cudf.utils.performance_tracking import _performance_tracking
-from cudf.utils.utils import NotIterable
+from cudf.utils.utils import _is_same_name
 
 if TYPE_CHECKING:
     from collections.abc import Hashable
@@ -27,7 +29,7 @@ if TYPE_CHECKING:
     import numpy
     import pyarrow as pa
 
-    from cudf._typing import NotImplementedType, ScalarLike
+    from cudf._typing import Dtype, NotImplementedType, ScalarLike
 
 
 class SingleColumnFrame(Frame, NotIterable):
@@ -36,11 +38,6 @@ class SingleColumnFrame(Frame, NotIterable):
     Frames with only a single column (Index or Series)
     share certain logic that is encoded in this class.
     """
-
-    _SUPPORT_AXIS_LOOKUP = {
-        0: 0,
-        "index": 0,
-    }
 
     @_performance_tracking
     def _reduce(
@@ -53,7 +50,7 @@ class SingleColumnFrame(Frame, NotIterable):
         if axis not in (None, 0, no_default):
             raise NotImplementedError("axis parameter is not implemented yet")
 
-        if numeric_only and not is_numeric_dtype(self.dtype):
+        if numeric_only and not is_dtype_obj_numeric(self.dtype):
             raise TypeError(
                 f"Series.{op} does not allow numeric_only={numeric_only} "
                 "with non-numeric dtypes."
@@ -83,7 +80,7 @@ class SingleColumnFrame(Frame, NotIterable):
 
     @property  # type: ignore
     @_performance_tracking
-    def ndim(self) -> int:  # noqa: D401
+    def ndim(self) -> int:
         """Number of dimensions of the underlying data, by definition 1."""
         return 1
 
@@ -105,12 +102,52 @@ class SingleColumnFrame(Frame, NotIterable):
 
     @property  # type: ignore
     @_performance_tracking
-    def values(self) -> cupy.ndarray:  # noqa: D102
-        return self._column.values
+    def values(self) -> cupy.ndarray:
+        col = self._column
+        if col.dtype.kind in {"i", "u", "f", "b"} and not col.has_nulls():
+            return cp.asarray(col)
+        return col.values
+
+    # TODO: We added fast paths in cudf #18555 to make `to_cupy` and `.values` faster
+    # in common cases (like no nulls, no type conversion, no copying). But these fast
+    # paths only work in limited situations. We should look into expanding the fast
+    # path to cover more types of columns.
+    @_performance_tracking
+    def to_cupy(
+        self,
+        dtype: Dtype | None = None,
+        copy: bool = False,
+        na_value=None,
+    ) -> cupy.ndarray:
+        """
+        Convert the SingleColumnFrame (e.g., Series) to a CuPy array.
+
+        Parameters
+        ----------
+        dtype : str or :class:`numpy.dtype`, optional
+            The dtype to pass to :func:`cupy.asarray`.
+        copy : bool, default False
+            Whether to ensure that the returned value is not a view on
+            another array. ``copy=False`` does not guarantee a zero-copy conversion,
+            but ``copy=True`` guarantees a copy is made.
+        na_value : Any, default None
+            The value to use for missing values. If specified, nulls will be filled
+            before converting to a CuPy array. If not specified and nulls are present,
+            falls back to the slower path.
+
+        Returns
+        -------
+        cupy.ndarray
+        """
+        return (
+            super()
+            .to_cupy(dtype=dtype, copy=copy, na_value=na_value)
+            .reshape(len(self), order="F")
+        )
 
     @property  # type: ignore
     @_performance_tracking
-    def values_host(self) -> numpy.ndarray:  # noqa: D102
+    def values_host(self) -> numpy.ndarray:
         return self._column.values_host
 
     @classmethod
@@ -124,7 +161,7 @@ class SingleColumnFrame(Frame, NotIterable):
 
     @classmethod
     @_performance_tracking
-    def from_arrow(cls, array) -> Self:
+    def from_arrow(cls, array: pa.Array) -> Self:
         raise NotImplementedError
 
     @_performance_tracking
@@ -157,6 +194,28 @@ class SingleColumnFrame(Frame, NotIterable):
         ]
         """
         return self._column.to_arrow()
+
+    def tolist(self) -> None:
+        """Conversion to host memory lists is currently unsupported
+
+        Raises
+        ------
+        TypeError
+            If this method is called
+
+        Notes
+        -----
+        cuDF currently does not support implicit conversion from GPU stored series to
+        host stored lists. A `TypeError` is raised when this method is called.
+        Consider calling `.to_arrow().to_pylist()` to construct a Python list.
+        """
+        raise TypeError(
+            "cuDF does not support conversion to host memory "
+            "via the `tolist()` method. Consider using "
+            "`.to_arrow().to_pylist()` to construct a Python list."
+        )
+
+    to_list = tolist
 
     def _to_frame(
         self, name: Hashable, index: cudf.Index | None
@@ -288,9 +347,9 @@ class SingleColumnFrame(Frame, NotIterable):
         # Get the appropriate name for output operations involving two objects
         # that are Series-like objects. The output shares the lhs's name unless
         # the rhs is a _differently_ named Series-like object.
-        if isinstance(
-            other, SingleColumnFrame
-        ) and not cudf.utils.utils._is_same_name(self.name, other.name):
+        if isinstance(other, SingleColumnFrame) and not _is_same_name(
+            self.name, other.name
+        ):
             result_name = None
         else:
             result_name = self.name
@@ -346,7 +405,7 @@ class SingleColumnFrame(Frame, NotIterable):
         else:
             arg = as_column(arg)
             if len(arg) == 0:
-                arg = cudf.core.column.column_empty(0, dtype="int32")
+                arg = column_empty(0, dtype=SIZE_TYPE_DTYPE)
             if arg.dtype.kind in "iu":
                 return self._column.take(arg)
             if arg.dtype.kind == "b":
@@ -356,32 +415,6 @@ class SingleColumnFrame(Frame, NotIterable):
                     )
                 return self._column.apply_boolean_mask(arg)
             raise NotImplementedError(f"Unknown indexer {type(arg)}")
-
-    @_performance_tracking
-    def where(self, cond, other=None, inplace=False):
-        from cudf.core._internals.where import (
-            _check_and_cast_columns_with_other,
-        )
-
-        if isinstance(other, cudf.DataFrame):
-            raise NotImplementedError(
-                "cannot align with a higher dimensional Frame"
-            )
-        cond = as_column(cond)
-        if len(cond) != len(self):
-            raise ValueError(
-                """Array conditional must be same shape as self"""
-            )
-
-        if not cudf.api.types.is_scalar(other):
-            other = cudf.core.column.as_column(other)
-
-        input_col, other = _check_and_cast_columns_with_other(
-            source_col=self._column, other=other, inplace=inplace
-        )
-
-        result = cudf._lib.copying.copy_if_else(input_col, other, cond)
-        return result._with_type_metadata(self.dtype)
 
     @_performance_tracking
     def transpose(self):

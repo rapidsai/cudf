@@ -47,8 +47,8 @@ def test_series_map_callable_numeric_basic():
 @pytest.mark.parametrize("nelem", list(product([2, 10, 100, 1000])))
 def test_series_map_callable_numeric_random(nelem):
     # Generate data
-    np.random.seed(0)
-    data = np.random.random(nelem) * 100
+    rng = np.random.default_rng(seed=0)
+    data = rng.random(nelem) * 100
 
     sr = Series(data)
     pdsr = pd.Series(data)

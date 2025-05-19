@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2024, NVIDIA CORPORATION.
+# Copyright (c) 2018-2025, NVIDIA CORPORATION.
 
 import glob
 import os
@@ -12,10 +12,6 @@ from dask import dataframe as dd
 import cudf
 
 import dask_cudf
-from dask_cudf.tests.utils import skip_dask_expr
-
-# No dask-expr support for dask<2024.4.0
-pytestmark = skip_dask_expr(lt_version="2024.4.0")
 
 cur_dir = os.path.dirname(__file__)
 sample_orc = os.path.join(cur_dir, "data/orc/sample.orc")
@@ -145,3 +141,17 @@ def test_to_orc(tmpdir, dtypes, compression, compute):
     # the cudf dataframes (df and df_read)
     dd.assert_eq(df, ddf_read)
     dd.assert_eq(df_read, ddf_read)
+
+
+def test_deprecated_api_paths(tmpdir):
+    df = dask_cudf.DataFrame.from_dict({"a": range(100)}, npartitions=1)
+    path = tmpdir.join("test.orc")
+    # Top-level to_orc function is deprecated
+    with pytest.warns(match="dask_cudf.to_orc is now deprecated"):
+        dask_cudf.to_orc(df, path, write_index=False)
+
+    # Encourage top-level read_orc import only
+    paths = glob.glob(str(path) + "/*.orc")
+    with pytest.warns(match="dask_cudf.io.read_orc is now deprecated"):
+        df2 = dask_cudf.io.read_orc(paths)
+    dd.assert_eq(df, df2, check_divisions=False)

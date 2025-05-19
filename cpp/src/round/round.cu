@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -208,8 +208,7 @@ struct half_even_fixed_point {
 };
 
 template <typename T,
-          template <typename>
-          typename RoundFunctor,
+          template <typename> typename RoundFunctor,
           std::enable_if_t<not cudf::is_fixed_point<T>()>* = nullptr>
 std::unique_ptr<column> round_with(column_view const& input,
                                    int32_t decimal_places,
@@ -240,8 +239,7 @@ std::unique_ptr<column> round_with(column_view const& input,
 }
 
 template <typename T,
-          template <typename>
-          typename RoundFunctor,
+          template <typename> typename RoundFunctor,
           std::enable_if_t<cudf::is_fixed_point<T>()>* = nullptr>
 std::unique_ptr<column> round_with(column_view const& input,
                                    int32_t decimal_places,
@@ -358,10 +356,11 @@ std::unique_ptr<column> round(column_view const& input,
 std::unique_ptr<column> round(column_view const& input,
                               int32_t decimal_places,
                               rounding_method method,
+                              rmm::cuda_stream_view stream,
                               rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::round(input, decimal_places, method, cudf::get_default_stream(), mr);
+  return detail::round(input, decimal_places, method, stream, mr);
 }
 
 }  // namespace cudf

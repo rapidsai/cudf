@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "io/comp/nvcomp_adapter.hpp"
+#include "io/comp/io_uncomp.hpp"
 #include "io/text/device_data_chunks.hpp"
 
 #include <cudf/detail/nvtx/ranges.hpp>
@@ -73,9 +73,10 @@ class bgzip_data_chunk_reader : public data_chunk_reader {
   {
     // Buffer needs to be padded.
     // Required by `inflate_kernel`.
-    device.resize(cudf::util::round_up_safe(host.size(), BUFFER_PADDING_MULTIPLE), stream);
-    CUDF_CUDA_TRY(cudaMemcpyAsync(
-      device.data(), host.data(), host.size() * sizeof(T), cudaMemcpyDefault, stream.value()));
+    device.resize(cudf::util::round_up_safe(host.size(), cudf::io::detail::BUFFER_PADDING_MULTIPLE),
+                  stream);
+    cudf::detail::cuda_memcpy_async<T>(
+      device_span<T>{device}.subspan(0, host.size()), host, stream);
   }
 
   struct decompression_blocks {
@@ -94,7 +95,7 @@ class bgzip_data_chunk_reader : public data_chunk_reader {
     rmm::device_uvector<std::size_t> d_decompressed_offsets;
     rmm::device_uvector<device_span<uint8_t const>> d_compressed_spans;
     rmm::device_uvector<device_span<uint8_t>> d_decompressed_spans;
-    rmm::device_uvector<compression_result> d_decompression_results;
+    rmm::device_uvector<cudf::io::detail::compression_result> d_decompression_results;
     std::size_t compressed_size_with_headers{};
     std::size_t max_decompressed_size{};
     // this is usually equal to decompressed_size()
@@ -147,23 +148,14 @@ class bgzip_data_chunk_reader : public data_chunk_reader {
         span_it,
         bgzip_nvcomp_transform_functor{reinterpret_cast<uint8_t const*>(d_compressed_blocks.data()),
                                        reinterpret_cast<uint8_t*>(d_decompressed_blocks.data())});
-      if (decompressed_size() > 0) {
-        if (nvcomp::is_decompression_disabled(nvcomp::compression_type::DEFLATE)) {
-          gpuinflate(d_compressed_spans,
-                     d_decompressed_spans,
-                     d_decompression_results,
-                     gzip_header_included::NO,
-                     stream);
-        } else {
-          cudf::io::nvcomp::batched_decompress(cudf::io::nvcomp::compression_type::DEFLATE,
-                                               d_compressed_spans,
-                                               d_decompressed_spans,
-                                               d_decompression_results,
-                                               max_decompressed_size,
-                                               decompressed_size(),
-                                               stream);
-        }
-      }
+
+      cudf::io::detail::decompress(cudf::io::compression_type::ZLIB,
+                                   d_compressed_spans,
+                                   d_decompressed_spans,
+                                   d_decompression_results,
+                                   max_decompressed_size,
+                                   decompressed_size(),
+                                   stream);
       is_decompressed = true;
     }
 

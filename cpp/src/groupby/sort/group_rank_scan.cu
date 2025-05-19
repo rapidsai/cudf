@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,6 +29,8 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/std/functional>
+#include <cuda/std/limits>
 #include <thrust/functional.h>
 #include <thrust/iterator/reverse_iterator.h>
 #include <thrust/pair.h>
@@ -145,7 +147,7 @@ std::unique_ptr<column> rank_generator(column_view const& grouped_values,
                                 group_labels_begin + group_labels.size(),
                                 mutable_rank_begin,
                                 mutable_rank_begin,
-                                thrust::equal_to{},
+                                cuda::std::equal_to{},
                                 scan_op);
   return ranks;
 }
@@ -185,7 +187,7 @@ std::unique_ptr<column> max_rank_scan(column_view const& grouped_values,
     group_labels,
     group_offsets,
     [] __device__(bool unequal, auto row_index_in_group) {
-      return unequal ? row_index_in_group + 1 : std::numeric_limits<size_type>::max();
+      return unequal ? row_index_in_group + 1 : cuda::std::numeric_limits<size_type>::max();
     },
     DeviceMin{},
     has_nested_nulls(table_view{{grouped_values}}),

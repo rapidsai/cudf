@@ -24,16 +24,6 @@
 
 using TestingTypes = cudf::test::NumericTypes;
 
-namespace cudf {
-// To print meanvar for debug.
-// Needs to be in the cudf namespace for ADL
-template <typename T>
-std::ostream& operator<<(std::ostream& os, cudf::meanvar<T> const& rhs)
-{
-  return os << "[" << rhs.value << ", " << rhs.value_squared << ", " << rhs.count << "] ";
-};
-}  // namespace cudf
-
 template <typename T>
 struct NumericPairIteratorTest : public IteratorTest<T> {};
 
@@ -53,6 +43,7 @@ struct transformer_pair_meanvar {
   };
 };
 
+namespace {
 struct sum_if_not_null {
   template <typename T>
   CUDF_HOST_DEVICE inline thrust::pair<T, bool> operator()(thrust::pair<T, bool> const& lhs,
@@ -66,6 +57,7 @@ struct sum_if_not_null {
       return {rhs};
   }
 };
+}  // namespace
 
 // TODO: enable this test also at __CUDACC_DEBUG__
 // This test causes fatal compilation error only at device debug mode.

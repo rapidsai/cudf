@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,13 +21,13 @@
 
 #pragma once
 
-#include "parquet.hpp"
 #include "parquet_gpu.hpp"
 
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/io/data_sink.hpp>
 #include <cudf/io/detail/parquet.hpp>
 #include <cudf/io/parquet.hpp>
+#include <cudf/io/parquet_schema.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/error.hpp>
 
@@ -144,7 +144,7 @@ class writer::impl {
   rmm::cuda_stream_view _stream;
 
   // Writer options.
-  Compression const _compression;
+  compression_type const _compression;
   size_t const _max_row_group_size;
   size_type const _max_row_group_rows;
   size_t const _max_page_size_bytes;

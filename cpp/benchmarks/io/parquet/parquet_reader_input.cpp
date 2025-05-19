@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -64,7 +64,7 @@ void BM_parquet_read_data_common(nvbench::state& state,
 {
   auto const d_type      = get_type_or_group(static_cast<int32_t>(DataType));
   auto const source_type = retrieve_io_type_enum(state.get_string("io_type"));
-  auto const data_size = static_cast<size_t>(state.get_int64("data_size"));
+  auto const data_size   = static_cast<size_t>(state.get_int64("data_size"));
   auto const compression = cudf::io::compression_type::SNAPPY;
   cuio_source_sink_pair source_sink(source_type);
 
@@ -93,6 +93,48 @@ void BM_parquet_read_data(nvbench::state& state,
     state, data_profile_builder().cardinality(cardinality).avg_run_length(run_length), type_list);
 }
 
+void BM_parquet_read_long_strings(nvbench::state& state)
+{
+  auto const cardinality = static_cast<cudf::size_type>(state.get_int64("cardinality"));
+
+  auto const d_type      = get_type_or_group(static_cast<int32_t>(data_type::STRING));
+  auto const source_type = retrieve_io_type_enum(state.get_string("io_type"));
+  auto const compression = cudf::io::compression_type::SNAPPY;
+  cuio_source_sink_pair source_sink(source_type);
+
+  auto const avg_string_length = static_cast<cudf::size_type>(state.get_int64("avg_string_length"));
+  // corresponds to 3 sigma (full width 6 sigma: 99.7% of range)
+  auto const half_width =
+    avg_string_length >> 3;  // 32 +/- 4, 128 +/- 16, 1024 +/- 128, 8k +/- 1k, etc.
+  auto const length_min = avg_string_length - half_width;
+  auto const length_max = avg_string_length + half_width;
+
+  data_profile profile =
+    data_profile_builder()
+      .cardinality(cardinality)
+      .avg_run_length(1)
+      .distribution(data_type::STRING, distribution_id::NORMAL, length_min, length_max);
+
+  auto const num_rows_written = [&]() {
+    auto const tbl = create_random_table(
+      cycle_dtypes(d_type, num_cols), table_size_bytes{data_size}, profile);  // THIS
+    auto const view = tbl->view();
+
+    // set smaller threshold to reduce file size and execution time
+    auto const threshold = 1;
+    setenv("LIBCUDF_LARGE_STRINGS_THRESHOLD", std::to_string(threshold).c_str(), 1);
+
+    cudf::io::parquet_writer_options write_opts =
+      cudf::io::parquet_writer_options::builder(source_sink.make_sink_info(), view)
+        .compression(compression);
+    cudf::io::write_parquet(write_opts);
+    return view.num_rows();
+  }();
+
+  parquet_read_common(num_rows_written, num_cols, source_sink, state);
+  unsetenv("LIBCUDF_LARGE_STRINGS_THRESHOLD");
+}
+
 template <data_type DataType>
 void BM_parquet_read_fixed_width_struct(nvbench::state& state,
                                         nvbench::type_list<nvbench::enum_type<DataType>> type_list)
@@ -113,6 +155,7 @@ void BM_parquet_read_io_compression(nvbench::state& state)
 {
   auto const d_type = get_type_or_group({static_cast<int32_t>(data_type::INTEGRAL),
                                          static_cast<int32_t>(data_type::FLOAT),
+                                         static_cast<int32_t>(data_type::BOOL8),
                                          static_cast<int32_t>(data_type::DECIMAL),
                                          static_cast<int32_t>(data_type::TIMESTAMP),
                                          static_cast<int32_t>(data_type::DURATION),
@@ -124,7 +167,7 @@ void BM_parquet_read_io_compression(nvbench::state& state)
   auto const run_length  = static_cast<cudf::size_type>(state.get_int64("run_length"));
   auto const source_type = retrieve_io_type_enum(state.get_string("io_type"));
   auto const compression = retrieve_compression_type_enum(state.get_string("compression_type"));
-  auto const data_size = static_cast<size_t>(state.get_int64("data_size"));
+  auto const data_size   = static_cast<size_t>(state.get_int64("data_size"));
   cuio_source_sink_pair source_sink(source_type);
 
   auto const num_rows_written = [&]() {
@@ -180,13 +223,13 @@ void BM_parquet_read_io_small_mixed(nvbench::state& state)
 template <data_type DataType>
 void BM_parquet_read_chunks(nvbench::state& state, nvbench::type_list<nvbench::enum_type<DataType>>)
 {
-  auto const d_type      = get_type_or_group(static_cast<int32_t>(DataType));
-  auto const cardinality = static_cast<cudf::size_type>(state.get_int64("cardinality"));
-  auto const run_length  = static_cast<cudf::size_type>(state.get_int64("run_length"));
-  auto const chunk_read_limit  = static_cast<cudf::size_type>(state.get_int64("chunk_read_limit"));
-  auto const source_type = retrieve_io_type_enum(state.get_string("io_type"));
-  auto const data_size = static_cast<size_t>(state.get_int64("data_size"));
-  auto const compression = cudf::io::compression_type::SNAPPY;
+  auto const d_type           = get_type_or_group(static_cast<int32_t>(DataType));
+  auto const cardinality      = static_cast<cudf::size_type>(state.get_int64("cardinality"));
+  auto const run_length       = static_cast<cudf::size_type>(state.get_int64("run_length"));
+  auto const chunk_read_limit = static_cast<cudf::size_type>(state.get_int64("chunk_read_limit"));
+  auto const source_type      = retrieve_io_type_enum(state.get_string("io_type"));
+  auto const data_size        = static_cast<size_t>(state.get_int64("data_size"));
+  auto const compression      = cudf::io::compression_type::SNAPPY;
   cuio_source_sink_pair source_sink(source_type);
 
   auto const num_rows_written = [&]() {
@@ -234,16 +277,17 @@ void BM_parquet_read_chunks(nvbench::state& state, nvbench::type_list<nvbench::e
 }
 
 template <data_type DataType>
-void BM_parquet_read_subrowgroup_chunks(nvbench::state& state, nvbench::type_list<nvbench::enum_type<DataType>>)
+void BM_parquet_read_subrowgroup_chunks(nvbench::state& state,
+                                        nvbench::type_list<nvbench::enum_type<DataType>>)
 {
-  auto const d_type      = get_type_or_group(static_cast<int32_t>(DataType));
-  auto const cardinality = static_cast<cudf::size_type>(state.get_int64("cardinality"));
-  auto const run_length  = static_cast<cudf::size_type>(state.get_int64("run_length"));
-  auto const chunk_read_limit  = static_cast<cudf::size_type>(state.get_int64("chunk_read_limit"));
+  auto const d_type           = get_type_or_group(static_cast<int32_t>(DataType));
+  auto const cardinality      = static_cast<cudf::size_type>(state.get_int64("cardinality"));
+  auto const run_length       = static_cast<cudf::size_type>(state.get_int64("run_length"));
+  auto const chunk_read_limit = static_cast<cudf::size_type>(state.get_int64("chunk_read_limit"));
   auto const pass_read_limit  = static_cast<cudf::size_type>(state.get_int64("pass_read_limit"));
-  auto const source_type = retrieve_io_type_enum(state.get_string("io_type"));
-  auto const data_size = static_cast<size_t>(state.get_int64("data_size"));
-  auto const compression = cudf::io::compression_type::SNAPPY;
+  auto const source_type      = retrieve_io_type_enum(state.get_string("io_type"));
+  auto const data_size        = static_cast<size_t>(state.get_int64("data_size"));
+  auto const compression      = cudf::io::compression_type::SNAPPY;
   cuio_source_sink_pair source_sink(source_type);
 
   auto const num_rows_written = [&]() {
@@ -271,7 +315,7 @@ void BM_parquet_read_subrowgroup_chunks(nvbench::state& state, nvbench::type_lis
       try_drop_l3_cache();
 
       timer.start();
-      auto reader                   = cudf::io::chunked_parquet_reader(chunk_read_limit, pass_read_limit, read_opts);
+      auto reader = cudf::io::chunked_parquet_reader(chunk_read_limit, pass_read_limit, read_opts);
       cudf::size_type num_rows_read = 0;
       do {
         auto const result = reader.read_chunk();
@@ -356,6 +400,7 @@ void BM_parquet_read_wide_tables_mixed(nvbench::state& state)
 
 using d_type_list = nvbench::enum_type_list<data_type::INTEGRAL,
                                             data_type::FLOAT,
+                                            data_type::BOOL8,
                                             data_type::DECIMAL,
                                             data_type::TIMESTAMP,
                                             data_type::DURATION,
@@ -437,3 +482,10 @@ NVBENCH_BENCH_TYPES(BM_parquet_read_fixed_width_struct, NVBENCH_TYPE_AXES(d_type
   .add_int64_axis("cardinality", {0, 1000})
   .add_int64_axis("run_length", {1, 32})
   .add_int64_axis("data_size", {512 << 20});
+
+NVBENCH_BENCH(BM_parquet_read_long_strings)
+  .set_name("parquet_read_long_strings")
+  .add_string_axis("io_type", {"DEVICE_BUFFER"})
+  .set_min_samples(4)
+  .add_int64_axis("cardinality", {0, 1000})
+  .add_int64_power_of_two_axis("avg_string_length",

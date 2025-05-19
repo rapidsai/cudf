@@ -1,10 +1,11 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
 
-import pylibcudf as plc
 import pytest
+
+import pylibcudf as plc
 
 from cudf_polars.dsl import expr
 
@@ -73,3 +74,36 @@ def test_namedexpr_repr_stable():
     b2 = expr.NamedExpr("b1", expr.Col(plc.DataType(plc.TypeId.INT8), "a"))
 
     assert repr(b1) == repr(b2)
+
+
+def test_equality_cse():
+    dt = plc.DataType(plc.TypeId.INT8)
+
+    def make_expr(n1, n2):
+        a = expr.Col(plc.DataType(plc.TypeId.INT8), n1)
+        b = expr.Col(plc.DataType(plc.TypeId.INT8), n2)
+
+        return expr.BinOp(dt, plc.binaryop.BinaryOperator.ADD, a, b)
+
+    e1 = make_expr("a", "b")
+    e2 = make_expr("a", "b")
+    e3 = make_expr("a", "c")
+
+    assert e1.children is not e2.children
+    assert e1 == e2
+    assert e1.children is e2.children
+    assert e1 == e2
+    assert e1 != e3
+    assert e2 != e3
+
+
+def test_reconstruct_named_expr():
+    ne1 = expr.NamedExpr("a", expr.Col(plc.DataType(plc.TypeId.INT8), "a"))
+    new_value = expr.Col(plc.DataType(plc.TypeId.INT16), "a")
+    ne2 = ne1.reconstruct(new_value)
+    assert ne1.name == ne2.name
+    assert ne1 != ne2
+    assert ne2.value == new_value
+
+    ne3 = ne2.reconstruct(ne2.value)
+    assert ne3 is ne2

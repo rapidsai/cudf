@@ -1,4 +1,4 @@
-# Copyright (c) 2022-2024, NVIDIA CORPORATION.
+# Copyright (c) 2022-2025, NVIDIA CORPORATION.
 from __future__ import annotations
 
 import os
@@ -138,7 +138,7 @@ def describe_option(name: str | None = None):
     """
     names = _OPTIONS.keys() if name is None else [name]
     for name in names:
-        print(_build_option_description(name, _OPTIONS[name]))
+        print(_build_option_description(name, _OPTIONS[name]))  # noqa: T201
 
 
 def _make_contains_validator(valid_options: Container) -> Callable:
@@ -173,9 +173,7 @@ def _integer_validator(val):
         int(val)
         return True
     except ValueError:
-        raise ValueError(
-            f"{val} is not a valid option. " f"Must be an integer."
-        )
+        raise ValueError(f"{val} is not a valid option. Must be an integer.")
 
 
 def _integer_and_none_validator(val):
@@ -184,7 +182,7 @@ def _integer_and_none_validator(val):
             return
     except ValueError:
         raise ValueError(
-            f"{val} is not a valid option. " f"Must be an integer or None."
+            f"{val} is not a valid option. Must be an integer or None."
         )
 
 
@@ -351,6 +349,22 @@ _register_option(
     _make_contains_validator([False, True]),
 )
 
+_register_option(
+    "kvikio_remote_io",
+    _env_get_bool("CUDF_KVIKIO_REMOTE_IO", False),
+    textwrap.dedent(
+        """
+        Whether to use KvikIO's remote IO backend or not.
+        \tWARN: this is experimental and may be removed at any time
+        \twithout warning or deprecation period.
+        \tSet KVIKIO_NTHREADS (default is 8) to change the number of
+        \tconcurrent tcp connections, which is important for good performance.
+        \tValid values are True or False. Default is False.
+    """
+    ),
+    _make_contains_validator([False, True]),
+)
+
 
 class option_context(ContextDecorator):
     """
@@ -364,7 +378,7 @@ class option_context(ContextDecorator):
     >>> from cudf import option_context
     >>> with option_context('mode.pandas_compatible', True, 'default_float_bitwidth', 32):
     ...     pass
-    """  # noqa: E501
+    """
 
     def __init__(self, *args) -> None:
         if len(args) % 2 != 0:

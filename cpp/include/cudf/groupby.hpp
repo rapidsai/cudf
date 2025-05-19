@@ -178,6 +178,7 @@ class groupby {
    *
    * @param requests The set of columns to aggregate and the aggregations to
    * perform
+   * @param stream CUDA stream used for device memory operations and kernel launches.
    * @param mr Device memory resource used to allocate the returned table and columns' device memory
    * @return Pair containing the table with each group's unique key and
    * a vector of aggregation_results for each request in the same order as
@@ -185,16 +186,7 @@ class groupby {
    */
   std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> aggregate(
     host_span<aggregation_request const> requests,
-    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
-
-  /**
-   * @copydoc aggregate(host_span<aggregation_request const>, rmm::device_async_resource_ref)
-   *
-   * @param stream CUDA stream used for device memory operations and kernel launches.
-   */
-  std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> aggregate(
-    host_span<aggregation_request const> requests,
-    rmm::cuda_stream_view stream,
+    rmm::cuda_stream_view stream      = cudf::get_default_stream(),
     rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
   /**
    * @brief Performs grouped scans on the specified values.
@@ -242,6 +234,7 @@ class groupby {
    * ```
    *
    * @param requests The set of columns to scan and the scans to perform
+   * @param stream CUDA stream used for device memory operations and kernel launches.
    * @param mr Device memory resource used to allocate the returned table and columns' device memory
    * @return Pair containing the table with each group's key and
    * a vector of aggregation_results for each request in the same order as
@@ -249,6 +242,7 @@ class groupby {
    */
   std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> scan(
     host_span<scan_request const> requests,
+    rmm::cuda_stream_view stream      = cudf::get_default_stream(),
     rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
   /**
@@ -295,6 +289,7 @@ class groupby {
    * @param values Table whose columns to be shifted
    * @param offsets The offsets by which to shift the input
    * @param fill_values Fill values for indeterminable outputs
+   * @param stream CUDA stream used for device memory operations and kernel launches.
    * @param mr Device memory resource used to allocate the returned table and columns' device memory
    * @return Pair containing the tables with each group's key and the columns shifted
    *
@@ -305,6 +300,7 @@ class groupby {
     table_view const& values,
     host_span<size_type const> offsets,
     std::vector<std::reference_wrapper<scalar const>> const& fill_values,
+    rmm::cuda_stream_view stream      = cudf::get_default_stream(),
     rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
   /**
@@ -329,11 +325,13 @@ class groupby {
    * and the `values` of the `groups` object will be `nullptr`.
    *
    * @param values Table representing values on which a groupby operation is to be performed
+   * @param stream CUDA stream used for device memory operations and kernel launches.
    * @param mr Device memory resource used to allocate the returned tables's device memory in the
    * returned groups
    * @return A `groups` object representing grouped keys and values
    */
   groups get_groups(cudf::table_view values           = {},
+                    rmm::cuda_stream_view stream      = cudf::get_default_stream(),
                     rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
   /**
@@ -367,6 +365,7 @@ class groupby {
    * @param[in] values A table whose column null values will be replaced
    * @param[in] replace_policies Specify the position of replacement values relative to null values,
    * one for each column
+   * @param[in] stream CUDA stream used for device memory operations and kernel launches.
    * @param[in] mr Device memory resource used to allocate device memory of the returned column
    *
    * @return Pair that contains a table with the sorted keys and the result column
@@ -374,6 +373,7 @@ class groupby {
   std::pair<std::unique_ptr<table>, std::unique_ptr<table>> replace_nulls(
     table_view const& values,
     host_span<cudf::replace_policy const> replace_policies,
+    rmm::cuda_stream_view stream      = cudf::get_default_stream(),
     rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
  private:

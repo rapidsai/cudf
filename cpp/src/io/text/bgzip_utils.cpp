@@ -40,7 +40,7 @@ IntType read_int(char* data)
 template <typename T>
 void write_int(std::ostream& output_stream, T val)
 {
-  std::array<char, sizeof(T)> bytes;
+  std::array<char, sizeof(T)> bytes{};
   // we assume little-endian
   std::memcpy(&bytes[0], &val, sizeof(T));
   output_stream.write(bytes.data(), bytes.size());

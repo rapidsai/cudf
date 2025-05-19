@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -213,30 +213,28 @@ template std::vector<uint64_t> random_values<uint64_t>(size_t size);
 // of the file to populate the FileMetaData pointed to by file_meta_data.
 // throws cudf::logic_error if the file or metadata is invalid.
 void read_footer(std::unique_ptr<cudf::io::datasource> const& source,
-                 cudf::io::parquet::detail::FileMetaData* file_meta_data)
+                 cudf::io::parquet::FileMetaData* file_meta_data)
 {
-  constexpr auto header_len = sizeof(cudf::io::parquet::detail::file_header_s);
-  constexpr auto ender_len  = sizeof(cudf::io::parquet::detail::file_ender_s);
+  using namespace cudf::io::parquet;
+  constexpr auto header_len = sizeof(file_header_s);
+  constexpr auto ender_len  = sizeof(file_ender_s);
 
   auto const len           = source->size();
   auto const header_buffer = source->host_read(0, header_len);
-  auto const header =
-    reinterpret_cast<cudf::io::parquet::detail::file_header_s const*>(header_buffer->data());
-  auto const ender_buffer = source->host_read(len - ender_len, ender_len);
-  auto const ender =
-    reinterpret_cast<cudf::io::parquet::detail::file_ender_s const*>(ender_buffer->data());
+  auto const header        = reinterpret_cast<file_header_s const*>(header_buffer->data());
+  auto const ender_buffer  = source->host_read(len - ender_len, ender_len);
+  auto const ender         = reinterpret_cast<file_ender_s const*>(ender_buffer->data());
 
   // checks for valid header, footer, and file length
   ASSERT_GT(len, header_len + ender_len);
-  ASSERT_TRUE(header->magic == cudf::io::parquet::detail::parquet_magic &&
-              ender->magic == cudf::io::parquet::detail::parquet_magic);
+  ASSERT_TRUE(header->magic == detail::parquet_magic && ender->magic == detail::parquet_magic);
   ASSERT_TRUE(ender->footer_len != 0 && ender->footer_len <= (len - header_len - ender_len));
 
   // parquet files end with 4-byte footer_length and 4-byte magic == "PAR1"
   // seek backwards from the end of the file (footer_length + 8 bytes of ender)
   auto const footer_buffer =
     source->host_read(len - ender->footer_len - ender_len, ender->footer_len);
-  cudf::io::parquet::detail::CompactProtocolReader cp(footer_buffer->data(), ender->footer_len);
+  detail::CompactProtocolReader cp(footer_buffer->data(), ender->footer_len);
 
   cp.read(file_meta_data);
 }
@@ -245,14 +243,15 @@ void read_footer(std::unique_ptr<cudf::io::datasource> const& source,
 // this assumes the data is uncompressed.
 // throws cudf::logic_error if the page_loc data is invalid.
 int read_dict_bits(std::unique_ptr<cudf::io::datasource> const& source,
-                   cudf::io::parquet::detail::PageLocation const& page_loc)
+                   cudf::io::parquet::PageLocation const& page_loc)
 {
+  using namespace cudf::io::parquet;
   CUDF_EXPECTS(page_loc.offset > 0, "Cannot find page header");
   CUDF_EXPECTS(page_loc.compressed_page_size > 0, "Invalid page header length");
 
-  cudf::io::parquet::detail::PageHeader page_hdr;
+  PageHeader page_hdr;
   auto const page_buf = source->host_read(page_loc.offset, page_loc.compressed_page_size);
-  cudf::io::parquet::detail::CompactProtocolReader cp(page_buf->data(), page_buf->size());
+  detail::CompactProtocolReader cp(page_buf->data(), page_buf->size());
   cp.read(&page_hdr);
 
   // cp should be pointing at the start of page data now. the first byte
@@ -263,14 +262,13 @@ int read_dict_bits(std::unique_ptr<cudf::io::datasource> const& source,
 // read column index from datasource at location indicated by chunk,
 // parse and return as a ColumnIndex struct.
 // throws cudf::logic_error if the chunk data is invalid.
-cudf::io::parquet::detail::ColumnIndex read_column_index(
-  std::unique_ptr<cudf::io::datasource> const& source,
-  cudf::io::parquet::detail::ColumnChunk const& chunk)
+cudf::io::parquet::ColumnIndex read_column_index(
+  std::unique_ptr<cudf::io::datasource> const& source, cudf::io::parquet::ColumnChunk const& chunk)
 {
   CUDF_EXPECTS(chunk.column_index_offset > 0, "Cannot find column index");
   CUDF_EXPECTS(chunk.column_index_length > 0, "Invalid column index length");
 
-  cudf::io::parquet::detail::ColumnIndex colidx;
+  cudf::io::parquet::ColumnIndex colidx;
   auto const ci_buf = source->host_read(chunk.column_index_offset, chunk.column_index_length);
   cudf::io::parquet::detail::CompactProtocolReader cp(ci_buf->data(), ci_buf->size());
   cp.read(&colidx);
@@ -280,14 +278,13 @@ cudf::io::parquet::detail::ColumnIndex read_column_index(
 // read offset index from datasource at location indicated by chunk,
 // parse and return as an OffsetIndex struct.
 // throws cudf::logic_error if the chunk data is invalid.
-cudf::io::parquet::detail::OffsetIndex read_offset_index(
-  std::unique_ptr<cudf::io::datasource> const& source,
-  cudf::io::parquet::detail::ColumnChunk const& chunk)
+cudf::io::parquet::OffsetIndex read_offset_index(
+  std::unique_ptr<cudf::io::datasource> const& source, cudf::io::parquet::ColumnChunk const& chunk)
 {
   CUDF_EXPECTS(chunk.offset_index_offset > 0, "Cannot find offset index");
   CUDF_EXPECTS(chunk.offset_index_length > 0, "Invalid offset index length");
 
-  cudf::io::parquet::detail::OffsetIndex offidx;
+  cudf::io::parquet::OffsetIndex offidx;
   auto const oi_buf = source->host_read(chunk.offset_index_offset, chunk.offset_index_length);
   cudf::io::parquet::detail::CompactProtocolReader cp(oi_buf->data(), oi_buf->size());
   cp.read(&offidx);
@@ -295,8 +292,7 @@ cudf::io::parquet::detail::OffsetIndex read_offset_index(
 }
 
 // Return as a Statistics from the column chunk
-cudf::io::parquet::detail::Statistics const& get_statistics(
-  cudf::io::parquet::detail::ColumnChunk const& chunk)
+cudf::io::parquet::Statistics const& get_statistics(cudf::io::parquet::ColumnChunk const& chunk)
 {
   return chunk.meta_data.statistics;
 }
@@ -304,14 +300,13 @@ cudf::io::parquet::detail::Statistics const& get_statistics(
 // read page header from datasource at location indicated by page_loc,
 // parse and return as a PageHeader struct.
 // throws cudf::logic_error if the page_loc data is invalid.
-cudf::io::parquet::detail::PageHeader read_page_header(
-  std::unique_ptr<cudf::io::datasource> const& source,
-  cudf::io::parquet::detail::PageLocation const& page_loc)
+cudf::io::parquet::PageHeader read_page_header(std::unique_ptr<cudf::io::datasource> const& source,
+                                               cudf::io::parquet::PageLocation const& page_loc)
 {
   CUDF_EXPECTS(page_loc.offset > 0, "Cannot find page header");
   CUDF_EXPECTS(page_loc.compressed_page_size > 0, "Invalid page header length");
 
-  cudf::io::parquet::detail::PageHeader page_hdr;
+  cudf::io::parquet::PageHeader page_hdr;
   auto const page_buf = source->host_read(page_loc.offset, page_loc.compressed_page_size);
   cudf::io::parquet::detail::CompactProtocolReader cp(page_buf->data(), page_buf->size());
   cp.read(&page_hdr);
@@ -743,16 +738,16 @@ int32_t compare(T& v1, T& v2)
 // 1 if v1 > v2.
 int32_t compare_binary(std::vector<uint8_t> const& v1,
                        std::vector<uint8_t> const& v2,
-                       cudf::io::parquet::detail::Type ptype,
-                       cuda::std::optional<cudf::io::parquet::detail::ConvertedType> const& ctype)
+                       cudf::io::parquet::Type ptype,
+                       std::optional<cudf::io::parquet::ConvertedType> const& ctype)
 {
-  auto ctype_val = ctype.value_or(cudf::io::parquet::detail::UNKNOWN);
+  auto ctype_val = ctype.value_or(cudf::io::parquet::ConvertedType::UNKNOWN);
   switch (ptype) {
-    case cudf::io::parquet::detail::INT32:
+    case cudf::io::parquet::Type::INT32:
       switch (ctype_val) {
-        case cudf::io::parquet::detail::UINT_8:
-        case cudf::io::parquet::detail::UINT_16:
-        case cudf::io::parquet::detail::UINT_32:
+        case cudf::io::parquet::ConvertedType::UINT_8:
+        case cudf::io::parquet::ConvertedType::UINT_16:
+        case cudf::io::parquet::ConvertedType::UINT_32:
           return compare(*(reinterpret_cast<uint32_t const*>(v1.data())),
                          *(reinterpret_cast<uint32_t const*>(v2.data())));
         default:
@@ -760,23 +755,23 @@ int32_t compare_binary(std::vector<uint8_t> const& v1,
                          *(reinterpret_cast<int32_t const*>(v2.data())));
       }
 
-    case cudf::io::parquet::detail::INT64:
-      if (ctype_val == cudf::io::parquet::detail::UINT_64) {
+    case cudf::io::parquet::Type::INT64:
+      if (ctype_val == cudf::io::parquet::ConvertedType::UINT_64) {
         return compare(*(reinterpret_cast<uint64_t const*>(v1.data())),
                        *(reinterpret_cast<uint64_t const*>(v2.data())));
       }
       return compare(*(reinterpret_cast<int64_t const*>(v1.data())),
                      *(reinterpret_cast<int64_t const*>(v2.data())));
 
-    case cudf::io::parquet::detail::FLOAT:
+    case cudf::io::parquet::Type::FLOAT:
       return compare(*(reinterpret_cast<float const*>(v1.data())),
                      *(reinterpret_cast<float const*>(v2.data())));
 
-    case cudf::io::parquet::detail::DOUBLE:
+    case cudf::io::parquet::Type::DOUBLE:
       return compare(*(reinterpret_cast<double const*>(v1.data())),
                      *(reinterpret_cast<double const*>(v2.data())));
 
-    case cudf::io::parquet::detail::BYTE_ARRAY: {
+    case cudf::io::parquet::Type::BYTE_ARRAY: {
       int32_t v1sz = v1.size();
       int32_t v2sz = v2.size();
       int32_t ret  = memcmp(v1.data(), v2.data(), std::min(v1sz, v2sz));

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,8 +18,10 @@
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/default_stream.hpp>
 #include <cudf_test/iterator_utilities.hpp>
+#include <cudf_test/testing_main.hpp>
 #include <cudf_test/type_lists.hpp>
 
+#include <cudf/contiguous_split.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/null_mask.hpp>
 
@@ -337,3 +339,27 @@ TEST_F(CopyingTest, PurgeNonEmptyNulls)
 
   cudf::purge_nonempty_nulls(*input, cudf::test::get_default_stream());
 }
+
+TEST_F(CopyingTest, ContiguousSplit)
+{
+  std::vector<cudf::size_type> splits{
+    2, 16, 31, 35, 64, 97, 158, 190, 638, 899, 900, 901, 996, 4200, 7131, 8111};
+
+  cudf::size_type size = 10002;
+  auto iter            = cudf::detail::make_counting_transform_iterator(
+    0, [](auto i) { return static_cast<double>(i); });
+
+  std::vector<std::string> base_strings(
+    {"banana", "pear", "apple", "pecans", "vanilla", "cat", "mouse", "green"});
+  auto string_randomizer = thrust::make_transform_iterator(
+    thrust::make_counting_iterator(0),
+    [&base_strings](cudf::size_type i) { return base_strings[rand() % base_strings.size()]; });
+
+  cudf::test::fixed_width_column_wrapper<double> col(iter, iter + size);
+  std::vector<std::string> strings(string_randomizer, string_randomizer + size);
+  cudf::test::strings_column_wrapper col2(strings.begin(), strings.end());
+  cudf::table_view tbl({col, col2});
+  auto result = cudf::contiguous_split(tbl, splits, cudf::test::get_default_stream());
+}
+
+CUDF_TEST_PROGRAM_MAIN()

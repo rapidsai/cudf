@@ -1,23 +1,37 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 from __future__ import annotations
 
 from functools import cached_property
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import pandas as pd
 import pyarrow as pa
 
 import cudf
-from cudf.core.column import ColumnBase
+from cudf.core.column.column import ColumnBase
 from cudf.core.column.methods import ColumnMethods
 from cudf.core.dtypes import StructDtype
-from cudf.core.missing import NA
+from cudf.core.scalar import pa_scalar_to_plc_scalar
+from cudf.utils.utils import _is_null_host_scalar
 
 if TYPE_CHECKING:
     from typing_extensions import Self
 
+    import pylibcudf as plc
+
     from cudf._typing import Dtype
     from cudf.core.buffer import Buffer
+    from cudf.core.column.string import StringColumn
+
+
+def _maybe_na_to_none(value: Any) -> Any:
+    """
+    Convert NA-like values to None for pyarrow.
+    """
+    if _is_null_host_scalar(value):
+        return None
+    else:
+        return value
 
 
 class StructColumn(ColumnBase):
@@ -51,6 +65,16 @@ class StructColumn(ColumnBase):
             children=children,
         )
 
+    def _prep_pandas_compat_repr(self) -> StringColumn | Self:
+        """
+        Preprocess Column to be compatible with pandas repr, namely handling nulls.
+
+        * null (datetime/timedelta) = str(pd.NaT)
+        * null (other types)= str(pd.NA)
+        """
+        # TODO: handle if self.has_nulls(): case
+        return self
+
     @staticmethod
     def _validate_dtype_instance(dtype: StructDtype) -> StructDtype:
         # IntervalDtype is a subclass of StructDtype, so compare types exactly
@@ -68,12 +92,7 @@ class StructColumn(ColumnBase):
             return self.size + self.offset
 
     def to_arrow(self) -> pa.Array:
-        children = [
-            pa.nulls(len(child))
-            if len(child) == child.null_count
-            else child.to_arrow()
-            for child in self.children
-        ]
+        children = [child.to_arrow() for child in self.children]
 
         pa_type = pa.struct(
             {
@@ -106,30 +125,33 @@ class StructColumn(ColumnBase):
 
     @cached_property
     def memory_usage(self) -> int:
-        n = 0
-        if self.nullable:
-            n += cudf._lib.null_mask.bitmask_allocation_size_bytes(self.size)
-
+        n = super().memory_usage
         for child in self.children:
             n += child.memory_usage
 
         return n
 
-    def element_indexing(self, index: int):
+    def element_indexing(self, index: int) -> dict:
         result = super().element_indexing(index)
-        return {
-            field: value
-            for field, value in zip(self.dtype.fields, result.values())
-        }
+        return self.dtype._recursively_replace_fields(result)
 
-    def __setitem__(self, key, value):
+    def _cast_setitem_value(self, value: Any) -> plc.Scalar:
         if isinstance(value, dict):
-            # filling in fields not in dict
-            for field in self.dtype.fields:
-                value[field] = value.get(field, NA)
-
-            value = cudf.Scalar(value, self.dtype)
-        super().__setitem__(key, value)
+            new_value = {
+                field: _maybe_na_to_none(value.get(field, None))
+                for field in self.dtype.fields
+            }
+            return pa_scalar_to_plc_scalar(
+                pa.scalar(new_value, type=self.dtype.to_arrow())
+            )
+        elif value is None or value is cudf.NA:
+            return pa_scalar_to_plc_scalar(
+                pa.scalar(None, type=self.dtype.to_arrow())
+            )
+        else:
+            raise ValueError(
+                f"Can not set {type(value).__name__} into StructColumn"
+            )
 
     def copy(self, deep: bool = True) -> Self:
         # Since struct columns are immutable, both deep and
@@ -267,13 +289,15 @@ class StructMethods(ColumnMethods):
         2  3  z
         3  4  a
         """
+        data = {
+            name: col.copy(deep=True)
+            for name, col in zip(
+                self._column.dtype.fields, self._column.children
+            )
+        }
+        rangeindex = len(data) == 0
         return cudf.DataFrame._from_data(
             cudf.core.column_accessor.ColumnAccessor(
-                {
-                    name: col.copy(deep=True)
-                    for name, col in zip(
-                        self._column.dtype.fields, self._column.children
-                    )
-                }
+                data, rangeindex=rangeindex
             )
         )

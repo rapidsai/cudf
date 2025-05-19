@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,11 +18,12 @@
 
 #include <cuda/functional>
 #include <cuda/std/atomic>
+#include <cuda/std/iterator>
 
 namespace cudf::detail {
 
-template <typename RowHasher>
-rmm::device_uvector<size_type> reduce_by_row(hash_set_type<RowHasher>& set,
+template <typename RowEqual>
+rmm::device_uvector<size_type> reduce_by_row(distinct_set_t<RowEqual>& set,
                                              size_type num_rows,
                                              duplicate_keep_option keep,
                                              rmm::cuda_stream_view stream,
@@ -35,7 +36,7 @@ rmm::device_uvector<size_type> reduce_by_row(hash_set_type<RowHasher>& set,
     auto const iter = thrust::counting_iterator<cudf::size_type>{0};
     set.insert_async(iter, iter + num_rows, stream.value());
     auto const output_end = set.retrieve_all(output_indices.begin(), stream.value());
-    output_indices.resize(thrust::distance(output_indices.begin(), output_end), stream);
+    output_indices.resize(cuda::std::distance(output_indices.begin(), output_end), stream);
     return output_indices;
   }
 
@@ -95,12 +96,12 @@ rmm::device_uvector<size_type> reduce_by_row(hash_set_type<RowHasher>& set,
                                          auto const idx) { return idx != init_value; }));
   }();
 
-  output_indices.resize(thrust::distance(output_indices.begin(), map_end), stream);
+  output_indices.resize(cuda::std::distance(output_indices.begin(), map_end), stream);
   return output_indices;
 }
 
 template rmm::device_uvector<size_type> reduce_by_row(
-  hash_set_type<cudf::experimental::row::equality::device_row_comparator<
+  distinct_set_t<cudf::experimental::row::equality::device_row_comparator<
     false,
     cudf::nullate::DYNAMIC,
     cudf::experimental::row::equality::nan_equal_physical_equality_comparator>>& set,
@@ -110,7 +111,7 @@ template rmm::device_uvector<size_type> reduce_by_row(
   rmm::device_async_resource_ref mr);
 
 template rmm::device_uvector<size_type> reduce_by_row(
-  hash_set_type<cudf::experimental::row::equality::device_row_comparator<
+  distinct_set_t<cudf::experimental::row::equality::device_row_comparator<
     true,
     cudf::nullate::DYNAMIC,
     cudf::experimental::row::equality::nan_equal_physical_equality_comparator>>& set,
@@ -120,7 +121,7 @@ template rmm::device_uvector<size_type> reduce_by_row(
   rmm::device_async_resource_ref mr);
 
 template rmm::device_uvector<size_type> reduce_by_row(
-  hash_set_type<cudf::experimental::row::equality::device_row_comparator<
+  distinct_set_t<cudf::experimental::row::equality::device_row_comparator<
     false,
     cudf::nullate::DYNAMIC,
     cudf::experimental::row::equality::physical_equality_comparator>>& set,
@@ -130,7 +131,7 @@ template rmm::device_uvector<size_type> reduce_by_row(
   rmm::device_async_resource_ref mr);
 
 template rmm::device_uvector<size_type> reduce_by_row(
-  hash_set_type<cudf::experimental::row::equality::device_row_comparator<
+  distinct_set_t<cudf::experimental::row::equality::device_row_comparator<
     true,
     cudf::nullate::DYNAMIC,
     cudf::experimental::row::equality::physical_equality_comparator>>& set,

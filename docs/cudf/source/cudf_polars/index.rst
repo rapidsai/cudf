@@ -5,10 +5,16 @@ cuDF provides an in-memory, GPU-accelerated execution engine for Python users of
 The engine supports most of the core expressions and data types as well as a growing set of more advanced dataframe manipulations
 and data file formats. When using the GPU engine, Polars will convert expressions into an optimized query plan and determine
 whether the plan is supported on the GPU. If it is not, the execution will transparently fall back to the standard Polars engine
-and run on the CPU.
+and run on the CPU. This functionality is available in Open Beta, is undergoing rapid development, and is currently a single GPU implementation.
 
 Benchmark
 ---------
+
+.. note::
+   The following benchmarks were performed with `POLARS_GPU_ENABLE_CUDA_MANAGED_MEMORY` environment variable set to `"0"`.
+   Using managed memory (the default) imposes a performance cost in order to avoid out of memory errors.
+   Peak performance can still be attained by setting the environment variable to 1.
+
 We reproduced the `Polars Decision Support (PDS) <https://github.com/pola-rs/polars-benchmark>`__ benchmark to compare Polars GPU engine with the default CPU settings across several dataset sizes. Here are the results:
 
 .. figure:: ../_static/pds_benchmark_polars.png
@@ -36,6 +42,13 @@ Launch on Google Colab
 
 .. figure:: ../_static/colab.png
    :width: 200px
-   :target: https://colab.research.google.com/github/rapidsai-community/showcase/blob/main/accelerated_data_processing_examples/polars_gpu_engine_demo.ipynb
+   :target: https://nvda.ws/4eKlWZW
 
-   Try out the GPU engine for Polars in a free GPU notebook environment. Sign in with your Google account and `launch the demo on Colab <https://colab.research.google.com/github/rapidsai-community/showcase/blob/main/accelerated_data_processing_examples/polars_gpu_engine_demo.ipynb>`__.
+   Try out the GPU engine for Polars in a free GPU notebook environment. Sign in with your Google account and `launch the demo on Colab <https://nvda.ws/4eKlWZW>`__.
+
+.. toctree::
+   :maxdepth: 1
+   :caption: Contents:
+
+   usage
+   engine_options

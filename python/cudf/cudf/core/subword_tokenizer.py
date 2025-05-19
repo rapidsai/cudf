@@ -1,15 +1,13 @@
-# Copyright (c) 2021-2024, NVIDIA CORPORATION.
+# Copyright (c) 2021-2025, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
 import warnings
 
 import cupy as cp
+import numpy as np
 
-from cudf._lib.nvtext.subword_tokenize import (
-    Hashed_Vocabulary as cpp_hashed_vocabulary,
-    subword_tokenize_inmem_hash as cpp_subword_tokenize,
-)
+import pylibcudf as plc
 
 
 def _cast_to_appropriate_type(ar, cast_type):
@@ -22,7 +20,7 @@ def _cast_to_appropriate_type(ar, cast_type):
     elif cast_type == "tf":
         from tensorflow.experimental.dlpack import from_dlpack
 
-    return from_dlpack(ar.astype("int32").toDlpack())
+    return from_dlpack(ar.astype(np.dtype(np.int32)).__dlpack__())
 
 
 class SubwordTokenizer:
@@ -50,7 +48,14 @@ class SubwordTokenizer:
 
     def __init__(self, hash_file: str, do_lower_case: bool = True):
         self.do_lower_case = do_lower_case
-        self.vocab_file = cpp_hashed_vocabulary(hash_file)
+        self.vocab_file = plc.nvtext.subword_tokenize.HashedVocabulary(
+            hash_file
+        )
+        warnings.warn(
+            "SubwordTokenizer is deprecated and will be removed in a future "
+            "version. Use WordPieceVocabulary instead.",
+            FutureWarning,
+        )
 
     def __call__(
         self,
@@ -188,8 +193,7 @@ class SubwordTokenizer:
 
         if padding != "max_length":
             error_msg = (
-                "Only padding to the provided max_length"
-                "is currently supported"
+                "Only padding to the provided max_lengthis currently supported"
             )
             raise NotImplementedError(error_msg)
 
@@ -207,8 +211,7 @@ class SubwordTokenizer:
         stride = max_length - stride
         # behavior varies from subword_tokenize but maps with huggingface
 
-        input_ids, attention_mask, metadata = cpp_subword_tokenize(
-            text._column,
+        input_ids, attention_mask, metadata = text._column.subword_tokenize(
             self.vocab_file,
             max_sequence_length=max_length,
             stride=stride,

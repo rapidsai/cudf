@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,6 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
+#include "compression_common.hpp"
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
@@ -160,6 +162,8 @@ auto chunked_read(std::string const& filepath,
 }  // namespace
 
 struct OrcChunkedReaderTest : public cudf::test::BaseFixture {};
+
+using OrcChunkedDecompressionTest = DecompressionTest<OrcChunkedReaderTest>;
 
 TEST_F(OrcChunkedReaderTest, TestChunkedReadNoData)
 {
@@ -1358,10 +1362,11 @@ TEST_F(OrcChunkedReaderInputLimitTest, SizeTypeRowsOverflow)
   int64_t constexpr total_rows  = num_rows * num_reps;
   static_assert(total_rows > std::numeric_limits<cudf::size_type>::max());
 
-  auto const it  = cudf::detail::make_counting_transform_iterator(0l, [num_rows](int64_t i) {
-    return (i % num_rows) % static_cast<int64_t>(std::numeric_limits<data_type>::max() / 2);
-  });
-  auto const col = data_col(it, it + num_rows);
+  auto const it = thrust::make_transform_iterator(
+    thrust::make_counting_iterator<int64_t>(0), [num_rows](int64_t i) {
+      return (i % num_rows) % static_cast<int64_t>(std::numeric_limits<data_type>::max() / 2);
+    });
+  auto const col         = data_col(it, it + num_rows);
   auto const chunk_table = cudf::table_view{{col}};
 
   std::vector<char> data_buffer;
@@ -1476,3 +1481,62 @@ TEST_F(OrcChunkedReaderInputLimitTest, SizeTypeRowsOverflow)
 
 #endif  // LOCAL_TEST
 }
+
+TEST_P(OrcChunkedDecompressionTest, RoundTripBasic)
+{
+  auto const compression_type = std::get<1>(GetParam());
+
+  auto const num_rows = 12'345;
+
+  std::vector<std::unique_ptr<cudf::column>> input_columns;
+  auto value_iter = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i / 4; });
+  input_columns.emplace_back(int32s_col(value_iter, value_iter + num_rows).release());
+  input_columns.emplace_back(int64s_col(value_iter, value_iter + num_rows).release());
+  auto expected = std::make_unique<cudf::table>(std::move(input_columns));
+
+  auto const filepath = temp_env->get_temp_filepath("chunked_read_compressions.orc");
+  auto const write_opts =
+    cudf::io::orc_writer_options::builder(cudf::io::sink_info{filepath}, *expected)
+      .compression(compression_type)
+      .stripe_size_rows(2'000)
+      .row_index_stride(1'000)
+      .build();
+  cudf::io::write_orc(write_opts);
+
+  {
+    auto const [result, num_chunks] =
+      chunked_read(filepath, output_limit{0}, input_limit{2'400'000});
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
+  }
+
+  {
+    auto const [result, num_chunks] = chunked_read(filepath, output_limit{0}, input_limit{240'000});
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
+  }
+
+  {
+    auto const [result, num_chunks] = chunked_read(filepath, output_limit{0}, input_limit{24'000});
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
+  }
+}
+
+INSTANTIATE_TEST_CASE_P(Nvcomp,
+                        OrcChunkedDecompressionTest,
+                        ::testing::Combine(::testing::Values("NVCOMP"),
+                                           ::testing::Values(cudf::io::compression_type::AUTO,
+                                                             cudf::io::compression_type::SNAPPY,
+                                                             cudf::io::compression_type::LZ4,
+                                                             cudf::io::compression_type::ZSTD)));
+
+INSTANTIATE_TEST_CASE_P(DeviceInternal,
+                        OrcChunkedDecompressionTest,
+                        ::testing::Combine(::testing::Values("DEVICE_INTERNAL"),
+                                           ::testing::Values(cudf::io::compression_type::AUTO,
+                                                             cudf::io::compression_type::SNAPPY)));
+
+INSTANTIATE_TEST_CASE_P(Host,
+                        OrcChunkedDecompressionTest,
+                        ::testing::Combine(::testing::Values("HOST"),
+                                           ::testing::Values(cudf::io::compression_type::AUTO,
+                                                             cudf::io::compression_type::SNAPPY,
+                                                             cudf::io::compression_type::ZSTD)));

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,23 +15,21 @@
  */
 
 #include <cudf_test/base_fixture.hpp>
-#include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/table_utilities.hpp>
-#include <cudf_test/testing_main.hpp>
-#include <cudf_test/type_lists.hpp>
 
 #include <cudf/column/column.hpp>
 #include <cudf/filling.hpp>
-#include <cudf/join.hpp>
+#include <cudf/join/distinct_hash_join.hpp>
 #include <cudf/sorting.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
-#include <limits>
+#include <cuco/utility/error.hpp>
+
+#include <numeric>
 #include <vector>
 
 template <typename T>
@@ -44,7 +42,7 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> get_left_indices(cudf::siz
 {
   auto sequence = std::vector<cudf::size_type>(size);
   std::iota(sequence.begin(), sequence.end(), 0);
-  auto indices = cudf::detail::make_device_uvector_sync(
+  auto indices = cudf::detail::make_device_uvector(
     sequence, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
   return std::make_unique<rmm::device_uvector<cudf::size_type>>(std::move(indices));
 }
@@ -58,7 +56,7 @@ struct DistinctJoinTest : public cudf::test::BaseFixture {
     cudf::table_view const& expected_table,
     cudf::out_of_bounds_policy oob_policy = cudf::out_of_bounds_policy::DONT_CHECK)
   {
-    auto const& [build_join_indices, probe_join_indices] = result;
+    auto const& [probe_join_indices, build_join_indices] = result;
 
     auto build_indices_span = cudf::device_span<cudf::size_type const>{*build_join_indices};
     auto probe_indices_span = cudf::device_span<cudf::size_type const>{*probe_join_indices};
@@ -94,10 +92,9 @@ TEST_F(DistinctJoinTest, IntegerInnerJoin)
   auto build_table = cudf::table_view{{build->view()}};
   auto probe_table = cudf::table_view{{probe->view()}};
 
-  auto distinct_join = cudf::distinct_hash_join<cudf::has_nested::NO>{
-    build_table, probe_table, cudf::nullable_join::NO};
+  auto distinct_join = cudf::distinct_hash_join{build_table};
 
-  auto result = distinct_join.inner_join();
+  auto result = distinct_join.inner_join(probe_table);
 
   auto constexpr gold_size = size / 2;
   auto gold                = cudf::sequence(gold_size, init, cudf::numeric_scalar<int32_t>{2});
@@ -125,8 +122,8 @@ TEST_F(DistinctJoinTest, InnerJoinNoNulls)
   Table build(std::move(cols0));
   Table probe(std::move(cols1));
 
-  auto distinct_join = cudf::distinct_hash_join<cudf::has_nested::YES>{build.view(), probe.view()};
-  auto result        = distinct_join.inner_join();
+  auto distinct_join = cudf::distinct_hash_join{build.view()};
+  auto result        = distinct_join.inner_join(probe.view());
 
   column_wrapper<int32_t> col_gold_0{{1, 2}};
   strcol_wrapper col_gold_1({"s0", "s0"});
@@ -167,9 +164,7 @@ TEST_F(DistinctJoinTest, InnerJoinWithNulls)
   Table build(std::move(cols0));
   Table probe(std::move(cols1));
 
-  auto distinct_join = cudf::distinct_hash_join<cudf::has_nested::YES>{build.view(), probe.view()};
-  auto result        = distinct_join.inner_join();
-
+  // Create gold table once
   column_wrapper<int32_t> col_gold_0{{3, 2}};
   strcol_wrapper col_gold_1({"s1", "s0"}, {true, true});
   column_wrapper<int32_t> col_gold_2{{1, 1}};
@@ -185,7 +180,16 @@ TEST_F(DistinctJoinTest, InnerJoinWithNulls)
   cols_gold.push_back(col_gold_5.release());
   Table gold(std::move(cols_gold));
 
-  this->compare_to_reference(build.view(), probe.view(), result, gold.view());
+  // Test with different load factors
+  std::vector<double> load_factors = {0.5, 1.0};
+
+  for (auto load_factor : load_factors) {
+    auto distinct_join =
+      cudf::distinct_hash_join{build.view(), cudf::null_equality::EQUAL, load_factor};
+    auto result = distinct_join.inner_join(probe.view());
+
+    this->compare_to_reference(build.view(), probe.view(), result, gold.view());
+  }
 }
 
 TEST_F(DistinctJoinTest, InnerJoinWithStructsAndNulls)
@@ -234,8 +238,8 @@ TEST_F(DistinctJoinTest, InnerJoinWithStructsAndNulls)
   Table probe(std::move(cols0));
   Table build(std::move(cols1));
 
-  auto distinct_join = cudf::distinct_hash_join<cudf::has_nested::YES>{build.view(), probe.view()};
-  auto result        = distinct_join.inner_join();
+  auto distinct_join = cudf::distinct_hash_join{build.view()};
+  auto result        = distinct_join.inner_join(probe.view());
 
   column_wrapper<int32_t> col_gold_0{{3, 2}};
   strcol_wrapper col_gold_1({"s1", "s0"}, {true, true});
@@ -289,8 +293,8 @@ TEST_F(DistinctJoinTest, EmptyBuildTableInnerJoin)
   Table build(std::move(cols0));
   Table probe(std::move(cols1));
 
-  auto distinct_join = cudf::distinct_hash_join<cudf::has_nested::NO>{build.view(), probe.view()};
-  auto result        = distinct_join.inner_join();
+  auto distinct_join = cudf::distinct_hash_join{build.view()};
+  auto result        = distinct_join.inner_join(probe.view());
 
   this->compare_to_reference(build.view(), probe.view(), result, build.view());
 }
@@ -312,9 +316,9 @@ TEST_F(DistinctJoinTest, EmptyBuildTableLeftJoin)
   Table build(std::move(cols0));
   Table probe(std::move(cols1));
 
-  auto distinct_join = cudf::distinct_hash_join<cudf::has_nested::NO>{build.view(), probe.view()};
-  auto result        = distinct_join.left_join();
-  auto gather_map    = std::pair{std::move(result), get_left_indices(result->size())};
+  auto distinct_join = cudf::distinct_hash_join{build.view()};
+  auto result        = distinct_join.left_join(probe.view());
+  auto gather_map    = std::pair{get_left_indices(result->size()), std::move(result)};
 
   this->compare_to_reference(
     build.view(), probe.view(), gather_map, probe.view(), cudf::out_of_bounds_policy::NULLIFY);
@@ -337,8 +341,8 @@ TEST_F(DistinctJoinTest, EmptyProbeTableInnerJoin)
   Table build(std::move(cols0));
   Table probe(std::move(cols1));
 
-  auto distinct_join = cudf::distinct_hash_join<cudf::has_nested::NO>{build.view(), probe.view()};
-  auto result        = distinct_join.inner_join();
+  auto distinct_join = cudf::distinct_hash_join{build.view()};
+  auto result        = distinct_join.inner_join(probe.view());
 
   this->compare_to_reference(build.view(), probe.view(), result, probe.view());
 }
@@ -360,9 +364,9 @@ TEST_F(DistinctJoinTest, EmptyProbeTableLeftJoin)
   Table build(std::move(cols0));
   Table probe(std::move(cols1));
 
-  auto distinct_join = cudf::distinct_hash_join<cudf::has_nested::NO>{build.view(), probe.view()};
-  auto result        = distinct_join.left_join();
-  auto gather_map    = std::pair{std::move(result), get_left_indices(result->size())};
+  auto distinct_join = cudf::distinct_hash_join{build.view()};
+  auto result        = distinct_join.left_join(probe.view());
+  auto gather_map    = std::pair{get_left_indices(result->size()), std::move(result)};
 
   this->compare_to_reference(
     build.view(), probe.view(), gather_map, probe.view(), cudf::out_of_bounds_policy::NULLIFY);
@@ -396,9 +400,9 @@ TEST_F(DistinctJoinTest, LeftJoinNoNulls)
   cols_gold.push_back(col_gold_3.release());
   Table gold(std::move(cols_gold));
 
-  auto distinct_join = cudf::distinct_hash_join<cudf::has_nested::NO>{build.view(), probe.view()};
-  auto result        = distinct_join.left_join();
-  auto gather_map    = std::pair{std::move(result), get_left_indices(result->size())};
+  auto distinct_join = cudf::distinct_hash_join{build.view()};
+  auto result        = distinct_join.left_join(probe.view());
+  auto gather_map    = std::pair{get_left_indices(result->size()), std::move(result)};
 
   this->compare_to_reference(
     build.view(), probe.view(), gather_map, gold.view(), cudf::out_of_bounds_policy::NULLIFY);
@@ -421,9 +425,9 @@ TEST_F(DistinctJoinTest, LeftJoinWithNulls)
   Table probe(std::move(cols0));
   Table build(std::move(cols1));
 
-  auto distinct_join = cudf::distinct_hash_join<cudf::has_nested::NO>{build.view(), probe.view()};
-  auto result        = distinct_join.left_join();
-  auto gather_map    = std::pair{std::move(result), get_left_indices(result->size())};
+  auto distinct_join = cudf::distinct_hash_join{build.view()};
+  auto result        = distinct_join.left_join(probe.view());
+  auto gather_map    = std::pair{get_left_indices(result->size()), std::move(result)};
 
   column_wrapper<int32_t> col_gold_0{{3, 1, 2, 0, 2}, {true, true, true, true, true}};
   strcol_wrapper col_gold_1({"s1", "s1", "", "s4", "s0"}, {true, true, false, true, true});
@@ -466,9 +470,9 @@ TEST_F(DistinctJoinTest, LeftJoinWithStructsAndNulls)
   Table probe(std::move(cols0));
   Table build(std::move(cols1));
 
-  auto distinct_join = cudf::distinct_hash_join<cudf::has_nested::YES>{build.view(), probe.view()};
-  auto result        = distinct_join.left_join();
-  auto gather_map    = std::pair{std::move(result), get_left_indices(result->size())};
+  auto distinct_join = cudf::distinct_hash_join{build.view()};
+  auto result        = distinct_join.left_join(probe.view());
+  auto gather_map    = std::pair{get_left_indices(result->size()), std::move(result)};
 
   auto col0_gold_names_col = strcol_wrapper{
     "Samuel Vimes", "Detritus", "Carrot Ironfoundersson", "Samuel Vimes", "Angua von Überwald"};
@@ -501,4 +505,25 @@ TEST_F(DistinctJoinTest, LeftJoinWithStructsAndNulls)
 
   this->compare_to_reference(
     build.view(), probe.view(), gather_map, gold.view(), cudf::out_of_bounds_policy::NULLIFY);
+}
+
+// Disabled for now, waiting on upstream cuco updates
+TEST_F(DistinctJoinTest, DISABLED_InvalidLoadFactor)
+{
+  column_wrapper<int32_t> col0_0{{3, 1, 2, 0, 3}};
+  strcol_wrapper col0_1({"s0", "s1", "s2", "s4", "s1"});
+
+  CVector cols0;
+  cols0.push_back(col0_0.release());
+  cols0.push_back(col0_1.release());
+
+  Table t0(std::move(cols0));
+
+  // Test load factor of -0.1
+  EXPECT_THROW(cudf::distinct_hash_join(t0, cudf::null_equality::EQUAL, -0.1), cuco::logic_error);
+  // Test load factor of 0
+  EXPECT_THROW(cudf::distinct_hash_join(t0, cudf::null_equality::EQUAL, 0.0), cuco::logic_error);
+
+  // Test load factor > 1
+  EXPECT_THROW(cudf::distinct_hash_join(t0, cudf::null_equality::EQUAL, 1.1), cuco::logic_error);
 }

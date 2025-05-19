@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2024, NVIDIA CORPORATION & AFFILIATES.   # noqa: E501
+# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION & AFFILIATES.
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
@@ -10,11 +10,13 @@ import operator
 import pickle
 import types
 import warnings
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Mapping
 from enum import IntEnum
-from typing import Any, Literal, Mapping
+from typing import Any, Literal
 
 import numpy as np
+
+from rmm import RMMError
 
 from ..options import _env_get_bool
 from ..testing import assert_eq
@@ -33,6 +35,20 @@ _CUDF_PANDAS_NVTX_COLORS = {
     "EXECUTE_SLOW": 0x0571B0,
 }
 
+# This is a dict of functions that are known to have arguments that
+# need to be transformed from fast to slow only. i.e., Some cudf functions
+# error on passing a device object but don't error on passing a host object.
+# For example: DataFrame.__setitem__(arg, value) errors on passing a
+# cudf.Index object but doesn't error on passing a pd.Index object.
+# Hence we need to transform the arg from fast to slow only. So, we use
+# a dictionary like:
+# {"DataFrame.__setitem__": {0}}
+# where the keys are the function names and the values are the indices
+# (0-based) of the arguments that need to be transformed.
+
+_SPECIAL_FUNCTIONS_ARGS_MAP = {
+    "DataFrame.__setitem__": {0},
+}
 
 _WRAPPER_ASSIGNMENTS = tuple(
     attr
@@ -96,7 +112,7 @@ class _PickleConstructor:
         self._type = type_
 
     def __call__(self):
-        return object.__new__(self._type)
+        return object.__new__(get_final_type_map().get(self._type, self._type))
 
 
 _DELETE = object()
@@ -135,7 +151,7 @@ def make_final_proxy_type(
     additional_attributes
         Mapping of additional attributes to add to the class
        (optional), these will override any defaulted attributes (e.g.
-       ``__init__`). If you want to remove a defaulted attribute
+       ``__init__``). If you want to remove a defaulted attribute
        completely, pass the special sentinel ``_DELETE`` as a value.
     postprocess
         Optional function called to allow the proxy to postprocess
@@ -188,6 +204,12 @@ def make_final_proxy_type(
             return fast_to_slow(self._fsproxy_wrapped)
         return self._fsproxy_wrapped
 
+    def as_gpu_object(self):
+        return self._fsproxy_slow_to_fast()
+
+    def as_cpu_object(self):
+        return self._fsproxy_fast_to_slow()
+
     @property  # type: ignore
     def _fsproxy_state(self) -> _State:
         return (
@@ -205,13 +227,16 @@ def make_final_proxy_type(
         "_fsproxy_slow_type": slow_type,
         "_fsproxy_slow_to_fast": _fsproxy_slow_to_fast,
         "_fsproxy_fast_to_slow": _fsproxy_fast_to_slow,
+        "as_gpu_object": as_gpu_object,
+        "as_cpu_object": as_cpu_object,
         "_fsproxy_state": _fsproxy_state,
     }
 
     if additional_attributes is None:
         additional_attributes = {}
+    slow_type_dir = dir(slow_type)
     for method in _SPECIAL_METHODS:
-        if getattr(slow_type, method, False):
+        if method in slow_type_dir and getattr(slow_type, method, False):
             cls_dict[method] = _FastSlowAttribute(method)
     for k, v in additional_attributes.items():
         if v is _DELETE and k in cls_dict:
@@ -219,7 +244,7 @@ def make_final_proxy_type(
         elif v is not _DELETE:
             cls_dict[k] = v
 
-    for slow_name in dir(slow_type):
+    for slow_name in slow_type_dir:
         if slow_name in cls_dict or slow_name.startswith("__"):
             continue
         else:
@@ -231,7 +256,7 @@ def make_final_proxy_type(
     if metaclasses:
         metaclass = types.new_class(  # type: ignore
             f"{name}_Meta",
-            metaclasses + (_FastSlowProxyMeta,),
+            (*metaclasses, _FastSlowProxyMeta),
             {},
         )
     cls = types.new_class(
@@ -328,7 +353,7 @@ def make_intermediate_proxy_type(
         "_fsproxy_state": _fsproxy_state,
     }
     for method in _SPECIAL_METHODS:
-        if getattr(slow_type, method, False):
+        if method in slow_dir and getattr(slow_type, method, False):
             cls_dict[method] = _FastSlowAttribute(method)
 
     for slow_name in dir(slow_type):
@@ -875,16 +900,60 @@ class _MethodProxy(_FunctionProxy):
             pass
         setattr(self._fsproxy_slow, "__name__", value)
 
+    @property
+    def _customqualname(self):
+        return self._fsproxy_slow.__qualname__
+
 
 def _assert_fast_slow_eq(left, right):
     if _is_final_type(type(left)) or type(left) in NUMPY_TYPES:
         assert_eq(left, right)
 
 
-class ProxyFallbackError(Exception):
-    """Raised when fallback occurs"""
+class FallbackError(Exception):
+    """Raises when fallback occurs"""
 
     pass
+
+
+class OOMFallbackError(FallbackError):
+    """Raises when cuDF produces a MemoryError or an rmm.RMMError"""
+
+    pass
+
+
+class NotImplementedFallbackError(FallbackError):
+    """Raises cuDF produces a NotImplementedError"""
+
+    pass
+
+
+class AttributeFallbackError(FallbackError):
+    """Raises when cuDF produces an AttributeError"""
+
+    pass
+
+
+class TypeFallbackError(FallbackError):
+    """Raises when cuDF produces a TypeError"""
+
+    pass
+
+
+def _raise_fallback_error(err, name):
+    """Raises a fallback error."""
+    err_message = f"Falling back to the slow path. The exception was {err}. \
+        The function called was {name}."
+    exception_map = {
+        (RMMError, MemoryError): OOMFallbackError,
+        NotImplementedError: NotImplementedFallbackError,
+        AttributeError: AttributeFallbackError,
+        TypeError: TypeFallbackError,
+    }
+    for err_type, fallback_err_type in exception_map.items():
+        if isinstance(err, err_type):
+            raise fallback_err_type(err_message) from err
+    raise FallbackError(err_message) from err
 
 
 def _fast_function_call():
@@ -963,16 +1032,14 @@ def _fast_slow_function_call(
                             f"The exception was {e}."
                         )
     except Exception as err:
-        if _env_get_bool("CUDF_PANDAS_FAIL_ON_FALLBACK", False):
-            raise ProxyFallbackError(
-                f"The operation failed with cuDF, the reason was {type(err)}: {err}"
-            ) from err
         with nvtx.annotate(
             "EXECUTE_SLOW",
             color=_CUDF_PANDAS_NVTX_COLORS["EXECUTE_SLOW"],
             domain="cudf_pandas",
         ):
             slow_args, slow_kwargs = _slow_arg(args), _slow_arg(kwargs)
+            if _env_get_bool("CUDF_PANDAS_FAIL_ON_FALLBACK", False):
+                _raise_fallback_error(err, slow_args[0].__name__)
             if _env_get_bool("LOG_FAST_FALLBACK", False):
                 from ._logger import log_fallback
 
@@ -1011,7 +1078,36 @@ def _transform_arg(
         # use __reduce_ex__ instead...
         if type(arg) is tuple:
             # Must come first to avoid infinite recursion
-            return tuple(_transform_arg(a, attribute_name, seen) for a in arg)
+            if (
+                len(arg) > 0
+                and isinstance(arg[0], _MethodProxy)
+                and arg[0]._customqualname in _SPECIAL_FUNCTIONS_ARGS_MAP
+            ):
+                indices_map = _SPECIAL_FUNCTIONS_ARGS_MAP[
+                    arg[0]._customqualname
+                ]
+                method_proxy, original_args, original_kwargs = arg
+
+                original_args = tuple(
+                    _transform_arg(a, "_fsproxy_slow", seen)
+                    if i - 1 in indices_map
+                    else _transform_arg(a, attribute_name, seen)
+                    for i, a in enumerate(original_args)
+                )
+                original_kwargs = _transform_arg(
+                    original_kwargs, attribute_name, seen
+                )
+                return tuple(
+                    (
+                        _transform_arg(method_proxy, attribute_name, seen),
+                        original_args,
+                        original_kwargs,
+                    )
+                )
+            else:
+                return tuple(
+                    _transform_arg(a, attribute_name, seen) for a in arg
+                )
         elif hasattr(arg, "__getnewargs_ex__"):
             # Partial implementation of to reconstruct with
             # transformed pieces
@@ -1099,7 +1195,9 @@ def _maybe_wrap_result(result: Any, func: Callable, /, *args, **kwargs) -> Any:
     """
     Wraps "result" in a fast-slow proxy if is a "proxiable" object.
     """
-    if _is_final_type(result):
+    if isinstance(result, (int, str, float, bool, type(None))):
+        return result
+    elif _is_final_type(result):
         typ = get_final_type_map()[type(result)]
         return typ._fsproxy_wrap(result, func)
     elif _is_intermediate_type(result):
@@ -1212,7 +1310,7 @@ def _replace_closurevars(
     return functools.update_wrapper(
         g,
         f,
-        assigned=functools.WRAPPER_ASSIGNMENTS + ("__kwdefaults__",),
+        assigned=(*functools.WRAPPER_ASSIGNMENTS, "__kwdefaults__"),
     )
 
 
@@ -1236,6 +1334,35 @@ def _get_proxy_base_class(cls):
         if proxy_class in cls.__mro__:
             return proxy_class
     return object
+
+
+def as_proxy_object(obj: Any) -> Any:
+    """
+    Wraps a cudf or pandas object in a proxy object if applicable.
+
+    There will be no memory transfer, i.e., GPU objects stay on GPU and
+    CPU objects stay on CPU. The object will be wrapped in a
+    proxy object. This is useful for ensuring that the object is
+    compatible with the fast-slow proxy system.
+
+    Parameters
+    ----------
+    obj : Any
+        The object to wrap.
+
+    Returns
+    -------
+    Any
+        The wrapped proxy object if applicable, otherwise the original object.
+    """
+    if _is_final_type(obj):
+        typ = get_final_type_map()[type(obj)]
+        return typ._fsproxy_wrap(obj, None)
+    return obj
+
+
+def is_proxy_instance(obj, type):
+    return is_proxy_object(obj) and obj.__class__.__name__ == type.__name__
 
 
 PROXY_BASE_CLASSES: set[type] = {

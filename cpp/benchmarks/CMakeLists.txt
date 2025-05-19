@@ -1,5 +1,5 @@
 # =============================================================================
-# Copyright (c) 2018-2024, NVIDIA CORPORATION.
+# Copyright (c) 2018-2025, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License. You may obtain a copy of the License at
@@ -25,7 +25,7 @@ target_compile_options(
 target_link_libraries(
   cudf_datagen
   PUBLIC GTest::gmock GTest::gtest benchmark::benchmark nvbench::nvbench Threads::Threads cudf
-         cudftestutil nvtx3::nvtx3-cpp
+         cudf::cudftestutil nvtx3::nvtx3-cpp
   PRIVATE $<TARGET_NAME_IF_EXISTS:conda_env>
 )
 
@@ -49,7 +49,7 @@ target_compile_options(
 
 target_link_libraries(
   ndsh_data_generator
-  PUBLIC cudf cudftestutil nvtx3::nvtx3-cpp
+  PUBLIC cudf cudf::cudftestutil nvtx3::nvtx3-cpp
   PRIVATE $<TARGET_NAME_IF_EXISTS:conda_env>
 )
 
@@ -65,14 +65,14 @@ target_include_directories(
 # Use an OBJECT library so we only compile these helper source files only once
 add_library(
   cudf_benchmark_common OBJECT
-  "${CUDF_SOURCE_DIR}/tests/utilities/random_seed.cpp"
-  synchronization/synchronization.cpp
-  io/cuio_common.cpp
-  common/table_utilities.cpp
-  common/benchmark_utilities.cpp
-  common/nvbench_utilities.cpp
+  synchronization/synchronization.cpp io/cuio_common.cpp common/table_utilities.cpp
+  common/benchmark_utilities.cpp common/nvbench_utilities.cpp
 )
-target_link_libraries(cudf_benchmark_common PRIVATE cudf_datagen $<TARGET_NAME_IF_EXISTS:conda_env>)
+target_link_libraries(
+  cudf_benchmark_common PRIVATE cudf_datagen $<TARGET_NAME_IF_EXISTS:conda_env> GTest::gmock
+                                GTest::gtest
+)
+
 add_custom_command(
   OUTPUT CUDF_BENCHMARKS
   COMMAND echo Running benchmarks
@@ -97,9 +97,12 @@ function(ConfigureBench CMAKE_BENCH_NAME)
                CUDA_STANDARD 17
                CUDA_STANDARD_REQUIRED ON
   )
+  target_compile_definitions(
+    ${CMAKE_BENCH_NAME} PRIVATE THRUST_FORCE_32_BIT_OFFSET_TYPE=1 CCCL_AVOID_SORT_UNROLL=1
+  )
   target_link_libraries(
     ${CMAKE_BENCH_NAME} PRIVATE cudf_benchmark_common cudf_datagen benchmark::benchmark_main
-                                $<TARGET_NAME_IF_EXISTS:conda_env>
+                                cudf::cudftestutil_objects $<TARGET_NAME_IF_EXISTS:conda_env>
   )
   add_custom_command(
     OUTPUT CUDF_BENCHMARKS
@@ -127,8 +130,9 @@ function(ConfigureNVBench CMAKE_BENCH_NAME)
                INSTALL_RPATH "\$ORIGIN/../../../lib"
   )
   target_link_libraries(
-    ${CMAKE_BENCH_NAME} PRIVATE cudf_benchmark_common ndsh_data_generator cudf_datagen
-                                nvbench::nvbench $<TARGET_NAME_IF_EXISTS:conda_env>
+    ${CMAKE_BENCH_NAME}
+    PRIVATE cudf_benchmark_common ndsh_data_generator cudf_datagen nvbench::nvbench
+            $<TARGET_NAME_IF_EXISTS:conda_env> cudf::cudftestutil_objects
   )
   install(
     TARGETS ${CMAKE_BENCH_NAME}
@@ -139,8 +143,9 @@ function(ConfigureNVBench CMAKE_BENCH_NAME)
 endfunction()
 
 # ##################################################################################################
-# * column benchmarks -----------------------------------------------------------------------------
-ConfigureBench(COLUMN_CONCAT_BENCH column/concatenate.cpp)
+# * copying benchmarks
+# -----------------------------------------------------------------------------
+ConfigureNVBench(COPYING_NVBENCH copying/concatenate.cpp)
 
 # ##################################################################################################
 # * gather benchmark ------------------------------------------------------------------------------
@@ -200,7 +205,7 @@ ConfigureNVBench(
 # * join benchmark --------------------------------------------------------------------------------
 ConfigureNVBench(
   JOIN_NVBENCH join/left_join.cu join/conditional_join.cu join/join.cu join/mixed_join.cu
-  join/distinct_join.cu
+  join/distinct_join.cu join/multiplicity_join.cu
 )
 
 # ##################################################################################################
@@ -214,10 +219,9 @@ ConfigureNVBench(SEARCH_NVBENCH search/contains_scalar.cpp search/contains_table
 
 # ##################################################################################################
 # * sort benchmark --------------------------------------------------------------------------------
-ConfigureBench(SORT_BENCH sort/rank.cpp sort/sort.cpp sort/sort_strings.cpp)
 ConfigureNVBench(
-  SORT_NVBENCH sort/rank_lists.cpp sort/rank_structs.cpp sort/segmented_sort.cpp
-  sort/sort_lists.cpp sort/sort_structs.cpp
+  SORT_NVBENCH sort/rank.cpp sort/rank_lists.cpp sort/rank_structs.cpp sort/segmented_sort.cpp
+  sort/sort.cpp sort/sort_lists.cpp sort/sort_strings.cpp sort/sort_structs.cpp
 )
 
 # ##################################################################################################
@@ -286,6 +290,11 @@ ConfigureBench(HASHING_BENCH hashing/partition.cpp)
 ConfigureNVBench(HASHING_NVBENCH hashing/hash.cpp)
 
 # ##################################################################################################
+# * interop benchmark ------------------------------------------------------------------------------
+ConfigureNVBench(INTEROP_NVBENCH interop/interop.cpp interop/interop_stringview.cpp)
+target_link_libraries(INTEROP_NVBENCH PRIVATE nanoarrow)
+
+# ##################################################################################################
 # * merge benchmark -------------------------------------------------------------------------------
 ConfigureBench(MERGE_BENCH merge/merge.cpp)
 ConfigureNVBench(
@@ -294,7 +303,7 @@ ConfigureNVBench(
 
 # ##################################################################################################
 # * null_mask benchmark ---------------------------------------------------------------------------
-ConfigureBench(NULLMASK_BENCH null_mask/set_null_mask.cpp)
+ConfigureNVBench(NULLMASK_NVBENCH null_mask/set_null_mask.cpp)
 
 # ##################################################################################################
 # * parquet writer benchmark ----------------------------------------------------------------------
@@ -336,58 +345,70 @@ ConfigureNVBench(CSV_WRITER_NVBENCH io/csv/csv_writer.cpp)
 
 # ##################################################################################################
 # * ast benchmark ---------------------------------------------------------------------------------
-ConfigureNVBench(AST_NVBENCH ast/transform.cpp)
+ConfigureNVBench(AST_NVBENCH ast/polynomials.cpp ast/transform.cpp)
 
 # ##################################################################################################
 # * binaryop benchmark ----------------------------------------------------------------------------
-ConfigureNVBench(BINARYOP_NVBENCH binaryop/binaryop.cpp binaryop/compiled_binaryop.cpp)
+ConfigureNVBench(
+  BINARYOP_NVBENCH binaryop/binaryop.cpp binaryop/compiled_binaryop.cpp binaryop/polynomials.cpp
+)
+
+# ##################################################################################################
+# * transform benchmark
+# ---------------------------------------------------------------------------------
+ConfigureNVBench(TRANSFORM_NVBENCH transform/polynomials.cpp transform/transform.cpp)
 
 # ##################################################################################################
 # * nvtext benchmark -------------------------------------------------------------------
-ConfigureBench(TEXT_BENCH text/ngrams.cpp text/subword.cpp)
-
 ConfigureNVBench(
-  TEXT_NVBENCH text/edit_distance.cpp text/hash_ngrams.cpp text/jaccard.cpp text/minhash.cpp
-  text/normalize.cpp text/replace.cpp text/tokenize.cpp text/vocab.cpp text/word_minhash.cpp
+  TEXT_NVBENCH
+  text/byte_pair_encoding.cpp
+  text/edit_distance.cpp
+  text/hash_ngrams.cpp
+  text/jaccard.cpp
+  text/minhash.cpp
+  text/ngrams.cpp
+  text/normalize.cpp
+  text/replace.cpp
+  text/subword.cpp
+  text/tokenize.cpp
+  text/vocab.cpp
 )
 
 # ##################################################################################################
 # * strings benchmark -------------------------------------------------------------------
-ConfigureBench(
-  STRINGS_BENCH
-  string/combine.cpp
-  string/convert_datetime.cpp
-  string/convert_durations.cpp
-  string/convert_fixed_point.cpp
-  string/convert_numerics.cpp
-  string/copy.cu
-  string/factory.cu
-  string/filter.cpp
-  string/repeat_strings.cpp
-  string/replace.cpp
-  string/translate.cpp
-  string/url_decode.cu
-)
-
 ConfigureNVBench(
   STRINGS_NVBENCH
   string/case.cpp
   string/char_types.cpp
+  string/combine.cpp
   string/contains.cpp
+  string/convert_datetime.cpp
+  string/convert_durations.cpp
+  string/convert_fixed_point.cpp
+  string/convert_numerics.cpp
+  string/copy.cpp
   string/copy_if_else.cpp
   string/copy_range.cpp
   string/count.cpp
   string/extract.cpp
+  string/factory.cpp
+  string/filter.cpp
   string/find.cpp
-  string/gather.cpp
+  string/find_multiple.cpp
   string/join_strings.cpp
   string/lengths.cpp
   string/like.cpp
+  string/make_strings_column.cu
+  string/repeat_strings.cpp
+  string/replace.cpp
   string/replace_re.cpp
   string/reverse.cpp
   string/slice.cpp
   string/split.cpp
   string/split_re.cpp
+  string/translate.cpp
+  string/url_decode.cu
 )
 
 # ##################################################################################################
@@ -411,7 +432,15 @@ ConfigureNVBench(DECIMAL_NVBENCH decimal/convert_floating.cpp)
 # ##################################################################################################
 # * reshape benchmark
 # ---------------------------------------------------------------------------------
-ConfigureNVBench(RESHAPE_NVBENCH reshape/interleave.cpp)
+ConfigureNVBench(RESHAPE_NVBENCH reshape/interleave.cpp reshape/table_to_array.cpp)
+
+# ##################################################################################################
+# * rolling benchmark
+# ---------------------------------------------------------------------------------
+ConfigureNVBench(
+  ROLLING_NVBENCH rolling/grouped_range_rolling_sum.cu rolling/grouped_rolling_sum.cpp
+  rolling/range_rolling_sum.cu rolling/rolling_sum.cpp
+)
 
 add_custom_target(
   run_benchmarks

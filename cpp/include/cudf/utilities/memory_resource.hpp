@@ -16,8 +16,6 @@
 
 #pragma once
 
-#include <cudf/utilities/memory_resource.hpp>
-
 #include <rmm/cuda_device.hpp>
 #include <rmm/mr/device/device_memory_resource.hpp>
 #include <rmm/mr/device/per_device_resource.hpp>

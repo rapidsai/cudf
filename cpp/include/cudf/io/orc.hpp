@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -41,6 +41,28 @@ namespace io {
 constexpr size_t default_stripe_size_bytes   = 64 * 1024 * 1024;  ///< 64MB default orc stripe size
 constexpr size_type default_stripe_size_rows = 1000000;  ///< 1M rows default orc stripe rows
 constexpr size_type default_row_index_stride = 10000;    ///< 10K rows default orc row index stride
+
+/**
+ * @brief Check if the compression type is supported for reading ORC files.
+ *
+ * @note This is a runtime check. Some compression types may not be supported because of the current
+ * system configuration.
+ *
+ * @param compression Compression type
+ * @return Boolean indicating if the compression type is supported
+ */
+[[nodiscard]] bool is_supported_read_orc(compression_type compression);
+
+/**
+ * @brief Check if the compression type is supported for writing ORC files.
+ *
+ * @note This is a runtime check. Some compression types may not be supported because of the current
+ * system configuration.
+ *
+ * @param compression Compression type
+ * @return Boolean indicating if the compression type is supported
+ */
+[[nodiscard]] bool is_supported_write_orc(compression_type compression);
 
 /**
  * @brief Builds settings to use for `read_orc()`.
@@ -578,7 +600,7 @@ class orc_writer_options {
   // Specify the sink to use for writer output
   sink_info _sink;
   // Specify the compression format to use
-  compression_type _compression = compression_type::AUTO;
+  compression_type _compression = compression_type::SNAPPY;
   // Specify frequency of statistics collection
   statistics_freq _stats_freq = ORC_STATISTICS_ROW_GROUP;
   // Maximum size of each stripe (unless smaller than a single row group)
@@ -733,7 +755,11 @@ class orc_writer_options {
    *
    * @param comp Compression type
    */
-  void set_compression(compression_type comp) { _compression = comp; }
+  void set_compression(compression_type comp)
+  {
+    _compression = comp;
+    if (comp == compression_type::AUTO) { _compression = compression_type::SNAPPY; }
+  }
 
   /**
    * @brief Choose granularity of statistics collection.
@@ -865,7 +891,7 @@ class orc_writer_options_builder {
    */
   orc_writer_options_builder& compression(compression_type comp)
   {
-    options._compression = comp;
+    options.set_compression(comp);
     return *this;
   }
 
@@ -1026,7 +1052,7 @@ class chunked_orc_writer_options {
   // Specify the sink to use for writer output
   sink_info _sink;
   // Specify the compression format to use
-  compression_type _compression = compression_type::AUTO;
+  compression_type _compression = compression_type::SNAPPY;
   // Specify granularity of statistics collection
   statistics_freq _stats_freq = ORC_STATISTICS_ROW_GROUP;
   // Maximum size of each stripe (unless smaller than a single row group)
@@ -1157,7 +1183,11 @@ class chunked_orc_writer_options {
    *
    * @param comp The compression type to use
    */
-  void set_compression(compression_type comp) { _compression = comp; }
+  void set_compression(compression_type comp)
+  {
+    _compression = comp;
+    if (comp == compression_type::AUTO) { _compression = compression_type::SNAPPY; }
+  }
 
   /**
    * @brief Choose granularity of statistics collection
@@ -1279,7 +1309,7 @@ class chunked_orc_writer_options_builder {
    */
   chunked_orc_writer_options_builder& compression(compression_type comp)
   {
-    options._compression = comp;
+    options.set_compression(comp);
     return *this;
   }
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,7 +17,9 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/copy.hpp>
+#include <cudf/detail/device_scalar.hpp>
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/device_operators.cuh>
 #include <cudf/dictionary/dictionary_column_view.hpp>
@@ -28,10 +30,10 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
-#include <thrust/extrema.h>
+#include <cuda/std/functional>
+#include <cuda/std/iterator>
 #include <thrust/functional.h>
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/iterator/iterator_traits.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/pair.h>
 #include <thrust/transform_reduce.h>
@@ -54,9 +56,9 @@ struct minmax_pair {
   T max_val;
 
   __host__ __device__ minmax_pair()
-    : min_val(cudf::DeviceMin::identity<T>()), max_val(cudf::DeviceMax::identity<T>()){};
-  __host__ __device__ minmax_pair(T val) : min_val(val), max_val(val){};
-  __host__ __device__ minmax_pair(T min_val_, T max_val_) : min_val(min_val_), max_val(max_val_){};
+    : min_val(cudf::DeviceMin::identity<T>()), max_val(cudf::DeviceMax::identity<T>()) {};
+  __host__ __device__ minmax_pair(T val) : min_val(val), max_val(val) {};
+  __host__ __device__ minmax_pair(T min_val_, T max_val_) : min_val(min_val_), max_val(max_val_) {};
 };
 
 /**
@@ -69,18 +71,18 @@ struct minmax_pair {
  * @param num_items number of items to reduce
  * @param binary_op binary operator used to reduce
  * @param stream CUDA stream to run kernels on.
- * @return rmm::device_scalar<OutputType>
+ * @return cudf::detail::device_scalar<OutputType>
  */
 template <typename Op,
           typename InputIterator,
-          typename OutputType = typename thrust::iterator_value<InputIterator>::type>
-rmm::device_scalar<OutputType> reduce_device(InputIterator d_in,
-                                             size_type num_items,
-                                             Op binary_op,
-                                             rmm::cuda_stream_view stream)
+          typename OutputType = cuda::std::iter_value_t<InputIterator>>
+auto reduce_device(InputIterator d_in,
+                   size_type num_items,
+                   Op binary_op,
+                   rmm::cuda_stream_view stream)
 {
   OutputType identity{};
-  rmm::device_scalar<OutputType> result{identity, stream};
+  cudf::detail::device_scalar<OutputType> result{identity, stream};
 
   // Allocate temporary storage
   size_t storage_bytes = 0;
@@ -110,8 +112,8 @@ template <typename T>
 struct minmax_binary_op {
   __device__ minmax_pair<T> operator()(minmax_pair<T> const& lhs, minmax_pair<T> const& rhs) const
   {
-    return minmax_pair<T>{thrust::min(lhs.min_val, rhs.min_val),
-                          thrust::max(lhs.max_val, rhs.max_val)};
+    return minmax_pair<T>{cuda::std::min(lhs.min_val, rhs.min_val),
+                          cuda::std::max(lhs.max_val, rhs.max_val)};
   }
 };
 
@@ -216,9 +218,8 @@ struct minmax_functor {
     auto dev_result = reduce<cudf::string_view>(col, stream);
     // copy the minmax_pair to the host; does not copy the strings
     using OutputType = minmax_pair<cudf::string_view>;
-    OutputType host_result;
-    CUDF_CUDA_TRY(cudaMemcpyAsync(
-      &host_result, dev_result.data(), sizeof(OutputType), cudaMemcpyDefault, stream.value()));
+
+    auto const host_result = dev_result.value(stream);
     // strings are copied to create the scalars here
     return {std::make_unique<string_scalar>(host_result.min_val, true, stream, mr),
             std::make_unique<string_scalar>(host_result.max_val, true, stream, mr)};
@@ -234,10 +235,8 @@ struct minmax_functor {
     // compute minimum and maximum values
     auto dev_result = reduce<T>(col, stream);
     // copy the minmax_pair to the host to call get_element
-    using OutputType = minmax_pair<T>;
-    OutputType host_result;
-    CUDF_CUDA_TRY(cudaMemcpyAsync(
-      &host_result, dev_result.data(), sizeof(OutputType), cudaMemcpyDefault, stream.value()));
+    using OutputType       = minmax_pair<T>;
+    OutputType host_result = dev_result.value(stream);
     // get the keys for those indexes
     auto const keys = dictionary_column_view(col).keys();
     return {detail::get_element(keys, static_cast<size_type>(host_result.min_val), stream, mr),

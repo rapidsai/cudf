@@ -1,8 +1,9 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 import pyarrow as pa
-import pylibcudf as plc
 import pytest
+
+import pylibcudf as plc
 
 
 @pytest.mark.parametrize(
@@ -15,7 +16,6 @@ import pytest
     ],
 )
 def test_table_shape(arrow_tbl):
-    plc_tbl = plc.interop.from_arrow(arrow_tbl)
+    plc_tbl = plc.Table(arrow_tbl)
 
-    plc_tbl_shape = (plc_tbl.num_rows(), plc_tbl.num_columns())
-    assert plc_tbl_shape == arrow_tbl.shape
+    assert plc_tbl.shape() == arrow_tbl.shape

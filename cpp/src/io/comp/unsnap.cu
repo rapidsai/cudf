@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,16 +17,16 @@
 #include "gpuinflate.hpp"
 #include "io/utilities/block_utils.cuh"
 
+#include <cudf/detail/utilities/cuda.cuh>
+
 #include <rmm/cuda_stream_view.hpp>
 
 #include <cub/cub.cuh>
 
-namespace cudf {
-namespace io {
+namespace cudf::io::detail {
 constexpr int32_t batch_size    = (1 << 5);
 constexpr int32_t batch_count   = (1 << 2);
 constexpr int32_t prefetch_size = (1 << 9);  // 512B, in 32B chunks
-constexpr bool log_cyclecount   = false;
 
 void __device__ busy_wait(size_t cycles)
 {
@@ -65,7 +65,8 @@ struct unsnap_queue_s {
  * @brief snappy decompression state
  */
 struct unsnap_state_s {
-  constexpr unsnap_state_s() noexcept {}  // required to compile on ctk-12.2 + aarch64
+  CUDF_HOST_DEVICE constexpr unsnap_state_s() noexcept {
+  }  // required to compile on ctk-12.2 + aarch64
 
   uint8_t const* base{};           ///< base ptr of compressed stream
   uint8_t const* end{};            ///< end of compressed stream
@@ -646,7 +647,6 @@ CUDF_KERNEL void __launch_bounds__(block_size)
     auto cur       = s->src.begin();
     auto const end = s->src.end();
     s->error       = 0;
-    if (log_cyclecount) { s->tstart = clock(); }
     if (cur < end) {
       // Read uncompressed size (varint), limited to 32-bit
       uint32_t uncompressed_size = *cur++;
@@ -704,11 +704,6 @@ CUDF_KERNEL void __launch_bounds__(block_size)
     results[strm_id].bytes_written = s->uncompressed_size - s->bytes_left;
     results[strm_id].status =
       (s->error == 0) ? compression_status::SUCCESS : compression_status::FAILURE;
-    if (log_cyclecount) {
-      results[strm_id].reserved = clock() - s->tstart;
-    } else {
-      results[strm_id].reserved = 0;
-    }
   }
 }
 
@@ -723,5 +718,42 @@ void gpu_unsnap(device_span<device_span<uint8_t const> const> inputs,
   unsnap_kernel<128><<<dim_grid, dim_block, 0, stream.value()>>>(inputs, outputs, results);
 }
 
-}  // namespace io
-}  // namespace cudf
+__global__ void get_snappy_uncompressed_size_kernel(
+  device_span<device_span<uint8_t const> const> inputs, device_span<size_t> uncompressed_sizes)
+{
+  auto const idx = cudf::detail::grid_1d::global_thread_id();
+  if (idx >= inputs.size()) return;
+
+  auto cur       = inputs[idx].begin();
+  auto const end = inputs[idx].end();
+
+  constexpr int payload_bits_per_byte = 7;
+  constexpr size_t payload_mask       = (1 << payload_bits_per_byte) - 1;
+  size_t uncompressed_size            = 0;
+  int shift                           = 0;
+  while (cur < end && shift + payload_bits_per_byte <= 8 * sizeof(size_t)) {
+    size_t const byte = *cur++;
+    uncompressed_size |= (byte & payload_mask) << shift;
+    if ((byte & (1 << payload_bits_per_byte)) == 0) {
+      uncompressed_sizes[idx] = uncompressed_size;
+      return;
+    }
+    shift += payload_bits_per_byte;
+  }
+  // Invalid varint
+  uncompressed_sizes[idx] = 0;
+}
+
+void get_snappy_uncompressed_size(device_span<device_span<uint8_t const> const> inputs,
+                                  device_span<size_t> uncompressed_sizes,
+                                  rmm::cuda_stream_view stream)
+{
+  int threads_per_block = 128;
+  auto const num_blocks =
+    cudf::util::div_rounding_up_safe<size_t>(inputs.size(), threads_per_block);
+
+  get_snappy_uncompressed_size_kernel<<<num_blocks, threads_per_block, 0, stream.value()>>>(
+    inputs, uncompressed_sizes);
+}
+
+}  // namespace cudf::io::detail

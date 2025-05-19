@@ -1,8 +1,6 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
 """Common abstract base classes for cudf."""
 
-import pickle
-
 import numpy
 
 import cudf
@@ -21,6 +19,14 @@ class Serializable:
     into a representative collection of metadata and data buffers, while the
     latter converts back from that representation into an equivalent object.
     """
+
+    # A mapping from class names to the classes themselves. This is used to
+    # reconstruct the correct class when deserializing an object.
+    _name_type_map: dict = {}
+
+    def __init_subclass__(cls, /, **kwargs):
+        super().__init_subclass__(**kwargs)
+        cls._name_type_map[cls.__name__] = cls
 
     def serialize(self):
         """Generate an equivalent serializable representation of an object.
@@ -98,7 +104,7 @@ class Serializable:
             )
             for f in frames
         )
-        header["type-serialized"] = pickle.dumps(type(self))
+        header["type-serialized-name"] = type(self).__name__
         header["is-cuda"] = [
             hasattr(f, "__cuda_array_interface__") for f in frames
         ]
@@ -128,10 +134,10 @@ class Serializable:
 
         :meta private:
         """
-        typ = pickle.loads(header["type-serialized"])
+        typ = cls._name_type_map[header["type-serialized-name"]]
         frames = [
             cudf.core.buffer.as_buffer(f) if c else memoryview(f)
-            for c, f in zip(header["is-cuda"], frames)
+            for c, f in zip(header["is-cuda"], frames, strict=True)
         ]
         return typ.deserialize(header, frames)
 

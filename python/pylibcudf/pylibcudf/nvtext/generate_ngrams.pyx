@@ -1,5 +1,6 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
+from libc.stdint cimport uint32_t
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 from pylibcudf.column cimport Column
@@ -14,6 +15,11 @@ from pylibcudf.libcudf.scalar.scalar cimport string_scalar
 from pylibcudf.libcudf.types cimport size_type
 from pylibcudf.scalar cimport Scalar
 
+__all__ = [
+    "generate_ngrams",
+    "generate_character_ngrams",
+    "hash_character_ngrams",
+]
 
 cpdef Column generate_ngrams(Column input, size_type ngrams, Scalar separator):
     """
@@ -40,12 +46,10 @@ cpdef Column generate_ngrams(Column input, size_type ngrams, Scalar separator):
     cdef unique_ptr[column] c_result
 
     with nogil:
-        c_result = move(
-            cpp_generate_ngrams(
-                c_strings,
-                ngrams,
-                c_separator[0]
-            )
+        c_result = cpp_generate_ngrams(
+            c_strings,
+            ngrams,
+            c_separator[0]
         )
     return Column.from_libcudf(move(c_result))
 
@@ -72,15 +76,14 @@ cpdef Column generate_character_ngrams(Column input, size_type ngrams = 2):
     cdef unique_ptr[column] c_result
 
     with nogil:
-        c_result = move(
-            cpp_generate_character_ngrams(
-                c_strings,
-                ngrams,
-            )
+        c_result = cpp_generate_character_ngrams(
+            c_strings,
+            ngrams,
         )
     return Column.from_libcudf(move(c_result))
 
-cpdef Column hash_character_ngrams(Column input, size_type ngrams = 2):
+
+cpdef Column hash_character_ngrams(Column input, size_type ngrams, uint32_t seed):
     """
     Returns a lists column of hash values of the characters in each string
 
@@ -92,6 +95,8 @@ cpdef Column hash_character_ngrams(Column input, size_type ngrams = 2):
         Input strings
     ngram : size_type
         The ngram number to generate
+    seed : uint32_t
+        Seed used for the hash algorithm
 
     Returns
     -------
@@ -102,10 +107,9 @@ cpdef Column hash_character_ngrams(Column input, size_type ngrams = 2):
     cdef unique_ptr[column] c_result
 
     with nogil:
-        c_result = move(
-            cpp_hash_character_ngrams(
-                c_strings,
-                ngrams,
-            )
+        c_result = cpp_hash_character_ngrams(
+            c_strings,
+            ngrams,
+            seed
         )
     return Column.from_libcudf(move(c_result))

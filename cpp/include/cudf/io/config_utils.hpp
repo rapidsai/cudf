@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,26 +18,21 @@
 #include <cudf/utilities/export.hpp>
 
 namespace CUDF_EXPORT cudf {
-namespace io::cufile_integration {
+namespace io {
+namespace kvikio_integration {
 
 /**
- * @brief Returns true if cuFile and its compatibility mode are enabled.
+ * @brief Set KvikIO parameters, including:
+ * - Compatibility mode, according to the environment variable KVIKIO_COMPAT_MODE. If
+ *   KVIKIO_COMPAT_MODE is not set, enable it by default, which enforces the use of POSIX I/O.
+ * - Thread pool size, according to the environment variable KVIKIO_NTHREADS. If KVIKIO_NTHREADS is
+ *   not set, use 4 threads by default.
  */
-bool is_always_enabled();
+void set_up_kvikio();
 
-/**
- * @brief Returns true if only direct IO through cuFile is enabled (compatibility mode is disabled).
- */
-bool is_gds_enabled();
+}  // namespace kvikio_integration
 
-/**
- * @brief Returns true if KvikIO is enabled.
- */
-bool is_kvikio_enabled();
-
-}  // namespace io::cufile_integration
-
-namespace io::nvcomp_integration {
+namespace nvcomp_integration {
 
 /**
  * @brief Returns true if all nvCOMP uses are enabled.
@@ -49,5 +44,6 @@ bool is_all_enabled();
  */
 bool is_stable_enabled();
 
-}  // namespace io::nvcomp_integration
+}  // namespace nvcomp_integration
+}  // namespace io
 }  // namespace CUDF_EXPORT cudf

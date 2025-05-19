@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,12 +16,10 @@
 
 #include "large_strings_fixture.hpp"
 
-#include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/testing_main.hpp>
 
 #include <cudf/column/column.hpp>
-#include <cudf/strings/combine.hpp>
 #include <cudf/strings/repeat_strings.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 
@@ -123,14 +121,19 @@ LargeStringsData* StringsLargeTest::g_ls_data = nullptr;
 int main(int argc, char** argv)
 {
   ::testing::InitGoogleTest(&argc, argv);
-  auto const cmd_opts = parse_cudf_test_opts(argc, argv);
-  // hardcoding the CUDA memory resource to keep from exceeding the pool
-  auto mr = cudf::test::make_cuda();
-  cudf::set_current_device_resource(mr.get());
-  auto adaptor = make_stream_mode_adaptor(cmd_opts);
-
+  cudf::test::config config;
+  config.rmm_mode = "cuda";
+  init_cudf_test(argc, argv, config);
   // create object to automatically be destroyed at the end of main()
   auto lsd = cudf::test::StringsLargeTest::get_ls_data();
 
+  if (std::getenv("GTEST_CUDF_MEMORY_PEAK")) {
+    auto mr = rmm::mr::statistics_resource_adaptor<rmm::mr::device_memory_resource>(
+      cudf::get_current_device_resource());
+    cudf::set_current_device_resource(&mr);
+    auto rc = RUN_ALL_TESTS();
+    std::cout << "Peak memory usage " << mr.get_bytes_counter().peak << " bytes" << std::endl;
+    return rc;
+  }
   return RUN_ALL_TESTS();
 }

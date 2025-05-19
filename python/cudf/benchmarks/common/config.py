@@ -1,4 +1,4 @@
-# Copyright (c) 2022-2024, NVIDIA CORPORATION.
+# Copyright (c) 2022-2025, NVIDIA CORPORATION.
 
 """Module used for global configuration of benchmarks.
 
@@ -42,9 +42,9 @@ if "CUDF_BENCHMARKS_USE_PANDAS" in os.environ:
         items[:] = list(filter(is_pandas_compatible, items))
 
 else:
-    import cupy  # noqa: W0611, F401
+    import cupy  # noqa: F401
 
-    import cudf  # noqa: W0611, F401
+    import cudf  # noqa: F401
 
     def pytest_collection_modifyitems(session, config, items):
         pass
@@ -64,7 +64,7 @@ def pytest_sessionfinish(session, exitstatus):
 # Constants used to define benchmarking standards.
 if "CUDF_BENCHMARKS_DEBUG_ONLY" in os.environ:
     NUM_ROWS = [10, 20]
-    NUM_COLS = [1, 6]
+    NUM_COLS = [1, 6, 20]
 else:
     NUM_ROWS = [100, 10_000, 1_000_000]
-    NUM_COLS = [1, 6]
+    NUM_COLS = [1, 6, 20]

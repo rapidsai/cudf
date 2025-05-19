@@ -95,8 +95,8 @@ rmm::device_uvector<size_type> distinct_indices(table_view const& input,
   auto const row_equal = cudf::experimental::row::equality::self_comparator(preprocessed_input);
 
   auto const helper_func = [&](auto const& d_equal) {
-    using RowHasher = std::decay_t<decltype(d_equal)>;
-    auto set        = hash_set_type<RowHasher>{
+    using RowEqual = std::decay_t<decltype(d_equal)>;
+    auto set       = distinct_set_t<RowEqual>{
       num_rows,
       0.5,  // desired load factor
       cuco::empty_key{cudf::detail::CUDF_SIZE_TYPE_SENTINEL},

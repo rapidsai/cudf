@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,20 +14,29 @@
  * limitations under the License.
  */
 
-#include <cudf/detail/utilities/logger.hpp>
+#include "io/utilities/getenv_or.hpp"
+
 #include <cudf/detail/utilities/stream_pool.hpp>
+#include <cudf/logger.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/export.hpp>
-#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/pinned_memory.hpp>
 
 #include <rmm/cuda_device.hpp>
 #include <rmm/mr/device/pool_memory_resource.hpp>
 #include <rmm/mr/pinned_host_memory_resource.hpp>
 
+#include <algorithm>
+#include <atomic>
+#include <cstdint>
+#include <cstdlib>
+#include <mutex>
+#include <optional>
+
 namespace cudf {
 
 namespace {
+
 class fixed_pinned_pool_memory_resource {
   using upstream_mr    = rmm::mr::pinned_host_memory_resource;
   using host_pooled_mr = rmm::mr::pool_memory_resource<upstream_mr>;
@@ -47,7 +56,7 @@ class fixed_pinned_pool_memory_resource {
       pool_size_{rmm::align_up(size, rmm::CUDA_ALLOCATION_ALIGNMENT)},
       pool_{new host_pooled_mr(upstream_mr_, pool_size_, pool_size_)}
   {
-    CUDF_LOG_INFO("Pinned pool size = {}", pool_size_);
+    CUDF_LOG_INFO("Pinned pool size = %zu", pool_size_);
 
     // Allocate full size from the pinned pool to figure out the beginning and end address
     pool_begin_ = pool_->allocate_async(pool_size_, stream_);
@@ -278,7 +287,7 @@ bool config_default_pinned_memory_resource(pinned_mr_options const& opts)
 CUDF_EXPORT auto& kernel_pinned_copy_threshold()
 {
   // use cudaMemcpyAsync for all pinned copies
-  static std::atomic<size_t> threshold = 0;
+  static std::atomic<size_t> threshold = getenv_or("LIBCUDF_KERNEL_PINNED_COPY_THRESHOLD", 0);
   return threshold;
 }
 
@@ -292,7 +301,7 @@ size_t get_kernel_pinned_copy_threshold() { return kernel_pinned_copy_threshold(
 CUDF_EXPORT auto& allocate_host_as_pinned_threshold()
 {
   // use pageable memory for all host allocations
-  static std::atomic<size_t> threshold = 0;
+  static std::atomic<size_t> threshold = getenv_or("LIBCUDF_ALLOCATE_HOST_AS_PINNED_THRESHOLD", 0);
   return threshold;
 }
 

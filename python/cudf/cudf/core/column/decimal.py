@@ -1,23 +1,23 @@
-# Copyright (c) 2021-2024, NVIDIA CORPORATION.
+# Copyright (c) 2021-2025, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
 import warnings
 from decimal import Decimal
-from typing import TYPE_CHECKING, Sequence, cast
+from typing import TYPE_CHECKING, Any, cast
 
 import cupy as cp
 import numpy as np
 import pyarrow as pa
 
+import pylibcudf as plc
+
 import cudf
-from cudf import _lib as libcudf
-from cudf._lib.strings.convert.convert_fixed_point import (
-    from_decimal as cpp_from_decimal,
-)
 from cudf.api.types import is_scalar
-from cudf.core.buffer import as_buffer
-from cudf.core.column import ColumnBase
+from cudf.core._internals import binaryop
+from cudf.core.buffer import acquire_spill_lock, as_buffer
+from cudf.core.column.column import ColumnBase, pa_mask_buffer_to_mask
+from cudf.core.column.numerical_base import NumericalBaseColumn
 from cudf.core.dtypes import (
     Decimal32Dtype,
     Decimal64Dtype,
@@ -25,11 +25,15 @@ from cudf.core.dtypes import (
     DecimalDtype,
 )
 from cudf.core.mixins import BinaryOperand
-from cudf.utils.utils import pa_mask_buffer_to_mask
-
-from .numerical_base import NumericalBaseColumn
+from cudf.core.scalar import _to_plc_scalar, pa_scalar_to_plc_scalar
+from cudf.utils.dtypes import (
+    CUDF_STRING_DTYPE,
+    cudf_dtype_to_pa_type,
+)
 
 if TYPE_CHECKING:
+    from typing_extensions import Self
+
     from cudf._typing import ColumnBinaryOperand, ColumnLike, Dtype, ScalarLike
     from cudf.core.buffer import Buffer
 
@@ -71,12 +75,9 @@ class DecimalBaseColumn(NumericalBaseColumn):
 
     def as_decimal_column(
         self,
-        dtype: Dtype,
-    ) -> "DecimalBaseColumn":
-        if (
-            isinstance(dtype, cudf.core.dtypes.DecimalDtype)
-            and dtype.scale < self.dtype.scale
-        ):
+        dtype: DecimalDtype,
+    ) -> DecimalBaseColumn:
+        if isinstance(dtype, DecimalDtype) and dtype.scale < self.dtype.scale:
             warnings.warn(
                 "cuDF truncates when downcasting decimals to a lower scale. "
                 "To round, use Series.round() or DataFrame.round()."
@@ -84,15 +85,21 @@ class DecimalBaseColumn(NumericalBaseColumn):
 
         if dtype == self.dtype:
             return self
-        return libcudf.unary.cast(self, dtype)
+        return self.cast(dtype=dtype)  # type: ignore[return-value]
 
     def as_string_column(self) -> cudf.core.column.StringColumn:
         if len(self) > 0:
-            return cpp_from_decimal(self)
+            with acquire_spill_lock():
+                plc_column = (
+                    plc.strings.convert.convert_fixed_point.from_fixed_point(
+                        self.to_pylibcudf(mode="read"),
+                    )
+                )
+                return type(self).from_pylibcudf(plc_column)  # type: ignore[return-value]
         else:
             return cast(
                 cudf.core.column.StringColumn,
-                cudf.core.column.column_empty(0, dtype="object"),
+                cudf.core.column.column_empty(0, dtype=CUDF_STRING_DTYPE),
             )
 
     def __pow__(self, other):
@@ -126,25 +133,43 @@ class DecimalBaseColumn(NumericalBaseColumn):
 
     def _binaryop(self, other: ColumnBinaryOperand, op: str):
         reflect, op = self._check_reflected_op(op)
-        other = self._wrap_binop_normalization(other)
+        other, other_cudf_dtype = self._normalize_binop_operand(other)  # type: ignore[assignment]
         if other is NotImplemented:
             return NotImplemented
-        lhs, rhs = (other, self) if reflect else (self, other)
+        if reflect:
+            lhs_dtype = other_cudf_dtype
+            rhs_dtype = self.dtype
+            lhs = other
+            rhs = self
+        else:
+            lhs_dtype = self.dtype
+            rhs_dtype = other_cudf_dtype
+            lhs = self
+            rhs = other  # type: ignore[assignment]
 
         # Binary Arithmetics between decimal columns. `Scale` and `precision`
         # are computed outside of libcudf
         if op in {"__add__", "__sub__", "__mul__", "__div__"}:
-            output_type = _get_decimal_type(lhs.dtype, rhs.dtype, op)
-            lhs = lhs.astype(
-                type(output_type)(lhs.dtype.precision, lhs.dtype.scale)
+            output_type = _get_decimal_type(lhs_dtype, rhs_dtype, op)
+            new_lhs_dtype = type(output_type)(
+                lhs_dtype.precision, lhs_dtype.scale
             )
-            rhs = rhs.astype(
-                type(output_type)(rhs.dtype.precision, rhs.dtype.scale)
+            new_rhs_dtype = type(output_type)(
+                rhs_dtype.precision, rhs_dtype.scale
             )
-            result = libcudf.binaryop.binaryop(lhs, rhs, op, output_type)
+            if isinstance(lhs, (int, Decimal)):
+                lhs = _to_plc_scalar(lhs, new_lhs_dtype)
+            else:
+                lhs = lhs.astype(new_lhs_dtype)
+            if isinstance(rhs, (int, Decimal)):
+                rhs = _to_plc_scalar(rhs, new_rhs_dtype)
+            else:
+                rhs = rhs.astype(new_rhs_dtype)  # type: ignore[assignment]
+            result = binaryop.binaryop(lhs, rhs, op, output_type)
             # libcudf doesn't support precision, so result.dtype doesn't
             # maintain output_type.precision
             result.dtype.precision = output_type.precision
+            return result
         elif op in {
             "__eq__",
             "__ne__",
@@ -153,85 +178,87 @@ class DecimalBaseColumn(NumericalBaseColumn):
             "__le__",
             "__ge__",
         }:
-            result = libcudf.binaryop.binaryop(lhs, rhs, op, bool)
+            if isinstance(rhs, (int, Decimal)):
+                rhs = _to_plc_scalar(rhs, self.dtype)
+            return binaryop.binaryop(lhs, rhs, op, np.dtype(np.bool_))
         else:
             raise TypeError(
                 f"{op} not supported for the following dtypes: "
-                f"{self.dtype}, {other.dtype}"
+                f"{self.dtype}, {other_cudf_dtype}"
             )
 
-        return result
+    def _cast_setitem_value(self, value: Any) -> plc.Scalar | ColumnBase:
+        if isinstance(value, np.integer):
+            value = value.item()
+        if is_scalar(value):
+            return self._scalar_to_plc_scalar(value)
+        return super()._cast_setitem_value(value)
+
+    def _scalar_to_plc_scalar(self, scalar: ScalarLike) -> plc.Scalar:
+        """Return a pylibcudf.Scalar that matches the type of self.dtype"""
+        if not isinstance(scalar, pa.Scalar):
+            # e.g casting int to decimal type isn't allow, but OK in the constructor?
+            pa_scalar = pa.scalar(
+                scalar, type=cudf_dtype_to_pa_type(self.dtype)
+            )
+        else:
+            pa_scalar = scalar.cast(cudf_dtype_to_pa_type(self.dtype))
+        plc_scalar = pa_scalar_to_plc_scalar(pa_scalar)
+        if isinstance(self.dtype, (Decimal32Dtype, Decimal64Dtype)):
+            # pyarrow.Scalar only supports Decimal128 so conversion
+            # from pyarrow would only return a pylibcudf.Scalar with Decimal128
+            col = ColumnBase.from_pylibcudf(
+                plc.Column.from_scalar(plc_scalar, 1)
+            ).astype(self.dtype)
+            return plc.copying.get_element(col.to_pylibcudf(mode="read"), 0)
+        return plc_scalar
 
     def _validate_fillna_value(
         self, fill_value: ScalarLike | ColumnLike
-    ) -> cudf.Scalar | ColumnBase:
+    ) -> plc.Scalar | ColumnBase:
         """Align fill_value for .fillna based on column type."""
         if isinstance(fill_value, (int, Decimal)):
-            return cudf.Scalar(fill_value, dtype=self.dtype)
+            return super()._validate_fillna_value(fill_value)
         elif isinstance(fill_value, ColumnBase) and (
             isinstance(self.dtype, DecimalDtype) or self.dtype.kind in "iu"
         ):
-            return fill_value.astype(self.dtype)
+            return super()._validate_fillna_value(fill_value)
         raise TypeError(
             "Decimal columns only support using fillna with decimal and "
             "integer values"
         )
 
-    def normalize_binop_value(self, other):
+    def _normalize_binop_operand(
+        self, other: Any
+    ) -> tuple[int | Decimal | ColumnBase, DecimalDtype]:
+        # TODO: Once pyarrow 19 is the minimum version, we can remove the
+        # passing the DecimalDtype since pyarrow scalars support decimal32/64 types
         if isinstance(other, ColumnBase):
-            if isinstance(other, cudf.core.column.NumericalColumn):
-                if other.dtype.kind not in "iu":
-                    raise TypeError(
-                        "Decimal columns only support binary operations with "
-                        "integer numerical columns."
-                    )
-                other = other.astype(
-                    self.dtype.__class__(self.dtype.__class__.MAX_PRECISION, 0)
+            if not isinstance(other, NumericalBaseColumn):
+                return NotImplemented, self.dtype
+            elif other.dtype.kind in "fb":
+                raise TypeError(
+                    "Decimal columns only support binary operations with "
+                    "integer numerical columns."
                 )
-            elif not isinstance(other, DecimalBaseColumn):
-                return NotImplemented
+            elif other.dtype.kind in "iu":
+                other = other.astype(
+                    type(self.dtype)(self.dtype.MAX_PRECISION, 0)
+                )
             elif not isinstance(self.dtype, other.dtype.__class__):
                 # This branch occurs if we have a DecimalBaseColumn of a
                 # different size (e.g. 64 instead of 32).
                 if _same_precision_and_scale(self.dtype, other.dtype):
                     other = other.astype(self.dtype)
-            return other
-        if isinstance(other, cudf.Scalar) and isinstance(
-            # TODO: Should it be possible to cast scalars of other numerical
-            # types to decimal?
-            other.dtype,
-            cudf.core.dtypes.DecimalDtype,
-        ):
-            if _same_precision_and_scale(self.dtype, other.dtype):
-                other = other.astype(self.dtype)
-            return other
-        elif is_scalar(other) and isinstance(other, (int, Decimal)):
-            other = Decimal(other)
-            metadata = other.as_tuple()
-            precision = max(len(metadata.digits), metadata.exponent)
-            scale = -metadata.exponent
-            return cudf.Scalar(
-                other, dtype=self.dtype.__class__(precision, scale)
-            )
-        return NotImplemented
-
-    def _decimal_quantile(
-        self, q: float | Sequence[float], interpolation: str, exact: bool
-    ) -> ColumnBase:
-        quant = [float(q)] if not isinstance(q, (Sequence, np.ndarray)) else q
-        # get sorted indices and exclude nulls
-        indices = libcudf.sort.order_by(
-            [self], [True], "first", stable=True
-        ).slice(self.null_count, len(self))
-        result = libcudf.quantiles.quantile(
-            self, quant, interpolation, indices, exact
-        )
-        return result._with_type_metadata(self.dtype)
+            return other, other.dtype
+        elif isinstance(other, (int, Decimal)):
+            return other, self.dtype._from_decimal(Decimal(other))
+        return super()._normalize_binop_operand(other), self.dtype
 
     def as_numerical_column(
-        self, dtype: Dtype
-    ) -> "cudf.core.column.NumericalColumn":
-        return libcudf.unary.cast(self, dtype)
+        self, dtype: np.dtype
+    ) -> cudf.core.column.NumericalColumn:
+        return self.cast(dtype=dtype)  # type: ignore[return-value]
 
 
 class Decimal32Column(DecimalBaseColumn):
@@ -258,7 +285,7 @@ class Decimal32Column(DecimalBaseColumn):
         )
 
     @classmethod
-    def from_arrow(cls, data: pa.Array):
+    def from_arrow(cls, data: pa.Array) -> Self:
         dtype = Decimal32Dtype.from_arrow(data.type)
         mask_buf = data.buffers()[0]
         mask = (
@@ -276,8 +303,8 @@ class Decimal32Column(DecimalBaseColumn):
             mask=mask,
         )
 
-    def to_arrow(self):
-        data_buf_32 = np.array(self.base_data.memoryview()).view("int32")
+    def to_arrow(self) -> pa.Array:
+        data_buf_32 = np.array(self.base_data.memoryview()).view("int32")  # type: ignore[union-attr]
         data_buf_128 = np.empty(len(data_buf_32) * 4, dtype="int32")
 
         # use striding to set the first 32 bits of each 128-bit chunk:
@@ -339,12 +366,12 @@ class Decimal128Column(DecimalBaseColumn):
         )
 
     @classmethod
-    def from_arrow(cls, data: pa.Array):
+    def from_arrow(cls, data: pa.Array) -> Self:
         result = cast(Decimal128Dtype, super().from_arrow(data))
         result.dtype.precision = data.type.precision
         return result
 
-    def to_arrow(self):
+    def to_arrow(self) -> pa.Array:
         return super().to_arrow().cast(self.dtype.to_arrow())
 
     def _with_type_metadata(
@@ -379,13 +406,8 @@ class Decimal64Column(DecimalBaseColumn):
             children=children,
         )
 
-    def __setitem__(self, key, value):
-        if isinstance(value, np.integer):
-            value = int(value)
-        super().__setitem__(key, value)
-
     @classmethod
-    def from_arrow(cls, data: pa.Array):
+    def from_arrow(cls, data: pa.Array) -> Self:
         dtype = Decimal64Dtype.from_arrow(data.type)
         mask_buf = data.buffers()[0]
         mask = (
@@ -403,8 +425,8 @@ class Decimal64Column(DecimalBaseColumn):
             mask=mask,
         )
 
-    def to_arrow(self):
-        data_buf_64 = np.array(self.base_data.memoryview()).view("int64")
+    def to_arrow(self) -> pa.Array:
+        data_buf_64 = np.array(self.base_data.memoryview()).view("int64")  # type: ignore[union-attr]
         data_buf_128 = np.empty(len(data_buf_64) * 2, dtype="int64")
 
         # use striding to set the first 64 bits of each 128-bit chunk:
@@ -447,7 +469,7 @@ def _get_decimal_type(
     `op` for the given dtypes.
 
     For precision & scale calculations see : https://docs.microsoft.com/en-us/sql/t-sql/data-types/precision-scale-and-length-transact-sql
-    """  # noqa: E501
+    """
 
     # This should at some point be hooked up to libcudf's
     # binary_operation_fixed_point_scale
@@ -518,8 +540,8 @@ def _get_decimal_type(
     # if we've reached this point, we cannot create a decimal type without
     # overflow; raise an informative error
     raise ValueError(
-        f"Performing {op} between columns of type {repr(lhs_dtype)} and "
-        f"{repr(rhs_dtype)} would result in overflow"
+        f"Performing {op} between columns of type {lhs_dtype!r} and "
+        f"{rhs_dtype!r} would result in overflow"
     )
 
 

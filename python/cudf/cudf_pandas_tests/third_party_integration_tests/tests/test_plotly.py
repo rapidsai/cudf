@@ -8,7 +8,7 @@ nsamps = 100
 
 
 def assert_plotly_equal(expect, got):
-    assert type(expect) == type(got)
+    assert type(expect) is type(got)
     if isinstance(expect, dict):
         assert expect.keys() == got.keys()
         for k in expect.keys():

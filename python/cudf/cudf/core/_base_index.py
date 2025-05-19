@@ -1,8 +1,7 @@
-# Copyright (c) 2021-2024, NVIDIA CORPORATION.
+# Copyright (c) 2021-2025, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
-import pickle
 import warnings
 from functools import cached_property
 from typing import TYPE_CHECKING, Any, Literal
@@ -11,20 +10,21 @@ import pandas as pd
 from typing_extensions import Self
 
 import cudf
-from cudf._lib.copying import _gather_map_is_valid, gather
-from cudf._lib.stream_compaction import (
-    apply_boolean_mask,
-    drop_duplicates,
-    drop_nulls,
-)
-from cudf._lib.types import size_type_dtype
 from cudf.api.extensions import no_default
 from cudf.api.types import is_integer, is_list_like, is_scalar
+from cudf.core._internals import copying, stream_compaction
 from cudf.core.abc import Serializable
-from cudf.core.column import ColumnBase, column
+from cudf.core.column.column import ColumnBase, as_column
+from cudf.core.copy_types import GatherMap
 from cudf.errors import MixedTypeError
 from cudf.utils import ioutils
-from cudf.utils.dtypes import can_convert_to_column, is_mixed_with_object_dtype
+from cudf.utils.dtypes import (
+    SIZE_TYPE_DTYPE,
+    _dtype_pandas_compatible,
+    can_convert_to_column,
+    find_common_type,
+    is_mixed_with_object_dtype,
+)
 from cudf.utils.utils import _is_same_name
 
 if TYPE_CHECKING:
@@ -32,6 +32,7 @@ if TYPE_CHECKING:
 
     import cupy
 
+    from cudf.core.column.numerical import NumericalColumn
     from cudf.core.column_accessor import ColumnAccessor
 
 
@@ -118,7 +119,7 @@ class BaseIndex(Serializable):
         """Return if the index has unique values."""
         raise NotImplementedError
 
-    def memory_usage(self, deep=False):
+    def memory_usage(self, deep: bool = False) -> int:
         """Return the memory usage of an object.
 
         Parameters
@@ -133,7 +134,7 @@ class BaseIndex(Serializable):
         """
         raise NotImplementedError
 
-    def tolist(self):  # noqa: D102
+    def tolist(self):
         raise TypeError(
             "cuDF does not support conversion to host memory "
             "via the `tolist()` method. Consider using "
@@ -148,7 +149,7 @@ class BaseIndex(Serializable):
         raise NotImplementedError
 
     @property  # type: ignore
-    def ndim(self) -> int:  # noqa: D401
+    def ndim(self) -> int:
         """Number of dimensions of the underlying data, by definition 1."""
         return 1
 
@@ -265,7 +266,7 @@ class BaseIndex(Serializable):
         slice(1, 3, None)
         >>> multi_index.get_loc(('b', 'e'))
         1
-        """  # noqa: E501
+        """
 
     def max(self):
         """The maximum value of the index."""
@@ -324,18 +325,11 @@ class BaseIndex(Serializable):
         elif is_integer(level):
             if level != 0:
                 raise IndexError(
-                    f"Cannot get level: {level} " f"for index with 1 level"
+                    f"Cannot get level: {level} for index with 1 level"
                 )
             return self
         else:
-            raise KeyError(f"Requested level with name {level} " "not found")
-
-    @classmethod
-    def deserialize(cls, header, frames):
-        # Dispatch deserialization to the appropriate index type in case
-        # deserialization is ever attempted with the base class directly.
-        idx_type = pickle.loads(header["type-serialized"])
-        return idx_type.deserialize(header, frames)
+            raise KeyError(f"Requested level with name {level} not found")
 
     @property
     def names(self):
@@ -357,7 +351,7 @@ class BaseIndex(Serializable):
 
         self.name = values[0]
 
-    def _clean_nulls_from_index(self):
+    def _pandas_repr_compatible(self):
         """
         Convert all na values(if any) in Index object
         to `<NA>` as a preprocessing step to `__repr__` methods.
@@ -421,7 +415,7 @@ class BaseIndex(Serializable):
         raise NotImplementedError
 
     @property
-    def nlevels(self):
+    def nlevels(self) -> int:
         """
         Number of levels.
         """
@@ -622,17 +616,13 @@ class BaseIndex(Serializable):
                 raise MixedTypeError("Cannot perform union with mixed types")
 
         if not len(other) or self.equals(other):
-            common_dtype = cudf.utils.dtypes.find_common_type(
-                [self.dtype, other.dtype]
-            )
+            common_dtype = find_common_type([self.dtype, other.dtype])
             res = self._get_reconciled_name_object(other).astype(common_dtype)
             if sort:
                 return res.sort_values()
             return res
         elif not len(self):
-            common_dtype = cudf.utils.dtypes.find_common_type(
-                [self.dtype, other.dtype]
-            )
+            common_dtype = find_common_type([self.dtype, other.dtype])
             res = other._get_reconciled_name_object(self).astype(common_dtype)
             if sort:
                 return res.sort_values()
@@ -721,8 +711,8 @@ class BaseIndex(Serializable):
             )
 
         if not len(self) or not len(other) or self.equals(other):
-            common_dtype = cudf.utils.dtypes._dtype_pandas_compatible(
-                cudf.utils.dtypes.find_common_type([self.dtype, other.dtype])
+            common_dtype = _dtype_pandas_compatible(
+                find_common_type([self.dtype, other.dtype])
             )
 
             lhs = self.unique() if self.has_duplicates else self
@@ -1454,7 +1444,7 @@ class BaseIndex(Serializable):
         other_df["order"] = other_df.index
         res = self_df.merge(other_df, on=[0], how="outer")
         res = res.sort_values(
-            by=res._data.to_pandas_index()[1:], ignore_index=True
+            by=res._data.to_pandas_index[1:], ignore_index=True
         )
         union_result = cudf.core.index._index_from_data({0: res._data[0]})
 
@@ -1473,7 +1463,7 @@ class BaseIndex(Serializable):
             ._data
         )
 
-        if sort is {None, True} and len(other):
+        if sort in {None, True} and len(other):
             return intersection_result.sort_values()
         return intersection_result
 
@@ -1709,7 +1699,7 @@ class BaseIndex(Serializable):
             out.name = name
             return out
 
-    def _indices_of(self, value) -> cudf.core.column.NumericalColumn:
+    def _indices_of(self, value) -> NumericalColumn:
         """
         Return indices corresponding to value
 
@@ -1922,7 +1912,7 @@ class BaseIndex(Serializable):
             )
         else:
             return cudf.Index._from_column(
-                column.as_column(index, nan_as_null=nan_as_null),
+                as_column(index, nan_as_null=nan_as_null),
                 name=index.name,
             )
 
@@ -1949,12 +1939,14 @@ class BaseIndex(Serializable):
         # This utilizes the fact that all `Index` is also a `Frame`.
         # Except RangeIndex.
         return self._from_columns_like_self(
-            drop_duplicates(
-                list(self._columns),
-                keys=range(len(self._columns)),
-                keep=keep,
-                nulls_are_equal=nulls_are_equal,
-            ),
+            [
+                ColumnBase.from_pylibcudf(col)
+                for col in stream_compaction.drop_duplicates(
+                    list(self._columns),
+                    keep=keep,
+                    nulls_are_equal=nulls_are_equal,
+                )
+            ],
             self._column_names,
         )
 
@@ -2037,11 +2029,13 @@ class BaseIndex(Serializable):
         data_columns = [col.nans_to_nulls() for col in self._columns]
 
         return self._from_columns_like_self(
-            drop_nulls(
-                data_columns,
-                how=how,
-                keys=range(len(data_columns)),
-            ),
+            [
+                ColumnBase.from_pylibcudf(col)
+                for col in stream_compaction.drop_nulls(
+                    data_columns,
+                    how=how,
+                )
+            ],
             self._column_names,
         )
 
@@ -2051,20 +2045,21 @@ class BaseIndex(Serializable):
         Skip bounds checking if check_bounds is False.
         Set rows to null for all out of bound indices if nullify is `True`.
         """
-        gather_map = cudf.core.column.as_column(gather_map)
+        gather_map = as_column(gather_map)
 
         # TODO: For performance, the check and conversion of gather map should
         # be done by the caller. This check will be removed in future release.
         if gather_map.dtype.kind not in "iu":
-            gather_map = gather_map.astype(size_type_dtype)
+            gather_map = gather_map.astype(SIZE_TYPE_DTYPE)
 
-        if not _gather_map_is_valid(
-            gather_map, len(self), check_bounds, nullify
-        ):
-            raise IndexError("Gather map index is out of bounds.")
-
+        GatherMap(gather_map, len(self), nullify=not check_bounds or nullify)
         return self._from_columns_like_self(
-            gather(list(self._columns), gather_map, nullify=nullify),
+            [
+                ColumnBase.from_pylibcudf(col)
+                for col in copying.gather(
+                    self._columns, gather_map, nullify=nullify
+                )
+            ],
             self._column_names,
         )
 
@@ -2108,12 +2103,17 @@ class BaseIndex(Serializable):
 
         Rows corresponding to `False` is dropped.
         """
-        boolean_mask = cudf.core.column.as_column(boolean_mask)
+        boolean_mask = as_column(boolean_mask)
         if boolean_mask.dtype.kind != "b":
             raise ValueError("boolean_mask is not boolean type.")
 
         return self._from_columns_like_self(
-            apply_boolean_mask(list(self._columns), boolean_mask),
+            [
+                ColumnBase.from_pylibcudf(col)
+                for col in stream_compaction.apply_boolean_mask(
+                    list(self._columns), boolean_mask
+                )
+            ],
             column_names=self._column_names,
         )
 
@@ -2170,9 +2170,3 @@ class BaseIndex(Serializable):
 
 def _get_result_name(left_name, right_name):
     return left_name if _is_same_name(left_name, right_name) else None
-
-
-def _return_get_indexer_result(result):
-    if cudf.get_option("mode.pandas_compatible"):
-        return result.astype("int64")
-    return result

@@ -19,11 +19,9 @@ This page provides a list of all publicly accessible modules, methods and classe
     general_utilities
     window
     io
-    subword_tokenize
-    string_handling
-    list_handling
-    struct_handling
+    character_normalizer
+    wordpiece_tokenizer
+    tokenize_vocabulary
     options
     extension_dtypes
-    pylibcudf/index.rst
     performance_tracking

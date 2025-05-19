@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 import operator
 
@@ -50,7 +50,7 @@ from cudf.utils.dtypes import (
 SUPPORTED_NUMPY_TYPES = (
     NUMERIC_TYPES | DATETIME_TYPES | TIMEDELTA_TYPES | STRING_TYPES
 )
-supported_type_str = "\n".join(sorted(list(SUPPORTED_NUMPY_TYPES) + ["bool"]))
+supported_type_str = "\n".join(sorted([*list(SUPPORTED_NUMPY_TYPES), "bool"]))
 
 _units = ["ns", "ms", "us", "s"]
 _datetime_cases = {types.NPDatetime(u) for u in _units}

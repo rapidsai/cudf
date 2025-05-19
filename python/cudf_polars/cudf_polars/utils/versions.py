@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 """Version utilities so that cudf_polars supports a range of polars versions."""
@@ -12,11 +12,12 @@ from polars import __version__
 
 POLARS_VERSION = parse(__version__)
 
-POLARS_VERSION_LT_18 = POLARS_VERSION < parse("1.8")
+POLARS_VERSION_LT_125 = POLARS_VERSION < parse("1.25")
+POLARS_VERSION_LT_128 = POLARS_VERSION < parse("1.28")
 
 
-def _ensure_polars_version():
-    if POLARS_VERSION_LT_18:
+def _ensure_polars_version() -> None:
+    if POLARS_VERSION_LT_125:
         raise ImportError(
-            "cudf_polars requires py-polars v1.8 or greater."
+            "cudf_polars requires py-polars v1.25 or greater."
         )  # pragma: no cover

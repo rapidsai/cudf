@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2024, NVIDIA CORPORATION.
+# Copyright (c) 2021-2025, NVIDIA CORPORATION.
 
 from collections import abc
 
@@ -145,7 +145,7 @@ def cut(
         if len(set(bins)) is not len(bins):
             if duplicates == "raise":
                 raise ValueError(
-                    f"Bin edges must be unique: {repr(bins)}.\n"
+                    f"Bin edges must be unique: {bins!r}.\n"
                     f"You can drop duplicate edges by setting the 'duplicates'"
                     "kwarg"
                 )
@@ -256,8 +256,11 @@ def cut(
         # the input arr must be changed to the same type as the edges
         input_arr = input_arr.astype(left_edges.dtype)
     # get the indexes for the appropriate number
-    index_labels = cudf._lib.labeling.label_bins(
-        input_arr, left_edges, left_inclusive, right_edges, right_inclusive
+    index_labels = input_arr.label_bins(
+        left_edge=left_edges,
+        left_inclusive=left_inclusive,
+        right_edge=right_edges,
+        right_inclusive=right_inclusive,
     )
 
     if labels is False:
@@ -283,7 +286,7 @@ def cut(
             # should allow duplicate categories.
             return interval_labels[index_labels]
 
-    index_labels = as_unsigned_codes(len(interval_labels), index_labels)
+    index_labels = as_unsigned_codes(len(interval_labels), index_labels)  # type: ignore[arg-type]
 
     col = CategoricalColumn(
         data=None,

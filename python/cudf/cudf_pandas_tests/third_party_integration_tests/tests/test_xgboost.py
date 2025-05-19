@@ -124,6 +124,11 @@ def test_predict(device: str) -> np.ndarray:
     predt0 = reg.predict(X_df)
 
     predt1 = booster.inplace_predict(X_df)
+    # After https://github.com/dmlc/xgboost/pull/11014, .inplace_predict()
+    # returns a real cupy array when called on a cudf.pandas proxy dataframe.
+    # So we need to ensure we have a valid numpy array.
+    if not isinstance(predt1, np.ndarray):
+        predt1 = predt1.get()
     np.testing.assert_allclose(predt0, predt1)
 
     predt2 = booster.predict(xgb.DMatrix(X_df))

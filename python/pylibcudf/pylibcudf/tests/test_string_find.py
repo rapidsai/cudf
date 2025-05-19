@@ -1,10 +1,11 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 import pyarrow as pa
 import pyarrow.compute as pc
-import pylibcudf as plc
 import pytest
 from utils import assert_column_eq
+
+import pylibcudf as plc
 
 
 @pytest.fixture(scope="module")
@@ -53,7 +54,7 @@ def data_col():
             None,
         ]
     )
-    return pa_array, plc.interop.from_arrow(pa_array)
+    return pa_array, plc.Column(pa_array)
 
 
 @pytest.fixture(scope="module")
@@ -102,7 +103,7 @@ def target_col():
             None,  # ends_with
         ]
     )
-    return pa_array, plc.interop.from_arrow(pa_array)
+    return pa_array, plc.Column(pa_array)
 
 
 @pytest.fixture(params=["a", " ", "A", "Ab", "23"], scope="module")
@@ -154,7 +155,7 @@ def colwise_apply(pa_data_col, pa_target_col, operator):
 def test_find_column(data_col, target_col):
     pa_data_col, plc_data_col = data_col
     pa_target_col, plc_target_col = target_col
-    expected = pa.array(
+    expect = pa.array(
         [
             elem.find(target) if not (elem is None or target is None) else None
             for elem, target in zip(
@@ -166,7 +167,7 @@ def test_find_column(data_col, target_col):
     )
 
     got = plc.strings.find.find(plc_data_col, plc_target_col, 0)
-    assert_column_eq(expected, got)
+    assert_column_eq(expect, got)
 
 
 def test_rfind(data_col, target_scalar):
@@ -176,7 +177,7 @@ def test_rfind(data_col, target_scalar):
 
     got = plc.strings.find.rfind(plc_data_col, plc_target_scalar, 0, -1)
 
-    expected = pa.array(
+    expect = pa.array(
         [
             elem.rfind(py_target)
             if not (elem is None or py_target is None)
@@ -186,7 +187,7 @@ def test_rfind(data_col, target_scalar):
         type=pa.int32(),
     )
 
-    assert_column_eq(expected, got)
+    assert_column_eq(expect, got)
 
 
 def test_contains(data_col, target_scalar):
@@ -195,7 +196,7 @@ def test_contains(data_col, target_scalar):
     py_target = pa_target_scalar.as_py()
 
     got = plc.strings.find.contains(plc_data_col, plc_target_scalar)
-    expected = pa.array(
+    expect = pa.array(
         [
             py_target in elem
             if not (elem is None or py_target is None)
@@ -205,17 +206,17 @@ def test_contains(data_col, target_scalar):
         type=pa.bool_(),
     )
 
-    assert_column_eq(expected, got)
+    assert_column_eq(expect, got)
 
 
 def test_contains_column(data_col, target_col):
     pa_data_col, plc_data_col = data_col
     pa_target_col, plc_target_col = target_col
-    expected = colwise_apply(
+    expect = colwise_apply(
         pa_data_col, pa_target_col, lambda st, target: target in st
     )
     got = plc.strings.find.contains(plc_data_col, plc_target_col)
-    assert_column_eq(expected, got)
+    assert_column_eq(expect, got)
 
 
 def test_starts_with(data_col, target_scalar):
@@ -223,18 +224,18 @@ def test_starts_with(data_col, target_scalar):
     pa_target_scalar, plc_target_scalar = target_scalar
     py_target = pa_target_scalar.as_py()
     got = plc.strings.find.starts_with(plc_data_col, plc_target_scalar)
-    expected = pc.starts_with(pa_data_col, py_target)
-    assert_column_eq(expected, got)
+    expect = pc.starts_with(pa_data_col, py_target)
+    assert_column_eq(expect, got)
 
 
 def test_starts_with_column(data_col, target_col):
     pa_data_col, plc_data_col = data_col
     pa_target_col, plc_target_col = target_col
-    expected = colwise_apply(
+    expect = colwise_apply(
         pa_data_col, pa_target_col, lambda st, target: st.startswith(target)
     )
     got = plc.strings.find.starts_with(plc_data_col, plc_target_col)
-    assert_column_eq(expected, got)
+    assert_column_eq(expect, got)
 
 
 def test_ends_with(data_col, target_scalar):
@@ -242,15 +243,15 @@ def test_ends_with(data_col, target_scalar):
     pa_target_scalar, plc_target_scalar = target_scalar
     py_target = pa_target_scalar.as_py()
     got = plc.strings.find.ends_with(plc_data_col, plc_target_scalar)
-    expected = pc.ends_with(pa_data_col, py_target)
-    assert_column_eq(expected, got)
+    expect = pc.ends_with(pa_data_col, py_target)
+    assert_column_eq(expect, got)
 
 
 def test_ends_with_column(data_col, target_col):
     pa_data_col, plc_data_col = data_col
     pa_target_col, plc_target_col = target_col
-    expected = colwise_apply(
+    expect = colwise_apply(
         pa_data_col, pa_target_col, lambda st, target: st.endswith(target)
     )
     got = plc.strings.find.ends_with(plc_data_col, plc_target_col)
-    assert_column_eq(expected, got)
+    assert_column_eq(expect, got)

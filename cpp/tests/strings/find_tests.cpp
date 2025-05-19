@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,15 +17,13 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/iterator_utilities.hpp>
 
-#include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/attributes.hpp>
 #include <cudf/strings/find.hpp>
 #include <cudf/strings/strings_column_view.hpp>
-
-#include <thrust/iterator/transform_iterator.h>
 
 #include <vector>
 
@@ -286,7 +284,7 @@ TEST_F(StringsFindTest, ZeroSizeStringsColumn)
 {
   auto const zero_size_strings_column = cudf::make_empty_column(cudf::type_id::STRING)->view();
   auto strings_view                   = cudf::strings_column_view(zero_size_strings_column);
-  auto results = cudf::strings::find(strings_view, cudf::string_scalar("é"));
+  auto results                        = cudf::strings::find(strings_view, cudf::string_scalar("é"));
   EXPECT_EQ(results->size(), 0);
   results = cudf::strings::rfind(strings_view, cudf::string_scalar("é"));
   EXPECT_EQ(results->size(), 0);

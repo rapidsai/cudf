@@ -14,13 +14,7 @@
  * limitations under the License.
  */
 
-#include "string_bench_args.hpp"
-
 #include <benchmarks/common/generate_input.hpp>
-#include <benchmarks/fixture/benchmark_fixture.hpp>
-#include <benchmarks/synchronization/synchronization.hpp>
-
-#include <cudf_test/column_wrapper.hpp>
 
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/char_types/char_types.hpp>
@@ -29,57 +23,58 @@
 #include <cudf/strings/translate.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
+#include <nvbench/nvbench.cuh>
+
 #include <vector>
 
-enum FilterAPI { filter, filter_chars, strip };
-
-class StringFilterChars : public cudf::benchmark {};
-
-static void BM_filter_chars(benchmark::State& state, FilterAPI api)
+static void bench_filter(nvbench::state& state)
 {
-  cudf::size_type const n_rows{static_cast<cudf::size_type>(state.range(0))};
-  cudf::size_type const max_str_length{static_cast<cudf::size_type>(state.range(1))};
+  auto const num_rows  = static_cast<cudf::size_type>(state.get_int64("num_rows"));
+  auto const min_width = static_cast<cudf::size_type>(state.get_int64("min_width"));
+  auto const max_width = static_cast<cudf::size_type>(state.get_int64("max_width"));
+  auto const api       = state.get_string("api");
+
   data_profile const profile = data_profile_builder().distribution(
-    cudf::type_id::STRING, distribution_id::NORMAL, 0, max_str_length);
-  auto const column = create_random_column(cudf::type_id::STRING, row_count{n_rows}, profile);
-  cudf::strings_column_view input(column->view());
+    cudf::type_id::STRING, distribution_id::NORMAL, min_width, max_width);
+  auto const column = create_random_column(cudf::type_id::STRING, row_count{num_rows}, profile);
+  auto const input  = cudf::strings_column_view(column->view());
 
-  auto const types = cudf::strings::string_character_types::SPACE;
-  std::vector<std::pair<cudf::char_utf8, cudf::char_utf8>> filter_table{
-    {cudf::char_utf8{'a'}, cudf::char_utf8{'c'}}};
+  auto stream = cudf::get_default_stream();
+  state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
+  auto chars_size = input.chars_size(stream);
+  state.add_global_memory_reads<nvbench::int8_t>(chars_size);
 
-  for (auto _ : state) {
-    cuda_event_timer raii(state, true, cudf::get_default_stream());
-    switch (api) {
-      case filter: cudf::strings::filter_characters_of_type(input, types); break;
-      case filter_chars: cudf::strings::filter_characters(input, filter_table); break;
-      case strip: cudf::strings::strip(input); break;
+  if (api == "filter") {
+    auto const types = cudf::strings::string_character_types::SPACE;
+    {
+      auto result = cudf::strings::filter_characters_of_type(input, types);
+      auto sv     = cudf::strings_column_view(result->view());
+      state.add_global_memory_writes<nvbench::int8_t>(sv.chars_size(stream));
     }
+    state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
+      cudf::strings::filter_characters_of_type(input, types);
+    });
+  } else if (api == "chars") {
+    state.add_global_memory_writes<nvbench::int8_t>(chars_size);
+    std::vector<std::pair<cudf::char_utf8, cudf::char_utf8>> filter_table{
+      {cudf::char_utf8{'a'}, cudf::char_utf8{'c'}}};
+    state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
+      cudf::strings::filter_characters(input, filter_table);
+    });
+  } else if (api == "strip") {
+    {
+      auto result = cudf::strings::strip(input);
+      auto sv     = cudf::strings_column_view(result->view());
+      state.add_global_memory_writes<nvbench::int8_t>(sv.chars_size(stream));
+    }
+    state.exec(nvbench::exec_tag::sync,
+               [&](nvbench::launch& launch) { cudf::strings::strip(input); });
   }
-
-  state.SetBytesProcessed(state.iterations() * input.chars_size(cudf::get_default_stream()));
 }
 
-static void generate_bench_args(benchmark::internal::Benchmark* b)
-{
-  int const min_rows          = 1 << 12;
-  int const max_rows          = 1 << 24;
-  int const row_multiplier    = 8;
-  int const min_length        = 1 << 5;
-  int const max_length        = 1 << 13;
-  int const length_multiplier = 2;
-  generate_string_bench_args(
-    b, min_rows, max_rows, row_multiplier, min_length, max_length, length_multiplier);
-}
-
-#define STRINGS_BENCHMARK_DEFINE(name)                                \
-  BENCHMARK_DEFINE_F(StringFilterChars, name)                         \
-  (::benchmark::State & st) { BM_filter_chars(st, FilterAPI::name); } \
-  BENCHMARK_REGISTER_F(StringFilterChars, name)                       \
-    ->Apply(generate_bench_args)                                      \
-    ->UseManualTime()                                                 \
-    ->Unit(benchmark::kMillisecond);
-
-STRINGS_BENCHMARK_DEFINE(filter)
-STRINGS_BENCHMARK_DEFINE(filter_chars)
-STRINGS_BENCHMARK_DEFINE(strip)
+NVBENCH_BENCH(bench_filter)
+  .set_name("filter")
+  .add_int64_axis("min_width", {0})
+  .add_int64_axis("max_width", {32, 64, 128, 256})
+  .add_int64_axis("num_rows", {32768, 262144, 2097152})
+  .add_string_axis("api", {"filter", "chars", "strip"});

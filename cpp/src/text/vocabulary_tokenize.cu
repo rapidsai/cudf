@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,6 +25,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/offsets_iterator_factory.cuh>
 #include <cudf/detail/sizes_to_offsets_iterator.cuh>
+#include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/hashing/detail/murmurhash3_x86_32.cuh>
 #include <cudf/strings/detail/utilities.hpp>
@@ -40,8 +41,9 @@
 
 #include <cub/cub.cuh>
 #include <cuco/static_map.cuh>
+#include <cuda/std/functional>
+#include <cuda/std/iterator>
 #include <thrust/copy.h>
-#include <thrust/distance.h>
 #include <thrust/execution_policy.h>
 #include <thrust/functional.h>
 #include <thrust/logical.h>
@@ -197,24 +199,24 @@ __device__ bool is_delimiter(cudf::string_view const& d_delimiters, cudf::char_u
                           [chr] __device__(cudf::char_utf8 c) { return c == chr; });
 }
 
-struct mark_delimiters_fn {
-  char const* d_chars;
-  cudf::string_view const d_delimiter;
-  int8_t* d_results;
+CUDF_KERNEL void mark_delimiters_fn(char const* d_chars,
+                                    int64_t chars_size,
+                                    cudf::string_view const d_delimiter,
+                                    int8_t* d_results)
 
-  __device__ void operator()(cudf::size_type idx) const
-  {
-    auto const ptr = d_chars + idx;
-    if (cudf::strings::detail::is_utf8_continuation_char(*ptr)) { return; }
-    cudf::char_utf8 chr = 0;
-    auto ch_size        = cudf::strings::detail::to_char_utf8(ptr, chr);
-    auto const output   = is_delimiter(d_delimiter, chr);
-    while (ch_size > 0) {
-      d_results[idx++] = output;
-      --ch_size;
-    }
+{
+  auto idx = cudf::detail::grid_1d::global_thread_id();
+  if (idx >= chars_size) { return; }
+  auto const ptr = d_chars + idx;
+  if (cudf::strings::detail::is_utf8_continuation_char(*ptr)) { return; }
+  cudf::char_utf8 chr = 0;
+  auto ch_size        = cudf::strings::detail::to_char_utf8(ptr, chr);
+  auto const output   = is_delimiter(d_delimiter, chr);
+  while (ch_size > 0) {
+    d_results[idx++] = output;
+    --ch_size;
   }
-};
+}
 
 CUDF_KERNEL void token_counts_fn(cudf::column_device_view const d_strings,
                                  cudf::string_view const d_delimiter,
@@ -222,12 +224,9 @@ CUDF_KERNEL void token_counts_fn(cudf::column_device_view const d_strings,
                                  int8_t* d_results)
 {
   // string per warp
-  auto const idx = static_cast<std::size_t>(threadIdx.x + blockIdx.x * blockDim.x);
-  if (idx >= (static_cast<std::size_t>(d_strings.size()) *
-              static_cast<std::size_t>(cudf::detail::warp_size))) {
-    return;
-  }
-  auto const str_idx  = static_cast<cudf::size_type>(idx / cudf::detail::warp_size);
+  auto const idx     = cudf::detail::grid_1d::global_thread_id();
+  auto const str_idx = static_cast<cudf::size_type>(idx / cudf::detail::warp_size);
+  if (str_idx >= d_strings.size()) { return; }
   auto const lane_idx = static_cast<cudf::size_type>(idx % cudf::detail::warp_size);
 
   if (d_strings.is_null(str_idx)) {
@@ -286,7 +285,7 @@ CUDF_KERNEL void token_counts_fn(cudf::column_device_view const d_strings,
   __syncwarp();
 
   // add up the counts from the other threads to compute the total token count for this string
-  auto const total_count = warp_reduce(warp_storage).Reduce(count, cub::Sum());
+  auto const total_count = warp_reduce(warp_storage).Reduce(count, cuda::std::plus());
   if (lane_idx == 0) { d_counts[str_idx] = total_count; }
 }
 
@@ -344,7 +343,7 @@ struct transform_tokenizer_fn {
       itr += ch_size;
     }
 
-    auto const size  = static_cast<cudf::size_type>(thrust::distance(itr, end));
+    auto const size  = static_cast<cudf::size_type>(cuda::std::distance(itr, end));
     auto const token = cudf::string_view{itr, size};
     // lookup token in map
     auto const fitr = d_map.find(token);
@@ -370,13 +369,17 @@ std::unique_ptr<cudf::column> tokenize_with_vocabulary(cudf::strings_column_view
   auto const d_strings   = cudf::column_device_view::create(input.parent(), stream);
   auto const d_delimiter = delimiter.value(stream);
   auto map_ref           = vocabulary._impl->get_map_ref();
-  auto const zero_itr    = thrust::make_counting_iterator<cudf::size_type>(0);
 
   if ((input.chars_size(stream) / (input.size() - input.null_count())) < AVG_CHAR_BYTES_THRESHOLD) {
-    auto const sizes_itr =
-      cudf::detail::make_counting_transform_iterator(0, strings_tokenizer{*d_strings, d_delimiter});
+    auto const zero_itr = thrust::make_counting_iterator<cudf::size_type>(0);
+    auto d_sizes        = rmm::device_uvector<cudf::size_type>(input.size(), stream);
+    thrust::transform(rmm::exec_policy_nosync(stream),
+                      zero_itr,
+                      zero_itr + input.size(),
+                      d_sizes.begin(),
+                      strings_tokenizer{*d_strings, d_delimiter});
     auto [token_offsets, total_count] =
-      cudf::detail::make_offsets_child_column(sizes_itr, sizes_itr + input.size(), stream, mr);
+      cudf::detail::make_offsets_child_column(d_sizes.begin(), d_sizes.end(), stream, mr);
 
     // build the output column to hold all the token ids
     auto tokens = cudf::make_numeric_column(
@@ -411,10 +414,11 @@ std::unique_ptr<cudf::column> tokenize_with_vocabulary(cudf::strings_column_view
   rmm::device_uvector<int8_t> d_marks(chars_size, stream);
 
   // mark position of all delimiters
-  thrust::for_each_n(rmm::exec_policy(stream),
-                     zero_itr,
-                     chars_size,
-                     mark_delimiters_fn{d_input_chars, d_delimiter, d_marks.data()});
+  auto grid_chars = cudf::detail::grid_1d{chars_size, block_size};
+  mark_delimiters_fn<<<grid_chars.num_blocks,
+                       grid_chars.num_threads_per_block,
+                       0,
+                       stream.value()>>>(d_input_chars, chars_size, d_delimiter, d_marks.data());
 
   // launch warp per string to compute token counts
   cudf::detail::grid_1d grid{input.size() * cudf::detail::warp_size, block_size};
@@ -423,16 +427,17 @@ std::unique_ptr<cudf::column> tokenize_with_vocabulary(cudf::strings_column_view
   auto [token_offsets, total_count] = cudf::detail::make_offsets_child_column(
     d_token_counts.begin(), d_token_counts.end(), stream, mr);
 
-  rmm::device_uvector<cudf::size_type> d_tmp_offsets(total_count + 1, stream);
+  auto d_tmp_offsets = rmm::device_uvector<int64_t>(total_count + 1, stream);
   d_tmp_offsets.set_element(total_count, chars_size, stream);
-  thrust::copy_if(rmm::exec_policy(stream),
-                  zero_itr,
-                  thrust::counting_iterator<cudf::size_type>(chars_size),
-                  d_tmp_offsets.begin(),
-                  [d_marks = d_marks.data()] __device__(auto idx) {
-                    if (idx == 0) return true;
-                    return d_marks[idx] && !d_marks[idx - 1];
-                  });
+  cudf::detail::copy_if_safe(
+    thrust::counting_iterator<int64_t>(0),
+    thrust::counting_iterator<int64_t>(chars_size),
+    d_tmp_offsets.begin(),
+    [d_marks = d_marks.data()] __device__(auto idx) {
+      if (idx == 0) return true;
+      return d_marks[idx] && !d_marks[idx - 1];
+    },
+    stream);
 
   auto tmp_offsets =
     std::make_unique<cudf::column>(std::move(d_tmp_offsets), rmm::device_buffer{}, 0);

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,14 +17,10 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/iterator_utilities.hpp>
 
 #include <cudf/aggregation.hpp>
-#include <cudf/groupby.hpp>
-#include <cudf/lists/explode.hpp>
 #include <cudf/rolling.hpp>
-#include <cudf/utilities/default_stream.hpp>
 
 template <typename T>
 using fwcw = cudf::test::fixed_width_column_wrapper<T>;
@@ -47,18 +43,21 @@ auto constexpr null = int32_t{0};  // NULL representation for int32_t;
 auto no_nulls_list() { return nulls_at({}); }
 
 struct OffsetRowWindowTest : public cudf::test::BaseFixture {
-  static ints_column const _keys;    // {0, 0, 0, 0, 0, 0, 1, 1, 1, 1};
-  static ints_column const _values;  // {0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
-
   struct rolling_runner {
     cudf::window_bounds _preceding, _following;
     cudf::size_type _min_periods;
     bool _grouped = true;
+    ints_column const _keys;    // {0, 0, 0, 0, 0, 0, 1, 1, 1, 1};
+    ints_column const _values;  // {0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
 
     rolling_runner(cudf::window_bounds const& preceding,
                    cudf::window_bounds const& following,
                    cudf::size_type min_periods_ = 1)
-      : _preceding{preceding}, _following{following}, _min_periods{min_periods_}
+      : _preceding{preceding},
+        _following{following},
+        _min_periods{min_periods_},
+        _keys{0, 0, 0, 0, 0, 0, 1, 1, 1, 1},
+        _values{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
     {
     }
 
@@ -84,9 +83,6 @@ struct OffsetRowWindowTest : public cudf::test::BaseFixture {
   };
 };
 
-ints_column const OffsetRowWindowTest::_keys{0, 0, 0, 0, 0, 0, 1, 1, 1, 1};
-ints_column const OffsetRowWindowTest::_values{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
-
 auto const AGG_COUNT_NON_NULL =
   cudf::make_count_aggregation<cudf::rolling_aggregation>(cudf::null_policy::EXCLUDE);
 auto const AGG_COUNT_ALL =
@@ -100,7 +96,8 @@ TEST_F(OffsetRowWindowTest, OffsetRowWindow_Grouped_3_to_Minus_1)
 {
   auto const preceding = cudf::window_bounds::get(3);
   auto const following = cudf::window_bounds::get(-1);
-  auto run_rolling     = rolling_runner{preceding, following}.min_periods(1).grouped(true);
+  auto run_rolling     = rolling_runner{preceding, following};
+  run_rolling.min_periods(1).grouped(true);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*run_rolling(*AGG_COUNT_NON_NULL),
                                  ints_column{{0, 1, 2, 2, 2, 2, 0, 1, 2, 2}, nulls_at({0, 6})});
@@ -140,7 +137,8 @@ TEST_F(OffsetRowWindowTest, OffsetRowWindow_Ungrouped_3_to_Minus_1)
 {
   auto const preceding = cudf::window_bounds::get(3);
   auto const following = cudf::window_bounds::get(-1);
-  auto run_rolling     = rolling_runner{preceding, following}.min_periods(1).grouped(false);
+  auto run_rolling     = rolling_runner{preceding, following};
+  run_rolling.min_periods(1).grouped(false);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*run_rolling(*AGG_COUNT_NON_NULL),
                                  ints_column{{0, 1, 2, 2, 2, 2, 2, 2, 2, 2}, nulls_at({0})});
@@ -180,7 +178,8 @@ TEST_F(OffsetRowWindowTest, OffsetRowWindow_Grouped_0_to_2)
 {
   auto const preceding = cudf::window_bounds::get(0);
   auto const following = cudf::window_bounds::get(2);
-  auto run_rolling     = rolling_runner{preceding, following}.min_periods(1).grouped(true);
+  auto run_rolling     = rolling_runner{preceding, following};
+  run_rolling.min_periods(1).grouped(true);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(
     *run_rolling(*AGG_COUNT_NON_NULL),
@@ -223,7 +222,8 @@ TEST_F(OffsetRowWindowTest, OffsetRowWindow_Ungrouped_0_to_2)
 {
   auto const preceding = cudf::window_bounds::get(0);
   auto const following = cudf::window_bounds::get(2);
-  auto run_rolling     = rolling_runner{preceding, following}.min_periods(1).grouped(false);
+  auto run_rolling     = rolling_runner{preceding, following};
+  run_rolling.min_periods(1).grouped(false);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*run_rolling(*AGG_COUNT_NON_NULL),
                                  ints_column{{2, 2, 2, 2, 2, 2, 2, 2, 1, null}, nulls_at({9})});

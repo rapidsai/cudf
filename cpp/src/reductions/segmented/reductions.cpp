@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,16 +13,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <cudf/column/column.hpp>
-#include <cudf/copying.hpp>
+
+#include <cudf/aggregation/host_udf.hpp>
+#include <cudf/column/column_factories.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/reduction.hpp>
 #include <cudf/reduction/detail/segmented_reduction_functions.hpp>
 #include <cudf/types.hpp>
-#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
-#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/type_checks.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -30,6 +29,8 @@
 namespace cudf {
 namespace reduction {
 namespace detail {
+namespace {
+
 struct segmented_reduce_dispatch_functor {
   column_view const& col;
   device_span<size_type const> offsets;
@@ -99,6 +100,13 @@ struct segmented_reduce_dispatch_functor {
       }
       case segmented_reduce_aggregation::NUNIQUE:
         return segmented_nunique(col, offsets, null_handling, stream, mr);
+      case aggregation::HOST_UDF: {
+        auto const& udf_base_ptr =
+          dynamic_cast<cudf::detail::host_udf_aggregation const&>(agg).udf_ptr;
+        auto const udf_ptr = dynamic_cast<segmented_reduce_host_udf const*>(udf_base_ptr.get());
+        CUDF_EXPECTS(udf_ptr != nullptr, "Invalid HOST_UDF instance for segmented reduction.");
+        return (*udf_ptr)(col, offsets, output_dtype, null_handling, init, stream, mr);
+      }  // case aggregation::HOST_UDF
       default: CUDF_FAIL("Unsupported aggregation type.");
     }
   }
@@ -118,10 +126,17 @@ std::unique_ptr<column> segmented_reduce(column_view const& segmented_values,
                cudf::data_type_error);
   if (init.has_value() && !(agg.kind == aggregation::SUM || agg.kind == aggregation::PRODUCT ||
                             agg.kind == aggregation::MIN || agg.kind == aggregation::MAX ||
-                            agg.kind == aggregation::ANY || agg.kind == aggregation::ALL)) {
+                            agg.kind == aggregation::ANY || agg.kind == aggregation::ALL ||
+                            agg.kind == aggregation::HOST_UDF)) {
     CUDF_FAIL(
-      "Initial value is only supported for SUM, PRODUCT, MIN, MAX, ANY, and ALL aggregation types");
+      "Initial value is only supported for SUM, PRODUCT, MIN, MAX, ANY, ALL, and HOST_UDF "
+      "aggregation types");
   }
+
+  if (segmented_values.is_empty() && offsets.empty()) {
+    return cudf::make_empty_column(output_dtype);
+  }
+
   CUDF_EXPECTS(offsets.size() > 0, "`offsets` should have at least 1 element.");
 
   return cudf::detail::aggregation_dispatcher(
@@ -130,6 +145,7 @@ std::unique_ptr<column> segmented_reduce(column_view const& segmented_values,
       segmented_values, offsets, output_dtype, null_handling, init, stream, mr},
     agg);
 }
+}  // namespace
 }  // namespace detail
 }  // namespace reduction
 

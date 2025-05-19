@@ -33,16 +33,12 @@ static void bench_vocab_tokenize(nvbench::state& state)
 {
   auto const stream    = cudf::get_default_stream();
   auto const num_rows  = static_cast<cudf::size_type>(state.get_int64("num_rows"));
-  auto const row_width = static_cast<cudf::size_type>(state.get_int64("row_width"));
+  auto const min_width = static_cast<cudf::size_type>(state.get_int64("min_width"));
+  auto const max_width = static_cast<cudf::size_type>(state.get_int64("max_width"));
 
-  if (static_cast<std::size_t>(num_rows) * static_cast<std::size_t>(row_width) >=
-      static_cast<std::size_t>(std::numeric_limits<cudf::size_type>::max())) {
-    state.skip("Skip benchmarks greater than size_type limit");
-  }
-
-  auto const column = [num_rows, row_width] {
+  auto const column = [num_rows, min_width, max_width] {
     data_profile const profile = data_profile_builder().no_validity().distribution(
-      cudf::type_id::STRING, distribution_id::NORMAL, 0, row_width);
+      cudf::type_id::STRING, distribution_id::NORMAL, min_width, max_width);
     auto const col = create_random_column(cudf::type_id::STRING, row_count{num_rows}, profile);
     return cudf::strings::filter_characters_of_type(
       cudf::strings_column_view(col->view()),
@@ -85,5 +81,6 @@ static void bench_vocab_tokenize(nvbench::state& state)
 
 NVBENCH_BENCH(bench_vocab_tokenize)
   .set_name("vocab_tokenize")
-  .add_int64_axis("row_width", {32, 64, 128, 256, 512, 1024})
-  .add_int64_axis("num_rows", {262144, 524288, 1048576, 2097152, 4194304, 16777216});
+  .add_int64_axis("min_width", {0})
+  .add_int64_axis("max_width", {32, 64, 128, 256})
+  .add_int64_axis("num_rows", {32768, 262144, 2097152});

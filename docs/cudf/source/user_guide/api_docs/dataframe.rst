@@ -28,6 +28,7 @@ Attributes and underlying data
    DataFrame.info
    DataFrame.select_dtypes
    DataFrame.values
+   DataFrame.values_host
    DataFrame.ndim
    DataFrame.size
    DataFrame.shape
@@ -92,14 +93,12 @@ Binary operator functions
    DataFrame.rfloordiv
    DataFrame.rmod
    DataFrame.rpow
-   DataFrame.round
    DataFrame.lt
    DataFrame.gt
    DataFrame.le
    DataFrame.ge
    DataFrame.ne
    DataFrame.eq
-   DataFrame.product
 
 Function application, GroupBy & window
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -271,12 +270,11 @@ Serialization / IO / conversion
    DataFrame.to_csv
    DataFrame.to_cupy
    DataFrame.to_hdf
-   DataFrame.to_dict
    DataFrame.to_json
    DataFrame.to_numpy
    DataFrame.to_pandas
    DataFrame.to_feather
    DataFrame.to_records
    DataFrame.to_string
-   DataFrame.values
-   DataFrame.values_host
+   DataFrame.to_pylibcudf
+   DataFrame.from_pylibcudf

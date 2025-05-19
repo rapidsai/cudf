@@ -33,3 +33,9 @@ cpdef Table repeat(
     Table input_table,
     ColumnOrSize count
 )
+
+cpdef Column calendrical_month_sequence(
+    size_type n,
+    Scalar init,
+    size_type months,
+)

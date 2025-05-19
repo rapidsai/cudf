@@ -6,6 +6,7 @@ from pylibcudf.column cimport Column
 from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.strings.convert cimport convert_urls as cpp_convert_urls
 
+__all__ = ["url_decode", "url_encode"]
 
 cpdef Column url_encode(Column input):
     """
@@ -26,11 +27,7 @@ cpdef Column url_encode(Column input):
     cdef unique_ptr[column] c_result
 
     with nogil:
-        c_result = move(
-            cpp_convert_urls.url_encode(
-                input.view()
-            )
-        )
+        c_result = cpp_convert_urls.url_encode(input.view())
 
     return Column.from_libcudf(move(c_result))
 
@@ -54,10 +51,6 @@ cpdef Column url_decode(Column input):
     cdef unique_ptr[column] c_result
 
     with nogil:
-        c_result = move(
-            cpp_convert_urls.url_decode(
-                input.view()
-            )
-        )
+        c_result = cpp_convert_urls.url_decode(input.view())
 
     return Column.from_libcudf(move(c_result))

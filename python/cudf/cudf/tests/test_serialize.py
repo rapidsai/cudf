@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2024, NVIDIA CORPORATION.
+# Copyright (c) 2018-2025, NVIDIA CORPORATION.
 
 import itertools
 import pickle
@@ -7,8 +7,10 @@ import msgpack
 import numpy as np
 import pandas as pd
 import pytest
+from packaging import version
 
 import cudf
+from cudf.core.column import as_column
 from cudf.testing import _utils as utils, assert_eq
 
 
@@ -149,13 +151,19 @@ def test_serialize(df, to_host):
 
 def test_serialize_dtype_error_checking():
     dtype = cudf.IntervalDtype("float", "right")
-    header, frames = dtype.serialize()
-    with pytest.raises(AssertionError):
-        # Invalid number of frames
-        type(dtype).deserialize(header, [None] * (header["frame_count"] + 1))
+    # Must call device_serialize (not serialize) to ensure that the type metadata is
+    # encoded in the header.
+    header, frames = dtype.device_serialize()
     with pytest.raises(AssertionError):
         # mismatching class
         cudf.StructDtype.deserialize(header, frames)
+    # The is-cuda flag list length must match the number of frames
+    header["is-cuda"] = [False]
+    with pytest.raises(AssertionError):
+        # Invalid number of frames
+        type(dtype).deserialize(
+            header, [np.zeros(1)] * (header["frame_count"] + 1)
+        )
 
 
 def test_serialize_dataframe():
@@ -170,11 +178,15 @@ def test_serialize_dataframe():
 
 
 def test_serialize_dataframe_with_index():
-    df = cudf.DataFrame()
-    df["a"] = np.arange(100)
-    df["b"] = np.random.random(100)
-    df["c"] = pd.Categorical(
-        ["a", "b", "c", "_", "_"] * 20, categories=["a", "b", "c"]
+    rng = np.random.default_rng(seed=0)
+    df = cudf.DataFrame(
+        {
+            "a": np.arange(100),
+            "b": rng.random(100),
+            "c": pd.Categorical(
+                ["a", "b", "c", "_", "_"] * 20, categories=["a", "b", "c"]
+            ),
+        }
     )
     df = df.sort_values("b")
     outdf = cudf.DataFrame.deserialize(*df.serialize())
@@ -200,11 +212,12 @@ def test_serialize_generic_index():
 
 
 def test_serialize_multi_index():
+    rng = np.random.default_rng(seed=0)
     pdf = pd.DataFrame(
         {
             "a": [4, 17, 4, 9, 5],
             "b": [1, 4, 4, 3, 2],
-            "x": np.random.normal(size=5),
+            "x": rng.normal(size=5),
         }
     )
     gdf = cudf.DataFrame.from_pandas(pdf)
@@ -218,21 +231,26 @@ def test_serialize_multi_index():
 
 def test_serialize_masked_series():
     nelem = 50
-    data = np.random.random(nelem)
+    rng = np.random.default_rng(seed=0)
+    data = rng.random(nelem)
     mask = utils.random_bitmask(nelem)
     bitmask = utils.expand_bits_to_bytes(mask)[:nelem]
     null_count = utils.count_zero(bitmask)
     assert null_count >= 0
-    sr = cudf.Series.from_masked_array(data, mask, null_count=null_count)
+    sr = cudf.Series._from_column(as_column(data).set_mask(mask))
     outsr = cudf.Series.deserialize(*sr.serialize())
     assert_eq(sr, outsr)
 
 
 def test_serialize_groupby_df():
-    df = cudf.DataFrame()
-    df["key_1"] = np.random.randint(0, 20, 100)
-    df["key_2"] = np.random.randint(0, 20, 100)
-    df["val"] = np.arange(100, dtype=np.float32)
+    rng = np.random.default_rng(seed=0)
+    df = cudf.DataFrame(
+        {
+            "key_1": rng.integers(0, 20, 100),
+            "key_2": rng.integers(0, 20, 100),
+            "val": np.arange(100, dtype=np.float32),
+        }
+    )
     gb = df.groupby(["key_1", "key_2"], sort=True)
     outgb = gb.deserialize(*gb.serialize())
     expect = gb.mean()
@@ -241,9 +259,9 @@ def test_serialize_groupby_df():
 
 
 def test_serialize_groupby_external():
-    df = cudf.DataFrame()
-    df["val"] = np.arange(100, dtype=np.float32)
-    gb = df.groupby(cudf.Series(np.random.randint(0, 20, 100)))
+    rng = np.random.default_rng(seed=0)
+    df = cudf.DataFrame({"val": np.arange(100, dtype=np.float32)})
+    gb = df.groupby(cudf.Series(rng.integers(0, 20, 100)))
     outgb = gb.deserialize(*gb.serialize())
     expect = gb.mean()
     got = outgb.mean()
@@ -262,7 +280,8 @@ def test_serialize_groupby_level():
 
 
 def test_serialize_groupby_sr():
-    sr = cudf.Series(np.random.randint(0, 20, 100))
+    rng = np.random.default_rng(seed=0)
+    sr = cudf.Series(rng.integers(0, 20, 100))
     gb = sr.groupby(sr // 2)
     outgb = gb.deserialize(*gb.serialize())
     got = gb.mean()
@@ -271,9 +290,10 @@ def test_serialize_groupby_sr():
 
 
 def test_serialize_datetime():
+    rng = np.random.default_rng(seed=0)
     # Make frame with datetime column
     df = pd.DataFrame(
-        {"x": np.random.randint(0, 5, size=20), "y": np.random.normal(size=20)}
+        {"x": rng.integers(0, 5, size=20), "y": rng.normal(size=20)}
     )
     ts = np.arange(0, len(df), dtype=np.dtype("datetime64[ms]"))
     df["timestamp"] = ts
@@ -285,9 +305,10 @@ def test_serialize_datetime():
 
 
 def test_serialize_string():
+    rng = np.random.default_rng(seed=0)
     # Make frame with string column
     df = pd.DataFrame(
-        {"x": np.random.randint(0, 5, size=5), "y": np.random.normal(size=5)}
+        {"x": rng.integers(0, 5, size=5), "y": rng.normal(size=5)}
     )
     str_data = ["a", "bc", "def", "ghij", "klmno"]
     df["timestamp"] = str_data
@@ -369,6 +390,10 @@ def test_serialize_string_check_buffer_sizes():
     assert expect == got
 
 
+@pytest.mark.skipif(
+    version.parse(np.__version__) < version.parse("2.0.0"),
+    reason="The serialization of numpy 2.0 types is incompatible with numpy 1.x",
+)
 def test_deserialize_cudf_23_12(datadir):
     fname = datadir / "pkl" / "stringColumnWithRangeIndex_cudf_23.12.pkl"
 

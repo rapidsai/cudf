@@ -28,17 +28,13 @@
 static void bench_jaccard(nvbench::state& state)
 {
   auto const num_rows        = static_cast<cudf::size_type>(state.get_int64("num_rows"));
-  auto const row_width       = static_cast<cudf::size_type>(state.get_int64("row_width"));
+  auto const min_width       = static_cast<cudf::size_type>(state.get_int64("min_width"));
+  auto const max_width       = static_cast<cudf::size_type>(state.get_int64("max_width"));
   auto const substring_width = static_cast<cudf::size_type>(state.get_int64("substring_width"));
-
-  if (static_cast<std::size_t>(num_rows) * static_cast<std::size_t>(row_width) >=
-      static_cast<std::size_t>(std::numeric_limits<cudf::size_type>::max())) {
-    state.skip("Skip benchmarks greater than size_type limit");
-  }
 
   data_profile const strings_profile =
     data_profile_builder()
-      .distribution(cudf::type_id::STRING, distribution_id::NORMAL, 0, row_width)
+      .distribution(cudf::type_id::STRING, distribution_id::NORMAL, min_width, max_width)
       .no_validity();
   auto const input_table = create_random_table(
     {cudf::type_id::STRING, cudf::type_id::STRING}, row_count{num_rows}, strings_profile);
@@ -59,6 +55,7 @@ static void bench_jaccard(nvbench::state& state)
 
 NVBENCH_BENCH(bench_jaccard)
   .set_name("jaccard")
+  .add_int64_axis("min_width", {0})
+  .add_int64_axis("max_width", {128, 512, 1024, 2048})
   .add_int64_axis("num_rows", {32768, 131072, 262144})
-  .add_int64_axis("row_width", {128, 512, 1024, 2048})
   .add_int64_axis("substring_width", {5, 10});

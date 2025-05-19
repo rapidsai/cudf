@@ -106,10 +106,10 @@ std::unique_ptr<column> add_keys(dictionary_column_view const& dictionary_column
   auto indices_column     = [&] {
     column_view gather_result = table_indices.front()->view();
     auto const indices_size   = gather_result.size();
-    // we can just use the lower-bound/gather data directly for UINT32 case
-    if (indices_type.id() == type_id::UINT32) {
+    // we can just use the lower-bound/gather data directly for INT32 case
+    if (indices_type.id() == type_id::INT32) {
       auto contents = table_indices.front()->release();
-      return std::make_unique<column>(data_type{type_id::UINT32},
+      return std::make_unique<column>(data_type{type_id::INT32},
                                       indices_size,
                                       std::move(*(contents.data.release())),
                                       rmm::device_buffer{0, stream, mr},

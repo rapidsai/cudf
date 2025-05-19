@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@
 #include <cudf/detail/utilities/assert.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/span.hpp>
 #include <cudf/utilities/traits.hpp>
 
 #include <functional>
@@ -89,6 +90,8 @@ class simple_aggregations_collector {  // Declares the interface for the simple 
   virtual std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
                                                           class udf_aggregation const& agg);
   virtual std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
+                                                          class host_udf_aggregation const& agg);
+  virtual std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
                                                           class merge_lists_aggregation const& agg);
   virtual std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
                                                           class merge_sets_aggregation const& agg);
@@ -104,6 +107,8 @@ class simple_aggregations_collector {  // Declares the interface for the simple 
                                                           class tdigest_aggregation const& agg);
   virtual std::vector<std::unique_ptr<aggregation>> visit(
     data_type col_type, class merge_tdigest_aggregation const& agg);
+  virtual std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
+                                                          class bitwise_aggregation const& agg);
 };
 
 class aggregation_finalizer {  // Declares the interface for the finalizer
@@ -135,6 +140,7 @@ class aggregation_finalizer {  // Declares the interface for the finalizer
   virtual void visit(class collect_set_aggregation const& agg);
   virtual void visit(class lead_lag_aggregation const& agg);
   virtual void visit(class udf_aggregation const& agg);
+  virtual void visit(class host_udf_aggregation const& agg);
   virtual void visit(class merge_lists_aggregation const& agg);
   virtual void visit(class merge_sets_aggregation const& agg);
   virtual void visit(class merge_m2_aggregation const& agg);
@@ -144,6 +150,7 @@ class aggregation_finalizer {  // Declares the interface for the finalizer
   virtual void visit(class tdigest_aggregation const& agg);
   virtual void visit(class merge_tdigest_aggregation const& agg);
   virtual void visit(class ewma_aggregation const& agg);
+  virtual void visit(class bitwise_aggregation const& agg);
 };
 
 /**
@@ -961,6 +968,37 @@ class udf_aggregation final : public rolling_aggregation {
 };
 
 /**
+ * @brief Derived class for specifying host-based UDF aggregation.
+ */
+class host_udf_aggregation final : public groupby_aggregation,
+                                   public reduce_aggregation,
+                                   public segmented_reduce_aggregation {
+ public:
+  std::unique_ptr<host_udf_base> udf_ptr;
+
+  host_udf_aggregation()                            = delete;
+  host_udf_aggregation(host_udf_aggregation const&) = delete;
+
+  // Need to define the constructor and destructor in a separate source file where we have the
+  // complete declaration of `host_udf_base`.
+  explicit host_udf_aggregation(std::unique_ptr<host_udf_base> udf_ptr_);
+  ~host_udf_aggregation() override;
+
+  [[nodiscard]] bool is_equal(aggregation const& _other) const override;
+
+  [[nodiscard]] size_t do_hash() const override;
+
+  [[nodiscard]] std::unique_ptr<aggregation> clone() const override;
+
+  std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
+    data_type col_type, simple_aggregations_collector& collector) const override
+  {
+    return collector.visit(col_type, *this);
+  }
+  void finalize(aggregation_finalizer& finalizer) const override { finalizer.visit(*this); }
+};
+
+/**
  * @brief Derived aggregation class for specifying MERGE_LISTS aggregation
  */
 class merge_lists_aggregation final : public groupby_aggregation, public reduce_aggregation {
@@ -1183,6 +1221,41 @@ class merge_tdigest_aggregation final : public groupby_aggregation, public reduc
   {
     return collector.visit(col_type, *this);
   }
+  void finalize(aggregation_finalizer& finalizer) const override { finalizer.visit(*this); }
+};
+
+/**
+ * @brief Derived aggregation class for specifying BITWISE_AGG aggregation.
+ */
+class bitwise_aggregation final : public groupby_aggregation, public reduce_aggregation {
+ public:
+  explicit bitwise_aggregation(bitwise_op bit_op_) : aggregation{BITWISE_AGG}, bit_op{bit_op_} {}
+
+  bitwise_op bit_op;
+
+  [[nodiscard]] bool is_equal(aggregation const& _other) const override
+  {
+    if (!this->aggregation::is_equal(_other)) { return false; }
+    auto const& other = dynamic_cast<bitwise_aggregation const&>(_other);
+    return bit_op == other.bit_op;
+  }
+
+  [[nodiscard]] size_t do_hash() const override
+  {
+    return this->aggregation::do_hash() ^ static_cast<size_t>(bit_op);
+  }
+
+  [[nodiscard]] std::unique_ptr<aggregation> clone() const override
+  {
+    return std::make_unique<bitwise_aggregation>(*this);
+  }
+
+  std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
+    data_type col_type, simple_aggregations_collector& collector) const override
+  {
+    return collector.visit(col_type, *this);
+  }
+
   void finalize(aggregation_finalizer& finalizer) const override { finalizer.visit(*this); }
 };
 
@@ -1462,6 +1535,20 @@ struct target_type_impl<Source,
   using type = struct_view;
 };
 
+template <typename SourceType>
+struct target_type_impl<SourceType, aggregation::HOST_UDF> {
+  // Just a placeholder. The actual return type is unknown.
+  using type = struct_view;
+};
+
+// BITWISE_AGG returns the same type as input for integral types.
+template <typename Source>
+struct target_type_impl<Source,
+                        aggregation::BITWISE_AGG,
+                        std::enable_if_t<std::is_integral_v<Source>>> {
+  using type = Source;
+};
+
 /**
  * @brief Helper alias to get the accumulator type for performing aggregation
  * `k` on elements of type `Source`
@@ -1579,6 +1666,10 @@ CUDF_HOST_DEVICE inline decltype(auto) aggregation_dispatcher(aggregation::Kind 
       return f.template operator()<aggregation::MERGE_TDIGEST>(std::forward<Ts>(args)...);
     case aggregation::EWMA:
       return f.template operator()<aggregation::EWMA>(std::forward<Ts>(args)...);
+    case aggregation::HOST_UDF:
+      return f.template operator()<aggregation::HOST_UDF>(std::forward<Ts>(args)...);
+    case aggregation::BITWISE_AGG:
+      return f.template operator()<aggregation::BITWISE_AGG>(std::forward<Ts>(args)...);
     default: {
 #ifndef __CUDA_ARCH__
       CUDF_FAIL("Unsupported aggregation.");
@@ -1672,6 +1763,25 @@ constexpr inline bool is_valid_aggregation()
  * @param k The aggregation to perform
  */
 bool is_valid_aggregation(data_type source, aggregation::Kind k);
+
+/**
+ * @brief Initializes each column in a table with a corresponding identity value
+ * of an aggregation operation.
+ *
+ * The `i`th column will be initialized with the identity value of the `i`th
+ * aggregation operation in `aggs`.
+ *
+ * @throw cudf::logic_error if column type and corresponding agg are incompatible
+ * @throw cudf::logic_error if column type is not fixed-width
+ *
+ * @param table The table of columns to initialize.
+ * @param aggs A span of aggregation operations corresponding to the table
+ * columns. The aggregations determine the identity value for each column.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ */
+void initialize_with_identity(mutable_table_view& table,
+                              host_span<cudf::aggregation::Kind const> aggs,
+                              rmm::cuda_stream_view stream);
 
 }  // namespace detail
 }  // namespace CUDF_EXPORT cudf

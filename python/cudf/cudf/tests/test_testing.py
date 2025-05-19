@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 
 import numpy as np
 import pandas as pd
@@ -69,7 +69,7 @@ def test_basic_assert_index_equal(
         msg = str(e)
 
     if kind is not None:
-        if (kind == TypeError) and (
+        if (kind is TypeError) and (
             msg
             == (
                 "Categoricals can only be compared "
@@ -429,8 +429,8 @@ def test_assert_column_memory_basic_same(arrow_arrays):
     data = cudf.core.column.ColumnBase.from_arrow(arrow_arrays)
     buf = cudf.core.buffer.as_buffer(data.base_data)
 
-    left = cudf.core.column.build_column(buf, dtype=np.int8)
-    right = cudf.core.column.build_column(buf, dtype=np.int8)
+    left = cudf.core.column.build_column(buf, dtype=np.dtype(np.int8))
+    right = cudf.core.column.build_column(buf, dtype=np.dtype(np.int8))
 
     assert_column_memory_eq(left, right)
     with pytest.raises(AssertionError):

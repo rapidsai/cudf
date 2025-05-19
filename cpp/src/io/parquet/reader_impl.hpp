@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -284,7 +284,7 @@ class reader::impl {
    *
    * @return Vector of total string data sizes for each column
    */
-  std::vector<size_t> calculate_page_string_offsets();
+  cudf::detail::host_vector<size_t> calculate_page_string_offsets();
 
   /**
    * @brief Converts the page data and outputs to columns.
@@ -373,7 +373,7 @@ class reader::impl {
   // Reader configs.
   struct {
     // timestamp_type
-    data_type timestamp_type{type_id::EMPTY};
+    data_type timestamp_type;
     // User specified reading rows/stripes selection.
     int64_t const skip_rows;
     std::optional<int64_t> num_rows;

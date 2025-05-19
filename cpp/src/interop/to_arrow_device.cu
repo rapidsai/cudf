@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,10 +15,11 @@
  */
 
 #include "arrow_utilities.hpp"
-#include "decimal_conversion_utilities.cuh"
 
 #include <cudf/column/column.hpp>
+#include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
+#include <cudf/detail/device_scalar.hpp>
 #include <cudf/detail/interop.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
@@ -35,7 +36,6 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/device_scalar.hpp>
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/for_each.h>
@@ -60,7 +60,7 @@ template <typename>
 struct is_device_scalar : public std::false_type {};
 
 template <typename T>
-struct is_device_scalar<rmm::device_scalar<T>> : public std::true_type {};
+struct is_device_scalar<cudf::detail::device_scalar<T>> : public std::true_type {};
 
 template <typename>
 struct is_device_uvector : public std::false_type {};
@@ -91,14 +91,31 @@ int set_buffer(std::unique_ptr<T> device_buf, int64_t i, ArrowArray* out)
   return NANOARROW_OK;
 }
 
+int set_null_mask(column::contents& contents, ArrowArray* out)
+{
+  if (contents.null_mask) {
+    NANOARROW_RETURN_NOT_OK(set_buffer(std::move(contents.null_mask), validity_buffer_idx, out));
+  }
+  return NANOARROW_OK;
+}
+
+int set_contents(column::contents& contents, ArrowArray* out)
+{
+  NANOARROW_RETURN_NOT_OK(set_null_mask(contents, out));
+  NANOARROW_RETURN_NOT_OK(set_buffer(std::move(contents.data), fixed_width_data_buffer_idx, out));
+  return NANOARROW_OK;
+}
+
 struct dispatch_to_arrow_device {
-  template <typename T, CUDF_ENABLE_IF(not is_rep_layout_compatible<T>())>
+  template <typename T,
+            CUDF_ENABLE_IF(not is_rep_layout_compatible<T>() and not is_fixed_point<T>())>
   int operator()(cudf::column&&, rmm::cuda_stream_view, rmm::device_async_resource_ref, ArrowArray*)
   {
     CUDF_FAIL("Unsupported type for to_arrow_device", cudf::data_type_error);
   }
 
-  template <typename T, CUDF_ENABLE_IF(is_rep_layout_compatible<T>())>
+  // cover rep layout compatible and decimal types
+  template <typename T, CUDF_ENABLE_IF(is_rep_layout_compatible<T>() or is_fixed_point<T>())>
   int operator()(cudf::column&& column,
                  rmm::cuda_stream_view stream,
                  rmm::device_async_resource_ref mr,
@@ -115,78 +132,13 @@ struct dispatch_to_arrow_device {
     ArrowArrayMove(tmp.get(), out);
     return NANOARROW_OK;
   }
-
-  int set_null_mask(column::contents& contents, ArrowArray* out)
-  {
-    if (contents.null_mask) {
-      NANOARROW_RETURN_NOT_OK(set_buffer(std::move(contents.null_mask), validity_buffer_idx, out));
-    }
-    return NANOARROW_OK;
-  }
-
-  int set_contents(column::contents& contents, ArrowArray* out)
-  {
-    NANOARROW_RETURN_NOT_OK(set_null_mask(contents, out));
-    NANOARROW_RETURN_NOT_OK(set_buffer(std::move(contents.data), fixed_width_data_buffer_idx, out));
-    return NANOARROW_OK;
-  }
 };
 
-template <typename DeviceType>
-int construct_decimals(cudf::column_view input,
-                       rmm::cuda_stream_view stream,
-                       rmm::device_async_resource_ref mr,
-                       ArrowArray* out)
+int handle_empty_type_column(ArrowArray* array, cudf::column& column)
 {
-  nanoarrow::UniqueArray tmp;
-  NANOARROW_RETURN_NOT_OK(initialize_array(tmp.get(), NANOARROW_TYPE_DECIMAL128, input));
-
-  auto buf = detail::convert_decimals_to_decimal128<DeviceType>(input, stream, mr);
-  // Synchronize stream here to ensure the decimal128 buffer is ready.
-  stream.synchronize();
-  NANOARROW_RETURN_NOT_OK(set_buffer(std::move(buf), fixed_width_data_buffer_idx, tmp.get()));
-
-  ArrowArrayMove(tmp.get(), out);
-  return NANOARROW_OK;
-}
-
-template <>
-int dispatch_to_arrow_device::operator()<numeric::decimal32>(cudf::column&& column,
-                                                             rmm::cuda_stream_view stream,
-                                                             rmm::device_async_resource_ref mr,
-                                                             ArrowArray* out)
-{
-  using DeviceType = int32_t;
-  NANOARROW_RETURN_NOT_OK(construct_decimals<DeviceType>(column.view(), stream, mr, out));
-  auto contents = column.release();
-  NANOARROW_RETURN_NOT_OK(set_null_mask(contents, out));
-  return NANOARROW_OK;
-}
-
-template <>
-int dispatch_to_arrow_device::operator()<numeric::decimal64>(cudf::column&& column,
-                                                             rmm::cuda_stream_view stream,
-                                                             rmm::device_async_resource_ref mr,
-                                                             ArrowArray* out)
-{
-  using DeviceType = int64_t;
-  NANOARROW_RETURN_NOT_OK(construct_decimals<DeviceType>(column.view(), stream, mr, out));
-  auto contents = column.release();
-  NANOARROW_RETURN_NOT_OK(set_null_mask(contents, out));
-  return NANOARROW_OK;
-}
-
-template <>
-int dispatch_to_arrow_device::operator()<numeric::decimal128>(cudf::column&& column,
-                                                              rmm::cuda_stream_view stream,
-                                                              rmm::device_async_resource_ref mr,
-                                                              ArrowArray* out)
-{
-  nanoarrow::UniqueArray tmp;
-  NANOARROW_RETURN_NOT_OK(initialize_array(tmp.get(), NANOARROW_TYPE_DECIMAL128, column));
-  auto contents = column.release();
-  NANOARROW_RETURN_NOT_OK(set_contents(contents, tmp.get()));
-  ArrowArrayMove(tmp.get(), out);
+  NANOARROW_RETURN_NOT_OK(initialize_array(array, NANOARROW_TYPE_NA, column.view()));
+  auto child_contents = column.release();
+  NANOARROW_RETURN_NOT_OK(set_contents(child_contents, array));
   return NANOARROW_OK;
 }
 
@@ -232,10 +184,10 @@ int dispatch_to_arrow_device::operator()<cudf::string_view>(cudf::column&& colum
     // in the offsets buffer. While some arrow implementations may accept a zero-sized
     // offsets buffer, best practices would be to allocate the buffer with the single value.
     if (nanoarrow_type == NANOARROW_TYPE_STRING) {
-      auto zero = std::make_unique<rmm::device_scalar<int32_t>>(0, stream, mr);
+      auto zero = std::make_unique<cudf::detail::device_scalar<int32_t>>(0, stream, mr);
       NANOARROW_RETURN_NOT_OK(set_buffer(std::move(zero), fixed_width_data_buffer_idx, tmp.get()));
     } else {
-      auto zero = std::make_unique<rmm::device_scalar<int64_t>>(0, stream, mr);
+      auto zero = std::make_unique<cudf::detail::device_scalar<int64_t>>(0, stream, mr);
       NANOARROW_RETURN_NOT_OK(set_buffer(std::move(zero), fixed_width_data_buffer_idx, tmp.get()));
     }
 
@@ -283,8 +235,12 @@ int dispatch_to_arrow_device::operator()<cudf::struct_view>(cudf::column&& colum
   for (size_t i = 0; i < size_t(tmp->n_children); ++i) {
     ArrowArray* child_ptr = tmp->children[i];
     auto& child           = contents.children[i];
-    NANOARROW_RETURN_NOT_OK(cudf::type_dispatcher(
-      child->type(), dispatch_to_arrow_device{}, std::move(*child), stream, mr, child_ptr));
+    if (child->type().id() == cudf::type_id::EMPTY) {
+      NANOARROW_RETURN_NOT_OK(handle_empty_type_column(child_ptr, *child));
+    } else {
+      NANOARROW_RETURN_NOT_OK(cudf::type_dispatcher(
+        child->type(), dispatch_to_arrow_device{}, std::move(*child), stream, mr, child_ptr));
+    }
   }
 
   ArrowArrayMove(tmp.get(), out);
@@ -309,8 +265,12 @@ int dispatch_to_arrow_device::operator()<cudf::list_view>(cudf::column&& column,
   NANOARROW_RETURN_NOT_OK(set_buffer(std::move(offsets_contents.data), 1, tmp.get()));
 
   auto& child = contents.children[cudf::lists_column_view::child_column_index];
-  NANOARROW_RETURN_NOT_OK(cudf::type_dispatcher(
-    child->type(), dispatch_to_arrow_device{}, std::move(*child), stream, mr, tmp->children[0]));
+  if (child->type().id() == cudf::type_id::EMPTY) {
+    NANOARROW_RETURN_NOT_OK(handle_empty_type_column(tmp->children[0], *child));
+  } else {
+    NANOARROW_RETURN_NOT_OK(cudf::type_dispatcher(
+      child->type(), dispatch_to_arrow_device{}, std::move(*child), stream, mr, tmp->children[0]));
+  }
 
   ArrowArrayMove(tmp.get(), out);
   return NANOARROW_OK;
@@ -323,9 +283,13 @@ int dispatch_to_arrow_device::operator()<cudf::dictionary32>(cudf::column&& colu
                                                              ArrowArray* out)
 {
   nanoarrow::UniqueArray tmp;
+
+  cudf::dictionary_column_view const dview{column.view()};
+  auto const is_empty = dview.is_empty();
+
   NANOARROW_RETURN_NOT_OK(initialize_array(
     tmp.get(),
-    id_to_arrow_type(column.child(cudf::dictionary_column_view::indices_column_index).type().id()),
+    is_empty ? NANOARROW_TYPE_INT32 : id_to_arrow_type(dview.indices().type().id()),
     column));
   NANOARROW_RETURN_NOT_OK(ArrowArrayAllocateDictionary(tmp.get()));
 
@@ -333,11 +297,14 @@ int dispatch_to_arrow_device::operator()<cudf::dictionary32>(cudf::column&& colu
   NANOARROW_RETURN_NOT_OK(set_null_mask(contents, tmp.get()));
 
   auto indices_contents =
-    contents.children[cudf::dictionary_column_view::indices_column_index]->release();
+    is_empty ? cudf::make_empty_column(cudf::type_id::INT32)->release()
+             : contents.children[cudf::dictionary_column_view::indices_column_index]->release();
   NANOARROW_RETURN_NOT_OK(
     set_buffer(std::move(indices_contents.data), fixed_width_data_buffer_idx, tmp.get()));
 
-  auto& keys = contents.children[cudf::dictionary_column_view::keys_column_index];
+  auto keys = is_empty
+                ? cudf::make_empty_column(cudf::type_id::INT64)
+                : std::move(contents.children[cudf::dictionary_column_view::keys_column_index]);
   NANOARROW_RETURN_NOT_OK(cudf::type_dispatcher(
     keys->type(), dispatch_to_arrow_device{}, std::move(*keys), stream, mr, tmp->dictionary));
 
@@ -350,13 +317,14 @@ struct dispatch_to_arrow_device_view {
   rmm::cuda_stream_view stream;
   rmm::device_async_resource_ref mr;
 
-  template <typename T, CUDF_ENABLE_IF(not is_rep_layout_compatible<T>())>
+  template <typename T,
+            CUDF_ENABLE_IF(not is_rep_layout_compatible<T>() and not is_fixed_point<T>())>
   int operator()(ArrowArray*) const
   {
     CUDF_FAIL("Unsupported type for to_arrow_device", cudf::data_type_error);
   }
 
-  template <typename T, CUDF_ENABLE_IF(is_rep_layout_compatible<T>())>
+  template <typename T, CUDF_ENABLE_IF(is_rep_layout_compatible<T>() or is_fixed_point<T>())>
   int operator()(ArrowArray* out) const
   {
     nanoarrow::UniqueArray tmp;
@@ -405,37 +373,6 @@ struct dispatch_to_arrow_device_view {
 };
 
 template <>
-int dispatch_to_arrow_device_view::operator()<numeric::decimal32>(ArrowArray* out) const
-{
-  using DeviceType = int32_t;
-  NANOARROW_RETURN_NOT_OK(construct_decimals<DeviceType>(column, stream, mr, out));
-  NANOARROW_RETURN_NOT_OK(set_null_mask(column, out));
-  return NANOARROW_OK;
-}
-
-template <>
-int dispatch_to_arrow_device_view::operator()<numeric::decimal64>(ArrowArray* out) const
-{
-  using DeviceType = int64_t;
-  NANOARROW_RETURN_NOT_OK(construct_decimals<DeviceType>(column, stream, mr, out));
-  NANOARROW_RETURN_NOT_OK(set_null_mask(column, out));
-  return NANOARROW_OK;
-}
-
-template <>
-int dispatch_to_arrow_device_view::operator()<numeric::decimal128>(ArrowArray* out) const
-{
-  nanoarrow::UniqueArray tmp;
-
-  NANOARROW_RETURN_NOT_OK(initialize_array(tmp.get(), NANOARROW_TYPE_DECIMAL128, column));
-  NANOARROW_RETURN_NOT_OK(set_null_mask(column, tmp.get()));
-  NANOARROW_RETURN_NOT_OK(set_view_to_buffer(column, tmp.get()));
-
-  ArrowArrayMove(tmp.get(), out);
-  return NANOARROW_OK;
-}
-
-template <>
 int dispatch_to_arrow_device_view::operator()<bool>(ArrowArray* out) const
 {
   nanoarrow::UniqueArray tmp;
@@ -466,10 +403,10 @@ int dispatch_to_arrow_device_view::operator()<cudf::string_view>(ArrowArray* out
   if (column.size() == 0) {
     // https://github.com/rapidsai/cudf/pull/15047#discussion_r1546528552
     if (nanoarrow_type == NANOARROW_TYPE_LARGE_STRING) {
-      auto zero = std::make_unique<rmm::device_scalar<int64_t>>(0, stream, mr);
+      auto zero = std::make_unique<cudf::detail::device_scalar<int64_t>>(0, stream, mr);
       NANOARROW_RETURN_NOT_OK(set_buffer(std::move(zero), fixed_width_data_buffer_idx, tmp.get()));
     } else {
-      auto zero = std::make_unique<rmm::device_scalar<int32_t>>(0, stream, mr);
+      auto zero = std::make_unique<cudf::detail::device_scalar<int32_t>>(0, stream, mr);
       NANOARROW_RETURN_NOT_OK(set_buffer(std::move(zero), fixed_width_data_buffer_idx, tmp.get()));
     }
 
@@ -539,17 +476,19 @@ int dispatch_to_arrow_device_view::operator()<cudf::dictionary32>(ArrowArray* ou
 {
   nanoarrow::UniqueArray tmp;
 
-  NANOARROW_RETURN_NOT_OK(initialize_array(
-    tmp.get(),
-    id_to_arrow_type(column.child(cudf::dictionary_column_view::indices_column_index).type().id()),
-    column));
+  auto const dcv     = cudf::dictionary_column_view(column);
+  auto const indices = dcv.is_empty() ? cudf::make_empty_column(cudf::type_id::INT32)->view()
+                                      : dcv.get_indices_annotated();
+  auto const keys =
+    dcv.is_empty() ? cudf::make_empty_column(cudf::type_id::INT64)->view() : dcv.keys();
+
+  NANOARROW_RETURN_NOT_OK(
+    initialize_array(tmp.get(), id_to_arrow_type(indices.type().id()), column));
   NANOARROW_RETURN_NOT_OK(ArrowArrayAllocateDictionary(tmp.get()));
   NANOARROW_RETURN_NOT_OK(set_null_mask(column, tmp.get()));
 
-  auto const dcv = cudf::dictionary_column_view(column);
-  NANOARROW_RETURN_NOT_OK(set_view_to_buffer(dcv.indices(), tmp.get()));
+  NANOARROW_RETURN_NOT_OK(set_view_to_buffer(indices, tmp.get()));
 
-  auto keys = dcv.keys();
   NANOARROW_RETURN_NOT_OK(cudf::type_dispatcher(
     keys.type(), dispatch_to_arrow_device_view{keys, stream, mr}, tmp->dictionary));
 
@@ -565,7 +504,7 @@ struct ArrowDeviceArrayPrivateData {
 void ArrowDeviceArrayRelease(ArrowArray* array)
 {
   auto private_data = reinterpret_cast<ArrowDeviceArrayPrivateData*>(array->private_data);
-  RMM_ASSERT_CUDA_SUCCESS(cudaEventDestroy(private_data->sync_event));
+  CUDF_CUDA_TRY(cudaEventDestroy(private_data->sync_event));
   ArrowArrayRelease(&private_data->parent);
   delete private_data;
   array->release = nullptr;
@@ -612,8 +551,12 @@ unique_device_array_t to_arrow_device(cudf::table&& table,
   for (size_t i = 0; i < cols.size(); ++i) {
     auto child = tmp->children[i];
     auto col   = cols[i].get();
-    NANOARROW_THROW_NOT_OK(cudf::type_dispatcher(
-      col->type(), detail::dispatch_to_arrow_device{}, std::move(*col), stream, mr, child));
+    if (col->type().id() == cudf::type_id::EMPTY) {
+      NANOARROW_THROW_NOT_OK(handle_empty_type_column(child, *col));
+    } else {
+      NANOARROW_THROW_NOT_OK(cudf::type_dispatcher(
+        col->type(), detail::dispatch_to_arrow_device{}, std::move(*col), stream, mr, child));
+    }
   }
 
   return create_device_array(std::move(tmp), stream);
@@ -625,8 +568,12 @@ unique_device_array_t to_arrow_device(cudf::column&& col,
 {
   nanoarrow::UniqueArray tmp;
 
-  NANOARROW_THROW_NOT_OK(cudf::type_dispatcher(
-    col.type(), detail::dispatch_to_arrow_device{}, std::move(col), stream, mr, tmp.get()));
+  if (col.type().id() == cudf::type_id::EMPTY) {
+    NANOARROW_THROW_NOT_OK(handle_empty_type_column(tmp.get(), col));
+  } else {
+    NANOARROW_THROW_NOT_OK(cudf::type_dispatcher(
+      col.type(), detail::dispatch_to_arrow_device{}, std::move(col), stream, mr, tmp.get()));
+  }
 
   return create_device_array(std::move(tmp), stream);
 }

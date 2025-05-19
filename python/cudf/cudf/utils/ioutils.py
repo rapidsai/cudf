@@ -1,33 +1,40 @@
-# Copyright (c) 2019-2024, NVIDIA CORPORATION.
+# Copyright (c) 2019-2025, NVIDIA CORPORATION.
+from __future__ import annotations
 
 import datetime
 import functools
+import json
 import operator
 import os
 import urllib
 import warnings
-from collections.abc import Callable
 from io import BufferedWriter, BytesIO, IOBase, TextIOWrapper
 from threading import Thread
+from typing import TYPE_CHECKING, Any
 
-import fsspec
-import fsspec.implementations.local
+# import fsspec locally for performance
 import numpy as np
 import pandas as pd
-from fsspec.core import expand_paths_if_needed, get_fs_token_paths
+import pyarrow as pa
 
+import cudf
 from cudf.api.types import is_list_like
 from cudf.core._compat import PANDAS_LT_300
 from cudf.utils.docutils import docfmt_partial
+from cudf.utils.dtypes import cudf_dtype_to_pa_type, np_dtypes_to_pandas_dtypes
 
-try:
-    import fsspec.parquet as fsspec_parquet
+if TYPE_CHECKING:
+    from collections.abc import Callable, Hashable
 
-except ImportError:
-    fsspec_parquet = None
+    from cudf.core.column import ColumnBase
+
+
+PARQUET_META_TYPE_MAP = {
+    str(cudf_dtype): str(pandas_dtype)
+    for cudf_dtype, pandas_dtype in np_dtypes_to_pandas_dtypes.items()
+}
 
 _BYTES_PER_THREAD_DEFAULT = 256 * 1024 * 1024
-_ROW_GROUP_SIZE_BYTES_DEFAULT = np.iinfo(np.uint64).max
 
 _docstring_remote_sources = """
 - cuDF supports local and remote data stores. See configuration details for
@@ -90,17 +97,17 @@ Examples
 doc_read_avro: Callable = docfmt_partial(docstring=_docstring_read_avro)
 
 _docstring_read_parquet_metadata = """
-Read a Parquet file's metadata and schema
+Read metadata and schema of a list of Parquet files
 
 Parameters
 ----------
-path : string or path object
-    Path of file to be read
+paths : List of strings or path objects
+    Path of file(s) to be read
 
 Returns
 -------
 Total number of rows
-Number of row groups
+Total number of row groups
 List of column names
 Number of columns
 List of metadata of row groups
@@ -109,7 +116,7 @@ Examples
 --------
 >>> import cudf
 >>> num_rows, num_row_groups, names, num_columns, row_group_metadata = cudf.io.read_parquet_metadata(filename)
->>> df = [cudf.read_parquet(fname, row_group=i) for i in range(row_groups)]
+>>> df = [cudf.read_parquet(fname, row_group=i) for i in range(num_row_groups)]
 >>> df = cudf.concat(df)
 >>> df
   num1                datetime text
@@ -208,6 +215,11 @@ DataFrame
 Notes
 -----
 {remote_data_sources}
+
+- Setting the cudf option `io.parquet.low_memory=True` will result in the chunked
+  low memory parquet reader being used. This can make it easier to read large
+  parquet datasets on systems with limited GPU memory. See all `available options
+  <https://docs.rapids.ai/api/cudf/nightly/user_guide/api_docs/options/#api-options>`_.
 
 Examples
 --------
@@ -697,11 +709,10 @@ chunksize : integer, default None
     for more information on ``chunksize``.
     This can only be passed if `lines=True`.
     If this is None, the file will be read into memory all at once.
-compression : {'infer', 'gzip', 'bz2', 'zip', 'xz', None}, default 'infer'
+compression : {'bz2', 'gzip', 'infer', 'snappy', 'zip', 'zstd'}, default 'infer'
     For on-the-fly decompression of on-disk data. If 'infer', then use
-    gzip, bz2, zip or xz if path_or_buf is a string ending in
-    '.gz', '.bz2', '.zip', or 'xz', respectively, and no decompression
-    otherwise. If using 'zip', the ZIP file must contain only one data
+    bz2, gzip, snappy, zip, or zstd if path_or_buf is a string ending in
+    '.bz2', '.gz', '.sz', '.zip', or '.zstd', respectively. If using 'zip', the ZIP file must contain only one data
     file to be read in. Set to None for no decompression.
 byte_range : list or tuple, default None
 
@@ -751,15 +762,36 @@ on_bad_lines : {'error', 'recover'}, default 'error'
 
     - ``'error'``, raise an Exception when a bad line is encountered.
     - ``'recover'``, fills the row with <NA> when a bad line is encountered.
+**kwargs : Additional parameters to be passed to the JSON reader. These are experimental features subject to change.
+    - ``'normalize_single_quotes'``, normalize single quotes to double quotes in the input buffer
+    - ``'normalize_whitespace'``, normalize unquoted whitespace in input buffer
+    - ``'delimiter'``, delimiter separating records in JSONL inputs
+    - ``'experimental'``, whether to enable experimental features.
+        When set to true, experimental features, such as the new column tree
+        construction, utf-8 matching of field names will be enabled.
+    - ``'na_values'``, sets additional values to recognize as null values.
+    - ``'nonnumeric_numbers'``, set whether unquoted number values should be allowed NaN, +INF, -INF, +Infinity,
+        Infinity, and -Infinity. Strict validation must be enabled for this to work.
+    - ``'nonnumeric_numbers'``, set whether leading zeros are allowed in numeric values. Strict validation
+        must be enabled for this to work.
+    - ``'strict_validation'``, set whether strict validation is enabled or not
+    - ``'unquoted_control_chars'``, set whether in a quoted string should characters greater than or equal to 0
+        and less than 32 be allowed without some form of escaping. Strict validation
+        must be enabled for this to work.
 Returns
 -------
 result : Series or DataFrame, depending on the value of `typ`.
 
 Notes
 -----
-When `engine='auto'`, and `line=False`, the `pandas` json
-reader will be used. To override the selection, please
-use `engine='cudf'`.
+- When `engine='auto'`, and `line=False`, the `pandas` json
+  reader will be used. To override the selection, please
+  use `engine='cudf'`.
+
+- Setting the cudf option `io.json.low_memory=True` will result in the chunked
+  low memory json reader being used. This can make it easier to read large
+  json datasets on systems with limited GPU memory. See all `available options
+  <https://docs.rapids.ai/api/cudf/nightly/user_guide/api_docs/options/#api-options>`_.
 
 See Also
 --------
@@ -811,7 +843,7 @@ Using the `dtype` argument to specify type casting:
 >>> cudf.read_json(json_str, engine='cudf', lines=True, dtype={'k1':float, 'k2':cudf.ListDtype(int)})
     k1   k2
 0  1.0  [1]
-"""  # noqa: E501
+"""
 doc_read_json: Callable = docfmt_partial(docstring=_docstring_read_json)
 
 _docstring_to_json = """
@@ -823,6 +855,8 @@ Parameters
 ----------
 path_or_buf : string or file handle, optional
     File path or object. If not specified, the result is returned as a string.
+compression : {'gzip', 'snappy', 'zstd'}, default None
+    For on-the-fly compression of the output data. Set to None for no compression.
 engine : {{ 'auto', 'cudf', 'pandas' }}, default 'auto'
     Parser engine to use. If 'auto' is passed, the `pandas` engine
     will be selected.
@@ -1469,6 +1503,136 @@ doc_get_reader_filepath_or_buffer = docfmt_partial(
 )
 
 
+def _index_level_name(
+    index_name: Hashable, level: int, column_names: list[Hashable]
+) -> Hashable:
+    """
+    Return the name of an index level or a default name
+    if `index_name` is None or is already a column name.
+
+    Parameters
+    ----------
+    index_name : name of an Index object
+    level : level of the Index object
+
+    Returns
+    -------
+    name : str
+    """
+    if index_name is not None and index_name not in column_names:
+        return index_name
+    else:
+        return f"__index_level_{level}__"
+
+
+def generate_pandas_metadata(table: cudf.DataFrame, index: bool | None) -> str:
+    col_names: list[Hashable] = []
+    types = []
+    index_levels = []
+    index_descriptors = []
+    df_meta = table.head(0)
+    columns_to_convert = list(df_meta._columns)
+
+    # Columns
+    for name, col in table._column_labels_and_values:
+        if cudf.get_option("mode.pandas_compatible"):
+            # in pandas-compat mode, non-string column names are stringified.
+            col_names.append(str(name))
+        else:
+            col_names.append(name)
+
+        if col.dtype.kind == "b":
+            # A boolean element takes 8 bits in cudf and 1 bit in
+            # pyarrow. To make sure the cudf format is interoperable
+            # with arrow, we use `int8` type when converting from a
+            # cudf boolean array.
+            types.append(pa.int8())
+        else:
+            types.append(cudf_dtype_to_pa_type(col.dtype))
+
+    # Indexes
+    if index is not False:
+        for level, name in enumerate(table.index.names):
+            if isinstance(df_meta.index, cudf.MultiIndex):
+                idx = df_meta.index.get_level_values(level)
+            else:
+                idx = df_meta.index
+
+            if isinstance(idx, cudf.RangeIndex):
+                if index is None:
+                    descr: dict[str, Any] | Hashable = {
+                        "kind": "range",
+                        "name": table.index.name,
+                        "start": table.index.start,
+                        "stop": table.index.stop,
+                        "step": table.index.step,
+                    }
+                else:
+                    # When `index=True`, RangeIndex needs to be materialized.
+                    materialized_idx = df_meta.index._as_int_index()
+                    df_meta.index = materialized_idx
+                    descr = _index_level_name(
+                        index_name=materialized_idx.name,
+                        level=level,
+                        column_names=col_names,
+                    )
+                    index_levels.append(materialized_idx)
+                    columns_to_convert.append(materialized_idx)
+                    col_names.append(descr)
+                    types.append(pa.from_numpy_dtype(materialized_idx.dtype))
+            else:
+                descr = _index_level_name(
+                    index_name=idx.name, level=level, column_names=col_names
+                )
+                columns_to_convert.append(idx)
+                col_names.append(descr)
+                if idx.dtype.kind == "b":
+                    # A boolean element takes 8 bits in cudf and 1 bit in
+                    # pyarrow. To make sure the cudf format is interperable
+                    # in arrow, we use `int8` type when converting from a
+                    # cudf boolean array.
+                    types.append(pa.int8())
+                else:
+                    types.append(cudf_dtype_to_pa_type(idx.dtype))
+
+                index_levels.append(idx)
+            index_descriptors.append(descr)
+
+    metadata = pa.pandas_compat.construct_metadata(
+        columns_to_convert=columns_to_convert,
+        # It is OKAY to do `.to_pandas()` because
+        # this method will extract `.columns` metadata only
+        df=df_meta.to_pandas(),
+        column_names=col_names,
+        index_levels=index_levels,
+        index_descriptors=index_descriptors,
+        preserve_index=index,
+        types=types,
+    )
+
+    md_dict = json.loads(metadata[b"pandas"])
+    _update_pandas_metadata_types_inplace(table, md_dict)
+    return json.dumps(md_dict)
+
+
+def _update_pandas_metadata_types_inplace(
+    df: cudf.DataFrame, md_dict: dict
+) -> None:
+    # correct metadata for list and struct and nullable numeric types
+    for col_meta in md_dict["columns"]:
+        if (
+            col_meta["name"] in df._column_names
+            and df._data[col_meta["name"]].nullable
+            and col_meta["numpy_type"] in PARQUET_META_TYPE_MAP
+            and col_meta["pandas_type"] != "decimal"
+        ):
+            col_meta["numpy_type"] = PARQUET_META_TYPE_MAP[
+                col_meta["numpy_type"]
+            ]
+        if col_meta["numpy_type"] in ("list", "struct"):
+            col_meta["numpy_type"] = "object"
+
+
 def is_url(url):
     """Check if a string is a valid URL to a network location.
 
@@ -1514,7 +1678,9 @@ def is_file_like(obj):
 
 
 def _is_local_filesystem(fs):
-    return isinstance(fs, fsspec.implementations.local.LocalFileSystem)
+    from fsspec.implementations.local import LocalFileSystem
+
+    return isinstance(fs, LocalFileSystem)
 
 
 def _select_single_source(sources: list, caller: str):
@@ -1532,9 +1698,11 @@ def is_directory(path_or_data, storage_options=None):
     """Returns True if the provided filepath is a directory"""
     path_or_data = stringify_pathlike(path_or_data)
     if isinstance(path_or_data, str):
+        import fsspec
+
         path_or_data = os.path.expanduser(path_or_data)
         try:
-            fs = get_fs_token_paths(
+            fs = fsspec.core.get_fs_token_paths(
                 path_or_data, mode="rb", storage_options=storage_options
             )[0]
         except ValueError as e:
@@ -1576,9 +1744,11 @@ def _get_filesystem_and_paths(
         else:
             path_or_data = [path_or_data]
 
+        import fsspec
+
         if filesystem is None:
             try:
-                fs, _, fs_paths = get_fs_token_paths(
+                fs, _, fs_paths = fsspec.core.get_fs_token_paths(
                     path_or_data, mode="rb", storage_options=storage_options
                 )
                 return_paths = fs_paths
@@ -1602,7 +1772,7 @@ def _get_filesystem_and_paths(
             fs = filesystem
             return_paths = [
                 fs._strip_protocol(u)
-                for u in expand_paths_if_needed(
+                for u in fsspec.core.expand_paths_if_needed(
                     path_or_data, "rb", 1, fs, None
                 )
             ]
@@ -1622,6 +1792,16 @@ def _maybe_expand_directories(paths, glob_pattern, fs):
         else:
             expanded_paths.append(path)
     return expanded_paths
+
+
+def _use_kvikio_remote_io(fs) -> bool:
+    """Whether `kvikio_remote_io` is enabled and `fs` refers to a S3 file"""
+
+    try:
+        from s3fs.core import S3FileSystem
+    except ImportError:
+        return False
+    return cudf.get_option("kvikio_remote_io") and isinstance(fs, S3FileSystem)
 
 
 @doc_get_reader_filepath_or_buffer()
@@ -1649,17 +1829,17 @@ def get_reader_filepath_or_buffer(
         )
     ]
     if not input_sources:
-        raise ValueError("Empty input source list: {input_sources}.")
+        raise ValueError(f"Empty input source list: {input_sources}.")
 
     filepaths_or_buffers = []
     string_paths = [isinstance(source, str) for source in input_sources]
     if any(string_paths):
-        # Sources are all strings. Thes strings are typically
+        # Sources are all strings. The strings are typically
         # file paths, but they may also be raw text strings.
 
         # Don't allow a mix of source types
         if not all(string_paths):
-            raise ValueError("Invalid input source list: {input_sources}.")
+            raise ValueError(f"Invalid input source list: {input_sources}.")
 
         # Make sure we define a filesystem (if possible)
         paths = input_sources
@@ -1712,11 +1892,17 @@ def get_reader_filepath_or_buffer(
                 raise FileNotFoundError(
                     f"{input_sources} could not be resolved to any files"
                 )
-            filepaths_or_buffers = _prefetch_remote_buffers(
-                paths,
-                fs,
-                **(prefetch_options or {}),
-            )
+
+            # If `kvikio_remote_io` is enabled and `fs` refers to a S3 file,
+            # we create S3 URLs and let them pass-through to libcudf.
+            if _use_kvikio_remote_io(fs):
+                filepaths_or_buffers = [f"s3://{fpath}" for fpath in paths]
+            else:
+                filepaths_or_buffers = _prefetch_remote_buffers(
+                    paths,
+                    fs,
+                    **(prefetch_options or {}),
+                )
         else:
             raw_text_input = True
 
@@ -1724,9 +1910,9 @@ def get_reader_filepath_or_buffer(
             filepaths_or_buffers = input_sources
             if warn_on_raw_text_input:
                 # Do not remove until pandas 3.0 support is added.
-                assert (
-                    PANDAS_LT_300
-                ), "Need to drop after pandas-3.0 support is added."
+                assert PANDAS_LT_300, (
+                    "Need to drop after pandas-3.0 support is added."
+                )
                 warnings.warn(
                     f"Passing literal {warn_meta[0]} to {warn_meta[1]} is "
                     "deprecated and will be removed in a future version. "
@@ -1784,8 +1970,10 @@ def get_writer_filepath_or_buffer(path_or_data, mode, storage_options=None):
         storage_options = {}
 
     if isinstance(path_or_data, str):
+        import fsspec
+
         path_or_data = os.path.expanduser(path_or_data)
-        fs = get_fs_token_paths(
+        fs = fsspec.core.get_fs_token_paths(
             path_or_data, mode=mode or "w", storage_options=storage_options
         )[0]
 
@@ -1821,6 +2009,8 @@ def get_IOBase_writer(file_obj):
 
 
 def is_fsspec_open_file(file_obj):
+    import fsspec
+
     if isinstance(file_obj, fsspec.core.OpenFile):
         return True
     return False
@@ -1980,7 +2170,9 @@ def _prepare_filters(filters):
 
 def _ensure_filesystem(passed_filesystem, path, storage_options):
     if passed_filesystem is None:
-        return get_fs_token_paths(
+        import fsspec
+
+        return fsspec.core.get_fs_token_paths(
             path[0] if isinstance(path, list) else path,
             storage_options={} if storage_options is None else storage_options,
         )[0]
@@ -2152,11 +2344,15 @@ def _get_remote_bytes_parquet(
     row_groups=None,
     blocksize=_BYTES_PER_THREAD_DEFAULT,
 ):
-    if fsspec_parquet is None or (columns is None and row_groups is None):
+    if columns is None and row_groups is None:
+        return _get_remote_bytes_all(remote_paths, fs, blocksize=blocksize)
+    try:
+        import fsspec.parquet
+    except ImportError:
         return _get_remote_bytes_all(remote_paths, fs, blocksize=blocksize)
 
     sizes = fs.sizes(remote_paths)
-    data = fsspec_parquet._get_parquet_byte_ranges(
+    data = fsspec.parquet._get_parquet_byte_ranges(
         remote_paths,
         fs,
         columns=columns,
@@ -2204,3 +2400,28 @@ def _prefetch_remote_buffers(
 
     else:
         return paths
+
+
+def _add_df_col_struct_names(
+    df: cudf.DataFrame, child_names_dict: dict
+) -> None:
+    for name, child_names in child_names_dict.items():
+        col = df._data[name]
+        df._data[name] = _update_col_struct_field_names(col, child_names)
+
+
+def _update_col_struct_field_names(
+    col: ColumnBase, child_names: dict
+) -> ColumnBase:
+    if col.children:
+        children = list(col.children)
+        for i, (child, names) in enumerate(
+            zip(children, child_names.values())
+        ):
+            children[i] = _update_col_struct_field_names(child, names)
+        col.set_base_children(tuple(children))
+
+    if isinstance(col.dtype, cudf.StructDtype):
+        col = col._rename_fields(child_names.keys())  # type: ignore[attr-defined]
+
+    return col

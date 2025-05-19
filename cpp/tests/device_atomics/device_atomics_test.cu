@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,6 +31,7 @@
 
 #include <algorithm>
 
+namespace {
 template <typename T>
 CUDF_KERNEL void gpu_atomic_test(T* result, T* data, size_t size)
 {
@@ -109,6 +110,7 @@ std::enable_if_t<cudf::is_timestamp<T>(), T> accumulate(cudf::host_span<T const>
     xs.begin(), xs.end(), ys.begin(), [](T const& ts) { return ts.time_since_epoch().count(); });
   return T{typename T::duration{std::accumulate(ys.begin(), ys.end(), 0)}};
 }
+}  // namespace
 
 template <typename T>
 struct AtomicsTest : public cudf::test::BaseFixture {
@@ -144,9 +146,9 @@ struct AtomicsTest : public cudf::test::BaseFixture {
     result_init[4] = result_init[1];
     result_init[5] = result_init[2];
 
-    auto dev_data = cudf::detail::make_device_uvector_sync(
+    auto dev_data = cudf::detail::make_device_uvector(
       v, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
-    auto dev_result = cudf::detail::make_device_uvector_sync(
+    auto dev_result = cudf::detail::make_device_uvector(
       result_init, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
 
     if (block_size == 0) { block_size = vec_size; }
@@ -159,7 +161,7 @@ struct AtomicsTest : public cudf::test::BaseFixture {
         dev_result.data(), dev_data.data(), vec_size);
     }
 
-    auto host_result = cudf::detail::make_host_vector_sync(dev_result, cudf::get_default_stream());
+    auto host_result = cudf::detail::make_host_vector(dev_result, cudf::get_default_stream());
 
     CUDF_CHECK_CUDA(cudf::get_default_stream().value());
 

@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2024, NVIDIA CORPORATION.
+# Copyright (c) 2021-2025, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -212,7 +212,7 @@ def test_can_parse_no_schema():
 
 @pytest.mark.parametrize("rows", [0, 1, 10, 1000])
 @pytest.mark.parametrize("codec", ["null", "deflate", "snappy"])
-def test_avro_compression(rows, codec):
+def test_avro_decompression(set_decomp_env_vars, rows, codec):
     schema = {
         "name": "root",
         "type": "record",
@@ -237,6 +237,7 @@ def test_avro_compression(rows, codec):
         ],
         rows,
         seed=0,
+        use_threads=False,
     )
     expected_df = cudf.DataFrame.from_arrow(df)
 
@@ -600,12 +601,12 @@ def test_avro_reader_multiblock(
     else:
         assert dtype in ("float32", "float64")
         avro_type = "float" if dtype == "float32" else "double"
-        np.random.seed(0)
+        rng = np.random.default_rng(seed=0)
         # We don't use rand_dataframe() here, because it increases the
         # execution time of each test by a factor of 10 or more (it appears
         # to use a very costly approach to generating random data).
         # See also: https://github.com/rapidsai/cudf/issues/13128
-        values = np.random.rand(total_rows).astype(dtype)
+        values = rng.random(total_rows).astype(dtype)
         bytes_per_row = values.dtype.itemsize
 
     # The sync_interval is the number of bytes between sync blocks.  We know

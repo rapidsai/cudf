@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -46,6 +46,11 @@ struct file_intermediate_data {
 
   // partial sum of the number of rows per data source
   std::vector<std::size_t> exclusive_sum_num_rows_per_source{};
+
+  size_type num_input_row_groups{0};  // total number of input row groups across all data sources
+
+  // struct containing the number of remaining row groups after each predicate pushdown filter
+  surviving_row_group_metrics surviving_row_groups;
 
   size_t _current_input_pass{0};  // current input pass index
   size_t _output_chunk_count{0};  // how many output chunks we have produced
@@ -107,7 +112,7 @@ struct subpass_intermediate_data {
  * rowgroups may represent less than all of the rowgroups to be read for the file.
  */
 struct pass_intermediate_data {
-  std::vector<std::unique_ptr<datasource::buffer>> raw_page_data;
+  std::vector<rmm::device_buffer> raw_page_data;
 
   // rowgroup, chunk and page information for the current pass.
   bool has_compressed_data{false};

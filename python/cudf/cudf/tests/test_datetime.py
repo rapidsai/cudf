@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2024, NVIDIA CORPORATION.
+# Copyright (c) 2019-2025, NVIDIA CORPORATION.
 
 import datetime
 import operator
@@ -212,21 +212,25 @@ def test_dt_index(data, field):
 def test_setitem_datetime():
     df = DataFrame()
     df["date"] = pd.date_range("20010101", "20010105").values
-    assert np.issubdtype(df.date.dtype, np.datetime64)
+    assert df.date.dtype.kind == "M"
 
 
 def test_sort_datetime():
-    df = pd.DataFrame()
-    df["date"] = np.array(
-        [
-            np.datetime64("2016-11-20"),
-            np.datetime64("2020-11-20"),
-            np.datetime64("2019-11-20"),
-            np.datetime64("1918-11-20"),
-            np.datetime64("2118-11-20"),
-        ]
+    rng = np.random.default_rng(seed=0)
+    df = pd.DataFrame(
+        {
+            "date": np.array(
+                [
+                    np.datetime64("2016-11-20"),
+                    np.datetime64("2020-11-20"),
+                    np.datetime64("2019-11-20"),
+                    np.datetime64("1918-11-20"),
+                    np.datetime64("2118-11-20"),
+                ]
+            ),
+            "vals": rng.random(5),
+        }
     )
-    df["vals"] = np.random.sample(len(df["date"]))
 
     gdf = cudf.from_pandas(df)
 
@@ -432,11 +436,12 @@ def test_datetime_to_arrow(dtype):
 )
 @pytest.mark.parametrize("nulls", ["none", "some"])
 def test_datetime_unique(data, nulls):
+    rng = np.random.default_rng(seed=0)
     psr = data.copy()
 
     if len(data) > 0:
         if nulls == "some":
-            p = np.random.randint(0, len(data), 2)
+            p = rng.integers(0, len(data), 2)
             psr[p] = None
 
     gsr = cudf.from_pandas(psr)
@@ -461,10 +466,11 @@ def test_datetime_unique(data, nulls):
 @pytest.mark.parametrize("nulls", ["none", "some"])
 def test_datetime_nunique(data, nulls):
     psr = data.copy()
+    rng = np.random.default_rng(seed=0)
 
     if len(data) > 0:
         if nulls == "some":
-            p = np.random.randint(0, len(data), 2)
+            p = rng.integers(0, len(data), 2)
             psr[p] = None
 
     gsr = cudf.from_pandas(psr)
@@ -924,6 +930,8 @@ def test_str_to_datetime_error():
         [None] * 7,
         [10, 20, 30, None, 100, 200, None],
         [3223.234, 342.2332, 23423.23, 3343.23324, 23432.2323, 242.23, 233],
+        datetime.datetime(1993, 6, 22, 13, 30),
+        datetime.datetime(2005, 1, 22, 10, 00),
         np.datetime64("2005-02"),
         np.datetime64("2005-02-25"),
         np.datetime64("2005-02-25T03:30"),
@@ -1070,7 +1078,7 @@ def test_datetime_series_cmpops_with_scalars(data, other_scalars, dtype, op):
         datetime.timedelta(days=768),
         datetime.timedelta(seconds=768),
         datetime.timedelta(microseconds=7),
-        pytest.param(np.timedelta64("nat"), marks=pytest.mark.xfail),
+        np.timedelta64("nat"),
         np.timedelta64(1, "s"),
         np.timedelta64(1, "ms"),
         np.timedelta64(1, "us"),
@@ -1079,12 +1087,12 @@ def test_datetime_series_cmpops_with_scalars(data, other_scalars, dtype, op):
 )
 @pytest.mark.parametrize("dtype", DATETIME_TYPES)
 @pytest.mark.parametrize("op", [np.add, np.subtract])
-def test_datetime_series_ops_with_cudf_scalars(data, scalar, dtype, op):
+def test_datetime_series_ops_with_scalars_misc(data, scalar, dtype, op):
     gsr = cudf.Series(data=data, dtype=dtype)
     psr = gsr.to_pandas()
 
     expect = op(psr, scalar)
-    got = op(gsr, cudf.Scalar(scalar))
+    got = op(gsr, scalar)
 
     assert_eq(expect, got)
 
@@ -1633,11 +1641,7 @@ def test_date_range_raise_overflow():
     periods = 2
     freq = cudf.DateOffset(months=1)
     with pytest.raises(pd.errors.OutOfBoundsDatetime):
-        # Extending beyond the max value will trigger a warning when pandas
-        # does an internal conversion to a Python built-in datetime.datetime
-        # object, which only supports down to microsecond resolution.
-        with pytest.warns(UserWarning):
-            cudf.date_range(start=start, periods=periods, freq=freq)
+        cudf.date_range(start=start, periods=periods, freq=freq)
 
 
 @pytest.mark.parametrize(
@@ -1677,7 +1681,9 @@ def test_date_range_raise_unsupported(freqstr_unsupported):
     if freqstr_unsupported != "3MS":
         freqstr_unsupported = freqstr_unsupported.lower()
         with pytest.raises(ValueError, match="does not yet support"):
-            with expect_warning_if(PANDAS_GE_220):
+            with expect_warning_if(
+                PANDAS_GE_220 and freqstr_unsupported not in {"b", "bh"}
+            ):
                 cudf.date_range(start=s, end=e, freq=freqstr_unsupported)
 
 
@@ -1850,10 +1856,7 @@ def test_is_quarter_end(data, dtype):
 
 def test_error_values():
     s = cudf.Series([1, 2, 3], dtype="datetime64[ns]")
-    with pytest.raises(
-        NotImplementedError,
-        match="DateTime Arrays is not yet implemented in cudf",
-    ):
+    with pytest.raises(NotImplementedError, match="cupy does not support"):
         s.values
 
 
@@ -2557,3 +2560,17 @@ def test_date_range_start_end_divisible_by_freq():
     result = cudf.date_range("2011-01-01", "2011-01-02", freq="h")
     expected = pd.date_range("2011-01-01", "2011-01-02", freq="h")
     assert_eq(result, expected)
+
+
+def test_writable_numpy_array():
+    gi = cudf.Index([1, 2, 3], dtype="datetime64[ns]")
+    expected_flags = pd.Index(
+        [1, 2, 3], dtype="datetime64[ns]"
+    )._data._ndarray.flags
+
+    actual_flags = gi.to_pandas()._data._ndarray.flags
+    assert expected_flags.c_contiguous == actual_flags.c_contiguous
+    assert expected_flags.f_contiguous == actual_flags.f_contiguous
+    assert expected_flags.writeable == actual_flags.writeable
+    assert expected_flags.aligned == actual_flags.aligned
+    assert expected_flags.writebackifcopy == actual_flags.writebackifcopy

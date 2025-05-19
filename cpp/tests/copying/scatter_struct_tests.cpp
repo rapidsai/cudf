@@ -21,7 +21,6 @@
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/copying.hpp>
-#include <cudf/lists/lists_column_view.hpp>
 #include <cudf/table/table_view.hpp>
 
 using namespace cudf::test::iterators;

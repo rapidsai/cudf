@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,7 +22,6 @@
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/column/column_factories.hpp>
-#include <cudf/detail/copy.hpp>
 #include <cudf/lists/contains.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 
@@ -1051,10 +1050,10 @@ TYPED_TEST(TypedContainsDecimalsTest, VectorKey)
     return cudf::make_lists_column(10, list_offsets.release(), decimals.release(), 0, {});
   }();
 
-  auto search_key = cudf::test::fixed_point_column_wrapper<typename T::rep>{
-    {1, 2, 3, 1, 2, 3, 1, 2, 3, 1},
-    numeric::scale_type{
-      0}}.release();
+  auto search_key =
+    cudf::test::fixed_point_column_wrapper<typename T::rep>{{1, 2, 3, 1, 2, 3, 1, 2, 3, 1},
+                                                            numeric::scale_type{0}}
+      .release();
 
   // Search space: [ [0,1,2], [3,4,5], [6,7,8], [9,0,1], [2,3,4], [5,6,7], [8,9,0], [], [1,2,3], []
   // ] Search keys:  [  1,       2,       3,       1,       2,       3,       1,       2,  3, 1 ]

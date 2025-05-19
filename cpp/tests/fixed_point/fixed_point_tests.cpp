@@ -18,17 +18,14 @@
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/testing_main.hpp>
-#include <cudf_test/type_lists.hpp>
 
 #include <cudf/binaryop.hpp>
 #include <cudf/fixed_point/fixed_point.hpp>
-#include <cudf/null_mask.hpp>
 #include <cudf/unary.hpp>
 
 #include <algorithm>
 #include <limits>
 #include <numeric>
-#include <type_traits>
 #include <vector>
 
 using namespace numeric;
@@ -580,10 +577,12 @@ TEST_F(FixedPointTest, Decimal32FloatVector)
   float_vector_test(0.15, 20, -2, std::multiplies<>());
 }
 
+namespace {
 struct cast_to_int32_fn {
   using decimal32 = fixed_point<int32_t, Radix::BASE_10>;
   int32_t __host__ __device__ operator()(decimal32 fp) { return static_cast<int32_t>(fp); }
 };
+}  // namespace
 
 TYPED_TEST(FixedPointTestAllReps, FixedPointColumnWrapper)
 {

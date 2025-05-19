@@ -2,6 +2,7 @@
 import socket
 
 import pytest
+
 from custreamz import kafka
 
 

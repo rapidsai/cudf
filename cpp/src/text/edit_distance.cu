@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,6 +30,7 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/std/functional>
 #include <thrust/execution_policy.h>
 #include <thrust/for_each.h>
 #include <thrust/functional.h>
@@ -64,10 +65,10 @@ __device__ cudf::size_type compute_distance(cudf::string_view const& d_str,
   if (str_length == 0) return tgt_length;
   if (tgt_length == 0) return str_length;
 
-  auto begin = str_length < tgt_length ? d_str.begin() : d_tgt.begin();
-  auto itr   = str_length < tgt_length ? d_tgt.begin() : d_str.begin();
-  // .first is min and .second is max
-  auto const [n, m] = std::minmax(str_length, tgt_length);
+  auto begin   = str_length < tgt_length ? d_str.begin() : d_tgt.begin();
+  auto itr     = str_length < tgt_length ? d_tgt.begin() : d_str.begin();
+  auto const n = cuda::std::min(str_length, tgt_length);
+  auto const m = cuda::std::max(str_length, tgt_length);
   // setup compute buffer pointers
   auto v0 = buffer;
   auto v1 = v0 + n + 1;
@@ -81,9 +82,9 @@ __device__ cudf::size_type compute_distance(cudf::string_view const& d_str,
       auto sub_cost = v0[j] + (*itr != *itr_tgt);
       auto del_cost = v0[j + 1] + 1;
       auto ins_cost = v1[j] + 1;
-      v1[j + 1]     = std::min(std::min(sub_cost, del_cost), ins_cost);
+      v1[j + 1]     = cuda::std::min(cuda::std::min(sub_cost, del_cost), ins_cost);
     }
-    thrust::swap(v0, v1);
+    cuda::std::swap(v0, v1);
   }
   return v0[n];
 }
@@ -170,7 +171,7 @@ std::unique_ptr<cudf::column> edit_distance(cudf::strings_column_view const& str
                                      ? d_targets.element<cudf::string_view>(0)
                                      : d_targets.element<cudf::string_view>(idx);
                       // just need 2 integers for each character of the shorter string
-                      return (std::min(d_str.length(), d_tgt.length()) + 1) * 2;
+                      return (cuda::std::min(d_str.length(), d_tgt.length()) + 1) * 2;
                     });
 
   // get the total size of the temporary compute buffer
@@ -241,7 +242,7 @@ std::unique_ptr<cudf::column> edit_distance_matrix(cudf::strings_column_view con
       if (d_str1.empty() || d_str2.empty()) { return; }
       // the temp size needed is 2 integers per character of the shorter string
       d_offsets[idx - ((row + 1) * (row + 2)) / 2] =
-        (std::min(d_str1.length(), d_str2.length()) + 1) * 2;
+        (cuda::std::min(d_str1.length(), d_str2.length()) + 1) * 2;
     });
 
   // get the total size for the compute buffer
@@ -282,7 +283,7 @@ std::unique_ptr<cudf::column> edit_distance_matrix(cudf::strings_column_view con
     offsets_column->mutable_view().data<cudf::size_type>(),
     [strings_count] __device__(auto idx) { return strings_count; },
     cudf::size_type{0},
-    thrust::plus<cudf::size_type>());
+    cuda::std::plus<cudf::size_type>());
   return cudf::make_lists_column(strings_count,
                                  std::move(offsets_column),
                                  std::move(results),

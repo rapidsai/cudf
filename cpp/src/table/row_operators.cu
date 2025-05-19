@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,6 +32,8 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <thrust/iterator/transform_iterator.h>
+
+#include <functional>
 
 namespace cudf {
 namespace experimental {
@@ -316,7 +318,7 @@ auto list_lex_preprocess(table_view const& table, rmm::cuda_stream_view stream)
       dremel_device_views.push_back(dremel_data.back());
     }
   }
-  auto d_dremel_device_views = detail::make_device_uvector_sync(
+  auto d_dremel_device_views = detail::make_device_uvector(
     dremel_device_views, stream, cudf::get_current_device_resource_ref());
   return std::make_tuple(std::move(dremel_data), std::move(d_dremel_device_views));
 }

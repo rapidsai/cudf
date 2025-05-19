@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,14 +17,12 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/random.hpp>
 #include <cudf_test/table_utilities.hpp>
 #include <cudf_test/testing_main.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/detail/iterator.cuh>
-#include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/io/csv.hpp>
 #include <cudf/io/datasource.hpp>
 #include <cudf/strings/convert/convert_datetime.hpp>
@@ -32,18 +30,12 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
-#include <cudf/unary.hpp>
 
-#include <thrust/copy.h>
 #include <thrust/execution_policy.h>
-#include <thrust/find.h>
 #include <thrust/iterator/counting_iterator.h>
-
-#include <arrow/io/api.h>
 
 #include <algorithm>
 #include <fstream>
-#include <iostream>
 #include <iterator>
 #include <limits>
 #include <numeric>
@@ -2549,6 +2541,29 @@ TEST_F(CsvReaderTest, OutOfMapBoundsReads)
 
   auto const end_data = source->host_read(0, file_size / 2 + 512);
   expect_buffers_equal(full_source->host_read(0, file_size / 2 + 512).get(), end_data.get());
+}
+
+struct CsvWriterTypeSupportTest : public cudf::test::BaseFixture {};
+
+TEST(CsvWriterTypeSupportTest, SupportedTypes)
+{
+  using cudf::io::is_supported_write_csv;
+
+  EXPECT_TRUE(is_supported_write_csv(cudf::data_type{cudf::type_id::INT32}));
+  EXPECT_TRUE(is_supported_write_csv(cudf::data_type{cudf::type_id::FLOAT64}));
+  EXPECT_TRUE(is_supported_write_csv(cudf::data_type{cudf::type_id::STRING}));
+  EXPECT_TRUE(is_supported_write_csv(cudf::data_type{cudf::type_id::DECIMAL64}));
+  EXPECT_TRUE(is_supported_write_csv(cudf::data_type{cudf::type_id::TIMESTAMP_NANOSECONDS}));
+  EXPECT_TRUE(is_supported_write_csv(cudf::data_type{cudf::type_id::DURATION_SECONDS}));
+}
+
+TEST(CsvWriterTypeSupportTest, UnsupportedTypes)
+{
+  using cudf::io::is_supported_write_csv;
+
+  EXPECT_FALSE(is_supported_write_csv(cudf::data_type{cudf::type_id::LIST}));
+  EXPECT_FALSE(is_supported_write_csv(cudf::data_type{cudf::type_id::STRUCT}));
+  EXPECT_FALSE(is_supported_write_csv(cudf::data_type{cudf::type_id::DICTIONARY32}));
 }
 
 CUDF_TEST_PROGRAM_MAIN()

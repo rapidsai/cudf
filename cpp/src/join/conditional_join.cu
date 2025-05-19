@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,12 +21,15 @@
 
 #include <cudf/ast/detail/expression_parser.hpp>
 #include <cudf/ast/expressions.hpp>
+#include <cudf/detail/device_scalar.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
-#include <cudf/join.hpp>
+#include <cudf/join/conditional_join.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/error.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -35,6 +38,9 @@
 
 namespace cudf {
 namespace detail {
+namespace {
+constexpr int DEFAULT_CACHE_SIZE = 128;
+}
 
 std::unique_ptr<rmm::device_uvector<size_type>> conditional_join_anti_semi(
   table_view const& left,
@@ -81,7 +87,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> conditional_join_anti_semi(
     join_size = *output_size;
   } else {
     // Allocate storage for the counter used to get the size of the join output
-    rmm::device_scalar<std::size_t> size(0, stream, mr);
+    cudf::detail::device_scalar<std::size_t> size(0, stream, mr);
     if (has_nulls) {
       compute_conditional_join_output_size<DEFAULT_JOIN_BLOCK_SIZE, true>
         <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
@@ -94,14 +100,14 @@ std::unique_ptr<rmm::device_uvector<size_type>> conditional_join_anti_semi(
     join_size = size.value(stream);
   }
 
-  rmm::device_scalar<std::size_t> write_index(0, stream);
+  cudf::detail::device_scalar<std::size_t> write_index(0, stream);
 
   auto left_indices = std::make_unique<rmm::device_uvector<size_type>>(join_size, stream, mr);
 
   auto const& join_output_l = left_indices->data();
 
   if (has_nulls) {
-    conditional_join_anti_semi<DEFAULT_JOIN_BLOCK_SIZE, DEFAULT_JOIN_CACHE_SIZE, true>
+    conditional_join_anti_semi<DEFAULT_JOIN_BLOCK_SIZE, DEFAULT_CACHE_SIZE, true>
       <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
         *left_table,
         *right_table,
@@ -111,7 +117,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> conditional_join_anti_semi(
         parser.device_expression_data,
         join_size);
   } else {
-    conditional_join_anti_semi<DEFAULT_JOIN_BLOCK_SIZE, DEFAULT_JOIN_CACHE_SIZE, false>
+    conditional_join_anti_semi<DEFAULT_JOIN_BLOCK_SIZE, DEFAULT_CACHE_SIZE, false>
       <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
         *left_table,
         *right_table,
@@ -177,7 +183,8 @@ conditional_join(table_view const& left,
   auto const parser =
     ast::detail::expression_parser{binary_predicate, left, right, has_nulls, stream, mr};
   CUDF_EXPECTS(parser.output_type().id() == type_id::BOOL8,
-               "The expression must produce a boolean output.");
+               "The expression must produce a boolean output.",
+               cudf::data_type_error);
 
   auto left_table  = table_device_view::create(left, stream);
   auto right_table = table_device_view::create(right, stream);
@@ -197,7 +204,7 @@ conditional_join(table_view const& left,
     join_size = *output_size;
   } else {
     // Allocate storage for the counter used to get the size of the join output
-    rmm::device_scalar<std::size_t> size(0, stream, mr);
+    cudf::detail::device_scalar<std::size_t> size(0, stream, mr);
     if (has_nulls) {
       compute_conditional_join_output_size<DEFAULT_JOIN_BLOCK_SIZE, true>
         <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
@@ -231,7 +238,7 @@ conditional_join(table_view const& left,
                      std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr));
   }
 
-  rmm::device_scalar<std::size_t> write_index(0, stream);
+  cudf::detail::device_scalar<std::size_t> write_index(0, stream);
 
   auto left_indices  = std::make_unique<rmm::device_uvector<size_type>>(join_size, stream, mr);
   auto right_indices = std::make_unique<rmm::device_uvector<size_type>>(join_size, stream, mr);
@@ -240,7 +247,7 @@ conditional_join(table_view const& left,
   auto const& join_output_r = right_indices->data();
 
   if (has_nulls) {
-    conditional_join<DEFAULT_JOIN_BLOCK_SIZE, DEFAULT_JOIN_CACHE_SIZE, true>
+    conditional_join<DEFAULT_JOIN_BLOCK_SIZE, DEFAULT_CACHE_SIZE, true>
       <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
         *left_table,
         *right_table,
@@ -252,7 +259,7 @@ conditional_join(table_view const& left,
         join_size,
         swap_tables);
   } else {
-    conditional_join<DEFAULT_JOIN_BLOCK_SIZE, DEFAULT_JOIN_CACHE_SIZE, false>
+    conditional_join<DEFAULT_JOIN_BLOCK_SIZE, DEFAULT_CACHE_SIZE, false>
       <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
         *left_table,
         *right_table,
@@ -329,7 +336,8 @@ std::size_t compute_conditional_join_output_size(table_view const& left,
   auto const parser =
     ast::detail::expression_parser{binary_predicate, left, right, has_nulls, stream, mr};
   CUDF_EXPECTS(parser.output_type().id() == type_id::BOOL8,
-               "The expression must produce a boolean output.");
+               "The expression must produce a boolean output.",
+               cudf::data_type_error);
 
   auto left_table  = table_device_view::create(left, stream);
   auto right_table = table_device_view::create(right, stream);
@@ -342,7 +350,7 @@ std::size_t compute_conditional_join_output_size(table_view const& left,
   auto const shmem_size_per_block = parser.shmem_per_thread * config.num_threads_per_block;
 
   // Allocate storage for the counter used to get the size of the join output
-  rmm::device_scalar<std::size_t> size(0, stream, mr);
+  cudf::detail::device_scalar<std::size_t> size(0, stream, mr);
 
   // Determine number of output rows without actually building the output to simply
   // find what the size of the output will be.

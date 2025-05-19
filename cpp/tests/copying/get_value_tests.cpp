@@ -16,10 +16,8 @@
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/table_utilities.hpp>
-#include <cudf_test/type_list_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/column/column_factories.hpp>
@@ -134,7 +132,7 @@ TYPED_TEST_SUITE(DictionaryGetValueTest, cudf::test::FixedWidthTypesWithoutFixed
 TYPED_TEST(DictionaryGetValueTest, BasicGet)
 {
   cudf::test::fixed_width_column_wrapper<TypeParam, int32_t> keys({6, 7, 8, 9});
-  cudf::test::fixed_width_column_wrapper<uint32_t> indices{0, 0, 1, 2, 1, 3, 3, 2};
+  cudf::test::fixed_width_column_wrapper<int32_t> indices{0, 0, 1, 2, 1, 3, 3, 2};
   auto col = cudf::make_dictionary_column(keys, indices);
 
   auto s = cudf::get_element(*col, 2);
@@ -149,7 +147,7 @@ TYPED_TEST(DictionaryGetValueTest, BasicGet)
 TYPED_TEST(DictionaryGetValueTest, GetFromNullable)
 {
   cudf::test::fixed_width_column_wrapper<TypeParam, int32_t> keys({6, 7, 8, 9});
-  cudf::test::fixed_width_column_wrapper<uint32_t> indices(
+  cudf::test::fixed_width_column_wrapper<int32_t> indices(
     {0, 0, 1, 2, 1, 3, 3, 2}, {false, true, false, true, true, true, false, false});
   auto col = cudf::make_dictionary_column(keys, indices);
 
@@ -165,7 +163,7 @@ TYPED_TEST(DictionaryGetValueTest, GetFromNullable)
 TYPED_TEST(DictionaryGetValueTest, GetNull)
 {
   cudf::test::fixed_width_column_wrapper<TypeParam, int32_t> keys({6, 7, 8, 9});
-  cudf::test::fixed_width_column_wrapper<uint32_t> indices(
+  cudf::test::fixed_width_column_wrapper<int32_t> indices(
     {0, 0, 1, 2, 1, 3, 3, 2}, {false, true, false, true, true, true, false, false});
   auto col = cudf::make_dictionary_column(keys, indices);
 

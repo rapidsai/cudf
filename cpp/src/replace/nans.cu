@@ -244,7 +244,7 @@ std::unique_ptr<column> normalize_nans_and_zeros(column_view const& input,
 void normalize_nans_and_zeros(mutable_column_view& in_out, rmm::cuda_stream_view stream)
 {
   CUDF_FUNC_RANGE();
-  detail::normalize_nans_and_zeros(in_out, cudf::get_default_stream());
+  detail::normalize_nans_and_zeros(in_out, stream);
 }
 
 }  // namespace cudf

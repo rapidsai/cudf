@@ -12,6 +12,7 @@ from pylibcudf.libcudf.table.table_view cimport table_view
 from .column cimport Column
 from .table cimport Table
 
+__all__ = ["concatenate"]
 
 cpdef concatenate(list objects):
     """Concatenate columns or tables.
@@ -40,14 +41,14 @@ cpdef concatenate(list objects):
             c_tables.push_back((<Table?>tbl).view())
 
         with nogil:
-            c_tbl_result = move(cpp_concatenate.concatenate(c_tables))
+            c_tbl_result = cpp_concatenate.concatenate(c_tables)
         return Table.from_libcudf(move(c_tbl_result))
     elif isinstance(objects[0], Column):
         for column in objects:
             c_columns.push_back((<Column?>column).view())
 
         with nogil:
-            c_col_result = move(cpp_concatenate.concatenate(c_columns))
+            c_col_result = cpp_concatenate.concatenate(c_columns)
         return Column.from_libcudf(move(c_col_result))
     else:
         raise ValueError("input must be a list of Columns or Tables")

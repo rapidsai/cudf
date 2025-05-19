@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@
 #include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/algorithm.cuh>
+#include <cudf/detail/utilities/functional.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/hashing/detail/default_hash.cuh>
 #include <cudf/hashing/detail/hashing.hpp>
@@ -38,6 +39,7 @@
 #include <cuco/static_map.cuh>
 #include <cuco/static_set.cuh>
 #include <cuda/functional>
+#include <cuda/std/iterator>
 #include <thrust/binary_search.h>
 #include <thrust/copy.h>
 #include <thrust/count.h>
@@ -213,8 +215,8 @@ void propagate_first_sibling_to_other(cudf::device_span<TreeDepthT const> node_l
     sorted_node_levels.end(),
     thrust::make_permutation_iterator(parent_node_ids.begin(), sorted_order.begin()),
     thrust::make_permutation_iterator(parent_node_ids.begin(), sorted_order.begin()),
-    thrust::equal_to<TreeDepthT>{},
-    thrust::maximum<NodeIndexT>{});
+    cuda::std::equal_to<TreeDepthT>{},
+    cudf::detail::maximum<NodeIndexT>{});
 }
 
 // Generates a tree representation of the given tokens, token_indices.
@@ -264,16 +266,13 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
       error_count > 0) {
     auto const error_location =
       thrust::find(rmm::exec_policy(stream), tokens.begin(), tokens.end(), token_t::ErrorBegin);
-    SymbolOffsetT error_index;
-    CUDF_CUDA_TRY(
-      cudaMemcpyAsync(&error_index,
-                      token_indices.data() + thrust::distance(tokens.begin(), error_location),
-                      sizeof(SymbolOffsetT),
-                      cudaMemcpyDefault,
-                      stream.value()));
-    stream.synchronize();
+    auto error_index = cudf::detail::make_host_vector<SymbolOffsetT>(
+      device_span<SymbolOffsetT const>{
+        token_indices.data() + cuda::std::distance(tokens.begin(), error_location), 1},
+      stream);
+
     CUDF_FAIL("JSON Parser encountered an invalid format at location " +
-              std::to_string(error_index));
+              std::to_string(error_index[0]));
   }
 
   auto const num_tokens = tokens.size();
@@ -299,7 +298,7 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
                                                             node_levels.begin(),
                                                             is_node,
                                                             stream);
-    CUDF_EXPECTS(thrust::distance(node_levels.begin(), node_levels_end) == num_nodes,
+    CUDF_EXPECTS(cuda::std::distance(node_levels.begin(), node_levels_end) == num_nodes,
                  "node level count mismatch");
   }
 
@@ -1012,7 +1011,7 @@ rmm::device_uvector<size_type> compute_row_offsets(rmm::device_uvector<NodeIndex
                       thrust::make_zip_iterator(parent_col_id.end(), scatter_indices.end()),
                       d_tree.parent_node_ids.begin(),
                       is_non_list_parent);
-  auto const num_list_parent = thrust::distance(
+  auto const num_list_parent = cuda::std::distance(
     thrust::make_zip_iterator(parent_col_id.begin(), scatter_indices.begin()), list_parent_end);
 
   thrust::stable_sort_by_key(rmm::exec_policy(stream),

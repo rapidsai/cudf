@@ -1,9 +1,10 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 import pyarrow as pa
-import pylibcudf as plc
 import pytest
 from utils import assert_column_eq
+
+import pylibcudf as plc
 
 
 @pytest.fixture
@@ -12,7 +13,7 @@ def data_col():
         ["aa", "bbb", "cccc", "abcd", None],
         type=pa.string(),
     )
-    return pa_data_col, plc.interop.from_arrow(pa_data_col)
+    return pa_data_col, plc.Column(pa_data_col)
 
 
 @pytest.fixture
@@ -22,14 +23,14 @@ def trans_table():
 
 def test_translate(data_col, trans_table):
     pa_array, plc_col = data_col
-    result = plc.strings.translate.translate(plc_col, trans_table)
-    expected = pa.array(
+    got = plc.strings.translate.translate(plc_col, trans_table)
+    expect = pa.array(
         [
             val.translate(trans_table) if isinstance(val, str) else None
             for val in pa_array.to_pylist()
         ]
     )
-    assert_column_eq(expected, result)
+    assert_column_eq(expect, got)
 
 
 @pytest.mark.parametrize(
@@ -41,7 +42,7 @@ def test_translate(data_col, trans_table):
 )
 def test_filter_characters(data_col, trans_table, keep):
     pa_array, plc_col = data_col
-    result = plc.strings.translate.filter_characters(
+    got = plc.strings.translate.filter_characters(
         plc_col, trans_table, keep, plc.interop.from_arrow(pa.scalar("*"))
     )
     exp_data = []
@@ -65,5 +66,5 @@ def test_filter_characters(data_col, trans_table, keep):
                 else:
                     new_val += "*"
             exp_data.append(new_val)
-    expected = pa.array(exp_data)
-    assert_column_eq(expected, result)
+    expect = pa.array(exp_data)
+    assert_column_eq(expect, got)

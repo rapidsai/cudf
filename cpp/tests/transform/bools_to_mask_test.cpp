@@ -20,10 +20,8 @@
 #include <cudf_test/testing_main.hpp>
 
 #include <cudf/column/column.hpp>
-#include <cudf/column/column_view.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/transform.hpp>
-#include <cudf/types.hpp>
 
 #include <thrust/host_vector.h>
 

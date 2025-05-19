@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,8 +16,8 @@
 
 #pragma once
 
+#include <cudf/fixed_point/detail/floating_conversion.hpp>
 #include <cudf/fixed_point/fixed_point.hpp>
-#include <cudf/fixed_point/floating_conversion.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/export.hpp>
@@ -137,8 +137,10 @@ enum class unary_operator : int32_t {
   FLOOR,       ///< largest integer value not greater than arg
   ABS,         ///< Absolute value
   RINT,        ///< Rounds the floating-point argument arg to an integer value
+  BIT_COUNT,   ///< Count the number of bits set to 1 of an integer value
   BIT_INVERT,  ///< Bitwise Not (~)
   NOT,         ///< Logical Not (!)
+  NEGATE,      ///< Unary negation (-), only for signed numeric and duration types.
 };
 
 /**

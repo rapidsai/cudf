@@ -1,10 +1,11 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 import pyarrow as pa
 import pyarrow.compute as pc
-import pylibcudf as plc
 import pytest
 from utils import assert_column_eq
+
+import pylibcudf as plc
 
 
 @pytest.fixture(params=["float32", "float64"])
@@ -13,7 +14,7 @@ def column(request, has_nulls):
     typ = {"float32": pa.float32(), "float64": pa.float64()}[request.param]
     if has_nulls:
         values[2] = None
-    return plc.interop.from_arrow(pa.array(values, type=typ))
+    return plc.Column(pa.array(values, type=typ))
 
 
 @pytest.mark.parametrize(

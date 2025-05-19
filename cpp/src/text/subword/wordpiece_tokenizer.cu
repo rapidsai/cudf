@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,8 +27,10 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/std/functional>
+#include <cuda/std/iterator>
+#include <cuda/std/limits>
 #include <thrust/copy.h>
-#include <thrust/distance.h>
 #include <thrust/execution_policy.h>
 #include <thrust/fill.h>
 #include <thrust/find.h>
@@ -83,13 +85,11 @@ CUDF_KERNEL void init_data_and_mark_word_start_and_ends(uint32_t const* code_poi
                                                         uint32_t* token_ids,
                                                         uint8_t* tokens_per_word)
 {
-  cudf::thread_index_type char_for_thread = static_cast<cudf::thread_index_type>(blockDim.x) *
-                                              static_cast<cudf::thread_index_type>(blockIdx.x) +
-                                            threadIdx.x;
+  auto const char_for_thread = cudf::detail::grid_1d::global_thread_id();
 
   // Deal with the start_word_indices array
   if (char_for_thread < num_code_points) {
-    uint32_t val_to_write = std::numeric_limits<uint32_t>::max();
+    uint32_t val_to_write = cuda::std::numeric_limits<uint32_t>::max();
     if ((code_points[char_for_thread] != SPACE_CODE_POINT) && (char_for_thread > 0) &&
         (code_points[char_for_thread - 1] == SPACE_CODE_POINT)) {
       val_to_write = char_for_thread;
@@ -97,7 +97,7 @@ CUDF_KERNEL void init_data_and_mark_word_start_and_ends(uint32_t const* code_poi
     start_word_indices[char_for_thread] = val_to_write;
 
     // Deal with the end_word_indices_array
-    val_to_write = std::numeric_limits<uint32_t>::max();
+    val_to_write = cuda::std::numeric_limits<uint32_t>::max();
     if ((code_points[char_for_thread] != SPACE_CODE_POINT) &&
         (char_for_thread + 1 < num_code_points) &&
         (code_points[char_for_thread + 1] == SPACE_CODE_POINT)) {
@@ -105,7 +105,7 @@ CUDF_KERNEL void init_data_and_mark_word_start_and_ends(uint32_t const* code_poi
     }
     end_word_indices[char_for_thread] = val_to_write;
 
-    token_ids[char_for_thread]       = std::numeric_limits<uint32_t>::max();
+    token_ids[char_for_thread]       = cuda::std::numeric_limits<uint32_t>::max();
     tokens_per_word[char_for_thread] = 0;
   }
 }
@@ -138,9 +138,7 @@ CUDF_KERNEL void mark_string_start_and_ends(uint32_t const* code_points,
                                             uint32_t* end_word_indices,
                                             uint32_t num_strings)
 {
-  cudf::thread_index_type idx = static_cast<cudf::thread_index_type>(blockDim.x) *
-                                  static_cast<cudf::thread_index_type>(blockIdx.x) +
-                                threadIdx.x;
+  auto const idx = cudf::detail::grid_1d::global_thread_id();
   // Ensure the starting character of each strings is written to the word start array.
   if (idx <= num_strings) {
     auto const offset = strings_offsets[idx];
@@ -218,7 +216,7 @@ struct mark_special_tokens {
   __device__ void operator()(size_t idx) const
   {
     uint32_t const start_index = start_word_indices[idx];
-    if ((start_index == std::numeric_limits<uint32_t>::max()) ||
+    if ((start_index == cuda::std::numeric_limits<uint32_t>::max()) ||
         ((start_index + MIN_ST_WIDTH + 2) > num_code_points))
       return;
     if (code_points[start_index] != '[') return;
@@ -229,12 +227,12 @@ struct mark_special_tokens {
     uint32_t const end_index = [&] {
       auto const begin = start_word_indices + start_pos;
       auto const width =
-        std::min(static_cast<size_t>(MAX_ST_WIDTH + 1), (num_code_points - start_pos));
+        cuda::std::min(static_cast<size_t>(MAX_ST_WIDTH + 1), (num_code_points - start_pos));
       auto const end = begin + width;
       // checking the next start-word is more reliable than arbitrarily searching for ']'
       // in case the text is split across string rows
       auto const iter = thrust::find_if(thrust::seq, begin + 1, end, [](auto swi) {
-        return swi != std::numeric_limits<uint32_t>::max();
+        return swi != cuda::std::numeric_limits<uint32_t>::max();
       });
       return iter == end ? start_index : static_cast<uint32_t>(iter - start_word_indices);
     }();
@@ -258,11 +256,11 @@ struct mark_special_tokens {
     thrust::fill(thrust::seq,
                  start_word_indices + start_index + 1,  // keep the first one
                  start_word_indices + end_index + 1,
-                 std::numeric_limits<uint32_t>::max());
+                 cuda::std::numeric_limits<uint32_t>::max());
     thrust::fill(thrust::seq,
                  end_word_indices + start_index,
                  end_word_indices + end_index + 1,
-                 std::numeric_limits<uint32_t>::max());
+                 cuda::std::numeric_limits<uint32_t>::max());
 
     // reset the new end-word index
     end_word_indices[end_pos] = end_pos + 1;
@@ -335,11 +333,9 @@ CUDF_KERNEL void kernel_wordpiece_tokenizer(uint32_t const* code_points,
                                             uint32_t* token_ids,
                                             uint8_t* tokens_per_word)
 {
-  cudf::thread_index_type word_to_tokenize = static_cast<cudf::thread_index_type>(blockDim.x) *
-                                               static_cast<cudf::thread_index_type>(blockIdx.x) +
-                                             threadIdx.x;
+  auto const word_to_tokenize = cudf::detail::grid_1d::global_thread_id();
 
-  if (word_to_tokenize >= total_words) return;
+  if (word_to_tokenize >= total_words) { return; }
   // Each thread gets the start code_point offset for each word and resets the token_id memory to
   // the default value. In a post processing step, all of these values will be removed.
   auto const token_start = word_starts[word_to_tokenize];
@@ -388,7 +384,7 @@ CUDF_KERNEL void kernel_wordpiece_tokenizer(uint32_t const* code_points,
       // We need to clean up the global array. This case is very uncommon.
       //  Only 0.016% of words cannot be resolved to a token from the squad dev set.
       for (uint32_t i = 1; i < num_values_tokenized; ++i) {
-        token_ids[token_start + i] = std::numeric_limits<uint32_t>::max();
+        token_ids[token_start + i] = cuda::std::numeric_limits<uint32_t>::max();
       }
       num_values_tokenized = 0;
     }
@@ -429,7 +425,10 @@ uvector_pair wordpiece_tokenizer::tokenize(cudf::strings_column_view const& inpu
 }
 
 struct copy_if_fn {  // inline lambda not allowed in private or protected member function
-  __device__ bool operator()(uint32_t cp) { return cp != std::numeric_limits<uint32_t>::max(); }
+  __device__ bool operator()(uint32_t cp)
+  {
+    return cp != cuda::std::numeric_limits<uint32_t>::max();
+  }
 };
 
 struct tranform_fn {  // just converting uint8 value to uint32
@@ -493,11 +492,11 @@ void wordpiece_tokenizer::tokenize(uvector_pair& cps_and_offsets, rmm::cuda_stre
   auto itr_end = thrust::remove(rmm::exec_policy(stream),
                                 device_word_indices.begin(),
                                 device_word_indices.end(),
-                                std::numeric_limits<uint32_t>::max());
+                                cuda::std::numeric_limits<uint32_t>::max());
 
   // The number of tokens selected will be double the number of words since we
   // select from both the start and end index arrays.
-  uint32_t const num_words = thrust::distance(device_word_indices.begin(), itr_end) / 2;
+  uint32_t const num_words = cuda::std::distance(device_word_indices.begin(), itr_end) / 2;
 
   // We need to change the end_word_indices pointer after the selection is complete
   device_end_word_indices = device_start_word_indices + num_words;
@@ -529,7 +528,8 @@ void wordpiece_tokenizer::tokenize(uvector_pair& cps_and_offsets, rmm::cuda_stre
   // token so this will always have enough memory to store the contiguous tokens.
   uint32_t* contiguous_token_ids = device_code_points;
   auto const copy_size           =  // thrust::copy_if limited to copying int-max values
-    std::min(device_token_ids.size(), static_cast<std::size_t>(std::numeric_limits<int>::max()));
+    cuda::std::min(device_token_ids.size(),
+                   static_cast<std::size_t>(cuda::std::numeric_limits<int>::max()));
   auto ids_itr       = device_token_ids.begin();
   auto const ids_end = device_token_ids.end();
   while (ids_itr != ids_end) {
@@ -548,7 +548,7 @@ void wordpiece_tokenizer::tokenize(uvector_pair& cps_and_offsets, rmm::cuda_stre
                                    device_tokens_per_word.data() + num_code_points,
                                    token_id_counts,
                                    tranform_fn{},
-                                   thrust::plus<uint32_t>());
+                                   cuda::std::plus<uint32_t>());
 
   // Update the device_strings_offsets using the token_id_counts
   thrust::for_each_n(rmm::exec_policy(stream),

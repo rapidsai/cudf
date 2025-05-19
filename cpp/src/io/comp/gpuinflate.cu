@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -43,14 +43,13 @@ misrepresented as being the original software.
 Mark Adler    madler@alumni.caltech.edu
 */
 
+#include "common_internal.hpp"
 #include "gpuinflate.hpp"
 #include "io/utilities/block_utils.cuh"
-#include "io_uncomp.hpp"
 
 #include <rmm/cuda_stream_view.hpp>
 
-namespace cudf {
-namespace io {
+namespace cudf::io::detail {
 
 constexpr int max_bits    = 15;   // maximum bits in a code
 constexpr int max_l_codes = 286;  // maximum number of literal/length codes
@@ -299,7 +298,7 @@ __device__ int construct(
     left <<= 1;                 // one more bit, double codes left
     left -= counts[len];        // deduct count from possible codes
     if (left < 0) return left;  // over-subscribed--return negative
-  }                             // left > 0 means incomplete
+  }  // left > 0 means incomplete
 
   // generate offsets into symbol table for each length for sorting
   offs[1] = 0;
@@ -980,27 +979,27 @@ __device__ int parse_gzip_header(uint8_t const* src, size_t src_size)
     {
       uint8_t flags = src[3];
       hdr_len       = 10;
-      if (flags & GZIPHeaderFlag::fextra)  // Extra fields present
+      if (flags & detail::GZIPHeaderFlag::fextra)  // Extra fields present
       {
         int xlen = src[hdr_len] | (src[hdr_len + 1] << 8);
         hdr_len += xlen;
         if (hdr_len >= src_size) return -1;
       }
-      if (flags & GZIPHeaderFlag::fname)  // Original file name present
+      if (flags & detail::GZIPHeaderFlag::fname)  // Original file name present
       {
         // Skip zero-terminated string
         do {
           if (hdr_len >= src_size) return -1;
         } while (src[hdr_len++] != 0);
       }
-      if (flags & GZIPHeaderFlag::fcomment)  // Comment present
+      if (flags & detail::GZIPHeaderFlag::fcomment)  // Comment present
       {
         // Skip zero-terminated string
         do {
           if (hdr_len >= src_size) return -1;
         } while (src[hdr_len++] != 0);
       }
-      if (flags & GZIPHeaderFlag::fhcrc)  // Header CRC present
+      if (flags & detail::GZIPHeaderFlag::fhcrc)  // Header CRC present
       {
         hdr_len += 2;
       }
@@ -1139,7 +1138,6 @@ CUDF_KERNEL void __launch_bounds__(block_size)
         default: return compression_status::FAILURE;
       }
     }();
-    results[z].reserved = (int)(state->end - state->cur);  // Here mainly for debug purposes
   }
 }
 
@@ -1224,5 +1222,4 @@ void gpu_copy_uncompressed_blocks(device_span<device_span<uint8_t const> const> 
   }
 }
 
-}  // namespace io
-}  // namespace cudf
+}  // namespace cudf::io::detail

@@ -17,22 +17,17 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/aggregation.hpp>
-#include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/rolling.hpp>
 #include <cudf/table/table_view.hpp>
-#include <cudf/unary.hpp>
-#include <cudf/utilities/bit.hpp>
 
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 
 #include <src/rolling/detail/range_window_bounds.hpp>
-#include <src/rolling/detail/rolling.hpp>
 
 #include <utility>
 #include <vector>

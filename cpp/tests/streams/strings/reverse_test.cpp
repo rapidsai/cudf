@@ -21,7 +21,6 @@
 #include <cudf/strings/reverse.hpp>
 
 #include <string>
-#include <vector>
 
 class StringsReverseTest : public cudf::test::BaseFixture {};
 

@@ -48,6 +48,7 @@ namespace CUDF_EXPORT cudf {
  *                            ignored.
  * @param[in] exact           If true, returns doubles.
  *                            If false, returns same type as input.
+ * @param[in] stream          CUDA stream used for device memory operations and kernel launches
  * @param[in] mr              Device memory resource used to allocate the returned column's device
  memory
  * @returns Column of specified quantiles, with nulls for indeterminable values
@@ -59,6 +60,7 @@ std::unique_ptr<column> quantile(
   interpolation interp               = interpolation::LINEAR,
   column_view const& ordered_indices = {},
   bool exact                         = true,
+  rmm::cuda_stream_view stream       = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr  = cudf::get_current_device_resource_ref());
 
 /**
@@ -85,6 +87,7 @@ std::unique_ptr<column> quantile(
  * @param is_input_sorted Indicates if the input has been pre-sorted
  * @param column_order    The desired sort order for each column
  * @param null_precedence The desired order of null compared to other elements
+ * @param stream          CUDA stream used for device memory operations and kernel launches
  * @param mr              Device memory resource used to allocate the returned table's device memory
  *
  * @returns Table of specified quantiles, with nulls for indeterminable values
@@ -98,6 +101,7 @@ std::unique_ptr<table> quantiles(
   cudf::sorted is_input_sorted                   = sorted::NO,
   std::vector<order> const& column_order         = {},
   std::vector<null_order> const& null_precedence = {},
+  rmm::cuda_stream_view stream                   = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr              = cudf::get_current_device_resource_ref());
 
 /**
@@ -114,6 +118,7 @@ std::unique_ptr<table> quantiles(
  *
  * @param input           tdigest input data. One tdigest per row
  * @param percentiles     Desired percentiles in range [0, 1]
+ * @param stream          CUDA stream used for device memory operations and kernel launches
  * @param mr              Device memory resource used to allocate the returned column's device
  * memory
  *
@@ -125,6 +130,7 @@ std::unique_ptr<table> quantiles(
 std::unique_ptr<column> percentile_approx(
   tdigest::tdigest_column_view const& input,
   column_view const& percentiles,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /** @} */  // end of group

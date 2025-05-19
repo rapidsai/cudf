@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,8 +37,9 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/std/functional>
+#include <cuda/std/iterator>
 #include <thrust/copy.h>
-#include <thrust/distance.h>
 #include <thrust/execution_policy.h>
 #include <thrust/iterator/counting_iterator.h>
 
@@ -87,8 +88,9 @@ std::unique_ptr<table> unique(table_view const& input,
                                         itr + num_rows,
                                         d_results.begin(),
                                         mutable_view->begin<size_type>(),
-                                        thrust::identity<bool>{});
-      return static_cast<size_type>(thrust::distance(mutable_view->begin<size_type>(), result_end));
+                                        cuda::std::identity{});
+      return static_cast<size_type>(
+        cuda::std::distance(mutable_view->begin<size_type>(), result_end));
     } else {
       // Using thrust::unique_copy with the comparator directly will compile more slowly but
       // improves runtime by up to 2x over the transform/copy_if approach above.
@@ -100,7 +102,8 @@ std::unique_ptr<table> unique(table_view const& input,
                                     row_equal,
                                     keep,
                                     stream);
-      return static_cast<size_type>(thrust::distance(mutable_view->begin<size_type>(), result_end));
+      return static_cast<size_type>(
+        cuda::std::distance(mutable_view->begin<size_type>(), result_end));
     }
   }();
   auto indices_view = cudf::detail::slice(column_view(*unique_indices), 0, unique_size, stream);

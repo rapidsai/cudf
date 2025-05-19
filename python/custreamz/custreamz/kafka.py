@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 import confluent_kafka as ck
 from cudf_kafka._lib.kafka import KafkaDatasource
 
@@ -151,9 +151,14 @@ class Consumer(CudfKafkaClient):
             "parquet": cudf.io.read_parquet,
         }
 
-        result = cudf_readers[message_format](
-            kafka_datasource, engine="cudf", lines=True
-        )
+        if message_format == "json":
+            result = cudf_readers[message_format](
+                kafka_datasource, engine="cudf", lines=True
+            )
+        else:
+            result = cudf_readers[message_format](
+                kafka_datasource, engine="cudf"
+            )
 
         # Close up the cudf datasource instance
         # TODO: Ideally the C++ destructor should handle the
@@ -288,4 +293,4 @@ class Consumer(CudfKafkaClient):
             (default: infinite (None translated into -1 in the
             library)). (Seconds)
         """
-        return self.ck.poll(timeout)
+        return self.ck_consumer.poll(timeout)

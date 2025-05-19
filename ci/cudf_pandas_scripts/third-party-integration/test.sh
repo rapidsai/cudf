@@ -1,22 +1,17 @@
 #!/bin/bash
-# Copyright (c) 2023-2024, NVIDIA CORPORATION.
+# Copyright (c) 2023-2025, NVIDIA CORPORATION.
 
 # Common setup steps shared by Python test jobs
 
 set -euo pipefail
 
-write_output() {
-  local key="$1"
-  local value="$2"
-  echo "$key=$value" | tee --append "${GITHUB_OUTPUT:-/dev/null}"
-}
 
 extract_lib_from_dependencies_yaml() {
     local file=$1
     # Parse all keys in dependencies.yaml under the "files" section,
     # extract all the keys that start with "test_", and extract the rest
-    local extracted_libs="$(yq -o json $file | jq -rc '.files | with_entries(select(.key | contains("test_"))) | keys | map(sub("^test_"; ""))')"
-    echo $extracted_libs
+    extracted_libs="$(yq -o json "$file" | jq -rc '.files | with_entries(select(.key | contains("test_"))) | keys | map(sub("^test_"; ""))')"
+    echo "$extracted_libs"
 }
 
 main() {
@@ -26,20 +21,37 @@ main() {
     LIBS=${LIBS#[}
     LIBS=${LIBS%]}
 
+    if [ "$RAPIDS_BUILD_TYPE" == "pull-request" ]; then
+        rapids-logger "Downloading artifacts from this pr jobs"
+        CPP_CHANNEL=$(rapids-download-conda-from-github cpp)
+        PYTHON_CHANNEL=$(rapids-download-conda-from-github python)
+    fi
+
+    ANY_FAILURES=0
+
     for lib in ${LIBS//,/ }; do
         lib=$(echo "$lib" | tr -d '""')
         echo "Running tests for library $lib"
 
-        CUDA_MAJOR=$(if [ "$lib" = "tensorflow" ]; then echo "11"; else echo "12"; fi)
-
         . /opt/conda/etc/profile.d/conda.sh
-
-        rapids-logger "Generate Python testing dependencies"
-        rapids-dependency-file-generator \
-          --config "$dependencies_yaml" \
-          --output conda \
-          --file-key test_${lib} \
-          --matrix "cuda=${CUDA_MAJOR};arch=$(arch);py=${RAPIDS_PY_VERSION}" | tee env.yaml
+        # Check the value of RAPIDS_BUILD_TYPE
+        if [ "$RAPIDS_BUILD_TYPE" == "pull-request" ]; then
+            rapids-logger "Generate Python testing dependencies"
+            rapids-dependency-file-generator \
+                --config "$dependencies_yaml" \
+                --output conda \
+                --file-key "test_${lib}" \
+                --matrix "cuda=${RAPIDS_CUDA_VERSION%.*};arch=$(arch);py=${RAPIDS_PY_VERSION}" \
+                --prepend-channel "${CPP_CHANNEL}" \
+                --prepend-channel "${PYTHON_CHANNEL}" | tee env.yaml
+        else
+            rapids-logger "Generate Python testing dependencies"
+            rapids-dependency-file-generator \
+                --config "$dependencies_yaml" \
+                --output conda \
+                --file-key "test_${lib}" \
+                --matrix "cuda=${RAPIDS_CUDA_VERSION%.*};arch=$(arch);py=${RAPIDS_PY_VERSION}" | tee env.yaml
+        fi
 
         rapids-mamba-retry env create --yes -f env.yaml -n test
 
@@ -56,10 +68,6 @@ main() {
         rapids-logger "Check GPU usage"
         nvidia-smi
 
-        EXITCODE=0
-        trap "EXITCODE=1" ERR
-        set +e
-
         rapids-logger "pytest ${lib}"
 
         NUM_PROCESSES=8
@@ -72,12 +80,20 @@ main() {
             fi
         done
 
-        TEST_DIR=${TEST_DIR} NUM_PROCESSES=${NUM_PROCESSES} ci/cudf_pandas_scripts/third-party-integration/run-library-tests.sh ${lib}
+        EXITCODE=0
+        trap "EXITCODE=1" ERR
+        set +e
 
+        TEST_DIR=${TEST_DIR} NUM_PROCESSES=${NUM_PROCESSES} ci/cudf_pandas_scripts/third-party-integration/run-library-tests.sh "${lib}"
+
+        set -e
         rapids-logger "Test script exiting with value: ${EXITCODE}"
+        if [[ ${EXITCODE} != 0 ]]; then
+            ANY_FAILURES=1
+        fi
     done
 
-    exit ${EXITCODE}
+    exit ${ANY_FAILURES}
 }
 
 main "$@"

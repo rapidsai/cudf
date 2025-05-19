@@ -6,6 +6,7 @@ from pylibcudf.column cimport Column
 from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.strings cimport attributes as cpp_attributes
 
+__all__ = ["code_points", "count_bytes", "count_characters"]
 
 cpdef Column count_characters(Column source_strings):
     """
@@ -25,7 +26,7 @@ cpdef Column count_characters(Column source_strings):
     cdef unique_ptr[column] c_result
 
     with nogil:
-        c_result = move(cpp_attributes.count_characters(source_strings.view()))
+        c_result = cpp_attributes.count_characters(source_strings.view())
 
     return Column.from_libcudf(move(c_result))
 
@@ -48,7 +49,7 @@ cpdef Column count_bytes(Column source_strings):
     cdef unique_ptr[column] c_result
 
     with nogil:
-        c_result = move(cpp_attributes.count_bytes(source_strings.view()))
+        c_result = cpp_attributes.count_bytes(source_strings.view())
 
     return Column.from_libcudf(move(c_result))
 
@@ -71,6 +72,6 @@ cpdef Column code_points(Column source_strings):
     cdef unique_ptr[column] c_result
 
     with nogil:
-        c_result = move(cpp_attributes.code_points(source_strings.view()))
+        c_result = cpp_attributes.code_points(source_strings.view())
 
     return Column.from_libcudf(move(c_result))

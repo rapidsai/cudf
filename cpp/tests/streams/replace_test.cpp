@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/default_stream.hpp>
+#include <cudf_test/testing_main.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/column/column_view.hpp>
@@ -104,9 +105,11 @@ TEST_F(ReplaceTest, NormalizeNansAndZeros)
 
 TEST_F(ReplaceTest, NormalizeNansAndZerosMutable)
 {
-  auto nan          = std::numeric_limits<double>::quiet_NaN();
-  auto input_column = cudf::test::make_type_param_vector<double>({-0.0, 0.0, -nan, nan, nan});
-  cudf::test::fixed_width_column_wrapper<double> input(input_column.begin(), input_column.end());
-  cudf::normalize_nans_and_zeros(static_cast<cudf::mutable_column_view>(input),
-                                 cudf::test::get_default_stream());
+  auto nan   = std::numeric_limits<double>::quiet_NaN();
+  auto data  = cudf::test::make_type_param_vector<double>({-0.0, 0.0, -nan, nan, nan});
+  auto input = cudf::test::fixed_width_column_wrapper<double>(data.begin(), data.end()).release();
+  auto view  = input->mutable_view();
+  cudf::normalize_nans_and_zeros(view, cudf::test::get_default_stream());
 }
+
+CUDF_TEST_PROGRAM_MAIN()

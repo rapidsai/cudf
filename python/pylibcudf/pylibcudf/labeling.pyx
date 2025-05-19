@@ -10,13 +10,14 @@ from pylibcudf.libcudf.labeling import inclusive as Inclusive  # no-cython-lint
 
 from .column cimport Column
 
+__all__ = ["Inclusive", "label_bins"]
 
 cpdef Column label_bins(
     Column input,
     Column left_edges,
-    bool left_inclusive,
+    inclusive left_inclusive,
     Column right_edges,
-    bool right_inclusive
+    inclusive right_inclusive
 ):
     """Labels elements based on membership in the specified bins.
 
@@ -28,11 +29,11 @@ cpdef Column label_bins(
         Column of input elements to label according to the specified bins.
     left_edges : Column
         Column of the left edge of each bin.
-    left_inclusive : bool
+    left_inclusive : Inclusive
         Whether or not the left edge is inclusive.
     right_edges : Column
         Column of the right edge of each bin.
-    right_inclusive : bool
+    right_inclusive : Inclusive
         Whether or not the right edge is inclusive.
 
     Returns
@@ -42,26 +43,13 @@ cpdef Column label_bins(
         according to the specified bins.
     """
     cdef unique_ptr[column] c_result
-    cdef inclusive c_left_inclusive = (
-        inclusive.YES
-        if left_inclusive
-        else inclusive.NO
-    )
-    cdef inclusive c_right_inclusive = (
-        inclusive.YES
-        if right_inclusive
-        else inclusive.NO
-    )
-
     with nogil:
-        c_result = move(
-            cpp_labeling.label_bins(
-                input.view(),
-                left_edges.view(),
-                c_left_inclusive,
-                right_edges.view(),
-                c_right_inclusive,
-            )
+        c_result = cpp_labeling.label_bins(
+            input.view(),
+            left_edges.view(),
+            left_inclusive,
+            right_edges.view(),
+            right_inclusive,
         )
 
     return Column.from_libcudf(move(c_result))

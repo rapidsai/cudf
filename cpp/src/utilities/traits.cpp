@@ -19,8 +19,6 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <cudf/wrappers/dictionary.hpp>
 
-#include <cuda_runtime.h>
-
 namespace cudf {
 
 namespace {
@@ -129,6 +127,22 @@ struct is_index_type_impl {
  */
 bool is_index_type(data_type type) { return cudf::type_dispatcher(type, is_index_type_impl{}); }
 
+struct is_signed_impl {
+  template <typename T>
+  constexpr bool operator()()
+  {
+    return is_signed<T>();
+  }
+};
+
+/**
+ * @brief Indicates whether `type` is a signed numeric `data_type`.
+ *
+ * @param type The `data_type` to verify
+ * @return true `type` is signed numeric
+ */
+bool is_signed(data_type type) { return cudf::type_dispatcher(type, is_signed_impl{}); }
+
 struct is_unsigned_impl {
   template <typename T>
   constexpr bool operator()()
@@ -169,6 +183,19 @@ struct is_integral_not_bool_impl {
 bool is_integral_not_bool(data_type type)
 {
   return cudf::type_dispatcher(type, is_integral_not_bool_impl{});
+}
+
+struct is_numeric_not_bool_impl {
+  template <typename T>
+  constexpr bool operator()()
+  {
+    return is_numeric_not_bool<T>();
+  }
+};
+
+bool is_numeric_not_bool(data_type type)
+{
+  return cudf::type_dispatcher(type, is_numeric_not_bool_impl{});
 }
 
 struct is_floating_point_impl {

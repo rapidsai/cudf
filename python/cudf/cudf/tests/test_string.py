@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2024, NVIDIA CORPORATION.
+# Copyright (c) 2018-2025, NVIDIA CORPORATION.
 
 import json
 import re
@@ -13,8 +13,11 @@ import pandas as pd
 import pyarrow as pa
 import pytest
 
+import rmm
+
 import cudf
 from cudf import concat
+from cudf.core.buffer import as_buffer
 from cudf.core.column.string import StringColumn
 from cudf.core.index import Index
 from cudf.testing import assert_eq
@@ -36,6 +39,7 @@ data_id_list = ["no_nulls", "some_nulls", "all_nulls"]
 idx_list = [None, [10, 11, 12, 13, 14]]
 
 idx_id_list = ["None_index", "Set_index"]
+rng = np.random.default_rng(seed=0)
 
 
 def raise_builder(flags, exceptions):
@@ -132,9 +136,14 @@ def test_string_get_item(ps_gs, item):
         np.array([False] * 5),
         cupy.asarray(np.array([True] * 5)),
         cupy.asarray(np.array([False] * 5)),
-        np.random.randint(0, 2, 5).astype("bool").tolist(),
-        np.random.randint(0, 2, 5).astype("bool"),
-        cupy.asarray(np.random.randint(0, 2, 5).astype("bool")),
+        np.random.default_rng(seed=0)
+        .integers(0, 2, 5)
+        .astype("bool")
+        .tolist(),
+        np.random.default_rng(seed=0).integers(0, 2, 5).astype("bool"),
+        cupy.asarray(
+            np.random.default_rng(seed=0).integers(0, 2, 5).astype("bool")
+        ),
     ],
 )
 def test_string_bool_mask(ps_gs, item):
@@ -530,8 +539,8 @@ def test_string_cat(ps_gs, others, sep, na_rep, index):
 
     assert_eq(expect, got)
 
-    expect = ps.str.cat(others=[ps.index] + [ps.index], sep=sep, na_rep=na_rep)
-    got = gs.str.cat(others=[gs.index] + [gs.index], sep=sep, na_rep=na_rep)
+    expect = ps.str.cat(others=[ps.index, ps.index], sep=sep, na_rep=na_rep)
+    got = gs.str.cat(others=[gs.index, gs.index], sep=sep, na_rep=na_rep)
 
     assert_eq(expect, got)
 
@@ -1078,7 +1087,8 @@ def test_string_set_scalar(scalar):
 
 
 def test_string_index():
-    pdf = pd.DataFrame(np.random.rand(5, 5))
+    rng = np.random.default_rng(seed=0)
+    pdf = pd.DataFrame(rng.random(size=(5, 5)))
     gdf = cudf.DataFrame.from_pandas(pdf)
     stringIndex = ["a", "b", "c", "d", "e"]
     pdf.index = stringIndex
@@ -1195,7 +1205,12 @@ def test_string_misc_name(ps_gs, name):
 
 
 def test_string_no_children_properties():
-    empty_col = StringColumn(children=())
+    empty_col = StringColumn(
+        as_buffer(rmm.DeviceBuffer(size=0)),
+        size=0,
+        dtype=np.dtype("object"),
+        children=(),
+    )
     assert empty_col.base_children == ()
     assert empty_col.base_size == 0
 
@@ -1265,7 +1280,7 @@ def test_string_slice_from():
     gs = cudf.Series(["hello world", "holy accéntéd", "batman", None, ""])
     d_starts = cudf.Series([2, 3, 0, -1, -1], dtype=np.int32)
     d_stops = cudf.Series([-1, -1, 0, -1, -1], dtype=np.int32)
-    got = gs.str.slice_from(starts=d_starts._column, stops=d_stops._column)
+    got = gs.str.slice_from(starts=d_starts, stops=d_stops)
     expected = cudf.Series(["llo world", "y accéntéd", "", None, ""])
     assert_eq(got, expected)
 
@@ -2041,26 +2056,26 @@ def test_string_starts_ends(data, pat):
     [
         (
             ["abc", "xyz", "a", "ab", "123", "097"],
-            ["abc", "x", "a", "b", "3", "7"],
+            ("abc", "x", "a", "b", "3", "7"),
         ),
-        (["A B", "1.5", "3,000"], ["A ", ".", ","]),
-        (["23", "³", "⅕", ""], ["23", "³", "⅕", ""]),
-        ([" ", "\t\r\n ", ""], ["d", "\n ", ""]),
+        (["A B", "1.5", "3,000"], ("A ", ".", ",")),
+        (["23", "³", "⅕", ""], ("23", "³", "⅕", "")),
+        ([" ", "\t\r\n ", ""], ("d", "\n ", "")),
         (
             ["$", "B", "Aab$", "$$ca", "C$B$", "cat"],
-            ["$", "$", "a", "<", "(", "#"],
+            ("$", "$", "a", "<", "(", "#"),
         ),
         (
             ["line to be wrapped", "another line to be wrapped"],
-            ["another", "wrapped"],
+            ("another", "wrapped"),
         ),
         (
             ["hello", "there", "world", "+1234", "-1234", None, "accént", ""],
-            ["hsdjfk", None, "ll", "+", "-", "w", "-", "én"],
+            ("hsdjfk", "", "ll", "+", "-", "w", "-", "én"),
         ),
         (
             ["1. Ant.  ", "2. Bee!\n", "3. Cat?\t", None],
-            ["1. Ant.  ", "2. Bee!\n", "3. Cat?\t", None],
+            ("1. Ant.  ", "2. Bee!\n", "3. Cat?\t", ""),
         ),
     ],
 )
@@ -3531,4 +3546,52 @@ def test_string_reduction_error():
         ps.all,
         lfunc_args_and_kwargs=([], {"skipna": False}),
         rfunc_args_and_kwargs=([], {"skipna": False}),
+    )
+
+
+def test_getitem_out_of_bounds():
+    data = ["123", "12", "1"]
+    pd_ser = pd.Series(data)
+    cudf_ser = cudf.Series(data)
+    expected = pd_ser.str[2]
+    result = cudf_ser.str[2]
+    assert_eq(result, expected)
+
+    expected = pd_ser.str[-2]
+    result = cudf_ser.str[-2]
+    assert_eq(result, expected)
+
+
+@pytest.mark.parametrize("method", ["startswith", "endswith"])
+@pytest.mark.parametrize("pat", [None, (1, 2), pd.Series([1])])
+def test_startsendwith_invalid_pat(method, pat):
+    ser = cudf.Series(["1"])
+    with pytest.raises(TypeError):
+        getattr(ser.str, method)(pat)
+
+
+@pytest.mark.parametrize("method", ["rindex", "index"])
+def test_index_int64_pandas_compat(method):
+    data = ["ABCDEFG", "BCDEFEF", "DEFGHIJEF", "EFGHEF"]
+    with cudf.option_context("mode.pandas_compatible", True):
+        result = getattr(cudf.Series(data).str, method)("E", 4, 8)
+    expected = getattr(pd.Series(data).str, method)("E", 4, 8)
+    assert_eq(result, expected)
+
+
+def test_replace_invalid_scalar_repl():
+    ser = cudf.Series(["1"])
+    with pytest.raises(TypeError):
+        ser.str.replace("1", 2)
+
+
+def test_string_methods_setattr():
+    ser = cudf.Series(["ab", "cd", "ef"])
+    pser = ser.to_pandas()
+
+    assert_exceptions_equal(
+        lfunc=ser.str.__setattr__,
+        rfunc=pser.str.__setattr__,
+        lfunc_args_and_kwargs=(("a", "b"),),
+        rfunc_args_and_kwargs=(("a", "b"),),
     )

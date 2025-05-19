@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2024, NVIDIA CORPORATION.
+# Copyright (c) 2018-2025, NVIDIA CORPORATION.
 
 """
 Test related to Index
@@ -36,7 +36,6 @@ from cudf.testing._utils import (
     assert_exceptions_equal,
     expect_warning_if,
 )
-from cudf.utils.utils import search_range
 
 
 def test_df_set_index_from_series():
@@ -259,13 +258,13 @@ def test_index_rename_inplace():
     # inplace=False should yield a shallow copy
     gds_renamed_deep = gds.rename("new_name", inplace=False)
 
-    assert gds_renamed_deep._values.data_ptr == gds._values.data_ptr
+    assert gds_renamed_deep._column.data_ptr == gds._column.data_ptr
 
     # inplace=True returns none
-    expected_ptr = gds._values.data_ptr
+    expected_ptr = gds._column.data_ptr
     gds.rename("new_name", inplace=True)
 
-    assert expected_ptr == gds._values.data_ptr
+    assert expected_ptr == gds._column.data_ptr
 
 
 def test_index_rename_preserves_arg():
@@ -375,7 +374,7 @@ def test_index_copy_category(name, deep=True):
     pidx_copy = pidx.copy(name=name, deep=deep)
     cidx_copy = cidx.copy(name=name, deep=deep)
 
-    assert_column_memory_ne(cidx._values, cidx_copy._values)
+    assert_column_memory_ne(cidx._column, cidx_copy._column)
     assert_eq(pidx_copy, cidx_copy)
 
 
@@ -398,7 +397,7 @@ def test_index_copy_deep(idx, deep, copy_on_write):
     original_cow_setting = cudf.get_option("copy_on_write")
     cudf.set_option("copy_on_write", copy_on_write)
     if (
-        isinstance(idx._values, cudf.core.column.StringColumn)
+        isinstance(idx._column, cudf.core.column.StringColumn)
         or not deep
         or (cudf.get_option("copy_on_write") and not deep)
     ):
@@ -408,9 +407,9 @@ def test_index_copy_deep(idx, deep, copy_on_write):
         # When `copy_on_write` is turned on, Index objects will
         # have unique column object but they all point to same
         # data pointers.
-        assert_column_memory_eq(idx._values, idx_copy._values)
+        assert_column_memory_eq(idx._column, idx_copy._column)
     else:
-        assert_column_memory_ne(idx._values, idx_copy._values)
+        assert_column_memory_ne(idx._column, idx_copy._column)
     cudf.set_option("copy_on_write", original_cow_setting)
 
 
@@ -1274,7 +1273,7 @@ def test_index_append_list(data, other):
 
 @pytest.mark.parametrize("data", [[1, 2, 3, 4], []])
 @pytest.mark.parametrize(
-    "dtype", NUMERIC_TYPES + ["str", "category", "datetime64[ns]"]
+    "dtype", [*NUMERIC_TYPES, "str", "category", "datetime64[ns]"]
 )
 @pytest.mark.parametrize("name", [1, "a", None])
 def test_index_basic(data, dtype, name):
@@ -1399,7 +1398,7 @@ def test_multiindex_append(data, other):
 
 @pytest.mark.parametrize("data", [[1, 2, 3, 4], []])
 @pytest.mark.parametrize(
-    "dtype", NUMERIC_TYPES + ["str", "category", "datetime64[ns]"]
+    "dtype", [*NUMERIC_TYPES, "str", "category", "datetime64[ns]"]
 )
 def test_index_empty(data, dtype):
     pdi = pd.Index(data, dtype=dtype)
@@ -1410,7 +1409,7 @@ def test_index_empty(data, dtype):
 
 @pytest.mark.parametrize("data", [[1, 2, 3, 4], []])
 @pytest.mark.parametrize(
-    "dtype", NUMERIC_TYPES + ["str", "category", "datetime64[ns]"]
+    "dtype", [*NUMERIC_TYPES, "str", "category", "datetime64[ns]"]
 )
 def test_index_size(data, dtype):
     pdi = pd.Index(data, dtype=dtype)
@@ -1421,7 +1420,7 @@ def test_index_size(data, dtype):
 
 @pytest.mark.parametrize("data", [[1, 2, 3, 1, 2, 3, 4], [], [1], [1, 2, 3]])
 @pytest.mark.parametrize(
-    "dtype", NUMERIC_TYPES + ["str", "category", "datetime64[ns]"]
+    "dtype", [*NUMERIC_TYPES, "str", "category", "datetime64[ns]"]
 )
 def test_index_drop_duplicates(data, dtype):
     pdi = pd.Index(data, dtype=dtype)
@@ -1437,7 +1436,7 @@ def test_dropna_bad_how():
 
 @pytest.mark.parametrize("data", [[1, 2, 3, 1, 2, 3, 4], []])
 @pytest.mark.parametrize(
-    "dtype", NUMERIC_TYPES + ["str", "category", "datetime64[ns]"]
+    "dtype", [*NUMERIC_TYPES, "str", "category", "datetime64[ns]"]
 )
 def test_index_tolist(data, dtype):
     gdi = cudf.Index(data, dtype=dtype)
@@ -1455,7 +1454,7 @@ def test_index_tolist(data, dtype):
 
 @pytest.mark.parametrize("data", [[], [1], [1, 2, 3]])
 @pytest.mark.parametrize(
-    "dtype", NUMERIC_TYPES + ["str", "category", "datetime64[ns]"]
+    "dtype", [*NUMERIC_TYPES, "str", "category", "datetime64[ns]"]
 )
 def test_index_iter_error(data, dtype):
     gdi = cudf.Index(data, dtype=dtype)
@@ -1473,7 +1472,7 @@ def test_index_iter_error(data, dtype):
 
 @pytest.mark.parametrize("data", [[], [1], [1, 2, 3, 4, 5]])
 @pytest.mark.parametrize(
-    "dtype", NUMERIC_TYPES + ["str", "category", "datetime64[ns]"]
+    "dtype", [*NUMERIC_TYPES, "str", "category", "datetime64[ns]"]
 )
 def test_index_values_host(data, dtype):
     gdi = cudf.Index(data, dtype=dtype)
@@ -1626,13 +1625,12 @@ def test_rangeindex_name_not_hashable():
         RangeIndex(range(2)).copy(name=["foo"])
 
 
-def test_index_rangeindex_search_range():
+def test_index_rangeindex_searchsorted():
     # step > 0
     ridx = RangeIndex(-13, 17, 4)
-    ri = ridx._range
     for i in range(len(ridx)):
-        assert i == search_range(ridx[i], ri, side="left")
-        assert i + 1 == search_range(ridx[i], ri, side="right")
+        assert i == ridx.searchsorted(ridx[i], side="left")
+        assert i + 1 == ridx.searchsorted(ridx[i], side="right")
 
 
 @pytest.mark.parametrize(
@@ -2645,21 +2643,20 @@ def test_isin_multiindex(data, values, level, err):
         )
 
 
-range_data = [
-    range(np.random.randint(0, 100)),
-    range(9, 12, 2),
-    range(20, 30),
-    range(100, 1000, 10),
-    range(0, 10, -2),
-    range(0, -10, 2),
-    range(0, -10, -2),
-]
-
-
-@pytest.fixture(params=range_data)
+@pytest.fixture(
+    params=[
+        range(np.random.default_rng(seed=0).integers(0, 100)),
+        range(9, 12, 2),
+        range(20, 30),
+        range(100, 1000, 10),
+        range(0, 10, -2),
+        range(0, -10, 2),
+        range(0, -10, -2),
+    ]
+)
 def rangeindex(request):
     """Create a cudf RangeIndex of different `nrows`"""
-    return RangeIndex(request.param)
+    return cudf.RangeIndex(request.param)
 
 
 @pytest.mark.parametrize(
@@ -2830,21 +2827,20 @@ def test_rangeindex_append_return_rangeindex():
     assert_eq(result, expected)
 
 
-index_data = [
-    range(np.random.randint(0, 100)),
-    range(0, 10, -2),
-    range(0, -10, 2),
-    range(0, -10, -2),
-    range(0, 1),
-    [1, 2, 3, 1, None, None],
-    [None, None, 3.2, 1, None, None],
-    [None, "a", "3.2", "z", None, None],
-    pd.Series(["a", "b", None], dtype="category"),
-    np.array([1, 2, 3, None], dtype="datetime64[s]"),
-]
-
-
-@pytest.fixture(params=index_data)
+@pytest.fixture(
+    params=[
+        range(np.random.default_rng(seed=0).integers(0, 100)),
+        range(0, 10, -2),
+        range(0, -10, 2),
+        range(0, -10, -2),
+        range(0, 1),
+        [1, 2, 3, 1, None, None],
+        [None, None, 3.2, 1, None, None],
+        [None, "a", "3.2", "z", None, None],
+        pd.Series(["a", "b", None], dtype="category"),
+        np.array([1, 2, 3, None], dtype="datetime64[s]"),
+    ]
+)
 def index(request):
     """Create a cudf Index of different dtypes"""
     return cudf.Index(request.param)
@@ -3127,14 +3123,10 @@ def test_period_index_error():
         cudf.Series(pd.array(pidx))
 
 
-def test_index_from_dataframe_valueerror():
-    with pytest.raises(ValueError):
-        cudf.Index(cudf.DataFrame(range(1)))
-
-
-def test_index_from_scalar_valueerror():
-    with pytest.raises(ValueError):
-        cudf.Index(11)
+@pytest.mark.parametrize("value", [cudf.DataFrame(range(1)), 11])
+def test_index_from_dataframe_scalar_raises(value):
+    with pytest.raises(TypeError):
+        cudf.Index(value)
 
 
 @pytest.mark.parametrize("idx", [0, np.int64(0)])
@@ -3338,3 +3330,23 @@ def test_bool_rangeindex_raises():
         lfunc_args_and_kwargs=[[pd.RangeIndex(0)]],
         rfunc_args_and_kwargs=[[cudf.RangeIndex(0)]],
     )
+
+
+@pytest.mark.parametrize("ordered", [True, False])
+@pytest.mark.parametrize("name", [None, "test"])
+def test_categoricalindex_from_codes(ordered, name):
+    codes = [0, 1, 2, 3, 4]
+    categories = ["a", "b", "c", "d", "e"]
+    result = cudf.CategoricalIndex.from_codes(codes, categories, ordered, name)
+    expected = pd.CategoricalIndex(
+        pd.Categorical.from_codes(codes, categories, ordered=ordered),
+        name=name,
+    )
+    assert_eq(result, expected)
+
+
+def test_roundtrip_index_plc_column():
+    index = cudf.Index([1])
+    expect = cudf.Index(index)
+    actual = cudf.Index.from_pylibcudf(*expect.to_pylibcudf())
+    assert_eq(expect, actual)

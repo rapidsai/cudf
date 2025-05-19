@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,17 +17,14 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/table_utilities.hpp>
 #include <cudf_test/testing_main.hpp>
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
-#include <cudf/copying.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 
 #include <memory>
-#include <random>
 
 template <typename T>
 using column_wrapper = cudf::test::fixed_width_column_wrapper<T>;
@@ -149,6 +146,32 @@ TEST_F(TableTest, CreateFromViewVectorEmptyTables)
   views.emplace_back(std::vector<column_view>{});
   TView final_view{views};
   EXPECT_EQ(final_view.num_columns(), 0);
+}
+
+TEST_F(TableTest, AllocSize)
+{
+  column_wrapper<int32_t> col1{{1, 2, 3, 4}};
+  column_wrapper<int16_t> col2{{1, 2, 3, 4}};
+
+  CVector cols;
+  cols.push_back(col1.release());
+  cols.push_back(col2.release());
+
+  Table t(std::move(cols));
+  EXPECT_EQ(t.alloc_size(), 24);
+}
+
+TEST_F(TableTest, AllocSizeWithNulls)
+{
+  column_wrapper<int32_t> col1{{1, 2, 3, 4}, {1, 0, 1, 0}};
+  column_wrapper<int16_t> col2{{1, 2, 3, 4}, {1, 0, 1, 0}};
+
+  CVector cols;
+  cols.push_back(col1.release());
+  cols.push_back(col2.release());
+
+  Table t(std::move(cols));
+  EXPECT_EQ(t.alloc_size(), 152);  // bitmask has padding
 }
 
 CUDF_TEST_PROGRAM_MAIN()

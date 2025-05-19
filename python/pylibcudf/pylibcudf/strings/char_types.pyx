@@ -12,6 +12,11 @@ from cython.operator import dereference
 from pylibcudf.libcudf.strings.char_types import \
     string_character_types as StringCharacterTypes  # no-cython-lint
 
+__all__ = [
+    "StringCharacterTypes",
+    "all_characters_of_type",
+    "filter_characters_of_type",
+]
 
 cpdef Column all_characters_of_type(
     Column source_strings,
@@ -38,12 +43,10 @@ cpdef Column all_characters_of_type(
     cdef unique_ptr[column] c_result
 
     with nogil:
-        c_result = move(
-            cpp_char_types.all_characters_of_type(
-                source_strings.view(),
-                types,
-                verify_types,
-            )
+        c_result = cpp_char_types.all_characters_of_type(
+            source_strings.view(),
+            types,
+            verify_types,
         )
 
     return Column.from_libcudf(move(c_result))
@@ -81,13 +84,11 @@ cpdef Column filter_characters_of_type(
     cdef unique_ptr[column] c_result
 
     with nogil:
-        c_result = move(
-            cpp_char_types.filter_characters_of_type(
-                source_strings.view(),
-                types_to_remove,
-                dereference(c_replacement),
-                types_to_keep,
-            )
+        c_result = cpp_char_types.filter_characters_of_type(
+            source_strings.view(),
+            types_to_remove,
+            dereference(c_replacement),
+            types_to_keep,
         )
 
     return Column.from_libcudf(move(c_result))

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,12 +26,13 @@
 
 // This is defined when including this header in a https://github.com/NVIDIA/jitify
 // or jitify2 source file. The jitify cannot include thrust headers at this time.
-#ifndef CUDF_JIT_UDF
+#ifndef CUDF_RUNTIME_JIT
 #include <thrust/count.h>
 #include <thrust/execution_policy.h>
 #endif
 
-#include <algorithm>
+#include <cuda/std/functional>
+#include <cuda/std/utility>
 
 // This file should only include device code logic.
 // Host-only or host/device code should be defined in the string_view.hpp header file.
@@ -51,7 +52,7 @@ __device__ inline size_type characters_in_string(char const* str, size_type byte
 {
   if ((str == nullptr) || (bytes == 0)) return 0;
   auto ptr = reinterpret_cast<uint8_t const*>(str);
-#ifndef CUDF_JIT_UDF
+#ifndef CUDF_RUNTIME_JIT
   return thrust::count_if(
     thrust::seq, ptr, ptr + bytes, [](uint8_t chr) { return is_begin_utf8_char(chr); });
 #else
@@ -75,8 +76,8 @@ __device__ inline size_type characters_in_string(char const* str, size_type byte
  * @param pos Character position to count to
  * @return The number of bytes and the left over non-counted position value
  */
-__device__ inline std::pair<size_type, size_type> bytes_to_character_position(string_view d_str,
-                                                                              size_type pos)
+__device__ inline cuda::std::pair<size_type, size_type> bytes_to_character_position(
+  string_view d_str, size_type pos)
 {
   size_type bytes    = 0;
   auto ptr           = d_str.data();
@@ -157,8 +158,11 @@ __device__ inline string_view::const_iterator::const_iterator(string_view const&
 
 __device__ inline string_view::const_iterator& string_view::const_iterator::operator++()
 {
-  if (byte_pos < bytes)
-    byte_pos += strings::detail::bytes_in_utf8_byte(static_cast<uint8_t>(p[byte_pos]));
+  if (byte_pos < bytes) {
+    // max is used to prevent an infinite loop on invalid UTF-8 data
+    byte_pos +=
+      cuda::std::max(1, strings::detail::bytes_in_utf8_byte(static_cast<uint8_t>(p[byte_pos])));
+  }
   ++char_pos;
   return *this;
 }
@@ -303,7 +307,7 @@ __device__ inline char_utf8 string_view::operator[](size_type pos) const
 __device__ inline size_type string_view::byte_offset(size_type pos) const
 {
   if (length() == size_bytes()) return pos;
-  return std::get<0>(strings::detail::bytes_to_character_position(*this, pos));
+  return cuda::std::get<0>(strings::detail::bytes_to_character_position(*this, pos));
 }
 
 __device__ inline int string_view::compare(string_view const& in) const
@@ -373,24 +377,23 @@ __device__ inline size_type string_view::find_impl(char const* str,
                                                    size_type pos,
                                                    size_type count) const
 {
-  auto const nchars = length();
-  if (!str || pos < 0 || pos > nchars) return npos;
-  if (count < 0) count = nchars;
+  if (!str || pos < 0) { return npos; }
+  if (pos > 0 && pos > length()) { return npos; }
 
   // use iterator to help reduce character/byte counting
-  auto itr        = begin() + pos;
+  auto const itr  = begin() + pos;
   auto const spos = itr.byte_offset();
-  auto const epos = ((pos + count) < nchars) ? (itr + count).byte_offset() : size_bytes();
+  auto const epos =
+    (count >= 0) && ((pos + count) < length()) ? (itr + count).byte_offset() : size_bytes();
 
   auto const find_length = (epos - spos) - bytes + 1;
+  auto const d_target    = string_view{str, bytes};
 
   auto ptr = data() + (forward ? spos : (epos - bytes));
   for (size_type idx = 0; idx < find_length; ++idx) {
-    bool match = true;
-    for (size_type jdx = 0; match && (jdx < bytes); ++jdx) {
-      match = (ptr[jdx] == str[jdx]);
+    if (d_target.compare(ptr, bytes) == 0) {
+      return forward ? pos : character_offset(epos - bytes - idx);
     }
-    if (match) { return forward ? pos : character_offset(epos - bytes - idx); }
     // use pos to record the current find position
     pos += strings::detail::is_begin_utf8_char(*ptr);
     forward ? ++ptr : --ptr;
@@ -439,10 +442,12 @@ __device__ inline size_type string_view::rfind(char_utf8 chr, size_type pos, siz
 __device__ inline string_view string_view::substr(size_type pos, size_type count) const
 {
   if (pos < 0 || pos >= length()) { return string_view{}; }
-  auto const itr  = begin() + pos;
-  auto const spos = itr.byte_offset();
-  auto const epos = count >= 0 ? (itr + count).byte_offset() : size_bytes();
-  return {data() + spos, epos - spos};
+  auto const spos = begin() + pos;
+  auto const epos = count >= 0 ? (spos + count) : const_iterator{*this, _length, size_bytes()};
+  auto ss = string_view{data() + spos.byte_offset(), epos.byte_offset() - spos.byte_offset()};
+  // this potentially saves redundant character counting downstream
+  if (_length != UNKNOWN_STRING_LENGTH) { ss._length = epos.position() - spos.position(); }
+  return ss;
 }
 
 __device__ inline size_type string_view::character_offset(size_type bytepos) const

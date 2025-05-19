@@ -13,6 +13,16 @@ from pylibcudf.libcudf.unary import \
 from .column cimport Column
 from .types cimport DataType
 
+__all__ = [
+    "UnaryOperator",
+    "cast",
+    "is_nan",
+    "is_not_nan",
+    "is_null",
+    "is_supported_cast",
+    "is_valid",
+    "unary_operation",
+]
 
 cpdef Column unary_operation(Column input, unary_operator op):
     """Perform a unary operation on a column.
@@ -34,7 +44,7 @@ cpdef Column unary_operation(Column input, unary_operator op):
     cdef unique_ptr[column] result
 
     with nogil:
-        result = move(cpp_unary.unary_operation(input.view(), op))
+        result = cpp_unary.unary_operation(input.view(), op)
 
     return Column.from_libcudf(move(result))
 
@@ -57,7 +67,7 @@ cpdef Column is_null(Column input):
     cdef unique_ptr[column] result
 
     with nogil:
-        result = move(cpp_unary.is_null(input.view()))
+        result = cpp_unary.is_null(input.view())
 
     return Column.from_libcudf(move(result))
 
@@ -80,7 +90,7 @@ cpdef Column is_valid(Column input):
     cdef unique_ptr[column] result
 
     with nogil:
-        result = move(cpp_unary.is_valid(input.view()))
+        result = cpp_unary.is_valid(input.view())
 
     return Column.from_libcudf(move(result))
 
@@ -105,7 +115,7 @@ cpdef Column cast(Column input, DataType data_type):
     cdef unique_ptr[column] result
 
     with nogil:
-        result = move(cpp_unary.cast(input.view(), data_type.c_obj))
+        result = cpp_unary.cast(input.view(), data_type.c_obj)
 
     return Column.from_libcudf(move(result))
 
@@ -128,7 +138,7 @@ cpdef Column is_nan(Column input):
     cdef unique_ptr[column] result
 
     with nogil:
-        result = move(cpp_unary.is_nan(input.view()))
+        result = cpp_unary.is_nan(input.view())
 
     return Column.from_libcudf(move(result))
 
@@ -151,7 +161,7 @@ cpdef Column is_not_nan(Column input):
     cdef unique_ptr[column] result
 
     with nogil:
-        result = move(cpp_unary.is_not_nan(input.view()))
+        result = cpp_unary.is_not_nan(input.view())
 
     return Column.from_libcudf(move(result))
 

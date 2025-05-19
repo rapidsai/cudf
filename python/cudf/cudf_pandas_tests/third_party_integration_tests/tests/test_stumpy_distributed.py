@@ -1,4 +1,4 @@
-# Copyright (c) 2023-2024, NVIDIA CORPORATION.
+# Copyright (c) 2023-2025, NVIDIA CORPORATION.
 
 import numpy as np
 import pandas as pd
@@ -31,17 +31,17 @@ def dask_client():
 
 
 def test_1d_distributed(dask_client):
-    np.random.seed(42)
-    ts = pd.Series(np.random.rand(100))
+    rng = np.random.default_rng(seed=42)
+    ts = pd.Series(rng.random(100))
     m = 10
     return stumpy.stumped(dask_client, ts, m)
 
 
 def test_multidimensional_distributed_timeseries(dask_client):
-    np.random.seed(42)
+    rng = np.random.default_rng(seed=42)
     # Each row represents data from a different dimension while each column represents
     # data from the same dimension
-    your_time_series = np.random.rand(3, 1000)
+    your_time_series = rng.random((3, 1000))
     # Approximately, how many data points might be found in a pattern
     window_size = 50
 

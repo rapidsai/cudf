@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 
@@ -24,17 +25,20 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 
+#include <functional>
 #include <numeric>
 
 namespace cudf {
 // Trivially copy all members but the children
 column_device_view::column_device_view(column_view source)
-  : detail::column_device_view_base{source.type(),
-                                    source.size(),
-                                    source.head(),
-                                    source.null_mask(),
-                                    source.offset()},
-    _num_children{source.num_children()}
+  : column_device_view_core{source.type(),
+                            source.size(),
+                            source.head(),
+                            source.null_mask(),
+                            source.offset(),
+                            nullptr,
+                            source.num_children()}
+
 {
 }
 
@@ -60,13 +64,12 @@ create_device_view_from_view(ColumnView const& source, rmm::cuda_stream_view str
   // A buffer of CPU memory is allocated to hold the ColumnDeviceView
   // objects. Once filled, the CPU memory is copied to device memory
   // and then set into the d_children member pointer.
-  std::vector<char> staging_buffer(descendant_storage_bytes);
+  auto staging_buffer = detail::make_host_vector<char>(descendant_storage_bytes, stream);
 
   // Each ColumnDeviceView instance may have child objects that
   // require setting some internal device pointers before being copied
   // from CPU to device.
-  rmm::device_buffer* const descendant_storage =
-    new rmm::device_buffer(descendant_storage_bytes, stream);
+  auto const descendant_storage = new rmm::device_uvector<char>(descendant_storage_bytes, stream);
 
   auto deleter = [descendant_storage](ColumnDeviceView* v) {
     v->destroy();
@@ -77,13 +80,7 @@ create_device_view_from_view(ColumnView const& source, rmm::cuda_stream_view str
     new ColumnDeviceView(source, staging_buffer.data(), descendant_storage->data()), deleter};
 
   // copy the CPU memory with all the children into device memory
-  CUDF_CUDA_TRY(cudaMemcpyAsync(descendant_storage->data(),
-                                staging_buffer.data(),
-                                descendant_storage->size(),
-                                cudaMemcpyDefault,
-                                stream.value()));
-
-  stream.synchronize();
+  detail::cuda_memcpy<char>(*descendant_storage, staging_buffer, stream);
 
   return result;
 }
@@ -93,12 +90,13 @@ create_device_view_from_view(ColumnView const& source, rmm::cuda_stream_view str
 // Place any child objects in host memory (h_ptr) and use the device
 // memory ptr (d_ptr) to set any child object pointers.
 column_device_view::column_device_view(column_view source, void* h_ptr, void* d_ptr)
-  : detail::column_device_view_base{source.type(),
-                                    source.size(),
-                                    source.head(),
-                                    source.null_mask(),
-                                    source.offset()},
-    _num_children{source.num_children()}
+  : column_device_view_core{source.type(),
+                            source.size(),
+                            source.head(),
+                            source.null_mask(),
+                            source.offset(),
+                            nullptr,
+                            source.num_children()}
 {
   d_children = detail::child_columns_to_device_array<column_device_view>(
     source.child_begin(), source.child_end(), h_ptr, d_ptr);
@@ -128,24 +126,26 @@ std::size_t column_device_view::extent(column_view const& source)
 
 // For use with inplace-new to pre-fill memory to be copied to device
 mutable_column_device_view::mutable_column_device_view(mutable_column_view source)
-  : detail::column_device_view_base{source.type(),
+  : mutable_column_device_view_core{source.type(),
                                     source.size(),
                                     source.head(),
                                     source.null_mask(),
-                                    source.offset()},
-    _num_children{source.num_children()}
+                                    source.offset(),
+                                    nullptr,
+                                    source.num_children()}
 {
 }
 
 mutable_column_device_view::mutable_column_device_view(mutable_column_view source,
                                                        void* h_ptr,
                                                        void* d_ptr)
-  : detail::column_device_view_base{source.type(),
+  : mutable_column_device_view_core{source.type(),
                                     source.size(),
                                     source.head(),
                                     source.null_mask(),
-                                    source.offset()},
-    _num_children{source.num_children()}
+                                    source.offset(),
+                                    nullptr,
+                                    source.num_children()}
 {
   d_children = detail::child_columns_to_device_array<mutable_column_device_view>(
     source.child_begin(), source.child_end(), h_ptr, d_ptr);

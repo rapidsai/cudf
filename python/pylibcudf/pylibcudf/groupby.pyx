@@ -25,6 +25,8 @@ from .types cimport null_order, null_policy, order, sorted
 from .utils cimport _as_vector
 
 
+__all__ = ["GroupBy", "GroupByRequest"]
+
 cdef class GroupByRequest:
     """A request for a groupby aggregation or scan.
 
@@ -44,6 +46,8 @@ cdef class GroupByRequest:
     def __init__(self, Column values, list aggregations):
         self._values = values
         self._aggregations = aggregations
+
+    __hash__ = None
 
     cdef aggregation_request _to_libcudf_agg_request(self) except *:
         """Convert to a libcudf aggregation_request object.
@@ -127,6 +131,8 @@ cdef class GroupBy:
         # deallocated from under us:
         self._keys = keys
 
+    __hash__ = None
+
     @staticmethod
     cdef tuple _parse_outputs(
         pair[unique_ptr[table], vector[aggregation_result]] c_res
@@ -176,7 +182,7 @@ cdef class GroupBy:
         # We rely on libcudf to tell us this rather than checking the types beforehand
         # ourselves.
         with nogil:
-            c_res = move(dereference(self.c_obj).aggregate(c_requests))
+            c_res = dereference(self.c_obj).aggregate(c_requests)
         return GroupBy._parse_outputs(move(c_res))
 
     cpdef tuple scan(self, list requests):
@@ -205,7 +211,7 @@ cdef class GroupBy:
 
         cdef pair[unique_ptr[table], vector[aggregation_result]] c_res
         with nogil:
-            c_res = move(dereference(self.c_obj).scan(c_requests))
+            c_res = dereference(self.c_obj).scan(c_requests)
         return GroupBy._parse_outputs(move(c_res))
 
     cpdef tuple shift(self, Table values, list offset, list fill_values):
@@ -234,10 +240,11 @@ cdef class GroupBy:
         cdef vector[size_type] c_offset = offset
         cdef pair[unique_ptr[table], unique_ptr[table]] c_res
         with nogil:
-            c_res = move(
-                dereference(self.c_obj).shift(values.view(), c_offset, c_fill_values)
+            c_res = dereference(self.c_obj).shift(
+                values.view(),
+                c_offset,
+                c_fill_values
             )
-
         return (
             Table.from_libcudf(move(c_res.first)),
             Table.from_libcudf(move(c_res.second)),
@@ -264,10 +271,10 @@ cdef class GroupBy:
         cdef pair[unique_ptr[table], unique_ptr[table]] c_res
         cdef vector[replace_policy] c_replace_policies = replace_policies
         with nogil:
-            c_res = move(
-                dereference(self.c_obj).replace_nulls(value.view(), c_replace_policies)
+            c_res = dereference(self.c_obj).replace_nulls(
+                value.view(),
+                c_replace_policies
             )
-
         return (
             Table.from_libcudf(move(c_res.first)),
             Table.from_libcudf(move(c_res.second)),

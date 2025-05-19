@@ -80,8 +80,8 @@ std::array<char, 33> const escapable_chars{
  */
 std::vector<char32_t> string_to_char32_vector(std::string_view pattern)
 {
-  auto size       = static_cast<size_type>(pattern.size());
-  size_type count = std::count_if(pattern.cbegin(), pattern.cend(), [](char ch) {
+  auto size             = static_cast<size_type>(pattern.size());
+  size_type const count = std::count_if(pattern.cbegin(), pattern.cend(), [](char ch) {
     return is_begin_utf8_char(static_cast<uint8_t>(ch));
   });
   std::vector<char32_t> result(count + 1);
@@ -89,7 +89,7 @@ std::vector<char32_t> string_to_char32_vector(std::string_view pattern)
   char const* input_ptr = pattern.data();
   for (size_type idx = 0; idx < size; ++idx) {
     char_utf8 output_character = 0;
-    size_type ch_width         = to_char_utf8(input_ptr, output_character);
+    size_type const ch_width   = to_char_utf8(input_ptr, output_character);
     input_ptr += ch_width;
     idx += ch_width - 1;
     *output_ptr++ = output_character;
@@ -102,7 +102,7 @@ std::vector<char32_t> string_to_char32_vector(std::string_view pattern)
 
 int32_t reprog::add_inst(int32_t t)
 {
-  reinst inst;
+  reinst inst{};
   inst.type        = t;
   inst.u2.left_id  = 0;
   inst.u1.right_id = 0;
@@ -710,19 +710,17 @@ class regex_parser {
     std::stack<int> lbra_stack;
     auto repeat_start_index = -1;
 
-    for (std::size_t index = 0; index < in.size(); index++) {
-      auto const item = in[index];
-
+    for (auto const item : in) {
       if (item.type != COUNTED && item.type != COUNTED_LAZY) {
         out.push_back(item);
         if (item.type == LBRA || item.type == LBRA_NC) {
-          lbra_stack.push(index);
+          lbra_stack.push(out.size() - 1);
           repeat_start_index = -1;
         } else if (item.type == RBRA) {
           repeat_start_index = lbra_stack.top();
           lbra_stack.pop();
         } else if ((item.type & ITEM_MASK) != OPERATOR_MASK) {
-          repeat_start_index = index;
+          repeat_start_index = out.size() - 1;
         }
       } else {
         // item is of type COUNTED or COUNTED_LAZY
@@ -731,26 +729,39 @@ class regex_parser {
         CUDF_EXPECTS(repeat_start_index >= 0, "regex: invalid counted quantifier location");
 
         // range of affected item(s) to repeat
-        auto const begin = in.begin() + repeat_start_index;
-        auto const end   = in.begin() + index;
+        auto const begin = out.begin() + repeat_start_index;
+        auto const end   = out.end();
+
         // count range values
         auto const n = item.d.count.n;  // minimum count
         auto const m = item.d.count.m;  // maximum count
-
         assert(n >= 0 && "invalid repeat count value n");
         // zero-repeat edge-case: need to erase the previous items
-        if (n == 0) { out.erase(out.end() - (index - repeat_start_index), out.end()); }
+        if (n == 0) { out.erase(begin, end); }
 
-        // minimum repeats (n)
-        for (int j = 1; j < n; j++) {
-          out.insert(out.end(), begin, end);
+        std::vector<regex_parser::Item> repeat_copy(begin, end);
+        // special handling for quantified capture groups
+        if ((n > 1) && (*begin).type == LBRA) {
+          (*begin).type = LBRA_NC;  // change first one to non-capture
+          // add intermediate groups as non-capture
+          std::vector<regex_parser::Item> ncg_copy(begin, end);
+          for (int j = 1; j < (n - 1); j++) {
+            out.insert(out.end(), ncg_copy.begin(), ncg_copy.end());
+          }
+          // add the last entry as a regular capture-group
+          out.insert(out.end(), repeat_copy.begin(), repeat_copy.end());
+        } else {
+          // minimum repeats (n)
+          for (int j = 1; j < n; j++) {
+            out.insert(out.end(), repeat_copy.begin(), repeat_copy.end());
+          }
         }
 
         // optional maximum repeats (m)
         if (m >= 0) {
           for (int j = n; j < m; j++) {
             out.emplace_back(LBRA_NC, 0);
-            out.insert(out.end(), begin, end);
+            out.insert(out.end(), repeat_copy.begin(), repeat_copy.end());
           }
           for (int j = n; j < m; j++) {
             out.emplace_back(RBRA, 0);
@@ -760,8 +771,9 @@ class regex_parser {
           // infinite repeats
           if (n > 0) {  // append '+' after last repetition
             out.emplace_back(item.type == COUNTED ? PLUS : PLUS_LAZY, 0);
-          } else {  // copy it once then append '*'
-            out.insert(out.end(), begin, end);
+          } else {
+            // copy it once then append '*'
+            out.insert(out.end(), repeat_copy.begin(), repeat_copy.end());
             out.emplace_back(item.type == COUNTED ? STAR : STAR_LAZY, 0);
           }
         }
@@ -956,7 +968,7 @@ class regex_compiler {
     }
     if (token != RBRA) { push_operator(token, subid); }
 
-    static std::vector<int> tokens{STAR, STAR_LAZY, QUEST, QUEST_LAZY, PLUS, PLUS_LAZY, RBRA};
+    static std::vector<int> const tokens{STAR, STAR_LAZY, QUEST, QUEST_LAZY, PLUS, PLUS_LAZY, RBRA};
     _last_was_and =
       std::any_of(tokens.cbegin(), tokens.cend(), [token](auto t) { return t == token; });
   }
@@ -1034,7 +1046,7 @@ reprog reprog::create_from(std::string_view pattern,
 {
   reprog rtn;
   auto pattern32 = string_to_char32_vector(pattern);
-  regex_compiler compiler(pattern32.data(), flags, capture, rtn);
+  regex_compiler const compiler(pattern32.data(), flags, capture, rtn);
   // for debugging, it can be helpful to call rtn.print(flags) here to dump
   // out the instructions that have been created from the given pattern
   return rtn;
@@ -1102,7 +1114,7 @@ void reprog::build_start_ids()
   std::stack<int> ids;
   ids.push(_startinst_id);
   while (!ids.empty()) {
-    int id = ids.top();
+    int const id = ids.top();
     ids.pop();
     reinst const& inst = _insts[id];
     if (inst.type == OR) {

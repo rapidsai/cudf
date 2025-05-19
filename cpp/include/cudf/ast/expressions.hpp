@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,8 @@
 #include <cudf/utilities/error.hpp>
 
 #include <cstdint>
+#include <memory>
+#include <vector>
 
 namespace CUDF_EXPORT cudf {
 namespace ast {
@@ -478,7 +480,7 @@ class operation : public expression {
    *
    * @return Vector of operands
    */
-  [[nodiscard]] std::vector<std::reference_wrapper<expression const>> get_operands() const
+  [[nodiscard]] std::vector<std::reference_wrapper<expression const>> const& get_operands() const
   {
     return operands;
   }
@@ -506,8 +508,8 @@ class operation : public expression {
   };
 
  private:
-  ast_operator const op;
-  std::vector<std::reference_wrapper<expression const>> const operands;
+  ast_operator op;
+  std::vector<std::reference_wrapper<expression const>> operands;
 };
 
 /**
@@ -550,6 +552,97 @@ class column_name_reference : public expression {
 
  private:
   std::string column_name;
+};
+
+/**
+ * @brief An AST expression tree. It owns and contains multiple dependent expressions. All the
+ * expressions are destroyed when the tree is destroyed.
+ */
+class tree {
+ public:
+  /**
+   * @brief construct an empty ast tree
+   */
+  tree() = default;
+
+  /**
+   * @brief Moves the ast tree
+   */
+  tree(tree&&) = default;
+
+  /**
+   * @brief move-assigns the AST tree
+   * @returns a reference to the move-assigned tree
+   */
+  tree& operator=(tree&&) = default;
+
+  ~tree() = default;
+
+  // the tree is not copyable
+  tree(tree const&)            = delete;
+  tree& operator=(tree const&) = delete;
+
+  /**
+   * @brief Add an expression to the AST tree
+   * @param args Arguments to use to construct the ast expression
+   * @returns a reference to the added expression
+   */
+  template <typename Expr, typename... Args>
+  std::enable_if_t<std::is_base_of_v<expression, Expr>, Expr const&> emplace(Args&&... args)
+  {
+    auto expr            = std::make_unique<Expr>(std::forward<Args>(args)...);
+    Expr const& expr_ref = *expr;
+    expressions.emplace_back(std::move(expr));
+    return expr_ref;
+  }
+
+  /**
+   * @brief Add an expression to the AST tree
+   * @param expr AST expression to be added
+   * @returns a reference to the added expression
+   */
+  template <typename Expr>
+  decltype(auto) push(Expr expr)
+  {
+    return emplace<Expr>(std::move(expr));
+  }
+
+  /**
+   * @brief get the first expression in the tree
+   * @returns the first inserted expression into the tree
+   */
+  [[nodiscard]] expression const& front() const { return *expressions.front(); }
+
+  /**
+   * @brief get the last expression in the tree
+   * @returns the last inserted expression into the tree
+   */
+  [[nodiscard]] expression const& back() const { return *expressions.back(); }
+
+  /**
+   * @brief get the number of expressions added to the tree
+   * @returns the number of expressions added to the tree
+   */
+  [[nodiscard]] size_t size() const { return expressions.size(); }
+
+  /**
+   * @brief get the expression at an index in the tree. Index is checked.
+   * @param index index of expression in the ast tree
+   * @returns the expression at the specified index
+   */
+  expression const& at(size_t index) { return *expressions.at(index); }
+
+  /**
+   * @brief get the expression at an index in the tree. Index is unchecked.
+   * @param index index of expression in the ast tree
+   * @returns the expression at the specified index
+   */
+  expression const& operator[](size_t index) const { return *expressions[index]; }
+
+ private:
+  // TODO: use better ownership semantics, the unique_ptr here is redundant. Consider using a bump
+  // allocator with type-erased deleters.
+  std::vector<std::unique_ptr<expression>> expressions;
 };
 
 /** @} */  // end of group

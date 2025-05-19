@@ -16,18 +16,16 @@
 
 #pragma once
 
-#include "gpuinflate.hpp"
+#include "io/comp/comp.hpp"
 
-#include <cudf/io/config_utils.hpp>
 #include <cudf/io/nvcomp_adapter.hpp>
-#include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
 #include <optional>
 
-namespace cudf::io::nvcomp {
+namespace cudf::io::detail::nvcomp {
 /**
  * @brief Device batch decompression of given type.
  *
@@ -105,4 +103,4 @@ void batched_compress(compression_type compression,
                       device_span<compression_result> results,
                       rmm::cuda_stream_view stream);
 
-}  // namespace cudf::io::nvcomp
+}  // namespace cudf::io::detail::nvcomp

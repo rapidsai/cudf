@@ -1,25 +1,24 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 from __future__ import annotations
 
 import warnings
-from typing import TYPE_CHECKING
 
 import cupy as cp
-import numpy as np
+import pyarrow as pa
 
 import cudf
 from cudf.core.column import as_column
-from cudf.core.index import Index, RangeIndex
-from cudf.core.scalar import Scalar
+from cudf.core.index import Index
 from cudf.options import get_option
-from cudf.utils.dtypes import can_convert_to_column
-
-if TYPE_CHECKING:
-    from cudf.core.column.column import ColumnBase
-    from cudf.core.index import BaseIndex
+from cudf.utils.dtypes import can_convert_to_column, cudf_dtype_to_pa_type
 
 
-def factorize(values, sort=False, use_na_sentinel=True, size_hint=None):
+def factorize(
+    values,
+    sort: bool = False,
+    use_na_sentinel: bool = True,
+    size_hint: int | None = None,
+) -> tuple[cp.ndarray, cp.ndarray | Index]:
     """Encode the input values as integer labels
 
     Parameters
@@ -96,10 +95,10 @@ def factorize(values, sort=False, use_na_sentinel=True, size_hint=None):
         warnings.warn("size_hint is not applicable for cudf.factorize")
 
     if use_na_sentinel:
-        na_sentinel = Scalar(-1)
+        na_sentinel = pa.scalar(-1)
         cats = values.dropna()
     else:
-        na_sentinel = Scalar(None, dtype=values.dtype)
+        na_sentinel = pa.scalar(None, type=cudf_dtype_to_pa_type(values.dtype))
         cats = values
 
     cats = cats.unique().astype(values.dtype)
@@ -116,36 +115,6 @@ def factorize(values, sort=False, use_na_sentinel=True, size_hint=None):
     return labels, cats.values if return_cupy_array else Index._from_column(
         cats
     )
-
-
-def _interpolation(column: ColumnBase, index: BaseIndex) -> ColumnBase:
-    """
-    Interpolate over a float column. assumes a linear interpolation
-    strategy using the index of the data to denote spacing of the x
-    values. For example the data and index [1.0, NaN, 4.0], [1, 3, 4]
-    would result in [1.0, 3.0, 4.0].
-    """
-    # figure out where the nans are
-    mask = column.isnull()
-
-    # trivial cases, all nan or no nans
-    if not mask.any() or mask.all():
-        return column.copy()
-
-    valid_locs = ~mask
-    if isinstance(index, RangeIndex):
-        # Each point is evenly spaced, index values don't matter
-        known_x = cp.flatnonzero(valid_locs.values)
-    else:
-        known_x = index._column.apply_boolean_mask(valid_locs).values  # type: ignore[attr-defined]
-    known_y = column.apply_boolean_mask(valid_locs).values
-
-    result = cp.interp(index.to_cupy(), known_x, known_y)
-
-    # find the first nan
-    first_nan_idx = valid_locs.values.argmax().item()
-    result[:first_nan_idx] = np.nan
-    return as_column(result)
 
 
 def unique(values):

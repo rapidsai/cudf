@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@
 #pragma once
 
 #include <cudf/column/column_device_view.cuh>
+#include <cudf/detail/device_scalar.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/detail/valid_if.cuh>
@@ -25,7 +26,6 @@
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/device_scalar.hpp>
 #include <rmm/exec_policy.hpp>
 
 #include <cub/block/block_reduce.cuh>
@@ -67,7 +67,7 @@ CUDF_KERNEL void offset_bitmask_binop(Binop op,
                                       size_type source_size_bits,
                                       size_type* count_ptr)
 {
-  auto const tid = threadIdx.x + blockIdx.x * blockDim.x;
+  auto const tid = cudf::detail::grid_1d::global_thread_id();
 
   auto const last_bit_index  = source_size_bits - 1;
   auto const last_word_index = cudf::word_index(last_bit_index);
@@ -75,7 +75,7 @@ CUDF_KERNEL void offset_bitmask_binop(Binop op,
   size_type thread_count = 0;
 
   for (size_type destination_word_index = tid; destination_word_index < destination.size();
-       destination_word_index += blockDim.x * gridDim.x) {
+       destination_word_index += cudf::detail::grid_1d::grid_stride()) {
     bitmask_type destination_word =
       detail::get_mask_offset_word(source[0],
                                    destination_word_index,
@@ -165,17 +165,10 @@ size_type inplace_bitmask_binop(Binop op,
                "Mask pointer cannot be null");
 
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref();
-  rmm::device_scalar<size_type> d_counter{0, stream, mr};
-  rmm::device_uvector<bitmask_type const*> d_masks(masks.size(), stream, mr);
-  rmm::device_uvector<size_type> d_begin_bits(masks_begin_bits.size(), stream, mr);
+  cudf::detail::device_scalar<size_type> d_counter{0, stream, mr};
 
-  CUDF_CUDA_TRY(cudaMemcpyAsync(
-    d_masks.data(), masks.data(), masks.size_bytes(), cudaMemcpyDefault, stream.value()));
-  CUDF_CUDA_TRY(cudaMemcpyAsync(d_begin_bits.data(),
-                                masks_begin_bits.data(),
-                                masks_begin_bits.size_bytes(),
-                                cudaMemcpyDefault,
-                                stream.value()));
+  auto d_masks      = cudf::detail::make_device_uvector_async(masks, stream, mr);
+  auto d_begin_bits = cudf::detail::make_device_uvector_async(masks_begin_bits, stream, mr);
 
   auto constexpr block_size = 256;
   cudf::detail::grid_1d config(dest_mask.size(), block_size);
@@ -221,8 +214,7 @@ CUDF_KERNEL void subtract_set_bits_range_boundaries_kernel(bitmask_type const* b
 {
   constexpr size_type const word_size_in_bits{detail::size_in_bits<bitmask_type>()};
 
-  size_type const tid = threadIdx.x + blockIdx.x * blockDim.x;
-  size_type range_id  = tid;
+  auto range_id = cudf::detail::grid_1d::global_thread_id();
 
   while (range_id < num_ranges) {
     size_type const first_bit_index = *(first_bit_indices + range_id);
@@ -250,7 +242,7 @@ CUDF_KERNEL void subtract_set_bits_range_boundaries_kernel(bitmask_type const* b
     // Update the null count with the computed delta.
     size_type updated_null_count = *(null_counts + range_id) + delta;
     *(null_counts + range_id)    = updated_null_count;
-    range_id += blockDim.x * gridDim.x;
+    range_id += cudf::detail::grid_1d::grid_stride();
   }
 }
 
@@ -452,7 +444,7 @@ std::vector<size_type> segmented_count_bits(bitmask_type const* bitmask,
                                        cudf::get_current_device_resource_ref());
 
   // Copy the results back to the host.
-  return make_std_vector_sync(d_bit_counts, stream);
+  return make_std_vector(d_bit_counts, stream);
 }
 
 // Count non-zero bits in the specified ranges.

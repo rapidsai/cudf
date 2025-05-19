@@ -80,7 +80,7 @@ class JSONReader(IOFuzz):
             # https://github.com/rapidsai/cudf/issues/7086
             # dtypes_list.extend(["list"])
             dtypes_meta, num_rows, num_cols = _generate_rand_meta(
-                self, dtypes_list
+                self, dtypes_list, seed
             )
             self._current_params["dtypes_meta"] = dtypes_meta
             self._current_params["seed"] = seed
@@ -105,14 +105,15 @@ class JSONReader(IOFuzz):
 
     def set_rand_params(self, params):
         params_dict = {}
+        rng = np.random.default_rng(seed=None)
         for param, values in params.items():
             if param == "dtype" and values == ALL_POSSIBLE_VALUES:
-                dtype_val = np.random.choice(
+                dtype_val = rng.choice(
                     [True, self._current_buffer.dtypes.to_dict()]
                 )
                 params_dict[param] = _get_dtype_param_value(dtype_val)
             else:
-                params_dict[param] = np.random.choice(values)
+                params_dict[param] = rng.choice(values)
         self._current_params["test_kwargs"] = self.process_kwargs(params_dict)
 
 
@@ -155,7 +156,7 @@ class JSONWriter(IOFuzz):
             # https://github.com/rapidsai/cudf/issues/7086
             # dtypes_list.extend(["list"])
             dtypes_meta, num_rows, num_cols = _generate_rand_meta(
-                self, dtypes_list
+                self, dtypes_list, seed
             )
             self._current_params["dtypes_meta"] = dtypes_meta
             self._current_params["seed"] = seed
@@ -180,12 +181,13 @@ class JSONWriter(IOFuzz):
 
     def set_rand_params(self, params):
         params_dict = {}
+        rng = np.random.default_rng(seed=None)
         for param, values in params.items():
             if param == "dtype" and values == ALL_POSSIBLE_VALUES:
-                dtype_val = np.random.choice(
+                dtype_val = rng.choice(
                     [True, self._current_buffer.dtypes.to_dict()]
                 )
                 params_dict[param] = _get_dtype_param_value(dtype_val)
             else:
-                params_dict[param] = np.random.choice(values)
+                params_dict[param] = rng.choice(values)
         self._current_params["test_kwargs"] = self.process_kwargs(params_dict)

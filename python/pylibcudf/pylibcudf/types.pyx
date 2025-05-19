@@ -1,5 +1,6 @@
-# Copyright (c) 2023-2024, NVIDIA CORPORATION.
+# Copyright (c) 2023-2025, NVIDIA CORPORATION.
 
+from libc.stddef cimport size_t
 from libc.stdint cimport int32_t
 from pylibcudf.libcudf.types cimport (
     data_type,
@@ -20,6 +21,22 @@ from pylibcudf.libcudf.types import null_order as NullOrder  # no-cython-lint, i
 from pylibcudf.libcudf.types import order as Order  # no-cython-lint, isort:skip
 from pylibcudf.libcudf.types import sorted as Sorted  # no-cython-lint, isort:skip
 
+__all__ = [
+    "DataType",
+    "Interpolation",
+    "MaskState",
+    "NanEquality",
+    "NanPolicy",
+    "NullEquality",
+    "NullOrder",
+    "NullPolicy",
+    "Order",
+    "SIZE_TYPE",
+    "SIZE_TYPE_ID",
+    "Sorted",
+    "TypeId",
+    "size_of"
+]
 
 cdef class DataType:
     """Indicator for the logical data type of an element in a column.
@@ -60,6 +77,9 @@ cdef class DataType:
     def __hash__(self):
         return hash((self.c_obj.id(), self.c_obj.scale()))
 
+    def __reduce__(self):
+        return (type(self), (self.c_obj.id(), self.c_obj.scale()))
+
     @staticmethod
     cdef DataType from_libcudf(data_type dt):
         """Create a DataType from a libcudf data_type.
@@ -73,12 +93,22 @@ cdef class DataType:
         ret.c_obj = dt
         return ret
 
-cpdef size_type size_of(DataType t):
+cpdef size_t size_of(DataType t):
     """Returns the size in bytes of elements of the specified data_type.
 
     Only fixed-width types are supported.
 
     For details, see :cpp:func:`size_of`.
+
+    Parameters
+    ----------
+    t : DataType
+        The DataType to get the size of.
+
+    Returns
+    -------
+    int
+        Size in bytes of an element of the specified type.
     """
     with nogil:
         return cpp_size_of(t.c_obj)

@@ -27,15 +27,11 @@
 static void bench_edit_distance(nvbench::state& state)
 {
   auto const num_rows  = static_cast<cudf::size_type>(state.get_int64("num_rows"));
-  auto const row_width = static_cast<cudf::size_type>(state.get_int64("row_width"));
-
-  if (static_cast<std::size_t>(num_rows) * static_cast<std::size_t>(row_width) >=
-      static_cast<std::size_t>(std::numeric_limits<cudf::size_type>::max())) {
-    state.skip("Skip benchmarks greater than size_type limit");
-  }
+  auto const min_width = static_cast<cudf::size_type>(state.get_int64("min_width"));
+  auto const max_width = static_cast<cudf::size_type>(state.get_int64("max_width"));
 
   data_profile const strings_profile = data_profile_builder().distribution(
-    cudf::type_id::STRING, distribution_id::NORMAL, 0, row_width);
+    cudf::type_id::STRING, distribution_id::NORMAL, min_width, max_width);
   auto const strings_table = create_random_table(
     {cudf::type_id::STRING, cudf::type_id::STRING}, row_count{num_rows}, strings_profile);
   cudf::strings_column_view input1(strings_table->view().column(0));
@@ -55,5 +51,6 @@ static void bench_edit_distance(nvbench::state& state)
 
 NVBENCH_BENCH(bench_edit_distance)
   .set_name("edit_distance")
-  .add_int64_axis("num_rows", {1024, 4096, 8192, 16364, 32768, 262144})
-  .add_int64_axis("row_width", {8, 16, 32, 64, 128, 256});
+  .add_int64_axis("min_width", {0})
+  .add_int64_axis("max_width", {32, 64, 128, 256})
+  .add_int64_axis("num_rows", {32768, 262144});

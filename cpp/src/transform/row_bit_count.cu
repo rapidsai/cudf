@@ -413,7 +413,7 @@ CUDF_KERNEL void compute_segment_sizes(device_span<column_device_view const> col
                                        size_type max_branch_depth)
 {
   extern __shared__ row_span thread_branch_stacks[];
-  int const tid = threadIdx.x + blockIdx.x * blockDim.x;
+  auto const tid = static_cast<size_type>(cudf::detail::grid_1d::global_thread_id());
 
   auto const num_segments = static_cast<size_type>(output.size());
   if (tid >= num_segments) { return; }

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright (c) 2019-2024, NVIDIA CORPORATION.
+# Copyright (c) 2019-2025, NVIDIA CORPORATION.
 
 # cuDF build script
 
@@ -47,8 +47,7 @@ HELP="$0 [clean] [libcudf] [pylibcudf] [cudf] [cudf_polars] [cudfjar] [dask_cudf
    --cmake-args=\\\"<args>\\\"   - pass arbitrary list of CMake configuration options (escape all quotes in argument)
    -h | --h[elp]                 - print this text
 
-   default action (no args) is to build and install 'libcudf' then 'cudf'
-   then 'dask_cudf' targets
+   default action (no args) is to build and install 'libcudf', 'pylibcudf', 'cudf', 'cudf_polars', and 'dask_cudf' targets
 "
 LIB_BUILD_DIR=${LIB_BUILD_DIR:=${REPODIR}/cpp/build}
 KAFKA_LIB_BUILD_DIR=${KAFKA_LIB_BUILD_DIR:=${REPODIR}/cpp/libcudf_kafka/build}
@@ -160,9 +159,11 @@ function buildLibCudfJniInDocker {
                 -DCUDF_USE_PER_THREAD_DEFAULT_STREAM=ON \
                 -DCUDF_LARGE_STRINGS_DISABLED=ON \
                 -DRMM_LOGGING_LEVEL=OFF \
-                -DBUILD_SHARED_LIBS=OFF && \
+                -DBUILD_SHARED_LIBS=OFF \
+                -DCUDF_EXPORT_NVCOMP=ON && \
              cmake --build . --parallel ${PARALLEL_LEVEL} && \
              cd $workspaceRepoDir/java && \
+             CUDF_CPP_BUILD_DIR=$workspaceRepoDir/java/target/libcudf-cmake-build \
              mvn ${MVN_PHASES:-"package"} \
                 -Dmaven.repo.local=$workspaceMavenRepoDir \
                 -DskipTests=${SKIP_TESTS:-false} \
@@ -171,11 +172,10 @@ function buildLibCudfJniInDocker {
                                      -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
                                      -DCMAKE_CUDA_COMPILER_LAUNCHER=ccache \
                                      -DCMAKE_CXX_LINKER_LAUNCHER=ccache' \
-                -DCUDF_CPP_BUILD_DIR=$workspaceRepoDir/java/target/libcudf-cmake-build \
                 -DCUDA_STATIC_RUNTIME=ON \
                 -DCUDF_USE_PER_THREAD_DEFAULT_STREAM=ON \
                 -DUSE_GDS=ON \
-                -DGPU_ARCHS=${CUDF_CMAKE_CUDA_ARCHITECTURES} \
+                -DCMAKE_CUDA_ARCHITECTURES=${CUDF_CMAKE_CUDA_ARCHITECTURES} \
                 -DCUDF_JNI_LIBCUDF_STATIC=ON \
                 -Dtest=*,!CuFileTest,!CudaFatalTest,!ColumnViewNonEmptyNullsTest"
 }

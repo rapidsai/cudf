@@ -1,5 +1,5 @@
 # =============================================================================
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License. You may obtain a copy of the License at
@@ -12,7 +12,21 @@
 # the License.
 # =============================================================================
 
-set(cython_sources edit_distance.pyx generate_ngrams.pyx jaccard.pyx)
+set(cython_sources
+    byte_pair_encode.pyx
+    deduplicate.pyx
+    edit_distance.pyx
+    generate_ngrams.pyx
+    jaccard.pyx
+    minhash.pyx
+    ngrams_tokenize.pyx
+    normalize.pyx
+    replace.pyx
+    stemmer.pyx
+    tokenize.pyx
+    subword_tokenize.pyx
+    wordpiece_tokenize.pyx
+)
 
 set(linked_libraries cudf::cudf)
 rapids_cython_create_modules(

@@ -33,7 +33,7 @@ struct dispatch_create_indices {
                                      rmm::cuda_stream_view stream,
                                      rmm::device_async_resource_ref mr)
   {
-    CUDF_EXPECTS(std::is_unsigned<IndexType>(), "indices must be an unsigned type");
+    CUDF_EXPECTS(cudf::is_signed<IndexType>(), "indices must be a signed type");
     column_view indices_view{
       indices.type(), indices.size(), indices.data<IndexType>(), nullptr, 0, indices.offset()};
     return std::make_unique<column>(indices_view, stream, mr);
@@ -83,7 +83,8 @@ std::unique_ptr<column> make_dictionary_column(std::unique_ptr<column> keys_colu
 {
   CUDF_EXPECTS(!keys_column->has_nulls(), "keys column must not have nulls");
   CUDF_EXPECTS(!indices_column->has_nulls(), "indices column must not have nulls");
-  CUDF_EXPECTS(is_unsigned(indices_column->type()), "indices must be type unsigned integer");
+  CUDF_EXPECTS(is_signed(indices_column->type()) && is_index_type(indices_column->type()),
+               "indices must be type unsigned integer");
 
   auto count = indices_column->size();
   std::vector<std::unique_ptr<column>> children;

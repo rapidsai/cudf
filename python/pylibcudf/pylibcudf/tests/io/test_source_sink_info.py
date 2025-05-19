@@ -2,8 +2,9 @@
 
 import io
 
-import pylibcudf as plc
 import pytest
+
+import pylibcudf as plc
 
 
 @pytest.fixture(params=[plc.io.SourceInfo, plc.io.SinkInfo])

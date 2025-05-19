@@ -59,7 +59,7 @@ std::unique_ptr<column> true_if(InputIterator begin,
   auto output_mutable_view = output->mutable_view();
   auto output_data         = output_mutable_view.data<bool>();
 
-  thrust::transform(rmm::exec_policy(stream), begin, end, output_data, p);
+  thrust::transform(rmm::exec_policy_nosync(stream), begin, end, output_data, p);
 
   return output;
 }

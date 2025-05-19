@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,8 +27,6 @@
 #include <nvtext/generate_ngrams.hpp>
 
 #include <thrust/iterator/transform_iterator.h>
-
-#include <vector>
 
 struct TextGenerateNgramsTest : public cudf::test::BaseFixture {};
 
@@ -161,6 +159,17 @@ TEST_F(TextGenerateNgramsTest, NgramsHash)
                     2319357747u}});
   // clang-format on
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+
+  results = nvtext::hash_character_ngrams(view, 10, 10);
+  // clang-format off
+  LCW expected2({LCW{2818025299u, 4026424618u, 578054337u, 2107870805u, 3942221995u,
+                     2802685757u, 2686450821u, 584898501u, 2206824201u, 487979059u},
+                 LCW{1154048732u, 3209682333u, 3246563372u, 3789750511u, 1287153502u,
+                     3759561568u, 1092423314u,  339538635u, 4265577390u,  879551618u,
+                     4222824617u, 1774528854u, 1028254379u,  485918316u,  879142987u, 3619248543u}
+  });
+  // clang-format on
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected2);
 }
 
 TEST_F(TextGenerateNgramsTest, NgramsHashErrors)

@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2024, NVIDIA CORPORATION.
+# Copyright (c) 2018-2025, NVIDIA CORPORATION.
 
 import codecs
 import gzip
@@ -153,7 +153,7 @@ def make_all_numeric_extremes_dataframe():
 
     for gdf_dtype in gdf_dtypes:
         np_type = pdf_dtypes[gdf_dtype]
-        if np.issubdtype(np_type, np.integer):
+        if np.dtype(np_type).kind in "iu":
             itype = np.iinfo(np_type)
             extremes = [0, +1, -1, itype.min, itype.max]
             df[gdf_dtype] = np.array(extremes * 4).astype(np_type)[:20]
@@ -887,10 +887,10 @@ def test_csv_reader_nrows(tmpdir):
     names = ["int1", "int2"]
     dtypes = ["int32", "int32"]
 
-    rows = 4000000
+    rows = 4000
     read_rows = (rows * 3) // 4
     skip_rows = (rows - read_rows) // 2
-    sample_skip = 1000
+    sample_skip = 100
 
     with open(str(fname), "w") as fp:
         fp.write(",".join(names) + "\n")
@@ -916,10 +916,10 @@ def test_csv_reader_nrows(tmpdir):
         str(fname), dtype=dtypes, skiprows=skip_rows + 1, nrows=read_rows
     )
     assert df.shape == (read_rows, 2)
-    assert str(skip_rows) in list(df)[0]
+    assert str(skip_rows) in next(iter(df))
     assert str(2 * skip_rows) in list(df)[1]
     for row in range(0, read_rows // sample_skip, sample_skip):
-        assert df[list(df)[0]][row] == row + skip_rows + 1
+        assert df[next(iter(df))][row] == row + skip_rows + 1
         assert df[list(df)[1]][row] == 2 * (row + skip_rows + 1)
     assert df[list(df)[1]][read_rows - 1] == 2 * (read_rows + skip_rows)
 
@@ -1183,7 +1183,7 @@ def test_csv_reader_byte_range_type_corner_case(tmpdir):
     ).to_csv(fname, chunksize=100000)
 
     byte_range = (2_147_483_648, 0)
-    with pytest.raises(OverflowError, match="Offset is past end of file"):
+    with pytest.raises(ValueError, match="Invalid byte range offset"):
         cudf.read_csv(fname, byte_range=byte_range, header=None)
 
 
@@ -1764,13 +1764,13 @@ def test_csv_writer_multiindex(tmpdir):
     pdf_df_fname = tmpdir.join("pdf_df_3.csv")
     gdf_df_fname = tmpdir.join("gdf_df_3.csv")
 
-    np.random.seed(0)
+    rng = np.random.default_rng(seed=0)
     gdf = cudf.DataFrame(
         {
-            "a": np.random.randint(0, 5, 20),
-            "b": np.random.randint(0, 5, 20),
+            "a": rng.integers(0, 5, 20),
+            "b": rng.integers(0, 5, 20),
             "c": range(20),
-            "d": np.random.random(20),
+            "d": rng.random(20),
         }
     )
     gdg = gdf.groupby(["a", "b"]).mean()
@@ -2165,9 +2165,11 @@ def test_default_integer_bitwidth(
     cudf_mixed_dataframe.to_csv(buf)
     buf.seek(0)
     read = cudf.read_csv(buf)
-    assert read["Integer"].dtype == np.dtype(f"i{default_integer_bitwidth//8}")
+    assert read["Integer"].dtype == np.dtype(
+        f"i{default_integer_bitwidth // 8}"
+    )
     assert read["Integer2"].dtype == np.dtype(
-        f"i{default_integer_bitwidth//8}"
+        f"i{default_integer_bitwidth // 8}"
     )
 
 
@@ -2182,7 +2184,7 @@ def test_default_integer_bitwidth_partial(
     read = cudf.read_csv(buf, dtype={"Integer": "int64"})
     assert read["Integer"].dtype == np.dtype("i8")
     assert read["Integer2"].dtype == np.dtype(
-        f"i{default_integer_bitwidth//8}"
+        f"i{default_integer_bitwidth // 8}"
     )
 
 
@@ -2197,9 +2199,11 @@ def test_default_integer_bitwidth_extremes(
     buf.seek(0)
     read = cudf.read_csv(buf)
 
-    assert read["int64"].dtype == np.dtype(f"i{default_integer_bitwidth//8}")
-    assert read["long"].dtype == np.dtype(f"i{default_integer_bitwidth//8}")
-    assert read["uint64"].dtype == np.dtype(f"u{default_integer_bitwidth//8}")
+    assert read["int64"].dtype == np.dtype(f"i{default_integer_bitwidth // 8}")
+    assert read["long"].dtype == np.dtype(f"i{default_integer_bitwidth // 8}")
+    assert read["uint64"].dtype == np.dtype(
+        f"u{default_integer_bitwidth // 8}"
+    )
 
 
 def test_default_float_bitwidth(cudf_mixed_dataframe, default_float_bitwidth):
@@ -2209,7 +2213,7 @@ def test_default_float_bitwidth(cudf_mixed_dataframe, default_float_bitwidth):
     cudf_mixed_dataframe.to_csv(buf)
     buf.seek(0)
     read = cudf.read_csv(buf)
-    assert read["Float"].dtype == np.dtype(f"f{default_float_bitwidth//8}")
+    assert read["Float"].dtype == np.dtype(f"f{default_float_bitwidth // 8}")
 
 
 def test_default_float_bitwidth_partial(default_float_bitwidth):
@@ -2219,7 +2223,7 @@ def test_default_float_bitwidth_partial(default_float_bitwidth):
         StringIO("float1,float2\n1.0,2.0\n3.0,4.0"),
         dtype={"float2": "float64"},
     )
-    assert read["float1"].dtype == np.dtype(f"f{default_float_bitwidth//8}")
+    assert read["float1"].dtype == np.dtype(f"f{default_float_bitwidth // 8}")
     assert read["float2"].dtype == np.dtype("f8")
 
 
@@ -2277,3 +2281,20 @@ def test_read_header_none_pandas_compat_column_type():
         result = cudf.read_csv(StringIO(data), header=None).columns
     expected = pd.read_csv(StringIO(data), header=None).columns
     pd.testing.assert_index_equal(result, expected, exact=True)
+
+
+@pytest.mark.parametrize("buffer", ["1", '"one"'])
+def test_read_single_unterminated_row(buffer):
+    gdf = cudf.read_csv(StringIO(buffer), header=None)
+    assert_eq(gdf.shape, (1, 1))
+
+
+@pytest.mark.parametrize("buffer", ["\n", "\r\n"])
+def test_read_empty_only_row(buffer):
+    gdf = cudf.read_csv(StringIO(buffer), header=None)
+    assert_eq(gdf.shape, (0, 0))
+
+
+def test_read_empty_only_row_custom_terminator():
+    gdf = cudf.read_csv(StringIO("*"), header=None, lineterminator="*")
+    assert_eq(gdf.shape, (0, 0))

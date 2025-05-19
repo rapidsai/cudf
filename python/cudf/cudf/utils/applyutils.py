@@ -1,20 +1,21 @@
-# Copyright (c) 2018-2024, NVIDIA CORPORATION.
+# Copyright (c) 2018-2025, NVIDIA CORPORATION.
 from __future__ import annotations
 
 import functools
 from typing import Any
 
 import cupy as cp
+import numpy as np
 from numba import cuda
 from numba.core.utils import pysignature
 
 import cudf
-from cudf import _lib as libcudf
+from cudf.core._internals import binaryop
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import column
-from cudf.utils import utils
 from cudf.utils._numba import _CUDFNumbaConfig
 from cudf.utils.docutils import docfmt_partial
+from cudf.utils.dtypes import SIZE_TYPE_DTYPE
 
 _doc_applyparams = """
 df : DataFrame
@@ -117,11 +118,9 @@ def make_aggregate_nullmask(df, columns=None, op="__and__"):
         nullmask = column.as_column(df[k]._column.nullmask)
 
         if out_mask is None:
-            out_mask = column.as_column(
-                nullmask.copy(), dtype=utils.mask_dtype
-            )
+            out_mask = column.as_column(nullmask.copy(), dtype=SIZE_TYPE_DTYPE)
         else:
-            out_mask = libcudf.binaryop.binaryop(
+            out_mask = binaryop.binaryop(
                 nullmask, out_mask, op, out_mask.dtype
             )
 
@@ -159,7 +158,7 @@ class ApplyKernelCompilerBase:
         outputs = {}
         for k, dt in self.outcols.items():
             outputs[k] = column.column_empty(
-                len(df), dt, False
+                len(df), np.dtype(dt), False
             ).data_array_view(mode="write")
         # Bind argument
         args = {}
@@ -350,10 +349,8 @@ def _load_cache_or_make_row_wise_kernel(cache_key, func, *args, **kwargs):
         cache_key = func
     try:
         out = _cache[cache_key]
-        # print("apply cache loaded", cache_key)
         return out
     except KeyError:
-        # print("apply cache NOT loaded", cache_key)
         kernel = _make_row_wise_kernel(func, *args, **kwargs)
         _cache[cache_key] = kernel
         return kernel

@@ -103,17 +103,12 @@ std::unique_ptr<table> quantiles(table_view const& input,
                                  cudf::sorted is_input_sorted,
                                  std::vector<order> const& column_order,
                                  std::vector<null_order> const& null_precedence,
+                                 rmm::cuda_stream_view stream,
                                  rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::quantiles(input,
-                           q,
-                           interp,
-                           is_input_sorted,
-                           column_order,
-                           null_precedence,
-                           cudf::get_default_stream(),
-                           mr);
+  return detail::quantiles(
+    input, q, interp, is_input_sorted, column_order, null_precedence, stream, mr);
 }
 
 }  // namespace cudf

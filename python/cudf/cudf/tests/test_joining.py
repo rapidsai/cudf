@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2024, NVIDIA CORPORATION.
+# Copyright (c) 2018-2025, NVIDIA CORPORATION.
 
 from itertools import combinations, product, repeat
 
@@ -17,12 +17,21 @@ from cudf.testing._utils import (
     assert_exceptions_equal,
     expect_warning_if,
 )
+from cudf.utils.dtypes import find_common_type
 
-_JOIN_TYPES = ("left", "inner", "outer", "right", "leftanti", "leftsemi")
+_JOIN_TYPES = (
+    "left",
+    "inner",
+    "outer",
+    "right",
+    "leftanti",
+    "leftsemi",
+    "cross",
+)
 
 
 def make_params():
-    np.random.seed(0)
+    rng = np.random.default_rng(seed=0)
 
     hows = _JOIN_TYPES
 
@@ -39,14 +48,14 @@ def make_params():
         yield (aa, bb, how)
 
     # Test large random integer inputs
-    aa = np.random.randint(0, 50, 100)
-    bb = np.random.randint(0, 50, 100)
+    aa = rng.integers(0, 50, 100)
+    bb = rng.integers(0, 50, 100)
     for how in hows:
         yield (aa, bb, how)
 
     # Test floating point inputs
-    aa = np.random.random(50)
-    bb = np.random.random(50)
+    aa = rng.random(50)
+    bb = rng.random(50)
     for how in hows:
         yield (aa, bb, how)
 
@@ -162,9 +171,9 @@ def _check_series(expect, got):
     reason="bug in older version of pandas",
 )
 def test_dataframe_join_suffix():
-    np.random.seed(0)
+    rng = np.random.default_rng(seed=0)
 
-    df = cudf.DataFrame(np.random.randint(0, 5, (5, 3)), columns=list("abc"))
+    df = cudf.DataFrame(rng.integers(0, 5, (5, 3)), columns=list("abc"))
 
     left = df.set_index("a")
     right = df.set_index("c")
@@ -281,19 +290,19 @@ def test_dataframe_join_mismatch_cats(how):
 
 @pytest.mark.parametrize("on", ["key1", ["key1", "key2"], None])
 def test_dataframe_merge_on(on):
-    np.random.seed(0)
+    rng = np.random.default_rng(seed=0)
 
     # Make cuDF
     df_left = cudf.DataFrame()
     nelem = 500
-    df_left["key1"] = np.random.randint(0, 40, nelem)
-    df_left["key2"] = np.random.randint(0, 50, nelem)
+    df_left["key1"] = rng.integers(0, 40, nelem)
+    df_left["key2"] = rng.integers(0, 50, nelem)
     df_left["left_val"] = np.arange(nelem)
 
     df_right = cudf.DataFrame()
     nelem = 500
-    df_right["key1"] = np.random.randint(0, 30, nelem)
-    df_right["key2"] = np.random.randint(0, 50, nelem)
+    df_right["key1"] = rng.integers(0, 30, nelem)
+    df_right["key2"] = rng.integers(0, 50, nelem)
     df_right["right_val"] = np.arange(nelem)
 
     # Make pandas DF
@@ -347,19 +356,19 @@ def test_dataframe_merge_on(on):
 
 
 def test_dataframe_merge_on_unknown_column():
-    np.random.seed(0)
+    rng = np.random.default_rng(seed=0)
 
     # Make cuDF
     df_left = cudf.DataFrame()
     nelem = 500
-    df_left["key1"] = np.random.randint(0, 40, nelem)
-    df_left["key2"] = np.random.randint(0, 50, nelem)
+    df_left["key1"] = rng.integers(0, 40, nelem)
+    df_left["key2"] = rng.integers(0, 50, nelem)
     df_left["left_val"] = np.arange(nelem)
 
     df_right = cudf.DataFrame()
     nelem = 500
-    df_right["key1"] = np.random.randint(0, 30, nelem)
-    df_right["key2"] = np.random.randint(0, 50, nelem)
+    df_right["key1"] = rng.integers(0, 30, nelem)
+    df_right["key2"] = rng.integers(0, 50, nelem)
     df_right["right_val"] = np.arange(nelem)
 
     with pytest.raises(KeyError) as raises:
@@ -368,19 +377,19 @@ def test_dataframe_merge_on_unknown_column():
 
 
 def test_dataframe_merge_no_common_column():
-    np.random.seed(0)
+    rng = np.random.default_rng(seed=0)
 
     # Make cuDF
     df_left = cudf.DataFrame()
     nelem = 500
-    df_left["key1"] = np.random.randint(0, 40, nelem)
-    df_left["key2"] = np.random.randint(0, 50, nelem)
+    df_left["key1"] = rng.integers(0, 40, nelem)
+    df_left["key2"] = rng.integers(0, 50, nelem)
     df_left["left_val"] = np.arange(nelem)
 
     df_right = cudf.DataFrame()
     nelem = 500
-    df_right["key3"] = np.random.randint(0, 30, nelem)
-    df_right["key4"] = np.random.randint(0, 50, nelem)
+    df_right["key3"] = rng.integers(0, 30, nelem)
+    df_right["key4"] = rng.integers(0, 50, nelem)
     df_right["right_val"] = np.arange(nelem)
 
     with pytest.raises(ValueError) as raises:
@@ -460,14 +469,14 @@ def test_dataframe_merge_order():
 @pytest.mark.parametrize("rows", [1, 5, 100])
 @pytest.mark.parametrize("how", ["left", "inner", "outer"])
 def test_dataframe_pairs_of_triples(pairs, max, rows, how):
-    np.random.seed(0)
+    rng = np.random.default_rng(seed=0)
 
     pdf_left = pd.DataFrame()
     pdf_right = pd.DataFrame()
     for left_column in pairs[0]:
-        pdf_left[left_column] = np.random.randint(0, max, rows)
+        pdf_left[left_column] = rng.integers(0, max, rows)
     for right_column in pairs[1]:
-        pdf_right[right_column] = np.random.randint(0, max, rows)
+        pdf_right[right_column] = rng.integers(0, max, rows)
     gdf_left = cudf.from_pandas(pdf_left)
     gdf_right = cudf.from_pandas(pdf_right)
     if not set(pdf_left.columns).intersection(pdf_right.columns):
@@ -504,15 +513,15 @@ def test_dataframe_pairs_of_triples(pairs, max, rows, how):
 
 
 def test_safe_merging_with_left_empty():
-    np.random.seed(0)
+    rng = np.random.default_rng(seed=0)
 
     pairs = ("bcd", "b")
     pdf_left = pd.DataFrame()
     pdf_right = pd.DataFrame()
     for left_column in pairs[0]:
-        pdf_left[left_column] = np.random.randint(0, 10, 0)
+        pdf_left[left_column] = rng.integers(0, 10, 0)
     for right_column in pairs[1]:
-        pdf_right[right_column] = np.random.randint(0, 10, 5)
+        pdf_right[right_column] = rng.integers(0, 10, 5)
     gdf_left = cudf.from_pandas(pdf_left)
     gdf_right = cudf.from_pandas(pdf_right)
 
@@ -981,7 +990,7 @@ def test_typecast_on_join_int_to_int(dtype_l, dtype_r):
     gdf_l = cudf.DataFrame({"join_col": join_data_l, "B": other_data})
     gdf_r = cudf.DataFrame({"join_col": join_data_r, "B": other_data})
 
-    exp_dtype = np.result_type(np.dtype(dtype_l), np.dtype(dtype_r))
+    exp_dtype = find_common_type((np.dtype(dtype_l), np.dtype(dtype_r)))
 
     exp_join_data = [1, 2]
     exp_other_data = ["a", "b"]
@@ -1011,7 +1020,7 @@ def test_typecast_on_join_float_to_float(dtype_l, dtype_r):
     gdf_l = cudf.DataFrame({"join_col": join_data_l, "B": other_data})
     gdf_r = cudf.DataFrame({"join_col": join_data_r, "B": other_data})
 
-    exp_dtype = np.result_type(np.dtype(dtype_l), np.dtype(dtype_r))
+    exp_dtype = find_common_type((np.dtype(dtype_l), np.dtype(dtype_r)))
 
     if dtype_l != dtype_r:
         exp_join_data = [1, 2, 3, 4.5]
@@ -1052,7 +1061,7 @@ def test_typecast_on_join_mixed_int_float(dtype_l, dtype_r):
     gdf_l = cudf.DataFrame({"join_col": join_data_l, "B": other_data})
     gdf_r = cudf.DataFrame({"join_col": join_data_r, "B": other_data})
 
-    exp_dtype = np.result_type(np.dtype(dtype_l), np.dtype(dtype_r))
+    exp_dtype = find_common_type((np.dtype(dtype_l), np.dtype(dtype_r)))
 
     exp_join_data = [1, 2, 3]
     exp_other_data = ["a", "b", "c"]
@@ -1527,7 +1536,7 @@ def test_categorical_typecast_outer():
         result = left.merge(right, how="outer", on="key")
 
 
-@pytest.mark.parametrize("dtype", NUMERIC_TYPES + ["str"])
+@pytest.mark.parametrize("dtype", [*NUMERIC_TYPES, "str"])
 def test_categorical_typecast_inner_one_cat(dtype):
     data = np.array([1, 2, 3], dtype=dtype)
 
@@ -1538,7 +1547,7 @@ def test_categorical_typecast_inner_one_cat(dtype):
     assert result["key"].dtype == left["key"].dtype.categories.dtype
 
 
-@pytest.mark.parametrize("dtype", NUMERIC_TYPES + ["str"])
+@pytest.mark.parametrize("dtype", [*NUMERIC_TYPES, "str"])
 def test_categorical_typecast_left_one_cat(dtype):
     data = np.array([1, 2, 3], dtype=dtype)
 
@@ -1549,7 +1558,7 @@ def test_categorical_typecast_left_one_cat(dtype):
     assert result["key"].dtype == left["key"].dtype
 
 
-@pytest.mark.parametrize("dtype", NUMERIC_TYPES + ["str"])
+@pytest.mark.parametrize("dtype", [*NUMERIC_TYPES, "str"])
 def test_categorical_typecast_outer_one_cat(dtype):
     data = np.array([1, 2, 3], dtype=dtype)
 
@@ -2275,3 +2284,109 @@ def test_merge_timedelta_types(dtype1, dtype2):
         else True,
         check_dtype=len(actual) > 0,
     )
+
+
+def test_merge_index_on_opposite_how_column_reset_index():
+    df = pd.DataFrame({"a": [1, 2, 3, 4, 5]}, index=[1, 3, 5, 7, 9])
+    ser = pd.Series([1, 2], index=pd.Index([1, 2], name="a"), name="b")
+    df_cudf = cudf.DataFrame.from_pandas(df)
+    ser_cudf = cudf.Series.from_pandas(ser)
+
+    expected = pd.merge(df, ser, on="a", how="left")
+    result = cudf.merge(df_cudf, ser_cudf, on="a", how="left")
+    assert_eq(result, expected)
+
+    expected = pd.merge(ser, df, on="a", how="right")
+    result = cudf.merge(ser_cudf, df_cudf, on="a", how="right")
+    assert_eq(result, expected)
+
+
+def test_merge_suffixes_duplicate_label_raises():
+    data = {"a": [1, 2, 3, 4, 5], "b": [6, 6, 6, 6, 6]}
+    df_cudf = cudf.DataFrame(data)
+    df_pd = pd.DataFrame(data)
+    result = df_cudf.merge(df_cudf, on=["a"], suffixes=("", "_right"))
+    expected = df_pd.merge(df_pd, on=["a"], suffixes=("", "_right"))
+    assert_eq(result, expected)
+
+    with pytest.raises(NotImplementedError):
+        result.merge(df_cudf, on=["a"], suffixes=("", "_right"))
+
+
+def test_merge_left_on_right_index_sort():
+    ser = cudf.Series(range(10), name="left_ser")
+    ser2 = cudf.Series(
+        range(10), index=[4, 5, 6, 3, 2, 1, 8, 9, 0, 7], name="right_ser"
+    )
+    ser_pd = ser.to_pandas()
+    ser2_pd = ser2.to_pandas()
+    result = cudf.merge(
+        ser, ser2, how="left", left_on="left_ser", right_index=True, sort=True
+    )
+    expected = pd.merge(
+        ser_pd,
+        ser2_pd,
+        how="left",
+        left_on="left_ser",
+        right_index=True,
+        sort=True,
+    )
+    assert_eq(result, expected)
+
+
+@pytest.mark.parametrize(
+    "left_data",
+    [
+        {"lkey": ["foo", "bar", "baz", "foo"], "value": [1, 2, 3, 5]},
+        {"lkey": ["foo", "bar", "baz", "foo"], "value": [5, 3, 2, 1]},
+        {
+            "lkey": ["foo", "bar", "baz", "foo"],
+            "value": [5, 3, 2, 1],
+            "extra_left": [1, 2, 3, 4],
+        },
+    ],
+)
+@pytest.mark.parametrize(
+    "right_data",
+    [
+        {"rkey": ["foo", "bar", "baz", "foo"], "value": [5, 6, 7, 8]},
+        {"rkey": ["foo", "bar", "baz", "foo"], "value": [8, 7, 6, 5]},
+        {
+            "rkey": ["foo", "bar", "baz", "foo"],
+            "value": [8, 7, 6, 5],
+            "extra_right": [10, 2, 30, 4],
+        },
+    ],
+)
+@pytest.mark.parametrize("sort", [True, False])
+def test_cross_join_overlapping(left_data, right_data, sort):
+    df1 = cudf.DataFrame(left_data)
+    df2 = cudf.DataFrame(right_data)
+
+    pdf1 = df1.to_pandas()
+    pdf2 = df2.to_pandas()
+    expected = pdf1.join(
+        pdf2, how="cross", lsuffix="_x", rsuffix="_y", sort=sort
+    )
+    result = df1.join(df2, how="cross", lsuffix="_x", rsuffix="_y", sort=sort)
+    assert_eq(result, expected)
+
+
+@pytest.mark.parametrize(
+    "suffixes",
+    [
+        ("_left", "_right"),
+        ("", "_right"),
+        ("_left", ""),
+    ],
+)
+def test_cross_merge(suffixes):
+    df1 = cudf.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
+    pdf1 = df1.to_pandas()
+
+    df2 = cudf.DataFrame({"a": [11, 12, 13], "d": [40, 50, 60]})
+    pdf2 = df2.to_pandas()
+
+    expected = pdf1.merge(pdf2, how="cross", suffixes=suffixes)
+    result = df1.merge(df2, how="cross", suffixes=suffixes)
+    assert_eq(result, expected)

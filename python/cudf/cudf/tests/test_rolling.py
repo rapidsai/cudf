@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2024, NVIDIA CORPORATION.
+# Copyright (c) 2021-2025, NVIDIA CORPORATION.
 
 import math
 
@@ -517,3 +517,16 @@ def test_rolling_series():
     actual = df.groupby("b")["a"].rolling(5).mean()
 
     assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize("klass", ["DataFrame", "Series"])
+def test_pandas_compat_int_nan_min_periods(klass):
+    data = [None, 1, 2, None, 4, 6, 11]
+    with cudf.option_context("mode.pandas_compatible", True):
+        result = getattr(cudf, klass)(data).rolling(2, min_periods=1).sum()
+    expected = getattr(pd, klass)(data).rolling(2, min_periods=1).sum()
+    assert_eq(result, expected)
+
+    result = getattr(cudf, klass)(data).rolling(2, min_periods=1).sum()
+    expected = getattr(cudf, klass)([None, 1, 3, 2, 4, 10, 17])
+    assert_eq(result, expected)

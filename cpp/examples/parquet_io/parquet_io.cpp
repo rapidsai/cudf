@@ -14,11 +14,15 @@
  * limitations under the License.
  */
 
-#include "parquet_io.hpp"
-
 #include "../utilities/timer.hpp"
+#include "common_utils.hpp"
+#include "io_source.hpp"
 
-#include <cudf/utilities/default_stream.hpp>
+#include <cudf/io/parquet.hpp>
+#include <cudf/io/types.hpp>
+#include <cudf/table/table_view.hpp>
+
+#include <string>
 
 /**
  * @file parquet_io.cpp
@@ -82,6 +86,18 @@ void write_parquet(cudf::table_view input,
 }
 
 /**
+ * @brief Function to print example usage and argument information.
+ */
+void print_usage()
+{
+  std::cout << "\nUsage: parquet_io <input parquet file> <output parquet file> <encoding type>\n"
+               "                  <compression type> <write page stats: yes/no>\n\n"
+               "Available encoding types: DEFAULT, DICTIONARY, PLAIN, DELTA_BINARY_PACKED,\n"
+               "                 DELTA_LENGTH_BYTE_ARRAY, DELTA_BYTE_ARRAY\n\n"
+               "Available compression types: NONE, AUTO, SNAPPY, LZ4, ZSTD\n\n";
+}
+
+/**
  * @brief Main for nested_types examples
  *
  * Command line parameters:
@@ -97,29 +113,28 @@ void write_parquet(cudf::table_view input,
  */
 int main(int argc, char const** argv)
 {
-  std::string input_filepath;
-  std::string output_filepath;
-  cudf::io::column_encoding encoding;
-  cudf::io::compression_type compression;
-  std::optional<cudf::io::statistics_freq> page_stats;
+  std::string input_filepath                          = "example.parquet";
+  std::string output_filepath                         = "output.parquet";
+  cudf::io::column_encoding encoding                  = get_encoding_type("DELTA_BINARY_PACKED");
+  cudf::io::compression_type compression              = get_compression_type("ZSTD");
+  std::optional<cudf::io::statistics_freq> page_stats = std::nullopt;
 
   switch (argc) {
-    case 1:
-      input_filepath  = "example.parquet";
-      output_filepath = "output.parquet";
-      encoding        = get_encoding_type("DELTA_BINARY_PACKED");
-      compression     = get_compression_type("ZSTD");
-      break;
-    case 6: page_stats = get_page_size_stats(argv[5]); [[fallthrough]];
-    case 5:
-      input_filepath  = argv[1];
-      output_filepath = argv[2];
-      encoding        = get_encoding_type(argv[3]);
-      compression     = get_compression_type(argv[4]);
-      break;
-    default:
-      throw std::runtime_error(
-        "Either provide all command-line arguments, or none to use defaults\n");
+    case 6:
+      page_stats = get_boolean(argv[5])
+                     ? std::make_optional(cudf::io::statistics_freq::STATISTICS_COLUMN)
+                     : std::nullopt;
+      [[fallthrough]];
+    case 5: compression = get_compression_type(argv[4]); [[fallthrough]];
+    case 4: encoding = get_encoding_type(argv[3]); [[fallthrough]];
+    case 3: output_filepath = argv[2]; [[fallthrough]];
+    case 2:  // Check if instead of input_paths, the first argument is `-h` or `--help`
+      if (auto arg = std::string{argv[1]}; arg != "-h" and arg != "--help") {
+        input_filepath = std::move(arg);
+        break;
+      }
+      [[fallthrough]];
+    default: print_usage(); throw std::runtime_error("");
   }
 
   // Create and use a memory pool
@@ -130,18 +145,16 @@ int main(int argc, char const** argv)
   // Read input parquet file
   // We do not want to time the initial read time as it may include
   // time for nvcomp, cufile loading and RMM growth
-  std::cout << std::endl << "Reading " << input_filepath << "..." << std::endl;
+  std::cout << "\nReading " << input_filepath << "...\n";
   std::cout << "Note: Not timing the initial parquet read as it may include\n"
-               "times for nvcomp, cufile loading and RMM growth."
-            << std::endl
-            << std::endl;
+               "times for nvcomp, cufile loading and RMM growth.\n\n";
   auto [input, metadata] = read_parquet(input_filepath);
 
   // Status string to indicate if page stats are set to be written or not
   auto page_stat_string = (page_stats.has_value()) ? "page stats" : "no page stats";
   // Write parquet file with the specified encoding and compression
   std::cout << "Writing " << output_filepath << " with encoding, compression and "
-            << page_stat_string << ".." << std::endl;
+            << page_stat_string << "..\n";
 
   // `timer` is automatically started here
   cudf::examples::timer timer;
@@ -149,7 +162,7 @@ int main(int argc, char const** argv)
   timer.print_elapsed_millis();
 
   // Read the parquet file written with encoding and compression
-  std::cout << "Reading " << output_filepath << "..." << std::endl;
+  std::cout << "Reading " << output_filepath << "...\n";
 
   // Reset the timer
   timer.reset();
@@ -157,23 +170,7 @@ int main(int argc, char const** argv)
   timer.print_elapsed_millis();
 
   // Check for validity
-  try {
-    // Left anti-join the original and transcoded tables
-    // identical tables should not throw an exception and
-    // return an empty indices vector
-    auto const indices = cudf::left_anti_join(input->view(),
-                                              transcoded_input->view(),
-                                              cudf::null_equality::EQUAL,
-                                              cudf::get_default_stream(),
-                                              resource.get());
-
-    // No exception thrown, check indices
-    auto const valid = indices->size() == 0;
-    std::cout << "Transcoding valid: " << std::boolalpha << valid << std::endl;
-  } catch (std::exception& e) {
-    std::cerr << e.what() << std::endl << std::endl;
-    std::cout << "Transcoding valid: false" << std::endl;
-  }
+  check_tables_equal(input->view(), transcoded_input->view());
 
   return 0;
 }

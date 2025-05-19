@@ -1,54 +1,33 @@
 #!/bin/bash
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 set -eou pipefail
 
-# We will only fail these tests if the PR touches code in pylibcudf
-# or cudf_polars itself.
-# Note, the three dots mean we are doing diff between the merge-base
-# of upstream and HEAD. So this is asking, "does _this branch_ touch
-# files in cudf_polars/pylibcudf", rather than "are there changes
-# between upstream and this branch which touch cudf_polars/pylibcudf"
-# TODO: is the target branch exposed anywhere in an environment variable?
-if [ -n "$(git diff --name-only origin/branch-24.12...HEAD -- python/cudf_polars/ python/pylibcudf/)" ];
-then
-    HAS_CHANGES=1
-    rapids-logger "PR has changes in cudf-polars/pylibcudf, test fails treated as failure"
-else
-    HAS_CHANGES=0
-    rapids-logger "PR does not have changes in cudf-polars/pylibcudf, test fails NOT treated as failure"
-fi
-
 rapids-logger "Download wheels"
 
-RAPIDS_PY_CUDA_SUFFIX="$(rapids-wheel-ctk-name-gen ${RAPIDS_CUDA_VERSION})"
-RAPIDS_PY_WHEEL_NAME="cudf_polars_${RAPIDS_PY_CUDA_SUFFIX}" RAPIDS_PY_WHEEL_PURE="1" rapids-download-wheels-from-s3 python ./dist
+RAPIDS_PY_CUDA_SUFFIX="$(rapids-wheel-ctk-name-gen "${RAPIDS_CUDA_VERSION}")"
+CUDF_POLARS_WHEELHOUSE=$(RAPIDS_PY_WHEEL_NAME="cudf_polars_${RAPIDS_PY_CUDA_SUFFIX}" RAPIDS_PY_WHEEL_PURE="1" rapids-download-wheels-from-github python)
 
 # Download libcudf and pylibcudf built in the previous step
-RAPIDS_PY_WHEEL_NAME="libcudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-s3 cpp ./dist
-RAPIDS_PY_WHEEL_NAME="pylibcudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-s3 python ./dist
+LIBCUDF_WHEELHOUSE=$(RAPIDS_PY_WHEEL_NAME="libcudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-github cpp)
+PYLIBCUDF_WHEELHOUSE=$(RAPIDS_PY_WHEEL_NAME="pylibcudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-github python)
 
 rapids-logger "Installing cudf_polars and its dependencies"
-# Constraint to minimum dependency versions if job is set up as "oldest"
-echo "" > ./constraints.txt
-if [[ $RAPIDS_DEPENDENCIES == "oldest" ]]; then
-    rapids-dependency-file-generator \
-        --output requirements \
-        --file-key py_test_cudf_polars \
-        --matrix "cuda=${RAPIDS_CUDA_VERSION%.*};arch=$(arch);py=${RAPIDS_PY_VERSION};dependencies=${RAPIDS_DEPENDENCIES}" \
-      | tee ./constraints.txt
-fi
 
-# echo to expand wildcard before adding `[test]` requires for pip
-python -m pip install \
+# generate constraints (possibly pinning to oldest support versions of dependencies)
+rapids-generate-pip-constraints py_test_cudf_polars ./constraints.txt
+
+# echo to expand wildcard before adding `[test,experimental]` requires for pip
+rapids-pip-retry install \
     -v \
     --constraint ./constraints.txt \
-    "$(echo ./dist/cudf_polars_${RAPIDS_PY_CUDA_SUFFIX}*.whl)[test]" \
-    "$(echo ./dist/libcudf_${RAPIDS_PY_CUDA_SUFFIX}*.whl)" \
-    "$(echo ./dist/pylibcudf_${RAPIDS_PY_CUDA_SUFFIX}*.whl)"
+    "$(echo "${CUDF_POLARS_WHEELHOUSE}"/cudf_polars_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)[test,experimental]" \
+    "$(echo "${LIBCUDF_WHEELHOUSE}"/libcudf_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)" \
+    "$(echo "${PYLIBCUDF_WHEELHOUSE}"/pylibcudf_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)"
 
 rapids-logger "Run cudf_polars tests"
 
+# shellcheck disable=SC2317
 function set_exitcode()
 {
     EXITCODE=$?
@@ -71,9 +50,4 @@ if [ ${EXITCODE} != 0 ]; then
 else
     rapids-logger "Testing PASSED"
 fi
-
-if [ ${HAS_CHANGES} == 1 ]; then
-    exit ${EXITCODE}
-else
-    exit 0
-fi
+exit ${EXITCODE}

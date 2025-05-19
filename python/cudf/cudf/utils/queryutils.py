@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2024, NVIDIA CORPORATION.
+# Copyright (c) 2018-2025, NVIDIA CORPORATION.
 from __future__ import annotations
 
 import ast
@@ -64,7 +64,7 @@ def query_parser(text):
     Returns
     -------
     info: a `dict` of the parsed info
-    """  # noqa
+    """
     # convert any '@' to
     text = text.replace("@", ENVREF_PREFIX)
     tree = ast.parse(text)
@@ -210,7 +210,6 @@ def query_execute(df, expr, callenv):
         Contains keys 'local_dict', 'locals' and 'globals' which are all dict.
         They represent the arg, local and global dictionaries of the caller.
     """
-
     # compile
     compiled = query_compile(expr)
     columns = compiled["colnames"]
@@ -221,8 +220,7 @@ def query_execute(df, expr, callenv):
     # wait to check the types until we know which cols are used
     if any(col.dtype not in SUPPORTED_QUERY_TYPES for col in colarrays):
         raise TypeError(
-            "query only supports numeric, datetime, timedelta, "
-            "or bool dtypes."
+            "query only supports numeric, datetime, timedelta, or bool dtypes."
         )
 
     colarrays = [col.data_array_view(mode="read") for col in colarrays]
@@ -247,9 +245,9 @@ def query_execute(df, expr, callenv):
 
     # allocate output buffer
     nrows = len(df)
-    out = column_empty(nrows, dtype=np.bool_)
+    out = column_empty(nrows, dtype=np.dtype(np.bool_), for_numba=True)
     # run kernel
-    args = [out] + colarrays + envargs
+    args = [out, *colarrays, *envargs]
     with _CUDFNumbaConfig():
         kernel.forall(nrows)(*args)
     out_mask = applyutils.make_aggregate_nullmask(df, columns=columns)

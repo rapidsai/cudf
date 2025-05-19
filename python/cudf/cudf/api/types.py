@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2024, NVIDIA CORPORATION.
+# Copyright (c) 2021-2025, NVIDIA CORPORATION.
 
 """Define common type operations."""
 
@@ -13,7 +13,10 @@ from typing import cast
 import cupy as cp
 import numpy as np
 import pandas as pd
-from pandas.api import types as pd_types
+import pyarrow as pa
+from pandas.api import types as pd_types  # noqa: TID251
+
+import pylibcudf as plc
 
 import cudf
 from cudf.core._compat import PANDAS_LT_300
@@ -31,6 +34,7 @@ from cudf.core.dtypes import (  # noqa: F401
     is_list_dtype,
     is_struct_dtype,
 )
+from cudf.utils.dtypes import CUDF_STRING_DTYPE
 
 
 def is_numeric_dtype(obj):
@@ -69,19 +73,6 @@ def is_numeric_dtype(obj):
     return pd_types.is_numeric_dtype(obj)
 
 
-# A version of numerical type check that does not include cudf decimals for
-# places where we need to distinguish fixed and floating point numbers.
-def _is_non_decimal_numeric_dtype(obj):
-    if isinstance(obj, _BaseDtype) or isinstance(
-        getattr(obj, "dtype", None), _BaseDtype
-    ):
-        return False
-    try:
-        return pd_types.is_numeric_dtype(obj)
-    except TypeError:
-        return False
-
-
 def is_integer(obj):
     """Return True if given object is integer.
 
@@ -91,7 +82,7 @@ def is_integer(obj):
     """
     if isinstance(obj, cudf.Scalar):
         return obj.dtype.kind in "iu"
-    return pd.api.types.is_integer(obj)
+    return pd.api.types.is_integer(obj)  # noqa: TID251
 
 
 def is_string_dtype(obj):
@@ -110,11 +101,11 @@ def is_string_dtype(obj):
     return (
         (
             isinstance(obj, (cudf.Index, cudf.Series))
-            and obj.dtype == cudf.dtype("O")
+            and obj.dtype == CUDF_STRING_DTYPE
         )
         or (isinstance(obj, cudf.core.column.StringColumn))
         or (
-            pd.api.types.is_string_dtype(obj)
+            pd.api.types.is_string_dtype(obj)  # noqa: TID251
             # Reject all cudf extension types.
             and not _is_categorical_dtype(obj)
             and not is_decimal_dtype(obj)
@@ -142,8 +133,9 @@ def is_scalar(val):
         val,
         (
             cudf.Scalar,
-            cudf._lib.scalar.DeviceScalar,
             cudf.core.tools.datetimes.DateOffset,
+            plc.Scalar,
+            pa.Scalar,
         ),
     ) or (
         pd_types.is_scalar(val)
@@ -486,37 +478,6 @@ def is_datetime64tz_dtype(obj):
     return _is_datetime64tz_dtype(obj)
 
 
-def _is_pandas_nullable_extension_dtype(dtype_to_check) -> bool:
-    if isinstance(
-        dtype_to_check,
-        (
-            pd.UInt8Dtype,
-            pd.UInt16Dtype,
-            pd.UInt32Dtype,
-            pd.UInt64Dtype,
-            pd.Int8Dtype,
-            pd.Int16Dtype,
-            pd.Int32Dtype,
-            pd.Int64Dtype,
-            pd.Float32Dtype,
-            pd.Float64Dtype,
-            pd.BooleanDtype,
-            pd.StringDtype,
-            pd.ArrowDtype,
-        ),
-    ):
-        return True
-    elif isinstance(dtype_to_check, pd.CategoricalDtype):
-        if dtype_to_check.categories is None:
-            return False
-        return _is_pandas_nullable_extension_dtype(
-            dtype_to_check.categories.dtype
-        )
-    elif isinstance(dtype_to_check, pd.IntervalDtype):
-        return _is_pandas_nullable_extension_dtype(dtype_to_check.subtype)
-    return False
-
-
 # TODO: The below alias is removed for now since improving cudf categorical
 # support is ongoing and we don't want to introduce any ambiguities. The above
 # method _union_categoricals will take its place once exposed.
@@ -559,4 +520,4 @@ is_dtype_equal = pd_types.is_dtype_equal
 
 
 # Aliases of numpy dtype functionality.
-issubdtype = np.issubdtype
+issubdtype = np.issubdtype  # noqa: TID251

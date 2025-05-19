@@ -13,6 +13,7 @@ from pylibcudf.table cimport Table
 
 from cython.operator import dereference
 
+__all__ = ["partition", "rpartition"]
 
 cpdef Table partition(Column input, Scalar delimiter=None):
     """
@@ -45,11 +46,9 @@ cpdef Table partition(Column input, Scalar delimiter=None):
         )
 
     with nogil:
-        c_result = move(
-            cpp_partition.partition(
-                input.view(),
-                dereference(c_delimiter)
-            )
+        c_result = cpp_partition.partition(
+            input.view(),
+            dereference(c_delimiter)
         )
 
     return Table.from_libcudf(move(c_result))
@@ -85,11 +84,9 @@ cpdef Table rpartition(Column input, Scalar delimiter=None):
         )
 
     with nogil:
-        c_result = move(
-            cpp_partition.rpartition(
-                input.view(),
-                dereference(c_delimiter)
-            )
+        c_result = cpp_partition.rpartition(
+            input.view(),
+            dereference(c_delimiter)
         )
 
     return Table.from_libcudf(move(c_result))

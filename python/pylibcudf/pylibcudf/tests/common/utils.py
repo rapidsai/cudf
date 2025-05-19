@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 from __future__ import annotations
 
 import io
@@ -7,10 +7,11 @@ import os
 import numpy as np
 import pyarrow as pa
 import pyarrow.compute as pc
-import pylibcudf as plc
 import pytest
 from pyarrow.orc import write_table as orc_write_table
 from pyarrow.parquet import write_table as pq_write_table
+
+import pylibcudf as plc
 from pylibcudf.io.types import CompressionType
 
 
@@ -155,7 +156,19 @@ def assert_column_eq(
             lhs = [lhs]
             rhs = [rhs]
 
+        def _is_supported_for_pc_is_nan(arr_type):
+            if pa.types.is_floating(arr_type):
+                return False
+            elif pa.types.is_list(arr_type):
+                return _is_supported_for_pc_is_nan(arr_type.value_type)
+            return True
+
         for lh_arr, rh_arr in zip(lhs, rhs):
+            # pc.is_nan does not support nested list
+            # with float (eg. list<list<float>>)
+            if not _is_supported_for_pc_is_nan(lh_arr.type):
+                continue
+
             # Check NaNs positions match
             # and then filter out nans
             lhs_nans = pc.is_nan(lh_arr)
@@ -175,8 +188,7 @@ def assert_column_eq(
 
 def assert_table_eq(pa_table: pa.Table, plc_table: plc.Table) -> None:
     """Verify that a pylibcudf table and PyArrow table are equal."""
-    plc_shape = (plc_table.num_rows(), plc_table.num_columns())
-    assert plc_shape == pa_table.shape
+    assert plc_table.shape() == pa_table.shape
 
     for plc_col, pa_col in zip(plc_table.columns(), pa_table.columns):
         assert_column_eq(pa_col, plc_col)
@@ -193,10 +205,9 @@ def assert_table_and_meta_eq(
 
     plc_table = plc_table_w_meta.tbl
 
-    plc_shape = (plc_table.num_rows(), plc_table.num_columns())
-    assert (
-        plc_shape == pa_table.shape
-    ), f"{plc_shape} is not equal to {pa_table.shape}"
+    assert plc_table.shape() == pa_table.shape, (
+        f"{plc_table.shape()} is not equal to {pa_table.shape}"
+    )
 
     if not check_types_if_empty and plc_table.num_rows() == 0:
         return
@@ -206,9 +217,9 @@ def assert_table_and_meta_eq(
 
     # Check column name equality
     if check_names:
-        assert (
-            plc_table_w_meta.column_names() == pa_table.column_names
-        ), f"{plc_table_w_meta.column_names()} != {pa_table.column_names}"
+        assert plc_table_w_meta.column_names() == pa_table.column_names, (
+            f"{plc_table_w_meta.column_names()} != {pa_table.column_names}"
+        )
 
 
 def cudf_raises(expected_exception: BaseException, *args, **kwargs):
@@ -354,6 +365,16 @@ def make_source(path_or_buf, pa_table, format, **kwargs):
     return path_or_buf
 
 
+def get_bytes_from_source(source):
+    if isinstance(source, (str, os.PathLike)):
+        with open(source, "rb") as f:
+            return f.read()
+    elif isinstance(source, io.BytesIO):
+        return source.getbuffer()
+    else:
+        raise TypeError(f"Unsupported source type: {type(source)}")
+
+
 NUMERIC_PA_TYPES = [pa.int64(), pa.float64(), pa.uint64()]
 STRING_PA_TYPES = [pa.string()]
 BOOL_PA_TYPES = [pa.bool_()]
@@ -384,12 +405,10 @@ DEFAULT_PA_STRUCT_TESTING_TYPES = [
     NESTED_STRUCT_TESTING_TYPE,
 ]
 
+NON_NESTED_PA_TYPES = NUMERIC_PA_TYPES + STRING_PA_TYPES + BOOL_PA_TYPES
+
 DEFAULT_PA_TYPES = (
-    NUMERIC_PA_TYPES
-    + STRING_PA_TYPES
-    + BOOL_PA_TYPES
-    + LIST_PA_TYPES
-    + DEFAULT_PA_STRUCT_TESTING_TYPES
+    NON_NESTED_PA_TYPES + LIST_PA_TYPES + DEFAULT_PA_STRUCT_TESTING_TYPES
 )
 
 # Map pylibcudf compression types to pandas ones

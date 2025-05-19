@@ -1,11 +1,12 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
 
 import pyarrow
-import pylibcudf as plc
 import pytest
+
+import pylibcudf as plc
 
 from cudf_polars.containers import Column
 
@@ -27,13 +28,24 @@ def test_length_leq_one_always_sorted(length):
             plc.DataType(plc.TypeId.INT8), length, plc.MaskState.ALL_VALID
         )
     )
-    assert column.is_sorted == plc.types.Sorted.YES
+    assert column.check_sorted(
+        order=plc.types.Order.ASCENDING, null_order=plc.types.NullOrder.AFTER
+    )
+    assert column.check_sorted(
+        order=plc.types.Order.DESCENDING, null_order=plc.types.NullOrder.AFTER
+    )
+
     column.set_sorted(
         is_sorted=plc.types.Sorted.NO,
         order=plc.types.Order.ASCENDING,
         null_order=plc.types.NullOrder.AFTER,
     )
-    assert column.is_sorted == plc.types.Sorted.YES
+    assert column.check_sorted(
+        order=plc.types.Order.ASCENDING, null_order=plc.types.NullOrder.AFTER
+    )
+    assert column.check_sorted(
+        order=plc.types.Order.DESCENDING, null_order=plc.types.NullOrder.AFTER
+    )
 
 
 def test_shallow_copy():
@@ -56,17 +68,26 @@ def test_shallow_copy():
 def test_mask_nans(typeid):
     dtype = plc.DataType(typeid)
     values = pyarrow.array([0, 0, 0], type=plc.interop.to_arrow(dtype))
-    column = Column(plc.interop.from_arrow(values))
+    column = Column(plc.Column(values))
     masked = column.mask_nans()
-    assert column.obj.null_count() == masked.obj.null_count()
+    assert column.null_count == masked.null_count
 
 
 def test_mask_nans_float():
     dtype = plc.DataType(plc.TypeId.FLOAT32)
     values = pyarrow.array([0, 0, float("nan")], type=plc.interop.to_arrow(dtype))
-    column = Column(plc.interop.from_arrow(values))
+    column = Column(plc.Column(values))
     masked = column.mask_nans()
     expect = pyarrow.array([0, 0, None], type=plc.interop.to_arrow(dtype))
     got = pyarrow.array(plc.interop.to_arrow(masked.obj))
 
     assert expect == got
+
+
+def test_slice_none_returns_self():
+    column = Column(
+        plc.column_factories.make_numeric_column(
+            plc.DataType(plc.TypeId.INT8), 2, plc.MaskState.ALL_VALID
+        )
+    )
+    assert column.slice(None) is column

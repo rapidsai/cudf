@@ -80,42 +80,39 @@ IO format.
 - \[¹\] - Not all orientations are GPU-accelerated.
 - \[²\] - Not GPU-accelerated.
 
-## Magnum IO GPUDirect Storage Integration
+## KvikIO Integration
+
+cuDF leverages the [KvikIO](https://github.com/rapidsai/kvikio) library for high-performance
+I/O features, such as parallel I/O operations and NVIDIA Magnum IO GPUDirect Storage (GDS).
 
 Many IO APIs can use Magnum IO GPUDirect Storage (GDS) library to optimize
 IO operations.  GDS enables a direct data path for direct memory access
 (DMA) transfers between GPU memory and storage, which avoids a bounce
-buffer through the CPU.  GDS also has a compatibility mode that allows
-the library to fall back to copying through a CPU bounce buffer. The
-SDK is available for download
+buffer through the CPU. The SDK is available for download
 [here](https://developer.nvidia.com/gpudirect-storage). GDS is also
 included in CUDA Toolkit 11.4 and higher.
 
-Use of GPUDirect Storage in cuDF is enabled by default, but can be
-disabled through the environment variable `LIBCUDF_CUFILE_POLICY`.
-This variable also controls the GDS compatibility mode.
+Use of GDS in cuDF is controlled by KvikIO's environment variable `KVIKIO_COMPAT_MODE`. It has
+3 options (case-insensitive):
 
-There are four valid values for the environment variable:
+- `ON` (aliases: `TRUE`, `YES`, `1`): Enable the compatibility mode, which enforces KvikIO POSIX I/O path.
+  This is the default option in cuDF.
+- `OFF` (aliases: `FALSE`, `NO`, `0`): Force-enable KvikIO cuFile (the underlying API for GDS) I/O path.
+  GDS will be activated if the system requirements for cuFile are met and cuFile is properly
+  configured. However, if the system is not suited for cuFile, I/O operations under the `OFF`
+  option may error out.
+- `AUTO`: Try KvikIO cuFile I/O path first, and fall back to KvikIO POSIX I/O if the system requirements
+  for cuFile are not met.
 
-- "GDS": Enable GDS use; GDS compatibility mode is *off*.
-- "ALWAYS": Enable GDS use; GDS compatibility mode is *on*.
-- "KVIKIO": Enable GDS through [KvikIO](https://github.com/rapidsai/kvikio).
-- "OFF": Completely disable GDS use.
-
-If no value is set, behavior will be the same as the "KVIKIO" option.
-
-This environment variable also affects how cuDF treats GDS errors.
-
-- When `LIBCUDF_CUFILE_POLICY` is set to "GDS" and a GDS API call
-  fails for any reason, cuDF falls back to the internal implementation
-  with bounce buffers.
-- When `LIBCUDF_CUFILE_POLICY` is set to "ALWAYS" and a GDS API call
-fails for any reason (unlikely, given that the compatibility mode is
-on), cuDF throws an exception to propagate the error to the user.
-- When `LIBCUDF_CUFILE_POLICY` is set to "KVIKIO" and a KvikIO API
-  call fails for any reason (unlikely, given that KvikIO implements
-  its own compatibility mode) cuDF throws an exception to propagate
-  the error to the user.
+Note that:
+- Even if KvikIO cuFile I/O path is taken, it is possible that GDS is still not activated, where cuFile falls back
+  to its internal compatibility mode. This will happen, for example, on an ext4 file system whose journaling
+  mode has not been explicitly set to `data=ordered`. This may also happen if cuFile's environment variable
+  `CUFILE_FORCE_COMPAT_MODE` is set to true. For more details, refer to
+  [cuFile compatibility mode](https://docs.nvidia.com/gpudirect-storage/api-reference-guide/index.html#cufile-compatibility-mode)
+  and [cuFile environment variables](https://docs.nvidia.com/gpudirect-storage/troubleshooting-guide/index.html#environment-variables).
+- Details of the GDS system requirements can be found in the [GDS documentation](https://docs.nvidia.com/gpudirect-storage/index.html).
+- If a KvikIO API call fails for any reason, cuDF throws an exception to propagate the error to the user.
 
 For more information about error handling, compatibility mode, and
 tuning parameters in KvikIO see: <https://github.com/rapidsai/kvikio>
@@ -130,15 +127,6 @@ Operations that support the use of GPUDirect Storage:
 - {py:func}`cudf.DataFrame.to_json`
 - {py:meth}`cudf.DataFrame.to_parquet`
 - {py:meth}`cudf.DataFrame.to_orc`
-
-Several parameters that can be used to tune the performance of
-GDS-enabled I/O are exposed through environment variables:
-
-- `LIBCUDF_CUFILE_THREAD_COUNT`: Integral value, maximum number of
-  parallel reads/writes per file (default 16);
-- `LIBCUDF_CUFILE_SLICE_SIZE`: Integral value, maximum size of each
-  GDS read/write, in bytes (default 4MB).  Larger I/O operations are
-  split into multiple calls.
 
 ## nvCOMP Integration
 
@@ -182,3 +170,13 @@ If no value is set, behavior will be the same as the "STABLE" option.
     +-----------------------+--------+--------+--------------+--------------+---------+--------+--------------+--------------+--------+
 
 ```
+
+## Low Memory Considerations
+
+By default, cuDF's parquet and json readers will try to read the entire file in one pass. This can cause problems when dealing with large datasets or when running workloads on GPUs with limited memory.
+
+To better support low memory systems, cuDF provides a "low-memory" reader for parquet and json files. This low memory reader processes data in chunks, leading to lower peak memory usage due to the smaller size of intermediate allocations.
+
+To read a parquet or json file in low memory mode, there are [cuDF options](https://docs.rapids.ai/api/cudf/nightly/user_guide/api_docs/options/#api-options) that must be set globally prior to calling the reader. To set those options, call:
+- `cudf.set_option("io.parquet.low_memory", True)` for parquet files, or
+- `cudf.set_option("io.json.low_memory", True)` for json files.

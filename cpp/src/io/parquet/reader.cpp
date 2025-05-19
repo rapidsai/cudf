@@ -16,8 +16,6 @@
 
 #include "reader_impl.hpp"
 
-#include <cudf/utilities/memory_resource.hpp>
-
 namespace cudf::io::parquet::detail {
 
 reader::reader() = default;

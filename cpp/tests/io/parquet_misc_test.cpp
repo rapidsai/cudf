@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,8 +20,6 @@
 #include <cudf_test/table_utilities.hpp>
 
 #include <cudf/io/parquet.hpp>
-#include <cudf/stream_compaction.hpp>
-#include <cudf/transform.hpp>
 
 #include <array>
 
@@ -31,9 +29,6 @@
 // Test fixture for delta encoding tests
 template <typename T>
 struct ParquetWriterDeltaTest : public ParquetWriterTest {};
-
-struct ParquetCompressionTest : public cudf::test::BaseFixture,
-                                public ::testing::WithParamInterface<cudf::io::compression_type> {};
 
 TYPED_TEST_SUITE(ParquetWriterDeltaTest, SupportedDeltaTestTypes);
 
@@ -168,13 +163,13 @@ TEST_P(ParquetSizedTest, DictionaryTest)
 
   // make sure dictionary was used
   auto const source = cudf::io::datasource::create(filepath);
-  cudf::io::parquet::detail::FileMetaData fmd;
+  cudf::io::parquet::FileMetaData fmd;
 
   read_footer(source, &fmd);
   auto used_dict = [&fmd]() {
     for (auto enc : fmd.row_groups[0].columns[0].meta_data.encodings) {
-      if (enc == cudf::io::parquet::detail::Encoding::PLAIN_DICTIONARY or
-          enc == cudf::io::parquet::detail::Encoding::RLE_DICTIONARY) {
+      if (enc == cudf::io::parquet::Encoding::PLAIN_DICTIONARY or
+          enc == cudf::io::parquet::Encoding::RLE_DICTIONARY) {
         return true;
       }
     }
@@ -217,7 +212,7 @@ TYPED_TEST(ParquetWriterComparableTypeTest, ThreeColumnSorted)
   cudf::io::write_parquet(out_opts);
 
   auto const source = cudf::io::datasource::create(filepath);
-  cudf::io::parquet::detail::FileMetaData fmd;
+  cudf::io::parquet::FileMetaData fmd;
 
   read_footer(source, &fmd);
   ASSERT_GT(fmd.row_groups.size(), 0);
@@ -227,49 +222,12 @@ TYPED_TEST(ParquetWriterComparableTypeTest, ThreeColumnSorted)
 
   // now check that the boundary order for chunk 1 is ascending,
   // chunk 2 is descending, and chunk 3 is unordered
-  std::array expected_orders{cudf::io::parquet::detail::BoundaryOrder::ASCENDING,
-                             cudf::io::parquet::detail::BoundaryOrder::DESCENDING,
-                             cudf::io::parquet::detail::BoundaryOrder::UNORDERED};
+  std::array expected_orders{cudf::io::parquet::BoundaryOrder::ASCENDING,
+                             cudf::io::parquet::BoundaryOrder::DESCENDING,
+                             cudf::io::parquet::BoundaryOrder::UNORDERED};
 
   for (std::size_t i = 0; i < columns.size(); i++) {
     auto const ci = read_column_index(source, columns[i]);
     EXPECT_EQ(ci.boundary_order, expected_orders[i]);
   }
 }
-
-TEST_P(ParquetCompressionTest, Basic)
-{
-  constexpr auto num_rows     = 12000;
-  auto const compression_type = GetParam();
-
-  // Generate compressible data
-  auto int_sequence =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 100; });
-  auto float_sequence =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i / 32; });
-
-  cudf::test::fixed_width_column_wrapper<int> int_col(int_sequence, int_sequence + num_rows);
-  cudf::test::fixed_width_column_wrapper<float> float_col(float_sequence,
-                                                          float_sequence + num_rows);
-
-  table_view expected({int_col, float_col});
-
-  std::vector<char> out_buffer;
-  cudf::io::parquet_writer_options out_opts =
-    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{&out_buffer}, expected)
-      .compression(compression_type);
-  cudf::io::write_parquet(out_opts);
-
-  cudf::io::parquet_reader_options in_opts = cudf::io::parquet_reader_options::builder(
-    cudf::io::source_info{out_buffer.data(), out_buffer.size()});
-  auto result = cudf::io::read_parquet(in_opts);
-
-  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
-}
-
-INSTANTIATE_TEST_CASE_P(ParquetCompressionTest,
-                        ParquetCompressionTest,
-                        ::testing::Values(cudf::io::compression_type::NONE,
-                                          cudf::io::compression_type::SNAPPY,
-                                          cudf::io::compression_type::LZ4,
-                                          cudf::io::compression_type::ZSTD));

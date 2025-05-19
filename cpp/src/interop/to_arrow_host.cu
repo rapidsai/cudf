@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,17 +15,19 @@
  */
 
 #include "arrow_utilities.hpp"
-#include "decimal_conversion_utilities.cuh"
 
+#include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/interop.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/offsets_iterator_factory.cuh>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/interop.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/null_mask.hpp>
+#include <cudf/strings/detail/strings_column_factories.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/structs/structs_column_view.hpp>
 #include <cudf/table/table_view.hpp>
@@ -44,6 +46,7 @@
 #include <nanoarrow/nanoarrow.h>
 #include <nanoarrow/nanoarrow.hpp>
 #include <nanoarrow/nanoarrow_device.h>
+#include <sys/mman.h>
 
 #include <iostream>
 
@@ -51,6 +54,30 @@ namespace cudf {
 namespace detail {
 
 namespace {
+
+/*
+  Enable Transparent Huge Pages (THP) for large (>4MB) allocations.
+  `buf` is returned untouched.
+  Enabling THP can improve performance of device-host memory transfers
+  significantly, see <https://github.com/rapidsai/cudf/pull/13914>.
+*/
+void enable_hugepage(ArrowBuffer* buffer)
+{
+  if (buffer->size_bytes < (1u << 22u)) {  // Smaller than 4 MB
+    return;
+  }
+
+#ifdef MADV_HUGEPAGE
+  auto const pagesize = sysconf(_SC_PAGESIZE);
+  void* addr          = const_cast<uint8_t*>(buffer->data);
+  auto length{static_cast<std::size_t>(buffer->size_bytes)};
+  if (std::align(pagesize, pagesize, addr, length)) {
+    // Intentionally not checking for errors that may be returned by older kernel versions;
+    // optimistically tries enabling huge pages.
+    madvise(addr, length, MADV_HUGEPAGE);
+  }
+#endif
+}
 
 struct dispatch_to_arrow_host {
   cudf::column_view column;
@@ -62,6 +89,7 @@ struct dispatch_to_arrow_host {
     if (!column.has_nulls()) { return NANOARROW_OK; }
 
     NANOARROW_RETURN_NOT_OK(ArrowBitmapResize(bitmap, static_cast<int64_t>(column.size()), 0));
+    enable_hugepage(&bitmap->buffer);
     CUDF_CUDA_TRY(cudaMemcpyAsync(bitmap->buffer.data,
                                   (column.offset() > 0)
                                     ? cudf::detail::copy_bitmask(column, stream, mr).data()
@@ -76,6 +104,7 @@ struct dispatch_to_arrow_host {
   int populate_data_buffer(device_span<T const> input, ArrowBuffer* buffer) const
   {
     NANOARROW_RETURN_NOT_OK(ArrowBufferResize(buffer, input.size_bytes(), 1));
+    enable_hugepage(buffer);
     CUDF_CUDA_TRY(cudaMemcpyAsync(
       buffer->data, input.data(), input.size_bytes(), cudaMemcpyDefault, stream.value()));
     return NANOARROW_OK;
@@ -88,8 +117,7 @@ struct dispatch_to_arrow_host {
     CUDF_FAIL("Unsupported type for to_arrow_host", cudf::data_type_error);
   }
 
-  template <typename T,
-            CUDF_ENABLE_IF(is_rep_layout_compatible<T>() || std::is_same_v<T, numeric::decimal128>)>
+  template <typename T, CUDF_ENABLE_IF(is_rep_layout_compatible<T>() || is_fixed_point<T>())>
   int operator()(ArrowArray* out) const
   {
     nanoarrow::UniqueArray tmp;
@@ -98,35 +126,9 @@ struct dispatch_to_arrow_host {
     NANOARROW_RETURN_NOT_OK(initialize_array(tmp.get(), storage_type, column));
 
     NANOARROW_RETURN_NOT_OK(populate_validity_bitmap(ArrowArrayValidityBitmap(tmp.get())));
-    using DataType = std::conditional_t<std::is_same_v<T, numeric::decimal128>, __int128_t, T>;
+    using DataType = device_storage_type_t<T>;
     NANOARROW_RETURN_NOT_OK(
       populate_data_buffer(device_span<DataType const>(column.data<DataType>(), column.size()),
-                           ArrowArrayBuffer(tmp.get(), fixed_width_data_buffer_idx)));
-
-    ArrowArrayMove(tmp.get(), out);
-    return NANOARROW_OK;
-  }
-
-  // convert decimal types from libcudf to arrow where those types are not directly
-  // supported by Arrow. These types must be fit into 128 bits, the smallest
-  // decimal resolution supported by Arrow
-  template <typename T,
-            CUDF_ENABLE_IF(!is_rep_layout_compatible<T>() &&
-                           (std::is_same_v<T, numeric::decimal32> ||
-                            std::is_same_v<T, numeric::decimal64>))>
-  int operator()(ArrowArray* out) const
-  {
-    using DeviceType = std::conditional_t<std::is_same_v<T, numeric::decimal32>, int32_t, int64_t>;
-    nanoarrow::UniqueArray tmp;
-    NANOARROW_RETURN_NOT_OK(initialize_array(tmp.get(), NANOARROW_TYPE_DECIMAL128, column));
-
-    NANOARROW_RETURN_NOT_OK(populate_validity_bitmap(ArrowArrayValidityBitmap(tmp.get())));
-    auto buf = detail::convert_decimals_to_decimal128<DeviceType>(column, stream, mr);
-    // No need to synchronize stream here as populate_data_buffer uses the same stream to copy data
-    // to host.
-    NANOARROW_RETURN_NOT_OK(
-      populate_data_buffer(device_span<__int128_t const>(
-                             reinterpret_cast<const __int128_t*>(buf->data()), column.size()),
                            ArrowArrayBuffer(tmp.get(), fixed_width_data_buffer_idx)));
 
     ArrowArrayMove(tmp.get(), out);
@@ -235,15 +237,18 @@ template <>
 int dispatch_to_arrow_host::operator()<cudf::dictionary32>(ArrowArray* out) const
 {
   nanoarrow::UniqueArray tmp;
-  NANOARROW_RETURN_NOT_OK(initialize_array(
-    tmp.get(),
-    id_to_arrow_type(column.child(cudf::dictionary_column_view::indices_column_index).type().id()),
-    column));
+
+  auto const dcv          = cudf::dictionary_column_view(column);
+  auto const dict_indices = dcv.is_empty() ? cudf::make_empty_column(cudf::type_id::INT32)->view()
+                                           : dcv.get_indices_annotated();
+  auto const keys =
+    dcv.is_empty() ? cudf::make_empty_column(cudf::type_id::INT64)->view() : dcv.keys();
+
+  NANOARROW_RETURN_NOT_OK(
+    initialize_array(tmp.get(), id_to_arrow_type(dict_indices.type().id()), column));
   NANOARROW_RETURN_NOT_OK(ArrowArrayAllocateDictionary(tmp.get()));
 
   NANOARROW_RETURN_NOT_OK(populate_validity_bitmap(ArrowArrayValidityBitmap(tmp.get())));
-  auto dcv          = cudf::dictionary_column_view(column);
-  auto dict_indices = dcv.get_indices_annotated();
   switch (dict_indices.type().id()) {
     case type_id::INT8:
     case type_id::UINT8:
@@ -272,7 +277,7 @@ int dispatch_to_arrow_host::operator()<cudf::dictionary32>(ArrowArray* out) cons
     default: CUDF_FAIL("unsupported type for dictionary indices");
   }
 
-  NANOARROW_RETURN_NOT_OK(get_column(dcv.keys(), stream, mr, tmp->dictionary));
+  NANOARROW_RETURN_NOT_OK(get_column(keys, stream, mr, tmp->dictionary));
 
   ArrowArrayMove(tmp.get(), out);
   return NANOARROW_OK;
@@ -374,6 +379,169 @@ unique_device_array_t to_arrow_host(cudf::column_view const& col,
   return create_device_array(std::move(tmp));
 }
 
+/**
+ * @brief Builds the ArrayBinaryView for each row in the d_strings column
+ *
+ * Smaller strings may fit inline in the ArrayBinaryItem object while
+ * longer strings specify a buffer and offset for their character data.
+ */
+struct strings_to_binary_view {
+  cudf::column_device_view d_strings;
+  input_offsetalator d_offsets;               // offsets of longer strings in d_strings
+  device_span<int64_t const> buffer_offsets;  // output buffers' offsets
+  ArrowBinaryView* d_items;
+
+  __device__ void operator()(cudf::size_type idx) const
+  {
+    auto& item = d_items[idx];
+    if (d_strings.is_null(idx)) {
+      item.inlined.size = 0;
+      return;
+    }
+    auto const d_str  = d_strings.element<cudf::string_view>(idx);
+    item.inlined.size = d_str.size_bytes();
+    if (d_str.size_bytes() <= NANOARROW_BINARY_VIEW_INLINE_SIZE) {
+      thrust::copy(thrust::seq, d_str.data(), d_str.data() + d_str.size_bytes(), item.inlined.data);
+      thrust::uninitialized_fill(thrust::seq,
+                                 item.inlined.data + item.inlined.size,
+                                 item.inlined.data + NANOARROW_BINARY_VIEW_INLINE_SIZE,
+                                 0);
+    } else {
+      thrust::copy(thrust::seq,
+                   d_str.data(),
+                   d_str.data() + NANOARROW_BINARY_VIEW_PREFIX_SIZE,
+                   item.ref.prefix);
+      auto const offset  = d_offsets[idx];
+      auto const buf_idx = cuda::std::distance(
+        buffer_offsets.begin(),
+        thrust::upper_bound(thrust::seq, buffer_offsets.begin(), buffer_offsets.end(), offset));
+      auto const new_offset = offset - (buf_idx == 0 ? 0 : buffer_offsets[buf_idx - 1]);
+      item.ref.buffer_index = buf_idx;
+      item.ref.offset       = static_cast<int32_t>(new_offset);
+    }
+  }
+};
+
+unique_device_array_t to_arrow_host_stringview(cudf::strings_column_view const& col,
+                                               rmm::cuda_stream_view stream,
+                                               rmm::device_async_resource_ref mr)
+{
+  nanoarrow::UniqueArray out;
+  NANOARROW_THROW_NOT_OK(ArrowArrayInitFromType(out.get(), NANOARROW_TYPE_STRING_VIEW));
+  NANOARROW_THROW_NOT_OK(ArrowArrayStartAppending(out.get()));
+
+  if (col.size() == 0) { return create_device_array(std::move(out)); }
+
+  dispatch_to_arrow_host fn{col.parent(), stream, mr};
+  NANOARROW_THROW_NOT_OK(fn.populate_validity_bitmap(ArrowArrayValidityBitmap(out.get())));
+
+  auto const d_strings = column_device_view::create(col.parent(), stream);
+  auto d_offsets =
+    cudf::detail::offsetalator_factory::make_input_iterator(col.offsets(), col.offset());
+
+  // count the number of long-ish strings -- ones that cannot be inlined
+  auto const num_longer_strings = thrust::count_if(
+    rmm::exec_policy_nosync(stream),
+    thrust::make_counting_iterator<cudf::size_type>(0),
+    thrust::make_counting_iterator<cudf::size_type>(col.size()),
+    [d_offsets] __device__(auto idx) {
+      return d_offsets[idx + 1] - d_offsets[idx] > NANOARROW_BINARY_VIEW_INLINE_SIZE;
+    });
+
+  // gather all the long-ish strings into a single strings column
+  auto [unused_col, longer_strings] = [&] {
+    if (num_longer_strings == col.size()) {
+      // we can use the input column as is for the remainder of this function
+      return std::pair{cudf::make_empty_column(cudf::type_id::STRING), col};
+    }
+    auto indices = make_counting_transform_iterator(
+      0,
+      cuda::proclaim_return_type<cudf::strings::detail::string_index_pair>(
+        [d_strings = *d_strings] __device__(auto idx) {
+          if (d_strings.is_null(idx)) {
+            return cudf::strings::detail::string_index_pair{nullptr, 0};
+          }
+          auto const d_str = d_strings.element<cudf::string_view>(idx);
+          return (d_str.size_bytes() > NANOARROW_BINARY_VIEW_INLINE_SIZE)
+                   ? cudf::strings::detail::string_index_pair{d_str.data(), d_str.size_bytes()}
+                   : cudf::strings::detail::string_index_pair{"", 0};
+        }));
+    auto longer_strings = cudf::strings::detail::make_strings_column(
+      indices, indices + col.size(), stream, cudf::get_current_device_resource_ref());
+    stream.synchronize();
+    auto const sv = cudf::strings_column_view(longer_strings->view());
+    return std::pair{std::move(longer_strings), sv};
+  }();
+  auto [first, last] = cudf::strings::detail::get_first_and_last_offset(longer_strings, stream);
+  auto const longer_chars_size = last - first;
+
+  d_offsets = cudf::detail::offsetalator_factory::make_input_iterator(longer_strings.offsets(),
+                                                                      longer_strings.offset());
+
+  // using max/2 here ensures no buffer is greater than 2GB
+  constexpr int64_t max_size = std::numeric_limits<int32_t>::max() / 2;
+  auto const num_buffers     = cudf::util::div_rounding_up_safe(longer_chars_size, max_size);
+  auto buffer_offsets        = rmm::device_uvector<int64_t>(num_buffers, stream);
+  // copy the bytes for the longer strings into Arrow variadic buffers
+  if (longer_chars_size > 0) {
+    // compute buffer boundaries (less than 2GB per buffer)
+    auto buffer_indices  = rmm::device_uvector<int64_t>(num_buffers, stream);
+    auto const bound_itr = make_counting_transform_iterator(
+      0, cuda::proclaim_return_type<int64_t>([] __device__(auto idx) {
+        return (idx + 1) * max_size;
+      }));
+    thrust::lower_bound(rmm::exec_policy(stream),
+                        d_offsets,
+                        d_offsets + longer_strings.size(),
+                        bound_itr,
+                        bound_itr + num_buffers,
+                        buffer_indices.begin());
+    thrust::transform(rmm::exec_policy(stream),
+                      buffer_indices.begin(),
+                      buffer_indices.end(),
+                      buffer_offsets.begin(),
+                      [d_offsets] __device__(auto idx) { return d_offsets[idx]; });
+    auto h_offsets = make_std_vector_async(buffer_offsets, stream);
+
+    // build up the variadic buffers needed
+    NANOARROW_THROW_NOT_OK(ArrowArrayAddVariadicBuffers(out.get(), num_buffers));
+    auto private_data     = static_cast<struct ArrowArrayPrivateData*>(out->private_data);
+    auto const chars_data = longer_strings.chars_begin(stream);
+    for (auto i = 0L; i < num_buffers; ++i) {
+      auto variadic_buf = &private_data->variadic_buffers[i];
+      auto const offset = i == 0 ? 0 : h_offsets[i - 1];
+      auto const size   = h_offsets[i] - offset;
+      NANOARROW_THROW_NOT_OK(ArrowBufferReserve(variadic_buf, size));
+      CUDF_CUDA_TRY(cudaMemcpyAsync(
+        variadic_buf->data, chars_data + offset, size, cudaMemcpyDefault, stream.value()));
+      private_data->variadic_buffer_sizes[i] = size;
+    }
+  }
+
+  // now build BinaryView objects from the strings in device memory
+  auto d_items = rmm::device_uvector<ArrowBinaryView>(col.size(), stream);
+  thrust::for_each_n(rmm::exec_policy_nosync(stream),
+                     thrust::counting_iterator<cudf::size_type>(0),
+                     col.size(),
+                     strings_to_binary_view{*d_strings, d_offsets, buffer_offsets, d_items.data()});
+
+  constexpr auto data_buffer_idx = 1;
+
+  // finally, copy the BinaryView array into host memory
+  auto data_buffer   = ArrowArrayBuffer(out.get(), data_buffer_idx);
+  auto const bv_size = d_items.size() * sizeof(ArrowBinaryView);
+  NANOARROW_THROW_NOT_OK(ArrowBufferReserve(data_buffer, bv_size));
+  CUDF_CUDA_TRY(
+    cudaMemcpyAsync(data_buffer->data, d_items.data(), bv_size, cudaMemcpyDefault, stream.value()));
+  data_buffer->size_bytes = bv_size;
+
+  out->length     = col.size();
+  out->null_count = col.null_count();
+  out->offset     = 0;
+
+  stream.synchronize();
+  return create_device_array(std::move(out));
+}
 }  // namespace detail
 
 unique_device_array_t to_arrow_host(cudf::column_view const& col,
@@ -392,4 +560,11 @@ unique_device_array_t to_arrow_host(cudf::table_view const& table,
   return detail::to_arrow_host(table, stream, mr);
 }
 
+unique_device_array_t to_arrow_host_stringview(cudf::strings_column_view const& col,
+                                               rmm::cuda_stream_view stream,
+                                               rmm::device_async_resource_ref mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::to_arrow_host_stringview(col, stream, mr);
+}
 }  // namespace cudf

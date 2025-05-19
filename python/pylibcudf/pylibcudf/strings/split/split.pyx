@@ -13,6 +13,16 @@ from pylibcudf.table cimport Table
 
 from cython.operator import dereference
 
+__all__ = [
+    "rsplit",
+    "rsplit_re",
+    "rsplit_record",
+    "rsplit_record_re",
+    "split",
+    "split_re",
+    "split_record",
+    "split_record_re",
+]
 
 cpdef Table split(Column strings_column, Scalar delimiter, size_type maxsplit):
     """
@@ -44,12 +54,10 @@ cpdef Table split(Column strings_column, Scalar delimiter, size_type maxsplit):
     )
 
     with nogil:
-        c_result = move(
-            cpp_split.split(
-                strings_column.view(),
-                dereference(c_delimiter),
-                maxsplit,
-            )
+        c_result = cpp_split.split(
+            strings_column.view(),
+            dereference(c_delimiter),
+            maxsplit,
         )
 
     return Table.from_libcudf(move(c_result))
@@ -85,12 +93,10 @@ cpdef Table rsplit(Column strings_column, Scalar delimiter, size_type maxsplit):
     )
 
     with nogil:
-        c_result = move(
-            cpp_split.rsplit(
-                strings_column.view(),
-                dereference(c_delimiter),
-                maxsplit,
-            )
+        c_result = cpp_split.rsplit(
+            strings_column.view(),
+            dereference(c_delimiter),
+            maxsplit,
         )
 
     return Table.from_libcudf(move(c_result))
@@ -124,12 +130,10 @@ cpdef Column split_record(Column strings, Scalar delimiter, size_type maxsplit):
     )
 
     with nogil:
-        c_result = move(
-            cpp_split.split_record(
-                strings.view(),
-                dereference(c_delimiter),
-                maxsplit,
-            )
+        c_result = cpp_split.split_record(
+            strings.view(),
+            dereference(c_delimiter),
+            maxsplit,
         )
 
     return Column.from_libcudf(move(c_result))
@@ -165,12 +169,10 @@ cpdef Column rsplit_record(Column strings, Scalar delimiter, size_type maxsplit)
     )
 
     with nogil:
-        c_result = move(
-            cpp_split.rsplit_record(
-                strings.view(),
-                dereference(c_delimiter),
-                maxsplit,
-            )
+        c_result = cpp_split.rsplit_record(
+            strings.view(),
+            dereference(c_delimiter),
+            maxsplit,
         )
 
     return Column.from_libcudf(move(c_result))
@@ -203,12 +205,10 @@ cpdef Table split_re(Column input, RegexProgram prog, size_type maxsplit):
     cdef unique_ptr[table] c_result
 
     with nogil:
-        c_result = move(
-            cpp_split.split_re(
-                input.view(),
-                prog.c_obj.get()[0],
-                maxsplit,
-            )
+        c_result = cpp_split.split_re(
+            input.view(),
+            prog.c_obj.get()[0],
+            maxsplit,
         )
 
     return Table.from_libcudf(move(c_result))
@@ -241,12 +241,10 @@ cpdef Table rsplit_re(Column input, RegexProgram prog, size_type maxsplit):
     cdef unique_ptr[table] c_result
 
     with nogil:
-        c_result = move(
-            cpp_split.rsplit_re(
-                input.view(),
-                prog.c_obj.get()[0],
-                maxsplit,
-            )
+        c_result = cpp_split.rsplit_re(
+            input.view(),
+            prog.c_obj.get()[0],
+            maxsplit,
         )
 
     return Table.from_libcudf(move(c_result))
@@ -278,12 +276,10 @@ cpdef Column split_record_re(Column input, RegexProgram prog, size_type maxsplit
     cdef unique_ptr[column] c_result
 
     with nogil:
-        c_result = move(
-            cpp_split.split_record_re(
-                input.view(),
-                prog.c_obj.get()[0],
-                maxsplit,
-            )
+        c_result = cpp_split.split_record_re(
+            input.view(),
+            prog.c_obj.get()[0],
+            maxsplit,
         )
 
     return Column.from_libcudf(move(c_result))
@@ -315,12 +311,10 @@ cpdef Column rsplit_record_re(Column input, RegexProgram prog, size_type maxspli
     cdef unique_ptr[column] c_result
 
     with nogil:
-        c_result = move(
-            cpp_split.rsplit_record_re(
-                input.view(),
-                prog.c_obj.get()[0],
-                maxsplit,
-            )
+        c_result = cpp_split.rsplit_record_re(
+            input.view(),
+            prog.c_obj.get()[0],
+            maxsplit,
         )
 
     return Column.from_libcudf(move(c_result))

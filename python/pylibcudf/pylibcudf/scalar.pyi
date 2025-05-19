@@ -1,0 +1,19 @@
+# Copyright (c) 2024, NVIDIA CORPORATION.
+
+from typing import Any
+
+from pylibcudf.column import Column
+from pylibcudf.types import DataType
+
+NpGeneric = type[Any]
+
+class Scalar:
+    def __init__(self): ...
+    def type(self) -> DataType: ...
+    def is_valid(self) -> bool: ...
+    @staticmethod
+    def empty_like(column: Column) -> Scalar: ...
+    @classmethod
+    def from_py(cls, py_val: Any, dtype: DataType | None = None) -> Scalar: ...
+    @classmethod
+    def from_numpy(cls, np_val: NpGeneric) -> Scalar: ...
