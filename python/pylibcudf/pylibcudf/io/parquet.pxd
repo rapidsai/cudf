@@ -156,4 +156,6 @@ cdef class ParquetWriterOptionsBuilder:
 
 cpdef memoryview write_parquet(ParquetWriterOptions options, Stream stream = *)
 
+cpdef bool is_supported_write_parquet(compression_type compression)
+
 cpdef memoryview merge_row_group_metadata(list metdata_list)

@@ -14,8 +14,9 @@ dependencies:
 - c-compiler
 - cachetools
 - certifi
-- clang-tools=16.0.6
-- clang==16.0.6
+- clang-tools=20.1.4
+- clang-tools==20.1.4
+- clang==20.1.4
 - cmake>=3.30.4
 - cramjam
 - cubinlinker
@@ -36,6 +37,7 @@ dependencies:
 - gcc_linux-64=11.*
 - hypothesis>=6.131.7
 - identify>=2.5.20
+- include-what-you-use==0.24.0
 - ipython
 - jupyter_client
 - libcufile-dev=1.4.0.31
@@ -77,6 +79,7 @@ dependencies:
 - pytest-benchmark
 - pytest-cases>=3.8.2
 - pytest-cov
+- pytest-rerunfailures
 - pytest-xdist
 - pytest<8
 - python-confluent-kafka>=2.8.0,<2.9.0a0
