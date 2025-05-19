@@ -118,7 +118,7 @@ struct scalar {
   }
 };
 
-template <bool has_nulls, bool has_user_data, typename Out, typename... In>
+template <bool has_user_data, typename Out, typename... In>
 CUDF_KERNEL void kernel(cudf::mutable_column_device_view_core const* outputs,
                         cudf::column_device_view_core const* inputs,
                         void* user_data)
@@ -134,9 +134,7 @@ CUDF_KERNEL void kernel(cudf::mutable_column_device_view_core const* outputs,
   thread_index_type const size   = outputs[0].size();
 
   for (auto i = start; i < size; i += stride) {
-    if constexpr (has_nulls) {
-      if (Out::is_null(outputs, i)) { continue; }
-    }
+    if (Out::is_null(outputs, i)) { continue; }
 
     if constexpr (has_user_data) {
       GENERIC_TRANSFORM_OP(user_data, i, &Out::element(outputs, i), In::element(inputs, i)...);
@@ -146,7 +144,7 @@ CUDF_KERNEL void kernel(cudf::mutable_column_device_view_core const* outputs,
   }
 }
 
-template <bool has_nulls, bool has_user_data, typename Out, typename... In>
+template <bool has_user_data, typename Out, typename... In>
 CUDF_KERNEL void fixed_point_kernel(cudf::mutable_column_device_view_core const* outputs,
                                     cudf::column_device_view_core const* inputs,
                                     void* user_data)
@@ -162,9 +160,7 @@ CUDF_KERNEL void fixed_point_kernel(cudf::mutable_column_device_view_core const*
   for (auto i = start; i < size; i += stride) {
     typename Out::type result{numeric::scaled_integer<typename Out::type::rep>{0, output_scale}};
 
-    if constexpr (has_nulls) {
-      if (Out::is_null(outputs, i)) { continue; }
-    }
+    if (Out::is_null(outputs, i)) { continue; }
 
     if constexpr (has_user_data) {
       GENERIC_TRANSFORM_OP(user_data, i, &result, In::element(inputs, i)...);
@@ -176,7 +172,7 @@ CUDF_KERNEL void fixed_point_kernel(cudf::mutable_column_device_view_core const*
   }
 }
 
-template <bool has_nulls, bool has_user_data, typename Out, typename... In>
+template <bool has_user_data, typename Out, typename... In>
 CUDF_KERNEL void span_kernel(cudf::jit::optional_device_span<typename Out::type> const* outputs,
                              cudf::column_device_view_core const* inputs,
                              void* user_data)
@@ -189,9 +185,7 @@ CUDF_KERNEL void span_kernel(cudf::jit::optional_device_span<typename Out::type>
   thread_index_type const size   = outputs[0].size();
 
   for (auto i = start; i < size; i += stride) {
-    if constexpr (has_nulls) {
-      if (Out::is_null(outputs, i)) { continue; }
-    }
+    if (Out::is_null(outputs, i)) { continue; }
 
     if constexpr (has_user_data) {
       GENERIC_TRANSFORM_OP(user_data, i, &Out::element(outputs, i), In::element(inputs, i)...);
