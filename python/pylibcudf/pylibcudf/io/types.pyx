@@ -557,8 +557,6 @@ cdef class SourceInfo:
                 empty_buffer = False
 
         if empty_buffer:
-            # Not necessary, but future-proofs against libcudf code
-            # that might reject an empty host_span.
             self._hspans.push_back(host_span[const_byte](<const_byte*>NULL, 0))
 
     __hash__ = None
