@@ -59,8 +59,8 @@ def _(
         )
 
     key_name = get_key_name(ir)
-    n = count_in // count_out
-    remainder = count_in - count_out * n
+    n, remainder = divmod(count_in, count_out)
+    # Spread remainder evenly over the partitions.
     offsets = [0, *itertools.accumulate(n + (i < remainder) for i in range(count_out))]
     child_keys = tuple(partition_info[child].keys(child))
     return {
