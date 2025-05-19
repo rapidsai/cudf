@@ -33,6 +33,7 @@
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/data_sink.hpp>
 #include <cudf/io/detail/json.hpp>
+#include <cudf/io/detail/utils.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/detail/combine.hpp>
@@ -541,19 +542,6 @@ std::unique_ptr<column> join_list_of_strings(lists_column_view const& lists_stri
  * @brief Functor to convert a column to string representation for JSON format.
  */
 struct column_to_strings_fn {
-  /**
-   * @brief Returns true if the specified type is not supported by the JSON writer.
-   */
-  template <typename column_type>
-  constexpr static bool is_not_handled()
-  {
-    // Note: the case (not std::is_same_v<column_type, bool>)  is already covered by is_integral)
-    return not((std::is_same_v<column_type, cudf::string_view>) ||
-               (std::is_integral_v<column_type>) || (std::is_floating_point_v<column_type>) ||
-               (cudf::is_fixed_point<column_type>()) || (cudf::is_timestamp<column_type>()) ||
-               (cudf::is_duration<column_type>()));
-  }
-
   explicit column_to_strings_fn(json_writer_options const& options,
                                 rmm::cuda_stream_view stream,
                                 rmm::device_async_resource_ref mr)
@@ -580,8 +568,9 @@ struct column_to_strings_fn {
 
   // unsupported type of column:
   template <typename column_type>
-  std::enable_if_t<is_not_handled<column_type>(), std::unique_ptr<column>> operator()(
-    column_view const&) const
+  std::enable_if_t<!cudf::io::detail::is_convertible_to_string_column<column_type>(),
+                   std::unique_ptr<column>>
+  operator()(column_view const&) const
   {
     CUDF_FAIL("Unsupported column type.");
   }

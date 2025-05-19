@@ -569,6 +569,10 @@ dependencies:
               cuda: "12.8"
             packages:
               - cuda-version=12.8
+          - matrix:
+              cuda: "12.9"
+            packages:
+              - cuda-version=12.9
   cuda:
     specific:
       - output_types: conda
@@ -1239,6 +1243,7 @@ dependencies:
           - nbconvert
           - nbformat
           - openpyxl
+          - pytest-rerunfailures
   depends_on_dask_cudf:
     common:
       - output_types: conda
