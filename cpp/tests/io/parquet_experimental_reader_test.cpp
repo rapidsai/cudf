@@ -35,7 +35,6 @@
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
-#include <gtest/gtest.h>
 #include <src/io/parquet/parquet_gpu.hpp>
 
 // Base test fixture for tests

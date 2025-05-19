@@ -92,7 +92,7 @@ namespace {
 }
 
 /**
- * @brief Compute page row counts and page row offsets and colum chunk page (count) offsets for a
+ * @brief Compute page row counts and page row offsets and column chunk page (count) offsets for a
  * given column schema index
  */
 [[nodiscard]] auto make_page_row_counts_and_offsets(
