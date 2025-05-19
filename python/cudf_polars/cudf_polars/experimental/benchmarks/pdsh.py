@@ -123,7 +123,7 @@ class HardwareInfo:
     @classmethod
     def collect(cls) -> HardwareInfo:
         """Collect the hardware information."""
-        if CUDF_POLARS_AVAILABLE:
+        if pynvml is not None:
             pynvml.nvmlInit()
             gpus = [GPUInfo.from_index(i) for i in range(pynvml.nvmlDeviceGetCount())]
         else:
