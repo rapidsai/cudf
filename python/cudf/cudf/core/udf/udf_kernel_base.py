@@ -1,5 +1,6 @@
 # Copyright (c) 2025 NVIDIA CORPORATION.
 
+from abc import ABC, abstractmethod
 from contextlib import nullcontext
 
 import numpy as np
@@ -24,7 +25,7 @@ from cudf.utils._numba import _CUDFNumbaConfig
 from cudf.utils.performance_tracking import _performance_tracking
 
 
-class ApplyKernelBase:
+class ApplyKernelBase(ABC):
     """
     Base class for kernels computing the result of `.apply`
     operations on Series or DataFrame objects.
@@ -43,17 +44,33 @@ class ApplyKernelBase:
         self.device_func = cuda.jit(device=True)(self.func)
 
     @property
+    @abstractmethod
     def kernel_type(self):
-        raise NotImplementedError
+        """
+        API type launching the kernel, used to break
+        degenerecies in the cache.
+        """
 
+    @abstractmethod
     def _get_frame_type(self):
-        raise NotImplementedError
+        """
+        Numba type of the frame being passed to the kernel.
+        """
 
+    @abstractmethod
     def _get_kernel_string(self):
-        raise NotImplementedError
+        """
+        Generate executable string of python that defines a
+        kernel we may retrieve from the context and compile
+        with numba.
+        """
 
+    @abstractmethod
     def _get_kernel_string_exec_context(self):
-        raise NotImplementedError
+        """
+        Get a dict of globals needed to exec the kernel
+        string.
+        """
 
     def _construct_signature(self, return_type):
         """
