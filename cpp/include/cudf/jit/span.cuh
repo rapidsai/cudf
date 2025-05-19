@@ -99,23 +99,31 @@ struct device_span {
 };
 
 template <typename T>
-struct optional_span {
-  cudf::jit::device_span<T> span_{};
-  cudf::bitmask_type* null_mask_ = nullptr;
+struct optional_device_span : device_span<T> {
+  using base = device_span<T>;
 
-  __device__ void set_valid(size_type element_index) const
+  bitmask_type* _null_mask = nullptr;
+
+  CUDF_HOST_DEVICE constexpr optional_device_span() {}
+
+  CUDF_HOST_DEVICE optional_device_span(device_span<T> span, bitmask_type* null_mask)
+    : base{span}, _null_mask{null_mask}
   {
-    return set_bit(null_mask_, element_index);
   }
 
-  __device__ void set_null(size_type element_index) const
+  CUDF_HOST_DEVICE bool nullable() const { return _null_mask != nullptr; }
+
+  [[nodiscard]] __device__ bool is_valid_nocheck(size_t i) const noexcept
   {
-    return clear_bit(null_mask_, element_index);
+    return bit_is_set(_null_mask, i);
   }
 
-  __device__ T& element(cudf::size_type row) const { return span_[row]; }
+  [[nodiscard]] __device__ bool is_valid(size_t i) const
+  {
+    return not nullable() or is_valid_nocheck(i);
+  }
 
-  __device__ void assign(cudf::size_type row, T value) const { span_[row] = value; }
+  __device__ bool is_null(size_t i) const { return !is_valid(i); }
 };
 
 }  // namespace jit

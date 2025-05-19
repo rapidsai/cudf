@@ -61,21 +61,10 @@ struct column_accessor {
     outputs[index].assign<T>(row, value);
   }
 
-  static __device__ bool is_null(cudf::column_device_view_core const* inputs, cudf::size_type row)
+  static __device__ bool is_null(cudf::mutable_column_device_view_core const* inputs,
+                                 cudf::size_type row)
   {
     return inputs[index].is_null(row);
-  }
-
-  static __device__ void set_null(cudf::mutable_column_device_view_core const* outputs,
-                                  cudf::size_type row)
-  {
-    outputs[index].set_null(row);
-  }
-
-  static __device__ void set_valid(cudf::mutable_column_device_view_core const* outputs,
-                                   cudf::size_type row)
-  {
-    outputs[index].set_valid(row);
   }
 };
 
@@ -84,26 +73,23 @@ struct span_accessor {
   using type                     = T;
   static constexpr int32_t index = Index;
 
-  static __device__ type& element(cudf::jit::optional_span<T> const* spans, cudf::size_type row)
+  static __device__ type& element(cudf::jit::optional_device_span<T> const* spans,
+                                  cudf::size_type row)
   {
-    return spans[index].element(row);
+    return spans[index][row];
   }
 
-  static __device__ void assign(cudf::jit::optional_span<T> const* outputs,
+  static __device__ void assign(cudf::jit::optional_device_span<T> const* outputs,
                                 cudf::size_type row,
                                 T value)
   {
-    outputs[index].assign(row, value);
+    outputs[index][row] = value;
   }
 
-  static __device__ void set_null(cudf::jit::optional_span<T> const* outputs, cudf::size_type row)
+  static __device__ bool is_null(cudf::jit::optional_device_span<T> const* inputs,
+                                 cudf::size_type row)
   {
-    outputs[index].set_null(row);
-  }
-
-  static __device__ void set_valid(cudf::jit::optional_span<T> const* outputs, cudf::size_type row)
-  {
-    outputs[index].set_valid(row);
+    return inputs[index].is_null(row);
   }
 };
 
@@ -113,7 +99,7 @@ struct scalar {
   static constexpr int32_t index = Accessor::index;
 
   static __device__ decltype(auto) element(cudf::mutable_column_device_view_core const* outputs,
-                                           cudf::size_type row)
+                                           [[maybe_unused]] cudf::size_type row)
   {
     return Accessor::element(outputs, 0);
   }
@@ -125,31 +111,14 @@ struct scalar {
   }
 
   static __device__ void assign(cudf::mutable_column_device_view_core const* outputs,
-                                cudf::size_type row,
+                                [[maybe_unused]] cudf::size_type row,
                                 type value)
   {
     return Accessor::assign(outputs, 0, value);
   }
-
-  static __device__ bool is_null(cudf::column_device_view_core const* inputs, cudf::size_type row)
-  {
-    return Accessor::is_null(inputs, row);
-  }
-
-  static __device__ void set_null(cudf::mutable_column_device_view_core const* outputs,
-                                  cudf::size_type row)
-  {
-    Accessor::set_null(outputs, row);
-  }
-
-  static __device__ void set_valid(cudf::mutable_column_device_view_core const* outputs,
-                                   cudf::size_type row)
-  {
-    Accessor::set_valid(outputs, row);
-  }
 };
 
-template <bool has_user_data, bool has_nulls, typename Out, typename... In>
+template <bool has_nulls, bool has_user_data, typename Out, typename... In>
 CUDF_KERNEL void kernel(cudf::mutable_column_device_view_core const* outputs,
                         cudf::column_device_view_core const* inputs,
                         void* user_data)
@@ -166,12 +135,7 @@ CUDF_KERNEL void kernel(cudf::mutable_column_device_view_core const* outputs,
 
   for (auto i = start; i < size; i += stride) {
     if constexpr (has_nulls) {
-      if ((false || ... || In::is_null(inputs, i))) {
-        Out::set_null(outputs, i);
-        continue;
-      } else {
-        Out::set_valid(outputs, i);
-      }
+      if (Out::is_null(outputs, i)) { continue; }
     }
 
     if constexpr (has_user_data) {
@@ -182,7 +146,7 @@ CUDF_KERNEL void kernel(cudf::mutable_column_device_view_core const* outputs,
   }
 }
 
-template <bool has_user_data, bool has_nulls, typename Out, typename... In>
+template <bool has_nulls, bool has_user_data, typename Out, typename... In>
 CUDF_KERNEL void fixed_point_kernel(cudf::mutable_column_device_view_core const* outputs,
                                     cudf::column_device_view_core const* inputs,
                                     void* user_data)
@@ -199,12 +163,7 @@ CUDF_KERNEL void fixed_point_kernel(cudf::mutable_column_device_view_core const*
     typename Out::type result{numeric::scaled_integer<typename Out::type::rep>{0, output_scale}};
 
     if constexpr (has_nulls) {
-      if ((false || ... || In::is_null(inputs, i))) {
-        Out::set_null(outputs, i);
-        continue;
-      } else {
-        Out::set_valid(outputs, i);
-      }
+      if (Out::is_null(outputs, i)) { continue; }
     }
 
     if constexpr (has_user_data) {
@@ -217,8 +176,8 @@ CUDF_KERNEL void fixed_point_kernel(cudf::mutable_column_device_view_core const*
   }
 }
 
-template <bool has_user_data, bool has_nulls, typename Out, typename... In>
-CUDF_KERNEL void span_kernel(cudf::jit::optional_span<typename Out::type> const* outputs,
+template <bool has_nulls, bool has_user_data, typename Out, typename... In>
+CUDF_KERNEL void span_kernel(cudf::jit::optional_device_span<typename Out::type> const* outputs,
                              cudf::column_device_view_core const* inputs,
                              void* user_data)
 {
@@ -231,15 +190,7 @@ CUDF_KERNEL void span_kernel(cudf::jit::optional_span<typename Out::type> const*
 
   for (auto i = start; i < size; i += stride) {
     if constexpr (has_nulls) {
-      if ((false || ... || In::is_null(inputs, i))) {
-        // NOTE: assigning default values is important for strings to be able to convert to a string
-        // column which use run-end encoding. The row thus can't ba an undefined value
-        Out::assign(outputs, i, typename Out::type{});
-        Out::set_null(outputs, i);
-        continue;
-      } else {
-        Out::set_valid(outputs, i);
-      }
+      if (Out::is_null(outputs, i)) { continue; }
     }
 
     if constexpr (has_user_data) {
