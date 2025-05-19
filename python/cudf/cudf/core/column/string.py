@@ -5384,9 +5384,9 @@ class StringMethods(ColumnMethods):
         Parameters
         ----------
         sa : Column
-             Suffix array from build_suffix_array
+            Suffix array from build_suffix_array
         min_width : int
-             Minimum number of bytes that must match
+            Minimum number of bytes that must match
 
         Returns
         -------
@@ -5415,13 +5415,13 @@ class StringMethods(ColumnMethods):
         Parameters
         ----------
         sa1 : Column
-             Suffix array from build_suffix_array for this column
+            Suffix array from build_suffix_array for this column
         input2 : Column
-             2nd strings column of text
+            2nd strings column of text
         sa2 : Column
-             Suffix array from build_suffix_array for input2
+            Suffix array from build_suffix_array for input2
         min_width : int
-             Minimum number of bytes that must match
+            Minimum number of bytes that must match
 
         Returns
         -------

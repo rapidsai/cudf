@@ -19,7 +19,7 @@ from rmm.librmm.device_buffer cimport device_buffer
 __all__ = [
     "build_suffix_array",
     "resolve_duplicates",
-    "resolve_duplicates_pair"
+    "resolve_duplicates_pair",
 ]
 
 cdef Column _column_from_suffix_array(cpp_suffix_array_type suffix_array):
