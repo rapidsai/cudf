@@ -55,7 +55,6 @@ struct input_column_reflection {
 };
 
 jitify2::StringVec build_jit_template_params(
-  bool has_nulls,
   bool has_user_data,
   std::vector<std::string> const& span_outputs,
   std::vector<std::string> const& column_outputs,
@@ -63,7 +62,6 @@ jitify2::StringVec build_jit_template_params(
 {
   jitify2::StringVec tparams;
 
-  tparams.emplace_back(jitify2::reflection::reflect(has_nulls));
   tparams.emplace_back(jitify2::reflection::reflect(has_user_data));
 
   std::transform(thrust::make_counting_iterator<size_t>(0),
@@ -199,7 +197,6 @@ jitify2::ConfiguredKernel build_transform_kernel(
   size_type base_column_size,
   std::vector<mutable_column_view> const& output_columns,
   std::vector<column_view> const& input_columns,
-  bool has_nulls,
   bool has_user_data,
   std::string const& udf,
   bool is_ptx,
@@ -217,7 +214,6 @@ jitify2::ConfiguredKernel build_transform_kernel(
 
   return get_kernel(jitify2::reflection::Template(kernel_name)
                       .instantiate(build_jit_template_params(
-                        has_nulls,
                         has_user_data,
                         {},
                         column_type_names(output_columns),
@@ -230,7 +226,6 @@ jitify2::ConfiguredKernel build_span_kernel(std::string const& kernel_name,
                                             size_type base_column_size,
                                             std::vector<std::string> const& span_outputs,
                                             std::vector<column_view> const& input_columns,
-                                            bool has_nulls,
                                             bool has_user_data,
                                             std::string const& udf,
                                             bool is_ptx,
@@ -246,7 +241,6 @@ jitify2::ConfiguredKernel build_span_kernel(std::string const& kernel_name,
 
   return get_kernel(jitify2::reflection::Template(kernel_name)
                       .instantiate(build_jit_template_params(
-                        has_nulls,
                         has_user_data,
                         span_outputs,
                         {},
@@ -357,7 +351,6 @@ std::unique_ptr<column> transform_operation(column_view base_column,
                                        base_column.size(),
                                        {*output},
                                        inputs,
-                                       null_count > 0,
                                        user_data.has_value(),
                                        udf,
                                        is_ptx,
@@ -383,7 +376,6 @@ std::unique_ptr<column> string_view_operation(column_view base_column,
                                   base_column.size(),
                                   {"cudf::string_view"},
                                   inputs,
-                                  null_count > 0,
                                   user_data.has_value(),
                                   udf,
                                   is_ptx,
