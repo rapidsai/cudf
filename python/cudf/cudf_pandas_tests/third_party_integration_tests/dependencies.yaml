@@ -70,7 +70,7 @@ files:
       - test_base
       - test_tensorflow
     matrix:
-      py: "3.12"
+      py: ["3.12"]
   test_xgboost:
     output: none
     includes:
