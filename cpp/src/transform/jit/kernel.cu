@@ -73,20 +73,20 @@ struct span_accessor {
   using type                     = T;
   static constexpr int32_t index = Index;
 
-  static __device__ type& element(cudf::jit::optional_device_span<T> const* spans,
+  static __device__ type& element(cudf::jit::device_optional_span<T> const* spans,
                                   cudf::size_type row)
   {
     return spans[index][row];
   }
 
-  static __device__ void assign(cudf::jit::optional_device_span<T> const* outputs,
+  static __device__ void assign(cudf::jit::device_optional_span<T> const* outputs,
                                 cudf::size_type row,
                                 T value)
   {
     outputs[index][row] = value;
   }
 
-  static __device__ bool is_null(cudf::jit::optional_device_span<T> const* inputs,
+  static __device__ bool is_null(cudf::jit::device_optional_span<T> const* inputs,
                                  cudf::size_type row)
   {
     return inputs[index].is_null(row);
@@ -173,7 +173,7 @@ CUDF_KERNEL void fixed_point_kernel(cudf::mutable_column_device_view_core const*
 }
 
 template <bool has_user_data, typename Out, typename... In>
-CUDF_KERNEL void span_kernel(cudf::jit::optional_device_span<typename Out::type> const* outputs,
+CUDF_KERNEL void span_kernel(cudf::jit::device_optional_span<typename Out::type> const* outputs,
                              cudf::column_device_view_core const* inputs,
                              void* user_data)
 {

@@ -280,7 +280,7 @@ void launch_span_kernel(jitify2::ConfiguredKernel& kernel,
                         rmm::cuda_stream_view stream,
                         rmm::device_async_resource_ref mr)
 {
-  auto outputs = to_device_vector(std::vector{cudf::jit::optional_device_span<T>{
+  auto outputs = to_device_vector(std::vector{cudf::jit::device_optional_span<T>{
                                     cudf::jit::device_span<T>{output.data(), output.size()},
                                     static_cast<bitmask_type*>(null_mask.data())}},
                                   stream,
@@ -289,7 +289,7 @@ void launch_span_kernel(jitify2::ConfiguredKernel& kernel,
   auto [input_handles, inputs] =
     column_views_to_device<column_device_view, column_view>(input_cols, stream, mr);
 
-  cudf::jit::optional_device_span<T> const* outputs_ptr = outputs.data();
+  cudf::jit::device_optional_span<T> const* outputs_ptr = outputs.data();
   column_device_view const* inputs_ptr                  = inputs.data();
   void* p_user_data                                     = user_data.value_or(nullptr);
 
