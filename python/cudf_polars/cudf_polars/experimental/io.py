@@ -47,7 +47,7 @@ def _(
     nrows = max(ir.df.shape()[0], 1)
     count = math.ceil(nrows / rows_per_partition)
 
-    table_stats = _default_table_stats(ir, nrows)
+    table_stats = TableStats(column_stats={}, num_rows=nrows)
     if count > 1:
         length = math.ceil(nrows / count)
         slices = [
@@ -298,6 +298,18 @@ def _sample_pq_statistics(ir: Scan) -> TableStats:
         ds = pa_ds.dataset(paths, format="parquet")
         need_schema = {k: v for k, v in need_schema.items() if k in ds.schema.names}
 
+    # We already know the element size of most dtypes
+    variable_size_types = (
+        plc.TypeId.LIST,
+        plc.TypeId.STRING,
+        plc.TypeId.STRUCT,
+    )
+    known_element_sizes: dict[str, list[int]] = {
+        name: plc.types.size_of(dtype)
+        for name, dtype in ir.schema.items()
+        if dtype.id() not in variable_size_types
+    }
+
     if ds is not None and need_schema:
         total_num_rows = []
         column_sizes = {}
@@ -323,7 +335,9 @@ def _sample_pq_statistics(ir: Scan) -> TableStats:
                         element_sizes[name] = []
                     column_sizes[name][i] += column.total_uncompressed_size
                     element_sizes[name].append(
-                        column.total_uncompressed_size / num_rows
+                        known_element_sizes.get(
+                            name, column.total_uncompressed_size / num_rows
+                        )
                     )
 
                     if column.statistics.distinct_count:  # pragma: no cover
@@ -333,9 +347,8 @@ def _sample_pq_statistics(ir: Scan) -> TableStats:
                         unique_available = False
 
             # Use real data from first row-group if unique stats are missing
-            # TODO: Cache all these statistics!!!
             if not (unique_available or real_sample):
-                real_sample = True  # Only do this once
+                real_sample = True  # Only sample one row-group like this
                 t = frag.split_by_row_group()[0].to_table(columns=list(need_schema))
                 for name in need_schema:
                     unique_count = pa_c.count_distinct(t.column(name)).as_py()
@@ -350,7 +363,7 @@ def _sample_pq_statistics(ir: Scan) -> TableStats:
                 name: ColumnStats(
                     dtype=dtype,
                     unique_count=int(np.mean(column_unique_counts[name])),
-                    element_size=int(np.mean(element_sizes[name])),
+                    element_size=max(int(np.mean(element_sizes[name])), 1),
                     file_size=int(np.mean(column_sizes[name])),
                 )
                 for name, dtype in need_schema.items()
@@ -359,10 +372,7 @@ def _sample_pq_statistics(ir: Scan) -> TableStats:
         )
 
         if table_stats_cached:  # pragma: no cover; TODO: Test this
-            combined_schema = table_stats_cached_schema | ir.schema
-            table_stats = TableStats.merge(
-                combined_schema, table_stats, table_stats_cached
-            )
+            table_stats = TableStats.merge(table_stats, table_stats_cached)
 
         _TABLESTATS_CACHE[tuple(ir.paths)] = table_stats
 
@@ -435,7 +445,3 @@ def _(
         return new_node, partition_info
 
     return ir, {ir: PartitionInfo(count=1)}  # pragma: no cover
-
-
-def _default_table_stats(ir: Scan | DataFrameScan, num_rows: int) -> TableStats:
-    return TableStats(column_stats={}, num_rows=num_rows)

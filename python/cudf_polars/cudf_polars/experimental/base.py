@@ -17,7 +17,6 @@ if TYPE_CHECKING:
     from cudf_polars.dsl.expr import NamedExpr
     from cudf_polars.dsl.ir import IR
     from cudf_polars.dsl.nodebase import Node
-    from cudf_polars.typing import Schema
 
 
 @dataclasses.dataclass(frozen=True)
@@ -44,14 +43,12 @@ class TableStats:
     """Estimated row count."""
 
     @classmethod
-    def merge(cls, schema: Schema, *tables: TableStats) -> Self:
+    def merge(cls, *tables: TableStats) -> Self:
         """Merge multiple TableStats objects."""
         num_rows = 0
         column_stats: dict[str, ColumnStats] = {}
         for table_stats in tables:
-            column_stats.update(
-                {k: v for k, v in table_stats.column_stats.items() if k in schema}
-            )
+            column_stats.update(table_stats.column_stats)
             num_rows = max(num_rows, table_stats.num_rows)
         return cls(column_stats, int(num_rows))
 
@@ -116,7 +113,7 @@ class PartitionInfo:
                 if stats is not None:
                     child_table_stats.append(stats)
             if child_table_stats:
-                table_stats = TableStats.merge(ir.schema, *child_table_stats)
+                table_stats = TableStats.merge(*child_table_stats)
 
         return cls(count, partitioned_on or (), table_stats)
 

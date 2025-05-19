@@ -67,3 +67,28 @@ def test_target_partition_size(tmp_path, df, blocksize, n_files):
         assert count > n_files
     else:
         assert count < n_files
+
+
+def test_table_statistics(tmp_path, df):
+    make_partitioned_source(df, tmp_path, "parquet", n_files=3)
+    q = pl.scan_parquet(tmp_path)
+    engine = pl.GPUEngine(
+        raise_on_fail=True,
+        executor="streaming",
+        executor_options={
+            "target_partition_size": 10_000,
+            "scheduler": DEFAULT_SCHEDULER,
+        },
+    )
+
+    q = q.filter(pl.col("z") < 3).group_by(pl.col("y")).mean().select(pl.col("x"))
+
+    # Check that we are tracking TableStats,
+    # and that the basic stats make sense
+    qir = Translator(q._ldf.visit(), engine).translate_ir()
+    ir, pi = lower_ir_graph(qir, ConfigOptions(engine.config))
+    table_stats = pi[ir].table_stats
+    result = q.collect()
+    assert table_stats.num_rows >= len(result)
+    assert table_stats.column_stats["y"].unique_count == len(result)
+    assert table_stats.column_stats["y"].element_size > 0
