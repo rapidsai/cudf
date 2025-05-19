@@ -445,15 +445,35 @@ decode_fixed_width_value(PageInfo const& page,
       break;
     }
     case parquet::Type::INT32: {
-      auto const int32_type_len = get_int32_type_len(chunk.logical_type);
       // Check if we are overruning the data stream
       if (is_stream_overrun(
-            value_idx * int32_type_len, int32_type_len, page.uncompressed_page_size)) {
+            value_idx * sizeof(int32_t), sizeof(int32_t), page.uncompressed_page_size)) {
         set_error(error, decode_error::DATA_STREAM_OVERRUN);
         return {};
       }
-      // Copy the value from the page data
-      cuda::std::memcpy(&decoded_value, page_data + (value_idx * int32_type_len), int32_type_len);
+
+      // Check if we are reading an 4 byte value
+      if constexpr (cuda::std::is_same_v<T, int32_t> or cuda::std::is_same_v<T, uint32_t>) {
+        // Copy the 4-byte (int32 or uint32) value from the page data
+        cuda::std::memcpy(&decoded_value, page_data + (value_idx * sizeof(T)), sizeof(T));
+      } else {
+        auto const int32_type_len = get_int32_type_len(chunk.logical_type);
+        if (int32_type_len == sizeof(int64_t)) {
+          // Reading INT32 TIME_MILLIS into 64-bit DURATION_MILLISECONDS
+          // TIME_MILLIS is the only duration type stored as int32:
+          // https://github.com/apache/parquet-format/blob/master/LogicalTypes.md#deprecated-time-convertedtype
+          cuda::std::memcpy(
+            &decoded_value, page_data + (value_idx * sizeof(uint32_t)), sizeof(uint32_t));
+        } else {
+          // Reading smaller bitwidth values
+          if (sizeof(T) > sizeof(int32_t)) {
+            set_error(error, decode_error::INVALID_DATA_TYPE);
+            return {};
+          }
+          // Copy the smaller bitwidth value from the page data
+          cuda::std::memcpy(&decoded_value, page_data + (value_idx * sizeof(int32_t)), sizeof(T));
+        }
+      }
       break;
     }
     case parquet::Type::INT64: [[fallthrough]];
@@ -740,8 +760,8 @@ __global__ void evaluate_some_string_literals(PageInfo const* pages,
   if (page.num_input_values == 0 or page_data_size == 0) {
     if (warp.thread_rank() == 0 and row_group_idx < total_row_groups) {
       for (auto i = 0; i < total_num_scalars; ++i) {
-        // Set the result to true (keep) if the operator is EQUAL, otherwise set it to false (do not
-        // prune)
+        // Set the result to true (keep) if the operator is EQUAL, otherwise set it to false (do
+        // not prune)
         results[i][row_group_idx] = operators[i] == ast::ast_operator::EQUAL;
       }
     }
@@ -790,8 +810,8 @@ __global__ void evaluate_some_string_literals(PageInfo const* pages,
       }
 
       // If operator is NOT_EQUAL, check if we have more than one values in the dictionary (will
-      // never evaluate to true so we can easily break) or if the decoded value was a match with the
-      // literal value. Otherwise, check if all literal values have been found and break early
+      // never evaluate to true so we can easily break) or if the decoded value was a match with
+      // the literal value. Otherwise, check if all literal values have been found and break early
       if (thrust::all_of(thrust::seq,
                          thrust::counting_iterator(0),
                          thrust::counting_iterator(total_num_scalars),
