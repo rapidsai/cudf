@@ -3625,7 +3625,7 @@ class _Grouping(Serializable):
 
     def _handle_level(self, by):
         level_values = self._obj.index.get_level_values(by)
-        self._key_columns.append(level_values._values)
+        self._key_columns.append(level_values._column)
         self.names.append(level_values.name)
 
     def _handle_misc(self, by):
