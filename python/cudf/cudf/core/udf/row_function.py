@@ -134,6 +134,16 @@ def _row_kernel_string_from_template(frame, row_type, args):
 
 
 class DataFrameApplyKernel(ApplyKernelBase):
+    """
+    Class representing a kernel that computes the result of
+    a DataFrame.apply operation. Expects that the user passed
+    a function that operates on an input row of the dataframe,
+    for example
+
+    def f(row):
+        return row['x'] + row['y']
+    """
+
     @property
     def kernel_type(self):
         return "dataframe_apply"

@@ -47,6 +47,16 @@ def _scalar_kernel_string_from_template(sr, args):
 
 
 class SeriesApplyKernel(ApplyKernelBase):
+    """
+    Class representing a kernel that computes the result of
+    a Series.apply operation. Expects that the user passed
+    a function that operates on an single element of the Series,
+    for example
+
+    def f(x):
+        return x + 1
+    """
+
     @property
     def kernel_type(self):
         return "series_apply"

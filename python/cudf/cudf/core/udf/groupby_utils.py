@@ -191,6 +191,19 @@ def _can_be_jitted(frame, func, args):
 
 
 class GroupByApplyKernel(ApplyKernelBase):
+    """
+    Class representing a kernel that computes the result of
+    a GroupBy.apply operation. Expects that the user passed
+    a function that operates on a single group of the data,
+    for example
+
+    def f(group):
+        return group['x'].sum() + group['y'].sum()
+    """
+
+    def f(x):
+        return x + 1
+
     @property
     def kernel_type(self):
         return "groupby_apply"
