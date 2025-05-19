@@ -1355,8 +1355,8 @@ void json_column::level_child_cols_recursively(row_offset_t min_row_count)
 
   // If this is a struct column, we need to level all its child columns
   if (type == json_col_t::StructColumn) {
-    for (auto it = std::begin(child_columns); it != std::end(child_columns); it++) {
-      it->second.level_child_cols_recursively(min_row_count);
+    for (auto& child_column : child_columns) {
+      child_column.second.level_child_cols_recursively(min_row_count);
     }
   }
   // If this is a list column, we need to make sure that its child column levels its children
@@ -1851,7 +1851,7 @@ void make_json_column(json_column& root_column,
         if (current_data_path.top().column->child_columns.empty()) {
           current_data_path.top().column->child_columns.emplace(std::string{list_child_name},
                                                                 json_column{json_col_t::Unknown});
-          current_data_path.top().column->column_order.push_back(list_child_name);
+          current_data_path.top().column->column_order.emplace_back(list_child_name);
         }
         current_data_path.top().current_selected_col =
           &current_data_path.top().column->child_columns.begin()->second;
