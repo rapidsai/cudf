@@ -30,12 +30,17 @@ import polars as pl
 
 try:
     import pynvml
+except ImportError:
+    pynvml = None
 
+try:
     from cudf_polars.dsl.translate import Translator
     from cudf_polars.experimental.explain import explain_query
     from cudf_polars.experimental.parallel import evaluate_streaming
+
+    CUDF_POLARS_AVAILABLE = True
 except ImportError:
-    print("Assume CPU execution...")
+    CUDF_POLARS_AVAILABLE = False
 
 if TYPE_CHECKING:
     import pathlib
@@ -118,10 +123,10 @@ class HardwareInfo:
     @classmethod
     def collect(cls) -> HardwareInfo:
         """Collect the hardware information."""
-        try:
+        if CUDF_POLARS_AVAILABLE:
             pynvml.nvmlInit()
             gpus = [GPUInfo.from_index(i) for i in range(pynvml.nvmlDeviceGetCount())]
-        except NameError:
+        else:
             # No GPUs -- probably running in CPU mode
             gpus = []
         return cls(gpus=gpus)
