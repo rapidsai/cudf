@@ -73,7 +73,7 @@ def keys(request):
             pl.col("uint16_with_null").sum(),
             pl.col("uint16_with_null").mean().alias("mean"),
         ],
-        [pl.col("float").max() - pl.col("int").min()],
+        [pl.col("float").max() - pl.col("int").min() + pl.col("int").max()],
         [pl.col("float").mean(), pl.col("int").std()],
         [(pl.col("float") - pl.lit(2)).max()],
         [pl.lit(10).alias("literal_value")],
@@ -81,6 +81,11 @@ def keys(request):
         [pl.col("float").round(decimals=1).sum()],
         [pl.col("int").first(), pl.col("float").last()],
         [pl.col("int").sum(), pl.col("string").str.replace("h", "foo", literal=True)],
+        [pl.col("float").quantile(0.3, interpolation="nearest")],
+        [pl.col("float").quantile(0.3, interpolation="higher")],
+        [pl.col("float").quantile(0.3, interpolation="lower")],
+        [pl.col("float").quantile(0.3, interpolation="midpoint")],
+        [pl.col("float").quantile(0.3, interpolation="linear")],
         [
             pl.col("datetime").max(),
             pl.col("datetime").max().dt.is_leap_year().alias("leapyear"),
@@ -224,6 +229,11 @@ def test_groupby_literal_in_agg(df, key, expr):
 )
 def test_groupby_unary_non_pointwise_raises(df, expr):
     q = df.group_by("key1").agg(expr)
+    assert_ir_translation_raises(q, NotImplementedError)
+
+
+def test_groupby_agg_broadcast_raises(df):
+    q = df.group_by("key1").agg(pl.col("int") + pl.col("float").max())
     assert_ir_translation_raises(q, NotImplementedError)
 
 

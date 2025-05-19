@@ -30,15 +30,12 @@ import pynvml
 import polars as pl
 
 from cudf_polars.dsl.translate import Translator
-from cudf_polars.experimental.parallel import evaluate_streaming, lower_ir_graph
-from cudf_polars.utils.config import ConfigOptions
+from cudf_polars.experimental.explain import explain_query
+from cudf_polars.experimental.parallel import evaluate_streaming
 
 if TYPE_CHECKING:
     import pathlib
-    from collections.abc import MutableMapping
 
-    from cudf_polars.dsl.ir import IR
-    from cudf_polars.experimental.base import PartitionInfo
 
 # Without this setting, the first IO task to run
 # on each worker takes ~15 sec extra
@@ -198,12 +195,15 @@ class RunConfig:
                     print(f"threads: {self.threads}")
                     print(f"spill_device: {self.spill_device}")
                     print(f"rapidsmpf_spill: {self.rapidsmpf_spill}")
-            print(f"iterations: {self.iterations}")
-            print("---------------------------------------")
-            print(f"min time : {min([record.duration for record in records]):0.4f}")
-            print(f"max time : {max(record.duration for record in records):0.4f}")
-            print(f"mean time: {np.mean([record.duration for record in records]):0.4f}")
-            print("=======================================")
+            if len(records) > 0:
+                print(f"iterations: {self.iterations}")
+                print("---------------------------------------")
+                print(f"min time : {min([record.duration for record in records]):0.4f}")
+                print(f"max time : {max(record.duration for record in records):0.4f}")
+                print(
+                    f"mean time: {np.mean([record.duration for record in records]):0.4f}"
+                )
+                print("=======================================")
 
 
 def get_data(
@@ -211,60 +211,6 @@ def get_data(
 ) -> pl.LazyFrame:
     """Get table from dataset."""
     return pl.scan_parquet(f"{path}/{table_name}{suffix}")
-
-
-def _explain(
-    ir: IR,
-    partition_info: MutableMapping[IR, PartitionInfo],
-    *,
-    offset: str = "",
-) -> str:
-    """Print the physical plan for an IR node."""
-    from cudf_polars.dsl.ir import GroupBy, Join, Projection, Scan, Select, Sort, Union
-    from cudf_polars.experimental.io import SplitScan
-
-    val = offset
-    count = partition_info[ir].count
-    if isinstance(ir, Union) and isinstance(ir.children[0], (Scan, SplitScan)):
-        scan = ir.children[0]
-        if isinstance(scan, SplitScan):
-            name = "SPLITSCAN"
-            scan = scan.base_scan
-        else:
-            name = "SCAN"
-        schema = tuple(ir.schema)
-        path = "/".join(scan.paths[0].split("/")[-2:])
-        val += f"UNION [{count} x {name} {schema} {path} ...]\n"
-    else:
-        if isinstance(ir, GroupBy):
-            keys = tuple(ne.name for ne in ir.keys)
-            val += f"GROUPBY {keys} [{count}]\n"
-        elif isinstance(ir, Join):
-            left_on = tuple(ne.name for ne in ir.left_on)
-            right_on = tuple(ne.name for ne in ir.right_on)
-            val += f"JOIN {ir.options[0]} {left_on} {right_on} [{count}]\n"
-        elif isinstance(ir, Projection):
-            schema = tuple(ir.schema)
-            val += f"PROJECTION {schema} [{count}]\n"
-        elif isinstance(ir, Select):
-            schema = tuple(ir.schema)
-            val += f"SELECT {schema} [{count}]\n"
-        elif isinstance(ir, Sort):
-            by = tuple(ne.name for ne in ir.by)
-            val += f"SORT {by} [{count}]\n"
-        else:
-            val += f"{type(ir).__name__.upper()} [{count}]\n"
-        for child in ir.children:
-            val += _explain(child, partition_info, offset=offset + "  ")
-    return val
-
-
-def explain_query(q: pl.LazyFrame, engine: pl.GPUEngine) -> str:
-    """Print the physical plan for a query."""
-    config_options = ConfigOptions.from_polars_engine(engine)
-    ir = Translator(q._ldf.visit(), engine).translate_ir()
-    ir, partition_info = lower_ir_graph(ir, config_options)
-    return _explain(ir, partition_info)
 
 
 class PDSHQueries:
@@ -1171,6 +1117,12 @@ parser.add_argument(
     help="Print an outline of the physical plan",
     default=False,
 )
+parser.add_argument(
+    "--explain-logical",
+    action=argparse.BooleanOptionalAction,
+    help="Print an outline of the logical plan",
+    default=False,
+)
 args = parser.parse_args()
 
 
@@ -1204,11 +1156,58 @@ def run(args: argparse.Namespace) -> None:
                     raise ImportError from err
 
     records: defaultdict[int, list[Record]] = defaultdict(list)
+    engine: pl.GPUEngine | None = None
+
+    if run_config.executor == "cpu":
+        engine = None
+    else:
+        executor_options: dict[str, Any] = {}
+        if run_config.executor == "streaming":
+            executor_options = {
+                "cardinality_factor": {
+                    "c_custkey": 0.05,  # Q10
+                    "l_orderkey": 1.0,  # Q18
+                    "l_partkey": 0.1,  # Q20
+                    "o_custkey": 0.25,  # Q22
+                },
+            }
+            if run_config.blocksize:
+                executor_options["target_partition_size"] = run_config.blocksize
+            if run_config.shuffle:
+                executor_options["shuffle_method"] = run_config.shuffle
+            if run_config.broadcast_join_limit:
+                executor_options["broadcast_join_limit"] = (
+                    run_config.broadcast_join_limit
+                )
+            if run_config.rapidsmpf_spill:
+                executor_options["rapidsmpf_spill"] = run_config.rapidsmpf_spill
+            if run_config.scheduler == "distributed":
+                executor_options["scheduler"] = "distributed"
+
+        engine = pl.GPUEngine(
+            raise_on_fail=True,
+            executor=run_config.executor,
+            executor_options=executor_options,
+        )
+
     for q_id in run_config.queries:
         try:
             q = getattr(PDSHQueries, f"q{q_id}")(run_config)
         except AttributeError as err:
             raise NotImplementedError(f"Query {q_id} not implemented.") from err
+
+        if run_config.executor == "cpu":
+            if args.explain_logical:
+                print(f"\nQuery {q_id} - Logical plan\n")
+                print(q.explain())
+        else:
+            assert isinstance(engine, pl.GPUEngine)
+            if args.explain_logical:
+                print(f"\nQuery {q_id} - Logical plan\n")
+                print(explain_query(q, engine, physical=False))
+            elif args.explain:
+                print(f"\nQuery {q_id} - Physical plan\n")
+                print(explain_query(q, engine))
 
         records[q_id] = []
 
@@ -1218,32 +1217,7 @@ def run(args: argparse.Namespace) -> None:
             if run_config.executor == "cpu":
                 result = q.collect(new_streaming=True)
             else:
-                executor_options: dict[str, Any] = {}
-                if run_config.executor == "streaming":
-                    executor_options = {
-                        "cardinality_factor": {
-                            "c_custkey": 0.05,  # Q10
-                            "l_orderkey": 1.0,  # Q18
-                        },
-                    }
-                    if run_config.blocksize:
-                        executor_options["parquet_blocksize"] = run_config.blocksize
-                    if run_config.shuffle:
-                        executor_options["shuffle_method"] = run_config.shuffle
-                    if run_config.broadcast_join_limit:
-                        executor_options["broadcast_join_limit"] = (
-                            run_config.broadcast_join_limit
-                        )
-                    if run_config.rapidsmpf_spill:
-                        executor_options["rapidsmpf_spill"] = run_config.rapidsmpf_spill
-                    if run_config.scheduler == "distributed":
-                        executor_options["scheduler"] = "distributed"
-
-                engine = pl.GPUEngine(
-                    raise_on_fail=True,
-                    executor=run_config.executor,
-                    executor_options=executor_options,
-                )
+                assert isinstance(engine, pl.GPUEngine)
                 if args.debug:
                     translator = Translator(q._ldf.visit(), engine)
                     ir = translator.translate_ir()
@@ -1260,9 +1234,6 @@ def run(args: argparse.Namespace) -> None:
             record = Record(query=q_id, duration=t1 - t0)
             if args.print_results:
                 print(result)
-            if args.explain:
-                print(f"\nQuery {q_id} - Physical plan\n")
-                print(explain_query(q, engine))
             print(f"Ran query={q_id} in {record.duration:0.4f}s", flush=True)
             records[q_id].append(record)
 

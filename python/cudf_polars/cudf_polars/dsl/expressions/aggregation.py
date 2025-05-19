@@ -66,9 +66,13 @@ class Agg(Expr):
                 else plc.types.NullPolicy.INCLUDE
             )
         elif name == "quantile":
-            _, quantile = self.children
+            child, quantile = self.children
             if not isinstance(quantile, Literal):
                 raise NotImplementedError("Only support literal quantile values")
+            if options == "equiprobable":
+                raise NotImplementedError("Quantile with equiprobable interpolation")
+            if plc.traits.is_duration(child.dtype):
+                raise NotImplementedError("Quantile with duration data type")
             req = plc.aggregation.quantile(
                 quantiles=[quantile.value.as_py()], interp=Agg.interp_mapping[options]
             )
@@ -82,7 +86,9 @@ class Agg(Expr):
             op = partial(self._reduce, request=req)
         elif name in {"min", "max"}:
             op = partial(op, propagate_nans=options)
-        elif name in {"count", "sum", "first", "last"}:
+        elif name == "count":
+            op = partial(op, include_nulls=options)
+        elif name in {"sum", "first", "last"}:
             pass
         else:
             raise NotImplementedError(
@@ -139,10 +145,11 @@ class Agg(Expr):
             )
         )
 
-    def _count(self, column: Column) -> Column:
+    def _count(self, column: Column, *, include_nulls: bool) -> Column:
+        null_count = column.null_count if not include_nulls else 0
         return Column(
             plc.Column.from_scalar(
-                plc.Scalar.from_py(column.size - column.null_count, self.dtype),
+                plc.Scalar.from_py(column.size - null_count, self.dtype),
                 1,
             )
         )

@@ -126,7 +126,7 @@ def default_blocksize(scheduler: str) -> int:
         # Fall back to a conservative 12GiB default
         warnings.warn(
             "Failed to query the device size with NVML. Please "
-            "set 'parquet_blocksize' to a literal byte size to "
+            "set 'target_partition_size' to a literal byte size to "
             f"silence this warning. Original error: {err}",
             stacklevel=1,
         )
@@ -170,9 +170,10 @@ class StreamingExecutor:
         Each factor estimates the fractional number of unique values in the
         column. By default, ``1.0`` is used for any column not included in
         ``cardinality_factor``.
-    parquet_blocksize
-        Controls how large parquet files are split into multiple partitions.
-        Files larger than ``parquet_blocksize`` bytes are split into multiple
+    target_partition_size
+        Target partition size for IO tasks. This configuration currently
+        controls how large parquet files are split into multiple partitions.
+        Files larger than ``target_partition_size`` bytes are split into multiple
         partitions.
     groupby_n_ary
         The factor by which the number of partitions is decreased when performing
@@ -197,7 +198,7 @@ class StreamingExecutor:
     fallback_mode: StreamingFallbackMode = StreamingFallbackMode.WARN
     max_rows_per_partition: int = 1_000_000
     cardinality_factor: dict[str, float] = dataclasses.field(default_factory=dict)
-    parquet_blocksize: int = 0
+    target_partition_size: int = 0
     groupby_n_ary: int = 32
     broadcast_join_limit: int = 0
     shuffle_method: ShuffleMethod | None = None
@@ -213,9 +214,9 @@ class StreamingExecutor:
         object.__setattr__(
             self, "fallback_mode", StreamingFallbackMode(self.fallback_mode)
         )
-        if self.parquet_blocksize == 0:
+        if self.target_partition_size == 0:
             object.__setattr__(
-                self, "parquet_blocksize", default_blocksize(self.scheduler)
+                self, "target_partition_size", default_blocksize(self.scheduler)
             )
         if self.broadcast_join_limit == 0:
             object.__setattr__(
@@ -235,8 +236,8 @@ class StreamingExecutor:
             raise TypeError("max_rows_per_partition must be an int")
         if not isinstance(self.cardinality_factor, dict):
             raise TypeError("cardinality_factor must be a dict of column name to float")
-        if not isinstance(self.parquet_blocksize, int):
-            raise TypeError("parquet_blocksize must be an int")
+        if not isinstance(self.target_partition_size, int):
+            raise TypeError("target_partition_size must be an int")
         if not isinstance(self.groupby_n_ary, int):
             raise TypeError("groupby_n_ary must be an int")
         if not isinstance(self.broadcast_join_limit, int):

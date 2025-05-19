@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 import pyarrow as pa
 import pytest
@@ -27,7 +27,7 @@ def test_ngrams_tokenize(input_col, ngrams, delim, sep):
         return tokens
 
     result = plc.nvtext.ngrams_tokenize.ngrams_tokenize(
-        plc.interop.from_arrow(input_col),
+        plc.Column(input_col),
         ngrams,
         plc.interop.from_arrow(pa.scalar(delim)),
         plc.interop.from_arrow(pa.scalar(sep)),

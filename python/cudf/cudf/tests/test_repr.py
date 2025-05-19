@@ -1487,16 +1487,11 @@ def test_interval_index_repr():
     assert repr(pi) == repr(gi)
 
 
-@pytest.mark.skip(reason="This test is unstable in CI")
-@pytest.mark.flaky(reruns=3, reruns_delay=5)
-def test_large_unique_categories_repr():
-    # Unfortunately, this is a long running test (takes about 1 minute)
-    # and there is no way we can reduce the time
-    pi = pd.CategoricalIndex(range(100_000_000))
-    gi = cudf.CategoricalIndex(range(100_000_000))
+def test_unique_categories_repr():
+    pi = pd.CategoricalIndex(range(10_000))
+    gi = cudf.CategoricalIndex(range(10_000))
     expected_repr = repr(pi)
-    with utils.cudf_timeout(6):
-        actual_repr = repr(gi)
+    actual_repr = repr(gi)
     assert expected_repr == actual_repr
 
 
