@@ -313,8 +313,8 @@ std::tuple<rmm::device_buffer, size_type> make_transform_null_mask(
   std::vector<column_view> bitmask_columns;
 
   // to handle null masks for scalars, we just check if the scalar element is null. If it is null,
-  // then all the rows of the transform output will be null. this would prevent creating another
-  // bitmask as large as the base column's.
+  // then all the rows of the transform output will be null. This helps us prevent creating
+  // column-sized bitmasks for each scalar.
   for (column_view const& col : inputs) {
     if (is_scalar(base_column.size(), col.size())) {
       // all nulls
