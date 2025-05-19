@@ -46,8 +46,9 @@ std::unique_ptr<cudf::column> transform(cudf::table_view const& table)
   }
   )***";
 
+  // a column with size 1 is considered a scalar
   auto alt = cudf::make_column_from_scalar(
-    cudf::string_scalar(cudf::string_view{"(unknown)", 9}, true, stream), 1, stream);
+    cudf::string_scalar(cudf::string_view{"(unknown)", 9}, true, stream, mr), 1, stream, mr);
 
   return cudf::transform({table.column(1), *alt},
                          udf,
