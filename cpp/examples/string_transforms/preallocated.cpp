@@ -71,7 +71,7 @@ __device__ void e164_format(void* scratch,
   rmm::device_uvector<char> scratch(maximum_size * num_rows, stream, mr);
 
   auto size =
-    cudf::make_column_from_scalar(cudf::numeric_scalar<int32_t>(maximum_size, true, stream, mr), 1);
+    cudf::make_column_from_scalar(cudf::numeric_scalar<int32_t>(maximum_size, true, stream), 1, stream);
 
   return cudf::transform({table.column(2), table.column(3), table.column(4), *size},
                          udf,
