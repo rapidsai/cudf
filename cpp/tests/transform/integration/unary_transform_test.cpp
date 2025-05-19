@@ -740,8 +740,7 @@ ret;
 
   auto fifth()
   {
-    return cudf::detail::make_counting_transform_iterator(
-      0, [](auto i) { return (i % 4) == 0 || (i % 5) == 0; });
+    return cudf::detail::make_counting_transform_iterator(0, [](auto i) { return (i % 5) == 0; });
   }
 };
 
