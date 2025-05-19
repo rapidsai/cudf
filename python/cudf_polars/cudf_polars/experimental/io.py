@@ -298,23 +298,26 @@ def _sample_pq_statistics(ir: Scan) -> TableStats:
         ds = pa_ds.dataset(paths, format="parquet")
         need_schema = {k: v for k, v in need_schema.items() if k in ds.schema.names}
 
-    # We already know the element size of most dtypes
-    variable_size_types = (
-        plc.TypeId.LIST,
-        plc.TypeId.STRING,
-        plc.TypeId.STRUCT,
-    )
-    known_element_sizes: dict[str, list[int]] = {
-        name: plc.types.size_of(dtype)
-        for name, dtype in ir.schema.items()
-        if dtype.id() not in variable_size_types
-    }
-
     if ds is not None and need_schema:
+        # We already know the element size of most dtypes
+        known_element_sizes: dict[str, list[int]] = {
+            name: plc.types.size_of(dtype)
+            for name, dtype in need_schema.items()
+            if dtype.id()
+            not in (
+                plc.TypeId.LIST,
+                plc.TypeId.STRING,
+                plc.TypeId.STRUCT,
+            )
+        }
+
+        column_sizes = {name: np.zeros(n_sample, dtype="int64") for name in need_schema}
+        column_unique_counts = {
+            name: np.zeros(n_sample, dtype="int64") for name in need_schema
+        }
+        sampled_element_sizes: dict[str, list[int]] = {name: [] for name in need_schema}
+
         total_num_rows = []
-        column_sizes = {}
-        column_unique_counts = {}
-        element_sizes: dict[str, list[int]] = {}
         real_sample = False  # Whether we read in a real file
         for i, frag in enumerate(ds.get_fragments()):
             md = frag.metadata
@@ -329,17 +332,12 @@ def _sample_pq_statistics(ir: Scan) -> TableStats:
                     name = column.path_in_schema
                     if name not in need_schema:
                         continue
-                    if name not in column_sizes:
-                        column_sizes[name] = np.zeros(n_sample, dtype="int64")
-                        column_unique_counts[name] = np.zeros(n_sample, dtype="float64")
-                        element_sizes[name] = []
                     column_sizes[name][i] += column.total_uncompressed_size
-                    element_sizes[name].append(
+                    sampled_element_sizes[name].append(
                         known_element_sizes.get(
                             name, column.total_uncompressed_size / num_rows
                         )
                     )
-
                     if column.statistics.distinct_count:  # pragma: no cover
                         # Use 'distinct_count' statistic
                         column_unique_counts[name][i] = column.statistics.distinct_count
@@ -363,7 +361,7 @@ def _sample_pq_statistics(ir: Scan) -> TableStats:
                 name: ColumnStats(
                     dtype=dtype,
                     unique_count=int(np.mean(column_unique_counts[name])),
-                    element_size=max(int(np.mean(element_sizes[name])), 1),
+                    element_size=max(int(np.mean(sampled_element_sizes[name])), 1),
                     file_size=int(np.mean(column_sizes[name])),
                 )
                 for name, dtype in need_schema.items()
