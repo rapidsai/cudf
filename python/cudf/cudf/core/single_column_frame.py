@@ -8,12 +8,12 @@ from typing import TYPE_CHECKING, Any
 import cupy as cp
 from typing_extensions import Self
 
+import cudf
 from cudf.api.extensions import no_default
 from cudf.api.types import (
     _is_scalar_or_zero_d_array,
     is_integer,
 )
-from cudf.core.algorithms import factorize
 from cudf.core.column import ColumnBase, as_column, column_empty
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.frame import Frame
@@ -221,14 +221,14 @@ class SingleColumnFrame(Frame, NotIterable):
 
     def _to_frame(self, name: Hashable, index: Index | None) -> DataFrame:
         """Helper function for Series.to_frame, Index.to_frame"""
-        from cudf.core.dataframe import DataFrame
 
         if name is no_default:
             col_name = 0 if self.name is None else self.name
         else:
             col_name = name
         ca = ColumnAccessor({col_name: self._column}, verify=False)
-        return DataFrame._from_data(ca, index=index)
+        # TODO: Avoid accessing DataFrame from the top level namespace
+        return cudf.DataFrame._from_data(ca, index=index)
 
     @property  # type: ignore
     @_performance_tracking
@@ -311,7 +311,8 @@ class SingleColumnFrame(Frame, NotIterable):
         >>> uniques
         Index(['a', 'c'], dtype='object')
         """
-        return factorize(
+        # TODO: Avoid accessing factorize from the top level namespace
+        return cudf.factorize(
             self,
             sort=sort,
             use_na_sentinel=use_na_sentinel,
@@ -346,7 +347,6 @@ class SingleColumnFrame(Frame, NotIterable):
         Dict[Optional[str], Tuple[ColumnBase, Any, bool, Any]]
             The operands to be passed to _colwise_binop.
         """
-        from cudf.core.index import RangeIndex
 
         # Get the appropriate name for output operations involving two objects
         # that are Series-like objects. The output shares the lhs's name unless
@@ -363,7 +363,8 @@ class SingleColumnFrame(Frame, NotIterable):
         elif not _is_scalar_or_zero_d_array(other):
             if not hasattr(
                 other, "__cuda_array_interface__"
-            ) and not isinstance(other, RangeIndex):
+            ) and not isinstance(other, cudf.RangeIndex):
+                # TODO: Avoid accessing RangeIndex from the top level namespace
                 return NotImplemented
 
             # Non-scalar right operands are valid iff they convert to columns.

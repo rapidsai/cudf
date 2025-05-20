@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 import pandas as pd
 
+import cudf
 from cudf.core.abc import Serializable
 from cudf.core.column.column import deserialize_columns
 from cudf.core.groupby.groupby import (
@@ -29,8 +30,6 @@ from cudf.core.groupby.groupby import (
     SeriesGroupBy,
     _Grouping,
 )
-from cudf.core.index import DatetimeIndex, Index
-from cudf.core.tools.datetimes import DateOffset, date_range
 
 if TYPE_CHECKING:
     from cudf._typing import DataFrameOrSeries
@@ -48,7 +47,7 @@ class _Resampler(GroupBy):
             func, *args, engine=engine, engine_kwargs=engine_kwargs, **kwargs
         )
         if len(self.grouping.bin_labels) != len(result):
-            index = Index(
+            index = cudf.Index(
                 self.grouping.bin_labels, name=self.grouping.names[0]
             )
             return result._align_to_index(
@@ -125,7 +124,7 @@ class SeriesResampler(_Resampler, SeriesGroupBy):
 
 
 class _ResampleGrouping(_Grouping):
-    bin_labels: Index
+    bin_labels: cudf.Index
 
     def __init__(self, obj, by=None, level=None):
         self._freq = getattr(by, "freq", None)
@@ -144,8 +143,8 @@ class _ResampleGrouping(_Grouping):
     @property
     def keys(self):
         index = super().keys
-        if self._freq is not None and isinstance(index, DatetimeIndex):
-            return DatetimeIndex._from_column(
+        if self._freq is not None and isinstance(index, cudf.DatetimeIndex):
+            return cudf.DatetimeIndex._from_column(
                 index._column, name=index.name, freq=self._freq
             )
         return index
@@ -170,7 +169,7 @@ class _ResampleGrouping(_Grouping):
         out.names = names
         out._named_columns = _named_columns
         out._key_columns = key_columns
-        out.bin_labels = Index.deserialize(
+        out.bin_labels = cudf.Index.deserialize(
             header["__bin_labels"], frames[-header["__bin_labels_count"] :]
         )
         out._freq = header["_freq"]
@@ -185,7 +184,7 @@ class _ResampleGrouping(_Grouping):
         label = by.label
         closed = by.closed
 
-        if isinstance(freq, (DateOffset, pd.DateOffset)):
+        if isinstance(freq, (cudf.DateOffset, pd.DateOffset)):
             raise NotImplementedError(
                 "Resampling by DateOffset objects is not yet supported."
             )
@@ -240,7 +239,7 @@ class _ResampleGrouping(_Grouping):
         end += offset
 
         # generate the labels for binning the key column:
-        bin_labels = date_range(
+        bin_labels = cudf.date_range(
             start=start,
             end=end,
             freq=freq,

@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 import cupy as cp
 import pyarrow as pa
 
+import cudf
 from cudf.core.column import as_column
 from cudf.core.dtypes import CategoricalDtype
 from cudf.options import get_option
@@ -83,8 +84,6 @@ def factorize(
     >>> uniques
     Index([<NA>, 1.0, 2.0], dtype='float64')
     """
-    from cudf.core.index import Index
-
     return_cupy_array = isinstance(values, cp.ndarray)
 
     if not can_convert_to_column(values):
@@ -116,8 +115,10 @@ def factorize(
         dtype="int64" if get_option("mode.pandas_compatible") else None,
     ).values
 
-    return labels, cats.values if return_cupy_array else Index._from_column(
-        cats
+    # TODO: Avoid accessing Index from the top level namespace
+    return (
+        labels,
+        cats.values if return_cupy_array else cudf.Index._from_column(cats),
     )
 
 
@@ -222,10 +223,8 @@ def unique(values):
     >>> pd.unique(pd.Series([("a", "b"), ("b", "a"), ("a", "c"), ("b", "a")]).values)
     array([('a', 'b'), ('b', 'a'), ('a', 'c')], dtype=object)
     """
-    from cudf.core.index import Index
-    from cudf.core.series import Series
-
-    if not isinstance(values, (Series, Index, cp.ndarray)):
+    # TODO: Avoid accessing Index and Series from the top level namespace
+    if not isinstance(values, (cudf.Series, cudf.Index, cp.ndarray)):
         raise ValueError(
             "Must pass cudf.Series, cudf.Index, or cupy.ndarray object"
         )
@@ -233,8 +232,8 @@ def unique(values):
         # pandas.unique will not sort the values in the result
         # while cupy.unique documents it will, so we pass cupy.ndarray
         # through cudf.Index to maintain the original order.
-        return cp.asarray(Index(values).unique())
-    if isinstance(values, Series):
+        return cp.asarray(cudf.Index(values).unique())
+    if isinstance(values, cudf.Series):
         if get_option("mode.pandas_compatible"):
             if isinstance(values.dtype, CategoricalDtype):
                 raise NotImplementedError(

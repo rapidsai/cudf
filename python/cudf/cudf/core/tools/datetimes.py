@@ -17,8 +17,10 @@ import pylibcudf as plc
 from cudf.api.types import is_integer, is_scalar
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column.column import ColumnBase, as_column
+from cudf.core.dataframe import DataFrame
 from cudf.core.index import BaseIndex, DatetimeIndex, Index, ensure_index
 from cudf.core.scalar import pa_scalar_to_plc_scalar
+from cudf.core.series import Series
 from cudf.utils.dtypes import CUDF_STRING_DTYPE
 from cudf.utils.temporal import infer_format, unit_to_nanoseconds_conversion
 
@@ -187,9 +189,6 @@ def to_datetime(
             )
         elif "%f" in format:
             format = format.replace("%f", "%9f")
-
-    from cudf.core.dataframe import DataFrame
-    from cudf.core.series import Series
 
     try:
         if isinstance(arg, DataFrame):
