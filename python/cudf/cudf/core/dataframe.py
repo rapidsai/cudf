@@ -1493,13 +1493,13 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 or (
                     out._data.multiindex is False
                     and self._data.multiindex is True
-                    and len(out._data.names)
+                    and out._num_columns
                     and all(n == "" for n in out._column_names)
                 )
                 or (
                     out._data.multiindex is True
                     and self._data.multiindex is True
-                    and len(out._data.names)
+                    and out._num_columns
                     and all(n == "" for n in out._column_names[0])
                 )
             ):
