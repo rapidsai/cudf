@@ -782,7 +782,7 @@ class CategoricalColumn(column.ColumnBase):
         arrow_type: bool = False,
     ) -> pd.Index:
         if nullable:
-            raise NotImplementedError(f"{arrow_type=} is not implemented.")
+            raise NotImplementedError(f"{nullable=} is not implemented.")
 
         if self.categories.dtype.kind == "f":
             col = type(self)(
