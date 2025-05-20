@@ -1489,22 +1489,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             elif isinstance(arg, tuple):
                 nlevels = len(arg)
 
-            if (
-                self._data.multiindex is False
-                or nlevels == self._data.nlevels
-                or (
-                    out._data.multiindex is False
-                    and self._data.multiindex is True
-                    and len(out._data.names)
-                    and all(n == "" for n in out._data.names)
-                )
-                or (
-                    out._data.multiindex is True
-                    and self._data.multiindex is True
-                    and len(out._data.names)
-                    and all(n == "" for n in out._data.names[0])
-                )
-            ):
+            if self._data.multiindex is False or nlevels == self._data.nlevels:
                 out = self._constructor_sliced._from_data(out._data)
                 out.index = self.index
                 out.name = arg

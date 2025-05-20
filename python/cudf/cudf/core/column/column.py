@@ -919,18 +919,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 plc.interop.from_arrow(data).columns()[0]
             )
 
-            if cudf.get_option("mode.pandas_compatible"):
-                # Special handling for pandas dtypes
-                if hasattr(array, "_pandas_type"):
-                    if isinstance(array._pandas_type, pd.ArrowDtype):
-                        result._dtype = array._pandas_type
-                    elif isinstance(
-                        array._pandas_type,
-                        pd.api.extensions.ExtensionDtype,
-                    ):
-                        result._dtype = array._pandas_type
-                    return result
-
             # Return a column with the appropriately converted dtype
             return result._with_type_metadata(
                 cudf_dtype_from_pa_type(array.type)
@@ -2827,11 +2815,14 @@ def as_column(
                 length=length,
             )
         elif is_pandas_nullable_extension_dtype(arbitrary.dtype):
-            arrow_type = getattr(arbitrary.dtype, "pyarrow_dtype", None)
-            if arrow_type is not None and (
-                arrow_type == pa.date32()
-                or arrow_type == pa.binary()
-                or isinstance(arrow_type, pa.DictionaryType)
+            if (
+                isinstance(arbitrary.dtype, pd.ArrowDtype)
+                and (arrow_type := arbitrary.dtype.pyarrow_dtype) is not None
+                and (
+                    arrow_type == pa.date32()
+                    or arrow_type == pa.binary()
+                    or isinstance(arrow_type, pa.DictionaryType)
+                )
             ):
                 raise NotImplementedError(
                     f"cuDF does not yet support {arbitrary.dtype}"

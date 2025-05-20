@@ -419,10 +419,10 @@ def pyarrow_dtype_to_cudf_dtype(dtype: pa.DataType) -> DtypeObj:
         return cudf.StructDtype.from_arrow(pyarrow_dtype)
     elif str(pyarrow_dtype) == "large_string":
         return CUDF_STRING_DTYPE
-    elif isinstance(pyarrow_dtype, pa.DataType):
-        return pyarrow_dtype.to_pandas_dtype()
     elif pyarrow_dtype is pa.date32():
         return TypeError("Unsupported type")
+    elif isinstance(pyarrow_dtype, pa.DataType):
+        return pyarrow_dtype.to_pandas_dtype()
     else:
         raise TypeError(f"Unsupported Arrow type: {pyarrow_dtype}")
 
