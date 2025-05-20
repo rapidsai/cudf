@@ -180,10 +180,10 @@ void build_join_hash_table(
   CUDF_EXPECTS(0 != build.num_rows(), "Build side table has no rows");
 
   auto const empty_key_sentinel = hash_table.get_empty_key_sentinel();
+  auto const nulls              = nullate::DYNAMIC{has_nulls};
 
   if (cudf::is_primitive_row_op_compatible(build)) {
-    auto const d_hasher =
-      cudf::row::primitive::row_hasher{nullate::DYNAMIC{has_nulls}, preprocessed_build};
+    auto const d_hasher  = cudf::row::primitive::row_hasher{nulls, preprocessed_build};
     auto const pair_func = make_pair_function{d_hasher, empty_key_sentinel};
     auto const iter      = cudf::detail::make_counting_transform_iterator(0, pair_func);
 
@@ -199,7 +199,7 @@ void build_join_hash_table(
     }
   } else {
     auto const row_hash   = experimental::row::hash::row_hasher{preprocessed_build};
-    auto const hash_build = row_hash.device_hasher(nullate::DYNAMIC{has_nulls});
+    auto const hash_build = row_hash.device_hasher(nulls);
 
     make_pair_function pair_func{hash_build, empty_key_sentinel};
 
