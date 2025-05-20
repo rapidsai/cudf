@@ -1,5 +1,6 @@
 # Copyright (c) 2021-2025, NVIDIA CORPORATION.
 import math
+from functools import cache
 
 import numpy as np
 from numba import cuda
@@ -86,53 +87,6 @@ def _get_frame_row_type(dtype):
     return Row(fields, offset, _is_aligned_struct)
 
 
-def _row_kernel_string_from_template(frame, row_type, args):
-    """
-    Function to write numba kernels for `DataFrame.apply` as a string.
-    Workaround until numba supports functions that use `*args`
-
-    `DataFrame.apply` expects functions of a dict like row as well as
-    possibly one or more scalar arguments
-
-    def f(row, c, k):
-        return (row['x'] + c) / k
-
-    Both the number of input columns as well as their nullability and any
-    scalar arguments may vary, so the kernels vary significantly. See
-    templates.py for the full row kernel template and more details.
-    """
-    # Create argument list for kernel
-    frame = _supported_cols_from_frame(frame)
-
-    input_columns = ", ".join([f"input_col_{i}" for i in range(len(frame))])
-    input_offsets = ", ".join([f"offset_{i}" for i in range(len(frame))])
-    extra_args = ", ".join([f"extra_arg_{i}" for i in range(len(args))])
-
-    # Generate the initializers for each device function argument
-    initializers = []
-    row_initializers = []
-    for i, (colname, col) in enumerate(frame.items()):
-        idx = str(i)
-        template = (
-            masked_input_initializer_template
-            if col.mask is not None
-            else unmasked_input_initializer_template
-        )
-        initializers.append(template.format(idx=idx))
-        row_initializers.append(
-            row_initializer_template.format(idx=idx, name=colname)
-        )
-
-    return row_kernel_template.format(
-        input_columns=input_columns,
-        input_offsets=input_offsets,
-        extra_args=extra_args,
-        masked_input_initializers="\n".join(initializers),
-        row_initializers="\n".join(row_initializers),
-        numba_rectype=row_type,
-    )
-
-
 class DataFrameApplyKernel(ApplyKernelBase):
     """
     Class representing a kernel that computes the result of
@@ -155,10 +109,43 @@ class DataFrameApplyKernel(ApplyKernelBase):
 
     def _get_kernel_string(self):
         row_type = self._get_frame_type()
-        return _row_kernel_string_from_template(
-            self.frame, row_type, self.args
+
+        # Create argument list for kernel
+        frame = _supported_cols_from_frame(self.frame)
+
+        input_columns = ", ".join(
+            [f"input_col_{i}" for i in range(len(frame))]
+        )
+        input_offsets = ", ".join([f"offset_{i}" for i in range(len(frame))])
+        extra_args = ", ".join(
+            [f"extra_arg_{i}" for i in range(len(self.args))]
         )
 
+        # Generate the initializers for each device function argument
+        initializers = []
+        row_initializers = []
+        for i, (colname, col) in enumerate(frame.items()):
+            idx = str(i)
+            template = (
+                masked_input_initializer_template
+                if col.mask is not None
+                else unmasked_input_initializer_template
+            )
+            initializers.append(template.format(idx=idx))
+            row_initializers.append(
+                row_initializer_template.format(idx=idx, name=colname)
+            )
+
+        return row_kernel_template.format(
+            input_columns=input_columns,
+            input_offsets=input_offsets,
+            extra_args=extra_args,
+            masked_input_initializers="\n".join(initializers),
+            row_initializers="\n".join(row_initializers),
+            numba_rectype=row_type,
+        )
+
+    @cache
     def _get_kernel_string_exec_context(self):
         # This is the global execution context that will be used
         # to compile the kernel. It contains the function being

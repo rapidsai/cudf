@@ -84,16 +84,18 @@ class ApplyKernelBase(ABC):
             return_type = return_type[::1]
         # Tuple of arrays, first the output data array, then the mask
         return_type = Tuple((return_type, boolean[::1]))
-        offsets = []
-        sig = [return_type, int64]
-        for col in _supported_cols_from_frame(self.frame).values():
-            sig.append(_masked_array_type_from_col(col))
-            offsets.append(int64)
-
-        # return_type, size, data, masks, offsets, extra args
-        sig = void(*(sig + offsets + [typeof(arg) for arg in self.args]))
-
-        return sig
+        supported_cols = _supported_cols_from_frame(self.frame)
+        offsets = [int64] * len(supported_cols)
+        sig = (
+            [return_type, int64]
+            + [
+                _masked_array_type_from_col(col)
+                for col in supported_cols.values()
+            ]
+            + offsets
+            + [typeof(arg) for arg in self.args]
+        )
+        return void(*sig)
 
     @_performance_tracking
     def _get_udf_return_type(self):
@@ -103,18 +105,12 @@ class ApplyKernelBase(ABC):
         # Get the return type. The PTX is also returned by compile_udf, but is not
         # needed here.
         with _CUDFNumbaConfig():
-            ptx, output_type = cudautils.compile_udf(self.func, compile_sig)
-
-        if not isinstance(output_type, MaskedType):
-            numba_output_type = numpy_support.from_dtype(np.dtype(output_type))
+            _, output_type = cudautils.compile_udf(self.func, compile_sig)
+        if isinstance(output_type, MaskedType):
+            result = output_type.value_type
         else:
-            numba_output_type = output_type
+            result = numpy_support.from_dtype(np.dtype(output_type))
 
-        result = (
-            numba_output_type
-            if not isinstance(numba_output_type, MaskedType)
-            else numba_output_type.value_type
-        )
         result = result if result.is_internal else result.return_type
 
         # _get_udf_return_type will throw a TypingError if the user tries to use

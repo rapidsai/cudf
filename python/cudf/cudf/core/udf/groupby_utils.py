@@ -1,6 +1,8 @@
 # Copyright (c) 2022-2025, NVIDIA CORPORATION.
 
 
+from functools import cache
+
 import cupy as cp
 import numpy as np
 from numba import cuda, types
@@ -201,9 +203,6 @@ class GroupByApplyKernel(ApplyKernelBase):
         return group['x'].sum() + group['y'].sum()
     """
 
-    def f(x):
-        return x + 1
-
     @property
     def kernel_type(self):
         return "groupby_apply"
@@ -215,10 +214,31 @@ class GroupByApplyKernel(ApplyKernelBase):
         )
 
     def _get_kernel_string(self):
-        return _groupby_apply_kernel_string_from_template(
-            self.frame, self.args
+        # Create argument list for kernel
+        frame = _supported_cols_from_frame(
+            self.frame, supported_types=SUPPORTED_GROUPBY_NUMPY_TYPES
+        )
+        input_columns = ", ".join(
+            [f"input_col_{i}" for i in range(len(frame))]
+        )
+        extra_args = ", ".join(
+            [f"extra_arg_{i}" for i in range(len(self.args))]
         )
 
+        # Generate the initializers for each device function argument
+        initializers = []
+        for i, colname in enumerate(frame.keys()):
+            initializers.append(
+                group_initializer_template.format(idx=i, name=colname)
+            )
+
+        return groupby_apply_kernel_template.format(
+            input_columns=input_columns,
+            extra_args=extra_args,
+            group_initializers="\n".join(initializers),
+        )
+
+    @cache
     def _get_kernel_string_exec_context(self):
         dataframe_group_type = self._get_frame_type()
         global_exec_context = {
