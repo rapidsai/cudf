@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,9 +35,8 @@
 #include <rmm/exec_policy.hpp>
 #include <rmm/mr/device/device_memory_resource.hpp>
 
-#include <thrust/advance.h>
+#include <cuda/std/iterator>
 #include <thrust/binary_search.h>
-#include <thrust/distance.h>
 #include <thrust/execution_policy.h>
 #include <thrust/functional.h>
 #include <thrust/pair.h>
@@ -88,7 +87,7 @@ struct bin_finder {
     // Exit early and return sentinel for values that lie below the interval.
     if (bound == m_left_begin) { return NULL_VALUE; }
 
-    auto index = thrust::distance(m_left_begin, thrust::prev(bound));
+    auto index = cuda::std::distance(m_left_begin, cuda::std::prev(bound));
     return (m_right_comp(value, m_right_begin[index])) ? index : NULL_VALUE;
   }
 
@@ -182,16 +181,16 @@ struct bin_type_dispatcher {
     rmm::device_async_resource_ref mr)
   {
     if ((left_inclusive == inclusive::YES) && (right_inclusive == inclusive::YES))
-      return label_bins<T, thrust::less_equal<T>, thrust::less_equal<T>>(
+      return label_bins<T, cuda::std::less_equal<T>, cuda::std::less_equal<T>>(
         input, left_edges, right_edges, stream, mr);
     if ((left_inclusive == inclusive::YES) && (right_inclusive == inclusive::NO))
-      return label_bins<T, thrust::less_equal<T>, thrust::less<T>>(
+      return label_bins<T, cuda::std::less_equal<T>, cuda::std::less<T>>(
         input, left_edges, right_edges, stream, mr);
     if ((left_inclusive == inclusive::NO) && (right_inclusive == inclusive::YES))
-      return label_bins<T, thrust::less<T>, thrust::less_equal<T>>(
+      return label_bins<T, cuda::std::less<T>, cuda::std::less_equal<T>>(
         input, left_edges, right_edges, stream, mr);
     if ((left_inclusive == inclusive::NO) && (right_inclusive == inclusive::NO))
-      return label_bins<T, thrust::less<T>, thrust::less<T>>(
+      return label_bins<T, cuda::std::less<T>, cuda::std::less<T>>(
         input, left_edges, right_edges, stream, mr);
 
     CUDF_FAIL("Undefined inclusive setting.");
@@ -209,7 +208,7 @@ std::unique_ptr<column> label_bins(column_view const& input,
                                    rmm::cuda_stream_view stream,
                                    rmm::device_async_resource_ref mr)
 {
-  CUDF_FUNC_RANGE()
+  CUDF_FUNC_RANGE();
   CUDF_EXPECTS(
     cudf::have_same_types(input, left_edges) && cudf::have_same_types(input, right_edges),
     "The input and edge columns must have the same types.",

@@ -12,24 +12,16 @@ from io import BufferedWriter, BytesIO, IOBase, TextIOWrapper
 from threading import Thread
 from typing import TYPE_CHECKING, Any
 
-import fsspec
-import fsspec.implementations.local
+# import fsspec locally for performance
 import numpy as np
 import pandas as pd
 import pyarrow as pa
-from fsspec.core import expand_paths_if_needed, get_fs_token_paths
 
 import cudf
 from cudf.api.types import is_list_like
 from cudf.core._compat import PANDAS_LT_300
 from cudf.utils.docutils import docfmt_partial
 from cudf.utils.dtypes import cudf_dtype_to_pa_type, np_dtypes_to_pandas_dtypes
-
-try:
-    import fsspec.parquet as fsspec_parquet
-except ImportError:
-    fsspec_parquet = None
-
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Hashable
@@ -105,17 +97,17 @@ Examples
 doc_read_avro: Callable = docfmt_partial(docstring=_docstring_read_avro)
 
 _docstring_read_parquet_metadata = """
-Read a Parquet file's metadata and schema
+Read metadata and schema of a list of Parquet files
 
 Parameters
 ----------
-path : string or path object
-    Path of file to be read
+paths : List of strings or path objects
+    Path of file(s) to be read
 
 Returns
 -------
 Total number of rows
-Number of row groups
+Total number of row groups
 List of column names
 Number of columns
 List of metadata of row groups
@@ -124,7 +116,7 @@ Examples
 --------
 >>> import cudf
 >>> num_rows, num_row_groups, names, num_columns, row_group_metadata = cudf.io.read_parquet_metadata(filename)
->>> df = [cudf.read_parquet(fname, row_group=i) for i in range(row_groups)]
+>>> df = [cudf.read_parquet(fname, row_group=i) for i in range(num_row_groups)]
 >>> df = cudf.concat(df)
 >>> df
   num1                datetime text
@@ -717,11 +709,10 @@ chunksize : integer, default None
     for more information on ``chunksize``.
     This can only be passed if `lines=True`.
     If this is None, the file will be read into memory all at once.
-compression : {'infer', 'gzip', 'bz2', 'zip', 'xz', None}, default 'infer'
+compression : {'bz2', 'gzip', 'infer', 'snappy', 'zip', 'zstd'}, default 'infer'
     For on-the-fly decompression of on-disk data. If 'infer', then use
-    gzip, bz2, zip or xz if path_or_buf is a string ending in
-    '.gz', '.bz2', '.zip', or 'xz', respectively, and no decompression
-    otherwise. If using 'zip', the ZIP file must contain only one data
+    bz2, gzip, snappy, zip, or zstd if path_or_buf is a string ending in
+    '.bz2', '.gz', '.sz', '.zip', or '.zstd', respectively. If using 'zip', the ZIP file must contain only one data
     file to be read in. Set to None for no decompression.
 byte_range : list or tuple, default None
 
@@ -864,6 +855,8 @@ Parameters
 ----------
 path_or_buf : string or file handle, optional
     File path or object. If not specified, the result is returned as a string.
+compression : {'gzip', 'snappy', 'zstd'}, default None
+    For on-the-fly compression of the output data. Set to None for no compression.
 engine : {{ 'auto', 'cudf', 'pandas' }}, default 'auto'
     Parser engine to use. If 'auto' is passed, the `pandas` engine
     will be selected.
@@ -1537,7 +1530,9 @@ def generate_pandas_metadata(table: cudf.DataFrame, index: bool | None) -> str:
     types = []
     index_levels = []
     index_descriptors = []
-    columns_to_convert = list(table._columns)
+    df_meta = table.head(0)
+    columns_to_convert = list(df_meta._columns)
+
     # Columns
     for name, col in table._column_labels_and_values:
         if cudf.get_option("mode.pandas_compatible"):
@@ -1556,13 +1551,12 @@ def generate_pandas_metadata(table: cudf.DataFrame, index: bool | None) -> str:
             types.append(cudf_dtype_to_pa_type(col.dtype))
 
     # Indexes
-    materialize_index = False
     if index is not False:
         for level, name in enumerate(table.index.names):
-            if isinstance(table.index, cudf.MultiIndex):
-                idx = table.index.get_level_values(level)
+            if isinstance(df_meta.index, cudf.MultiIndex):
+                idx = df_meta.index.get_level_values(level)
             else:
-                idx = table.index
+                idx = df_meta.index
 
             if isinstance(idx, cudf.RangeIndex):
                 if index is None:
@@ -1574,23 +1568,23 @@ def generate_pandas_metadata(table: cudf.DataFrame, index: bool | None) -> str:
                         "step": table.index.step,
                     }
                 else:
-                    materialize_index = True
                     # When `index=True`, RangeIndex needs to be materialized.
-                    materialized_idx = idx._as_int_index()
+                    materialized_idx = df_meta.index._as_int_index()
+                    df_meta.index = materialized_idx
                     descr = _index_level_name(
                         index_name=materialized_idx.name,
                         level=level,
                         column_names=col_names,
                     )
                     index_levels.append(materialized_idx)
-                    columns_to_convert.append(materialized_idx._values)
+                    columns_to_convert.append(materialized_idx)
                     col_names.append(descr)
                     types.append(pa.from_numpy_dtype(materialized_idx.dtype))
             else:
                 descr = _index_level_name(
                     index_name=idx.name, level=level, column_names=col_names
                 )
-                columns_to_convert.append(idx._values)
+                columns_to_convert.append(idx)
                 col_names.append(descr)
                 if idx.dtype.kind == "b":
                     # A boolean element takes 8 bits in cudf and 1 bit in
@@ -1604,12 +1598,9 @@ def generate_pandas_metadata(table: cudf.DataFrame, index: bool | None) -> str:
                 index_levels.append(idx)
             index_descriptors.append(descr)
 
-    df_meta = table.head(0)
-    if materialize_index:
-        df_meta.index = df_meta.index._as_int_index()
     metadata = pa.pandas_compat.construct_metadata(
         columns_to_convert=columns_to_convert,
-        # It is OKAY to do `.head(0).to_pandas()` because
+        # It is OKAY to do `.to_pandas()` because
         # this method will extract `.columns` metadata only
         df=df_meta.to_pandas(),
         column_names=col_names,
@@ -1687,7 +1678,9 @@ def is_file_like(obj):
 
 
 def _is_local_filesystem(fs):
-    return isinstance(fs, fsspec.implementations.local.LocalFileSystem)
+    from fsspec.implementations.local import LocalFileSystem
+
+    return isinstance(fs, LocalFileSystem)
 
 
 def _select_single_source(sources: list, caller: str):
@@ -1705,9 +1698,11 @@ def is_directory(path_or_data, storage_options=None):
     """Returns True if the provided filepath is a directory"""
     path_or_data = stringify_pathlike(path_or_data)
     if isinstance(path_or_data, str):
+        import fsspec
+
         path_or_data = os.path.expanduser(path_or_data)
         try:
-            fs = get_fs_token_paths(
+            fs = fsspec.core.get_fs_token_paths(
                 path_or_data, mode="rb", storage_options=storage_options
             )[0]
         except ValueError as e:
@@ -1749,9 +1744,11 @@ def _get_filesystem_and_paths(
         else:
             path_or_data = [path_or_data]
 
+        import fsspec
+
         if filesystem is None:
             try:
-                fs, _, fs_paths = get_fs_token_paths(
+                fs, _, fs_paths = fsspec.core.get_fs_token_paths(
                     path_or_data, mode="rb", storage_options=storage_options
                 )
                 return_paths = fs_paths
@@ -1775,7 +1772,7 @@ def _get_filesystem_and_paths(
             fs = filesystem
             return_paths = [
                 fs._strip_protocol(u)
-                for u in expand_paths_if_needed(
+                for u in fsspec.core.expand_paths_if_needed(
                     path_or_data, "rb", 1, fs, None
                 )
             ]
@@ -1973,8 +1970,10 @@ def get_writer_filepath_or_buffer(path_or_data, mode, storage_options=None):
         storage_options = {}
 
     if isinstance(path_or_data, str):
+        import fsspec
+
         path_or_data = os.path.expanduser(path_or_data)
-        fs = get_fs_token_paths(
+        fs = fsspec.core.get_fs_token_paths(
             path_or_data, mode=mode or "w", storage_options=storage_options
         )[0]
 
@@ -2010,6 +2009,8 @@ def get_IOBase_writer(file_obj):
 
 
 def is_fsspec_open_file(file_obj):
+    import fsspec
+
     if isinstance(file_obj, fsspec.core.OpenFile):
         return True
     return False
@@ -2169,7 +2170,9 @@ def _prepare_filters(filters):
 
 def _ensure_filesystem(passed_filesystem, path, storage_options):
     if passed_filesystem is None:
-        return get_fs_token_paths(
+        import fsspec
+
+        return fsspec.core.get_fs_token_paths(
             path[0] if isinstance(path, list) else path,
             storage_options={} if storage_options is None else storage_options,
         )[0]
@@ -2341,11 +2344,15 @@ def _get_remote_bytes_parquet(
     row_groups=None,
     blocksize=_BYTES_PER_THREAD_DEFAULT,
 ):
-    if fsspec_parquet is None or (columns is None and row_groups is None):
+    if columns is None and row_groups is None:
+        return _get_remote_bytes_all(remote_paths, fs, blocksize=blocksize)
+    try:
+        import fsspec.parquet
+    except ImportError:
         return _get_remote_bytes_all(remote_paths, fs, blocksize=blocksize)
 
     sizes = fs.sizes(remote_paths)
-    data = fsspec_parquet._get_parquet_byte_ranges(
+    data = fsspec.parquet._get_parquet_byte_ranges(
         remote_paths,
         fs,
         columns=columns,

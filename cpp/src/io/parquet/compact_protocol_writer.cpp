@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,8 +16,7 @@
 
 #include "compact_protocol_writer.hpp"
 
-#include "parquet.hpp"
-
+#include <cudf/io/parquet_schema.hpp>
 #include <cudf/utilities/error.hpp>
 
 namespace cudf::io::parquet::detail {
@@ -53,8 +52,10 @@ size_t CompactProtocolWriter::write(TimeUnit const& time_unit)
   switch (time_unit.type) {
     case TimeUnit::MILLIS:
     case TimeUnit::MICROS:
-    case TimeUnit::NANOS: c.field_empty_struct(time_unit.type); break;
-    default: CUDF_FAIL("Trying to write an invalid TimeUnit " + std::to_string(time_unit.type));
+    case TimeUnit::NANOS: c.field_empty_struct(static_cast<int>(time_unit.type)); break;
+    default:
+      CUDF_FAIL("Trying to write an invalid TimeUnit " +
+                std::to_string(static_cast<int>(time_unit.type)));
   }
   return c.value();
 }
@@ -94,18 +95,18 @@ size_t CompactProtocolWriter::write(LogicalType const& logical_type)
     case LogicalType::DATE:
     case LogicalType::UNKNOWN:
     case LogicalType::JSON:
-    case LogicalType::BSON: c.field_empty_struct(logical_type.type); break;
+    case LogicalType::BSON: c.field_empty_struct(static_cast<int>(logical_type.type)); break;
     case LogicalType::DECIMAL:
-      c.field_struct(LogicalType::DECIMAL, logical_type.decimal_type.value());
+      c.field_struct(static_cast<int>(LogicalType::DECIMAL), logical_type.decimal_type.value());
       break;
     case LogicalType::TIME:
-      c.field_struct(LogicalType::TIME, logical_type.time_type.value());
+      c.field_struct(static_cast<int>(LogicalType::TIME), logical_type.time_type.value());
       break;
     case LogicalType::TIMESTAMP:
-      c.field_struct(LogicalType::TIMESTAMP, logical_type.timestamp_type.value());
+      c.field_struct(static_cast<int>(LogicalType::TIMESTAMP), logical_type.timestamp_type.value());
       break;
     case LogicalType::INTEGER:
-      c.field_struct(LogicalType::INTEGER, logical_type.int_type.value());
+      c.field_struct(static_cast<int>(LogicalType::INTEGER), logical_type.int_type.value());
       break;
     default:
       CUDF_FAIL("Trying to write an invalid LogicalType " + std::to_string(logical_type.type));
@@ -116,17 +117,19 @@ size_t CompactProtocolWriter::write(LogicalType const& logical_type)
 size_t CompactProtocolWriter::write(SchemaElement const& s)
 {
   CompactProtocolFieldWriter c(*this);
-  if (s.type != UNDEFINED_TYPE) {
-    c.field_int(1, s.type);
+  if (s.type != Type::UNDEFINED) {
+    c.field_int(1, static_cast<int32_t>(s.type));
     if (s.type_length != 0) { c.field_int(2, s.type_length); }
   }
-  if (s.repetition_type != NO_REPETITION_TYPE) { c.field_int(3, s.repetition_type); }
+  if (s.repetition_type != FieldRepetitionType::UNSPECIFIED) {
+    c.field_int(3, static_cast<int32_t>(s.repetition_type));
+  }
   c.field_string(4, s.name);
 
-  if (s.type == UNDEFINED_TYPE) { c.field_int(5, s.num_children); }
+  if (s.type == Type::UNDEFINED) { c.field_int(5, s.num_children); }
   if (s.converted_type.has_value()) {
-    c.field_int(6, s.converted_type.value());
-    if (s.converted_type == DECIMAL) {
+    c.field_int(6, static_cast<int32_t>(s.converted_type.value()));
+    if (s.converted_type == ConvertedType::DECIMAL) {
       c.field_int(7, s.decimal_scale);
       c.field_int(8, s.decimal_precision);
     }
@@ -177,10 +180,10 @@ size_t CompactProtocolWriter::write(ColumnChunk const& s)
 size_t CompactProtocolWriter::write(ColumnChunkMetaData const& s)
 {
   CompactProtocolFieldWriter c(*this);
-  c.field_int(1, s.type);
+  c.field_int(1, static_cast<int32_t>(s.type));
   c.field_int_list(2, s.encodings);
   c.field_string_list(3, s.path_in_schema);
-  c.field_int(4, s.codec);
+  c.field_int(4, static_cast<int32_t>(s.codec));
   c.field_int(5, s.num_values);
   c.field_int(6, s.total_uncompressed_size);
   c.field_int(7, s.total_compressed_size);
@@ -245,8 +248,10 @@ size_t CompactProtocolWriter::write(ColumnOrder const& co)
 {
   CompactProtocolFieldWriter c(*this);
   switch (co.type) {
-    case ColumnOrder::TYPE_ORDER: c.field_empty_struct(co.type); break;
-    default: CUDF_FAIL("Trying to write an invalid ColumnOrder " + std::to_string(co.type));
+    case ColumnOrder::TYPE_ORDER: c.field_empty_struct(static_cast<int>(co.type)); break;
+    default:
+      CUDF_FAIL("Trying to write an invalid ColumnOrder " +
+                std::to_string(static_cast<int>(co.type)));
   }
   return c.value();
 }

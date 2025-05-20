@@ -18,6 +18,8 @@ from pylibcudf.libcudf.io.json cimport (
     read_json as cpp_read_json,
     schema_element,
     write_json as cpp_write_json,
+    is_supported_write_json as cpp_is_supported_write_json,
+
 )
 
 from pylibcudf.libcudf.io.types cimport (
@@ -938,6 +940,23 @@ cdef class JsonWriterOptionsBuilder:
         self.c_obj.compression(comptype)
         return self
 
+    cpdef JsonWriterOptionsBuilder utf8_escaped(self, bool val):
+        """
+        Sets whether to write UTF-8 characters in string fields
+        without escaping them.
+
+        Parameters
+        ----------
+        val : bool
+            If False, disables escaping of UTF-8 characters in output
+
+        Returns
+        -------
+        Self
+        """
+        self.c_obj.utf8_escaped(val)
+        return self
+
     cpdef JsonWriterOptions build(self):
         """Create a JsonWriterOptions object"""
         cdef JsonWriterOptions json_options = JsonWriterOptions.__new__(
@@ -967,3 +986,10 @@ cpdef void write_json(JsonWriterOptions options, Stream stream = None):
     cdef Stream s = _get_stream(stream)
     with nogil:
         cpp_write_json(options.c_obj, s.view())
+
+cpdef bool is_supported_write_json(DataType type):
+    """Check if the dtype is supported for JSON writing
+
+    For details, see :cpp:func:`is_supported_write_json`.
+    """
+    return cpp_is_supported_write_json(type.c_obj)

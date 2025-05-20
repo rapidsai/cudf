@@ -5,8 +5,9 @@ import pyarrow as pa
 import pyarrow.compute as pc
 import pytest
 from pyarrow.parquet import read_table
-from utils import assert_table_and_meta_eq, make_source
+from utils import assert_table_and_meta_eq, get_bytes_from_source, make_source
 
+from rmm.pylibrmm.device_buffer import DeviceBuffer
 from rmm.pylibrmm.stream import Stream
 
 import pylibcudf as plc
@@ -152,6 +153,51 @@ def test_read_parquet_filters(
     )
 
 
+@pytest.mark.parametrize("num_buffers", [1, 2])
+@pytest.mark.parametrize("stream", [None, Stream()])
+@pytest.mark.parametrize("columns", [None, ["col_int64", "col_bool"]])
+def test_read_parquet_from_device_buffers(
+    table_data,
+    binary_source_or_sink,
+    nrows_skiprows,
+    stream,
+    columns,
+    num_buffers,
+):
+    _, pa_table = table_data
+    nrows, skiprows = nrows_skiprows
+
+    # Load data from source
+    source = make_source(
+        binary_source_or_sink, pa_table, **_COMMON_PARQUET_SOURCE_KWARGS
+    )
+
+    buf = DeviceBuffer.to_device(get_bytes_from_source(source))
+
+    options = plc.io.parquet.ParquetReaderOptions.builder(
+        plc.io.SourceInfo([buf] * num_buffers)
+    ).build()
+    if nrows > -1:
+        options.set_num_rows(nrows)
+    if skiprows != 0:
+        options.set_skip_rows(skiprows)
+    if columns is not None:
+        options.set_columns(columns)
+
+    res = plc.io.parquet.read_parquet(options, stream)
+
+    expected = (
+        pa_table
+        if num_buffers == 1
+        else pa.concat_tables([pa_table] * num_buffers)
+    )
+    if columns is not None:
+        expected = expected.select(columns)
+    expected = expected.slice(skiprows, nrows if nrows > -1 else None)
+
+    assert_table_and_meta_eq(expected, res, check_field_nullability=False)
+
+
 # TODO: Test these options
 # list row_groups = None,
 # ^^^ This one is not tested since it's not in pyarrow/pandas, deprecate?
@@ -190,7 +236,7 @@ def test_write_parquet(
     _, pa_table = table_data
     if len(pa_table) == 0 and partitions is not None:
         pytest.skip("https://github.com/rapidsai/cudf/issues/17361")
-    plc_table = plc.interop.from_arrow(pa_table)
+    plc_table = plc.Table(pa_table)
     table_meta = plc.io.types.TableInputMetadata(plc_table)
     sink = plc.io.SinkInfo([io.BytesIO()])
     user_data = [{"foo": "{'bar': 'baz'}"}]

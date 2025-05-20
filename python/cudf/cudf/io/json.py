@@ -12,9 +12,17 @@ import pandas as pd
 
 import pylibcudf as plc
 
-import cudf
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import ColumnBase
+from cudf.core.dataframe import DataFrame
+from cudf.core.dtypes import (
+    CategoricalDtype,
+    ListDtype,
+    StructDtype,
+    dtype as cudf_dtype,
+)
+from cudf.core.series import Series
+from cudf.options import get_option
 from cudf.utils import ioutils
 from cudf.utils.dtypes import (
     _maybe_convert_to_default_type,
@@ -25,8 +33,8 @@ from cudf.utils.dtypes import (
 def _get_cudf_schema_element_from_dtype(
     dtype,
 ) -> tuple[plc.DataType, list[tuple[str, plc.DataType, Any]]]:
-    dtype = cudf.dtype(dtype)
-    if isinstance(dtype, cudf.CategoricalDtype):
+    dtype = cudf_dtype(dtype)
+    if isinstance(dtype, CategoricalDtype):
         raise NotImplementedError(
             "CategoricalDtype as dtype is not yet supported in JSON reader"
         )
@@ -34,13 +42,13 @@ def _get_cudf_schema_element_from_dtype(
     lib_type = dtype_to_pylibcudf_type(dtype)
     child_types = []
 
-    if isinstance(dtype, cudf.StructDtype):
+    if isinstance(dtype, StructDtype):
         for name, child_type in dtype.fields.items():
             child_lib_type, grandchild_types = (
                 _get_cudf_schema_element_from_dtype(child_type)
             )
             child_types.append((name, child_lib_type, grandchild_types))
-    elif isinstance(dtype, cudf.ListDtype):
+    elif isinstance(dtype, ListDtype):
         child_lib_type, grandchild_types = _get_cudf_schema_element_from_dtype(
             dtype.element_type
         )
@@ -53,19 +61,39 @@ def _get_cudf_schema_element_from_dtype(
 
 
 def _to_plc_compression(
-    compression: Literal["infer", "gzip", "bz2", "zip", "xz", None],
+    compression: Literal[
+        "brotli",
+        "bz2",
+        "gzip",
+        "infer",
+        "lz4",
+        "lzo",
+        "snappy",
+        "xz",
+        "zip",
+        "zlib",
+        "zstd",
+    ]
+    | None,
 ) -> plc.io.types.CompressionType:
-    if compression is not None:
-        if compression == "gzip":
-            return plc.io.types.CompressionType.GZIP
-        elif compression == "bz2":
-            return plc.io.types.CompressionType.BZIP2
-        elif compression == "zip":
-            return plc.io.types.CompressionType.ZIP
-        else:
-            return plc.io.types.CompressionType.AUTO
-    else:
-        return plc.io.types.CompressionType.NONE
+    compression_map = {
+        None: plc.io.types.CompressionType.NONE,
+        "brotli": plc.io.types.CompressionType.BROTLI,
+        "bz2": plc.io.types.CompressionType.BZIP2,
+        "gzip": plc.io.types.CompressionType.GZIP,
+        "infer": plc.io.types.CompressionType.AUTO,
+        "lz4": plc.io.types.CompressionType.LZ4,
+        "lzo": plc.io.types.CompressionType.LZO,
+        "snappy": plc.io.types.CompressionType.SNAPPY,
+        "xz": plc.io.types.CompressionType.XZ,
+        "zip": plc.io.types.CompressionType.ZIP,
+        "zlib": plc.io.types.CompressionType.ZLIB,
+        "zstd": plc.io.types.CompressionType.ZSTD,
+    }
+    try:
+        return compression_map[compression]
+    except KeyError:
+        raise ValueError(f"Unsupported compression type: {compression}")
 
 
 @ioutils.doc_read_json()
@@ -75,7 +103,15 @@ def read_json(
     orient=None,
     dtype=None,
     lines: bool = False,
-    compression="infer",
+    compression: Literal[
+        "bz2",
+        "gzip",
+        "infer",
+        "snappy",
+        "zip",
+        "zstd",
+    ]
+    | None = "infer",
     byte_range: None | list[int] = None,
     keep_quotes: bool = False,
     storage_options=None,
@@ -84,7 +120,7 @@ def read_json(
     on_bad_lines: Literal["error", "recover"] = "error",
     *args,
     **kwargs,
-) -> cudf.DataFrame:
+) -> DataFrame:
     """{docstring}"""
 
     if dtype is not None and not isinstance(dtype, (abc.Mapping, bool)):
@@ -162,7 +198,7 @@ def read_json(
             else:
                 raise TypeError("`dtype` must be 'list like' or 'dict'")
 
-        if cudf.get_option("io.json.low_memory") and lines:
+        if get_option("io.json.low_memory") and lines:
             res_cols, res_col_names, res_child_names = (
                 plc.io.json.chunked_read_json(
                     plc.io.json._setup_json_reader_options(
@@ -180,7 +216,7 @@ def read_json(
                 name: ColumnBase.from_pylibcudf(col)
                 for name, col in zip(res_col_names, res_cols, strict=True)
             }
-            df = cudf.DataFrame._from_data(data)
+            df = DataFrame._from_data(data)
             ioutils._add_df_col_struct_names(df, res_child_names)
             return df
         else:
@@ -203,7 +239,7 @@ def read_json(
                     extra_parameters=kwargs,
                 )
             )
-            df = cudf.DataFrame.from_pylibcudf(table_w_meta)
+            df = DataFrame.from_pylibcudf(table_w_meta)
     else:
         warnings.warn(
             "Using CPU via Pandas to read JSON dataset, this may "
@@ -230,7 +266,10 @@ def read_json(
             *args,
             **kwargs,
         )
-        df = cudf.from_pandas(pd_value)
+        if isinstance(pd_value, pd.DataFrame):
+            df = DataFrame.from_pandas(pd_value)
+        else:
+            df = Series.from_pandas(pd_value)
 
     if dtype is None:
         dtype = True
@@ -259,7 +298,7 @@ def read_json(
 
 
 def _maybe_return_nullable_pd_obj(
-    cudf_obj: cudf.DataFrame | cudf.Series,
+    cudf_obj: DataFrame | Series,
 ) -> pd.DataFrame | pd.Series:
     try:
         return cudf_obj.to_pandas(nullable=True)
@@ -268,26 +307,31 @@ def _maybe_return_nullable_pd_obj(
 
 
 def _dtype_to_names_list(col: ColumnBase) -> list[tuple[abc.Hashable, Any]]:
-    if isinstance(col.dtype, cudf.StructDtype):
+    if isinstance(col.dtype, StructDtype):
         return [
             (name, _dtype_to_names_list(child))
             for name, child in zip(col.dtype.fields, col.children)
         ]
-    elif isinstance(col.dtype, cudf.ListDtype):
+    elif isinstance(col.dtype, ListDtype):
         return [("", _dtype_to_names_list(child)) for child in col.children]
     return []
 
 
 @acquire_spill_lock()
 def _plc_write_json(
-    table: cudf.Series | cudf.DataFrame,
+    table: Series | DataFrame,
     colnames: list[tuple[abc.Hashable, Any]],
     path_or_buf,
+    compression: Literal[
+        "gzip",
+        "snappy",
+        "zstd",
+    ]
+    | None = None,
     na_rep: str = "null",
     include_nulls: bool = True,
     lines: bool = False,
     rows_per_chunk: int = 1024 * 64,  # 64K rows
-    compression: Literal["infer", "gzip", "bz2", "zip", "xz", None] = None,
 ) -> None:
     try:
         tbl_w_meta = plc.io.TableWithMetadata(
@@ -319,8 +363,9 @@ def _plc_write_json(
 
 @ioutils.doc_to_json()
 def to_json(
-    cudf_val: cudf.DataFrame | cudf.Series,
+    cudf_val: DataFrame | Series,
     path_or_buf=None,
+    compression: Literal["gzip", "snappy", "zstd"] | None = None,
     engine: Literal["auto", "pandas", "cudf"] = "auto",
     orient=None,
     storage_options=None,
@@ -359,17 +404,24 @@ def to_json(
             with path_or_buf as file_obj:
                 file_obj = ioutils.get_IOBase_writer(file_obj)
                 _plc_write_json(
-                    cudf_val, colnames, path_or_buf, *args, **kwargs
+                    cudf_val,
+                    colnames,
+                    path_or_buf,
+                    compression,
+                    *args,
+                    **kwargs,
                 )
         else:
-            _plc_write_json(cudf_val, colnames, path_or_buf, *args, **kwargs)
+            _plc_write_json(
+                cudf_val, colnames, path_or_buf, compression, *args, **kwargs
+            )
 
         if return_as_string:
             path_or_buf.seek(0)
             return path_or_buf.read()
     elif engine == "pandas":
         warnings.warn("Using CPU via Pandas to write JSON dataset")
-        if isinstance(cudf_val, cudf.DataFrame):
+        if isinstance(cudf_val, DataFrame):
             pd_data = {
                 col: _maybe_return_nullable_pd_obj(series)
                 for col, series in cudf_val.items()

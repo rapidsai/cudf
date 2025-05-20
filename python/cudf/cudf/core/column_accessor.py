@@ -13,7 +13,7 @@ import numpy as np
 import pandas as pd
 
 import cudf
-from cudf.api.types import is_scalar
+from cudf.api.types import infer_dtype, is_scalar
 from cudf.core import column
 
 if TYPE_CHECKING:
@@ -305,7 +305,7 @@ class ColumnAccessor(abc.MutableMapping):
                     return pd.RangeIndex(
                         start=0, stop=0, step=1, name=self.name
                     )
-                elif cudf.api.types.infer_dtype(self.names) == "integer":
+                elif infer_dtype(self.names) == "integer":
                     if len(self.names) == 1:
                         start = cast(int, self.names[0])
                         return pd.RangeIndex(
@@ -372,9 +372,8 @@ class ColumnAccessor(abc.MutableMapping):
             new_values = self.columns[:loc] + (value,) + self.columns[loc:]
             self._data = dict(zip(new_keys, new_values))
         self._clear_cache(old_ncols, old_ncols + 1)
-        if old_ncols == 0:
-            # The type(name) may no longer match the prior label_dtype
-            self.label_dtype = None
+        # The type(name) may no longer match the prior label_dtype
+        self.label_dtype = None
 
     def copy(self, deep: bool = False) -> Self:
         """
@@ -728,12 +727,18 @@ class ColumnAccessor(abc.MutableMapping):
             if len(new_col_names) != len(set(new_col_names)):
                 raise ValueError("Duplicate column names are not allowed")
 
+        label_dtype = self.label_dtype
+        if len(self) > 0 and label_dtype is not None:
+            old_type = type(next(iter(self.keys())))
+            if not all(isinstance(label, old_type) for label in new_col_names):
+                label_dtype = None
+
         data = dict(zip(new_col_names, self.values()))
         return type(self)(
             data=data,
             level_names=self.level_names,
             multiindex=self.multiindex,
-            label_dtype=self.label_dtype,
+            label_dtype=label_dtype,
             verify=False,
         )
 

@@ -27,17 +27,22 @@ namespace CUDF_EXPORT cudf {
 namespace io::detail {
 
 /**
+ * @brief Check if compression is supported for the given compression type.
+ *
+ * @param compression Compression type
+ * @return Boolean indicating if the compression type is supported
+ */
+[[nodiscard]] bool is_compression_supported(compression_type compression);
+
+/**
  * @brief Compresses a system memory buffer.
  *
  * @param compression Type of compression of the input data
  * @param src         Decompressed host buffer
- * @param stream      CUDA stream used for device memory operations and kernel launches
  *
  * @return Vector containing the Compressed output
  */
-std::vector<uint8_t> compress(compression_type compression,
-                              host_span<uint8_t const> src,
-                              rmm::cuda_stream_view stream);
+std::vector<uint8_t> compress(compression_type compression, host_span<uint8_t const> src);
 
 /**
  * @brief Maximum size of uncompressed chunks that can be compressed.

@@ -393,6 +393,10 @@ _all_namespaces = _generate_namespaces(
 )
 
 
+_names_to_skip_in_cudf = {
+    "cudf.core.window.rolling.RollingGroupby",
+}
+
 _names_to_skip_in_pylibcudf = {
     # Cython types that don't alias cleanly because of
     # https://github.com/cython/cython/issues/5609
@@ -401,6 +405,7 @@ _names_to_skip_in_pylibcudf = {
     "type_id",
     # Unknown base types
     "int32_t",
+    "uint64_t",
     "void",
 }
 
@@ -411,6 +416,7 @@ _names_to_skip_in_cpp = {
     "cuda",
     "arrow",
     "DLManagedTensor",
+    "ARROW_DEVICE_CUDA",
     # Unknown types
     "int8_t",
     "int16_t",
@@ -500,6 +506,9 @@ def on_missing_reference(app, env, node, contnode):
     if any(toskip in reftarget for toskip in _names_to_skip_in_pylibcudf):
         return contnode
 
+    if any(toskip in reftarget for toskip in _names_to_skip_in_cudf):
+        return contnode
+
     if (refid := node.get("refid")) is not None and "hpp" in refid:
         # We don't want to link to C++ header files directly from the
         # Sphinx docs, those are pages that doxygen automatically
@@ -572,6 +581,7 @@ nitpick_ignore = [
     # Erroneously warned in ParquetColumnSchema.name
     ("py:class", "unicode"),
     ("py:class", "SeriesOrIndex"),
+    ("py:class", "DataFrameOrSeries"),
     ("py:class", "Dtype"),
     # The following are erroneously warned due to
     # https://github.com/sphinx-doc/sphinx/issues/11225
@@ -582,11 +592,14 @@ nitpick_ignore = [
     ("py:obj", "cudf.Index.T"),
     ("py:obj", "cudf.Index.to_flat_index"),
     ("py:obj", "cudf.MultiIndex.to_flat_index"),
+    ("py:obj", "Series.pipe"),
+    ("py:obj", "DataFrame.pipe"),
     ("py:meth", "pyarrow.Table.to_pandas"),
     ("py:class", "abc.Hashable"),
     ("py:class", "pd.DataFrame"),
     ("py:class", "pandas.core.indexes.frozen.FrozenList"),
     ("py:class", "pa.Array"),
+    ("py:class", "pa.ListType"),
     ("py:class", "pa.Decimal128Type"),
     ("py:class", "ScalarLike"),
     ("py:class", "ParentType"),
@@ -595,6 +608,7 @@ nitpick_ignore = [
     ("py:class", "pyarrow.lib.Scalar"),
     ("py:class", "pyarrow.lib.ChunkedArray"),
     ("py:class", "pyarrow.lib.Array"),
+    ("py:class", "StringColumn"),
     ("py:class", "ColumnLike"),
     ("py:class", "DtypeObj"),
     ("py:class", "pa.StructType"),

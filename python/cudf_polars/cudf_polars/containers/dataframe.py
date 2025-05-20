@@ -8,19 +8,17 @@ from __future__ import annotations
 from functools import cached_property
 from typing import TYPE_CHECKING, cast
 
-import pyarrow as pa
-
 import polars as pl
 
 import pylibcudf as plc
 
 from cudf_polars.containers import Column
-from cudf_polars.utils import conversion, dtypes
+from cudf_polars.utils import conversion
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping, Sequence, Set
 
-    from typing_extensions import Self
+    from typing_extensions import Any, Self
 
     from cudf_polars.typing import ColumnOptions, DataFrameHeader, Slice
 
@@ -108,17 +106,12 @@ class DataFrame:
         -------
         New dataframe representing the input.
         """
-        table = df.to_arrow()
-        schema = table.schema
-        for i, field in enumerate(schema):
-            schema = schema.set(
-                i, pa.field(field.name, dtypes.downcast_arrow_lists(field.type))
-            )
-        # No-op if the schema is unchanged.
-        d_table = plc.interop.from_arrow(table.cast(schema))
+        plc_table = plc.Table(df)
         return cls(
-            Column(column).copy_metadata(h_col)
-            for column, h_col in zip(d_table.columns(), df.iter_columns(), strict=True)
+            Column(d_col, name=name).copy_metadata(h_col)
+            for d_col, h_col, name in zip(
+                plc_table.columns(), df.iter_columns(), df.columns, strict=True
+            )
         )
 
     @classmethod
@@ -277,7 +270,7 @@ class DataFrame:
         """Drop columns by name."""
         return type(self)(column for column in self.columns if column.name not in names)
 
-    def select(self, names: Sequence[str]) -> Self:
+    def select(self, names: Sequence[str] | Mapping[str, Any]) -> Self:
         """Select columns by name returning DataFrame."""
         try:
             return type(self)(self.column_map[name] for name in names)

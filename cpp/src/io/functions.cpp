@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include "io/comp/comp.hpp"
+#include "io/comp/io_uncomp.hpp"
 #include "io/orc/orc.hpp"
 #include "io/utilities/getenv_or.hpp"
 
@@ -29,6 +31,7 @@
 #include <cudf/io/detail/json.hpp>
 #include <cudf/io/detail/orc.hpp>
 #include <cudf/io/detail/parquet.hpp>
+#include <cudf/io/detail/utils.hpp>
 #include <cudf/io/json.hpp>
 #include <cudf/io/orc.hpp>
 #include <cudf/io/orc_metadata.hpp>
@@ -48,7 +51,12 @@ compression_type infer_compression_type(compression_type compression, source_inf
 {
   if (compression != compression_type::AUTO) { return compression; }
 
-  if (info.type() != io_type::FILEPATH) { return compression_type::NONE; }
+  if (info.type() != io_type::FILEPATH) {
+    CUDF_LOG_WARN(
+      "Auto detection of compression type is supported only for file type buffers. For other "
+      "buffer types, AUTO compression type assumes uncompressed input.");
+    return compression_type::NONE;
+  }
 
   auto filepath = info.filepaths()[0];
 
@@ -68,6 +76,8 @@ compression_type infer_compression_type(compression_type compression, source_inf
   if (ext == "gz") { return compression_type::GZIP; }
   if (ext == "zip") { return compression_type::ZIP; }
   if (ext == "bz2") { return compression_type::BZIP2; }
+  if (ext == "zstd") { return compression_type::ZSTD; }
+  if (ext == "sz") { return compression_type::SNAPPY; }
   if (ext == "xz") { return compression_type::XZ; }
 
   return compression_type::NONE;
@@ -286,6 +296,28 @@ void write_csv(csv_writer_options const& options, rmm::cuda_stream_view stream)
     options.get_names(),
     options,
     stream);
+}
+
+bool is_supported_read_orc(compression_type compression)
+{
+  if (compression == compression_type::AUTO or compression == compression_type::NONE) {
+    return true;
+  }
+
+  return ((compression == compression_type::ZLIB or compression == compression_type::SNAPPY or
+           compression == compression_type::ZSTD or compression == compression_type::LZ4) and
+          detail::is_decompression_supported(compression));
+}
+
+bool is_supported_write_orc(compression_type compression)
+{
+  if (compression == compression_type::AUTO or compression == compression_type::NONE) {
+    return true;
+  }
+
+  return ((compression == compression_type::ZLIB or compression == compression_type::SNAPPY or
+           compression == compression_type::ZSTD or compression == compression_type::LZ4) and
+          detail::is_compression_supported(compression));
 }
 
 raw_orc_statistics read_raw_orc_statistics(source_info const& src_info,
@@ -561,6 +593,29 @@ void orc_chunked_writer::close()
 
 using namespace cudf::io::parquet::detail;
 namespace detail_parquet = cudf::io::parquet::detail;
+
+bool is_supported_read_parquet(compression_type compression)
+{
+  if (compression == compression_type::AUTO or compression == compression_type::NONE) {
+    return true;
+  }
+
+  return ((compression == compression_type::BROTLI or compression == compression_type::GZIP or
+           compression == compression_type::LZ4 or compression == compression_type::SNAPPY or
+           compression == compression_type::ZSTD) and
+          detail::is_decompression_supported(compression));
+}
+
+bool is_supported_write_parquet(compression_type compression)
+{
+  if (compression == compression_type::AUTO or compression == compression_type::NONE) {
+    return true;
+  }
+
+  return ((compression == compression_type::LZ4 or compression == compression_type::SNAPPY or
+           compression == compression_type::ZSTD) and
+          detail::is_compression_supported(compression));
+}
 
 table_with_metadata read_parquet(parquet_reader_options const& options,
                                  rmm::cuda_stream_view stream,

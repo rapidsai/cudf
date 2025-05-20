@@ -31,9 +31,9 @@
 #include <rmm/cuda_stream_view.hpp>
 
 #include <cuda/std/functional>
+#include <cuda/std/iterator>
 #include <thrust/functional.h>
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/iterator/iterator_traits.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/pair.h>
 #include <thrust/transform_reduce.h>
@@ -56,9 +56,9 @@ struct minmax_pair {
   T max_val;
 
   __host__ __device__ minmax_pair()
-    : min_val(cudf::DeviceMin::identity<T>()), max_val(cudf::DeviceMax::identity<T>()){};
-  __host__ __device__ minmax_pair(T val) : min_val(val), max_val(val){};
-  __host__ __device__ minmax_pair(T min_val_, T max_val_) : min_val(min_val_), max_val(max_val_){};
+    : min_val(cudf::DeviceMin::identity<T>()), max_val(cudf::DeviceMax::identity<T>()) {};
+  __host__ __device__ minmax_pair(T val) : min_val(val), max_val(val) {};
+  __host__ __device__ minmax_pair(T min_val_, T max_val_) : min_val(min_val_), max_val(max_val_) {};
 };
 
 /**
@@ -75,7 +75,7 @@ struct minmax_pair {
  */
 template <typename Op,
           typename InputIterator,
-          typename OutputType = typename thrust::iterator_value<InputIterator>::type>
+          typename OutputType = cuda::std::iter_value_t<InputIterator>>
 auto reduce_device(InputIterator d_in,
                    size_type num_items,
                    Op binary_op,

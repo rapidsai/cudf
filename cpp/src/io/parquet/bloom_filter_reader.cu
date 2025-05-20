@@ -15,7 +15,6 @@
  */
 
 #include "compact_protocol_reader.hpp"
-#include "io/parquet/parquet.hpp"
 #include "reader_impl_helpers.hpp"
 
 #include <cudf/ast/detail/expression_transformer.hpp>
@@ -24,6 +23,7 @@
 #include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/detail/transform.hpp>
 #include <cudf/hashing/detail/xxhash_64.cuh>
+#include <cudf/io/parquet_schema.hpp>
 #include <cudf/logger.hpp>
 #include <cudf/utilities/span.hpp>
 #include <cudf/utilities/traits.hpp>
@@ -88,45 +88,45 @@ struct bloom_filter_caster {
     cudf::device_span<bool> results_span{static_cast<bool*>(results.data()), total_row_groups};
 
     // Query literal in bloom filters from each column chunk (row group).
-    thrust::tabulate(
-      rmm::exec_policy_nosync(stream),
-      results_span.begin(),
-      results_span.end(),
-      [filter_span          = bloom_filter_spans.data(),
-       d_scalar             = literal->get_value(),
-       col_idx              = equality_col_idx,
-       num_equality_columns = num_equality_columns] __device__(auto row_group_idx) {
-        // Filter bitset buffer index
-        auto const filter_idx  = col_idx + (num_equality_columns * row_group_idx);
-        auto const filter_size = filter_span[filter_idx].size();
+    thrust::tabulate(rmm::exec_policy_nosync(stream),
+                     results_span.begin(),
+                     results_span.end(),
+                     [filter_span          = bloom_filter_spans.data(),
+                      d_scalar             = literal->get_value(),
+                      col_idx              = equality_col_idx,
+                      num_equality_columns = num_equality_columns] __device__(auto row_group_idx) {
+                       // Filter bitset buffer index
+                       auto const filter_idx  = col_idx + (num_equality_columns * row_group_idx);
+                       auto const filter_size = filter_span[filter_idx].size();
 
-        // If no bloom filter, then fill in `true` as membership cannot be determined
-        if (filter_size == 0) { return true; }
+                       // If no bloom filter, then fill in `true` as membership cannot be determined
+                       if (filter_size == 0) { return true; }
 
-        // Number of filter blocks
-        auto const num_filter_blocks = filter_size / bytes_per_block;
+                       // Number of filter blocks
+                       auto const num_filter_blocks = filter_size / bytes_per_block;
 
-        // Create a bloom filter view.
-        bloom_filter_type filter{
-          reinterpret_cast<filter_block_type*>(filter_span[filter_idx].data()),
-          num_filter_blocks,
-          {},   // Thread scope as the same literal is being searched across different bitsets per
-                // thread
-          {}};  // Arrow policy with cudf::hashing::detail::XXHash_64 seeded with 0 for Arrow
-                // compatibility
+                       // Create a bloom filter view.
+                       bloom_filter_type filter{
+                         reinterpret_cast<filter_block_type*>(filter_span[filter_idx].data()),
+                         num_filter_blocks,
+                         {},  // Thread scope as the same literal is being searched across different
+                              // bitsets per thread
+                         {}};  // Arrow policy with cudf::hashing::detail::XXHash_64 seeded with 0
+                               // for Arrow compatibility
 
-        // If int96_timestamp type, convert literal to string_view and query bloom
-        // filter
-        if constexpr (cuda::std::is_same_v<T, cudf::string_view> and
-                      IS_INT96_TIMESTAMP == is_int96_timestamp::YES) {
-          auto const int128_key = static_cast<__int128_t>(d_scalar.value<int64_t>());
-          cudf::string_view probe_key{reinterpret_cast<char const*>(&int128_key), 12};
-          return filter.contains(probe_key);
-        } else {
-          // Query the bloom filter and store results
-          return filter.contains(d_scalar.value<T>());
-        }
-      });
+                       // If int96_timestamp type, convert literal to string_view and query bloom
+                       // filter
+                       if constexpr (cuda::std::is_same_v<T, cudf::string_view> and
+                                     IS_INT96_TIMESTAMP == is_int96_timestamp::YES) {
+                         auto const int128_key = static_cast<__int128_t>(d_scalar.value<int64_t>());
+                         cudf::string_view probe_key{reinterpret_cast<char const*>(&int128_key),
+                                                     12};
+                         return filter.contains(probe_key);
+                       } else {
+                         // Query the bloom filter and store results
+                         return filter.contains(d_scalar.value<T>());
+                       }
+                     });
 
     return std::make_unique<cudf::column>(cudf::data_type{cudf::type_id::BOOL8},
                                           static_cast<cudf::size_type>(total_row_groups),
@@ -335,9 +335,9 @@ void read_bloom_filter_data(host_span<std::unique_ptr<datasource> const> sources
       // Check if the bloom filter header is valid.
       auto const is_header_valid =
         (header.num_bytes % words_per_block) == 0 and
-        header.compression.compression == BloomFilterCompression::Compression::UNCOMPRESSED and
-        header.algorithm.algorithm == BloomFilterAlgorithm::Algorithm::SPLIT_BLOCK and
-        header.hash.hash == BloomFilterHash::Hash::XXHASH;
+        header.compression.compression == BloomFilterCompression::UNCOMPRESSED and
+        header.algorithm.algorithm == BloomFilterAlgorithm::SPLIT_BLOCK and
+        header.hash.hash == BloomFilterHash::XXHASH;
 
       // Do not read if the bloom filter is invalid
       if (not is_header_valid) {
@@ -508,12 +508,12 @@ std::vector<Type> aggregate_reader_metadata::get_parquet_types(
 }
 
 std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::apply_bloom_filters(
-  std::vector<rmm::device_buffer>& bloom_filter_data,
+  cudf::host_span<rmm::device_buffer> bloom_filter_data,
   host_span<std::vector<size_type> const> input_row_group_indices,
   host_span<std::vector<ast::literal*> const> literals,
   size_type total_row_groups,
   host_span<data_type const> output_dtypes,
-  host_span<int const> equality_col_schemas,
+  host_span<int const> bloom_filter_col_schemas,
   std::reference_wrapper<ast::expression const> filter,
   rmm::cuda_stream_view stream) const
 {
@@ -521,7 +521,7 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::ap
   auto const num_input_columns = static_cast<cudf::size_type>(output_dtypes.size());
 
   // Get parquet types for the predicate columns
-  auto const parquet_types = get_parquet_types(input_row_group_indices, equality_col_schemas);
+  auto const parquet_types = get_parquet_types(input_row_group_indices, bloom_filter_col_schemas);
 
   // Create spans from bloom filter bitset buffers to use in cuco::bloom_filter_ref.
   std::vector<cudf::device_span<cuda::std::byte>> h_bloom_filter_spans;
@@ -542,7 +542,7 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::ap
   bloom_filter_caster const bloom_filter_col{bloom_filter_spans,
                                              parquet_types,
                                              static_cast<size_t>(total_row_groups),
-                                             equality_col_schemas.size()};
+                                             bloom_filter_col_schemas.size()};
 
   // Converts bloom filter membership for equality predicate columns to a table
   // containing a column for each `col[i] == literal` predicate to be evaluated.
@@ -584,8 +584,6 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::ap
                                             stream);
 }
 
-equality_literals_collector::equality_literals_collector() = default;
-
 equality_literals_collector::equality_literals_collector(ast::expression const& expr,
                                                          cudf::size_type num_input_columns)
   : _num_input_columns{num_input_columns}
@@ -604,7 +602,7 @@ std::reference_wrapper<ast::expression const> equality_literals_collector::visit
   ast::column_reference const& expr)
 {
   CUDF_EXPECTS(expr.get_table_source() == ast::table_reference::LEFT,
-               "BloomfilterAST supports only left table");
+               "DictionaryAST and BloomfilterAST support only left table");
   CUDF_EXPECTS(expr.get_column_index() < _num_input_columns,
                "Column index cannot be more than number of columns in the table");
   return expr;
@@ -613,7 +611,7 @@ std::reference_wrapper<ast::expression const> equality_literals_collector::visit
 std::reference_wrapper<ast::expression const> equality_literals_collector::visit(
   ast::column_name_reference const& expr)
 {
-  CUDF_FAIL("Column name reference is not supported in BloomfilterAST");
+  CUDF_FAIL("Column name reference is not supported in DictionaryAST and BloomfilterAST");
 }
 
 std::reference_wrapper<ast::expression const> equality_literals_collector::visit(

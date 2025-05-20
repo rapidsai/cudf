@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -68,7 +68,7 @@ struct simple_comparator {
       bool lhs_null{d_column.is_null(lhs)};
       bool rhs_null{d_column.is_null(rhs)};
       if (lhs_null || rhs_null) {
-        if (!ascending) thrust::swap(lhs_null, rhs_null);
+        if (!ascending) { cuda::std::swap(lhs_null, rhs_null); }
         return (null_precedence == cudf::null_order::BEFORE ? !rhs_null : !lhs_null);
       }
     }
@@ -87,7 +87,7 @@ struct column_sorted_order_fn {
    * @brief Compile time check for allowing faster sort.
    *
    * Faster sort is defined for fixed-width types where only
-   * the primitive comparators thrust::greater or thrust::less
+   * the primitive comparators cuda::std::greater or cuda::std::less
    * are needed.
    *
    * Floating point is removed here for special handling of NaNs
@@ -140,9 +140,9 @@ struct column_sorted_order_fn {
     };
 
     if (ascending) {
-      do_sort(thrust::less<T>{});
+      do_sort(cuda::std::less<T>{});
     } else {
-      do_sort(thrust::greater<T>{});
+      do_sort(cuda::std::greater<T>{});
     }
   }
 

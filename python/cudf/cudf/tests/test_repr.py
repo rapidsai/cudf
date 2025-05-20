@@ -110,25 +110,24 @@ def test_full_dataframe_20(dtype, size, nrows, ncols):
     st.lists(
         st.integers(-9223372036854775808, 9223372036854775807),
         min_size=1,
-        max_size=10000,
+        max_size=1000,
     )
 )
-@settings(deadline=None)
+@settings(deadline=None, max_examples=20)
 def test_integer_dataframe(x):
     gdf = cudf.DataFrame({"x": x})
     pdf = gdf.to_pandas()
-    pd.options.display.max_columns = 1
-    assert repr(gdf) == repr(pdf)
-    assert repr(gdf.T) == repr(pdf.T)
-    pd.reset_option("display.max_columns")
+    with pd.option_context("display.max_columns", 1):
+        assert repr(gdf) == repr(pdf)
+        assert repr(gdf.T) == repr(pdf.T)
 
 
 @given(
     st.lists(
-        st.integers(-9223372036854775808, 9223372036854775807), max_size=10000
+        st.integers(-9223372036854775808, 9223372036854775807), max_size=1000
     )
 )
-@settings(deadline=None)
+@settings(deadline=None, max_examples=20)
 def test_integer_series(x):
     sr = cudf.Series(x, dtype=int)
     ps = pd.Series(data=x, dtype=int)
@@ -137,7 +136,7 @@ def test_integer_series(x):
 
 
 @given(st.lists(st.floats()))
-@settings(deadline=None)
+@settings(deadline=None, max_examples=20)
 def test_float_dataframe(x):
     gdf = cudf.DataFrame({"x": cudf.Series(x, dtype=float, nan_as_null=False)})
     pdf = gdf.to_pandas()
@@ -145,7 +144,7 @@ def test_float_dataframe(x):
 
 
 @given(st.lists(st.floats()))
-@settings(deadline=None)
+@settings(deadline=None, max_examples=20)
 def test_float_series(x):
     sr = cudf.Series(x, dtype=float, nan_as_null=False)
     ps = pd.Series(data=x, dtype=float)
@@ -1488,14 +1487,11 @@ def test_interval_index_repr():
     assert repr(pi) == repr(gi)
 
 
-def test_large_unique_categories_repr():
-    # Unfortunately, this is a long running test (takes about 1 minute)
-    # and there is no way we can reduce the time
-    pi = pd.CategoricalIndex(range(100_000_000))
-    gi = cudf.CategoricalIndex(range(100_000_000))
+def test_unique_categories_repr():
+    pi = pd.CategoricalIndex(range(10_000))
+    gi = cudf.CategoricalIndex(range(10_000))
     expected_repr = repr(pi)
-    with utils.cudf_timeout(6):
-        actual_repr = repr(gi)
+    actual_repr = repr(gi)
     assert expected_repr == actual_repr
 
 

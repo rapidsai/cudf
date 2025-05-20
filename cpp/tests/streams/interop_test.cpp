@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/default_stream.hpp>
+#include <cudf_test/testing_main.hpp>
 
 #include <cudf/interop.hpp>
 #include <cudf/table/table_view.hpp>
@@ -46,3 +47,5 @@ TEST_F(DLPackTest, FromDLPack)
   unique_managed_tensor tensor(cudf::to_dlpack(input, cudf::test::get_default_stream()));
   auto result = cudf::from_dlpack(tensor.get(), cudf::test::get_default_stream());
 }
+
+CUDF_TEST_PROGRAM_MAIN()

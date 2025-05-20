@@ -1809,8 +1809,8 @@ TEST_P(JsonReaderParamTest, JsonDtypeParsing)
                                   double_ignore,
                                   double_ignore},
                                  make_validity(validity)};
-  auto str_col =
-    cudf::test::strings_column_wrapper{// clang-format off
+  auto str_col   = cudf::test::strings_column_wrapper{
+    // clang-format off
     {"0", "0", " 0", "1", "1", " 1", "a", "z", "", "true", "false", "null", "true", "false", "nan", "nan"},
      cudf::test::iterators::nulls_at(std::vector<int>{8})};
   // clang-format on
@@ -3443,8 +3443,7 @@ TEST_P(JsonCompressedIOTest, BasicJsonLines)
   if (comptype != cudf::io::compression_type::NONE) {
     cdata = cudf::io::detail::compress(
       comptype,
-      cudf::host_span<uint8_t const>(reinterpret_cast<uint8_t const*>(data.data()), data.size()),
-      cudf::get_default_stream());
+      cudf::host_span<uint8_t const>(reinterpret_cast<uint8_t const*>(data.data()), data.size()));
     auto decomp_out_buffer = cudf::io::detail::decompress(
       comptype, cudf::host_span<uint8_t const>(cdata.data(), cdata.size()));
     std::string const expected = R"({"0":1, "1":1.1}

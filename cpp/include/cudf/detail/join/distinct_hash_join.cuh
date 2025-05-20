@@ -49,7 +49,7 @@ struct always_not_equal {
 };
 
 /**
- * @brief An comparator adapter wrapping the two table comparator
+ * @brief A comparator adapter wrapping the two table comparator
  */
 template <typename Equal>
 struct comparator_adapter {
@@ -61,6 +61,25 @@ struct comparator_adapter {
   {
     if (lhs.first != rhs.first) { return false; }
     return _d_equal(lhs.second, rhs.second);
+  }
+
+ private:
+  Equal _d_equal;
+};
+
+/**
+ * @brief A comparator adapter wrapping the two table comparator
+ */
+template <typename Equal>
+struct primitive_comparator_adapter {
+  primitive_comparator_adapter(Equal const& d_equal) : _d_equal{d_equal} {}
+
+  __device__ constexpr auto operator()(
+    cuco::pair<hash_value_type, lhs_index_type> const& lhs,
+    cuco::pair<hash_value_type, rhs_index_type> const& rhs) const noexcept
+  {
+    if (lhs.first != rhs.first) { return false; }
+    return _d_equal(static_cast<size_type>(lhs.second), static_cast<size_type>(rhs.second));
   }
 
  private:
@@ -106,6 +125,16 @@ class distinct_hash_join {
    */
   distinct_hash_join(cudf::table_view const& build,
                      cudf::null_equality compare_nulls,
+                     rmm::cuda_stream_view stream);
+
+  /**
+   * @copydoc distinct_hash_join(cudf::table_view const&, null_equality, rmm::cuda_stream_view)
+   *
+   * @param load_factor The hash table occupancy ratio in (0,1]. A value of 0.5 means 50% occupancy.
+   */
+  distinct_hash_join(cudf::table_view const& build,
+                     cudf::null_equality compare_nulls,
+                     double load_factor,
                      rmm::cuda_stream_view stream);
 
   /**
