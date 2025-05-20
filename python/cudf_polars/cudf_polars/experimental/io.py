@@ -6,9 +6,12 @@ from __future__ import annotations
 
 import dataclasses
 import enum
+import itertools
 import math
 from enum import IntEnum
 from typing import TYPE_CHECKING, Any, TypeVar
+
+import numpy as np
 
 import pylibcudf as plc
 
@@ -266,18 +269,13 @@ class SplitScan(IR):
 
 
 def _sample_pq_statistics(ir: Scan) -> TableStats:
-    import numpy as np
-    import pyarrow.compute as pa_c
-    import pyarrow.dataset as pa_ds
-
     # Use average total_uncompressed_size of three files
-    # TODO: Use plc.io.parquet_metadata.read_parquet_metadata
     n_sample = 5  # TODO: Make this configurable
     file_count = len(ir.paths)
     stride = max(1, int(file_count / n_sample))
     paths = ir.paths[: stride * n_sample : stride]
 
-    # Check cache table-stats cache
+    # Check table-stats cache
     table_stats_cached: TableStats | None = None
     table_stats_cached_schema: Schema = {}
     try:
@@ -289,18 +287,44 @@ def _sample_pq_statistics(ir: Scan) -> TableStats:
     except KeyError:
         pass
 
-    ds: pa_ds.Dataset | None = None
     if need_schema := {
         name: dtype
         for name, dtype in ir.schema.items()
         if name not in table_stats_cached_schema
     }:
-        ds = pa_ds.dataset(paths, format="parquet")
-        need_schema = {k: v for k, v in need_schema.items() if k in ds.schema.names}
+        # Still need un-cached columns
+        metadata = plc.io.parquet_metadata.read_parquet_metadata(
+            plc.io.SourceInfo(paths)
+        )
+        num_rows_per_file = int(metadata.num_rows() / len(paths))
+        num_rows_total = num_rows_per_file * file_count
+        num_row_groups_per_file_samples = metadata.num_rowgroups_per_file()
+        num_row_groups_per_file = np.mean(num_row_groups_per_file_samples)
+        rowgroup_offsets_per_file = np.insert(
+            np.cumsum(num_row_groups_per_file_samples), 0, 0
+        )
 
-    if ds is not None and need_schema:
+        # For each column, calculate the `total_uncompressed_size` for each file
+        column_sizes = {}
+        for name, uncompressed_sizes in metadata.columnchunk_metadata().items():
+            if name in need_schema:
+                column_sizes[name] = np.array(
+                    [
+                        np.sum(uncompressed_sizes[start:end])
+                        for (start, end) in itertools.pairwise(
+                            rowgroup_offsets_per_file
+                        )
+                    ],
+                    dtype="int64",
+                )
+        # Revise schema, since some columns may not be in the file
+        need_schema = {k: v for k, v in need_schema.items() if k in column_sizes}
+
+    if need_schema:
+        # We have un-cached column metadata to process
+
         # We already know the element size of most dtypes
-        known_element_sizes: dict[str, list[int]] = {
+        known_element_sizes: dict[str, int] = {
             name: plc.types.size_of(dtype)
             for name, dtype in need_schema.items()
             if dtype.id()
@@ -311,66 +335,61 @@ def _sample_pq_statistics(ir: Scan) -> TableStats:
             )
         }
 
-        column_sizes = {name: np.zeros(n_sample, dtype="int64") for name in need_schema}
-        column_unique_counts = {
-            name: np.zeros(n_sample, dtype="int64") for name in need_schema
+        # Calculate the mean per-file `total_uncompressed_size` for each column
+        total_uncompressed_size = {
+            name: np.mean(sizes) for name, sizes in column_sizes.items()
         }
-        sampled_element_sizes: dict[str, list[int]] = {name: [] for name in need_schema}
+        element_sizes = {
+            name: known_element_sizes.get(
+                name,
+                max(int(total_uncompressed_size[name] / num_rows_per_file), 1),
+            )
+            for name in need_schema
+        }
 
-        total_num_rows = []
-        real_sample = False  # Whether we read in a real file
-        for i, frag in enumerate(ds.get_fragments()):
-            md = frag.metadata
-            total_num_rows.append(0)
-            unique_available = True
-            for rg in range(md.num_row_groups):
-                row_group = md.row_group(rg)
-                num_rows = row_group.num_rows
-                total_num_rows[-1] += num_rows
-                for col in range(row_group.num_columns):
-                    column = row_group.column(col)
-                    name = column.path_in_schema
-                    if name not in need_schema:
-                        continue
-                    column_sizes[name][i] += column.total_uncompressed_size
-                    sampled_element_sizes[name].append(
-                        known_element_sizes.get(
-                            name, column.total_uncompressed_size / num_rows
-                        )
-                    )
-                    if column.statistics.distinct_count:  # pragma: no cover
-                        # Use 'distinct_count' statistic
-                        column_unique_counts[name][i] = column.statistics.distinct_count
-                    else:
-                        unique_available = False
-
-            # Use real data from first row-group if unique stats are missing
-            if not (unique_available or real_sample):
-                real_sample = True  # Only sample one row-group like this
-                t = frag.split_by_row_group()[0].to_table(columns=list(need_schema))
-                for name in need_schema:
-                    unique_count = pa_c.count_distinct(t.column(name)).as_py()
-                    for j in range(n_sample):
-                        column_unique_counts[name][j] = unique_count
-
-        assert ir.config_options.executor.name == "streaming"
-
-        # Construct estimated TableStats
-        table_stats = TableStats(
-            column_stats={
-                name: ColumnStats(
-                    dtype=dtype,
-                    unique_count=int(np.mean(column_unique_counts[name])),
-                    element_size=max(int(np.mean(sampled_element_sizes[name])), 1),
-                    file_size=int(np.mean(column_sizes[name])),
+        # Collect real unique-count of first row-group
+        # TODO: Check for 'distinct_count' statistics
+        # and make this sampling configurable.
+        options = plc.io.parquet.ParquetReaderOptions.builder(
+            plc.io.SourceInfo(paths[:1])
+        ).build()
+        options.set_columns([c for c in ir.schema if c in need_schema])
+        options.set_row_groups([[0]])
+        tbl_w_meta = plc.io.parquet.read_parquet(options)
+        row_group_num_rows = tbl_w_meta.tbl.num_rows()
+        unique_count_estimates: dict[str, int] = {}
+        for name, column in zip(
+            tbl_w_meta.column_names(), tbl_w_meta.columns, strict=True
+        ):
+            if name in need_schema:
+                row_group_unique_count = plc.stream_compaction.distinct_count(
+                    column,
+                    plc.types.NullPolicy.INCLUDE,
+                    plc.types.NanPolicy.NAN_IS_NULL,
                 )
-                for name, dtype in need_schema.items()
-            },
-            num_rows=int(np.mean(total_num_rows)) * file_count,
-        )
+                unique_count_estimates[name] = int(
+                    (row_group_unique_count / row_group_num_rows)
+                    * row_group_num_rows
+                    * np.mean(num_row_groups_per_file)
+                    * file_count
+                )
 
-        if table_stats_cached:  # pragma: no cover; TODO: Test this
-            table_stats = TableStats.merge(table_stats, table_stats_cached)
+    # Construct estimated TableStats
+    table_stats = TableStats(
+        column_stats={
+            name: ColumnStats(
+                dtype=dtype,
+                unique_count=unique_count_estimates[name],
+                element_size=element_sizes[name],
+                file_size=total_uncompressed_size[name],
+            )
+            for name, dtype in need_schema.items()
+        },
+        num_rows=num_rows_total,
+    )
+
+    if table_stats_cached:  # pragma: no cover; TODO: Test this
+        table_stats = TableStats.merge(table_stats, table_stats_cached)
 
         _TABLESTATS_CACHE[tuple(ir.paths)] = table_stats
 
