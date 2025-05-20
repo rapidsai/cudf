@@ -206,7 +206,9 @@ class row_hasher {
    * @param t A table_device_view to hash
    * @param seed A seed value to use for hashing
    */
-  row_hasher(cudf::nullate::DYNAMIC const& has_nulls, table_device_view t, hash_value_type seed)
+  row_hasher(cudf::nullate::DYNAMIC const& has_nulls,
+             table_device_view t,
+             hash_value_type seed = DEFAULT_HASH_SEED)
     : _has_nulls{has_nulls}, _table{t}, _seed{seed}
   {
   }
@@ -220,7 +222,7 @@ class row_hasher {
    */
   row_hasher(cudf::nullate::DYNAMIC const& has_nulls,
              std::shared_ptr<cudf::experimental::row::equality::preprocessed_table> t,
-             hash_value_type seed)
+             hash_value_type seed = DEFAULT_HASH_SEED)
     : _has_nulls{has_nulls}, _table{*t}, _seed{seed}
   {
   }

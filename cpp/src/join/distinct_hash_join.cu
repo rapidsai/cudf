@@ -209,7 +209,7 @@ distinct_hash_join::distinct_hash_join(cudf::table_view const& build,
 
   if (cudf::is_primitive_row_op_compatible(_build)) {
     auto const d_hasher = cudf::row::primitive::row_hasher<cudf::hashing::detail::default_hash>{
-      nullate::DYNAMIC{has_nulls}, this->_preprocessed_build, DEFAULT_HASH_SEED};
+      nullate::DYNAMIC{has_nulls}, this->_preprocessed_build};
 
     auto const iter = cudf::detail::make_counting_transform_iterator(
       0, primitive_keys_fn<rhs_index_type>{d_hasher});
@@ -255,7 +255,7 @@ distinct_hash_join::inner_join(cudf::table_view const& probe,
     cudf::experimental::row::equality::preprocessed_table::create(probe, stream);
   if (cudf::is_primitive_row_op_compatible(_build)) {
     auto const d_hasher = cudf::row::primitive::row_hasher<cudf::hashing::detail::default_hash>{
-      nullate::DYNAMIC{has_nulls}, preprocessed_probe, DEFAULT_HASH_SEED};
+      nullate::DYNAMIC{has_nulls}, preprocessed_probe};
     auto const d_equal = cudf::row::primitive::row_equality_comparator{
       nullate::DYNAMIC{has_nulls}, preprocessed_probe, _preprocessed_build, _nulls_equal};
     auto const iter = cudf::detail::make_counting_transform_iterator(
@@ -351,7 +351,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> distinct_hash_join::left_join(
 
   if (cudf::is_primitive_row_op_compatible(_build)) {
     auto const d_hasher = cudf::row::primitive::row_hasher<cudf::hashing::detail::default_hash>{
-      nullate::DYNAMIC{has_nulls}, preprocessed_probe, DEFAULT_HASH_SEED};
+      nullate::DYNAMIC{has_nulls}, preprocessed_probe};
     auto const d_equal = cudf::row::primitive::row_equality_comparator{
       nullate::DYNAMIC{has_nulls}, preprocessed_probe, _preprocessed_build, _nulls_equal};
 
