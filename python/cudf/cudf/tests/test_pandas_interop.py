@@ -90,6 +90,14 @@ def test_from_pandas_datetimeindex_freq():
     assert_eq(expected, actual)
     assert actual.freq is not None
 
+    actual = cudf.Index(expected)
+    assert_eq(expected, actual)
+    assert actual.freq is not None
+
+    actual = cudf.core.index.as_index(expected)
+    assert_eq(expected, actual)
+    assert actual.freq is not None
+
 
 def test_from_pandas_rangeindex_step():
     expected = pd.RangeIndex(start=0, stop=8, step=2, name="myindex")

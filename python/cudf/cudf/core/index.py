@@ -470,7 +470,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):  # type: ignore[
             return cudf.DatetimeIndex._from_data(
                 {None: as_column(index, nan_as_null=nan_as_null)},
                 name=index.name,
-                freq=index.freq.name,
+                freq=index.freq.name if index.freq else None,
             )
         else:
             return cudf.Index._from_column(
@@ -5420,7 +5420,7 @@ def as_index(
         return cudf.DatetimeIndex._from_data(
             {None: as_column(arbitrary, nan_as_null=nan_as_null)},
             name=arbitrary.name,
-            freq=arbitrary.freq.name,
+            freq=arbitrary.freq.name if arbitrary.freq else None,
         )
     elif isinstance(arbitrary, pd.MultiIndex):
         if dtype is not None:
