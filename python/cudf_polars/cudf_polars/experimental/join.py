@@ -314,10 +314,17 @@ def _(
         estimated_output_rows is not None
         and max_input_rows is not None
         and output_count
-        > (new_count := max(1, estimated_output_rows * output_count // max_input_rows))
+        > (
+            new_count := max(
+                1, int(1 * estimated_output_rows * output_count // max_input_rows)
+            )
+        )
     ):
         # Only repartition if estimated count suggests we should go to
-        # a smaller number of partitions
+        # a smaller number of partitions.
+        # Avoid reducing the partition count be more than 5x
+        # (This seems to improve stability)
+        new_count = max(new_count, output_count // 5)
         result = Repartition(joined.schema, joined)
         partition_info[result] = PartitionInfo.new(
             result, partition_info, count=new_count, table_stats=join_stats
