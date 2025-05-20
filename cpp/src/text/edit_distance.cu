@@ -99,7 +99,7 @@ struct edit_distance_levenshtein_algorithm {
   {
     auto d_str =
       d_strings.is_null(idx) ? cudf::string_view{} : d_strings.element<cudf::string_view>(idx);
-    auto d_tgt = [&] __device__ {  // d_targets is also allowed to have only one entry
+    auto d_tgt = [&] __device__ {  // d_targets is also allowed to have only one valid entry
       if (d_targets.size() > 1 && d_targets.is_null(idx)) { return cudf::string_view{}; }
       return d_targets.size() == 1 ? d_targets.element<cudf::string_view>(0)
                                    : d_targets.element<cudf::string_view>(idx);
