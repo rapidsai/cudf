@@ -859,7 +859,7 @@ class GroupBy(Serializable, Reducible, Scannable):
                 ColumnBase.from_pylibcudf(col)._with_type_metadata(val.dtype)
                 if not isinstance(
                     val.dtype,
-                    (cudf.core.dtypes.DecimalDtype, cudf.CategoricalDtype),
+                    (DecimalDtype, CategoricalDtype),
                 )
                 else ColumnBase.from_pylibcudf(col)
                 for col in result.columns()
