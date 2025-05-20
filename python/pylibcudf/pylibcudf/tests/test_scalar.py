@@ -13,13 +13,33 @@ def np():
     return pytest.importorskip("numpy")
 
 
-@pytest.mark.parametrize(
-    "val", [True, False, -1, 0, 1 - 1.0, 0.0, 1.52, "", "a1!"]
+@pytest.fixture(
+    params=[
+        True,
+        False,
+        -1,
+        0,
+        1 - 1.0,
+        0.0,
+        1.52,
+        "",
+        "a1!",
+        datetime.datetime(2020, 1, 1),
+        datetime.datetime(2020, 1, 1, microsecond=1),
+        datetime.timedelta(1),
+        datetime.timedelta(days=1, microseconds=1),
+    ],
+    ids=repr,
 )
-def test_from_py(val):
-    result = plc.Scalar.from_py(val)
-    expected = pa.scalar(val)
+def py_scalar(request):
+    return request.param
+
+
+def test_from_py(py_scalar):
+    result = plc.Scalar.from_py(py_scalar)
+    expected = pa.scalar(py_scalar)
     assert plc.interop.to_arrow(result).equals(expected)
+    assert plc.interop.to_arrow(result.type()).equals(expected.type)
 
 
 @pytest.mark.parametrize(
@@ -33,10 +53,21 @@ def test_from_py(val):
         (1, TypeId.UINT16),
         (1, TypeId.UINT32),
         (1, TypeId.UINT64),
+        (1, TypeId.FLOAT32),
+        (1, TypeId.DURATION_NANOSECONDS),
+        (1, TypeId.DURATION_MICROSECONDS),
+        (1, TypeId.DURATION_MILLISECONDS),
+        (1, TypeId.DURATION_SECONDS),
         (1.0, TypeId.FLOAT32),
         (1.5, TypeId.FLOAT64),
         ("str", TypeId.STRING),
         (True, TypeId.BOOL8),
+        (datetime.timedelta(1), TypeId.DURATION_SECONDS),
+        (datetime.timedelta(1), TypeId.DURATION_MILLISECONDS),
+        (datetime.timedelta(1), TypeId.DURATION_NANOSECONDS),
+        (datetime.datetime(2020, 1, 1), TypeId.TIMESTAMP_SECONDS),
+        (datetime.datetime(2020, 1, 1), TypeId.TIMESTAMP_MILLISECONDS),
+        (datetime.datetime(2020, 1, 1), TypeId.TIMESTAMP_NANOSECONDS),
     ],
 )
 def test_from_py_with_dtype(val, tid):
@@ -75,18 +106,6 @@ def test_from_py_with_dtype(val, tid):
         ),
         (
             1,
-            TypeId.FLOAT32,
-            TypeError,
-            "Cannot convert int to Scalar with dtype FLOAT32",
-        ),
-        (
-            1,
-            TypeId.FLOAT64,
-            TypeError,
-            "Cannot convert int to Scalar with dtype FLOAT64",
-        ),
-        (
-            1,
             TypeId.BOOL8,
             TypeError,
             "Cannot convert int to Scalar with dtype BOOL8",
@@ -108,6 +127,18 @@ def test_from_py_with_dtype(val, tid):
             TypeId.INT32,
             TypeError,
             "Cannot convert float to Scalar with dtype INT32",
+        ),
+        (
+            datetime.datetime(2020, 1, 1),
+            TypeId.INT32,
+            TypeError,
+            "Cannot convert datetime to Scalar with dtype INT32",
+        ),
+        (
+            datetime.timedelta(days=1, microseconds=1),
+            TypeId.INT32,
+            TypeError,
+            "Cannot convert timedelta to Scalar with dtype INT32",
         ),
     ],
 )
@@ -131,6 +162,9 @@ def test_from_py_with_dtype_errors(val, tid, error, msg):
         (2**64, TypeId.UINT64),
         (float(2**150), TypeId.FLOAT32),
         (float(-(2**150)), TypeId.FLOAT32),
+        (datetime.timedelta.max, TypeId.DURATION_NANOSECONDS),
+        (datetime.timedelta.max, TypeId.DURATION_MICROSECONDS),
+        (datetime.datetime.max, TypeId.TIMESTAMP_NANOSECONDS),
     ],
 )
 def test_from_py_overflow_errors(val, tid):
@@ -139,18 +173,26 @@ def test_from_py_overflow_errors(val, tid):
         plc.Scalar.from_py(val, dtype)
 
 
-@pytest.mark.parametrize(
-    "val", [datetime.datetime(2020, 1, 1), datetime.timedelta(1), [1], {1: 1}]
-)
+@pytest.mark.parametrize("val", [[1], {1: 1}])
 def test_from_py_notimplemented(val):
     with pytest.raises(NotImplementedError):
         plc.Scalar.from_py(val)
 
 
-@pytest.mark.parametrize("val", [object, None])
-def test_from_py_typeerror(val):
+def test_from_py_typeerror():
     with pytest.raises(TypeError):
-        plc.Scalar.from_py(val)
+        plc.Scalar.from_py(object)
+
+
+def test_from_py_none_no_type_raises():
+    with pytest.raises(ValueError):
+        plc.Scalar.from_py(None)
+
+
+def test_from_py_none():
+    result = plc.Scalar.from_py(None, plc.DataType(plc.TypeId.STRING))
+    expected = pa.scalar(None, type=pa.string())
+    assert plc.interop.to_arrow(result).equals(expected)
 
 
 @pytest.mark.parametrize(
@@ -188,3 +230,18 @@ def test_from_numpy_notimplemented(np, np_type):
 def test_from_numpy_typeerror(np):
     with pytest.raises(TypeError):
         plc.Scalar.from_numpy(np.void(5))
+
+
+def test_round_trip_scalar_through_column(py_scalar):
+    result = plc.Column.from_scalar(
+        plc.Scalar.from_py(py_scalar), 1
+    ).to_scalar()
+    expected = pa.scalar(py_scalar)
+    assert plc.interop.to_arrow(result).equals(expected)
+
+
+def test_non_constant_column_to_scalar_raises():
+    with pytest.raises(
+        ValueError, match="to_scalar only works for columns of size 1"
+    ):
+        plc.Column(pa.array([0, 1])).to_scalar()

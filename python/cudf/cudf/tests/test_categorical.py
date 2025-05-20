@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2024, NVIDIA CORPORATION.
+# Copyright (c) 2018-2025, NVIDIA CORPORATION.
 
 import operator
 import string
@@ -264,7 +264,7 @@ def test_categorical_unique(num_elements):
 
     # gdf
     gdf = cudf.DataFrame()
-    gdf["a"] = cudf.Series.from_categorical(pd_cat)
+    gdf["a"] = cudf.Series.from_pandas(pd_cat)
     gdf_unique_sorted = np.sort(gdf["a"].unique().to_pandas())
 
     # pandas
@@ -289,7 +289,7 @@ def test_categorical_unique_count(nelem):
 
     # gdf
     gdf = cudf.DataFrame()
-    gdf["a"] = cudf.Series.from_categorical(pd_cat)
+    gdf["a"] = cudf.Series.from_pandas(pd_cat)
     gdf_unique_count = gdf["a"].nunique()
 
     # pandas
@@ -319,7 +319,7 @@ def test_categorical_empty():
 def test_categorical_set_categories():
     cat = pd.Categorical(["a", "a", "b", "c", "a"], categories=["a", "b", "c"])
     psr = pd.Series(cat)
-    sr = cudf.Series.from_categorical(cat)
+    sr = cudf.Series.from_pandas(cat)
 
     # adding category
     expect = psr.cat.set_categories(["a", "b", "c", "d"])

@@ -36,7 +36,6 @@ from cudf.testing._utils import (
     assert_exceptions_equal,
     expect_warning_if,
 )
-from cudf.utils.utils import search_range
 
 
 def test_df_set_index_from_series():
@@ -259,13 +258,13 @@ def test_index_rename_inplace():
     # inplace=False should yield a shallow copy
     gds_renamed_deep = gds.rename("new_name", inplace=False)
 
-    assert gds_renamed_deep._values.data_ptr == gds._values.data_ptr
+    assert gds_renamed_deep._column.data_ptr == gds._column.data_ptr
 
     # inplace=True returns none
-    expected_ptr = gds._values.data_ptr
+    expected_ptr = gds._column.data_ptr
     gds.rename("new_name", inplace=True)
 
-    assert expected_ptr == gds._values.data_ptr
+    assert expected_ptr == gds._column.data_ptr
 
 
 def test_index_rename_preserves_arg():
@@ -375,7 +374,7 @@ def test_index_copy_category(name, deep=True):
     pidx_copy = pidx.copy(name=name, deep=deep)
     cidx_copy = cidx.copy(name=name, deep=deep)
 
-    assert_column_memory_ne(cidx._values, cidx_copy._values)
+    assert_column_memory_ne(cidx._column, cidx_copy._column)
     assert_eq(pidx_copy, cidx_copy)
 
 
@@ -398,7 +397,7 @@ def test_index_copy_deep(idx, deep, copy_on_write):
     original_cow_setting = cudf.get_option("copy_on_write")
     cudf.set_option("copy_on_write", copy_on_write)
     if (
-        isinstance(idx._values, cudf.core.column.StringColumn)
+        isinstance(idx._column, cudf.core.column.StringColumn)
         or not deep
         or (cudf.get_option("copy_on_write") and not deep)
     ):
@@ -408,9 +407,9 @@ def test_index_copy_deep(idx, deep, copy_on_write):
         # When `copy_on_write` is turned on, Index objects will
         # have unique column object but they all point to same
         # data pointers.
-        assert_column_memory_eq(idx._values, idx_copy._values)
+        assert_column_memory_eq(idx._column, idx_copy._column)
     else:
-        assert_column_memory_ne(idx._values, idx_copy._values)
+        assert_column_memory_ne(idx._column, idx_copy._column)
     cudf.set_option("copy_on_write", original_cow_setting)
 
 
@@ -1626,13 +1625,12 @@ def test_rangeindex_name_not_hashable():
         RangeIndex(range(2)).copy(name=["foo"])
 
 
-def test_index_rangeindex_search_range():
+def test_index_rangeindex_searchsorted():
     # step > 0
     ridx = RangeIndex(-13, 17, 4)
-    ri = ridx._range
     for i in range(len(ridx)):
-        assert i == search_range(ridx[i], ri, side="left")
-        assert i + 1 == search_range(ridx[i], ri, side="right")
+        assert i == ridx.searchsorted(ridx[i], side="left")
+        assert i + 1 == ridx.searchsorted(ridx[i], side="right")
 
 
 @pytest.mark.parametrize(
@@ -3125,14 +3123,10 @@ def test_period_index_error():
         cudf.Series(pd.array(pidx))
 
 
-def test_index_from_dataframe_valueerror():
-    with pytest.raises(ValueError):
-        cudf.Index(cudf.DataFrame(range(1)))
-
-
-def test_index_from_scalar_valueerror():
-    with pytest.raises(ValueError):
-        cudf.Index(11)
+@pytest.mark.parametrize("value", [cudf.DataFrame(range(1)), 11])
+def test_index_from_dataframe_scalar_raises(value):
+    with pytest.raises(TypeError):
+        cudf.Index(value)
 
 
 @pytest.mark.parametrize("idx", [0, np.int64(0)])
@@ -3349,3 +3343,10 @@ def test_categoricalindex_from_codes(ordered, name):
         name=name,
     )
     assert_eq(result, expected)
+
+
+def test_roundtrip_index_plc_column():
+    index = cudf.Index([1])
+    expect = cudf.Index(index)
+    actual = cudf.Index.from_pylibcudf(*expect.to_pylibcudf())
+    assert_eq(expect, actual)

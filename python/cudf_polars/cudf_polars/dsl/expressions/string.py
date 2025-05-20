@@ -21,8 +21,6 @@ from cudf_polars.dsl.expressions.base import ExecutionContext, Expr
 from cudf_polars.dsl.expressions.literal import Literal, LiteralColumn
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
-
     from typing_extensions import Self
 
     from polars.polars import _expr_nodes as pl_expr
@@ -107,7 +105,7 @@ class StringFunction(Expr):
         self.options = options
         self.name = name
         self.children = children
-        self.is_pointwise = True
+        self.is_pointwise = self.name != StringFunction.Name.ConcatVertical
         self._validate_input()
 
     def _validate_input(self) -> None:
@@ -138,7 +136,7 @@ class StringFunction(Expr):
                     raise NotImplementedError(
                         "Regex contains only supports a scalar pattern"
                     )
-                pattern = self.children[1].value.as_py()
+                pattern = self.children[1].value
                 try:
                     self._regex_program = plc.strings.regex_program.RegexProgram.create(
                         pattern,
@@ -157,7 +155,7 @@ class StringFunction(Expr):
             target = self.children[1]
             # Above, we raise NotImplementedError if the target is not a Literal,
             # so we can safely access .value here.
-            if target.value == pa.scalar("", type=target.value.type):  # type: ignore[attr-defined]
+            if target.value == "":  # type: ignore[attr-defined]
                 raise NotImplementedError(
                     "libcudf replace does not support empty strings"
                 )
@@ -174,7 +172,12 @@ class StringFunction(Expr):
             target = self.children[1]
             # Above, we raise NotImplementedError if the target is not a Literal,
             # so we can safely access .value here.
-            if pc.any(pc.equal(target.value.cast(pa.string()), "")).as_py():  # type: ignore[attr-defined]
+            if (isinstance(target, Literal) and target.value == "") or (
+                isinstance(target, LiteralColumn)
+                and pc.any(
+                    pc.equal(target.value.cast(pa.string()), "")  # type: ignore[attr-defined]
+                ).as_py()
+            ):
                 raise NotImplementedError(
                     "libcudf replace_many is implemented differently from polars "
                     "for empty strings"
@@ -203,33 +206,29 @@ class StringFunction(Expr):
                 )
 
     def do_evaluate(
-        self,
-        df: DataFrame,
-        *,
-        context: ExecutionContext = ExecutionContext.FRAME,
-        mapping: Mapping[Expr, Column] | None = None,
+        self, df: DataFrame, *, context: ExecutionContext = ExecutionContext.FRAME
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
         if self.name is StringFunction.Name.ConcatVertical:
             (child,) = self.children
-            column = child.evaluate(df, context=context, mapping=mapping)
+            column = child.evaluate(df, context=context)
             delimiter, ignore_nulls = self.options
             if column.null_count > 0 and not ignore_nulls:
                 return Column(plc.Column.all_null_like(column.obj, 1))
             return Column(
                 plc.strings.combine.join_strings(
                     column.obj,
-                    plc.interop.from_arrow(pa.scalar(delimiter, type=pa.string())),
-                    plc.interop.from_arrow(pa.scalar(None, type=pa.string())),
+                    plc.Scalar.from_py(delimiter, plc.DataType(plc.TypeId.STRING)),
+                    plc.Scalar.from_py(None, plc.DataType(plc.TypeId.STRING)),
                 )
             )
         elif self.name is StringFunction.Name.Contains:
             child, arg = self.children
-            column = child.evaluate(df, context=context, mapping=mapping)
+            column = child.evaluate(df, context=context)
 
             literal, _ = self.options
             if literal:
-                pat = arg.evaluate(df, context=context, mapping=mapping)
+                pat = arg.evaluate(df, context=context)
                 pattern = (
                     pat.obj_scalar
                     if pat.is_scalar and pat.size != column.size
@@ -245,15 +244,15 @@ class StringFunction(Expr):
             assert isinstance(expr_offset, Literal)
             assert isinstance(expr_length, Literal)
 
-            column = child.evaluate(df, context=context, mapping=mapping)
+            column = child.evaluate(df, context=context)
             # libcudf slices via [start,stop).
             # polars slices with offset + length where start == offset
             # stop = start + length. Negative values for start look backward
             # from the last element of the string. If the end index would be
             # below zero, an empty string is returned.
             # Do this maths on the host
-            start = expr_offset.value.as_py()
-            length = expr_length.value.as_py()
+            start = expr_offset.value
+            length = expr_length.value
 
             if length == 0:
                 stop = start
@@ -266,8 +265,8 @@ class StringFunction(Expr):
             return Column(
                 plc.strings.slice.slice_strings(
                     column.obj,
-                    plc.interop.from_arrow(pa.scalar(start, type=pa.int32())),
-                    plc.interop.from_arrow(pa.scalar(stop, type=pa.int32())),
+                    plc.Scalar.from_py(start, plc.DataType(plc.TypeId.INT32)),
+                    plc.Scalar.from_py(stop, plc.DataType(plc.TypeId.INT32)),
                 )
             )
         elif self.name in {
@@ -275,9 +274,7 @@ class StringFunction(Expr):
             StringFunction.Name.StripCharsStart,
             StringFunction.Name.StripCharsEnd,
         }:
-            column, chars = (
-                c.evaluate(df, context=context, mapping=mapping) for c in self.children
-            )
+            column, chars = (c.evaluate(df, context=context) for c in self.children)
             if self.name is StringFunction.Name.StripCharsStart:
                 side = plc.strings.SideType.LEFT
             elif self.name is StringFunction.Name.StripCharsEnd:
@@ -286,10 +283,7 @@ class StringFunction(Expr):
                 side = plc.strings.SideType.BOTH
             return Column(plc.strings.strip.strip(column.obj, side, chars.obj_scalar))
 
-        columns = [
-            child.evaluate(df, context=context, mapping=mapping)
-            for child in self.children
-        ]
+        columns = [child.evaluate(df, context=context) for child in self.children]
         if self.name is StringFunction.Name.Lowercase:
             (column,) = columns
             return Column(plc.strings.case.to_lower(column.obj))
@@ -319,7 +313,7 @@ class StringFunction(Expr):
         elif self.name is StringFunction.Name.Strptime:
             # TODO: ignores ambiguous
             format, strict, exact, cache = self.options
-            col = self.children[0].evaluate(df, context=context, mapping=mapping)
+            col = self.children[0].evaluate(df, context=context)
 
             is_timestamps = plc.strings.convert.convert_datetime.is_timestamp(
                 col.obj, format
@@ -338,8 +332,7 @@ class StringFunction(Expr):
                 not_timestamps = plc.unary.unary_operation(
                     is_timestamps, plc.unary.UnaryOperator.NOT
                 )
-
-                null = plc.interop.from_arrow(pa.scalar(None, type=pa.string()))
+                null = plc.Scalar.from_py(None, plc.DataType(plc.TypeId.STRING))
                 res = plc.copying.boolean_mask_scatter(
                     [null], plc.Table([col.obj]), not_timestamps
                 )

@@ -18,6 +18,7 @@ from cudf.core._compat import (
     PANDAS_VERSION,
 )
 from cudf.core.buffer.spill_manager import get_global_manager
+from cudf.core.column.column import as_column
 from cudf.testing import _utils as utils, assert_eq
 from cudf.utils.dtypes import (
     DATETIME_TYPES,
@@ -442,7 +443,7 @@ def test_validity_add(nelem, lhs_nulls, rhs_nulls):
         lhs_bitmask = utils.expand_bits_to_bytes(lhs_mask)[:nelem]
         lhs_null_count = utils.count_zero(lhs_bitmask)
         assert lhs_null_count >= 0
-        lhs = Series.from_masked_array(lhs_data, lhs_mask)
+        lhs = Series._from_column(as_column(lhs_data).set_mask(lhs_mask))
         assert lhs.null_count == lhs_null_count
     else:
         lhs = Series(lhs_data)
@@ -453,7 +454,7 @@ def test_validity_add(nelem, lhs_nulls, rhs_nulls):
         rhs_bitmask = utils.expand_bits_to_bytes(rhs_mask)[:nelem]
         rhs_null_count = utils.count_zero(rhs_bitmask)
         assert rhs_null_count >= 0
-        rhs = Series.from_masked_array(rhs_data, rhs_mask)
+        rhs = Series._from_column(as_column(rhs_data).set_mask(rhs_mask))
         assert rhs.null_count == rhs_null_count
     else:
         rhs = Series(rhs_data)
@@ -2643,3 +2644,26 @@ def test_cat_non_cat_compare_ops(comp_op, data_left, data_right, ordered):
         expected = comp_op(pd_non_cat, pd_cat)
         result = comp_op(cudf_non_cat, cudf_cat)
         assert_eq(result, expected)
+
+
+@pytest.mark.parametrize(
+    "left_data, right_data",
+    [[["a", "b"], [1, 2]], [[[1, 2, 3], [4, 5]], [{"a": 1}, {"a": 2}]]],
+)
+@pytest.mark.parametrize(
+    "op, expected_data",
+    [[operator.eq, [False, False]], [operator.ne, [True, True]]],
+)
+@pytest.mark.parametrize("with_na", [True, False])
+def test_eq_ne_non_comparable_types(
+    left_data, right_data, op, expected_data, with_na
+):
+    if with_na:
+        left_data[0] = None
+    left = cudf.Series(left_data)
+    right = cudf.Series(right_data)
+    result = op(left, right)
+    if with_na:
+        expected_data[0] = None
+    expected = cudf.Series(expected_data)
+    assert_eq(result, expected)

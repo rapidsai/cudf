@@ -7,8 +7,10 @@ from __future__ import annotations
 import operator
 import warnings
 from functools import reduce
+from itertools import chain
 from typing import TYPE_CHECKING
 
+from cudf_polars.dsl.expr import Col
 from cudf_polars.dsl.ir import Union
 from cudf_polars.experimental.base import PartitionInfo
 
@@ -16,13 +18,36 @@ if TYPE_CHECKING:
     from collections.abc import MutableMapping
 
     from cudf_polars.containers import DataFrame
+    from cudf_polars.dsl.expr import Expr
     from cudf_polars.dsl.ir import IR
     from cudf_polars.experimental.dispatch import LowerIRTransformer
+    from cudf_polars.utils.config import ConfigOptions
 
 
 def _concat(*dfs: DataFrame) -> DataFrame:
     # Concatenate a sequence of DataFrames vertically
     return Union.do_evaluate(None, *dfs)
+
+
+def _fallback_inform(msg: str, config_options: ConfigOptions) -> None:
+    """Inform the user of single-partition fallback."""
+    # Satisfy type checking
+    assert config_options.executor.name == "streaming", (
+        "'in-memory' executor not supported in '_fallback_inform'"
+    )
+
+    match fallback_mode := config_options.executor.fallback_mode:
+        case "warn":
+            warnings.warn(msg, stacklevel=2)
+        case "raise":
+            raise NotImplementedError(msg)
+        case "silent":
+            pass
+        case _:  # pragma: no cover; Should never get here.
+            raise ValueError(
+                f"{fallback_mode} is not a supported 'fallback_mode' "
+                "option. Please use 'warn', 'raise', or 'silent'."
+            )
 
 
 def _lower_ir_fallback(
@@ -55,22 +80,21 @@ def _lower_ir_fallback(
     if fallback and msg:
         # Warn/raise the user if any children were collapsed
         # and the "fallback_mode" configuration is not "silent"
-        match fallback_mode := rec.state["config_options"].get(
-            "executor_options.fallback_mode"
-        ):
-            case "warn":
-                warnings.warn(msg, stacklevel=2)
-            case "raise":
-                raise NotImplementedError(msg)
-            case "silent":
-                pass
-            case _:  # pragma: no cover; Should never get here.
-                raise ValueError(
-                    f"{fallback_mode} is not a supported 'fallback_mode' "
-                    "option. Please use 'warn', 'raise', or 'silent'."
-                )
+        _fallback_inform(msg, rec.state["config_options"])
 
     # Reconstruct and return
     new_node = ir.reconstruct(children)
     partition_info[new_node] = PartitionInfo(count=1)
     return new_node, partition_info
+
+
+def _leaf_column_names(expr: Expr) -> tuple[str, ...]:
+    """Find the leaf column names of an expression."""
+    if expr.children:
+        return tuple(
+            chain.from_iterable(_leaf_column_names(child) for child in expr.children)
+        )
+    elif isinstance(expr, Col):
+        return (expr.name,)
+    else:
+        return ()

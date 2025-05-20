@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include "compression_common.hpp"
 #include "parquet_common.hpp"
 
 #include <cudf_test/base_fixture.hpp>
@@ -180,6 +181,8 @@ auto const read_table_and_nrows_per_source(cudf::io::chunked_parquet_reader cons
 }  // namespace
 
 struct ParquetChunkedReaderTest : public cudf::test::BaseFixture {};
+
+using ParquetChunkedDecompressionTest = DecompressionTest<ParquetChunkedReaderTest>;
 
 TEST_F(ParquetChunkedReaderTest, TestChunkedReadNoData)
 {
@@ -1201,6 +1204,11 @@ template <typename T>
 struct value_gen {
   __device__ T operator()(int i) { return i % 1024; }
 };
+
+struct bool_gen {
+  __device__ bool operator()(int i) { return i % 2 == 0; }
+};
+
 }  // namespace
 
 TEST_F(ParquetChunkedReaderInputLimitTest, List)
@@ -1882,3 +1890,103 @@ TEST_F(ParquetChunkedReaderTest, TestNumRowsPerSourceEmptyTable)
   EXPECT_TRUE(
     std::equal(expected_counts.cbegin(), expected_counts.cend(), num_rows_per_source.cbegin()));
 }
+
+TEST_F(ParquetReaderTest, ManyLargeLists)
+{
+  auto const stream = cudf::get_default_stream();
+
+  // Generate a large list<bool> column
+  constexpr cudf::size_type num_rows      = 10'000'000;
+  constexpr cudf::size_type bools_per_row = 2;
+  auto offsets_iter = cudf::detail::make_counting_transform_iterator(0, offset_gen{bools_per_row});
+  auto offsets_col  = cudf::make_fixed_width_column(
+    cudf::data_type{cudf::type_id::INT32}, num_rows + 1, cudf::mask_state::UNALLOCATED);
+  thrust::copy(rmm::exec_policy_nosync(stream),
+               offsets_iter,
+               offsets_iter + num_rows + 1,
+               offsets_col->mutable_view().begin<int>());
+
+  auto bools_iter = cudf::detail::make_counting_transform_iterator(0, bool_gen{});
+  auto bools_col  = cudf::make_fixed_width_column(
+    cudf::data_type{cudf::type_id::BOOL8}, num_rows * bools_per_row, cudf::mask_state::UNALLOCATED);
+  thrust::copy(rmm::exec_policy_nosync(stream),
+               bools_iter,
+               bools_iter + (num_rows * bools_per_row),
+               bools_col->mutable_view().begin<bool>());
+
+  stream.synchronize();
+
+  auto list_col = cudf::make_lists_column(
+    num_rows, std::move(offsets_col), std::move(bools_col), 0, rmm::device_buffer{});
+
+  auto const table    = cudf::table_view({*list_col});
+  auto const filepath = temp_env->get_temp_filepath("ManyLargeLists.parquet");
+  auto const out_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, table).build();
+  // Write the table to parquet
+  cudf::io::write_parquet(out_opts);
+
+  // Times to concat filepath to overflow cudf column size limits
+  constexpr cudf::size_type reads_to_overflow =
+    (std::numeric_limits<cudf::size_type>::max() / (num_rows * bools_per_row)) + 1;
+
+  auto const in_opts =
+    cudf::io::parquet_reader_options::builder(
+      cudf::io::source_info{std::vector<std::string>(reads_to_overflow, filepath)})
+      .build();
+
+  // Expect an overflow error when reading the files
+  EXPECT_THROW(cudf::io::read_parquet(in_opts), std::overflow_error);
+}
+
+TEST_P(ParquetChunkedDecompressionTest, RoundTripBasic)
+{
+  auto const compression_type = std::get<1>(GetParam());
+
+  srand(31337);
+  auto expected = create_compressible_fixed_table<int>(4, 23456, 3, true);
+
+  auto const filepath = temp_env->get_temp_filepath("chunked_decompression");
+  cudf::io::parquet_writer_options args =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, *expected)
+      .compression(compression_type)
+      .row_group_size_rows(2000);
+  cudf::io::write_parquet(args);
+
+  {
+    auto const [result, num_chunks] = chunked_read(filepath, 0, 2'400'000);
+    EXPECT_EQ(num_chunks, 1);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
+  }
+
+  {
+    auto const [result, num_chunks] = chunked_read(filepath, 0, 240'000);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
+  }
+
+  {
+    auto const [result, num_chunks] = chunked_read(filepath, 0, 24'000);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
+  }
+}
+
+INSTANTIATE_TEST_CASE_P(Nvcomp,
+                        ParquetChunkedDecompressionTest,
+                        ::testing::Combine(::testing::Values("NVCOMP"),
+                                           ::testing::Values(cudf::io::compression_type::AUTO,
+                                                             cudf::io::compression_type::SNAPPY,
+                                                             cudf::io::compression_type::LZ4,
+                                                             cudf::io::compression_type::ZSTD)));
+
+INSTANTIATE_TEST_CASE_P(DeviceInternal,
+                        ParquetChunkedDecompressionTest,
+                        ::testing::Combine(::testing::Values("DEVICE_INTERNAL"),
+                                           ::testing::Values(cudf::io::compression_type::AUTO,
+                                                             cudf::io::compression_type::SNAPPY)));
+
+INSTANTIATE_TEST_CASE_P(Host,
+                        ParquetChunkedDecompressionTest,
+                        ::testing::Combine(::testing::Values("HOST"),
+                                           ::testing::Values(cudf::io::compression_type::AUTO,
+                                                             cudf::io::compression_type::SNAPPY,
+                                                             cudf::io::compression_type::ZSTD)));

@@ -19,7 +19,6 @@ import cudf
 from cudf.api.extensions import no_default
 from cudf.api.types import is_integer, is_list_like, is_scalar
 from cudf.core import column
-from cudf.core._base_index import _return_get_indexer_result
 from cudf.core._internals import sorting
 from cudf.core.algorithms import factorize
 from cudf.core.buffer import acquire_spill_lock
@@ -29,17 +28,19 @@ from cudf.core.frame import Frame
 from cudf.core.index import (
     BaseIndex,
     _get_indexer_basic,
+    _index_from_data,
     _lexsorted_equal_range,
     ensure_index,
 )
 from cudf.core.join._join_helpers import _match_join_keys
+from cudf.core.mixins import NotIterable
 from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
     SIZE_TYPE_DTYPE,
     is_column_like,
 )
 from cudf.utils.performance_tracking import _performance_tracking
-from cudf.utils.utils import NotIterable, _external_only_api, _is_same_name
+from cudf.utils.utils import _external_only_api, _is_same_name
 
 if TYPE_CHECKING:
     from collections.abc import Generator, Hashable, MutableMapping
@@ -68,7 +69,7 @@ def _maybe_indices_to_slice(indices: cp.ndarray) -> slice | cp.ndarray:
     return indices
 
 
-class MultiIndex(Frame, BaseIndex, NotIterable):
+class MultiIndex(Frame, BaseIndex, NotIterable):  # type: ignore[misc]
     """A multi-level or hierarchical index.
 
     Provides N-Dimensional indexing into Series and DataFrame objects.
@@ -563,11 +564,12 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             "get_slice_bound is not currently implemented."
         )
 
-    @property  # type: ignore
+    # TODO: Can remove once MultiIndex inherits from Index
+    @property
     @_performance_tracking
     def nlevels(self) -> int:
         """Integer number of levels in this MultiIndex."""
-        return self._num_columns
+        return len(self._data)
 
     @property  # type: ignore
     @_performance_tracking
@@ -599,7 +601,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         """
         self._maybe_materialize_codes_and_levels()
         return [
-            idx.rename(name)
+            idx.rename(name)  # type: ignore[misc]
             for idx, name in zip(self._levels, self.names)  # type: ignore[arg-type]
         ]
 
@@ -1602,7 +1604,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             new_data.pop(self._data.names[i])
 
         if len(new_data) == 1:
-            return cudf.core.index._index_from_data(new_data)
+            return _index_from_data(new_data)
         else:
             mi = type(self)._from_data(new_data)
             mi.names = new_names
@@ -1942,11 +1944,13 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             dtype=SIZE_TYPE_DTYPE,
         )
         if not len(self):
-            return _return_get_indexer_result(result.values)
+            # TODO: Replace cudf.Index with self once MultiIndex inherits from Index
+            return cudf.Index._return_get_indexer_result(result.values)
         try:
             target = cudf.MultiIndex.from_tuples(target)
         except TypeError:
-            return _return_get_indexer_result(result.values)
+            # Replace cudf.Index with self once MultiIndex inherits from Index
+            return cudf.Index._return_get_indexer_result(result.values)
 
         join_keys = [
             _match_join_keys(lcol, rcol, "inner")
@@ -1985,7 +1989,8 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
                 "{['ffill'/'pad', 'bfill'/'backfill', None]}"
             )
 
-        return _return_get_indexer_result(result_series.to_cupy())
+        # Replace cudf.Index with self once MultiIndex inherits from Index
+        return cudf.Index._return_get_indexer_result(result_series.to_cupy())
 
     @_performance_tracking
     def get_loc(self, key):
@@ -2181,7 +2186,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             # None is caught later to return RangeIndex
             return None
 
-        index = cudf.core.index._index_from_data(
+        index = _index_from_data(
             dict(enumerate(index_columns)),
             name=name,
         )

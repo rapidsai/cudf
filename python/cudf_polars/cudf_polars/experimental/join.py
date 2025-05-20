@@ -8,11 +8,12 @@ import operator
 from functools import reduce
 from typing import TYPE_CHECKING, Any
 
-from cudf_polars.dsl.ir import Join
+from cudf_polars.dsl.ir import ConditionalJoin, Join
 from cudf_polars.experimental.base import PartitionInfo, get_key_name
 from cudf_polars.experimental.dispatch import generate_ir_tasks, lower_ir_node
+from cudf_polars.experimental.repartition import Repartition
 from cudf_polars.experimental.shuffle import Shuffle, _partition_dataframe
-from cudf_polars.experimental.utils import _concat, _lower_ir_fallback
+from cudf_polars.experimental.utils import _concat, _fallback_inform, _lower_ir_fallback
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
@@ -122,13 +123,13 @@ def _should_bcast_join(
     #    TODO: Make this value/heuristic configurable).
     #    We may want to account for the number of workers.
     # 3. The "kind" of join is compatible with a broadcast join
+    assert ir.config_options.executor.name == "streaming", (
+        "'in-memory' executor not supported in 'generate_ir_tasks'"
+    )
+
     return (
         not large_shuffled
-        and small_count
-        <= ir.config_options.get(
-            # Maximum number of "small"-table partitions to bcast
-            "executor_options.broadcast_join_limit"
-        )
+        and small_count <= ir.config_options.executor.broadcast_join_limit
         and (
             ir.options[0] == "Inner"
             or (ir.options[0] in ("Left", "Semi", "Anti") and large == left)
@@ -179,6 +180,44 @@ def _make_bcast_join(
             )
 
     new_node = ir.reconstruct([left, right])
+    partition_info[new_node] = PartitionInfo(count=output_count)
+    return new_node, partition_info
+
+
+@lower_ir_node.register(ConditionalJoin)
+def _(
+    ir: ConditionalJoin, rec: LowerIRTransformer
+) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+    if ir.options[2]:  # pragma: no cover
+        return _lower_ir_fallback(
+            ir,
+            rec,
+            msg="Slice not supported in ConditionalJoin for multiple partitions.",
+        )
+
+    # Lower children
+    left, right = ir.children
+    left, pi_left = rec(left)
+    right, pi_right = rec(right)
+
+    # Fallback to single partition on the smaller table
+    left_count = pi_left[left].count
+    right_count = pi_right[right].count
+    output_count = max(left_count, right_count)
+    fallback_msg = "ConditionalJoin not supported for multiple partitions."
+    if left_count < right_count:
+        if left_count > 1:
+            left = Repartition(left.schema, left)
+            pi_left[left] = PartitionInfo(count=1)
+            _fallback_inform(fallback_msg, rec.state["config_options"])
+    elif right_count > 1:
+        right = Repartition(left.schema, right)
+        pi_right[right] = PartitionInfo(count=1)
+        _fallback_inform(fallback_msg, rec.state["config_options"])
+
+    # Reconstruct and return
+    new_node = ir.reconstruct([left, right])
+    partition_info = reduce(operator.or_, (pi_left, pi_right))
     partition_info[new_node] = PartitionInfo(count=output_count)
     return new_node, partition_info
 
@@ -273,6 +312,7 @@ def _(
         out_name = get_key_name(ir)
         out_size = partition_info[ir].count
         split_name = f"split-{out_name}"
+        getit_name = f"getit-{out_name}"
         inter_name = f"inter-{out_name}"
 
         for part_out in range(out_size):
@@ -286,18 +326,13 @@ def _(
 
             _concat_list = []
             for j in range(small_size):
-                join_children = [
-                    (
-                        (
-                            operator.getitem,
-                            (split_name, part_out),
-                            j,
-                        )
-                        if ir.options[0] != "Inner"
-                        else (large_name, part_out)
-                    ),
-                    (small_name, j),
-                ]
+                left_key: tuple[str, int] | tuple[str, int, int]
+                if ir.options[0] != "Inner":
+                    left_key = (getit_name, part_out, j)
+                    graph[left_key] = (operator.getitem, (split_name, part_out), j)
+                else:
+                    left_key = (large_name, part_out)
+                join_children = [left_key, (small_name, j)]
                 if small_side == "Left":
                     join_children.reverse()
 
