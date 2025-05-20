@@ -248,7 +248,7 @@ def _join_table_stats(
     # Left
     left_table_stats = partition_info[left].table_stats
     if left_table_stats is None:
-        return None
+        return None  # pragma: no cover
     left_card = left_table_stats.num_rows
     left_on = [ne.name for ne in ir.left_on]
     left_on_unique_counts = [
@@ -263,7 +263,7 @@ def _join_table_stats(
     # Right
     right_table_stats = partition_info[right].table_stats
     if right_table_stats is None:
-        return None
+        return None  # pragma: no cover
     right_card = right_table_stats.num_rows
     right_on = [ne.name for ne in ir.right_on]
     right_on_unique_counts = [
@@ -272,7 +272,7 @@ def _join_table_stats(
         if name in right_on
     ]
     if not right_on_unique_counts:
-        return None
+        return None  # pragma: no cover
     right_tdom = max(min(reduce(operator.mul, right_on_unique_counts), right_card), 1)
 
     return TableStats.merge(

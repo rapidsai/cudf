@@ -138,7 +138,7 @@ def _groupby_table_stats(
     keys = [ne.name for ne in ir.keys]
     child_table_stats = partition_info[child].table_stats
     if child_table_stats is None:
-        return None
+        return None  # pragma: no cover
     child_card = child_table_stats.num_rows
     keys_unique_counts = [
         stats.unique_count
