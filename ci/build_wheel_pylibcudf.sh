@@ -3,6 +3,8 @@
 
 set -euo pipefail
 
+source rapids-init-pip
+
 package_dir="python/pylibcudf"
 
 RAPIDS_PY_CUDA_SUFFIX="$(rapids-wheel-ctk-name-gen "${RAPIDS_CUDA_VERSION}")"
