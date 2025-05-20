@@ -73,7 +73,7 @@ def test_join(left, right, how, reverse, max_rows_per_partition, broadcast_join_
 
 
 @pytest.mark.parametrize("broadcast_join_limit", [1, 2, 3, 4])
-def test_broadcast_join_limit(left, right, broadcast_join_limit):
+def test_broadcast_join_limit(broadcast_join_limit):
     engine = pl.GPUEngine(
         raise_on_fail=True,
         executor="streaming",

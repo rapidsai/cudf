@@ -101,3 +101,56 @@ def test_table_statistics(tmp_path, df):
     assert table_stats_2.column_stats["y"].element_size == element_size_y
     assert table_stats_2.column_stats["x"].unique_count > 0
     assert table_stats_2.column_stats["x"].element_size > 0
+
+
+def test_table_statistics_join(tmp_path):
+    tmp_dir_left = tmp_path / "temp_dir_left"
+    tmp_dir_left.mkdir()
+    left = pl.DataFrame(
+        {
+            "x": range(15),
+            "y": [1, 2, 3] * 5,
+            "z": [1.0, 2.0, 3.0, 4.0, 5.0] * 3,
+        }
+    )
+    make_partitioned_source(left, tmp_dir_left, "parquet", n_files=1)
+    dfl = pl.scan_parquet(tmp_dir_left)
+
+    tmp_dir_right = tmp_path / "temp_dir_right"
+    tmp_dir_right.mkdir()
+    right = pl.DataFrame(
+        {
+            "xx": range(10),
+            "y": [2, 4, 3, 5, 6] * 2,
+            "zz": [1, 2, 3, 4, 5] * 2,
+        }
+    )
+    make_partitioned_source(right, tmp_dir_right, "parquet", n_files=1)
+    dfr = pl.scan_parquet(tmp_dir_right)
+
+    engine = pl.GPUEngine(
+        raise_on_fail=True,
+        executor="streaming",
+        executor_options={
+            "target_partition_size": 10_000,
+            "scheduler": DEFAULT_SCHEDULER,
+            "shuffle_method": "tasks",
+        },
+    )
+    q = dfl.join(dfr, on="y", how="inner")
+
+    qir = Translator(q._ldf.visit(), engine).translate_ir()
+    ir, pi = lower_ir_graph(qir, ConfigOptions(engine.config))
+    table_stats_left = pi[ir.children[0]].table_stats
+    table_stats_right = pi[ir.children[1]].table_stats
+    table_stats = pi[ir].table_stats
+
+    expected_num_rows = int(
+        (table_stats_left.num_rows * table_stats_right.num_rows)
+        / min(
+            table_stats_left.column_stats["y"].unique_count,
+            table_stats_right.column_stats["y"].unique_count,
+        )
+    )
+    assert table_stats.num_rows == expected_num_rows
+    assert_gpu_result_equal(q, engine=engine, check_row_order=False)

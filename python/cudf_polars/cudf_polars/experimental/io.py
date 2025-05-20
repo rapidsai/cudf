@@ -390,7 +390,7 @@ def _sample_pq_statistics(ir: Scan) -> TableStats:
 
         if table_stats_cached is not None:
             # Combine new and cached column stats
-            table_stats = TableStats.merge(table_stats, table_stats_cached)
+            table_stats = TableStats.merge([table_stats, table_stats_cached])
 
     _TABLESTATS_CACHE[tuple(ir.paths)] = table_stats
 

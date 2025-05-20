@@ -9,7 +9,7 @@ from functools import reduce
 from typing import TYPE_CHECKING, Any
 
 from cudf_polars.dsl.ir import ConditionalJoin, Join
-from cudf_polars.experimental.base import PartitionInfo, get_key_name
+from cudf_polars.experimental.base import PartitionInfo, TableStats, get_key_name
 from cudf_polars.experimental.dispatch import generate_ir_tasks, lower_ir_node
 from cudf_polars.experimental.repartition import Repartition
 from cudf_polars.experimental.shuffle import Shuffle, _partition_dataframe
@@ -93,6 +93,7 @@ def _make_hash_join(
         partition_info,
         count=output_count,
         partitioned_on=partitioned_on,
+        table_stats=_join_table_stats(ir, left, right, partition_info),
     )
 
     return ir, partition_info
@@ -185,7 +186,10 @@ def _make_bcast_join(
 
     new_node = ir.reconstruct([left, right])
     partition_info[new_node] = PartitionInfo.new(
-        new_node, partition_info, count=output_count
+        new_node,
+        partition_info,
+        count=output_count,
+        table_stats=_join_table_stats(ir, left, right, partition_info),
     )
     return new_node, partition_info
 
@@ -230,6 +234,59 @@ def _(
     return new_node, partition_info
 
 
+def _join_table_stats(
+    ir: Join,
+    left: IR,
+    right: IR,
+    partition_info: MutableMapping[IR, PartitionInfo],
+) -> TableStats | None:
+    """Return TableStats for a join operation."""
+    if ir.options[0] != "Inner":
+        # TODO: Handle other join types
+        return None
+
+    # Left
+    left_table_stats = partition_info[left].table_stats
+    if left_table_stats is None:
+        return None
+    left_card = left_table_stats.num_rows
+    left_on = [ne.name for ne in ir.left_on]
+    left_on_unique_counts = [
+        stats.unique_count
+        for name, stats in left_table_stats.column_stats.items()
+        if name in left_on
+    ]
+    if not left_on_unique_counts:
+        return None
+    left_tdom = max(min(reduce(operator.mul, left_on_unique_counts), left_card), 1)
+
+    # Right
+    right_table_stats = partition_info[right].table_stats
+    if right_table_stats is None:
+        return None
+    right_card = right_table_stats.num_rows
+    right_on = [ne.name for ne in ir.right_on]
+    right_on_unique_counts = [
+        stats.unique_count
+        for name, stats in right_table_stats.column_stats.items()
+        if name in right_on
+    ]
+    if not right_on_unique_counts:
+        return None
+    right_tdom = max(min(reduce(operator.mul, right_on_unique_counts), right_card), 1)
+
+    return TableStats.merge(
+        [left_table_stats, right_table_stats],
+        num_rows=max(
+            int(
+                # Ref. S. Ebergen Thesis (2022)
+                (left_card * right_card) / min(left_tdom, right_tdom)
+            ),
+            1,
+        ),
+    )
+
+
 @lower_ir_node.register(Join)
 def _(
     ir: Join, rec: LowerIRTransformer
@@ -242,7 +299,12 @@ def _(
     output_count = max(partition_info[left].count, partition_info[right].count)
     if output_count == 1:
         new_node = ir.reconstruct(children)
-        partition_info[new_node] = PartitionInfo.new(new_node, partition_info, count=1)
+        partition_info[new_node] = PartitionInfo.new(
+            new_node,
+            partition_info,
+            count=1,
+            table_stats=_join_table_stats(ir, left, right, partition_info),
+        )
         return new_node, partition_info
     elif ir.options[0] == "Cross":  # pragma: no cover
         return _lower_ir_fallback(

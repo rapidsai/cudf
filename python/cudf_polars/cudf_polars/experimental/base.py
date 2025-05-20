@@ -8,7 +8,7 @@ import dataclasses
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator, MutableMapping
+    from collections.abc import Iterator, MutableMapping, Sequence
 
     from typing_extensions import Self
 
@@ -43,14 +43,33 @@ class TableStats:
     """Estimated row count."""
 
     @classmethod
-    def merge(cls, *tables: TableStats) -> Self:
-        """Merge multiple TableStats objects."""
-        num_rows = 0
+    def merge(
+        cls,
+        tables: Sequence[TableStats],
+        num_rows: int | None = None,
+    ) -> Self:
+        """
+        Merge multiple TableStats objects.
+
+        Parameters
+        ----------
+        tables
+            Sequence of TableStats objects to combine into
+            a single TableStats object. Each element
+            of ``tables`` will overwrite the ColumnStats
+            contributions from previous elements if the
+            column names match.
+        num_rows
+            The estimated row-count for the new TableStats
+            object. If nothing is specified, ``num_rows``
+            will be set to the maximum found in ``tables``.
+        """
+        max_num_rows = 0
         column_stats: dict[str, ColumnStats] = {}
         for table_stats in tables:
             column_stats.update(table_stats.column_stats)
-            num_rows = max(num_rows, table_stats.num_rows)
-        return cls(column_stats, int(num_rows))
+            max_num_rows = max(max_num_rows, table_stats.num_rows)
+        return cls(column_stats, num_rows or max_num_rows)
 
 
 class PartitionInfo:
@@ -157,7 +176,7 @@ class PartitionInfo:
                 if stats is not None:
                     child_table_stats.append(stats)
             if child_table_stats:
-                table_stats = TableStats.merge(*child_table_stats)
+                table_stats = TableStats.merge(child_table_stats)
 
         return cls(count, partitioned_on or (), table_stats)
 
