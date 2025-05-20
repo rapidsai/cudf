@@ -592,6 +592,8 @@ nitpick_ignore = [
     ("py:obj", "cudf.Index.T"),
     ("py:obj", "cudf.Index.to_flat_index"),
     ("py:obj", "cudf.MultiIndex.to_flat_index"),
+    ("py:obj", "Series.pipe"),
+    ("py:obj", "DataFrame.pipe"),
     ("py:meth", "pyarrow.Table.to_pandas"),
     ("py:class", "abc.Hashable"),
     ("py:class", "pd.DataFrame"),
