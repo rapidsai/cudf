@@ -374,22 +374,23 @@ def _sample_pq_statistics(ir: Scan) -> TableStats:
                     * file_count
                 )
 
-    # Construct estimated TableStats
-    table_stats = TableStats(
-        column_stats={
-            name: ColumnStats(
-                dtype=dtype,
-                unique_count=unique_count_estimates[name],
-                element_size=element_sizes[name],
-                file_size=total_uncompressed_size[name],
-            )
-            for name, dtype in need_schema.items()
-        },
-        num_rows=num_rows_total,
-    )
+        # Construct estimated TableStats
+        table_stats = TableStats(
+            column_stats={
+                name: ColumnStats(
+                    dtype=dtype,
+                    unique_count=unique_count_estimates[name],
+                    element_size=element_sizes[name],
+                    file_size=total_uncompressed_size[name],
+                )
+                for name, dtype in need_schema.items()
+            },
+            num_rows=num_rows_total,
+        )
 
-    if table_stats_cached:  # pragma: no cover; TODO: Test this
-        table_stats = TableStats.merge(table_stats, table_stats_cached)
+        if table_stats_cached is not None:
+            # Combine new and cached column stats
+            table_stats = TableStats.merge(table_stats, table_stats_cached)
 
     _TABLESTATS_CACHE[tuple(ir.paths)] = table_stats
 

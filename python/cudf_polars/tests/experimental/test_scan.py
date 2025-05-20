@@ -82,7 +82,8 @@ def test_table_statistics(tmp_path, df):
         },
     )
 
-    qir1 = Translator(q._ldf.visit(), engine).translate_ir()
+    q1 = q.select(pl.col("y"))
+    qir1 = Translator(q1._ldf.visit(), engine).translate_ir()
     ir1, pi1 = lower_ir_graph(qir1, ConfigOptions(engine.config))
     table_stats_1 = pi1[ir1].table_stats
     unique_count_y = table_stats_1.column_stats["y"].unique_count
@@ -98,3 +99,5 @@ def test_table_statistics(tmp_path, df):
     assert table_stats_2.num_rows > 0
     assert table_stats_2.column_stats["y"].unique_count == unique_count_y
     assert table_stats_2.column_stats["y"].element_size == element_size_y
+    assert table_stats_2.column_stats["x"].unique_count > 0
+    assert table_stats_2.column_stats["x"].element_size > 0
