@@ -6,9 +6,10 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from cudf_polars.dsl import expr
 from cudf_polars.dsl.ir import HConcat, Select
 from cudf_polars.dsl.traversal import traversal
-from cudf_polars.experimental.base import PartitionInfo
+from cudf_polars.experimental.base import ColumnStats, PartitionInfo, TableStats
 from cudf_polars.experimental.dispatch import lower_ir_node
 from cudf_polars.experimental.expressions import decompose_expr_graph
 from cudf_polars.experimental.utils import _lower_ir_fallback
@@ -115,5 +116,14 @@ def _(
             )
 
     new_node = ir.reconstruct([child])
+    tstats = pi.table_stats
+    cstats = {}
+    if tstats is not None:
+        for e in ir.exprs:
+            if isinstance(e.value, expr.Col) and e.value.name in tstats.column_stats:
+                cstats[e.name] = tstats.column_stats[e.value.name]
+            else:
+                cstats[e.name] = ColumnStats(e.value.dtype, None, 1, None)
+        pi.table_stats = TableStats(cstats, tstats.num_rows)
     partition_info[new_node] = pi
     return new_node, partition_info

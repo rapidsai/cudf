@@ -16,6 +16,7 @@ import cudf_polars.experimental.join
 import cudf_polars.experimental.select
 import cudf_polars.experimental.shuffle
 import cudf_polars.experimental.sort  # noqa: F401
+from cudf_polars.dsl import expr
 from cudf_polars.dsl.ir import (
     IR,
     Cache,
@@ -27,7 +28,12 @@ from cudf_polars.dsl.ir import (
     Union,
 )
 from cudf_polars.dsl.traversal import CachingVisitor, traversal
-from cudf_polars.experimental.base import PartitionInfo, get_key_name
+from cudf_polars.experimental.base import (
+    ColumnStats,
+    PartitionInfo,
+    TableStats,
+    get_key_name,
+)
 from cudf_polars.experimental.dispatch import (
     generate_ir_tasks,
     lower_ir_node,
@@ -317,8 +323,41 @@ def _lower_ir_pwise(
 
 
 _lower_ir_pwise_preserve = partial(_lower_ir_pwise, preserve_partitioning=True)
+
+
+@lower_ir_node.register(Filter)
+def _(
+    ir: Filter, rec: LowerIRTransformer
+) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+    new_node, partition_info = _lower_ir_pwise_preserve(ir, rec)
+
+    if (tstats := partition_info[new_node].table_stats) is not None:
+        # Guess that filtering removes 20% of the rows.
+        partition_info[new_node].table_stats = TableStats(
+            tstats.column_stats, max(1, int(tstats.num_rows * 0.8))
+        )
+    return new_node, partition_info
+
+
+@lower_ir_node.register(HStack)
+def _(
+    ir: HStack, rec: LowerIRTransformer
+) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+    new_node, partition_info = _lower_ir_pwise(ir, rec)
+
+    if (tstats := partition_info[new_node].table_stats) is not None:
+        extra_cstats = {}
+        for e in ir.columns:
+            if isinstance(e.value, expr.Col) and e.value.name in tstats.column_stats:
+                extra_cstats[e.name] = tstats.column_stats[e.value.name]
+            else:
+                extra_cstats[e.name] = ColumnStats(e.value.dtype, None, 1, None)
+        partition_info[new_node].table_stats = TableStats(
+            tstats.column_stats | extra_cstats, tstats.num_rows
+        )
+    return new_node, partition_info
+
+
 lower_ir_node.register(Projection, _lower_ir_pwise_preserve)
-lower_ir_node.register(Filter, _lower_ir_pwise_preserve)
 lower_ir_node.register(Cache, _lower_ir_pwise)
-lower_ir_node.register(HStack, _lower_ir_pwise)
 lower_ir_node.register(HConcat, _lower_ir_pwise)

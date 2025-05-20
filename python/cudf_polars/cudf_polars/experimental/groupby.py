@@ -143,11 +143,12 @@ def _groupby_table_stats(
     keys_unique_counts = [
         stats.unique_count
         for name, stats in child_table_stats.column_stats.items()
-        if name in keys
+        if name in keys and stats.unique_count
     ]
-    if not keys_unique_counts:
-        return None
-    new_num_rows = max(min(child_card, reduce(operator.mul, keys_unique_counts)), 1)
+    if keys_unique_counts:
+        new_num_rows = max(min(child_card, reduce(operator.mul, keys_unique_counts)), 1)
+    else:
+        new_num_rows = child_table_stats.num_rows
     return TableStats.merge([child_table_stats], num_rows=new_num_rows)
 
 

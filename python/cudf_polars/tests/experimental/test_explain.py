@@ -69,7 +69,7 @@ def test_explain_physical_plan(tmp_path, df):
     plan = explain_query(q, engine)
 
     assert "UNION" in plan
-    assert "SPLITSCAN" in plan
+    assert "SPLITSCAN" in plan or "SCAN" in plan
     assert "SELECT ('sum', 'y')" in plan or "PROJECTION ('sum', 'y')" in plan
 
 

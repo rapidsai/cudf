@@ -8,6 +8,7 @@ import pytest
 import polars as pl
 
 from cudf_polars import Translator
+from cudf_polars.dsl.ir import Join
 from cudf_polars.experimental.parallel import lower_ir_graph
 from cudf_polars.testing.asserts import DEFAULT_SCHEDULER, assert_gpu_result_equal
 from cudf_polars.testing.io import make_partitioned_source
@@ -86,10 +87,8 @@ def test_table_statistics(tmp_path, df):
     qir1 = Translator(q1._ldf.visit(), engine).translate_ir()
     ir1, pi1 = lower_ir_graph(qir1, ConfigOptions(engine.config))
     table_stats_1 = pi1[ir1].table_stats
-    unique_count_y = table_stats_1.column_stats["y"].unique_count
     element_size_y = table_stats_1.column_stats["y"].element_size
     assert table_stats_1.num_rows > 0
-    assert unique_count_y < len(df)
     assert element_size_y > 0
 
     q2 = q.filter(pl.col("z") < 3).group_by(pl.col("y")).mean().select(pl.col("x"))
@@ -97,9 +96,7 @@ def test_table_statistics(tmp_path, df):
     ir2, pi2 = lower_ir_graph(qir2, ConfigOptions(engine.config))
     table_stats_2 = pi2[ir2].table_stats
     assert table_stats_2.num_rows > 0
-    assert table_stats_2.column_stats["y"].unique_count == unique_count_y
     assert table_stats_2.column_stats["y"].element_size == element_size_y
-    assert table_stats_2.column_stats["x"].unique_count > 0
     assert table_stats_2.column_stats["x"].element_size > 0
 
 
@@ -110,7 +107,7 @@ def test_table_statistics_join(tmp_path):
     left = pl.DataFrame(
         {
             "x": range(150),
-            "y": [1, 2, 3] * 50,
+            "y": range(0, 300, 2),
             "z": [1.0, 2.0, 3.0, 4.0, 5.0] * 30,
         }
     )
@@ -123,7 +120,7 @@ def test_table_statistics_join(tmp_path):
     right = pl.DataFrame(
         {
             "xx": range(100),
-            "y": [2, 4, 3, 5, 6] * 20,
+            "y": list(range(50)) * 2,
             "zz": [1, 2, 3, 4, 5] * 20,
         }
     )
@@ -146,15 +143,13 @@ def test_table_statistics_join(tmp_path):
     q = dfl.join(dfr, on="y", how="inner")
     qir = Translator(q._ldf.visit(), engine).translate_ir()
     ir, pi = lower_ir_graph(qir, ConfigOptions(engine.config))
+    ir = ir if isinstance(ir, Join) else ir.children[0]
     table_stats_left = pi[ir.children[0]].table_stats
     table_stats_right = pi[ir.children[1]].table_stats
     table_stats = pi[ir].table_stats
     expected_num_rows = int(
         (table_stats_left.num_rows * table_stats_right.num_rows)
-        / min(
-            table_stats_left.column_stats["y"].unique_count,
-            table_stats_right.column_stats["y"].unique_count,
-        )
+        / table_stats_left.column_stats["y"].unique_count
     )
     assert table_stats.num_rows == expected_num_rows
     assert_gpu_result_equal(q, engine=engine, check_row_order=False)

@@ -15,6 +15,7 @@ import numpy as np
 
 import pylibcudf as plc
 
+from cudf_polars.dsl import expr
 from cudf_polars.dsl.ir import IR, DataFrameScan, Scan, Union
 from cudf_polars.experimental.base import ColumnStats, PartitionInfo, TableStats
 from cudf_polars.experimental.dispatch import lower_ir_node
@@ -310,7 +311,6 @@ def _sample_pq_statistics(ir: Scan) -> TableStats:
         num_rows_per_file = int(metadata.num_rows() / len(paths))
         num_rows_total = num_rows_per_file * file_count
         num_row_groups_per_file_samples = metadata.num_rowgroups_per_file()
-        num_row_groups_per_file = np.mean(num_row_groups_per_file_samples)
         rowgroup_offsets_per_file = np.insert(
             np.cumsum(num_row_groups_per_file_samples), 0, 0
         )
@@ -378,19 +378,23 @@ def _sample_pq_statistics(ir: Scan) -> TableStats:
                     plc.types.NullPolicy.INCLUDE,
                     plc.types.NanPolicy.NAN_IS_NULL,
                 )
-                unique_count_estimates[name] = int(
-                    (row_group_unique_count / row_group_num_rows)
-                    * row_group_num_rows
-                    * np.mean(num_row_groups_per_file)
-                    * file_count
-                )
+                # Assume that if every row is unique then this is a
+                # primary key otherwise it's a foreign key and we
+                # can't use the single row group count estimate
+                # Example, consider a "foreign" key that has 100
+                # unique values. If we sample from a single row group,
+                # we likely obtain a unique count of 100. But we can't
+                # necessarily deduce that that means that the unique
+                # count is 100 / num_rows_in_group * num_rows_in_file
+                if row_group_unique_count == row_group_num_rows:
+                    unique_count_estimates[name] = num_rows_total
 
         # Construct estimated TableStats
         table_stats = TableStats(
             column_stats={
                 name: ColumnStats(
                     dtype=dtype,
-                    unique_count=unique_count_estimates[name],
+                    unique_count=unique_count_estimates.get(name),
                     element_size=element_sizes[name],
                     file_size=total_uncompressed_size[name],
                 )
@@ -401,9 +405,34 @@ def _sample_pq_statistics(ir: Scan) -> TableStats:
 
         if table_stats_cached is not None:
             # Combine new and cached column stats
-            table_stats = TableStats.merge([table_stats, table_stats_cached])
+            table_stats = TableStats.merge([table_stats_cached, table_stats])
 
     _update_tablestats_cache(tuple(ir.paths), table_stats)
+
+    if ir.predicate is not None:
+        # Default assume 20% reduction, could be much smarter here
+        selectivity = 0.8
+        if (
+            isinstance((pred := ir.predicate.value), expr.BinOp)
+            and pred.op is plc.binaryop.BinaryOperator.EQUAL
+        ):
+            try:
+                (col,) = (c for c in pred.children if isinstance(c, expr.Col))
+                (lit,) = (c for c in pred.children if isinstance(c, expr.Literal))
+                # Equality between column and literal. Assume uniformly distributed values
+                if (
+                    col.name in table_stats.column_stats
+                    and (
+                        unique_count := table_stats.column_stats[col.name].unique_count
+                    )
+                    is not None
+                ):
+                    selectivity = 1 / unique_count
+            except ValueError:
+                pass
+        # Update the table stats without caching
+        num_rows_filtered = max(1, int(table_stats.num_rows * selectivity))
+        table_stats = TableStats(table_stats.column_stats, num_rows_filtered)
 
     return table_stats
 

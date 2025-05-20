@@ -59,6 +59,7 @@ def _make_hash_join(
     ir: Join,
     output_count: int,
     partition_info: MutableMapping[IR, PartitionInfo],
+    estimated_output_rows: int | None,
     left: IR,
     right: IR,
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
@@ -88,14 +89,15 @@ def _make_hash_join(
         partitioned_on = ir.left_on
     elif ir.options[0] == "Right":
         partitioned_on = ir.right_on
-    partition_info[ir] = PartitionInfo.new(
+    pi = PartitionInfo.new(
         ir,
         partition_info,
         count=output_count,
         partitioned_on=partitioned_on,
-        table_stats=_join_table_stats(ir, left, right, partition_info),
     )
-
+    if pi.table_stats is not None and estimated_output_rows is not None:
+        pi.table_stats = TableStats(pi.table_stats.column_stats, estimated_output_rows)
+    partition_info[ir] = pi
     return ir, partition_info
 
 
@@ -145,6 +147,7 @@ def _make_bcast_join(
     ir: Join,
     output_count: int,
     partition_info: MutableMapping[IR, PartitionInfo],
+    estimated_output_rows: int | None,
     left: IR,
     right: IR,
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
@@ -183,12 +186,10 @@ def _make_bcast_join(
             )
 
     new_node = ir.reconstruct([left, right])
-    partition_info[new_node] = PartitionInfo.new(
-        new_node,
-        partition_info,
-        count=output_count,
-        table_stats=_join_table_stats(ir, left, right, partition_info),
-    )
+    pi = PartitionInfo.new(new_node, partition_info, count=output_count)
+    if pi.table_stats is not None and estimated_output_rows is not None:
+        pi.table_stats = TableStats(pi.table_stats.column_stats, estimated_output_rows)
+    partition_info[new_node] = pi
     return new_node, partition_info
 
 
@@ -232,130 +233,6 @@ def _(
     return new_node, partition_info
 
 
-def _join_table_stats(
-    ir: Join,
-    left: IR,
-    right: IR,
-    partition_info: MutableMapping[IR, PartitionInfo],
-) -> TableStats | None:
-    """Return TableStats for a join operation."""
-    if ir.options[0] != "Inner":
-        # TODO: Handle other join types
-        return None
-
-    # Left
-    left_table_stats = partition_info[left].table_stats
-    if left_table_stats is None:
-        return None  # pragma: no cover
-    left_card = left_table_stats.num_rows
-    left_on = [ne.name for ne in ir.left_on]
-    left_on_unique_counts = [
-        stats.unique_count
-        for name, stats in left_table_stats.column_stats.items()
-        if name in left_on
-    ]
-    if not left_on_unique_counts:
-        return None
-    left_tdom = max(min(reduce(operator.mul, left_on_unique_counts), left_card), 1)
-
-    # Right
-    right_table_stats = partition_info[right].table_stats
-    if right_table_stats is None:
-        return None  # pragma: no cover
-    right_card = right_table_stats.num_rows
-    right_on = [ne.name for ne in ir.right_on]
-    right_on_unique_counts = [
-        stats.unique_count
-        for name, stats in right_table_stats.column_stats.items()
-        if name in right_on
-    ]
-    if not right_on_unique_counts:
-        return None  # pragma: no cover
-    right_tdom = max(min(reduce(operator.mul, right_on_unique_counts), right_card), 1)
-
-    return TableStats.merge(
-        [left_table_stats, right_table_stats],
-        num_rows=max(
-            int(
-                # Ref. S. Ebergen Thesis (2022)
-                (left_card * right_card) / min(left_tdom, right_tdom)
-            ),
-            1,
-        ),
-    )
-
-
-def _maybe_repartition_child(
-    ir: Join,
-    child: IR,
-    side: str,
-    output_count: int,
-    partition_info: MutableMapping[IR, PartitionInfo],
-) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
-    """
-    Repartition a Join child if allowed.
-
-    Parameters
-    ----------
-    ir
-        The Join parent of ``child``.
-    child
-        The IR node being joined.
-    side
-        Which side this child corresponds to.
-    output_count
-        Current output partition count of ``ir``.
-    partition_info
-        A mapping from unique IR nodes to the associated
-        PartitionInfo object.
-
-    Returns
-    -------
-    child, partition_info
-        The new child, and an updated mapping
-        from unique IR nodes to associated PartitionInfo objects.
-
-    Notes
-    -----
-    This function will use TableStats information to estimate
-    the size of ``child``. A Repartition node will be added
-    to the IR graph if this estimates suggest a smaller
-    partition count is appropriate.
-    """
-    assert ir.config_options.executor.name == "streaming", (
-        "'in-memory' executor not supported in 'lower_ir_node'"
-    )
-    blocksize = ir.config_options.executor.target_partition_size
-    broadcast_join_limit = ir.config_options.executor.broadcast_join_limit
-    join_on = ir.left_on if side == "left" else ir.right_on
-    assert side in ("left", "right"), "Unexpected `side` argument."
-
-    child_count = partition_info[child].count
-    shuffled = (
-        partition_info[child].partitioned_on == join_on and child_count == output_count
-    )
-    table_stats = partition_info[child].table_stats
-    if not shuffled and child_count < output_count and table_stats is not None:
-        row_size = 0
-        for name in child.schema:
-            if name in table_stats.column_stats:
-                row_size += table_stats.column_stats[name].element_size
-            else:
-                row_size = 0
-                break
-        if row_size:
-            ideal_count = max(1, int(row_size * table_stats.num_rows / blocksize))
-            if ideal_count <= broadcast_join_limit and ideal_count < child_count:
-                child = Repartition(child.schema, child)
-                partition_info[child] = PartitionInfo.new(
-                    child,
-                    partition_info,
-                    count=ideal_count,
-                )
-
-    return child, partition_info
-
-
 @lower_ir_node.register(Join)
 def _(
     ir: Join, rec: LowerIRTransformer
@@ -365,14 +242,46 @@ def _(
     partition_info = reduce(operator.or_, _partition_info)
 
     left, right = children
+    left_stats = partition_info[left].table_stats
+    right_stats = partition_info[right].table_stats
+    if left_stats is not None and right_stats is not None:
+        left_rows = left_stats.num_rows
+        right_rows = right_stats.num_rows
+        left_keys = [e.name for e in ir.left_on]
+        right_keys = [e.name for e in ir.right_on]
+        unique_counts = -1
+        for lname, rname in zip(left_keys, right_keys, strict=True):
+            uniques_left, uniques_right = None, None
+            if lname in left_stats.column_stats:
+                uniques_left = left_stats.column_stats[lname].unique_count
+            if rname in right_stats.column_stats:
+                uniques_right = right_stats.column_stats[rname].unique_count
+            uniques = (uniques_left, uniques_right)
+            unique_counts = max(
+                unique_counts,
+                max(
+                    (u for u in uniques if u is not None),
+                    default=min(left_rows, right_rows),
+                ),
+            )
+        estimated_output_rows = max(1, left_rows * right_rows // unique_counts)
+        max_input_rows = max(left_rows, right_rows)
+        join_stats = TableStats(
+            TableStats.merge_column_stats(
+                left_stats.column_stats, right_stats.column_stats
+            ),
+            estimated_output_rows,
+        )
+    else:
+        max_input_rows = None
+        estimated_output_rows = None
+        join_stats = None
+
     output_count = max(partition_info[left].count, partition_info[right].count)
     if output_count == 1:
         new_node = ir.reconstruct(children)
         partition_info[new_node] = PartitionInfo.new(
-            new_node,
-            partition_info,
-            count=1,
-            table_stats=_join_table_stats(ir, left, right, partition_info),
+            new_node, partition_info, count=1, table_stats=join_stats
         )
         return new_node, partition_info
     elif ir.options[0] == "Cross":  # pragma: no cover
@@ -380,32 +289,42 @@ def _(
             ir, rec, msg="Cross join not support for multiple partitions."
         )
 
-    # Repartition children if we can
-    left, partition_info = _maybe_repartition_child(
-        ir, left, "left", output_count, partition_info
-    )
-    right, partition_info = _maybe_repartition_child(
-        ir, right, "right", output_count, partition_info
-    )
-
     if _should_bcast_join(ir, left, right, partition_info, output_count):
         # Create a broadcast join
-        return _make_bcast_join(
+        joined, partition_info = _make_bcast_join(
             ir,
             output_count,
             partition_info,
+            estimated_output_rows,
             left,
             right,
         )
     else:
         # Create a hash join
-        return _make_hash_join(
+        joined, partition_info = _make_hash_join(
             ir,
             output_count,
             partition_info,
+            estimated_output_rows,
             left,
             right,
         )
+
+    if (
+        estimated_output_rows is not None
+        and max_input_rows is not None
+        and output_count
+        > (new_count := max(1, estimated_output_rows * output_count // max_input_rows))
+    ):
+        # Only repartition if estimated count suggests we should go to
+        # a smaller number of partitions
+        result = Repartition(joined.schema, joined)
+        partition_info[result] = PartitionInfo.new(
+            result, partition_info, count=new_count, table_stats=join_stats
+        )
+        return result, partition_info
+    else:
+        return joined, partition_info
 
 
 @generate_ir_tasks.register(Join)
