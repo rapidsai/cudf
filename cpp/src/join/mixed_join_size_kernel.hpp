@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,11 +14,11 @@
  * limitations under the License.
  */
 
-#include "join_common_utils.cuh"
+#pragma once
+
 #include "join_common_utils.hpp"
 #include "mixed_join_common_utils.cuh"
 
-#include <cudf/ast/detail/expression_evaluator.cuh>
 #include <cudf/ast/detail/expression_parser.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/table/table_device_view.cuh>
@@ -27,10 +27,6 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/resource_ref.hpp>
-
-#include <cooperative_groups.h>
-#include <cub/cub.cuh>
-#include <thrust/iterator/discard_iterator.h>
 
 namespace CUDF_EXPORT cudf {
 namespace detail {
@@ -43,8 +39,9 @@ namespace detail {
  * evaluates to true between the left/right tables when a match is found
  * between probe and build rows.
  *
- * @tparam block_size The number of threads per block for this kernel
  * @tparam has_nulls Whether or not the inputs may contain nulls.
+ * @tparam HashProbe Type of the hash probe function
+ * @tparam EqualityProbe Type of the equality probe function
  *
  * @param[in] left_table The left table
  * @param[in] right_table The right table
@@ -66,15 +63,14 @@ namespace detail {
  * left/right tables to determine which is the build table and which is the
  * probe table has already happened on the host.
  */
-
-template <bool has_nulls>
+template <bool has_nulls, typename HashProbe, typename EqualityProbe>
 std::size_t launch_compute_mixed_join_output_size(
   cudf::table_device_view left_table,
   cudf::table_device_view right_table,
   cudf::table_device_view probe,
   cudf::table_device_view build,
-  row_hash const hash_probe,
-  row_equality const equality_probe,
+  HashProbe hash_probe,
+  EqualityProbe equality_probe,
   join_kind const join_type,
   cudf::detail::mixed_multimap_type::device_view hash_table_view,
   ast::detail::expression_device_view device_expression_data,

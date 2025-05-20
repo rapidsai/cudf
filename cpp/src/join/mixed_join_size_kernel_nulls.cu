@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,16 +16,14 @@
 
 #include "mixed_join_size_kernel.cuh"
 
-namespace cudf {
-namespace detail {
-
-template std::size_t launch_compute_mixed_join_output_size<true>(
+namespace cudf::detail {
+template std::size_t launch_compute_mixed_join_output_size<true, row_hash, row_equality>(
   table_device_view left_table,
   table_device_view right_table,
   table_device_view probe,
   table_device_view build,
-  row_hash const hash_probe,
-  row_equality const equality_probe,
+  row_hash hash_probe,
+  row_equality equality_probe,
   join_kind const join_type,
   cudf::detail::mixed_multimap_type::device_view hash_table_view,
   ast::detail::expression_device_view device_expression_data,
@@ -35,5 +33,4 @@ template std::size_t launch_compute_mixed_join_output_size<true>(
   int64_t shmem_size_per_block,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr);
-}  // namespace detail
-}  // namespace cudf
+}  // namespace cudf::detail
