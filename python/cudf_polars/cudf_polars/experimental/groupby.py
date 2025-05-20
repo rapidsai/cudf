@@ -6,8 +6,6 @@ from __future__ import annotations
 
 import itertools
 import math
-import operator
-from functools import reduce
 from typing import TYPE_CHECKING
 
 import pylibcudf as plc
@@ -16,7 +14,7 @@ from cudf_polars.dsl.expr import Agg, BinOp, Col, Len, NamedExpr
 from cudf_polars.dsl.ir import GroupBy, Select
 from cudf_polars.dsl.traversal import traversal
 from cudf_polars.dsl.utils.naming import unique_names
-from cudf_polars.experimental.base import PartitionInfo, TableStats
+from cudf_polars.experimental.base import PartitionInfo
 from cudf_polars.experimental.dispatch import lower_ir_node
 from cudf_polars.experimental.repartition import Repartition
 from cudf_polars.experimental.shuffle import Shuffle
@@ -129,29 +127,6 @@ def decompose(
         )
 
 
-def _groupby_table_stats(
-    ir: GroupBy,
-    child: IR,
-    partition_info: MutableMapping[IR, PartitionInfo],
-) -> TableStats | None:
-    """Return TableStats for a groupby operation."""
-    keys = [ne.name for ne in ir.keys]
-    child_table_stats = partition_info[child].table_stats
-    if child_table_stats is None:
-        return None  # pragma: no cover
-    child_card = child_table_stats.num_rows
-    keys_unique_counts = [
-        stats.unique_count
-        for name, stats in child_table_stats.column_stats.items()
-        if name in keys and stats.unique_count
-    ]
-    if keys_unique_counts:
-        new_num_rows = max(min(child_card, reduce(operator.mul, keys_unique_counts)), 1)
-    else:
-        new_num_rows = child_table_stats.num_rows
-    return TableStats.merge([child_table_stats], num_rows=new_num_rows)
-
-
 @lower_ir_node.register(GroupBy)
 def _(
     ir: GroupBy, rec: LowerIRTransformer
@@ -165,7 +140,6 @@ def _(
         partition_info[single_part_node] = PartitionInfo.new(
             single_part_node,
             partition_info,
-            table_stats=_groupby_table_stats(ir, child, partition_info),
         )
         return single_part_node, partition_info
 
@@ -317,6 +291,5 @@ def _(
         new_node,
         partition_info,
         partitioned_on=ir.keys,
-        table_stats=_groupby_table_stats(ir, gb_reduce, partition_info),
     )
     return new_node, partition_info
