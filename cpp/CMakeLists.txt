@@ -777,6 +777,7 @@ add_library(
   src/structs/structs_column_factories.cu
   src/structs/structs_column_view.cpp
   src/structs/utilities.cpp
+  src/table/primitive_row_operators.cu
   src/table/row_operators.cu
   src/table/table.cpp
   src/table/table_device_view.cu

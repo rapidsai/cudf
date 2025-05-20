@@ -40,12 +40,7 @@ namespace CUDF_EXPORT cudf {
  * @param table The table to check for compatibility
  * @return true if the table is compatible with primitive row operations, false otherwise
  */
-bool is_primitive_row_op_compatible(cudf::table_view const& table)
-{
-  return table.num_columns() == 1 and std::all_of(table.begin(), table.end(), [](auto const& col) {
-           return cudf::is_numeric(col.type());
-         });
-}
+bool is_primitive_row_op_compatible(cudf::table_view const& table);
 
 namespace row::primitive {
 
