@@ -485,7 +485,6 @@ def dtype_to_pylibcudf_type(dtype) -> plc.DataType:
             dtype = np.dtype(dtype)
         except TypeError:
             dtype = cudf.dtype(dtype)
-    # print(type(dtype), dtype)
     return plc.DataType(SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES[dtype])
 
 

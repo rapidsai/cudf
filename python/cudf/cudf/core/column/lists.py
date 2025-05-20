@@ -338,7 +338,7 @@ class ListColumn(ColumnBase):
         if arrow_type or isinstance(self.dtype, pd.ArrowDtype):
             return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
         elif nullable:
-            raise NotImplementedError(f"{arrow_type=} is not implemented.")
+            raise NotImplementedError(f"{nullable=} is not implemented.")
         else:
             return pd.Index(self.to_arrow().tolist(), dtype="object")
 

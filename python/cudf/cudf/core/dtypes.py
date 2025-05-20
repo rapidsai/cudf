@@ -84,9 +84,8 @@ def dtype(arbitrary: Any) -> DtypeObj:
     pd_dtype = pd.api.types.pandas_dtype(arbitrary)  # noqa: TID251
     if is_pandas_nullable_extension_dtype(pd_dtype):
         if isinstance(pd_dtype, pd.ArrowDtype):
-            arrow_type = getattr(pd_dtype, "pyarrow_dtype", None)
-            if arrow_type is not None and (
-                arrow_type == pa.date32()
+            arrow_type = pd_dtype.pyarrow_dtype
+            if (arrow_type == pa.date32()
                 or arrow_type == pa.binary()
                 or isinstance(arrow_type, pa.DictionaryType)
             ):
