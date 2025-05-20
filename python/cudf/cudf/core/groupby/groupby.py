@@ -508,8 +508,7 @@ class GroupBy(Serializable, Reducible, Scannable):
 
     def __iter__(self):
         group_names, offsets, _, grouped_values = self._grouped()
-        # Replace with Index once BaseIndex is removed
-        if isinstance(group_names, (Index, MultiIndex, RangeIndex)):
+        if isinstance(group_names, Index):
             group_names = group_names.to_pandas()
         for i, name in enumerate(group_names):
             yield (
@@ -3556,8 +3555,7 @@ class _Grouping(Serializable):
                     self._handle_callable(by)
                 elif isinstance(by, Series):
                     self._handle_series(by)
-                # Replace with Index once BaseIndex is removed
-                elif isinstance(by, (Index, MultiIndex, RangeIndex)):
+                elif isinstance(by, Index):
                     self._handle_index(by)
                 elif isinstance(by, abc.Mapping):
                     self._handle_mapping(by)
