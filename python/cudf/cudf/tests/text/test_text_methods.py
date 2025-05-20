@@ -1093,11 +1093,28 @@ def duplicate_input():
     ]
 
 
-def test_substring_duplicates(duplicate_input):
+def test_resolve_duplicates(duplicate_input):
     text = duplicate_input
     input = cudf.Series(text)
-    actual = input.str.substring_duplicates(15)
+    sa = input.str.build_suffix_array(0)
+    actual = input.str.resolve_duplicates(sa, 15)
     expected = cudf.Series(
         [" 01234567890123456789 ", ". 012345678901234", " reprehenderit "]
+    )
+    assert_eq(expected, actual)
+
+
+def test_resolve_duplicates_pair(duplicate_input):
+    text = duplicate_input
+    text1 = text[0:3]
+    text2 = text[3:]
+
+    input1 = cudf.Series(text1)
+    sa1 = input1.str.build_suffix_array(0)
+    input2 = cudf.Series(text2)
+    sa2 = input2.str.build_suffix_array(0)
+    actual = input1.str.resolve_duplicates_pair(sa1, input2, sa2, 15)
+    expected = cudf.Series(
+        [". 012345678901234", " 012345678901234", " reprehenderit "]
     )
     assert_eq(expected, actual)
