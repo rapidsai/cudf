@@ -1138,7 +1138,7 @@ def run(args: argparse.Namespace) -> None:
         kwargs = {
             "n_workers": run_config.n_workers,
             "dashboard_address": ":8585",
-            "protocol": "ucx",
+            "protocol": "ucxx",
             "rmm_pool_size": args.rmm_pool_size,
             "threads_per_worker": run_config.threads,
         }
