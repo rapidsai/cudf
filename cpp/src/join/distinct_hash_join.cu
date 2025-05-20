@@ -207,7 +207,7 @@ distinct_hash_join::distinct_hash_join(cudf::table_view const& build,
     }
   };
 
-  if (_build.num_columns() == 1 and cudf::is_numeric(_build.column(0).type())) {
+  if (cudf::is_primitive_row_op_compatible(_build)) {
     auto const d_hasher = cudf::row::primitive::row_hasher<cudf::hashing::detail::default_hash>{
       nullate::DYNAMIC{has_nulls}, this->_preprocessed_build, DEFAULT_HASH_SEED};
 
@@ -253,7 +253,7 @@ distinct_hash_join::inner_join(cudf::table_view const& probe,
 
   auto preprocessed_probe =
     cudf::experimental::row::equality::preprocessed_table::create(probe, stream);
-  if (_build.num_columns() == 1 and cudf::is_numeric(_build.column(0).type())) {
+  if (cudf::is_primitive_row_op_compatible(_build)) {
     auto const d_hasher = cudf::row::primitive::row_hasher<cudf::hashing::detail::default_hash>{
       nullate::DYNAMIC{has_nulls}, preprocessed_probe, DEFAULT_HASH_SEED};
     auto const d_equal = cudf::row::primitive::row_equality_comparator{
@@ -349,7 +349,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> distinct_hash_join::left_join(
   auto preprocessed_probe =
     cudf::experimental::row::equality::preprocessed_table::create(probe, stream);
 
-  if (_build.num_columns() == 1 and cudf::is_numeric(_build.column(0).type())) {
+  if (cudf::is_primitive_row_op_compatible(_build)) {
     auto const d_hasher = cudf::row::primitive::row_hasher<cudf::hashing::detail::default_hash>{
       nullate::DYNAMIC{has_nulls}, preprocessed_probe, DEFAULT_HASH_SEED};
     auto const d_equal = cudf::row::primitive::row_equality_comparator{
