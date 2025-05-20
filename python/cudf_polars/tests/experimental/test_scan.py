@@ -82,14 +82,19 @@ def test_table_statistics(tmp_path, df):
         },
     )
 
-    q = q.filter(pl.col("z") < 3).group_by(pl.col("y")).mean().select(pl.col("x"))
+    qir1 = Translator(q._ldf.visit(), engine).translate_ir()
+    ir1, pi1 = lower_ir_graph(qir1, ConfigOptions(engine.config))
+    table_stats_1 = pi1[ir1].table_stats
+    unique_count_y = table_stats_1.column_stats["y"].unique_count
+    element_size_y = table_stats_1.column_stats["y"].element_size
+    assert table_stats_1.num_rows > 0
+    assert unique_count_y < len(df)
+    assert element_size_y > 0
 
-    # Check that we are tracking TableStats,
-    # and that the basic stats make sense
-    qir = Translator(q._ldf.visit(), engine).translate_ir()
-    ir, pi = lower_ir_graph(qir, ConfigOptions(engine.config))
-    table_stats = pi[ir].table_stats
-    result = q.collect()
-    assert table_stats.num_rows >= len(result)
-    assert table_stats.column_stats["y"].unique_count < len(df)
-    assert table_stats.column_stats["y"].element_size > 0
+    q2 = q.filter(pl.col("z") < 3).group_by(pl.col("y")).mean().select(pl.col("x"))
+    qir2 = Translator(q2._ldf.visit(), engine).translate_ir()
+    ir2, pi2 = lower_ir_graph(qir2, ConfigOptions(engine.config))
+    table_stats_2 = pi2[ir2].table_stats
+    assert table_stats_2.num_rows > 0
+    assert table_stats_2.column_stats["y"].unique_count == unique_count_y
+    assert table_stats_2.column_stats["y"].element_size == element_size_y
