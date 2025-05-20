@@ -87,16 +87,60 @@ class PartitionInfo:
         *,
         count: int | None = None,
         partitioned_on: tuple[NamedExpr, ...] | None = None,
-        inherit_partitioned_on: bool = False,
+        preserve_partitioned_on: bool = False,
         table_stats: TableStats | None = None,
-        inherit_table_stats: bool = True,
     ) -> Self:
-        """Create a new PartitionInfo object."""
+        """
+        Create a new PartitionInfo object.
+
+        Parameters
+        ----------
+        ir
+            The corresponding IR node.
+        partition_info
+            A mapping from unique IR nodes to the associated
+            PartitionInfo object.
+        count
+            The partition count. By default, the partition
+            count will be set to the maximum partition count
+            of ``ir.children``. If ``ir`` has no children,
+            the default partition count is ``1``.
+        partitioned_on
+            Columns the data is hash-partitioned on. This will be
+            copied from a child of ``ir`` if ``preserve_partitioned_on``
+            is set to ``True``.
+        preserve_partitioned_on
+            Whether to copy ``partitioned_on`` from a child of
+            ``ir``. This argument is ignored if ``partitioned_on``
+            is not ``None``, or if there are multiple children
+            with inconsistent ``partitioned_on`` attributes.
+        table_stats
+            Table statistics for ``ir``. By default, these statistics
+            are copied from ``ir.children``. Copied statistics will
+            include all column statistics, and ``num_rows`` will
+            be set to the maximum child row-count estimate.
+
+        Returns
+        -------
+        new_ir, partition_info
+            The new PartitionInfo object, and an updated mapping
+            from unique IR nodes to associated PartitionInfo objects.
+
+        Notes
+        -----
+        This function should be used in lieu of ``PartitionInfo()``
+        unless ``ir`` corresponds to a leaf node. This will ensure
+        that table statistics are propagated through the IR graph.
+        """
         children = ir.children
         count = count or (
             max(partition_info[child].count for child in children) if children else 1
         )
-        if partitioned_on is None and inherit_partitioned_on:
+        if preserve_partitioned_on:
+            if partitioned_on is not None:  # pragma: no cover
+                raise ValueError(
+                    "Cannot specify both preserve_partitioned_on and partitioned_on"
+                )
             # Inherit partitioned_on
             partitionining = {
                 partition_info[child].partitioned_on
@@ -105,7 +149,7 @@ class PartitionInfo:
             }
             partitioned_on = partitionining.pop() if len(partitionining) == 1 else ()
 
-        if table_stats is None and inherit_table_stats:
+        if table_stats is None:
             # Inherit table statistics
             child_table_stats: list[TableStats] = []
             for child in children:

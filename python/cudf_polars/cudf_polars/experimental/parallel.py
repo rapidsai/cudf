@@ -311,7 +311,7 @@ def _lower_ir_pwise(
     partition_info[new_node] = PartitionInfo.new(
         new_node,
         partition_info,
-        inherit_partitioned_on=preserve_partitioning,
+        preserve_partitioned_on=preserve_partitioning,
     )
     return new_node, partition_info
 
