@@ -3458,7 +3458,7 @@ class Series(SingleColumnFrame, IndexedFrame):
 
     @_performance_tracking
     @docutils.doc_apply(
-        groupby_doc_template.format(
+        groupby_doc_template.format(  # type: ignore[has-type]
             ret=textwrap.dedent(
                 """
                 Returns
