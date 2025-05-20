@@ -363,8 +363,8 @@ struct base_ws_split_tokenizer {
   }
 
  protected:
-  column_device_view const d_strings;  // strings to split
-  size_type max_tokens;                // maximum number of tokens to identify
+  column_device_view d_strings;  // strings to split
+  size_type max_tokens;          // maximum number of tokens to identify
 };
 
 /**
