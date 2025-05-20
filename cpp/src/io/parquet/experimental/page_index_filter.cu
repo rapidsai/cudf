@@ -100,20 +100,24 @@ namespace {
   cudf::host_span<std::vector<size_type> const> row_group_indices,
   size_type schema_idx)
 {
+  // Vector to store how many rows are present in each page
   std::vector<size_type> page_row_counts;
+  // Vector to store the cumulative number of rows in each page
   std::vector<size_type> page_row_offsets{0};
+  // Vector to store the cumulative number of pages in each column chunk
   std::vector<size_type> col_chunk_page_offsets{0};
 
-  // For all sources
+  // For all data sources
   std::for_each(
     thrust::counting_iterator<size_t>(0),
     thrust::counting_iterator(row_group_indices.size()),
     [&](auto src_idx) {
       auto const& rg_indices = row_group_indices[src_idx];
-      // For all row groups in this source
+      // For all column chunks in this data source
       std::for_each(rg_indices.cbegin(), rg_indices.cend(), [&](auto rg_idx) {
         auto const& row_group = per_file_metadata[src_idx].row_groups[rg_idx];
-        auto col              = std::find_if(
+        // Find the column chunk with the given schema index
+        auto col = std::find_if(
           row_group.columns.begin(), row_group.columns.end(), [schema_idx](ColumnChunk const& col) {
             return col.schema_idx == schema_idx;
           });
@@ -121,9 +125,11 @@ namespace {
         if (col != std::end(row_group.columns) and col->offset_index.has_value()) {
           CUDF_EXPECTS(col->column_index.has_value(),
                        "Both offset and column indexes must be present");
+          // Get the offset and column indexes of the column chunk
+          auto const& offset_index = col->offset_index.value();
+          auto const& column_index = col->column_index.value();
 
-          auto const& offset_index       = col->offset_index.value();
-          auto const& column_index       = col->column_index.value();
+          // Number of pages in this column chunk
           auto const row_group_num_pages = offset_index.page_locations.size();
 
           CUDF_EXPECTS(column_index.min_values.size() == column_index.max_values.size(),
@@ -131,21 +137,23 @@ namespace {
           CUDF_EXPECTS(column_index.min_values.size() == offset_index.page_locations.size(),
                        "mismatch between size of min/max page values and the size of page "
                        "locations");
-          // Get page offsets for this row group
+          // Update the cumulative number of pages in this column chunk
           col_chunk_page_offsets.emplace_back(col_chunk_page_offsets.back() +
                                               offset_index.page_locations.size());
 
-          // For all pages in this row group, Get row counts and offsets.
+          // For all pages in this column chunk, update page row counts and offsets.
           std::for_each(
             thrust::counting_iterator<size_t>(0),
             thrust::counting_iterator(row_group_num_pages),
             [&](auto const page_idx) {
               int64_t const first_row_idx = offset_index.page_locations[page_idx].first_row_index;
+              // For the last page, this is simply the total number of rows in the column chunk
               int64_t const last_row_idx =
                 (page_idx < row_group_num_pages - 1)
                   ? offset_index.page_locations[page_idx + 1].first_row_index
                   : row_group.num_rows;
 
+              // Update the page row counts and offsets
               page_row_counts.emplace_back(last_row_idx - first_row_idx);
               page_row_offsets.emplace_back(page_row_offsets.back() + page_row_counts.back());
             });
@@ -153,6 +161,7 @@ namespace {
       });
     });
 
+  // If the vector is empty, it means we don't have the page index present
   CUDF_EXPECTS(col_chunk_page_offsets.back() > 0,
                "Page index is not present for page pruning",
                std::runtime_error);
@@ -384,7 +393,7 @@ struct page_stats_caster : public stats_caster_base {
    */
   template <typename T>
   std::pair<std::unique_ptr<column>, std::unique_ptr<column>> operator()(
-    int schema_idx,
+    cudf::size_type schema_idx,
     cudf::data_type dtype,
     rmm::cuda_stream_view stream,
     rmm::device_async_resource_ref mr) const
