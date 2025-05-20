@@ -11169,3 +11169,29 @@ def test_setitem_reset_label_dtype():
     result["a"] = [2]
     expected["a"] = [2]
     assert_eq(result, expected)
+
+
+def test_dataframe_midx_cols_getitem():
+    df = cudf.DataFrame(
+        {
+            "a": ["a", "b", "c"],
+            "b": ["b", "", ""],
+            "c": [10, 11, 12],
+        }
+    )
+    df.columns = df.set_index(["a", "b"]).index
+    pdf = df.to_pandas()
+
+    expected = df["c"]
+    actual = pdf["c"]
+    assert_eq(expected, actual)
+    df = cudf.DataFrame(
+        [[1, 0], [0, 1]],
+        columns=[
+            ["foo", "foo"],
+            ["location", "location"],
+            ["x", "y"],
+        ],
+    )
+    df = df.assign(bools=cudf.Series([True, False], dtype="bool"))
+    assert_eq(df["bools"], df.to_pandas()["bools"])
