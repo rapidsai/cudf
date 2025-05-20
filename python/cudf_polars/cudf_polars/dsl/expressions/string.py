@@ -9,8 +9,6 @@ from __future__ import annotations
 from enum import IntEnum, auto
 from typing import TYPE_CHECKING, Any
 
-import pyarrow as pa
-
 from polars.exceptions import InvalidOperationError
 
 import pylibcudf as plc
@@ -135,7 +133,7 @@ class StringFunction(Expr):
                     raise NotImplementedError(
                         "Regex contains only supports a scalar pattern"
                     )
-                pattern = self.children[1].value.as_py()
+                pattern = self.children[1].value
                 try:
                     self._regex_program = plc.strings.regex_program.RegexProgram.create(
                         pattern,
@@ -154,7 +152,7 @@ class StringFunction(Expr):
             target = self.children[1]
             # Above, we raise NotImplementedError if the target is not a Literal,
             # so we can safely access .value here.
-            if target.value == pa.scalar("", type=target.value.type):  # type: ignore[attr-defined]
+            if target.value == "":  # type: ignore[attr-defined]
                 raise NotImplementedError(
                     "libcudf replace does not support empty strings"
                 )
@@ -247,8 +245,8 @@ class StringFunction(Expr):
             # from the last element of the string. If the end index would be
             # below zero, an empty string is returned.
             # Do this maths on the host
-            start = expr_offset.value.as_py()
-            length = expr_length.value.as_py()
+            start = expr_offset.value
+            length = expr_length.value
 
             if length == 0:
                 stop = start

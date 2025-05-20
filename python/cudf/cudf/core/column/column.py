@@ -1153,6 +1153,29 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             return pa.scalar(None, type=cudf_dtype_to_pa_type(self.dtype))
         return NotImplemented
 
+    def _all_bools_with_nulls(
+        self, other: ColumnBase, bool_fill_value: bool
+    ) -> ColumnBase:
+        # Might be able to remove if we share more of
+        # DatetimeColumn._binaryop & TimedeltaColumn._binaryop
+        if self.has_nulls() and other.has_nulls():
+            result_mask = (
+                self._get_mask_as_column() & other._get_mask_as_column()
+            )
+        elif self.has_nulls():
+            result_mask = self._get_mask_as_column()
+        elif other.has_nulls():
+            result_mask = other._get_mask_as_column()
+        else:
+            result_mask = None
+
+        result_col = as_column(
+            bool_fill_value, dtype=np.dtype(np.bool_), length=len(self)
+        )
+        if result_mask is not None:
+            result_col = result_col.set_mask(result_mask.as_mask())
+        return result_col
+
     def _scatter_by_slice(
         self,
         key: builtins.slice,
@@ -2662,7 +2685,7 @@ def as_column(
         if isinstance(arbitrary, cudf.Series):
             arbitrary = arbitrary._column
         elif isinstance(arbitrary, cudf.BaseIndex):
-            arbitrary = arbitrary._values
+            arbitrary = arbitrary._column
         if dtype is not None:
             return arbitrary.astype(dtype)
         return arbitrary

@@ -84,7 +84,7 @@ __device__ cudf::size_type compute_distance(cudf::string_view const& d_str,
       auto ins_cost = v1[j] + 1;
       v1[j + 1]     = cuda::std::min(cuda::std::min(sub_cost, del_cost), ins_cost);
     }
-    thrust::swap(v0, v1);
+    cuda::std::swap(v0, v1);
   }
   return v0[n];
 }

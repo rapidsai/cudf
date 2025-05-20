@@ -140,7 +140,7 @@ def _(node: expr.ColRef, self: Transformer) -> plc_expr.Expression:
 
 @_to_ast.register
 def _(node: expr.Literal, self: Transformer) -> plc_expr.Expression:
-    return plc_expr.Literal(plc.interop.from_arrow(node.value))
+    return plc_expr.Literal(plc.Scalar.from_py(node.value, node.dtype))
 
 
 @_to_ast.register
@@ -188,7 +188,7 @@ def _(node: expr.BooleanFunction, self: Transformer) -> plc_expr.Expression:
         if isinstance(haystack, expr.LiteralColumn) and len(haystack.value) < 16:
             # 16 is an arbitrary limit
             needle_ref = self(needles)
-            values = [plc_expr.Literal(haystack.dtype, val) for val in haystack.value]
+            values = (plc_expr.Literal(haystack.dtype, val) for val in haystack.value)
             return reduce(
                 partial(plc_expr.Operation, plc_expr.ASTOperator.LOGICAL_OR),
                 (

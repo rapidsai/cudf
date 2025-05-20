@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 import pyarrow as pa
 import pyarrow.compute as pc
@@ -11,23 +11,23 @@ import pylibcudf as plc
 @pytest.fixture
 def str_data():
     pa_data = pa.array(["A", None])
-    return pa_data, plc.interop.from_arrow(pa_data)
+    return pa_data, plc.Column(pa_data)
 
 
 def test_count_characters(str_data):
-    result = plc.strings.attributes.count_characters(str_data[1])
-    expected = pc.utf8_length(str_data[0])
-    assert_column_eq(expected, result)
+    got = plc.strings.attributes.count_characters(str_data[1])
+    expect = pc.utf8_length(str_data[0])
+    assert_column_eq(expect, got)
 
 
 def test_count_bytes(str_data):
-    result = plc.strings.attributes.count_characters(str_data[1])
-    expected = pc.binary_length(str_data[0])
-    assert_column_eq(expected, result)
+    got = plc.strings.attributes.count_characters(str_data[1])
+    expect = pc.binary_length(str_data[0])
+    assert_column_eq(expect, got)
 
 
 def test_code_points(str_data):
-    result = plc.strings.attributes.code_points(str_data[1])
+    got = plc.strings.attributes.code_points(str_data[1])
     exp_data = [ord(str_data[0].to_pylist()[0])]
-    expected = pa.chunked_array([exp_data], type=pa.int32())
-    assert_column_eq(expected, result)
+    expect = pa.chunked_array([exp_data], type=pa.int32())
+    assert_column_eq(expect, got)

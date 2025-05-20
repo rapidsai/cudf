@@ -1270,6 +1270,34 @@ def test_dataframe_to_cupy():
         np.testing.assert_array_equal(df[k].to_numpy(), mat[:, i])
 
 
+@pytest.mark.parametrize("has_nulls", [False, True])
+@pytest.mark.parametrize("use_na_value", [False, True])
+def test_dataframe_to_cupy_single_column(has_nulls, use_na_value):
+    nelem = 10
+    data = np.arange(nelem, dtype=np.float64)
+
+    if has_nulls:
+        data = data.astype("object")
+        data[::2] = None
+
+    df = cudf.DataFrame({"a": data})
+
+    if has_nulls and not use_na_value:
+        with pytest.raises(ValueError, match="Column must have no nulls"):
+            df.to_cupy()
+        return
+
+    na_value = 0.0 if use_na_value else None
+    expected = (
+        cupy.asarray(df["a"].fillna(na_value))
+        if has_nulls
+        else cupy.asarray(df["a"])
+    )
+    result = df.to_cupy(na_value=na_value)
+    assert result.shape == (nelem, 1)
+    assert_eq(result.ravel(), expected)
+
+
 def test_dataframe_to_cupy_null_values():
     df = cudf.DataFrame()
 
@@ -1381,7 +1409,7 @@ def test_dataframe_append_to_empty():
 def test_dataframe_setitem_index_len1():
     gdf = cudf.DataFrame()
     gdf["a"] = [1]
-    gdf["b"] = gdf.index._values
+    gdf["b"] = gdf.index._column
 
     np.testing.assert_equal(gdf.b.to_numpy(), [0])
 
@@ -1995,7 +2023,7 @@ def test_dataframe_cupy_array_wrong_index():
     with pytest.raises(ValueError):
         cudf.DataFrame(d_ary, index=["a"])
 
-    with pytest.raises(ValueError):
+    with pytest.raises(TypeError):
         cudf.DataFrame(d_ary, index="a")
 
 
@@ -2932,12 +2960,12 @@ def test_gpu_memory_usage_with_boolmask():
     cudaDF = cudaDF[boolmask]
 
     assert (
-        cudaDF.index._values.data_array_view(mode="read").device_ctypes_pointer
-        == cudaDF["col0"].index._values.data_array_view.device_ctypes_pointer
+        cudaDF.index._column.data_array_view(mode="read").device_ctypes_pointer
+        == cudaDF["col0"].index._column.data_array_view.device_ctypes_pointer
     )
     assert (
-        cudaDF.index._values.data_array_view(mode="read").device_ctypes_pointer
-        == cudaDF["col1"].index._values.data_array_view.device_ctypes_pointer
+        cudaDF.index._column.data_array_view(mode="read").device_ctypes_pointer
+        == cudaDF["col1"].index._column.data_array_view.device_ctypes_pointer
     )
 
     assert memory_used == query_GPU_memory()
@@ -11141,3 +11169,29 @@ def test_setitem_reset_label_dtype():
     result["a"] = [2]
     expected["a"] = [2]
     assert_eq(result, expected)
+
+
+def test_dataframe_midx_cols_getitem():
+    df = cudf.DataFrame(
+        {
+            "a": ["a", "b", "c"],
+            "b": ["b", "", ""],
+            "c": [10, 11, 12],
+        }
+    )
+    df.columns = df.set_index(["a", "b"]).index
+    pdf = df.to_pandas()
+
+    expected = df["c"]
+    actual = pdf["c"]
+    assert_eq(expected, actual)
+    df = cudf.DataFrame(
+        [[1, 0], [0, 1]],
+        columns=[
+            ["foo", "foo"],
+            ["location", "location"],
+            ["x", "y"],
+        ],
+    )
+    df = df.assign(bools=cudf.Series([True, False], dtype="bool"))
+    assert_eq(df["bools"], df.to_pandas()["bools"])

@@ -17,16 +17,24 @@ from uuid import uuid4
 import numpy as np
 import pandas as pd
 import pyarrow as pa
-from pyarrow import dataset as ds
 
 import pylibcudf as plc
 
-import cudf
 from cudf.api.types import is_list_like
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import ColumnBase, as_column, column_empty
 from cudf.core.column.categorical import CategoricalColumn, as_unsigned_codes
-from cudf.core.dtypes import DecimalDtype
+from cudf.core.dataframe import DataFrame
+from cudf.core.dtypes import (
+    CategoricalDtype,
+    DecimalDtype,
+    ListDtype,
+    StructDtype,
+)
+from cudf.core.index import Index, RangeIndex
+from cudf.core.multiindex import MultiIndex
+from cudf.core.reshape import concat
+from cudf.options import get_option
 from cudf.utils import ioutils
 from cudf.utils.performance_tracking import _performance_tracking
 
@@ -39,6 +47,8 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Hashable
 
     from typing_extensions import Self
+
+    from cudf.core.series import Series
 
 
 BYTE_SIZES = {
@@ -111,7 +121,7 @@ def _plc_write_parquet(
     cudf.io.parquet.write_parquet
     """
     if index is True or (
-        index is None and not isinstance(table.index, cudf.RangeIndex)
+        index is None and not isinstance(table.index, RangeIndex)
     ):
         columns = itertools.chain(table.index._columns, table._columns)
         plc_table = plc.Table(
@@ -132,7 +142,7 @@ def _plc_write_parquet(
 
     for i, name in enumerate(table._column_names, num_index_cols_meta):
         if not isinstance(name, str):
-            if cudf.get_option("mode.pandas_compatible"):
+            if get_option("mode.pandas_compatible"):
                 tbl_meta.column_metadata[i].set_name(str(name))
             else:
                 raise ValueError(
@@ -611,6 +621,9 @@ def _process_dataset(
     # dataset API), (2) to apply row-group filters, and (3)
     # to discover directory-partitioning information
 
+    # Lazily import pyarrow.dataset due to import time
+    import pyarrow.dataset as ds
+
     # Deal with case that the user passed in a directory name
     file_list = paths
     if len(paths) == 1 and ioutils.is_directory(paths[0]):
@@ -963,8 +976,8 @@ def _normalize_filters(filters: list | None) -> list[list[tuple]] | None:
 
 
 def _apply_post_filters(
-    df: cudf.DataFrame, filters: list[list[tuple]] | None
-) -> cudf.DataFrame:
+    df: DataFrame, filters: list[list[tuple]] | None
+) -> DataFrame:
     """Apply DNF filters to an in-memory DataFrame
 
     Disjunctive normal form (DNF) means that the inner-most
@@ -978,14 +991,14 @@ def _apply_post_filters(
         # No filters to apply
         return df
 
-    def _handle_in(column: cudf.Series, value, *, negate) -> cudf.Series:
+    def _handle_in(column: Series, value, *, negate) -> Series:
         if not isinstance(value, (list, set, tuple)):
             raise TypeError(
                 "Value of 'in'/'not in' filter must be a list, set, or tuple."
             )
         return ~column.isin(value) if negate else column.isin(value)
 
-    def _handle_is(column: cudf.Series, value, *, negate) -> cudf.Series:
+    def _handle_is(column: Series, value, *, negate) -> Series:
         if value not in {np.nan, None}:
             raise TypeError(
                 "Value of 'is'/'is not' filter must be np.nan or None."
@@ -1009,14 +1022,14 @@ def _apply_post_filters(
     # out rows from a DataFrame with a default RangeIndex
     # (to reduce memory usage)
     reset_index = (
-        isinstance(df.index, cudf.RangeIndex)
+        isinstance(df.index, RangeIndex)
         and df.index.name is None
         and df.index.start == 0
         and df.index.step == 1
     )
 
     try:
-        selection: cudf.Series = reduce(
+        selection: Series = reduce(
             operator.or_,
             (
                 reduce(
@@ -1071,7 +1084,7 @@ def _parquet_to_frame(
     partition_meta = None
     partitioning = (dataset_kwargs or {}).get("partitioning", None)
     if hasattr(partitioning, "schema"):
-        partition_meta = cudf.DataFrame.from_arrow(
+        partition_meta = DataFrame.from_arrow(
             partitioning.schema.empty_table()
         )
 
@@ -1115,7 +1128,7 @@ def _parquet_to_frame(
                 col = CategoricalColumn(
                     data=None,
                     size=codes.size,
-                    dtype=cudf.CategoricalDtype(
+                    dtype=CategoricalDtype(
                         categories=partition_categories[name], ordered=False
                     ),
                     offset=codes.offset,
@@ -1137,7 +1150,7 @@ def _parquet_to_frame(
         # Assume we can ignore the index if it has no name.
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", FutureWarning)
-            res = cudf.concat(dfs, ignore_index=dfs[-1].index.name is None)
+            res = concat(dfs, ignore_index=dfs[-1].index.name is None)
         return res
     else:
         return dfs[0]
@@ -1155,7 +1168,7 @@ def _read_parquet(
     allow_mismatched_pq_schemas: bool = False,
     *args,
     **kwargs,
-) -> cudf.DataFrame:
+) -> DataFrame:
     # Simple helper function to dispatch between
     # cudf and pyarrow to read parquet data
     if engine == "cudf":
@@ -1175,7 +1188,7 @@ def _read_parquet(
             nrows = -1
         if skip_rows is None:
             skip_rows = 0
-        if cudf.get_option("io.parquet.low_memory"):
+        if get_option("io.parquet.low_memory"):
             # Note: If this function ever takes accepts filters
             # allow_range_index needs to be False when a filter is passed
             # (see read_parquet)
@@ -1227,7 +1240,7 @@ def _read_parquet(
                 name: ColumnBase.from_pylibcudf(col)
                 for name, col in zip(column_names, concatenated_columns)
             }
-            df = cudf.DataFrame._from_data(data)
+            df = DataFrame._from_data(data)
             ioutils._add_df_col_struct_names(df, child_names)
             df = _process_metadata(
                 df,
@@ -1267,7 +1280,7 @@ def _read_parquet(
                 options.set_filter(filters)
 
             tbl_w_meta = plc.io.parquet.read_parquet(options)
-            df = cudf.DataFrame.from_pylibcudf(tbl_w_meta)
+            df = DataFrame.from_pylibcudf(tbl_w_meta)
             df = _process_metadata(
                 df,
                 tbl_w_meta.column_names(include_children=False),
@@ -1287,7 +1300,7 @@ def _read_parquet(
         ):
             filepaths_or_buffers = filepaths_or_buffers[0]
 
-        return cudf.DataFrame.from_pandas(
+        return DataFrame.from_pandas(
             pd.read_parquet(
                 filepaths_or_buffers,
                 columns=columns,
@@ -1629,8 +1642,7 @@ class ParquetWriter:
                 num_partitions=len(partitions_info) if partitions_info else 1,
             )
         if self.index is not False and (
-            table.index.name is not None
-            or isinstance(table.index, cudf.MultiIndex)
+            table.index.name is not None or isinstance(table.index, MultiIndex)
         ):
             columns = itertools.chain(table.index._columns, table._columns)
             plc_table = plc.Table(
@@ -1676,7 +1688,7 @@ class ParquetWriter:
         )
         self.tbl_meta = plc.io.types.TableInputMetadata(plc_table)
         if self.index is not False:
-            if isinstance(table.index, cudf.MultiIndex):
+            if isinstance(table.index, MultiIndex):
                 plc_table = plc.Table(
                     [
                         col.to_pylibcudf(mode="read")
@@ -1710,9 +1722,7 @@ class ParquetWriter:
                 self.tbl_meta.column_metadata[i],
             )
 
-        index = (
-            False if isinstance(table.index, cudf.RangeIndex) else self.index
-        )
+        index = False if isinstance(table.index, RangeIndex) else self.index
         user_data = [
             {"pandas": ioutils.generate_pandas_metadata(table, index)}
         ] * num_partitions
@@ -2156,7 +2166,7 @@ def _set_col_metadata(
     if output_as_binary is not None and full_path in output_as_binary:
         col_meta.set_output_as_binary(True)
 
-    if isinstance(col.dtype, cudf.StructDtype):
+    if isinstance(col.dtype, StructDtype):
         for i, (child_col, name) in enumerate(
             zip(col.children, list(col.dtype.fields))
         ):
@@ -2171,7 +2181,7 @@ def _set_col_metadata(
                 column_type_length,
                 output_as_binary,
             )
-    elif isinstance(col.dtype, cudf.ListDtype):
+    elif isinstance(col.dtype, ListDtype):
         if full_path is not None:
             full_path = full_path + ".list"
             col_meta.child(1).set_name("element")
@@ -2212,7 +2222,7 @@ def _get_stat_freq(
 
 
 def _process_metadata(
-    df: cudf.DataFrame,
+    df: DataFrame,
     names: list[Hashable],
     per_file_user_data: list,
     row_groups,
@@ -2221,7 +2231,7 @@ def _process_metadata(
     use_pandas_metadata: bool,
     nrows: int = -1,
     skip_rows: int = 0,
-) -> cudf.DataFrame:
+) -> DataFrame:
     index_col = None
     is_range_index = True
     column_index_type = None
@@ -2300,7 +2310,7 @@ def _process_metadata(
 
                     for rg in row_groups[i]:
                         filtered_idx.append(
-                            cudf.RangeIndex(
+                            RangeIndex(
                                 start=row_groups_i[rg][0],
                                 stop=row_groups_i[rg][1],
                                 step=range_index_meta["step"],
@@ -2308,15 +2318,15 @@ def _process_metadata(
                         )
 
                 if len(filtered_idx) > 0:
-                    idx = cudf.concat(filtered_idx)
+                    idx = concat(filtered_idx)
                 else:
-                    idx = cudf.Index._from_column(column_empty(0))
+                    idx = Index._from_column(column_empty(0))
             else:
                 start = range_index_meta["start"] + skip_rows  # type: ignore[operator]
                 stop = range_index_meta["stop"]
                 if nrows > -1:
                     stop = start + nrows
-                idx = cudf.RangeIndex(
+                idx = RangeIndex(
                     start=start,
                     stop=stop,
                     step=range_index_meta["step"],
@@ -2328,11 +2338,11 @@ def _process_metadata(
             index_data = df[index_col]
             actual_index_names = iter(index_col_names.values())
             if index_data._num_columns == 1:
-                idx = cudf.Index._from_column(
+                idx = Index._from_column(
                     index_data._columns[0], name=next(actual_index_names)
                 )
             else:
-                idx = cudf.MultiIndex.from_frame(
+                idx = MultiIndex.from_frame(
                     index_data, names=list(actual_index_names)
                 )
             df.drop(columns=index_col, inplace=True)
