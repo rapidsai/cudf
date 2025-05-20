@@ -22,6 +22,7 @@
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/hashing/detail/murmurhash3_x86_32.cuh>
 #include <cudf/table/experimental/row_operators.cuh>
+#include <cudf/table/primitive_row_operators.cuh>
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -178,23 +179,42 @@ void build_join_hash_table(
   CUDF_EXPECTS(0 != build.num_columns(), "Selected build dataset is empty");
   CUDF_EXPECTS(0 != build.num_rows(), "Build side table has no rows");
 
-  auto const row_hash   = experimental::row::hash::row_hasher{preprocessed_build};
-  auto const hash_build = row_hash.device_hasher(nullate::DYNAMIC{has_nulls});
-
   auto const empty_key_sentinel = hash_table.get_empty_key_sentinel();
-  make_pair_function pair_func{hash_build, empty_key_sentinel};
 
-  auto const iter = cudf::detail::make_counting_transform_iterator(0, pair_func);
+  if (cudf::is_primitive_row_op_compatible(build)) {
+    auto const d_hasher =
+      cudf::row::primitive::row_hasher{nullate::DYNAMIC{has_nulls}, preprocessed_build};
+    auto const pair_func = make_pair_function{d_hasher, empty_key_sentinel};
+    auto const iter      = cudf::detail::make_counting_transform_iterator(0, pair_func);
 
-  size_type const build_table_num_rows{build.num_rows()};
-  if (nulls_equal == cudf::null_equality::EQUAL or (not nullable(build))) {
-    hash_table.insert(iter, iter + build_table_num_rows, stream.value());
+    size_type const build_table_num_rows{build.num_rows()};
+    if (nulls_equal == cudf::null_equality::EQUAL or (not nullable(build))) {
+      hash_table.insert(iter, iter + build_table_num_rows, stream.value());
+    } else {
+      thrust::counting_iterator<size_type> stencil(0);
+      row_is_valid pred{bitmask};
+
+      // insert valid rows
+      hash_table.insert_if(iter, iter + build_table_num_rows, stencil, pred, stream.value());
+    }
   } else {
-    thrust::counting_iterator<size_type> stencil(0);
-    row_is_valid pred{bitmask};
+    auto const row_hash   = experimental::row::hash::row_hasher{preprocessed_build};
+    auto const hash_build = row_hash.device_hasher(nullate::DYNAMIC{has_nulls});
 
-    // insert valid rows
-    hash_table.insert_if(iter, iter + build_table_num_rows, stencil, pred, stream.value());
+    make_pair_function pair_func{hash_build, empty_key_sentinel};
+
+    auto const iter = cudf::detail::make_counting_transform_iterator(0, pair_func);
+
+    size_type const build_table_num_rows{build.num_rows()};
+    if (nulls_equal == cudf::null_equality::EQUAL or (not nullable(build))) {
+      hash_table.insert(iter, iter + build_table_num_rows, stream.value());
+    } else {
+      thrust::counting_iterator<size_type> stencil(0);
+      row_is_valid pred{bitmask};
+
+      // insert valid rows
+      hash_table.insert_if(iter, iter + build_table_num_rows, stencil, pred, stream.value());
+    }
   }
 }
 

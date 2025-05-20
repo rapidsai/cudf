@@ -23,6 +23,7 @@
 #include <cudf/hashing/detail/helper_functions.cuh>
 #include <cudf/join/hash_join.hpp>
 #include <cudf/table/experimental/row_operators.cuh>
+#include <cudf/table/primitive_row_operators.cuh>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/type_checks.hpp>
@@ -48,6 +49,23 @@ namespace cudf {
 namespace detail {
 namespace {
 using multimap_type = cudf::hash_join::impl_type::map_type;
+
+class primitive_equality {
+ public:
+  primitive_equality(cudf::row::primitive::row_equality_comparator check_row_equality)
+    : _check_row_equality{std::move(check_row_equality)}
+  {
+  }
+
+  __device__ __forceinline__ bool operator()(pair_type const& lhs,
+                                             pair_type const& rhs) const noexcept
+  {
+    return lhs.first == rhs.first and _check_row_equality(rhs.second, lhs.second);
+  }
+
+ private:
+  cudf::row::primitive::row_equality_comparator _check_row_equality;
+};
 
 /**
  * @brief Calculates the exact size of the join output produced when
@@ -99,19 +117,11 @@ std::size_t compute_join_output_size(
     }
   }
 
-  auto const probe_nulls = cudf::nullate::DYNAMIC{has_nulls};
-
-  auto const row_hash           = cudf::experimental::row::hash::row_hasher{preprocessed_probe};
-  auto const hash_probe         = row_hash.device_hasher(probe_nulls);
+  auto const probe_nulls        = cudf::nullate::DYNAMIC{has_nulls};
   auto const empty_key_sentinel = hash_table.get_empty_key_sentinel();
-  auto const iter               = cudf::detail::make_counting_transform_iterator(
-    0, make_pair_function{hash_probe, empty_key_sentinel});
 
-  auto const row_comparator =
-    cudf::experimental::row::equality::two_table_comparator{preprocessed_probe, preprocessed_build};
-  auto const comparator_helper = [&](auto device_comparator) {
-    pair_equality equality{device_comparator};
-
+  // Common function to handle both primitive and non-primitive cases
+  auto compute_size = [&](auto equality, auto iter) {
     if (join == join_kind::LEFT_JOIN) {
       return hash_table.pair_count_outer(
         iter, iter + probe_table_num_rows, equality, stream.value());
@@ -120,12 +130,31 @@ std::size_t compute_join_output_size(
     }
   };
 
-  if (cudf::detail::has_nested_columns(probe_table)) {
-    auto const device_comparator = row_comparator.equal_to<true>(has_nulls, nulls_equal);
-    return comparator_helper(device_comparator);
+  if (cudf::is_primitive_row_op_compatible(build_table)) {
+    auto const d_hasher = cudf::row::primitive::row_hasher{probe_nulls, preprocessed_probe};
+    auto const d_equal  = cudf::row::primitive::row_equality_comparator{
+      probe_nulls, preprocessed_probe, preprocessed_build, nulls_equal};
+    auto const iter = cudf::detail::make_counting_transform_iterator(
+      0, make_pair_function{d_hasher, empty_key_sentinel});
+    auto const equality = primitive_equality{d_equal};
+
+    return compute_size(equality, iter);
   } else {
-    auto const device_comparator = row_comparator.equal_to<false>(has_nulls, nulls_equal);
-    return comparator_helper(device_comparator);
+    auto const row_hash   = cudf::experimental::row::hash::row_hasher{preprocessed_probe};
+    auto const hash_probe = row_hash.device_hasher(probe_nulls);
+    auto const iter       = cudf::detail::make_counting_transform_iterator(
+      0, make_pair_function{hash_probe, empty_key_sentinel});
+
+    auto const row_comparator = cudf::experimental::row::equality::two_table_comparator{
+      preprocessed_probe, preprocessed_build};
+
+    if (cudf::detail::has_nested_columns(probe_table)) {
+      auto const device_comparator = row_comparator.equal_to<true>(has_nulls, nulls_equal);
+      return compute_size(pair_equality{device_comparator}, iter);
+    } else {
+      auto const device_comparator = row_comparator.equal_to<false>(has_nulls, nulls_equal);
+      return compute_size(pair_equality{device_comparator}, iter);
+    }
   }
 }
 
@@ -191,27 +220,17 @@ probe_join_hash_table(
   cudf::experimental::prefetch::detail::prefetch("hash_join", *left_indices, stream);
   cudf::experimental::prefetch::detail::prefetch("hash_join", *right_indices, stream);
 
-  auto const probe_nulls = cudf::nullate::DYNAMIC{has_nulls};
-
-  auto const row_hash           = cudf::experimental::row::hash::row_hasher{preprocessed_probe};
-  auto const hash_probe         = row_hash.device_hasher(probe_nulls);
-  auto const empty_key_sentinel = hash_table.get_empty_key_sentinel();
-  auto const iter               = cudf::detail::make_counting_transform_iterator(
-    0, make_pair_function{hash_probe, empty_key_sentinel});
-
-  cudf::size_type const probe_table_num_rows = probe_table.num_rows();
-
-  auto const out1_zip_begin = thrust::make_zip_iterator(
+  auto const empty_key_sentinel   = hash_table.get_empty_key_sentinel();
+  auto const probe_nulls          = cudf::nullate::DYNAMIC{has_nulls};
+  auto const probe_table_num_rows = probe_table.num_rows();
+  auto const out1_zip_begin       = thrust::make_zip_iterator(
     thrust::make_tuple(thrust::make_discard_iterator(), left_indices->begin()));
   auto const out2_zip_begin = thrust::make_zip_iterator(
     thrust::make_tuple(thrust::make_discard_iterator(), right_indices->begin()));
 
-  auto const row_comparator =
-    cudf::experimental::row::equality::two_table_comparator{preprocessed_probe, preprocessed_build};
-  auto const comparator_helper = [&](auto device_comparator) {
-    pair_equality equality{device_comparator};
-
-    if (join == cudf::detail::join_kind::FULL_JOIN or join == cudf::detail::join_kind::LEFT_JOIN) {
+  // Common function to handle retrieval for both primitive and non-primitive cases
+  auto retrieve_results = [&](auto equality, auto iter) {
+    if (join == cudf::detail::join_kind::FULL_JOIN || join == cudf::detail::join_kind::LEFT_JOIN) {
       [[maybe_unused]] auto [out1_zip_end, out2_zip_end] =
         hash_table.pair_retrieve_outer(iter,
                                        iter + probe_table_num_rows,
@@ -235,12 +254,31 @@ probe_join_hash_table(
     }
   };
 
-  if (cudf::detail::has_nested_columns(probe_table)) {
-    auto const device_comparator = row_comparator.equal_to<true>(probe_nulls, compare_nulls);
-    comparator_helper(device_comparator);
+  if (cudf::is_primitive_row_op_compatible(build_table)) {
+    auto const d_hasher = cudf::row::primitive::row_hasher{probe_nulls, preprocessed_probe};
+    auto const d_equal  = cudf::row::primitive::row_equality_comparator{
+      probe_nulls, preprocessed_probe, preprocessed_build, compare_nulls};
+    auto const iter = cudf::detail::make_counting_transform_iterator(
+      0, make_pair_function{d_hasher, empty_key_sentinel});
+    auto const equality = primitive_equality{d_equal};
+
+    retrieve_results(equality, iter);
   } else {
-    auto const device_comparator = row_comparator.equal_to<false>(probe_nulls, compare_nulls);
-    comparator_helper(device_comparator);
+    auto const row_hash   = cudf::experimental::row::hash::row_hasher{preprocessed_probe};
+    auto const hash_probe = row_hash.device_hasher(probe_nulls);
+    auto const iter       = cudf::detail::make_counting_transform_iterator(
+      0, make_pair_function{hash_probe, empty_key_sentinel});
+
+    auto const row_comparator = cudf::experimental::row::equality::two_table_comparator{
+      preprocessed_probe, preprocessed_build};
+
+    if (cudf::detail::has_nested_columns(probe_table)) {
+      auto const device_comparator = row_comparator.equal_to<true>(probe_nulls, compare_nulls);
+      retrieve_results(pair_equality{device_comparator}, iter);
+    } else {
+      auto const device_comparator = row_comparator.equal_to<false>(probe_nulls, compare_nulls);
+      retrieve_results(pair_equality{device_comparator}, iter);
+    }
   }
 
   return std::pair(std::move(left_indices), std::move(right_indices));
