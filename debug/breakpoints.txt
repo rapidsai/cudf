@@ -1,0 +1,26 @@
+break /home/coder/cudf/cpp/src/io/orc/stripe_data.cu:210
+
+# break /home/coder/cudf/cpp/src/io/orc/stripe_data.cu:1398
+# break /home/coder/cudf/cpp/src/io/orc/stripe_data.cu:646
+# break /home/coder/cudf/cpp/src/io/orc/stripe_data.cu:700
+# break /home/coder/cudf/cpp/src/io/orc/stripe_data.cu:1493
+# break /home/coder/cudf/cpp/src/io/orc/stripe_data.cu:1605
+# break /home/coder/cudf/cpp/src/io/orc/stripe_data.cu:1444
+# break /home/coder/cudf/cpp/src/io/orc/stripe_data.cu:1451
+# break /home/coder/cudf/cpp/src/io/orc/stripe_data.cu:1827
+# break /home/coder/cudf/cpp/examples/orc_io/orc_io.cpp:114
+# break /home/coder/cudf/cpp/src/io/orc/reader_impl.cu:85
+# break /home/coder/cudf/cpp/src/io/orc/reader_impl.cu:31
+# break /home/coder/cudf/cpp/src/io/orc/reader_impl_decode.cu:875
+# break /home/coder/cudf/cpp/src/io/orc/reader_impl_decode.cu:933
+# break /home/coder/cudf/cpp/src/io/orc/reader_impl_decode.cu:982
+# break /home/coder/cudf/cpp/src/io/orc/stripe_init.cu:459
+# break /home/coder/cudf/cpp/src/io/orc/stripe_data.cu:1891
+
+define biu62
+    cuda block (0,62,0) thread (0,0,0)
+end
+
+define biu63
+    cuda block (0,63,0) thread (0,0,0)
+end

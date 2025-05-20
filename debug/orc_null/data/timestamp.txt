@@ -1,0 +1,2824 @@
+--> SECOND
+    offset: 3052
+    bytes: 2548934
+--> NANOSECOND
+    offset: 2551986
+    bytes: 1275076
+--> SECOND
+    Total run-length: 636679
+    Total encoded length: 2548934
+--> NANOSECOND
+    Total run-length: 636679
+    Total encoded length: 1275076
+--> SECOND
+rowGroupIdx,
+offsetFromStream_actual,
+numElementsToSkip_actual,
+offsetFromStream_expected,
+numElementsToSkip_expected,
+     0,               0,               0,               0,               0
+     1,           38950,             272,           38950,             272
+     2,           79950,              32,           79950,              32
+     3,          118900,             304,          118900,             304
+     4,          159900,              64,          159900,              64
+     5,          198850,             336,          198850,             336
+     6,          239850,              96,          239850,              96
+     7,          278800,             368,          278800,             368
+     8,          319800,             128,          319800,             128
+     9,          358750,             400,          358750,             400
+    10,          399750,             160,          399750,             160
+    11,          438700,             432,          438700,             432
+    12,          479700,             192,          479700,             192
+    13,          518650,             464,          518650,             464
+    14,          559650,             224,          559650,             224
+    15,          598600,             496,          598600,             496
+    16,          639600,             256,          639600,             256
+    17,          680600,              16,          680600,              16
+    18,          719550,             288,          719550,             288
+    19,          760550,              48,          760550,              48
+    20,          799500,             320,          799500,             320
+    21,          840500,              80,          840500,              80
+    22,          879450,             352,          879450,             352
+    23,          920450,             112,          920450,             112
+    24,          959400,             384,          959400,             384
+    25,         1000400,             144,         1000400,             144
+    26,         1039350,             416,         1039350,             416
+    27,         1080350,             176,         1080350,             176
+    28,         1119300,             448,         1119300,             448
+    29,         1160300,             208,         1160300,             208
+    30,         1199250,             480,         1199250,             480
+    31,         1240250,             240,         1240250,             240
+    32,         1281250,               0,         1281250,               0
+    33,         1320200,             272,         1320200,             272
+    34,         1361200,              32,         1361200,              32
+    35,         1400150,             304,         1400150,             304
+    36,         1441150,              64,         1441150,              64
+    37,         1480100,             336,         1480100,             336
+    38,         1521100,              96,         1521100,              96
+    39,         1560050,             368,         1560050,             368
+    40,         1601050,             128,         1601050,             128
+    41,         1640000,             400,         1640000,             400
+    42,         1681000,             160,         1681000,             160
+    43,         1719950,             432,         1719950,             432
+    44,         1760950,             192,         1760950,             192
+    45,         1799900,             464,         1799900,             464
+    46,         1840900,             224,         1840900,             224
+    47,         1879850,             496,         1879850,             496
+    48,         1920850,             256,         1920850,             256
+    49,         1961850,              16,         1961850,              16
+    50,         2000800,             288,         2000800,             288
+    51,         2041800,              48,         2041800,              48
+    52,         2080750,             320,         2080750,             320
+    53,         2121750,              80,         2121750,              80
+    54,         2160700,             352,         2160700,             352
+    55,         2201700,             112,         2201700,             112
+    56,         2240650,             384,         2240650,             384
+    57,         2281650,             144,         2281650,             144
+    58,         2320600,             416,         2320600,             416
+    59,         2361600,             176,         2361600,             176
+    60,         2401020,             263,         2401020,             263
+    61,         2442020,              23,         2442020,              23
+    62,         2480970,             295,         2480970,             295
+    63,         2521970,              55,         2521970,              55
+--> NANOSECOND
+rowGroupIdx,
+offsetFromStream_actual,
+numElementsToSkip_actual,
+offsetFromStream_expected,
+numElementsToSkip_expected,
+     0,               0,               0,               0,               0
+     1,           19494,             272,           19494,             272
+     2,           40014,              32,           40014,              32
+     3,           59508,             304,           59508,             304
+     4,           80028,              64,           80028,              64
+     5,           99522,             336,           99522,             336
+     6,          120042,              96,          120042,              96
+     7,          139536,             368,          139536,             368
+     8,          160056,             128,          160056,             128
+     9,          179550,             400,          179550,             400
+    10,          200070,             160,          200070,             160
+    11,          219564,             432,          219564,             432
+    12,          240084,             192,          240084,             192
+    13,          259578,             464,          259578,             464
+    14,          280098,             224,          280098,             224
+    15,          299592,             496,          299592,             496
+    16,          320112,             256,          320112,             256
+    17,          340632,              16,          340632,              16
+    18,          360126,             288,          360126,             288
+    19,          380646,              48,          380646,              48
+    20,          400140,             320,          400140,             320
+    21,          420660,              80,          420660,              80
+    22,          440154,             352,          440154,             352
+    23,          460674,             112,          460674,             112
+    24,          480168,             384,          480168,             384
+    25,          500688,             144,          500688,             144
+    26,          520182,             416,          520182,             416
+    27,          540702,             176,          540702,             176
+    28,          560196,             448,          560196,             448
+    29,          580716,             208,          580716,             208
+    30,          600210,             480,          600210,             480
+    31,          620560,             312,          620560,             312
+    32,          640572,             320,          640572,             320
+    33,          660751,             244,          660751,             244
+    34,          680631,             265,          680631,             265
+    35,          701151,              25,          701151,              25
+    36,          720645,             297,          720645,             297
+    37,          740902,             185,          740902,             185
+    38,          760396,             457,          760396,             457
+    39,          780916,             217,          780916,             217
+    40,          801023,             174,          801023,             174
+    41,          821115,             124,          821115,             124
+    42,          840609,             396,          840609,             396
+    43,          860606,             381,          860606,             381
+    44,          881117,             143,          881117,             143
+    45,          901040,             164,          901040,             164
+    46,          920534,             436,          920534,             436
+    47,          940554,             428,          940554,             428
+    48,          961074,             188,          961074,             188
+    49,          980527,             475,          980527,             475
+    50,         1000894,             281,         1000894,             281
+    51,         1021414,              41,         1021414,              41
+    52,         1040613,             425,         1040613,             425
+    53,         1061133,             185,         1061133,             185
+    54,         1080627,             457,         1080627,             457
+    55,         1101086,             246,         1101086,             246
+    56,         1121606,               6,         1121606,               6
+    57,         1141100,             278,         1141100,             278
+    58,         1161133,             244,         1161133,             244
+    59,         1180894,             382,         1180894,             382
+    60,         1201414,             142,         1201414,             142
+    61,         1220908,             414,         1220908,             414
+    62,         1241311,             175,         1241311,             175
+    63,         1260805,             447,         1260805,             447
+--> Compare SECOND and NANOSECOND remaining elements
+rowGroupIdx,
+numElementsToSkip_SECOND,
+numElementsToSkip_NANOSECOND,
+numElementsToRemain_SECOND,
+numElementsToRemain_NANOSECOND,
+doesNanosecHaveMoreOrEqualRemaining
+     0,               0,               0,             512,             512,               1
+     1,             272,             272,             240,             240,               1
+     2,              32,              32,             480,             480,               1
+     3,             304,             304,             208,             208,               1
+     4,              64,              64,             448,             448,               1
+     5,             336,             336,             176,             176,               1
+     6,              96,              96,             416,             416,               1
+     7,             368,             368,             144,             144,               1
+     8,             128,             128,             384,             384,               1
+     9,             400,             400,             112,             112,               1
+    10,             160,             160,             352,             352,               1
+    11,             432,             432,              80,              80,               1
+    12,             192,             192,             320,             320,               1
+    13,             464,             464,              48,              48,               1
+    14,             224,             224,             288,             288,               1
+    15,             496,             496,              16,              16,               1
+    16,             256,             256,             256,             256,               1
+    17,              16,              16,             496,             496,               1
+    18,             288,             288,             224,             224,               1
+    19,              48,              48,             464,             464,               1
+    20,             320,             320,             192,             192,               1
+    21,              80,              80,             432,             432,               1
+    22,             352,             352,             160,             160,               1
+    23,             112,             112,             400,             400,               1
+    24,             384,             384,             128,             128,               1
+    25,             144,             144,             368,             368,               1
+    26,             416,             416,              96,              96,               1
+    27,             176,             176,             336,             336,               1
+    28,             448,             448,              64,              64,               1
+    29,             208,             208,             304,             304,               1
+    30,             480,             480,              32,              32,               1
+    31,             240,             312,             272,             200,               0
+    32,               0,             320,             512,             192,               0
+    33,             272,             244,             240,             268,               1
+    34,              32,             265,             480,             247,               0
+    35,             304,              25,             208,             487,               1
+    36,              64,             297,             448,             215,               0
+    37,             336,             185,             176,             327,               1
+    38,              96,             457,             416,              55,               0
+    39,             368,             217,             144,             295,               1
+    40,             128,             174,             384,             338,               0
+    41,             400,             124,             112,             388,               1
+    42,             160,             396,             352,             116,               0
+    43,             432,             381,              80,             131,               1
+    44,             192,             143,             320,             369,               1
+    45,             464,             164,              48,             348,               1
+    46,             224,             436,             288,              76,               0
+    47,             496,             428,              16,              84,               1
+    48,             256,             188,             256,             324,               1
+    49,              16,             475,             496,              37,               0
+    50,             288,             281,             224,             231,               1
+    51,              48,              41,             464,             471,               1
+    52,             320,             425,             192,              87,               0
+    53,              80,             185,             432,             327,               0
+    54,             352,             457,             160,              55,               0
+    55,             112,             246,             400,             266,               0
+    56,             384,               6,             128,             506,               1
+    57,             144,             278,             368,             234,               0
+    58,             416,             244,              96,             268,               1
+    59,             176,             382,             336,             130,               0
+    60,             263,             142,             249,             370,               1
+    61,              23,             414,             489,              98,               0
+    62,             295,             175,             217,             337,               1
+    63,              55,             447,             457,              65,               0
+--> Verbose info
+--> SECOND
+              DIRECT       512 --- Row group index: 0, skipping: 0, remaining: 512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 1, skipping: 272, remaining: 240
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 2, skipping: 32, remaining: 480
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 3, skipping: 304, remaining: 208
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 4, skipping: 64, remaining: 448
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 5, skipping: 336, remaining: 176
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 6, skipping: 96, remaining: 416
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 7, skipping: 368, remaining: 144
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 8, skipping: 128, remaining: 384
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 9, skipping: 400, remaining: 112
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 10, skipping: 160, remaining: 352
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 11, skipping: 432, remaining: 80
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 12, skipping: 192, remaining: 320
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 13, skipping: 464, remaining: 48
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 14, skipping: 224, remaining: 288
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 15, skipping: 496, remaining: 16
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 16, skipping: 256, remaining: 256
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 17, skipping: 16, remaining: 496
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 18, skipping: 288, remaining: 224
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 19, skipping: 48, remaining: 464
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 20, skipping: 320, remaining: 192
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 21, skipping: 80, remaining: 432
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 22, skipping: 352, remaining: 160
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 23, skipping: 112, remaining: 400
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 24, skipping: 384, remaining: 128
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 25, skipping: 144, remaining: 368
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 26, skipping: 416, remaining: 96
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 27, skipping: 176, remaining: 336
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 28, skipping: 448, remaining: 64
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 29, skipping: 208, remaining: 304
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 30, skipping: 480, remaining: 32
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 31, skipping: 240, remaining: 272
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 32, skipping: 0, remaining: 512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 33, skipping: 272, remaining: 240
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 34, skipping: 32, remaining: 480
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 35, skipping: 304, remaining: 208
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 36, skipping: 64, remaining: 448
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 37, skipping: 336, remaining: 176
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 38, skipping: 96, remaining: 416
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 39, skipping: 368, remaining: 144
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 40, skipping: 128, remaining: 384
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 41, skipping: 400, remaining: 112
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 42, skipping: 160, remaining: 352
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 43, skipping: 432, remaining: 80
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 44, skipping: 192, remaining: 320
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 45, skipping: 464, remaining: 48
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 46, skipping: 224, remaining: 288
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 47, skipping: 496, remaining: 16
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 48, skipping: 256, remaining: 256
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 49, skipping: 16, remaining: 496
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 50, skipping: 288, remaining: 224
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 51, skipping: 48, remaining: 464
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 52, skipping: 320, remaining: 192
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 53, skipping: 80, remaining: 432
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 54, skipping: 352, remaining: 160
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 55, skipping: 112, remaining: 400
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 56, skipping: 384, remaining: 128
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 57, skipping: 144, remaining: 368
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 58, skipping: 416, remaining: 96
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 59, skipping: 176, remaining: 336
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       115 (not 512)
+               DELTA        70 (not 512)
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 60, skipping: 263, remaining: 249
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 61, skipping: 23, remaining: 489
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 62, skipping: 295, remaining: 217
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 63, skipping: 55, remaining: 457
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT        78 (not 512)
+--> NANOSECOND
+              DIRECT       512 --- Row group index: 0, skipping: 0, remaining: 512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 1, skipping: 272, remaining: 240
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 2, skipping: 32, remaining: 480
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 3, skipping: 304, remaining: 208
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 4, skipping: 64, remaining: 448
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 5, skipping: 336, remaining: 176
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 6, skipping: 96, remaining: 416
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 7, skipping: 368, remaining: 144
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 8, skipping: 128, remaining: 384
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 9, skipping: 400, remaining: 112
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 10, skipping: 160, remaining: 352
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 11, skipping: 432, remaining: 80
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 12, skipping: 192, remaining: 320
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 13, skipping: 464, remaining: 48
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 14, skipping: 224, remaining: 288
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 15, skipping: 496, remaining: 16
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 16, skipping: 256, remaining: 256
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 17, skipping: 16, remaining: 496
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 18, skipping: 288, remaining: 224
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 19, skipping: 48, remaining: 464
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 20, skipping: 320, remaining: 192
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 21, skipping: 80, remaining: 432
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 22, skipping: 352, remaining: 160
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 23, skipping: 112, remaining: 400
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 24, skipping: 384, remaining: 128
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 25, skipping: 144, remaining: 368
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 26, skipping: 416, remaining: 96
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 27, skipping: 176, remaining: 336
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 28, skipping: 448, remaining: 64
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 29, skipping: 208, remaining: 304
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 30, skipping: 480, remaining: 32
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       403 (not 512)
+        SHORT_REPEAT         3 (not 512)
+              DIRECT         1 (not 512)
+        SHORT_REPEAT         3 (not 512)
+              DIRECT         1 (not 512)
+        SHORT_REPEAT         3 (not 512)
+              DIRECT         1 (not 512)
+        SHORT_REPEAT         3 (not 512)
+              DIRECT         1 (not 512)
+        SHORT_REPEAT         3 (not 512)
+              DIRECT         1 (not 512)
+        SHORT_REPEAT         3 (not 512)
+              DIRECT         1 (not 512)
+        SHORT_REPEAT         3 (not 512)
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       499 (not 512)
+        SHORT_REPEAT         3 (not 512)
+              DIRECT         1 (not 512)
+        SHORT_REPEAT         3 (not 512)
+              DIRECT         1 (not 512)
+        SHORT_REPEAT         3 (not 512)
+              DIRECT         1 (not 512)
+        SHORT_REPEAT         3 (not 512)
+              DIRECT         1 (not 512)
+        SHORT_REPEAT         3 (not 512)
+              DIRECT         1 (not 512)
+        SHORT_REPEAT         3 (not 512)
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 31, skipping: 312, remaining: 200
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT        61 (not 512)
+        SHORT_REPEAT         3 (not 512)
+              DIRECT         1 (not 512)
+        SHORT_REPEAT         3 (not 512)
+              DIRECT       512
+              DIRECT       512
+              DIRECT       165 (not 512)
+        SHORT_REPEAT         3 (not 512)
+              DIRECT         1 (not 512)
+        SHORT_REPEAT         3 (not 512)
+              DIRECT         1 (not 512)
+        SHORT_REPEAT         3 (not 512)
+              DIRECT         1 (not 512)
+        SHORT_REPEAT         3 (not 512)
+              DIRECT         1 (not 512)
+        SHORT_REPEAT         3 (not 512)
+              DIRECT         1 (not 512)
+        SHORT_REPEAT         3 (not 512)
+              DIRECT         1 (not 512)
+        SHORT_REPEAT         3 (not 512)
+              DIRECT         1 (not 512)
+        SHORT_REPEAT         3 (not 512)
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 32, skipping: 320, remaining: 192
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       305 (not 512)
+        SHORT_REPEAT         3 (not 512)
+              DIRECT         1 (not 512)
+        SHORT_REPEAT         3 (not 512)
+              DIRECT         1 (not 512)
+        SHORT_REPEAT         3 (not 512)
+              DIRECT         1 (not 512)
+        SHORT_REPEAT         3 (not 512)
+              DIRECT         1 (not 512)
+        SHORT_REPEAT         3 (not 512)
+              DIRECT         1 (not 512)
+        SHORT_REPEAT         3 (not 512)
+              DIRECT         1 (not 512)
+        SHORT_REPEAT         3 (not 512)
+              DIRECT         1 (not 512)
+        SHORT_REPEAT         3 (not 512)
+              DIRECT         1 (not 512)
+        SHORT_REPEAT         3 (not 512)
+              DIRECT         1 (not 512)
+        SHORT_REPEAT         3 (not 512)
+              DIRECT         1 (not 512)
+        SHORT_REPEAT         3 (not 512)
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 33, skipping: 244, remaining: 268
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       383 (not 512)
+               DELTA        44 (not 512)
+              DIRECT       512
+              DIRECT       301 (not 512)
+        SHORT_REPEAT         5 (not 512)
+              DIRECT         3 (not 512)
+        SHORT_REPEAT         7 (not 512)
+              DIRECT         1 (not 512)
+        SHORT_REPEAT         3 (not 512)
+              DIRECT         1 (not 512)
+        SHORT_REPEAT         9 (not 512)
+              DIRECT         1 (not 512)
+        SHORT_REPEAT         5 (not 512)
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 34, skipping: 265, remaining: 247
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 35, skipping: 25, remaining: 487
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 36, skipping: 297, remaining: 215
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       379 (not 512)
+        SHORT_REPEAT         5 (not 512)
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 37, skipping: 185, remaining: 327
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 38, skipping: 457, remaining: 55
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 39, skipping: 217, remaining: 295
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       303 (not 512)
+               DELTA        12 (not 512)
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 40, skipping: 174, remaining: 338
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       389 (not 512)
+        SHORT_REPEAT         3 (not 512)
+              DIRECT       512
+              DIRECT        46 (not 512)
+        SHORT_REPEAT         5 (not 512)
+              DIRECT         7 (not 512)
+        SHORT_REPEAT         3 (not 512)
+              DIRECT         5 (not 512)
+        SHORT_REPEAT         3 (not 512)
+              DIRECT         7 (not 512)
+        SHORT_REPEAT         5 (not 512)
+              DIRECT       512
+              DIRECT        77 (not 512)
+               DELTA        14 (not 512)
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       114 (not 512)
+        SHORT_REPEAT         7 (not 512)
+              DIRECT       512
+              DIRECT       512
+              DIRECT       146 (not 512)
+        SHORT_REPEAT         3 (not 512)
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 41, skipping: 124, remaining: 388
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 42, skipping: 396, remaining: 116
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       248 (not 512)
+               DELTA        39 (not 512)
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 43, skipping: 381, remaining: 131
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       506 (not 512)
+        SHORT_REPEAT         4 (not 512)
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 44, skipping: 143, remaining: 369
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       211 (not 512)
+               DELTA        40 (not 512)
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 45, skipping: 164, remaining: 348
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 46, skipping: 436, remaining: 76
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       260 (not 512)
+               DELTA        20 (not 512)
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 47, skipping: 428, remaining: 84
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 48, skipping: 188, remaining: 324
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       490 (not 512)
+        SHORT_REPEAT         7 (not 512)
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 49, skipping: 475, remaining: 37
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       433 (not 512)
+               DELTA        33 (not 512)
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 50, skipping: 281, remaining: 231
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 51, skipping: 41, remaining: 471
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       362 (not 512)
+               DELTA        38 (not 512)
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 52, skipping: 425, remaining: 87
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 53, skipping: 185, remaining: 327
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 54, skipping: 457, remaining: 55
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       480 (not 512)
+        SHORT_REPEAT         3 (not 512)
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 55, skipping: 246, remaining: 266
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 56, skipping: 6, remaining: 506
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 57, skipping: 278, remaining: 234
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       266 (not 512)
+               DELTA        40 (not 512)
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 58, skipping: 244, remaining: 268
+              DIRECT       131 (not 512)
+        SHORT_REPEAT         3 (not 512)
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 59, skipping: 382, remaining: 130
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 60, skipping: 142, remaining: 370
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 61, skipping: 414, remaining: 98
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       451 (not 512)
+               DELTA        60 (not 512)
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 62, skipping: 175, remaining: 337
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512 --- Row group index: 63, skipping: 447, remaining: 65
+              DIRECT        35 (not 512)
+        SHORT_REPEAT         7 (not 512)
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       512
+              DIRECT       428 (not 512)

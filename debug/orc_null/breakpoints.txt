@@ -1,0 +1,31 @@
+b /home/coder/cudf/cpp/src/io/orc/stripe_data.cu:327
+b /home/coder/cudf/cpp/src/io/orc/stripe_data.cu:1684
+
+# b /home/coder/cudf/cpp/src/io/orc/stripe_data.cu:2096
+# b /home/coder/cudf/cpp/src/io/orc/stripe_data.cu:1699
+# b /home/coder/cudf/cpp/src/io/orc/stripe_data.cu:1883
+# b /home/coder/cudf/cpp/src/io/orc/stripe_data.cu:1663
+
+# b /home/coder/cudf/cpp/src/io/orc/stripe_data.cu:2085
+
+# b /home/coder/cudf/cpp/src/io/orc/stripe_data.cu:319
+
+define ha
+    cuda block (39,0,0) thread (0,0,0)
+end
+
+define biu0
+    cuda block (0,0,0) thread (0,0,0)
+end
+
+define biu1
+    cuda block (1,0,0) thread (0,0,0)
+end
+
+define biu62
+    cuda block (62,0,0) thread (0,0,0)
+end
+
+define biu63
+    cuda block (63,0,0) thread (0,0,0)
+end
