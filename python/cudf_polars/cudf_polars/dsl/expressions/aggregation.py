@@ -74,7 +74,7 @@ class Agg(Expr):
             if plc.traits.is_duration(child.dtype):
                 raise NotImplementedError("Quantile with duration data type")
             req = plc.aggregation.quantile(
-                quantiles=[quantile.value.as_py()], interp=Agg.interp_mapping[options]
+                quantiles=[quantile.value], interp=Agg.interp_mapping[options]
             )
         else:
             raise NotImplementedError(

@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 
-import pyarrow as pa
 import pytest
 
 import polars as pl
@@ -89,9 +88,7 @@ def test_compute_column(expr, df):
 
 
 def test_invalid_colref_construction_raises():
-    literal = expr_nodes.Literal(
-        plc.DataType(plc.TypeId.INT8), pa.scalar(1, type=pa.int8())
-    )
+    literal = expr_nodes.Literal(plc.DataType(plc.TypeId.INT8), 1)
     with pytest.raises(TypeError):
         expr_nodes.ColRef(
             literal.dtype, 0, plc.expressions.TableReference.LEFT, literal
