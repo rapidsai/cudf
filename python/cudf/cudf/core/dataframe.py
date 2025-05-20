@@ -1494,7 +1494,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                     out._data.multiindex is False
                     and self._data.multiindex is True
                     and len(out._data.names)
-                    and all(n == "" for n in out._data.names)
+                    and all(n == "" for n in out._column_names)
                 )
                 or (
                     out._data.multiindex is True
