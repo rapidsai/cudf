@@ -479,6 +479,7 @@ class PDSHQueries:
     def q8(run_config: RunConfig) -> pl.LazyFrame:
         """Query 8."""
         return PDSHQueries.q8_duckdb_join_order(run_config)
+        # TODO: Add flag to use original join order?
         customer = get_data(run_config.dataset_path, "customer", run_config.suffix)
         lineitem = get_data(run_config.dataset_path, "lineitem", run_config.suffix)
         nation = get_data(run_config.dataset_path, "nation", run_config.suffix)
