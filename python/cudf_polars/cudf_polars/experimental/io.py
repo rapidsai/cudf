@@ -391,7 +391,7 @@ def _sample_pq_statistics(ir: Scan) -> TableStats:
     if table_stats_cached:  # pragma: no cover; TODO: Test this
         table_stats = TableStats.merge(table_stats, table_stats_cached)
 
-        _TABLESTATS_CACHE[tuple(ir.paths)] = table_stats
+    _TABLESTATS_CACHE[tuple(ir.paths)] = table_stats
 
     return table_stats
 
