@@ -377,7 +377,7 @@ struct string_to_prefix_fn {
     uint32_t data   = 0;
     auto const size = cuda::std::min(static_cast<size_t>(str.size_bytes()), sizeof(uint32_t));
     memcpy(&data, str.data(), size);
-    return __byte_perm(data, 0, 0x0123);
+    return __byte_perm(data, 0, 0x0123);  // unswaps bytes for sorting
   }
 };
 
@@ -391,7 +391,7 @@ struct index_to_prefix_fn {
     auto const size = cuda::std::min((chars.size() - idx), sizeof(uint32_t));
     uint32_t data   = 0;
     memcpy(&data, chars.data() + idx, size);
-    return __byte_perm(data, 0, 0x0123);
+    return __byte_perm(data, 0, 0x0123);  // unswaps bytes for sorting
   }
 };
 
