@@ -124,9 +124,7 @@ def _should_bcast_join(
 
     # Broadcast-Join Criteria:
     # 1. Large dataframe isn't already shuffled
-    # 2. Small dataframe has 8 partitions (or fewer).
-    #    TODO: Make this value/heuristic configurable).
-    #    We may want to account for the number of workers.
+    # 2. Small dataframe meets broadcast_join_limit.
     # 3. The "kind" of join is compatible with a broadcast join
     assert ir.config_options.executor.name == "streaming", (
         "'in-memory' executor not supported in 'generate_ir_tasks'"
@@ -287,6 +285,77 @@ def _join_table_stats(
     )
 
 
+def _maybe_repartition_child(
+    ir: Join,
+    child: IR,
+    side: str,
+    output_count: int,
+    partition_info: MutableMapping[IR, PartitionInfo],
+) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+    """
+    Repartition a Join child if allowed.
+
+    Parameters
+    ----------
+    ir
+        The Join parent of ``child``.
+    child
+        The IR node being joined.
+    side
+        Which side this child corresponds to.
+    output_count
+        Current output partition count of ``ir``.
+    partition_info
+        A mapping from unique IR nodes to the associated
+        PartitionInfo object.
+
+    Returns
+    -------
+    child, partition_info
+        The new child, and an updated mapping
+        from unique IR nodes to associated PartitionInfo objects.
+
+    Notes
+    -----
+    This function will use TableStats information to estimate
+    the size of ``child``. A Repartition node will be added
+    to the IR graph if this estimates suggest a smaller
+    partition count is appropriate.
+    """
+    assert ir.config_options.executor.name == "streaming", (
+        "'in-memory' executor not supported in 'lower_ir_node'"
+    )
+    blocksize = ir.config_options.executor.target_partition_size
+    broadcast_join_limit = ir.config_options.executor.broadcast_join_limit
+    join_on = ir.left_on if side == "left" else ir.right_on
+    assert side in ("left", "right"), "Unexpected `side` argument."
+
+    child_count = partition_info[child].count
+    shuffled = (
+        partition_info[child].partitioned_on == join_on and child_count == output_count
+    )
+    table_stats = partition_info[child].table_stats
+    if not shuffled and child_count < output_count and table_stats is not None:
+        row_size = 0
+        for name in child.schema:
+            if name in table_stats.column_stats:
+                row_size += table_stats.column_stats[name].element_size
+            else:
+                row_size = 0
+                break
+        if row_size:
+            ideal_count = max(1, int(row_size * table_stats.num_rows / blocksize))
+            if ideal_count <= broadcast_join_limit and ideal_count < child_count:
+                child = Repartition(child.schema, child)
+                partition_info[child] = PartitionInfo.new(
+                    child,
+                    partition_info,
+                    count=ideal_count,
+                )
+
+    return child, partition_info
+
+
 @lower_ir_node.register(Join)
 def _(
     ir: Join, rec: LowerIRTransformer
@@ -310,6 +379,14 @@ def _(
         return _lower_ir_fallback(
             ir, rec, msg="Cross join not support for multiple partitions."
         )
+
+    # Repartition children if we can
+    left, partition_info = _maybe_repartition_child(
+        ir, left, "left", output_count, partition_info
+    )
+    right, partition_info = _maybe_repartition_child(
+        ir, right, "right", output_count, partition_info
+    )
 
     if _should_bcast_join(ir, left, right, partition_info, output_count):
         # Create a broadcast join

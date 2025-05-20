@@ -104,47 +104,51 @@ def test_table_statistics(tmp_path, df):
 
 
 def test_table_statistics_join(tmp_path):
+    # Left table
     tmp_dir_left = tmp_path / "temp_dir_left"
     tmp_dir_left.mkdir()
     left = pl.DataFrame(
         {
-            "x": range(15),
-            "y": [1, 2, 3] * 5,
-            "z": [1.0, 2.0, 3.0, 4.0, 5.0] * 3,
+            "x": range(150),
+            "y": [1, 2, 3] * 50,
+            "z": [1.0, 2.0, 3.0, 4.0, 5.0] * 30,
         }
     )
     make_partitioned_source(left, tmp_dir_left, "parquet", n_files=1)
     dfl = pl.scan_parquet(tmp_dir_left)
 
+    # Right table
     tmp_dir_right = tmp_path / "temp_dir_right"
     tmp_dir_right.mkdir()
     right = pl.DataFrame(
         {
-            "xx": range(10),
-            "y": [2, 4, 3, 5, 6] * 2,
-            "zz": [1, 2, 3, 4, 5] * 2,
+            "xx": range(100),
+            "y": [2, 4, 3, 5, 6] * 20,
+            "zz": [1, 2, 3, 4, 5] * 20,
         }
     )
     make_partitioned_source(right, tmp_dir_right, "parquet", n_files=1)
     dfr = pl.scan_parquet(tmp_dir_right)
 
+    # Make sure we get many partitions
     engine = pl.GPUEngine(
         raise_on_fail=True,
         executor="streaming",
         executor_options={
-            "target_partition_size": 10_000,
+            "target_partition_size": 500,
             "scheduler": DEFAULT_SCHEDULER,
             "shuffle_method": "tasks",
         },
     )
-    q = dfl.join(dfr, on="y", how="inner")
 
+    # Check that we get the expected table stats
+    # after a simple join.
+    q = dfl.join(dfr, on="y", how="inner")
     qir = Translator(q._ldf.visit(), engine).translate_ir()
     ir, pi = lower_ir_graph(qir, ConfigOptions(engine.config))
     table_stats_left = pi[ir.children[0]].table_stats
     table_stats_right = pi[ir.children[1]].table_stats
     table_stats = pi[ir].table_stats
-
     expected_num_rows = int(
         (table_stats_left.num_rows * table_stats_right.num_rows)
         / min(
@@ -154,3 +158,14 @@ def test_table_statistics_join(tmp_path):
     )
     assert table_stats.num_rows == expected_num_rows
     assert_gpu_result_equal(q, engine=engine, check_row_order=False)
+
+    # Join on `q` again.
+    # This provides test coverage for automatic repartitioning
+    # of the smaller table (i.e. `q`).
+    tmp_dir_right_2 = tmp_path / "temp_dir_right_2"
+    tmp_dir_right_2.mkdir()
+    right_2 = pl.DataFrame({"xx": range(100), "yy": range(0, 200, 2)})
+    make_partitioned_source(right_2, tmp_dir_right_2, "parquet", n_files=1)
+    dfr2 = pl.scan_parquet(tmp_dir_right_2)
+    q2 = q.join(dfr2, on="xx", how="inner")
+    assert_gpu_result_equal(q2, engine=engine, check_row_order=False)

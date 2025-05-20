@@ -35,6 +35,17 @@ if TYPE_CHECKING:
 
 # Cache TableStats for each tuple of path names
 _TABLESTATS_CACHE: MutableMapping[tuple[str, ...], TableStats] = {}
+_TABLESTATS_CACHE_MAX_ITEMS: int = 10
+
+
+def _update_tablestats_cache(key: tuple[str, ...], value: TableStats) -> None:
+    """Update _TABLESTATS_CACHE with FIFO eviction."""
+    if key not in _TABLESTATS_CACHE and (
+        len(_TABLESTATS_CACHE) >= _TABLESTATS_CACHE_MAX_ITEMS
+    ):
+        first_key = next(iter(_TABLESTATS_CACHE))
+        del _TABLESTATS_CACHE[first_key]
+    _TABLESTATS_CACHE[key] = value
 
 
 @lower_ir_node.register(DataFrameScan)
@@ -392,7 +403,7 @@ def _sample_pq_statistics(ir: Scan) -> TableStats:
             # Combine new and cached column stats
             table_stats = TableStats.merge([table_stats, table_stats_cached])
 
-    _TABLESTATS_CACHE[tuple(ir.paths)] = table_stats
+    _update_tablestats_cache(tuple(ir.paths), table_stats)
 
     return table_stats
 

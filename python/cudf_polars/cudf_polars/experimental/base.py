@@ -141,9 +141,8 @@ class PartitionInfo:
 
         Returns
         -------
-        new_ir, partition_info
-            The new PartitionInfo object, and an updated mapping
-            from unique IR nodes to associated PartitionInfo objects.
+        The new PartitionInfo object, and an updated mapping
+        from unique IR nodes to associated PartitionInfo objects.
 
         Notes
         -----
