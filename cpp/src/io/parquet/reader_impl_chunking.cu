@@ -562,17 +562,23 @@ struct get_page_span {
   RowIndexIter page_row_index;
   size_t const start_row;
   size_t const end_row;
+  bool is_first_subpass;
+  bool has_page_index;
 
   get_page_span(device_span<size_type const> _page_offsets,
                 device_span<ColumnChunkDesc const> _chunks,
                 RowIndexIter _page_row_index,
                 size_t _start_row,
-                size_t _end_row)
+                size_t _end_row,
+                bool _is_first_subpass,
+                bool _has_page_index)
     : page_offsets(_page_offsets),
       chunks(_chunks),
       page_row_index(_page_row_index),
       start_row(_start_row),
-      end_row(_end_row)
+      end_row(_end_row),
+      is_first_subpass(_is_first_subpass),
+      has_page_index(_has_page_index)
   {
   }
 
@@ -584,24 +590,23 @@ struct get_page_span {
     auto const num_pages         = column_page_end - column_page_start;
     bool const is_list           = chunks[column_index].max_level[level_type::REPETITION] > 0;
 
-    auto start_page = first_page_index;
-
     // For list columns, the row counts are estimates so we need all prefix pages to correctly
-    // compute page bounds. Otherwise, we can get an exact span of pages.
-    if (not is_list) {
+    // compute page bounds. For non-list columns, we can get an exact span of pages.
+    auto start_page              = first_page_index;
+    auto const update_start_page = has_page_index or (not is_list) or (not is_first_subpass);
+    if (update_start_page) {
       start_page += thrust::distance(
         column_page_start,
         thrust::lower_bound(thrust::seq, column_page_start, column_page_end, start_row));
-
-      if (page_row_index[start_page] == start_row) { start_page++; }
+    }
+    if (page_row_index[start_page] == start_row and (has_page_index or not is_list)) {
+      start_page++;
     }
 
     auto end_page = thrust::distance(column_page_start,
                                      thrust::lower_bound(
                                        thrust::seq, column_page_start, column_page_end, end_row)) +
                     first_page_index;
-    // TODO: For list columns, we can still end up with the `end_page` not containing the actual
-    // `end_row`. This should be handled properly.
     if (end_page < (first_page_index + num_pages)) { end_page++; }
 
     return {static_cast<size_t>(start_page), static_cast<size_t>(end_page)};
@@ -685,6 +690,8 @@ struct copy_subpass_page {
  * @param start_row The row to start the subpass at
  * @param size_limit The size limit in bytes of the subpass
  * @param num_columns The number of columns
+ * @param is_first_subpass Boolean indicating if this is the first subpass
+ * @param has_page_index Boolean indicating if we have a page index
  * @param stream The stream to execute cuda operations on
  * @returns A tuple containing a vector of page_span structs indicating the page indices to include
  * for each column to be processed, the total number of pages over all columns, and the total
@@ -699,6 +706,8 @@ std::tuple<rmm::device_uvector<page_span>, size_t, size_t> compute_next_subpass(
   size_t start_row,
   size_t size_limit,
   size_t num_columns,
+  bool is_first_subpass,
+  bool has_page_index,
   rmm::cuda_stream_view stream)
 {
   auto [aggregated_info, page_keys_by_split] = adjust_cumulative_sizes(c_info, pages, stream);
@@ -726,11 +735,13 @@ std::tuple<rmm::device_uvector<page_span>, size_t, size_t> compute_next_subpass(
   auto iter = thrust::make_counting_iterator(size_t{0});
   auto page_row_index =
     cudf::detail::make_counting_transform_iterator(0, get_page_end_row_index{c_info});
-  thrust::transform(rmm::exec_policy_nosync(stream),
-                    iter,
-                    iter + num_columns,
-                    page_bounds.begin(),
-                    get_page_span{page_offsets, chunks, page_row_index, start_row, end_row});
+  thrust::transform(
+    rmm::exec_policy_nosync(stream),
+    iter,
+    iter + num_columns,
+    page_bounds.begin(),
+    get_page_span{
+      page_offsets, chunks, page_row_index, start_row, end_row, is_first_subpass, has_page_index});
 
   // total page count over all columns
   auto page_count_iter = thrust::make_transform_iterator(page_bounds.begin(), get_span_size{});
@@ -1320,6 +1331,9 @@ void reader::impl::setup_next_subpass(read_mode mode)
   // respect it.
   auto const min_subpass_size = std::min(_input_pass_read_limit, minimum_subpass_expected_size);
 
+  // Check if this the first subpass in this pass
+  auto const is_first_subpass = pass.processed_rows == 0;
+
   // what do we do if the base memory size (the compressed data) itself is approaching or larger
   // than the overall read limit? we are still going to be decompressing in subpasses, but we have
   // to assume some reasonable minimum size needed to safely decompress a single subpass. so always
@@ -1383,6 +1397,8 @@ void reader::impl::setup_next_subpass(read_mode mode)
                                 pass.processed_rows + pass.skip_rows,
                                 remaining_read_limit,
                                 num_columns,
+                                is_first_subpass,
+                                _has_page_index,
                                 _stream);
   }();
 
@@ -1424,8 +1440,6 @@ void reader::impl::setup_next_subpass(read_mode mode)
   subpass.column_page_count = std::vector<size_t>(num_columns);
   std::transform(
     h_spans.begin(), h_spans.end(), subpass.column_page_count.begin(), get_span_size{});
-
-  auto const is_first_subpass = pass.processed_rows == 0;
 
   // decompress the data pages in this subpass; also decompress the dictionary pages in this pass,
   // if this is the first subpass in the pass

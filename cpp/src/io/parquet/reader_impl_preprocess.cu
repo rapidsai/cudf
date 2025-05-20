@@ -743,6 +743,24 @@ struct set_final_row_count {
   }
 };
 
+/**
+ * @brief Set the page.num_rows for all pages if page index is available
+ */
+struct compute_page_num_rows_from_chunk_rows {
+  device_span<PageInfo> pages;
+  device_span<ColumnChunkDesc const> chunks;
+
+  __device__ void operator()(size_t i)
+  {
+    auto& page        = pages[i];
+    auto const& chunk = chunks[page.chunk_idx];
+    if (i < pages.size() - 1 && (pages[i + 1].chunk_idx == page.chunk_idx)) {
+      page.num_rows = pages[i + 1].chunk_row - page.chunk_row;
+    } else {
+      page.num_rows = chunk.num_rows - page.chunk_row;
+    }
+  }
+};
 }  // anonymous namespace
 
 void reader::impl::build_string_dict_indices()
@@ -1357,10 +1375,6 @@ void reader::impl::preprocess_file(read_mode mode)
 void reader::impl::generate_list_column_row_count_estimates()
 {
   auto& pass = *_pass_itm_data;
-  thrust::for_each(rmm::exec_policy(_stream),
-                   pass.pages.d_begin(),
-                   pass.pages.d_end(),
-                   set_list_row_count_estimate{pass.chunks});
 
   // computes:
   // PageInfo::chunk_row (the chunk-relative row index) for all pages in the pass. The start_row
@@ -1369,6 +1383,10 @@ void reader::impl::generate_list_column_row_count_estimates()
   // gives us the absolute row index
   // Note: chunk_row is already computed if we have column indexes
   if (not _has_page_index) {
+    thrust::for_each(rmm::exec_policy(_stream),
+                     pass.pages.d_begin(),
+                     pass.pages.d_end(),
+                     set_list_row_count_estimate{pass.chunks});
     auto key_input  = thrust::make_transform_iterator(pass.pages.d_begin(), get_page_chunk_idx{});
     auto page_input = thrust::make_transform_iterator(pass.pages.d_begin(), get_page_num_rows{});
     thrust::exclusive_scan_by_key(rmm::exec_policy_nosync(_stream),
@@ -1376,6 +1394,12 @@ void reader::impl::generate_list_column_row_count_estimates()
                                   key_input + pass.pages.size(),
                                   page_input,
                                   chunk_row_output_iter{pass.pages.device_ptr()});
+  } else {
+    // If column indexes are available, we can translate PageInfo::chunk_row to PageInfo::num_rows
+    thrust::for_each(rmm::exec_policy_nosync(_stream),
+                     thrust::counting_iterator<size_t>(0),
+                     thrust::counting_iterator(pass.pages.size()),
+                     compute_page_num_rows_from_chunk_rows{pass.pages, pass.chunks});
   }
 
   // to compensate for the list row size estimates, force the row count on the last page for each

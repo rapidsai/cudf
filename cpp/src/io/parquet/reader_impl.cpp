@@ -730,7 +730,7 @@ std::vector<size_t> reader::impl::calculate_output_num_rows_per_source(size_t co
   auto const end_iter =
     (end_row == _file_itm_data.global_skip_rows + _file_itm_data.global_num_rows)
       ? partial_sum_nrows_source.cend() - 1
-      : std::upper_bound(start_iter, partial_sum_nrows_source.cend(), end_row);
+      : std::lower_bound(start_iter, partial_sum_nrows_source.cend(), end_row);
 
   // Compute the array offset index for both iterators
   auto const start_idx = std::distance(partial_sum_nrows_source.cbegin(), start_iter);
