@@ -53,7 +53,7 @@ bool constexpr has_nulls = true;  ///< Always has nulls
  */
 template <typename T>
 class primitive_keys_fn {
-  using hasher = cudf::row::primitive::row_hasher<cudf::hashing::detail::default_hash>;
+  using hasher = cudf::row::primitive::row_hasher<>;
 
  public:
   CUDF_HOST_DEVICE constexpr primitive_keys_fn(hasher const& hash) : _hash{hash} {}
@@ -208,8 +208,8 @@ distinct_hash_join::distinct_hash_join(cudf::table_view const& build,
   };
 
   if (cudf::is_primitive_row_op_compatible(_build)) {
-    auto const d_hasher = cudf::row::primitive::row_hasher<cudf::hashing::detail::default_hash>{
-      nullate::DYNAMIC{has_nulls}, this->_preprocessed_build};
+    auto const d_hasher =
+      cudf::row::primitive::row_hasher{nullate::DYNAMIC{has_nulls}, this->_preprocessed_build};
 
     auto const iter = cudf::detail::make_counting_transform_iterator(
       0, primitive_keys_fn<rhs_index_type>{d_hasher});
@@ -254,8 +254,8 @@ distinct_hash_join::inner_join(cudf::table_view const& probe,
   auto preprocessed_probe =
     cudf::experimental::row::equality::preprocessed_table::create(probe, stream);
   if (cudf::is_primitive_row_op_compatible(_build)) {
-    auto const d_hasher = cudf::row::primitive::row_hasher<cudf::hashing::detail::default_hash>{
-      nullate::DYNAMIC{has_nulls}, preprocessed_probe};
+    auto const d_hasher =
+      cudf::row::primitive::row_hasher{nullate::DYNAMIC{has_nulls}, preprocessed_probe};
     auto const d_equal = cudf::row::primitive::row_equality_comparator{
       nullate::DYNAMIC{has_nulls}, preprocessed_probe, _preprocessed_build, _nulls_equal};
     auto const iter = cudf::detail::make_counting_transform_iterator(
@@ -350,8 +350,8 @@ std::unique_ptr<rmm::device_uvector<size_type>> distinct_hash_join::left_join(
     cudf::experimental::row::equality::preprocessed_table::create(probe, stream);
 
   if (cudf::is_primitive_row_op_compatible(_build)) {
-    auto const d_hasher = cudf::row::primitive::row_hasher<cudf::hashing::detail::default_hash>{
-      nullate::DYNAMIC{has_nulls}, preprocessed_probe};
+    auto const d_hasher =
+      cudf::row::primitive::row_hasher{nullate::DYNAMIC{has_nulls}, preprocessed_probe};
     auto const d_equal = cudf::row::primitive::row_equality_comparator{
       nullate::DYNAMIC{has_nulls}, preprocessed_probe, _preprocessed_build, _nulls_equal};
 

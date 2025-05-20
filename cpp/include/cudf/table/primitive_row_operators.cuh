@@ -194,7 +194,7 @@ class element_hasher {
  *
  * @tparam Hash Hash functor to use for hashing elements.
  */
-template <template <typename> class Hash>
+template <template <typename> class Hash = cudf::hashing::detail::default_hash>
 class row_hasher {
  public:
   row_hasher() = delete;
