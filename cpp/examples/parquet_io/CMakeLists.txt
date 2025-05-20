@@ -3,6 +3,7 @@
 cmake_minimum_required(VERSION 3.30.4 FATAL_ERROR)
 
 include(../set_cuda_architecture.cmake)
+include_directories(../../src)  # due to #include "io/parquet/reader_impl_helpers.hpp"
 
 # initialize cuda architecture
 rapids_cuda_init_architectures(parquet_io)
@@ -30,6 +31,15 @@ target_link_libraries(
 )
 target_compile_features(parquet_io PRIVATE cxx_std_17)
 install(TARGETS parquet_io DESTINATION bin/examples/libcudf)
+
+# Build and install parquet_io_metadata_caching
+add_executable(parquet_io_metadata_caching parquet_io_metadata_caching.cpp)
+target_link_libraries(
+  parquet_io_metadata_caching PRIVATE cudf::cudf $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp>
+                     $<TARGET_OBJECTS:parquet_io_utils>
+)
+target_compile_features(parquet_io_metadata_caching PRIVATE cxx_std_17)
+install(TARGETS parquet_io_metadata_caching DESTINATION bin/examples/libcudf)
 
 # Build and install parquet_io_multithreaded
 add_executable(parquet_io_multithreaded parquet_io_multithreaded.cpp)

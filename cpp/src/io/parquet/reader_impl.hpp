@@ -25,6 +25,7 @@
 #include "reader_impl_chunking.hpp"
 #include "reader_impl_helpers.hpp"
 
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/detail/parquet.hpp>
 #include <cudf/io/parquet.hpp>
@@ -384,7 +385,54 @@ class reader::impl {
   named_to_reference_converter _expr_conv{std::nullopt, table_metadata{}};
 
   std::vector<std::unique_ptr<datasource>> _sources;
-  std::unique_ptr<aggregate_reader_metadata> _metadata;
+
+  struct aggregate_reader_metadata_wrapper {
+    aggregate_reader_metadata_wrapper() {}
+
+    ~aggregate_reader_metadata_wrapper()
+    {
+      if (use_unique_ptr) { metadata_unique_ptr.reset(); }
+    }
+
+    aggregate_reader_metadata* operator->()
+    {
+      return use_unique_ptr ? metadata_unique_ptr.get() : metadata_raw_ptr;
+    }
+
+    aggregate_reader_metadata& operator*()
+    {
+      return use_unique_ptr ? *metadata_unique_ptr : *metadata_raw_ptr;
+    }
+
+    aggregate_reader_metadata* operator&()
+    {
+      return use_unique_ptr ? metadata_unique_ptr.get() : metadata_raw_ptr;
+    }
+
+    void make_unique_ptr(host_span<std::unique_ptr<datasource> const> sources,
+                         bool use_arrow_schema,
+                         bool has_cols_from_mismatched_srcs)
+    {
+      CUDF_FUNC_RANGE();
+      use_unique_ptr      = true;
+      metadata_unique_ptr = std::make_unique<aggregate_reader_metadata>(
+        sources, use_arrow_schema, has_cols_from_mismatched_srcs);
+    }
+
+    void make_raw_ptr(aggregate_reader_metadata* pointer)
+    {
+      CUDF_FUNC_RANGE();
+      use_unique_ptr   = false;
+      metadata_raw_ptr = pointer;
+    }
+
+    bool use_unique_ptr = true;
+    std::unique_ptr<aggregate_reader_metadata> metadata_unique_ptr;
+    aggregate_reader_metadata* metadata_raw_ptr = nullptr;
+  };
+
+  // Pointer wrapper for aggregate_reader_metadata
+  aggregate_reader_metadata_wrapper _metadata;
 
   // input columns to be processed
   std::vector<input_column_info> _input_columns;

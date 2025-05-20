@@ -21,6 +21,8 @@
 
 #pragma once
 
+#include "io/parquet/reader_impl_helpers.hpp"
+
 #include <cudf/io/parquet_schema.hpp>
 #include <cudf/io/types.hpp>
 #include <cudf/utilities/export.hpp>
@@ -168,7 +170,8 @@ class parquet_metadata {
   using row_group_metadata = std::unordered_map<std::string, int64_t>;
   /// Column chunk metadata from each ColumnChunkMetaData element
   using column_chunk_metadata = std::unordered_map<std::string, std::vector<int64_t>>;
-
+  /// For metadata caching
+  using aggregate_reader_metadata = parquet::detail::aggregate_reader_metadata;
   /**
    * @brief Default constructor
    *
@@ -202,6 +205,37 @@ class parquet_metadata {
       _file_metadata{std::move(file_metadata)},
       _rowgroup_metadata{std::move(rg_metadata)},
       _column_chunk_metadata{std::move(column_chunk_metadata)}
+  {
+  }
+
+  /**
+   * @brief constructor for the case with metadata caching
+   *
+   * @param schema parquet schema
+   * @param num_rows number of rows
+   * @param num_rowgroups total number of row groups
+   * @param num_rowgroups_per_file number of row groups per file
+   * @param file_metadata key-value metadata in the file footer
+   * @param rg_metadata vector of maps containing metadata for each row group
+   * @param column_chunk_metadata map of column names to vectors of `total_uncompressed_size`
+   *                              metadata from all their column chunks
+   * @param _aggregate_reader_metadata the reader metadata
+   */
+  parquet_metadata(parquet_schema schema,
+                   int64_t num_rows,
+                   size_type num_rowgroups,
+                   std::vector<size_type> num_rowgroups_per_file,
+                   key_value_metadata file_metadata,
+                   std::vector<row_group_metadata> rg_metadata,
+                   column_chunk_metadata column_chunk_metadata,
+                   aggregate_reader_metadata _aggregate_reader_metadata)
+    : _schema{std::move(schema)},
+      _num_rows{num_rows},
+      _num_rowgroups{num_rowgroups},
+      _num_rowgroups_per_file{std::move(num_rowgroups_per_file)},
+      _file_metadata{std::move(file_metadata)},
+      _rowgroup_metadata{std::move(rg_metadata)},
+      _aggregate_reader_metadata{_aggregate_reader_metadata}
   {
   }
 
@@ -250,6 +284,16 @@ class parquet_metadata {
   [[nodiscard]] auto const& rowgroup_metadata() const { return _rowgroup_metadata; }
 
   /**
+   * @brief Returns the cached parquet metadata pointer
+   *
+   * @return A single metadata
+   */
+  [[nodiscard]] std::uintptr_t get_aggregate_reader_metadata_ptr() const
+  {
+    return reinterpret_cast<std::uintptr_t>(&_aggregate_reader_metadata);
+  }
+
+  /**
    * @brief Returns a map of column names to vectors of `total_uncompressed_size` metadata from
    *        all their column chunks
    *
@@ -266,6 +310,7 @@ class parquet_metadata {
   key_value_metadata _file_metadata;
   std::vector<row_group_metadata> _rowgroup_metadata;
   column_chunk_metadata _column_chunk_metadata;
+  aggregate_reader_metadata _aggregate_reader_metadata;
 };
 
 /**

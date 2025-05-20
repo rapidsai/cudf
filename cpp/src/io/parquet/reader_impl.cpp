@@ -541,11 +541,16 @@ reader::impl::impl(std::size_t chunk_read_limit,
     _output_chunk_read_limit{chunk_read_limit},
     _input_pass_read_limit{pass_read_limit}
 {
-  // Open and parse the source dataset metadata
-  _metadata = std::make_unique<aggregate_reader_metadata>(
-    _sources,
-    options.is_enabled_use_arrow_schema(),
-    options.get_columns().has_value() and options.is_enabled_allow_mismatched_pq_schemas());
+  if (options.get_aggregate_reader_metadata_ptr() != nullptr) {
+    // Metadata caching
+    _metadata.make_raw_ptr(options.get_aggregate_reader_metadata_ptr());
+  } else {
+    // Open and parse the source dataset metadata
+    _metadata.make_unique_ptr(
+      _sources,
+      options.is_enabled_use_arrow_schema(),
+      options.get_columns().has_value() and options.is_enabled_allow_mismatched_pq_schemas());
+  }
 
   // Strings may be returned as either string or categorical columns
   _strings_to_categorical = options.is_enabled_convert_strings_to_categories();
@@ -871,7 +876,8 @@ parquet_metadata read_parquet_metadata(host_span<std::unique_ptr<datasource> con
                           metadata.get_num_row_groups_per_file(),
                           metadata.get_key_value_metadata()[0],
                           metadata.get_rowgroup_metadata(),
-                          metadata.get_column_chunk_metadata()};
+                          metadata.get_column_chunk_metadata(),
+                          metadata};
 }
 
 }  // namespace cudf::io::parquet::detail

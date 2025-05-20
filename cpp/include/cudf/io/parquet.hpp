@@ -16,6 +16,8 @@
 
 #pragma once
 
+#include "io/parquet/reader_impl_helpers.hpp"
+
 #include <cudf/ast/expressions.hpp>
 #include <cudf/io/detail/parquet.hpp>
 #include <cudf/io/types.hpp>
@@ -72,6 +74,8 @@ constexpr size_type default_max_page_fragment_size     = 5000;  ///< 5000 rows p
 
 class parquet_reader_options_builder;
 
+using aggregate_reader_metadata = parquet::detail::aggregate_reader_metadata;
+
 /**
  * @brief Settings for `read_parquet()`.
  */
@@ -113,6 +117,8 @@ class parquet_reader_options {
 
   friend parquet_reader_options_builder;
 
+  aggregate_reader_metadata* _aggregate_reader_metadata = nullptr;
+
  public:
   /**
    * @brief Default constructor.
@@ -130,6 +136,16 @@ class parquet_reader_options {
    * @return Builder to build reader options
    */
   static parquet_reader_options_builder builder(source_info src = source_info{});
+
+  /**
+   * @brief Returns the _aggregate_reader_metadata pointer in this option.
+   *
+   * @return _aggregate_reader_metadata pointer. If not cached, then nullptr.
+   */
+  [[nodiscard]] aggregate_reader_metadata* get_aggregate_reader_metadata_ptr() const
+  {
+    return _aggregate_reader_metadata;
+  }
 
   /**
    * @brief Returns source info.
@@ -360,6 +376,16 @@ class parquet_reader_options {
    * @param type The timestamp data_type to which all timestamp columns need to be cast
    */
   void set_timestamp_type(data_type type) { _timestamp_type = type; }
+
+  /**
+   * @brief Sets the cached metadata
+   *
+   * @param meta_ptr the cached metadata pointer
+   */
+  void set_aggregate_reader_metadata(std::uintptr_t meta_ptr)
+  {
+    _aggregate_reader_metadata = reinterpret_cast<aggregate_reader_metadata*>(meta_ptr);
+  }
 };
 
 /**
