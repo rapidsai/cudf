@@ -1500,7 +1500,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                     out._data.multiindex is True
                     and self._data.multiindex is True
                     and len(out._data.names)
-                    and all(n == "" for n in out._data.names[0])
+                    and all(n == "" for n in out._column_names[0])
                 )
             ):
                 out = self._constructor_sliced._from_data(out._data)
