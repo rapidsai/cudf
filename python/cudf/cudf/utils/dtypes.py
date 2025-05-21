@@ -386,15 +386,10 @@ def is_dtype_obj_numeric(
         return is_non_decimal
 
 
-try:
-    pa_decimal32type = pa.Decimal32Type
-except AttributeError:
-    pa_decimal32type = None
+pa_decimal32type = getattr(pa, "Decimal32Type", None)
 
 try:
-    pa_decimal64type = pa.Decimal64Type
-except AttributeError:
-    pa_decimal64type = None
+pa_decimal64type = getattr(pa, "Decimal64Type", None)
 
 
 def pyarrow_dtype_to_cudf_dtype(dtype: pa.DataType) -> DtypeObj:
