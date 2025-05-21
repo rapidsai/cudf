@@ -18,7 +18,7 @@ from cudf_polars.experimental.base import PartitionInfo
 from cudf_polars.experimental.dispatch import lower_ir_node
 from cudf_polars.experimental.repartition import Repartition
 from cudf_polars.experimental.shuffle import Shuffle
-from cudf_polars.experimental.utils import _lower_ir_fallback
+from cudf_polars.experimental.utils import _get_unique_fractions, _lower_ir_fallback
 
 if TYPE_CHECKING:
     from collections.abc import Generator, MutableMapping
@@ -159,15 +159,15 @@ def _(
     shuffled = partition_info[child].partitioned_on == ir.keys
 
     assert ir.config_options.executor.name == "streaming", (
-        "'in-memory' executor not supported in 'generate_ir_tasks'"
+        "'in-memory' executor not supported in 'lower_ir_node'"
     )
 
-    unique_fraction_dict = {
-        c: min(f, 1.0)
-        for c, f in ir.config_options.executor.unique_fraction.items()
-        if c in groupby_key_columns
-    }
-    if unique_fraction_dict:
+    if unique_fraction_dict := _get_unique_fractions(
+        child,
+        groupby_key_columns,
+        partition_info,
+        ir.config_options,
+    ):
         # The `unique_fraction` config can be used
         # to specify a mapping between column names and the
         # fractional number of unique values in the column.
@@ -177,6 +177,8 @@ def _(
             int(max(unique_fraction_dict.values()) * child_count),
             1,
         )
+        if post_aggregation_count > ir.config_options.executor.broadcast_join_limit:
+            post_aggregation_count = child_count
 
     new_node: IR
     name_generator = unique_names(ir.schema.keys())

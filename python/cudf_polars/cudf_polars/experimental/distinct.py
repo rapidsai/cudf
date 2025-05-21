@@ -13,7 +13,11 @@ from cudf_polars.dsl.expressions.base import Col, NamedExpr
 from cudf_polars.dsl.ir import Distinct
 from cudf_polars.experimental.base import PartitionInfo
 from cudf_polars.experimental.dispatch import lower_ir_node
-from cudf_polars.experimental.utils import _fallback_inform, _lower_ir_fallback
+from cudf_polars.experimental.utils import (
+    _fallback_inform,
+    _get_unique_fractions,
+    _lower_ir_fallback,
+)
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
@@ -157,16 +161,15 @@ def _(
     # Extract child partitioning
     child, partition_info = rec(ir.children[0])
     config_options = rec.state["config_options"]
-    assert config_options.executor.name == "streaming", (
-        "'in-memory' executor not supported in 'lower_ir_node'"
+
+    subset: frozenset[str] = ir.subset or frozenset(ir.schema)
+    unique_fraction_dict = _get_unique_fractions(
+        child,
+        tuple(subset),
+        partition_info,
+        config_options,
     )
 
-    subset: frozenset = ir.subset or frozenset(ir.schema)
-    unique_fraction_dict = {
-        c: max(min(f, 1.0), 0.00001)
-        for c, f in config_options.executor.unique_fraction.items()
-        if c in subset
-    }
     unique_fraction = (
         max(unique_fraction_dict.values()) if unique_fraction_dict else None
     )
