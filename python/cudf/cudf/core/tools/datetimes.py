@@ -509,6 +509,7 @@ class DateOffset:
         "D": "days",
         "W": "weeks",
         "M": "months",
+        "ME": "months",
         "Y": "years",
     }
 
@@ -524,6 +525,11 @@ class DateOffset:
     }
 
     _FREQSTR_REGEX = re.compile("([-+]?[0-9]*)([a-zA-Z]+)")
+
+    def __eq__(self, other):
+        if not isinstance(other, DateOffset):
+            return NotImplemented
+        return self.kwds == other.kwds
 
     def __init__(self, n=1, normalize=False, **kwds):
         if normalize:
@@ -701,6 +707,11 @@ class DateOffset:
         if numeric_part == "":
             numeric_part = "1"
         freq_part = match.group(2)
+
+        #        # Certain frequency strings are deprecated in pandas
+        #        # and automatically swapped on construction
+        #        if freq_part == "M":
+        #            freq_part == "ME"
 
         if freq_part not in cls._CODES_TO_UNITS:
             raise ValueError(f"Cannot interpret frequency str: {freqstr}")

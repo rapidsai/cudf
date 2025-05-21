@@ -271,7 +271,6 @@ class _SeriesLocIndexer(_FrameIndexer):
             arg = self._loc_to_iloc(arg)
         except (TypeError, KeyError, IndexError, ValueError) as err:
             raise KeyError(arg) from err
-
         return self._frame.iloc[arg]
 
     @_performance_tracking
