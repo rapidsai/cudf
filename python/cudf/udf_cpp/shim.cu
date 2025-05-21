@@ -727,44 +727,36 @@ make_definition_corr(BlockCorr, int64, int64_t);
 NRT CUDA functions
 */
 
-// Only used to allocate the right amount of space, see below
-struct meminfo_and_str {
-  NRT_MemInfo mi;
-  udf_string st;
-};
-
 /*
-Create a new MemInfo object holding the reference count of a udf_string. When returning
-new strings, shim functions expect a pointer to a stack allocated buffer into which it
-will construct the udf_string it returns. Since one can not safely build a MemInfo object
-around this stack memory, we store a copy of the udf_string itself next to the MemInfo
-which manages the lifetime of the udf_string.
+Initialize a MemInfo to track a newly created cudf::udf_string.
+Shim functions return new cudf::udf_string objects into stack memory,
+so this function persists a copy to the heap for use when destructing
+the object later on. The returned MemInfo tracks the heap copy.
 */
-extern "C" __device__ int meminfo_from_new_udf_str(void** nb_retval, void* udf_str)
+extern "C" __device__ int init_udf_string_meminfo(void** out_meminfo, void* udf_str)
 {
-  // allocate enough room for both the meminfo and udf_string
-  meminfo_and_str* mi_and_str = (meminfo_and_str*)NRT_Allocate(sizeof(meminfo_and_str));
+  struct mi_str_allocation {
+    NRT_MemInfo mi;
+    udf_string st;
+  };
+  mi_str_allocation* mi_and_str = (mi_str_allocation*)NRT_Allocate(sizeof(mi_str_allocation));
   if (mi_and_str != NULL) {
     auto mi_ptr        = &(mi_and_str->mi);
     udf_string* st_ptr = &(mi_and_str->st);
 
-    // We pass a null size here because the udf_string actually exists on the stack
-    // and tracks the size of the string data that it points to.
-    NRT_MemInfo_init(mi_ptr, st_ptr, NULL, udf_str_dtor, NULL);
+    // udf_str_dtor can destruct the string without knowing the size
+    NRT_MemInfo_init(mi_ptr,
+                     st_ptr,
+                     NULL,  // size
+                     udf_str_dtor,
+                     NULL);
 
     // copy the udf_string to the extra heap space
     udf_string* in_str_ptr = reinterpret_cast<udf_string*>(udf_str);
     memcpy(st_ptr, in_str_ptr, sizeof(udf_string));
-    *nb_retval = &(mi_and_str->mi);
+    *out_meminfo = &(mi_and_str->mi);
   } else {
-    *nb_retval = NULL;
+    *out_meminfo = NULL;
   }
-
-  return 0;
-}
-
-extern "C" int __device__ extern_NRT_Decref(int& retval, void* ptr)
-{
-  NRT_decref(reinterpret_cast<NRT_MemInfo*>(ptr));
   return 0;
 }

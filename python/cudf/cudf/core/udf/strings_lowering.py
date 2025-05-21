@@ -30,6 +30,13 @@ from cudf.core.udf.strings_typing import (
 _STR_VIEW_PTR = types.CPointer(string_view)
 _UDF_STRING_PTR = types.CPointer(udf_string)
 
+_UDF_STR_PTR_LLVM_TY = ir.PointerType(
+    default_manager[udf_string].get_value_type()
+)
+_STR_VIEW_PTR_LLVM_TY = ir.PointerType(
+    default_manager[string_view].get_value_type()
+)
+
 # CUDA function declarations
 # read-only (input is a string_view, output is a fixed with type)
 _string_view_len = cuda.declare_device("len", size_type(_STR_VIEW_PTR))
@@ -191,13 +198,13 @@ def cast_managed_udf_string_to_string_view(
 
 
 # Utilities
-_new_meminfo_from_udf_str = cuda.declare_device(
-    "meminfo_from_new_udf_str", types.voidptr(_UDF_STRING_PTR)
+_init_udf_string_meminfo = cuda.declare_device(
+    "init_udf_string_meminfo", types.voidptr(_UDF_STRING_PTR)
 )
 
 
-def new_meminfo_from_udf_str(udf_str):
-    return _new_meminfo_from_udf_str(udf_str)
+def init_udf_string_meminfo(udf_str):
+    return _init_udf_string_meminfo(udf_str)
 
 
 def _finalize_new_managed_udf_string(context, builder, managed_ptr):
@@ -217,7 +224,7 @@ def _finalize_new_managed_udf_string(context, builder, managed_ptr):
     # See shim.cu for details.
     mi = context.compile_internal(
         builder,
-        new_meminfo_from_udf_str,
+        init_udf_string_meminfo,
         types.voidptr(_UDF_STRING_PTR),
         (udf_str_ptr,),
     )
@@ -287,27 +294,16 @@ def len_impl(context, builder, sig, args):
     return result
 
 
-_device_nrt_decref = cuda.declare_device(
-    "extern_NRT_Decref", types.void(types.voidptr)
-)
-
-
-def call_device_nrt_decref(meminfo):
-    return _device_nrt_decref(meminfo)
-
-
 @cuda_lower(NRT_decref, managed_udf_string)
 def decref_managed_udf_string(context, builder, sig, args):
     managed_ptr = args[0]
     managed = cgutils.create_struct_proxy(managed_udf_string)(
         context, builder, value=managed_ptr
     )
-    _ = context.compile_internal(
-        builder,
-        call_device_nrt_decref,
-        nb_signature(types.void, types.voidptr),
-        (managed.meminfo,),
-    )
+    fnty = ir.FunctionType(ir.VoidType(), [ir.PointerType(ir.IntType(8))])
+    fn = cgutils.get_or_insert_function(builder.module, fnty, "NRT_decref")
+    builder.call(fn, (managed.meminfo,))
+
     return
 
 
@@ -328,13 +324,13 @@ def concat_impl(context, builder, sig, args):
     udf_str_ptr = builder.gep(
         managed_ptr, [ir.IntType(32)(0), ir.IntType(32)(1)]
     )
-
     _ = context.compile_internal(
         builder,
         call_concat_string_view,
         types.void(_UDF_STRING_PTR, _STR_VIEW_PTR, _STR_VIEW_PTR),
         (udf_str_ptr, lhs_ptr, rhs_ptr),
     )
+
     return _finalize_new_managed_udf_string(context, builder, managed_ptr)
 
 
