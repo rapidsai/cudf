@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -41,9 +41,9 @@ static void bench_copy_range(nvbench::state& state)
   auto const target = source_tables->view().column(1);
 
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
-  auto chars_size = cudf::strings_column_view(target).chars_size(cudf::get_default_stream());
-  state.add_global_memory_reads<nvbench::int8_t>(chars_size);   // all bytes are read;
-  state.add_global_memory_writes<nvbench::int8_t>(chars_size);  // both columns are similar size
+  auto data_size = source_tables->alloc_size();
+  state.add_global_memory_reads<nvbench::int8_t>(data_size);   // all bytes are read;
+  state.add_global_memory_writes<nvbench::int8_t>(data_size);  // both columns are similar size
 
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
     [[maybe_unused]] auto result = cudf::copy_range(source, target, start, end, start / 2);

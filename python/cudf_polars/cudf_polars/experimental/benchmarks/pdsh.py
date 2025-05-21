@@ -25,13 +25,22 @@ from datetime import date, datetime, timezone
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
-import pynvml
 
 import polars as pl
 
-from cudf_polars.dsl.translate import Translator
-from cudf_polars.experimental.explain import explain_query
-from cudf_polars.experimental.parallel import evaluate_streaming
+try:
+    import pynvml
+except ImportError:
+    pynvml = None
+
+try:
+    from cudf_polars.dsl.translate import Translator
+    from cudf_polars.experimental.explain import explain_query
+    from cudf_polars.experimental.parallel import evaluate_streaming
+
+    CUDF_POLARS_AVAILABLE = True
+except ImportError:
+    CUDF_POLARS_AVAILABLE = False
 
 if TYPE_CHECKING:
     import pathlib
@@ -66,18 +75,16 @@ class PackageVersions:
         packages = [
             "cudf_polars",
             "polars",
+            "rapidsmpf",
         ]
         versions = {}
         for name in packages:
-            package = importlib.import_module(name)
-            versions[name] = package.__version__
+            try:
+                package = importlib.import_module(name)
+                versions[name] = package.__version__
+            except (AttributeError, ImportError):  # noqa: PERF203
+                versions[name] = None
         versions["python"] = ".".join(str(v) for v in sys.version_info[:3])
-        try:
-            import rapidsmpf
-
-            versions["rapidsmpf"] = rapidsmpf.__version__
-        except (AttributeError, ImportError):
-            versions["rapidsmpf"] = None
         return cls(**versions)
 
 
@@ -116,8 +123,12 @@ class HardwareInfo:
     @classmethod
     def collect(cls) -> HardwareInfo:
         """Collect the hardware information."""
-        pynvml.nvmlInit()
-        gpus = [GPUInfo.from_index(i) for i in range(pynvml.nvmlDeviceGetCount())]
+        if pynvml is not None:
+            pynvml.nvmlInit()
+            gpus = [GPUInfo.from_index(i) for i in range(pynvml.nvmlDeviceGetCount())]
+        else:
+            # No GPUs -- probably running in CPU mode
+            gpus = []
         return cls(gpus=gpus)
 
 
@@ -144,6 +155,8 @@ class RunConfig:
         default_factory=lambda: datetime.now(timezone.utc).isoformat()
     )
     hardware: HardwareInfo = dataclasses.field(default_factory=HardwareInfo.collect)
+    rmm_async: bool
+    rapidsmpf_oom_protection: bool
     rapidsmpf_spill: bool
     spill_device: float
 
@@ -168,6 +181,8 @@ class RunConfig:
             threads=args.threads,
             iterations=args.iterations,
             suffix=args.suffix,
+            rmm_async=args.rmm_async,
+            rapidsmpf_oom_protection=args.rapidsmpf_oom_protection,
             spill_device=args.spill_device,
             rapidsmpf_spill=args.rapidsmpf_spill,
         )
@@ -193,6 +208,8 @@ class RunConfig:
                 if self.scheduler == "distributed":
                     print(f"n_workers: {self.n_workers}")
                     print(f"threads: {self.threads}")
+                    print(f"rmm_async: {self.rmm_async}")
+                    print(f"rapidsmpf_oom_protection: {self.rapidsmpf_oom_protection}")
                     print(f"spill_device: {self.spill_device}")
                     print(f"rapidsmpf_spill: {self.rapidsmpf_spill}")
             if len(records) > 0:
@@ -1081,6 +1098,18 @@ parser.add_argument(
     help="RMM pool size (fractional).",
 )
 parser.add_argument(
+    "--rmm-async",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help="Use RMM async memory resource.",
+)
+parser.add_argument(
+    "--rapidsmpf-oom-protection",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help="Use rapidsmpf CUDA managed memory-based OOM protection.",
+)
+parser.add_argument(
     "--rapidsmpf-spill",
     action=argparse.BooleanOptionalAction,
     default=False,
@@ -1090,7 +1119,7 @@ parser.add_argument(
     "--spill-device",
     default=0.5,
     type=float,
-    help="Rapdsimpf device spill threshold.",
+    help="Rapidsmpf device spill threshold.",
 )
 parser.add_argument(
     "-o",
@@ -1138,8 +1167,9 @@ def run(args: argparse.Namespace) -> None:
         kwargs = {
             "n_workers": run_config.n_workers,
             "dashboard_address": ":8585",
-            "protocol": "ucx",
+            "protocol": "ucxx",
             "rmm_pool_size": args.rmm_pool_size,
+            "rmm_async": args.rmm_async,
             "threads_per_worker": run_config.threads,
         }
 
@@ -1150,7 +1180,11 @@ def run(args: argparse.Namespace) -> None:
             try:
                 from rapidsmpf.integrations.dask import bootstrap_dask_cluster
 
-                bootstrap_dask_cluster(client, spill_device=run_config.spill_device)
+                bootstrap_dask_cluster(
+                    client,
+                    spill_device=run_config.spill_device,
+                    oom_protection=args.rapidsmpf_oom_protection,
+                )
             except ImportError as err:
                 if run_config.shuffle == "rapidsmpf":
                     raise ImportError from err
@@ -1200,7 +1234,7 @@ def run(args: argparse.Namespace) -> None:
             if args.explain_logical:
                 print(f"\nQuery {q_id} - Logical plan\n")
                 print(q.explain())
-        else:
+        elif CUDF_POLARS_AVAILABLE:
             assert isinstance(engine, pl.GPUEngine)
             if args.explain_logical:
                 print(f"\nQuery {q_id} - Logical plan\n")
@@ -1208,6 +1242,10 @@ def run(args: argparse.Namespace) -> None:
             elif args.explain:
                 print(f"\nQuery {q_id} - Physical plan\n")
                 print(explain_query(q, engine))
+        else:
+            raise RuntimeError(
+                "Cannot provide the logical or physical plan because cudf_polars is not installed."
+            )
 
         records[q_id] = []
 
@@ -1216,7 +1254,7 @@ def run(args: argparse.Namespace) -> None:
 
             if run_config.executor == "cpu":
                 result = q.collect(new_streaming=True)
-            else:
+            elif CUDF_POLARS_AVAILABLE:
                 assert isinstance(engine, pl.GPUEngine)
                 if args.debug:
                     translator = Translator(q._ldf.visit(), engine)
@@ -1229,6 +1267,10 @@ def run(args: argparse.Namespace) -> None:
                         ).to_polars()
                 else:
                     result = q.collect(engine=engine)
+            else:
+                raise RuntimeError(
+                    "Cannot provide debug information because cudf_polars is not installed."
+                )
 
             t1 = time.monotonic()
             record = Record(query=q_id, duration=t1 - t0)
