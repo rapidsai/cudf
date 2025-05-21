@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 from . import (
     avro,
@@ -9,6 +9,7 @@ from . import (
     parquet,
     parquet_metadata,
     text,
+    threads,
     timezone,
     types,
 )
