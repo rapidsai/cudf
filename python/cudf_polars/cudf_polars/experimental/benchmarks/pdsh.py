@@ -1208,7 +1208,7 @@ def run(args: argparse.Namespace) -> None:
         kwargs = {
             "n_workers": run_config.n_workers,
             "dashboard_address": ":8585",
-            "protocol": "ucx",
+            "protocol": "ucxx",
             "rmm_pool_size": args.rmm_pool_size,
             "rmm_async": args.rmm_async,
             "threads_per_worker": run_config.threads,
@@ -1236,10 +1236,10 @@ def run(args: argparse.Namespace) -> None:
         if run_config.executor == "streaming":
             executor_options = {
                 "unique_fraction": {
-                    "c_custkey": 0.05,  # Q10
-                    "l_orderkey": 1.0,  # Q18
-                    "l_partkey": 0.1,  # Q20
-                    "o_custkey": 0.25,  # Q22
+                    # "c_custkey": 0.05,  # Q10
+                    # "l_orderkey": 1.0,  # Q18
+                    # "l_partkey": 0.1,  # Q20
+                    # "o_custkey": 0.25,  # Q22
                 },
             }
             if run_config.blocksize:
