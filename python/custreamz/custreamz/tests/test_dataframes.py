@@ -35,6 +35,9 @@ def disable_distributed_gc_diagnosis():
     distributed.gc.enable_gc_diagnosis()
 
 
+pytestmark = pytest.mark.usefixtures("disable_distributed_gc_diagnosis")
+
+
 @pytest.fixture(scope="module")
 def client():
     client = Client(processes=False, asynchronous=False)
