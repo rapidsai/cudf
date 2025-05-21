@@ -15,6 +15,7 @@
  */
 
 #pragma once
+
 #include <cudf/detail/utilities/assert.cuh>
 #include <cudf/types.hpp>
 #include <cudf/unary.hpp>
