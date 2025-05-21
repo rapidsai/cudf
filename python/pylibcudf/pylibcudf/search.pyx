@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
@@ -97,9 +97,9 @@ cpdef Column contains(Column haystack, Column needles):
 
     Parameters
     ----------
-    haystack : Table
+    haystack : Column
         The search space.
-    needles : Table
+    needles : Column
         The values for which to search.
 
     Returns

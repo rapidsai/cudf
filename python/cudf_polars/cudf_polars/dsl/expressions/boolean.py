@@ -10,6 +10,8 @@ from enum import IntEnum, auto
 from functools import partial, reduce
 from typing import TYPE_CHECKING, Any, ClassVar
 
+import pyarrow as pa
+
 import pylibcudf as plc
 
 from cudf_polars.containers import Column
@@ -17,6 +19,7 @@ from cudf_polars.dsl.expressions.base import (
     ExecutionContext,
     Expr,
 )
+from cudf_polars.dsl.expressions.literal import LiteralColumn
 from cudf_polars.utils.versions import POLARS_VERSION_LT_128
 
 if TYPE_CHECKING:
@@ -94,6 +97,15 @@ class BooleanFunction(Expr):
             # TODO: If polars IR doesn't put the casts in, we need to
             # mimic the supertype promotion rules.
             raise NotImplementedError("IsIn doesn't support supertype casting")
+        if self.name is BooleanFunction.Name.IsIn:
+            _, haystack = self.children
+            # TODO: Use pl.List isinstance check once we have https://github.com/rapidsai/cudf/pull/18564
+            if isinstance(haystack, LiteralColumn) and isinstance(
+                haystack.value, pa.ListArray
+            ):
+                raise NotImplementedError(
+                    "IsIn does not support nested list column input"
+                )  # pragma: no cover
 
     @staticmethod
     def _distinct(

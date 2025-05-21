@@ -154,6 +154,7 @@ class UnaryFunction(Expr):
             (child,) = self.children
             return child.evaluate(df, context=context).mask_nans()
         if self.name == "round":
+            round_mode = "half_away_from_zero"
             if POLARS_VERSION_LT_129:  # pragma: no cover
                 (decimal_places,) = self.options
             else:  # pragma: no cover
@@ -162,15 +163,17 @@ class UnaryFunction(Expr):
                     round_mode,
                 ) = self.options
             (values,) = (child.evaluate(df, context=context) for child in self.children)
-            if not POLARS_VERSION_LT_129:  # pragma: no cover
-                round_mode = (
-                    plc.round.RoundingMethod.HALF_EVEN
-                    if round_mode == "half_to_even"
-                    else plc.round.RoundingMethod.HALF_UP
-                )
             return Column(
-                plc.round.round(values.obj, decimal_places, round_mode)
-            ).sorted_like(values)
+                plc.round.round(
+                    values.obj,
+                    decimal_places,
+                    (
+                        plc.round.RoundingMethod.HALF_EVEN
+                        if round_mode == "half_to_even"
+                        else plc.round.RoundingMethod.HALF_UP
+                    ),
+                )
+            ).sorted_like(values)  # pragma: no cover
         elif self.name == "unique":
             (maintain_order,) = self.options
             (values,) = (child.evaluate(df, context=context) for child in self.children)
