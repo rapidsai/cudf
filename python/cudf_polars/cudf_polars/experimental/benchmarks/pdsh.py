@@ -1098,6 +1098,12 @@ parser.add_argument(
     help="Use RMM async memory resource.",
 )
 parser.add_argument(
+    "--rapidsmpf-oom-protection",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help="Use rapidsmpf CUDA managed memory-based OOM protection.",
+)
+parser.add_argument(
     "--rapidsmpf-spill",
     action=argparse.BooleanOptionalAction,
     default=False,
@@ -1107,7 +1113,7 @@ parser.add_argument(
     "--spill-device",
     default=0.5,
     type=float,
-    help="Rapdsimpf device spill threshold.",
+    help="Rapidsmpf device spill threshold.",
 )
 parser.add_argument(
     "-o",
@@ -1168,7 +1174,11 @@ def run(args: argparse.Namespace) -> None:
             try:
                 from rapidsmpf.integrations.dask import bootstrap_dask_cluster
 
-                bootstrap_dask_cluster(client, spill_device=run_config.spill_device)
+                bootstrap_dask_cluster(
+                    client,
+                    spill_device=run_config.spill_device,
+                    oom_protection=args.rapidsmpf_oom_protection,
+                )
             except ImportError as err:
                 if run_config.shuffle == "rapidsmpf":
                     raise ImportError from err
