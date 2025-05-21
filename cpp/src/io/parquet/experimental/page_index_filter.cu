@@ -161,15 +161,41 @@ namespace {
       });
     });
 
-  // If the vector is empty, it means we don't have the page index present
-  CUDF_EXPECTS(col_chunk_page_offsets.back() > 0,
-               "Page index is not present for page pruning",
-               std::runtime_error);
-
   return std::tuple{
     std::move(page_row_counts), std::move(page_row_offsets), std::move(col_chunk_page_offsets)};
 }
 
+/**
+ * @brief Compute if the page index is present in all parquet data sources for all output columns
+ */
+[[nodiscard]] bool compute_has_page_index(
+  cudf::host_span<metadata_base const> per_file_metadata,
+  cudf::host_span<std::vector<size_type> const> row_group_indices,
+  cudf::host_span<size_type const> output_column_schemas)
+{
+  // For all output columns, check all parquet data sources
+  return std::all_of(
+    output_column_schemas.begin(), output_column_schemas.end(), [&](auto const schema_idx) {
+      // For all parquet data sources
+      return std::all_of(
+        thrust::counting_iterator<size_t>(0),
+        thrust::counting_iterator(row_group_indices.size()),
+        [&](auto const src_index) {
+          // For all row groups in this parquet data source
+          auto const& rg_indices = row_group_indices[src_index];
+          return std::all_of(rg_indices.begin(), rg_indices.end(), [&](auto const& rg_index) {
+            auto const& row_group = per_file_metadata[src_index].row_groups[rg_index];
+            auto col              = std::find_if(
+              row_group.columns.begin(),
+              row_group.columns.end(),
+              [schema_idx](ColumnChunk const& col) { return col.schema_idx == schema_idx; });
+            // Check if the offset_index and column_index are present
+            return col != per_file_metadata[src_index].row_groups[rg_index].columns.end() and
+                   col->offset_index.has_value() and col->column_index.has_value();
+          });
+        });
+    });
+}
 /**
  * @brief Construct a vector of all required data pages from the page row counts
  */
@@ -549,27 +575,13 @@ std::unique_ptr<cudf::column> aggregate_reader_metadata::filter_data_pages_with_
   if (row_group_indices.empty()) { return cudf::make_empty_column(cudf::type_id::BOOL8); }
 
   // Check if we have page index for all columns in all row groups
-  auto const has_page_index = std::all_of(
-    output_column_schemas.begin(), output_column_schemas.end(), [&](auto const schema_idx) {
-      return std::all_of(
-        thrust::counting_iterator<size_t>(0),
-        thrust::counting_iterator(row_group_indices.size()),
-        [&](auto const src_index) {
-          auto const& rg_indices = row_group_indices[src_index];
-          return std::all_of(rg_indices.begin(), rg_indices.end(), [&](auto const& rg_index) {
-            auto const& row_group = per_file_metadata[src_index].row_groups[rg_index];
-            auto col              = std::find_if(
-              row_group.columns.begin(),
-              row_group.columns.end(),
-              [schema_idx](ColumnChunk const& col) { return col.schema_idx == schema_idx; });
-            return col != per_file_metadata[src_index].row_groups[rg_index].columns.end() and
-                   col->offset_index.has_value() and col->column_index.has_value();
-          });
-        });
-    });
+  auto const has_page_index =
+    compute_has_page_index(per_file_metadata, row_group_indices, output_column_schemas);
 
   // Return if page index is not present
-  CUDF_EXPECTS(has_page_index, "Page index is not present for page pruning", std::runtime_error);
+  CUDF_EXPECTS(has_page_index,
+               "Page pruning requires the Parquet page index for all output columns",
+               std::runtime_error);
 
   // Total number of rows
   auto const total_rows = std::accumulate(
@@ -639,6 +651,9 @@ std::vector<thrust::host_vector<bool>> aggregate_reader_metadata::compute_data_p
 
   auto const total_rows  = row_mask.size();
   auto const num_columns = output_dtypes.size();
+
+  CUDF_EXPECTS(compute_has_page_index(per_file_metadata, row_group_indices, output_column_schemas),
+               "Data page mask computation requires the Parquet page index for all output columns");
 
   // Compute page row counts, offsets, and column chunk page offsets for each column
   std::vector<std::vector<size_type>> page_row_counts(num_columns);
