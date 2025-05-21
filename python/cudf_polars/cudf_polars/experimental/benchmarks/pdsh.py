@@ -155,6 +155,8 @@ class RunConfig:
         default_factory=lambda: datetime.now(timezone.utc).isoformat()
     )
     hardware: HardwareInfo = dataclasses.field(default_factory=HardwareInfo.collect)
+    rmm_async: bool
+    rapidsmpf_oom_protection: bool
     rapidsmpf_spill: bool
     spill_device: float
 
@@ -179,6 +181,8 @@ class RunConfig:
             threads=args.threads,
             iterations=args.iterations,
             suffix=args.suffix,
+            rmm_async=args.rmm_async,
+            rapidsmpf_oom_protection=args.rapidsmpf_oom_protection,
             spill_device=args.spill_device,
             rapidsmpf_spill=args.rapidsmpf_spill,
         )
@@ -204,6 +208,8 @@ class RunConfig:
                 if self.scheduler == "distributed":
                     print(f"n_workers: {self.n_workers}")
                     print(f"threads: {self.threads}")
+                    print(f"rmm_async: {self.rmm_async}")
+                    print(f"rapidsmpf_oom_protection: {self.rapidsmpf_oom_protection}")
                     print(f"spill_device: {self.spill_device}")
                     print(f"rapidsmpf_spill: {self.rapidsmpf_spill}")
             if len(records) > 0:
