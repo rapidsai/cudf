@@ -531,19 +531,6 @@ source_properties get_source_properties(compression_type compression, host_span<
   return source_properties{compression, comp_data, comp_len, uncomp_len};
 }
 
-size_t decompress(compression_type compression,
-                  host_span<uint8_t const> src,
-                  host_span<uint8_t> dst)
-{
-  switch (compression) {
-    case compression_type::GZIP: return decompress_gzip(src, dst);
-    case compression_type::ZLIB: return decompress_zlib(src, dst);
-    case compression_type::SNAPPY: return decompress_snappy(src, dst);
-    case compression_type::ZSTD: return decompress_zstd(src, dst);
-    default: CUDF_FAIL("Unsupported compression type: " + compression_type_name(compression));
-  }
-}
-
 void device_decompress(compression_type compression,
                        device_span<device_span<uint8_t const> const> inputs,
                        device_span<device_span<uint8_t> const> outputs,
@@ -715,6 +702,19 @@ size_t get_uncompressed_size(compression_type compression, host_span<uint8_t con
   if (di.type == compression_type::BROTLI) return get_gpu_debrotli_scratch_size(di.num_pages);
   // only Brotli kernel requires scratch memory
   return 0;
+}
+
+size_t decompress(compression_type compression,
+                  host_span<uint8_t const> src,
+                  host_span<uint8_t> dst)
+{
+  switch (compression) {
+    case compression_type::GZIP: return decompress_gzip(src, dst);
+    case compression_type::ZLIB: return decompress_zlib(src, dst);
+    case compression_type::SNAPPY: return decompress_snappy(src, dst);
+    case compression_type::ZSTD: return decompress_zstd(src, dst);
+    default: CUDF_FAIL("Unsupported compression type: " + compression_type_name(compression));
+  }
 }
 
 std::vector<uint8_t> decompress(compression_type compression, host_span<uint8_t const> src)
