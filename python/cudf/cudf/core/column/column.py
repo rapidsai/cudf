@@ -2079,7 +2079,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         When ``self`` is a nested column, recursively apply this function on
         the children of ``self``.
         """
-        # For pandas dtypes, store them directly in the column's dtype property
+        # For Arrow dtypes, store them directly in the column's dtype property
         if isinstance(dtype, pd.ArrowDtype):
             self._dtype = cudf.dtype(dtype)
         return self
