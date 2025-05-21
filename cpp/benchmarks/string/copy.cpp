@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -46,21 +46,21 @@ static void bench_copy(nvbench::state& state)
   if (api == "gather") {
     auto result =
       cudf::gather(source->view(), map_view, cudf::out_of_bounds_policy::NULLIFY, stream);
-    auto chars_size = cudf::strings_column_view(result->view().column(0)).chars_size(stream);
-    state.add_global_memory_reads<nvbench::int8_t>(chars_size +
+    auto data_size = result->alloc_size();
+    state.add_global_memory_reads<nvbench::int8_t>(data_size +
                                                    (map_view.size() * sizeof(cudf::size_type)));
-    state.add_global_memory_writes<nvbench::int8_t>(chars_size);
+    state.add_global_memory_writes<nvbench::int8_t>(data_size);
     state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
       cudf::gather(source->view(), map_view, cudf::out_of_bounds_policy::NULLIFY, stream);
     });
   } else if (api == "scatter") {
     auto const target =
       create_random_table({cudf::type_id::STRING}, row_count{num_rows}, table_profile);
-    auto result     = cudf::scatter(source->view(), map_view, target->view(), stream);
-    auto chars_size = cudf::strings_column_view(result->view().column(0)).chars_size(stream);
-    state.add_global_memory_reads<nvbench::int8_t>(chars_size +
+    auto result    = cudf::scatter(source->view(), map_view, target->view(), stream);
+    auto data_size = result->alloc_size();
+    state.add_global_memory_reads<nvbench::int8_t>(data_size +
                                                    (map_view.size() * sizeof(cudf::size_type)));
-    state.add_global_memory_writes<nvbench::int8_t>(chars_size);
+    state.add_global_memory_writes<nvbench::int8_t>(data_size);
     state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
       cudf::scatter(source->view(), map_view, target->view(), stream);
     });

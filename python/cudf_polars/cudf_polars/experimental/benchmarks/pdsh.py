@@ -1092,6 +1092,12 @@ parser.add_argument(
     help="RMM pool size (fractional).",
 )
 parser.add_argument(
+    "--rmm-async",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help="Use RMM async memory resource.",
+)
+parser.add_argument(
     "--rapidsmpf-spill",
     action=argparse.BooleanOptionalAction,
     default=False,
@@ -1151,6 +1157,7 @@ def run(args: argparse.Namespace) -> None:
             "dashboard_address": ":8585",
             "protocol": "ucxx",
             "rmm_pool_size": args.rmm_pool_size,
+            "rmm_async": args.rmm_async,
             "threads_per_worker": run_config.threads,
         }
 
