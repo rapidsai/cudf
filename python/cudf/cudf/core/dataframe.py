@@ -82,7 +82,7 @@ from cudf.core.mixins import GetAttrGetItemMixin
 from cudf.core.multiindex import MultiIndex
 from cudf.core.resample import DataFrameResampler
 from cudf.core.series import Series
-from cudf.core.udf.row_function import _get_row_kernel
+from cudf.core.udf.row_function import DataFrameApplyKernel
 from cudf.errors import MixedTypeError
 from cudf.utils import applyutils, docutils, ioutils, queryutils
 from cudf.utils.docutils import copy_docstring
@@ -4903,7 +4903,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         if by_row != "compat":
             raise NotImplementedError("by_row is currently not supported.")
 
-        return self._apply(func, _get_row_kernel, *args, **kwargs)
+        return self._apply(func, DataFrameApplyKernel, *args, **kwargs)
 
     def applymap(
         self,
