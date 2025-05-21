@@ -33,7 +33,6 @@ class ManagedUDFString(types.Type):
     np_dtype = np.dtype("object")
 
     def __init__(self):
-        # initialize the memsys module
         super().__init__(name="managed_udf_string")
 
     @property

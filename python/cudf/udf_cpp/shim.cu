@@ -723,16 +723,18 @@ make_definition_corr(BlockCorr, int64, int64_t);
 #undef make_definition_corr
 }
 
-/*
-NRT CUDA functions
-*/
-
-/*
-Initialize a MemInfo to track a newly created cudf::udf_string.
-Shim functions return new cudf::udf_string objects into stack memory,
-so this function persists a copy to the heap for use when destructing
-the object later on. The returned MemInfo tracks the heap copy.
-*/
+/**
+ * @brief Initialize a MemInfo to track a newly created cudf::udf_string.
+ *
+ * Shim functions return new cudf::udf_string objects into stack memory,
+ * so this function persists a copy to the heap for use when destructing
+ * the object later on. The returned MemInfo tracks the heap copy.
+ *
+ * @param out_meminfo Pointer to value through which to return the MemInfo.
+ * @param udf_str Pointer to the newly created udf_string object.
+ *
+ *
+ */
 extern "C" __device__ int init_udf_string_meminfo(void** out_meminfo, void* udf_str)
 {
   struct mi_str_allocation {
@@ -745,11 +747,8 @@ extern "C" __device__ int init_udf_string_meminfo(void** out_meminfo, void* udf_
     udf_string* st_ptr = &(mi_and_str->st);
 
     // udf_str_dtor can destruct the string without knowing the size
-    NRT_MemInfo_init(mi_ptr,
-                     st_ptr,
-                     NULL,  // size
-                     udf_str_dtor,
-                     NULL);
+    size_t size = 0;
+    NRT_MemInfo_init(mi_ptr, st_ptr, size, udf_str_dtor, NULL);
 
     // copy the udf_string to the extra heap space
     udf_string* in_str_ptr = reinterpret_cast<udf_string*>(udf_str);

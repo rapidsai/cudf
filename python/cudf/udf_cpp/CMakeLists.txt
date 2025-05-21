@@ -26,7 +26,7 @@ rapids_find_package(
   INSTALL_EXPORT_SET udf-exports
 )
 
-# The below in vendored/inspired by legate dataframe
+# The below in inspired by legate dataframe
 execute_process(
   COMMAND "python" -c "from numba.cuda.runtime.nrt import get_include; print(get_include())"
   OUTPUT_VARIABLE NRT_INCLUDE_DIR
@@ -35,7 +35,9 @@ execute_process(
   OUTPUT_STRIP_TRAILING_WHITESPACE
 )
 if(${NRT_RESULT})
-  message(FATAL_ERROR "Error while trying to obtain NRT include directory:\n${NRT_ERROR}")
+  message(
+    FATAL_ERROR "Error while trying to obtain numba cuda runtime include directory:\n${NRT_ERROR}"
+  )
 endif()
 
 message(STATUS "NRT_INCLUDE_DIR: ${NRT_INCLUDE_DIR}")

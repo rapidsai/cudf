@@ -222,7 +222,7 @@ def _finalize_new_managed_udf_string(context, builder, managed_ptr):
     # udf_string pointer. The resulting pointer points to a heap allocation. A
     # copy of the udf_string is made, although its underlying data isn't copied
     # See shim.cu for details.
-    mi = context.compile_internal(
+    meminfo = context.compile_internal(
         builder,
         init_udf_string_meminfo,
         types.voidptr(_UDF_STRING_PTR),
@@ -237,9 +237,9 @@ def _finalize_new_managed_udf_string(context, builder, managed_ptr):
         ),  # {i8*, {i8*, i32, i32}}* -> {i8*, {i8*, i32, i32}}
     )
     # i8* = i8*
-    managed.meminfo = mi
+    managed.meminfo = meminfo
 
-    # {i8*, {i8*, i32, i32} by _value_
+    # {i8*, {i8*, i32, i32}} by _value_
     return managed._getvalue()
 
 
