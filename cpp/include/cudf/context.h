@@ -14,32 +14,37 @@
  * limitations under the License.
  */
 
-#pragma once
-
-#include <jitify2.hpp>
-
 #include <memory>
-#include <mutex>
-#include <string>
 
 namespace cudf {
-namespace jit {
 
-class ProgramCache {
-  std::mutex _caches_mutex;
-  std::unordered_map<std::string, std::unique_ptr<jitify2::ProgramCache<>>> _caches;
+namespace jit {
+struct ProgramCache;
+}
+
+class Context {
+ private:
+  std::unique_ptr<jit::ProgramCache> _program_cache;
 
  public:
-  ProgramCache(ProgramCache const&)            = delete;
-  ProgramCache(ProgramCache&&)                 = delete;
-  ProgramCache& operator=(ProgramCache const&) = delete;
-  ProgramCache& operator=(ProgramCache&&)      = delete;
-  ~ProgramCache()                              = default;
+  Context();
+  Context(Context const&)            = delete;
+  Context& operator=(Context const&) = delete;
+  Context(Context&&)                 = delete;
+  Context& operator=(Context&&)      = delete;
+  ~Context()                         = default;
 
-  jitify2::ProgramCache<>& get(jitify2::PreprocessedProgramData preprog);
+  jit::ProgramCache& program_cache();
 };
 
-jitify2::ProgramCache<>& get_program_cache(jitify2::PreprocessedProgramData preprog);
+namespace detail {
+std::unique_ptr<Context>& context_ptr();
+}
 
-}  // namespace jit
+Context& context();
+
+void initialize();
+
+void deinitialize();
+
 }  // namespace cudf
