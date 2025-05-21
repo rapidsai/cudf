@@ -88,12 +88,6 @@ def test_from_list_nested_dicts_raises():
         plc.Column.from_iterable_of_py(data)
 
 
-def test_from_list_nested_strings_raises():
-    data = [["a", "b"], ["c", "d"]]
-    with pytest.raises(TypeError, match="Unsupported scalar type"):
-        plc.Column.from_iterable_of_py(data)
-
-
 def test_from_list_nested_none_raises():
     data = [[None], [None]]
     with pytest.raises(TypeError, match="Unsupported scalar type"):
@@ -165,4 +159,24 @@ def test_from_custom_generator():
         Foo(4), dtype=plc.DataType(plc.TypeId.INT64)
     )
     expect = pa.array([0, 1, 2, 3], type=pa.int64())
+    assert_column_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "data, pa_type",
+    [
+        (["a", "b", "c"], pa.string()),
+        ([["a"], ["b"], ["c"]], pa.list_(pa.string())),
+        ([["foo"], ["bar"], ["baz"]], pa.list_(pa.string())),
+        ([["a", "b"], ["c", "d"]], pa.list_(pa.string())),
+        ([["a", "b", "c"], ["d", "e", "f"]], pa.list_(pa.string())),
+        ([[["a"]], [["b"]], [["c"]]], pa.list_(pa.list_(pa.string()))),
+        (lambda: map(str, ("x", "y", "z")), pa.string()),
+    ],
+)
+def test_from_iterable_of_str(data, pa_type):
+    if callable(data):
+        data = list(data())
+    got = plc.Column.from_iterable_of_py(data)
+    expect = pa.array(data, type=pa_type)
     assert_column_eq(expect, got)

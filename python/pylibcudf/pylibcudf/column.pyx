@@ -32,6 +32,7 @@ from pylibcudf.libcudf.strings.strings_column_view cimport strings_column_view
 from pylibcudf.libcudf.types cimport size_type, size_of as cpp_size_of, bitmask_type
 from pylibcudf.libcudf.utilities.traits cimport is_fixed_width
 from pylibcudf.libcudf.copying cimport get_element
+from pylibcudf.libcudf.binaryop cimport binary_operator
 
 
 from rmm.pylibrmm.device_buffer cimport DeviceBuffer
@@ -39,6 +40,7 @@ from rmm.pylibrmm.stream cimport Stream
 
 from .gpumemoryview cimport gpumemoryview
 from .filling cimport sequence
+from .binaryop cimport binary_operation
 from .gpumemoryview cimport gpumemoryview
 from .scalar cimport Scalar
 from .traits cimport (
@@ -58,6 +60,7 @@ from .gpumemoryview import _datatype_from_dtype_desc
 from ._interop_helpers import ArrowLike, ColumnMetadata
 
 import array
+from itertools import accumulate
 import functools
 import operator
 from typing import Iterable
@@ -141,7 +144,7 @@ def _infer_list_depth_and_dtype(obj: list) -> tuple[int, type]:
     if not current and depth == 0:
         raise ValueError("Cannot infer dtype from empty input")
 
-    if not isinstance(current, (int, float, bool)):
+    if not isinstance(current, (int, float, bool, str)):
         raise TypeError(f"Unsupported scalar type: {type(current).__name__}")
 
     return depth, type(current)
@@ -220,6 +223,11 @@ def _typestr_from_dtype(dtype: DataType) -> str:
     }[dtype.id()]
 
 
+class ArrayInterfaceWrapper:
+    def __init__(self, iface):
+        self.__array_interface__ = iface
+
+
 def _prepare_array_metadata(
     iface: dict,
 ) -> tuple[int, int, tuple[int, ...], tuple[int, ...] | None, DataType]:
@@ -274,7 +282,7 @@ def _prepare_array_metadata(
     size_type_row_limit = numeric_limits[size_type].max()
     if (
         shape[0] > size_type_row_limit if len(shape) == 1
-        # >= because we do list column construction _from_gpumemoryview
+        # >= because we do list column construction _wrap_nested_list_column
         else shape[0] >= size_type_row_limit
     ):
         raise ValueError(
@@ -756,13 +764,16 @@ cdef class Column:
         return Column.from_libcudf(move(c_result))
 
     @staticmethod
-    cdef Column _from_gpumemoryview(
+    cdef Column _wrap_nested_list_column(
         gpumemoryview data,
         tuple shape,
         DataType dtype,
+        Column base=None,
     ):
         """
-        Construct a Column from a gpumemoryview and array metadata.
+        Construct a list Column from a gpumemoryview and array
+        metadata, or wrap an existing Column in a nested list
+        column matching the given shape.
 
         This non-public method does not perform validation. It assumes
         all arguments have been checked for correctness (e.g., shape,
@@ -771,36 +782,45 @@ cdef class Column:
         """
         ndim = len(shape)
         flat_size = functools.reduce(operator.mul, shape)
-        data_col = Column(
-            data_type=dtype,
-            size=flat_size,
-            data=data,
-            mask=None,
-            null_count=0,
-            offset=0,
-            children=[],
-        )
 
-        int32_dtype = DataType(type_id.INT32)
+        if base is None:
+            base = Column(
+                data_type=dtype,
+                size=flat_size,
+                data=data,
+                mask=None,
+                null_count=0,
+                offset=0,
+                children=[],
+            )
+
+        int32_dtype = <DataType>DataType(type_id.INT32)
+        nested = base
 
         for i in range(ndim - 1, 0, -1):
-            total_rows = functools.reduce(operator.mul, shape[:i])
-            offsets_col = sequence(
-                total_rows + 1,
+            outer_len = functools.reduce(operator.mul, shape[:i])
+
+            range_col = <Column>sequence(
+                outer_len + 1,
                 Scalar.from_py(0, int32_dtype),
-                Scalar.from_py(shape[i], int32_dtype),
+                Scalar.from_py(1, int32_dtype),
             )
-            data_col = Column(
+            stride = <Scalar>Scalar.from_py(shape[i], int32_dtype)
+            offsets_col = binary_operation(
+                range_col, stride, binary_operator.MUL, int32_dtype
+            )
+
+            nested = Column(
                 data_type=DataType(type_id.LIST),
-                size=total_rows,
+                size=outer_len,
                 data=None,
                 mask=None,
                 null_count=0,
                 offset=0,
-                children=[offsets_col, data_col],
+                children=[offsets_col, nested],
             )
 
-        return data_col
+        return nested
 
     @classmethod
     def from_array_interface(cls, obj):
@@ -847,7 +867,7 @@ cdef class Column:
             <const unsigned char[:nbytes:1]><const unsigned char*><uintptr_t>data_ptr
         )
 
-        return Column._from_gpumemoryview(gpumemoryview(dbuf), shape, dtype)
+        return Column._wrap_nested_list_column(gpumemoryview(dbuf), shape, dtype)
 
     @classmethod
     def from_cuda_array_interface(cls, obj):
@@ -881,7 +901,7 @@ cdef class Column:
 
         _, _, shape, _, dtype = _prepare_array_metadata(iface)
 
-        return Column._from_gpumemoryview(gpumemoryview(obj), shape, dtype)
+        return Column._wrap_nested_list_column(gpumemoryview(obj), shape, dtype)
 
     @classmethod
     def from_array(cls, obj):
@@ -932,9 +952,9 @@ cdef class Column:
         Parameters
         ----------
         obj : Iterable
-            An iterable of scalar values (e.g., int, float, bool) or a nested iterable.
+            An iterable of Python scalar values (int, float, bool, str) or nested lists.
         dtype : DataType | None
-            The data type of the elements. If not specified, the type is inferred.
+            The type of the leaf elements. If not specified, the type is inferred.
 
         Returns
         -------
@@ -950,8 +970,11 @@ cdef class Column:
 
         Notes
         -----
-        - Only scalar types int, float, and bool are supported.
+        - Only scalar types int, float, bool, and str are supported.
         - Nested iterables must be materialized as lists.
+        - Jagged nested lists are not supported. Inner lists must have the same shape.
+        - Nulls (None) are not currently supported in input values.
+        - dtype must match the inferred or actual type of the scalar values
         """
 
         # TODO: Investigate when we can avoid full list materialization.
@@ -970,6 +993,42 @@ cdef class Column:
 
         flat, shape = _flatten_nested_list(obj, depth)
 
+        if dtype.id() == type_id.STRING:
+            encoded = [s.encode("utf-8") for s in flat]
+            offsets = [0] + list(accumulate(len(s) for s in encoded))
+            joined_bytes = b"".join(encoded)
+
+            offsets_col = Column.from_iterable_of_py(
+                offsets, dtype=DataType(type_id.INT32)
+            )
+
+            mv = memoryview(array.array("B", joined_bytes))
+
+            iface = {
+                "data": (mv.obj.buffer_info()[0], False),
+                "shape": (len(joined_bytes),),
+                "typestr": "|u1",
+                "strides": None,
+                "version": 3,
+            }
+
+            chars_col = Column.from_array_interface(ArrayInterfaceWrapper(iface))
+
+            base = Column(
+                DataType(type_id.STRING),
+                len(flat),
+                chars_col.data(),
+                None,
+                0,
+                0,
+                [offsets_col, chars_col],
+            )
+
+            return (
+                base if depth == 1
+                else Column._wrap_nested_list_column(None, shape, dtype, base=base)
+            )
+
         buf = array.array(_python_typecode_from_dtype(dtype), flat)
         mv = memoryview(buf).cast("B")
 
@@ -980,10 +1039,6 @@ cdef class Column:
             "strides": None,
             "version": 3,
         }
-
-        class ArrayInterfaceWrapper:
-            def __init__(self, iface):
-                self.__array_interface__ = iface
 
         return Column.from_array_interface(ArrayInterfaceWrapper(iface))
 
