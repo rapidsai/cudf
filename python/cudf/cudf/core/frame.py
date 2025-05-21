@@ -179,7 +179,14 @@ class Frame(BinaryOperand, Scannable, Serializable):
         """
         Construct cls from a ColumnAccessor-like mapping.
         """
-        obj = cls.__new__(cls)
+        from cudf.core.index import Index
+
+        if cls is Index:
+            # Because Index.__new__ is overridden as a constructor,
+            # to copy pandas...
+            obj = object.__new__(cls)
+        else:
+            obj = cls.__new__(cls)
         Frame.__init__(obj, data)
         return obj
 
@@ -302,7 +309,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
 
     @property
     @_performance_tracking
-    def empty(self):
+    def empty(self) -> bool:
         """
         Indicator whether DataFrame or Series is empty.
 

@@ -9,8 +9,6 @@ from __future__ import annotations
 from enum import IntEnum, auto
 from typing import TYPE_CHECKING, Any, ClassVar
 
-import polars as pl
-
 import pylibcudf as plc
 
 from cudf_polars.containers import Column
@@ -171,15 +169,19 @@ class TemporalFunction(Expr):
                 plc.strings.convert.convert_datetime.from_timestamps(
                     column.obj,
                     self.options[0],
-                    plc.Column(pl.Series(dtype=pl.datatypes.String())),
+                    plc.Column.from_iterable_of_py(
+                        [], dtype=plc.DataType(plc.TypeId.STRING)
+                    ),
                 )
             )
         if self.name is TemporalFunction.Name.Week:
             result = plc.strings.convert.convert_integers.to_integers(
                 plc.strings.convert.convert_datetime.from_timestamps(
                     column.obj,
-                    "%V",
-                    plc.Column(pl.Series(dtype=pl.datatypes.String())),
+                    format="%V",
+                    input_strings_names=plc.Column.from_iterable_of_py(
+                        [], dtype=plc.DataType(plc.TypeId.STRING)
+                    ),
                 ),
                 plc.types.DataType(plc.types.TypeId.INT8),
             )
@@ -188,8 +190,10 @@ class TemporalFunction(Expr):
             result = plc.strings.convert.convert_integers.to_integers(
                 plc.strings.convert.convert_datetime.from_timestamps(
                     column.obj,
-                    "%G",
-                    plc.Column(pl.Series(dtype=pl.datatypes.String())),
+                    format="%G",
+                    input_strings_names=plc.Column.from_iterable_of_py(
+                        [], dtype=plc.DataType(plc.TypeId.STRING)
+                    ),
                 ),
                 plc.types.DataType(plc.types.TypeId.INT32),
             )
