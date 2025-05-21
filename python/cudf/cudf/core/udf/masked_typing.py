@@ -1,9 +1,10 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 
 import operator
 
 import numpy as np
 from numba import types
+from numba.core.datamodel import default_manager
 from numba.core.extending import (
     make_attribute_wrapper,
     models,
@@ -28,6 +29,7 @@ from cudf.core.udf._ops import (
     comparison_ops,
     unary_ops,
 )
+from cudf.core.udf.nrt_utils import _current_nrt_context
 from cudf.core.udf.strings_typing import (
     StringView,
     UDFString,
@@ -108,6 +110,12 @@ class MaskedType(types.Type):
     def __init__(self, value):
         # MaskedType in Numba shall be parameterized
         # with a value type
+        if default_manager[value].has_nrt_meminfo():
+            ctx = _current_nrt_context.get(None)
+            if ctx is not None:
+                # we're in a compilation that is determining
+                # if NRT must be linked
+                ctx.use_nrt = True
         self.value_type = _type_to_masked_type(value)
         super().__init__(name=f"Masked({self.value_type})")
 
