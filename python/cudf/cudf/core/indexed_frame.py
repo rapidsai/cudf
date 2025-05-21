@@ -32,7 +32,6 @@ from cudf.api.types import (
     is_list_like,
     is_scalar,
 )
-from cudf.core._base_index import BaseIndex
 from cudf.core._compat import PANDAS_LT_300
 from cudf.core._internals import copying, stream_compaction
 from cudf.core.buffer import acquire_spill_lock
@@ -48,13 +47,12 @@ from cudf.core.copy_types import BooleanMask, GatherMap
 from cudf.core.dtypes import ListDtype
 from cudf.core.frame import Frame
 from cudf.core.groupby.groupby import GroupBy
-from cudf.core.index import RangeIndex, _index_from_data, ensure_index
+from cudf.core.index import Index, RangeIndex, _index_from_data, ensure_index
 from cudf.core.missing import NA
 from cudf.core.multiindex import MultiIndex
 from cudf.core.resample import _Resampler
 from cudf.core.scalar import pa_scalar_to_plc_scalar
 from cudf.core.udf.utils import (
-    _compile_or_get,
     _get_input_args_from_frame,
     _post_process_output_col,
     _return_arr_from_dtype,
@@ -280,10 +278,10 @@ class IndexedFrame(Frame):
     def __init__(
         self,
         data: ColumnAccessor | MutableMapping[Any, ColumnBase],
-        index: BaseIndex,
+        index: Index,
     ):
         super().__init__(data=data)
-        if not isinstance(index, BaseIndex):
+        if not isinstance(index, Index):
             raise ValueError(
                 f"index must be a cudf index not {type(index).__name__}"
             )
@@ -307,13 +305,13 @@ class IndexedFrame(Frame):
     def _from_data(
         cls,
         data: MutableMapping,
-        index: BaseIndex | None = None,
+        index: Index | None = None,
     ):
         out = super()._from_data(data)
         if index is None:
             # out._num_rows requires .index to be defined
             index = RangeIndex(out._data.nrows)
-        elif not isinstance(index, BaseIndex):
+        elif not isinstance(index, Index):
             raise ValueError(
                 f"index must be a cudf.Index not {type(index).__name__}"
             )
@@ -3472,14 +3470,13 @@ class IndexedFrame(Frame):
 
     @acquire_spill_lock()
     @_performance_tracking
-    def _apply(self, func, kernel_getter, *args, **kwargs):
+    def _apply(self, func, kernel_class, *args, **kwargs):
         """Apply `func` across the rows of the frame."""
         if kwargs:
             raise ValueError("UDFs using **kwargs are not yet supported.")
         try:
-            kernel, retty = _compile_or_get(
-                self, func, args, kernel_getter=kernel_getter
-            )
+            kr = kernel_class(self, func, args)
+            kernel, retty = kr.get_kernel()
         except Exception as e:
             raise ValueError(
                 "user defined function compilation failed."
@@ -4857,7 +4854,7 @@ class IndexedFrame(Frame):
     ) -> tuple[
         dict[str | None, tuple[ColumnBase, Any, bool, Any]]
         | NotImplementedType,
-        cudf.BaseIndex | None,
+        cudf.Index | None,
         dict[str, Any],
     ]:
         raise NotImplementedError(
@@ -6540,7 +6537,7 @@ def _get_replacement_values_for_columns(
         to_replace_columns = {col: [to_replace] for col in columns_dtype_map}
         values_columns = {col: [value] for col in columns_dtype_map}
     elif is_list_like(to_replace) or isinstance(
-        to_replace, (ColumnBase, BaseIndex)
+        to_replace, (ColumnBase, Index)
     ):
         if is_scalar(value):
             to_replace_columns = {col: to_replace for col in columns_dtype_map}
