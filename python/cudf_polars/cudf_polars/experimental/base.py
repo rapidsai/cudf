@@ -9,12 +9,12 @@ import itertools
 import operator
 from typing import TYPE_CHECKING
 
+import pylibcudf as plc
+
 if TYPE_CHECKING:
     from collections.abc import Iterator, MutableMapping, Sequence
 
     from typing_extensions import Self
-
-    import pylibcudf as plc
 
     from cudf_polars.dsl.expr import NamedExpr
     from cudf_polars.dsl.ir import IR
@@ -29,21 +29,66 @@ class ColumnStats:
     """Column data type."""
     unique_count: int | None
     """Estimated unique count for this column."""
+    unique_fraction: float | None
+    """Estimated unique fraction for this column."""
     element_size: int
     """Estimated byte size for each element of this column."""
     file_size: int | None
-    """Estimated file size for this column (Optional)."""
+    """Estimated file size for this column."""
+
+    @classmethod
+    def new(
+        cls,
+        dtype: plc.DataType,
+        *,
+        unique_count: int | None = None,
+        unique_fraction: float | None = None,
+        element_size: int | None = None,
+        file_size: int | None = None,
+    ) -> Self:
+        """
+        Create a new ColumnStats object.
+
+        Parameters
+        ----------
+        dtype
+            Column datatype.
+        unique_count
+            Estimated unique count for this column.
+            Default is None.
+        unique_fraction
+            Estimated unique fraction for this column.
+            Default is None.
+        element_size
+            Estimated byte size for each element of this column.
+            Default is the size of ``dtype``.
+        file_size
+            Estimated file size for this column.
+            Default is None.
+        """
+        if element_size is None:
+            element_size = plc.types.size_of(dtype)
+        return cls(dtype, unique_count, unique_fraction, element_size, file_size)
 
     @classmethod
     def merge(cls, *stats: ColumnStats) -> Self:
-        """Merge column stats that purportedly represent the same column."""
-        assert len(stats) > 0
-        unique_count = max(
-            (s.unique_count for s in stats if s.unique_count is not None), default=None
-        )
-        return cls(
-            stats[0].dtype, unique_count, stats[0].element_size, stats[0].file_size
-        )
+        """
+        Merge column stats that purportedly represent the same column.
+
+        Notes
+        -----
+        Merged ColumnStats will assume the maximum value for each attribute.
+        """
+        assert len(stats) > 0, "Expected one or more ColumnStats."
+        assert all(s.dtype == stats[0].dtype for s in stats), "Mismatched dtypes."
+        kwargs = {
+            attr: max(
+                (getattr(s, attr) for s in stats if getattr(s, attr) is not None),
+                default=None,
+            )
+            for attr in ("unique_count", "unique_fraction", "element_size", "file_size")
+        }
+        return cls.new(stats[0].dtype, **kwargs)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -84,6 +129,7 @@ class TableStats:
     @staticmethod
     def merge_column_stats(*stats: dict[str, ColumnStats]) -> dict[str, ColumnStats]:
         """Merge column stats dictionaries."""
+        assert len(stats) > 0, "Expected one or more arguments."
         keyfunc = operator.itemgetter(0)
         return {
             name: ColumnStats.merge(*(stats for _, stats in group))

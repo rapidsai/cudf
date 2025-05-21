@@ -369,6 +369,7 @@ def _sample_pq_statistics(ir: Scan) -> TableStats:
         tbl_w_meta = plc.io.parquet.read_parquet(options)
         row_group_num_rows = tbl_w_meta.tbl.num_rows()
         unique_count_estimates: dict[str, int] = {}
+        unique_fraction_estimates: dict[str, float] = {}
         for name, column in zip(
             tbl_w_meta.column_names(), tbl_w_meta.columns, strict=True
         ):
@@ -386,15 +387,20 @@ def _sample_pq_statistics(ir: Scan) -> TableStats:
                 # we likely obtain a unique count of 100. But we can't
                 # necessarily deduce that that means that the unique
                 # count is 100 / num_rows_in_group * num_rows_in_file
+                unique_fraction_estimates[name] = max(
+                    min(1.0, row_group_unique_count / row_group_num_rows),
+                    0.00001,
+                )
                 if row_group_unique_count == row_group_num_rows:
                     unique_count_estimates[name] = num_rows_total
 
         # Construct estimated TableStats
         table_stats = TableStats(
             column_stats={
-                name: ColumnStats(
-                    dtype=dtype,
+                name: ColumnStats.new(
+                    dtype,
                     unique_count=unique_count_estimates.get(name),
+                    unique_fraction=unique_fraction_estimates.get(name),
                     element_size=element_sizes[name],
                     file_size=total_uncompressed_size[name],
                 )
@@ -428,7 +434,7 @@ def _sample_pq_statistics(ir: Scan) -> TableStats:
                     is not None
                 ):
                     selectivity = 1 / unique_count
-            except ValueError:
+            except ValueError:  # pragma: no cover
                 pass
         # Update the table stats without caching
         num_rows_filtered = max(1, int(table_stats.num_rows * selectivity))

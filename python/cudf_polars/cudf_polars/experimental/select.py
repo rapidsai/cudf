@@ -123,7 +123,7 @@ def _(
             if isinstance(e.value, expr.Col) and e.value.name in tstats.column_stats:
                 cstats[e.name] = tstats.column_stats[e.value.name]
             else:
-                cstats[e.name] = ColumnStats(e.value.dtype, None, 1, None)
+                cstats[e.name] = ColumnStats.new(e.value.dtype)
         pi.table_stats = TableStats(cstats, tstats.num_rows)
     partition_info[new_node] = pi
     return new_node, partition_info

@@ -353,7 +353,7 @@ def _(
             ):  # pragma: no cover; TODO: Try to cover this
                 extra_cstats[e.name] = tstats.column_stats[e.value.name]
             else:
-                extra_cstats[e.name] = ColumnStats(e.value.dtype, None, 1, None)
+                extra_cstats[e.name] = ColumnStats.new(e.value.dtype)
         partition_info[new_node].table_stats = TableStats(
             tstats.column_stats | extra_cstats, tstats.num_rows
         )
