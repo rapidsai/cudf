@@ -174,8 +174,6 @@ def _(
             int(max(unique_fraction_dict.values()) * child_count),
             1,
         )
-        if post_aggregation_count > ir.config_options.executor.broadcast_join_limit:
-            post_aggregation_count = child_count
 
     new_node: IR
     name_generator = unique_names(ir.schema.keys())

@@ -322,16 +322,13 @@ def _(
     ):
         # Only repartition if estimated count suggests we should go to
         # a smaller number of partitions.
-        # Avoid reducing the partition count be more than 100x
-        # (This seems to improve stability)
-        new_count = max(new_count, output_count // 100)
         result = Repartition(joined.schema, joined)
         partition_info[result] = PartitionInfo.new(
             result, partition_info, count=new_count, table_stats=join_stats
         )
         return result, partition_info
-    else:
-        return joined, partition_info
+
+    return joined, partition_info
 
 
 @generate_ir_tasks.register(Join)
