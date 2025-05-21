@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,8 @@
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/debug_utilities.hpp>
+#include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/tdigest_utilities.cuh>
 #include <cudf_test/type_list_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
@@ -455,5 +457,32 @@ TEST_F(PercentileApproxTest, NullPercentiles)
   cudf::test::lists_column_wrapper<double> expected{{{99, 99, 4, 4}, valids.begin()},
                                                     {{99, 99, 8, 8}, valids.begin()}};
 
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected);
+}
+
+TEST_F(PercentileApproxTest, ReductionWithLowRowCount)
+{
+  // Test that the tdigest reduction with a low row count still produces the correct results.
+  // With 10 rows, the tdigest will have 10 centroids, where each row corresponds exactly to a
+  // single decile. In this case, there should be no interpolation required.
+  auto const max_centroids = 1000;
+
+  auto const values = cudf::test::fixed_width_column_wrapper<double>{
+    708, 717, 769, 1022, 1097, 1108, 1400, 1460, 2469, 2761};
+
+  auto const tdigest =
+    cudf::reduce(values,
+                 *cudf::make_tdigest_aggregation<cudf::reduce_aggregation>(max_centroids),
+                 cudf::data_type{cudf::type_id::STRUCT});
+
+  auto const tdigest_col = cudf::make_column_from_scalar(
+    *tdigest, 1, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
+
+  auto const percentiles = cudf::test::fixed_width_column_wrapper<double>{
+    0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0};
+  auto const result = cudf::percentile_approx(tdigest_col->view(), percentiles);
+
+  auto const expected = cudf::test::lists_column_wrapper<double>{
+    {708, 708, 717, 769, 1022, 1097, 1108, 1400, 1460, 2469, 2761}};
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected);
 }
