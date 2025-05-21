@@ -16,7 +16,7 @@ from typing_extensions import Self
 import pylibcudf as plc
 
 import cudf
-from cudf.api.types import is_integer, is_scalar
+from cudf.api.types import is_integer, is_scalar, is_string_dtype
 from cudf.core._internals import binaryop
 from cudf.core.buffer import Buffer, acquire_spill_lock
 from cudf.core.column.column import ColumnBase, as_column, column_empty
@@ -5857,15 +5857,11 @@ class StringColumn(ColumnBase):
         if not isinstance(data, Buffer):
             raise ValueError("data must be a Buffer")
         if (
-            dtype != CUDF_STRING_DTYPE
-            and not isinstance(dtype, pd.StringDtype)
-            and not (
-                isinstance(dtype, pd.ArrowDtype)
-                and (
-                    dtype.pyarrow_dtype == pa.string()
-                    or dtype.pyarrow_dtype == pa.large_string()
-                )
-            )
+            not cudf.get_option("mode.pandas_compatible")
+            and dtype != CUDF_STRING_DTYPE
+        ) or (
+            cudf.get_option("mode.pandas_compatible")
+            and not is_string_dtype(dtype)
         ):
             raise ValueError(f"dtype must be {CUDF_STRING_DTYPE}")
         if len(children) > 1:

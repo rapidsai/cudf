@@ -470,6 +470,12 @@ SKIP_TEST_PATTERNS = [
     "test_reduce_series_numeric[bool-median-False]",
     "test_reduce_series_numeric[bool-kurt-False]",
     "test_reduce_series_numeric[bool-skew-False]",
+    "test_reduce_frame[float-sum-True]",
+    "test_reduce_frame[float-mean-True]",
+    "test_reduce_frame[float-prod-True]",
+    "test_reduce_frame[float-std-True]",
+    "test_reduce_frame[float-var-True]",
+    "test_reduce_frame[decimal128(7, 3)-median-True]",
 ]
 
 

@@ -23,7 +23,7 @@ rapids-pip-retry install -U -e . pytest-env "hypothesis>=6.131.7"
 rapids-logger "Check narwhals versions"
 python -c "import narwhals; print(narwhals.show_versions())"
 
-TESTS_TO_ALWAYS_SKIP_CUDF="test_date_lit[cudf]"
+TESTS_TO_ALWAYS_SKIP_CUDF="test_date_lit[cudf]" # pa.date32() is not supported in cudf
 
 rapids-logger "Run narwhals tests for cuDF"
 python -m pytest \

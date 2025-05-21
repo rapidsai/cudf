@@ -75,14 +75,15 @@ class NumericalColumn(NumericalBaseColumn):
         null_count: int | None = None,
         children: tuple = (),
     ):
-        if cudf.get_option("mode.pandas_compatible"):
-            if dtype.kind not in "iufb":
-                raise ValueError(
-                    "dtype must be a floating, integer or boolean numpy dtype."
-                )
-        elif not (isinstance(dtype, np.dtype) and dtype.kind in "iufb"):
+        if (
+            cudf.get_option("mode.pandas_compatible")
+            and dtype.kind not in "iufb"
+        ) or (
+            not cudf.get_option("mode.pandas_compatible")
+            and not (isinstance(dtype, np.dtype) and dtype.kind in "iufb")
+        ):
             raise ValueError(
-                "dtype must be a floating, integer or boolean numpy dtype."
+                f"dtype must be a floating, integer or boolean dtype. Got: {dtype}"
             )
 
         if data.size % dtype.itemsize:
@@ -608,14 +609,6 @@ class NumericalColumn(NumericalBaseColumn):
             if self_dtype_numpy <= to_dtype_numpy:
                 return True
             else:
-                # Kinds are the same but to_dtype is smaller
-                if "float" in to_dtype_numpy.name:
-                    finfo = np.finfo(to_dtype_numpy)
-                    lower_, upper_ = finfo.min, finfo.max
-                elif "int" in to_dtype_numpy.name:
-                    iinfo = np.iinfo(to_dtype_numpy)
-                    lower_, upper_ = iinfo.min, iinfo.max
-
                 if self_dtype_numpy.kind == "f":
                     # Exclude 'np.inf', '-np.inf'
                     not_inf = (self != np.inf) & (self != -np.inf)
@@ -629,6 +622,14 @@ class NumericalColumn(NumericalBaseColumn):
                 if np.isnan(min_):
                     # Column contains only infs
                     return True
+
+                # Kinds are the same but to_dtype is smaller
+                if "float" in to_dtype_numpy.name:
+                    finfo = np.finfo(to_dtype_numpy)
+                    lower_, upper_ = finfo.min, finfo.max
+                elif "int" in to_dtype_numpy.name:
+                    iinfo = np.iinfo(to_dtype_numpy)
+                    lower_, upper_ = iinfo.min, iinfo.max
 
                 return (min_ >= lower_) and (col.max() < upper_)
 

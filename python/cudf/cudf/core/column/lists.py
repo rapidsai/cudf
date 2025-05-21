@@ -18,10 +18,14 @@ from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column.column import ColumnBase, as_column, column_empty
 from cudf.core.column.methods import ColumnMethods, ParentType
 from cudf.core.column.numerical import NumericalColumn
-from cudf.core.dtypes import ListDtype
+from cudf.core.dtypes import ListDtype, is_list_dtype
 from cudf.core.missing import NA
 from cudf.core.scalar import pa_scalar_to_plc_scalar
-from cudf.utils.dtypes import SIZE_TYPE_DTYPE, is_dtype_obj_numeric
+from cudf.utils.dtypes import (
+    SIZE_TYPE_DTYPE,
+    get_dtype_of_same_kind,
+    is_dtype_obj_numeric,
+)
 from cudf.utils.utils import _is_null_host_scalar
 
 if TYPE_CHECKING:
@@ -49,7 +53,13 @@ class ListColumn(ColumnBase):
     ):
         if data is not None:
             raise ValueError("data must be None")
-        if not isinstance(dtype, ListDtype):
+        if (
+            not cudf.get_option("mode.pandas_compatible")
+            and not isinstance(dtype, ListDtype)
+        ) or (
+            cudf.get_option("mode.pandas_compatible")
+            and not is_list_dtype(dtype)
+        ):
             raise ValueError("dtype must be a cudf.ListDtype")
         if not (
             len(children) == 2
@@ -329,6 +339,19 @@ class ListColumn(ColumnBase):
             )
         return lc
 
+    @property
+    def element_type(self) -> Dtype:
+        """
+        Returns the element type of the list column.
+        """
+        if isinstance(self.dtype, ListDtype):
+            return self.dtype.element_type
+        else:
+            return get_dtype_of_same_kind(
+                self.dtype,
+                self.dtype.pyarrow_dtype.value_type.to_pandas_dtype(),
+            )
+
     def to_pandas(
         self,
         *,
@@ -474,11 +497,17 @@ class ListMethods(ColumnMethods):
     _column: ListColumn
 
     def __init__(self, parent: ParentType):
-        if not isinstance(parent.dtype, ListDtype):
+        if not is_list_dtype(parent.dtype):
             raise AttributeError(
                 "Can only use .list accessor with a 'list' dtype"
             )
         super().__init__(parent=parent)
+
+    def __getitem__(self, key):
+        if isinstance(key, slice):
+            return self.slice(start=key.start, stop=key.stop, step=key.step)
+        else:
+            return self.get(key)
 
     def get(
         self,
@@ -553,12 +582,13 @@ class ListMethods(ColumnMethods):
                     out_of_bounds_mask,
                     pa_scalar_to_plc_scalar(pa.scalar(default)),
                 )
-        if out.dtype != self._column.dtype.element_type:
+
+        if self._column.element_type != out.dtype:
             # libcudf doesn't maintain struct labels so we must transfer over
             # manually from the input column if we lost some information
             # somewhere. Not doing this unilaterally since the cost is
             # non-zero..
-            out = out._with_type_metadata(self._column.dtype.element_type)
+            out = out._with_type_metadata(self._column.element_type)
         return self._return_or_inplace(out)
 
     def contains(self, search_key: ScalarLike) -> ParentType:

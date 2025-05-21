@@ -10,7 +10,7 @@ import pyarrow as pa
 import cudf
 from cudf.core.column.column import ColumnBase
 from cudf.core.column.methods import ColumnMethods
-from cudf.core.dtypes import StructDtype
+from cudf.core.dtypes import StructDtype, is_struct_dtype
 from cudf.core.scalar import pa_scalar_to_plc_scalar
 from cudf.utils.dtypes import pyarrow_dtype_to_cudf_dtype
 from cudf.utils.utils import _is_null_host_scalar
@@ -79,7 +79,13 @@ class StructColumn(ColumnBase):
     @staticmethod
     def _validate_dtype_instance(dtype: StructDtype) -> StructDtype:
         # IntervalDtype is a subclass of StructDtype, so compare types exactly
-        if type(dtype) is not StructDtype:
+        if (
+            not cudf.get_option("mode.pandas_compatible")
+            and type(dtype) is not StructDtype
+        ) or (
+            cudf.get_option("mode.pandas_compatible")
+            and not is_struct_dtype(dtype)
+        ):
             raise ValueError(
                 f"{type(dtype).__name__} must be a StructDtype exactly."
             )
@@ -224,7 +230,7 @@ class StructMethods(ColumnMethods):
     _column: StructColumn
 
     def __init__(self, parent=None):
-        if not isinstance(parent.dtype, StructDtype):
+        if not is_struct_dtype(parent.dtype):
             raise AttributeError(
                 "Can only use .struct accessor with a 'struct' dtype"
             )

@@ -216,6 +216,12 @@ StringMethods = make_intermediate_proxy_type(
     pd.core.strings.accessor.StringMethods,
 )
 
+ListMethods = make_intermediate_proxy_type(
+    "ListMethods",
+    cudf.core.column.lists.ListMethods,
+    pd.core.arrays.arrow.accessors.ListAccessor,
+)
+
 _CategoricalAccessor = make_intermediate_proxy_type(
     "CategoricalAccessor",
     cudf.core.column.categorical.CategoricalAccessor,
@@ -294,6 +300,7 @@ Series = make_final_proxy_type(
         "__iter__": custom_iter,
         "dt": _AccessorAttr(CombinedDatetimelikeProperties),
         "str": _AccessorAttr(StringMethods),
+        "list": _AccessorAttr(ListMethods),
         "cat": _AccessorAttr(_CategoricalAccessor),
         "_constructor": _FastSlowAttribute("_constructor"),
         "_constructor_expanddim": _FastSlowAttribute("_constructor_expanddim"),

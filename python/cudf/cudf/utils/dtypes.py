@@ -488,14 +488,14 @@ def dtype_to_pylibcudf_type(dtype) -> plc.DataType:
     return plc.DataType(SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES[dtype])
 
 
-def dtype_to_pyarrow_type(dtype) -> pa.DataType:
+def dtype_to_pyarrow_extended_dtype(dtype) -> pa.DataType:
     if isinstance(dtype, pd.ArrowDtype):
         return dtype
     if isinstance(
         dtype,
         (cudf.ListDtype, cudf.StructDtype, cudf.core.dtypes.DecimalDtype),
     ):
-        return dtype.to_arrow()
+        return pd.ArrowDtype(dtype.to_arrow())
     # libcudf types don't support timezones so convert to the base type
     elif isinstance(dtype, pd.DatetimeTZDtype):
         dtype = _get_base_dtype(dtype)
@@ -505,7 +505,7 @@ def dtype_to_pyarrow_type(dtype) -> pa.DataType:
             dtype = np.dtype(dtype)
         except TypeError:
             dtype = cudf.dtype(dtype)
-    return pa.from_numpy_dtype(dtype)
+    return pd.ArrowDtype(pa.from_numpy_dtype(dtype))
 
 
 def dtype_to_pandas_nullable_extension_type(dtype) -> DtypeObj:
@@ -523,7 +523,7 @@ def get_dtype_of_same_kind(source_dtype: DtypeObj, target_dtype: DtypeObj):
     If no such dtype exists, return the default dtype.
     """
     if isinstance(source_dtype, pd.ArrowDtype):
-        return dtype_to_pyarrow_type(target_dtype)
+        return dtype_to_pyarrow_extended_dtype(target_dtype)
     elif is_pandas_nullable_extension_dtype(source_dtype):
         return dtype_to_pandas_nullable_extension_type(target_dtype)
     else:

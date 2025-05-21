@@ -1137,6 +1137,10 @@ def is_list_dtype(obj):
         or obj is cudf.core.column.ListColumn
         or (isinstance(obj, str) and obj == ListDtype.name)
         or (hasattr(obj, "dtype") and isinstance(obj.dtype, ListDtype))
+        or (
+            isinstance(obj, pd.ArrowDtype)
+            and pa.types.is_list(obj.pyarrow_dtype)
+        )
     )
 
 
@@ -1163,6 +1167,10 @@ def is_struct_dtype(obj):
         or obj is StructDtype
         or (isinstance(obj, str) and obj == StructDtype.name)
         or (hasattr(obj, "dtype") and isinstance(obj.dtype, StructDtype))
+        or (
+            isinstance(obj, pd.ArrowDtype)
+            and pa.types.is_struct(obj.pyarrow_dtype)
+        )
     )
 
 
@@ -1203,6 +1211,10 @@ def _is_interval_dtype(obj):
                 getattr(obj, "dtype", None),
                 (pd.IntervalDtype, IntervalDtype),
             )
+        )
+        or (
+            isinstance(obj, pd.ArrowDtype)
+            and pa.types.is_interval(obj.pyarrow_dtype)
         )
     )
 
@@ -1252,4 +1264,8 @@ def is_decimal128_dtype(obj):
         or obj is Decimal128Dtype
         or (isinstance(obj, str) and obj == Decimal128Dtype.name)
         or (hasattr(obj, "dtype") and is_decimal128_dtype(obj.dtype))
+        or (
+            isinstance(obj, pd.ArrowDtype)
+            and pa.types.is_decimal128(obj.pyarrow_dtype)
+        )
     )

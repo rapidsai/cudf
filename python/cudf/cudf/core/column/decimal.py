@@ -24,6 +24,7 @@ from cudf.core.dtypes import (
     Decimal64Dtype,
     Decimal128Dtype,
     DecimalDtype,
+    is_decimal128_dtype,
 )
 from cudf.core.mixins import BinaryOperand
 from cudf.core.scalar import _to_plc_scalar, pa_scalar_to_plc_scalar
@@ -364,7 +365,13 @@ class Decimal128Column(DecimalBaseColumn):
         null_count: int | None = None,
         children: tuple = (),
     ):
-        if not isinstance(dtype, Decimal128Dtype):
+        if (
+            not cudf.get_option("mode.pandas_compatible")
+            and not isinstance(dtype, Decimal128Dtype)
+        ) or (
+            cudf.get_option("mode.pandas_compatible")
+            and not is_decimal128_dtype(dtype)
+        ):
             raise ValueError(f"{dtype=} must be a Decimal128Dtype instance")
         super().__init__(
             data=data,
