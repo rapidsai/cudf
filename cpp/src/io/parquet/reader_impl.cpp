@@ -730,10 +730,10 @@ std::vector<size_t> reader::impl::calculate_output_num_rows_per_source(size_t co
   auto const end_iter = std::lower_bound(start_iter, partial_sum_nrows_source.cend(), end_row);
 
   // Compute the array offset index for both iterators
-  auto const start_idx = std::distance(partial_sum_nrows_source.cbegin(), start_iter);
-  auto const end_idx   = std::distance(partial_sum_nrows_source.cbegin(), end_iter);
-  auto const max_idx   = static_cast<cudf::size_type>(partial_sum_nrows_source.size());
-  CUDF_EXPECTS(start_idx <= end_idx and start_idx < max_idx and end_idx < max_idx,
+  auto const start_idx   = std::distance(partial_sum_nrows_source.cbegin(), start_iter);
+  auto const end_idx     = std::distance(partial_sum_nrows_source.cbegin(), end_iter);
+  auto const num_sources = static_cast<cudf::size_type>(partial_sum_nrows_source.size());
+  CUDF_EXPECTS(start_idx <= end_idx and start_idx < num_sources and end_idx < num_sources,
                "Encountered out of range output table chunk row bounds");
 
   // If the entire chunk is from the same source file, then the count is simply num_rows
