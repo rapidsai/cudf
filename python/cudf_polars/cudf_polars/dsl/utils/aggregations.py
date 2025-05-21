@@ -7,9 +7,7 @@ from __future__ import annotations
 
 import itertools
 from functools import partial
-from typing import TYPE_CHECKING
-
-import pyarrow as pa
+from typing import TYPE_CHECKING, Any
 
 import pylibcudf as plc
 
@@ -23,7 +21,7 @@ if TYPE_CHECKING:
 __all__ = ["apply_pre_evaluation", "decompose_aggs", "decompose_single_agg"]
 
 
-def replace_nulls(col: expr.Expr, value: pa.Scalar, *, is_top: bool) -> expr.Expr:
+def replace_nulls(col: expr.Expr, value: Any, *, is_top: bool) -> expr.Expr:
     """
     Replace nulls with the given scalar if at top level.
 
@@ -96,7 +94,7 @@ def decompose_single_agg(
         return child_agg, named_expr.reconstruct(
             replace_nulls(
                 agg.reconstruct([post.value]),
-                pa.scalar(0, type=plc.interop.to_arrow(agg.dtype)),
+                0,
                 is_top=True,
             )
         )
@@ -146,11 +144,7 @@ def decompose_single_agg(
                 # sum(empty_group) => null So must post-process by
                 # replacing nulls, but only if we're a "top-level"
                 # agg.
-                replace_nulls(
-                    col,
-                    pa.scalar(0, type=plc.interop.to_arrow(agg.dtype)),
-                    is_top=is_top,
-                ),
+                replace_nulls(col, 0, is_top=is_top),
             )
         else:
             return [(named_expr, True)], named_expr.reconstruct(
