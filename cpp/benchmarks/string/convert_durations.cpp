@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -58,7 +58,7 @@ void bench_convert_duration(nvbench::state& state, nvbench::type_list<DataType>)
   } else {
     auto source = cudf::strings::from_durations(input, format);
     auto view   = cudf::strings_column_view(source->view());
-    state.add_global_memory_reads<int8_t>(view.chars_size(stream));
+    state.add_global_memory_reads<int8_t>(source->alloc_size());
     state.add_global_memory_writes<DataType>(num_rows);
     state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
       cudf::strings::to_durations(view, data_type, format);
