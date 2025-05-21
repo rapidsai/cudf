@@ -311,7 +311,8 @@ def _(
         )
 
     if (
-        estimated_output_rows is not None
+        join_stats is not None
+        and estimated_output_rows is not None
         and max_input_rows is not None
         and output_count
         > (
@@ -320,13 +321,34 @@ def _(
             )
         )
     ):
-        # Only repartition if estimated count suggests we should go to
-        # a smaller number of partitions.
-        result = Repartition(joined.schema, joined)
-        partition_info[result] = PartitionInfo.new(
-            result, partition_info, count=new_count, table_stats=join_stats
+        assert ir.config_options.executor.name == "streaming", (
+            "'in-memory' executor not supported in 'lower_ir_node'"
         )
-        return result, partition_info
+
+        # Only repartition if estimated row count suggests we should
+        # go to a smaller number of partitions and the estimated
+        # output size also favors a smaller partition count.
+        estimated_output_size = (
+            sum(
+                join_stats.column_stats[col].element_size
+                if col in join_stats.column_stats
+                else 16
+                for col in joined.schema
+            )
+            * join_stats.num_rows
+        )
+        target_size = rec.state["config_options"].executor.target_partition_size // 4
+        if (ideal_count := estimated_output_size // target_size) > new_count:
+            # Throttle repartitioning with a conservative
+            # partition-size target (1/4).
+            new_count = min(ideal_count, output_count)
+
+        if new_count < output_count:
+            result = Repartition(joined.schema, joined)
+            partition_info[result] = PartitionInfo.new(
+                result, partition_info, count=new_count, table_stats=join_stats
+            )
+            return result, partition_info
 
     return joined, partition_info
 

@@ -62,7 +62,7 @@ def test_target_partition_size(tmp_path, df, blocksize, n_files):
 
     # Check partitioning
     qir = Translator(q._ldf.visit(), engine).translate_ir()
-    ir, info = lower_ir_graph(qir, ConfigOptions(engine.config))
+    ir, info = lower_ir_graph(qir, ConfigOptions.from_polars_engine(engine))
     count = info[ir].count
     if blocksize <= 12_000:
         assert count > n_files
@@ -82,10 +82,11 @@ def test_table_statistics(tmp_path, df):
             "scheduler": DEFAULT_SCHEDULER,
         },
     )
+    config_options = ConfigOptions.from_polars_engine(engine)
 
     q1 = q.select(pl.col("y"))
     qir1 = Translator(q1._ldf.visit(), engine).translate_ir()
-    ir1, pi1 = lower_ir_graph(qir1, ConfigOptions(engine.config))
+    ir1, pi1 = lower_ir_graph(qir1, config_options)
     table_stats_1 = pi1[ir1].table_stats
     element_size_y = table_stats_1.column_stats["y"].element_size
     assert table_stats_1.num_rows > 0
@@ -93,7 +94,7 @@ def test_table_statistics(tmp_path, df):
 
     q2 = q.filter(pl.col("z") < 3).group_by(pl.col("y")).mean().select(pl.col("x"))
     qir2 = Translator(q2._ldf.visit(), engine).translate_ir()
-    ir2, pi2 = lower_ir_graph(qir2, ConfigOptions(engine.config))
+    ir2, pi2 = lower_ir_graph(qir2, config_options)
     table_stats_2 = pi2[ir2].table_stats
     assert table_stats_2.num_rows > 0
     assert table_stats_2.column_stats["y"].element_size == element_size_y
@@ -101,7 +102,7 @@ def test_table_statistics(tmp_path, df):
 
     q3 = q.filter(pl.col("x") == 10).select(pl.col("y"))
     qir3 = Translator(q3._ldf.visit(), engine).translate_ir()
-    ir3, pi3 = lower_ir_graph(qir3, ConfigOptions(engine.config))
+    ir3, pi3 = lower_ir_graph(qir3, config_options)
     table_stats_3 = pi3[ir3].table_stats
     assert table_stats_3.num_rows == 1
     assert table_stats_3.column_stats["y"].element_size == element_size_y
@@ -150,7 +151,7 @@ def test_table_statistics_join(tmp_path):
     # after a simple join.
     q = dfl.join(dfr, on="y", how="inner")
     qir = Translator(q._ldf.visit(), engine).translate_ir()
-    ir, pi = lower_ir_graph(qir, ConfigOptions(engine.config))
+    ir, pi = lower_ir_graph(qir, ConfigOptions.from_polars_engine(engine))
     ir = ir if isinstance(ir, Join) else ir.children[0]
     table_stats_left = pi[ir.children[0]].table_stats
     table_stats_right = pi[ir.children[1]].table_stats

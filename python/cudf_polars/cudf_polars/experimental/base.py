@@ -66,8 +66,9 @@ class ColumnStats:
             Estimated file size for this column.
             Default is None.
         """
-        if element_size is None:
-            element_size = plc.types.size_of(dtype)
+        element_size = (
+            plc.types.size_of(dtype) if element_size is None else element_size
+        )
         return cls(dtype, unique_count, unique_fraction, element_size, file_size)
 
     @classmethod
