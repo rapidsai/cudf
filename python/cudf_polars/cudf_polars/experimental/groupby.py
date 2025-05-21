@@ -168,10 +168,7 @@ def _(
         partition_info,
         ir.config_options,
     ):
-        # The `unique_fraction` config can be used
-        # to specify a mapping between column names and the
-        # fractional number of unique values in the column.
-        # Each value should be in the range (0, 1].
+        # Use unique_fraction to determine output partitioning
         child_count = partition_info[child].count
         post_aggregation_count = max(
             int(max(unique_fraction_dict.values()) * child_count),

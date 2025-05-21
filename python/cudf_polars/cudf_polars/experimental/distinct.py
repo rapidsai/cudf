@@ -111,8 +111,13 @@ def lower_distinct(
             raise NotImplementedError("Unsupported slice for multiple partitions.")
     elif unique_fraction is not None:
         # Use unique_fraction to determine partitioning
+        assert config_options.executor.name == "streaming", (
+            "'in-memory' executor not supported in 'lower_distinct'"
+        )
         n_ary = min(max(int(1.0 / unique_fraction), 2), child_count)
         output_count = max(int(unique_fraction * child_count), 1)
+        if output_count > config_options.executor.broadcast_join_limit:
+            output_count = child_count
 
     if output_count > 1 and require_tree_reduction:
         # Need to reduce down to a single partition even
