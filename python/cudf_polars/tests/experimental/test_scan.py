@@ -115,9 +115,9 @@ def test_table_statistics_join(tmp_path):
     tmp_dir_left.mkdir()
     left = pl.DataFrame(
         {
-            "x": range(150),
-            "y": range(0, 300, 2),
-            "z": [1.0, 2.0, 3.0, 4.0, 5.0] * 30,
+            "x": range(300),
+            "y": range(0, 600, 2),
+            "z": [1.0, 2.0, 3.0, 4.0, 5.0] * 60,
         }
     )
     make_partitioned_source(left, tmp_dir_left, "parquet", n_files=1)
@@ -128,9 +128,9 @@ def test_table_statistics_join(tmp_path):
     tmp_dir_right.mkdir()
     right = pl.DataFrame(
         {
-            "xx": range(100),
-            "y": list(range(50)) * 2,
-            "zz": [1, 2, 3, 4, 5] * 20,
+            "xx": range(200),
+            "y": list(range(100)) * 2,
+            "zz": [1, 2, 3, 4, 5] * 40,
         }
     )
     make_partitioned_source(right, tmp_dir_right, "parquet", n_files=1)
@@ -141,7 +141,7 @@ def test_table_statistics_join(tmp_path):
         raise_on_fail=True,
         executor="streaming",
         executor_options={
-            "target_partition_size": 500,
+            "target_partition_size": 400,
             "scheduler": DEFAULT_SCHEDULER,
             "shuffle_method": "tasks",
         },
@@ -168,7 +168,7 @@ def test_table_statistics_join(tmp_path):
     # of the smaller table (i.e. `q`).
     tmp_dir_right_2 = tmp_path / "temp_dir_right_2"
     tmp_dir_right_2.mkdir()
-    right_2 = pl.DataFrame({"xx": range(100), "yy": range(0, 200, 2)})
+    right_2 = pl.DataFrame({"xx": range(20), "yy": range(0, 40, 2)})
     make_partitioned_source(right_2, tmp_dir_right_2, "parquet", n_files=1)
     dfr2 = pl.scan_parquet(tmp_dir_right_2)
     q2 = q.join(dfr2, on="xx", how="inner")
