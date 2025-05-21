@@ -3,9 +3,10 @@
 from pylibcudf.exception_handler cimport libcudf_exception_handler
 
 cdef extern from "cudf/io/thread.hpp" \
-        namespace "cudf::io::detail" nogil:
+        namespace "cudf" nogil:
 
-    void set_num_io_threads(unsigned int num_io_threads) \
+    void cpp_set_num_io_threads "cudf::io::detail::set_num_io_threads" \
+        (unsigned int num_io_threads) except +libcudf_exception_handler
+
+    unsigned int cpp_num_io_threads "cudf::io::detail::num_io_threads"() \
         except +libcudf_exception_handler
-
-    unsigned int num_io_threads() except +libcudf_exception_handler

@@ -11,6 +11,6 @@ from . cimport (
     text,
     timezone,
     types,
-    threads,
 )
 from .types cimport SourceInfo, TableWithMetadata
+from .thread cimport set_num_io_threads, num_io_threads

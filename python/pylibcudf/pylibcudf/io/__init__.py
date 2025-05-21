@@ -9,10 +9,10 @@ from . import (
     parquet,
     parquet_metadata,
     text,
-    threads,
     timezone,
     types,
 )
+from .thread import num_io_threads, set_num_io_threads
 from .types import SinkInfo, SourceInfo, TableWithMetadata
 
 __all__ = [
