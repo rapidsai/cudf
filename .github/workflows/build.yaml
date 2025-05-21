@@ -40,26 +40,28 @@ jobs:
   cpp-build:
     needs: [telemetry-setup]
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/conda-cpp-build.yaml@branch-25.06
+    uses: rapidsai/shared-workflows/.github/workflows/conda-cpp-build.yaml@branch-25.08
     with:
       build_type: ${{ inputs.build_type || 'branch' }}
       branch: ${{ inputs.branch }}
       date: ${{ inputs.date }}
+      script: ci/build_cpp.sh
       sha: ${{ inputs.sha }}
       node_type: "cpu16"
   python-build:
     needs: [telemetry-setup, cpp-build]
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/conda-python-build.yaml@branch-25.06
+    uses: rapidsai/shared-workflows/.github/workflows/conda-python-build.yaml@branch-25.08
     with:
       build_type: ${{ inputs.build_type || 'branch' }}
       branch: ${{ inputs.branch }}
       date: ${{ inputs.date }}
+      script: ci/build_python.sh
       sha: ${{ inputs.sha }}
   upload-conda:
     needs: [cpp-build, python-build]
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/conda-upload-packages.yaml@branch-25.06
+    uses: rapidsai/shared-workflows/.github/workflows/conda-upload-packages.yaml@branch-25.08
     with:
       build_type: ${{ inputs.build_type || 'branch' }}
       branch: ${{ inputs.branch }}
@@ -69,7 +71,7 @@ jobs:
     if: github.ref_type == 'branch'
     needs: python-build
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@branch-25.06
+    uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@branch-25.08
     with:
       arch: "amd64"
       branch: ${{ inputs.branch }}
@@ -77,12 +79,12 @@ jobs:
       container_image: "rapidsai/ci-conda:latest"
       date: ${{ inputs.date }}
       node_type: "gpu-l4-latest-1"
-      run_script: "ci/build_docs.sh"
+      script: "ci/build_docs.sh"
       sha: ${{ inputs.sha }}
   wheel-build-libcudf:
     needs: [telemetry-setup]
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@branch-25.06
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@branch-25.08
     with:
       # build for every combination of arch and CUDA version, but only for the latest Python
       matrix_filter: group_by([.ARCH, (.CUDA_VER|split(".")|map(tonumber)|.[0])]) | map(max_by(.PY_VER|split(".")|map(tonumber)))
@@ -97,7 +99,7 @@ jobs:
   wheel-publish-libcudf:
     needs: wheel-build-libcudf
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/wheels-publish.yaml@branch-25.06
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-publish.yaml@branch-25.08
     with:
       build_type: ${{ inputs.build_type || 'branch' }}
       branch: ${{ inputs.branch }}
@@ -108,7 +110,7 @@ jobs:
   wheel-build-pylibcudf:
     needs: [telemetry-setup, wheel-build-libcudf]
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@branch-25.06
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@branch-25.08
     with:
       build_type: ${{ inputs.build_type || 'branch' }}
       branch: ${{ inputs.branch }}
@@ -120,7 +122,7 @@ jobs:
   wheel-publish-pylibcudf:
     needs: wheel-build-pylibcudf
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/wheels-publish.yaml@branch-25.06
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-publish.yaml@branch-25.08
     with:
       build_type: ${{ inputs.build_type || 'branch' }}
       branch: ${{ inputs.branch }}
@@ -131,7 +133,7 @@ jobs:
   wheel-build-cudf:
     needs: [telemetry-setup, wheel-build-pylibcudf]
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@branch-25.06
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@branch-25.08
     with:
       build_type: ${{ inputs.build_type || 'branch' }}
       branch: ${{ inputs.branch }}
@@ -143,7 +145,7 @@ jobs:
   wheel-publish-cudf:
     needs: wheel-build-cudf
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/wheels-publish.yaml@branch-25.06
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-publish.yaml@branch-25.08
     with:
       build_type: ${{ inputs.build_type || 'branch' }}
       branch: ${{ inputs.branch }}
@@ -154,7 +156,7 @@ jobs:
   wheel-build-dask-cudf:
     needs: [telemetry-setup, wheel-build-cudf]
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@branch-25.06
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@branch-25.08
     with:
       # This selects "ARCH=amd64 + the latest supported Python + CUDA".
       matrix_filter: map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
@@ -169,7 +171,7 @@ jobs:
   wheel-publish-dask-cudf:
     needs: wheel-build-dask-cudf
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/wheels-publish.yaml@branch-25.06
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-publish.yaml@branch-25.08
     with:
       build_type: ${{ inputs.build_type || 'branch' }}
       branch: ${{ inputs.branch }}
@@ -180,7 +182,7 @@ jobs:
   wheel-build-cudf-polars:
     needs: [telemetry-setup, wheel-build-pylibcudf]
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@branch-25.06
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@branch-25.08
     with:
       # This selects "ARCH=amd64 + the latest supported Python + CUDA".
       matrix_filter: map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
@@ -195,7 +197,7 @@ jobs:
   wheel-publish-cudf-polars:
     needs: wheel-build-cudf-polars
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/wheels-publish.yaml@branch-25.06
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-publish.yaml@branch-25.08
     with:
       build_type: ${{ inputs.build_type || 'branch' }}
       branch: ${{ inputs.branch }}
