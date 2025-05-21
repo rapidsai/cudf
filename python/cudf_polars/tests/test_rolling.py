@@ -13,6 +13,7 @@ from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
+from cudf_polars.utils.versions import POLARS_VERSION_LT_130
 
 
 @pytest.fixture(params=[False, True], ids=["nosort", "sort"])
@@ -108,13 +109,19 @@ def test_calendrical_period_unsupported(df):
     assert_ir_translation_raises(q, NotImplementedError)
 
 
-def test_unsorted_raises_computeerror():
+def test_unsorted_raises():
     df = pl.LazyFrame({"orderby": [1, 2, 4, 2], "values": [1, 2, 3, 4]})
     q = df.rolling("orderby", period="2i").agg(sum=pl.sum("values"))
     with pytest.raises(pl.exceptions.InvalidOperationError):
         q.collect(engine="in-memory")
-    with pytest.raises(pl.exceptions.ComputeError):
-        q.collect(engine=pl.GPUEngine(raise_on_fail=True))
+    if POLARS_VERSION_LT_130:
+        with pytest.raises(pl.exceptions.ComputeError):
+            q.collect(engine=pl.GPUEngine(raise_on_fail=True))
+    else:
+        with pytest.raises(
+            RuntimeError, match=r".*rolling is not sorted, please sort first"
+        ):
+            q.collect(engine=pl.GPUEngine(raise_on_fail=True))
 
 
 def test_grouped_rolling():
@@ -130,7 +137,7 @@ def test_grouped_rolling():
     assert_gpu_result_equal(q)
 
 
-def test_grouped_rolling_unsorted_raises_computeerror():
+def test_grouped_rolling_unsorted_raises():
     df = pl.LazyFrame(
         {
             "keys": [1, None, 2, 1, 2, None],
@@ -142,8 +149,14 @@ def test_grouped_rolling_unsorted_raises_computeerror():
 
     with pytest.raises(pl.exceptions.ComputeError):
         q.collect(engine="in-memory")
-    with pytest.raises(pl.exceptions.ComputeError):
-        q.collect(engine=pl.GPUEngine(raise_on_fail=True))
+    if POLARS_VERSION_LT_130:
+        with pytest.raises(pl.exceptions.ComputeError):
+            q.collect(engine=pl.GPUEngine(raise_on_fail=True))
+    else:
+        with pytest.raises(
+            RuntimeError, match="Input for grouped rolling is not sorted"
+        ):
+            q.collect(engine=pl.GPUEngine(raise_on_fail=True))
 
 
 def test_orderby_nulls_raises_computeerror():
@@ -151,8 +164,14 @@ def test_orderby_nulls_raises_computeerror():
     q = df.rolling("orderby", period="2i").agg(sum=pl.sum("values"))
     with pytest.raises(pl.exceptions.InvalidOperationError):
         q.collect(engine="in-memory")
-    with pytest.raises(pl.exceptions.ComputeError):
-        q.collect(engine=pl.GPUEngine(raise_on_fail=True))
+    if POLARS_VERSION_LT_130:
+        with pytest.raises(pl.exceptions.ComputeError):
+            q.collect(engine=pl.GPUEngine(raise_on_fail=True))
+    else:
+        with pytest.raises(
+            RuntimeError, match=r"Index column.*in rolling may not contain nulls"
+        ):
+            q.collect(engine=pl.GPUEngine(raise_on_fail=True))
 
 
 def test_rolling_nested_raises():

@@ -27,7 +27,7 @@ def df():
             "uint16_with_null": pl.Series(
                 [1, None, 2, None, None, None, 4, 5, 6], dtype=pl.UInt16()
             ),
-            "float": [7.0, 1, 2, 3, 4, 5, 6, 7, 8],
+            "float": [7.0, 1, 2, 3, 4.5, 5, 6, 7, 8],
             "string": ["abc", "def", "hijk", "lmno", "had", "to", "be", "or", "not"],
             "datetime": [
                 date(1970, 1, 1),
@@ -79,6 +79,8 @@ def keys(request):
         [pl.lit(10).alias("literal_value")],
         [pl.col("float").sum().round(decimals=1)],
         [pl.col("float").round(decimals=1).sum()],
+        [pl.col("float").sum().round()],
+        [pl.col("float").round().sum()],
         [pl.col("int").first(), pl.col("float").last()],
         [pl.col("int").sum(), pl.col("string").str.replace("h", "foo", literal=True)],
         [pl.col("float").quantile(0.3, interpolation="nearest")],

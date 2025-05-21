@@ -10,6 +10,7 @@ import pytest
 import polars as pl
 
 from cudf_polars.testing.asserts import DEFAULT_SCHEDULER, assert_gpu_result_equal
+from cudf_polars.utils.versions import POLARS_VERSION_LT_130
 
 
 @pytest.fixture(scope="module")
@@ -61,7 +62,12 @@ def test_select_reduce_fallback(df, fallback_mode):
     if fallback_mode == "silent":
         ctx = contextlib.nullcontext()
     elif fallback_mode == "raise":
-        ctx = pytest.raises(pl.exceptions.ComputeError, match=match)
+        ctx = pytest.raises(
+            pl.exceptions.ComputeError
+            if POLARS_VERSION_LT_130
+            else NotImplementedError,
+            match=match,
+        )
     elif fallback_mode == "foo":
         ctx = pytest.raises(
             pl.exceptions.ComputeError,

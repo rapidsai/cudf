@@ -14,6 +14,7 @@ from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
+from cudf_polars.utils.versions import POLARS_VERSION_LT_129, POLARS_VERSION_LT_130
 
 
 @pytest.fixture
@@ -257,7 +258,9 @@ def test_to_datetime(to_datetime_data, cache, strict, format, exact):
         assert_collect_raises(
             query,
             polars_except=pl.exceptions.InvalidOperationError,
-            cudf_except=pl.exceptions.ComputeError,
+            cudf_except=pl.exceptions.ComputeError
+            if POLARS_VERSION_LT_130
+            else pl.exceptions.InvalidOperationError,
         )
     else:
         assert_gpu_result_equal(query)
@@ -297,10 +300,14 @@ def test_replace_re(ldf):
         ),
     ],
 )
-def test_replace_many(ldf, target, repl):
+def test_replace_many(request, ldf, target, repl):
     query = ldf.select(pl.col("a").str.replace_many(target, repl))
-
-    assert_gpu_result_equal(query)
+    # TODO: Remove when we support implode agg
+    _need_support_for_implode_agg = isinstance(repl, list)
+    if POLARS_VERSION_LT_129 or _need_support_for_implode_agg:
+        assert_gpu_result_equal(query)
+    else:
+        assert_ir_translation_raises(query, NotImplementedError)
 
 
 @pytest.mark.parametrize(
@@ -452,7 +459,9 @@ def test_string_to_numeric_invalid(numeric_type):
     assert_collect_raises(
         q,
         polars_except=pl.exceptions.InvalidOperationError,
-        cudf_except=pl.exceptions.ComputeError,
+        cudf_except=pl.exceptions.ComputeError
+        if POLARS_VERSION_LT_130
+        else pl.exceptions.InvalidOperationError,
     )
 
 

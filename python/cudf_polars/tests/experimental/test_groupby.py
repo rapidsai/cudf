@@ -10,6 +10,7 @@ import pytest
 import polars as pl
 
 from cudf_polars.testing.asserts import DEFAULT_SCHEDULER, assert_gpu_result_equal
+from cudf_polars.utils.versions import POLARS_VERSION_LT_130
 
 
 @pytest.fixture(scope="module")
@@ -90,7 +91,10 @@ def test_groupby_agg_config_options(df, op, keys):
     )
     agg = getattr(pl.col("x"), op)()
     if op in ("sum", "mean"):
-        agg = agg.round(2)  # Unary test coverage
+        # TODO: Remove the explicit cast to float, which is
+        # currently needed due to a polars bug, See tracking
+        # issue https://github.com/pola-rs/polars/issues/22691
+        agg = agg.cast(pl.Float64).round(2)  # Unary test coverage
     q = df.group_by(*keys).agg(agg)
     assert_gpu_result_equal(q, engine=engine, check_row_order=False)
 
@@ -113,7 +117,12 @@ def test_groupby_fallback(df, engine, fallback_mode):
     if fallback_mode == "silent":
         ctx = contextlib.nullcontext()
     elif fallback_mode == "raise":
-        ctx = pytest.raises(pl.exceptions.ComputeError, match=match)
+        ctx = pytest.raises(
+            pl.exceptions.ComputeError
+            if POLARS_VERSION_LT_130
+            else NotImplementedError,
+            match=match,
+        )
     elif fallback_mode == "foo":
         ctx = pytest.raises(
             pl.exceptions.ComputeError,
