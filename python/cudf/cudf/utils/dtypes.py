@@ -388,7 +388,6 @@ def is_dtype_obj_numeric(
 
 pa_decimal32type = getattr(pa, "Decimal32Type", None)
 
-try:
 pa_decimal64type = getattr(pa, "Decimal64Type", None)
 
 

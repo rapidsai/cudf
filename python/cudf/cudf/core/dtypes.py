@@ -85,7 +85,8 @@ def dtype(arbitrary: Any) -> DtypeObj:
     if is_pandas_nullable_extension_dtype(pd_dtype):
         if isinstance(pd_dtype, pd.ArrowDtype):
             arrow_type = pd_dtype.pyarrow_dtype
-            if (arrow_type == pa.date32()
+            if (
+                arrow_type == pa.date32()
                 or arrow_type == pa.binary()
                 or isinstance(arrow_type, pa.DictionaryType)
             ):
@@ -1076,7 +1077,7 @@ def _is_categorical_dtype(obj):
         return True
     if isinstance(
         obj,
-        (cudf.core.index.BaseIndex, cudf.core.column.ColumnBase, cudf.Series),
+        (cudf.Index, cudf.core.column.ColumnBase, cudf.Series),
     ):
         return isinstance(obj.dtype, cudf.CategoricalDtype)
     if isinstance(obj, (pd.Series, pd.Index)):
@@ -1204,7 +1205,7 @@ def _is_interval_dtype(obj):
             ),
         )
         or obj is IntervalDtype
-        or (isinstance(obj, cudf.core.index.BaseIndex) and obj._is_interval())
+        or (isinstance(obj, cudf.Index) and obj._is_interval())
         or (isinstance(obj, str) and obj == IntervalDtype.name)
         or (
             isinstance(
