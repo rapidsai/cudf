@@ -2120,6 +2120,7 @@ NODEIDS_THAT_XPASS_WITH_CUDF_PANDAS = {
     "tests/window/moments/test_moments_consistency_rolling.py::test_rolling_apply_consistency_sum[all_data15-rolling_consistency_cases0-False-sum]",
     "tests/window/moments/test_moments_consistency_rolling.py::test_rolling_apply_consistency_sum[all_data16-rolling_consistency_cases0-True-sum]",
     "tests/window/moments/test_moments_consistency_rolling.py::test_rolling_apply_consistency_sum[all_data16-rolling_consistency_cases0-False-sum]",
+    "tests/plotting/test_datetimelike.py::TestTSPlot::test_add_matplotlib_datetime64",
 }
 
 
