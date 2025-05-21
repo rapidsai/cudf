@@ -2497,15 +2497,15 @@ def test_series_arrow_numeric_types_roundtrip(pandas_type):
 
     with cudf.option_context("mode.pandas_compatible", True):
         gs = cudf.from_pandas(ps)
-    assert_eq(ps, gs)
+        assert_eq(ps, gs)
 
     with cudf.option_context("mode.pandas_compatible", True):
         gi = cudf.from_pandas(pi)
-    assert_eq(pi, gi)
+        assert_eq(pi, gi)
 
     with cudf.option_context("mode.pandas_compatible", True):
         gdf = cudf.from_pandas(pdf)
-    assert_eq(pdf, gdf)
+        assert_eq(pdf, gdf)
 
 
 @pytest.mark.parametrize(
@@ -2518,18 +2518,15 @@ def test_series_arrow_bool_types_roundtrip(pandas_type):
 
     with cudf.option_context("mode.pandas_compatible", True):
         gs = cudf.from_pandas(ps)
-
-    assert_eq(ps, gs)
+        assert_eq(ps, gs)
 
     with cudf.option_context("mode.pandas_compatible", True):
         gi = cudf.from_pandas(pi)
-
-    assert_eq(pi, gi)
+        assert_eq(pi, gi)
 
     with cudf.option_context("mode.pandas_compatible", True):
         gdf = cudf.from_pandas(pdf)
-
-    assert_eq(pdf, gdf)
+        assert_eq(pdf, gdf)
 
 
 @pytest.mark.parametrize(
@@ -2542,18 +2539,15 @@ def test_series_arrow_string_types_roundtrip(pandas_type):
 
     with cudf.option_context("mode.pandas_compatible", True):
         gs = cudf.from_pandas(ps)
-
-    assert_eq(ps, gs)
+        assert_eq(ps, gs)
 
     with cudf.option_context("mode.pandas_compatible", True):
         gi = cudf.from_pandas(pi)
-
-    assert_eq(pi, gi)
+        assert_eq(pi, gi)
 
     with cudf.option_context("mode.pandas_compatible", True):
         gdf = cudf.from_pandas(pdf)
-
-    assert_eq(pdf, gdf)
+        assert_eq(pdf, gdf)
 
 
 def test_series_arrow_category_types_roundtrip():
@@ -2592,13 +2586,11 @@ def test_series_arrow_decimal_types_roundtrip(pa_type):
 
     with cudf.option_context("mode.pandas_compatible", True):
         gs = cudf.from_pandas(ps)
-
-    assert_eq(ps, gs)
+        assert_eq(ps, gs)
 
     with cudf.option_context("mode.pandas_compatible", True):
         gdf = cudf.from_pandas(pdf)
-
-    assert_eq(pdf, gdf)
+        assert_eq(pdf, gdf)
 
 
 def test_series_arrow_struct_types_roundtrip():
@@ -2610,13 +2602,11 @@ def test_series_arrow_struct_types_roundtrip():
 
     with cudf.option_context("mode.pandas_compatible", True):
         gs = cudf.from_pandas(ps)
-
-    assert_eq(ps, gs)
+        assert_eq(ps, gs)
 
     with cudf.option_context("mode.pandas_compatible", True):
         gdf = cudf.from_pandas(pdf)
-
-    assert_eq(pdf, gdf)
+        assert_eq(pdf, gdf)
 
 
 def test_series_arrow_list_types_roundtrip():

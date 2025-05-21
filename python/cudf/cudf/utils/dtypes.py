@@ -529,6 +529,20 @@ def get_dtype_of_same_kind(source_dtype: DtypeObj, target_dtype: DtypeObj):
         return target_dtype
 
 
+def get_dtype_of_same_type(lhs_dtype: DtypeObj, rhs_dtype: DtypeObj):
+    """
+    Given two dtypes, checks if `lhs_dtype` translates to same libcudf
+    type as `rhs_dtype`, if yes, returns `lhs_dtype`.
+    Else, returns `rhs_dtype` in `lhs_dtype`'s kind.
+    """
+    if dtype_to_pylibcudf_type(lhs_dtype) == dtype_to_pylibcudf_type(
+        rhs_dtype
+    ):
+        return lhs_dtype
+    else:
+        return get_dtype_of_same_kind(lhs_dtype, rhs_dtype)
+
+
 def dtype_from_pylibcudf_column(col: plc.Column) -> DtypeObj:
     type_ = col.type()
     tid = type_.id()

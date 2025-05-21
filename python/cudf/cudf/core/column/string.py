@@ -6250,7 +6250,8 @@ class StringColumn(ColumnBase):
         arrow_type: bool = False,
     ) -> pd.Index:
         if (
-            isinstance(self.dtype, pd.StringDtype)
+            cudf.get_option("mode.pandas_compatible")
+            and isinstance(self.dtype, pd.StringDtype)
             and "pyarrow" in self.dtype.storage
         ):
             pandas_array = self.dtype.__from_arrow__(

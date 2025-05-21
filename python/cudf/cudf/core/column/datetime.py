@@ -31,8 +31,7 @@ from cudf.utils.dtypes import (
     _get_base_dtype,
     cudf_dtype_from_pa_type,
     cudf_dtype_to_pa_type,
-    dtype_to_pylibcudf_type,
-    get_dtype_of_same_kind,
+    get_dtype_of_same_type,
 )
 
 if TYPE_CHECKING:
@@ -625,12 +624,7 @@ class DatetimeColumn(TemporalBaseColumn):
                 null_count=self.null_count,
             )
         if cudf.get_option("mode.pandas_compatible"):
-            if dtype_to_pylibcudf_type(dtype) == dtype_to_pylibcudf_type(
-                self.dtype
-            ):
-                self._dtype = dtype
-            else:
-                self._dtype = get_dtype_of_same_kind(dtype, self.dtype)
+            self._dtype = get_dtype_of_same_type(dtype, self.dtype)
 
         return self
 
@@ -786,7 +780,14 @@ class DatetimeTZColumn(DatetimeColumn):
         nullable: bool = False,
         arrow_type: bool = False,
     ) -> pd.Index:
-        if arrow_type or nullable or isinstance(self.dtype, pd.ArrowDtype):
+        if (
+            arrow_type
+            or nullable
+            or (
+                cudf.get_option("mode.pandas_compatible")
+                and isinstance(self.dtype, pd.ArrowDtype)
+            )
+        ):
             return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
         else:
             return self._local_time.to_pandas().tz_localize(

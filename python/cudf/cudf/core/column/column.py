@@ -710,10 +710,17 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         pa_array = self.to_arrow()
 
         # Check if dtype is an ArrowDtype or pd.ExtensionDtype subclass
-        if arrow_type or isinstance(self.dtype, pd.ArrowDtype):
+        if arrow_type or (
+            cudf.get_option("mode.pandas_compatible")
+            and isinstance(self.dtype, pd.ArrowDtype)
+        ):
             return pd.Index(pd.arrays.ArrowExtensionArray(pa_array))
         elif (
-            nullable or is_pandas_nullable_extension_dtype(self.dtype)
+            nullable
+            or (
+                cudf.get_option("mode.pandas_compatible")
+                and is_pandas_nullable_extension_dtype(self.dtype)
+            )
         ) and is_pandas_nullable_extension_dtype(
             pandas_nullable_dtype := np_dtypes_to_pandas_dtypes.get(
                 self.dtype, self.dtype

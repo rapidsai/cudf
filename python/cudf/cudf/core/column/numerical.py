@@ -27,7 +27,7 @@ from cudf.utils.dtypes import (
     cudf_dtype_to_pa_type,
     dtype_to_pylibcudf_type,
     find_common_type,
-    get_dtype_of_same_kind,
+    get_dtype_of_same_type,
     min_signed_type,
     min_unsigned_type,
 )
@@ -400,6 +400,8 @@ class NumericalColumn(NumericalBaseColumn):
             if dtype_to_pylibcudf_type(dtype) == dtype_to_pylibcudf_type(
                 self.dtype
             ):
+                # Short-circuit the cast if the dtypes are equivalent
+                # but not the same type object.
                 self._dtype = dtype
                 return self
         return self.cast(dtype=dtype)  # type: ignore[return-value]
@@ -704,12 +706,7 @@ class NumericalColumn(NumericalBaseColumn):
                 children=(codes,),
             )
         if cudf.get_option("mode.pandas_compatible"):
-            if dtype_to_pylibcudf_type(dtype) == dtype_to_pylibcudf_type(
-                self.dtype
-            ):
-                self._dtype = cudf.dtype(dtype)
-            else:
-                self._dtype = get_dtype_of_same_kind(dtype, self.dtype)
+            self._dtype = get_dtype_of_same_type(dtype, self.dtype)
         return self
 
     def _reduction_result_dtype(self, reduction_op: str) -> Dtype:
