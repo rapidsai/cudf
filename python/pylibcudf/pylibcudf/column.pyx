@@ -57,8 +57,10 @@ from .utils cimport _get_stream
 from .gpumemoryview import _datatype_from_dtype_desc
 from ._interop_helpers import ArrowLike, ColumnMetadata
 
+import array
 import functools
 import operator
+from typing import Iterable
 
 __all__ = ["Column", "ListColumnView", "is_c_contiguous"]
 
@@ -125,6 +127,97 @@ cdef class OwnerMaskWithCAI:
     @property
     def __cuda_array_interface__(self):
         return self.cai
+
+
+def _infer_list_depth_and_dtype(obj: list) -> tuple[int, type]:
+    """Infer the nesting depth and final scalar type."""
+    depth = 0
+    current = obj
+
+    while isinstance(current, list) and current:
+        current = current[0]
+        depth += 1
+
+    if not current and depth == 0:
+        raise ValueError("Cannot infer dtype from empty input")
+
+    if not isinstance(current, (int, float, bool)):
+        raise TypeError(f"Unsupported scalar type: {type(current).__name__}")
+
+    return depth, type(current)
+
+
+def _flatten_nested_list(obj: list, depth: int) -> tuple[list, tuple[int, ...]]:
+    """Flatten a nested list and compute the shape"""
+    shape = _infer_shape(obj, depth)
+
+    flat = [None] * functools.reduce(operator.mul, shape)
+    _flatten(obj, flat, 0)
+    return flat, shape
+
+
+def _infer_shape(obj: list, depth: int) -> tuple[int, ...]:
+    shape = []
+    current = obj
+
+    for i in range(depth):
+        if not current:
+            raise ValueError("Cannot infer shape from empty list")
+
+        shape.append(len(current))
+
+        if i < depth - 1:
+            first = current[0]
+            if not all(
+                isinstance(sub, list) and len(sub) == len(first) for sub in current
+            ):
+                raise ValueError("Inconsistent inner list shapes")
+            current = first
+
+    return tuple(shape)
+
+
+def _flatten(obj: list, out: list, offset: int) -> int:
+    if not isinstance(obj[0], list):
+        out[offset:offset + len(obj)] = obj
+        return offset + len(obj)
+    for sub in obj:
+        offset = _flatten(sub, out, offset)
+    return offset
+
+
+def _python_typecode_from_dtype(dtype: DataType) -> str:
+    """The Python type string."""
+    return {
+        type_id.INT8: 'b',
+        type_id.INT16: 'h',
+        type_id.INT32: 'i',
+        type_id.INT64: 'q',
+        type_id.UINT8: 'B',
+        type_id.UINT16: 'H',
+        type_id.UINT32: 'I',
+        type_id.UINT64: 'Q',
+        type_id.FLOAT32: 'f',
+        type_id.FLOAT64: 'd',
+        type_id.BOOL8: 'b'
+    }[dtype.id()]
+
+
+def _typestr_from_dtype(dtype: DataType) -> str:
+    """The array interface type string."""
+    return {
+        type_id.INT8: "|i1",
+        type_id.INT16: "<i2",
+        type_id.INT32: "<i4",
+        type_id.INT64: "<i8",
+        type_id.UINT8: "|u1",
+        type_id.UINT16: "<u2",
+        type_id.UINT32: "<u4",
+        type_id.UINT64: "<u8",
+        type_id.FLOAT32: "<f4",
+        type_id.FLOAT64: "<f8",
+        type_id.BOOL8: "|b1",
+    }[dtype.id()]
 
 
 def _prepare_array_metadata(
@@ -265,10 +358,10 @@ cdef class Column:
         cdef _ArrowColumnHolder result
         cdef unique_ptr[arrow_column] c_result
         if hasattr(arrow_like, "__arrow_c_device_array__"):
-            schema, array = arrow_like.__arrow_c_device_array__()
+            schema, d_array = arrow_like.__arrow_c_device_array__()
             c_schema = <ArrowSchema*>PyCapsule_GetPointer(schema, "arrow_schema")
             c_device_array = (
-                <ArrowDeviceArray*>PyCapsule_GetPointer(array, "arrow_device_array")
+                <ArrowDeviceArray*>PyCapsule_GetPointer(d_array, "arrow_device_array")
             )
 
             result = _ArrowColumnHolder()
@@ -289,9 +382,9 @@ cdef class Column:
                 tmp.children(),
             )
         elif hasattr(arrow_like, "__arrow_c_array__"):
-            schema, array = arrow_like.__arrow_c_array__()
+            schema, h_array = arrow_like.__arrow_c_array__()
             c_schema = <ArrowSchema*>PyCapsule_GetPointer(schema, "arrow_schema")
-            c_array = <ArrowArray*>PyCapsule_GetPointer(array, "arrow_array")
+            c_array = <ArrowArray*>PyCapsule_GetPointer(h_array, "arrow_array")
 
             result = _ArrowColumnHolder()
             with nogil:
@@ -830,6 +923,69 @@ cdef class Column:
         raise TypeError(
             f"Cannot convert object of type {type(obj)} to a pylibcudf Column"
         )
+
+    @staticmethod
+    def from_iterable_of_py(obj: Iterable, dtype: DataType | None = None) -> Column:
+        """
+        Create a Column from a Python iterable of scalar values or nested iterables.
+
+        Parameters
+        ----------
+        obj : Iterable
+            An iterable of scalar values (e.g., int, float, bool) or a nested iterable.
+        dtype : DataType | None
+            The data type of the elements. If not specified, the type is inferred.
+
+        Returns
+        -------
+        Column
+            A Column containing the data from the input iterable.
+
+        Raises
+        ------
+        TypeError
+            If the input contains unsupported scalar types.
+        ValueError
+            If the iterable is empty and dtype is not provided.
+
+        Notes
+        -----
+        - Only scalar types int, float, and bool are supported.
+        - Nested iterables must be materialized as lists.
+        """
+
+        # TODO: Investigate when we can avoid full list materialization.
+        obj = list(obj)
+
+        if not obj:
+            if dtype is None:
+                raise ValueError("Cannot infer dtype from empty iterable object")
+            return Column(dtype, 0, None, None, 0, 0, [])
+
+        if dtype is None:
+            depth, py_dtype = _infer_list_depth_and_dtype(obj)
+            dtype = DataType.from_py(py_dtype)
+        else:
+            depth, _ = _infer_list_depth_and_dtype(obj)
+
+        flat, shape = _flatten_nested_list(obj, depth)
+
+        buf = array.array(_python_typecode_from_dtype(dtype), flat)
+        mv = memoryview(buf).cast("B")
+
+        iface = {
+            "data": (mv.obj.buffer_info()[0], False),
+            "shape": shape,
+            "typestr": _typestr_from_dtype(dtype),
+            "strides": None,
+            "version": 3,
+        }
+
+        class ArrayInterfaceWrapper:
+            def __init__(self, iface):
+                self.__array_interface__ = iface
+
+        return Column.from_array_interface(ArrayInterfaceWrapper(iface))
 
     cpdef DataType type(self):
         """The type of data in the column."""
