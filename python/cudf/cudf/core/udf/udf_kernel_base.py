@@ -11,7 +11,7 @@ from numba.types import CPointer, Poison, Tuple, boolean, int64, void
 
 from cudf.api.types import is_scalar
 from cudf.core.udf.masked_typing import MaskedType
-from cudf.core.udf.nrt_utils import NRTContext, nrt_enabled
+from cudf.core.udf.nrt_utils import CaptureNRTUsage, nrt_enabled
 from cudf.core.udf.strings_typing import str_view_arg_handler
 from cudf.core.udf.utils import (
     _generate_cache_key,
@@ -136,13 +136,15 @@ class ApplyKernelBase(ABC):
         # First compilation pass compiles the UDF alone
         # gets us the return type to allocate the output
         # and determines if NRT must be enabled
-        nrtctx = NRTContext()
-        with nrtctx:
+        capture_nrt_usage = CaptureNRTUsage()
+        with capture_nrt_usage:
             return_type = self._get_udf_return_type()
 
         self.sig = self._construct_signature(return_type)
         kernel_string = self._get_kernel_string()
-        kernel = self.compile_kernel_string(kernel_string, nrt=nrtctx.use_nrt)
+        kernel = self.compile_kernel_string(
+            kernel_string, nrt=capture_nrt_usage.use_nrt
+        )
 
         return kernel, return_type
 

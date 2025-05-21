@@ -10,7 +10,14 @@ _current_nrt_context: contextvars.ContextVar = contextvars.ContextVar(
 )
 
 
-class NRTContext:
+class CaptureNRTUsage:
+    """
+    Context manager for determining if NRT is needed.
+    Managed types may set use_nrt to be true during
+    instantiation to signal that NRT must be enabled
+    during code generation.
+    """
+
     def __init__(self):
         self.use_nrt = False
 
@@ -24,6 +31,12 @@ class NRTContext:
 
 @contextmanager
 def nrt_enabled():
+    """
+    Context manager for enabling NRT via the numba
+    config. CUDA_ENABLE_NRT may be toggled dynamically
+    for a single kernel launch, so we use this context
+    to enable it for those that we know need it.
+    """
     original_value = numba_config.CUDA_ENABLE_NRT
     numba_config.CUDA_ENABLE_NRT = True
     try:
