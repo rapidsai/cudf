@@ -153,7 +153,9 @@ class TemporalFunction(Expr):
                 plc.strings.convert.convert_datetime.from_timestamps(
                     column.obj,
                     self.options[0],
-                    plc.interop.from_arrow(pa.array([], type=pa.string())),
+                    plc.Column.from_iterable_of_py(
+                        [], dtype=plc.DataType(plc.TypeId.STRING)
+                    ),
                 )
             )
         if self.name is TemporalFunction.Name.Week:
@@ -161,8 +163,8 @@ class TemporalFunction(Expr):
                 plc.strings.convert.convert_datetime.from_timestamps(
                     column.obj,
                     format="%V",
-                    input_strings_names=plc.interop.from_arrow(
-                        pa.array([], type=pa.string())
+                    input_strings_names=plc.Column.from_iterable_of_py(
+                        [], dtype=plc.DataType(plc.TypeId.STRING)
                     ),
                 ),
                 plc.types.DataType(plc.types.TypeId.INT8),
@@ -173,8 +175,8 @@ class TemporalFunction(Expr):
                 plc.strings.convert.convert_datetime.from_timestamps(
                     column.obj,
                     format="%G",
-                    input_strings_names=plc.interop.from_arrow(
-                        pa.array([], type=pa.string())
+                    input_strings_names=plc.Column.from_iterable_of_py(
+                        [], dtype=plc.DataType(plc.TypeId.STRING)
                     ),
                 ),
                 plc.types.DataType(plc.types.TypeId.INT32),
