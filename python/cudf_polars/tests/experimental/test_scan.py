@@ -99,6 +99,14 @@ def test_table_statistics(tmp_path, df):
     assert table_stats_2.column_stats["y"].element_size == element_size_y
     assert table_stats_2.column_stats["x"].element_size > 0
 
+    q3 = q.filter(pl.col("x") == 10).select(pl.col("y"))
+    qir3 = Translator(q3._ldf.visit(), engine).translate_ir()
+    ir3, pi3 = lower_ir_graph(qir3, ConfigOptions(engine.config))
+    table_stats_3 = pi3[ir3].table_stats
+    assert table_stats_3.num_rows == 1
+    assert table_stats_3.column_stats["y"].element_size == element_size_y
+    assert table_stats_3.column_stats["x"].element_size > 0
+
 
 def test_table_statistics_join(tmp_path):
     # Left table

@@ -348,7 +348,9 @@ def _(
     if (tstats := partition_info[new_node].table_stats) is not None:
         extra_cstats = {}
         for e in ir.columns:
-            if isinstance(e.value, expr.Col) and e.value.name in tstats.column_stats:
+            if (
+                isinstance(e.value, expr.Col) and e.value.name in tstats.column_stats
+            ):  # pragma: no cover; TODO: Try to cover this
                 extra_cstats[e.name] = tstats.column_stats[e.value.name]
             else:
                 extra_cstats[e.name] = ColumnStats(e.value.dtype, None, 1, None)

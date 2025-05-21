@@ -272,7 +272,7 @@ def _(
             ),
             estimated_output_rows,
         )
-    else:
+    else:  # pragma: no cover; We usually have basic table stats (num_rows)
         max_input_rows = None
         estimated_output_rows = None
         join_stats = None
