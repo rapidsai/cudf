@@ -23,7 +23,7 @@ namespace cudf::detail {
 template std::size_t launch_compute_mixed_join_output_size<
   false,
   cudf::row::primitive::row_hasher<cudf::hashing::detail::default_hash>,
-  cudf::row::primitive::row_equality_comparator<false>>(
+  cudf::row::primitive::row_equality_comparator>(
   table_device_view left_table,
   table_device_view right_table,
   table_device_view probe,

@@ -32,19 +32,19 @@
 #include <cub/cub.cuh>
 #include <thrust/iterator/discard_iterator.h>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace detail {
 
 namespace cg = cooperative_groups;
 
-template <cudf::size_type block_size, bool has_nulls>
+template <cudf::size_type block_size, bool has_nulls, typename HashProbe, typename EqualityProbe>
 CUDF_KERNEL void __launch_bounds__(block_size)
   mixed_join(table_device_view left_table,
              table_device_view right_table,
              table_device_view probe,
              table_device_view build,
-             row_hash const hash_probe,
-             row_equality const equality_probe,
+             HashProbe hash_probe,
+             EqualityProbe equality_probe,
              join_kind const join_type,
              cudf::detail::mixed_multimap_type::device_view hash_table_view,
              size_type* join_output_l,
@@ -73,14 +73,14 @@ CUDF_KERNEL void __launch_bounds__(block_size)
     left_table, right_table, device_expression_data);
 
   auto const empty_key_sentinel = hash_table_view.get_empty_key_sentinel();
-  make_pair_function pair_func{hash_probe, empty_key_sentinel};
+  make_pair_function<HashProbe> pair_func{hash_probe, empty_key_sentinel};
 
   if (outer_row_index < outer_num_rows) {
     // Figure out the number of elements for this key.
     cg::thread_block_tile<1> this_thread = cg::this_thread();
     // Figure out the number of elements for this key.
     auto query_pair = pair_func(outer_row_index);
-    auto equality   = pair_expression_equality<has_nulls>{
+    auto equality   = pair_expression_equality<has_nulls, EqualityProbe>{
       evaluator, thread_intermediate_storage, swap_tables, equality_probe};
 
     auto probe_key_begin       = thrust::make_discard_iterator();
@@ -110,13 +110,13 @@ CUDF_KERNEL void __launch_bounds__(block_size)
   }
 }
 
-template <bool has_nulls>
+template <bool has_nulls, typename HashProbe, typename EqualityProbe>
 void launch_mixed_join(table_device_view left_table,
                        table_device_view right_table,
                        table_device_view probe,
                        table_device_view build,
-                       row_hash const hash_probe,
-                       row_equality const equality_probe,
+                       HashProbe hash_probe,
+                       EqualityProbe equality_probe,
                        join_kind const join_type,
                        cudf::detail::mixed_multimap_type::device_view hash_table_view,
                        size_type* join_output_l,
@@ -128,7 +128,7 @@ void launch_mixed_join(table_device_view left_table,
                        int64_t shmem_size_per_block,
                        rmm::cuda_stream_view stream)
 {
-  mixed_join<DEFAULT_JOIN_BLOCK_SIZE, has_nulls>
+  mixed_join<DEFAULT_JOIN_BLOCK_SIZE, has_nulls, HashProbe, EqualityProbe>
     <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
       left_table,
       right_table,
@@ -147,4 +147,4 @@ void launch_mixed_join(table_device_view left_table,
 
 }  // namespace detail
 
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

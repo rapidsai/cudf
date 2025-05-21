@@ -479,7 +479,7 @@ compute_mixed_join_output_size(table_view const& left_equality,
                                                           stream,
                                                           mr);
     }
-    return {size, std::move(matches_per_row)};
+    return std::pair{size, std::move(matches_per_row)};
   };
 
   if (cudf::is_primitive_row_op_compatible(build)) {
