@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,6 +34,7 @@ void bench_case(nvbench::state& state)
   auto const column = create_random_column(cudf::type_id::STRING, row_count{num_rows}, profile);
 
   auto col_view = column->view();
+  auto col_size = column->alloc_size();
 
   cudf::column::contents ascii_contents;
   if (encoding == "ascii") {
@@ -46,23 +47,22 @@ void bench_case(nvbench::state& state)
       ascii_profile);
     auto ascii_data = ascii_column->view();
 
-    col_view = cudf::column_view(col_view.type(),
+    col_view       = cudf::column_view(col_view.type(),
                                  col_view.size(),
                                  ascii_data.data<char>(),
                                  col_view.null_mask(),
                                  col_view.null_count(),
                                  0,
-                                 {input.offsets()});
-
+                                       {input.offsets()});
+    col_size       = ascii_column->alloc_size();
     ascii_contents = ascii_column->release();
   }
   auto input = cudf::strings_column_view(col_view);
 
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
 
-  state.add_element_count(input.chars_size(cudf::get_default_stream()), "chars_size");
-  state.add_global_memory_reads<nvbench::int8_t>(input.chars_size(cudf::get_default_stream()));
-  state.add_global_memory_writes<nvbench::int8_t>(input.chars_size(cudf::get_default_stream()));
+  state.add_global_memory_reads<nvbench::int8_t>(col_size);
+  state.add_global_memory_writes<nvbench::int8_t>(col_size);
 
   state.exec(nvbench::exec_tag::sync,
              [&](nvbench::launch& launch) { auto result = cudf::strings::to_lower(input); });
