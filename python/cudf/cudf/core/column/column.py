@@ -709,17 +709,11 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         if arrow_type or isinstance(self.dtype, pd.ArrowDtype):
             return pd.Index(pd.arrays.ArrowExtensionArray(pa_array))
         elif (
-            (
-                nullable
-                or isinstance(self.dtype, pd.api.extensions.ExtensionDtype)
+            nullable or is_pandas_nullable_extension_dtype(self.dtype)
+        ) and is_pandas_nullable_extension_dtype(
+            pandas_nullable_dtype := np_dtypes_to_pandas_dtypes.get(
+                self.dtype, self.dtype
             )
-            and isinstance(
-                pandas_nullable_dtype := np_dtypes_to_pandas_dtypes.get(
-                    self.dtype, self.dtype
-                ),
-                pd.api.extensions.ExtensionDtype,
-            )
-            and hasattr(pandas_nullable_dtype, "__from_arrow__")
         ):
             pandas_array = pandas_nullable_dtype.__from_arrow__(pa_array)
             return pd.Index(pandas_array, copy=False)
@@ -1959,7 +1953,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             frames.extend(dtype_frames)
             header["dtype-is-cudf-serialized"] = True
         except AttributeError:
-            if isinstance(self.dtype, pd.ArrowDtype):
+            if is_pandas_nullable_extension_dtype(self.dtype):
                 header["dtype"] = pickle.dumps(self.dtype)
             else:
                 header["dtype"] = self.dtype.str
@@ -2000,11 +1994,8 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         else:
             try:
                 dtype = np.dtype(header["dtype"])
-            except TypeError as e:
-                if cudf.get_option("mode.pandas_compatible"):
-                    dtype = pickle.loads(header["dtype"])
-                else:
-                    raise e
+            except TypeError:
+                dtype = pickle.loads(header["dtype"])
         if "data" in header:
             data, frames = unpack(header["data"], frames)
         else:
@@ -2842,9 +2833,9 @@ def as_column(
                 isinstance(arbitrary.dtype, pd.ArrowDtype)
                 and (arrow_type := arbitrary.dtype.pyarrow_dtype) is not None
                 and (
-                    arrow_type == pa.date32()
-                    or arrow_type == pa.binary()
-                    or isinstance(arrow_type, pa.DictionaryType)
+                    pa.types.is_date32(arrow_type)
+                    or pa.types.is_binary(arrow_type)
+                    or pa.types.is_dictionary(arrow_type)
                 )
             ):
                 raise NotImplementedError(

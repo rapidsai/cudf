@@ -5861,7 +5861,10 @@ class StringColumn(ColumnBase):
             and not isinstance(dtype, pd.StringDtype)
             and not (
                 isinstance(dtype, pd.ArrowDtype)
-                and dtype.pyarrow_dtype == pa.string()
+                and (
+                    dtype.pyarrow_dtype == pa.string()
+                    or dtype.pyarrow_dtype == pa.large_string()
+                )
             )
         ):
             raise ValueError(f"dtype must be {CUDF_STRING_DTYPE}")

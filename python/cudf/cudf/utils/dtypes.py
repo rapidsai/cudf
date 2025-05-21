@@ -422,8 +422,8 @@ def pyarrow_dtype_to_cudf_dtype(dtype: pa.DataType) -> DtypeObj:
         raise TypeError(f"Unsupported Arrow type: {pyarrow_dtype}")
 
 
-def is_pandas_nullable_extension_dtype(dtype_to_check) -> bool:
-    if isinstance(
+def is_pandas_nullable_numpy_dtype(dtype_to_check) -> bool:
+    return isinstance(
         dtype_to_check,
         (
             pd.UInt8Dtype,
@@ -438,8 +438,13 @@ def is_pandas_nullable_extension_dtype(dtype_to_check) -> bool:
             pd.Float64Dtype,
             pd.BooleanDtype,
             pd.StringDtype,
-            pd.ArrowDtype,
         ),
+    )
+
+
+def is_pandas_nullable_extension_dtype(dtype_to_check) -> bool:
+    if is_pandas_nullable_numpy_dtype(dtype_to_check) or isinstance(
+        dtype_to_check, pd.ArrowDtype
     ):
         return True
     elif isinstance(dtype_to_check, pd.CategoricalDtype):
@@ -514,18 +519,13 @@ def dtype_to_pandas_nullable_extension_type(dtype) -> DtypeObj:
 
 def get_dtype_of_same_kind(source_dtype: DtypeObj, target_dtype: DtypeObj):
     """
-    Given a dtype, return a dtype of the same kind
-    with the same size as the input dtype.
+    Given a dtype, return a dtype of the same kind.
     If no such dtype exists, return the default dtype.
     """
     if isinstance(source_dtype, pd.ArrowDtype):
         return dtype_to_pyarrow_type(target_dtype)
     elif is_pandas_nullable_extension_dtype(source_dtype):
         return dtype_to_pandas_nullable_extension_type(target_dtype)
-    elif isinstance(source_dtype, np.dtype) and isinstance(
-        target_dtype, np.dtype
-    ):
-        return target_dtype
     else:
         return target_dtype
 

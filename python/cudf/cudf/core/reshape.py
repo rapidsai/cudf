@@ -1167,8 +1167,7 @@ def pivot(
     # MultiIndex to Index
     if not values_is_list:
         result._data.droplevel(0)
-        if cudf.get_option("mode.pandas_compatible"):
-            result._data.label_dtype = column_data.dtype
+        result._data.label_dtype = column_data.dtype
 
     return result
 

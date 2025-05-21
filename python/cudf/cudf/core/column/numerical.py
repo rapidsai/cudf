@@ -36,8 +36,6 @@ from cudf.utils.utils import _is_null_host_scalar, is_na_like
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    import pandas as pd
-
     from cudf._typing import (
         ColumnBinaryOperand,
         ColumnLike,
@@ -712,14 +710,6 @@ class NumericalColumn(NumericalBaseColumn):
             else:
                 self._dtype = get_dtype_of_same_kind(dtype, self.dtype)
         return self
-
-    def to_pandas(
-        self,
-        *,
-        nullable: bool = False,
-        arrow_type: bool = False,
-    ) -> pd.Index:
-        return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
 
     def _reduction_result_dtype(self, reduction_op: str) -> Dtype:
         if reduction_op in {"sum", "product"}:
