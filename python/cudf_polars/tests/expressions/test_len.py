@@ -26,9 +26,9 @@ def test_len(dtype, empty):
     # Workaround for https://github.com/pola-rs/polars/issues/16904
     assert_gpu_result_equal(
         q,
-        collect_kwargs={"optimizations": pl.QueryOptFlags(projection_pushdown=False)}
-        if not POLARS_VERSION_LT_130
-        else {"projection_pushdown": False},
+        collect_kwargs={"projection_pushdown": False}
+        if POLARS_VERSION_LT_130
+        else {"optimizations": pl.QueryOptFlags(projection_pushdown=False)},
     )
 
 

@@ -34,9 +34,7 @@ def test_filter_expression(expr, predicate_pushdown):
     query = ldf.select(pl.col("a").filter(expr))
     assert_gpu_result_equal(
         query,
-        collect_kwargs={
-            "optimizations": pl.QueryOptFlags(predicate_pushdown=predicate_pushdown)
-        }
-        if not POLARS_VERSION_LT_130
-        else {"predicate_pushdown": predicate_pushdown},
+        collect_kwargs={"predicate_pushdown": predicate_pushdown}
+        if POLARS_VERSION_LT_130
+        else {"optimizations": pl.QueryOptFlags(predicate_pushdown=predicate_pushdown)},
     )

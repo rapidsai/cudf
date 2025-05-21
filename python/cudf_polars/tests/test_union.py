@@ -43,7 +43,7 @@ def test_concat_diagonal_empty():
 
     assert_gpu_result_equal(
         q,
-        collect_kwargs={"optimizations": pl.QueryOptFlags()}
-        if not POLARS_VERSION_LT_130
-        else {"no_optimization": True},
+        collect_kwargs={"no_optimization": True}
+        if POLARS_VERSION_LT_130
+        else {"optimizations": pl.QueryOptFlags()},
     )

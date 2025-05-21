@@ -41,11 +41,9 @@ def test_scan_drop_nulls(subset, predicate_pushdown):
 
     assert_gpu_result_equal(
         q,
-        collect_kwargs={
-            "optimizations": pl.QueryOptFlags(predicate_pushdown=predicate_pushdown)
-        }
-        if not POLARS_VERSION_LT_130
-        else {"predicate_pushdown": predicate_pushdown},
+        collect_kwargs={"predicate_pushdown": predicate_pushdown}
+        if POLARS_VERSION_LT_130
+        else {"optimizations": pl.QueryOptFlags(predicate_pushdown=predicate_pushdown)},
     )
 
 

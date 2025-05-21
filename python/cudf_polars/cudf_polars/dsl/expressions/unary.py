@@ -155,9 +155,10 @@ class UnaryFunction(Expr):
             return child.evaluate(df, context=context).mask_nans()
         if self.name == "round":
             round_mode = "half_away_from_zero"
-            if POLARS_VERSION_LT_129:  # pragma: no cover
-                (decimal_places,) = self.options
-            else:  # pragma: no cover
+            if POLARS_VERSION_LT_129:
+                (decimal_places,) = self.options  # pragma: no cover
+            else:
+                # pragma: no cover
                 (
                     decimal_places,
                     round_mode,
