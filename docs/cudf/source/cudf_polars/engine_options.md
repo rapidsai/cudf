@@ -25,7 +25,7 @@ result = query.collect(engine=engine)
 Note that passing `chunked: False` disables chunked reading entirely, and thus `chunk_read_limit` and `pass_read_limit` will have no effect.
 
 ## Experimental Streaming and Multi-GPU Options
-The new experimental streaming executor can be configured for single-gpu (`synchronous`) or multi-gpu (`distributed`) execution.  For both,
+The new experimental streaming executor supports both single-GPU (`synchronous`) and multi-GPU (`distributed`) execution.  To use either mode,
 we need to specify `streaming` as the `executor` and choose between `synchronous` or `distributed` as the `executor_options["scheduler"]` when calling collect:
 
 
