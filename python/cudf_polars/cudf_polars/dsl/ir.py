@@ -489,13 +489,10 @@ class Scan(IR):
         meta = plc.io.parquet_metadata.read_parquet_metadata(
             plc.io.SourceInfo(self.paths)
         )
-        total_rows = meta.num_rows()
-        if self.n_rows == -1:
-            rows = max(total_rows - self.skip_rows, 0)
-        else:
-            rows = max(min(total_rows - self.skip_rows, self.n_rows), 0)
-
-        return rows
+        total_rows = meta.num_rows() - self.skip_rows
+        if self.n_rows != -1:
+            total_rows = min(total_rows, self.n_rows)
+        return max(total_rows, 0)
 
     @classmethod
     def do_evaluate(
@@ -1128,55 +1125,55 @@ class Select(IR):
             columns = broadcast(*columns)
         return DataFrame(columns)
 
-    if not POLARS_VERSION_LT_128:  # pragma: no cover
+    def evaluate(self, *, cache: CSECache, timer: Timer | None) -> DataFrame:
+        """
+        Evaluate the Select node with special handling for fast count queries.
 
-        def evaluate(self, *, cache: CSECache, timer: Timer | None) -> DataFrame:
-            """
-            Evaluate the Select node with special handling for fast count queries.
+        Parameters
+        ----------
+        cache
+            Mapping from cached node ids to constructed DataFrames.
+            Used to implement evaluation of the `Cache` node.
+        timer
+            If not None, a Timer object to record timings for the
+            evaluation of the node.
 
-            Parameters
-            ----------
-            cache
-                Mapping from cached node ids to constructed DataFrames.
-                Used to implement evaluation of the `Cache` node.
-            timer
-                If not None, a Timer object to record timings for the
-                evaluation of the node.
+        Returns
+        -------
+        DataFrame
+            Result of evaluating this Select node. If the expression is a
+            count over a parquet scan, returns a constant row count directly
+            without evaluating the scan.
 
-            Returns
-            -------
-            DataFrame
-                Result of evaluating this Select node. If the expression is a
-                count over a parquet scan, returns a constant row count directly
-                without evaluating the scan.
-
-            Raises
-            ------
-            NotImplementedError
-                If evaluation fails. Ideally this should not occur, since the
-                translation phase should fail earlier.
-            """
-            if (
-                isinstance(self.children[0], Scan)
-                and Select._is_len_expr(self.exprs)
-                and self.children[0].typ == "parquet"
-                and self.children[0].predicate is None
-            ):
-                scan = self.children[0]
-                effective_rows = scan.fast_count()
-                col = Column(
-                    plc.Column.from_scalar(
-                        plc.Scalar.from_py(
-                            effective_rows,
-                            plc.types.DataType(plc.types.TypeId.UINT32),
-                        ),
-                        1,
+        Raises
+        ------
+        NotImplementedError
+            If evaluation fails. Ideally this should not occur, since the
+            translation phase should fail earlier.
+        """
+        if (
+            not POLARS_VERSION_LT_128
+            and isinstance(self.children[0], Scan)
+            and Select._is_len_expr(self.exprs)
+            and self.children[0].typ == "parquet"
+            and self.children[0].predicate is None
+        ):
+            # pragma: no cover
+            scan = self.children[0]
+            effective_rows = scan.fast_count()
+            col = Column(
+                plc.Column.from_scalar(
+                    plc.Scalar.from_py(
+                        effective_rows,
+                        plc.types.DataType(plc.types.TypeId.UINT32),
                     ),
-                    name=self.exprs[0].name or "len",
-                )
-                return DataFrame([col])
+                    1,
+                ),
+                name=self.exprs[0].name or "len",
+            )
+            return DataFrame([col])
 
-            return super().evaluate(cache=cache, timer=timer)
+        return super().evaluate(cache=cache, timer=timer)
 
 
 class Reduce(IR):
