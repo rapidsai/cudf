@@ -172,7 +172,7 @@ def _append_new_row_inplace(col: ColumnBase, value: ScalarLike) -> None:
     """Append a scalar `value` to the end of `col` inplace.
     Cast to common type if possible
     """
-    val_col = as_column(value)
+    val_col = as_column(value, dtype=col.dtype if value is None else None)
     to_type = find_common_type([val_col.dtype, col.dtype])
     val_col = val_col.astype(to_type)
     old_col = col.astype(to_type)
@@ -335,14 +335,7 @@ class _SeriesLocIndexer(_FrameIndexer):
                 and index_dtype.categories.dtype.kind in "iu"
             ):
                 # TODO: switch to cudf.utils.dtypes.is_integer(arg)
-                if isinstance(arg, cudf.Scalar) and arg.dtype.kind in "iu":
-                    # Do not remove until pandas 3.0 support is added.
-                    assert PANDAS_LT_300, (
-                        "Need to drop after pandas-3.0 support is added."
-                    )
-                    warnings.warn(warn_msg, FutureWarning)
-                    return arg.value
-                elif is_integer(arg):
+                if is_integer(arg):
                     # Do not remove until pandas 3.0 support is added.
                     assert PANDAS_LT_300, (
                         "Need to drop after pandas-3.0 support is added."

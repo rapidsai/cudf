@@ -46,7 +46,6 @@ from cudf.core.copy_types import GatherMap
 from cudf.core.dtypes import IntervalDtype
 from cudf.core.join._join_helpers import _match_join_keys
 from cudf.core.mixins import BinaryOperand
-from cudf.core.scalar import pa_scalar_to_plc_scalar
 from cudf.core.single_column_frame import SingleColumnFrame
 from cudf.errors import MixedTypeError
 from cudf.utils.docutils import copy_docstring
@@ -62,6 +61,7 @@ from cudf.utils.dtypes import (
     is_mixed_with_object_dtype,
 )
 from cudf.utils.performance_tracking import _performance_tracking
+from cudf.utils.scalar import pa_scalar_to_plc_scalar
 from cudf.utils.utils import _is_same_name, _warn_no_dask_cudf
 
 if TYPE_CHECKING:
