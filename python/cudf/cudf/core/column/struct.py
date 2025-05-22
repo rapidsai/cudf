@@ -12,7 +12,10 @@ from cudf.core.column.column import ColumnBase
 from cudf.core.column.methods import ColumnMethods
 from cudf.core.dtypes import StructDtype, is_struct_dtype
 from cudf.core.scalar import pa_scalar_to_plc_scalar
-from cudf.utils.dtypes import pyarrow_dtype_to_cudf_dtype
+from cudf.utils.dtypes import (
+    get_dtype_of_same_kind,
+    pyarrow_dtype_to_cudf_dtype,
+)
 from cudf.utils.utils import _is_null_host_scalar
 
 if TYPE_CHECKING:
@@ -270,10 +273,19 @@ class StructMethods(ColumnMethods):
         1    3
         dtype: int64
         """
-        fields = list(self._column.dtype.fields.keys())
-        if key in fields:
-            pos = fields.index(key)
-            return self._return_or_inplace(self._column.children[pos])
+        struct_dtype_fields = StructDtype.get_struct_dtype(
+            self._column.dtype
+        ).fields
+        field_keys = list(struct_dtype_fields.keys())
+        if key in struct_dtype_fields:
+            pos = field_keys.index(key)
+            return self._return_or_inplace(
+                self._column.children[pos]._with_type_metadata(
+                    get_dtype_of_same_kind(
+                        self._column.dtype, struct_dtype_fields[key]
+                    )
+                )
+            )
         else:
             if isinstance(key, int):
                 try:

@@ -126,6 +126,13 @@ def make_intermediate_proxy_type(name, fast_type, slow_type):
     )
 
 
+try:
+    # List Accessor in pandas was introduced in 2.2.0 only
+    pd_ListAccessor = pd.core.arrays.arrow.accessors.ListAccessor
+except AttributeError:
+    pd_ListAccessor = _Unusable
+
+
 class _AccessorAttr:
     """
     Descriptor that ensures that accessors like `.dt` and `.str`
@@ -219,7 +226,7 @@ StringMethods = make_intermediate_proxy_type(
 ListMethods = make_intermediate_proxy_type(
     "ListMethods",
     cudf.core.column.lists.ListMethods,
-    pd.core.arrays.arrow.accessors.ListAccessor,
+    pd_ListAccessor,
 )
 
 _CategoricalAccessor = make_intermediate_proxy_type(

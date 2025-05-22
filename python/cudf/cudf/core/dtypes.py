@@ -732,6 +732,17 @@ class StructDtype(_BaseDtype):
                 new_result[new_field] = result_value
         return new_result
 
+    @classmethod
+    def get_struct_dtype(cls, obj):
+        if isinstance(obj, StructDtype):
+            return obj
+        elif isinstance(obj, pa.StructType):
+            return cls.from_arrow(obj)
+        elif isinstance(obj, pd.ArrowDtype):
+            return cls.from_arrow(obj.pyarrow_dtype)
+        else:
+            raise TypeError(f"Cannot convert {type(obj)} to StructDtype")
+
 
 decimal_dtype_template = textwrap.dedent(
     """
