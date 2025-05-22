@@ -1077,7 +1077,7 @@ parser.add_argument(
     default="ucx",
     type=str,
     choices=["ucx", "ucxx"],
-    help="Shuffle method to use for distributed execution.",
+    help="UCX frontend to use: ucx (ucx-py) or ucxx)",
 )
 parser.add_argument(
     "--shuffle",
