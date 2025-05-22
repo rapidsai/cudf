@@ -15,7 +15,7 @@ from cudf_polars.dsl.expressions.base import ExecutionContext, Expr
 from cudf_polars.utils import sorting
 
 if TYPE_CHECKING:
-    from cudf_polars.containers import DataFrame
+    from cudf_polars.containers import DType, DataFrame
 
 __all__ = ["Sort", "SortBy"]
 
@@ -25,7 +25,7 @@ class Sort(Expr):
     _non_child = ("dtype", "options")
 
     def __init__(
-        self, dtype: plc.DataType, options: tuple[bool, bool, bool], column: Expr
+        self, dtype: DType, options: tuple[bool, bool, bool], column: Expr
     ) -> None:
         self.dtype = dtype
         self.options = options
@@ -58,7 +58,7 @@ class SortBy(Expr):
 
     def __init__(
         self,
-        dtype: plc.DataType,
+        dtype: DType,
         options: tuple[bool, tuple[bool], tuple[bool]],
         column: Expr,
         *by: Expr,

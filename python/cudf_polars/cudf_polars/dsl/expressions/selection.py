@@ -14,7 +14,7 @@ from cudf_polars.containers import Column
 from cudf_polars.dsl.expressions.base import ExecutionContext, Expr
 
 if TYPE_CHECKING:
-    from cudf_polars.containers import DataFrame
+    from cudf_polars.containers import DType, DataFrame
 
 __all__ = ["Filter", "Gather"]
 
@@ -23,7 +23,7 @@ class Gather(Expr):
     __slots__ = ()
     _non_child = ("dtype",)
 
-    def __init__(self, dtype: plc.DataType, values: Expr, indices: Expr) -> None:
+    def __init__(self, dtype: DType, values: Expr, indices: Expr) -> None:
         self.dtype = dtype
         self.children = (values, indices)
         self.is_pointwise = False
@@ -58,7 +58,7 @@ class Filter(Expr):
     __slots__ = ()
     _non_child = ("dtype",)
 
-    def __init__(self, dtype: plc.DataType, values: Expr, indices: Expr):
+    def __init__(self, dtype: DType, values: Expr, indices: Expr):
         self.dtype = dtype
         self.children = (values, indices)
         self.is_pointwise = False

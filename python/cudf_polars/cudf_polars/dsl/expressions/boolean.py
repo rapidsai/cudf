@@ -25,7 +25,7 @@ if TYPE_CHECKING:
     import polars.type_aliases as pl_types
     from polars.polars import _expr_nodes as pl_expr
 
-    from cudf_polars.containers import DataFrame
+    from cudf_polars.containers import DType, DataFrame
 
 __all__ = ["BooleanFunction"]
 
@@ -69,7 +69,7 @@ class BooleanFunction(Expr):
 
     def __init__(
         self,
-        dtype: plc.DataType,
+        dtype: DType,
         name: BooleanFunction.Name,
         options: tuple[Any, ...],
         *children: Expr,
@@ -178,7 +178,7 @@ class BooleanFunction(Expr):
             (column,) = columns
             is_any = self.name is BooleanFunction.Name.Any
             agg = plc.aggregation.any() if is_any else plc.aggregation.all()
-            result = plc.reduce.reduce(column.obj, agg, self.dtype)
+            result = plc.reduce.reduce(column.obj, agg, self.dtype.plc_dtype)
             if not ignore_nulls and column.null_count > 0:
                 #      Truth tables
                 #     Any         All
@@ -221,32 +221,48 @@ class BooleanFunction(Expr):
             return self._distinct(
                 column,
                 keep=plc.stream_compaction.DuplicateKeepOption.KEEP_FIRST,
-                source_value=plc.Scalar.from_py(py_val=True, dtype=self.dtype),
-                target_value=plc.Scalar.from_py(py_val=False, dtype=self.dtype),
+                source_value=plc.Scalar.from_py(
+                    py_val=True, dtype=self.dtype.plc_dtype
+                ),
+                target_value=plc.Scalar.from_py(
+                    py_val=False, dtype=self.dtype.plc_dtype
+                ),
             )
         elif self.name is BooleanFunction.Name.IsLastDistinct:
             (column,) = columns
             return self._distinct(
                 column,
                 keep=plc.stream_compaction.DuplicateKeepOption.KEEP_LAST,
-                source_value=plc.Scalar.from_py(py_val=True, dtype=self.dtype),
-                target_value=plc.Scalar.from_py(py_val=False, dtype=self.dtype),
+                source_value=plc.Scalar.from_py(
+                    py_val=True, dtype=self.dtype.plc_dtype
+                ),
+                target_value=plc.Scalar.from_py(
+                    py_val=False, dtype=self.dtype.plc_dtype
+                ),
             )
         elif self.name is BooleanFunction.Name.IsUnique:
             (column,) = columns
             return self._distinct(
                 column,
                 keep=plc.stream_compaction.DuplicateKeepOption.KEEP_NONE,
-                source_value=plc.Scalar.from_py(py_val=True, dtype=self.dtype),
-                target_value=plc.Scalar.from_py(py_val=False, dtype=self.dtype),
+                source_value=plc.Scalar.from_py(
+                    py_val=True, dtype=self.dtype.plc_dtype
+                ),
+                target_value=plc.Scalar.from_py(
+                    py_val=False, dtype=self.dtype.plc_dtype
+                ),
             )
         elif self.name is BooleanFunction.Name.IsDuplicated:
             (column,) = columns
             return self._distinct(
                 column,
                 keep=plc.stream_compaction.DuplicateKeepOption.KEEP_NONE,
-                source_value=plc.Scalar.from_py(py_val=False, dtype=self.dtype),
-                target_value=plc.Scalar.from_py(py_val=True, dtype=self.dtype),
+                source_value=plc.Scalar.from_py(
+                    py_val=False, dtype=self.dtype.plc_dtype
+                ),
+                target_value=plc.Scalar.from_py(
+                    py_val=True, dtype=self.dtype.plc_dtype
+                ),
             )
         elif self.name is BooleanFunction.Name.AllHorizontal:
             return Column(
@@ -254,7 +270,7 @@ class BooleanFunction(Expr):
                     partial(
                         plc.binaryop.binary_operation,
                         op=plc.binaryop.BinaryOperator.NULL_LOGICAL_AND,
-                        output_type=self.dtype,
+                        output_type=self.dtype.plc_dtype,
                     ),
                     (c.obj for c in columns),
                 )
@@ -265,7 +281,7 @@ class BooleanFunction(Expr):
                     partial(
                         plc.binaryop.binary_operation,
                         op=plc.binaryop.BinaryOperator.NULL_LOGICAL_OR,
-                        output_type=self.dtype,
+                        output_type=self.dtype.plc_dtype,
                     ),
                     (c.obj for c in columns),
                 )

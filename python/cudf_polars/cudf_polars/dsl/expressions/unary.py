@@ -16,7 +16,7 @@ from cudf_polars.utils import dtypes
 from cudf_polars.utils.versions import POLARS_VERSION_LT_128
 
 if TYPE_CHECKING:
-    from cudf_polars.containers import DataFrame
+    from cudf_polars.containers import DType, DataFrame
 
 __all__ = ["Cast", "Len", "UnaryFunction"]
 
@@ -27,11 +27,11 @@ class Cast(Expr):
     __slots__ = ()
     _non_child = ("dtype",)
 
-    def __init__(self, dtype: plc.DataType, value: Expr) -> None:
+    def __init__(self, dtype: DType, value: Expr) -> None:
         self.dtype = dtype
         self.children = (value,)
         self.is_pointwise = True
-        if not dtypes.can_cast(value.dtype, self.dtype):
+        if not dtypes.can_cast(value.dtype.plc_dtype, self.dtype.plc_dtype):
             raise NotImplementedError(
                 f"Can't cast {value.dtype.id().name} to {self.dtype.id().name}"
             )
@@ -42,13 +42,13 @@ class Cast(Expr):
         """Evaluate this expression given a dataframe for context."""
         (child,) = self.children
         column = child.evaluate(df, context=context)
-        return column.astype(self.dtype)
+        return column.astype(self.dtype.plc_dtype)
 
 
 class Len(Expr):
     """Class representing the length of an expression."""
 
-    def __init__(self, dtype: plc.DataType) -> None:
+    def __init__(self, dtype: DType) -> None:
         self.dtype = dtype
         self.children = ()
         self.is_pointwise = False
@@ -122,7 +122,7 @@ class UnaryFunction(Expr):
     )
 
     def __init__(
-        self, dtype: plc.DataType, name: str, options: tuple[Any, ...], *children: Expr
+        self, dtype: DType, name: str, options: tuple[Any, ...], *children: Expr
     ) -> None:
         self.dtype = dtype
         self.name = name
@@ -246,7 +246,7 @@ class UnaryFunction(Expr):
         elif self.name in self._OP_MAPPING:
             column = self.children[0].evaluate(df, context=context)
             if column.obj.type().id() != self.dtype.id():
-                arg = plc.unary.cast(column.obj, self.dtype)
+                arg = plc.unary.cast(column.obj, self.dtype.plc_dtype)
             else:
                 arg = column.obj
             return Column(plc.unary.unary_operation(arg, self._OP_MAPPING[self.name]))

@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 
     from polars.polars import _expr_nodes as pl_expr
 
-    from cudf_polars.containers import DataFrame
+    from cudf_polars.containers import DType, DataFrame
 
 __all__ = ["TemporalFunction"]
 
@@ -116,7 +116,7 @@ class TemporalFunction(Expr):
 
     def __init__(
         self,
-        dtype: plc.DataType,
+        dtype: DType,
         name: TemporalFunction.Name,
         options: tuple[Any, ...],
         *children: Expr,

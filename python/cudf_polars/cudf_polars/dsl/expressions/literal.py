@@ -18,7 +18,7 @@ if TYPE_CHECKING:
 
     import pyarrow as pa
 
-    from cudf_polars.containers import DataFrame
+    from cudf_polars.containers import DType, DataFrame
 
 __all__ = ["Literal", "LiteralColumn"]
 
@@ -28,7 +28,7 @@ class Literal(Expr):
     _non_child = ("dtype", "value")
     value: Any  # Python scalar
 
-    def __init__(self, dtype: plc.DataType, value: Any) -> None:
+    def __init__(self, dtype: DType, value: Any) -> None:
         if value is None and dtype.id() == plc.TypeId.EMPTY:
             # TypeId.EMPTY not supported by libcudf
             # cuDF Python also maps EMPTY to INT8
@@ -43,7 +43,9 @@ class Literal(Expr):
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
         return Column(
-            plc.Column.from_scalar(plc.Scalar.from_py(self.value, self.dtype), 1)
+            plc.Column.from_scalar(
+                plc.Scalar.from_py(self.value, self.dtype.plc_dtype), 1
+            )
         )
 
     @property
@@ -58,7 +60,7 @@ class LiteralColumn(Expr):
     _non_child = ("dtype", "value")
     value: pa.Array[Any]
 
-    def __init__(self, dtype: plc.DataType, value: pa.Array) -> None:
+    def __init__(self, dtype: DType, value: pa.Array) -> None:
         self.dtype = dtype
         self.value = value
         self.children = ()
@@ -69,7 +71,7 @@ class LiteralColumn(Expr):
         # This is stricter than necessary, but we only need this hash
         # for identity in groupby replacements so it's OK. And this
         # way we avoid doing potentially expensive compute.
-        return (type(self), self.dtype, id(self.value))
+        return (type(self), self.dtype.plc_dtype, id(self.value))
 
     def do_evaluate(
         self, df: DataFrame, *, context: ExecutionContext = ExecutionContext.FRAME

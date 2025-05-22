@@ -16,7 +16,7 @@ from cudf_polars.dsl.expressions.base import ExecutionContext, Expr
 from cudf_polars.dsl.expressions.literal import Literal
 
 if TYPE_CHECKING:
-    from cudf_polars.containers import DataFrame
+    from cudf_polars.containers import DType, DataFrame
 
 __all__ = ["Agg"]
 
@@ -25,9 +25,7 @@ class Agg(Expr):
     __slots__ = ("name", "op", "options", "request")
     _non_child = ("dtype", "name", "options")
 
-    def __init__(
-        self, dtype: plc.DataType, name: str, options: Any, *children: Expr
-    ) -> None:
+    def __init__(self, dtype: DType, name: str, options: Any, *children: Expr) -> None:
         self.dtype = dtype
         self.name = name
         self.options = options
@@ -140,7 +138,7 @@ class Agg(Expr):
     ) -> Column:
         return Column(
             plc.Column.from_scalar(
-                plc.reduce.reduce(column.obj, request, self.dtype),
+                plc.reduce.reduce(column.obj, request, self.dtype.plc_dtype),
                 1,
             )
         )
@@ -149,7 +147,7 @@ class Agg(Expr):
         null_count = column.null_count if not include_nulls else 0
         return Column(
             plc.Column.from_scalar(
-                plc.Scalar.from_py(column.size - null_count, self.dtype),
+                plc.Scalar.from_py(column.size - null_count, self.dtype.plc_dtype),
                 1,
             )
         )
@@ -158,7 +156,7 @@ class Agg(Expr):
         if column.size == 0 or column.null_count == column.size:
             return Column(
                 plc.Column.from_scalar(
-                    plc.Scalar.from_py(0, self.dtype),
+                    plc.Scalar.from_py(0, self.dtype.plc_dtype),
                     1,
                 )
             )
@@ -168,7 +166,7 @@ class Agg(Expr):
         if propagate_nans and column.nan_count > 0:
             return Column(
                 plc.Column.from_scalar(
-                    plc.Scalar.from_py(float("nan"), self.dtype),
+                    plc.Scalar.from_py(float("nan"), self.dtype.plc_dtype),
                     1,
                 )
             )
@@ -180,7 +178,7 @@ class Agg(Expr):
         if propagate_nans and column.nan_count > 0:
             return Column(
                 plc.Column.from_scalar(
-                    plc.Scalar.from_py(float("nan"), self.dtype),
+                    plc.Scalar.from_py(float("nan"), self.dtype.plc_dtype),
                     1,
                 )
             )

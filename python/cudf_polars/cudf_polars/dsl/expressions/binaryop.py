@@ -16,7 +16,7 @@ from cudf_polars.containers import Column
 from cudf_polars.dsl.expressions.base import ExecutionContext, Expr
 
 if TYPE_CHECKING:
-    from cudf_polars.containers import DataFrame
+    from cudf_polars.containers import DType, DataFrame
 
 __all__ = ["BinOp"]
 
@@ -27,13 +27,13 @@ class BinOp(Expr):
 
     def __init__(
         self,
-        dtype: plc.DataType,
+        dtype: DType,
         op: plc.binaryop.BinaryOperator,
         left: Expr,
         right: Expr,
     ) -> None:
         self.dtype = dtype
-        if plc.traits.is_boolean(self.dtype):
+        if plc.traits.is_boolean(self.dtype.plc_dtype):
             # For boolean output types, bitand and bitor implement
             # boolean logic, so translate. bitxor also does, but the
             # default behaviour is correct.
@@ -42,7 +42,7 @@ class BinOp(Expr):
         self.children = (left, right)
         self.is_pointwise = True
         if not plc.binaryop.is_supported_operation(
-            self.dtype, left.dtype, right.dtype, op
+            self.dtype.plc_dtype, left.dtype.plc_dtype, right.dtype.plc_dtype, op
         ):
             raise NotImplementedError(
                 f"Operation {op.name} not supported "
@@ -95,5 +95,5 @@ class BinOp(Expr):
             elif right.is_scalar:
                 rop = right.obj_scalar
         return Column(
-            plc.binaryop.binary_operation(lop, rop, self.op, self.dtype),
+            plc.binaryop.binary_operation(lop, rop, self.op, self.dtype.plc_dtype),
         )
