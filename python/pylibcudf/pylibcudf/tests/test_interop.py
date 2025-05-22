@@ -99,7 +99,7 @@ def test_decimal_other(data_type):
 
 def test_round_trip_dlpack_plc_table():
     expected = pa.table({"a": [1, 2, 3], "b": [5, 6, 7]})
-    plc_table = plc.Table.from_arrow(expected)
+    plc_table = plc.interop.from_arrow(expected)
     result = plc.interop.from_dlpack(plc.interop.to_dlpack(plc_table))
     assert_table_eq(expected, result)
 
@@ -156,7 +156,7 @@ def test_device_interop_table():
         ],
         schema=schema,
     )
-    plc_table = plc.Table.from_arrow(pa_tbl)
+    plc_table = plc.interop.from_arrow(pa_tbl)
 
     na_arr = nanoarrow.device.c_device_array(plc_table)
     actual_schema = pa.schema(na_arr.schema)
