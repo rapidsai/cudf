@@ -1021,7 +1021,7 @@ cdef class Column:
                 None,
                 0,
                 0,
-                [offsets_col, chars_col],
+                [offsets_col],
             )
 
             return (
