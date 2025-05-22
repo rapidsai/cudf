@@ -70,6 +70,7 @@ cdef class DataType:
         """Get the scale associated with this data type."""
         return self.c_obj.scale()
 
+    @property
     def _python_typecode(self) -> str:
         """The Python struct module typecode string."""
         try:
@@ -91,6 +92,7 @@ cdef class DataType:
                 f"No Python typecode for DataType {self.id()}"
             )
 
+    @property
     def typestr(self) -> str:
         """The array interface type string."""
         try:
@@ -106,7 +108,7 @@ cdef class DataType:
                 type_id.FLOAT32: "<f4",
                 type_id.FLOAT64: "<f8",
                 type_id.BOOL8: "|b1",
-            }[self.id()]()
+            }[self.id()]
         except KeyError:
             raise NotImplementedError(
                 f"No array interface typestr for DataType {self.id()}"

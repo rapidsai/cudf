@@ -936,13 +936,13 @@ cdef class Column:
 
         flat, shape = _flatten_nested_list(obj, depth)
 
-        buf = array.array(dtype.python_typecode(), flat)
+        buf = array.array(dtype._python_typecode, flat)
         mv = memoryview(buf).cast("B")
 
         iface = {
             "data": (mv.obj.buffer_info()[0], False),
             "shape": shape,
-            "typestr": dtype.typestr(),
+            "typestr": dtype.typestr,
             "strides": None,
             "version": 3,
         }
