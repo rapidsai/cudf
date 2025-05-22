@@ -53,9 +53,6 @@ cdef class Table:
     columns : list
         The columns in this table.
     """
-    def __init__(self, obj):
-        self._init(obj)
-
     __hash__ = None
 
     def __init__(self, list columns):
