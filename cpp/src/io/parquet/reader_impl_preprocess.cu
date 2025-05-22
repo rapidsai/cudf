@@ -1376,12 +1376,11 @@ void reader::impl::generate_list_column_row_counts(is_estimate_row_counts is_est
 {
   auto& pass = *_pass_itm_data;
 
-  // computes:
-  // PageInfo::chunk_row (the chunk-relative row index) for all pages in the pass. The start_row
-  // field in ColumnChunkDesc is the absolute row index for the whole file. chunk_row in PageInfo is
-  // relative to the beginning of the chunk. so in the kernels, chunk.start_row + page.chunk_row
-  // gives us the absolute row index
-  // Note: chunk_row is already computed if we have column indexes
+  // Computes:
+  // Estimated PageInfo::chunk_row (the chunk-relative row index) and PageInfo::num_rows (number of
+  // rows in this page) for all pages in the pass. The start_row field in ColumnChunkDesc is the
+  // absolute row index for the whole file. chunk_row in PageInfo is relative to the beginning of
+  // the chunk. so in the kernels, chunk.start_row + page.chunk_row gives us the absolute row index
   if (is_estimate_row_counts == is_estimate_row_counts::YES) {
     thrust::for_each(rmm::exec_policy(_stream),
                      pass.pages.d_begin(),
@@ -1395,7 +1394,7 @@ void reader::impl::generate_list_column_row_counts(is_estimate_row_counts is_est
                                   page_input,
                                   chunk_row_output_iter{pass.pages.device_ptr()});
 
-    // to compensate for the list row size estimates, force the row count on the last page for each
+    // To compensate for the list row size estimates, force the row count on the last page for each
     // column chunk (each rowgroup) such that it ends on the real known row count. this is so that
     // as we march through the subpasses, we will find that every column cleanly ends up the
     // expected row count at the row group boundary and our split computations work correctly.
@@ -1405,7 +1404,8 @@ void reader::impl::generate_list_column_row_counts(is_estimate_row_counts is_est
                      iter + pass.pages.size(),
                      set_final_row_count{pass.pages, pass.chunks});
   } else {
-    // If column indexes are available, we can translate PageInfo::chunk_row to PageInfo::num_rows
+    // If column indexes are available, we don't need to estimate PageInfo::num_rows for lists and
+    // can instead translate known PageInfo::chunk_row to PageInfo::num_rows
     thrust::for_each(rmm::exec_policy_nosync(_stream),
                      thrust::counting_iterator<size_t>(0),
                      thrust::counting_iterator(pass.pages.size()),
