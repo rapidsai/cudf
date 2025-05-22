@@ -1087,28 +1087,6 @@ cudf.read_feather
 """
 doc_to_feather = docfmt_partial(docstring=_docstring_to_feather)
 
-_docstring_to_dlpack = """
-Converts a cuDF object into a DLPack tensor.
-
-DLPack is an open-source memory tensor structure:
-`dmlc/dlpack <https://github.com/dmlc/dlpack>`_.
-
-This function takes a cuDF object and converts it to a PyCapsule object
-which contains a pointer to a DLPack tensor. This function deep copies the
-data into the DLPack tensor from the cuDF object.
-
-Parameters
-----------
-cudf_obj : DataFrame, Series, Index, or Column
-
-Returns
--------
-pycapsule_obj : PyCapsule
-    Output DLPack tensor pointer which is encapsulated in a PyCapsule
-    object.
-"""
-doc_to_dlpack = docfmt_partial(docstring=_docstring_to_dlpack)
-
 _docstring_read_csv = """
 Load a comma-separated-values (CSV) dataset into a DataFrame
 

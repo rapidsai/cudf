@@ -34,11 +34,11 @@ from cudf.core.column import (
 from cudf.core.column.categorical import CategoricalColumn, as_unsigned_codes
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.mixins import BinaryOperand, Scannable
-from cudf.utils import ioutils
 from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
     cudf_dtype_from_pa_type,
     find_common_type,
+    is_dtype_obj_numeric,
 )
 from cudf.utils.performance_tracking import _performance_tracking
 from cudf.utils.utils import _array_ufunc, _warn_no_dask_cudf
@@ -606,6 +606,39 @@ class Frame(BinaryOperand, Scannable, Serializable):
     @_performance_tracking
     def to_pandas(self, *, nullable: bool = False, arrow_type: bool = False):
         raise NotImplementedError(f"{type(self)} must implement to_pandas")
+
+    @_performance_tracking
+    def to_dlpack(self):
+        """
+        Converts a cuDF object to a DLPack tensor.
+
+        DLPack is an open-source memory tensor structure:
+        `dmlc/dlpack <https://github.com/dmlc/dlpack>`_.
+
+        Returns
+        -------
+        PyCapsule
+            A DLPack tensor pointer which is encapsulated in a PyCapsule object.
+
+        Notes
+        -----
+        The result is in column-major (Fortran order) format. If the
+        output tensor needs to be row major, transpose the output of this function.
+        """
+        dtypes = []
+        for _, dtype in self._dtypes:
+            if not is_dtype_obj_numeric(dtype, include_decimal=False):
+                raise NotImplementedError(
+                    "non-numeric data is not yet supported"
+                )
+            dtypes.append(dtype)
+        dtype = find_common_type(dtypes)
+        casted = self.astype(dtype)
+        return plc.interop.to_dlpack(
+            plc.Table(
+                [col.to_pylibcudf(mode="read") for col in casted._columns]
+            )
+        )
 
     @_performance_tracking
     def to_cupy(
@@ -1972,13 +2005,6 @@ class Frame(BinaryOperand, Scannable, Serializable):
             skipna=skipna,
             **kwargs,
         )
-
-    @_performance_tracking
-    @ioutils.doc_to_dlpack()
-    def to_dlpack(self):
-        """{docstring}"""
-
-        return cudf.io.dlpack.to_dlpack(self)
 
     @_performance_tracking
     def __str__(self) -> str:
