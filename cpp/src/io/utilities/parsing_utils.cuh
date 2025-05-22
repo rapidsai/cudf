@@ -39,6 +39,8 @@
 #include <thrust/iterator/reverse_iterator.h>
 #include <thrust/mismatch.h>
 
+#include <concepts>
+
 using cudf::device_span;
 
 namespace cudf {
@@ -599,7 +601,7 @@ struct ConvertFunctor {
    * @brief Dispatch for floating points, which are set to NaN if the input
    * is not valid. In such case, the validity mask is set to zero too.
    */
-  template <typename T, CUDF_ENABLE_IF(std::is_floating_point_v<T>)>
+  template <std::floating_point T>
   __device__ __forceinline__ bool operator()(char const* begin,
                                              char const* end,
                                              void* out_buffer,
