@@ -167,16 +167,23 @@ struct duration_to_string_fn : public duration_to_string_size_fn<T> {
 };
 
 /**
+ * @brief Concept that constrains a type to be a duration type
+ *
+ * @tparam T The type to check
+ */
+template <typename T>
+concept Duration = is_duration<T>();
+
+/**
  * @brief This dispatch method is for converting durations into strings.
  *
  * The template function declaration ensures only duration types are used.
  */
 struct dispatch_from_durations_fn {
-  template <typename T>
+  template <Duration T>
   std::unique_ptr<column> operator()(column_view const& durations,
                                      rmm::cuda_stream_view stream,
                                      rmm::device_async_resource_ref mr) const
-    requires(cudf::is_duration<T>())
   {
     size_type strings_count = durations.size();
     auto column             = column_device_view::create(durations, stream);
