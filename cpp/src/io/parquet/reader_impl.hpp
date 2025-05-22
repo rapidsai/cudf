@@ -212,7 +212,7 @@ class reader::impl {
    * more accurately, we would like to have a more accurate guess of the real number of rows per
    * page.
    */
-  enum class is_estimate_row_counts { YES, NO };
+  enum class is_estimate_row_counts : bool { NO = false, YES = true };
   void generate_list_column_row_counts(is_estimate_row_counts is_estimate_row_counts);
 
   /**
