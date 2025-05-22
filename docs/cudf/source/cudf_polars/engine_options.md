@@ -40,7 +40,7 @@ engine = GPUEngine(
 result = query.collect(engine=engine)
 ```
 
-Note: distbritubed execution requires Dask / Dask-CUDA as a dependency
+Note: distributed execution requires Dask / Dask-CUDA as a dependency
 
 ## Disabling CUDA Managed Memory
 
