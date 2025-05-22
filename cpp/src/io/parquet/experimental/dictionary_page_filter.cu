@@ -1385,17 +1385,16 @@ class dictionary_expression_converter : public equality_literals_collector {
 
         auto const& value = _dictionary_expr.push(ast::column_reference{col_literal_offset});
 
-        // For NOT_EQUAL operator, simply evaluate boolean is_false(value) expression as
-        // NOT(value). The value indicates if the row group should be pruned (if the literal is
-        // present in the hash set and it's the only value in the hash set)
-        auto const& should_be_pruned =
+        if (op == ast_operator::NOT_EQUAL) {
+          // For NOT_EQUAL operator, simply evaluate boolean is_false(value) expression as
+          // NOT(value). The value indicates if the row group should be pruned (if the literal is
+          // present in the hash set and it's the only value in the hash set)
           _dictionary_expr.push(ast::operation{ast_operator::NOT, value});
-
-        // For EQUAL operator, evaluate boolean is_true(value) expression as NOT(NOT(value))
-        // The value indicates if the row group should be kept (if the literal is present in the
-        // hash set)
-        if (op == ast_operator::EQUAL) {
-          _dictionary_expr.push(ast::operation{ast_operator::NOT, should_be_pruned});
+        } else {
+          // For EQUAL operator, evaluate boolean is_true(value) expression as IDENTITY(value)
+          // The value indicates if the row group should be kept (if the literal is present in the
+          // hash set)
+          _dictionary_expr.push(ast::operation{ast_operator::IDENTITY, value});
         }
       }
       // For all other expressions, push an always true expression
