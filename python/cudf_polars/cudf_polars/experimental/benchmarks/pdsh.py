@@ -1073,11 +1073,11 @@ parser.add_argument(
     help="Debug run.",
 )
 parser.add_argument(
-    "--ucx",
+    "--protocol",
     default="ucx",
     type=str,
     choices=["ucx", "ucxx"],
-    help="UCX frontend to use: ucx (ucx-py) or ucxx)",
+    help="Communication protocol to use for Dask: ucx (UCX-Py) or ucxx)",
 )
 parser.add_argument(
     "--shuffle",
