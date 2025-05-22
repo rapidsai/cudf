@@ -57,7 +57,7 @@ def test_sequence():
 
 
 def test_repeat_with_count_int(pa_table):
-    input_table = plc.Table(pa_table)
+    input_table = plc.Table.from_arrow(pa_table)
     count = 2
     result = plc.filling.repeat(input_table, count)
     expect = pa.table([[1, 1, 2, 2, 3, 3]], names=["a"])
@@ -65,7 +65,7 @@ def test_repeat_with_count_int(pa_table):
 
 
 def test_repeat_with_count_column(pa_table):
-    input_table = plc.Table(pa_table)
+    input_table = plc.Table.from_arrow(pa_table)
     count = plc.Column(pa.array([1, 2, 3]))
     result = plc.filling.repeat(input_table, count)
     expect = pa.table([[1] + [2] * 2 + [3] * 3], names=["a"])

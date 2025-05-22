@@ -37,8 +37,6 @@ from pylibcudf._interop_helpers cimport (
 )
 from ._interop_helpers import ArrowLike, ColumnMetadata
 
-from functools import singledispatchmethod
-
 __all__ = ["Table"]
 
 
@@ -60,18 +58,43 @@ cdef class Table:
 
     __hash__ = None
 
-    @singledispatchmethod
-    def _init(self, obj):
-        raise ValueError(f"Invalid input type {type(obj)}")
-
-    @_init.register(list)
-    def _(self, list columns):
+    def __init__(self, list columns):
         if not all(isinstance(c, Column) for c in columns):
             raise ValueError("All columns must be pylibcudf Column objects")
         self._columns = columns
 
-    @_init.register(ArrowLike)
-    def _(self, arrow_like):
+    @staticmethod
+    def from_arrow(arrow_like: ArrowLike):
+        """
+        Create a Table from an Arrow-like object using the Arrow C data interface.
+
+        This method supports constructing a `pylibcudf.Table` from an object that
+        implements one of the Arrow C data interface protocols, such as:
+
+        - `__arrow_c_device_array__`: Returns a tuple of (ArrowSchema, ArrowDeviceArray)
+          representing columnar device memory.
+        - `__arrow_c_stream__`: Returns an ArrowArrayStream pointer representing
+          a stream of host columnar batches.
+        - `__arrow_c_device_stream__`: Not yet implemented.
+        - `__arrow_c_array__`: Not yet implemented.
+
+        Parameters
+        ----------
+        arrow_like : ArrowLike
+            An object implementing one of the Arrow C data interface methods.
+
+        Returns
+        -------
+        Table
+            A Table constructed from the Arrow-like input.
+
+        Raises
+        ------
+        NotImplementedError
+            If the input is a device or host stream not yet supported.
+        ValueError
+            If the input does not implement a supported Arrow C interface.
+        """
         cdef ArrowSchema* c_schema
         cdef ArrowDeviceArray* c_array
         cdef _ArrowTableHolder result
@@ -90,8 +113,7 @@ cdef class Table:
                 )
             result.tbl.swap(c_result)
 
-            tmp = Table.from_table_view_of_arbitrary(result.tbl.get().view(), result)
-            self._columns = tmp.columns()
+            return Table.from_table_view_of_arbitrary(result.tbl.get().view(), result)
         elif hasattr(arrow_like, "__arrow_c_stream__"):
             stream = arrow_like.__arrow_c_stream__()
             c_stream = (
@@ -103,8 +125,7 @@ cdef class Table:
                 c_result = make_unique[arrow_table](move(dereference(c_stream)))
             result.tbl.swap(c_result)
 
-            tmp = Table.from_table_view_of_arbitrary(result.tbl.get().view(), result)
-            self._columns = tmp.columns()
+            return Table.from_table_view_of_arbitrary(result.tbl.get().view(), result)
         elif hasattr(arrow_like, "__arrow_c_device_stream__"):
             # TODO: When we add support for this case, it should be moved above
             # the __arrow_c_stream__ case since we should prioritize device

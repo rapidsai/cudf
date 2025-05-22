@@ -99,7 +99,7 @@ def test_decimal_other(data_type):
 
 def test_round_trip_dlpack_plc_table():
     expected = pa.table({"a": [1, 2, 3], "b": [5, 6, 7]})
-    plc_table = plc.Table(expected)
+    plc_table = plc.Table.from_arrow(expected)
     result = plc.interop.from_dlpack(plc.interop.to_dlpack(plc_table))
     assert_table_eq(expected, result)
 
@@ -113,7 +113,9 @@ def test_round_trip_dlpack_array(array):
 
 
 def test_to_dlpack_error():
-    plc_table = plc.Table(pa.table({"a": [1, None, 3], "b": [5, 6, 7]}))
+    plc_table = plc.Table.from_arrow(
+        pa.table({"a": [1, None, 3], "b": [5, 6, 7]})
+    )
     with pytest.raises(ValueError, match="Cannot create a DLPack tensor"):
         plc.interop.from_dlpack(plc.interop.to_dlpack(plc_table))
 
@@ -154,13 +156,13 @@ def test_device_interop_table():
         ],
         schema=schema,
     )
-    plc_table = plc.Table(pa_tbl)
+    plc_table = plc.Table.from_arrow(pa_tbl)
 
     na_arr = nanoarrow.device.c_device_array(plc_table)
     actual_schema = pa.schema(na_arr.schema)
     assert actual_schema.equals(pa_tbl.schema)
 
-    new_tbl = plc.Table(na_arr)
+    new_tbl = plc.Table.from_arrow(na_arr)
     assert_table_eq(pa_tbl, new_tbl)
 
 
