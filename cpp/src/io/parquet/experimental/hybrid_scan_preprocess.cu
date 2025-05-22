@@ -194,7 +194,7 @@ hybrid_scan_reader_impl::prepare_dictionaries(
       auto& dict_page_data = dictionary_page_data[chunk_idx];
 
       // Check if the column chunk has compressed data
-      has_compressed_data =
+      has_compressed_data |=
         col_meta.codec != Compression::UNCOMPRESSED and col_meta.total_compressed_size > 0;
 
       auto const clock_rate = conversion_info(

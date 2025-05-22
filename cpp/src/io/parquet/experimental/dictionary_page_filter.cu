@@ -66,6 +66,11 @@ auto constexpr bucket_size        = 1;             ///< Number of buckets per se
 auto constexpr occupancy_factor = 70;  ///< cuCollections suggests targeting a 70% occupancy factor
 uint32_t constexpr hasher_seed  = 0;   ///< default seed for the hashers
 
+/// Hash function for cuco::static_set_ref
+template <typename T>
+using hasher_type = cudf::hashing::detail::MurmurHash3_x86_32<T>;
+
+/// cuco::static_set_ref storage type
 using storage_type     = cuco::bucket_storage<key_type,
                                           bucket_size,
                                           cuco::extent<std::size_t>,
@@ -104,7 +109,7 @@ struct insert_hash_functor {
   uint32_t const seed{hasher_seed};
   __device__ constexpr auto operator()(key_type idx) const noexcept
   {
-    return cudf::hashing::detail::MurmurHash3_x86_32<T>{seed}(decoded_data[idx]);
+    return hasher_type<T>{seed}(decoded_data[idx]);
   }
 };
 
@@ -133,7 +138,7 @@ struct query_hash_functor {
   uint32_t const seed{hasher_seed};
   __device__ __forceinline__ constexpr auto operator()(T const& key) const noexcept
   {
-    return cudf::hashing::detail::MurmurHash3_x86_32<T>{seed}(key);
+    return hasher_type<T>{seed}(key);
   }
 };
 
@@ -483,12 +488,12 @@ decode_fixed_width_value(PageInfo const& page,
 
       // Handle timestamps
       if constexpr (cudf::is_timestamp<T>()) {
-        int32_t int32_value{};
-        cuda::std::memcpy(&int32_value, page_data + (value_idx * sizeof(T)), sizeof(T));
+        int32_t timestamp{};
+        cuda::std::memcpy(&timestamp, page_data + (value_idx * sizeof(T)), sizeof(T));
         if (timestamp_scale != 0) {
-          decoded_value = T{typename T::duration(static_cast<typename T::rep>(int32_value))};
+          decoded_value = T{typename T::duration(static_cast<typename T::rep>(timestamp))};
         } else {
-          decoded_value = T{static_cast<typename T::duration>(int32_value)};
+          decoded_value = T{static_cast<typename T::duration>(timestamp)};
         }
       }
       // Handle durations
@@ -497,12 +502,11 @@ decode_fixed_width_value(PageInfo const& page,
           // Reading INT32 TIME_MILLIS into 64-bit DURATION_MILLISECONDS
           // TIME_MILLIS is the only duration type stored as int32:
           // https://github.com/apache/parquet-format/blob/master/LogicalTypes.md#deprecated-time-convertedtype
-          uint32_t uint32_value{};
+          uint32_t duration{};
           cuda::std::memcpy(
-            &uint32_value, page_data + (value_idx * sizeof(uint32_t)), sizeof(uint32_t));
-          decoded_value = T{static_cast<typename T::rep>(uint32_value)};
+            &duration, page_data + (value_idx * sizeof(uint32_t)), sizeof(uint32_t));
+          decoded_value = T{static_cast<typename T::rep>(duration)};
         } else {
-          // Copy the 4-byte value from the page data
           cuda::std::memcpy(&decoded_value, page_data + (value_idx * sizeof(T)), sizeof(T));
         }
       }
@@ -513,7 +517,6 @@ decode_fixed_width_value(PageInfo const& page,
           set_error(error, decode_error::INVALID_DATA_TYPE);
           return {};
         }
-        // Copy the value from the page data
         cuda::std::memcpy(&decoded_value, page_data + (value_idx * sizeof(int32_t)), sizeof(T));
       }
       break;
@@ -527,18 +530,17 @@ decode_fixed_width_value(PageInfo const& page,
       }
       // Handle timestamps
       if constexpr (cudf::is_timestamp<T>()) {
-        int64_t int64_value{};
-        cuda::std::memcpy(&int64_value, page_data + (value_idx * sizeof(T)), sizeof(T));
+        int64_t timestamp{};
+        cuda::std::memcpy(&timestamp, page_data + (value_idx * sizeof(T)), sizeof(T));
         if (timestamp_scale != 0) {
           decoded_value = T{typename T::duration(
-            static_cast<typename T::rep>(convert_to_timestamp64(int64_value, timestamp_scale)))};
+            static_cast<typename T::rep>(convert_to_timestamp64(timestamp, timestamp_scale)))};
         } else {
-          decoded_value = T{typename T::duration(static_cast<typename T::rep>(int64_value))};
+          decoded_value = T{typename T::duration(static_cast<typename T::rep>(timestamp))};
         }
       }
-      // Handle durations and other 8-byte encoded values including decimal64
+      // Handle durations and other int64 encoded values including decimal64
       else {
-        // Copy the 8-byte value from the page data
         cuda::std::memcpy(&decoded_value, page_data + (value_idx * sizeof(T)), sizeof(T));
       }
       break;
@@ -759,15 +761,15 @@ build_fixed_width_dictionaries(PageInfo const* pages,
   // Decode values from the current dictionary page
   for (auto value_idx = group.thread_rank(); value_idx < page.num_input_values;
        value_idx += group.num_threads()) {
+    // Key (decoded value's global index) to insert into the cuco hash set
+    auto const insert_key = static_cast<key_type>(value_offset + value_idx);
+
     // Decode the value from the page data
-    decoded_data[value_offset + value_idx] =
+    decoded_data[insert_key] =
       decode_fixed_width_value<T>(page, chunk, value_idx, physical_type, error);
 
     // Return early if an error has been set
     if (is_error_set(error)) { return; }
-
-    // Key (decoded value's global index) to insert into the cuco hash set
-    auto const insert_key = static_cast<key_type>(value_offset + value_idx);
 
     // Insert the key (decoded value's global index) into the cuco hash set
     set_insert_ref.insert(insert_key);

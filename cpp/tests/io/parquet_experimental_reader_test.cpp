@@ -205,7 +205,8 @@ descending_low_cardinality()
 template <typename T, size_t NumTableConcats>
 auto create_parquet_with_stats(
   cudf::size_type col2_value             = 100,
-  cudf::io::compression_type compression = cudf::io::compression_type::AUTO)
+  cudf::io::compression_type compression = cudf::io::compression_type::AUTO,
+  rmm::cuda_stream_view stream           = cudf::get_default_stream())
 {
   static_assert(NumTableConcats >= 1, "Concatenated table must contain at least one table");
 
