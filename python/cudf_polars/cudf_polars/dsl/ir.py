@@ -2243,13 +2243,15 @@ class MapFunction(IR):
         elif self.name == "row_index":
             col_name, offset = options
             self.options = (col_name, offset)
-        elif self.name == "fast_count":  # pragma: no cover
+        elif self.name == "fast_count":
             # TODO: Remove this once all scan types support projections
             # using Select + Len. Currently, CSV is the only format that
             # uses the legacy MapFunction(FastCount) path because it is
             # faster than the new-streaming path for large files.
             # See https://github.com/pola-rs/polars/pull/22363#issue-3010224808
-            raise NotImplementedError(f"Unsupported scan type: {1}")
+            raise NotImplementedError(
+                "Fast count unsupported for CSV scans"
+            )  # pragma: no cover
         self._non_child_args = (schema, name, self.options)
 
     def get_hashable(self) -> Hashable:
