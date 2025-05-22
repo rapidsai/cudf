@@ -524,7 +524,7 @@ template <>
 struct operator_functor<ast_operator::SIN, false> {
   static constexpr auto arity{1};
 
-  template <typename InputT, std::enable_if_t<std::is_floating_point_v<InputT>>* = nullptr>
+  template <std::floating_point InputT>
   __device__ inline auto operator()(InputT input) -> decltype(std::sin(input))
   {
     return std::sin(input);
@@ -535,7 +535,7 @@ template <>
 struct operator_functor<ast_operator::COS, false> {
   static constexpr auto arity{1};
 
-  template <typename InputT, std::enable_if_t<std::is_floating_point_v<InputT>>* = nullptr>
+  template <std::floating_point InputT>
   __device__ inline auto operator()(InputT input) -> decltype(std::cos(input))
   {
     return std::cos(input);

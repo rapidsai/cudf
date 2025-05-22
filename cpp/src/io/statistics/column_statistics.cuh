@@ -136,11 +136,11 @@ struct calculate_group_statistics_functor {
     }
   }
 
-  template <typename T,
-            std::enable_if_t<detail::statistics_type_category<T, IO>::include_extrema and
-                             IO == detail::io_file_format::PARQUET and
-                             std::is_same_v<T, list_view>>* = nullptr>
+  template <typename T>
   __device__ void operator()(stats_state_s& s, uint32_t t)
+    requires(detail::statistics_type_category<T, IO>::include_extrema and IO ==
+               detail::io_file_format::PARQUET and
+             std::is_same_v<T, list_view>)
   {
     operator()<statistics::byte_array_view>(s, t);
   }

@@ -570,14 +570,14 @@ struct ConvertFunctor {
   /**
    * @brief Dispatch for boolean type types.
    */
-  template <typename T, CUDF_ENABLE_IF(std::is_same_v<T, bool>)>
+  template <typename T>
   __device__ __forceinline__ bool operator()(char const* begin,
                                              char const* end,
                                              void* out_buffer,
                                              size_t row,
                                              data_type const output_type,
                                              parse_options_view const& opts,
-                                             bool as_hex)
+                                             bool as_hex) requires std::is_same_v<T, bool>
   {
     auto const value = [&opts, begin, end]() -> cuda::std::optional<T> {
       // Check for user-specified true/false values

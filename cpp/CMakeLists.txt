@@ -22,6 +22,7 @@ include(${rapids-cmake-dir}/cuda/set_runtime.cmake)
 include(rapids-export)
 include(rapids-find)
 
+set (CMAKE_CUDA_ARCHITECTURES "NATIVE")
 rapids_cuda_init_architectures(CUDF)
 
 project(
@@ -856,12 +857,12 @@ set_target_properties(
   PROPERTIES BUILD_RPATH "\$ORIGIN"
              INSTALL_RPATH "\$ORIGIN"
              # set target compile options
-             CXX_STANDARD 17
+             CXX_STANDARD 20
              CXX_STANDARD_REQUIRED ON
              # For std:: support of __int128_t. Can be removed once using cuda::std
              CXX_EXTENSIONS ON
              CXX_VISIBILITY_PRESET hidden
-             CUDA_STANDARD 17
+             CUDA_STANDARD 20
              CUDA_STANDARD_REQUIRED ON
              CUDA_VISIBILITY_PRESET hidden
              POSITION_INDEPENDENT_CODE ON
@@ -1042,9 +1043,9 @@ if(CUDF_BUILD_TESTUTIL)
     PROPERTIES BUILD_RPATH "\$ORIGIN"
                INSTALL_RPATH "\$ORIGIN"
                # set target compile options
-               CXX_STANDARD 17
+               CXX_STANDARD 20
                CXX_STANDARD_REQUIRED ON
-               CUDA_STANDARD 17
+               CUDA_STANDARD 20
                CUDA_STANDARD_REQUIRED ON
                POSITION_INDEPENDENT_CODE ON
                INTERFACE_POSITION_INDEPENDENT_CODE ON
@@ -1065,9 +1066,9 @@ if(CUDF_BUILD_TESTUTIL)
     PROPERTIES BUILD_RPATH "\$ORIGIN"
                INSTALL_RPATH "\$ORIGIN"
                # set target compile options
-               CXX_STANDARD 17
+               CXX_STANDARD 20
                CXX_STANDARD_REQUIRED ON
-               CUDA_STANDARD 17
+               CUDA_STANDARD 20
                CUDA_STANDARD_REQUIRED ON
   )
 
@@ -1089,6 +1090,18 @@ if(CUDF_BUILD_TESTUTIL)
   add_library(cudf::cudftestutil ALIAS cudftestutil)
 
   add_library(cudftestutil_impl INTERFACE)
+
+  set_target_properties(
+    cudftestutil_impl
+    PROPERTIES BUILD_RPATH "\$ORIGIN"
+               INSTALL_RPATH "\$ORIGIN"
+               # set target compile options
+               CXX_STANDARD 20
+               CXX_STANDARD_REQUIRED ON
+               CUDA_STANDARD 20
+               CUDA_STANDARD_REQUIRED ON
+  )
+
   add_library(cudf::cudftestutil_impl ALIAS cudftestutil_impl)
   target_sources(
     cudftestutil_impl
@@ -1105,6 +1118,7 @@ if(CUDF_BUILD_TESTUTIL)
               $<INSTALL_INTERFACE:src/cudftestutil/utilities/table_utilities.cu>
               $<INSTALL_INTERFACE:src/cudftestutil/utilities/tdigest_utilities.cu>
   )
+
   target_link_libraries(cudftestutil_impl INTERFACE cudf::cudftestutil)
 
   # Base library for linking to cudf::cudftestutil, Note that targets should not directly link to
@@ -1156,7 +1170,7 @@ if(CUDF_BUILD_STREAMS_TEST_UTIL)
     set_target_properties(
       ${_tgt}
       PROPERTIES # set target compile options
-                 CXX_STANDARD 17
+                 CXX_STANDARD 20
                  CXX_STANDARD_REQUIRED ON
                  POSITION_INDEPENDENT_CODE ON
     )
