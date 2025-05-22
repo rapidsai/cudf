@@ -50,7 +50,6 @@ from cudf.core.join._join_helpers import _match_join_keys
 from cudf.core.mixins import GetAttrGetItemMixin, Reducible, Scannable
 from cudf.core.multiindex import MultiIndex
 from cudf.core.reshape import concat
-from cudf.core.scalar import pa_scalar_to_plc_scalar
 from cudf.core.udf.groupby_utils import _can_be_jitted, jit_groupby_apply
 from cudf.options import get_option
 from cudf.utils.dtypes import (
@@ -60,6 +59,7 @@ from cudf.utils.dtypes import (
     is_dtype_obj_numeric,
 )
 from cudf.utils.performance_tracking import _performance_tracking
+from cudf.utils.scalar import pa_scalar_to_plc_scalar
 
 if TYPE_CHECKING:
     from collections.abc import Generator, Hashable, Iterable, Sequence

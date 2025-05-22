@@ -1126,6 +1126,13 @@ parser.add_argument(
     help="Debug run.",
 )
 parser.add_argument(
+    "--protocol",
+    default="ucx",
+    type=str,
+    choices=["ucx", "ucxx"],
+    help="Communication protocol to use for Dask: ucx (UCX-Py) or ucxx)",
+)
+parser.add_argument(
     "--shuffle",
     default=None,
     type=str,
@@ -1220,7 +1227,7 @@ def run(args: argparse.Namespace) -> None:
         kwargs = {
             "n_workers": run_config.n_workers,
             "dashboard_address": ":8585",
-            "protocol": "ucxx",
+            "protocol": args.protocol,
             "rmm_pool_size": args.rmm_pool_size,
             "rmm_async": args.rmm_async,
             "threads_per_worker": run_config.threads,
