@@ -70,37 +70,47 @@ cdef class DataType:
         """Get the scale associated with this data type."""
         return self.c_obj.scale()
 
-    def python_typecode(self) -> str:
-        """The Python type string."""
-        return {
-            type_id.INT8: 'b',
-            type_id.INT16: 'h',
-            type_id.INT32: 'i',
-            type_id.INT64: 'q',
-            type_id.UINT8: 'B',
-            type_id.UINT16: 'H',
-            type_id.UINT32: 'I',
-            type_id.UINT64: 'Q',
-            type_id.FLOAT32: 'f',
-            type_id.FLOAT64: 'd',
-            type_id.BOOL8: 'b',
-        }[self.id()]
+    def _python_typecode(self) -> str:
+        """The Python struct module typecode string."""
+        try:
+            return {
+                type_id.INT8: 'b',
+                type_id.INT16: 'h',
+                type_id.INT32: 'i',
+                type_id.INT64: 'q',
+                type_id.UINT8: 'B',
+                type_id.UINT16: 'H',
+                type_id.UINT32: 'I',
+                type_id.UINT64: 'Q',
+                type_id.FLOAT32: 'f',
+                type_id.FLOAT64: 'd',
+                type_id.BOOL8: 'b',
+            }[self.id()]
+        except KeyError:
+            raise NotImplementedError(
+                f"No Python typecode for DataType {self.id()}"
+            )
 
     def typestr(self) -> str:
         """The array interface type string."""
-        return {
-            type_id.INT8: "|i1",
-            type_id.INT16: "<i2",
-            type_id.INT32: "<i4",
-            type_id.INT64: "<i8",
-            type_id.UINT8: "|u1",
-            type_id.UINT16: "<u2",
-            type_id.UINT32: "<u4",
-            type_id.UINT64: "<u8",
-            type_id.FLOAT32: "<f4",
-            type_id.FLOAT64: "<f8",
-            type_id.BOOL8: "|b1",
-        }[self.id()]
+        try:
+            return {
+                type_id.INT8: "|i1",
+                type_id.INT16: "<i2",
+                type_id.INT32: "<i4",
+                type_id.INT64: "<i8",
+                type_id.UINT8: "|u1",
+                type_id.UINT16: "<u2",
+                type_id.UINT32: "<u4",
+                type_id.UINT64: "<u8",
+                type_id.FLOAT32: "<f4",
+                type_id.FLOAT64: "<f8",
+                type_id.BOOL8: "|b1",
+            }[self.id()]()
+        except KeyError:
+            raise NotImplementedError(
+                f"No array interface typestr for DataType {self.id()}"
+            )
 
     def __eq__(self, other):
         return type(self) is type(other) and (
