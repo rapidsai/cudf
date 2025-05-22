@@ -99,19 +99,19 @@ struct scalar {
   static constexpr int32_t index = Accessor::index;
 
   static __device__ decltype(auto) element(cudf::mutable_column_device_view_core const* outputs,
-                                           [[maybe_unused]] cudf::size_type row)
+                                           cudf::size_type)
   {
     return Accessor::element(outputs, 0);
   }
 
   static __device__ decltype(auto) element(cudf::column_device_view_core const* inputs,
-                                           cudf::size_type row)
+                                           cudf::size_type)
   {
     return Accessor::element(inputs, 0);
   }
 
   static __device__ void assign(cudf::mutable_column_device_view_core const* outputs,
-                                [[maybe_unused]] cudf::size_type row,
+                                cudf::size_type,
                                 type value)
   {
     return Accessor::assign(outputs, 0, value);
