@@ -21,7 +21,7 @@ from cudf.core.column import (
     concat_columns,
 )
 from cudf.core.column_accessor import ColumnAccessor
-from cudf.core.dtypes import CategoricalDtype
+from cudf.core.dtypes import CategoricalDtype, dtype as cudf_dtype
 from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
     SIZE_TYPE_DTYPE,
@@ -656,7 +656,7 @@ def melt(
 
     # Error for unimplemented support for datatype
     if any(
-        isinstance(frame[col].dtype, cudf.CategoricalDtype)
+        isinstance(frame[col].dtype, CategoricalDtype)
         for col in itertools.chain(id_vars, value_vars)
     ):
         raise NotImplementedError(
@@ -701,7 +701,7 @@ def melt(
     if not value_vars:
         # TODO: Use frame._data.label_dtype when it's more consistently set
         var_data = column_empty(
-            0, dtype=cudf.dtype(frame._data.to_pandas_index.dtype)
+            0, dtype=cudf_dtype(frame._data.to_pandas_index.dtype)
         )
     else:
         var_data = as_column(value_vars).take(
@@ -813,7 +813,7 @@ def get_dummies(
     if sparse:
         raise NotImplementedError("sparse is not supported yet")
 
-    dtype = cudf.dtype(dtype)
+    dtype = cudf_dtype(dtype)
 
     if isinstance(data, cudf.DataFrame):
         encode_fallback_dtypes = [CUDF_STRING_DTYPE, "category"]
