@@ -9,8 +9,8 @@ __all__ = [
     "num_io_threads",
 ]
 
-cpdef set_num_io_threads(num_io_threads):
+cpdef void set_num_io_threads(unsigned int num_io_threads):
     cpp_set_num_io_threads(num_io_threads)
 
-cpdef num_io_threads():
+cpdef unsigned int num_io_threads():
     return cpp_num_io_threads()

@@ -2,8 +2,7 @@
 
 from pylibcudf.exception_handler cimport libcudf_exception_handler
 
-cdef extern from "cudf/io/thread.hpp" \
-        namespace "cudf" nogil:
+cdef extern from "cudf/io/thread.hpp" nogil:
 
     void cpp_set_num_io_threads "cudf::io::detail::set_num_io_threads" \
         (unsigned int num_io_threads) except +libcudf_exception_handler
