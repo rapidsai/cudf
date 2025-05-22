@@ -124,10 +124,10 @@ struct device_optional_span : device_span<T> {
   }
 
   /// @copydoc column_device_view::nullable
-  CUDF_HOST_DEVICE bool nullable() const { return _null_mask != nullptr; }
+  [[nodiscard]] CUDF_HOST_DEVICE bool nullable() const { return _null_mask != nullptr; }
 
   /// @copydoc column_device_view::is_valid_nocheck
-  [[nodiscard]] __device__ bool is_valid_nocheck(size_t element_index) const noexcept
+  [[nodiscard]] __device__ bool is_valid_nocheck(size_t element_index) const
   {
     return bit_is_set(_null_mask, element_index);
   }
@@ -139,7 +139,10 @@ struct device_optional_span : device_span<T> {
   }
 
   /// @copydoc column_device_view::is_null
-  __device__ bool is_null(size_t element_index) const { return !is_valid(element_index); }
+  [[nodiscard]] __device__ bool is_null(size_t element_index) const
+  {
+    return !is_valid(element_index);
+  }
 };
 
 }  // namespace jit

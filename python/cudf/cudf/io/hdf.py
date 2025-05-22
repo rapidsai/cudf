@@ -4,7 +4,7 @@ import warnings
 
 import pandas as pd
 
-from cudf.core.dataframe import DataFrame
+from cudf.core.dataframe import from_pandas
 from cudf.utils import ioutils
 
 
@@ -16,7 +16,7 @@ def read_hdf(path_or_buf, *args, **kwargs):
         "be GPU accelerated in the future"
     )
     pd_value = pd.read_hdf(path_or_buf, *args, **kwargs)
-    return DataFrame.from_pandas(pd_value)
+    return from_pandas(pd_value)
 
 
 @ioutils.doc_to_hdf()
