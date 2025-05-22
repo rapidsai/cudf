@@ -473,7 +473,7 @@ TEST_F(PercentileApproxTest, ReductionWithLowRowCount)
                  *cudf::make_tdigest_aggregation<cudf::reduce_aggregation>(max_centroids),
                  cudf::data_type{cudf::type_id::STRUCT});
 
-  auto const tdigest_col = cudf::make_column_from_scalar( *tdigest, 1);
+  auto const tdigest_col = cudf::make_column_from_scalar(*tdigest, 1);
 
   auto const percentiles = cudf::test::fixed_width_column_wrapper<double>{
     0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0};
