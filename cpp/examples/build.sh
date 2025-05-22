@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright (c) 2021-2024, NVIDIA CORPORATION.
+# Copyright (c) 2021-2025, NVIDIA CORPORATION.
 
 # libcudf examples build script
 
@@ -58,6 +58,7 @@ build_example() {
 
 build_example basic
 build_example strings
+build_example string_transforms
 build_example nested_types
 build_example parquet_io
 build_example billion_rows
