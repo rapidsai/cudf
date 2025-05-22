@@ -1073,6 +1073,13 @@ parser.add_argument(
     help="Debug run.",
 )
 parser.add_argument(
+    "--ucx",
+    default="ucx",
+    type=str,
+    choices=["ucx", "ucxx"],
+    help="Shuffle method to use for distributed execution.",
+)
+parser.add_argument(
     "--shuffle",
     default=None,
     type=str,
@@ -1167,7 +1174,7 @@ def run(args: argparse.Namespace) -> None:
         kwargs = {
             "n_workers": run_config.n_workers,
             "dashboard_address": ":8585",
-            "protocol": "ucxx",
+            "protocol": args.ucx,
             "rmm_pool_size": args.rmm_pool_size,
             "rmm_async": args.rmm_async,
             "threads_per_worker": run_config.threads,
