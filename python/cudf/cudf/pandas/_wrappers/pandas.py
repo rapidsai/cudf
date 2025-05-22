@@ -10,6 +10,12 @@ import pickle
 import sys
 
 import pandas as pd
+
+# cuGraph third party integration test, test_cugraph_from_pandas_adjacency,
+# fails without this pyarrow.dataset import
+# I suspect it relates to pyarrow's pandas-shim that gets imported
+# with this module https://github.com/rapidsai/cudf/issues/14521#issue-2015198786
+import pyarrow.dataset as ds  # noqa: F401
 from pandas.tseries.holiday import (
     AbstractHolidayCalendar as pd_AbstractHolidayCalendar,
     EasterMonday as pd_EasterMonday,
@@ -1868,11 +1874,10 @@ for typ in _PANDAS_OBJ_INTERMEDIATE_TYPES:
 _original_Series_init = cudf.Series.__init__
 _original_DataFrame_init = cudf.DataFrame.__init__
 _original_Index_init = cudf.Index.__init__
-_original_IndexMeta_call = cudf.core.index.IndexMeta.__call__
 _original_from_pandas = cudf.from_pandas
 _original_DataFrame_from_pandas = cudf.DataFrame.from_pandas
 _original_Series_from_pandas = cudf.Series.from_pandas
-_original_Index_from_pandas = cudf.BaseIndex.from_pandas
+_original_Index_from_pandas = cudf.Index.from_pandas
 _original_MultiIndex_from_pandas = cudf.MultiIndex.from_pandas
 
 
@@ -1949,7 +1954,7 @@ def wrap_from_pandas_index(original_call):
     def wrapped_from_pandas_index(index, *args, **kwargs):
         if is_proxy_object(index):
             index = index.as_gpu_object()
-            if isinstance(index, cudf.core.index.BaseIndex):
+            if isinstance(index, cudf.Index):
                 return index
         return original_call(index, *args, **kwargs)
 
@@ -2004,7 +2009,6 @@ def initial_setup():
     cudf.Series.__init__ = wrap_init(_original_Series_init)
     cudf.Index.__init__ = wrap_init(_original_Index_init)
     cudf.DataFrame.__init__ = DataFrame_init_
-    cudf.core.index.IndexMeta.__call__ = wrap_call(_original_IndexMeta_call)
     cudf.from_pandas = wrap_from_pandas(_original_from_pandas)
     cudf.DataFrame.from_pandas = wrap_from_pandas_dataframe(
         _original_DataFrame_from_pandas
@@ -2012,7 +2016,7 @@ def initial_setup():
     cudf.Series.from_pandas = wrap_from_pandas_series(
         _original_Series_from_pandas
     )
-    cudf.BaseIndex.from_pandas = wrap_from_pandas_index(
+    cudf.Index.from_pandas = wrap_from_pandas_index(
         _original_Index_from_pandas
     )
     cudf.MultiIndex.from_pandas = wrap_from_pandas_multiindex(

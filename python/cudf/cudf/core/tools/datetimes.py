@@ -14,12 +14,13 @@ from typing_extensions import Self
 
 import pylibcudf as plc
 
-import cudf
 from cudf.api.types import is_integer, is_scalar
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column.column import ColumnBase, as_column
-from cudf.core.index import ensure_index
+from cudf.core.dataframe import DataFrame
+from cudf.core.index import DatetimeIndex, Index, ensure_index
 from cudf.core.scalar import pa_scalar_to_plc_scalar
+from cudf.core.series import Series
 from cudf.utils.dtypes import CUDF_STRING_DTYPE
 from cudf.utils.temporal import infer_format, unit_to_nanoseconds_conversion
 
@@ -190,7 +191,7 @@ def to_datetime(
             format = format.replace("%f", "%9f")
 
     try:
-        if isinstance(arg, cudf.DataFrame):
+        if isinstance(arg, DataFrame):
             # we require at least Ymd
             required = ["year", "month", "day"]
             req = list(set(required) - set(arg._column_names))
@@ -285,7 +286,7 @@ def to_datetime(
                 format=format,
                 utc=utc,
             )
-            return cudf.Series._from_column(col, index=arg.index)
+            return Series._from_column(col, index=arg.index)
         else:
             col = _process_col(
                 col=as_column(arg),
@@ -295,16 +296,16 @@ def to_datetime(
                 format=format,
                 utc=utc,
             )
-            if isinstance(arg, (cudf.BaseIndex, pd.Index)):
-                return cudf.DatetimeIndex._from_column(col, name=arg.name)
-            elif isinstance(arg, (cudf.Series, pd.Series)):
-                return cudf.Series._from_column(
+            if isinstance(arg, (Index, pd.Index)):
+                return DatetimeIndex._from_column(col, name=arg.name)
+            elif isinstance(arg, (Series, pd.Series)):
+                return Series._from_column(
                     col, name=arg.name, index=ensure_index(arg.index)
                 )
             elif is_scalar(arg):
                 return col.element_indexing(0)
             else:
-                return cudf.Index._from_column(col)
+                return Index._from_column(col)
     except Exception as e:
         if errors == "raise":
             raise e
@@ -848,9 +849,7 @@ def date_range(
         end = dtype.type(end, unit).astype(np.dtype(np.int64))
         arr = np.linspace(start=start, stop=end, num=periods).astype(dtype)
         result = as_column(arr)
-        return cudf.DatetimeIndex._from_column(result, name=name).tz_localize(
-            tz
-        )
+        return DatetimeIndex._from_column(result, name=name).tz_localize(tz)
 
     # The code logic below assumes `freq` is defined. It is first normalized
     # into `DateOffset` for further computation with timestamps.
@@ -958,9 +957,9 @@ def date_range(
         arr = range(int(start), int(stop), step)
         res = as_column(arr).astype(dtype)
 
-    return cudf.DatetimeIndex._from_column(
-        res, name=name, freq=freq
-    ).tz_localize(tz)
+    return DatetimeIndex._from_column(res, name=name, freq=freq).tz_localize(
+        tz
+    )
 
 
 def _has_fixed_frequency(freq: DateOffset) -> bool:

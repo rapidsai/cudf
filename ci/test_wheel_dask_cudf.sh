@@ -21,7 +21,12 @@ rapids-logger "Install dask_cudf, cudf, pylibcudf, and test requirements"
 # generate constraints (possibly pinning to oldest support versions of dependencies)
 rapids-generate-pip-constraints py_test_dask_cudf ./constraints.txt
 
-# echo to expand wildcard before adding `[extra]` requires for pip
+# notes:
+#
+#   * echo to expand wildcard before adding `[test]` requires for pip
+#   * need to provide --constraint="${PIP_CONSTRAINT}" because that environment variable is
+#     ignored if any other --constraint are passed via the CLI
+#
 rapids-pip-retry install \
   -v \
   --constraint ./constraints.txt \

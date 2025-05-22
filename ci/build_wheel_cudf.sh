@@ -15,7 +15,7 @@ RAPIDS_PY_CUDA_SUFFIX="$(rapids-wheel-ctk-name-gen "${RAPIDS_CUDA_VERSION}")"
 # Downloads libcudf and pylibcudf wheels from this current build,
 # then ensures 'cudf' wheel builds always use the 'libcudf' and 'pylibcudf' just built in the same CI run.
 #
-# Using env variable PIP_CONSTRAINT is necessary to ensure the constraints
+# Using env variable PIP_CONSTRAINT (initialized by 'rapids-init-pip') is necessary to ensure the constraints
 # are used when creating the isolated build environment.
 PIP_CONSTRAINT="${PIP_CONSTRAINT:-$(mktemp -d)/constraints.txt}"
 export PIP_CONSTRAINT
