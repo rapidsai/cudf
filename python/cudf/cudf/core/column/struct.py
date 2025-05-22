@@ -273,7 +273,7 @@ class StructMethods(ColumnMethods):
         1    3
         dtype: int64
         """
-        struct_dtype_fields = StructDtype.get_struct_dtype(
+        struct_dtype_fields = StructDtype.from_struct_dtype(
             self._column.dtype
         ).fields
         field_keys = list(struct_dtype_fields.keys())

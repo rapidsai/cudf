@@ -522,7 +522,7 @@ def get_dtype_of_same_kind(source_dtype: DtypeObj, target_dtype: DtypeObj):
     If no such dtype exists, return the default dtype.
     """
     if isinstance(source_dtype, pd.ArrowDtype):
-        return dtype_to_pyarrow_extended_dtype(target_dtype)
+        return dtype_to_pandas_arrowdtype(target_dtype)
     elif is_pandas_nullable_extension_dtype(source_dtype):
         return dtype_to_pandas_nullable_extension_type(target_dtype)
     else:
