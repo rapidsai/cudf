@@ -239,6 +239,10 @@ class MultiIndex(Index):
             )
         self._names = pd.core.indexes.frozen.FrozenList(value)
 
+    @property
+    def _num_columns(self) -> int:
+        return len(self._data)
+
     @_performance_tracking
     def to_series(self, index=None, name=None):
         raise NotImplementedError(
@@ -1000,6 +1004,14 @@ class MultiIndex(Index):
             return result
 
     @_performance_tracking
+    def isna(self) -> cp.ndarray:
+        return Frame.isna(self).values
+
+    @_performance_tracking
+    def notna(self) -> cp.ndarray:
+        return Frame.notna(self).values
+
+    @_performance_tracking
     def equals(self, other) -> bool:
         return Frame.equals(self, other)
 
@@ -1235,6 +1247,10 @@ class MultiIndex(Index):
     def to_numpy(self) -> np.ndarray:
         return self.values_host
 
+    @_performance_tracking
+    def to_pylibcudf(self) -> tuple[plc.Table, dict[str, Any]]:
+        raise NotImplementedError("to_pylibcudf is not currently supported.")
+
     def to_flat_index(self):
         """
         Convert a MultiIndex to an Index of Tuples containing the level values.
@@ -1306,7 +1322,7 @@ class MultiIndex(Index):
             raise NotImplementedError(
                 "Unable to create a cupy array with tuples."
             )
-        return self.to_frame(index=False).values
+        return Frame.to_cupy(self)
 
     @classmethod
     @_performance_tracking
@@ -2220,11 +2236,11 @@ class MultiIndex(Index):
     def repeat(self, repeats, axis=None) -> Self:
         return self._from_data(
             self._data._from_columns_like_self(
-                super()._repeat(self._columns, repeats, axis)
+                self._repeat(self._columns, repeats, axis)
             )
         )
 
     @_performance_tracking
     @_warn_no_dask_cudf
-    def __dask_tokenize__(self):
+    def __dask_tokenize__(self) -> list[Any]:
         return Frame.__dask_tokenize__(self)

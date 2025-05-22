@@ -93,7 +93,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
 
     @property
     def ndim(self) -> int:
-        raise NotImplementedError()
+        raise NotImplementedError
 
     @_performance_tracking
     def serialize(self):
@@ -602,6 +602,10 @@ class Frame(BinaryOperand, Scannable, Serializable):
         Instead, it should be called on subclasses like DataFrame/Series.
         """
         raise NotImplementedError(f"{type(self)} must implement to_pylibcudf")
+
+    @_performance_tracking
+    def to_pandas(self, *, nullable: bool = False, arrow_type: bool = False):
+        raise NotImplementedError(f"{type(self)} must implement to_pandas")
 
     @_performance_tracking
     def to_cupy(
@@ -1450,10 +1454,12 @@ class Frame(BinaryOperand, Scannable, Serializable):
         self,
         by=None,
         axis=0,
-        kind="quicksort",
+        kind: Literal[
+            "mergesort", "quicksort", "heapsort", "stable"
+        ] = "quicksort",
         order=None,
-        ascending=True,
-        na_position="last",
+        ascending: bool = True,
+        na_position: Literal["first", "last"] = "last",
     ) -> cupy.ndarray:
         """Return the integer indices that would sort the Series values.
 
@@ -1536,7 +1542,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
     def _get_sorted_inds(
         self,
         by=None,
-        ascending=True,
+        ascending: bool = True,
         na_position: Literal["first", "last"] = "last",
     ) -> ColumnBase:
         """
@@ -1551,7 +1557,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
         if is_scalar(ascending):
             ascending_lst = [ascending] * len(to_sort)
         else:
-            ascending_lst = list(ascending)
+            ascending_lst = list(ascending)  # type: ignore[call-overload]
 
         return ColumnBase.from_pylibcudf(
             sorting.order_by(
@@ -1567,6 +1573,8 @@ class Frame(BinaryOperand, Scannable, Serializable):
         """Split a frame with split points in ``splits``. Returns a list of
         Frames of length `len(splits) + 1`.
         """
+        if self._num_rows == 0:
+            return []
         return [
             self._from_columns_like_self(
                 [ColumnBase.from_pylibcudf(col) for col in split],
@@ -1994,26 +2002,6 @@ class Frame(BinaryOperand, Scannable, Serializable):
             self._data._from_columns_like_self((~col for col in self._columns))
         )
 
-    @_performance_tracking
-    def nunique(self, dropna: bool = True):
-        """
-        Returns a per column mapping with counts of unique values for
-        each column.
-
-        Parameters
-        ----------
-        dropna : bool, default True
-            Don't include NaN in the counts.
-
-        Returns
-        -------
-        dict
-            Name and unique value counts of each column in frame.
-        """
-        raise NotImplementedError(
-            f"{type(self).__name__} does not implement nunique"
-        )
-
     @staticmethod
     @_performance_tracking
     def _repeat(
@@ -2040,7 +2028,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
 
     @_performance_tracking
     @_warn_no_dask_cudf
-    def __dask_tokenize__(self):
+    def __dask_tokenize__(self) -> list[Any]:
         from dask.base import normalize_token
 
         return [

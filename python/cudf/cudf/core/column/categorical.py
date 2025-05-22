@@ -33,6 +33,7 @@ if TYPE_CHECKING:
     from collections import abc
     from collections.abc import Mapping, Sequence
 
+    import cupy as cp
     import numba.cuda
 
     from cudf._typing import (
@@ -837,11 +838,11 @@ class CategoricalColumn(column.ColumnBase):
         return self.to_pandas().values
 
     @property
-    def values(self):
+    def values(self) -> cp.ndarray:
         """
         Return a CuPy representation of the CategoricalColumn.
         """
-        raise NotImplementedError("cudf.Categorical is not yet implemented")
+        raise NotImplementedError(f"cupy does not support {self.dtype}")
 
     def clip(self, lo: ScalarLike, hi: ScalarLike) -> Self:
         return (
