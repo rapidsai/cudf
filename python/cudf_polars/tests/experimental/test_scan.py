@@ -108,6 +108,11 @@ def test_table_statistics(tmp_path, df):
     assert table_stats_3.column_stats["y"].element_size == element_size_y
     assert table_stats_3.column_stats["x"].element_size > 0
 
+    # Group_by on column of all uniques to test
+    # unique_count statistics optimization.
+    q4 = q.unique().select(pl.col("y"))
+    assert_gpu_result_equal(q4, engine=engine, check_row_order=False)
+
 
 def test_table_statistics_join(tmp_path):
     # Left table
