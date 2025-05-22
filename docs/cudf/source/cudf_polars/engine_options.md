@@ -26,7 +26,7 @@ Note that passing `chunked: False` disables chunked reading entirely, and thus `
 
 ## Experimental Streaming and Multi-GPU Options
 The new experimental streaming executor supports both single-GPU (`synchronous`) and multi-GPU (`distributed`) execution.  To use either mode,
-we need to specify `streaming` as the `executor` and choose between `synchronous` or `distributed` as the `executor_options["scheduler"]` when calling collect:
+set the executor to `streaming` and specify the desired scheduler mode in `executor_options["scheduler"]` when calling collect:
 
 
 ```python
