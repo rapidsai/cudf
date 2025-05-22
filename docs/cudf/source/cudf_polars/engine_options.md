@@ -31,7 +31,7 @@ we need to specify `streaming` as the `executor` and choose between `synchronous
 
 ```python
 executor_options["scheduler"] = "synchronous" # "distributed" for multi-gpu execution
-executor = "streaming":
+executor = "streaming"
 
 engine = GPUEngine(
     executor=executor,
