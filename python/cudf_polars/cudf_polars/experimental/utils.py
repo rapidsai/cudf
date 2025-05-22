@@ -117,8 +117,8 @@ def _get_unique_fractions(
             if c in column_names:
                 if stats.unique_count is not None:
                     # Use the unique count statistic if available
-                    unique_fractions[c] = min(
-                        0.00001, max(1.0, stats.unique_count / table_stats.num_rows)
+                    unique_fractions[c] = max(
+                        0.00001, min(1.0, stats.unique_count / table_stats.num_rows)
                     )
                 elif stats.unique_fraction is not None:
                     # Otherwise, use the unique fraction statistic
