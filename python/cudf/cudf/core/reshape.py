@@ -21,6 +21,7 @@ from cudf.core.column import (
     concat_columns,
 )
 from cudf.core.column_accessor import ColumnAccessor
+from cudf.core.dtypes import CategoricalDtype
 from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
     SIZE_TYPE_DTYPE,
@@ -728,7 +729,6 @@ def get_dummies(
     prefix_sep="_",
     dummy_na=False,
     columns=None,
-    cats=None,
     sparse=False,
     drop_first=False,
     dtype="bool",
@@ -749,10 +749,6 @@ def get_dummies(
         Separator to use when appending prefixes
     dummy_na : boolean, optional
         Add a column to indicate Nones, if False Nones are ignored.
-    cats : dict, optional
-        Dictionary mapping column names to sequences of values representing
-        that column's category. If not supplied, it is computed as the unique
-        values of the column.
     sparse : boolean, optional
         Right now this is NON-FUNCTIONAL argument in rapids.
     drop_first : boolean, optional
@@ -814,14 +810,6 @@ def get_dummies(
     3  False  False   True  False
     4  False  False  False   True
     """
-
-    if cats is None:
-        cats = {}
-    else:
-        warnings.warn(
-            "cats is deprecated and will be removed in a future version.",
-            FutureWarning,
-        )
     if sparse:
         raise NotImplementedError("sparse is not supported yet")
 
@@ -867,33 +855,25 @@ def get_dummies(
             }
 
             for name in columns:
-                if name not in cats:
-                    unique = _get_unique(
-                        column=data._data[name], dummy_na=dummy_na
-                    )
-                else:
-                    unique = as_column(cats[name])
-
                 col_enc_data = _one_hot_encode_column(
                     column=data._data[name],
-                    categories=unique,
                     prefix=prefix_map.get(name, prefix),
                     prefix_sep=prefix_sep_map.get(name, prefix_sep),
                     dtype=dtype,
                     drop_first=drop_first,
+                    dummy_na=dummy_na,
                 )
                 result_data.update(col_enc_data)
             return cudf.DataFrame._from_data(result_data, index=data.index)
     else:
         ser = cudf.Series(data)
-        unique = _get_unique(column=ser._column, dummy_na=dummy_na)
         data = _one_hot_encode_column(
             column=ser._column,
-            categories=unique,
             prefix=prefix,
             prefix_sep=prefix_sep,
             dtype=dtype,
             drop_first=drop_first,
+            dummy_na=dummy_na,
         )
         return cudf.DataFrame._from_data(data, index=ser.index)
 
@@ -1316,34 +1296,27 @@ def unstack(df, level, fill_value=None, sort: bool = True):
         return result
 
 
-def _get_unique(column: ColumnBase, dummy_na: bool) -> ColumnBase:
-    """
-    Returns unique values in a column, if
-    dummy_na is False, nan's are also dropped.
-    """
-    if isinstance(column.dtype, cudf.CategoricalDtype):
-        unique = column.categories  # type: ignore[attr-defined]
-    else:
-        unique = column.unique().sort_values()
-    if not dummy_na:
-        unique = unique.nans_to_nulls().dropna()
-    return unique
-
-
 def _one_hot_encode_column(
     column: ColumnBase,
-    categories: ColumnBase,
     prefix: str | None,
     prefix_sep: str | None,
     dtype: DtypeObj,
     drop_first: bool,
+    dummy_na: bool,
 ) -> dict[str, ColumnBase]:
     """Encode a single column with one hot encoding. The return dictionary
     contains pairs of (category, encodings). The keys may be prefixed with
     `prefix`, separated with category name with `prefix_sep`. The encoding
     columns maybe coerced into `dtype`.
     """
-    if isinstance(column.dtype, cudf.CategoricalDtype):
+    if isinstance(column.dtype, CategoricalDtype):
+        categories = column.categories  # type: ignore[attr-defined]
+    else:
+        categories = column.unique().sort_values()
+    if not dummy_na:
+        categories = categories.nans_to_nulls().dropna()
+
+    if isinstance(column.dtype, CategoricalDtype):
         if column.size == column.null_count:
             column = column_empty(
                 row_count=column.size, dtype=categories.dtype
