@@ -334,7 +334,7 @@ cdef class Column:
         self._num_children = len(children)
 
     @staticmethod
-    def from_arrow(arrow_like: ArrowLike):
+    def from_arrow(arrow_like: ArrowLike, dtype: DataType | None = None):
         """
         Create a Column from an Arrow-like object using the Arrow C Data Interface.
 
@@ -368,6 +368,8 @@ cdef class Column:
         - This method supports zero-copy construction for device arrays.
         - Device stream support (`__arrow_c_device_stream__`) is not supported yet.
         """
+        if dtype is not None:
+            raise ValueError("Cannot create a Column with dtype specified.")
         cdef ArrowSchema* c_schema
         cdef ArrowArray* c_array
         cdef ArrowDeviceArray* c_device_array
