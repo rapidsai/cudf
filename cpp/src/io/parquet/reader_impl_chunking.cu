@@ -562,8 +562,8 @@ struct get_page_span {
   RowIndexIter page_row_index;
   size_t const start_row;
   size_t const end_row;
-  bool is_first_subpass;
-  bool has_page_index;
+  bool const is_first_subpass;
+  bool const has_page_index;
 
   get_page_span(device_span<size_type const> _page_offsets,
                 device_span<ColumnChunkDesc const> _chunks,
@@ -1295,7 +1295,11 @@ void reader::impl::setup_next_pass(read_mode mode)
     // if we are doing subpass reading, generate more accurate num_row estimates for list columns.
     // this helps us to generate more accurate subpass splits.
     if (pass.has_compressed_data && _input_pass_read_limit != 0) {
-      generate_list_column_row_count_estimates();
+      if (not _has_page_index) {
+        generate_list_column_row_counts(is_estimate_row_counts::YES);
+      } else {
+        generate_list_column_row_counts(is_estimate_row_counts::NO);
+      }
     }
 
 #if defined(PARQUET_CHUNK_LOGGING)

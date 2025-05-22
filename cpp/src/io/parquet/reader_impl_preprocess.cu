@@ -1372,7 +1372,7 @@ void reader::impl::preprocess_file(read_mode mode)
   _file_preprocessed = true;
 }
 
-void reader::impl::generate_list_column_row_count_estimates()
+void reader::impl::generate_list_column_row_counts(is_estimate_row_counts is_estimate_row_counts)
 {
   auto& pass = *_pass_itm_data;
 
@@ -1382,7 +1382,7 @@ void reader::impl::generate_list_column_row_count_estimates()
   // relative to the beginning of the chunk. so in the kernels, chunk.start_row + page.chunk_row
   // gives us the absolute row index
   // Note: chunk_row is already computed if we have column indexes
-  if (not _has_page_index) {
+  if (is_estimate_row_counts == is_estimate_row_counts::YES) {
     thrust::for_each(rmm::exec_policy(_stream),
                      pass.pages.d_begin(),
                      pass.pages.d_end(),
@@ -1394,6 +1394,16 @@ void reader::impl::generate_list_column_row_count_estimates()
                                   key_input + pass.pages.size(),
                                   page_input,
                                   chunk_row_output_iter{pass.pages.device_ptr()});
+
+    // to compensate for the list row size estimates, force the row count on the last page for each
+    // column chunk (each rowgroup) such that it ends on the real known row count. this is so that
+    // as we march through the subpasses, we will find that every column cleanly ends up the
+    // expected row count at the row group boundary and our split computations work correctly.
+    auto iter = thrust::make_counting_iterator(0);
+    thrust::for_each(rmm::exec_policy_nosync(_stream),
+                     iter,
+                     iter + pass.pages.size(),
+                     set_final_row_count{pass.pages, pass.chunks});
   } else {
     // If column indexes are available, we can translate PageInfo::chunk_row to PageInfo::num_rows
     thrust::for_each(rmm::exec_policy_nosync(_stream),
@@ -1401,16 +1411,6 @@ void reader::impl::generate_list_column_row_count_estimates()
                      thrust::counting_iterator(pass.pages.size()),
                      compute_page_num_rows_from_chunk_rows{pass.pages, pass.chunks});
   }
-
-  // to compensate for the list row size estimates, force the row count on the last page for each
-  // column chunk (each rowgroup) such that it ends on the real known row count. this is so that as
-  // we march through the subpasses, we will find that every column cleanly ends up the expected row
-  // count at the row group boundary and our split computations work correctly.
-  auto iter = thrust::make_counting_iterator(0);
-  thrust::for_each(rmm::exec_policy_nosync(_stream),
-                   iter,
-                   iter + pass.pages.size(),
-                   set_final_row_count{pass.pages, pass.chunks});
 
   pass.chunks.device_to_host_async(_stream);
   pass.pages.device_to_host_async(_stream);
