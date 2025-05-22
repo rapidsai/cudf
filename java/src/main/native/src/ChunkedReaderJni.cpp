@@ -224,9 +224,8 @@ jlong create_chunked_orc_reader(JNIEnv* env,
     cudf::jni::auto_set_device(env);
     cudf::jni::native_jstringArray n_filter_col_names(env, filter_col_names);
     cudf::jni::native_jstringArray n_dec128_col_names(env, dec128_col_names);
-
-    auto const source = cudf::io::source_info(reinterpret_cast<char*>(buffer),
-                                              static_cast<std::size_t>(buffer_length));
+    auto const source = cudf::io::source_info(cudf::host_span<std::byte const>(
+      reinterpret_cast<std::byte const*>(buffer), static_cast<std::size_t>(buffer_length)));
     auto opts_builder = cudf::io::orc_reader_options::builder(source);
     if (n_filter_col_names.size() > 0) {
       opts_builder = opts_builder.columns(n_filter_col_names.as_cpp_vector());
