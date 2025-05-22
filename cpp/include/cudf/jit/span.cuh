@@ -99,7 +99,10 @@ struct device_span {
 };
 
 /**
- * @brief A span type with optional elements.
+ * @brief A span type with optional/nullable elements.
+ * Optional implies the span contains nullable elements.
+ * The nullability of the elements is internally represented by an optional bitmask which is nullptr
+ * when all the elements are empty.
  *
  */
 template <typename T>
