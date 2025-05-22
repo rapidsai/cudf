@@ -20,11 +20,10 @@ from pylibcudf.libcudf.interop cimport (
 )
 from pylibcudf.libcudf.table.table cimport table
 
-from . cimport copying
 from .column cimport Column
 from .scalar cimport Scalar
 from .table cimport Table
-from .types cimport DataType, type_id
+from .types cimport DataType, type_id, LIBCUDF_TO_ARROW_TYPES
 from ._interop_helpers import ColumnMetadata
 
 __all__ = [
@@ -34,43 +33,6 @@ __all__ = [
     "to_arrow",
     "to_dlpack",
 ]
-
-ARROW_TO_PYLIBCUDF_TYPES = {
-    pa.int8(): type_id.INT8,
-    pa.int16(): type_id.INT16,
-    pa.int32(): type_id.INT32,
-    pa.int64(): type_id.INT64,
-    pa.uint8(): type_id.UINT8,
-    pa.uint16(): type_id.UINT16,
-    pa.uint32(): type_id.UINT32,
-    pa.uint64(): type_id.UINT64,
-    pa.float32(): type_id.FLOAT32,
-    pa.float64(): type_id.FLOAT64,
-    pa.bool_(): type_id.BOOL8,
-    pa.string(): type_id.STRING,
-    pa.large_string(): type_id.STRING,
-    pa.duration('s'): type_id.DURATION_SECONDS,
-    pa.duration('ms'): type_id.DURATION_MILLISECONDS,
-    pa.duration('us'): type_id.DURATION_MICROSECONDS,
-    pa.duration('ns'): type_id.DURATION_NANOSECONDS,
-    pa.timestamp('s'): type_id.TIMESTAMP_SECONDS,
-    pa.timestamp('ms'): type_id.TIMESTAMP_MILLISECONDS,
-    pa.timestamp('us'): type_id.TIMESTAMP_MICROSECONDS,
-    pa.timestamp('ns'): type_id.TIMESTAMP_NANOSECONDS,
-    pa.date32(): type_id.TIMESTAMP_DAYS,
-    pa.null(): type_id.EMPTY,
-}
-# New in pyarrow 18.0.0
-if (string_view := getattr(pa, "string_view", None)) is not None:
-    ARROW_TO_PYLIBCUDF_TYPES[string_view()] = type_id.STRING
-
-
-LIBCUDF_TO_ARROW_TYPES = {
-    v: k for k, v in ARROW_TO_PYLIBCUDF_TYPES.items()
-}
-# Because we map 2-3 pyarrow string types to type_id.STRING,
-# just map type_id.STRING to pa.string
-LIBCUDF_TO_ARROW_TYPES[type_id.STRING] = pa.string()
 
 
 @singledispatch
@@ -94,17 +56,7 @@ def from_arrow(pyarrow_object, *, DataType data_type=None):
 
 @from_arrow.register(pa.DataType)
 def _from_arrow_datatype(pyarrow_object):
-    if isinstance(pyarrow_object, pa.Decimal128Type):
-        return DataType(type_id.DECIMAL128, scale=-pyarrow_object.scale)
-    elif isinstance(pyarrow_object, pa.StructType):
-        return DataType(type_id.STRUCT)
-    elif isinstance(pyarrow_object, pa.ListType):
-        return DataType(type_id.LIST)
-    else:
-        try:
-            return DataType(ARROW_TO_PYLIBCUDF_TYPES[pyarrow_object])
-        except KeyError:
-            raise TypeError(f"Unable to convert {pyarrow_object} to cudf datatype")
+    return DataType.from_arrow(pyarrow_object)
 
 
 @from_arrow.register(pa.Table)
@@ -116,17 +68,7 @@ def _from_arrow_table(pyarrow_object, *, DataType data_type=None):
 
 @from_arrow.register(pa.Scalar)
 def _from_arrow_scalar(pyarrow_object, *, DataType data_type=None):
-    if isinstance(pyarrow_object.type, pa.ListType) and pyarrow_object.as_py() is None:
-        # pyarrow doesn't correctly handle None values for list types, so
-        # we have to create this one manually.
-        # https://github.com/apache/arrow/issues/40319
-        pa_array = pa.array([None], type=pyarrow_object.type)
-    else:
-        pa_array = pa.array([pyarrow_object])
-    return copying.get_element(
-        from_arrow(pa_array, data_type=data_type),
-        0,
-    )
+    return Scalar.from_arrow(pyarrow_object, dtype=data_type)
 
 
 @from_arrow.register(pa.Array)
