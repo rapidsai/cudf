@@ -34,7 +34,7 @@ executor_options["scheduler"] = "synchronous" # "distributed" for multi-gpu exec
 executor = "streaming":
 
 engine = GPUEngine(
-    executor=run_config.executor,
+    executor=executor,
     executor_options=executor_options,
 )
 result = query.collect(engine=engine)
