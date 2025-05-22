@@ -24,6 +24,24 @@ result = query.collect(engine=engine)
 ```
 Note that passing `chunked: False` disables chunked reading entirely, and thus `chunk_read_limit` and `pass_read_limit` will have no effect.
 
+## Experimental Streaming and Multi-GPU Options
+The new experimental streaming executor can be configured for single-gpu (`synchronous`) or multi-gpu (`distributed`) execution.  For both,
+we need to specify `streaming` as the `executor` and choose between `synchronous` or `distributed` as the `executor_options["scheduler"]` when calling collect:
+
+
+```python
+executor_options["scheduler"] = "synchronous" # "distributed" for multi-gpu execution
+executor = "streaming":
+
+engine = GPUEngine(
+    executor=run_config.executor,
+    executor_options=executor_options,
+)
+result = query.collect(engine=engine)
+```
+
+Note: distbritubed execution requires Dask / Dask-CUDA as a dependency
+
 ## Disabling CUDA Managed Memory
 
 By default `cudf_polars` will default to [CUDA managed memory](https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#unified-memory-introduction) with RMM's pool allocator. On systems that don't support managed memory, a non-managed asynchronous pool
