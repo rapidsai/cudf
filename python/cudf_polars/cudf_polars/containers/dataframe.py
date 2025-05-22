@@ -59,7 +59,6 @@ class DataFrame:
         # https://github.com/pola-rs/polars/issues/11632
         # To guarantee we produce correct names, we therefore
         # serialise with names we control and rename with that map.
-        breakpoint()
         name_map = {f"column_{i}": name for i, name in enumerate(self.column_map)}
         table = plc.interop.to_arrow(
             self.table,

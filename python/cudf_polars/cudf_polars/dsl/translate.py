@@ -100,7 +100,6 @@ class Translator:
 
         with ctx:
             polars_schema = self.visitor.get_schema()
-            breakpoint()
             try:
                 schema = {k: DType(v) for k, v in polars_schema.items()}
             except Exception as e:
