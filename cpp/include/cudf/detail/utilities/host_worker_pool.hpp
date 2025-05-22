@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#pragma once
+
 #include <BS_thread_pool.hpp>
 
 namespace cudf::detail {

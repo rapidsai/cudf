@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#pragma once
+
 #include "strings/positions.hpp"
 
 #include <cudf/column/column.hpp>
