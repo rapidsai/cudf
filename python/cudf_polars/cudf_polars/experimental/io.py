@@ -394,13 +394,25 @@ def _sample_pq_statistics(ir: Scan) -> TableStats:
                 if row_group_unique_count == row_group_num_rows:
                     unique_count_estimates[name] = num_rows_total
 
+        # Leave out unique stats if they were defined by the
+        # user. This allows us to avoid collecting stats for
+        # columns that are know to be problematic.
+        assert ir.config_options.executor.name == "streaming", (
+            "'in-memory' executor not supported in '_sample_pq_statistics"
+        )
+        user_fractions = ir.config_options.executor.unique_fraction
+
         # Construct estimated TableStats
         table_stats = TableStats(
             column_stats={
                 name: ColumnStats.new(
                     dtype,
-                    unique_count=unique_count_estimates.get(name),
-                    unique_fraction=unique_fraction_estimates.get(name),
+                    unique_count=unique_count_estimates.get(name)
+                    if name not in user_fractions
+                    else None,
+                    unique_fraction=unique_fraction_estimates.get(name)
+                    if name not in user_fractions
+                    else None,
                     element_size=element_sizes[name],
                     file_size=total_uncompressed_size[name],
                 )

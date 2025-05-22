@@ -1220,7 +1220,7 @@ def run(args: argparse.Namespace) -> None:
         kwargs = {
             "n_workers": run_config.n_workers,
             "dashboard_address": ":8585",
-            "protocol": "ucx",
+            "protocol": "ucxx",
             "rmm_pool_size": args.rmm_pool_size,
             "rmm_async": args.rmm_async,
             "threads_per_worker": run_config.threads,
@@ -1256,6 +1256,7 @@ def run(args: argparse.Namespace) -> None:
                     # "l_orderkey": 1.0,  # Q18
                     # "l_partkey": 0.1,  # Q20
                     # "o_custkey": 0.25,  # Q22
+                    "ps_suppkey": 0.0125,  # Q9, Q11
                 },
             }
             if run_config.blocksize:
