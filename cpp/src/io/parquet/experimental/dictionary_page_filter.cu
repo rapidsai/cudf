@@ -74,6 +74,26 @@ using storage_ref_type = typename storage_type::ref_type;
 using bucket_type      = typename storage_type::bucket_type;
 
 /**
+ * @brief Helper function to check if two values are equal
+ *
+ * @tparam T Underlying data type of the cudf column
+ * @param lhs Left hand side value
+ * @param rhs Right hand side value
+ *
+ * @return Boolean indicating if the two values are equal
+ */
+template <typename T>
+__host__ __device__ __forceinline__ constexpr bool are_values_equal(T const& lhs,
+                                                                    T const& rhs) noexcept
+{
+  if constexpr (cudf::is_floating_point<T>()) {
+    return cuda::std::abs(lhs - rhs) < fp_error_tolerance;
+  } else {
+    return lhs == rhs;
+  }
+}
+
+/**
  * @brief Hash functor for inserting values into a `cuco::static_set`
  *
  * @tparam T Underlying data type of the cudf column
@@ -99,11 +119,7 @@ struct insert_equality_functor {
   __device__ __forceinline__ constexpr bool operator()(key_type lhs_idx,
                                                        key_type rhs_idx) const noexcept
   {
-    if constexpr (cudf::is_floating_point<T>()) {
-      return cuda::std::abs(decoded_data[lhs_idx] - decoded_data[rhs_idx]) < fp_error_tolerance;
-    } else {
-      return decoded_data[lhs_idx] == decoded_data[rhs_idx];
-    }
+    return are_values_equal(decoded_data[lhs_idx], decoded_data[rhs_idx]);
   }
 };
 
@@ -131,11 +147,7 @@ struct query_equality_functor {
   cudf::device_span<T const> const decoded_data;
   __device__ __forceinline__ constexpr bool operator()(T const& lhs, key_type rhs) const noexcept
   {
-    if constexpr (cudf::is_floating_point<T>()) {
-      return cuda::std::abs(lhs - decoded_data[rhs]) < fp_error_tolerance;
-    } else {
-      return lhs == decoded_data[rhs];
-    }
+    return are_values_equal(lhs, decoded_data[rhs]);
   }
 };
 
@@ -396,6 +408,14 @@ decode_fixed_width_value(PageInfo const& page,
   // Placeholder for the decoded value
   auto decoded_value = T{};
 
+  // Check for decimal types
+  auto const is_decimal =
+    chunk.logical_type.has_value() and chunk.logical_type.value().type == LogicalType::DECIMAL;
+  if (is_decimal and not cudf::is_fixed_point<T>()) {
+    set_error(error, decode_error::INVALID_DATA_TYPE);
+    return {};
+  }
+
   // Decode the value based on the physical type
   switch (physical_type) {
     case parquet::Type::INT96: {
@@ -429,12 +449,13 @@ decode_fixed_width_value(PageInfo const& page,
         set_error(error, decode_error::INVALID_DATA_TYPE);
         return {};
       }
-      // Decode the value from the page data
+      // Decode the flba values as string view
       auto const flba_value = cudf::string_view{
         reinterpret_cast<char const*>(page_data) + value_idx * flba_length, flba_length};
-      cuda::std::memcpy(
-        &decoded_value, flba_value.data(), cuda::std::min<size_t>(sizeof(T), flba_length));
+      // Copy the flba value including decimal128 (__int128) from the page data
+      cuda::std::memcpy(&decoded_value, flba_value.data(), flba_length);
 
+      // Handle signed integral types
       if constexpr (cudf::is_integral<T>() and cudf::is_signed<T>()) {
         // Shift the unscaled value up and back down to correctly represent negative numbers.
         if (flba_length < sizeof(T)) {
@@ -452,31 +473,76 @@ decode_fixed_width_value(PageInfo const& page,
         return {};
       }
 
-      // Check if we are reading an 4 byte value
-      if constexpr (cuda::std::is_same_v<T, int32_t> or cuda::std::is_same_v<T, uint32_t>) {
-        // Copy the 4-byte (int32 or uint32) value from the page data
-        cuda::std::memcpy(&decoded_value, page_data + (value_idx * sizeof(T)), sizeof(T));
-      } else {
-        auto const int32_type_len = get_int32_type_len(chunk.logical_type);
+      // Calculate the bitwidth of the int32 encoded value
+      auto const int32_type_len = get_int32_type_len(chunk.logical_type);
+      // Check if we are reading INT32 TIME_MILLIS into 64-bit DURATION_MILLISECONDS
+      if (int32_type_len == sizeof(int64_t) and not cudf::is_duration<T>) {
+        set_error(error, decode_error::INVALID_DATA_TYPE);
+        return {};
+      }
+
+      // Handle timestamps
+      if constexpr (cudf::is_timestamp<T>()) {
+        int32_t int32_value{};
+        cuda::std::memcpy(&int32_value, page_data + (value_idx * sizeof(T)), sizeof(T));
+        if (timestamp_scale != 0) {
+          decoded_value = T{typename T::duration(static_cast<typename T::rep>(int32_value))};
+        } else {
+          decoded_value = T{static_cast<typename T::duration>(int32_value)};
+        }
+      }
+      // Handle durations
+      else if constexpr (cudf::is_duration<T>()) {
         if (int32_type_len == sizeof(int64_t)) {
           // Reading INT32 TIME_MILLIS into 64-bit DURATION_MILLISECONDS
           // TIME_MILLIS is the only duration type stored as int32:
           // https://github.com/apache/parquet-format/blob/master/LogicalTypes.md#deprecated-time-convertedtype
+          uint32_t uint32_value{};
           cuda::std::memcpy(
-            &decoded_value, page_data + (value_idx * sizeof(uint32_t)), sizeof(uint32_t));
+            &uint32_value, page_data + (value_idx * sizeof(uint32_t)), sizeof(uint32_t));
+          decoded_value = T{static_cast<typename T::rep>(uint32_value)};
         } else {
-          // Reading smaller bitwidth values
-          if (sizeof(T) > sizeof(int32_t)) {
-            set_error(error, decode_error::INVALID_DATA_TYPE);
-            return {};
-          }
-          // Copy the smaller bitwidth value from the page data
-          cuda::std::memcpy(&decoded_value, page_data + (value_idx * sizeof(int32_t)), sizeof(T));
+          // Copy the 4-byte value from the page data
+          cuda::std::memcpy(&decoded_value, page_data + (value_idx * sizeof(T)), sizeof(T));
         }
+      }
+      // Handle other int32 encoded values including smaller bitwidths and decimal32
+      else {
+        // Reading smaller bitwidth values
+        if (sizeof(T) > sizeof(int32_t) or sizeof(T) != int32_type_len) {
+          set_error(error, decode_error::INVALID_DATA_TYPE);
+          return {};
+        }
+        // Copy the value from the page data
+        cuda::std::memcpy(&decoded_value, page_data + (value_idx * sizeof(int32_t)), sizeof(T));
       }
       break;
     }
-    case parquet::Type::INT64: [[fallthrough]];
+    case parquet::Type::INT64: {
+      // Check if we are overruning the data stream
+      if (is_stream_overrun(
+            value_idx * sizeof(int64_t), sizeof(int64_t), page.uncompressed_page_size)) {
+        set_error(error, decode_error::DATA_STREAM_OVERRUN);
+        return {};
+      }
+      // Handle timestamps
+      if constexpr (cudf::is_timestamp<T>()) {
+        int64_t int64_value{};
+        cuda::std::memcpy(&int64_value, page_data + (value_idx * sizeof(T)), sizeof(T));
+        if (timestamp_scale != 0) {
+          decoded_value = T{typename T::duration(
+            static_cast<typename T::rep>(convert_to_timestamp64(int64_value, timestamp_scale)))};
+        } else {
+          decoded_value = T{typename T::duration(static_cast<typename T::rep>(int64_value))};
+        }
+      }
+      // Handle durations and other 8-byte encoded values including decimal64
+      else {
+        // Copy the 8-byte value from the page data
+        cuda::std::memcpy(&decoded_value, page_data + (value_idx * sizeof(T)), sizeof(T));
+      }
+      break;
+    }
     case parquet::Type::FLOAT: [[fallthrough]];
     case parquet::Type::DOUBLE: {
       // Check if we are overruning the data stream
@@ -491,13 +557,6 @@ decode_fixed_width_value(PageInfo const& page,
       // Parquet physical type is not fixed width so set the error code and break early
       set_error(error, decode_error::INVALID_DATA_TYPE);
       return {};
-    }
-  }
-
-  // timestamp_ms is represented as int64_t in cudf
-  if constexpr (cuda::std::is_same_v<T, int64_t>) {
-    if (timestamp_scale != 0) {
-      decoded_value = convert_to_timestamp64(decoded_value, timestamp_scale);
     }
   }
 
@@ -894,8 +953,8 @@ evaluate_some_fixed_width_literals(PageInfo const* pages,
 
     // Evaluate all input predicates against the decoded value
     for (auto scalar_idx = 0; scalar_idx < total_num_scalars; ++scalar_idx) {
-      // Check if the literal value matches the decoded value
-      if (decoded_value == scalars[scalar_idx].value<T>()) {
+      // Check if the literal value is equal to the decoded value
+      if (are_values_equal(decoded_value, scalars[scalar_idx].value<T>())) {
         // If the operator is NOT_EQUAL, set the result to true (row group to be pruned) if and
         // only if this is the only value in the dictionary page (all values are unique).
         // Otherwise set it to true (row group to be kept)
