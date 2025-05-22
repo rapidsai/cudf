@@ -487,7 +487,7 @@ def dtype_to_pylibcudf_type(dtype) -> plc.DataType:
     return plc.DataType(SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES[dtype])
 
 
-def dtype_to_pyarrow_extended_dtype(dtype) -> pa.DataType:
+def dtype_to_pandas_arrowdtype(dtype) -> pd.ArrowDtype:
     if isinstance(dtype, pd.ArrowDtype):
         return dtype
     if isinstance(

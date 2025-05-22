@@ -1750,11 +1750,11 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 result = self.as_categorical_column(dtype)
             elif _is_interval_dtype(
                 dtype
-            ):  # isinstance(dtype, IntervalDtype):
+            ):
                 result = self.as_interval_column(dtype)
             elif is_list_dtype(dtype) or is_struct_dtype(
                 dtype
-            ):  # , (ListDtype, StructDtype)):
+            ):
                 if self.dtype != dtype:
                     raise NotImplementedError(
                         f"Casting {self.dtype} columns not currently supported"

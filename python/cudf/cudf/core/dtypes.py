@@ -733,7 +733,7 @@ class StructDtype(_BaseDtype):
         return new_result
 
     @classmethod
-    def get_struct_dtype(cls, obj):
+    def from_struct_dtype(cls, obj) -> Self:
         if isinstance(obj, StructDtype):
             return obj
         elif isinstance(obj, pa.StructType):
