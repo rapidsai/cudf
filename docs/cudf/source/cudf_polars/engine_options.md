@@ -40,7 +40,7 @@ engine = GPUEngine(
 result = query.collect(engine=engine)
 ```
 
-Note: distributed execution requires Dask / Dask-CUDA as a dependency
+Note: Distributed execution requires [Dask](https://www.dask.org/) and [Dask-CUDA](https://docs.rapids.ai/api/dask-cuda/nightly/) to be installed.
 
 ## Disabling CUDA Managed Memory
 
