@@ -107,6 +107,7 @@ class UnaryFunction(Expr):
             "round",
             "set_sorted",
             "unique",
+            "value_counts",
         }
     )
     _supported_cum_aggs = frozenset(
@@ -216,6 +217,54 @@ class UnaryFunction(Expr):
                 order=order,
                 null_order=null_order,
             )
+        elif self.name == "value_counts":
+            (sort, parallel, name, normalize) = self.options
+            count_agg = plc.aggregation.count(plc.types.NullPolicy.INCLUDE)
+            gp_requests = [
+                plc.groupby.GroupByRequest(
+                    child.evaluate(df, context=context).obj, [count_agg]
+                )
+                for child in self.children
+            ]
+            # TODO: Can we always rely on 1 result of counts?
+            (keys_table, (counts_table,)) = plc.groupby.GroupBy(df.table).aggregate(
+                gp_requests
+            )
+            if sort:
+                sort_indices = plc.sorting.stable_sorted_order(
+                    counts_table,
+                    [plc.types.Order.DESCENDING],
+                    [plc.types.NullOrder.BEFORE],
+                )
+                counts_table = plc.copying.gather(
+                    counts_table, sort_indices, plc.copying.OutOfBoundsPolicy.DONT_CHECK
+                )
+                keys_table = plc.copying.gather(
+                    keys_table, sort_indices, plc.copying.OutOfBoundsPolicy.DONT_CHECK
+                )
+            counts_col = counts_table.column()[0]
+            if normalize:
+                total_counts = plc.reduce.reduce(
+                    counts_col, plc.aggregation.sum(), counts_col.dtype
+                )
+                counts_col = plc.binaryop.binary_operation(
+                    counts_col,
+                    total_counts,
+                    plc.binaryop.BinaryOperator.DIV,
+                    plc.DataType(plc.TypeId.FLOAT64),
+                )
+
+            plc_column = plc.Column(
+                plc.DataType(plc.TypeId.STRUCT),
+                counts_col.size(),
+                None,
+                None,
+                0,
+                0,
+                [counts_col],
+            )
+            # TODO: Handle keys_table
+            return Column(plc_column, name=name)
         elif self.name == "drop_nulls":
             (column,) = (child.evaluate(df, context=context) for child in self.children)
             if column.null_count == 0:
