@@ -134,7 +134,7 @@ def pa_column(pa_dtype):
 
 @pytest.fixture(scope="module")
 def column(pa_column):
-    return plc.Column(pa_column)
+    return plc.Column.from_arrow(pa_column)
 
 
 def test_foo(pa_column, column):

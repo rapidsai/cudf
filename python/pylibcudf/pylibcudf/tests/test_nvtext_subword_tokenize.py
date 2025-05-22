@@ -11,7 +11,7 @@ import pylibcudf as plc
 def test_wordpiece_tokenize(max_words):
     vocab_strs = pa.array(["[unk]", "abc", "def", "gh", "##i"])
     vocab = plc.nvtext.wordpiece_tokenize.WordPieceVocabulary(
-        plc.Column(vocab_strs)
+        plc.Column.from_arrow(vocab_strs)
     )
     strings_col = pa.array(
         [
@@ -21,7 +21,7 @@ def test_wordpiece_tokenize(max_words):
         ]
     )
     got = plc.nvtext.wordpiece_tokenize.wordpiece_tokenize(
-        plc.Column(strings_col), vocab, max_words
+        plc.Column.from_arrow(strings_col), vocab, max_words
     )
     expect_type = plc.interop.to_arrow(
         got.type(), value_type=pa.list_(pa.int32()).value_type

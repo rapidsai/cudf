@@ -73,7 +73,7 @@ def test_concatenate_rows(test_data):
 )
 def test_concatenate_list_elements(test_data, dropna, expected):
     got = plc.lists.concatenate_list_elements(
-        plc.Column(pa.array(test_data)), dropna
+        plc.Column.from_arrow(pa.array(test_data)), dropna
     )
 
     expect = pa.array(expected)
@@ -82,7 +82,7 @@ def test_concatenate_list_elements(test_data, dropna, expected):
 
 
 def test_contains_scalar(list_column, scalar):
-    plc_column = plc.Column(pa.array(list_column))
+    plc_column = plc.Column.from_arrow(pa.array(list_column))
     plc_scalar = plc.interop.from_arrow(scalar)
     got = plc.lists.contains(plc_column, plc_scalar)
 
@@ -92,8 +92,8 @@ def test_contains_scalar(list_column, scalar):
 
 
 def test_contains_list_column(list_column, search_key_column):
-    plc_column1 = plc.Column(pa.array(list_column))
-    plc_column2 = plc.Column(pa.array(search_key_column[0]))
+    plc_column1 = plc.Column.from_arrow(pa.array(list_column))
+    plc_column2 = plc.Column.from_arrow(pa.array(search_key_column[0]))
     got = plc.lists.contains(plc_column1, plc_column2)
 
     expect = pa.array([False, True, True, True])
@@ -115,7 +115,7 @@ def test_contains_list_column(list_column, search_key_column):
     ],
 )
 def test_contains_nulls(list_column, expected):
-    plc_column = plc.Column(pa.array(list_column))
+    plc_column = plc.Column.from_arrow(pa.array(list_column))
     got = plc.lists.contains_nulls(plc_column)
 
     expect = pa.array(expected)
@@ -126,7 +126,7 @@ def test_contains_nulls(list_column, expected):
 def test_index_of_scalar(list_column, scalar):
     arr = pa.array(list_column)
 
-    plc_column = plc.Column(arr)
+    plc_column = plc.Column.from_arrow(arr)
     plc_scalar = plc.interop.from_arrow(scalar)
     got = plc.lists.index_of(
         plc_column, plc_scalar, plc.lists.DuplicateFindOption.FIND_FIRST
@@ -138,8 +138,8 @@ def test_index_of_scalar(list_column, scalar):
 
 
 def test_index_of_list_column(list_column, search_key_column):
-    plc_column1 = plc.Column(pa.array(list_column))
-    plc_column2 = plc.Column(search_key_column[0])
+    plc_column1 = plc.Column.from_arrow(pa.array(list_column))
+    plc_column2 = plc.Column.from_arrow(search_key_column[0])
     got = plc.lists.index_of(
         plc_column1, plc_column2, plc.lists.DuplicateFindOption.FIND_FIRST
     )
@@ -150,7 +150,7 @@ def test_index_of_list_column(list_column, search_key_column):
 
 
 def test_reverse(list_column):
-    plc_column = plc.Column(pa.array(list_column))
+    plc_column = plc.Column.from_arrow(pa.array(list_column))
 
     got = plc.lists.reverse(plc_column)
 
@@ -162,8 +162,8 @@ def test_reverse(list_column):
 def test_segmented_gather(test_data):
     list_column1, list_column2 = test_data[0]
 
-    plc_column1 = plc.Column(pa.array(list_column1))
-    plc_column2 = plc.Column(pa.array(list_column2))
+    plc_column1 = plc.Column.from_arrow(pa.array(list_column1))
+    plc_column2 = plc.Column.from_arrow(pa.array(list_column2))
 
     got = plc.lists.segmented_gather(plc_column2, plc_column1)
 
@@ -173,7 +173,7 @@ def test_segmented_gather(test_data):
 
 
 def test_extract_list_element_scalar(list_column):
-    plc_column = plc.Column(pa.array(list_column))
+    plc_column = plc.Column.from_arrow(pa.array(list_column))
 
     got = plc.lists.extract_list_element(plc_column, 0)
     expect = pc.list_element(list_column, 0)
@@ -182,8 +182,8 @@ def test_extract_list_element_scalar(list_column):
 
 
 def test_extract_list_element_column(list_column):
-    plc_column = plc.Column(pa.array(list_column))
-    indices = plc.Column(pa.array([0, 1, -4, -1]))
+    plc_column = plc.Column.from_arrow(pa.array(list_column))
+    indices = plc.Column.from_arrow(pa.array([0, 1, -4, -1]))
 
     got = plc.lists.extract_list_element(plc_column, indices)
     expect = pa.array([0, None, None, 7])
@@ -193,7 +193,7 @@ def test_extract_list_element_column(list_column):
 
 def test_count_elements(test_data):
     arr = pa.array(test_data[0][1])
-    plc_column = plc.Column(arr)
+    plc_column = plc.Column.from_arrow(arr)
     got = plc.lists.count_elements(plc_column)
 
     expect = pa.array([1, 1, 0, 3], type=pa.int32())
@@ -212,9 +212,9 @@ def test_count_elements(test_data):
     ],
 )
 def test_sequences_parametrized(steps, expect):
-    starts = plc.Column(pa.array([0, 1, 2, 3, 4]))
-    sizes = plc.Column(pa.array([0, 2, 2, 1, 3]))
-    steps = plc.Column(steps) if steps is not None else None
+    starts = plc.Column.from_arrow(pa.array([0, 1, 2, 3, 4]))
+    sizes = plc.Column.from_arrow(pa.array([0, 2, 2, 1, 3]))
+    steps = plc.Column.from_arrow(steps) if steps is not None else None
 
     got = (
         plc.lists.sequences(starts, sizes)
@@ -252,7 +252,7 @@ def test_sequences_parametrized(steps, expect):
 )
 @pytest.mark.parametrize("stable", [False, True])
 def test_sort_lists_param(lists_column, order, na_position, expect, stable):
-    plc_column = plc.Column(pa.array(lists_column))
+    plc_column = plc.Column.from_arrow(pa.array(lists_column))
     got = plc.lists.sort_lists(plc_column, order, na_position, stable)
     expect = pa.array(expect)
 
@@ -328,8 +328,8 @@ def test_set_operations(
     lhs, rhs = set_lists_column
 
     got = set_operation(
-        plc.Column(pa.array(lhs)),
-        plc.Column(pa.array(rhs)),
+        plc.Column.from_arrow(pa.array(lhs)),
+        plc.Column.from_arrow(pa.array(rhs)),
         nans_equal,
         nulls_equal,
     )
@@ -372,7 +372,7 @@ def test_set_operations(
     ],
 )
 def test_distinct(list_column, nans_equal, nulls_equal, expected):
-    plc_column = plc.Column(
+    plc_column = plc.Column.from_arrow(
         pa.array(
             [
                 [np.nan, np.nan, 0, 1, 2, 3, 2],
