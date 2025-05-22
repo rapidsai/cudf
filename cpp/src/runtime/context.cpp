@@ -14,41 +14,44 @@
  * limitations under the License.
  */
 
-#include <cudf/context.h>
+#include <cudf/context.hpp>
 #include <cudf/utilities/error.hpp>
+
+#include <jit/cache.hpp>
 
 #include <memory>
 
 namespace cudf {
 
 namespace detail {
-std::unique_ptr<Context>& context_ptr()
+std::unique_ptr<context>& get_context_ptr()
 {
-  static std::unique_ptr<Context> context;
+  static std::unique_ptr<context> context;
   return context;
 }
 }  // namespace detail
 
-// [ ] todo
-Context::Context(): _program_cache{}{}
+context::context() : _program_cache{std::make_unique<jit::program_cache>()} {}
 
-Context& context()
+jit::program_cache& context::program_cache() { return *_program_cache; }
+
+context& get_context()
 {
-  auto& ctx = detail::context_ptr();
-  CUDF_EXPECTS(ctx != nullptr, "Context is not initialized");
+  auto& ctx = detail::get_context_ptr();
+  CUDF_EXPECTS(ctx != nullptr, "context is not initialized");
   return *ctx;
 }
 
 void initialize()
 {
-  CUDF_EXPECTS(detail::context_ptr() == nullptr, "Context is already initialized");
-  detail::context_ptr() = std::make_unique<Context>();
+  CUDF_EXPECTS(detail::get_context_ptr() == nullptr, "context is already initialized");
+  detail::get_context_ptr() = std::make_unique<context>();
 }
 
 void deinitialize()
 {
-  CUDF_EXPECTS(detail::context_ptr() != nullptr, "Context has already been deinitialized");
-  detail::context_ptr().reset();
+  CUDF_EXPECTS(detail::get_context_ptr() != nullptr, "context has already been deinitialized");
+  detail::get_context_ptr().reset();
 }
 
 }  // namespace cudf

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <cudf/context.h>
+#include <cudf/context.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <jit/cache.hpp>
@@ -111,7 +111,7 @@ std::size_t try_parse_numeric_env_var(char const* const env_name, std::size_t de
 }
 }  // namespace
 
-jitify2::ProgramCache<>& ProgramCache::get(jitify2::PreprocessedProgramData preprog)
+jitify2::ProgramCache<>& program_cache::get(jitify2::PreprocessedProgramData preprog)
 {
   std::lock_guard<std::mutex> const caches_lock(_caches_mutex);
 
@@ -139,7 +139,7 @@ jitify2::ProgramCache<>& ProgramCache::get(jitify2::PreprocessedProgramData prep
 
 jitify2::ProgramCache<>& get_program_cache(jitify2::PreprocessedProgramData preprog)
 {
-  return context().program_cache().get(preprog);
+  return get_context().program_cache().get(preprog);
 }
 
 }  // namespace jit

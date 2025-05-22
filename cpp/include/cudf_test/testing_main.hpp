@@ -20,6 +20,7 @@
 #include <cudf_test/cxxopts.hpp>
 #include <cudf_test/stream_checking_resource_adaptor.hpp>
 
+#include <cudf/context.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/export.hpp>
 #include <cudf/utilities/memory_resource.hpp>
@@ -232,6 +233,8 @@ inline void init_cudf_test(int argc, char** argv, cudf::test::config const& conf
 #define CUDF_TEST_PROGRAM_MAIN()                                                                 \
   int main(int argc, char** argv)                                                                \
   {                                                                                              \
+    cudf::initialize();                                                                          \
+    cudf::context_guard guard{};                                                                 \
     ::testing::InitGoogleTest(&argc, argv);                                                      \
     init_cudf_test(argc, argv);                                                                  \
     if (std::getenv("GTEST_CUDF_MEMORY_PEAK")) {                                                 \

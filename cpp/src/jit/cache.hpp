@@ -17,24 +17,26 @@
 #pragma once
 
 #include <jitify2.hpp>
+#include <cudf/utilities/export.hpp>
 
 #include <memory>
 #include <mutex>
 #include <string>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace jit {
 
-class ProgramCache {
+class program_cache {
   std::mutex _caches_mutex;
   std::unordered_map<std::string, std::unique_ptr<jitify2::ProgramCache<>>> _caches;
 
  public:
-  ProgramCache(ProgramCache const&)            = delete;
-  ProgramCache(ProgramCache&&)                 = delete;
-  ProgramCache& operator=(ProgramCache const&) = delete;
-  ProgramCache& operator=(ProgramCache&&)      = delete;
-  ~ProgramCache()                              = default;
+  program_cache()                               = default;
+  program_cache(program_cache const&)            = delete;
+  program_cache(program_cache&&)                 = delete;
+  program_cache& operator=(program_cache const&) = delete;
+  program_cache& operator=(program_cache&&)      = delete;
+  ~program_cache()                              = default;
 
   jitify2::ProgramCache<>& get(jitify2::PreprocessedProgramData preprog);
 };
