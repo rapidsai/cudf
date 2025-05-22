@@ -18,12 +18,13 @@ from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column.column import ColumnBase, as_column, column_empty
 from cudf.core.column.methods import ColumnMethods, ParentType
 from cudf.core.column.numerical import NumericalColumn
-from cudf.core.dtypes import ListDtype, is_list_dtype
+from cudf.core.dtypes import ListDtype
 from cudf.core.missing import NA
 from cudf.core.scalar import pa_scalar_to_plc_scalar
 from cudf.utils.dtypes import (
     SIZE_TYPE_DTYPE,
     get_dtype_of_same_kind,
+    is_dtype_obj_list,
     is_dtype_obj_numeric,
 )
 from cudf.utils.utils import _is_null_host_scalar
@@ -58,7 +59,7 @@ class ListColumn(ColumnBase):
             and not isinstance(dtype, ListDtype)
         ) or (
             cudf.get_option("mode.pandas_compatible")
-            and not is_list_dtype(dtype)
+            and not is_dtype_obj_list(dtype)
         ):
             raise ValueError("dtype must be a cudf.ListDtype")
         if not (
@@ -500,7 +501,7 @@ class ListMethods(ColumnMethods):
     _column: ListColumn
 
     def __init__(self, parent: ParentType):
-        if not is_list_dtype(parent.dtype):
+        if not is_dtype_obj_list(parent.dtype):
             raise AttributeError(
                 "Can only use .list accessor with a 'list' dtype"
             )

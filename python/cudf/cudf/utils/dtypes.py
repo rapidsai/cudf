@@ -606,6 +606,32 @@ def is_dtype_obj_categorical(obj):
         return pd_types.is_categorical_dtype(obj)
 
 
+def is_dtype_obj_string(obj):
+    """Check whether the provided array or dtype is of the string dtype.
+
+    Parameters
+    ----------
+    obj : array-like or dtype
+        The array or dtype to check.
+
+    Returns
+    -------
+    bool
+        Whether or not the array or dtype is of the string dtype.
+    """
+    return (
+        obj is CUDF_STRING_DTYPE
+        or (isinstance(obj, pd.StringDtype))
+        or (
+            isinstance(obj, pd.ArrowDtype)
+            and (
+                pa.types.is_string(obj.pyarrow_dtype)
+                or pa.types.is_large_string(obj.pyarrow_dtype)
+            )
+        )
+    )
+
+
 def is_dtype_obj_list(obj):
     """Check whether an array-like or dtype is of the list dtype.
 
@@ -630,7 +656,7 @@ def is_dtype_obj_list(obj):
     )
 
 
-def is_struct_dtype(obj):
+def is_dtype_obj_struct(obj):
     """Check whether an array-like or dtype is of the struct dtype.
 
     Parameters

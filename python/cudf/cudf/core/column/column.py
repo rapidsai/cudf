@@ -53,10 +53,6 @@ from cudf.core.dtypes import (
     IntervalDtype,
     ListDtype,
     StructDtype,
-    _is_interval_dtype,
-    is_decimal_dtype,
-    is_list_dtype,
-    is_struct_dtype,
 )
 from cudf.core.mixins import BinaryOperand, Reducible
 from cudf.core.scalar import pa_scalar_to_plc_scalar
@@ -72,7 +68,11 @@ from cudf.utils.dtypes import (
     dtype_to_pylibcudf_type,
     find_common_type,
     is_column_like,
+    is_dtype_obj_decimal,
+    is_dtype_obj_interval,
+    is_dtype_obj_list,
     is_dtype_obj_numeric,
+    is_dtype_obj_struct,
     is_mixed_with_object_dtype,
     is_pandas_nullable_extension_dtype,
     min_signed_type,
@@ -1748,19 +1748,15 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         else:
             if isinstance(dtype, CategoricalDtype):
                 result = self.as_categorical_column(dtype)
-            elif _is_interval_dtype(
-                dtype
-            ):
+            elif is_dtype_obj_interval(dtype):
                 result = self.as_interval_column(dtype)
-            elif is_list_dtype(dtype) or is_struct_dtype(
-                dtype
-            ):
+            elif is_dtype_obj_list(dtype) or is_dtype_obj_struct(dtype):
                 if self.dtype != dtype:
                     raise NotImplementedError(
                         f"Casting {self.dtype} columns not currently supported"
                     )
                 result = self
-            elif is_decimal_dtype(dtype):
+            elif is_dtype_obj_decimal(dtype):
                 result = self.as_decimal_column(dtype)
             elif dtype.kind == "M":
                 result = self.as_datetime_column(dtype)

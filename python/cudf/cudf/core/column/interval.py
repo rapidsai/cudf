@@ -9,7 +9,8 @@ import pyarrow as pa
 import cudf
 from cudf.core.column.column import as_column, pa_mask_buffer_to_mask
 from cudf.core.column.struct import StructColumn
-from cudf.core.dtypes import IntervalDtype, _is_interval_dtype
+from cudf.core.dtypes import IntervalDtype
+from cudf.core.utils.dtypes import is_obj_dtype_interval
 
 if TYPE_CHECKING:
     from typing_extensions import Self
@@ -50,7 +51,7 @@ class IntervalColumn(StructColumn):
             and not isinstance(dtype, IntervalDtype)
         ) or (
             cudf.get_option("mode.pandas_compatible")
-            and not _is_interval_dtype(dtype)
+            and not is_obj_dtype_interval(dtype)
         ):
             raise ValueError("dtype must be a IntervalDtype.")
         return dtype

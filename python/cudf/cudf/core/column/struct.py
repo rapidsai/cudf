@@ -10,10 +10,11 @@ import pyarrow as pa
 import cudf
 from cudf.core.column.column import ColumnBase
 from cudf.core.column.methods import ColumnMethods
-from cudf.core.dtypes import StructDtype, is_struct_dtype
+from cudf.core.dtypes import StructDtype
 from cudf.core.scalar import pa_scalar_to_plc_scalar
 from cudf.utils.dtypes import (
     get_dtype_of_same_kind,
+    is_dtype_obj_struct,
     pyarrow_dtype_to_cudf_dtype,
 )
 from cudf.utils.utils import _is_null_host_scalar
@@ -87,7 +88,7 @@ class StructColumn(ColumnBase):
             and type(dtype) is not StructDtype
         ) or (
             cudf.get_option("mode.pandas_compatible")
-            and not is_struct_dtype(dtype)
+            and not is_dtype_obj_struct(dtype)
         ):
             raise ValueError(
                 f"{type(dtype).__name__} must be a StructDtype exactly."
@@ -240,7 +241,7 @@ class StructMethods(ColumnMethods):
     _column: StructColumn
 
     def __init__(self, parent=None):
-        if not is_struct_dtype(parent.dtype):
+        if not is_dtype_obj_struct(parent.dtype):
             raise AttributeError(
                 "Can only use .struct accessor with a 'struct' dtype"
             )

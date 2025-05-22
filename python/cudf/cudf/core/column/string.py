@@ -16,7 +16,7 @@ from typing_extensions import Self
 import pylibcudf as plc
 
 import cudf
-from cudf.api.types import is_integer, is_scalar, is_string_dtype
+from cudf.api.types import is_integer, is_scalar
 from cudf.core._internals import binaryop
 from cudf.core.buffer import Buffer, acquire_spill_lock
 from cudf.core.column.column import ColumnBase, as_column, column_empty
@@ -29,6 +29,7 @@ from cudf.utils.dtypes import (
     SIZE_TYPE_DTYPE,
     can_convert_to_column,
     dtype_to_pylibcudf_type,
+    is_dtype_obj_string,
     is_pandas_nullable_extension_dtype,
 )
 from cudf.utils.temporal import infer_format
@@ -5907,7 +5908,7 @@ class StringColumn(ColumnBase):
             and dtype != CUDF_STRING_DTYPE
         ) or (
             cudf.get_option("mode.pandas_compatible")
-            and not is_string_dtype(dtype)
+            and not is_dtype_obj_string(dtype)
         ):
             raise ValueError(f"dtype must be {CUDF_STRING_DTYPE}")
         if len(children) > 1:
