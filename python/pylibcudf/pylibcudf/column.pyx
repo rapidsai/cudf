@@ -995,10 +995,7 @@ cdef class Column:
             )
 
             offsets_data = _copy_array_to_device(
-                array.array(
-                    "q" if offset_dtype.id() == type_id.INT64
-                    else "i", offsets
-                )
+                array.array(offset_dtype._python_typecode, offsets)
             )
             chars_data = _copy_array_to_device(array.array("B", b"".join(encoded)))
 
