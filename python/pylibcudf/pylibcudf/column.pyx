@@ -132,6 +132,34 @@ cdef class OwnerMaskWithCAI:
         return self.cai
 
 
+class ArrayInterfaceWrapper:
+    def __init__(self, iface):
+        self.__array_interface__ = iface
+
+
+def _copy_array_to_device(buf: array.array) -> gpumemoryview:
+    """
+    Copy a host-side array.array buffer to device memory.
+
+    Parameters
+    ----------
+    buf : array.array
+        Array of bytes.
+
+    Returns
+    -------
+    gpumemoryview
+        A device memory view backed by an rmm.DeviceBuffer.
+    """
+    cdef memoryview mv = memoryview(buf)
+    cdef uintptr_t ptr = <uintptr_t>mv.obj.buffer_info()[0]
+    cdef size_t nbytes = len(mv) * mv.itemsize
+
+    return gpumemoryview(DeviceBuffer.to_device(
+        <const unsigned char[:nbytes:1]><const unsigned char*>ptr
+    ))
+
+
 def _infer_list_depth_and_dtype(obj: list) -> tuple[int, type]:
     """Infer the nesting depth and final scalar type."""
     depth = 0
@@ -187,45 +215,6 @@ def _flatten(obj: list, out: list, offset: int) -> int:
     for sub in obj:
         offset = _flatten(sub, out, offset)
     return offset
-
-
-def _python_typecode_from_dtype(dtype: DataType) -> str:
-    """The Python type string."""
-    return {
-        type_id.INT8: 'b',
-        type_id.INT16: 'h',
-        type_id.INT32: 'i',
-        type_id.INT64: 'q',
-        type_id.UINT8: 'B',
-        type_id.UINT16: 'H',
-        type_id.UINT32: 'I',
-        type_id.UINT64: 'Q',
-        type_id.FLOAT32: 'f',
-        type_id.FLOAT64: 'd',
-        type_id.BOOL8: 'b'
-    }[dtype.id()]
-
-
-def _typestr_from_dtype(dtype: DataType) -> str:
-    """The array interface type string."""
-    return {
-        type_id.INT8: "|i1",
-        type_id.INT16: "<i2",
-        type_id.INT32: "<i4",
-        type_id.INT64: "<i8",
-        type_id.UINT8: "|u1",
-        type_id.UINT16: "<u2",
-        type_id.UINT32: "<u4",
-        type_id.UINT64: "<u8",
-        type_id.FLOAT32: "<f4",
-        type_id.FLOAT64: "<f8",
-        type_id.BOOL8: "|b1",
-    }[dtype.id()]
-
-
-class ArrayInterfaceWrapper:
-    def __init__(self, iface):
-        self.__array_interface__ = iface
 
 
 def _prepare_array_metadata(
@@ -975,9 +964,11 @@ cdef class Column:
         - Jagged nested lists are not supported. Inner lists must have the same shape.
         - Nulls (None) are not currently supported in input values.
         - dtype must match the inferred or actual type of the scalar values
+        - Large strings are supported, meaning the combined length of all strings
+          (in bytes) can exceed the maximum 32-bit integer value. In that case,
+          the offsets column is automatically promoted to use 64-bit integers.
         """
 
-        # TODO: Investigate when we can avoid full list materialization.
         obj = list(obj)
 
         if not obj:
@@ -994,30 +985,37 @@ cdef class Column:
         flat, shape = _flatten_nested_list(obj, depth)
 
         if dtype.id() == type_id.STRING:
-            encoded = [s.encode("utf-8") for s in flat]
+            encoded = [s.encode() for s in flat]
             offsets = [0] + list(accumulate(len(s) for s in encoded))
-            joined_bytes = b"".join(encoded)
 
-            offsets_col = Column.from_iterable_of_py(
-                offsets, dtype=DataType(type_id.INT32)
+            offset_dtype = (
+                DataType(type_id.INT64)
+                if offsets[-1] > numeric_limits[size_type].max()
+                else DataType(type_id.INT32)
             )
 
-            mv = memoryview(array.array("B", joined_bytes))
+            offsets_data = _copy_array_to_device(
+                array.array(
+                    "q" if offset_dtype.id() == type_id.INT64
+                    else "i", offsets
+                )
+            )
+            chars_data = _copy_array_to_device(array.array("B", b"".join(encoded)))
 
-            iface = {
-                "data": (mv.obj.buffer_info()[0], False),
-                "shape": (len(joined_bytes),),
-                "typestr": "|u1",
-                "strides": None,
-                "version": 3,
-            }
-
-            chars_col = Column.from_array_interface(ArrayInterfaceWrapper(iface))
+            offsets_col = Column(
+                offset_dtype,
+                len(offsets),
+                offsets_data,
+                None,
+                0,
+                0,
+                [],
+            )
 
             base = Column(
                 DataType(type_id.STRING),
                 len(flat),
-                chars_col.data(),
+                chars_data,
                 None,
                 0,
                 0,
@@ -1029,13 +1027,13 @@ cdef class Column:
                 else Column._wrap_nested_list_column(None, shape, dtype, base=base)
             )
 
-        buf = array.array(_python_typecode_from_dtype(dtype), flat)
+        buf = array.array(dtype._python_typecode, flat)
         mv = memoryview(buf).cast("B")
 
         iface = {
             "data": (mv.obj.buffer_info()[0], False),
             "shape": shape,
-            "typestr": _typestr_from_dtype(dtype),
+            "typestr": dtype.typestr,
             "strides": None,
             "version": 3,
         }

@@ -34,6 +34,19 @@ def dtype_info(request):
     return request.param
 
 
+@pytest.fixture
+def dummy_large_string_type():
+    class Bar(bytes):
+        def __len__(self):
+            return 2**31 + 1
+
+    class Foo(str):
+        def encode(self):
+            return Bar(b"x")
+
+    return Foo
+
+
 def generate_list_data(shape, dtype):
     def gen_values(n):
         if dtype is bool:
@@ -180,3 +193,26 @@ def test_from_iterable_of_str(data, pa_type):
     got = plc.Column.from_iterable_of_py(data)
     expect = pa.array(data, type=pa_type)
     assert_column_eq(expect, got)
+
+
+def test_from_list_of_large_strings(dummy_large_string_type):
+    Foo = dummy_large_string_type
+    data = [Foo(), Foo()]
+    col = plc.Column.from_iterable_of_py(
+        data, dtype=plc.DataType(plc.TypeId.STRING)
+    )
+
+    assert col.type().id() == plc.TypeId.STRING
+    assert col.children()[0].type().id() == plc.TypeId.INT64
+
+
+def test_from_nested_list_of_large_strings(dummy_large_string_type):
+    Foo = dummy_large_string_type
+    nested_data = [[Foo(), Foo()], [Foo(), Foo()]]
+    col = plc.Column.from_iterable_of_py(
+        nested_data, dtype=plc.DataType(plc.TypeId.STRING)
+    )
+
+    assert col.type().id() == plc.TypeId.LIST
+    assert col.children()[1].type().id() == plc.TypeId.STRING
+    assert col.children()[1].children()[0].type().id() == plc.TypeId.INT64
