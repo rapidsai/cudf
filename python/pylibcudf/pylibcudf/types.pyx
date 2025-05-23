@@ -21,6 +21,7 @@ from pylibcudf.libcudf.types import null_order as NullOrder  # no-cython-lint, i
 from pylibcudf.libcudf.types import order as Order  # no-cython-lint, isort:skip
 from pylibcudf.libcudf.types import sorted as Sorted  # no-cython-lint, isort:skip
 
+
 __all__ = [
     "DataType",
     "Interpolation",
@@ -69,6 +70,50 @@ cdef class DataType:
         """Get the scale associated with this data type."""
         return self.c_obj.scale()
 
+    @property
+    def _python_typecode(self) -> str:
+        """The Python struct module typecode string."""
+        try:
+            return {
+                type_id.INT8: 'b',
+                type_id.INT16: 'h',
+                type_id.INT32: 'i',
+                type_id.INT64: 'q',
+                type_id.UINT8: 'B',
+                type_id.UINT16: 'H',
+                type_id.UINT32: 'I',
+                type_id.UINT64: 'Q',
+                type_id.FLOAT32: 'f',
+                type_id.FLOAT64: 'd',
+                type_id.BOOL8: 'b',
+            }[self.id()]
+        except KeyError:
+            raise NotImplementedError(
+                f"No Python typecode for DataType {self.id()}"
+            )
+
+    @property
+    def typestr(self) -> str:
+        """The array interface type string."""
+        try:
+            return {
+                type_id.INT8: "|i1",
+                type_id.INT16: "<i2",
+                type_id.INT32: "<i4",
+                type_id.INT64: "<i8",
+                type_id.UINT8: "|u1",
+                type_id.UINT16: "<u2",
+                type_id.UINT32: "<u4",
+                type_id.UINT64: "<u8",
+                type_id.FLOAT32: "<f4",
+                type_id.FLOAT64: "<f8",
+                type_id.BOOL8: "|b1",
+            }[self.id()]
+        except KeyError:
+            raise NotImplementedError(
+                f"No array interface typestr for DataType {self.id()}"
+            )
+
     def __eq__(self, other):
         return type(self) is type(other) and (
             self.c_obj == (<DataType>other).c_obj
@@ -92,6 +137,41 @@ cdef class DataType:
         cdef DataType ret = DataType.__new__(DataType, type_id.EMPTY)
         ret.c_obj = dt
         return ret
+
+    @staticmethod
+    def from_py(typ: type) -> DataType:
+        """
+        Construct a DataType from a Python type.
+
+        Parameters
+        ----------
+        typ : type
+            A Python type (eg. int, str, list)
+
+        Returns
+        -------
+        DataType
+            The corresponding pylibcudf DataType.
+
+        Raises
+        ------
+        TypeError
+            If the Python type is not supported.
+        """
+        if typ is bool:
+            return DataType(type_id.BOOL8)
+        elif typ is int:
+            return DataType(type_id.INT64)
+        elif typ is float:
+            return DataType(type_id.FLOAT64)
+        elif typ is str:
+            return DataType(type_id.STRING)
+        elif typ is list:
+            return DataType(type_id.LIST)
+        elif typ is dict:
+            return DataType(type_id.STRUCT)
+        else:
+            raise TypeError(f"Cannot infer DataType from Python type {typ}")
 
 cpdef size_t size_of(DataType t):
     """Returns the size in bytes of elements of the specified data_type.

@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#pragma once
+
 #include <cudf/types.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
