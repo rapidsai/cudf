@@ -233,6 +233,7 @@ def _(
     new_child, pi = rec(child)
     if pi[new_child].count == 1 or ir.keys == pi[new_child].partitioned_on:
         # Already shuffled
+        # What type is new_child? `rec(child)` is just a generic IR.
         return new_child, pi
     new_node = ir.reconstruct([new_child])
     pi[new_node] = PartitionInfo(

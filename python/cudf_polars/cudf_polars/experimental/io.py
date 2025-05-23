@@ -35,7 +35,7 @@ if TYPE_CHECKING:
 @lower_ir_node.register(DataFrameScan)
 def _(
     ir: DataFrameScan, rec: LowerIRTransformer
-) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+) -> tuple[Union | DataFrameScan, MutableMapping[IR, PartitionInfo]]:
     assert ir.config_options.executor.name == "streaming", (
         "'in-memory' executor not supported in 'generate_ir_tasks'"
     )
@@ -57,9 +57,12 @@ def _(
             for offset in range(0, nrows, length)
         ]
         new_node = Union(ir.schema, None, *slices)
-        return new_node, {slice: PartitionInfo(count=1) for slice in slices} | {
-            new_node: PartitionInfo(count=count)
+        partition_info: MutableMapping[IR, PartitionInfo] = {
+            **{slice: PartitionInfo(count=1) for slice in slices},
+            new_node: PartitionInfo(count=count),
         }
+
+        return new_node, partition_info
 
     return ir, {ir: PartitionInfo(count=1)}
 
@@ -289,7 +292,7 @@ def _sample_pq_statistics(ir: Scan) -> dict[str, np.floating[T]]:
 @lower_ir_node.register(Scan)
 def _(
     ir: Scan, rec: LowerIRTransformer
-) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+) -> tuple[Union | Scan, MutableMapping[IR, PartitionInfo]]:
     partition_info: MutableMapping[IR, PartitionInfo]
     if ir.typ in ("csv", "parquet", "ndjson") and ir.n_rows == -1 and ir.skip_rows == 0:
         plan = ScanPartitionPlan.from_scan(ir)

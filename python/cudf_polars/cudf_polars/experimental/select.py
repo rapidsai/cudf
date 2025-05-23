@@ -26,7 +26,7 @@ def decompose_select(
     input_ir: IR,
     partition_info: MutableMapping[IR, PartitionInfo],
     config_options: ConfigOptions,
-) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+) -> tuple[HConcat | Select, MutableMapping[IR, PartitionInfo]]:
     """
     Decompose a multi-partition Select operation.
 
@@ -80,8 +80,8 @@ def decompose_select(
         partition_info.update(_partition_info)
         selections.append(partial_input_ir)
 
-    # Concatenate partial selections
     new_ir: HConcat | Select
+    # Concatenate partial selections
     if len(selections) > 1:
         new_ir = HConcat(
             select_ir.schema,
@@ -100,7 +100,7 @@ def decompose_select(
 @lower_ir_node.register(Select)
 def _(
     ir: Select, rec: LowerIRTransformer
-) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+) -> tuple[HConcat | Select, MutableMapping[IR, PartitionInfo]]:
     child, partition_info = rec(ir.children[0])
     pi = partition_info[child]
     if pi.count > 1 and not all(

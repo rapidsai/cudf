@@ -22,7 +22,7 @@ if TYPE_CHECKING:
 @lower_ir_node.register(Sort)
 def _(
     ir: Sort, rec: LowerIRTransformer
-) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+) -> tuple[Sort, MutableMapping[IR, PartitionInfo]]:
     # Special handling for slicing
     # (May be a top- or bottom-k operation)
 

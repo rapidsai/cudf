@@ -30,7 +30,7 @@ def lower_distinct(
     config_options: ConfigOptions,
     *,
     cardinality: float | None = None,
-) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+) -> tuple[Distinct, MutableMapping[IR, PartitionInfo]]:
     """
     Lower a Distinct IR into partition-wise stages.
 
@@ -120,7 +120,7 @@ def lower_distinct(
 
     # Partition-wise unique
     count = child_count
-    new_node: IR = ir.reconstruct([child])
+    new_node: Distinct | Repartition | Shuffle = ir.reconstruct([child])
     partition_info[new_node] = PartitionInfo(count=count)
 
     if shuffled or output_count == 1:
@@ -141,13 +141,16 @@ def lower_distinct(
             partitioned_on=shuffle_keys,
         )
 
+    # new_node always comes from `ir.reconstruct`, which has type Distinct
+    assert isinstance(new_node, Distinct)
+
     return new_node, partition_info
 
 
 @lower_ir_node.register(Distinct)
 def _(
     ir: Distinct, rec: LowerIRTransformer
-) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+) -> tuple[Distinct, MutableMapping[IR, PartitionInfo]]:
     # Extract child partitioning
     child, partition_info = rec(ir.children[0])
     config_options = rec.state["config_options"]

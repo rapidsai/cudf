@@ -59,7 +59,7 @@ def _make_hash_join(
     partition_info: MutableMapping[IR, PartitionInfo],
     left: IR,
     right: IR,
-) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+) -> tuple[Join, MutableMapping[IR, PartitionInfo]]:
     # Shuffle left and right dataframes (if necessary)
     new_left = _maybe_shuffle_frame(
         left,
@@ -144,7 +144,7 @@ def _make_bcast_join(
     partition_info: MutableMapping[IR, PartitionInfo],
     left: IR,
     right: IR,
-) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+) -> tuple[Join, MutableMapping[IR, PartitionInfo]]:
     if ir.options[0] != "Inner":
         left_count = partition_info[left].count
         right_count = partition_info[right].count
@@ -187,7 +187,7 @@ def _make_bcast_join(
 @lower_ir_node.register(ConditionalJoin)
 def _(
     ir: ConditionalJoin, rec: LowerIRTransformer
-) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+) -> tuple[ConditionalJoin, MutableMapping[IR, PartitionInfo]]:
     if ir.options[2]:  # pragma: no cover
         return _lower_ir_fallback(
             ir,
@@ -225,7 +225,7 @@ def _(
 @lower_ir_node.register(Join)
 def _(
     ir: Join, rec: LowerIRTransformer
-) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+) -> tuple[Join, MutableMapping[IR, PartitionInfo]]:
     # Lower children
     children, _partition_info = zip(*(rec(c) for c in ir.children), strict=True)
     partition_info = reduce(operator.or_, _partition_info)

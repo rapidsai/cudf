@@ -6,8 +6,8 @@ from __future__ import annotations
 
 import itertools
 import operator
-from functools import partial, reduce
-from typing import TYPE_CHECKING, Any
+from functools import reduce
+from typing import TYPE_CHECKING, Any, TypeVar
 
 import cudf_polars.experimental.distinct
 import cudf_polars.experimental.groupby
@@ -43,10 +43,13 @@ if TYPE_CHECKING:
     from cudf_polars.utils.config import ConfigOptions
 
 
+T = TypeVar("T", bound=IR)
+
+
 @lower_ir_node.register(IR)
 def _(
-    ir: IR, rec: LowerIRTransformer
-) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:  # pragma: no cover
+    ir: T, rec: LowerIRTransformer
+) -> tuple[T, MutableMapping[IR, PartitionInfo]]:  # pragma: no cover
     # Default logic - Requires single partition
     return _lower_ir_fallback(
         ir, rec, msg=f"Class {type(ir)} does not support multiple partitions."
@@ -241,7 +244,7 @@ def _(
 @lower_ir_node.register(Union)
 def _(
     ir: Union, rec: LowerIRTransformer
-) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+) -> tuple[Union, MutableMapping[IR, PartitionInfo]]:
     # Check zlice
     if ir.zlice is not None:  # pragma: no cover
         return _lower_ir_fallback(
@@ -277,7 +280,7 @@ def _(
 @lower_ir_node.register(MapFunction)
 def _(
     ir: MapFunction, rec: LowerIRTransformer
-) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+) -> tuple[MapFunction, MutableMapping[IR, PartitionInfo]]:
     # Allow pointwise operations
     if ir.name in ("rename", "explode"):
         return _lower_ir_pwise(ir, rec)
@@ -289,8 +292,8 @@ def _(
 
 
 def _lower_ir_pwise(
-    ir: IR, rec: LowerIRTransformer, *, preserve_partitioning: bool = False
-) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+    ir: T, rec: LowerIRTransformer, *, preserve_partitioning: bool = False
+) -> tuple[T, MutableMapping[IR, PartitionInfo]]:
     # Lower a partition-wise (i.e. embarrassingly-parallel) IR node
 
     # Lower children
@@ -318,9 +321,10 @@ def _lower_ir_pwise(
     return new_node, partition_info
 
 
-_lower_ir_pwise_preserve = partial(_lower_ir_pwise, preserve_partitioning=True)
-lower_ir_node.register(Projection, _lower_ir_pwise_preserve)
-lower_ir_node.register(Filter, _lower_ir_pwise_preserve)
-lower_ir_node.register(Cache, _lower_ir_pwise)
-lower_ir_node.register(HStack, _lower_ir_pwise)
-lower_ir_node.register(HConcat, _lower_ir_pwise)
+@lower_ir_node.register(Projection)
+@lower_ir_node.register(Filter)
+@lower_ir_node.register(Cache)
+@lower_ir_node.register(HStack)
+@lower_ir_node.register(HConcat)
+def _(ir: T, rec: LowerIRTransformer) -> tuple[T, MutableMapping[IR, PartitionInfo]]:
+    return _lower_ir_pwise(ir, rec, preserve_partitioning=True)

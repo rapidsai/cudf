@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 """Multi-partition dispatch functions."""
 
@@ -41,6 +41,10 @@ def lower_ir_node(
     new_ir, partition_info
         The rewritten node, and a mapping from unique nodes in
         the full IR graph to associated partitioning information.
+
+        This may or may not be the same subtype of IR as the input
+        ``ir``. While the lowered node must be *some* `IR` subtype,
+        implementations should return the narrowest possible type.
 
     Notes
     -----
