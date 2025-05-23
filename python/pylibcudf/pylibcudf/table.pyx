@@ -28,6 +28,7 @@ from pylibcudf.libcudf.interop cimport (
 from pylibcudf.libcudf.table.table cimport table
 
 from .column cimport Column
+from .types cimport DataType
 from .utils cimport _get_stream
 from pylibcudf._interop_helpers cimport (
     _release_schema,
@@ -61,7 +62,7 @@ cdef class Table:
         self._columns = columns
 
     @staticmethod
-    def from_arrow(arrow_like: ArrowLike):
+    def from_arrow(obj: ArrowLike, type: DataType | None = None) -> Table:
         """
         Create a Table from an Arrow-like object using the Arrow C data interface.
 
@@ -77,8 +78,10 @@ cdef class Table:
 
         Parameters
         ----------
-        arrow_like : ArrowLike
+        obj : Arrow-like type
             An object implementing one of the Arrow C data interface methods.
+        dtype: DataType
+            The pylibcudf data type.
 
         Returns
         -------
@@ -89,9 +92,14 @@ cdef class Table:
         ------
         NotImplementedError
             If the input is a device or host stream not yet supported.
+            If the dtype argument is not None.
         ValueError
             If the input does not implement a supported Arrow C interface.
         """
+        if dtype is not None:
+            raise NotImplementedError(
+                "Creating a Table with the dtype argument specified."
+            )
         cdef ArrowSchema* c_schema
         cdef ArrowDeviceArray* c_array
         cdef _ArrowTableHolder result

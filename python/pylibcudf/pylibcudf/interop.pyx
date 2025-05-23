@@ -109,8 +109,6 @@ def _from_arrow_datatype(pyarrow_object):
 
 @from_arrow.register(pa.Table)
 def _from_arrow_table(pyarrow_object, *, DataType data_type=None):
-    if data_type is not None:
-        raise ValueError("data_type may not be passed for tables")
     return Table.from_arrow(pyarrow_object)
 
 
