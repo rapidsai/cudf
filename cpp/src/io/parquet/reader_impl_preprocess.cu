@@ -53,23 +53,15 @@ namespace cudf::io::parquet::detail {
 namespace {
 
 #if defined(PREPROCESS_DEBUG)
-void print_pages(cudf::detail::hostdevice_span<PageInfo> pages, rmm::cuda_stream_view _stream)
+void print_pages(cudf::detail::hostdevice_span<PageInfo> pages, rmm::cuda_stream_view stream)
 {
-  pages.device_to_host(_stream);
-  for (size_t idx = 0; idx < pages.size(); idx++) {
-    auto const& p = pages[idx];
-    // skip dictionary pages
-    if (p.flags & PAGEINFO_FLAGS_DICTIONARY) { continue; }
-    printf(
-      "P(%lu, s:%d): chunk_row(%d), num_rows(%d), skipped_values(%d), skipped_leaf_values(%d), "
-      "str_bytes(%d)\n",
-      idx,
-      p.src_col_schema,
-      p.chunk_row,
-      p.num_rows,
-      p.skipped_values,
-      p.skipped_leaf_values,
-      p.str_bytes);
+  pages.device_to_host(stream);
+  for (auto const& p : pages) {
+    if (p.flags & cudf::io::parquet::detail::PAGEINFO_FLAGS_DICTIONARY) { std::cout << "Dict"; }
+    std::cout << "P(" << idx << ", s:" << p.src_col_schema << "): chunk_row(" << p.chunk_row
+              << "), num_rows(" << p.num_rows << "), skipped_values(" << p.skipped_values
+              << "), skipped_leaf_values(" << p.skipped_leaf_values << "), str_bytes("
+              << p.str_bytes << ")\n";
   }
 }
 #endif  // PREPROCESS_DEBUG
