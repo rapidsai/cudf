@@ -9,13 +9,14 @@ import enum
 import math
 import random
 from enum import IntEnum
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, TypeVar
 
 import pylibcudf as plc
 
-from cudf_polars.dsl.ir import IR, DataFrameScan, Scan, Union
-from cudf_polars.experimental.base import PartitionInfo
-from cudf_polars.experimental.dispatch import lower_ir_node
+from cudf_polars.dsl.ir import IR, DataFrameScan, Scan, Sink, Union
+from cudf_polars.experimental.base import PartitionInfo, get_key_name
+from cudf_polars.experimental.dispatch import generate_ir_tasks, lower_ir_node
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
@@ -352,3 +353,47 @@ def _(
         return new_node, partition_info
 
     return ir, {ir: PartitionInfo(count=1)}  # pragma: no cover
+
+
+@lower_ir_node.register(Sink)
+def _(
+    ir: Sink, rec: LowerIRTransformer
+) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+    child, partition_info = rec(ir.children[0])
+    if partition_info[child].count > 1:
+        # Create a directory to write output files
+        Path(ir.path).mkdir(parents=True)
+    new_node = ir.reconstruct([child])
+    partition_info[new_node] = partition_info[child]
+    return new_node, partition_info
+
+
+@generate_ir_tasks.register(Sink)
+def _(
+    ir: Sink, partition_info: MutableMapping[IR, PartitionInfo]
+) -> MutableMapping[Any, Any]:
+    name = get_key_name(ir)
+    count = partition_info[ir].count
+    child_name = get_key_name(ir.children[0])
+    if count == 1:
+        return {
+            (name, 0): (
+                ir.do_evaluate,
+                *ir._non_child_args,
+                (child_name, 0),
+            )
+        }
+
+    suffix = ir.kind.lower()
+    width = math.ceil(math.log10(count))
+    return {
+        (name, i): (
+            ir.do_evaluate,
+            ir.schema,
+            ir.kind,
+            f"{ir.path}/part.{str(i).zfill(width)}.{suffix}",
+            ir.options,
+            (child_name, i),
+        )
+        for i in range(count)
+    }
