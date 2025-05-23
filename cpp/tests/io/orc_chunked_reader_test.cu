@@ -1052,6 +1052,7 @@ void input_limit_test_read(int test_location,
                  ", file idx: " + std::to_string(idx));
     auto const [result, num_chunks] =
       chunked_read(test_files[idx], output_limit_bytes, input_limit_bytes);
+    // Skipping the chunk count check because compression can impact it
     // EXPECT_EQ(expected_chunk_counts[idx], num_chunks);
     // TODO: equal
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*result, input);
@@ -1338,6 +1339,7 @@ TEST_F(OrcChunkedReaderInputLimitTest, ReadWithRowSelection)
   do {
     auto chunk = reader.read_chunk();
     // Each output chunk should have either exactly 50k rows, or num_rows_to_read % 50k.
+    // Skipping the chunk count check because compression can impact it
     // EXPECT_TRUE(chunk.tbl->num_rows() == 50000 ||
     //             chunk.tbl->num_rows() == num_rows_to_read % 50000);
 
@@ -1347,6 +1349,7 @@ TEST_F(OrcChunkedReaderInputLimitTest, ReadWithRowSelection)
   } while (reader.has_next());
 
   auto const read_result = cudf::concatenate(tviews);
+  // Skipping the chunk count check because compression can impact it
   // EXPECT_EQ(num_chunks, 13);
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, read_result->view());
 }
@@ -1427,6 +1430,7 @@ TEST_F(OrcChunkedReaderInputLimitTest, SizeTypeRowsOverflow)
     } while (reader.has_next());
 
     auto const read_result = cudf::concatenate(tviews);
+    // Skipping the chunk count check because compression can impact it
     // EXPECT_EQ(num_chunks, 11);
     CUDF_TEST_EXPECT_TABLES_EQUAL(expected, read_result->view());
   }
@@ -1474,6 +1478,7 @@ TEST_F(OrcChunkedReaderInputLimitTest, SizeTypeRowsOverflow)
     // Typically, we got a chunk having 5M rows.
     // However, since the reader internally splits file stripes that are not multiple of 5 stripes,
     // we may have some extra chunks that have less than 5M rows.
+    // Skipping the chunk count check because compression can impact it
     // EXPECT_EQ(num_chunks, 1002);
 
     // Verify the selected chunk.
