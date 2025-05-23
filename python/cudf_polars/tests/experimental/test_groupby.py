@@ -91,10 +91,9 @@ def test_groupby_agg_config_options(df, op, keys):
     )
     agg = getattr(pl.col("x"), op)()
     if op in ("sum", "mean"):
-        # TODO: Remove the explicit cast to float, which is
-        # currently needed due to a polars bug, See tracking
-        # issue https://github.com/pola-rs/polars/issues/22691
-        agg = agg.cast(pl.Float64).round(2)  # Unary test coverage
+        if POLARS_VERSION_LT_130:
+            agg = agg.cast(pl.Float64)
+        agg = agg.round(2)  # Unary test coverage
     q = df.group_by(*keys).agg(agg)
     assert_gpu_result_equal(q, engine=engine, check_row_order=False)
 
