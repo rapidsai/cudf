@@ -17,14 +17,18 @@ import argparse
 import dataclasses
 import importlib
 import json
+import logging
 import os
 import sys
+import threading
 import time
+import uuid
 from collections import defaultdict
 from datetime import date, datetime, timezone
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
+import nvtx
 
 import polars as pl
 
@@ -44,6 +48,54 @@ except ImportError:
 
 if TYPE_CHECKING:
     import pathlib
+
+
+def _thread_name(_: Any, __: Any, event_dict: dict[str, Any]) -> dict[str, Any]:
+    event_dict["thread"] = threading.current_thread().name
+    return event_dict
+
+
+try:
+    import structlog
+
+    HAS_STRUCTLOG = True
+except ImportError:
+    HAS_STRUCTLOG = False
+
+
+def setup_logging() -> structlog.BoundLogger | None:
+    """Setup logging with structlog."""
+    if not HAS_STRUCTLOG:
+        return None
+    processors = [
+        structlog.contextvars.merge_contextvars,
+        _thread_name,
+        structlog.processors.add_log_level,
+        structlog.processors.StackInfoRenderer(),
+        structlog.dev.set_exc_info,
+        structlog.processors.TimeStamper(fmt="iso"),
+    ]
+    if os.environ.get("CUDF_POLARS_DEBUG"):
+        processors.append(structlog.dev.ConsoleRenderer())
+    else:
+        processors.extend(
+            [structlog.processors.dict_tracebacks, structlog.processors.JSONRenderer()]
+        )
+
+    structlog.configure(
+        processors=processors,
+        wrapper_class=structlog.make_filtering_bound_logger(logging.NOTSET),
+        context_class=dict,
+        logger_factory=structlog.stdlib.LoggerFactory(),
+        cache_logger_on_first_use=False,
+    )
+
+    # Configure standard library logging to write to trace.log
+    logging.basicConfig(
+        filename="trace.log", level=logging.NOTSET, format="%(message)s", filemode="a"
+    )
+
+    return structlog.get_logger()
 
 
 # Without this setting, the first IO task to run
@@ -1183,6 +1235,7 @@ def run(args: argparse.Namespace) -> None:
         # Avoid UVM in distributed cluster
         client = Client(LocalCUDACluster(**kwargs))
         client.wait_for_workers(run_config.n_workers)
+        client.run(setup_logging)
         if run_config.shuffle != "tasks":
             try:
                 from rapidsmpf.integrations.dask import bootstrap_dask_cluster
@@ -1231,6 +1284,9 @@ def run(args: argparse.Namespace) -> None:
             executor_options=executor_options,
         )
 
+    logger = setup_logging()
+
+    run_id = str(uuid.uuid4())
     for q_id in run_config.queries:
         try:
             q = getattr(PDSHQueries, f"q{q_id}")(run_config)
@@ -1256,34 +1312,53 @@ def run(args: argparse.Namespace) -> None:
 
         records[q_id] = []
 
-        for _ in range(args.iterations):
+        for i in range(args.iterations):
             t0 = time.monotonic()
 
-            if run_config.executor == "cpu":
-                result = q.collect(new_streaming=True)
-            elif CUDF_POLARS_AVAILABLE:
-                assert isinstance(engine, pl.GPUEngine)
-                if args.debug:
-                    translator = Translator(q._ldf.visit(), engine)
-                    ir = translator.translate_ir()
-                    if run_config.executor == "in-memory":
-                        result = ir.evaluate(cache={}, timer=None).to_polars()
-                    elif run_config.executor == "streaming":
-                        result = evaluate_streaming(
-                            ir, translator.config_options
-                        ).to_polars()
-                else:
-                    result = q.collect(engine=engine)
-            else:
-                raise RuntimeError(
-                    "Cannot provide debug information because cudf_polars is not installed."
+            if HAS_STRUCTLOG:
+                structlog.contextvars.bind_contextvars(
+                    query=q_id,
+                    iteration=i,
+                    run_id=run_id,
+                    executor=run_config.executor,
+                    scheduler=run_config.scheduler,
                 )
+            with nvtx.annotate(
+                message=f"Query {q_id} - Iteration {i}",
+                domain="cudf_polars",
+                color="green",
+            ):
+                if run_config.executor == "cpu":
+                    result = q.collect(new_streaming=True)
+                elif CUDF_POLARS_AVAILABLE:
+                    assert isinstance(engine, pl.GPUEngine)
+                    if args.debug:
+                        translator = Translator(q._ldf.visit(), engine)
+                        ir = translator.translate_ir()
+                        if run_config.executor == "in-memory":
+                            result = ir.evaluate(cache={}, timer=None).to_polars()
+                        elif run_config.executor == "streaming":
+                            result = evaluate_streaming(
+                                ir, translator.config_options
+                            ).to_polars()
+                    else:
+                        result = q.collect(engine=engine)
+                else:
+                    raise RuntimeError(
+                        "Cannot provide debug information because cudf_polars is not installed."
+                    )
 
             t1 = time.monotonic()
             record = Record(query=q_id, duration=t1 - t0)
             if args.print_results:
                 print(result)
-            print(f"Ran query={q_id} in {record.duration:0.4f}s", flush=True)
+
+            if logger is not None:
+                logger.info(event="Query finished", duration=f"{record.duration:0.4f}s")
+            else:
+                print(
+                    f"Query {q_id} - Iteration {i} finished in {record.duration:0.4f}s"
+                )
             records[q_id].append(record)
 
     run_config = dataclasses.replace(run_config, records=dict(records))

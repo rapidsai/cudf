@@ -488,3 +488,18 @@ To centralize validation and keep things well-typed internally, we model our
 additional configuration as a set of dataclasses defined in
 `cudf_polars/utils/config.py`. To transition from user-provided options to our
 (validated) internal options, use `ConfigOptions.from_polars_engine`.
+
+# Profiling
+
+You can profile `cudf_polars` using NVIDIA NSight Systems. Each `.collect()` or
+`.sink()` call is has two top-level ranges under the `cudf_polars` domain:
+
+1. `ConvertIR`: measures the time spent converting the polars query plan to
+   cudf-polars' IR.
+2. `ExecuteIR`: measures the time spent executing the cudf-polars IR.
+
+The majority of time should be spent in the `ExecuteIR` range. Within
+`ExecuteIR`, each individual IR node's `do_evaluate` method is wrapped in
+another `nvtx` range (e.g. `Scan.do_evaluate`, `GroupBy.do_evaluate`, etc.).
+These provide a higher-level grouping over the lower-level libcudf calls (e.g.
+`read_chunk`, `aggregate`).

@@ -26,6 +26,7 @@ from cudf_polars.dsl.ir import (
     Projection,
     Union,
 )
+from cudf_polars.dsl.tracing import wrap_do_evaluate
 from cudf_polars.dsl.traversal import CachingVisitor, traversal
 from cudf_polars.experimental.base import PartitionInfo, get_key_name
 from cudf_polars.experimental.dispatch import (
@@ -215,7 +216,8 @@ def evaluate_streaming(ir: IR, config_options: ConfigOptions) -> DataFrame:
 
     graph = post_process_task_graph(graph, key, config_options)
 
-    return get_scheduler(config_options)(graph, key)
+    scheduler = get_scheduler(config_options)
+    return scheduler(graph, key)
 
 
 @generate_ir_tasks.register(IR)
@@ -225,17 +227,25 @@ def _(
     # Generate pointwise (embarrassingly-parallel) tasks by default
     child_names = [get_key_name(c) for c in ir.children]
     bcast_child = [partition_info[c].count == 1 for c in ir.children]
-    return {
-        key: (
-            ir.do_evaluate,
+    # this errors
+    tasks = {}
+
+    for i, key in enumerate(partition_info[ir].keys(ir)):
+        # Problem: dask doesn't recurse in to `args` to substitute values for task keys
+        # when args is a tuple rather than a top-level *args.
+        # Solution: use partial to wrap the function with the wrapper_options.
+        args = (
             *ir._non_child_args,
             *[
                 (child_name, 0 if bcast_child[j] else i)
                 for j, child_name in enumerate(child_names)
             ],
         )
-        for i, key in enumerate(partition_info[ir].keys(ir))
-    }
+        wrapper_options = ir._tracing_options(*args)
+        wrapper = partial(wrap_do_evaluate, wrapper_options=wrapper_options)
+        tasks[key] = (wrapper, ir.do_evaluate, *args)
+
+    return tasks
 
 
 @lower_ir_node.register(Union)

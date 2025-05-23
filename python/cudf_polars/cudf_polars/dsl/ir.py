@@ -46,6 +46,7 @@ if TYPE_CHECKING:
 
     from polars.polars import _expr_nodes as pl_expr
 
+    from cudf_polars.dsl.tracing import TracingOptions
     from cudf_polars.typing import CSECache, ClosedInterval, Schema, Slice as Zlice
     from cudf_polars.utils.config import ConfigOptions
     from cudf_polars.utils.timer import Timer
@@ -226,6 +227,8 @@ class IR(Node["IR"]):
             If evaluation fails. Ideally this should not occur, since the
             translation phase should fail earlier.
         """
+        from cudf_polars.dsl.tracing import wrap_do_evaluate
+
         children = [child.evaluate(cache=cache, timer=timer) for child in self.children]
         if timer is not None:
             start = time.monotonic_ns()
@@ -235,7 +238,65 @@ class IR(Node["IR"]):
             timer.store(start, end, type(self).__name__)
             return result
         else:
-            return self.do_evaluate(*self._non_child_args, *children)
+            args = (*self._non_child_args, *children)
+            wrapper_options = self._tracing_options(*args)
+            return wrap_do_evaluate(
+                self.do_evaluate, *args, wrapper_options=wrapper_options
+            )
+
+    def _tracing_options(self, *args: Any) -> TracingOptions:
+        from cudf_polars.containers import DataFrame
+        from cudf_polars.dsl.expressions.base import Col
+        from cudf_polars.dsl.ir import GroupBy, Join, Scan, Sort
+
+        logger_kwargs: dict[str, Any] = {"op": type(self).__name__}
+
+        input_dataframes = [x for x in args if isinstance(x, DataFrame)]
+
+        if input_dataframes:
+            logger_kwargs["input_dataframes"] = [
+                {"count_rows": df.num_rows, "count_columns": df.num_columns}
+                for df in input_dataframes
+            ]
+
+        # TODO: figure out a better way to get node-specific logging here.
+        # There's a lot of overlap with the "important" parameters included in explain.
+
+        extra: dict[str, Any]
+
+        match self:
+            case Join():
+                left_on = tuple(ne.name for ne in self.left_on)
+                right_on = tuple(ne.name for ne in self.right_on)
+                extra = {
+                    "left_on": left_on,
+                    "right_on": right_on,
+                    "how": self.options[0],
+                }
+            case Col():
+                extra = {"col": self.name}
+            case GroupBy():
+                keys = tuple(ne.name for ne in self.keys)
+                extra = {
+                    "keys": keys,
+                }
+            case Sort():
+                by = tuple(ne.name for ne in self.by)
+                extra = {
+                    "by": by,
+                }
+            case Scan():
+                extra = {"type": self.typ}
+            case _:
+                extra = {}
+
+        logger_kwargs.update(extra)
+
+        name = type(self).__name__
+        return {
+            "name": name,
+            "logger_options": logger_kwargs,
+        }
 
 
 class ErrorNode(IR):
