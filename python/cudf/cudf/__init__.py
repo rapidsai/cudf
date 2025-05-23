@@ -25,7 +25,6 @@ del validate_setup
 import cupy
 from numba import cuda
 
-import rmm
 from rmm.allocators.cupy import rmm_cupy_allocator
 from rmm.allocators.numba import RMMNumbaManager
 
@@ -70,7 +69,6 @@ from cudf.core.reshape import (
     pivot_table,
     unstack,
 )
-from cudf.core.scalar import Scalar
 from cudf.core.series import Series
 from cudf.core.tools.datetimes import DateOffset, date_range, to_datetime
 from cudf.core.tools.numeric import to_numeric
@@ -100,10 +98,6 @@ del cupy
 del rmm_cupy_allocator
 del RMMNumbaManager
 
-rmm.register_reinitialize_hook(lambda: Scalar._clear_instance_cache())
-
-del rmm
-
 __all__ = [
     "NA",
     "CategoricalDtype",
@@ -123,7 +117,6 @@ __all__ = [
     "NaT",
     "NamedAgg",
     "RangeIndex",
-    "Scalar",
     "Series",
     "StructDtype",
     "TimedeltaIndex",

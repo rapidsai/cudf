@@ -17,12 +17,12 @@ from cudf.core._internals import binaryop
 from cudf.core.buffer import Buffer, acquire_spill_lock
 from cudf.core.column.column import ColumnBase, as_column
 from cudf.core.column.temporal_base import TemporalBaseColumn
-from cudf.core.scalar import pa_scalar_to_plc_scalar
 from cudf.utils.dtypes import (
     cudf_dtype_from_pa_type,
     cudf_dtype_to_pa_type,
     find_common_type,
 )
+from cudf.utils.scalar import pa_scalar_to_plc_scalar
 from cudf.utils.temporal import unit_to_nanoseconds_conversion
 
 if TYPE_CHECKING:
