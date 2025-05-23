@@ -104,8 +104,8 @@ cdef class Table:
         cdef ArrowDeviceArray* c_array
         cdef _ArrowTableHolder result
         cdef unique_ptr[arrow_table] c_result
-        if hasattr(arrow_like, "__arrow_c_device_array__"):
-            schema, array = arrow_like.__arrow_c_device_array__()
+        if hasattr(obj, "__arrow_c_device_array__"):
+            schema, array = obj.__arrow_c_device_array__()
             c_schema = <ArrowSchema*>PyCapsule_GetPointer(schema, "arrow_schema")
             c_array = (
                 <ArrowDeviceArray*>PyCapsule_GetPointer(array, "arrow_device_array")
@@ -119,8 +119,8 @@ cdef class Table:
             result.tbl.swap(c_result)
 
             return Table.from_table_view_of_arbitrary(result.tbl.get().view(), result)
-        elif hasattr(arrow_like, "__arrow_c_stream__"):
-            stream = arrow_like.__arrow_c_stream__()
+        elif hasattr(obj, "__arrow_c_stream__"):
+            stream = obj.__arrow_c_stream__()
             c_stream = (
                 <ArrowArrayStream*>PyCapsule_GetPointer(stream, "arrow_array_stream")
             )
@@ -131,12 +131,12 @@ cdef class Table:
             result.tbl.swap(c_result)
 
             return Table.from_table_view_of_arbitrary(result.tbl.get().view(), result)
-        elif hasattr(arrow_like, "__arrow_c_device_stream__"):
+        elif hasattr(obj, "__arrow_c_device_stream__"):
             # TODO: When we add support for this case, it should be moved above
             # the __arrow_c_stream__ case since we should prioritize device
             # data if possible.
             raise NotImplementedError("Device streams not yet supported")
-        elif hasattr(arrow_like, "__arrow_c_array__"):
+        elif hasattr(obj, "__arrow_c_array__"):
             raise NotImplementedError("Arrow host arrays not yet supported")
         else:
             raise ValueError("Invalid Arrow-like object")
