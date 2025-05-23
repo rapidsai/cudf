@@ -54,8 +54,6 @@ CUDF_HOST_DEVICE inline constexpr int count_significant_bits(T value)
     return 128 - (__clzll(high_bits) + static_cast<int>(high_bits == 0) * __clzll(low_bits));
   }
 #else
-  if (value == 0) { return 0; }
-
   if constexpr (std::is_same_v<T, uint64_t>) {
     return 64 - cuda::std::countl_zero(value);
   } else if constexpr (std::is_same_v<T, uint32_t>) {

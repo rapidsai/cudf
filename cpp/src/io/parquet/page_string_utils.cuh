@@ -204,11 +204,7 @@ template <int value>
 inline constexpr int log2_int()
 {
   static_assert((value >= 1) && ((value & (value - 1)) == 0), "Only works for powers of 2!");
-  if constexpr (value == 1) {
-    return 0;
-  } else {
-    return 31 - cuda::std::countl_zero(static_cast<uint32_t>(value));
-  }
+  return 31 - cuda::std::countl_zero(static_cast<uint32_t>(value));
 }
 
 template <int block_size>

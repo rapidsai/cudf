@@ -234,7 +234,7 @@ inline __device__ string_index_pair gpuGetStringData(page_state_s* s, state_buf*
  * @param[out] sb Page state buffer output
  * @param[in] target_pos Target index position in dict_idx buffer (may exceed this value by up to
  * 31)
- * @param[in] t Warp1 thread ID (0..31)
+ * @param[in] t Warp thread ID (0..31)
  * @tparam sizes_only True if only sizes are to be calculated
  * @tparam state_buf Typename of the `state_buf` (usually inferred)
  *
@@ -361,13 +361,17 @@ __device__ cuda::std::pair<int, int> gpuDecodeDictionaryIndices(page_state_s* s,
  * @param[in,out] s Page state input/output
  * @param[out] sb Page state buffer output
  * @param[in] target_pos Target write position
- * @param[in] t Thread ID
+ * @param[in] warp Warp cooperative group
  * @tparam state_buf Typename of the `state_buf` (usually inferred)
  *
  * @return The new output position
  */
 template <typename state_buf>
-inline __device__ int gpuDecodeRleBooleans(page_state_s* s, state_buf* sb, int target_pos, int t)
+inline __device__ int gpuDecodeRleBooleans(
+  page_state_s* s,
+  state_buf* sb,
+  int target_pos,
+  cg::thread_block_tile<cudf::detail::warp_size, cg::thread_block> const& warp)
 {
   uint8_t const* end = s->data_end;
   int64_t pos        = s->dict_pos;
@@ -376,9 +380,6 @@ inline __device__ int gpuDecodeRleBooleans(page_state_s* s, state_buf* sb, int t
   // because the only path that does not include a sync will lead to s->dict_pos being overwritten
   // with the same value
 
-  // Create a warp cooperative group
-  auto const warp = cooperative_groups::tiled_partition<cudf::detail::warp_size>(
-    cooperative_groups::this_thread_block());
   while (pos < target_pos) {
     int is_literal, batch_len;
     if (warp.thread_rank() == 0) {
@@ -417,13 +418,13 @@ inline __device__ int gpuDecodeRleBooleans(page_state_s* s, state_buf* sb, int t
     if (warp.thread_rank() < batch_len) {
       int dict_idx;
       if (is_literal) {
-        int32_t ofs      = t - ((batch_len + 7) & ~7);
+        int32_t ofs      = warp.thread_rank() - ((batch_len + 7) & ~7);
         uint8_t const* p = s->data_start + (ofs >> 3);
         dict_idx         = (p < end) ? (p[0] >> (ofs & 7u)) & 1 : 0;
       } else {
         dict_idx = s->dict_val;
       }
-      sb->dict_idx[rolling_index<state_buf::dict_buf_size>(pos + t)] = dict_idx;
+      sb->dict_idx[rolling_index<state_buf::dict_buf_size>(pos + warp.thread_rank())] = dict_idx;
     }
     pos += batch_len;
   }

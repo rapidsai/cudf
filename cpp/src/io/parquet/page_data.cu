@@ -251,10 +251,11 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
 
   page_state_s* const s = &state_g;
   auto* const sb        = &state_buffers;
-  int page_idx          = blockIdx.x;
-  int t                 = threadIdx.x;
-  int out_thread0;
-  [[maybe_unused]] null_count_back_copier _{s, t};
+  int const page_idx    = cg::this_grid().block_rank();
+  auto const block      = cg::this_thread_block();
+  auto const warp       = cg::tiled_partition<cudf::detail::warp_size>(block);
+  int out_warp_id;
+  [[maybe_unused]] null_count_back_copier _{s, static_cast<int>(block.thread_rank())};
 
   // Setup local page info
   if (!setupLocalPageInfo(s,
@@ -299,7 +300,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
       auto offptr = reinterpret_cast<size_type*>(ni.data_out);
 
       // Write the initial string offset at all positions to indicate empty strings
-      for (int idx = t; idx < value_count; idx += decode_block_size) {
+      for (int idx = block.thread_rank(); idx < value_count; idx += block.size()) {
         offptr[idx] = initial_value;
       }
     }
@@ -309,13 +310,13 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
   PageNestingDecodeInfo* nesting_info_base = s->nesting_info;
 
   if (s->dict_base) {
-    out_thread0 = (s->dict_bits > 0) ? 64 : 32;
+    out_warp_id = (s->dict_bits > 0) ? 2 : 1;
   } else {
     switch (s->col.physical_type) {
       case Type::BOOLEAN: [[fallthrough]];
       case Type::BYTE_ARRAY: [[fallthrough]];
-      case Type::FIXED_LEN_BYTE_ARRAY: out_thread0 = 64; break;
-      default: out_thread0 = 32;
+      case Type::FIXED_LEN_BYTE_ARRAY: out_warp_id = 2; break;
+      default: out_warp_id = 1;
     }
   }
 
@@ -329,23 +330,25 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
     int target_pos;
     int src_pos = s->src_pos;
 
-    if (t < out_thread0) {
-      target_pos = min(src_pos + 2 * (decode_block_size - out_thread0),
-                       s->nz_count + (decode_block_size - out_thread0));
+    if (warp.meta_group_rank() < out_warp_id) {
+      target_pos =
+        cuda::std::min<int32_t>(src_pos + 2 * (decode_block_size - (out_warp_id * warp.size())),
+                                s->nz_count + (decode_block_size - (out_warp_id * warp.size())));
     } else {
-      target_pos = min(s->nz_count, src_pos + decode_block_size - out_thread0);
-      if (out_thread0 > 32) { target_pos = min(target_pos, s->dict_pos); }
+      target_pos = cuda::std::min<int32_t>(
+        s->nz_count, src_pos + decode_block_size - (out_warp_id * warp.size()));
+      if (out_warp_id > 1) { target_pos = min(target_pos, s->dict_pos); }
     }
     // this needs to be here to prevent warp 3 modifying src_pos before all threads have read it
     __syncthreads();
     auto const warp = cg::tiled_partition<cudf::detail::warp_size>(cg::this_thread_block());
-    if (t < 32) {
+    if (warp.meta_group_rank() == 0) {
       // decode repetition and definition levels.
       // - update validity vectors
       // - updates offsets (for nested columns)
       // - produces non-NULL value indices in s->nz_idx for subsequent decoding
       gpuDecodeLevels<lvl_buf_size, level_t>(s, sb, target_pos, rep, def, warp);
-    } else if (t < out_thread0) {
+    } else if (warp.meta_group_rank() < out_warp_id) {
       // skipped_leaf_values will always be 0 for flat hierarchies.
       uint32_t src_target_pos = target_pos + skipped_leaf_values;
 
@@ -355,9 +358,10 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
       // 9 lines in `if (s->dict_pos < src_target_pos) {}`. If that change is made here, it will
       // be needed in the other DecodeXXX kernels.
       if (s->dict_base) {
-        src_target_pos = gpuDecodeDictionaryIndices<false>(s, sb, src_target_pos, t & 0x1f).first;
+        src_target_pos =
+          gpuDecodeDictionaryIndices<false>(s, sb, src_target_pos, warp.thread_rank()).first;
       } else if (s->col.physical_type == Type::BOOLEAN) {
-        src_target_pos = gpuDecodeRleBooleans(s, sb, src_target_pos, t & 0x1f);
+        src_target_pos = gpuDecodeRleBooleans(s, sb, src_target_pos, warp);
       } else if (s->col.physical_type == Type::BYTE_ARRAY or
                  s->col.physical_type == Type::FIXED_LEN_BYTE_ARRAY) {
         gpuInitStringDescriptors<is_calc_sizes_only::NO>(s, sb, src_target_pos, warp);
@@ -366,7 +370,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
     } else {
       // WARP1..WARP3: Decode values
       Type const dtype = s->col.physical_type;
-      src_pos += t - out_thread0;
+      src_pos += block.thread_rank() - (out_warp_id * warp.size());
 
       // the position in the output column/buffer
       int dst_pos = sb->nz_idx[rolling_index<rolling_buf_size>(src_pos)];
@@ -453,11 +457,13 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
         }
       }
 
-      if (t == out_thread0) { s->src_pos = target_pos; }
+      if (warp.meta_group_rank() == out_warp_id and warp.thread_rank() == 0) {
+        s->src_pos = target_pos;
+      }
     }
     __syncthreads();
   }
-  if (t == 0 and s->error != 0) { set_error(s->error, error_code); }
+  if (block.thread_rank() == 0 and s->error != 0) { set_error(s->error, error_code); }
 }
 
 struct mask_tform {
