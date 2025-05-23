@@ -220,15 +220,6 @@ def _is_all_scan_aggregate(all_aggs: list[list[str]]) -> bool:
     return all_scan and any_scan
 
 
-def _deprecate_collect():
-    warnings.warn(
-        "Groupby.collect is deprecated and "
-        "will be removed in a future version. "
-        "Use `.agg(list)` instead.",
-        FutureWarning,
-    )
-
-
 # The three functions below return the quantiles [25%, 50%, 75%]
 # respectively, which are called in the describe() method to output
 # the summary stats of a GroupBy object
@@ -2691,12 +2682,6 @@ class GroupBy(Serializable, Reducible, Scannable):
             return getattr(x, "quantile")(q=q, interpolation=interpolation)
 
         return self.agg(func)
-
-    @_performance_tracking
-    def collect(self):
-        """Get a list of all the values for each column in each group."""
-        _deprecate_collect()
-        return self.agg(list)
 
     @_performance_tracking
     def unique(self):
