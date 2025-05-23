@@ -321,11 +321,31 @@ def _(
             )
         )
     ):
-        result = Repartition(joined.schema, joined)
-        partition_info[result] = PartitionInfo.new(
-            result, partition_info, count=new_count, table_stats=join_stats
+        assert ir.config_options.executor.name == "streaming", (
+            "'in-memory' executor not supported in 'lower_ir_node'"
         )
-        return result, partition_info
+
+        # Only repartition if the estimated output size also
+        # favors a smaller partition count.
+        estimated_output_size = (
+            sum(
+                join_stats.column_stats[col].element_size
+                if col in join_stats.column_stats
+                else 16  # Conservative guess for untracked columns
+                for col in joined.schema
+            )
+            * join_stats.num_rows
+        )
+        target_size = rec.state["config_options"].executor.target_partition_size
+        if (ideal_count := estimated_output_size // target_size) > new_count:
+            new_count = min(ideal_count, output_count)
+
+        if new_count < output_count:
+            result = Repartition(joined.schema, joined)
+            partition_info[result] = PartitionInfo.new(
+                result, partition_info, count=new_count, table_stats=join_stats
+            )
+            return result, partition_info
 
     return joined, partition_info
 
