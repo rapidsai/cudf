@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,6 +33,7 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cooperative_groups.h>
+#include <cooperative_groups/reduce.h>
 #include <cuda/atomic>
 #include <cuda/std/utility>
 #include <thrust/binary_search.h>
@@ -125,13 +126,11 @@ CUDF_KERNEL void finder_warp_parallel_fn(column_device_view const d_strings,
 
   auto const str_idx = idx / cudf::detail::warp_size;
   if (str_idx >= d_strings.size()) { return; }
-  auto const lane_idx = idx % cudf::detail::warp_size;
-
   if (d_strings.is_null(str_idx)) { return; }
 
-  // initialize the output for the atomicMin/Max
-  if (lane_idx == 0) { d_results[str_idx] = forward ? std::numeric_limits<size_type>::max() : -1; }
-  __syncwarp();
+  namespace cg        = cooperative_groups;
+  auto const warp     = cg::tiled_partition<cudf::detail::warp_size>(cg::this_thread_block());
+  auto const lane_idx = warp.thread_rank();
 
   auto const d_str    = d_strings.element<string_view>(str_idx);
   auto const d_target = d_targets[str_idx];
@@ -158,16 +157,12 @@ CUDF_KERNEL void finder_warp_parallel_fn(column_device_view const d_strings,
   }
 
   // find stores the minimum position while rfind stores the maximum position
-  // note that this was slightly faster than using cub::WarpReduce
-  cuda::atomic_ref<size_type, cuda::thread_scope_block> ref{*(d_results + str_idx)};
-  forward ? ref.fetch_min(position, cuda::std::memory_order_relaxed)
-          : ref.fetch_max(position, cuda::std::memory_order_relaxed);
-  __syncwarp();
+  auto const result = forward ? cg::reduce(warp, position, cg::less<size_type>())
+                              : cg::reduce(warp, position, cg::greater<size_type>());
 
   if (lane_idx == 0) {
     // the final result needs to be fixed up convert max() to -1
     // and a byte position to a character position
-    auto const result = d_results[str_idx];
     d_results[str_idx] =
       ((result < std::numeric_limits<size_type>::max()) && (result >= begin))
         ? start_char_pos + characters_in_string(d_str.data() + begin, result - begin)
