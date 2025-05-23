@@ -639,7 +639,7 @@ void host_decompress(compression_type compression,
   }
 }
 
-enum class host_engine_state { ON, OFF, AUTO };
+enum class host_engine_state : uint8_t { ON, OFF, AUTO };
 
 [[nodiscard]] host_engine_state get_host_engine_state(compression_type compression)
 {
