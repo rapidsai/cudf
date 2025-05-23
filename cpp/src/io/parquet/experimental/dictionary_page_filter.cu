@@ -51,9 +51,10 @@ namespace {
 
 namespace cg = cooperative_groups;
 
-// Decode kernel parameters
-auto constexpr int96_size        = 12;   ///< Size of INT96 physical type
-auto constexpr decode_block_size = 128;  ///< Must be a multiple of warp_size
+/// Size of INT96 physical type
+auto constexpr int96_size = 12;
+/// Decode kernel block size. Must be a multiple of warp_size
+auto constexpr decode_block_size = 4 * cudf::detail::warp_size;
 /// Maximum number of literals to evaluate while decoding column dictionaries
 auto constexpr max_inline_literals = 2;
 
@@ -65,19 +66,19 @@ auto constexpr bucket_size        = 1;             ///< Number of buckets per se
 auto constexpr occupancy_factor = 70;  ///< cuCollections suggests targeting a 70% occupancy factor
 uint32_t constexpr hasher_seed  = 0;   ///< default seed for the hashers
 
-/// Hash function for cuco::static_set_ref
-template <typename T>
-using hasher_type = cudf::hashing::detail::MurmurHash3_x86_32<T>;
-
-/// Supported fixed width types for dictionary page based row group pruning
+/// Supported fixed width types for row group pruning using dictionaries
 template <typename T>
 auto constexpr is_supported_fixed_width_type =
   not cuda::std::is_same_v<T, bool> and not cudf::is_compound<T>();
 
-/// All supported types for dictionary page based row group pruning
+/// All supported types for row group pruning using dictionaries
 template <typename T>
 auto constexpr is_supported_dictionary_type =
   is_supported_fixed_width_type<T> or cuda::std::is_same_v<T, cudf::string_view>;
+
+/// Hash function for cuco::static_set_ref
+template <typename T>
+using hasher_type = cudf::hashing::detail::MurmurHash3_x86_32<T>;
 
 /// cuco::static_set_ref storage type
 using storage_type     = cuco::bucket_storage<key_type,
@@ -105,6 +106,8 @@ struct hash_functor {
 
   /**
    * @brief Hasher operator for inserting values into `cuco::static_set`
+   *
+   * @note Enabled via is_insert as T can be the same as key_type in dispatch
    */
   template <bool is_insert = is_insert, CUDF_ENABLE_IF(is_insert)>
   constexpr __device__ __forceinline__ typename hasher_type<T>::result_type operator()(
@@ -115,6 +118,8 @@ struct hash_functor {
 
   /**
    * @brief Hasher operator for querying values from hash set
+   *
+   * @note Enabled via is_query as T can be the same as key_type in dispatch
    */
   template <bool is_query = is_query, CUDF_ENABLE_IF(is_query)>
   constexpr __device__ __forceinline__ typename hasher_type<T>::result_type operator()(
@@ -138,6 +143,8 @@ struct equality_functor {
 
   /**
    * @brief Equality operator for inserting values into hash set
+   *
+   * @note Enabled via is_insert as T can be the same as key_type in dispatch
    */
   template <bool is_insert = is_insert, CUDF_ENABLE_IF(is_insert)>
   constexpr __device__ __forceinline__ bool operator()(key_type lhs_key,
@@ -147,7 +154,9 @@ struct equality_functor {
   }
 
   /**
-   * @brief Equality operator for querying values from hash set
+   * @brief Equality operator for querying values from hash set.
+   *
+   * @note Enabled via is_query as T can be the same as key_type in dispatch
    */
   template <bool is_query = is_query, CUDF_ENABLE_IF(is_query)>
   constexpr __device__ __forceinline__ bool operator()(T const& value, key_type key) const noexcept
@@ -206,6 +215,9 @@ __device__ __forceinline__ bool is_error_set(kernel_error::pointer error)
 __device__ __forceinline__ int32_t
 calc_timestamp_scale(std::optional<LogicalType> const& logical_type, int32_t clock_rate)
 {
+  // Note: This function has been extracted from the snippet at:
+  // https://github.com/rapidsai/cudf/blob/c89c83c00c729a86c56570693b627f31408bc2c9/cpp/src/io/parquet/page_decode.cuh#L1219-L1236
+
   auto timestamp_scale = 0;
   // Adjust for timestamps
   if (logical_type.has_value()) {
@@ -233,6 +245,9 @@ calc_timestamp_scale(std::optional<LogicalType> const& logical_type, int32_t clo
 __device__ __forceinline__ int32_t
 get_int32_type_len(std::optional<LogicalType> const& logical_type)
 {
+  // Note: This function has been extracted from the snippet at:
+  // https://github.com/rapidsai/cudf/blob/c89c83c00c729a86c56570693b627f31408bc2c9/cpp/src/io/parquet/page_decode.cuh#L1278-L1287
+
   // Check for smaller bitwidths
   if (logical_type.has_value()) {
     if (logical_type.value().type == LogicalType::INTEGER) {
@@ -256,29 +271,34 @@ __device__ __forceinline__ void decode_int96timestamp(cudf::string_view const in
                                                       int32_t clock_rate,
                                                       int64_t* timestamp64)
 {
+  // Note: This function has been modified from the original at
+  // https://github.com/rapidsai/cudf/blob/c89c83c00c729a86c56570693b627f31408bc2c9/cpp/src/io/parquet/page_data.cuh#L133-L198
+
   auto nanos = int64_t{0};
   auto days  = int64_t{0};
+
   cuda::std::memcpy(&nanos, int96_value.data(), sizeof(int64_t));
   cuda::std::memcpy(&days, int96_value.data() + sizeof(int64_t), sizeof(int32_t));
 
-  cudf::duration_D duration_days{days - 2440588};
+  // Convert from Julian day at noon to UTC seconds
+  cudf::duration_D duration_days{
+    days - 2440588};  // TBD: Should be noon instead of midnight, but this matches pyarrow
+
+  using cuda::std::chrono::duration_cast;
 
   *timestamp64 = [&]() {
     switch (clock_rate) {
       case 1:  // seconds
-        return cuda::std::chrono::duration_cast<cudf::duration_s>(duration_days).count() +
-               cuda::std::chrono::duration_cast<cudf::duration_s>(cudf::duration_ns{nanos}).count();
+        return duration_cast<cudf::duration_s>(duration_days).count() +
+               duration_cast<cudf::duration_s>(cudf::duration_ns{nanos}).count();
       case 1'000:  // milliseconds
-        return cuda::std::chrono::duration_cast<cudf::duration_ms>(duration_days).count() +
-               cuda::std::chrono::duration_cast<cudf::duration_ms>(cudf::duration_ns{nanos})
-                 .count();
+        return duration_cast<cudf::duration_ms>(duration_days).count() +
+               duration_cast<cudf::duration_ms>(cudf::duration_ns{nanos}).count();
       case 1'000'000:  // microseconds
-        return cuda::std::chrono::duration_cast<cudf::duration_us>(duration_days).count() +
-               cuda::std::chrono::duration_cast<cudf::duration_us>(cudf::duration_ns{nanos})
-                 .count();
+        return duration_cast<cudf::duration_us>(duration_days).count() +
+               duration_cast<cudf::duration_us>(cudf::duration_ns{nanos}).count();
       case 1'000'000'000:  // nanoseconds
-      default:
-        return cuda::std::chrono::duration_cast<cudf::duration_ns>(duration_days).count() + nanos;
+      default: return duration_cast<cudf::duration_ns>(duration_days).count() + nanos;
     }
   }();
 }
@@ -293,6 +313,9 @@ __device__ __forceinline__ void decode_int96timestamp(cudf::string_view const in
 __device__ __forceinline__ int64_t convert_to_timestamp64(int64_t const value,
                                                           int32_t timestamp_scale)
 {
+  // Note: This function has been taken as-is from the snippet at:
+  // https://github.com/rapidsai/cudf/blob/c89c83c00c729a86c56570693b627f31408bc2c9/cpp/src/io/parquet/page_data.cuh#L247-L258
+
   if (timestamp_scale < 0) {
     // round towards negative infinity
     int32_t const sign = (value < 0);
