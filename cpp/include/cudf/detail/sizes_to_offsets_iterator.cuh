@@ -277,7 +277,14 @@ auto sizes_to_offsets(SizesIterator begin,
   // when computing the individual scan output elements.
   thrust::exclusive_scan(
     rmm::exec_policy_nosync(stream), begin, end, output_itr, static_cast<LastType>(initial_offset));
-  return last_element.value(stream);
+
+  // Copy the scalar from device to host pinned memory
+  auto host_scalar = make_pinned_vector_async<LastType>(1, stream);  // as host pinned memory
+  cudaMemcpyAsync(host_scalar.data(), last_element.data(), sizeof(LastType), cudaMemcpyDeviceToHost, stream.value());
+  stream.synchronize();
+  return host_scalar.front(); 
+  // Note: the rmm::device_scalar::value(stream) returns a copy to a
+  // host-pageable stack variable in T
 }
 
 /**
