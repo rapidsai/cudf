@@ -581,6 +581,7 @@ add_library(
   src/io/utilities/data_sink.cpp
   src/io/utilities/datasource.cpp
   src/io/utilities/row_selection.cpp
+  src/io/utilities/thread.cpp
   src/io/utilities/type_inference.cu
   src/io/utilities/trie.cu
   src/jit/cache.cpp

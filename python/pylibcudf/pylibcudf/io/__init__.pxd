@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 # CSV is removed since it is def not cpdef (to force kw-only arguments)
 from . cimport (
@@ -13,3 +13,4 @@ from . cimport (
     types,
 )
 from .types cimport SourceInfo, TableWithMetadata
+from .thread cimport set_num_io_threads, num_io_threads

@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 from . import (
     avro,
@@ -12,6 +12,7 @@ from . import (
     timezone,
     types,
 )
+from .thread import num_io_threads, set_num_io_threads
 from .types import SinkInfo, SourceInfo, TableWithMetadata
 
 __all__ = [

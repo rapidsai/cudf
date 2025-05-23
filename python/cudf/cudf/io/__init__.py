@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2025, NVIDIA CORPORATION.
 from cudf.io.avro import read_avro
 from cudf.io.csv import read_csv, to_csv
 from cudf.io.dlpack import from_dlpack
@@ -14,3 +14,4 @@ from cudf.io.parquet import (
     write_to_dataset,
 )
 from cudf.io.text import read_text
+from cudf.io.thread import num_io_threads, set_num_io_threads
