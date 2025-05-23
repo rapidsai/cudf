@@ -65,8 +65,10 @@ class Column:
     def from_rmm_buffer(
         buff: DeviceBuffer, dtype: DataType, size: int, children: list[Column]
     ) -> Column: ...
-    @classmethod
-    def from_arrow(cls, obj: ArrowLike) -> Column: ...
+    @staticmethod
+    def from_arrow(
+        obj: ArrowLike, dtype: DataType | None = None
+    ) -> Column: ...
     @classmethod
     def from_cuda_array_interface(
         cls, obj: SupportsCudaArrayInterface

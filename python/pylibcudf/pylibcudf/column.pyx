@@ -300,7 +300,7 @@ cdef class Column:
         self._num_children = len(children)
 
     @staticmethod
-    def from_arrow(arrow_like: ArrowLike, dtype: DataType | None = None):
+    def from_arrow(obj: ArrowLike, dtype: DataType | None = None) -> Column:
         """
         Create a Column from an Arrow-like object using the Arrow C Data Interface.
 
@@ -310,12 +310,14 @@ cdef class Column:
 
         Parameters
         ----------
-        arrow_like : ArrowLike
+        obj : Arrow-like
             An object implementing one of the following:
             - `__arrow_c_array__` (host Arrow array)
             - `__arrow_c_device_array__` (device Arrow array)
             - `__arrow_c_stream__` (host Arrow stream)
             - `__arrow_c_device_stream__` (not yet supported)
+        dtype : DataType | None
+            The pylibcudf data type.
 
         Returns
         -------
@@ -326,6 +328,7 @@ cdef class Column:
         ------
         NotImplementedError
             If the Arrow-like object is a device stream (`__arrow_c_device_stream__`).
+            If the dtype argument is not None.
         ValueError
             If the object does not implement a known Arrow C interface.
 
@@ -335,14 +338,16 @@ cdef class Column:
         - Device stream support (`__arrow_c_device_stream__`) is not supported yet.
         """
         if dtype is not None:
-            raise ValueError("Cannot create a Column with dtype specified.")
+            raise NotImplementedError(
+                "Creating a Column with the dtype argument specified."
+            )
         cdef ArrowSchema* c_schema
         cdef ArrowArray* c_array
         cdef ArrowDeviceArray* c_device_array
         cdef _ArrowColumnHolder result
         cdef unique_ptr[arrow_column] c_result
-        if hasattr(arrow_like, "__arrow_c_device_array__"):
-            schema, d_array = arrow_like.__arrow_c_device_array__()
+        if hasattr(obj, "__arrow_c_device_array__"):
+            schema, d_array = obj.__arrow_c_device_array__()
             c_schema = <ArrowSchema*>PyCapsule_GetPointer(schema, "arrow_schema")
             c_device_array = (
                 <ArrowDeviceArray*>PyCapsule_GetPointer(d_array, "arrow_device_array")
@@ -356,8 +361,8 @@ cdef class Column:
             result.col.swap(c_result)
 
             return Column.from_column_view_of_arbitrary(result.col.get().view(), result)
-        elif hasattr(arrow_like, "__arrow_c_array__"):
-            schema, h_array = arrow_like.__arrow_c_array__()
+        elif hasattr(obj, "__arrow_c_array__"):
+            schema, h_array = obj.__arrow_c_array__()
             c_schema = <ArrowSchema*>PyCapsule_GetPointer(schema, "arrow_schema")
             c_array = <ArrowArray*>PyCapsule_GetPointer(h_array, "arrow_array")
 
@@ -369,8 +374,8 @@ cdef class Column:
             result.col.swap(c_result)
 
             return Column.from_column_view_of_arbitrary(result.col.get().view(), result)
-        elif hasattr(arrow_like, "__arrow_c_stream__"):
-            stream = arrow_like.__arrow_c_stream__()
+        elif hasattr(obj, "__arrow_c_stream__"):
+            stream = obj.__arrow_c_stream__()
             c_stream = (
                 <ArrowArrayStream*>PyCapsule_GetPointer(stream, "arrow_array_stream")
             )
@@ -383,7 +388,7 @@ cdef class Column:
             result.col.swap(c_result)
 
             return Column.from_column_view_of_arbitrary(result.col.get().view(), result)
-        elif hasattr(arrow_like, "__arrow_c_device_stream__"):
+        elif hasattr(obj, "__arrow_c_device_stream__"):
             # TODO: When we add support for this case, it should be moved above
             # the __arrow_c_array__ case since we should prioritize device
             # data if possible.
