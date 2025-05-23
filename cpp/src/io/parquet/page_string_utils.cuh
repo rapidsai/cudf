@@ -207,7 +207,7 @@ inline constexpr int log2_int()
   if constexpr (value == 1) {
     return 0;
   } else {
-    return sizeof(uint32_t) - 1 - cuda::std::countl_zero(static_cast<uint32_t>(value));
+    return 31 - cuda::std::countl_zero(static_cast<uint32_t>(value));
   }
 }
 

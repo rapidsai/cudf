@@ -236,8 +236,7 @@ void set_null_masks(cudf::host_span<bitmask_type*> bitmasks,
   auto block_size =
     std::max<size_t>(min_threads_per_block, (average_nullmask_words / max_words_per_thread));
   // Round block size to nearest (ceil) power of 2
-  // TODO: Use `std::countl_zero` instead of `__builtin_clzll` once we migrate to C++20
-  block_size = size_t{1} << (63 - __builtin_clzll(block_size));
+  block_size = size_t{1} << (63 - cuda::std::countl_zero(block_size));
   // Cap block size to 1024 threads
   block_size = std::min<size_t>(block_size, 1024);
 
