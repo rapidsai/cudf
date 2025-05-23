@@ -70,9 +70,9 @@ def test_target_partition_size(tmp_path, df, blocksize, n_files):
         assert count < n_files
 
 
-def test_table_statistics(tmp_path, df):
-    n_files = 3
-    make_partitioned_source(df, tmp_path, "parquet", n_files=n_files)
+@pytest.mark.parametrize("parquet_metadata_samples", [1, 3])
+def test_table_statistics(tmp_path, df, parquet_metadata_samples):
+    make_partitioned_source(df, tmp_path, "parquet", n_files=3)
     q = pl.scan_parquet(tmp_path)
     engine = pl.GPUEngine(
         raise_on_fail=True,
@@ -80,6 +80,7 @@ def test_table_statistics(tmp_path, df):
         executor_options={
             "target_partition_size": 10_000,
             "scheduler": DEFAULT_SCHEDULER,
+            "parquet_metadata_samples": parquet_metadata_samples,
         },
     )
     config_options = ConfigOptions.from_polars_engine(engine)
@@ -114,7 +115,8 @@ def test_table_statistics(tmp_path, df):
     assert_gpu_result_equal(q4, engine=engine, check_row_order=False)
 
 
-def test_table_statistics_join(tmp_path):
+@pytest.mark.parametrize("parquet_rowgroup_samples", [1, 2])
+def test_table_statistics_join(tmp_path, parquet_rowgroup_samples):
     # Left table
     tmp_dir_left = tmp_path / "temp_dir_left"
     tmp_dir_left.mkdir()
@@ -125,7 +127,7 @@ def test_table_statistics_join(tmp_path):
             "z": [1.0, 2.0, 3.0, 4.0, 5.0] * 60,
         }
     )
-    make_partitioned_source(left, tmp_dir_left, "parquet", n_files=1)
+    make_partitioned_source(left, tmp_dir_left, "parquet", n_files=2)
     dfl = pl.scan_parquet(tmp_dir_left)
 
     # Right table
@@ -138,7 +140,7 @@ def test_table_statistics_join(tmp_path):
             "zz": [1, 2, 3, 4, 5] * 40,
         }
     )
-    make_partitioned_source(right, tmp_dir_right, "parquet", n_files=1)
+    make_partitioned_source(right, tmp_dir_right, "parquet", n_files=2)
     dfr = pl.scan_parquet(tmp_dir_right)
 
     # Make sure we get many partitions
@@ -149,6 +151,7 @@ def test_table_statistics_join(tmp_path):
             "target_partition_size": 400,
             "scheduler": DEFAULT_SCHEDULER,
             "shuffle_method": "tasks",
+            "parquet_rowgroup_samples": parquet_rowgroup_samples,
         },
     )
 

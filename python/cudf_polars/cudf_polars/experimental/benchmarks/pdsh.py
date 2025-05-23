@@ -484,8 +484,6 @@ class PDSHQueries:
     @staticmethod
     def q8(run_config: RunConfig) -> pl.LazyFrame:
         """Query 8."""
-        return PDSHQueries.q8_duckdb_join_order(run_config)
-        # TODO: Add flag to use original join order?
         customer = get_data(run_config.dataset_path, "customer", run_config.suffix)
         lineitem = get_data(run_config.dataset_path, "lineitem", run_config.suffix)
         nation = get_data(run_config.dataset_path, "nation", run_config.suffix)
@@ -512,57 +510,6 @@ class PDSHQueries:
             .join(region, left_on="n_regionkey", right_on="r_regionkey")
             .filter(pl.col("r_name") == var2)
             .join(n2, left_on="s_nationkey", right_on="n_nationkey")
-            .filter(pl.col("o_orderdate").is_between(var4, var5))
-            .filter(pl.col("p_type") == var3)
-            .select(
-                pl.col("o_orderdate").dt.year().alias("o_year"),
-                (pl.col("l_extendedprice") * (1 - pl.col("l_discount"))).alias(
-                    "volume"
-                ),
-                pl.col("n_name").alias("nation"),
-            )
-            .with_columns(
-                pl.when(pl.col("nation") == var1)
-                .then(pl.col("volume"))
-                .otherwise(0)
-                .alias("_tmp")
-            )
-            .group_by("o_year")
-            .agg((pl.sum("_tmp") / pl.sum("volume")).round(2).alias("mkt_share"))
-            .sort("o_year")
-        )
-
-    @staticmethod
-    def q8_duckdb_join_order(run_config: RunConfig) -> pl.LazyFrame:
-        """Query 8 with duckdb physical plan."""
-        customer = get_data(run_config.dataset_path, "customer", run_config.suffix)
-        lineitem = get_data(run_config.dataset_path, "lineitem", run_config.suffix)
-        nation = get_data(run_config.dataset_path, "nation", run_config.suffix)
-        orders = get_data(run_config.dataset_path, "orders", run_config.suffix)
-        part = get_data(run_config.dataset_path, "part", run_config.suffix)
-        region = get_data(run_config.dataset_path, "region", run_config.suffix)
-        supplier = get_data(run_config.dataset_path, "supplier", run_config.suffix)
-
-        var1 = "BRAZIL"
-        var2 = "AMERICA"
-        var3 = "ECONOMY ANODIZED STEEL"
-        var4 = date(1995, 1, 1)
-        var5 = date(1996, 12, 31)
-
-        n1 = nation.select("n_nationkey", "n_regionkey")
-        n2 = nation.select("n_nationkey", "n_name")
-        return (
-            n1.join(region, left_on="n_nationkey", right_on="r_regionkey")
-            .join(customer, left_on="n_nationkey", right_on="c_nationkey")
-            .join(orders, left_on="c_custkey", right_on="o_custkey")
-            .join(lineitem, left_on="o_orderkey", right_on="l_orderkey")
-            .join(part, left_on="l_partkey", right_on="p_partkey")
-            .join(
-                supplier.join(n2, left_on="s_nationkey", right_on="n_nationkey"),
-                left_on="l_suppkey",
-                right_on="s_suppkey",
-            )
-            .filter(pl.col("r_name") == var2)
             .filter(pl.col("o_orderdate").is_between(var4, var5))
             .filter(pl.col("p_type") == var3)
             .select(
@@ -1259,11 +1206,10 @@ def run(args: argparse.Namespace) -> None:
         if run_config.executor == "streaming":
             executor_options = {
                 "unique_fraction": {
-                    # "c_custkey": 0.05,  # Q10
-                    # "l_orderkey": 1.0,  # Q18
-                    # "l_partkey": 0.1,  # Q20
-                    # "o_custkey": 0.25,  # Q22
-                    "ps_suppkey": 0.0125,  # Q9, Q11
+                    "c_custkey": 0.05,  # Q10
+                    "l_orderkey": 1.0,  # Q18
+                    "l_partkey": 0.1,  # Q20
+                    "o_custkey": 0.25,  # Q22
                 },
             }
             if run_config.blocksize:

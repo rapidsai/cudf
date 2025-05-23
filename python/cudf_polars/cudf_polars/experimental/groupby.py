@@ -14,7 +14,7 @@ from cudf_polars.dsl.expr import Agg, BinOp, Col, Len, NamedExpr
 from cudf_polars.dsl.ir import GroupBy, Select
 from cudf_polars.dsl.traversal import traversal
 from cudf_polars.dsl.utils.naming import unique_names
-from cudf_polars.experimental.base import PartitionInfo
+from cudf_polars.experimental.base import PartitionInfo, TableStats
 from cudf_polars.experimental.dispatch import lower_ir_node
 from cudf_polars.experimental.repartition import Repartition
 from cudf_polars.experimental.shuffle import Shuffle
@@ -162,6 +162,7 @@ def _(
         "'in-memory' executor not supported in 'lower_ir_node'"
     )
 
+    groupby_table_stats: TableStats | None = None
     if unique_fraction_dict := _get_unique_fractions(
         child,
         groupby_key_columns,
@@ -170,10 +171,14 @@ def _(
     ):
         # Use unique_fraction to determine output partitioning
         child_count = partition_info[child].count
-        post_aggregation_count = max(
-            int(max(unique_fraction_dict.values()) * child_count),
-            1,
-        )
+        unique_fraction = max(unique_fraction_dict.values())
+        post_aggregation_count = max(int(unique_fraction * child_count), 1)
+        if (table_stats := partition_info[child].table_stats) is not None:
+            # Update the estimated row count
+            groupby_table_stats = TableStats(
+                table_stats.column_stats,
+                max(1, int(unique_fraction * table_stats.num_rows)),
+            )
 
     new_node: IR
     name_generator = unique_names(ir.schema.keys())
@@ -288,5 +293,6 @@ def _(
         new_node,
         partition_info,
         partitioned_on=ir.keys,
+        table_stats=groupby_table_stats,
     )
     return new_node, partition_info

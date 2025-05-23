@@ -72,7 +72,7 @@ def _repr_ir_tree(
         count = pi.count
         stats = pi.table_stats
         num_rows = stats.num_rows if stats is not None else "unknown"
-        header = header.rstrip("\n") + f" [{count} partitions, {num_rows=}]\n"
+        header = header.rstrip("\n") + f" [{count} partitions, ~{num_rows} rows]\n"
 
     children_strs = [
         _repr_ir_tree(child, partition_info, offset=offset + "  ")

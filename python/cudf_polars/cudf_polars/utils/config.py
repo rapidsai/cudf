@@ -175,6 +175,14 @@ class StreamingExecutor:
         controls how large parquet files are split into multiple partitions.
         Files larger than ``target_partition_size`` bytes are split into multiple
         partitions.
+    parquet_metadata_samples
+        The number of files to sample Parquet metadata from for each dataset. This
+        metadata will be used to estimate the average file size and the total number
+        of rows in the dataset. Default is ``5``.
+    parquet_rowgroup_samples
+        The number of Parquet row-groups to sample ahead of time for each dataset.
+        This data will be used to estimate global unique-value statistics. Default
+        is ``1``.
     groupby_n_ary
         The factor by which the number of partitions is decreased when performing
         a groupby on a partitioned column. For example, if a column has 64 partitions,
@@ -199,6 +207,8 @@ class StreamingExecutor:
     max_rows_per_partition: int = 1_000_000
     unique_fraction: dict[str, float] = dataclasses.field(default_factory=dict)
     target_partition_size: int = 0
+    parquet_metadata_samples: int = 5
+    parquet_rowgroup_samples: int = 1
     groupby_n_ary: int = 32
     broadcast_join_limit: int = 0
     shuffle_method: ShuffleMethod | None = None
@@ -238,6 +248,10 @@ class StreamingExecutor:
             raise TypeError("unique_fraction must be a dict of column name to float")
         if not isinstance(self.target_partition_size, int):
             raise TypeError("target_partition_size must be an int")
+        if not isinstance(self.parquet_metadata_samples, int):
+            raise TypeError("parquet_metadata_samples must be an int")
+        if not isinstance(self.parquet_rowgroup_samples, int):
+            raise TypeError("parquet_rowgroup_samples must be an int")
         if not isinstance(self.groupby_n_ary, int):
             raise TypeError("groupby_n_ary must be an int")
         if not isinstance(self.broadcast_join_limit, int):

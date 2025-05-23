@@ -8,6 +8,7 @@ import dataclasses
 import enum
 import itertools
 import math
+from collections import defaultdict
 from enum import IntEnum
 from typing import TYPE_CHECKING, Any, TypeVar
 
@@ -282,10 +283,16 @@ class SplitScan(IR):
 
 def _sample_pq_statistics(ir: Scan) -> TableStats:
     # Use average total_uncompressed_size of three files
-    n_sample = 5  # TODO: Make this configurable
+
+    assert ir.config_options.executor.name == "streaming", (
+        "'in-memory' executor not supported in '_sample_pq_statistics"
+    )
+
+    num_file_samples = ir.config_options.executor.parquet_metadata_samples
+    num_rg_samples = ir.config_options.executor.parquet_rowgroup_samples
     file_count = len(ir.paths)
-    stride = max(1, int(file_count / n_sample))
-    paths = ir.paths[: stride * n_sample : stride]
+    stride = max(1, int(file_count / num_file_samples))
+    paths = ir.paths[: stride * num_file_samples : stride]
 
     # Check table-stats cache
     table_stats_cached: TableStats | None = None
@@ -359,47 +366,53 @@ def _sample_pq_statistics(ir: Scan) -> TableStats:
         }
 
         # Collect real unique-count of first row-group
-        # TODO: Check for 'distinct_count' statistics
-        # and make this sampling configurable.
-        options = plc.io.parquet.ParquetReaderOptions.builder(
-            plc.io.SourceInfo(paths[:1])
-        ).build()
-        options.set_columns([c for c in ir.schema if c in need_schema])
-        options.set_row_groups([[0]])
-        tbl_w_meta = plc.io.parquet.read_parquet(options)
-        row_group_num_rows = tbl_w_meta.tbl.num_rows()
         unique_count_estimates: dict[str, int] = {}
         unique_fraction_estimates: dict[str, float] = {}
-        for name, column in zip(
-            tbl_w_meta.column_names(), tbl_w_meta.columns, strict=True
-        ):
-            if name in need_schema:
-                row_group_unique_count = plc.stream_compaction.distinct_count(
-                    column,
-                    plc.types.NullPolicy.INCLUDE,
-                    plc.types.NanPolicy.NAN_IS_NULL,
-                )
-                # Assume that if every row is unique then this is a
-                # primary key otherwise it's a foreign key and we
-                # can't use the single row group count estimate
-                # Example, consider a "foreign" key that has 100
-                # unique values. If we sample from a single row group,
-                # we likely obtain a unique count of 100. But we can't
-                # necessarily deduce that that means that the unique
-                # count is 100 / num_rows_in_group * num_rows_in_file
-                unique_fraction_estimates[name] = max(
-                    min(1.0, row_group_unique_count / row_group_num_rows),
-                    0.00001,
-                )
-                if row_group_unique_count == row_group_num_rows:
-                    unique_count_estimates[name] = num_rows_total
+        if num_rg_samples > 0:
+            n = 0
+            samples: defaultdict[str, list[int]] = defaultdict(list)
+            for path, num_rgs in zip(
+                paths, num_row_groups_per_file_samples, strict=True
+            ):
+                for rg_id in range(num_rgs):
+                    n += 1
+                    samples[path].append(rg_id)
+                    if n == num_rg_samples:
+                        break
+            options = plc.io.parquet.ParquetReaderOptions.builder(
+                plc.io.SourceInfo(list(samples))
+            ).build()
+            options.set_columns([c for c in ir.schema if c in need_schema])
+            options.set_row_groups(list(samples.values()))
+            tbl_w_meta = plc.io.parquet.read_parquet(options)
+            row_group_num_rows = tbl_w_meta.tbl.num_rows()
+            for name, column in zip(
+                tbl_w_meta.column_names(), tbl_w_meta.columns, strict=True
+            ):
+                if name in need_schema:
+                    row_group_unique_count = plc.stream_compaction.distinct_count(
+                        column,
+                        plc.types.NullPolicy.INCLUDE,
+                        plc.types.NanPolicy.NAN_IS_NULL,
+                    )
+                    unique_fraction_estimates[name] = max(
+                        min(1.0, row_group_unique_count / row_group_num_rows),
+                        0.00001,
+                    )
+                    # Assume that if every row is unique then this is a
+                    # primary key otherwise it's a foreign key and we
+                    # can't use the single row group count estimate
+                    # Example, consider a "foreign" key that has 100
+                    # unique values. If we sample from a single row group,
+                    # we likely obtain a unique count of 100. But we can't
+                    # necessarily deduce that that means that the unique
+                    # count is 100 / num_rows_in_group * num_rows_in_file
+                    if row_group_unique_count == row_group_num_rows:
+                        unique_count_estimates[name] = num_rows_total
 
         # Leave out unique stats if they were defined by the
         # user. This allows us to avoid collecting stats for
         # columns that are know to be problematic.
-        assert ir.config_options.executor.name == "streaming", (
-            "'in-memory' executor not supported in '_sample_pq_statistics"
-        )
         user_fractions = ir.config_options.executor.unique_fraction
 
         # Construct estimated TableStats

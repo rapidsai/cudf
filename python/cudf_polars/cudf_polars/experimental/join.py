@@ -59,7 +59,7 @@ def _make_hash_join(
     ir: Join,
     output_count: int,
     partition_info: MutableMapping[IR, PartitionInfo],
-    estimated_output_rows: int | None,
+    table_stats: TableStats | None,
     left: IR,
     right: IR,
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
@@ -89,15 +89,13 @@ def _make_hash_join(
         partitioned_on = ir.left_on
     elif ir.options[0] == "Right":
         partitioned_on = ir.right_on
-    pi = PartitionInfo.new(
+    partition_info[ir] = PartitionInfo.new(
         ir,
         partition_info,
         count=output_count,
         partitioned_on=partitioned_on,
+        table_stats=table_stats,
     )
-    if pi.table_stats is not None and estimated_output_rows is not None:
-        pi.table_stats = TableStats(pi.table_stats.column_stats, estimated_output_rows)
-    partition_info[ir] = pi
     return ir, partition_info
 
 
@@ -147,7 +145,7 @@ def _make_bcast_join(
     ir: Join,
     output_count: int,
     partition_info: MutableMapping[IR, PartitionInfo],
-    estimated_output_rows: int | None,
+    table_stats: TableStats | None,
     left: IR,
     right: IR,
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
@@ -186,10 +184,9 @@ def _make_bcast_join(
             )
 
     new_node = ir.reconstruct([left, right])
-    pi = PartitionInfo.new(new_node, partition_info, count=output_count)
-    if pi.table_stats is not None and estimated_output_rows is not None:
-        pi.table_stats = TableStats(pi.table_stats.column_stats, estimated_output_rows)
-    partition_info[new_node] = pi
+    partition_info[new_node] = PartitionInfo.new(
+        new_node, partition_info, count=output_count, table_stats=table_stats
+    )
     return new_node, partition_info
 
 
@@ -265,7 +262,6 @@ def _(
                 ),
             )
         estimated_output_rows = max(1, left_rows * right_rows // unique_counts)
-        max_input_rows = max(left_rows, right_rows)
         join_stats = TableStats(
             TableStats.merge_column_stats(
                 left_stats.column_stats, right_stats.column_stats
@@ -273,8 +269,6 @@ def _(
             estimated_output_rows,
         )
     else:  # pragma: no cover; We usually have basic table stats (num_rows)
-        max_input_rows = None
-        estimated_output_rows = None
         join_stats = None
 
     output_count = max(partition_info[left].count, partition_info[right].count)
@@ -295,7 +289,7 @@ def _(
             ir,
             output_count,
             partition_info,
-            estimated_output_rows,
+            join_stats,
             left,
             right,
         )
@@ -305,48 +299,12 @@ def _(
             ir,
             output_count,
             partition_info,
-            estimated_output_rows,
+            join_stats,
             left,
             right,
         )
 
-    if (
-        join_stats is not None
-        and estimated_output_rows is not None
-        and max_input_rows is not None
-        and output_count
-        > (
-            new_count := max(
-                1, int(1 * estimated_output_rows * output_count // max_input_rows)
-            )
-        )
-    ):
-        assert ir.config_options.executor.name == "streaming", (
-            "'in-memory' executor not supported in 'lower_ir_node'"
-        )
-
-        # Only repartition if the estimated output size also
-        # favors a smaller partition count.
-        estimated_output_size = (
-            sum(
-                join_stats.column_stats[col].element_size
-                if col in join_stats.column_stats
-                else 16  # Conservative guess for untracked columns
-                for col in joined.schema
-            )
-            * join_stats.num_rows
-        )
-        target_size = rec.state["config_options"].executor.target_partition_size
-        if (ideal_count := estimated_output_size // target_size) > new_count:
-            new_count = min(ideal_count, output_count)
-
-        if new_count < output_count:
-            result = Repartition(joined.schema, joined)
-            partition_info[result] = PartitionInfo.new(
-                result, partition_info, count=new_count, table_stats=join_stats
-            )
-            return result, partition_info
-
+    # TODO: Use join_stats to repartition
     return joined, partition_info
 
 
