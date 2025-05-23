@@ -1146,9 +1146,9 @@ struct chunk_row_output_iter {
   using reference         = size_type&;
   using iterator_category = thrust::output_device_iterator_tag;
 
-  __host__ __device__ chunk_row_output_iter operator+(int i) { return {p + i}; }
+  CUDF_HOST_DEVICE chunk_row_output_iter operator+(int i) { return {p + i}; }
 
-  __host__ __device__ chunk_row_output_iter& operator++()
+  CUDF_HOST_DEVICE chunk_row_output_iter& operator++()
   {
     p++;
     return *this;
@@ -1236,9 +1236,9 @@ struct page_offset_output_iter {
   using reference         = size_t&;
   using iterator_category = thrust::output_device_iterator_tag;
 
-  __host__ __device__ page_offset_output_iter operator+(int i) { return {p + i}; }
+  CUDF_HOST_DEVICE page_offset_output_iter operator+(int i) { return {p + i}; }
 
-  __host__ __device__ page_offset_output_iter& operator++()
+  CUDF_HOST_DEVICE page_offset_output_iter& operator++()
   {
     p++;
     return *this;

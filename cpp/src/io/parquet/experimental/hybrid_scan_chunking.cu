@@ -1,4 +1,3 @@
-
 /*
  * Copyright (c) 2025, NVIDIA CORPORATION.
  *
@@ -62,20 +61,12 @@ using PageInfo              = parquet::detail::PageInfo;
 void print_pages(cudf::detail::hostdevice_span<PageInfo> pages, rmm::cuda_stream_view _stream)
 {
   pages.device_to_host(_stream);
-  for (size_t idx = 0; idx < pages.size(); idx++) {
-    auto const& p = pages[idx];
-    // skip dictionary pages
-    if (p.flags & cudf::io::parquet::detail::PAGEINFO_FLAGS_DICTIONARY) { printf("Dict"); }
-    printf(
-      "P(%lu, s:%d): chunk_row(%d), num_rows(%d), skipped_values(%d), skipped_leaf_values(%d), "
-      "str_bytes(%d)\n",
-      idx,
-      p.src_col_schema,
-      p.chunk_row,
-      p.num_rows,
-      p.skipped_values,
-      p.skipped_leaf_values,
-      p.str_bytes);
+  for (auto const& p : pages) {
+    if (p.flags & cudf::io::parquet::detail::PAGEINFO_FLAGS_DICTIONARY) { std::cout << "Dict"; }
+    std::cout << "P(" << idx << ", s:" << p.src_col_schema << "): chunk_row(" << p.chunk_row
+              << "), num_rows(" << p.num_rows << "), skipped_values(" << p.skipped_values
+              << "), skipped_leaf_values(" << p.skipped_leaf_values << "), str_bytes("
+              << p.str_bytes << ")\n";
   }
 }
 #endif  // PAGE_PRUNING_DEBUG
@@ -83,7 +74,7 @@ void print_pages(cudf::detail::hostdevice_span<PageInfo> pages, rmm::cuda_stream
 /**
  * @brief Returns the cudf compression type and whether it is supported by the parquet writer.
  */
-__host__ __device__ cuda::std::pair<compression_type, bool> parquet_compression_support(
+CUDF_HOST_DEVICE cuda::std::pair<compression_type, bool> parquet_compression_support(
   Compression compression)
 {
   switch (compression) {
@@ -174,7 +165,8 @@ struct codec_stats {
   host_span<PageInfo> pass_pages,
   host_span<PageInfo> subpass_pages,
   host_span<bool const> page_mask,
-  rmm::cuda_stream_view stream)
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
 
@@ -233,7 +225,7 @@ struct codec_stats {
   auto copy_out =
     cudf::detail::make_empty_host_vector<device_span<uint8_t>>(num_comp_pages, stream);
 
-  rmm::device_uvector<compression_result> comp_res(num_comp_pages, stream);
+  rmm::device_uvector<compression_result> comp_res(num_comp_pages, stream, mr);
   thrust::uninitialized_fill(rmm::exec_policy_nosync(stream),
                              comp_res.begin(),
                              comp_res.end(),
@@ -305,10 +297,8 @@ struct codec_stats {
   }
   // now copy the uncompressed V2 def and rep level data
   if (not copy_in.empty()) {
-    auto const d_copy_in = cudf::detail::make_device_uvector_async(
-      copy_in, stream, cudf::get_current_device_resource_ref());
-    auto const d_copy_out = cudf::detail::make_device_uvector_async(
-      copy_out, stream, cudf::get_current_device_resource_ref());
+    auto const d_copy_in  = cudf::detail::make_device_uvector_async(copy_in, stream, mr);
+    auto const d_copy_out = cudf::detail::make_device_uvector_async(copy_out, stream, mr);
 
     cudf::io::detail::gpu_copy_uncompressed_blocks(d_copy_in, d_copy_out, stream);
   }
@@ -329,10 +319,12 @@ struct codec_stats {
 rmm::device_buffer hybrid_scan_reader_impl::decompress_dictionary_page_data(
   cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
   cudf::detail::hostdevice_span<PageInfo> pages,
-  rmm::cuda_stream_view stream)
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
 {
   auto const page_mask = thrust::host_vector<bool>(pages.size(), true);
-  return std::get<0>(decompress_page_data(chunks, pages, host_span<PageInfo>{}, page_mask, stream));
+  return std::get<0>(
+    decompress_page_data(chunks, pages, host_span<PageInfo>{}, page_mask, stream, mr));
 }
 
 }  // namespace cudf::io::parquet::experimental::detail

@@ -158,7 +158,7 @@ void print_cumulative_row_info(host_span<cumulative_page_info const> sizes,
 /**
  * @brief Returns the cudf compression type and whether it is supported by the parquet writer.
  */
-__host__ __device__ cuda::std::pair<compression_type, bool> parquet_compression_support(
+CUDF_HOST_DEVICE cuda::std::pair<compression_type, bool> parquet_compression_support(
   Compression compression)
 {
   switch (compression) {

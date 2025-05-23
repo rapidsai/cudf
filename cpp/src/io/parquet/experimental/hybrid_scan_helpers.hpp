@@ -231,7 +231,7 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
     cudf::host_span<std::vector<ast::literal*> const> literals,
     cudf::host_span<std::vector<ast::ast_operator> const> operators,
     cudf::host_span<data_type const> output_dtypes,
-    cudf::host_span<int const> dictionary_col_schemas,
+    cudf::host_span<cudf::size_type const> dictionary_col_schemas,
     std::reference_wrapper<ast::expression const> filter,
     rmm::cuda_stream_view stream) const;
 

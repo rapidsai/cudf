@@ -259,9 +259,10 @@ hybrid_scan_reader_impl::filter_row_groups_with_dictionary_pages(
     row_group_indices, dictionary_page_data, dictionary_col_schemas, options, stream);
 
   // Decompress dictionary pages if needed and store uncompressed buffers here
+  auto const mr                          = cudf::get_current_device_resource_ref();
   auto decompressed_dictionary_page_data = std::optional<rmm::device_buffer>{};
   if (has_compressed_data) {
-    decompressed_dictionary_page_data = decompress_dictionary_page_data(chunks, pages, stream);
+    decompressed_dictionary_page_data = decompress_dictionary_page_data(chunks, pages, stream, mr);
     pages.host_to_device_async(stream);
   }
 

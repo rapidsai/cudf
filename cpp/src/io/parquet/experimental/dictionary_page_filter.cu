@@ -69,6 +69,16 @@ uint32_t constexpr hasher_seed  = 0;   ///< default seed for the hashers
 template <typename T>
 using hasher_type = cudf::hashing::detail::MurmurHash3_x86_32<T>;
 
+/// Supported fixed width types for dictionary page based row group pruning
+template <typename T>
+auto constexpr is_supported_fixed_width_type =
+  not cuda::std::is_same_v<T, bool> and not cudf::is_compound<T>();
+
+/// All supported types for dictionary page based row group pruning
+template <typename T>
+auto constexpr is_supported_dictionary_type =
+  is_supported_fixed_width_type<T> or cuda::std::is_same_v<T, cudf::string_view>;
+
 /// cuco::static_set_ref storage type
 using storage_type     = cuco::bucket_storage<key_type,
                                           bucket_size,
@@ -96,10 +106,9 @@ struct hash_functor {
   /**
    * @brief Hasher operator for inserting values into `cuco::static_set`
    */
-  template <bool is_insert = is_insert>
-  constexpr __device__ __forceinline__
-    cuda::std::enable_if_t<is_insert, typename hasher_type<T>::result_type>
-    operator()(key_type key) const noexcept
+  template <bool is_insert = is_insert, CUDF_ENABLE_IF(is_insert)>
+  constexpr __device__ __forceinline__ typename hasher_type<T>::result_type operator()(
+    key_type key) const noexcept
   {
     return hasher_type<T>{seed}(decoded_data[key]);
   }
@@ -107,10 +116,9 @@ struct hash_functor {
   /**
    * @brief Hasher operator for querying values from hash set
    */
-  template <bool is_query = is_query>
-  constexpr __device__ __forceinline__
-    cuda::std::enable_if_t<is_query, typename hasher_type<T>::result_type>
-    operator()(T const& value) const noexcept
+  template <bool is_query = is_query, CUDF_ENABLE_IF(is_query)>
+  constexpr __device__ __forceinline__ typename hasher_type<T>::result_type operator()(
+    T const& value) const noexcept
   {
     return hasher_type<T>{seed}(value);
   }
@@ -131,9 +139,9 @@ struct equality_functor {
   /**
    * @brief Equality operator for inserting values into hash set
    */
-  template <bool is_insert = is_insert>
-  constexpr __device__ __forceinline__ cuda::std::enable_if_t<is_insert, bool> operator()(
-    key_type lhs_key, key_type rhs_key) const noexcept
+  template <bool is_insert = is_insert, CUDF_ENABLE_IF(is_insert)>
+  constexpr __device__ __forceinline__ bool operator()(key_type lhs_key,
+                                                       key_type rhs_key) const noexcept
   {
     return decoded_data[lhs_key] == decoded_data[rhs_key];
   }
@@ -141,9 +149,8 @@ struct equality_functor {
   /**
    * @brief Equality operator for querying values from hash set
    */
-  template <bool is_query = is_query>
-  constexpr __device__ __forceinline__ cuda::std::enable_if_t<is_query, bool> operator()(
-    T const& value, key_type key) const noexcept
+  template <bool is_query = is_query, CUDF_ENABLE_IF(is_query)>
+  constexpr __device__ __forceinline__ bool operator()(T const& value, key_type key) const noexcept
   {
     return value == decoded_data[key];
   }
@@ -309,18 +316,16 @@ __device__ __forceinline__ int64_t convert_to_timestamp64(int64_t const value,
  * @param physical_type Parquet physical type of the column
  */
 template <typename T>
-__global__ std::enable_if_t<not std::is_same_v<T, bool> and
-                              not(cudf::is_compound<T>() and not std::is_same_v<T, string_view>),
-                            void>
-query_dictionaries(cudf::device_span<T> decoded_data,
-                   cudf::device_span<bool*> results,
-                   ast::generic_scalar_device_view const* scalars,
-                   ast::ast_operator const* operators,
-                   bucket_type* const set_storage,
-                   cudf::size_type const* set_offsets,
-                   cudf::size_type const* value_offsets,
-                   cudf::size_type total_row_groups,
-                   parquet::Type physical_type)
+CUDF_KERNEL cuda::std::enable_if_t<is_supported_dictionary_type<T>, void> query_dictionaries(
+  cudf::device_span<T> decoded_data,
+  cudf::device_span<bool*> results,
+  ast::generic_scalar_device_view const* scalars,
+  ast::ast_operator const* operators,
+  bucket_type* const set_storage,
+  cudf::size_type const* set_offsets,
+  cudf::size_type const* value_offsets,
+  cudf::size_type total_row_groups,
+  parquet::Type physical_type)
 {
   // Each thread block (cg) evaluates one scalar against all column chunk dictionaries (cuco hash
   // sets) of this column
@@ -386,13 +391,12 @@ query_dictionaries(cudf::device_span<T> decoded_data,
  * @param error Pointer to the kernel error code
  * @return Decoded value
  */
-template <typename T>
-__device__ std::enable_if_t<not std::is_same_v<T, bool> and not cudf::is_compound<T>(), T>
-decode_fixed_width_value(PageInfo const& page,
-                         ColumnChunkDesc const& chunk,
-                         int32_t value_idx,
-                         parquet::Type physical_type,
-                         kernel_error::pointer error)
+template <typename T, CUDF_ENABLE_IF(is_supported_fixed_width_type<T>)>
+__device__ T decode_fixed_width_value(PageInfo const& page,
+                                      ColumnChunkDesc const& chunk,
+                                      int32_t value_idx,
+                                      parquet::Type physical_type,
+                                      kernel_error::pointer error)
 {
   // Page data pointer
   auto const& page_data = page.page_data;
@@ -611,15 +615,16 @@ __device__ cudf::string_view decode_string_value(uint8_t const* page_data,
  * @param dictionary_col_idx Index of the current dictionary column
  * @param error Pointer to the kernel error code
  */
-__global__ void build_string_dictionaries(PageInfo const* pages,
-                                          cudf::device_span<cudf::string_view> decoded_data,
-                                          bucket_type* const set_storage,
-                                          cudf::size_type const* set_offsets,
-                                          cudf::size_type const* value_offsets,
-                                          cudf::size_type total_row_groups,
-                                          cudf::size_type num_dictionary_columns,
-                                          cudf::size_type dictionary_col_idx,
-                                          kernel_error::pointer error)
+CUDF_KERNEL void __launch_bounds__(decode_block_size)
+  build_string_dictionaries(PageInfo const* pages,
+                            cudf::device_span<cudf::string_view> decoded_data,
+                            bucket_type* const set_storage,
+                            cudf::size_type const* set_offsets,
+                            cudf::size_type const* value_offsets,
+                            cudf::size_type total_row_groups,
+                            cudf::size_type num_dictionary_columns,
+                            cudf::size_type dictionary_col_idx,
+                            kernel_error::pointer error)
 {
   // Single thread from each warp decodes one dictionary page and inserts into the corresponding
   // cuco hash set
@@ -705,17 +710,17 @@ __global__ void build_string_dictionaries(PageInfo const* pages,
  * @param error Pointer to the kernel error code
  */
 template <typename T>
-__global__ std::enable_if_t<not std::is_same_v<T, bool> and not cudf::is_compound<T>(), void>
-build_fixed_width_dictionaries(PageInfo const* pages,
-                               ColumnChunkDesc const* chunks,
-                               cudf::device_span<T> decoded_data,
-                               bucket_type* const set_storage,
-                               cudf::size_type const* set_offsets,
-                               cudf::size_type const* value_offsets,
-                               parquet::Type physical_type,
-                               cudf::size_type num_dictionary_columns,
-                               cudf::size_type dictionary_col_idx,
-                               kernel_error::pointer error)
+CUDF_KERNEL cuda::std::enable_if_t<is_supported_fixed_width_type<T>, void> __launch_bounds__(
+  decode_block_size) build_fixed_width_dictionaries(PageInfo const* pages,
+                                                    ColumnChunkDesc const* chunks,
+                                                    cudf::device_span<T> decoded_data,
+                                                    bucket_type* const set_storage,
+                                                    cudf::size_type const* set_offsets,
+                                                    cudf::size_type const* value_offsets,
+                                                    parquet::Type physical_type,
+                                                    cudf::size_type num_dictionary_columns,
+                                                    cudf::size_type dictionary_col_idx,
+                                                    kernel_error::pointer error)
 {
   // Each thread block (cg) decodes values from one dictionary page and inserts into the
   // corresponding cuco hash set
@@ -783,15 +788,16 @@ build_fixed_width_dictionaries(PageInfo const* pages,
  * @param dictionary_col_idx Index of the current dictionary column
  * @param error Pointer to the kernel error code
  */
-__global__ void evaluate_some_string_literals(PageInfo const* pages,
-                                              cudf::device_span<bool*> results,
-                                              ast::generic_scalar_device_view const* scalars,
-                                              ast::ast_operator const* operators,
-                                              cudf::size_type total_num_scalars,
-                                              cudf::size_type total_row_groups,
-                                              cudf::size_type num_dictionary_columns,
-                                              cudf::size_type dictionary_col_idx,
-                                              kernel_error::pointer error)
+CUDF_KERNEL void __launch_bounds__(decode_block_size)
+  evaluate_some_string_literals(PageInfo const* pages,
+                                cudf::device_span<bool*> results,
+                                ast::generic_scalar_device_view const* scalars,
+                                ast::ast_operator const* operators,
+                                cudf::size_type total_num_scalars,
+                                cudf::size_type total_row_groups,
+                                cudf::size_type num_dictionary_columns,
+                                cudf::size_type dictionary_col_idx,
+                                kernel_error::pointer error)
 {
   // Single thread from each warp decodes values from one dictionary page and evaluates all input
   // predicates against them
@@ -898,17 +904,18 @@ __global__ void evaluate_some_string_literals(PageInfo const* pages,
  * @param error Pointer to the kernel error code
  */
 template <typename T>
-__global__ std::enable_if_t<not std::is_same_v<T, bool> and not cudf::is_compound<T>(), void>
-evaluate_some_fixed_width_literals(PageInfo const* pages,
-                                   ColumnChunkDesc const* chunks,
-                                   cudf::device_span<bool*> results,
-                                   ast::generic_scalar_device_view const* scalars,
-                                   ast::ast_operator const* operators,
-                                   parquet::Type physical_type,
-                                   cudf::size_type total_num_scalars,
-                                   cudf::size_type num_dictionary_columns,
-                                   cudf::size_type dictionary_col_idx,
-                                   kernel_error::pointer error)
+CUDF_KERNEL cuda::std::enable_if_t<is_supported_fixed_width_type<T>, void> __launch_bounds__(
+  decode_block_size)
+  evaluate_some_fixed_width_literals(PageInfo const* pages,
+                                     ColumnChunkDesc const* chunks,
+                                     cudf::device_span<bool*> results,
+                                     ast::generic_scalar_device_view const* scalars,
+                                     ast::ast_operator const* operators,
+                                     parquet::Type physical_type,
+                                     cudf::size_type total_num_scalars,
+                                     cudf::size_type num_dictionary_columns,
+                                     cudf::size_type dictionary_col_idx,
+                                     kernel_error::pointer error)
 {
   // Each thread block decodes values from one dictionary page and evaluates all input predicates
   // against them
@@ -1023,12 +1030,10 @@ struct dictionary_caster {
    *
    * @return A vector of BOOL8 columns containing dictionary membership results, one per predicate
    */
-  template <typename T>
-  std::enable_if_t<not std::is_same_v<T, bool> and
-                     not(cudf::is_compound<T>() and not std::is_same_v<T, string_view>),
-                   std::vector<std::unique_ptr<cudf::column>>>
-  evaluate_many_literals(cudf::host_span<ast::literal* const> literals,
-                         cudf::host_span<ast::ast_operator const> operators)
+  template <typename T, CUDF_ENABLE_IF(is_supported_dictionary_type<T>)>
+  std::vector<std::unique_ptr<cudf::column>> evaluate_many_literals(
+    cudf::host_span<ast::literal* const> literals,
+    cudf::host_span<ast::ast_operator const> operators)
   {
     // Host vectors to store the running number of hash set slots and decoded values for all
     // dictionaries
@@ -1185,12 +1190,10 @@ struct dictionary_caster {
    *
    * @return A vector of BOOL8 columns containing dictionary membership results, one per predicate
    */
-  template <typename T>
-  std::enable_if_t<not std::is_same_v<T, bool> and
-                     not(cudf::is_compound<T>() and not std::is_same_v<T, string_view>),
-                   std::vector<std::unique_ptr<cudf::column>>>
-  evaluate_some_literals(cudf::host_span<ast::literal* const> literals,
-                         cudf::host_span<ast::ast_operator const> operators)
+  template <typename T, CUDF_ENABLE_IF(is_supported_dictionary_type<T>)>
+  std::vector<std::unique_ptr<cudf::column>> evaluate_some_literals(
+    cudf::host_span<ast::literal* const> literals,
+    cudf::host_span<ast::ast_operator const> operators)
   {
     // Get the total number of scalars and literals
     auto const total_num_literals = static_cast<cudf::size_type>(literals.size());
@@ -1282,8 +1285,7 @@ struct dictionary_caster {
     cudf::host_span<ast::ast_operator const> operators)
   {
     // Boolean, List, Struct, Dictionary types are not supported
-    if constexpr (cuda::std::is_same_v<T, bool> or
-                  (cudf::is_compound<T>() and not cuda::std::is_same_v<T, string_view>)) {
+    if constexpr (not is_supported_dictionary_type<T>) {
       CUDF_FAIL("Dictionaries do not support boolean or compound types");
     } else {
       // Make sure all literals have the same type as the predicate column
