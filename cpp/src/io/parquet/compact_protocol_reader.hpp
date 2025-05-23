@@ -133,7 +133,7 @@ class CompactProtocolReader {
  public:
   static inline constexpr int NumRequiredBits(uint32_t max_level) noexcept
   {
-    return max_level > 0 ? 32 - cuda::std::countl_zero(max_level) : 0;
+    return 32 - cuda::std::countl_zero(max_level);
   }
   bool InitSchema(FileMetaData* md);
 
