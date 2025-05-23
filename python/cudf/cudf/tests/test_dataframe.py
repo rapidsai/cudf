@@ -7191,12 +7191,6 @@ def test_dataframe_info_null_counts():
     assert str_cmp == actual_string
 
 
-def test_is_close_deprecation():
-    ser = cudf.Series([1])
-    with pytest.warns(FutureWarning):
-        cudf.isclose(ser, ser)
-
-
 @pytest.mark.parametrize(
     "orient", ["dict", "list", "split", "tight", "records", "index", "series"]
 )
