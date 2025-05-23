@@ -223,7 +223,7 @@ class StreamingExecutor:
                 self,
                 "broadcast_join_limit",
                 # Usually better to avoid shuffling for single gpu
-                2 if self.scheduler == "distributed" else 32,
+                3 if self.scheduler == "distributed" else 32,
             )
         object.__setattr__(self, "scheduler", Scheduler(self.scheduler))
         if self.shuffle_method is not None:
