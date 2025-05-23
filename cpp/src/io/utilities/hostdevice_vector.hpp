@@ -119,7 +119,7 @@ class hostdevice_vector {
                                   d_data.element_ptr(element_index),
                                   sizeof(T),
                                   cudaMemcpyDeviceToHost,
-                                  stream.value()));
+                                  stream.value()));  // host pinned <- device
     stream.synchronize();
     return host_scalar.front();
     // Note: the rmm::device_uvector::element(element_index, stream) returns a copy to a

@@ -61,7 +61,7 @@ void batched_memset(std::vector<cudf::device_span<T>> const& bufs,
 
   // copy bufs into device memory and then get sizes
   auto gpu_bufs = cudf::detail::make_device_uvector_async(
-    host_pinned_bufs, stream, cudf::get_current_device_resource_ref());
+    host_pinned_bufs, stream, cudf::get_current_device_resource_ref());  // host pinned -> device
 
   // get a vector with the sizes of all buffers
   auto sizes = thrust::make_transform_iterator(
