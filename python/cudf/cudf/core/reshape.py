@@ -21,6 +21,7 @@ from cudf.core.column import (
     concat_columns,
 )
 from cudf.core.column_accessor import ColumnAccessor
+from cudf.core.dtypes import CategoricalDtype, dtype as cudf_dtype
 from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
     SIZE_TYPE_DTYPE,
@@ -31,6 +32,10 @@ if TYPE_CHECKING:
     from collections.abc import Hashable
 
     from cudf._typing import DtypeObj
+    from cudf.core.dataframe import DataFrame
+    from cudf.core.index import Index
+    from cudf.core.multiindex import MultiIndex
+    from cudf.core.series import Series
 
 _AXIS_MAP = {0: 0, 1: 1, "index": 0, "columns": 1}
 
@@ -114,7 +119,7 @@ def _get_combined_index(indexes, intersect: bool = False, sort=None):
 
 
 def _normalize_series_and_dataframe(
-    objs: list[cudf.Series | cudf.DataFrame], axis: Literal[0, 1]
+    objs: list[Series | DataFrame], axis: Literal[0, 1]
 ) -> None:
     """Convert any cudf.Series objects in objs to DataFrames in place."""
     # Default to naming series by a numerical id if they are not named.
@@ -307,7 +312,7 @@ def concat(
         objs = {k: obj for k, obj in objs.items() if obj is not None}
         keys_objs = list(objs)
         objs = list(objs.values())
-        if any(isinstance(o, cudf.BaseIndex) for o in objs):
+        if any(isinstance(o, cudf.Index) for o in objs):
             raise TypeError(
                 "cannot concatenate a dictionary containing indices"
             )
@@ -324,7 +329,7 @@ def concat(
     allowed_typs = {
         cudf.Series,
         cudf.DataFrame,
-        cudf.BaseIndex,
+        cudf.Index,
     }
     if not all(isinstance(o, tuple(allowed_typs)) for o in objs):
         raise TypeError(
@@ -332,8 +337,8 @@ def concat(
             f"{allowed_typs}, instead received {[type(o) for o in objs]}"
         )
 
-    if any(isinstance(o, cudf.BaseIndex) for o in objs):
-        if not all(isinstance(o, cudf.BaseIndex) for o in objs):
+    if any(isinstance(o, cudf.Index) for o in objs):
+        if not all(isinstance(o, cudf.Index) for o in objs):
             raise TypeError(
                 "when concatenating indices you must provide ONLY indices"
             )
@@ -545,14 +550,14 @@ def concat(
 
 
 def melt(
-    frame: cudf.DataFrame,
+    frame: DataFrame,
     id_vars=None,
     value_vars=None,
     var_name=None,
     value_name: Hashable = "value",
     col_level=None,
     ignore_index: bool = True,
-) -> cudf.DataFrame:
+) -> DataFrame:
     """Unpivots a DataFrame from wide format to long format,
     optionally leaving identifier variables set.
 
@@ -651,7 +656,7 @@ def melt(
 
     # Error for unimplemented support for datatype
     if any(
-        isinstance(frame[col].dtype, cudf.CategoricalDtype)
+        isinstance(frame[col].dtype, CategoricalDtype)
         for col in itertools.chain(id_vars, value_vars)
     ):
         raise NotImplementedError(
@@ -696,7 +701,7 @@ def melt(
     if not value_vars:
         # TODO: Use frame._data.label_dtype when it's more consistently set
         var_data = column_empty(
-            0, dtype=cudf.dtype(frame._data.to_pandas_index.dtype)
+            0, dtype=cudf_dtype(frame._data.to_pandas_index.dtype)
         )
     else:
         var_data = as_column(value_vars).take(
@@ -724,7 +729,6 @@ def get_dummies(
     prefix_sep="_",
     dummy_na=False,
     columns=None,
-    cats=None,
     sparse=False,
     drop_first=False,
     dtype="bool",
@@ -745,10 +749,6 @@ def get_dummies(
         Separator to use when appending prefixes
     dummy_na : boolean, optional
         Add a column to indicate Nones, if False Nones are ignored.
-    cats : dict, optional
-        Dictionary mapping column names to sequences of values representing
-        that column's category. If not supplied, it is computed as the unique
-        values of the column.
     sparse : boolean, optional
         Right now this is NON-FUNCTIONAL argument in rapids.
     drop_first : boolean, optional
@@ -810,18 +810,10 @@ def get_dummies(
     3  False  False   True  False
     4  False  False  False   True
     """
-
-    if cats is None:
-        cats = {}
-    else:
-        warnings.warn(
-            "cats is deprecated and will be removed in a future version.",
-            FutureWarning,
-        )
     if sparse:
         raise NotImplementedError("sparse is not supported yet")
 
-    dtype = cudf.dtype(dtype)
+    dtype = cudf_dtype(dtype)
 
     if isinstance(data, cudf.DataFrame):
         encode_fallback_dtypes = [CUDF_STRING_DTYPE, "category"]
@@ -863,33 +855,25 @@ def get_dummies(
             }
 
             for name in columns:
-                if name not in cats:
-                    unique = _get_unique(
-                        column=data._data[name], dummy_na=dummy_na
-                    )
-                else:
-                    unique = as_column(cats[name])
-
                 col_enc_data = _one_hot_encode_column(
                     column=data._data[name],
-                    categories=unique,
                     prefix=prefix_map.get(name, prefix),
                     prefix_sep=prefix_sep_map.get(name, prefix_sep),
                     dtype=dtype,
                     drop_first=drop_first,
+                    dummy_na=dummy_na,
                 )
                 result_data.update(col_enc_data)
             return cudf.DataFrame._from_data(result_data, index=data.index)
     else:
         ser = cudf.Series(data)
-        unique = _get_unique(column=ser._column, dummy_na=dummy_na)
         data = _one_hot_encode_column(
             column=ser._column,
-            categories=unique,
             prefix=prefix,
             prefix_sep=prefix_sep,
             dtype=dtype,
             drop_first=drop_first,
+            dummy_na=dummy_na,
         )
         return cudf.DataFrame._from_data(data, index=ser.index)
 
@@ -933,7 +917,9 @@ def _merge_sorted(
     if len(objs) < 1:
         raise ValueError("objs must be non-empty")
 
-    if not all(isinstance(table, cudf.core.frame.Frame) for table in objs):
+    if not all(
+        isinstance(table, (cudf.DataFrame, cudf.Series)) for table in objs
+    ):
         raise TypeError("Elements of objs must be Frame-like")
 
     if len(objs) == 1:
@@ -1003,9 +989,9 @@ def _merge_sorted(
 
 def _pivot(
     col_accessor: ColumnAccessor,
-    index: cudf.Index | cudf.MultiIndex,
-    columns: cudf.Index | cudf.MultiIndex,
-) -> cudf.DataFrame:
+    index: Index | MultiIndex,
+    columns: Index | MultiIndex,
+) -> DataFrame:
     """
     Reorganize the values of the DataFrame according to the given
     index and columns.
@@ -1059,8 +1045,8 @@ def _pivot(
 
 
 def pivot(
-    data: cudf.DataFrame, columns=None, index=no_default, values=no_default
-) -> cudf.DataFrame:
+    data: DataFrame, columns=None, index=no_default, values=no_default
+) -> DataFrame:
     """
     Return reshaped DataFrame organized by the given index and column values.
 
@@ -1310,34 +1296,27 @@ def unstack(df, level, fill_value=None, sort: bool = True):
         return result
 
 
-def _get_unique(column: ColumnBase, dummy_na: bool) -> ColumnBase:
-    """
-    Returns unique values in a column, if
-    dummy_na is False, nan's are also dropped.
-    """
-    if isinstance(column.dtype, cudf.CategoricalDtype):
-        unique = column.categories  # type: ignore[attr-defined]
-    else:
-        unique = column.unique().sort_values()
-    if not dummy_na:
-        unique = unique.nans_to_nulls().dropna()
-    return unique
-
-
 def _one_hot_encode_column(
     column: ColumnBase,
-    categories: ColumnBase,
     prefix: str | None,
     prefix_sep: str | None,
     dtype: DtypeObj,
     drop_first: bool,
+    dummy_na: bool,
 ) -> dict[str, ColumnBase]:
     """Encode a single column with one hot encoding. The return dictionary
     contains pairs of (category, encodings). The keys may be prefixed with
     `prefix`, separated with category name with `prefix_sep`. The encoding
     columns maybe coerced into `dtype`.
     """
-    if isinstance(column.dtype, cudf.CategoricalDtype):
+    if isinstance(column.dtype, CategoricalDtype):
+        categories = column.categories  # type: ignore[attr-defined]
+    else:
+        categories = column.unique().sort_values()
+    if not dummy_na:
+        categories = categories.nans_to_nulls().dropna()
+
+    if isinstance(column.dtype, CategoricalDtype):
         if column.size == column.null_count:
             column = column_empty(
                 row_count=column.size, dtype=categories.dtype

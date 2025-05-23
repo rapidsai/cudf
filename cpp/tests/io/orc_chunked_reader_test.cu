@@ -1384,7 +1384,8 @@ TEST_F(OrcChunkedReaderInputLimitTest, SizeTypeRowsOverflow)
 
   // Verify metadata.
   auto const metadata =
-    cudf::io::read_orc_metadata(cudf::io::source_info{data_buffer.data(), data_buffer.size()});
+    cudf::io::read_orc_metadata(cudf::io::source_info{cudf::host_span<std::byte const>{
+      reinterpret_cast<std::byte const*>(data_buffer.data()), data_buffer.size()}});
   EXPECT_EQ(metadata.num_rows(), total_rows);
   EXPECT_EQ(metadata.num_stripes(), total_rows / rows_per_stripe);
 
@@ -1400,12 +1401,14 @@ TEST_F(OrcChunkedReaderInputLimitTest, SizeTypeRowsOverflow)
     auto const skipped_col = data_col(it + sequence_start, it + sequence_start + num_rows_to_read);
     auto const expected    = cudf::table_view{{skipped_col}};
 
-    auto const read_opts = cudf::io::orc_reader_options::builder(
-                             cudf::io::source_info{data_buffer.data(), data_buffer.size()})
-                             .use_index(false)
-                             .skip_rows(num_rows_to_skip)
-                             .num_rows(num_rows_to_read)
-                             .build();
+    auto const read_opts =
+      cudf::io::orc_reader_options::builder(
+        cudf::io::source_info{cudf::host_span<std::byte const>{
+          reinterpret_cast<std::byte const*>(data_buffer.data()), data_buffer.size()}})
+        .use_index(false)
+        .skip_rows(num_rows_to_skip)
+        .num_rows(num_rows_to_read)
+        .build();
     auto reader = cudf::io::chunked_orc_reader(
       600'000UL * sizeof(data_type) /* output limit, equal to 600k rows */,
       rows_per_stripe * sizeof(data_type) /* input limit, around size of 1 stripe's decoded data */,
@@ -1434,10 +1437,12 @@ TEST_F(OrcChunkedReaderInputLimitTest, SizeTypeRowsOverflow)
   // However, the reader should be able to detect and load only enough stripes each time
   // to avoid decoding a table having number of rows that exceeds the column size limit.
   {
-    auto const read_opts = cudf::io::orc_reader_options::builder(
-                             cudf::io::source_info{data_buffer.data(), data_buffer.size()})
-                             .use_index(false)
-                             .build();
+    auto const read_opts =
+      cudf::io::orc_reader_options::builder(
+        cudf::io::source_info{cudf::host_span<std::byte const>{
+          reinterpret_cast<std::byte const*>(data_buffer.data()), data_buffer.size()}})
+        .use_index(false)
+        .build();
     auto reader = cudf::io::chunked_orc_reader(
       static_cast<std::size_t>(rows_per_stripe * 5.7) *
         sizeof(data_type) /* output limit, equal to 5.7M rows */,
