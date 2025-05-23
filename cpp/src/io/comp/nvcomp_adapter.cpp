@@ -67,9 +67,11 @@ namespace {
 }
 
 #if NVCOMP_VER_MAJOR >= 5
-[[nodiscard]] bool use_hw_decompression()
+[[nodiscard]] std::optional<bool> use_hw_decompression()
 {
-  return getenv_or("LIBCUDF_HW_DECOMPRESSION", std::string{"ON"}) == "ON";
+  auto const env = getenv("LIBCUDF_HW_DECOMPRESSION");
+  if (env == nullptr) { return std::nullopt; }
+  return std::string{env} == "ON";
 }
 #endif
 
@@ -128,7 +130,7 @@ auto batched_decompress_get_temp_size_ex(compression_type compression, Args&&...
 // Dispatcher for nvcompBatched<format>DecompressAsync
 template <typename... Args>
 auto batched_decompress_async(compression_type compression,
-                              bool use_hw_decompression,
+                              std::optional<bool> use_hw_decompression,
                               const void* const* device_compressed_chunk_ptrs,
                               const size_t* device_compressed_chunk_bytes,
                               const size_t* device_uncompressed_buffer_bytes,
@@ -143,6 +145,10 @@ auto batched_decompress_async(compression_type compression,
   switch (compression) {
     case compression_type::SNAPPY: {
       auto opts = nvcompBatchedSnappyDecompressDefaultOpts;
+      if (use_hw_decompression.has_value()) {
+        opts.backend = *use_hw_decompression ? NVCOMP_DECOMPRESS_BACKEND_HARDWARE
+                                             : NVCOMP_DECOMPRESS_BACKEND_CUDA;
+      }
       // TODO: adjust opts.algorithm based on use_hw_decompression - no details on this yet
       return nvcompBatchedSnappyDecompressAsync(device_compressed_chunk_ptrs,
                                                 device_compressed_chunk_bytes,
@@ -470,6 +476,7 @@ size_t batched_decompress_temp_size(compression_type compression,
 {
   size_t temp_size = 0;
 #if NVCOMP_VER_MAJOR >= 5
+  // TODO: decompression options are expected to be added as parameters in the future
   nvcompStatus_t const nvcomp_status = batched_decompress_get_temp_size(
     compression, num_chunks, max_uncomp_chunk_size, max_total_uncomp_size, &temp_size);
 #else
