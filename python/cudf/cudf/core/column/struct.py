@@ -11,7 +11,10 @@ import cudf
 from cudf.core.column.column import ColumnBase
 from cudf.core.column.methods import ColumnMethods
 from cudf.core.dtypes import StructDtype
-from cudf.core.scalar import pa_scalar_to_plc_scalar
+from cudf.utils.scalar import (
+    maybe_nested_pa_scalar_to_py,
+    pa_scalar_to_plc_scalar,
+)
 from cudf.utils.utils import _is_null_host_scalar
 
 if TYPE_CHECKING:
@@ -133,7 +136,10 @@ class StructColumn(ColumnBase):
 
     def element_indexing(self, index: int) -> dict:
         result = super().element_indexing(index)
-        return self.dtype._recursively_replace_fields(result)
+        if isinstance(result, pa.Scalar):
+            py_element = maybe_nested_pa_scalar_to_py(result)
+            return self.dtype._recursively_replace_fields(py_element)
+        return result
 
     def _cast_setitem_value(self, value: Any) -> plc.Scalar:
         if isinstance(value, dict):
