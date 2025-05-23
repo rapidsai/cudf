@@ -56,7 +56,6 @@ auto constexpr int96_size        = 12;   ///< Size of INT96 physical type
 auto constexpr decode_block_size = 128;  ///< Must be a multiple of warp_size
 /// Maximum number of literals to evaluate while decoding column dictionaries
 auto constexpr max_inline_literals = 2;
-auto constexpr fp_error_tolerance  = 1e-5;  ///< Floating point error tolerance
 
 // cuCollections static set parameters
 using key_type = cudf::size_type;                  ///< Using column indices (size_type) as set keys
@@ -72,87 +71,81 @@ using hasher_type = cudf::hashing::detail::MurmurHash3_x86_32<T>;
 
 /// cuco::static_set_ref storage type
 using storage_type     = cuco::bucket_storage<key_type,
-                                              bucket_size,
-                                              cuco::extent<std::size_t>,
-                                              cudf::detail::cuco_allocator<char>>;
+                                          bucket_size,
+                                          cuco::extent<std::size_t>,
+                                          cudf::detail::cuco_allocator<char>>;
 using storage_ref_type = typename storage_type::ref_type;
 using bucket_type      = typename storage_type::bucket_type;
 
-/**
- * @brief Helper function to check if two values are equal
- *
- * @tparam T Underlying data type of the cudf column
- * @param lhs Left hand side value
- * @param rhs Right hand side value
- *
- * @return Boolean indicating if the two values are equal
- */
-template <typename T>
-__host__ __device__ __forceinline__ constexpr bool are_values_equal(T const& lhs,
-                                                                    T const& rhs) noexcept
-{
-  if constexpr (cudf::is_floating_point<T>()) {
-    return cuda::std::abs(lhs - rhs) < fp_error_tolerance;
-  } else {
-    return lhs == rhs;
-  }
-}
+/// hash set operation type
+enum class set_operation_type : uint8_t { INSERT, QUERY };
 
 /**
- * @brief Hash functor for inserting values into a `cuco::static_set`
+ * @brief Hash functor for inserting values into `cuco::static_set`
  *
  * @tparam T Underlying data type of the cudf column
+ * @tparam op Type of `cuco::static_set` operation
  */
-template <typename T>
-struct insert_hash_functor {
+template <typename T, set_operation_type op>
+struct hash_functor {
   cudf::device_span<T const> const decoded_data;
   uint32_t const seed{hasher_seed};
-  __device__ constexpr auto operator()(key_type idx) const noexcept
+  static constexpr auto is_insert = op == set_operation_type::INSERT;
+  static constexpr auto is_query  = op == set_operation_type::QUERY;
+
+  /**
+   * @brief Hasher operator for inserting values into `cuco::static_set`
+   */
+  template <bool is_insert = is_insert>
+  constexpr __device__ __forceinline__
+    cuda::std::enable_if_t<is_insert, typename hasher_type<T>::result_type>
+    operator()(key_type key) const noexcept
   {
-    return hasher_type<T>{seed}(decoded_data[idx]);
+    return hasher_type<T>{seed}(decoded_data[key]);
+  }
+
+  /**
+   * @brief Hasher operator for querying values from hash set
+   */
+  template <bool is_query = is_query>
+  constexpr __device__ __forceinline__
+    cuda::std::enable_if_t<is_query, typename hasher_type<T>::result_type>
+    operator()(T const& value) const noexcept
+  {
+    return hasher_type<T>{seed}(value);
   }
 };
 
 /**
- * @brief Equality functor for inserting values into a `cuco::static_set`
+ * @brief Equality functor for `cuco::static_set`
  *
  * @tparam T Underlying data type of the cudf column
+ * @tparam op Type of `cuco::static_set` operation
  */
-template <typename T>
-struct insert_equality_functor {
+template <typename T, set_operation_type op>
+struct equality_functor {
   cudf::device_span<T const> const decoded_data;
-  __device__ __forceinline__ constexpr bool operator()(key_type lhs_idx,
-                                                       key_type rhs_idx) const noexcept
-  {
-    return are_values_equal(decoded_data[lhs_idx], decoded_data[rhs_idx]);
-  }
-};
+  static constexpr auto is_insert = op == set_operation_type::INSERT;
+  static constexpr auto is_query  = op == set_operation_type::QUERY;
 
-/**
- * @brief Hash functor for querying values from a `cuco::static_set`
- *
- * @tparam T Underlying data type of the cudf column
- */
-template <typename T>
-struct query_hash_functor {
-  uint32_t const seed{hasher_seed};
-  __device__ __forceinline__ constexpr auto operator()(T const& key) const noexcept
+  /**
+   * @brief Equality operator for inserting values into hash set
+   */
+  template <bool is_insert = is_insert>
+  constexpr __device__ __forceinline__ cuda::std::enable_if_t<is_insert, bool> operator()(
+    key_type lhs_key, key_type rhs_key) const noexcept
   {
-    return hasher_type<T>{seed}(key);
+    return decoded_data[lhs_key] == decoded_data[rhs_key];
   }
-};
 
-/**
- * @brief Equality functor for querying values from a `cuco::static_set`
- *
- * @tparam T Underlying data type of the cudf column
- */
-template <typename T>
-struct query_equality_functor {
-  cudf::device_span<T const> const decoded_data;
-  __device__ __forceinline__ constexpr bool operator()(T const& lhs, key_type rhs) const noexcept
+  /**
+   * @brief Equality operator for querying values from hash set
+   */
+  template <bool is_query = is_query>
+  constexpr __device__ __forceinline__ cuda::std::enable_if_t<is_query, bool> operator()(
+    T const& value, key_type key) const noexcept
   {
-    return are_values_equal(lhs, decoded_data[rhs]);
+    return value == decoded_data[key];
   }
 };
 
@@ -340,8 +333,8 @@ query_dictionaries(cudf::device_span<T> decoded_data,
   // Result vector for this scalar
   auto result = results[scalar_idx];
 
-  using equality_fn_type    = query_equality_functor<T>;
-  using hash_fn_type        = query_hash_functor<T>;
+  using equality_fn_type    = equality_functor<T, set_operation_type::QUERY>;
+  using hash_fn_type        = hash_functor<T, set_operation_type::QUERY>;
   using probing_scheme_type = cuco::linear_probing<set_cg_size, hash_fn_type>;
 
   // Evaluate the scalar against all cuco hash sets of this column
@@ -648,8 +641,8 @@ __global__ void build_string_dictionaries(PageInfo const* pages,
   // If empty buffer or no input values, then return early
   if (page.num_input_values == 0 or page_data_size == 0) { return; }
 
-  using equality_fn_type    = insert_equality_functor<cudf::string_view>;
-  using hash_fn_type        = insert_hash_functor<cudf::string_view>;
+  using equality_fn_type    = equality_functor<cudf::string_view, set_operation_type::INSERT>;
+  using hash_fn_type        = hash_functor<cudf::string_view, set_operation_type::INSERT>;
   using probing_scheme_type = cuco::linear_probing<set_cg_size, hash_fn_type>;
 
   // Set storage reference for the current cuco hash set
@@ -746,8 +739,8 @@ build_fixed_width_dictionaries(PageInfo const* pages,
   storage_ref_type const storage_ref{set_offsets[row_group_idx + 1] - set_offsets[row_group_idx],
                                      set_storage + set_offsets[row_group_idx]};
 
-  using equality_fn_type    = insert_equality_functor<T>;
-  using hash_fn_type        = insert_hash_functor<T>;
+  using equality_fn_type    = equality_functor<T, set_operation_type::INSERT>;
+  using hash_fn_type        = hash_functor<T, set_operation_type::INSERT>;
   using probing_scheme_type = cuco::linear_probing<set_cg_size, hash_fn_type>;
 
   // Create a view of the hash set
@@ -956,7 +949,7 @@ evaluate_some_fixed_width_literals(PageInfo const* pages,
     // Evaluate all input predicates against the decoded value
     for (auto scalar_idx = 0; scalar_idx < total_num_scalars; ++scalar_idx) {
       // Check if the literal value is equal to the decoded value
-      if (are_values_equal(decoded_value, scalars[scalar_idx].value<T>())) {
+      if (decoded_value == scalars[scalar_idx].value<T>()) {
         // If the operator is NOT_EQUAL, set the result to true (row group to be pruned) if and
         // only if this is the only value in the dictionary page (all values are unique).
         // Otherwise set it to true (row group to be kept)
