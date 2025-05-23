@@ -69,7 +69,7 @@ from cudf.core.reshape import (
     pivot_table,
     unstack,
 )
-from cudf.core.series import Series, isclose
+from cudf.core.series import Series
 from cudf.core.tools.datetimes import DateOffset, date_range, to_datetime
 from cudf.core.tools.numeric import to_numeric
 from cudf.io import (
@@ -137,7 +137,6 @@ __all__ = [
     "get_option",
     "interval_range",
     "io",
-    "isclose",
     "melt",
     "merge",
     "option_context",
