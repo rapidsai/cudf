@@ -756,7 +756,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
     uint32_t target_pos;
     uint32_t const src_pos = s->src_pos;
 
-    if (warp.meta_group_rank() == 0 < 2) {  // warp0..1
+    if (warp.meta_group_rank() < 2) {  // warp0..1
       target_pos = min(src_pos + 2 * batch_size, s->nz_count + batch_size);
     } else {  // warp2
       target_pos = min(s->nz_count, src_pos + batch_size);
