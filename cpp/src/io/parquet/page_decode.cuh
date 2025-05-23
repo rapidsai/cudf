@@ -456,7 +456,7 @@ __device__ size_type gpuInitStringDescriptors(page_state_s* s,
                                               int target_pos,
                                               thread_group const& group)
 {
-  int const tid       = group.thread_rank();
+  int const t         = group.thread_rank();
   int const dict_size = s->dict_size;
   int k               = s->dict_val;
   int pos             = s->dict_pos;
@@ -467,7 +467,7 @@ __device__ size_type gpuInitStringDescriptors(page_state_s* s,
     int const dtype_len_in = s->dtype_len_in;
     total_len              = min((target_pos - pos) * dtype_len_in, dict_size - s->dict_val);
     if constexpr (sizes_only == is_calc_sizes_only::NO) {
-      for (pos += tid, k += tid * dtype_len_in; pos < target_pos; pos += group.size()) {
+      for (pos += t, k += t * dtype_len_in; pos < target_pos; pos += group.size()) {
         sb->str_len[rolling_index<state_buf::str_buf_size>(pos)] =
           (k < dict_size) ? dtype_len_in : 0;
         // dict_idx is upperbounded by dict_size.
@@ -477,11 +477,11 @@ __device__ size_type gpuInitStringDescriptors(page_state_s* s,
       }
     }
     // Only thread_rank = 0 updates the s->dict_val
-    if (tid == 0) { s->dict_val += total_len; }
+    if (t == 0) { s->dict_val += total_len; }
   }
   // This step is purely serial for byte arrays
   else {
-    if (tid == 0) {
+    if (t == 0) {
       uint8_t const* cur = s->data_start;
 
       for (int len = 0; pos < target_pos; pos++, len = 0) {
