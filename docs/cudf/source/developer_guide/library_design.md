@@ -90,8 +90,8 @@ subclasses:
   Where such an implementation is infeasible, we fall back to converting it to an `Index` of `int64`
   dtype first instead.
 - A `MultiIndex` can be backed by _multiple_ columns of data.
-  Methods where `SingleColumnFrame` assumes 1 column of data are overridden to pass itself to
-  the corresponding `Frame` method.
+  Therefore, `MultiIndex` overrides methods in `SingleColumnFrame` that assume 1 column of data to support
+  multiple columns.
 
 
 ## The Column layer
@@ -151,11 +151,10 @@ As another example, a `StringColumn` backing the Series `['do', 'you', 'have', '
 
 1. A data buffer of UTF-8 characters `['d', 'o', 'y', 'o', 'u', 'h', ..., '?']`
 2. No mask buffer as there are no nulls
-3. A child column of "offsets" to the characters column `[0, 2, 5, 9, 12, 19]`
+3. A child column of "offsets"  indicating the start of each string to the characters column e.g. `[0, 2, 5, 9, 12, 19]`
 
-Operations that call `libcudf` routines interface with `pylibcudf`, converting itself to a `pylibcudf.Column`
-before calling a `pylibcudf` API. A resulting `pylibcudf.Column` result is then converted back to a `ColumnBase`
-object.
+Operations that call `libcudf` routines first convert the `ColumnBase` to a `pylibcudf.Column`,
+invoke the corresponding `pylibcudf` function, and convert the result back to a `ColumnBase` object.
 
 
 ### Data types
