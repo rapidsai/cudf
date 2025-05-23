@@ -186,40 +186,6 @@ def _flatten(obj: list, out: list, offset: int) -> int:
     return offset
 
 
-def _python_typecode_from_dtype(dtype: DataType) -> str:
-    """The Python type string."""
-    return {
-        type_id.INT8: 'b',
-        type_id.INT16: 'h',
-        type_id.INT32: 'i',
-        type_id.INT64: 'q',
-        type_id.UINT8: 'B',
-        type_id.UINT16: 'H',
-        type_id.UINT32: 'I',
-        type_id.UINT64: 'Q',
-        type_id.FLOAT32: 'f',
-        type_id.FLOAT64: 'd',
-        type_id.BOOL8: 'b'
-    }[dtype.id()]
-
-
-def _typestr_from_dtype(dtype: DataType) -> str:
-    """The array interface type string."""
-    return {
-        type_id.INT8: "|i1",
-        type_id.INT16: "<i2",
-        type_id.INT32: "<i4",
-        type_id.INT64: "<i8",
-        type_id.UINT8: "|u1",
-        type_id.UINT16: "<u2",
-        type_id.UINT32: "<u4",
-        type_id.UINT64: "<u8",
-        type_id.FLOAT32: "<f4",
-        type_id.FLOAT64: "<f8",
-        type_id.BOOL8: "|b1",
-    }[dtype.id()]
-
-
 def _prepare_array_metadata(
     iface: dict,
 ) -> tuple[int, int, tuple[int, ...], tuple[int, ...] | None, DataType]:
@@ -970,13 +936,13 @@ cdef class Column:
 
         flat, shape = _flatten_nested_list(obj, depth)
 
-        buf = array.array(_python_typecode_from_dtype(dtype), flat)
+        buf = array.array(dtype._python_typecode, flat)
         mv = memoryview(buf).cast("B")
 
         iface = {
             "data": (mv.obj.buffer_info()[0], False),
             "shape": shape,
-            "typestr": _typestr_from_dtype(dtype),
+            "typestr": dtype.typestr,
             "strides": None,
             "version": 3,
         }
