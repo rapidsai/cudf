@@ -101,7 +101,7 @@ class hostdevice_vector {
   [[nodiscard]] T const* d_end() const { return device_ptr(size()); }
 
   /**
-   * @brief Returns the specified element from device memory
+   * @brief Returns the specified element from device memory to host pinned memory as bounce buffer
    *
    * @note This function incurs a device to host memcpy and should be used sparingly.
    * @note This function synchronizes `stream`.
@@ -114,7 +114,17 @@ class hostdevice_vector {
    */
   [[nodiscard]] T element(std::size_t element_index, rmm::cuda_stream_view stream) const
   {
-    return d_data.element(element_index, stream);
+    auto const host_scalar =
+      make_pinned_vector_async<T>(1, stream);  // as host pinned memory if host_allocator allows
+    CUDF_CUDA_TRY(cudaMemcpyAsync(const_cast<T*>(host_scalar.data()),
+                                  d_data.element_ptr(element_index),
+                                  sizeof(T),
+                                  cudaMemcpyDeviceToHost,
+                                  stream.value()));
+    stream.synchronize();
+    return host_scalar.front();
+    // Note: the rmm::device_uvector::element(element_index, stream) returns a copy to a
+    // host-pageable stack variable in T
   }
 
   operator cudf::host_span<T>() { return host_span<T>{h_data}.subspan(0, size()); }

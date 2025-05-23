@@ -50,7 +50,7 @@ void batched_memset(std::vector<cudf::device_span<T>> const& bufs,
   // define task and bytes parameters
   auto const num_bufs = bufs.size();
 
-  // duplicate std::vector to host-pinned memory for efficient device memory transfer
+  // duplicate std::vector to host pinned memory for efficient device memory transfer
   auto host_pinned_bufs =
     cudf::detail::make_pinned_vector_async<cudf::device_span<T>>(num_bufs, stream);
   CUDF_CUDA_TRY(cudaMemcpyAsync(host_pinned_bufs.data(),
