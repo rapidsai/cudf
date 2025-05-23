@@ -114,9 +114,8 @@ class hostdevice_vector {
    */
   [[nodiscard]] T element(std::size_t element_index, rmm::cuda_stream_view stream) const
   {
-    auto const host_scalar =
-      make_pinned_vector_async<T>(1, stream);  // as host pinned memory if host_allocator allows
-    CUDF_CUDA_TRY(cudaMemcpyAsync(const_cast<T*>(host_scalar.data()),
+    auto host_scalar = make_pinned_vector_async<T>(1, stream);  // as host pinned memory
+    CUDF_CUDA_TRY(cudaMemcpyAsync(host_scalar.data(),
                                   d_data.element_ptr(element_index),
                                   sizeof(T),
                                   cudaMemcpyDeviceToHost,
