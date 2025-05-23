@@ -3104,31 +3104,6 @@ def test_series_to_cupy(dtype, has_nulls, use_na_value):
     assert_eq(sr.to_cupy(na_value=na_value), expected)
 
 
-def test_nullmask_deprecation():
-    ser = cudf.Series([1, 2, 3, None])
-    with pytest.warns(FutureWarning):
-        ser.nullmask
-
-
-def test_nullable_deprecation():
-    ser = cudf.Series([1, 2, 3])
-    with pytest.warns(FutureWarning):
-        ser.nullable
-
-
-def test_from_masked_array_deprecation():
-    data = cudf.Series([10, 11, 12, 13, 14])
-    mask = cudf.Series([1, 2, 3, None, 4, None])._column.mask
-    with pytest.warns(FutureWarning):
-        cudf.Series.from_masked_array(data, mask)
-
-
-def test_from_categorical_deprecation():
-    pd_cat = pd.Categorical(pd.Series(["a", "b", "c", "a"], dtype="category"))
-    with pytest.warns(FutureWarning):
-        cudf.Series.from_categorical(pd_cat)
-
-
 def test_to_dense_array():
     rng = np.random.default_rng(seed=0)
     data = rng.random(8)

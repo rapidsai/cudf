@@ -27,19 +27,35 @@ from cudf.core.dtypes import (
     is_decimal128_dtype,
 )
 from cudf.core.mixins import BinaryOperand
-from cudf.core.scalar import _to_plc_scalar, pa_scalar_to_plc_scalar
 from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
     cudf_dtype_to_pa_type,
     get_dtype_of_same_type,
     pyarrow_dtype_to_cudf_dtype,
 )
+from cudf.utils.scalar import pa_scalar_to_plc_scalar
 
 if TYPE_CHECKING:
     from typing_extensions import Self
 
     from cudf._typing import ColumnBinaryOperand, ColumnLike, Dtype, ScalarLike
     from cudf.core.buffer import Buffer
+
+
+def _to_plc_scalar(scalar: int | Decimal, dtype: DecimalDtype) -> plc.Scalar:
+    pa_scalar = pa.scalar(scalar, type=dtype.to_arrow())
+    plc_scalar = pa_scalar_to_plc_scalar(pa_scalar)
+    if isinstance(dtype, (Decimal32Dtype, Decimal64Dtype)):
+        # pyarrow only supports decimal128
+        if isinstance(dtype, Decimal32Dtype):
+            plc_type = plc.DataType(plc.TypeId.DECIMAL32, -dtype.scale)
+        elif isinstance(dtype, Decimal64Dtype):
+            plc_type = plc.DataType(plc.TypeId.DECIMAL64, -dtype.scale)
+        plc_column = plc.unary.cast(
+            plc.Column.from_scalar(plc_scalar, 1), plc_type
+        )
+        plc_scalar = plc.copying.get_element(plc_column, 0)
+    return plc_scalar
 
 
 class DecimalBaseColumn(NumericalBaseColumn):
@@ -76,6 +92,12 @@ class DecimalBaseColumn(NumericalBaseColumn):
         raise NotImplementedError(
             "Decimals are not yet supported via `__cuda_array_interface__`"
         )
+
+    def element_indexing(self, index: int):
+        result = super().element_indexing(index)
+        if isinstance(result, pa.Scalar):
+            return result.as_py()
+        return result
 
     def as_decimal_column(
         self,

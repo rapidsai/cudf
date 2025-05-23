@@ -22,7 +22,6 @@ from cudf.core.buffer import Buffer, acquire_spill_lock
 from cudf.core.column.column import ColumnBase, as_column, column_empty
 from cudf.core.column.lists import ListColumn
 from cudf.core.column.methods import ColumnMethods
-from cudf.core.scalar import pa_scalar_to_plc_scalar
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
@@ -32,6 +31,7 @@ from cudf.utils.dtypes import (
     is_dtype_obj_string,
     is_pandas_nullable_extension_dtype,
 )
+from cudf.utils.scalar import pa_scalar_to_plc_scalar
 from cudf.utils.temporal import infer_format
 from cudf.utils.utils import is_na_like
 
@@ -5827,9 +5827,6 @@ class StringMethods(ColumnMethods):
 def _massage_string_arg(
     value, name, allow_col: bool = False
 ) -> StringColumn | plc.Scalar:
-    if isinstance(value, cudf.Scalar):
-        return value
-
     if isinstance(value, str):
         return pa_scalar_to_plc_scalar(pa.scalar(value, type=pa.string()))
 
@@ -6044,6 +6041,12 @@ class StringColumn(ColumnBase):
             f"dtype {self.dtype} is not yet supported via "
             "`__cuda_array_interface__`"
         )
+
+    def element_indexing(self, index: int):
+        result = super().element_indexing(index)
+        if isinstance(result, pa.Scalar):
+            return result.as_py()
+        return result
 
     def to_arrow(self) -> pa.Array:
         """Convert to PyArrow Array

@@ -20,12 +20,15 @@ from cudf.core.column.methods import ColumnMethods, ParentType
 from cudf.core.column.numerical import NumericalColumn
 from cudf.core.dtypes import ListDtype
 from cudf.core.missing import NA
-from cudf.core.scalar import pa_scalar_to_plc_scalar
 from cudf.utils.dtypes import (
     SIZE_TYPE_DTYPE,
     get_dtype_of_same_kind,
     is_dtype_obj_list,
     is_dtype_obj_numeric,
+)
+from cudf.utils.scalar import (
+    maybe_nested_pa_scalar_to_py,
+    pa_scalar_to_plc_scalar,
 )
 from cudf.utils.utils import _is_null_host_scalar
 
@@ -126,10 +129,10 @@ class ListColumn(ColumnBase):
 
     def element_indexing(self, index: int) -> list:
         result = super().element_indexing(index)
-        if isinstance(result, list):
-            return self.dtype._recursively_replace_fields(result)
-        else:
-            return result
+        if isinstance(result, pa.Scalar):
+            py_element = maybe_nested_pa_scalar_to_py(result)
+            return self.dtype._recursively_replace_fields(py_element)
+        return result
 
     def _cast_setitem_value(self, value: Any) -> plc.Scalar:
         if isinstance(value, list) or value is None:

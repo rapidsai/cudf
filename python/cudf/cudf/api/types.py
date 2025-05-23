@@ -80,8 +80,6 @@ def is_integer(obj):
     -------
     bool
     """
-    if isinstance(obj, cudf.Scalar):
-        return obj.dtype.kind in "iu"
     return pd.api.types.is_integer(obj)  # noqa: TID251
 
 
@@ -140,7 +138,6 @@ def is_scalar(val):
     return isinstance(
         val,
         (
-            cudf.Scalar,
             cudf.core.tools.datetimes.DateOffset,
             plc.Scalar,
             pa.Scalar,
