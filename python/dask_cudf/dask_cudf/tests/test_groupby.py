@@ -10,7 +10,6 @@ from dask.utils_test import hlg_layer
 
 import cudf
 from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
-from cudf.testing._utils import expect_warning_if
 
 import dask_cudf
 from dask_cudf._expr.groupby import OPTIMIZED_AGGS, _aggs_optimized
@@ -53,7 +52,7 @@ def pdf(request):
 # deprecation check for "collect".
 @pytest.mark.parametrize(
     "aggregation",
-    sorted((*tuple(set(OPTIMIZED_AGGS) - {list}), "collect")),
+    sorted(set(OPTIMIZED_AGGS) - {list}),
 )
 @pytest.mark.parametrize("series", [False, True])
 def test_groupby_basic(series, aggregation, pdf):
@@ -69,9 +68,8 @@ def test_groupby_basic(series, aggregation, pdf):
 
     check_dtype = aggregation != "count"
 
-    with expect_warning_if(aggregation == "collect"):
-        expect = getattr(gdf_grouped, aggregation)()
-        actual = getattr(ddf_grouped, aggregation)()
+    expect = getattr(gdf_grouped, aggregation)()
+    actual = getattr(ddf_grouped, aggregation)()
 
     dd.assert_eq(expect, actual, check_dtype=check_dtype)
 
