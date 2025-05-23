@@ -323,6 +323,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
   __shared__ level_t rep[rolling_buf_size];  // circular buffer of repetition level values
   __shared__ level_t def[rolling_buf_size];  // circular buffer of definition level values
 
+  auto const first_out_thread_id = out_warp_id * warp.size();
   // skipped_leaf_values will always be 0 for flat hierarchies.
   uint32_t skipped_leaf_values = s->page.skipped_leaf_values;
   while (s->error == 0 &&
@@ -331,13 +332,12 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
     int src_pos = s->src_pos;
 
     if (warp.meta_group_rank() < out_warp_id) {
-      target_pos =
-        cuda::std::min<int32_t>(src_pos + 2 * (decode_block_size - (out_warp_id * warp.size())),
-                                s->nz_count + (decode_block_size - (out_warp_id * warp.size())));
+      target_pos = cuda::std::min<int32_t>(src_pos + 2 * (decode_block_size - first_out_thread_id),
+                                           s->nz_count + (decode_block_size - first_out_thread_id));
     } else {
-      target_pos = cuda::std::min<int32_t>(
-        s->nz_count, src_pos + decode_block_size - (out_warp_id * warp.size()));
-      if (out_warp_id > 1) { target_pos = min(target_pos, s->dict_pos); }
+      target_pos =
+        cuda::std::min<int32_t>(s->nz_count, src_pos + decode_block_size - first_out_thread_id);
+      if (out_warp_id > 1) { target_pos = cuda::std::min<int32_t>(target_pos, s->dict_pos); }
     }
     // this needs to be here to prevent warp 3 modifying src_pos before all threads have read it
     __syncthreads();
@@ -358,8 +358,9 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
       // 9 lines in `if (s->dict_pos < src_target_pos) {}`. If that change is made here, it will
       // be needed in the other DecodeXXX kernels.
       if (s->dict_base) {
-        src_target_pos =
-          gpuDecodeDictionaryIndices<false>(s, sb, src_target_pos, warp.thread_rank()).first;
+        src_target_pos = gpuDecodeDictionaryIndices<is_calc_sizes_only::NO>(
+                           s, sb, src_target_pos, warp.thread_rank())
+                           .first;
       } else if (s->col.physical_type == Type::BOOLEAN) {
         src_target_pos = gpuDecodeRleBooleans(s, sb, src_target_pos, warp);
       } else if (s->col.physical_type == Type::BYTE_ARRAY or
@@ -370,7 +371,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
     } else {
       // WARP1..WARP3: Decode values
       Type const dtype = s->col.physical_type;
-      src_pos += block.thread_rank() - (out_warp_id * warp.size());
+      src_pos += block.thread_rank() - first_out_thread_id;
 
       // the position in the output column/buffer
       int dst_pos = sb->nz_idx[rolling_index<rolling_buf_size>(src_pos)];
@@ -457,9 +458,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
         }
       }
 
-      if (warp.meta_group_rank() == out_warp_id and warp.thread_rank() == 0) {
-        s->src_pos = target_pos;
-      }
+      if (block.thread_rank() == first_out_thread_id) { s->src_pos = target_pos; }
     }
     __syncthreads();
   }

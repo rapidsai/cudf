@@ -228,6 +228,11 @@ inline __device__ string_index_pair gpuGetStringData(page_state_s* s, state_buf*
 }
 
 /**
+ * @brief Indicates if the string descriptor initializer kernel is only calculating sizes
+ */
+enum class is_calc_sizes_only : bool { NO = false, YES = true };
+
+/**
  * @brief Performs RLE decoding of dictionary indexes
  *
  * @param[in,out] s Page state input/output
@@ -235,7 +240,7 @@ inline __device__ string_index_pair gpuGetStringData(page_state_s* s, state_buf*
  * @param[in] target_pos Target index position in dict_idx buffer (may exceed this value by up to
  * 31)
  * @param[in] t Warp thread ID (0..31)
- * @tparam sizes_only True if only sizes are to be calculated
+ * @tparam sizes_only Indicates if only sizes are to be calculated
  * @tparam state_buf Typename of the `state_buf` (usually inferred)
  *
  * @return A pair containing the new output position, and the total length of strings decoded (this
@@ -243,7 +248,7 @@ inline __device__ string_index_pair gpuGetStringData(page_state_s* s, state_buf*
  * decodes strings beyond target_pos, the total length of strings returned will include these
  * additional values.
  */
-template <bool sizes_only, typename state_buf>
+template <is_calc_sizes_only sizes_only, typename state_buf>
 __device__ cuda::std::pair<int, int> gpuDecodeDictionaryIndices(page_state_s* s,
                                                                 [[maybe_unused]] state_buf* sb,
                                                                 int target_pos,
@@ -327,13 +332,13 @@ __device__ cuda::std::pair<int, int> gpuDecodeDictionaryIndices(page_state_s* s,
       }
 
       // if we're not computing sizes, store off the dictionary index
-      if constexpr (!sizes_only) {
+      if constexpr (sizes_only == is_calc_sizes_only::NO) {
         sb->dict_idx[rolling_index<state_buf::dict_buf_size>(pos + t)] = dict_idx;
       }
     }
 
     // if we're computing sizes, add the length(s)
-    if constexpr (sizes_only) {
+    if constexpr (sizes_only == is_calc_sizes_only::YES) {
       int const len = [&]() {
         if (t >= batch_len || (pos + t >= target_pos)) { return 0; }
         uint32_t const dict_pos = (s->dict_bits > 0) ? dict_idx * sizeof(string_index_pair) : 0;
@@ -430,11 +435,6 @@ inline __device__ int gpuDecodeRleBooleans(
   }
   return pos;
 }
-
-/**
- * @brief Indicates if the string descriptor initializer kernel is only calculating sizes
- */
-enum class is_calc_sizes_only : bool { NO = false, YES = true };
 
 /**
  * @brief Parses the length and position of strings and returns total length of all strings

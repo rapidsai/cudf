@@ -151,7 +151,8 @@ __device__ size_type gpuDecodeTotalPageStringSize(page_state_s* s, int t)
     case Encoding::RLE_DICTIONARY:
       if (t < warp_size && s->dict_base) {
         auto const [new_target_pos, len] =
-          gpuDecodeDictionaryIndices<true, unused_state_buf>(s, nullptr, target_pos, t);
+          gpuDecodeDictionaryIndices<is_calc_sizes_only::YES, unused_state_buf>(
+            s, nullptr, target_pos, t);
         target_pos = new_target_pos;
         str_len    = len;
       }
