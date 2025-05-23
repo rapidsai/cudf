@@ -325,12 +325,12 @@ struct orc_table_view {
   std::vector<uint32_t> string_column_indices;
   rmm::device_uvector<uint32_t> d_string_column_indices;
 
-  auto num_columns() const noexcept { return columns.size(); }
+  [[nodiscard]] auto num_columns() const noexcept { return columns.size(); }
   [[nodiscard]] size_type num_rows() const noexcept
   {
     return columns.empty() ? 0 : columns.front().size();
   }
-  auto num_string_columns() const noexcept { return string_column_indices.size(); }
+  [[nodiscard]] auto num_string_columns() const noexcept { return string_column_indices.size(); }
 
   auto& column(uint32_t idx) { return columns.at(idx); }
   [[nodiscard]] auto const& column(uint32_t idx) const { return columns.at(idx); }
@@ -1743,8 +1743,7 @@ pushdown_null_masks init_pushdown_null_masks(orc_table_view& orc_table,
 
 template <typename T>
 struct device_stack {
-  __device__ device_stack(T* stack_storage, int capacity)
-    : stack(stack_storage), capacity(capacity), size(0)
+  __device__ device_stack(T* stack_storage, int capacity) : stack(stack_storage), capacity(capacity)
   {
   }
   __device__ void push(T const& val)
@@ -1762,7 +1761,7 @@ struct device_stack {
  private:
   T* stack;
   int capacity;
-  int size;
+  int size{0};
 };
 
 orc_table_view make_orc_table_view(table_view const& table,
