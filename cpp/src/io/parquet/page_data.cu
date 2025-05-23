@@ -68,9 +68,11 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
 
   page_state_s* const s = &state_g;
   auto* const sb        = &state_buffers;
-  int page_idx          = blockIdx.x;
-  int t                 = threadIdx.x;
-  [[maybe_unused]] null_count_back_copier _{s, t};
+  int const page_idx    = cg::this_grid().block_rank();
+  auto const block      = cg::this_thread_block();
+  auto const warp       = cg::tiled_partition<cudf::detail::warp_size>(block);
+
+  [[maybe_unused]] null_count_back_copier _{s, static_cast<int>(block.thread_rank())};
 
   // Setup local page info
   if (!setupLocalPageInfo(s,
@@ -96,9 +98,8 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
     return;
   }
 
-  auto const data_len    = cuda::std::distance(s->data_start, s->data_end);
-  auto const num_values  = data_len / s->dtype_len_in;
-  auto const out_thread0 = warp_size;
+  auto const data_len   = cuda::std::distance(s->data_start, s->data_end);
+  auto const num_values = data_len / s->dtype_len_in;
 
   PageNestingDecodeInfo* nesting_info_base = s->nesting_info;
 
@@ -112,27 +113,27 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
     int target_pos;
     int src_pos = s->src_pos;
 
-    if (t < out_thread0) {
-      target_pos = min(src_pos + 2 * (decode_block_size - out_thread0),
-                       s->nz_count + (decode_block_size - out_thread0));
+    if (warp.meta_group_rank() == 0) {
+      target_pos = cuda::std::min(src_pos + 2 * (decode_block_size - warp.size()),
+                                  s->nz_count + (decode_block_size - warp.size()));
     } else {
-      target_pos = min(s->nz_count, src_pos + decode_block_size - out_thread0);
+      target_pos = cuda::std::min<int32_t>(s->nz_count, src_pos + decode_block_size - warp.size());
     }
-    // this needs to be here to prevent warp 1 modifying src_pos before all threads have read it
-    __syncthreads();
+    // This needs to be here to prevent warp 1 modifying src_pos before all threads have read it
+    block.sync();
 
-    if (t < warp_size) {
-      // decode repetition and definition levels.
+    if (warp.meta_group_rank() == 0) {
+      // WARP0: decode repetition and definition levels.
       // - update validity vectors
       // - updates offsets (for nested columns)
       // - produces non-NULL value indices in s->nz_idx for subsequent decoding
-      gpuDecodeLevels<lvl_buf_size, level_t>(s, sb, target_pos, rep, def, t);
+      gpuDecodeLevels<lvl_buf_size, level_t>(s, sb, target_pos, rep, def, warp);
     } else {
       // WARP1..WARP3: Decode values
       Type const dtype = s->col.physical_type;
-      src_pos += t - out_thread0;
+      src_pos += block.thread_rank() - warp.size();
 
-      // the position in the output column/buffer
+      // The position in the output column/buffer
       int dst_pos = sb->nz_idx[rolling_index<rolling_buf_size>(src_pos)];
 
       // for the flat hierarchy case we will be reading from the beginning of the value stream,
@@ -211,12 +212,12 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
           s->set_error_code(decode_error::UNSUPPORTED_ENCODING);
         }
       }
-
-      if (t == out_thread0) { s->src_pos = target_pos; }
+      // Only the first thread in the warp 1 updates src_pos
+      if (warp.meta_group_rank() == 1 and warp.thread_rank() == 0) { s->src_pos = target_pos; }
     }
-    __syncthreads();
+    block.sync();
   }
-  if (t == 0 and s->error != 0) { set_error(s->error, error_code); }
+  if (block.thread_rank() == 0 and s->error != 0) { set_error(s->error, error_code); }
 }
 
 /**
@@ -337,13 +338,13 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
     }
     // this needs to be here to prevent warp 3 modifying src_pos before all threads have read it
     __syncthreads();
-    auto const tile_warp = cg::tiled_partition<cudf::detail::warp_size>(cg::this_thread_block());
+    auto const warp = cg::tiled_partition<cudf::detail::warp_size>(cg::this_thread_block());
     if (t < 32) {
       // decode repetition and definition levels.
       // - update validity vectors
       // - updates offsets (for nested columns)
       // - produces non-NULL value indices in s->nz_idx for subsequent decoding
-      gpuDecodeLevels<lvl_buf_size, level_t>(s, sb, target_pos, rep, def, t);
+      gpuDecodeLevels<lvl_buf_size, level_t>(s, sb, target_pos, rep, def, warp);
     } else if (t < out_thread0) {
       // skipped_leaf_values will always be 0 for flat hierarchies.
       uint32_t src_target_pos = target_pos + skipped_leaf_values;
@@ -359,9 +360,9 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
         src_target_pos = gpuDecodeRleBooleans(s, sb, src_target_pos, t & 0x1f);
       } else if (s->col.physical_type == Type::BYTE_ARRAY or
                  s->col.physical_type == Type::FIXED_LEN_BYTE_ARRAY) {
-        gpuInitStringDescriptors<false>(s, sb, src_target_pos, tile_warp);
+        gpuInitStringDescriptors<is_calc_sizes_only::NO>(s, sb, src_target_pos, warp);
       }
-      if (tile_warp.thread_rank() == 0) { s->dict_pos = src_target_pos; }
+      if (warp.thread_rank() == 0) { s->dict_pos = src_target_pos; }
     } else {
       // WARP1..WARP3: Decode values
       Type const dtype = s->col.physical_type;
