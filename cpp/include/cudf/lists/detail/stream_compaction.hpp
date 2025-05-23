@@ -45,15 +45,5 @@ std::unique_ptr<column> distinct(lists_column_view const& input,
                                  rmm::cuda_stream_view stream,
                                  rmm::device_async_resource_ref mr);
 
-/**
- * @copydoc cudf::lists::distinct(lists_column_view const&, null_equality, nan_equality,
- * rmm::cuda_stream_view stream, rmm::device_async_resource_ref)
- */
-[[deprecated]] std::unique_ptr<column> distinct(lists_column_view const& input,
-                                                null_equality nulls_equal,
-                                                nan_equality nans_equal,
-                                                rmm::cuda_stream_view stream,
-                                                rmm::device_async_resource_ref mr);
-
 }  // namespace lists::detail
 }  // namespace CUDF_EXPORT cudf
