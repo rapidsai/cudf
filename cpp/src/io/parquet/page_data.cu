@@ -340,8 +340,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
       if (out_warp_id > 1) { target_pos = cuda::std::min<int32_t>(target_pos, s->dict_pos); }
     }
     // this needs to be here to prevent warp 3 modifying src_pos before all threads have read it
-    __syncthreads();
-    auto const warp = cg::tiled_partition<cudf::detail::warp_size>(cg::this_thread_block());
+    block.sync();
     if (warp.meta_group_rank() == 0) {
       // decode repetition and definition levels.
       // - update validity vectors
