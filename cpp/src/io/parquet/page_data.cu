@@ -476,7 +476,7 @@ uint32_t GetAggregatedDecodeKernelMask(cudf::detail::hostdevice_span<PageInfo co
     cudf::reduction::detail::reduce(mask_iter,
                                     pages.size(),  // static_cast<cudf::size_type>(pages.size()),
                                     cudf::reduction::detail::op::bit_or{},
-                                    std::optional<uint32_t /**ResultType*/>(0),
+                                    std::optional<uint32_t /**ResultType*/>(std::nullopt),
                                     stream,
                                     cudf::get_current_device_resource_ref());
   auto host_scalar = cudf::detail::make_pinned_vector_async<uint32_t>(1, stream);
