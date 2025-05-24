@@ -54,7 +54,6 @@ from cudf.core.dtypes import (
     StructDtype,
 )
 from cudf.core.mixins import BinaryOperand, Reducible
-from cudf.core.scalar import pa_scalar_to_plc_scalar
 from cudf.errors import MixedTypeError
 from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
@@ -73,6 +72,7 @@ from cudf.utils.dtypes import (
     min_signed_type,
     min_unsigned_type,
 )
+from cudf.utils.scalar import pa_scalar_to_plc_scalar
 from cudf.utils.utils import (
     _array_ufunc,
     _is_null_host_scalar,
@@ -145,7 +145,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         "min",
     }
 
-    _PANDAS_NA_REPR = str(pd.NA)
+    _PANDAS_NA_VALUE = pd.NA
 
     def __init__(
         self,
@@ -584,12 +584,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             ),
         )
 
-    @classmethod
-    def from_scalar(cls, slr: cudf.Scalar, size: int) -> Self:
-        return cls.from_pylibcudf(
-            plc.Column.from_scalar(slr.device_value, size)
-        )
-
     def data_array_view(
         self, *, mode: Literal["write", "read"] = "write"
     ) -> "cuda.devicearray.DeviceNDArray":
@@ -682,7 +676,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         * null (other types)= str(pd.NA)
         """
         if self.has_nulls():
-            return self.astype(CUDF_STRING_DTYPE).fillna(self._PANDAS_NA_REPR)
+            return self.astype(CUDF_STRING_DTYPE).fillna(
+                str(self._PANDAS_NA_VALUE)
+            )
         return self
 
     def to_pandas(
@@ -1069,18 +1065,28 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         Raises
         ------
         ``IndexError`` if out-of-bound
+
+        Notes
+        -----
+        Subclass should override this method to not return a pyarrow.Scalar
+        (May not be needed once pylibcudf.Scalar.as_py() exists.)
         """
-        idx = np.int32(index)
-        if idx < 0:
-            idx = len(self) + idx
-        if idx > len(self) - 1 or idx < 0:
+        if index < 0:
+            index = len(self) + index
+        if index > len(self) - 1 or index < 0:
             raise IndexError("single positional indexer is out-of-bounds")
         with acquire_spill_lock():
             plc_scalar = plc.copying.get_element(
                 self.to_pylibcudf(mode="read"),
-                idx,
+                index,
             )
-        return cudf.Scalar.from_pylibcudf(plc_scalar).value
+        py_element = plc.interop.to_arrow(plc_scalar)
+        if not py_element.is_valid:
+            return self._PANDAS_NA_VALUE
+        # Calling .as_py() on a pyarrow.StructScalar with duplicate field names
+        # would raise. So we need subclasses to convert handle pyarrow scalars
+        # manually
+        return py_element
 
     def slice(self, start: int, stop: int, stride: int | None = None) -> Self:
         stride = 1 if stride is None else stride
