@@ -24,6 +24,7 @@
 #include <cudf/detail/utilities/functional.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/reduction/detail/reduction.cuh>
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/exec_policy.hpp>
@@ -608,13 +609,27 @@ void decode_page_headers(pass_intermediate_data& pass,
       return static_cast<int>(
         max(c.level_bits[level_type::REPETITION], c.level_bits[level_type::DEFINITION]));
     }));
+
+  // reduce level_bit_size with max to compute max_level_bits after stream-sync
+  std::unique_ptr<scalar> device_reduce_result =
+    cudf::reduction::detail::reduce(level_bit_size,
+                                    pass.chunks.size(),
+                                    cudf::reduction::detail::op::max{},
+                                    std::optional<int /**ResultType*/>(std::nullopt),
+                                    stream,
+                                    cudf::get_current_device_resource_ref());
+  auto host_scalar = cudf::detail::make_pinned_vector_async<int>(1, stream);
+  CUDF_CUDA_TRY(
+    cudaMemcpyAsync(host_scalar.data(),
+                    static_cast<cudf::numeric_scalar<int>*>(device_reduce_result.get())->data(),
+                    sizeof(int),
+                    cudaMemcpyDeviceToHost,
+                    stream.value()));  // host pinned <- device
+  stream.synchronize();
   // max level data bit size.
-  int const max_level_bits = thrust::reduce(rmm::exec_policy(stream),
-                                            level_bit_size,
-                                            level_bit_size + pass.chunks.size(),
-                                            0,
-                                            cudf::detail::maximum<int>());
-  pass.level_type_size     = std::max(1, cudf::util::div_rounding_up_safe(max_level_bits, 8));
+  int const max_level_bits = host_scalar.front();
+
+  pass.level_type_size = std::max(1, cudf::util::div_rounding_up_safe(max_level_bits, 8));
 
   // sort the pages in chunk/schema order.
   pass.pages = sort_pages(unsorted_pages, pass.chunks, stream);
@@ -760,8 +775,23 @@ void reader::impl::build_string_dict_indices()
                    pass.pages.d_end(),
                    set_str_dict_index_count{str_dict_index_count, pass.chunks});
 
-  size_t const total_str_dict_indexes = thrust::reduce(
-    rmm::exec_policy(_stream), str_dict_index_count.begin(), str_dict_index_count.end());
+  // reduce str_dict_index_count with sum to compute total_str_dict_indexes after stream-sync
+  std::unique_ptr<scalar> device_reduce_result =
+    cudf::reduction::detail::reduce(str_dict_index_count.begin(),
+                                    str_dict_index_count.size(),
+                                    cudf::reduction::detail::op::sum{},
+                                    std::optional<size_t /**ResultType*/>(std::nullopt),
+                                    _stream,
+                                    cudf::get_current_device_resource_ref());
+  auto host_scalar = cudf::detail::make_pinned_vector_async<size_t>(1, _stream);
+  CUDF_CUDA_TRY(
+    cudaMemcpyAsync(host_scalar.data(),
+                    static_cast<cudf::numeric_scalar<size_t>*>(device_reduce_result.get())->data(),
+                    sizeof(size_t),
+                    cudaMemcpyDeviceToHost,
+                    _stream.value()));  // host pinned <- device
+  _stream.synchronize();
+  size_t const total_str_dict_indexes = host_scalar.front();
   if (total_str_dict_indexes == 0) { return; }
 
   // convert to offsets

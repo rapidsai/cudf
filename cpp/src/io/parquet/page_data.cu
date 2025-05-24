@@ -18,12 +18,12 @@
 #include "page_decode.cuh"
 
 #include <cudf/detail/utilities/batched_memcpy.hpp>
+#include <cudf/reduction/detail/reduction.cuh>
 
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/std/iterator>
 #include <thrust/iterator/transform_iterator.h>
-#include <thrust/reduce.h>
 
 namespace cudf::io::parquet::detail {
 
@@ -470,11 +470,24 @@ uint32_t GetAggregatedDecodeKernelMask(cudf::detail::hostdevice_span<PageInfo co
 {
   // determine which kernels to invoke
   auto mask_iter = thrust::make_transform_iterator(pages.device_begin(), mask_tform{});
-  return thrust::reduce(rmm::exec_policy(stream),
-                        mask_iter,
-                        mask_iter + pages.size(),
-                        0U,
-                        cuda::std::bit_or<uint32_t>{});
+
+  // reduce mask_iter with bit_or to compute the return-value after stream-sync
+  std::unique_ptr<scalar> device_reduce_result =
+    cudf::reduction::detail::reduce(mask_iter,
+                                    pages.size(),  // static_cast<cudf::size_type>(pages.size()),
+                                    cudf::reduction::detail::op::bit_or{},
+                                    std::optional<uint32_t /**ResultType*/>(0),
+                                    stream,
+                                    cudf::get_current_device_resource_ref());
+  auto host_scalar = cudf::detail::make_pinned_vector_async<uint32_t>(1, stream);
+  CUDF_CUDA_TRY(cudaMemcpyAsync(
+    host_scalar.data(),
+    static_cast<cudf::numeric_scalar<uint32_t>*>(device_reduce_result.get())->data(),
+    sizeof(uint32_t),
+    cudaMemcpyDeviceToHost,
+    stream.value()));  // host pinned <- device
+  stream.synchronize();
+  return host_scalar.front();
 }
 
 /**

@@ -26,6 +26,7 @@
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/config_utils.hpp>
+#include <cudf/reduction/detail/reduction.cuh>
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/exec_policy.hpp>
@@ -1272,9 +1273,24 @@ void reader::impl::setup_next_pass(read_mode mode)
     // subpasses
     auto chunk_iter =
       thrust::make_transform_iterator(pass.chunks.d_begin(), get_chunk_compressed_size{});
-    pass.base_mem_size =
-      decomp_dict_data_size +
-      thrust::reduce(rmm::exec_policy(_stream), chunk_iter, chunk_iter + pass.chunks.size());
+
+    // reduce chunk_iter with sum to compute the total compressed size after stream-sync
+    std::unique_ptr<scalar> device_reduce_result =
+      cudf::reduction::detail::reduce(chunk_iter,
+                                      pass.chunks.size(),
+                                      cudf::reduction::detail::op::sum{},
+                                      std::optional<size_t /**ResultType*/>(0),
+                                      _stream,
+                                      cudf::get_current_device_resource_ref());
+    auto host_scalar = cudf::detail::make_pinned_vector_async<size_t>(1, _stream);
+    CUDF_CUDA_TRY(cudaMemcpyAsync(
+      host_scalar.data(),
+      static_cast<cudf::numeric_scalar<size_t>*>(device_reduce_result.get())->data(),
+      sizeof(size_t),
+      cudaMemcpyDeviceToHost,
+      _stream.value()));  // host pinned <- device
+    _stream.synchronize();
+    pass.base_mem_size = pass.decomp_dict_data.size() + host_scalar.front();
 
     // if we are doing subpass reading, generate more accurate num_row estimates for list columns.
     // this helps us to generate more accurate subpass splits.
