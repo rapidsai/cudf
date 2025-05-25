@@ -1097,7 +1097,15 @@ void detect_malformed_pages(device_span<PageInfo const> pages,
   auto const compacted_row_counts_end  = compacted_row_counts_begin + compacted_row_counts_size;
 
   if (compacted_row_counts_end != compacted_row_counts_begin) {
-    auto const found_row_count = static_cast<size_t>(compacted_row_counts.element(0, stream));
+    auto host_scalar_ =
+      cudf::detail::make_pinned_vector_async<size_type>(1, stream);  // as host pinned memory
+    CUDF_CUDA_TRY(cudaMemcpyAsync(host_scalar_.data(),
+                                  compacted_row_counts.data(),
+                                  sizeof(size_type),
+                                  cudaMemcpyDeviceToHost,
+                                  stream.value()));  // host pinned <- device
+    stream.synchronize();
+    size_t const found_row_count = host_scalar_.front();
 
     // if we somehow don't match the expected row count from the row groups themselves
     if (expected_row_count.has_value()) {
