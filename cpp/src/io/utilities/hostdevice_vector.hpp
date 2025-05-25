@@ -115,13 +115,11 @@ class hostdevice_vector {
   [[nodiscard]] T element(std::size_t element_index, rmm::cuda_stream_view stream) const
   {
     auto host_scalar = make_pinned_vector_async<T>(1, stream);  // as host pinned memory
-    CUDF_CUDA_TRY(
-      cudaMemcpyAsync(host_scalar.data(),  // TODO(jigao): BITMASK null_mask_partition_bulk sometime
-                                           // fails...not deterministic
-                      d_data.element_ptr(element_index),
-                      sizeof(T),
-                      cudaMemcpyDeviceToHost,
-                      stream.value()));  // host pinned <- device
+    CUDF_CUDA_TRY(cudaMemcpyAsync(host_scalar.data(),
+                                  d_data.element_ptr(element_index),
+                                  sizeof(T),
+                                  cudaMemcpyDeviceToHost,
+                                  stream.value()));  // host pinned <- device
     stream.synchronize();
     return host_scalar.front();
     // Note: the rmm::device_uvector::element(element_index, stream) returns a copy to a
