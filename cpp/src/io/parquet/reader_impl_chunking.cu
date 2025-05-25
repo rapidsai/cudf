@@ -35,7 +35,6 @@
 #include <thrust/binary_search.h>
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/discard_iterator.h>
-#include <thrust/logical.h>
 #include <thrust/sort.h>
 #include <thrust/transform_scan.h>
 #include <thrust/unique.h>
@@ -962,13 +961,32 @@ struct codec_stats {
     cudf::io::detail::gpu_copy_uncompressed_blocks(d_copy_in, d_copy_out, stream);
   }
 
-  CUDF_EXPECTS(thrust::all_of(rmm::exec_policy(stream),
-                              comp_res.begin(),
-                              comp_res.end(),
-                              [] __device__(auto const& res) {
-                                return res.status == compression_status::SUCCESS;
-                              }),
-               "Error during decompression");
+  // Thrust transform generating bitmap-like iterator with a predicate to find success statuses
+  auto compression_status_iter =
+    thrust::make_transform_iterator(comp_res.begin(), [] __device__(auto const& res) -> size_t {
+      // return size_t instead of bool to match
+      // cudf::reduction::detail::reduce
+      return res.status == compression_status::SUCCESS;
+    });
+
+  // reduce bitmap-like iterator to count all success statuses after stream-sync
+  std::unique_ptr<scalar> device_reduce_result =
+    cudf::reduction::detail::reduce(compression_status_iter,
+                                    num_comp_pages,
+                                    cudf::reduction::detail::op::sum{},
+                                    std::optional<size_t /**ResultType*/>(std::nullopt),
+                                    stream,
+                                    cudf::get_current_device_resource_ref());
+  auto host_scalar = cudf::detail::make_pinned_vector_async<size_t>(1, stream);
+  CUDF_CUDA_TRY(
+    cudaMemcpyAsync(host_scalar.data(),
+                    static_cast<cudf::numeric_scalar<size_t>*>(device_reduce_result.get())->data(),
+                    sizeof(size_t),
+                    cudaMemcpyDeviceToHost,
+                    stream.value()));  // host pinned <- device
+  stream.synchronize();
+  // all pages must have success statuses
+  CUDF_EXPECTS(host_scalar.front() == num_comp_pages, "Error during decompression");
 
   return {std::move(pass_decomp_pages), std::move(subpass_decomp_pages)};
 }
@@ -993,7 +1011,11 @@ struct row_counts_nonzero {
 
 struct row_counts_different {
   size_type const expected;
-  __device__ bool operator()(size_type count) const { return (count != 0) && (count != expected); }
+  __device__ size_type operator()(size_type count) const
+  {
+    // return size_type instead of bool to match cudf::reduction::detail::reduce
+    return (count != 0) && (count != expected);
+  }
 };
 
 /**
@@ -1050,12 +1072,33 @@ void detect_malformed_pages(device_span<PageInfo const> pages,
                    "Encountered malformed parquet page data (unexpected row count in page data)");
     }
 
+    // TODO(jigao): replace later
+    auto const compacted_row_counts_size = compacted_row_counts_end - compacted_row_counts_begin;
+
+    // Thrust transform generating bitmap-like iterator with a predicate to find different
+    // row counts
+    auto row_counts_different_iter = thrust::make_transform_iterator(
+      compacted_row_counts_begin, row_counts_different{static_cast<size_type>(found_row_count)});
+
+    // reduce bitmap-like iterator to count any different row counts after stream-sync
+    std::unique_ptr<scalar> device_reduce_result =
+      cudf::reduction::detail::reduce(row_counts_different_iter,
+                                      compacted_row_counts_size,
+                                      cudf::reduction::detail::op::sum{},
+                                      std::optional<size_type /**ResultType*/>(std::nullopt),
+                                      stream,
+                                      cudf::get_current_device_resource_ref());
+    auto host_scalar = cudf::detail::make_pinned_vector_async<size_type>(1, stream);
+    CUDF_CUDA_TRY(cudaMemcpyAsync(
+      host_scalar.data(),
+      static_cast<cudf::numeric_scalar<size_type>*>(device_reduce_result.get())->data(),
+      sizeof(size_type),
+      cudaMemcpyDeviceToHost,
+      stream.value()));  // host pinned <- device
+    stream.synchronize();
+
     // all non-zero row counts must be the same
-    auto const chk =
-      thrust::count_if(rmm::exec_policy(stream),
-                       compacted_row_counts_begin,
-                       compacted_row_counts_end,
-                       row_counts_different{static_cast<size_type>(found_row_count)});
+    auto const chk = host_scalar.front();
     CUDF_EXPECTS(chk == 0,
                  "Encountered malformed parquet page data (row count mismatch in page data)");
   }

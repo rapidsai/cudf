@@ -23,9 +23,9 @@
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/functional.hpp>
 #include <cudf/detail/utilities/stream_pool.hpp>
+#include <cudf/reduction/detail/reduction.cuh>
 #include <cudf/strings/detail/gather.cuh>
 
-#include <thrust/logical.h>
 #include <thrust/transform_scan.h>
 
 #include <bitset>
@@ -996,12 +996,32 @@ void ComputePageStringSizes(cudf::detail::hostdevice_span<PageInfo> pages,
   cudf::detail::join_streams(streams, stream);
 
   // check for needed temp space for DELTA_BYTE_ARRAY
-  auto const need_sizes =
-    thrust::any_of(rmm::exec_policy(stream),
-                   pages.device_begin(),
-                   pages.device_end(),
-                   cuda::proclaim_return_type<bool>(
-                     [] __device__(auto& page) { return page.temp_string_size != 0; }));
+  // Thrust transform generating bitmap-like iterator with a predicate to check temp_string_size
+  auto temp_string_size_iter = thrust::make_transform_iterator(
+    pages.device_begin(), [] __device__(auto const& page) -> size_t {
+      // return size_t instead of bool to match
+      // cudf::reduction::detail::reduce
+      return page.temp_string_size != 0;
+    });
+
+  // reduce bitmap-like iterator to count pages needing temp space for DELTA_BYTE_ARRAY
+  std::unique_ptr<scalar> device_reduce_result =
+    cudf::reduction::detail::reduce(temp_string_size_iter,
+                                    pages.size(),
+                                    cudf::reduction::detail::op::sum{},
+                                    std::optional<size_t /**ResultType*/>(std::nullopt),
+                                    stream,
+                                    cudf::get_current_device_resource_ref());
+  auto host_scalar = cudf::detail::make_pinned_vector_async<size_t>(1, stream);
+  CUDF_CUDA_TRY(
+    cudaMemcpyAsync(host_scalar.data(),
+                    static_cast<cudf::numeric_scalar<size_t>*>(device_reduce_result.get())->data(),
+                    sizeof(size_t),
+                    cudaMemcpyDeviceToHost,
+                    stream.value()));  // host pinned <- device
+  stream.synchronize();
+  // if any page needing temp space for DELTA_BYTE_ARRAY
+  bool const need_sizes = static_cast<bool>(host_scalar.front());
 
   if (need_sizes) {
     // sum up all of the temp_string_sizes
