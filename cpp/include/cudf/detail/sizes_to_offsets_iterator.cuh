@@ -280,11 +280,11 @@ auto sizes_to_offsets(SizesIterator begin,
 
   // Copy the scalar from device to host pinned memory
   auto host_scalar = make_pinned_vector_async<LastType>(1, stream);  // as host pinned memory
-  cudaMemcpyAsync(host_scalar.data(),
-                  last_element.data(),
-                  sizeof(LastType),
-                  cudaMemcpyDeviceToHost,
-                  stream.value());  // host pinned <- device
+  CUDF_CUDA_TRY(cudaMemcpyAsync(host_scalar.data(),
+                                last_element.data(),
+                                sizeof(LastType),
+                                cudaMemcpyDeviceToHost,
+                                stream.value()));  // host pinned <- device
   stream.synchronize();
   return host_scalar.front();
   // Note: the rmm::device_scalar::value(stream) returns a copy to a

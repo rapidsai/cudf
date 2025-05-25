@@ -69,14 +69,14 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
   auto const initial_value = init.value_or(op.template get_identity<OutputType>());
   auto host_scalar =
     cudf::detail::make_pinned_vector_async<OutputType>(1, stream);  // as host pinned memory
-  cudaMemcpyAsync(
-    host_scalar.data(), &initial_value, sizeof(OutputType), cudaMemcpyHostToHost, stream.value());
+  CUDF_CUDA_TRY(cudaMemcpyAsync(
+    host_scalar.data(), &initial_value, sizeof(OutputType), cudaMemcpyHostToHost, stream.value()));
   rmm::device_scalar<OutputType> dev_result{stream, mr};
-  cudaMemcpyAsync(dev_result.data(),
-                  host_scalar.data(),
-                  sizeof(OutputType),
-                  cudaMemcpyHostToDevice,
-                  stream.value());  // device <- host pinned
+  CUDF_CUDA_TRY(cudaMemcpyAsync(dev_result.data(),
+                                host_scalar.data(),
+                                sizeof(OutputType),
+                                cudaMemcpyHostToDevice,
+                                stream.value()));  // device <- host pinned
 
   // Allocate temporary storage
   rmm::device_buffer d_temp_storage;
