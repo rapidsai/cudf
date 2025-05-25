@@ -474,7 +474,7 @@ uint32_t GetAggregatedDecodeKernelMask(cudf::detail::hostdevice_span<PageInfo co
   // reduce mask_iter with bit_or to compute the return-value after stream-sync
   std::unique_ptr<scalar> device_reduce_result =
     cudf::reduction::detail::reduce(mask_iter,
-                                    pages.size(),  // static_cast<cudf::size_type>(pages.size()),
+                                    pages.size(),
                                     cudf::reduction::detail::op::bit_or{},
                                     std::optional<uint32_t /**ResultType*/>(std::nullopt),
                                     stream,

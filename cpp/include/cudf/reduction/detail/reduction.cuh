@@ -240,6 +240,76 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
   return std::unique_ptr<scalar>(result);
 }
 
+/**
+ * @brief Compute the specified by-key reduction over the input range of elements.
+ *
+ * @param[in] d_keys_in          the begin iterator of input keys
+ * @param[out] d_unique_out      the begin iterator of output keys (one key per run)
+ * @param[in] d_values_in        the begin iterator of input values
+ * @param[out] d_aggregates_out  the begin iterator of output aggregated values (one aggregate
+ * per run)
+ * @param[out] d_num_runs_out    the pointer of total number of runs encountered (i.e., the length
+ * of d_unique_out)
+ * @param[in] op                 the reduction operator
+ * @param[in] num_items          the number of key+value pairs (i.e., the length of d_in_keys and
+ * d_in_values)
+ * @param[in] stream             CUDA stream used for device memory operations and kernel launches
+ * @param[in] mr                 Device memory resource used to allocate the returned scalar's
+ * device memory
+ *
+ * @tparam Op                         the reduction operator with device binary operator
+ * @tparam KeysInputIteratorT         the input keys iterator
+ * @tparam UniqueOutputIteratorT      the output keys iterator
+ * @tparam ValuesInputIteratorT       the input values iterator
+ * @tparam AggregatesOutputIteratorT  the output values iterator
+ * @tparam OutputType                 the output type of reduction
+ */
+template <typename Op,
+          typename KeysInputIteratorT,
+          typename UniqueOutputIteratorT,
+          typename ValuesInputIteratorT,
+          typename AggregatesOutputIteratorT,
+          typename OutputType = cuda::std::iter_value_t<KeysInputIteratorT>,
+          std::enable_if_t<is_fixed_width<OutputType>() &&
+                           not cudf::is_fixed_point<OutputType>()>* = nullptr>
+void reduce_by_key(KeysInputIteratorT d_keys_in,                // input keys
+                   UniqueOutputIteratorT d_unique_out,          // output keys
+                   ValuesInputIteratorT d_values_in,            // input values
+                   AggregatesOutputIteratorT d_aggregates_out,  // output values
+                   cudf::size_type* d_num_runs_out,             // output size  cudf::size_type
+                   op::simple_op<Op> op,
+                   cudf::size_type num_items,  // input
+                   rmm::cuda_stream_view stream,
+                   rmm::device_async_resource_ref mr)
+{
+  auto const binary_op = cudf::detail::cast_functor<OutputType>(op.get_binary_op());
+  // Allocate temporary storage
+  rmm::device_buffer d_temp_storage;
+  size_t temp_storage_bytes = 0;
+  cub::DeviceReduce::ReduceByKey(d_temp_storage.data(),
+                                 temp_storage_bytes,
+                                 d_keys_in,
+                                 d_unique_out,
+                                 d_values_in,
+                                 d_aggregates_out,
+                                 d_num_runs_out,
+                                 binary_op,
+                                 num_items,
+                                 stream.value());
+  d_temp_storage = rmm::device_buffer{temp_storage_bytes, stream, mr};
+
+  // Run reduction
+  cub::DeviceReduce::ReduceByKey(d_temp_storage.data(),
+                                 temp_storage_bytes,
+                                 d_keys_in,
+                                 d_unique_out,
+                                 d_values_in,
+                                 d_aggregates_out,
+                                 d_num_runs_out,
+                                 binary_op,
+                                 num_items,
+                                 stream.value());
+}
 }  // namespace detail
 }  // namespace reduction
 }  // namespace cudf

@@ -639,14 +639,23 @@ void decode_page_headers(pass_intermediate_data& pass,
   //
   // result:      0,          4,          8
   rmm::device_uvector<size_type> page_counts(pass.pages.size() + 1, stream);
-  auto page_keys             = make_page_key_iterator(pass.pages);
-  auto const page_counts_end = thrust::reduce_by_key(rmm::exec_policy(stream),
-                                                     page_keys,
-                                                     page_keys + pass.pages.size(),
-                                                     thrust::make_constant_iterator(1),
-                                                     thrust::make_discard_iterator(),
-                                                     page_counts.begin())
-                                 .second;
+  auto page_keys = make_page_key_iterator(pass.pages);
+
+  // reduce_by_key on page_keys [input keys] and constant_iterator [input values] resulting in
+  // page_counts [output values]
+  auto d_num_runs_out = cudf::detail::make_pinned_vector_async<cudf::size_type>(1, stream);
+  cudf::reduction::detail::reduce_by_key(page_keys,
+                                         thrust::make_discard_iterator(),  // discarding output keys
+                                         thrust::make_constant_iterator(1),
+                                         page_counts.begin(),
+                                         d_num_runs_out.data(),
+                                         cudf::reduction::detail::op::sum{},
+                                         pass.pages.size(),
+                                         stream,
+                                         cudf::get_current_device_resource_ref());
+  stream.synchronize();
+  auto const page_counts_end = page_counts.begin() + d_num_runs_out.front();
+
   auto const num_page_counts = page_counts_end - page_counts.begin();
   pass.page_offsets          = rmm::device_uvector<size_type>(num_page_counts + 1, stream);
   thrust::exclusive_scan(rmm::exec_policy_nosync(stream),
@@ -1771,14 +1780,21 @@ cudf::detail::host_vector<size_t> reader::impl::calculate_page_string_offsets()
                                 page_offset_output_iter{subpass.pages.device_ptr()});
 
   // now sum up page sizes
-  rmm::device_uvector<int> reduce_keys(d_col_sizes.size(), _stream);
-  thrust::reduce_by_key(rmm::exec_policy_nosync(_stream),
-                        page_keys,
-                        page_keys + subpass.pages.size(),
-                        val_iter,
-                        reduce_keys.begin(),
-                        d_col_sizes.begin());
-
+  rmm::device_uvector<int> reduce_keys(
+    d_col_sizes.size(), _stream);  // TODO: Jigao: could be a thrust::make_discard_iterator()
+  // reduce_by_key on page_keys [input keys] and val_iter [input values] resulting in
+  // reduce_keys [output keys] and d_col_sizes [output values]
+  auto d_num_runs_out = cudf::detail::make_pinned_vector_async<cudf::size_type>(1, _stream);
+  cudf::reduction::detail::reduce_by_key(page_keys,
+                                         reduce_keys.begin(),
+                                         val_iter,
+                                         d_col_sizes.begin(),
+                                         d_num_runs_out.data(),
+                                         cudf::reduction::detail::op::sum{},
+                                         subpass.pages.size(),
+                                         _stream,
+                                         cudf::get_current_device_resource_ref());
+  _stream.synchronize();
   return cudf::detail::make_host_vector(d_col_sizes, _stream);
 }
 

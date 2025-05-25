@@ -1047,13 +1047,21 @@ void detect_malformed_pages(device_span<PageInfo const> pages,
     thrust::make_transform_iterator(pages.begin(), flat_column_num_rows{chunks.data()});
   auto const row_counts_begin = row_counts.begin();
   auto page_keys              = make_page_key_iterator(pages);
-  auto const row_counts_end   = thrust::reduce_by_key(rmm::exec_policy(stream),
-                                                    page_keys,
-                                                    page_keys + pages.size(),
-                                                    size_iter,
-                                                    thrust::make_discard_iterator(),
-                                                    row_counts_begin)
-                                .second;
+
+  // reduce_by_key on page_keys [input keys] and size_iter [input values] resulting in
+  // row_counts_begin [output values]
+  auto d_num_runs_out = cudf::detail::make_pinned_vector_async<cudf::size_type>(1, stream);
+  cudf::reduction::detail::reduce_by_key(page_keys,
+                                         thrust::make_discard_iterator(),  // discarding output keys
+                                         size_iter,
+                                         row_counts_begin,
+                                         d_num_runs_out.data(),
+                                         cudf::reduction::detail::op::sum{},
+                                         pages.size(),
+                                         stream,
+                                         cudf::get_current_device_resource_ref());
+  stream.synchronize();
+  auto const row_counts_end = row_counts_begin + d_num_runs_out.front();
 
   // make sure all non-zero row counts are the same
   rmm::device_uvector<size_type> compacted_row_counts(pages.size(), stream);
