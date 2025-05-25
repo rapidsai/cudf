@@ -272,13 +272,13 @@ template <typename Op,
           typename OutputType = cuda::std::iter_value_t<KeysInputIteratorT>,
           std::enable_if_t<is_fixed_width<OutputType>() &&
                            not cudf::is_fixed_point<OutputType>()>* = nullptr>
-void reduce_by_key(KeysInputIteratorT d_keys_in,                // input keys
-                   UniqueOutputIteratorT d_unique_out,          // output keys
-                   ValuesInputIteratorT d_values_in,            // input values
-                   AggregatesOutputIteratorT d_aggregates_out,  // output values
-                   cudf::size_type* d_num_runs_out,             // output size  cudf::size_type
+void reduce_by_key(KeysInputIteratorT d_keys_in,
+                   UniqueOutputIteratorT d_unique_out,
+                   ValuesInputIteratorT d_values_in,
+                   AggregatesOutputIteratorT d_aggregates_out,
+                   cudf::size_type* d_num_runs_out,
                    op::simple_op<Op> op,
-                   cudf::size_type num_items,  // input
+                   cudf::size_type num_items,
                    rmm::cuda_stream_view stream,
                    rmm::device_async_resource_ref mr)
 {
