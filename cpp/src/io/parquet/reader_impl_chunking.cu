@@ -1066,11 +1066,36 @@ void detect_malformed_pages(device_span<PageInfo const> pages,
   // make sure all non-zero row counts are the same
   rmm::device_uvector<size_type> compacted_row_counts(pages.size(), stream);
   auto const compacted_row_counts_begin = compacted_row_counts.begin();
-  auto const compacted_row_counts_end   = thrust::copy_if(rmm::exec_policy(stream),
-                                                        row_counts_begin,
-                                                        row_counts_end,
-                                                        compacted_row_counts_begin,
-                                                        row_counts_nonzero{});
+
+  auto d_num_selected_out = cudf::detail::make_pinned_vector_async<size_type>(1, stream);
+  {
+    // CUB implementation equivalent to thrust::copy_if with predicate row_counts_nonzero{}
+    rmm::device_buffer d_temp_storage;
+    size_t temp_storage_bytes = 0;
+    const auto num_items      = row_counts_end - row_counts_begin;
+    CUDF_CUDA_TRY(cub::DeviceSelect::If(d_temp_storage.data(),
+                                        temp_storage_bytes,
+                                        row_counts_begin,
+                                        compacted_row_counts_begin,
+                                        d_num_selected_out.data(),
+                                        num_items,
+                                        row_counts_nonzero{},
+                                        stream));
+    d_temp_storage =
+      rmm::device_buffer{temp_storage_bytes, stream, cudf::get_current_device_resource_ref()};
+    CUDF_CUDA_TRY(cub::DeviceSelect::If(d_temp_storage.data(),
+                                        temp_storage_bytes,
+                                        row_counts_begin,
+                                        compacted_row_counts_begin,
+                                        d_num_selected_out.data(),
+                                        num_items,
+                                        row_counts_nonzero{},
+                                        stream));
+    stream.synchronize();
+  }
+  auto const compacted_row_counts_size = d_num_selected_out.front();
+  auto const compacted_row_counts_end  = compacted_row_counts_begin + compacted_row_counts_size;
+
   if (compacted_row_counts_end != compacted_row_counts_begin) {
     auto const found_row_count = static_cast<size_t>(compacted_row_counts.element(0, stream));
 
@@ -1079,9 +1104,6 @@ void detect_malformed_pages(device_span<PageInfo const> pages,
       CUDF_EXPECTS(expected_row_count.value() == found_row_count,
                    "Encountered malformed parquet page data (unexpected row count in page data)");
     }
-
-    // TODO(jigao): replace later
-    auto const compacted_row_counts_size = compacted_row_counts_end - compacted_row_counts_begin;
 
     // Thrust transform generating bitmap-like iterator with a predicate to find different
     // row counts
