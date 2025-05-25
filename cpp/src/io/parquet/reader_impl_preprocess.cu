@@ -1780,13 +1780,12 @@ cudf::detail::host_vector<size_t> reader::impl::calculate_page_string_offsets()
                                 page_offset_output_iter{subpass.pages.device_ptr()});
 
   // now sum up page sizes
-  rmm::device_uvector<int> reduce_keys(
-    d_col_sizes.size(), _stream);  // TODO: Jigao: could be a thrust::make_discard_iterator()
+
   // reduce_by_key on page_keys [input keys] and val_iter [input values] resulting in
-  // reduce_keys [output keys] and d_col_sizes [output values]
+  // d_col_sizes [output values]
   auto d_num_runs_out = cudf::detail::make_pinned_vector_async<cudf::size_type>(1, _stream);
   cudf::reduction::detail::reduce_by_key(page_keys,
-                                         reduce_keys.begin(),
+                                         thrust::make_discard_iterator(),
                                          val_iter,
                                          d_col_sizes.begin(),
                                          d_num_runs_out.data(),
