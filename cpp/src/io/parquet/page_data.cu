@@ -472,22 +472,20 @@ uint32_t GetAggregatedDecodeKernelMask(cudf::detail::hostdevice_span<PageInfo co
   auto mask_iter = thrust::make_transform_iterator(pages.device_begin(), mask_tform{});
 
   // reduce mask_iter with bit_or to compute the return-value after stream-sync
-  std::unique_ptr<scalar> device_reduce_result =
+  std::unique_ptr<cudf::scalar> d_reduce_result =
     cudf::reduction::detail::reduce(mask_iter,
                                     pages.size(),
                                     cudf::reduction::detail::op::bit_or{},
                                     std::optional<uint32_t /**ResultType*/>(std::nullopt),
                                     stream,
                                     cudf::get_current_device_resource_ref());
-  auto host_scalar = cudf::detail::make_pinned_vector_async<uint32_t>(1, stream);
-  CUDF_CUDA_TRY(cudaMemcpyAsync(
-    host_scalar.data(),
-    static_cast<cudf::numeric_scalar<uint32_t>*>(device_reduce_result.get())->data(),
-    sizeof(uint32_t),
-    cudaMemcpyDeviceToHost,
-    stream.value()));  // host pinned <- device
-  stream.synchronize();
-  return host_scalar.front();
+  auto h_reduce_result =
+    cudf::detail::make_pinned_vector<uint32_t>(
+      cudf::device_span<uint32_t>{
+        static_cast<cudf::numeric_scalar<uint32_t>*>(d_reduce_result.get())->data(), 1},
+      stream)
+      .front();  // front() to access only one element
+  return h_reduce_result;
 }
 
 /**
