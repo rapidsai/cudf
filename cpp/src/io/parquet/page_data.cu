@@ -471,7 +471,7 @@ uint32_t GetAggregatedDecodeKernelMask(cudf::detail::hostdevice_span<PageInfo co
   // determine which kernels to invoke
   auto mask_iter = thrust::make_transform_iterator(pages.device_begin(), mask_tform{});
 
-  // reduce mask_iter with bit_or to compute the return-value after stream-sync
+  // reduce mask_iter with bit_or to compute the return value
   std::unique_ptr<cudf::scalar> d_reduce_result =
     cudf::reduction::detail::reduce(mask_iter,
                                     pages.size(),
