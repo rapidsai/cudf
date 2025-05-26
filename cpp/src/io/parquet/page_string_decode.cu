@@ -996,32 +996,27 @@ void ComputePageStringSizes(cudf::detail::hostdevice_span<PageInfo> pages,
   cudf::detail::join_streams(streams, stream);
 
   // check for needed temp space for DELTA_BYTE_ARRAY
-  //  1. Thrust transform generating bitmap-like iterator with a predicate to check temp_string_size
-  auto temp_string_size_iter = thrust::make_transform_iterator(
-    pages.device_begin(), [] __device__(auto const& page) -> size_t {
-      // return size_t instead of bool to match
-      // cudf::reduction::detail::reduce
-      return page.temp_string_size != 0;
-    });
+  bool const need_sizes = [&]() -> bool {
+    // reduce with bit_or on bool-iterator to check if any pages needing temp space (equivalent to
+    // thrust::any_of)
+    std::unique_ptr<scalar> d_reduce_result = cudf::reduction::detail::reduce(
+      thrust::make_transform_iterator(
+        pages.device_begin(),
+        [] __device__(auto const& page) -> bool { return page.temp_string_size != 0; }),
+      pages.size(),
+      cudf::reduction::detail::op::bit_or{},
+      std::optional<bool /**ResultType*/>(std::nullopt),
+      stream,
+      cudf::get_current_device_resource_ref());
 
-  //  2. reduce bitmap-like iterator to count pages needing temp space for DELTA_BYTE_ARRAY
-  std::unique_ptr<scalar> d_reduce_result =
-    cudf::reduction::detail::reduce(temp_string_size_iter,
-                                    pages.size(),
-                                    cudf::reduction::detail::op::sum{},
-                                    std::optional<size_t /**ResultType*/>(std::nullopt),
-                                    stream,
-                                    cudf::get_current_device_resource_ref());
-
-  auto h_reduce_result =
-    cudf::detail::make_pinned_vector<size_t>(
-      cudf::device_span<size_t>{
-        static_cast<cudf::numeric_scalar<size_t>*>(d_reduce_result.get())->data(), 1},
-      stream)
-      .front();  // front() to access only one element
-
-  // if any page needing temp space for DELTA_BYTE_ARRAY
-  bool const need_sizes = static_cast<bool>(h_reduce_result);
+    auto h_reduce_result =
+      cudf::detail::make_pinned_vector<bool>(
+        cudf::device_span<bool>{
+          static_cast<cudf::numeric_scalar<bool>*>(d_reduce_result.get())->data(), 1},
+        stream)
+        .front();  // front() to access only one element
+    return h_reduce_result;
+  }();
 
   if (need_sizes) {
     // sum up all of the temp_string_sizes
