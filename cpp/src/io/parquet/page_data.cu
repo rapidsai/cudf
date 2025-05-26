@@ -545,20 +545,9 @@ void WriteFinalOffsets(host_span<size_type const> offsets,
                        rmm::cuda_stream_view stream)
 {
   // copy offsets and buff_addrs into host pinned memory
-  auto host_pinned_offsets =
-    cudf::detail::make_pinned_vector_async<size_type>(offsets.size(), stream);
-  CUDF_CUDA_TRY(cudaMemcpyAsync(host_pinned_offsets.data(),
-                                offsets.data(),
-                                offsets.size() * sizeof(size_type),
-                                cudaMemcpyHostToHost,
-                                stream.value()));
+  auto host_pinned_offsets = cudf::detail::make_pinned_vector_async<size_type>(offsets, stream);
   auto host_pinned_buff_addrs =
-    cudf::detail::make_pinned_vector_async<size_type*>(offsets.size(), stream);
-  CUDF_CUDA_TRY(cudaMemcpyAsync(host_pinned_buff_addrs.data(),
-                                buff_addrs.data(),
-                                offsets.size() * sizeof(size_type*),
-                                cudaMemcpyHostToHost,
-                                stream.value()));
+    cudf::detail::make_pinned_vector_async<size_type*>(buff_addrs, stream);
 
   // Copy offsets to device and create an iterator
   auto d_src_data = cudf::detail::make_device_uvector_async(
