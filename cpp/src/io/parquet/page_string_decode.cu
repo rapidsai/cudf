@@ -996,7 +996,7 @@ void ComputePageStringSizes(cudf::detail::hostdevice_span<PageInfo> pages,
   cudf::detail::join_streams(streams, stream);
 
   // check for needed temp space for DELTA_BYTE_ARRAY
-  // Thrust transform generating bitmap-like iterator with a predicate to check temp_string_size
+  //  1. Thrust transform generating bitmap-like iterator with a predicate to check temp_string_size
   auto temp_string_size_iter = thrust::make_transform_iterator(
     pages.device_begin(), [] __device__(auto const& page) -> size_t {
       // return size_t instead of bool to match
@@ -1004,24 +1004,24 @@ void ComputePageStringSizes(cudf::detail::hostdevice_span<PageInfo> pages,
       return page.temp_string_size != 0;
     });
 
-  // reduce bitmap-like iterator to count pages needing temp space for DELTA_BYTE_ARRAY
-  std::unique_ptr<scalar> device_reduce_result =
+  //  2. reduce bitmap-like iterator to count pages needing temp space for DELTA_BYTE_ARRAY
+  std::unique_ptr<scalar> d_reduce_result =
     cudf::reduction::detail::reduce(temp_string_size_iter,
                                     pages.size(),
                                     cudf::reduction::detail::op::sum{},
                                     std::optional<size_t /**ResultType*/>(std::nullopt),
                                     stream,
                                     cudf::get_current_device_resource_ref());
-  auto host_scalar = cudf::detail::make_pinned_vector_async<size_t>(1, stream);
-  CUDF_CUDA_TRY(
-    cudaMemcpyAsync(host_scalar.data(),
-                    static_cast<cudf::numeric_scalar<size_t>*>(device_reduce_result.get())->data(),
-                    sizeof(size_t),
-                    cudaMemcpyDeviceToHost,
-                    stream.value()));  // host pinned <- device
-  stream.synchronize();
+
+  auto h_reduce_result =
+    cudf::detail::make_pinned_vector<size_t>(
+      cudf::device_span<size_t>{
+        static_cast<cudf::numeric_scalar<size_t>*>(d_reduce_result.get())->data(), 1},
+      stream)
+      .front();  // front() to access only one element
+
   // if any page needing temp space for DELTA_BYTE_ARRAY
-  bool const need_sizes = static_cast<bool>(host_scalar.front());
+  bool const need_sizes = static_cast<bool>(h_reduce_result);
 
   if (need_sizes) {
     // sum up all of the temp_string_sizes
