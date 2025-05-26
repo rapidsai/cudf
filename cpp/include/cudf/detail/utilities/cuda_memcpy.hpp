@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -72,6 +72,26 @@ void cuda_memcpy_async(host_span<T> dst, device_span<T const> src, rmm::cuda_str
 }
 
 /**
+ * @brief Asynchronously copies data from host memory to host memory.
+ *
+ * Implementation may use different strategies depending on the size and type of host data.
+ *
+ * @param dst Destination host memory
+ * @param src Source device memory
+ * @param stream CUDA stream used for the copy
+ */
+template <typename T>
+void cuda_memcpy_async(host_span<T> dst, host_span<T const> src, rmm::cuda_stream_view stream)
+{
+  CUDF_EXPECTS(dst.size() == src.size(), "Mismatched sizes in cuda_memcpy_async");
+  cuda_memcpy_async_impl(dst.data(),
+                         src.data(),
+                         src.size_bytes(),
+                         host_memory_kind::PAGEABLE,  // use copy_pageable for host-to-host copy
+                         stream);
+}
+
+/**
  * @brief Synchronously copies data from host to device memory.
  *
  * Implementation may use different strategies depending on the size and type of host data.
@@ -98,6 +118,22 @@ void cuda_memcpy(device_span<T> dst, host_span<T const> src, rmm::cuda_stream_vi
  */
 template <typename T>
 void cuda_memcpy(host_span<T> dst, device_span<T const> src, rmm::cuda_stream_view stream)
+{
+  cuda_memcpy_async(dst, src, stream);
+  stream.synchronize();
+}
+
+/**
+ * @brief Synchronously copies data from host memory to host memory.
+ *
+ * Implementation may use different strategies depending on the size and type of host data.
+ *
+ * @param dst Destination host memory
+ * @param src Source device memory
+ * @param stream CUDA stream used for the copy
+ */
+template <typename T>
+void cuda_memcpy(host_span<T> dst, host_span<T const> src, rmm::cuda_stream_view stream)
 {
   cuda_memcpy_async(dst, src, stream);
   stream.synchronize();
