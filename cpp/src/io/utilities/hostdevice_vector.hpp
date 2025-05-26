@@ -122,8 +122,6 @@ class hostdevice_vector {
                                   stream.value()));  // host pinned <- device
     stream.synchronize();
     return host_scalar.front();
-    // Note: the rmm::device_uvector::element(element_index, stream) returns a copy to a
-    // host-pageable stack variable in T
   }
 
   operator cudf::host_span<T>() { return host_span<T>{h_data}.subspan(0, size()); }
