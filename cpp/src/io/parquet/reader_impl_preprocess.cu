@@ -610,24 +610,24 @@ void decode_page_headers(pass_intermediate_data& pass,
         max(c.level_bits[level_type::REPETITION], c.level_bits[level_type::DEFINITION]));
     }));
 
-  // reduce level_bit_size with max to compute max_level_bits after stream-sync
-  std::unique_ptr<scalar> device_reduce_result =
-    cudf::reduction::detail::reduce(level_bit_size,
-                                    pass.chunks.size(),
-                                    cudf::reduction::detail::op::max{},
-                                    std::optional<int /**ResultType*/>(std::nullopt),
-                                    stream,
-                                    cudf::get_current_device_resource_ref());
-  auto host_scalar = cudf::detail::make_pinned_vector_async<int>(1, stream);
-  CUDF_CUDA_TRY(
-    cudaMemcpyAsync(host_scalar.data(),
-                    static_cast<cudf::numeric_scalar<int>*>(device_reduce_result.get())->data(),
-                    sizeof(int),
-                    cudaMemcpyDeviceToHost,
-                    stream.value()));  // host pinned <- device
-  stream.synchronize();
   // max level data bit size.
-  int const max_level_bits = host_scalar.front();
+  int const max_level_bits = [&]() {
+    // reduce level_bit_size with max to compute max_level_bits
+    std::unique_ptr<scalar> d_reduce_result =
+      cudf::reduction::detail::reduce(level_bit_size,
+                                      pass.chunks.size(),
+                                      cudf::reduction::detail::op::max{},
+                                      std::optional<int /**ResultType*/>(std::nullopt),
+                                      stream,
+                                      cudf::get_current_device_resource_ref());
+    auto h_reduce_result =
+      cudf::detail::make_pinned_vector<int>(
+        cudf::device_span<int>{
+          static_cast<cudf::numeric_scalar<int>*>(d_reduce_result.get())->data(), 1},
+        stream)
+        .front();  // front() to access only one element
+    return h_reduce_result;
+  }();
 
   pass.level_type_size = std::max(1, cudf::util::div_rounding_up_safe(max_level_bits, 8));
 
@@ -784,23 +784,24 @@ void reader::impl::build_string_dict_indices()
                    pass.pages.d_end(),
                    set_str_dict_index_count{str_dict_index_count, pass.chunks});
 
-  // reduce str_dict_index_count with sum to compute total_str_dict_indexes after stream-sync
-  std::unique_ptr<scalar> device_reduce_result =
-    cudf::reduction::detail::reduce(str_dict_index_count.begin(),
-                                    str_dict_index_count.size(),
-                                    cudf::reduction::detail::op::sum{},
-                                    std::optional<size_t /**ResultType*/>(std::nullopt),
-                                    _stream,
-                                    cudf::get_current_device_resource_ref());
-  auto host_scalar = cudf::detail::make_pinned_vector_async<size_t>(1, _stream);
-  CUDF_CUDA_TRY(
-    cudaMemcpyAsync(host_scalar.data(),
-                    static_cast<cudf::numeric_scalar<size_t>*>(device_reduce_result.get())->data(),
-                    sizeof(size_t),
-                    cudaMemcpyDeviceToHost,
-                    _stream.value()));  // host pinned <- device
-  _stream.synchronize();
-  size_t const total_str_dict_indexes = host_scalar.front();
+  size_t const total_str_dict_indexes = [&]() {
+    // reduce str_dict_index_count with sum to compute total_str_dict_indexes
+    std::unique_ptr<scalar> d_reduce_result =
+      cudf::reduction::detail::reduce(str_dict_index_count.begin(),
+                                      str_dict_index_count.size(),
+                                      cudf::reduction::detail::op::sum{},
+                                      std::optional<size_t /**ResultType*/>(std::nullopt),
+                                      _stream,
+                                      cudf::get_current_device_resource_ref());
+    auto h_reduce_result =
+      cudf::detail::make_pinned_vector<size_t>(
+        cudf::device_span<size_t>{
+          static_cast<cudf::numeric_scalar<size_t>*>(d_reduce_result.get())->data(), 1},
+        _stream)
+        .front();  // front() to access only one element
+    return h_reduce_result;
+  }();
+
   if (total_str_dict_indexes == 0) { return; }
 
   // convert to offsets
