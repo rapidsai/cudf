@@ -50,18 +50,14 @@ void batched_memset(std::vector<cudf::device_span<T>> const& bufs,
   // define task and bytes parameters
   auto const num_bufs = bufs.size();
 
-  // duplicate std::vector to host pinned memory for efficient device memory transfer
-  auto host_pinned_bufs =
-    cudf::detail::make_pinned_vector_async<cudf::device_span<T>>(num_bufs, stream);
-  CUDF_CUDA_TRY(cudaMemcpyAsync(host_pinned_bufs.data(),
-                                bufs.data(),
-                                num_bufs * sizeof(cudf::device_span<T>),
-                                cudaMemcpyHostToHost,
-                                stream.value()));
+  auto host_pinned_bufs = cudf::detail::make_pinned_vector_async<cudf::device_span<T>>(
+    bufs, stream);  // host pageble -> host pinned memory
 
   // copy bufs into device memory and then get sizes
   auto gpu_bufs = cudf::detail::make_device_uvector_async(
-    host_pinned_bufs, stream, cudf::get_current_device_resource_ref());  // host pinned -> device
+    host_pinned_bufs,
+    stream,
+    cudf::get_current_device_resource_ref());  // host pinned -> device memory
 
   // get a vector with the sizes of all buffers
   auto sizes = thrust::make_transform_iterator(
