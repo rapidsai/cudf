@@ -961,32 +961,30 @@ struct codec_stats {
     cudf::io::detail::gpu_copy_uncompressed_blocks(d_copy_in, d_copy_out, stream);
   }
 
-  // Thrust transform generating bitmap-like iterator with a predicate to find success statuses
-  auto compression_status_iter =
-    thrust::make_transform_iterator(comp_res.begin(), [] __device__(auto const& res) -> size_t {
-      // return size_t instead of bool to match
-      // cudf::reduction::detail::reduce
-      return res.status == compression_status::SUCCESS;
-    });
+  bool const all_decompression_success = [&]() -> bool {
+    // reduce with bit_and on bool-iterator to check if all pages have success status (equivalent to
+    // thrust::all_of)
+    std::unique_ptr<scalar> d_reduce_result = cudf::reduction::detail::reduce(
+      thrust::make_transform_iterator(comp_res.begin(),
+                                      [] __device__(auto const& res) -> bool {
+                                        return res.status == compression_status::SUCCESS;
+                                      }),
+      num_comp_pages,
+      cudf::reduction::detail::op::bit_and{},
+      std::optional<bool /**ResultType*/>(std::nullopt),
+      stream,
+      cudf::get_current_device_resource_ref());
 
-  // reduce bitmap-like iterator to count all success statuses after stream-sync
-  std::unique_ptr<scalar> device_reduce_result =
-    cudf::reduction::detail::reduce(compression_status_iter,
-                                    num_comp_pages,
-                                    cudf::reduction::detail::op::sum{},
-                                    std::optional<size_t /**ResultType*/>(std::nullopt),
-                                    stream,
-                                    cudf::get_current_device_resource_ref());
-  auto host_scalar = cudf::detail::make_pinned_vector_async<size_t>(1, stream);
-  CUDF_CUDA_TRY(
-    cudaMemcpyAsync(host_scalar.data(),
-                    static_cast<cudf::numeric_scalar<size_t>*>(device_reduce_result.get())->data(),
-                    sizeof(size_t),
-                    cudaMemcpyDeviceToHost,
-                    stream.value()));  // host pinned <- device
-  stream.synchronize();
-  // all pages must have success statuses
-  CUDF_EXPECTS(host_scalar.front() == num_comp_pages, "Error during decompression");
+    auto h_reduce_result =
+      cudf::detail::make_pinned_vector<bool>(
+        cudf::device_span<bool>{
+          static_cast<cudf::numeric_scalar<bool>*>(d_reduce_result.get())->data(), 1},
+        stream)
+        .front();  // front() to access only one element
+
+    return h_reduce_result;
+  }();
+  CUDF_EXPECTS(all_decompression_success, "Error during decompression");
 
   return {std::move(pass_decomp_pages), std::move(subpass_decomp_pages)};
 }
@@ -1011,11 +1009,7 @@ struct row_counts_nonzero {
 
 struct row_counts_different {
   size_type const expected;
-  __device__ size_type operator()(size_type count) const
-  {
-    // return size_type instead of bool to match cudf::reduction::detail::reduce
-    return (count != 0) && (count != expected);
-  }
+  __device__ bool operator()(size_type count) const { return (count != 0) && (count != expected); }
 };
 
 /**
@@ -1097,15 +1091,11 @@ void detect_malformed_pages(device_span<PageInfo const> pages,
   auto const compacted_row_counts_end  = compacted_row_counts_begin + compacted_row_counts_size;
 
   if (compacted_row_counts_end != compacted_row_counts_begin) {
-    auto host_scalar_ =
-      cudf::detail::make_pinned_vector_async<size_type>(1, stream);  // as host pinned memory
-    CUDF_CUDA_TRY(cudaMemcpyAsync(host_scalar_.data(),
-                                  compacted_row_counts.data(),
-                                  sizeof(size_type),
-                                  cudaMemcpyDeviceToHost,
-                                  stream.value()));  // host pinned <- device
-    stream.synchronize();
-    size_t const found_row_count = host_scalar_.front();
+    // copy compacted_row_counts.element(0) via host pinned memory
+    size_t const found_row_count =
+      cudf::detail::make_pinned_vector<size_type>(
+        cudf::device_span<size_type>{compacted_row_counts.data(), 1}, stream)
+        .front();
 
     // if we somehow don't match the expected row count from the row groups themselves
     if (expected_row_count.has_value()) {
@@ -1113,32 +1103,29 @@ void detect_malformed_pages(device_span<PageInfo const> pages,
                    "Encountered malformed parquet page data (unexpected row count in page data)");
     }
 
-    // Thrust transform generating bitmap-like iterator with a predicate to find different
-    // row counts
-    auto row_counts_different_iter = thrust::make_transform_iterator(
-      compacted_row_counts_begin, row_counts_different{static_cast<size_type>(found_row_count)});
-
-    // reduce bitmap-like iterator to count any different row counts after stream-sync
-    std::unique_ptr<scalar> device_reduce_result =
-      cudf::reduction::detail::reduce(row_counts_different_iter,
-                                      compacted_row_counts_size,
-                                      cudf::reduction::detail::op::sum{},
-                                      std::optional<size_type /**ResultType*/>(std::nullopt),
-                                      stream,
-                                      cudf::get_current_device_resource_ref());
-    auto host_scalar = cudf::detail::make_pinned_vector_async<size_type>(1, stream);
-    CUDF_CUDA_TRY(cudaMemcpyAsync(
-      host_scalar.data(),
-      static_cast<cudf::numeric_scalar<size_type>*>(device_reduce_result.get())->data(),
-      sizeof(size_type),
-      cudaMemcpyDeviceToHost,
-      stream.value()));  // host pinned <- device
-    stream.synchronize();
-
     // all non-zero row counts must be the same
-    auto const chk = host_scalar.front();
-    CUDF_EXPECTS(chk == 0,
-                 "Encountered malformed parquet page data (row count mismatch in page data)");
+    bool const chk = [&]() -> bool {
+      // reduce with bit_or on bool-iterator to check if any pages having row counts not same
+      // (equivalent to thrust::count_if)
+      std::unique_ptr<scalar> d_reduce_result = cudf::reduction::detail::reduce(
+        thrust::make_transform_iterator(
+          compacted_row_counts_begin,
+          row_counts_different{static_cast<size_type>(found_row_count)}),
+        compacted_row_counts_size,
+        cudf::reduction::detail::op::bit_or{},
+        std::optional<bool /**ResultType*/>(std::nullopt),
+        stream,
+        cudf::get_current_device_resource_ref());
+
+      auto h_reduce_result =
+        cudf::detail::make_pinned_vector<bool>(
+          cudf::device_span<bool>{
+            static_cast<cudf::numeric_scalar<bool>*>(d_reduce_result.get())->data(), 1},
+          stream)
+          .front();  // front() to access only one element
+      return h_reduce_result;
+    }();
+    CUDF_EXPECTS(!chk, "Encountered malformed parquet page data (row count mismatch in page data)");
   }
 }
 
@@ -1356,22 +1343,22 @@ void reader::impl::setup_next_pass(read_mode mode)
       thrust::make_transform_iterator(pass.chunks.d_begin(), get_chunk_compressed_size{});
 
     // reduce chunk_iter with sum to compute the total compressed size after stream-sync
-    std::unique_ptr<scalar> device_reduce_result =
+    std::unique_ptr<scalar> d_reduce_result =
       cudf::reduction::detail::reduce(chunk_iter,
                                       pass.chunks.size(),
                                       cudf::reduction::detail::op::sum{},
                                       std::optional<size_t /**ResultType*/>(0),
                                       _stream,
                                       cudf::get_current_device_resource_ref());
-    auto host_scalar = cudf::detail::make_pinned_vector_async<size_t>(1, _stream);
-    CUDF_CUDA_TRY(cudaMemcpyAsync(
-      host_scalar.data(),
-      static_cast<cudf::numeric_scalar<size_t>*>(device_reduce_result.get())->data(),
-      sizeof(size_t),
-      cudaMemcpyDeviceToHost,
-      _stream.value()));  // host pinned <- device
-    _stream.synchronize();
-    pass.base_mem_size = pass.decomp_dict_data.size() + host_scalar.front();
+
+    auto h_reduce_result =
+      cudf::detail::make_pinned_vector<size_t>(
+        cudf::device_span<size_t>{
+          static_cast<cudf::numeric_scalar<size_t>*>(d_reduce_result.get())->data(), 1},
+        _stream)
+        .front();  // front() to access only one element
+
+    pass.base_mem_size = pass.decomp_dict_data.size() + h_reduce_result;
 
     // if we are doing subpass reading, generate more accurate num_row estimates for list columns.
     // this helps us to generate more accurate subpass splits.
