@@ -697,7 +697,7 @@ def _(
         named_aggs = [agg for agg, _ in aggs]
         orderby = node.options.index_column
         orderby_dtype = schema[orderby].plc_dtype
-        if plc.traits.is_integral(orderby_dtype.plc_dtype):
+        if plc.traits.is_integral(orderby_dtype):
             # Integer orderby column is cast in implementation to int64 in polars
             orderby_dtype = plc.DataType(plc.TypeId.INT64)
         preceding, following = offsets_to_windows(
