@@ -1023,7 +1023,7 @@ dependencies:
       - output_types: [conda, requirements, pyproject]
         packages:
           - nvtx>=0.2.1,<0.2.12
-          - pytest-xdist
+          - pytest-env
           - pytest-timeout
   depends_on_libcudf:
     common:
