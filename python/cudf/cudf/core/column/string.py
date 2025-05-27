@@ -22,7 +22,6 @@ from cudf.core.buffer import Buffer, acquire_spill_lock
 from cudf.core.column.column import ColumnBase, as_column, column_empty
 from cudf.core.column.lists import ListColumn
 from cudf.core.column.methods import ColumnMethods
-from cudf.core.scalar import pa_scalar_to_plc_scalar
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
@@ -30,6 +29,7 @@ from cudf.utils.dtypes import (
     can_convert_to_column,
     dtype_to_pylibcudf_type,
 )
+from cudf.utils.scalar import pa_scalar_to_plc_scalar
 from cudf.utils.temporal import infer_format
 from cudf.utils.utils import is_na_like
 
@@ -5344,28 +5344,6 @@ class StringMethods(ColumnMethods):
             self._column.is_letter(True, position)  # type: ignore[arg-type]
         )
 
-    def substring_duplicates(self, min_width: int) -> SeriesOrIndex:
-        """
-        Returns duplicate strings found anywhere in the input column
-        with min_width minimum number of bytes.
-
-        Parameters
-        ----------
-        min_width : int
-            The minimum number of bytes to determine duplicates
-
-        Returns
-        -------
-        Series of duplicate strings found
-
-        """
-        return self._return_or_inplace(
-            self._column.substring_duplicates(min_width),  # type: ignore[arg-type]
-            inplace=False,
-            expand=False,
-            retain_index=False,
-        )
-
     def build_suffix_array(self, min_width: int) -> SeriesOrIndex:
         """
         Builds a suffix array for the input strings column.
@@ -5389,6 +5367,74 @@ class StringMethods(ColumnMethods):
         """
         return self._return_or_inplace(
             self._column.build_suffix_array(min_width),  # type: ignore[arg-type]
+            inplace=False,
+            expand=False,
+            retain_index=False,
+        )
+
+    def resolve_duplicates(self, sa, min_width: int) -> SeriesOrIndex:
+        """
+        Returns duplicate strings found in the input column
+        with min_width minimum number of bytes.
+        The indices are expected to be the suffix array previously created
+        for input. Otherwise, the results are undefined.
+
+        For details, see :cpp:func:`resolve_duplicates`
+
+        Parameters
+        ----------
+        sa : Column
+            Suffix array from build_suffix_array
+        min_width : int
+            Minimum number of bytes that must match
+
+        Returns
+        -------
+        Column
+            New column of duplicates
+        """
+        sa_column = sa._column
+        return self._return_or_inplace(
+            self._column.resolve_duplicates(sa_column, min_width),  # type: ignore[arg-type]
+            inplace=False,
+            expand=False,
+            retain_index=False,
+        )
+
+    def resolve_duplicates_pair(
+        self, sa1, input2, sa2, min_width: int
+    ) -> SeriesOrIndex:
+        """
+        Returns duplicate strings in input1 found in input2
+        with min_width minimum number of bytes.
+        The indices are expected to be the suffix array previously
+        created for the inputs. Otherwise, the results are undefined.
+
+        For details, see :cpp:func:`resolve_duplicates_pair`
+
+        Parameters
+        ----------
+        sa1 : Column
+            Suffix array from build_suffix_array for this column
+        input2 : Column
+            2nd strings column of text
+        sa2 : Column
+            Suffix array from build_suffix_array for input2
+        min_width : int
+            Minimum number of bytes that must match
+
+        Returns
+        -------
+        Column
+            New column of duplicates
+        """
+        sa1_col = sa1._column
+        sa2_col = sa2._column
+        input2_col = input2._column
+        return self._return_or_inplace(
+            self._column.resolve_duplicates_pair(
+                sa1_col, input2_col, sa2_col, min_width
+            ),  # type: ignore[arg-type]
             inplace=False,
             expand=False,
             retain_index=False,
@@ -5779,9 +5825,6 @@ class StringMethods(ColumnMethods):
 def _massage_string_arg(
     value, name, allow_col: bool = False
 ) -> StringColumn | plc.Scalar:
-    if isinstance(value, cudf.Scalar):
-        return value
-
     if isinstance(value, str):
         return pa_scalar_to_plc_scalar(pa.scalar(value, type=pa.string()))
 
@@ -5990,6 +6033,12 @@ class StringColumn(ColumnBase):
             f"dtype {self.dtype} is not yet supported via "
             "`__cuda_array_interface__`"
         )
+
+    def element_indexing(self, index: int):
+        result = super().element_indexing(index)
+        if isinstance(result, pa.Scalar):
+            return result.as_py()
+        return result
 
     def to_arrow(self) -> pa.Array:
         """Convert to PyArrow Array
@@ -6412,16 +6461,31 @@ class StringColumn(ColumnBase):
         return type(self).from_pylibcudf(result)  # type: ignore[return-value]
 
     @acquire_spill_lock()
-    def substring_duplicates(self, min_width: int) -> Self:
-        result = plc.nvtext.deduplicate.substring_duplicates(
+    def build_suffix_array(self, min_width: int) -> Self:
+        result = plc.nvtext.deduplicate.build_suffix_array(
             self.to_pylibcudf(mode="read"), min_width
         )
         return type(self).from_pylibcudf(result)  # type: ignore[return-value]
 
     @acquire_spill_lock()
-    def build_suffix_array(self, min_width: int) -> Self:
-        result = plc.nvtext.deduplicate.build_suffix_array(
-            self.to_pylibcudf(mode="read"), min_width
+    def resolve_duplicates(self, sa, min_width: int) -> Self:
+        result = plc.nvtext.deduplicate.resolve_duplicates(
+            self.to_pylibcudf(mode="read"),
+            sa.to_pylibcudf(mode="read"),
+            min_width,
+        )
+        return type(self).from_pylibcudf(result)  # type: ignore[return-value]
+
+    @acquire_spill_lock()
+    def resolve_duplicates_pair(
+        self, sa1, input2, sa2, min_width: int
+    ) -> Self:
+        result = plc.nvtext.deduplicate.resolve_duplicates_pair(
+            self.to_pylibcudf(mode="read"),
+            sa1.to_pylibcudf(mode="read"),
+            input2.to_pylibcudf(mode="read"),
+            sa2.to_pylibcudf(mode="read"),
+            min_width,
         )
         return type(self).from_pylibcudf(result)  # type: ignore[return-value]
 

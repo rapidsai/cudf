@@ -18,10 +18,10 @@ from cudf.api.types import is_integer, is_scalar
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column.column import ColumnBase, as_column
 from cudf.core.dataframe import DataFrame
-from cudf.core.index import BaseIndex, DatetimeIndex, Index, ensure_index
-from cudf.core.scalar import pa_scalar_to_plc_scalar
+from cudf.core.index import DatetimeIndex, Index, ensure_index
 from cudf.core.series import Series
 from cudf.utils.dtypes import CUDF_STRING_DTYPE
+from cudf.utils.scalar import pa_scalar_to_plc_scalar
 from cudf.utils.temporal import infer_format, unit_to_nanoseconds_conversion
 
 if TYPE_CHECKING:
@@ -296,7 +296,7 @@ def to_datetime(
                 format=format,
                 utc=utc,
             )
-            if isinstance(arg, (BaseIndex, pd.Index)):
+            if isinstance(arg, (Index, pd.Index)):
                 return DatetimeIndex._from_column(col, name=arg.name)
             elif isinstance(arg, (Series, pd.Series)):
                 return Series._from_column(

@@ -50,7 +50,6 @@ from cudf.core.join._join_helpers import _match_join_keys
 from cudf.core.mixins import GetAttrGetItemMixin, Reducible, Scannable
 from cudf.core.multiindex import MultiIndex
 from cudf.core.reshape import concat
-from cudf.core.scalar import pa_scalar_to_plc_scalar
 from cudf.core.udf.groupby_utils import _can_be_jitted, jit_groupby_apply
 from cudf.options import get_option
 from cudf.utils.dtypes import (
@@ -60,6 +59,7 @@ from cudf.utils.dtypes import (
     is_dtype_obj_numeric,
 )
 from cudf.utils.performance_tracking import _performance_tracking
+from cudf.utils.scalar import pa_scalar_to_plc_scalar
 
 if TYPE_CHECKING:
     from collections.abc import Generator, Hashable, Iterable, Sequence
@@ -218,15 +218,6 @@ def _is_all_scan_aggregate(all_aggs: list[list[str]]) -> bool:
             "Cannot perform both aggregation and scan in one operation"
         )
     return all_scan and any_scan
-
-
-def _deprecate_collect():
-    warnings.warn(
-        "Groupby.collect is deprecated and "
-        "will be removed in a future version. "
-        "Use `.agg(list)` instead.",
-        FutureWarning,
-    )
 
 
 # The three functions below return the quantiles [25%, 50%, 75%]
@@ -508,8 +499,7 @@ class GroupBy(Serializable, Reducible, Scannable):
 
     def __iter__(self):
         group_names, offsets, _, grouped_values = self._grouped()
-        # Replace with Index once BaseIndex is removed
-        if isinstance(group_names, (Index, MultiIndex, RangeIndex)):
+        if isinstance(group_names, Index):
             group_names = group_names.to_pandas()
         for i, name in enumerate(group_names):
             yield (
@@ -2694,12 +2684,6 @@ class GroupBy(Serializable, Reducible, Scannable):
         return self.agg(func)
 
     @_performance_tracking
-    def collect(self):
-        """Get a list of all the values for each column in each group."""
-        _deprecate_collect()
-        return self.agg(list)
-
-    @_performance_tracking
     def unique(self):
         """Get a list of the unique values for each column in each group."""
         return self.agg("unique")
@@ -3556,8 +3540,7 @@ class _Grouping(Serializable):
                     self._handle_callable(by)
                 elif isinstance(by, Series):
                     self._handle_series(by)
-                # Replace with Index once BaseIndex is removed
-                elif isinstance(by, (Index, MultiIndex, RangeIndex)):
+                elif isinstance(by, Index):
                     self._handle_index(by)
                 elif isinstance(by, abc.Mapping):
                     self._handle_mapping(by)
