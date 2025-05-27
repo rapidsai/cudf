@@ -71,7 +71,10 @@ namespace {
 {
   auto const env = getenv("LIBCUDF_HW_DECOMPRESSION");
   if (env == nullptr) { return std::nullopt; }
-  return std::string{env} == "ON";
+  std::string val{env};
+  std::transform(
+    val.begin(), val.end(), val.begin(), [](unsigned char c) { return std::toupper(c); });
+  return val == "ON";
 }
 #endif
 
@@ -131,12 +134,12 @@ auto batched_decompress_get_temp_size_ex(compression_type compression, Args&&...
 template <typename... Args>
 auto batched_decompress_async(compression_type compression,
                               std::optional<bool> use_hw_decompression,
-                              const void* const* device_compressed_chunk_ptrs,
-                              const size_t* device_compressed_chunk_bytes,
-                              const size_t* device_uncompressed_buffer_bytes,
+                              void const* const* device_compressed_chunk_ptrs,
+                              size_t const* device_compressed_chunk_bytes,
+                              size_t const* device_uncompressed_buffer_bytes,
                               size_t* device_uncompressed_chunk_bytes,
                               size_t num_chunks,
-                              void* const device_temp_ptr,
+                              void* device_temp_ptr,
                               size_t temp_bytes,
                               void* const* device_uncompressed_chunk_ptrs,
                               nvcompStatus_t* device_statuses,
