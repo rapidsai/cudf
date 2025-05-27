@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,8 +14,9 @@
  * limitations under the License.
  */
 
-#include <memory>
 #include <cudf/utilities/export.hpp>
+
+#include <memory>
 
 namespace CUDF_EXPORT cudf {
 
@@ -58,4 +59,4 @@ class context_guard {
   ~context_guard() { deinitialize(); }
 };
 
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf
