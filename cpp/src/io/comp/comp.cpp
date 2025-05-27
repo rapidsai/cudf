@@ -30,6 +30,8 @@
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
+#include <cuda/std/bit>
+
 #include <BS_thread_pool.hpp>
 #include <zlib.h>  // GZIP compression
 #include <zstd.h>
@@ -142,8 +144,7 @@ uint8_t* emit_literal(uint8_t* out_begin, uint8_t const* literal_begin, uint8_t 
     // Fits into a single tag byte
     *out_it++ = n << 2;
   } else {
-    // TODO: Use `std::countl_zero` instead of `__builtin_clz` once we migrate to C++20
-    auto const log2_n = 31 - __builtin_clz(static_cast<uint32_t>(n));
+    auto const log2_n = 31 - cuda::std::countl_zero(static_cast<uint32_t>(n));
     auto const count  = (log2_n >> 3) + 1;
     *out_it++         = (59 + count) << 2;
     std::memcpy(out_it, &n, count);

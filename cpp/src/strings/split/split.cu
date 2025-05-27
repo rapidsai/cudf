@@ -105,7 +105,44 @@ namespace {
  *      6    ''    aa  b__ccc__
  * ```
  *
- * @tparam Tokenizer provides unique functions for split/rsplit
+ * The whitespace split function works differently in that consecutive whitespace is
+ * treated as a single delimiter.
+ *
+ * ```
+ *  import pandas as pd
+ *  pd_series = pd.Series(['', None, 'a b', ' a b ', '  aa  bb  ', ' a  bbb   c', ' aa b  ccc  '])
+ *  print(pd_series.str.split(pat=None, expand=True))
+ *            0     1     2
+ *      0  None  None  None
+ *      1  None  None  None
+ *      2     a     b  None
+ *      3     a     b  None
+ *      4    aa    bb  None
+ *      5     a   bbb     c
+ *      6    aa     b   ccc
+ *
+ *  print(pd_series.str.split(pat=None, n=1, expand=True))
+ *            0         1
+ *      0  None      None
+ *      1  None      None
+ *      2     a         b
+ *      3     a        b
+ *      4    aa      bb
+ *      5     a   bbb   c
+ *      6    aa  b  ccc
+ *
+ *  print(pd_series.str.split(pat=None, n=2, expand=True))
+ *            0     1      2
+ *      0  None  None   None
+ *      1  None  None   None
+ *      2     a     b   None
+ *      3     a     b   None
+ *      4    aa    bb   None
+ *      5     a   bbb      c
+ *      6    aa     b  ccc *
+ * ```
+ *
+ * @tparam Tokenizer provides unique functions for split/rsplit and whitespace split/rsplit
  * @tparam DelimiterFn Functor for locating delimiters
  * @param input The strings to split
  * @param tokenizer Tokenizer for counting and producing tokens
@@ -159,233 +196,15 @@ std::unique_ptr<table> split_fn(strings_column_view const& input,
   return std::make_unique<table>(std::move(results));
 }
 
-/**
- * @brief Base class for whitespace tokenizers.
- *
- * These are common methods used by both split and rsplit tokenizer functors.
- */
-struct base_whitespace_split_tokenizer {
-  // count the tokens only between non-whitespace characters
-  __device__ size_type count_tokens(size_type idx) const
-  {
-    if (d_strings.is_null(idx)) return 0;
-    string_view const d_str = d_strings.element<string_view>(idx);
-    return count_tokens_whitespace(d_str, max_tokens);
-  }
-
-  base_whitespace_split_tokenizer(column_device_view const& d_strings, size_type max_tokens)
-    : d_strings(d_strings), max_tokens(max_tokens)
-  {
-  }
-
- protected:
-  column_device_view const d_strings;
-  size_type max_tokens;  // maximum number of tokens
-};
-
-/**
- * @brief The tokenizer functions for split() with whitespace.
- *
- * The whitespace tokenizer has no delimiter and handles one or more
- * consecutive whitespace characters as a single delimiter.
- */
-struct whitespace_split_tokenizer_fn : base_whitespace_split_tokenizer {
-  /**
-   * @brief This will create tokens around each runs of whitespace characters.
-   *
-   * Each token is placed in `d_all_tokens` so they align consecutively
-   * with other tokens for the same output column.
-   * That is, `d_tokens[col * strings_count + string_index]` is the token at column `col`
-   * for string at `string_index`.
-   *
-   * @param idx Index of the string to process
-   * @param d_token_counts Token counts for each string
-   * @param d_all_tokens All output tokens for the strings column
-   */
-  __device__ void process_tokens(size_type idx,
-                                 size_type const* d_token_counts,
-                                 string_index_pair* d_all_tokens) const
-  {
-    string_index_pair* d_tokens = d_all_tokens + idx;
-    if (d_strings.is_null(idx)) return;
-    string_view const d_str = d_strings.element<cudf::string_view>(idx);
-    if (d_str.empty()) return;
-    whitespace_string_tokenizer tokenizer(d_str);
-    size_type token_count = d_token_counts[idx];
-    size_type token_idx   = 0;
-    position_pair token{0, 0};
-    while (tokenizer.next_token() && (token_idx < token_count)) {
-      token = tokenizer.get_token();
-      d_tokens[d_strings.size() * (token_idx++)] =
-        string_index_pair{d_str.data() + token.first, (token.second - token.first)};
-    }
-    if (token_count == max_tokens)
-      d_tokens[d_strings.size() * (token_idx - 1)] =
-        string_index_pair{d_str.data() + token.first, (d_str.size_bytes() - token.first)};
-  }
-
-  whitespace_split_tokenizer_fn(column_device_view const& d_strings, size_type max_tokens)
-    : base_whitespace_split_tokenizer(d_strings, max_tokens)
-  {
-  }
-};
-
-/**
- * @brief The tokenizer functions for rsplit() with whitespace.
- *
- * The whitespace tokenizer has no delimiter and handles one or more
- * consecutive whitespace characters as a single delimiter.
- *
- * This one processes tokens from the end of each string.
- */
-struct whitespace_rsplit_tokenizer_fn : base_whitespace_split_tokenizer {
-  /**
-   * @brief This will create tokens around each runs of whitespace characters.
-   *
-   * Each token is placed in `d_all_tokens` so they align consecutively
-   * with other tokens for the same output column.
-   * That is, `d_tokens[col * strings_count + string_index]` is the token at column `col`
-   * for string at `string_index`.
-   *
-   * @param idx Index of the string to process
-   * @param d_token_counts Token counts for each string
-   * @param d_all_tokens All output tokens for the strings column
-   */
-  __device__ void process_tokens(size_type idx,  // string position index
-                                 size_type const* d_token_counts,
-                                 string_index_pair* d_all_tokens) const
-  {
-    string_index_pair* d_tokens = d_all_tokens + idx;
-    if (d_strings.is_null(idx)) return;
-    string_view const d_str = d_strings.element<cudf::string_view>(idx);
-    if (d_str.empty()) return;
-    whitespace_string_tokenizer tokenizer(d_str, true);
-    size_type token_count = d_token_counts[idx];
-    size_type token_idx   = 0;
-    position_pair token{0, 0};
-    while (tokenizer.prev_token() && (token_idx < token_count)) {
-      token = tokenizer.get_token();
-      d_tokens[d_strings.size() * (token_count - 1 - token_idx)] =
-        string_index_pair{d_str.data() + token.first, (token.second - token.first)};
-      ++token_idx;
-    }
-    if (token_count == max_tokens)
-      d_tokens[d_strings.size() * (token_count - token_idx)] =
-        string_index_pair{d_str.data(), token.second};
-  }
-
-  whitespace_rsplit_tokenizer_fn(column_device_view const& d_strings, size_type max_tokens)
-    : base_whitespace_split_tokenizer(d_strings, max_tokens)
-  {
-  }
-};
-
-/**
- * @brief Generic split function called by split() and rsplit() using whitespace as a delimiter.
- *
- * The number of tokens for each string is computed by counting consecutive characters
- * between runs of whitespace in each string. The number of output columns is determined
- * by the string with the most tokens. Next the string_index_pairs for the entire column
- * is created.
- *
- * Finally, each column is built by creating a vector of tokens (string_index_pairs)
- * according to their position in each string. The first token from each string goes
- * into the first output column, the 2nd token from each string goes into the 2nd
- * output column, etc.
- *
- * This can be compared to Pandas `split()` with no delimiter and with `expand=True` but
- * with the rows/columns transposed.
- *
- *  import pandas as pd
- *  pd_series = pd.Series(['', None, 'a b', ' a b ', '  aa  bb  ', ' a  bbb   c', ' aa b  ccc  '])
- *  print(pd_series.str.split(pat=None, expand=True))
- *            0     1     2
- *      0  None  None  None
- *      1  None  None  None
- *      2     a     b  None
- *      3     a     b  None
- *      4    aa    bb  None
- *      5     a   bbb     c
- *      6    aa     b   ccc
- *
- *  print(pd_series.str.split(pat=None, n=1, expand=True))
- *            0         1
- *      0  None      None
- *      1  None      None
- *      2     a         b
- *      3     a        b
- *      4    aa      bb
- *      5     a   bbb   c
- *      6    aa  b  ccc
- *
- *  print(pd_series.str.split(pat=None, n=2, expand=True))
- *            0     1      2
- *      0  None  None   None
- *      1  None  None   None
- *      2     a     b   None
- *      3     a     b   None
- *      4    aa    bb   None
- *      5     a   bbb      c
- *      6    aa     b  ccc
- *
- * @tparam Tokenizer provides unique functions for split/rsplit.
- * @param strings_count The number of strings in the column
- * @param tokenizer Tokenizer for counting and producing tokens
- * @return table of columns for the output of the split
- */
-template <typename Tokenizer>
-std::unique_ptr<table> whitespace_split_fn(size_type strings_count,
-                                           Tokenizer tokenizer,
+// Create a table with a single strings column with all nulls
+std::unique_ptr<table> make_all_null_table(size_type size,
                                            rmm::cuda_stream_view stream,
                                            rmm::device_async_resource_ref mr)
 {
-  // compute the number of tokens per string
-  rmm::device_uvector<size_type> token_counts(strings_count, stream);
-  auto d_token_counts = token_counts.data();
-  thrust::transform(rmm::exec_policy(stream),
-                    thrust::make_counting_iterator<size_type>(0),
-                    thrust::make_counting_iterator<size_type>(strings_count),
-                    d_token_counts,
-                    cuda::proclaim_return_type<size_type>([tokenizer] __device__(size_type idx) {
-                      return tokenizer.count_tokens(idx);
-                    }));
-
-  // column count is the maximum number of tokens for any string
-  size_type const columns_count = thrust::reduce(
-    rmm::exec_policy(stream), token_counts.begin(), token_counts.end(), 0, cudf::detail::maximum{});
-
   std::vector<std::unique_ptr<column>> results;
-  // boundary case: if no columns, return one null column (issue #119)
-  if (columns_count == 0) {
-    results.push_back(std::make_unique<column>(
-      data_type{type_id::STRING},
-      strings_count,
-      rmm::device_buffer{0, stream, mr},  // no data
-      cudf::detail::create_null_mask(strings_count, mask_state::ALL_NULL, stream, mr),
-      strings_count));
-  }
-
-  // get the positions for every token
-  rmm::device_uvector<string_index_pair> tokens(
-    static_cast<int64_t>(columns_count) * static_cast<int64_t>(strings_count), stream);
-  string_index_pair* d_tokens = tokens.data();
-  thrust::fill(
-    rmm::exec_policy(stream), tokens.begin(), tokens.end(), string_index_pair{nullptr, 0});
-  thrust::for_each_n(rmm::exec_policy(stream),
-                     thrust::make_counting_iterator<size_type>(0),
-                     strings_count,
-                     [tokenizer, d_token_counts, d_tokens] __device__(size_type idx) {
-                       tokenizer.process_tokens(idx, d_token_counts, d_tokens);
-                     });
-
-  // Create each column.
-  // - Each pair points to a string for that column for each row.
-  // - Create the strings column from the vector using the strings factory.
-  for (size_type col = 0; col < columns_count; ++col) {
-    auto column_tokens = d_tokens + (col * strings_count);
-    results.emplace_back(
-      make_strings_column(column_tokens, column_tokens + strings_count, stream, mr));
-  }
+  auto mask = cudf::detail::create_null_mask(size, mask_state::ALL_NULL, stream, mr);
+  results.push_back(std::make_unique<column>(
+    data_type{type_id::STRING}, size, rmm::device_buffer{}, std::move(mask), size));
   return std::make_unique<table>(std::move(results));
 }
 
@@ -403,8 +222,12 @@ std::unique_ptr<table> split(strings_column_view const& input,
 
   auto d_strings = column_device_view::create(input.parent(), stream);
   if (delimiter.size() == 0) {
-    return whitespace_split_fn(
-      input.size(), whitespace_split_tokenizer_fn{*d_strings, max_tokens}, stream, mr);
+    auto tokenizer    = split_ws_tokenizer_fn{*d_strings, max_tokens};
+    auto delimiter_fn = whitespace_delimiter_fn{};
+    auto results      = split_fn(input, tokenizer, delimiter_fn, stream, mr);
+    // boundary case: if no columns, return one null column (issue #119)
+    return (results->num_columns() == 0) ? make_all_null_table(input.size(), stream, mr)
+                                         : std::move(results);
   }
 
   auto tokenizer    = split_tokenizer_fn{*d_strings, delimiter.size(), max_tokens};
@@ -424,8 +247,12 @@ std::unique_ptr<table> rsplit(strings_column_view const& input,
 
   auto d_strings = column_device_view::create(input.parent(), stream);
   if (delimiter.size() == 0) {
-    return whitespace_split_fn(
-      input.size(), whitespace_rsplit_tokenizer_fn{*d_strings, max_tokens}, stream, mr);
+    auto tokenizer    = rsplit_ws_tokenizer_fn{*d_strings, max_tokens};
+    auto delimiter_fn = whitespace_delimiter_fn{};
+    auto results      = split_fn(input, tokenizer, delimiter_fn, stream, mr);
+    // boundary case: if no columns, return one null column (issue #119)
+    return (results->num_columns() == 0) ? make_all_null_table(input.size(), stream, mr)
+                                         : std::move(results);
   }
 
   auto tokenizer    = rsplit_tokenizer_fn{*d_strings, delimiter.size(), max_tokens};
@@ -437,24 +264,24 @@ std::unique_ptr<table> rsplit(strings_column_view const& input,
 
 // external APIs
 
-std::unique_ptr<table> split(strings_column_view const& strings_column,
+std::unique_ptr<table> split(strings_column_view const& input,
                              string_scalar const& delimiter,
                              size_type maxsplit,
                              rmm::cuda_stream_view stream,
                              rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::split(strings_column, delimiter, maxsplit, stream, mr);
+  return detail::split(input, delimiter, maxsplit, stream, mr);
 }
 
-std::unique_ptr<table> rsplit(strings_column_view const& strings_column,
+std::unique_ptr<table> rsplit(strings_column_view const& input,
                               string_scalar const& delimiter,
                               size_type maxsplit,
                               rmm::cuda_stream_view stream,
                               rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::rsplit(strings_column, delimiter, maxsplit, stream, mr);
+  return detail::rsplit(input, delimiter, maxsplit, stream, mr);
 }
 
 }  // namespace strings

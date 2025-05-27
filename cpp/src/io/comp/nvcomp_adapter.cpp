@@ -152,7 +152,6 @@ auto batched_decompress_async(compression_type compression,
         opts.backend = *use_hw_decompression ? NVCOMP_DECOMPRESS_BACKEND_HARDWARE
                                              : NVCOMP_DECOMPRESS_BACKEND_CUDA;
       }
-      // TODO: adjust opts.algorithm based on use_hw_decompression - no details on this yet
       return nvcompBatchedSnappyDecompressAsync(device_compressed_chunk_ptrs,
                                                 device_compressed_chunk_bytes,
                                                 device_uncompressed_buffer_bytes,
