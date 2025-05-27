@@ -61,7 +61,7 @@ dependencies:
 - numpy>=1.23,<3.0a0
 - numpydoc
 - nvcomp==4.2.0.11
-- nvtx>=0.2.1
+- nvtx>=0.2.1,<0.2.12
 - openpyxl
 - packaging
 - pandas

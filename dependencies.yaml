@@ -745,7 +745,7 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - nvtx>=0.2.1
+          - nvtx>=0.2.1,<0.2.12
           - packaging
           - typing_extensions>=4.0.0
       - output_types: requirements
@@ -771,7 +771,7 @@ dependencies:
           - cachetools
           - &numba-cuda-dep numba-cuda>=0.11.0,<0.12.0a0
           - &numba-dep numba>=0.59.1,<0.62.0a0
-          - nvtx>=0.2.1
+          - nvtx>=0.2.1,<0.2.12
           - packaging
           - rich
           - typing_extensions>=4.0.0

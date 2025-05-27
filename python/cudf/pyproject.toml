@@ -27,7 +27,7 @@ dependencies = [
     "numba-cuda>=0.11.0,<0.12.0a0",
     "numba>=0.59.1,<0.62.0a0",
     "numpy>=1.23,<3.0a0",
-    "nvtx>=0.2.1",
+    "nvtx>=0.2.1,<0.2.12",
     "packaging",
     "pandas>=2.0,<2.2.4dev0",
     "ptxcompiler",

@@ -201,6 +201,7 @@ dependencies:
           - pandas
           - pytest
           - pytest-xdist
+          - nvtx>=0.2.1,<0.2.12
   test_dask:
     common:
       - output_types: conda
