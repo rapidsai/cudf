@@ -351,7 +351,7 @@ def _(node: pl_ir.Join, translator: Translator, schema: Schema) -> ir.IR:
         else:
             ops = [op1, op2]
 
-        dtype = plc.DataType(plc.TypeId.BOOL8)
+        dtype = DType(pl.datatypes.Boolean())
         predicate = functools.reduce(
             functools.partial(
                 expr.BinOp, dtype, plc.binaryop.BinaryOperator.LOGICAL_AND
@@ -495,9 +495,7 @@ def _(node: pl_ir.HConcat, translator: Translator, schema: Schema) -> ir.IR:
 
 
 @_translate_ir.register
-def _(
-    node: pl_ir.Sink, translator: Translator, schema: dict[str, plc.DataType]
-) -> ir.IR:
+def _(node: pl_ir.Sink, translator: Translator, schema: Schema) -> ir.IR:
     payload = json.loads(node.payload)
     try:
         file = payload["File"]
@@ -698,8 +696,8 @@ def _(
         )
         named_aggs = [agg for agg, _ in aggs]
         orderby = node.options.index_column
-        orderby_dtype = schema[orderby]
-        if plc.traits.is_integral(orderby_dtype):
+        orderby_dtype = schema[orderby].plc_dtype
+        if plc.traits.is_integral(orderby_dtype.plc_dtype):
             # Integer orderby column is cast in implementation to int64 in polars
             orderby_dtype = plc.DataType(plc.TypeId.INT64)
         preceding, following = offsets_to_windows(
