@@ -17,6 +17,7 @@
 #include "hybrid_scan_helpers.hpp"
 #include "hybrid_scan_impl.hpp"
 #include "io/parquet/parquet_gpu.hpp"
+#include "io/utilities/block_utils.cuh"
 
 #include <cudf/ast/detail/expression_transformer.hpp>
 #include <cudf/ast/detail/operators.hpp>
@@ -263,22 +264,19 @@ get_int32_type_len(std::optional<LogicalType> const& logical_type)
 /**
  * @brief Helper function to decode an INT96 value
  *
- * @param int96_value INT96 value to decode
+ * @param int96_ptr Pointer to the INT96 value to decode
  * @param clock_rate Clock rate of the column
  * @param timestamp64 Pointer to the timestamp64 value to store the decoded value
  */
-__device__ __forceinline__ void decode_int96timestamp(cudf::string_view const int96_value,
+__device__ __forceinline__ void decode_int96timestamp(uint8_t const* int96_ptr,
                                                       int32_t clock_rate,
                                                       int64_t* timestamp64)
 {
   // Note: This function has been modified from the original at
   // https://github.com/rapidsai/cudf/blob/c89c83c00c729a86c56570693b627f31408bc2c9/cpp/src/io/parquet/page_data.cuh#L133-L198
 
-  auto nanos = int64_t{0};
-  auto days  = int64_t{0};
-
-  cuda::std::memcpy(&nanos, int96_value.data(), sizeof(int64_t));
-  cuda::std::memcpy(&days, int96_value.data() + sizeof(int64_t), sizeof(int32_t));
+  int64_t nanos = cudf::io::unaligned_load64(int96_ptr);
+  int64_t days  = cudf::io::unaligned_load32(int96_ptr + sizeof(int64_t));
 
   // Convert from Julian day at noon to UTC seconds
   cudf::duration_D duration_days{
@@ -456,10 +454,9 @@ __device__ T decode_fixed_width_value(PageInfo const& page,
       }
 
       // Decode the int96 value from the page data
-      auto const int96_value = cudf::string_view{
-        reinterpret_cast<char const*>(page_data) + value_idx * flba_length, flba_length};
-      decode_int96timestamp(
-        int96_value, chunk.ts_clock_rate, reinterpret_cast<int64_t*>(&decoded_value));
+      decode_int96timestamp(page_data + (value_idx * flba_length),
+                            chunk.ts_clock_rate,
+                            reinterpret_cast<int64_t*>(&decoded_value));
       break;
     }
 
@@ -508,8 +505,8 @@ __device__ T decode_fixed_width_value(PageInfo const& page,
 
       // Handle timestamps
       if constexpr (cudf::is_timestamp<T>()) {
-        int32_t timestamp{};
-        cuda::std::memcpy(&timestamp, page_data + (value_idx * sizeof(T)), sizeof(T));
+        auto const timestamp =
+          cudf::io::unaligned_load32(page_data + (value_idx * sizeof(uint32_t)));
         if (timestamp_scale != 0) {
           decoded_value = T{typename T::duration(static_cast<typename T::rep>(timestamp))};
         } else {
@@ -518,17 +515,23 @@ __device__ T decode_fixed_width_value(PageInfo const& page,
       }
       // Handle durations
       else if constexpr (cudf::is_duration<T>()) {
-        if (int32_type_len == sizeof(int64_t)) {
-          // Reading INT32 TIME_MILLIS into 64-bit DURATION_MILLISECONDS
-          // TIME_MILLIS is the only duration type stored as int32:
-          // https://github.com/apache/parquet-format/blob/master/LogicalTypes.md#deprecated-time-convertedtype
-          uint32_t duration{};
-          cuda::std::memcpy(
-            &duration, page_data + (value_idx * sizeof(uint32_t)), sizeof(uint32_t));
-          decoded_value = T{static_cast<typename T::rep>(duration)};
-        } else {
-          cuda::std::memcpy(&decoded_value, page_data + (value_idx * sizeof(T)), sizeof(T));
+        // Note: This function has been extracted from the snippet at:
+        // https://github.com/rapidsai/cudf/blob/594d26768ce86b9c2f389e851ae1afb77032c879/cpp/src/io/parquet/decode_fixed.cu#L159-L163
+
+        // Reading INT32 TIME_MILLIS into 64-bit DURATION_MILLISECONDS
+        // TIME_MILLIS is the only duration type stored as int32:
+        // https://github.com/apache/parquet-format/blob/master/LogicalTypes.md#deprecated-time-convertedtype
+
+        // Must be either int32 or int64 duration
+        if (sizeof(typename T::rep) != sizeof(int32_t) and
+            sizeof(typename T::rep) != sizeof(int64_t)) {
+          set_error(error, decode_error::INVALID_DATA_TYPE);
+          return {};
         }
+
+        auto const duration =
+          cudf::io::unaligned_load32(page_data + (value_idx * sizeof(uint32_t)));
+        decoded_value = T{static_cast<typename T::rep>(duration)};
       }
       // Handle other int32 encoded values including smaller bitwidths and decimal32
       else {
@@ -537,7 +540,8 @@ __device__ T decode_fixed_width_value(PageInfo const& page,
           set_error(error, decode_error::INVALID_DATA_TYPE);
           return {};
         }
-        cuda::std::memcpy(&decoded_value, page_data + (value_idx * sizeof(int32_t)), sizeof(T));
+        decoded_value =
+          static_cast<T>(cudf::io::unaligned_load32(page_data + (value_idx * sizeof(uint32_t))));
       }
       break;
     }
@@ -550,8 +554,8 @@ __device__ T decode_fixed_width_value(PageInfo const& page,
       }
       // Handle timestamps
       if constexpr (cudf::is_timestamp<T>()) {
-        int64_t timestamp{};
-        cuda::std::memcpy(&timestamp, page_data + (value_idx * sizeof(T)), sizeof(T));
+        int64_t const timestamp =
+          cudf::io::unaligned_load64(page_data + (value_idx * sizeof(int64_t)));
         if (timestamp_scale != 0) {
           decoded_value = T{typename T::duration(
             static_cast<typename T::rep>(convert_to_timestamp64(timestamp, timestamp_scale)))};
@@ -561,7 +565,8 @@ __device__ T decode_fixed_width_value(PageInfo const& page,
       }
       // Handle durations and other int64 encoded values including decimal64
       else {
-        cuda::std::memcpy(&decoded_value, page_data + (value_idx * sizeof(T)), sizeof(T));
+        decoded_value =
+          static_cast<T>(cudf::io::unaligned_load64(page_data + (value_idx * sizeof(uint64_t))));
       }
       break;
     }
