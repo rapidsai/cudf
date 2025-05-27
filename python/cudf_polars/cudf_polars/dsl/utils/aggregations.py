@@ -13,7 +13,7 @@ import polars as pl
 
 import pylibcudf as plc
 
-from cudf_polars.containers import DType
+from cudf_polars.dsl.containers import DType
 from cudf_polars.dsl import expr, ir
 
 if TYPE_CHECKING:
