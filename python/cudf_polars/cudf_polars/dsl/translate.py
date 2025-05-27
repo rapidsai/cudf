@@ -828,9 +828,9 @@ def _(
     # Push casts into literals so we can handle Cast(Literal(Null))
     if isinstance(inner, expr.Literal):
         plc_column = plc.Column.from_scalar(
-            plc.Scalar.from_py(inner.value, inner.dtype), 1
+            plc.Scalar.from_py(inner.value, inner.dtype.plc_dtype), 1
         )
-        casted_column = plc.unary.cast(plc_column, dtype)
+        casted_column = plc.unary.cast(plc_column, dtype.plc_dtype)
         casted_py_scalar = plc.interop.to_arrow(
             plc.copying.get_element(casted_column, 0)
         ).as_py()

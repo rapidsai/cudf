@@ -9,8 +9,11 @@ import itertools
 from functools import partial
 from typing import TYPE_CHECKING, Any
 
+import polars as pl
+
 import pylibcudf as plc
 
+from cudf_polars.containers import DType
 from cudf_polars.dsl import expr, ir
 
 if TYPE_CHECKING:
@@ -110,7 +113,7 @@ def decompose_single_agg(
         else:
             (child,) = agg.children
         needs_masking = agg.name in {"min", "max"} and plc.traits.is_floating_point(
-            child.dtype
+            child.dtype.plc_dtype
         )
         if needs_masking and agg.options:
             # pl.col("a").nan_max or nan_min
@@ -131,9 +134,9 @@ def decompose_single_agg(
             )
         elif agg.name == "sum":
             col = (
-                expr.Cast(agg.dtype, expr.Col(plc.DataType(plc.TypeId.INT64), name))
+                expr.Cast(agg.dtype, expr.Col(Dtype(pl.datatypes.Int64()), name))
                 if (
-                    plc.traits.is_integral(agg.dtype)
+                    plc.traits.is_integral(agg.dtype.plc_dtype)
                     and agg.dtype.id() != plc.TypeId.INT64
                 )
                 else expr.Col(agg.dtype, name)

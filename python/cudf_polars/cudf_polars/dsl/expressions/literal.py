@@ -8,9 +8,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, NoReturn
 
+import polars as pl
+
 import pylibcudf as plc
 
-from cudf_polars.containers import Column
+from cudf_polars.containers import Column, DType
 from cudf_polars.dsl.expressions.base import ExecutionContext, Expr
 
 if TYPE_CHECKING:
@@ -18,7 +20,7 @@ if TYPE_CHECKING:
 
     import pyarrow as pa
 
-    from cudf_polars.containers import DType, DataFrame
+    from cudf_polars.containers import DataFrame
 
 __all__ = ["Literal", "LiteralColumn"]
 
@@ -32,7 +34,7 @@ class Literal(Expr):
         if value is None and dtype.id() == plc.TypeId.EMPTY:
             # TypeId.EMPTY not supported by libcudf
             # cuDF Python also maps EMPTY to INT8
-            dtype = plc.DataType(plc.TypeId.INT8)
+            dtype = DType(pl.datatypes.Int8())
         self.dtype = dtype
         self.value = value
         self.children = ()

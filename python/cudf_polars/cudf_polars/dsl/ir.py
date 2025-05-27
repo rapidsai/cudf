@@ -1192,7 +1192,7 @@ class Rolling(IR):
         self.agg_requests = tuple(agg_requests)
         if not all(
             plc.rolling.is_valid_rolling_aggregation(
-                agg.value.dtype, agg.value.agg_request
+                agg.value.dtype.plc_dtype, agg.value.agg_request
             )
             for agg in self.agg_requests
         ):

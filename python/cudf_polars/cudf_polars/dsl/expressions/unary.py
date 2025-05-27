@@ -59,7 +59,7 @@ class Len(Expr):
         """Evaluate this expression given a dataframe for context."""
         return Column(
             plc.Column.from_scalar(
-                plc.Scalar.from_py(df.num_rows, self.dtype),
+                plc.Scalar.from_py(df.num_rows, self.dtype.plc_dtype),
                 1,
             )
         )
@@ -230,7 +230,9 @@ class UnaryFunction(Expr):
             if column.null_count == 0:
                 return column
             if isinstance(self.children[1], Literal):
-                arg = plc.Scalar.from_py(self.children[1].value, self.children[1].dtype)
+                arg = plc.Scalar.from_py(
+                    self.children[1].value, self.children[1].dtype.plc_dtype
+                )
             else:
                 evaluated = self.children[1].evaluate(df, context=context)
                 arg = evaluated.obj_scalar if evaluated.is_scalar else evaluated.obj

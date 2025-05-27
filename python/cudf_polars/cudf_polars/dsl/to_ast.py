@@ -140,7 +140,7 @@ def _(node: expr.ColRef, self: Transformer) -> plc_expr.Expression:
 
 @_to_ast.register
 def _(node: expr.Literal, self: Transformer) -> plc_expr.Expression:
-    return plc_expr.Literal(plc.Scalar.from_py(node.value, node.dtype))
+    return plc_expr.Literal(plc.Scalar.from_py(node.value, node.dtype.plc_dtype))
 
 
 @_to_ast.register

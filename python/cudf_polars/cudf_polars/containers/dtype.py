@@ -109,3 +109,7 @@ class DType:
     def id(self) -> plc.TypeId:
         """The pylibcudf.TypeId of this Dtype."""
         return self.plc_dtype.id()
+
+    def __hash__(self) -> int:
+        """Hash of the dtype."""
+        return hash((self.plc_dtype, self.polars_dtype))

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -9,7 +9,8 @@ import polars as pl
 
 import pylibcudf as plc
 
-from cudf_polars.utils.dtypes import from_polars, is_order_preserving_cast
+from cudf_polars.containers import DType
+from cudf_polars.utils.dtypes import is_order_preserving_cast
 
 INT8 = plc.DataType(plc.TypeId.INT8)
 INT16 = plc.DataType(plc.TypeId.INT16)
@@ -42,7 +43,7 @@ FLOAT64 = plc.DataType(plc.TypeId.FLOAT64)
 )
 def test_unhandled_dtype_conversion_raises(pltype):
     with pytest.raises(NotImplementedError):
-        _ = from_polars(pltype)
+        _ = DType(pltype)
 
 
 def test_is_order_preserving_cast():

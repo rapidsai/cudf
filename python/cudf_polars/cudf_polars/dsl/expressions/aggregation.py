@@ -69,7 +69,7 @@ class Agg(Expr):
                 raise NotImplementedError("Only support literal quantile values")
             if options == "equiprobable":
                 raise NotImplementedError("Quantile with equiprobable interpolation")
-            if plc.traits.is_duration(child.dtype):
+            if plc.traits.is_duration(child.dtype.plc_dtype):
                 raise NotImplementedError("Quantile with duration data type")
             req = plc.aggregation.quantile(
                 quantiles=[quantile.value], interp=Agg.interp_mapping[options]

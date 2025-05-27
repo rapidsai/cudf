@@ -89,7 +89,10 @@ class BooleanFunction(Expr):
         if (
             POLARS_VERSION_LT_128
             and self.name is BooleanFunction.Name.IsIn
-            and not all(c.dtype == self.children[0].dtype for c in self.children)
+            and not all(
+                c.dtype.plc_dtype == self.children[0].dtype.plc_dtype
+                for c in self.children
+            )
         ):  # pragma: no cover
             # TODO: If polars IR doesn't put the casts in, we need to
             # mimic the supertype promotion rules.

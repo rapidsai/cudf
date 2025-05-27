@@ -130,7 +130,7 @@ class TemporalFunction(Expr):
             raise NotImplementedError(f"Temporal function {self.name}")
 
         if self.name is TemporalFunction.Name.ToString and plc.traits.is_duration(
-            self.children[0].dtype
+            self.children[0].dtype.plc_dtype
         ):
             raise NotImplementedError("ToString is not supported on duration types")
 
