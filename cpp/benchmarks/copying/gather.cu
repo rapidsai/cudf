@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,28 +15,25 @@
  */
 
 #include <benchmarks/common/generate_input.hpp>
-#include <benchmarks/fixture/benchmark_fixture.hpp>
-#include <benchmarks/synchronization/synchronization.hpp>
 
 #include <cudf/copying.hpp>
-#include <cudf/types.hpp>
 
 #include <thrust/execution_policy.h>
 #include <thrust/random.h>
 #include <thrust/reverse.h>
 #include <thrust/shuffle.h>
 
-class Gather : public cudf::benchmark {};
+#include <nvbench/nvbench.cuh>
 
-template <class TypeParam, bool coalesce>
-void BM_gather(benchmark::State& state)
+static void bench_gather(nvbench::state& state)
 {
-  cudf::size_type const source_size{(cudf::size_type)state.range(0)};
-  auto const n_cols = (cudf::size_type)state.range(1);
+  auto const num_rows = static_cast<cudf::size_type>(state.get_int64("num_rows"));
+  auto const num_cols = static_cast<cudf::size_type>(state.get_int64("num_cols"));
+  auto const coalesce = static_cast<bool>(state.get_int64("coalesce"));
 
   // Gather indices
   auto gather_map_table =
-    create_sequence_table({cudf::type_to_id<cudf::size_type>()}, row_count{source_size});
+    create_sequence_table({cudf::type_to_id<cudf::size_type>()}, row_count{num_rows});
   auto gather_map = gather_map_table->get_column(0).mutable_view();
 
   if (coalesce) {
@@ -50,26 +47,20 @@ void BM_gather(benchmark::State& state)
   }
 
   // Every element is valid
-  auto source_table = create_sequence_table(cycle_dtypes({cudf::type_to_id<TypeParam>()}, n_cols),
-                                            row_count{source_size});
+  auto source_table = create_sequence_table(cycle_dtypes({cudf::type_to_id<int64_t>()}, num_cols),
+                                            row_count{num_rows});
 
-  for (auto _ : state) {
-    cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0
-    cudf::gather(*source_table, gather_map);
-  }
+  auto stream = cudf::get_default_stream();
+  state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
+  state.add_global_memory_reads<int8_t>(source_table->alloc_size());
+  state.add_global_memory_writes<int8_t>(source_table->alloc_size());
 
-  state.SetBytesProcessed(state.iterations() * state.range(0) * n_cols * 2 * sizeof(TypeParam));
+  state.exec(nvbench::exec_tag::sync,
+             [&](nvbench::launch&) { cudf::gather(*source_table, gather_map); });
 }
 
-#define GBM_BENCHMARK_DEFINE(name, type, coalesce)             \
-  BENCHMARK_DEFINE_F(Gather, name)(::benchmark::State & state) \
-  {                                                            \
-    BM_gather<type, coalesce>(state);                          \
-  }                                                            \
-  BENCHMARK_REGISTER_F(Gather, name)                           \
-    ->RangeMultiplier(2)                                       \
-    ->Ranges({{1 << 10, 1 << 26}, {1, 8}})                     \
-    ->UseManualTime();
-
-GBM_BENCHMARK_DEFINE(double_coalesced, double, true);
-GBM_BENCHMARK_DEFINE(double_shuffled, double, false);
+NVBENCH_BENCH(bench_gather)
+  .set_name("gather")
+  .add_int64_axis("num_rows", {64, 512, 4096, 32768, 262144, 2097152, 16777216, 134217728})
+  .add_int64_axis("num_cols", {1, 8})
+  .add_int64_axis("coalesce", {true, false});

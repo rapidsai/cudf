@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,60 +15,51 @@
  */
 
 #include <benchmarks/common/generate_input.hpp>
-#include <benchmarks/fixture/benchmark_fixture.hpp>
-#include <benchmarks/synchronization/synchronization.hpp>
 
 #include <cudf/copying.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/device_buffer.hpp>
 
-class CopyIfElse : public cudf::benchmark {};
+#include <nvbench/nvbench.cuh>
 
-template <class TypeParam>
-static void BM_copy_if_else(benchmark::State& state, bool nulls)
+template <typename DataType>
+static void bench_copy_if_else(nvbench::state& state, nvbench::type_list<DataType>)
 {
-  cudf::size_type const n_rows{(cudf::size_type)state.range(0)};
-  auto input_type  = cudf::type_to_id<TypeParam>();
+  auto const num_rows = static_cast<cudf::size_type>(state.get_int64("num_rows"));
+  auto const nulls    = static_cast<bool>(state.get_int64("nulls"));
+
+  auto input_type  = cudf::type_to_id<DataType>();
   auto bool_type   = cudf::type_id::BOOL8;
-  auto const input = create_random_table({input_type, input_type, bool_type}, row_count{n_rows});
+  auto const input = create_random_table({input_type, input_type, bool_type}, row_count{num_rows});
 
   if (!nulls) {
-    input->get_column(2).set_null_mask(rmm::device_buffer{}, 0);
-    input->get_column(1).set_null_mask(rmm::device_buffer{}, 0);
     input->get_column(0).set_null_mask(rmm::device_buffer{}, 0);
+    input->get_column(1).set_null_mask(rmm::device_buffer{}, 0);
+    input->get_column(2).set_null_mask(rmm::device_buffer{}, 0);
   }
 
-  cudf::column_view decision(input->view().column(2));
-  cudf::column_view rhs(input->view().column(1));
   cudf::column_view lhs(input->view().column(0));
+  cudf::column_view rhs(input->view().column(1));
+  cudf::column_view decision(input->view().column(2));
 
-  for (auto _ : state) {
-    cuda_event_timer raii(state, true, cudf::get_default_stream());
-    cudf::copy_if_else(lhs, rhs, decision);
-  }
+  auto const bytes_read    = num_rows * (sizeof(DataType) + sizeof(bool));
+  auto const bytes_written = num_rows * sizeof(DataType);
+  auto const null_bytes    = nulls ? 2 * cudf::bitmask_allocation_size_bytes(num_rows) : 0;
 
-  auto const bytes_read    = n_rows * (sizeof(TypeParam) + sizeof(bool));
-  auto const bytes_written = n_rows * sizeof(TypeParam);
-  auto const null_bytes    = nulls ? 2 * cudf::bitmask_allocation_size_bytes(n_rows) : 0;
+  auto stream = cudf::get_default_stream();
+  state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
+  state.add_global_memory_reads<int8_t>(bytes_read);
+  state.add_global_memory_writes<int8_t>(bytes_written + null_bytes);
 
-  // Use number of bytes read and written.
-  state.SetBytesProcessed(static_cast<int64_t>(state.iterations()) *
-                          (bytes_read + bytes_written + null_bytes));
+  state.exec(nvbench::exec_tag::sync,
+             [&](nvbench::launch&) { cudf::copy_if_else(lhs, rhs, decision); });
 }
 
-#define COPY_BENCHMARK_DEFINE(name, type, b)                  \
-  BENCHMARK_DEFINE_F(CopyIfElse, name)                        \
-  (::benchmark::State & st) { BM_copy_if_else<type>(st, b); } \
-  BENCHMARK_REGISTER_F(CopyIfElse, name)                      \
-    ->RangeMultiplier(8)                                      \
-    ->Ranges({{1 << 12, 1 << 27}})                            \
-    ->UseManualTime()                                         \
-    ->Unit(benchmark::kMillisecond);
+using Types = nvbench::type_list<int16_t, uint32_t, double>;
 
-COPY_BENCHMARK_DEFINE(int16, int16_t, true)
-COPY_BENCHMARK_DEFINE(uint32, uint32_t, true)
-COPY_BENCHMARK_DEFINE(float64, double, true)
-COPY_BENCHMARK_DEFINE(int16_no_nulls, int16_t, false)
-COPY_BENCHMARK_DEFINE(uint32_no_nulls, uint32_t, false)
-COPY_BENCHMARK_DEFINE(float64_no_nulls, double, false)
+NVBENCH_BENCH_TYPES(bench_copy_if_else, NVBENCH_TYPE_AXES(Types))
+  .set_name("copy_if_else")
+  .set_type_axes_names({"DataType"})
+  .add_int64_axis("nulls", {true, false})
+  .add_int64_axis("num_rows", {4096, 32768, 262144, 2097152, 16777216, 134217728});
