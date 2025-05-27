@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#pragma once
+
 #include <cudf/strings/detail/convert/is_float.cuh>
 #include <cudf/strings/string_view.cuh>
 

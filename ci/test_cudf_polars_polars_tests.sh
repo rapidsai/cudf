@@ -3,6 +3,8 @@
 
 set -eou pipefail
 
+source rapids-init-pip
+
 rapids-logger "Download wheels"
 
 RAPIDS_PY_CUDA_SUFFIX="$(rapids-wheel-ctk-name-gen "${RAPIDS_CUDA_VERSION}")"

@@ -115,8 +115,9 @@ TEST_F(ParquetStringsTest, DISABLED_ChunkedReadLargeStrings)
   size_t constexpr pass_read_limit = size_t{8} * 1024 * 1024 * 1024;
 
   // Reader options
-  cudf::io::parquet_reader_options default_in_opts =
-    cudf::io::parquet_reader_options::builder(cudf::io::source_info(buffer.data(), buffer.size()));
+  cudf::io::parquet_reader_options default_in_opts = cudf::io::parquet_reader_options::builder(
+    cudf::io::source_info{cudf::host_span<std::byte const>{
+      reinterpret_cast<std::byte const*>(buffer.data()), buffer.size()}});
 
   // Chunked parquet reader
   auto reader = cudf::io::chunked_parquet_reader(0, pass_read_limit, default_in_opts);
@@ -213,8 +214,9 @@ TEST_F(ParquetStringsTest, ChunkedReadNestedLargeStrings)
   cudf::io::write_parquet(out_opts);
 
   // Reader options
-  cudf::io::parquet_reader_options in_opts =
-    cudf::io::parquet_reader_options::builder(cudf::io::source_info(buffer.data(), buffer.size()));
+  cudf::io::parquet_reader_options in_opts = cudf::io::parquet_reader_options::builder(
+    cudf::io::source_info{cudf::host_span<std::byte const>{
+      reinterpret_cast<std::byte const*>(buffer.data()), buffer.size()}});
 
   auto constexpr chunk_read_limit = size_t{1} * 1024 * 1024;
   auto constexpr pass_read_limit  = 0;

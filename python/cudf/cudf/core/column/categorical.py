@@ -18,7 +18,6 @@ from cudf.api.types import is_scalar
 from cudf.core.column import column
 from cudf.core.column.methods import ColumnMethods
 from cudf.core.dtypes import CategoricalDtype, IntervalDtype
-from cudf.core.scalar import pa_scalar_to_plc_scalar
 from cudf.utils.dtypes import (
     SIZE_TYPE_DTYPE,
     cudf_dtype_to_pa_type,
@@ -27,6 +26,7 @@ from cudf.utils.dtypes import (
     min_signed_type,
     min_unsigned_type,
 )
+from cudf.utils.scalar import pa_scalar_to_plc_scalar
 from cudf.utils.utils import _is_null_host_scalar
 
 if TYPE_CHECKING:
@@ -765,7 +765,9 @@ class CategoricalColumn(column.ColumnBase):
 
     def element_indexing(self, index: int) -> ScalarLike:
         val = self.codes.element_indexing(index)
-        return self._decode(int(val)) if val is not None else val
+        if val is self._PANDAS_NA_VALUE:
+            return val
+        return self._decode(int(val))
 
     @property
     def __cuda_array_interface__(self) -> Mapping[str, Any]:
