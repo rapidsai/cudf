@@ -952,8 +952,8 @@ table_with_metadata read_csv(cudf::io::datasource* source,
     }
   } else {
     // Create empty columns
-    for (size_t i = 0; i < column_types.size(); ++i) {
-      out_columns.emplace_back(make_empty_column(column_types[i]));
+    for (auto column_type : column_types) {
+      out_columns.emplace_back(make_empty_column(column_type));
     }
     // Handle empty metadata
     for (int col = 0; col < num_actual_columns; ++col) {
@@ -1001,7 +1001,7 @@ cudf::detail::trie create_na_trie(char quotechar,
 
   // Pandas treats empty strings as N/A if empty fields are treated as N/A
   if (std::find(na_values.begin(), na_values.end(), "") != na_values.end()) {
-    na_values.push_back(std::string(2, quotechar));
+    na_values.emplace_back(2, quotechar);
   }
 
   return cudf::detail::create_serialized_trie(na_values, stream);
