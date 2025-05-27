@@ -210,19 +210,19 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_fromArrow(JNIEnv* env,
 
     ArrowSchema sch;
     if (!arrow::ExportSchema(*arrow_table->schema(), &sch).ok()) {
-      JNI_THROW_NEW(env, "java/lang/RuntimeException", "Unable to produce an ArrowSchema", 0)
+      JNI_THROW_NEW(env, cudf::jni::RUNTIME_EXCEPTION_CLASS, "Unable to produce an ArrowSchema", 0)
     }
     auto batch = arrow_table->CombineChunksToBatch().ValueOrDie();
     ArrowArray arr;
     if (!arrow::ExportRecordBatch(*batch, &arr).ok()) {
-      JNI_THROW_NEW(env, "java/lang/RuntimeException", "Unable to produce an ArrowArray", 0)
+      JNI_THROW_NEW(env, cudf::jni::RUNTIME_EXCEPTION_CLASS, "Unable to produce an ArrowArray", 0)
     }
     auto retCols = cudf::from_arrow(&sch, &arr)->release();
     arr.release(&arr);
     sch.release(&sch);
 
     if (retCols.size() != 1) {
-      JNI_THROW_NEW(env, "java/lang/IllegalArgumentException", "Must result in one column", 0);
+      JNI_THROW_NEW(env, cudf::jni::ILLEGAL_ARG_EXCEPTION_CLASS, "Must result in one column", 0);
     }
     return release_as_jlong(retCols[0]);
   }
