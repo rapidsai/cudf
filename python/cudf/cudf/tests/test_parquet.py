@@ -3930,7 +3930,7 @@ def test_parquet_chunked_reader_string_decoders(
         (1024000, 1024000),  # large chunk and pass read limits
     ],
 )
-def test_parquet_reader_nrows_skiprows(
+def test_chunked_parquet_reader_nrows_skiprows(
     nrows,
     skip_rows,
     row_group_size_rows,
