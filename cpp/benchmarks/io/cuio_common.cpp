@@ -64,11 +64,14 @@ cudf::io::source_info cuio_source_sink_pair::make_source_info()
 {
   switch (type) {
     case io_type::FILEPATH: return cudf::io::source_info(file_name);
-    case io_type::HOST_BUFFER: return cudf::io::source_info(h_buffer.data(), h_buffer.size());
+    case io_type::HOST_BUFFER:
+      return cudf::io::source_info(cudf::host_span<std::byte const>(
+        reinterpret_cast<std::byte const*>(h_buffer.data()), h_buffer.size()));
     case io_type::PINNED_BUFFER: {
       pinned_buffer.resize(h_buffer.size());
       std::copy(h_buffer.begin(), h_buffer.end(), pinned_buffer.begin());
-      return cudf::io::source_info(pinned_buffer.data(), pinned_buffer.size());
+      return cudf::io::source_info(cudf::host_span<std::byte const>(
+        reinterpret_cast<std::byte const*>(pinned_buffer.data()), pinned_buffer.size()));
     }
     case io_type::DEVICE_BUFFER: {
       // TODO: make cuio_source_sink_pair stream-friendly and avoid implicit use of the default
