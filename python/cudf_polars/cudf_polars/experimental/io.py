@@ -388,7 +388,6 @@ def _sample_pq_statistics(ir: Scan) -> TableStats:
             options.set_row_groups(list(samples.values()))
             tbl_w_meta = plc.io.parquet.read_parquet(options)
             row_group_num_rows = tbl_w_meta.tbl.num_rows()
-            print(f"samples:{samples}, num_rows:{row_group_num_rows}\n")
             for name, column in zip(
                 tbl_w_meta.column_names(), tbl_w_meta.columns, strict=True
             ):
