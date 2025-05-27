@@ -17,6 +17,7 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
+#include <cudf/copying.hpp>
 #include <cudf/io/csv.hpp>
 #include <cudf/io/datasource.hpp>
 #include <cudf/strings/strings_column_view.hpp>
@@ -87,36 +88,40 @@ void write_csv(cudf::table_view const& tbl_view, std::string const& file_path)
 int main(int argc, char const** argv)
 {
   if (argc < 3) {
-    std::cout << "required parameters: csv-file-path out-file-path\n";
+    std::cout
+      << "insufficient argurments.\n\t\tin-csv-path out-csv-path [num_rows [memory_resource]]\n";
     return 1;
   }
 
-  auto const mr_name = std::string{argc >= 4 ? std::string(argv[3]) : std::string("cuda")};
-  auto const out_csv = std::string{argv[2]};
-  auto const in_csv  = std::string{argv[1]};
-  auto resource      = create_memory_resource(mr_name);
+  auto const in_csv   = std::string{argv[1]};
+  auto const out_csv  = std::string{argv[2]};
+  auto const num_rows = argc > 3 ? std::optional{std::stoi(std::string(argv[3]))} : std::nullopt;
+  auto const memory_resource_name =
+    std::string{argc > 5 ? std::string(argv[5]) : std::string("cuda")};
+
+  auto resource = create_memory_resource(memory_resource_name);
   cudf::set_current_device_resource(resource.get());
 
-  auto const csv_result = [in_csv] {
-    cudf::io::csv_reader_options in_opts =
-      cudf::io::csv_reader_options::builder(cudf::io::source_info{in_csv}).header(0);
-    return cudf::io::read_csv(in_opts).tbl;
-  }();
-  auto const csv_table = csv_result->view();
+  cudf::io::csv_reader_options in_opts =
+    cudf::io::csv_reader_options::builder(cudf::io::source_info{in_csv}).header(0);
+  auto input = cudf::io::read_csv(in_opts).tbl;
 
-  std::cout << "table: " << csv_table.num_rows() << " rows " << csv_table.num_columns()
+  if (num_rows.has_value() && input->get_column(0).size() != num_rows.value()) {
+    input = cudf::sample(*input, num_rows.value(), cudf::sample_with_replacement::TRUE);
+  }
+
+  auto table_view = input->view();
+
+  std::cout << "table: " << table_view.num_rows() << " rows " << table_view.num_columns()
             << " columns\n";
 
   auto st     = std::chrono::steady_clock::now();
-  auto result = transform(csv_table);
+  auto result = transform(table_view);
 
   std::chrono::duration<double> elapsed = std::chrono::steady_clock::now() - st;
   std::cout << "Wall time: " << elapsed.count() << " seconds\n";
 
-  std::vector<std::unique_ptr<cudf::column>> table_columns;
-  table_columns.push_back(std::move(result));
-
-  auto out_table = cudf::table(std::move(table_columns));
+  auto out_table = cudf::table({std::move(result)});
 
   write_csv(out_table, out_csv);
 

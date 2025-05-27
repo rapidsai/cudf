@@ -6,10 +6,11 @@ strings columns.
 The example source code loads a csv file and produces a transformed column from the table using the values from the tables.
 
 The following examples are included:
-1. Using a transform to perform a fused checksum on two columns
-2. Using a transform to get a substring from a kernel
-3. Using a transform kernel to output a string to a pre-allocated buffer
-
+1. `int_output` - Using a transform to perform a fused checksum on two columns
+2. `output` - Using a transform to get a substring from a kernel
+3. `preallocated` - Using a transform kernel to output a string to a pre-allocated buffer
+4. `output_public` - Performs same transformation on the CSV as `output` but uses alternative public APIs
+4. `preallocated_public` - Performs same transformation on the CSV as `preallocated` but uses alternative public APIs
 
 ## Compile and execute
 
@@ -20,8 +21,6 @@ cmake -S . -B build/
 cmake --build build/ --parallel $PARALLEL_LEVEL
 # Execute
 build/output info.csv
---OR--
-build/preallocated info.csv
 ```
 
 If your machine does not come with a pre-built libcudf binary, expect the

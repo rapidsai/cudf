@@ -18,7 +18,10 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/concatenate.hpp>
 #include <cudf/filling.hpp>
+#include <cudf/scalar/scalar.hpp>
+#include <cudf/strings/combine.hpp>
 #include <cudf/transform.hpp>
 
 #include <rmm/cuda_stream_view.hpp>

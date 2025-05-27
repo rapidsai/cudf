@@ -16,40 +16,38 @@
 
 #include "common.hpp"
 
+#include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
-#include <cudf/table/table_view.hpp>
+#include <cudf/concatenate.hpp>
+#include <cudf/filling.hpp>
+#include <cudf/scalar/scalar.hpp>
+#include <cudf/strings/combine.hpp>
 #include <cudf/transform.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_uvector.hpp>
+
 
 std::unique_ptr<cudf::column> transform(cudf::table_view const& table)
 {
   auto stream = rmm::cuda_stream_default;
   auto mr     = cudf::get_current_device_resource_ref();
 
-  auto udf = R"***(
- __device__ void checksum(uint16_t* out,
-                          cudf::string_view const name,
-                          cudf::string_view const email)
- {
-   auto fletcher16 = [](cudf::string_view str) -> uint16_t {
-     uint16_t sum1 = 0;
-     uint16_t sum2 = 0;
-     for (cudf::size_type i = 0; i < str.size_bytes(); ++i) {
-       sum1 = (sum1 + str.data()[i]) % 255;
-       sum2 = (sum2 + sum1) % 255;
-     }
-     return (sum2 << 8) | sum1;
-   };
-   *out = fletcher16(name) ^ fletcher16(email);
- }
-   )***";
+  auto country_code = table.column(2);
+  auto area_code    = table.column(3);
+  auto phone_number = table.column(4);
 
-  return cudf::transform({table.column(0), table.column(1)},
-                         udf,
-                         cudf::data_type{cudf::type_id::UINT16},
-                         false,
-                         std::nullopt,
-                         stream,
-                         mr);
+  auto country_symbol = cudf::make_column_from_scalar(
+    cudf::string_scalar("+", true, stream, mr), country_code.size(), stream, mr);
+  auto extension_symbol = cudf::make_column_from_scalar(
+    cudf::string_scalar("-", true, stream, mr), country_code.size(), stream, mr);
+
+  return cudf::strings::concatenate(
+    cudf::table_view(
+      {*country_symbol, *extension_symbol, area_code, *extension_symbol, phone_number}),
+    cudf::string_scalar("", true, stream, mr),
+    cudf::string_scalar("", false, stream, mr),
+    cudf::strings::separator_on_nulls::YES,
+    stream,
+    mr);
 }

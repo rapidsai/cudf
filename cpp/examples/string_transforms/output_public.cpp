@@ -16,7 +16,12 @@
 
 #include "common.hpp"
 
+#include <cudf/binaryop.hpp>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/replace.hpp>
+#include <cudf/strings/extract.hpp>
+#include <cudf/strings/regex/regex_program.hpp>
+#include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/transform.hpp>
 
@@ -27,29 +32,13 @@ std::unique_ptr<cudf::column> transform(cudf::table_view const& table)
   auto stream = rmm::cuda_stream_default;
   auto mr     = cudf::get_current_device_resource_ref();
 
-  auto udf = R"***(
- __device__ void checksum(uint16_t* out,
-                          cudf::string_view const name,
-                          cudf::string_view const email)
- {
-   auto fletcher16 = [](cudf::string_view str) -> uint16_t {
-     uint16_t sum1 = 0;
-     uint16_t sum2 = 0;
-     for (cudf::size_type i = 0; i < str.size_bytes(); ++i) {
-       sum1 = (sum1 + str.data()[i]) % 255;
-       sum2 = (sum2 + sum1) % 255;
-     }
-     return (sum2 << 8) | sum1;
-   };
-   *out = fletcher16(name) ^ fletcher16(email);
- }
-   )***";
+  auto regex = cudf::strings::regex_program::create(".*?@(.*?)");
 
-  return cudf::transform({table.column(0), table.column(1)},
-                         udf,
-                         cudf::data_type{cudf::type_id::UINT16},
-                         false,
-                         std::nullopt,
-                         stream,
-                         mr);
+  auto alt = cudf::string_scalar(cudf::string_view{"(unknown)", 9}, true, stream, mr);
+
+  auto emails = cudf::strings::extract_single(table.column(1), *regex, 0);
+
+  auto emails_filled = cudf::replace_nulls(*emails, alt, stream, mr);
+
+  return emails_filled;
 }

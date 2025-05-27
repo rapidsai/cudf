@@ -32,10 +32,16 @@ target_compile_options(output PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FL
 target_link_libraries(output PRIVATE cudf::cudf nvToolsExt)
 install(TARGETS output DESTINATION bin/examples/libcudf)
 
-add_executable(preallocated preallocated.cpp)
-target_compile_features(preallocated PRIVATE cxx_std_17)
-target_compile_options(preallocated PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>")
-target_link_libraries(preallocated PRIVATE cudf::cudf nvToolsExt)
-install(TARGETS preallocated DESTINATION bin/examples/libcudf)
+add_executable(output_public output_public.cpp)
+target_compile_features(output_public PRIVATE cxx_std_17)
+target_compile_options(output_public PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>")
+target_link_libraries(output_public PRIVATE cudf::cudf nvToolsExt)
+install(TARGETS output_public DESTINATION bin/examples/libcudf)
+
+add_executable(preallocated_public preallocated_public.cpp)
+target_compile_features(preallocated_public PRIVATE cxx_std_17)
+target_compile_options(preallocated_public PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>")
+target_link_libraries(preallocated_public PRIVATE cudf::cudf nvToolsExt)
+install(TARGETS preallocated_public DESTINATION bin/examples/libcudf)
 
 install(FILES ${CMAKE_CURRENT_LIST_DIR}/info.csv DESTINATION bin/examples/libcudf)
