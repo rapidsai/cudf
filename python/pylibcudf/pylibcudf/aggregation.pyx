@@ -874,7 +874,7 @@ cpdef Aggregation lead(size_type offset):
     Parameters
     ----------
     offset : int
-        The number of rows to lag the input
+        The number of rows to lead the input
 
     Returns
     -------
