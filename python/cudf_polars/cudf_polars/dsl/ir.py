@@ -576,7 +576,9 @@ class Scan(IR):
                         column_names = read_csv_header(path, str(sep))
                         options.set_names(column_names)
                 options.set_header(header)
-                options.set_dtypes(schema)
+                options.set_dtypes(
+                    {name: dtype.plc_dtype for name, dtype in schema.items()}
+                )
                 if usecols is not None:
                     options.set_use_cols_names([str(name) for name in usecols])
                 options.set_na_values(null_values)
