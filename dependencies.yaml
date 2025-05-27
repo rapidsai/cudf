@@ -940,8 +940,10 @@ dependencies:
           - &fastavro fastavro>=0.22.9
           - mmh3
           - nanoarrow
+          - pytest-env
           - hypothesis>=6.131.7
           - *numpy
+          - "nvtx>=0.2.1,<0.2.12"
           - pandas
       - output_types: conda
         packages:

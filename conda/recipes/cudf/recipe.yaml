@@ -100,7 +100,7 @@ requirements:
           then:
             - libcufile
     - ${{ pin_compatible("cuda-version", upper_bound="x", lower_bound="x") }}
-    - nvtx >=0.2.1
+    - nvtx >=0.2.1,<0.2.12
     - packaging
     - cachetools
     - rich

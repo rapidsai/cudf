@@ -81,7 +81,7 @@ requirements:
         - cuda-python >=11.8.5,<12.0a0
       else:
         - cuda-python >=12.6.2,<13.0a0
-    - nvtx >=0.2.1
+    - nvtx >=0.2.1,<0.2.12
     - packaging
   ignore_run_exports:
     from_package:
