@@ -1544,6 +1544,30 @@ TEST_F(ParquetChunkedReaderTest, TestNumRowsPerSource)
                                                cudf::io::default_max_page_size_bytes,
                                                rows_in_row_group);
 
+  // Chunked-read single data source skipping all rows
+  {
+    auto const rows_to_skip          = num_rows + 1;
+    auto constexpr output_read_limit = 1'500;
+    auto constexpr pass_read_limit   = 3'500;
+
+    auto const options = cudf::io::parquet_reader_options_builder(cudf::io::source_info{filepath})
+                           .skip_rows(rows_to_skip)
+                           .build();
+    auto const reader = cudf::io::chunked_parquet_reader(
+      output_read_limit, pass_read_limit, options, cudf::get_default_stream());
+
+    auto const [result, num_chunks, num_rows_per_source] = read_table_and_nrows_per_source(reader);
+
+    auto int64_col_selected = int64s_col(int64_data.begin(), int64_data.begin()).release();
+    cudf::table_view const expected_selected({int64_col_selected->view()});
+
+    // Should read an empty table
+    CUDF_TEST_EXPECT_TABLES_EQUAL(expected_selected, result->view());
+    EXPECT_EQ(num_chunks, 1);
+    EXPECT_EQ(num_rows_per_source.size(), 1);
+    EXPECT_EQ(num_rows_per_source[0], 0);
+  }
+
   // Chunked-read single data source entirely
   {
     auto constexpr output_read_limit = 1'500;
