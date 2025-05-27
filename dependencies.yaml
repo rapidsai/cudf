@@ -394,7 +394,7 @@ files:
       - test_python_common
       - test_python_cudf_common
       - test_python_cudf
-      - test_python_pylibcudf
+      - test_python_narwhals
       - depends_on_cudf
       - depends_on_cudf_polars
       - depends_on_narwhals
@@ -941,10 +941,8 @@ dependencies:
           - &fastavro fastavro>=0.22.9
           - mmh3
           - nanoarrow
-          - pytest-env
           - hypothesis>=6.131.7
           - *numpy
-          - "nvtx>=0.2.1,<0.2.12"
           - pandas
       - output_types: conda
         packages:
@@ -1020,6 +1018,13 @@ dependencies:
         packages:
           - dask-cuda==25.6.*,>=0.0.0a0
           - *numpy
+  test_python_narwhals:
+    common:
+      - output_types: [conda, requirements, pyproject]
+        packages:
+          - nvtx>=0.2.1,<0.2.12
+          - pytest-xdist
+          - pytest-timeout
   depends_on_libcudf:
     common:
       - output_types: conda

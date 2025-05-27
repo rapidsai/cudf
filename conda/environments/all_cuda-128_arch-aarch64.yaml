@@ -76,7 +76,6 @@ dependencies:
 - pytest-benchmark
 - pytest-cases>=3.8.2
 - pytest-cov
-- pytest-env
 - pytest-rerunfailures
 - pytest-xdist
 - pytest<8
