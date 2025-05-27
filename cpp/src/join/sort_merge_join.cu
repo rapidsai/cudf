@@ -134,10 +134,70 @@ class merge {
   {
   }
 
+  std::unique_ptr<rmm::device_uvector<size_type>> matches_per_row(rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr);
+
   std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
             std::unique_ptr<rmm::device_uvector<size_type>>>
   operator()(rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr);
 };
+
+template <typename LargerIterator, typename SmallerIterator>
+std::unique_ptr<rmm::device_uvector<size_type>> merge<LargerIterator, SmallerIterator>::matches_per_row(rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr) {
+  auto temp_mr             = cudf::get_current_device_resource_ref();
+  auto smaller_dv_ptr      = cudf::table_device_view::create(smaller, stream);
+  auto larger_dv_ptr       = cudf::table_device_view::create(larger, stream);
+  auto list_lex_preprocess = [stream](table_view const& table) {
+    std::vector<detail::dremel_data> dremel_data;
+    auto const num_list_columns = std::count_if(
+      table.begin(), table.end(), [](auto const& col) { return col.type().id() == type_id::LIST; });
+    auto dremel_device_views =
+      detail::make_empty_host_vector<detail::dremel_device_view>(num_list_columns, stream);
+    for (auto const& col : table) {
+      if (col.type().id() == type_id::LIST) {
+        dremel_data.push_back(detail::get_comparator_data(col, {}, false, stream));
+        dremel_device_views.push_back(dremel_data.back());
+      }
+    }
+    auto d_dremel_device_views = detail::make_device_uvector(
+      dremel_device_views, stream, cudf::get_current_device_resource_ref());
+    return std::pair(std::move(dremel_data), std::move(d_dremel_device_views));
+  };
+  auto [smaller_dremel, smaller_dremel_dv] = list_lex_preprocess(smaller);
+  auto [larger_dremel, larger_dremel_dv]   = list_lex_preprocess(larger);
+
+  // naive: iterate through larger table and binary search on smaller table
+  auto const larger_numrows = larger.num_rows();
+  rmm::device_scalar<bound_type> d_lb_type(bound_type::LOWER, stream, temp_mr);
+  rmm::device_scalar<bound_type> d_ub_type(bound_type::UPPER, stream, temp_mr);
+
+  auto match_counts =
+    cudf::detail::make_zeroed_device_uvector_async<size_type>(larger_numrows + 1, stream, temp_mr);
+
+  row_comparator comp(
+    *larger_dv_ptr, *smaller_dv_ptr, larger_dremel_dv, smaller_dremel_dv, d_ub_type.data());
+  auto match_counts_it = match_counts.begin();
+  thrust::upper_bound(rmm::exec_policy_nosync(stream),
+                      sorted_smaller_order_begin,
+                      sorted_smaller_order_end,
+                      thrust::counting_iterator(0),
+                      thrust::counting_iterator(0) + larger_numrows,
+                      match_counts_it,
+                      comp);
+
+  comp._d_ptr = d_lb_type.data();
+  auto match_counts_update_it =
+    thrust::tabulate_output_iterator([match_counts = match_counts.begin()] __device__(
+                                       size_type idx, size_type val) { match_counts[idx] -= val; });
+  thrust::lower_bound(rmm::exec_policy_nosync(stream),
+                      sorted_smaller_order_begin,
+                      sorted_smaller_order_end,
+                      thrust::counting_iterator(0),
+                      thrust::counting_iterator(0) + larger_numrows,
+                      match_counts_update_it,
+                      comp);
+
+  return std::make_unique<rmm::device_uvector<size_type>>(std::move(match_counts));
+}
 
 template <typename LargerIterator, typename SmallerIterator>
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
@@ -520,6 +580,90 @@ sort_merge_join::inner_join(table_view const& left,
   stream.synchronize();
   if (is_left_smaller) { return {std::move(smaller_indices), std::move(larger_indices)}; }
   return {std::move(larger_indices), std::move(smaller_indices)};
+}
+
+// The motivation for this API is to partition the left table in the case of exploding joins.
+// Note that this function needs to return the size per row of the left table, not the larger table which is what the merge operation does.
+// So when workflows adopt the estimation-then-join approach, we need to fix the larger table to be the left table.
+std::unique_ptr<rmm::device_uvector<size_type>> sort_merge_join::inner_join_size_per_row(table_view const &left,
+           sorted is_left_sorted,
+           rmm::cuda_stream_view stream, 
+           rmm::device_async_resource_ref mr) {
+  // Sanity checks
+  CUDF_EXPECTS(left.num_columns() != 0,
+               "Number of columns in left keys must be non-zero for a join");
+  CUDF_EXPECTS(left.num_columns() == preprocessed_right._null_processed_table_view.num_columns(),
+               "Number of columns must match for a join");
+
+  // Preprocessing the left table
+  preprocessed_left._table_view = left;
+  if (compare_nulls == null_equality::EQUAL) {
+    preprocessed_left._null_processed_table_view = left;
+  } else {
+    // if a table has no nullable column, then there's no preprocessing to be done
+    auto is_left_nullable = has_nested_nulls(left);
+    if (is_left_nullable) {
+      preprocessed_left.preprocess_unprocessed_table(stream);
+    } else {
+      preprocessed_left._null_processed_table_view = left;
+    }
+  }
+  if (is_left_sorted == cudf::sorted::NO) { preprocessed_left.get_sorted_order(stream); }
+
+  // The smaller table has to be the right table since we need to return match counts of the left table
+  bool is_left_smaller = preprocessed_left._null_processed_table_view.num_rows() <
+                         preprocessed_right._null_processed_table_view.num_rows();
+  auto& smaller = preprocessed_right;
+  auto& larger  = preprocessed_left;
+
+  // Neither table was pre-sorted
+  if (smaller._null_processed_table_sorted_order.has_value() &&
+      larger._null_processed_table_sorted_order.has_value()) {
+    auto smaller_sorted_order = smaller._null_processed_table_sorted_order.value()->view();
+    auto larger_sorted_order  = larger._null_processed_table_sorted_order.value()->view();
+    merge obj(smaller._null_processed_table_view,
+              smaller_sorted_order.begin<size_type>(),
+              smaller_sorted_order.end<size_type>(),
+              larger._null_processed_table_view,
+              larger_sorted_order.begin<size_type>(),
+              larger_sorted_order.end<size_type>());
+    auto matches_per_row = obj.matches_per_row(stream, cudf::get_current_device_resource_ref());
+    // Now we need to post-process the matches i.e. insert zero counts for all the null positions
+    auto unprocessed_matches_per_row = cudf::detail::make_zeroed_device_uvector_async<size_type>(left.num_rows(), stream, mr);
+    return obj.matches_per_row(stream, mr);
+  }
+  // Only the larger table was pre-sorted
+  if (smaller._null_processed_table_sorted_order.has_value() &&
+      !larger._null_processed_table_sorted_order.has_value()) {
+    auto smaller_sorted_order = smaller._null_processed_table_sorted_order.value()->view();
+    merge obj(smaller._null_processed_table_view,
+              smaller_sorted_order.begin<size_type>(),
+              smaller_sorted_order.end<size_type>(),
+              larger._null_processed_table_view,
+              thrust::counting_iterator(0),
+              thrust::counting_iterator(larger._null_processed_table_view.num_rows()));
+    return obj.matches_per_row(stream, mr);
+  }
+  // Only the smaller table was pre-sorted
+  if (!smaller._null_processed_table_sorted_order.has_value() &&
+      larger._null_processed_table_sorted_order.has_value()) {
+    auto larger_sorted_order = larger._null_processed_table_sorted_order.value()->view();
+    merge obj(smaller._null_processed_table_view,
+              thrust::counting_iterator(0),
+              thrust::counting_iterator(smaller._null_processed_table_view.num_rows()),
+              larger._null_processed_table_view,
+              larger_sorted_order.begin<size_type>(),
+              larger_sorted_order.end<size_type>());
+    return obj.matches_per_row(stream, mr);
+  }
+  // Both tables were pre-sorted
+  merge obj(smaller._null_processed_table_view,
+            thrust::counting_iterator(0),
+            thrust::counting_iterator(smaller._null_processed_table_view.num_rows()),
+            larger._null_processed_table_view,
+            thrust::counting_iterator(0),
+            thrust::counting_iterator(larger._null_processed_table_view.num_rows()));
+  return obj.matches_per_row(stream, mr);
 }
 
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,

@@ -28,7 +28,6 @@
 #include <thrust/iterator/counting_iterator.h>
 
 #include <optional>
-#include <variant>
 
 namespace CUDF_EXPORT cudf {
 
@@ -79,6 +78,12 @@ class sort_merge_join {
   std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
             std::unique_ptr<rmm::device_uvector<size_type>>>
   inner_join(table_view const& left,
+             sorted is_left_sorted,
+             rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+             rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
+  // TODO: somehow enforce the left tables to be the same in inner_join_size_per_row and inner_join
+  std::unique_ptr<rmm::device_uvector<size_type>> inner_join_size_per_row(table_view const &left,
              sorted is_left_sorted,
              rmm::cuda_stream_view stream      = cudf::get_default_stream(),
              rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
