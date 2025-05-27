@@ -62,7 +62,7 @@ cdef class Table:
         self._columns = columns
 
     @staticmethod
-    def from_arrow(obj: ArrowLike, type: DataType | None = None) -> Table:
+    def from_arrow(obj: ArrowLike, dtype: DataType | None = None) -> Table:
         """
         Create a Table from an Arrow-like object using the Arrow C data interface.
 

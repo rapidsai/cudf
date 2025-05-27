@@ -109,7 +109,7 @@ def _from_arrow_datatype(pyarrow_object):
 
 @from_arrow.register(pa.Table)
 def _from_arrow_table(pyarrow_object, *, DataType data_type=None):
-    return Table.from_arrow(pyarrow_object)
+    return Table.from_arrow(pyarrow_object, dtype=data_type)
 
 
 @from_arrow.register(pa.Scalar)
