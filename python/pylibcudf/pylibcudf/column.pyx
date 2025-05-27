@@ -315,7 +315,7 @@ cdef class Column:
             - `__arrow_c_array__` (host Arrow array)
             - `__arrow_c_device_array__` (device Arrow array)
             - `__arrow_c_stream__` (host Arrow stream)
-            - `__arrow_c_device_stream__` (not yet supported)
+            - `__arrow_c_device_stream__` (device Arrow stream)
         dtype : DataType | None
             The pylibcudf data type.
 
@@ -335,7 +335,6 @@ cdef class Column:
         Notes
         -----
         - This method supports zero-copy construction for device arrays.
-        - Device stream support (`__arrow_c_device_stream__`) is not supported yet.
         """
         if dtype is not None:
             raise NotImplementedError(

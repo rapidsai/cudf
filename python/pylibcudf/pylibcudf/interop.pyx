@@ -131,7 +131,7 @@ def _from_arrow_scalar(pyarrow_object, *, DataType data_type=None):
 
 @from_arrow.register(pa.Array)
 def _from_arrow_column(pyarrow_object, *, DataType data_type=None):
-    return Column.from_arrow(pyarrow_object)
+    return Column.from_arrow(pyarrow_object, dtype=data_type)
 
 
 @singledispatch
