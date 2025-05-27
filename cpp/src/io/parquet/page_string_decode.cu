@@ -94,7 +94,7 @@ __device__ thrust::pair<int, int> page_bounds(
   auto const pp   = &s->page;
   auto const col  = &s->col;
 
-  // initialize the stream decoders (requires values computed in setupLocalPageInfo)
+  // initialize the stream decoders (requires values computed in setup_local_page_info)
   auto const def_decode = reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::DEFINITION]);
   auto const rep_decode = reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::REPETITION]);
   decoders[level_type::DEFINITION].init(s->col.level_bits[level_type::DEFINITION],
@@ -625,13 +625,13 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size) gpuComputeStringPageBo
     decoders[level_type::NUM_LEVEL_TYPES] = {{def_runs}, {rep_runs}};
 
   // setup page info
-  if (!setupLocalPageInfo(s,
-                          pp,
-                          chunks,
-                          min_row,
-                          num_rows,
-                          mask_filter{STRINGS_MASK},
-                          page_processing_stage::STRING_BOUNDS)) {
+  if (!setup_local_page_info(s,
+                             pp,
+                             chunks,
+                             min_row,
+                             num_rows,
+                             mask_filter{STRINGS_MASK},
+                             page_processing_stage::STRING_BOUNDS)) {
     return;
   }
 
@@ -679,13 +679,13 @@ CUDF_KERNEL void __launch_bounds__(delta_preproc_block_size) gpuComputeDeltaPage
   bool const has_repetition = chunks[pp->chunk_idx].max_level[level_type::REPETITION] > 0;
 
   // setup page info
-  if (!setupLocalPageInfo(s,
-                          pp,
-                          chunks,
-                          min_row,
-                          num_rows,
-                          mask_filter{decode_kernel_mask::DELTA_BYTE_ARRAY},
-                          page_processing_stage::STRING_BOUNDS)) {
+  if (!setup_local_page_info(s,
+                             pp,
+                             chunks,
+                             min_row,
+                             num_rows,
+                             mask_filter{decode_kernel_mask::DELTA_BYTE_ARRAY},
+                             page_processing_stage::STRING_BOUNDS)) {
     return;
   }
 
@@ -764,13 +764,13 @@ CUDF_KERNEL void __launch_bounds__(delta_length_block_size) gpuComputeDeltaLengt
   bool const has_repetition = chunks[pp->chunk_idx].max_level[level_type::REPETITION] > 0;
 
   // setup page info
-  if (!setupLocalPageInfo(s,
-                          pp,
-                          chunks,
-                          min_row,
-                          num_rows,
-                          mask_filter{decode_kernel_mask::DELTA_LENGTH_BA},
-                          page_processing_stage::STRING_BOUNDS)) {
+  if (!setup_local_page_info(s,
+                             pp,
+                             chunks,
+                             min_row,
+                             num_rows,
+                             mask_filter{decode_kernel_mask::DELTA_LENGTH_BA},
+                             page_processing_stage::STRING_BOUNDS)) {
     return;
   }
 
@@ -862,13 +862,13 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size) gpuComputePageStringSi
   bool const has_repetition = chunks[pp->chunk_idx].max_level[level_type::REPETITION] > 0;
 
   // setup page info
-  if (!setupLocalPageInfo(s,
-                          pp,
-                          chunks,
-                          min_row,
-                          num_rows,
-                          mask_filter{STRINGS_MASK_NON_DELTA},
-                          page_processing_stage::STRING_BOUNDS)) {
+  if (!setup_local_page_info(s,
+                             pp,
+                             chunks,
+                             min_row,
+                             num_rows,
+                             mask_filter{STRINGS_MASK_NON_DELTA},
+                             page_processing_stage::STRING_BOUNDS)) {
     return;
   }
 

@@ -22,6 +22,7 @@
 
 #include <rmm/exec_policy.hpp>
 
+#include <cooperative_groups.h>
 #include <cuda/std/iterator>
 #include <thrust/reduce.h>
 
@@ -49,11 +50,11 @@ using unused_state_buf = page_state_buffers_s<0, 0, 0>;
  * Result is valid only on thread 0.
  *
  * @param s The local page info
- * @param t Thread index
+ * @param block Thread block cooperative group
  */
-__device__ size_type gpuDeltaLengthPageStringSize(page_state_s* s, int t)
+__device__ size_type delta_length_page_string_size(page_state_s* s, cg::thread_block const& block)
 {
-  if (t == 0) {
+  if (block.thread_rank() == 0) {
     // find the beginning of char data
     delta_binary_decoder string_lengths;
     auto const* string_start = string_lengths.find_end_of_block(s->data_start, s->data_end);
@@ -69,58 +70,58 @@ __device__ size_type gpuDeltaLengthPageStringSize(page_state_s* s, int t)
  * This expects all threads in the thread block (preprocess_block_size).
  *
  * @param s The local page info
- * @param t Thread index
+ * @param block Thread block cooperative group
  */
-__device__ size_type gpuDeltaPageStringSize(page_state_s* s, int t)
+__device__ size_type delta_page_string_size(page_state_s* s, cg::thread_block const& block)
 {
-  using cudf::detail::warp_size;
   using WarpReduce = cub::WarpReduce<uleb128_t>;
   __shared__ typename WarpReduce::TempStorage temp_storage[2];
 
   __shared__ __align__(16) delta_binary_decoder prefixes;
   __shared__ __align__(16) delta_binary_decoder suffixes;
 
-  int const lane_id = t % warp_size;
-  int const warp_id = t / warp_size;
+  auto const warp = cg::tiled_partition<cudf::detail::warp_size>(block);
 
-  if (t == 0) {
+  if (block.thread_rank() == 0) {
     auto const* suffix_start = prefixes.find_end_of_block(s->data_start, s->data_end);
     suffixes.init_binary_block(suffix_start, s->data_end);
   }
-  __syncthreads();
+  block.sync();
 
   // two warps will traverse the prefixes and suffixes and sum them up
-  auto const db = t < warp_size ? &prefixes : t < 2 * warp_size ? &suffixes : nullptr;
+  auto const db = warp.meta_group_rank() == 0   ? &prefixes
+                  : warp.meta_group_rank() == 1 ? &suffixes
+                                                : nullptr;
 
   size_t total_bytes = 0;
   if (db != nullptr) {
     // initialize with first value (which is stored in last_value)
-    if (lane_id == 0) { total_bytes = db->last_value; }
+    if (warp.thread_rank() == 0) { total_bytes = db->last_value; }
 
     uleb128_t lane_sum = 0;
     while (db->current_value_idx < db->num_encoded_values(true)) {
       // calculate values for current mini-block
-      db->calc_mini_block_values(lane_id);
+      db->calc_mini_block_values(warp.thread_rank());
 
       // get per lane sum for mini-block
-      for (uint32_t i = 0; i < db->values_per_mb; i += warp_size) {
-        uint32_t const idx = db->current_value_idx + i + lane_id;
+      for (uint32_t i = 0; i < db->values_per_mb; i += warp.size()) {
+        uint32_t const idx = db->current_value_idx + i + warp.thread_rank();
         if (idx < db->value_count) {
           lane_sum += db->value[rolling_index<delta_rolling_buf_size>(idx)];
         }
       }
 
-      if (lane_id == 0) { db->setup_next_mini_block(true); }
-      __syncwarp();
+      if (warp.thread_rank() == 0) { db->setup_next_mini_block(true); }
+      warp.sync();
     }
 
     // get sum for warp.
     // note: warp_sum will only be valid on lane 0.
-    auto const warp_sum = WarpReduce(temp_storage[warp_id]).Sum(lane_sum);
+    auto const warp_sum = WarpReduce(temp_storage[warp.meta_group_rank()]).Sum(lane_sum);
 
-    if (lane_id == 0) { total_bytes += warp_sum; }
+    if (warp.thread_rank() == 0) { total_bytes += warp_sum; }
   }
-  __syncthreads();
+  block.sync();
 
   // now sum up total_bytes from the two warps. result is only valid on thread 0.
   auto const final_bytes =
@@ -141,18 +142,20 @@ __device__ size_type gpuDeltaPageStringSize(page_state_s* s, int t)
  * @param s The local page info
  * @param t Thread index
  */
-__device__ size_type gpuDecodeTotalPageStringSize(page_state_s* s, int t)
+__device__ size_type decode_total_page_string_size(page_state_s* s, int t)
 {
-  using cudf::detail::warp_size;
+  auto const block     = cg::this_thread_block();
+  auto const warp      = cg::tiled_partition<cudf::detail::warp_size>(block);
   size_type target_pos = s->num_input_values;
   size_type str_len    = 0;
   switch (s->page.encoding) {
     case Encoding::PLAIN_DICTIONARY:
     case Encoding::RLE_DICTIONARY:
-      if (t < warp_size && s->dict_base) {
+      // Use warp 0 to decode dictionary indices and return the new target position
+      if (warp.meta_group_rank() == 0 && s->dict_base) {
         auto const [new_target_pos, len] =
-          gpuDecodeDictionaryIndices<is_calc_sizes_only::YES, unused_state_buf>(
-            s, nullptr, target_pos, t);
+          decode_dictionary_indices<is_calc_sizes_only::YES, unused_state_buf>(
+            s, nullptr, target_pos, warp);
         target_pos = new_target_pos;
         str_len    = len;
       }
@@ -167,14 +170,16 @@ __device__ size_type gpuDecodeTotalPageStringSize(page_state_s* s, int t)
       // For V1, the choice is an overestimate (s->dict_size), or an exact number that's
       // expensive to compute. For now we're going with the latter.
       else {
-        str_len = gpuInitStringDescriptors<is_calc_sizes_only::YES, unused_state_buf>(
-          s, nullptr, target_pos, cg::this_thread_block());
+        str_len = initialize_string_descriptors<is_calc_sizes_only::YES, unused_state_buf>(
+          s, nullptr, target_pos, block);
       }
       break;
 
-    case Encoding::DELTA_LENGTH_BYTE_ARRAY: str_len = gpuDeltaLengthPageStringSize(s, t); break;
+    case Encoding::DELTA_LENGTH_BYTE_ARRAY:
+      str_len = delta_length_page_string_size(s, block);
+      break;
 
-    case Encoding::DELTA_BYTE_ARRAY: str_len = gpuDeltaPageStringSize(s, t); break;
+    case Encoding::DELTA_BYTE_ARRAY: str_len = delta_page_string_size(s, block); break;
 
     default:
       // not a valid string encoding, so just return 0
@@ -351,12 +356,12 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size)
     decoders[level_type::NUM_LEVEL_TYPES] = {{def_runs}, {rep_runs}};
 
   // setup page info
-  if (!setupLocalPageInfo(
+  if (!setup_local_page_info(
         s, pp, chunks, min_row, num_rows, all_types_filter{}, page_processing_stage::PREPROCESS)) {
     return;
   }
 
-  // initialize the stream decoders (requires values computed in setupLocalPageInfo)
+  // initialize the stream decoders (requires values computed in setup_local_page_info)
   // the size of the rolling batch buffer
   level_t* const rep = reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::REPETITION]);
   level_t* const def = reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::DEFINITION]);
@@ -466,7 +471,7 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size)
 
   // retrieve total string size.
   if (compute_string_sizes && !pp->has_page_index) {
-    auto const str_bytes = gpuDecodeTotalPageStringSize(s, t);
+    auto const str_bytes = decode_total_page_string_size(s, t);
     if (t == 0) { s->page.str_bytes = str_bytes; }
   }
 

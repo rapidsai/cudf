@@ -92,7 +92,7 @@ __device__ static void scan_block_exclusive_sum(
 }
 
 template <int block_size, bool has_lists_t, typename state_buf>
-__device__ void gpuDecodeFixedWidthValues(
+__device__ void decode_fixed_width_values(
   page_state_s* s, state_buf* const sb, int start, int end, int t)
 {
   constexpr int num_warps      = block_size / cudf::detail::warp_size;
@@ -139,37 +139,41 @@ __device__ void gpuDecodeFixedWidthValues(
 
       if (s->col.logical_type.has_value() && s->col.logical_type->type == LogicalType::DECIMAL) {
         switch (dtype) {
-          case Type::INT32: gpuOutputFast(s, sb, src_pos, static_cast<uint32_t*>(dst)); break;
-          case Type::INT64: gpuOutputFast(s, sb, src_pos, static_cast<uint2*>(dst)); break;
+          case Type::INT32:
+            read_fixed_width_value_fast(s, sb, src_pos, static_cast<uint32_t*>(dst));
+            break;
+          case Type::INT64:
+            read_fixed_width_value_fast(s, sb, src_pos, static_cast<uint2*>(dst));
+            break;
           default:
             if (s->dtype_len_in <= sizeof(int32_t)) {
-              gpuOutputFixedLenByteArrayAsInt(s, sb, src_pos, static_cast<int32_t*>(dst));
+              read_fixed_width_byte_array_as_int(s, sb, src_pos, static_cast<int32_t*>(dst));
             } else if (s->dtype_len_in <= sizeof(int64_t)) {
-              gpuOutputFixedLenByteArrayAsInt(s, sb, src_pos, static_cast<int64_t*>(dst));
+              read_fixed_width_byte_array_as_int(s, sb, src_pos, static_cast<int64_t*>(dst));
             } else {
-              gpuOutputFixedLenByteArrayAsInt(s, sb, src_pos, static_cast<__int128_t*>(dst));
+              read_fixed_width_byte_array_as_int(s, sb, src_pos, static_cast<__int128_t*>(dst));
             }
             break;
         }
       } else if (dtype == Type::BOOLEAN) {
-        gpuOutputBoolean(sb, src_pos, static_cast<uint8_t*>(dst));
+        read_boolean(sb, src_pos, static_cast<uint8_t*>(dst));
       } else if (dtype == Type::INT96) {
-        gpuOutputInt96Timestamp(s, sb, src_pos, static_cast<int64_t*>(dst));
+        read_int96_timestamp(s, sb, src_pos, static_cast<int64_t*>(dst));
       } else if (dtype_len == 8) {
         if (s->dtype_len_in == 4) {
           // Reading INT32 TIME_MILLIS into 64-bit DURATION_MILLISECONDS
           // TIME_MILLIS is the only duration type stored as int32:
           // https://github.com/apache/parquet-format/blob/master/LogicalTypes.md#deprecated-time-convertedtype
-          gpuOutputFast(s, sb, src_pos, static_cast<uint32_t*>(dst));
+          read_fixed_width_value_fast(s, sb, src_pos, static_cast<uint32_t*>(dst));
         } else if (s->ts_scale) {
-          gpuOutputInt64Timestamp(s, sb, src_pos, static_cast<int64_t*>(dst));
+          read_int64_timestamp(s, sb, src_pos, static_cast<int64_t*>(dst));
         } else {
-          gpuOutputFast(s, sb, src_pos, static_cast<uint2*>(dst));
+          read_fixed_width_value_fast(s, sb, src_pos, static_cast<uint2*>(dst));
         }
       } else if (dtype_len == 4) {
-        gpuOutputFast(s, sb, src_pos, static_cast<uint32_t*>(dst));
+        read_fixed_width_value_fast(s, sb, src_pos, static_cast<uint32_t*>(dst));
       } else {
-        gpuOutputGeneric(s, sb, src_pos, static_cast<uint8_t*>(dst), dtype_len);
+        read_nbyte_fixed_width_value(s, sb, src_pos, static_cast<uint8_t*>(dst), dtype_len);
       }
     }
 
@@ -178,7 +182,7 @@ __device__ void gpuDecodeFixedWidthValues(
 }
 
 template <int block_size, bool has_lists_t, typename state_buf>
-__device__ inline void gpuDecodeFixedWidthSplitValues(
+__device__ inline void decode_fixed_width_split_values(
   page_state_s* s, state_buf* const sb, int start, int end, int t)
 {
   using cudf::detail::warp_size;
@@ -281,8 +285,23 @@ __device__ inline void gpuDecodeFixedWidthSplitValues(
   }
 }
 
+/**
+ * @brief Update validity and row indices for nested types
+ *
+ * @tparam decode_block_size Size of the thread block
+ * @tparam level_t Definition level type
+ * @tparam state_buf State buffer type
+ *
+ * @param target_value_count The target value count to process
+ * @param s Pointer to  page state
+ * @param sb Pointer to  state buffer
+ * @param def Pointer to the definition levels
+ * @param t Thread index
+ *
+ * @return Maximum depth valid count after processing
+ */
 template <int decode_block_size, typename level_t, typename state_buf>
-static __device__ int gpuUpdateValidityAndRowIndicesNested(
+__device__ int update_validity_and_row_indices_nested(
   int32_t target_value_count, page_state_s* s, state_buf* sb, level_t const* const def, int t)
 {
   constexpr int num_warps      = decode_block_size / cudf::detail::warp_size;
@@ -400,8 +419,23 @@ static __device__ int gpuUpdateValidityAndRowIndicesNested(
   return max_depth_valid_count;
 }
 
+/**
+ * @brief Update validity and row indices for flat types
+ *
+ * @tparam decode_block_size Size of the thread block
+ * @tparam level_t Definition level type
+ * @tparam state_buf State buffer type
+ *
+ * @param target_value_count The target value count to process
+ * @param s Pointer to  page state
+ * @param sb Pointer to  state buffer
+ * @param def Pointer to the definition levels
+ * @param t Thread index
+ *
+ * @return Maximum depth valid count after processing
+ */
 template <int decode_block_size, typename level_t, typename state_buf>
-static __device__ int gpuUpdateValidityAndRowIndicesFlat(
+__device__ int update_validity_and_row_indices_flat(
   int32_t target_value_count, page_state_s* s, state_buf* sb, level_t const* const def, int t)
 {
   constexpr int num_warps      = decode_block_size / cudf::detail::warp_size;
@@ -508,11 +542,24 @@ static __device__ int gpuUpdateValidityAndRowIndicesFlat(
   return valid_count;
 }
 
+/**
+ * @brief Update validity and row indices for non-nullable flat types
+ *
+ * @tparam decode_block_size Size of the thread block
+ * @tparam state_buf State buffer type (inferred)
+ *
+ * @param target_value_count The target value count to process
+ * @param s Pointer to  page state
+ * @param sb Pointer to  state buffer
+ * @param t Thread index
+ *
+ * @return Number of valid values processed
+ */
 template <int decode_block_size, typename state_buf>
-static __device__ int gpuUpdateValidityAndRowIndicesNonNullable(int32_t target_value_count,
-                                                                page_state_s* s,
-                                                                state_buf* sb,
-                                                                int t)
+__device__ int update_validity_and_rows_indices_non_nullable(int32_t target_value_count,
+                                                             page_state_s* s,
+                                                             state_buf* sb,
+                                                             int t)
 {
   constexpr int num_warps      = decode_block_size / cudf::detail::warp_size;
   constexpr int max_batch_size = num_warps * cudf::detail::warp_size;
@@ -572,13 +619,28 @@ static __device__ int gpuUpdateValidityAndRowIndicesNonNullable(int32_t target_v
   return valid_count;
 }
 
+/**
+ * @brief Update validity and row indices for list types
+ *
+ * @tparam decode_block_size Size of the thread block
+ * @tparam level_t Definition level type
+ * @tparam state_buf State buffer type
+ *
+ * @param target_value_count The target value count to process
+ * @param s Pointer to  page state
+ * @param sb Pointer to  state buffer
+ * @param def Pointer to the definition levels
+ * @param t Thread index
+ *
+ * @return Maximum depth valid count after processing
+ */
 template <int decode_block_size, bool nullable, typename level_t, typename state_buf>
-static __device__ int gpuUpdateValidityAndRowIndicesLists(int32_t target_value_count,
-                                                          page_state_s* s,
-                                                          state_buf* sb,
-                                                          level_t const* const def,
-                                                          level_t const* const rep,
-                                                          int t)
+__device__ int update_validity_and_row_indices_lists(int32_t target_value_count,
+                                                     page_state_s* s,
+                                                     state_buf* sb,
+                                                     level_t const* const def,
+                                                     level_t const* const rep,
+                                                     int t)
 {
   constexpr int num_warps      = decode_block_size / cudf::detail::warp_size;
   constexpr int max_batch_size = num_warps * cudf::detail::warp_size;
@@ -949,7 +1011,7 @@ constexpr bool is_split_decode()
  */
 template <typename level_t, int decode_block_size_t, decode_kernel_mask kernel_mask_t>
 CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
-  gpuDecodePageDataGeneric(PageInfo* pages,
+  decode_page_data_generic(PageInfo* pages,
                            device_span<ColumnChunkDesc const> chunks,
                            size_t min_row,
                            size_t num_rows,
@@ -996,13 +1058,13 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
   }
 
   // Setup local page info
-  if (!setupLocalPageInfo(s,
-                          pp,
-                          chunks,
-                          min_row,
-                          num_rows,
-                          mask_filter{kernel_mask_t},
-                          page_processing_stage::DECODE)) {
+  if (!setup_local_page_info(s,
+                             pp,
+                             chunks,
+                             min_row,
+                             num_rows,
+                             mask_filter{kernel_mask_t},
+                             page_processing_stage::DECODE)) {
     return;
   }
 
@@ -1044,7 +1106,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
 
   auto def_runs = reinterpret_cast<rle_run*>(shared_buf + shared_offset);
 
-  // initialize the stream decoders (requires values computed in setupLocalPageInfo)
+  // initialize the stream decoders (requires values computed in setup_local_page_info)
   rle_stream<level_t, decode_block_size_t, rolling_buf_size> def_decoder{def_runs};
   level_t* const def = reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::DEFINITION]);
   if (should_process_nulls) {
@@ -1103,7 +1165,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
       if constexpr (has_dict_t) {
         skip_decode<rolling_buf_size>(dict_stream, skipped_leaf_values, t);
       } else if constexpr (has_strings_t) {
-        gpuInitStringDescriptors<is_calc_sizes_only::YES>(
+        initialize_string_descriptors<is_calc_sizes_only::YES>(
           s, sb, skipped_leaf_values, cooperative_groups::this_thread_block());
         if (t == 0) { s->dict_pos = processed_count; }
         __syncthreads();
@@ -1112,7 +1174,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
   }
 
   // the core loop. decode batches of level stream data using rle_stream objects
-  // and pass the results to gpuDecodeValues
+  // and pass the results to decode_values
   // For chunked reads we may not process all of the rows on the page; if not stop early
   int const last_row = s->first_row + s->num_rows;
   while ((s->error == 0) && (processed_count < s->page.num_input_values) &&
@@ -1127,29 +1189,31 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
       if constexpr (has_lists_t) {
         rep_decoder.decode_next(t);
         __syncthreads();
-        next_valid_count = gpuUpdateValidityAndRowIndicesLists<decode_block_size_t, true, level_t>(
-          processed_count, s, sb, def, rep, t);
+        next_valid_count =
+          update_validity_and_row_indices_lists<decode_block_size_t, true, level_t>(
+            processed_count, s, sb, def, rep, t);
       } else if constexpr (has_nesting_t) {
-        next_valid_count = gpuUpdateValidityAndRowIndicesNested<decode_block_size_t, level_t>(
+        next_valid_count = update_validity_and_row_indices_nested<decode_block_size_t, level_t>(
           processed_count, s, sb, def, t);
       } else {
-        next_valid_count = gpuUpdateValidityAndRowIndicesFlat<decode_block_size_t, level_t>(
+        next_valid_count = update_validity_and_row_indices_flat<decode_block_size_t, level_t>(
           processed_count, s, sb, def, t);
       }
     }
     // if we wanted to split off the skip_rows/num_rows case into a separate kernel, we could skip
     // this function call entirely since all it will ever generate is a mapping of (i -> i) for
-    // nz_idx.  gpuDecodeFixedWidthValues would be the only work that happens.
+    // nz_idx.  decode_fixed_width_values would be the only work that happens.
     else {
       if constexpr (has_lists_t) {
         processed_count += rep_decoder.decode_next(t);
         __syncthreads();
-        next_valid_count = gpuUpdateValidityAndRowIndicesLists<decode_block_size_t, false, level_t>(
-          processed_count, s, sb, nullptr, rep, t);
+        next_valid_count =
+          update_validity_and_row_indices_lists<decode_block_size_t, false, level_t>(
+            processed_count, s, sb, nullptr, rep, t);
       } else {
         processed_count += min(rolling_buf_size, s->page.num_input_values - processed_count);
-        next_valid_count =
-          gpuUpdateValidityAndRowIndicesNonNullable<decode_block_size_t>(processed_count, s, sb, t);
+        next_valid_count = update_validity_and_rows_indices_non_nullable<decode_block_size_t>(
+          processed_count, s, sb, t);
       }
     }
     __syncthreads();
@@ -1162,7 +1226,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
       __syncthreads();
     } else if constexpr (has_strings_t) {
       auto const target_pos = next_valid_count + skipped_leaf_values;
-      gpuInitStringDescriptors<is_calc_sizes_only::NO>(
+      initialize_string_descriptors<is_calc_sizes_only::NO>(
         s, sb, target_pos, cooperative_groups::this_thread_block());
       if (t == 0) { s->dict_pos = target_pos; }
       __syncthreads();
@@ -1177,13 +1241,13 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
 
     // decode the values themselves
     if constexpr (has_strings_t) {
-      string_output_offset = gpuDecodeString<decode_block_size_t, has_lists_t, split_decode_t>(
+      string_output_offset = decode_strings<decode_block_size_t, has_lists_t, split_decode_t>(
         s, sb, valid_count, next_valid_count, t, string_output_offset);
     } else if constexpr (split_decode_t) {
-      gpuDecodeFixedWidthSplitValues<decode_block_size_t, has_lists_t>(
+      decode_fixed_width_split_values<decode_block_size_t, has_lists_t>(
         s, sb, valid_count, next_valid_count, t);
     } else {
-      gpuDecodeFixedWidthValues<decode_block_size_t, has_lists_t>(
+      decode_fixed_width_values<decode_block_size_t, has_lists_t>(
         s, sb, valid_count, next_valid_count, t);
     }
     __syncthreads();
@@ -1214,7 +1278,10 @@ using kernel_tag_t = std::integral_constant<decode_kernel_mask, mask>;
 template <int value>
 using int_tag_t = std::integral_constant<int, value>;
 
-void __host__ DecodePageData(cudf::detail::hostdevice_span<PageInfo> pages,
+/**
+ * @copydoc cudf::io::paruquet::detail::launch_decode_page_data
+ */
+void launch_decode_page_data(cudf::detail::hostdevice_span<PageInfo> pages,
                              cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
                              size_t num_rows,
                              size_t min_row,
@@ -1234,7 +1301,7 @@ void __host__ DecodePageData(cudf::detail::hostdevice_span<PageInfo> pages,
     dim3 dim_grid(pages.size(), 1);  // 1 threadblock per page
 
     if (level_type_size == 1) {
-      gpuDecodePageDataGeneric<uint8_t, decode_block_size, mask>
+      decode_page_data_generic<uint8_t, decode_block_size, mask>
         <<<dim_grid, dim_block, 0, stream.value()>>>(pages.device_ptr(),
                                                      chunks,
                                                      min_row,
@@ -1243,7 +1310,7 @@ void __host__ DecodePageData(cudf::detail::hostdevice_span<PageInfo> pages,
                                                      initial_str_offsets,
                                                      error_code);
     } else {
-      gpuDecodePageDataGeneric<uint16_t, decode_block_size, mask>
+      decode_page_data_generic<uint16_t, decode_block_size, mask>
         <<<dim_grid, dim_block, 0, stream.value()>>>(pages.device_ptr(),
                                                      chunks,
                                                      min_row,

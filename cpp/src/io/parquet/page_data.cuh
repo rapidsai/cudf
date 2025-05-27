@@ -57,7 +57,7 @@ inline __device__ void gpuOutputString(page_state_s* s, state_buf* sb, int src_p
  * @param[in] dst Pointer to row output data
  */
 template <typename state_buf>
-inline __device__ void gpuOutputBoolean(state_buf* sb, int src_pos, uint8_t* dst)
+inline __device__ void read_boolean(state_buf* sb, int src_pos, uint8_t* dst)
 {
   *dst = sb->dict_idx[rolling_index<state_buf::dict_buf_size>(src_pos)];
 }
@@ -131,10 +131,10 @@ inline __device__ void gpuStoreOutput(uint2* dst,
  * @param[out] dst Pointer to row output data
  */
 template <typename state_buf>
-inline __device__ void gpuOutputInt96Timestamp(page_state_s* s,
-                                               state_buf* sb,
-                                               int src_pos,
-                                               int64_t* dst)
+inline __device__ void read_int96_timestamp(page_state_s* s,
+                                            state_buf* sb,
+                                            int src_pos,
+                                            int64_t* dst)
 {
   using cuda::std::chrono::duration_cast;
 
@@ -206,10 +206,10 @@ inline __device__ void gpuOutputInt96Timestamp(page_state_s* s,
  * @param[in] dst Pointer to row output data
  */
 template <typename state_buf>
-inline __device__ void gpuOutputInt64Timestamp(page_state_s* s,
-                                               state_buf* sb,
-                                               int src_pos,
-                                               int64_t* dst)
+inline __device__ void read_int64_timestamp(page_state_s* s,
+                                            state_buf* sb,
+                                            int src_pos,
+                                            int64_t* dst)
 {
   uint8_t const* src8;
   uint32_t dict_pos, dict_size = s->dict_size, ofs;
@@ -289,7 +289,10 @@ __device__ void gpuOutputByteArrayAsInt(char const* ptr, int32_t len, T* dst)
  * @param[in] dst Pointer to row output data
  */
 template <typename T, typename state_buf>
-__device__ void gpuOutputFixedLenByteArrayAsInt(page_state_s* s, state_buf* sb, int src_pos, T* dst)
+__device__ void read_fixed_width_byte_array_as_int(page_state_s* s,
+                                                   state_buf* sb,
+                                                   int src_pos,
+                                                   T* dst)
 {
   uint32_t const dtype_len_in = s->dtype_len_in;
   uint8_t const* data         = s->dict_base ? s->dict_base : s->data_start;
@@ -323,7 +326,10 @@ __device__ void gpuOutputFixedLenByteArrayAsInt(page_state_s* s, state_buf* sb, 
  * @param[in] dst Pointer to row output data
  */
 template <typename T, typename state_buf>
-inline __device__ void gpuOutputFast(page_state_s* s, state_buf* sb, int src_pos, T* dst)
+inline __device__ void read_fixed_width_value_fast(page_state_s* s,
+                                                   state_buf* sb,
+                                                   int src_pos,
+                                                   T* dst)
 {
   uint8_t const* dict;
   uint32_t dict_pos, dict_size = s->dict_size;
@@ -352,7 +358,7 @@ inline __device__ void gpuOutputFast(page_state_s* s, state_buf* sb, int src_pos
  * @param[in] len Length of element
  */
 template <typename state_buf>
-inline __device__ void gpuOutputGeneric(
+inline __device__ void read_nbyte_fixed_width_value(
   page_state_s* s, state_buf* sb, int src_pos, uint8_t* dst8, int len)
 {
   uint8_t const* dict;

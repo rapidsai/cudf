@@ -303,7 +303,8 @@ void generate_depth_remappings(
 
   kernel_error error_code(stream);
   chunks.host_to_device_async(stream);
-  DecodePageHeaders(chunks.device_ptr(), nullptr, chunks.size(), error_code.data(), stream);
+  launch_decode_page_headers(
+    chunks.device_ptr(), nullptr, chunks.size(), error_code.data(), stream);
   chunks.device_to_host(stream);
 
   // It's required to ignore unsupported encodings in this function
@@ -582,11 +583,11 @@ void decode_page_headers(pass_intermediate_data& pass,
                    });
 
   kernel_error error_code(stream);
-  DecodePageHeaders(pass.chunks.d_begin(),
-                    d_chunk_page_info.begin(),
-                    pass.chunks.size(),
-                    error_code.data(),
-                    stream);
+  launch_decode_page_headers(pass.chunks.d_begin(),
+                             d_chunk_page_info.begin(),
+                             pass.chunks.size(),
+                             error_code.data(),
+                             stream);
 
   if (auto const error = error_code.value_sync(stream); error != 0) {
     if (BitAnd(error, decode_error::UNSUPPORTED_ENCODING) != 0) {
@@ -784,7 +785,7 @@ void reader::impl::build_string_dict_indices()
     set_str_dict_index_ptr{pass.str_dict_index.data(), str_dict_index_offsets, pass.chunks});
 
   // compute the indices
-  BuildStringDictionaryIndex(pass.chunks.device_ptr(), pass.chunks.size(), _stream);
+  launch_build_string_dictionary_index(pass.chunks.device_ptr(), pass.chunks.size(), _stream);
   pass.chunks.device_to_host(_stream);
 }
 

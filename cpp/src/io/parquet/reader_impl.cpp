@@ -247,16 +247,16 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
   int s_idx = 0;
 
   auto decode_data = [&](decode_kernel_mask decoder_mask) {
-    DecodePageData(subpass.pages,
-                   pass.chunks,
-                   num_rows,
-                   skip_rows,
-                   level_type_size,
-                   decoder_mask,
-                   page_mask,
-                   initial_str_offsets,
-                   error_code.data(),
-                   streams[s_idx++]);
+    launch_decode_page_data(subpass.pages,
+                            pass.chunks,
+                            num_rows,
+                            skip_rows,
+                            level_type_size,
+                            decoder_mask,
+                            page_mask,
+                            initial_str_offsets,
+                            error_code.data(),
+                            streams[s_idx++]);
   };
 
   // launch string decoder for plain encoded flat columns
@@ -306,40 +306,40 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
 
   // launch delta byte array decoder
   if (BitAnd(kernel_mask, decode_kernel_mask::DELTA_BYTE_ARRAY) != 0) {
-    DecodeDeltaByteArray(subpass.pages,
-                         pass.chunks,
-                         num_rows,
-                         skip_rows,
-                         level_type_size,
-                         page_mask,
-                         initial_str_offsets,
-                         error_code.data(),
-                         streams[s_idx++]);
+    launch_decode_delta_byte_array(subpass.pages,
+                                   pass.chunks,
+                                   num_rows,
+                                   skip_rows,
+                                   level_type_size,
+                                   page_mask,
+                                   initial_str_offsets,
+                                   error_code.data(),
+                                   streams[s_idx++]);
   }
 
   // launch delta length byte array decoder
   if (BitAnd(kernel_mask, decode_kernel_mask::DELTA_LENGTH_BA) != 0) {
-    DecodeDeltaLengthByteArray(subpass.pages,
+    launch_decode_delta_length_byte_array(subpass.pages,
+                                          pass.chunks,
+                                          num_rows,
+                                          skip_rows,
+                                          level_type_size,
+                                          page_mask,
+                                          initial_str_offsets,
+                                          error_code.data(),
+                                          streams[s_idx++]);
+  }
+
+  // launch delta binary decoder
+  if (BitAnd(kernel_mask, decode_kernel_mask::DELTA_BINARY) != 0) {
+    launch_decode_delta_binary(subpass.pages,
                                pass.chunks,
                                num_rows,
                                skip_rows,
                                level_type_size,
                                page_mask,
-                               initial_str_offsets,
                                error_code.data(),
                                streams[s_idx++]);
-  }
-
-  // launch delta binary decoder
-  if (BitAnd(kernel_mask, decode_kernel_mask::DELTA_BINARY) != 0) {
-    DecodeDeltaBinary(subpass.pages,
-                      pass.chunks,
-                      num_rows,
-                      skip_rows,
-                      level_type_size,
-                      page_mask,
-                      error_code.data(),
-                      streams[s_idx++]);
   }
 
   // launch byte stream split decoder
@@ -359,14 +359,14 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
 
   // launch byte stream split decoder
   if (BitAnd(kernel_mask, decode_kernel_mask::BYTE_STREAM_SPLIT) != 0) {
-    DecodeSplitPageData(subpass.pages,
-                        pass.chunks,
-                        num_rows,
-                        skip_rows,
-                        level_type_size,
-                        page_mask,
-                        error_code.data(),
-                        streams[s_idx++]);
+    launch_decode_split_page_data(subpass.pages,
+                                  pass.chunks,
+                                  num_rows,
+                                  skip_rows,
+                                  level_type_size,
+                                  page_mask,
+                                  error_code.data(),
+                                  streams[s_idx++]);
   }
 
   // launch fixed width type decoder
@@ -416,14 +416,14 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
 
   // launch the catch-all page decoder
   if (BitAnd(kernel_mask, decode_kernel_mask::GENERAL) != 0) {
-    DecodePageData(subpass.pages,
-                   pass.chunks,
-                   num_rows,
-                   skip_rows,
-                   level_type_size,
-                   page_mask,
-                   error_code.data(),
-                   streams[s_idx++]);
+    launch_decode_page_data(subpass.pages,
+                            pass.chunks,
+                            num_rows,
+                            skip_rows,
+                            level_type_size,
+                            page_mask,
+                            error_code.data(),
+                            streams[s_idx++]);
   }
 
   // synchronize the streams

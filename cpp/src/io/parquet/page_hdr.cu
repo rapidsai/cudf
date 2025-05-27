@@ -22,9 +22,15 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <cooperative_groups.h>
 #include <thrust/tuple.h>
 
 namespace cudf::io::parquet::detail {
+
+auto constexpr decode_page_headers_block_size     = 128;
+auto constexpr build_string_dict_index_block_size = 128;
+
+namespace cg = cooperative_groups;
 
 // Minimal thrift implementation for parsing page headers
 // https://github.com/apache/thrift/blob/master/doc/specs/thrift-compact-protocol.md
@@ -410,25 +416,29 @@ struct gpuParsePageHeader {
  */
 // blockDim {128,1,1}
 CUDF_KERNEL
-void __launch_bounds__(128) gpuDecodePageHeaders(ColumnChunkDesc* chunks,
-                                                 chunk_page_info* chunk_pages,
-                                                 int32_t num_chunks,
-                                                 kernel_error::pointer error_code)
+void __launch_bounds__(decode_page_headers_block_size)
+  decode_page_headers(ColumnChunkDesc* chunks,
+                      chunk_page_info* chunk_pages,
+                      int32_t num_chunks,
+                      kernel_error::pointer error_code)
 {
-  using cudf::detail::warp_size;
+  auto constexpr num_warps_per_block = decode_page_headers_block_size / cudf::detail::warp_size;
   gpuParsePageHeader parse_page_header;
-  __shared__ byte_stream_s bs_g[4];
+  __shared__ byte_stream_s bs_g[num_warps_per_block];
 
-  kernel_error::value_type error[4] = {0};
+  kernel_error::value_type error[num_warps_per_block] = {0};
 
-  auto const lane_id = threadIdx.x % warp_size;
-  auto const warp_id = threadIdx.x / warp_size;
-  auto const chunk   = (blockIdx.x * 4) + warp_id;
+  auto const block = cg::this_thread_block();
+  auto const warp  = cg::tiled_partition<cudf::detail::warp_size>(block);
+
+  auto const lane_id = warp.thread_rank();
+  auto const warp_id = warp.meta_group_rank();
+  int const chunk    = (cg::this_grid().block_rank() * warp.meta_group_size()) + warp_id;
   auto const bs      = &bs_g[warp_id];
 
   if (chunk < num_chunks and lane_id == 0) { bs->ck = chunks[chunk]; }
   if (lane_id == 0) { error[warp_id] = 0; }
-  __syncthreads();
+  block.sync();
 
   if (chunk < num_chunks) {
     size_t num_values, values_found;
@@ -465,7 +475,7 @@ void __launch_bounds__(128) gpuDecodePageHeaders(ColumnChunkDesc* chunks,
     page_info     = chunk_pages ? chunk_pages[chunk].pages : nullptr;
     max_num_pages = page_info ? (bs->ck.num_data_pages + bs->ck.num_dict_pages) : 0;
     values_found  = 0;
-    __syncwarp();
+    warp.sync();
     while (values_found < num_values && bs->cur < bs->end) {
       int index_out = -1;
 
@@ -526,7 +536,7 @@ void __launch_bounds__(128) gpuDecodePageHeaders(ColumnChunkDesc* chunks,
         page_info[index_out] = bs->page;
       }
       num_values = shuffle(num_values);
-      __syncwarp();
+      warp.sync();
     }
     if (lane_id == 0) {
       chunks[chunk].num_data_pages = data_page_count;
@@ -548,16 +558,20 @@ void __launch_bounds__(128) gpuDecodePageHeaders(ColumnChunkDesc* chunks,
  * @param[in] num_chunks Number of column chunks
  */
 // blockDim {128,1,1}
-CUDF_KERNEL void __launch_bounds__(128)
-  gpuBuildStringDictionaryIndex(ColumnChunkDesc* chunks, int32_t num_chunks)
+CUDF_KERNEL void __launch_bounds__(build_string_dict_index_block_size)
+  build_string_dictionary_index(ColumnChunkDesc* chunks, int32_t num_chunks)
 {
-  __shared__ ColumnChunkDesc chunk_g[4];
+  auto constexpr num_warps_per_block = build_string_dict_index_block_size / cudf::detail::warp_size;
+  __shared__ ColumnChunkDesc chunk_g[num_warps_per_block];
 
-  int lane_id               = threadIdx.x % 32;
-  int chunk                 = (blockIdx.x * 4) + (threadIdx.x / 32);
-  ColumnChunkDesc* const ck = &chunk_g[threadIdx.x / 32];
+  auto const block  = cg::this_thread_block();
+  auto const warp   = cg::tiled_partition<cudf::detail::warp_size>(block);
+  int const lane_id = warp.thread_rank();
+  int const chunk =
+    (cg::this_grid().block_rank() * warp.meta_group_size()) + warp.meta_group_rank();
+  ColumnChunkDesc* const ck = &chunk_g[warp.meta_group_rank()];
   if (chunk < num_chunks and lane_id == 0) *ck = chunks[chunk];
-  __syncthreads();
+  block.sync();
 
   if (chunk >= num_chunks) { return; }
   if (!lane_id && ck->num_dict_pages > 0 && ck->str_dict_index) {
@@ -596,26 +610,43 @@ CUDF_KERNEL void __launch_bounds__(128)
   }
 }
 
-void __host__ DecodePageHeaders(ColumnChunkDesc* chunks,
+void launch_decode_page_headers(ColumnChunkDesc* chunks,
                                 chunk_page_info* chunk_pages,
                                 int32_t num_chunks,
                                 kernel_error::pointer error_code,
                                 rmm::cuda_stream_view stream)
 {
-  dim3 dim_block(128, 1);
-  dim3 dim_grid((num_chunks + 3) >> 2, 1);  // 1 chunk per warp, 4 warps per block
+  static_assert(decode_page_headers_block_size % cudf::detail::warp_size == 0,
+                "Block size for decode page headers kernel must be a multiple of warp size");
 
-  gpuDecodePageHeaders<<<dim_grid, dim_block, 0, stream.value()>>>(
+  auto constexpr num_warps_per_block = decode_page_headers_block_size / cudf::detail::warp_size;
+
+  auto const num_blocks = cudf::util::div_rounding_up_safe(
+    num_chunks, num_warps_per_block);  // 1 warp per chunk, 4 warps per block
+  dim3 dim_block(decode_page_headers_block_size, 1);
+  dim3 dim_grid(num_blocks,
+                1);  // 1 chunk per warp, 4 warps per block
+
+  decode_page_headers<<<dim_grid, dim_block, 0, stream.value()>>>(
     chunks, chunk_pages, num_chunks, error_code);
 }
 
-void __host__ BuildStringDictionaryIndex(ColumnChunkDesc* chunks,
-                                         int32_t num_chunks,
-                                         rmm::cuda_stream_view stream)
+void launch_build_string_dictionary_index(ColumnChunkDesc* chunks,
+                                          int32_t num_chunks,
+                                          rmm::cuda_stream_view stream)
 {
-  dim3 dim_block(128, 1);
-  dim3 dim_grid((num_chunks + 3) >> 2, 1);  // 1 chunk per warp, 4 warps per block
-  gpuBuildStringDictionaryIndex<<<dim_grid, dim_block, 0, stream.value()>>>(chunks, num_chunks);
+  static_assert(
+    build_string_dict_index_block_size % cudf::detail::warp_size == 0,
+    "Block size for build string dictionary index kernel must be a multiple of warp size");
+  auto constexpr num_warps_per_block = build_string_dict_index_block_size / cudf::detail::warp_size;
+  auto const num_blocks              = cudf::util::div_rounding_up_safe(
+    num_chunks, num_warps_per_block);  // 1 warp per chunk, 4 warps per block
+
+  dim3 dim_block(build_string_dict_index_block_size, 1);
+  dim3 dim_grid(num_blocks,
+                1);  // 1 chunk per warp, 4 warps per block
+
+  build_string_dictionary_index<<<dim_grid, dim_block, 0, stream.value()>>>(chunks, num_chunks);
 }
 
 }  // namespace cudf::io::parquet::detail

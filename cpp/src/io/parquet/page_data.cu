@@ -53,14 +53,13 @@ constexpr int rolling_buf_size  = decode_block_size * 2;
  */
 template <int lvl_buf_size, typename level_t>
 CUDF_KERNEL void __launch_bounds__(decode_block_size)
-  gpuDecodeSplitPageData(PageInfo* pages,
+  decode_split_page_data(PageInfo* pages,
                          device_span<ColumnChunkDesc const> chunks,
                          size_t min_row,
                          size_t num_rows,
                          cudf::device_span<bool const> page_mask,
                          kernel_error::pointer error_code)
 {
-  using cudf::detail::warp_size;
   __shared__ __align__(16) page_state_s state_g;
   __shared__ __align__(16)
     page_state_buffers_s<rolling_buf_size, rolling_buf_size, rolling_buf_size>
@@ -75,17 +74,17 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
   [[maybe_unused]] null_count_back_copier _{s, static_cast<int>(block.thread_rank())};
 
   // Setup local page info
-  if (!setupLocalPageInfo(s,
-                          &pages[page_idx],
-                          chunks,
-                          min_row,
-                          num_rows,
-                          mask_filter{decode_kernel_mask::BYTE_STREAM_SPLIT},
-                          page_processing_stage::DECODE)) {
+  if (!setup_local_page_info(s,
+                             &pages[page_idx],
+                             chunks,
+                             min_row,
+                             num_rows,
+                             mask_filter{decode_kernel_mask::BYTE_STREAM_SPLIT},
+                             page_processing_stage::DECODE)) {
     return;
   }
 
-  // Must be evaluated after setupLocalPageInfo
+  // Must be evaluated after setup_local_page_info
   bool const has_repetition = s->col.max_level[level_type::REPETITION] > 0;
 
   // Write list offsets and exit if the page does not need to be decoded
@@ -237,12 +236,12 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
  */
 template <int lvl_buf_size, typename level_t>
 CUDF_KERNEL void __launch_bounds__(decode_block_size)
-  gpuDecodePageData(PageInfo* pages,
-                    device_span<ColumnChunkDesc const> chunks,
-                    size_t min_row,
-                    size_t num_rows,
-                    cudf::device_span<bool const> page_mask,
-                    kernel_error::pointer error_code)
+  decode_page_data(PageInfo* pages,
+                   device_span<ColumnChunkDesc const> chunks,
+                   size_t min_row,
+                   size_t num_rows,
+                   cudf::device_span<bool const> page_mask,
+                   kernel_error::pointer error_code)
 {
   __shared__ __align__(16) page_state_s state_g;
   __shared__ __align__(16)
@@ -258,17 +257,17 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
   [[maybe_unused]] null_count_back_copier _{s, static_cast<int>(block.thread_rank())};
 
   // Setup local page info
-  if (!setupLocalPageInfo(s,
-                          &pages[page_idx],
-                          chunks,
-                          min_row,
-                          num_rows,
-                          mask_filter{decode_kernel_mask::GENERAL},
-                          page_processing_stage::DECODE)) {
+  if (!setup_local_page_info(s,
+                             &pages[page_idx],
+                             chunks,
+                             min_row,
+                             num_rows,
+                             mask_filter{decode_kernel_mask::GENERAL},
+                             page_processing_stage::DECODE)) {
     return;
   }
 
-  // Must be evaluated after setupLocalPageInfo
+  // Must be evaluated after setup_local_page_info
   bool const has_repetition = s->col.max_level[level_type::REPETITION] > 0;
 
   // Write list offsets and exit if the page does not need to be decoded
@@ -281,7 +280,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
     if (has_repetition) { update_list_offsets_for_pruned_pages<decode_block_size>(s); }
 
     // Fill offsets with the initial `str_offset` to indicate empty strings for BYTE_ARRAY and
-    // FIXED_LEN_BYTE_ARRAY types. These types are now decoded by `gpuDecodePageDataGeneric()`
+    // FIXED_LEN_BYTE_ARRAY types. These types are now decoded by `decode_page_data_generic()`
     // anyway so the following code should never be reached. Also note that this decoder does not
     // handle large strings either and should eventually be removed.
     Type const dtype = s->col.physical_type;
@@ -357,14 +356,13 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
       // 9 lines in `if (s->dict_pos < src_target_pos) {}`. If that change is made here, it will
       // be needed in the other DecodeXXX kernels.
       if (s->dict_base) {
-        src_target_pos = gpuDecodeDictionaryIndices<is_calc_sizes_only::NO>(
-                           s, sb, src_target_pos, warp.thread_rank())
-                           .first;
+        src_target_pos =
+          decode_dictionary_indices<is_calc_sizes_only::NO>(s, sb, src_target_pos, warp).first;
       } else if (s->col.physical_type == Type::BOOLEAN) {
-        src_target_pos = gpuDecodeRleBooleans(s, sb, src_target_pos, warp);
+        src_target_pos = decode_rle_booleans(s, sb, src_target_pos, warp);
       } else if (s->col.physical_type == Type::BYTE_ARRAY or
                  s->col.physical_type == Type::FIXED_LEN_BYTE_ARRAY) {
-        gpuInitStringDescriptors<is_calc_sizes_only::NO>(s, sb, src_target_pos, warp);
+        initialize_string_descriptors<is_calc_sizes_only::NO>(s, sb, src_target_pos, warp);
       }
       if (warp.thread_rank() == 0) { s->dict_pos = src_target_pos; }
     } else {
@@ -420,40 +418,45 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
             gpuOutputString(s, sb, val_src_pos, dst);
           }
         } else if (dtype == Type::BOOLEAN) {
-          gpuOutputBoolean(sb, val_src_pos, static_cast<uint8_t*>(dst));
+          read_boolean(sb, val_src_pos, static_cast<uint8_t*>(dst));
         } else if (is_decimal) {
           switch (dtype) {
-            case Type::INT32: gpuOutputFast(s, sb, val_src_pos, static_cast<uint32_t*>(dst)); break;
-            case Type::INT64: gpuOutputFast(s, sb, val_src_pos, static_cast<uint2*>(dst)); break;
+            case Type::INT32:
+              read_fixed_width_value_fast(s, sb, val_src_pos, static_cast<uint32_t*>(dst));
+              break;
+            case Type::INT64:
+              read_fixed_width_value_fast(s, sb, val_src_pos, static_cast<uint2*>(dst));
+              break;
             default:
               if (s->dtype_len_in <= sizeof(int32_t)) {
-                gpuOutputFixedLenByteArrayAsInt(s, sb, val_src_pos, static_cast<int32_t*>(dst));
+                read_fixed_width_byte_array_as_int(s, sb, val_src_pos, static_cast<int32_t*>(dst));
               } else if (s->dtype_len_in <= sizeof(int64_t)) {
-                gpuOutputFixedLenByteArrayAsInt(s, sb, val_src_pos, static_cast<int64_t*>(dst));
+                read_fixed_width_byte_array_as_int(s, sb, val_src_pos, static_cast<int64_t*>(dst));
               } else {
-                gpuOutputFixedLenByteArrayAsInt(s, sb, val_src_pos, static_cast<__int128_t*>(dst));
+                read_fixed_width_byte_array_as_int(
+                  s, sb, val_src_pos, static_cast<__int128_t*>(dst));
               }
               break;
           }
         } else if (dtype == Type::FIXED_LEN_BYTE_ARRAY) {
           gpuOutputString(s, sb, val_src_pos, dst);
         } else if (dtype == Type::INT96) {
-          gpuOutputInt96Timestamp(s, sb, val_src_pos, static_cast<int64_t*>(dst));
+          read_int96_timestamp(s, sb, val_src_pos, static_cast<int64_t*>(dst));
         } else if (dtype_len == 8) {
           if (s->dtype_len_in == 4) {
             // Reading INT32 TIME_MILLIS into 64-bit DURATION_MILLISECONDS
             // TIME_MILLIS is the only duration type stored as int32:
             // https://github.com/apache/parquet-format/blob/master/LogicalTypes.md#deprecated-time-convertedtype
-            gpuOutputFast(s, sb, val_src_pos, static_cast<uint32_t*>(dst));
+            read_fixed_width_value_fast(s, sb, val_src_pos, static_cast<uint32_t*>(dst));
           } else if (s->ts_scale) {
-            gpuOutputInt64Timestamp(s, sb, val_src_pos, static_cast<int64_t*>(dst));
+            read_int64_timestamp(s, sb, val_src_pos, static_cast<int64_t*>(dst));
           } else {
-            gpuOutputFast(s, sb, val_src_pos, static_cast<uint2*>(dst));
+            read_fixed_width_value_fast(s, sb, val_src_pos, static_cast<uint2*>(dst));
           }
         } else if (dtype_len == 4) {
-          gpuOutputFast(s, sb, val_src_pos, static_cast<uint32_t*>(dst));
+          read_fixed_width_value_fast(s, sb, val_src_pos, static_cast<uint32_t*>(dst));
         } else {
-          gpuOutputGeneric(s, sb, val_src_pos, static_cast<uint8_t*>(dst), dtype_len);
+          read_nbyte_fixed_width_value(s, sb, val_src_pos, static_cast<uint8_t*>(dst), dtype_len);
         }
       }
 
@@ -483,9 +486,9 @@ uint32_t GetAggregatedDecodeKernelMask(cudf::detail::hostdevice_span<PageInfo co
 }
 
 /**
- * @copydoc cudf::io::parquet::detail::DecodePageData
+ * @copydoc cudf::io::parquet::detail::launch_decode_page_data
  */
-void __host__ DecodePageData(cudf::detail::hostdevice_span<PageInfo> pages,
+void launch_decode_page_data(cudf::detail::hostdevice_span<PageInfo> pages,
                              cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
                              size_t num_rows,
                              size_t min_row,
@@ -500,25 +503,25 @@ void __host__ DecodePageData(cudf::detail::hostdevice_span<PageInfo> pages,
   dim3 dim_grid(pages.size(), 1);  // 1 threadblock per page
 
   if (level_type_size == 1) {
-    gpuDecodePageData<rolling_buf_size, uint8_t><<<dim_grid, dim_block, 0, stream.value()>>>(
+    decode_page_data<rolling_buf_size, uint8_t><<<dim_grid, dim_block, 0, stream.value()>>>(
       pages.device_ptr(), chunks, min_row, num_rows, page_mask, error_code);
   } else {
-    gpuDecodePageData<rolling_buf_size, uint16_t><<<dim_grid, dim_block, 0, stream.value()>>>(
+    decode_page_data<rolling_buf_size, uint16_t><<<dim_grid, dim_block, 0, stream.value()>>>(
       pages.device_ptr(), chunks, min_row, num_rows, page_mask, error_code);
   }
 }
 
 /**
- * @copydoc cudf::io::parquet::detail::DecodePageData
+ * @copydoc cudf::io::parquet::detail::launch_decode_split_page_data
  */
-void __host__ DecodeSplitPageData(cudf::detail::hostdevice_span<PageInfo> pages,
-                                  cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
-                                  size_t num_rows,
-                                  size_t min_row,
-                                  int level_type_size,
-                                  cudf::device_span<bool const> page_mask,
-                                  kernel_error::pointer error_code,
-                                  rmm::cuda_stream_view stream)
+void launch_decode_split_page_data(cudf::detail::hostdevice_span<PageInfo> pages,
+                                   cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
+                                   size_t num_rows,
+                                   size_t min_row,
+                                   int level_type_size,
+                                   cudf::device_span<bool const> page_mask,
+                                   kernel_error::pointer error_code,
+                                   rmm::cuda_stream_view stream)
 {
   CUDF_EXPECTS(pages.size() > 0, "There is no page to decode");
 
@@ -526,10 +529,10 @@ void __host__ DecodeSplitPageData(cudf::detail::hostdevice_span<PageInfo> pages,
   dim3 dim_grid(pages.size(), 1);  // 1 threadblock per page
 
   if (level_type_size == 1) {
-    gpuDecodeSplitPageData<rolling_buf_size, uint8_t><<<dim_grid, dim_block, 0, stream.value()>>>(
+    decode_split_page_data<rolling_buf_size, uint8_t><<<dim_grid, dim_block, 0, stream.value()>>>(
       pages.device_ptr(), chunks, min_row, num_rows, page_mask, error_code);
   } else {
-    gpuDecodeSplitPageData<rolling_buf_size, uint16_t><<<dim_grid, dim_block, 0, stream.value()>>>(
+    decode_split_page_data<rolling_buf_size, uint16_t><<<dim_grid, dim_block, 0, stream.value()>>>(
       pages.device_ptr(), chunks, min_row, num_rows, page_mask, error_code);
   }
 }

@@ -22,7 +22,7 @@
 #include "rle_stream.cuh"
 
 #include <cooperative_groups.h>
-#include <cuda/atomic>
+#include <cuda/std/atomic>
 #include <cuda/std/tuple>
 
 namespace cudf::io::parquet::detail {
@@ -239,7 +239,7 @@ enum class is_calc_sizes_only : bool { NO = false, YES = true };
  * @param[out] sb Page state buffer output
  * @param[in] target_pos Target index position in dict_idx buffer (may exceed this value by up to
  * 31)
- * @param[in] t Warp thread ID (0..31)
+ * @param[in] t Warp cooperative group
  * @tparam sizes_only Indicates if only sizes are to be calculated
  * @tparam state_buf Typename of the `state_buf` (usually inferred)
  *
@@ -249,10 +249,11 @@ enum class is_calc_sizes_only : bool { NO = false, YES = true };
  * additional values.
  */
 template <is_calc_sizes_only sizes_only, typename state_buf>
-__device__ cuda::std::pair<int, int> gpuDecodeDictionaryIndices(page_state_s* s,
-                                                                [[maybe_unused]] state_buf* sb,
-                                                                int target_pos,
-                                                                int t)
+__device__ cuda::std::pair<int, int> decode_dictionary_indices(
+  page_state_s* s,
+  [[maybe_unused]] state_buf* sb,
+  int target_pos,
+  cg::thread_block_tile<cudf::detail::warp_size, cg::thread_block> const& warp)
 {
   uint8_t const* end = s->data_end;
   int dict_bits      = s->dict_bits;
@@ -265,7 +266,7 @@ __device__ cuda::std::pair<int, int> gpuDecodeDictionaryIndices(page_state_s* s,
 
   while (pos < target_pos) {
     int is_literal, batch_len;
-    if (!t) {
+    if (warp.thread_rank() == 0) {
       uint32_t run       = s->dict_run;
       uint8_t const* cur = s->data_start;
       if (run <= 1) {
@@ -303,16 +304,16 @@ __device__ cuda::std::pair<int, int> gpuDecodeDictionaryIndices(page_state_s* s,
       is_literal    = run & 1;
       __threadfence_block();
     }
-    __syncwarp();
+    warp.sync();
     is_literal = shuffle(is_literal);
     batch_len  = shuffle(batch_len);
 
     // compute dictionary index.
     int dict_idx = 0;
-    if (t < batch_len) {
+    if (warp.thread_rank() < batch_len) {
       dict_idx = s->dict_val;
       if (is_literal) {
-        int32_t ofs      = (t - ((batch_len + 7) & ~7)) * dict_bits;
+        int32_t ofs      = (warp.thread_rank() - ((batch_len + 7) & ~7)) * dict_bits;
         uint8_t const* p = s->data_start + (ofs >> 3);
         ofs &= 7;
         if (p < end) {
@@ -333,14 +334,16 @@ __device__ cuda::std::pair<int, int> gpuDecodeDictionaryIndices(page_state_s* s,
 
       // if we're not computing sizes, store off the dictionary index
       if constexpr (sizes_only == is_calc_sizes_only::NO) {
-        sb->dict_idx[rolling_index<state_buf::dict_buf_size>(pos + t)] = dict_idx;
+        sb->dict_idx[rolling_index<state_buf::dict_buf_size>(pos + warp.thread_rank())] = dict_idx;
       }
     }
 
     // if we're computing sizes, add the length(s)
     if constexpr (sizes_only == is_calc_sizes_only::YES) {
       int const len = [&]() {
-        if (t >= batch_len || (pos + t >= target_pos)) { return 0; }
+        if (warp.thread_rank() >= batch_len || (pos + warp.thread_rank() >= target_pos)) {
+          return 0;
+        }
         uint32_t const dict_pos = (s->dict_bits > 0) ? dict_idx * sizeof(string_index_pair) : 0;
         if (dict_pos < (uint32_t)s->dict_size) {
           const auto* src = reinterpret_cast<const string_index_pair*>(s->dict_base + dict_pos);
@@ -372,7 +375,7 @@ __device__ cuda::std::pair<int, int> gpuDecodeDictionaryIndices(page_state_s* s,
  * @return The new output position
  */
 template <typename state_buf>
-inline __device__ int gpuDecodeRleBooleans(
+inline __device__ int decode_rle_booleans(
   page_state_s* s,
   state_buf* sb,
   int target_pos,
@@ -451,10 +454,10 @@ inline __device__ int gpuDecodeRleBooleans(
  * @return Total length of strings processed
  */
 template <is_calc_sizes_only sizes_only, typename state_buf, typename thread_group>
-__device__ size_type gpuInitStringDescriptors(page_state_s* s,
-                                              [[maybe_unused]] state_buf* sb,
-                                              int target_pos,
-                                              thread_group const& group)
+__device__ size_type initialize_string_descriptors(page_state_s* s,
+                                                   [[maybe_unused]] state_buf* sb,
+                                                   int target_pos,
+                                                   thread_group const& group)
 {
   int const t         = group.thread_rank();
   int const dict_size = s->dict_size;
@@ -627,8 +630,12 @@ inline __device__ void store_validity(int valid_map_offset,
     if (relevant_mask == ~0) {
       valid_map[word_offset] = valid_mask;
     } else {
-      atomicAnd(valid_map + word_offset, ~(relevant_mask << bit_offset));
-      atomicOr(valid_map + word_offset, (valid_mask & relevant_mask) << bit_offset);
+      auto validity_map_word_ref =
+        cuda::atomic_ref<bitmask_type, cuda::thread_scope_block>(valid_map[word_offset]);
+      validity_map_word_ref.fetch_and(~(relevant_mask << bit_offset),
+                                      cuda::std::memory_order_relaxed);
+      validity_map_word_ref.fetch_or((valid_mask & relevant_mask) << bit_offset,
+                                     cuda::std::memory_order_relaxed);
     }
   }
   // we're going to spill over into the next word.
@@ -642,14 +649,19 @@ inline __device__ void store_validity(int valid_map_offset,
     // first word. strip bits_left bits off the beginning and store that
     uint32_t relevant_mask = ((1 << bits_left) - 1);
     uint32_t mask_word0    = valid_mask & relevant_mask;
-    atomicAnd(valid_map + word_offset, ~(relevant_mask << bit_offset));
-    atomicOr(valid_map + word_offset, mask_word0 << bit_offset);
+    auto validity_map_first_word_ref =
+      cuda::atomic_ref<bitmask_type, cuda::thread_scope_device>(valid_map[word_offset]);
+    validity_map_first_word_ref.fetch_and(~(relevant_mask << bit_offset),
+                                          cuda::std::memory_order_relaxed);
+    validity_map_first_word_ref.fetch_or(mask_word0 << bit_offset, cuda::std::memory_order_relaxed);
 
     // second word. strip the remainder of the bits off the end and store that
+    auto validity_map_second_word_ref =
+      cuda::atomic_ref<bitmask_type, cuda::thread_scope_device>(valid_map[word_offset + 1]);
     relevant_mask       = ((1 << (value_count - bits_left)) - 1);
     uint32_t mask_word1 = valid_mask & (relevant_mask << bits_left);
-    atomicAnd(valid_map + word_offset + 1, ~(relevant_mask));
-    atomicOr(valid_map + word_offset + 1, mask_word1 >> bits_left);
+    validity_map_second_word_ref.fetch_and(~(relevant_mask), cuda::std::memory_order_relaxed);
+    validity_map_second_word_ref.fetch_or(mask_word1 >> bits_left, cuda::std::memory_order_relaxed);
   }
 }
 
@@ -1061,14 +1073,14 @@ inline __device__ uint32_t InitLevelSection(page_state_s* s,
 }
 
 /**
- * @brief Functor for setupLocalPageInfo that always returns true.
+ * @brief Functor for setup_local_page_info that always returns true.
  */
 struct all_types_filter {
   __device__ inline bool operator()(PageInfo const& page) { return true; }
 };
 
 /**
- * @brief Functor for setupLocalPageInfo that takes a mask of allowed types.
+ * @brief Functor for setup_local_page_info that takes a mask of allowed types.
  */
 struct mask_filter {
   uint32_t mask;
@@ -1103,13 +1115,13 @@ enum class page_processing_stage {
  * @return True if this page should be processed further
  */
 template <typename Filter>
-inline __device__ bool setupLocalPageInfo(page_state_s* const s,
-                                          PageInfo const* p,
-                                          device_span<ColumnChunkDesc const> chunks,
-                                          size_t min_row,
-                                          size_t num_rows,
-                                          Filter filter,
-                                          page_processing_stage stage)
+inline __device__ bool setup_local_page_info(page_state_s* const s,
+                                             PageInfo const* p,
+                                             device_span<ColumnChunkDesc const> chunks,
+                                             size_t min_row,
+                                             size_t num_rows,
+                                             Filter filter,
+                                             page_processing_stage stage)
 {
   int t = threadIdx.x;
 
