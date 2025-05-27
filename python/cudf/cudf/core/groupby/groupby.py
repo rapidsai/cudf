@@ -50,7 +50,6 @@ from cudf.core.join._join_helpers import _match_join_keys
 from cudf.core.mixins import GetAttrGetItemMixin, Reducible, Scannable
 from cudf.core.multiindex import MultiIndex
 from cudf.core.reshape import concat
-from cudf.core.scalar import pa_scalar_to_plc_scalar
 from cudf.core.udf.groupby_utils import _can_be_jitted, jit_groupby_apply
 from cudf.options import get_option
 from cudf.utils.dtypes import (
@@ -60,6 +59,7 @@ from cudf.utils.dtypes import (
     is_dtype_obj_numeric,
 )
 from cudf.utils.performance_tracking import _performance_tracking
+from cudf.utils.scalar import pa_scalar_to_plc_scalar
 
 if TYPE_CHECKING:
     from collections.abc import Generator, Hashable, Iterable, Sequence
@@ -218,15 +218,6 @@ def _is_all_scan_aggregate(all_aggs: list[list[str]]) -> bool:
             "Cannot perform both aggregation and scan in one operation"
         )
     return all_scan and any_scan
-
-
-def _deprecate_collect():
-    warnings.warn(
-        "Groupby.collect is deprecated and "
-        "will be removed in a future version. "
-        "Use `.agg(list)` instead.",
-        FutureWarning,
-    )
 
 
 # The three functions below return the quantiles [25%, 50%, 75%]
@@ -2691,12 +2682,6 @@ class GroupBy(Serializable, Reducible, Scannable):
             return getattr(x, "quantile")(q=q, interpolation=interpolation)
 
         return self.agg(func)
-
-    @_performance_tracking
-    def collect(self):
-        """Get a list of all the values for each column in each group."""
-        _deprecate_collect()
-        return self.agg(list)
 
     @_performance_tracking
     def unique(self):
