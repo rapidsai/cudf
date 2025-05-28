@@ -20,7 +20,6 @@ import pylibcudf as plc
 import cudf
 from cudf.api.extensions import no_default
 from cudf.api.types import (
-    is_dtype_equal,
     is_hashable,
     is_integer,
     is_list_like,
@@ -43,9 +42,8 @@ from cudf.core.column.column import as_column, column_empty, concat_columns
 from cudf.core.column.string import StringMethods as StringMethods
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.copy_types import GatherMap
-from cudf.core.dtypes import IntervalDtype
+from cudf.core.dtypes import IntervalDtype, dtype as cudf_dtype
 from cudf.core.join._join_helpers import _match_join_keys
-from cudf.core.mixins import BinaryOperand
 from cudf.core.single_column_frame import SingleColumnFrame
 from cudf.errors import MixedTypeError
 from cudf.utils.docutils import copy_docstring
@@ -2539,8 +2537,6 @@ class RangeIndex(Index):
     RangeIndex(start=1, stop=10, step=1, name='a')
     """
 
-    _VALID_BINARY_OPERATIONS = BinaryOperand._SUPPORTED_BINARY_OPERATIONS
-
     _range: range
 
     @_performance_tracking
@@ -2626,7 +2622,9 @@ class RangeIndex(Index):
         return ColumnAccessor({self.name: self._column}, verify=False)
 
     @property
-    def _column_labels_and_values(self) -> Iterable:
+    def _column_labels_and_values(
+        self,
+    ) -> Iterable[tuple[Hashable, ColumnBase]]:
         return zip(self._column_names, self._columns)
 
     @_performance_tracking
@@ -2730,9 +2728,10 @@ class RangeIndex(Index):
         return RangeIndex(self._range, name=name)
 
     @_performance_tracking
-    def astype(self, dtype, copy: bool = True):
-        if is_dtype_equal(dtype, self.dtype):
-            return self
+    def astype(self, dtype: Dtype, copy: bool = True) -> Self:
+        dtype = cudf_dtype(dtype)
+        if self.dtype == dtype:
+            return self if not copy else self.copy()
         return self._as_int_index().astype(dtype, copy=copy)
 
     def fillna(self, value, downcast=None) -> Self:
@@ -3292,14 +3291,6 @@ class RangeIndex(Index):
     def where(self, cond, other=None, inplace: bool = False) -> Self | None:
         return self._as_int_index().where(cond, other, inplace)
 
-    def __array__(self, dtype=None):
-        raise TypeError(
-            "Implicit conversion to a host NumPy array via __array__ is not "
-            "allowed, To explicitly construct a GPU matrix, consider using "
-            ".to_cupy()\nTo explicitly construct a host matrix, consider "
-            "using .to_numpy()."
-        )
-
     @_performance_tracking
     def nunique(self, dropna: bool = True) -> int:
         return len(self)
@@ -3383,6 +3374,12 @@ class RangeIndex(Index):
             return -self
         else:
             return abs(self._as_int_index())
+
+    def __invert__(self) -> Self:
+        if len(self) == 0:
+            return self.copy()
+        rng = range(~self.start, ~self.stop, -self.step)
+        return type(self)(rng, name=self.name)
 
     def _columns_for_reset_index(
         self, levels: tuple | None
