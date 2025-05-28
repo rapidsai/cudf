@@ -119,6 +119,22 @@ def test_query_local_dict():
     np.testing.assert_array_equal(data[1], got["datetimes"].to_numpy())
 
 
+def test_query_global_dict():
+    df = DataFrame()
+    df["a"] = aa = np.arange(100)
+    expr = "a < @foo"
+
+    global_scope = {"foo": 42}
+    got = df.query(expr, global_dict=global_scope)
+
+    np.testing.assert_array_equal(aa[aa < 42], got["a"].to_numpy())
+
+    global_scope = {"foo": 7}
+    got = df.query(expr, global_dict=global_scope)
+
+    np.testing.assert_array_equal(aa[aa < 7], got["a"].to_numpy())
+
+
 def test_query_splitted_combine():
     rng = np.random.default_rng(seed=0)
     df = pd.DataFrame(
