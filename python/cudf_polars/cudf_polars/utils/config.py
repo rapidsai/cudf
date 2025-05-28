@@ -141,7 +141,8 @@ def default_blocksize(scheduler: str) -> int:
         # support a much larger blocksize.
         blocksize = int(device_size * 0.0625)
 
-    return max(blocksize, 256_000_000)
+    # Cap the default between 256MB and 4GB
+    return min(max(blocksize, 256_000_000), 4_000_000_000)
 
 
 @dataclasses.dataclass(frozen=True, eq=True)
