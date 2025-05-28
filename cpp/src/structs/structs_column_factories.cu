@@ -62,7 +62,7 @@ std::unique_ptr<cudf::column> make_structs_column(
                                   std::move(child_columns));
 }
 
-/// Column factory that adopts child columns.
+/// Column factory that adopts child columns without null sanitization.
 std::unique_ptr<cudf::column> make_structs_column_unsanitized(
   size_type num_rows,
   std::vector<std::unique_ptr<column>>&& child_columns,
