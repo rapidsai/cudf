@@ -183,10 +183,15 @@ std::unique_ptr<column> make_column(column_buffer_base<string_policy>& buffer,
                                     std::optional<reader_column_schema> const& schema,
                                     rmm::cuda_stream_view stream)
 {
-  std::function<std::unique_ptr<column>(column_buffer_base<string_policy>& buffer, column_name_info* schema_info, std::optional<reader_column_schema> const& schema)> construct_column;
-  construct_column = [&construct_column, stream](
-      column_buffer_base<string_policy>& buffer, column_name_info* schema_info, std::optional<reader_column_schema> const& schema) -> std::unique_ptr<column> {
-
+  std::function<std::unique_ptr<column>(column_buffer_base<string_policy> & buffer,
+                                        column_name_info * schema_info,
+                                        std::optional<reader_column_schema> const& schema)>
+    construct_column;
+  construct_column =
+    [&construct_column, stream](
+      column_buffer_base<string_policy>& buffer,
+      column_name_info* schema_info,
+      std::optional<reader_column_schema> const& schema) -> std::unique_ptr<column> {
     if (schema_info != nullptr) {
       schema_info->name        = buffer.name;
       schema_info->is_nullable = buffer.is_nullable;
@@ -292,11 +297,11 @@ std::unique_ptr<column> make_column(column_buffer_base<string_policy>& buffer,
         }
 
         return make_structs_column_unsanitized(buffer.size,
-                                   std::move(output_children),
-                                   buffer._null_count,
-                                   std::move(buffer._null_mask),
-                                   stream,
-                                   buffer._mr);
+                                               std::move(output_children),
+                                               buffer._null_count,
+                                               std::move(buffer._null_mask),
+                                               stream,
+                                               buffer._mr);
       } break;
 
       default: {
@@ -313,20 +318,22 @@ std::unique_ptr<column> make_column(column_buffer_base<string_policy>& buffer,
   if (buffer.type.id() == type_id::STRUCT) {
     if (col->nullable()) {
       auto col_contents = col->release();
-      for(auto &child : col_contents.children) {
-        child = structs::detail::superimpose_nulls(static_cast<bitmask_type const*>(col_contents.null_mask->data()),
-                                                   buffer._null_count,
-                                                   std::move(child),
-                                                   stream,
-                                                   buffer._mr);
+      for (auto& child : col_contents.children) {
+        child = structs::detail::superimpose_nulls(
+          static_cast<bitmask_type const*>(col_contents.null_mask->data()),
+          buffer._null_count,
+          std::move(child),
+          stream,
+          buffer._mr);
       }
-      
-      return std::make_unique<column>(cudf::data_type{type_id::STRUCT},
-                                      buffer.size,
-                                      rmm::device_buffer{},  // Empty data buffer. Structs hold no data.
-                                      std::move(*col_contents.null_mask),
-                                      buffer._null_count,
-                                      std::move(col_contents.children));
+
+      return std::make_unique<column>(
+        cudf::data_type{type_id::STRUCT},
+        buffer.size,
+        rmm::device_buffer{},  // Empty data buffer. Structs hold no data.
+        std::move(*col_contents.null_mask),
+        buffer._null_count,
+        std::move(col_contents.children));
     }
   }
 

@@ -577,7 +577,7 @@ std::unique_ptr<cudf::column> make_structs_column(
  * The specified null mask governs which struct row has a null value. This
  * is orthogonal to the null values of individual child columns.
  *
- * This function will not recurse through struct descendants to superimpose 
+ * This function will not recurse through struct descendants to superimpose
  * the parent null mask i.e. the struct column is not sanitized.
  *
  * @param[in] num_rows The number of struct values in the struct column.

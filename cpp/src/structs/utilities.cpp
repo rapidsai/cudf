@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -269,11 +269,12 @@ std::unique_ptr<column> superimpose_nulls_no_sanitize(bitmask_type const* null_m
                "Child columns must have the same number of rows as the Struct column.");
 
   for (auto& child : content.children) {
-    child = superimpose_nulls_no_sanitize(static_cast<bitmask_type const*>(content.null_mask->data()),
-                                          new_null_count,
-                                          std::move(child),
-                                          stream,
-                                          mr);
+    child =
+      superimpose_nulls_no_sanitize(static_cast<bitmask_type const*>(content.null_mask->data()),
+                                    new_null_count,
+                                    std::move(child),
+                                    stream,
+                                    mr);
   }
   return std::make_unique<column>(cudf::data_type{type_id::STRUCT},
                                   num_rows,
