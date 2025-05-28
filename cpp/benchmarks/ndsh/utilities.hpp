@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#pragma once
+
 #include "io/cuio_common.hpp"
 
 #include <cudf/detail/nvtx/ranges.hpp>

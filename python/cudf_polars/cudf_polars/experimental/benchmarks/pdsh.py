@@ -155,6 +155,8 @@ class RunConfig:
         default_factory=lambda: datetime.now(timezone.utc).isoformat()
     )
     hardware: HardwareInfo = dataclasses.field(default_factory=HardwareInfo.collect)
+    rmm_async: bool
+    rapidsmpf_oom_protection: bool
     rapidsmpf_spill: bool
     spill_device: float
 
@@ -179,6 +181,8 @@ class RunConfig:
             threads=args.threads,
             iterations=args.iterations,
             suffix=args.suffix,
+            rmm_async=args.rmm_async,
+            rapidsmpf_oom_protection=args.rapidsmpf_oom_protection,
             spill_device=args.spill_device,
             rapidsmpf_spill=args.rapidsmpf_spill,
         )
@@ -204,6 +208,8 @@ class RunConfig:
                 if self.scheduler == "distributed":
                     print(f"n_workers: {self.n_workers}")
                     print(f"threads: {self.threads}")
+                    print(f"rmm_async: {self.rmm_async}")
+                    print(f"rapidsmpf_oom_protection: {self.rapidsmpf_oom_protection}")
                     print(f"spill_device: {self.spill_device}")
                     print(f"rapidsmpf_spill: {self.rapidsmpf_spill}")
             if len(records) > 0:
@@ -1067,6 +1073,13 @@ parser.add_argument(
     help="Debug run.",
 )
 parser.add_argument(
+    "--protocol",
+    default="ucx",
+    type=str,
+    choices=["ucx", "ucxx"],
+    help="Communication protocol to use for Dask: ucx (UCX-Py) or ucxx)",
+)
+parser.add_argument(
     "--shuffle",
     default=None,
     type=str,
@@ -1098,6 +1111,12 @@ parser.add_argument(
     help="Use RMM async memory resource.",
 )
 parser.add_argument(
+    "--rapidsmpf-oom-protection",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help="Use rapidsmpf CUDA managed memory-based OOM protection.",
+)
+parser.add_argument(
     "--rapidsmpf-spill",
     action=argparse.BooleanOptionalAction,
     default=False,
@@ -1107,7 +1126,7 @@ parser.add_argument(
     "--spill-device",
     default=0.5,
     type=float,
-    help="Rapdsimpf device spill threshold.",
+    help="Rapidsmpf device spill threshold.",
 )
 parser.add_argument(
     "-o",
@@ -1155,7 +1174,7 @@ def run(args: argparse.Namespace) -> None:
         kwargs = {
             "n_workers": run_config.n_workers,
             "dashboard_address": ":8585",
-            "protocol": "ucxx",
+            "protocol": args.protocol,
             "rmm_pool_size": args.rmm_pool_size,
             "rmm_async": args.rmm_async,
             "threads_per_worker": run_config.threads,
@@ -1168,7 +1187,11 @@ def run(args: argparse.Namespace) -> None:
             try:
                 from rapidsmpf.integrations.dask import bootstrap_dask_cluster
 
-                bootstrap_dask_cluster(client, spill_device=run_config.spill_device)
+                bootstrap_dask_cluster(
+                    client,
+                    spill_device=run_config.spill_device,
+                    oom_protection=args.rapidsmpf_oom_protection,
+                )
             except ImportError as err:
                 if run_config.shuffle == "rapidsmpf":
                     raise ImportError from err
