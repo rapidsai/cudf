@@ -5,6 +5,7 @@ strings
     :maxdepth: 1
 
     attributes
+    capitalize
     case
     char_types
     combine
