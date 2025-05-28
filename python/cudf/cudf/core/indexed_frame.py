@@ -4959,7 +4959,7 @@ class IndexedFrame(Frame):
         dtype: int64
         """
         res = self._from_columns_like_self(
-            Frame._repeat(
+            self._repeat(
                 [*self.index._columns, *self._columns], repeats, axis
             ),
             self._column_names,

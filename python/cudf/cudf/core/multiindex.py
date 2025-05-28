@@ -2220,7 +2220,7 @@ class MultiIndex(Index):
     def repeat(self, repeats, axis=None) -> Self:
         return self._from_data(
             self._data._from_columns_like_self(
-                super()._repeat(self._columns, repeats, axis)
+                self._repeat(self._columns, repeats, axis)
             )
         )
 
