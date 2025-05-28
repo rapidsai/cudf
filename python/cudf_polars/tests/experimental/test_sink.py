@@ -55,3 +55,27 @@ def test_sink_parquet(
         },
         engine=engine,
     )
+
+
+def test_sink_parquet_raises(request, df, tmp_path):
+    request.applymarker(
+        pytest.mark.xfail(
+            condition=POLARS_VERSION_LT_128,
+            reason="not supported until polars 1.28",
+        )
+    )
+
+    engine = pl.GPUEngine(
+        raise_on_fail=True,
+        executor="streaming",
+        executor_options={
+            "max_rows_per_partition": 100_000,
+            "scheduler": DEFAULT_SCHEDULER,
+        },
+    )
+
+    # We can write to a file once, but not twice
+    path = tmp_path / "test_sink_raises.parquet"
+    df.sink_parquet(path, engine=engine)
+    with pytest.raises(pl.exceptions.ComputeError, match="not supported"):
+        df.sink_parquet(path, engine=engine)

@@ -358,14 +358,35 @@ def _(
 @lower_ir_node.register(Sink)
 def _(
     ir: Sink, rec: LowerIRTransformer
-) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+) -> tuple[Sink, MutableMapping[IR, PartitionInfo]]:
     child, partition_info = rec(ir.children[0])
-    if partition_info[child].count > 1:
-        # Create a directory to write output files
-        Path(ir.path).mkdir(parents=True)
+    if Path(ir.path).exists():
+        # TODO: Support cloud storage
+        raise NotImplementedError(
+            "Writing to an existing path is not supported "
+            "by the GPU streaming executor."
+        )
     new_node = ir.reconstruct([child])
     partition_info[new_node] = partition_info[child]
     return new_node, partition_info
+
+
+def _prepare_sink(path: str) -> None:
+    """Prepare for a multi-partition sink."""
+    # TODO: Support cloud storage
+    Path(path).mkdir(parents=True)
+
+
+def _sink_partition(
+    schema: Schema,
+    kind: str,
+    path: str,
+    options: dict[str, Any],
+    df: DataFrame,
+    ready: None,
+) -> DataFrame:
+    """Sink a partition to disk."""
+    return Sink.do_evaluate(schema, kind, path, options, df)
 
 
 @generate_ir_tasks.register(Sink)
@@ -384,16 +405,20 @@ def _(
             )
         }
 
+    setup_name = f"setup-{name}"
     suffix = ir.kind.lower()
     width = math.ceil(math.log10(count))
-    return {
+    graph: MutableMapping[Any, Any] = {
         (name, i): (
-            ir.do_evaluate,
+            _sink_partition,
             ir.schema,
             ir.kind,
             f"{ir.path}/part.{str(i).zfill(width)}.{suffix}",
             ir.options,
             (child_name, i),
+            setup_name,
         )
         for i in range(count)
     }
+    graph[setup_name] = (_prepare_sink, ir.path)
+    return graph
