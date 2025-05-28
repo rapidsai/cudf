@@ -7,6 +7,8 @@ from __future__ import annotations
 import operator
 from typing import TYPE_CHECKING, Any, TypedDict
 
+import nvtx
+
 import pylibcudf as plc
 import rmm.mr
 from rmm.pylibrmm.stream import DEFAULT_STREAM
@@ -44,6 +46,7 @@ class RMPFIntegration:  # pragma: no cover
     """cuDF-Polars protocol for rapidsmpf shuffler."""
 
     @staticmethod
+    @nvtx.annotate(name="RMPFIntegration.insert_partition", domain="cudf_polars")
     def insert_partition(
         df: DataFrame,
         partition_id: int,  # Not currently used
@@ -68,6 +71,7 @@ class RMPFIntegration:  # pragma: no cover
         shuffler.insert_chunks(packed_inputs)
 
     @staticmethod
+    @nvtx.annotate(name="RMPFIntegration.extract_partition", domain="cudf_polars")
     def extract_partition(
         partition_id: int,
         shuffler: Any,
@@ -265,14 +269,15 @@ def _(
         try:
             from rapidsmpf.integrations.dask import rapidsmpf_shuffle_graph
 
-            return rapidsmpf_shuffle_graph(
-                get_key_name(ir.children[0]),
-                get_key_name(ir),
-                partition_info[ir.children[0]].count,
-                partition_info[ir].count,
-                RMPFIntegration,
-                {"on": shuffle_on, "column_names": list(ir.schema.keys())},
-            )
+            with nvtx.annotate(name="rapidsmpf_shuffle_graph", domain="rapidsmpf"):
+                return rapidsmpf_shuffle_graph(
+                    get_key_name(ir.children[0]),
+                    get_key_name(ir),
+                    partition_info[ir.children[0]].count,
+                    partition_info[ir].count,
+                    RMPFIntegration,
+                    {"on": shuffle_on, "column_names": list(ir.schema.keys())},
+                )
         except (ImportError, ValueError) as err:
             # ImportError: rapidsmpf is not installed
             # ValueError: rapidsmpf couldn't find a distributed client

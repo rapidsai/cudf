@@ -90,12 +90,22 @@ def setup_logging() -> structlog.BoundLogger | None:
         cache_logger_on_first_use=False,
     )
 
-    # Configure standard library logging to write to trace.log
     logging.basicConfig(
         filename="trace.log", level=logging.NOTSET, format="%(message)s", filemode="a"
     )
 
     return structlog.get_logger()
+
+
+def add_context(q_id: int, i: int, run_id: str, executor: str, scheduler: str):
+    """Add PDSH context to the structlog context."""
+    structlog.contextvars.bind_contextvars(
+        query=q_id,
+        iteration=i,
+        run_id=run_id,
+        executor=executor,
+        scheduler=scheduler,
+    )
 
 
 # Without this setting, the first IO task to run
@@ -1316,13 +1326,18 @@ def run(args: argparse.Namespace) -> None:
             t0 = time.monotonic()
 
             if HAS_STRUCTLOG:
-                structlog.contextvars.bind_contextvars(
-                    query=q_id,
-                    iteration=i,
-                    run_id=run_id,
-                    executor=run_config.executor,
-                    scheduler=run_config.scheduler,
-                )
+                add_context(q_id, i, run_id, run_config.executor, run_config.scheduler)
+                if client is not None:
+                    # this isn't working for some reason.
+                    client.run(
+                        add_context,
+                        q_id,
+                        i,
+                        run_id,
+                        run_config.executor,
+                        run_config.scheduler,
+                    )
+
             with nvtx.annotate(
                 message=f"Query {q_id} - Iteration {i}",
                 domain="cudf_polars",
