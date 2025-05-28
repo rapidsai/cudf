@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2024, NVIDIA CORPORATION.
+# Copyright (c) 2019-2025, NVIDIA CORPORATION.
 
 from functools import partial
 
@@ -119,7 +119,7 @@ def test_join_left(left_nrows, right_nrows, left_nkeys, right_nkeys, how):
         expect = expect.sort_values(list(expect.columns))
 
     # Check index
-    np.testing.assert_array_equal(expect.index.values, got.index.values)
+    pd.testing.assert_index_equal(expect.index, got.index)
 
     # Check rows in each groups
     expect_rows = {}
