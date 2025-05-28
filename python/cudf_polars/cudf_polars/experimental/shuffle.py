@@ -46,7 +46,7 @@ class RMPFIntegration:  # pragma: no cover
     """cuDF-Polars protocol for rapidsmpf shuffler."""
 
     @staticmethod
-    @nvtx.annotate(name="RMPFIntegration.insert_partition", domain="cudf_polars")
+    @nvtx.annotate(message="RMPFIntegration.insert_partition", domain="cudf_polars")
     def insert_partition(
         df: DataFrame,
         partition_id: int,  # Not currently used
@@ -71,7 +71,7 @@ class RMPFIntegration:  # pragma: no cover
         shuffler.insert_chunks(packed_inputs)
 
     @staticmethod
-    @nvtx.annotate(name="RMPFIntegration.extract_partition", domain="cudf_polars")
+    @nvtx.annotate(message="RMPFIntegration.extract_partition", domain="cudf_polars")
     def extract_partition(
         partition_id: int,
         shuffler: Any,
@@ -269,7 +269,7 @@ def _(
         try:
             from rapidsmpf.integrations.dask import rapidsmpf_shuffle_graph
 
-            with nvtx.annotate(name="rapidsmpf_shuffle_graph", domain="rapidsmpf"):
+            with nvtx.annotate(message="rapidsmpf_shuffle_graph", domain="rapidsmpf"):
                 return rapidsmpf_shuffle_graph(
                     get_key_name(ir.children[0]),
                     get_key_name(ir),
