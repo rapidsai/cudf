@@ -27,6 +27,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Hashable
 
     from cudf.core.column import ColumnBase
+    from cudf.core.dataframe import DataFrame
 
 
 PARQUET_META_TYPE_MAP = {
@@ -1525,7 +1526,7 @@ def _index_level_name(
         return f"__index_level_{level}__"
 
 
-def generate_pandas_metadata(table: cudf.DataFrame, index: bool | None) -> str:
+def generate_pandas_metadata(table: DataFrame, index: bool | None) -> str:
     col_names: list[Hashable] = []
     types = []
     index_levels = []
@@ -1616,7 +1617,7 @@ def generate_pandas_metadata(table: cudf.DataFrame, index: bool | None) -> str:
 
 
 def _update_pandas_metadata_types_inplace(
-    df: cudf.DataFrame, md_dict: dict
+    df: DataFrame, md_dict: dict
 ) -> None:
     # correct metadata for list and struct and nullable numeric types
     for col_meta in md_dict["columns"]:
@@ -2402,9 +2403,7 @@ def _prefetch_remote_buffers(
         return paths
 
 
-def _add_df_col_struct_names(
-    df: cudf.DataFrame, child_names_dict: dict
-) -> None:
+def _add_df_col_struct_names(df: DataFrame, child_names_dict: dict) -> None:
     for name, child_names in child_names_dict.items():
         col = df._data[name]
         df._data[name] = _update_col_struct_field_names(col, child_names)

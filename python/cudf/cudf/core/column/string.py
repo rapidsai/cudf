@@ -52,6 +52,7 @@ if TYPE_CHECKING:
     from cudf.core.column.numerical import NumericalColumn
     from cudf.core.column.timedelta import TimeDeltaColumn
     from cudf.core.dtypes import DecimalDtype
+    from cudf.core.series import Series
 
 
 def _is_supported_regex_flags(flags: int) -> bool:
@@ -2207,9 +2208,7 @@ class StringMethods(ColumnMethods):
             result = ColumnBase.from_pylibcudf(plc_column)
         return self._return_or_inplace(result)
 
-    def slice_from(
-        self, starts: cudf.Series, stops: cudf.Series
-    ) -> SeriesOrIndex:
+    def slice_from(self, starts: Series, stops: Series) -> SeriesOrIndex:
         """
         Return substring of each string using positions for each string.
 
@@ -3794,7 +3793,7 @@ class StringMethods(ColumnMethods):
         """
         return self._findall(plc.strings.findall.find_re, pat, flags)
 
-    def find_multiple(self, patterns: SeriesOrIndex) -> cudf.Series:
+    def find_multiple(self, patterns: SeriesOrIndex) -> Series:
         """
         Find all first occurrences of patterns in the Series/Index.
 
@@ -4785,7 +4784,7 @@ class StringMethods(ColumnMethods):
         return result
 
     def detokenize(
-        self, indices: cudf.Series, separator: str = " "
+        self, indices: Series, separator: str = " "
     ) -> SeriesOrIndex:
         """
         Combines tokens into strings by concatenating them in the order
@@ -5794,7 +5793,7 @@ class StringMethods(ColumnMethods):
         result = ColumnBase.from_pylibcudf(plc_column)
         return self._return_or_inplace(result)
 
-    def jaccard_index(self, input: cudf.Series, width: int) -> SeriesOrIndex:
+    def jaccard_index(self, input: Series, width: int) -> SeriesOrIndex:
         """
         Compute the Jaccard index between this column and the given
         input strings column.
