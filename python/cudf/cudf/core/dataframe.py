@@ -4565,7 +4565,13 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             dropna,
         )
 
-    def query(self, expr, local_dict=None):
+    def query(
+        self,
+        expr: str,
+        local_dict: None | dict[str, Any] = None,
+        global_dict: None | dict[str, Any] = None,
+        **kwargs,
+    ) -> DataFrame:
         """
         Query with a boolean expression using Numba to compile a GPU kernel.
 
@@ -4577,14 +4583,16 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             A boolean expression. Names in expression refer to columns.
             `index` can be used instead of index name, but this is not
             supported for MultiIndex.
-
             Names starting with `@` refer to Python variables.
-
             An output value will be `null` if any of the input values are
             `null` regardless of expression.
-
         local_dict : dict
             Containing the local variable to be used in query.
+        global_dict : dict, optional
+            A dictionary of global variables. If not provided,
+            the globals from the calling environment are used.
+        **kwargs
+            Not supported.
 
         Returns
         -------
@@ -4633,11 +4641,19 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             One difference from pandas is that ``query`` currently only
             supports numeric, datetime, timedelta, or bool dtypes.
         """
+        if kwargs:
+            raise ValueError(
+                "Keyword arguments other than `local_dict`"
+                "and `global_dict` are not supported."
+            )
         # can't use `annotate` decorator here as we inspect the calling
         # environment.
         with annotate("DATAFRAME_QUERY", color="purple", domain="cudf_python"):
             if local_dict is None:
                 local_dict = {}
+
+            if global_dict is None:
+                global_dict = {}
 
             if self.empty:
                 return self.copy()
@@ -4648,12 +4664,24 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                     f"{type(local_dict)}"
                 )
 
+            if not isinstance(global_dict, dict):
+                raise TypeError(
+                    f"global_dict type: expected dict but found "
+                    f"{type(global_dict)}"
+                )
+
             # Get calling environment
-            callframe = inspect.currentframe().f_back
+            if (frame := inspect.currentframe()) is not None and (
+                callframe := frame.f_back
+            ) is not None:
+                pass
+            else:
+                raise RuntimeError("Failed to get the calling frame.")
             callenv = {
                 "locals": callframe.f_locals,
                 "globals": callframe.f_globals,
                 "local_dict": local_dict,
+                "global_dict": global_dict,
             }
             # Run query
             boolmask = queryutils.query_execute(self, expr, callenv)
