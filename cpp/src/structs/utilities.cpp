@@ -281,14 +281,6 @@ std::unique_ptr<column> superimpose_nulls_no_sanitize(bitmask_type const* null_m
                                   std::move(*content.null_mask),
                                   new_null_count,
                                   std::move(content.children));
-  /*
-  return cudf::make_structs_column(num_rows,
-                                   std::move(content.children),
-                                   new_null_count,
-                                   std::move(*content.null_mask),
-                                   stream,
-                                   mr);
-  */
 }
 
 /**
