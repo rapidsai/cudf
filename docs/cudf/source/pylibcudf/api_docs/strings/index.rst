@@ -4,7 +4,8 @@ strings
 .. toctree::
     :maxdepth: 1
 
-    capitalize
+    attributes
+    case
     char_types
     combine
     contains
