@@ -2695,65 +2695,6 @@ class IndexedFrame(Frame):
 
         return self._mimic_inplace(out, inplace=inplace)
 
-    def memory_usage(self, index: bool = True, deep: bool = False) -> int:  # type: ignore[override]
-        """Return the memory usage of an object.
-
-        Parameters
-        ----------
-        index : bool, default True
-            Specifies whether to include the memory usage of the index.
-        deep : bool, default False
-            The deep parameter is ignored and is only included for pandas
-            compatibility.
-
-        Returns
-        -------
-        Series or scalar
-            For DataFrame, a Series whose index is the original column names
-            and whose values is the memory usage of each column in bytes. For a
-            Series the total memory usage.
-
-        Examples
-        --------
-        **DataFrame**
-
-        >>> dtypes = ['int64', 'float64', 'object', 'bool']
-        >>> data = dict([(t, np.ones(shape=5000).astype(t))
-        ...              for t in dtypes])
-        >>> df = cudf.DataFrame(data)
-        >>> df.head()
-           int64  float64  object  bool
-        0      1      1.0     1.0  True
-        1      1      1.0     1.0  True
-        2      1      1.0     1.0  True
-        3      1      1.0     1.0  True
-        4      1      1.0     1.0  True
-        >>> df.memory_usage(index=False)
-        int64      40000
-        float64    40000
-        object     40000
-        bool        5000
-        dtype: int64
-
-        Use a Categorical for efficient storage of an object-dtype column with
-        many repeated values.
-
-        >>> df['object'].astype('category').memory_usage(deep=True)
-        5008
-
-        **Series**
-        >>> s = cudf.Series(range(3), index=['a','b','c'])
-        >>> s.memory_usage()
-        43
-
-        Not including the index gives the size of the rest of the data, which
-        is necessarily smaller:
-
-        >>> s.memory_usage(index=False)
-        24
-        """
-        raise NotImplementedError
-
     def hash_values(
         self,
         method: Literal[

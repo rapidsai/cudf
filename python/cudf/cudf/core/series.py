@@ -1043,7 +1043,34 @@ class Series(SingleColumnFrame, IndexedFrame):
         return self._to_frame(name=name, index=self.index)
 
     @_performance_tracking
-    def memory_usage(self, index: bool = True, deep: bool = False) -> int:
+    def memory_usage(self, index: bool = True, deep: bool = False) -> int:  # type: ignore[override]
+        """
+        Return the memory usage of the Series.
+
+        Parameters
+        ----------
+        index : bool, default True
+            Specifies whether to include the memory usage of the index.
+        deep : bool, default False
+            The deep parameter is ignored and is only included for pandas
+            compatibility.
+
+        Returns
+        -------
+        int
+            The total memory usage in bytes.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series(range(3), index=['a','b','c'])
+        >>> s.memory_usage()
+        43
+        Not including the index gives the size of the rest of the data, which
+        is necessarily smaller:
+        >>> s.memory_usage(index=False)
+        24
+        """
         return self._column.memory_usage + (
             self.index.memory_usage() if index else 0
         )

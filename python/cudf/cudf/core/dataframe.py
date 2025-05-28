@@ -1644,9 +1644,49 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         self._drop_column(name)
 
     @_performance_tracking
-    def memory_usage(
-        self, index: bool = True, deep: bool = False
-    ) -> cudf.Series:
+    def memory_usage(self, index: bool = True, deep: bool = False) -> Series:  # type: ignore[override]
+        """
+        Return the memory usage of the DataFrame.
+
+        Parameters
+        ----------
+        index : bool, default True
+            Specifies whether to include the memory usage of the index.
+        deep : bool, default False
+            The deep parameter is ignored and is only included for pandas
+            compatibility.
+
+        Returns
+        -------
+        Series
+            A Series whose index is the original column names
+            and whose values is the memory usage of each column in bytes.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> import numpy as np
+        >>> dtypes = [int, float, str, bool]
+        >>> data = {typ.__name__: [typ(1)] * 5000 for typ in dtypes}
+        >>> df = cudf.DataFrame(data)
+        >>> df.head()
+        int  float str  bool
+        0    1    1.0   1  True
+        1    1    1.0   1  True
+        2    1    1.0   1  True
+        3    1    1.0   1  True
+        4    1    1.0   1  True
+        >>> df.memory_usage(index=False)
+        int      40000
+        float    40000
+        str      25004
+        bool      5000
+        dtype: int64
+        Use a Categorical for efficient storage of an object-dtype column with
+        many repeated values.
+        >>> df['str'].astype('category').memory_usage(deep=True)
+        5009
+        """
         mem_usage: abc.Iterable[int] = (
             col.memory_usage for col in self._columns
         )

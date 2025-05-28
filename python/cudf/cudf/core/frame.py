@@ -1994,26 +1994,6 @@ class Frame(BinaryOperand, Scannable, Serializable):
             self._data._from_columns_like_self((~col for col in self._columns))
         )
 
-    @_performance_tracking
-    def nunique(self, dropna: bool = True):
-        """
-        Returns a per column mapping with counts of unique values for
-        each column.
-
-        Parameters
-        ----------
-        dropna : bool, default True
-            Don't include NaN in the counts.
-
-        Returns
-        -------
-        dict
-            Name and unique value counts of each column in frame.
-        """
-        raise NotImplementedError(
-            f"{type(self).__name__} does not implement nunique"
-        )
-
     @staticmethod
     @_performance_tracking
     def _repeat(
