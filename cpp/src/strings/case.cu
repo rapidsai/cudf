@@ -286,14 +286,13 @@ CUDF_KERNEL void count_bytes_kernel(convert_char_fn converter,
                                     column_device_view d_strings,
                                     size_type* d_sizes)
 {
-  auto const idx     = cudf::detail::grid_1d::global_thread_id();
-  auto const str_idx = idx / cudf::detail::warp_size;
-  if (str_idx >= d_strings.size()) { return; }
-  if (d_strings.is_null(str_idx)) { return; }
-
   namespace cg        = cooperative_groups;
   auto const warp     = cg::tiled_partition<cudf::detail::warp_size>(cg::this_thread_block());
   auto const lane_idx = warp.thread_rank();
+
+  auto const str_idx = warp.meta_group_rank();
+  if (str_idx >= d_strings.size()) { return; }
+  if (d_strings.is_null(str_idx)) { return; }
 
   auto const d_str   = d_strings.element<string_view>(str_idx);
   auto const str_ptr = d_str.data();
