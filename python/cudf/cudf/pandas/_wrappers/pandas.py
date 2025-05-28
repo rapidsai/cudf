@@ -5,10 +5,9 @@ import abc
 import copyreg
 import functools
 import importlib
+import inspect
 import os
 import pickle
-import sys
-import inspect
 
 import pandas as pd
 
@@ -1052,6 +1051,7 @@ except ImportError:
     # Styler requires Jinja to be installed
     pass
 
+
 def _find_user_frame():
     frame = inspect.currentframe()
     while frame:
@@ -1060,6 +1060,7 @@ def _find_user_frame():
             return frame
         frame = frame.f_back
     raise RuntimeError("Could not find the user's frame.")
+
 
 _eval_func = _FunctionProxy(_Unusable(), pd.eval)
 
