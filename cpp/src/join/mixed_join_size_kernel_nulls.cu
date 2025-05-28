@@ -17,7 +17,7 @@
 #include "mixed_join_size_kernel.cuh"
 
 namespace cudf::detail {
-template std::size_t launch_compute_mixed_join_output_size<true, row_hash, row_equality>(
+template std::size_t launch_compute_mixed_join_output_size<true>(
   table_device_view left_table,
   table_device_view right_table,
   table_device_view probe,

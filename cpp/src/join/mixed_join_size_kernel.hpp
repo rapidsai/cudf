@@ -22,6 +22,7 @@
 
 #include <cudf/ast/detail/expression_parser.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/table/primitive_row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/export.hpp>
 #include <cudf/utilities/span.hpp>
@@ -41,8 +42,6 @@ namespace detail {
  * between probe and build rows.
  *
  * @tparam has_nulls Whether or not the inputs may contain nulls.
- * @tparam HashProbe Type of the hash probe function
- * @tparam EqualityProbe Type of the equality probe function
  *
  * @param[in] left_table The left table
  * @param[in] right_table The right table
@@ -64,14 +63,14 @@ namespace detail {
  * left/right tables to determine which is the build table and which is the
  * probe table has already happened on the host.
  */
-template <bool has_nulls, typename HashProbe, typename EqualityProbe>
+template <bool has_nulls>
 std::size_t launch_compute_mixed_join_output_size(
   cudf::table_device_view left_table,
   cudf::table_device_view right_table,
   cudf::table_device_view probe,
   cudf::table_device_view build,
-  HashProbe hash_probe,
-  EqualityProbe equality_probe,
+  row_hash hash_probe,
+  row_equality equality_probe,
   join_kind const join_type,
   cudf::detail::mixed_multimap_type::device_view hash_table_view,
   ast::detail::expression_device_view device_expression_data,
@@ -81,5 +80,61 @@ std::size_t launch_compute_mixed_join_output_size(
   int64_t shmem_size_per_block,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr);
+
+/**
+ * @brief Computes the output size of joining the left table to the right table.
+ *
+ * This method probes the hash table with each row in the probe table using a
+ * custom equality comparator that also checks that the conditional expression
+ * evaluates to true between the left/right tables when a match is found
+ * between probe and build rows.
+ *
+ * This is a specialization for primitive row hashers and equality comparators.
+ *
+ * @tparam has_nulls Whether or not the inputs may contain nulls.
+ *
+ * @param[in] left_table The left table
+ * @param[in] right_table The right table
+ * @param[in] probe The table with which to probe the hash table for matches.
+ * @param[in] build The table with which the hash table was built.
+ * @param[in] hash_probe The primitive row hasher used for the probe table.
+ * @param[in] equality_probe The primitive row equality comparator used when probing the hash table.
+ * @param[in] join_type The type of join to be performed
+ * @param[in] hash_table_view The hash table built from `build`.
+ * @param[in] device_expression_data Container of device data required to evaluate the desired
+ * expression.
+ * @param[in] swap_tables If true, the kernel was launched with one thread per right row and
+ * the kernel needs to internally loop over left rows. Otherwise, loop over right rows.
+ * @param[out] matches_per_row The number of matches in one pair of
+ * equality/conditional tables for each row in the other pair of tables. If
+ * swap_tables is true, matches_per_row corresponds to the right_table,
+ * otherwise it corresponds to the left_table. Note that corresponding swap of
+ * left/right tables to determine which is the build table and which is the
+ * probe table has already happened on the host.
+ * @param[in] config The kernel configuration for launching the CUDA kernel.
+ * @param[in] shmem_size_per_block The amount of shared memory to allocate per block.
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches.
+ * @param[in] mr Device memory resource used to allocate the returned vector.
+ *
+ * @return The output size of the join operation.
+ */
+template <bool has_nulls>
+std::size_t launch_compute_mixed_join_output_size(
+  cudf::table_device_view left_table,
+  cudf::table_device_view right_table,
+  cudf::table_device_view probe,
+  cudf::table_device_view build,
+  cudf::row::primitive::row_hasher<cudf::hashing::detail::default_hash> hash_probe,
+  cudf::row::primitive::row_equality_comparator equality_probe,
+  join_kind const join_type,
+  cudf::detail::mixed_multimap_type::device_view hash_table_view,
+  ast::detail::expression_device_view device_expression_data,
+  bool const swap_tables,
+  cudf::device_span<cudf::size_type> matches_per_row,
+  detail::grid_1d const config,
+  int64_t shmem_size_per_block,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr);
+
 }  // namespace detail
 }  // namespace CUDF_EXPORT cudf

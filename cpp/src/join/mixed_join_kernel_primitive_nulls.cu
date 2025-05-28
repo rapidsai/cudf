@@ -14,14 +14,11 @@
  * limitations under the License.
  */
 
-#include "mixed_join_kernel.cuh"
 #include "mixed_join_kernel.hpp"
+#include "mixed_join_kernel_primitive.cuh"
 
 namespace cudf::detail {
-template void
-launch_mixed_join<true,
-                  cudf::row::primitive::row_hasher<cudf::hashing::detail::default_hash>,
-                  cudf::row::primitive::row_equality_comparator>(
+template void launch_mixed_join<true>(
   table_device_view left_table,
   table_device_view right_table,
   table_device_view probe,

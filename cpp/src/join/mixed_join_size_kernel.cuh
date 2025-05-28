@@ -36,14 +36,14 @@
 namespace cudf::detail {
 namespace cg = cooperative_groups;
 
-template <int block_size, bool has_nulls, typename HashProbe, typename EqualityProbe>
+template <int block_size, bool has_nulls>
 CUDF_KERNEL void __launch_bounds__(block_size)
   compute_mixed_join_output_size(table_device_view left_table,
                                  table_device_view right_table,
                                  table_device_view probe,
                                  table_device_view build,
-                                 HashProbe hash_probe,
-                                 EqualityProbe equality_probe,
+                                 row_hash hash_probe,
+                                 row_equality equality_probe,
                                  join_kind const join_type,
                                  cudf::detail::mixed_multimap_type::device_view hash_table_view,
                                  ast::detail::expression_device_view device_expression_data,
@@ -104,14 +104,14 @@ CUDF_KERNEL void __launch_bounds__(block_size)
   }
 }
 
-template <bool has_nulls, typename HashProbe, typename EqualityProbe>
+template <bool has_nulls>
 std::size_t launch_compute_mixed_join_output_size(
   table_device_view left_table,
   table_device_view right_table,
   table_device_view probe,
   table_device_view build,
-  HashProbe hash_probe,
-  EqualityProbe equality_probe,
+  row_hash hash_probe,
+  row_equality equality_probe,
   join_kind const join_type,
   cudf::detail::mixed_multimap_type::device_view hash_table_view,
   ast::detail::expression_device_view device_expression_data,
@@ -141,5 +141,4 @@ std::size_t launch_compute_mixed_join_output_size(
       matches_per_row);
   return size.value(stream);
 }
-
 }  // namespace cudf::detail

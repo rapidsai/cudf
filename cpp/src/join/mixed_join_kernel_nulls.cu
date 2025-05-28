@@ -18,7 +18,7 @@
 #include "mixed_join_kernel.hpp"
 
 namespace cudf::detail {
-template void launch_mixed_join<true, row_hash, row_equality>(
+template void launch_mixed_join<true>(
   table_device_view left_table,
   table_device_view right_table,
   table_device_view probe,

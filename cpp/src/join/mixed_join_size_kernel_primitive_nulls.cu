@@ -14,16 +14,11 @@
  * limitations under the License.
  */
 
-#include "mixed_join_size_kernel.cuh"
 #include "mixed_join_size_kernel.hpp"
-
-#include <cudf/table/primitive_row_operators.cuh>
+#include "mixed_join_size_kernel_primitive.cuh"
 
 namespace cudf::detail {
-template std::size_t launch_compute_mixed_join_output_size<
-  true,
-  cudf::row::primitive::row_hasher<cudf::hashing::detail::default_hash>,
-  cudf::row::primitive::row_equality_comparator>(
+template std::size_t launch_compute_mixed_join_output_size<true>(
   table_device_view left_table,
   table_device_view right_table,
   table_device_view probe,
