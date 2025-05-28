@@ -87,8 +87,6 @@ struct faster_sorted_order_fn {
     // and creating the input indices sequence.
 
     auto const do_sort = [&](auto const comp) {
-      // Compiling `thrust::*sort*` APIs is expensive.
-      // Thus, we should optimize that by using constexpr condition to only compile what we need.
       if constexpr (method == sort_method::STABLE) {
         thrust::stable_sort_by_key(rmm::exec_policy(stream),
                                    input.begin<T>(),

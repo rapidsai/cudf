@@ -35,7 +35,7 @@ void faster_sorted_order<sort_method::UNSTABLE>(column_view const& input,
   auto col_temp = column(input, stream);
   auto d_col    = col_temp.mutable_view();
   thrust::sequence(
-    rmm::exec_policy(stream), indices.begin<size_type>(), indices.end<size_type>(), 0);
+    rmm::exec_policy_nosync(stream), indices.begin<size_type>(), indices.end<size_type>(), 0);
   auto dispatch_fn = faster_sorted_order_fn<sort_method::UNSTABLE>{};
   cudf::type_dispatcher<dispatch_storage_type>(
     input.type(), dispatch_fn, d_col, indices, ascending, stream);
