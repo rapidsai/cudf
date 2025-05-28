@@ -3232,7 +3232,7 @@ class IndexedFrame(Frame):
         result._data.rangeindex = self._data.rangeindex
         return result
 
-    def _split(self, splits, keep_index: bool = True) -> list[Self]:
+    def _split(self, splits: list[int], keep_index: bool = True) -> list[Self]:
         if self._num_rows == 0:
             return []
 

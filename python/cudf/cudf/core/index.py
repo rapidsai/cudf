@@ -3202,10 +3202,8 @@ class RangeIndex(Index):
     def repeat(self, repeats, axis=None):
         return self._as_int_index().repeat(repeats, axis)
 
-    def _split(self, splits):
-        return Index._from_column(
-            self._as_int_index()._split(splits), name=self.name
-        )
+    def _split(self, splits: list[int]) -> list[Index]:
+        return self._as_int_index()._split(splits)
 
     def _binaryop(self, other, op: str):  # type: ignore[override]
         # TODO: certain binops don't require materializing range index and

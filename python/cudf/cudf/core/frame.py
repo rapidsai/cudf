@@ -1564,9 +1564,16 @@ class Frame(BinaryOperand, Scannable, Serializable):
 
     @_performance_tracking
     def _split(self, splits: list[int]) -> list[Self]:
-        """Split a frame with split points in ``splits``. Returns a list of
-        Frames of length `len(splits) + 1`.
         """
+        Split a frame with split points in ``splits``.
+
+        Returns
+        -------
+        list[Self]
+            Returns a list of Self of length len(splits) + 1.
+        """
+        if self._num_rows == 0:
+            return []
         return [
             self._from_columns_like_self(
                 [ColumnBase.from_pylibcudf(col) for col in split],

@@ -81,6 +81,7 @@ from cudf.utils.utils import (
 
 if TYPE_CHECKING:
     import builtins
+    from collections.abc import Generator
 
     from cudf._typing import ColumnLike, Dtype, DtypeObj, ScalarLike
     from cudf.core.column.categorical import CategoricalColumn
@@ -2160,10 +2161,15 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             )
         )
 
+    def split_by_offsets(
+        self, offsets: list[int]
+    ) -> Generator[Self, None, None]:
+        for cols in copying.columns_split([self], offsets):
+            for col in cols:
+                yield type(self).from_pylibcudf(col)
+
     @acquire_spill_lock()
-    def one_hot_encode(
-        self, categories: ColumnBase
-    ) -> abc.Generator[ColumnBase]:
+    def one_hot_encode(self, categories: ColumnBase) -> Generator[ColumnBase]:
         plc_table = plc.transform.one_hot_encode(
             self.to_pylibcudf(mode="read"),
             categories.to_pylibcudf(mode="read"),

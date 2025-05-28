@@ -2571,8 +2571,12 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
 
     @_performance_tracking
     def scatter_by_map(
-        self, map_index, map_size=None, keep_index=True, debug: bool = False
-    ):
+        self,
+        map_index,
+        map_size: int | None = None,
+        keep_index: bool = True,
+        debug: bool = False,
+    ) -> list[Self]:
         """Scatter to a list of dataframes.
 
         Uses map_index to determine the destination
@@ -2646,38 +2650,16 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 raise ValueError("Partition map has invalid values")
 
         with acquire_spill_lock():
-            plc_table, output_offsets = plc.partitioning.partition(
+            plc_table, offsets = plc.partitioning.partition(
                 plc.Table(
                     [col.to_pylibcudf(mode="read") for col in source_columns]
                 ),
                 map_index.to_pylibcudf(mode="read"),
                 map_size,
             )
-            partitioned_columns = [
-                ColumnBase.from_pylibcudf(col) for col in plc_table.columns()
-            ]
-
-        partitioned = self._from_columns_like_self(
-            partitioned_columns,
-            column_names=self._column_names,
-            index_names=list(self._index_names) if keep_index else None,
+        return self._wrap_from_partitions(
+            plc_table, offsets, keep_index=keep_index, size=map_size
         )
-
-        # due to the split limitation mentioned
-        # here: https://github.com/rapidsai/cudf/issues/4607
-        # we need to remove first & last elements in offsets.
-        # TODO: Remove this after the above issue is fixed.
-        output_offsets = output_offsets[1:-1]
-
-        result = partitioned._split(output_offsets, keep_index=keep_index)
-
-        if map_size:
-            result += [
-                self._empty_like(keep_index)
-                for _ in range(map_size - len(result))
-            ]
-
-        return result
 
     @_performance_tracking
     def update(
@@ -5175,8 +5157,8 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
 
     @_performance_tracking
     def partition_by_hash(
-        self, columns, nparts: int, keep_index: bool = True
-    ) -> list[DataFrame]:
+        self, columns: Sequence[Hashable], nparts: int, keep_index: bool = True
+    ) -> list[Self]:
         """Partition the dataframe by the hashed value of data in *columns*.
 
         Parameters
@@ -5198,7 +5180,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             cols: abc.Iterable[ColumnBase] = itertools.chain(
                 self.index._columns, self._columns
             )
-            key_indices = [i + len(self.index._columns) for i in key_indices]
+            key_indices = [i + self.index._num_columns for i in key_indices]
         else:
             cols = self._columns
 
@@ -5208,23 +5190,44 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 key_indices,
                 nparts,
             )
-            output_columns = [
-                ColumnBase.from_pylibcudf(col) for col in plc_table.columns()
-            ]
-
-        outdf = self._from_columns_like_self(
-            output_columns,
-            self._column_names,
-            self._index_names if keep_index else None,  # type: ignore[arg-type]
+        return self._wrap_from_partitions(
+            plc_table,
+            offsets,
+            keep_index=keep_index,
+            size=nparts,
+            by_hash=True,
         )
-        # Slice into partitions. Notice, `hash_partition` returns the start
-        # offset of each partition thus we skip the first offset
-        ret = outdf._split(offsets[1:], keep_index=keep_index)
 
-        # Calling `_split()` on an empty dataframe returns an empty list
-        # so we add empty partitions here
-        ret += [self._empty_like(keep_index) for _ in range(nparts - len(ret))]
-        return ret
+    def _wrap_from_partitions(
+        self,
+        table: plc.Table,
+        offsets: list[int],
+        *,
+        keep_index: bool,
+        size: int,
+        by_hash: bool = False,
+    ) -> list[Self]:
+        # we need to remove first & last elements in offsets.
+        # TODO: Remove this after https://github.com/rapidsai/cudf/issues/4607 is fixed.
+        if by_hash:
+            slc = slice(1, None)
+        else:
+            slc = slice(1, -1)
+        offsets = offsets[slc]
+        output_columns = [
+            ColumnBase.from_pylibcudf(col) for col in table.columns()
+        ]
+        partitioned = self._from_columns_like_self(
+            output_columns,
+            column_names=self._column_names,
+            index_names=self._index_names if keep_index else None,  # type: ignore[arg-type]
+        )
+        result = partitioned._split(offsets, keep_index=keep_index)
+        if size:
+            result.extend(
+                self._empty_like(keep_index) for _ in range(size - len(result))
+            )
+        return result
 
     def info(
         self,
@@ -7992,7 +7995,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         columns: list[ColumnBase],
         column_names: abc.Iterable[str] | None = None,
         index_names: list[str] | None = None,
-    ) -> DataFrame:
+    ) -> Self:
         result = super()._from_columns_like_self(
             columns,
             column_names,
