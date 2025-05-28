@@ -562,6 +562,14 @@ std::unique_ptr<cudf::column> make_structs_column(
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
+std::unique_ptr<cudf::column> make_structs_column_unsanitized(
+  size_type num_rows,
+  std::vector<std::unique_ptr<column>>&& child_columns,
+  size_type null_count,
+  rmm::device_buffer&& null_mask,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
 /**
  * @brief Construct a column with size elements that are all equal to the given scalar.
  *

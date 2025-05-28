@@ -263,12 +263,32 @@ std::unique_ptr<column> superimpose_nulls_no_sanitize(bitmask_type const* null_m
 
   // Replace the children columns.
   // make_structs_column recursively calls superimpose_nulls
+  CUDF_EXPECTS(std::all_of(content.children.begin(),
+                           content.children.end(),
+                           [&](auto const& child_col) { return num_rows == child_col->size(); }),
+               "Child columns must have the same number of rows as the Struct column.");
+
+  for (auto& child : content.children) {
+    child = superimpose_nulls_no_sanitize(static_cast<bitmask_type const*>(content.null_mask->data()),
+                                          new_null_count,
+                                          std::move(child),
+                                          stream,
+                                          mr);
+  }
+  return std::make_unique<column>(cudf::data_type{type_id::STRUCT},
+                                  num_rows,
+                                  rmm::device_buffer{},  // Empty data buffer. Structs hold no data.
+                                  std::move(*content.null_mask),
+                                  new_null_count,
+                                  std::move(content.children));
+  /*
   return cudf::make_structs_column(num_rows,
                                    std::move(content.children),
                                    new_null_count,
                                    std::move(*content.null_mask),
                                    stream,
                                    mr);
+  */
 }
 
 /**
@@ -371,6 +391,7 @@ std::unique_ptr<column> superimpose_nulls(bitmask_type const* null_mask,
                                           rmm::cuda_stream_view stream,
                                           rmm::device_async_resource_ref mr)
 {
+  CUDF_FUNC_RANGE();
   input = superimpose_nulls_no_sanitize(null_mask, null_count, std::move(input), stream, mr);
 
   if (auto const input_view = input->view(); cudf::detail::has_nonempty_nulls(input_view, stream)) {
