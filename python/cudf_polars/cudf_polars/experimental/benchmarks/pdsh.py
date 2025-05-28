@@ -207,7 +207,7 @@ class RunConfig:
                 print(f"blocksize: {self.blocksize}")
                 print(f"shuffle_method: {self.shuffle}")
                 print(f"broadcast_join_limit: {self.broadcast_join_limit}")
-                print(f"task-fusion: {not self.task_fusion}")
+                print(f"task-fusion: {self.task_fusion}")
                 if self.scheduler == "distributed":
                     print(f"n_workers: {self.n_workers}")
                     print(f"threads: {self.threads}")
