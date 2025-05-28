@@ -211,7 +211,7 @@ CUDF_KERNEL void url_decode_char_counter(column_device_view const in_strings,
 
   auto const global_thread_id = cudf::detail::grid_1d::global_thread_id();
   auto const global_warp_id   = static_cast<size_type>(global_thread_id / cudf::detail::warp_size);
-  auto const local_warp_id    = static_cast<size_type>(threadIdx.x / cudf::detail::warp_size);
+  auto const local_warp_id    = static_cast<size_type>(warp.meta_group_rank());
   auto const warp_lane        = static_cast<size_type>(warp.thread_rank());
   auto const nwarps =
     static_cast<size_type>(cudf::detail::grid_1d::grid_stride() / cudf::detail::warp_size);
@@ -301,7 +301,7 @@ CUDF_KERNEL void url_decode_char_replacer(column_device_view const in_strings,
 
   auto const global_thread_id = cudf::detail::grid_1d::global_thread_id();
   auto const global_warp_id   = static_cast<size_type>(global_thread_id / cudf::detail::warp_size);
-  auto const local_warp_id    = static_cast<size_type>(threadIdx.x / cudf::detail::warp_size);
+  auto const local_warp_id    = static_cast<size_type>(warp.meta_group_rank());
   auto const warp_lane        = static_cast<size_type>(warp.thread_rank());
   auto const nwarps =
     static_cast<size_type>(cudf::detail::grid_1d::grid_stride() / cudf::detail::warp_size);

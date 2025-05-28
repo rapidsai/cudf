@@ -122,15 +122,13 @@ CUDF_KERNEL void finder_warp_parallel_fn(column_device_view const d_strings,
                                          size_type const stop,
                                          size_type* d_results)
 {
-  auto const idx = cudf::detail::grid_1d::global_thread_id();
-
-  auto const str_idx = idx / cudf::detail::warp_size;
-  if (str_idx >= d_strings.size()) { return; }
-  if (d_strings.is_null(str_idx)) { return; }
-
   namespace cg        = cooperative_groups;
   auto const warp     = cg::tiled_partition<cudf::detail::warp_size>(cg::this_thread_block());
   auto const lane_idx = warp.thread_rank();
+
+  auto const str_idx = warp.meta_group_rank();
+  if (str_idx >= d_strings.size()) { return; }
+  if (d_strings.is_null(str_idx)) { return; }
 
   auto const d_str    = d_strings.element<string_view>(str_idx);
   auto const d_target = d_targets[str_idx];
