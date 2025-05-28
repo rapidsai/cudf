@@ -4603,13 +4603,19 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         Parameters
         ----------
         expr : str
-            ...
+            A boolean expression. Names in expression refer to columns.
+            `index` can be used instead of index name, but this is not
+            supported for MultiIndex.
+            Names starting with `@` refer to Python variables.
+            An output value will be `null` if any of the input values are
+            `null` regardless of expression.
         local_dict : dict
             Containing the local variable to be used in query.
-
         global_dict : dict, optional
             A dictionary of global variables. If not provided,
             the globals from the calling environment are used.
+        **kwargs
+            Not supported.
 
         Returns
         -------
@@ -4688,9 +4694,10 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 )
 
             # Get calling environment
-            frame = inspect.currentframe()
-            if frame is not None and frame.f_back is not None:
-                callframe = frame.f_back
+            if (frame := inspect.currentframe()) is not None and (
+                callframe := frame.f_back
+            ) is not None:
+                pass
             else:
                 raise RuntimeError("Failed to get the calling frame.")
             callenv = {
