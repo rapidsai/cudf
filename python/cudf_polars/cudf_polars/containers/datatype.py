@@ -105,8 +105,14 @@ class DataType:
         self.plc = _from_polars(polars_dtype)
 
     def id(self) -> plc.TypeId:
-        """The pylibcudf.TypeId of this Dtype."""
+        """The pylibcudf.TypeId of this DataType."""
         return self.plc.id()
+
+    def __eq__(self, other: object) -> bool:
+        """Equality of DataTypes."""
+        if not isinstance(other, DataType):
+            return False
+        return self.polars == other.polars
 
     def __hash__(self) -> int:
         """Hash of the DataType."""

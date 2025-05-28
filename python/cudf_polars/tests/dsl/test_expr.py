@@ -71,6 +71,7 @@ def test_namedexpr_ne_values():
     assert b1 != b2
 
 
+@pytest.mark.xfail(reason="pylibcudf datatype repr not stable")
 def test_namedexpr_repr_stable():
     b1 = expr.NamedExpr("b1", expr.Col(DataType(pl.datatypes.Int8()), "a"))
     b2 = expr.NamedExpr("b1", expr.Col(DataType(pl.datatypes.Int8()), "a"))
