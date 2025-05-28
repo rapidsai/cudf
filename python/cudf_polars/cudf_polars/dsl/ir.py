@@ -563,9 +563,9 @@ class Scan(IR):
                     .decimal(decimal)
                     .keep_default_na(keep_default_na=False)
                     .na_filter(na_filter=True)
+                    .delimiter(str(sep))
                     .build()
                 )
-                options.set_delimiter(str(sep))
                 if column_names is not None:
                     options.set_names([str(name) for name in column_names])
                 else:
