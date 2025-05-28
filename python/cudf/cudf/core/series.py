@@ -1066,8 +1066,10 @@ class Series(SingleColumnFrame, IndexedFrame):
         >>> s = cudf.Series(range(3), index=['a','b','c'])
         >>> s.memory_usage()
         43
+
         Not including the index gives the size of the rest of the data, which
         is necessarily smaller:
+
         >>> s.memory_usage(index=False)
         24
         """

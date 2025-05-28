@@ -1682,8 +1682,10 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         str      25004
         bool      5000
         dtype: int64
+
         Use a Categorical for efficient storage of an object-dtype column with
         many repeated values.
+
         >>> df['str'].astype('category').memory_usage(deep=True)
         5009
         """
