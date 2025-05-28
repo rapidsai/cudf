@@ -214,7 +214,7 @@ inline void jni_cuda_check(JNIEnv* const env, cudaError_t cuda_status)
   catch (const cudf::data_type_error& e)                                                         \
   {                                                                                              \
     JNI_CHECK_THROW_CUDF_EXCEPTION(                                                              \
-      env, cudf::jni::ILLEGAL_ARG_EXCEPTION_CLASS, e.what(), e.stacktrace(), ret_val);           \
+      env, cudf::jni::CUDF_EXCEPTION_CLASS, e.what(), e.stacktrace(), ret_val);                  \
   }                                                                                              \
   catch (std::overflow_error const& e)                                                           \
   {                                                                                              \
