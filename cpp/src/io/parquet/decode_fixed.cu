@@ -267,7 +267,7 @@ __device__ inline void decode_fixed_width_split_values(
           // https://github.com/apache/parquet-format/blob/master/LogicalTypes.md#deprecated-time-convertedtype
           gpuOutputByteStreamSplit<int32_t>(dst, src, num_values);
           // zero out most significant bytes
-          memset(dst + 4, 0, 4);
+          cuda::std::memset(dst + sizeof(int32_t), 0, sizeof(int32_t));
         } else if (s->ts_scale) {
           gpuOutputSplitInt64Timestamp(
             reinterpret_cast<int64_t*>(dst), src, num_values, s->ts_scale);
@@ -1037,10 +1037,11 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
                                            has_strings_t ? rolling_buf_size : 1>;
   __shared__ __align__(16) state_buf_t state_buffers;
 
+  auto const block      = cg::this_thread_block();
   page_state_s* const s = &state_g;
   auto* const sb        = &state_buffers;
-  int const page_idx    = blockIdx.x;
-  int const t           = threadIdx.x;
+  int const page_idx    = cg::this_grid().block_rank();
+  int const t           = block.thread_rank();
   PageInfo* pp          = &pages[page_idx];
 
   if (!(BitAnd(pages[page_idx].kernel_mask, kernel_mask_t))) { return; }
@@ -1141,7 +1142,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
       bool_stream.init(1, s->data_start, s->data_end, sb->dict_idx, s->page.num_input_values);
     }
   }
-  __syncthreads();
+  block.sync();
 
   // We use two counters in the loop below: processed_count and valid_count.
   // - processed_count: number of values out of num_input_values that we have decoded so far.
@@ -1165,10 +1166,9 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
       if constexpr (has_dict_t) {
         skip_decode<rolling_buf_size>(dict_stream, skipped_leaf_values, t);
       } else if constexpr (has_strings_t) {
-        initialize_string_descriptors<is_calc_sizes_only::YES>(
-          s, sb, skipped_leaf_values, cooperative_groups::this_thread_block());
+        initialize_string_descriptors<is_calc_sizes_only::YES>(s, sb, skipped_leaf_values, block);
         if (t == 0) { s->dict_pos = processed_count; }
-        __syncthreads();
+        block.sync();
       }
     }
   }
@@ -1184,11 +1184,11 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
     // only need to process definition levels if this is a nullable column
     if (should_process_nulls) {
       processed_count += def_decoder.decode_next(t);
-      __syncthreads();
+      block.sync();
 
       if constexpr (has_lists_t) {
         rep_decoder.decode_next(t);
-        __syncthreads();
+        block.sync();
         next_valid_count =
           update_validity_and_row_indices_lists<decode_block_size_t, true, level_t>(
             processed_count, s, sb, def, rep, t);
@@ -1206,7 +1206,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
     else {
       if constexpr (has_lists_t) {
         processed_count += rep_decoder.decode_next(t);
-        __syncthreads();
+        block.sync();
         next_valid_count =
           update_validity_and_row_indices_lists<decode_block_size_t, false, level_t>(
             processed_count, s, sb, nullptr, rep, t);
@@ -1216,27 +1216,26 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
           processed_count, s, sb, t);
       }
     }
-    __syncthreads();
+    block.sync();
 
     // We want to limit the number of dictionary/bool/string items we decode,
     // that correspond to the rows we have processed in this iteration that are valid.
     // We know the number of valid rows to process with: next_valid_count - valid_count.
     if constexpr (has_dict_t) {
       dict_stream.decode_next(t, next_valid_count - valid_count);
-      __syncthreads();
+      block.sync();
     } else if constexpr (has_strings_t) {
       auto const target_pos = next_valid_count + skipped_leaf_values;
-      initialize_string_descriptors<is_calc_sizes_only::NO>(
-        s, sb, target_pos, cooperative_groups::this_thread_block());
+      initialize_string_descriptors<is_calc_sizes_only::NO>(s, sb, target_pos, block);
       if (t == 0) { s->dict_pos = target_pos; }
-      __syncthreads();
+      block.sync();
     } else if constexpr (has_bools_t) {
       if (bools_are_rle_stream) {
         bool_stream.decode_next(t, next_valid_count - valid_count);
       } else {
         bool_plain_decode<decode_block_size_t>(s, sb, t, next_valid_count - valid_count);
       }
-      __syncthreads();
+      block.sync();
     }
 
     // decode the values themselves
@@ -1250,7 +1249,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
       decode_fixed_width_values<decode_block_size_t, has_lists_t>(
         s, sb, valid_count, next_valid_count, t);
     }
-    __syncthreads();
+    block.sync();
 
     valid_count = next_valid_count;
   }

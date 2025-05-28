@@ -22,7 +22,7 @@
 #include "rle_stream.cuh"
 
 #include <cooperative_groups.h>
-#include <cuda/std/atomic>
+#include <cuda/atomic>
 #include <cuda/std/tuple>
 
 namespace cudf::io::parquet::detail {
