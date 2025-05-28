@@ -2897,12 +2897,12 @@ Java_ai_rapids_cudf_Table_convertArrowTableToCudf(JNIEnv* env, jclass, jlong arr
 
     ArrowSchema sch;
     if (!arrow::ExportSchema(*handle->get()->schema(), &sch).ok()) {
-      JNI_THROW_NEW(env, "java/lang/RuntimeException", "Unable to produce an ArrowSchema", 0)
+      JNI_THROW_NEW(env, cudf::jni::RUNTIME_EXCEPTION_CLASS, "Unable to produce an ArrowSchema", 0)
     }
     auto batch = handle->get()->CombineChunksToBatch().ValueOrDie();
     ArrowArray arr;
     if (!arrow::ExportRecordBatch(*batch, &arr).ok()) {
-      JNI_THROW_NEW(env, "java/lang/RuntimeException", "Unable to produce an ArrowArray", 0)
+      JNI_THROW_NEW(env, cudf::jni::RUNTIME_EXCEPTION_CLASS, "Unable to produce an ArrowArray", 0)
     }
     auto ret = cudf::from_arrow(&sch, &arr);
     arr.release(&arr);

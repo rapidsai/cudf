@@ -35,8 +35,12 @@ constexpr char const* CUDF_OVERFLOW_EXCEPTION_CLASS =
 constexpr char const* INDEX_OOB_EXCEPTION_CLASS   = "java/lang/ArrayIndexOutOfBoundsException";
 constexpr char const* ILLEGAL_ARG_EXCEPTION_CLASS = "java/lang/IllegalArgumentException";
 constexpr char const* NPE_EXCEPTION_CLASS         = "java/lang/NullPointerException";
-constexpr char const* OOM_EXCEPTION_CLASS         = "java/lang/OutOfMemoryError";
+constexpr char const* RUNTIME_EXCEPTION_CLASS     = "java/lang/RuntimeException";
 constexpr char const* UNSUPPORTED_EXCEPTION_CLASS = "java/lang/UnsupportedOperationException";
+
+// Java error classes.
+// An error is a serious problem and the applications should not expect to recover from it.
+constexpr char const* OOM_ERROR_CLASS = "java/lang/OutOfMemoryError";
 
 /**
  * @brief indicates that a JNI error of some kind was thrown and the main
@@ -191,7 +195,7 @@ inline void jni_cuda_check(JNIEnv* const env, cudaError_t cuda_status)
     JNI_EXCEPTION_OCCURRED_CHECK(env, ret_val);                                                  \
     auto const what =                                                                            \
       std::string("Could not allocate native memory: ") + (e.what() == nullptr ? "" : e.what()); \
-    JNI_THROW_NEW(env, cudf::jni::OOM_EXCEPTION_CLASS, what.c_str(), ret_val);                   \
+    JNI_THROW_NEW(env, cudf::jni::OOM_ERROR_CLASS, what.c_str(), ret_val);                       \
   }                                                                                              \
   catch (const cudf::fatal_cuda_error& e)                                                        \
   {                                                                                              \
