@@ -6467,6 +6467,31 @@ class IndexedFrame(Frame):
                 self._data._from_columns_like_self(cols, verify=False)
             )
 
+    @_performance_tracking
+    def serialize(self):
+        header, frames = super().serialize()
+
+        header["index"], index_frames = self.index.device_serialize()
+        header["index_frame_count"] = len(index_frames)
+        # For backwards compatibility with older versions of cuDF, index
+        # columns are placed before data columns.
+        frames = index_frames + frames
+
+        return header, frames
+
+    @classmethod
+    @_performance_tracking
+    def deserialize(cls, header, frames):
+        index_nframes = header["index_frame_count"]
+        obj = super().deserialize(
+            header, frames[header["index_frame_count"] :]
+        )
+
+        index = cls.device_deserialize(header["index"], frames[:index_nframes])
+        obj.index = index
+
+        return obj
+
     @_warn_no_dask_cudf
     def __dask_tokenize__(self):
         from dask.base import normalize_token

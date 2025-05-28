@@ -93,7 +93,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
 
     @property
     def ndim(self) -> int:
-        raise NotImplementedError()
+        raise NotImplementedError
 
     @_performance_tracking
     def serialize(self):

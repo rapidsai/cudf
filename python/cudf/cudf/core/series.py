@@ -751,31 +751,6 @@ class Series(SingleColumnFrame, IndexedFrame):
         return self._column.has_nulls(include_nan=True)
 
     @_performance_tracking
-    def serialize(self):
-        header, frames = super().serialize()
-
-        header["index"], index_frames = self.index.device_serialize()
-        header["index_frame_count"] = len(index_frames)
-        # For backwards compatibility with older versions of cuDF, index
-        # columns are placed before data columns.
-        frames = index_frames + frames
-
-        return header, frames
-
-    @classmethod
-    @_performance_tracking
-    def deserialize(cls, header, frames):
-        index_nframes = header["index_frame_count"]
-        obj = super().deserialize(
-            header, frames[header["index_frame_count"] :]
-        )
-
-        index = cls.device_deserialize(header["index"], frames[:index_nframes])
-        obj.index = index
-
-        return obj
-
-    @_performance_tracking
     def drop(
         self,
         labels=None,
