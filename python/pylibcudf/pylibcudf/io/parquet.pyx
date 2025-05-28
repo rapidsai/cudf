@@ -45,15 +45,17 @@ from pylibcudf.utils cimport _get_stream
 
 __all__ = [
     "ChunkedParquetReader",
-    "ParquetWriterOptions",
-    "ParquetWriterOptionsBuilder",
-    "read_parquet",
-    "write_parquet",
+    "ChunkedParquetWriterOptions",
+    "ChunkedParquetWriterOptionsBuilder",
+    "ParquetChunkedWriter",
     "ParquetReaderOptions",
     "ParquetReaderOptionsBuilder",
-    "ChunkedParquetWriterOptions",
-    "ChunkedParquetWriterOptionsBuilder"
+    "ParquetWriterOptions",
+    "ParquetWriterOptionsBuilder",
+    "is_supported_write_parquet",
     "merge_row_group_metadata",
+    "read_parquet",
+    "write_parquet",
 ]
 
 

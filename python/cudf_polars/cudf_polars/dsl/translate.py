@@ -521,6 +521,7 @@ def _(
         schema=schema,
         kind=sink_kind,
         path=file["target"],
+        config_options=translator.config_options,
         options=options,
         cloud_options=cloud_options,
         df=translator.translate_ir(n=node.input),

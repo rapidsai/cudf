@@ -86,7 +86,10 @@ def test_sink_ndjson(request, df, tmp_path):
 @pytest.mark.parametrize("mkdir", [True, False])
 @pytest.mark.parametrize("data_page_size", [None, 256_000])
 @pytest.mark.parametrize("row_group_size", [None, 1_000])
-def test_sink_parquet(request, df, tmp_path, mkdir, data_page_size, row_group_size):
+@pytest.mark.parametrize("is_chunked", [False, True])
+def test_sink_parquet(
+    request, df, tmp_path, mkdir, data_page_size, row_group_size, is_chunked
+):
     request.applymarker(
         pytest.mark.xfail(
             condition=POLARS_VERSION_LT_128,
@@ -101,6 +104,9 @@ def test_sink_parquet(request, df, tmp_path, mkdir, data_page_size, row_group_si
             "data_page_size": data_page_size,
             "row_group_size": row_group_size,
         },
+        engine=pl.GPUEngine(
+            raise_on_fail=True, parquet_options={"chunked": is_chunked}
+        ),
     )
 
 
