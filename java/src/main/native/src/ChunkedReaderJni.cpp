@@ -21,11 +21,9 @@
 #include <cudf/column/column.hpp>
 #include <cudf/io/orc.hpp>
 #include <cudf/io/parquet.hpp>
-#include <cudf/table/table.hpp>
 
 #include <memory>
 #include <optional>
-#include <vector>
 
 // This file is for the code related to chunked reader (Parquet, ORC, etc.).
 
@@ -55,7 +53,7 @@ Java_ai_rapids_cudf_ParquetChunkedReader_create(JNIEnv* env,
     read_buffer = false;
   } else if (inp_file_path != nullptr) {
     JNI_THROW_NEW(env,
-                  cudf::jni::ILLEGAL_ARG_CLASS,
+                  cudf::jni::ILLEGAL_ARG_EXCEPTION_CLASS,
                   "Cannot pass in both buffers and an inp_file_path",
                   nullptr);
   }
@@ -64,7 +62,8 @@ Java_ai_rapids_cudf_ParquetChunkedReader_create(JNIEnv* env,
     cudf::jni::auto_set_device(env);
     cudf::jni::native_jstring filename(env, inp_file_path);
     if (!read_buffer && filename.is_empty()) {
-      JNI_THROW_NEW(env, cudf::jni::ILLEGAL_ARG_CLASS, "inp_file_path cannot be empty", nullptr);
+      JNI_THROW_NEW(
+        env, cudf::jni::ILLEGAL_ARG_EXCEPTION_CLASS, "inp_file_path cannot be empty", nullptr);
     }
 
     cudf::jni::native_jstringArray n_filter_col_names(env, filter_col_names);
@@ -217,7 +216,8 @@ jlong create_chunked_orc_reader(JNIEnv* env,
 {
   JNI_NULL_CHECK(env, buffer, "buffer is null", 0);
   if (buffer_length <= 0) {
-    JNI_THROW_NEW(env, cudf::jni::ILLEGAL_ARG_CLASS, "An empty buffer is not supported", 0);
+    JNI_THROW_NEW(
+      env, cudf::jni::ILLEGAL_ARG_EXCEPTION_CLASS, "An empty buffer is not supported", 0);
   }
 
   try {

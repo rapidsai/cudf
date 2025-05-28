@@ -224,15 +224,19 @@ class native_jArray {
 
   N_TYPE operator[](int index) const
   {
-    if (orig == NULL) { throw_java_exception(env, NPE_CLASS, "pointer is NULL"); }
-    if (index < 0 || index >= len) { throw_java_exception(env, INDEX_OOB_CLASS, "NOT IN BOUNDS"); }
+    if (orig == NULL) { throw_java_exception(env, NPE_EXCEPTION_CLASS, "pointer is NULL"); }
+    if (index < 0 || index >= len) {
+      throw_java_exception(env, INDEX_OOB_EXCEPTION_CLASS, "NOT IN BOUNDS");
+    }
     return data()[index];
   }
 
   N_TYPE& operator[](int index)
   {
-    if (orig == NULL) { throw_java_exception(env, NPE_CLASS, "pointer is NULL"); }
-    if (index < 0 || index >= len) { throw_java_exception(env, INDEX_OOB_CLASS, "NOT IN BOUNDS"); }
+    if (orig == NULL) { throw_java_exception(env, NPE_EXCEPTION_CLASS, "pointer is NULL"); }
+    if (index < 0 || index >= len) {
+      throw_java_exception(env, INDEX_OOB_EXCEPTION_CLASS, "NOT IN BOUNDS");
+    }
     return data()[index];
   }
 
@@ -357,18 +361,18 @@ class native_jpointerArray {
 
   T* operator[](int index) const
   {
-    if (data() == NULL) { throw_java_exception(env, NPE_CLASS, "pointer is NULL"); }
+    if (data() == NULL) { throw_java_exception(env, NPE_EXCEPTION_CLASS, "pointer is NULL"); }
     if (index < 0 || index >= wrapped.size()) {
-      throw_java_exception(env, INDEX_OOB_CLASS, "NOT IN BOUNDS");
+      throw_java_exception(env, INDEX_OOB_EXCEPTION_CLASS, "NOT IN BOUNDS");
     }
     return data()[index];
   }
 
   T*& operator[](int index)
   {
-    if (data() == NULL) { throw_java_exception(env, NPE_CLASS, "pointer is NULL"); }
+    if (data() == NULL) { throw_java_exception(env, NPE_EXCEPTION_CLASS, "pointer is NULL"); }
     if (index < 0 || index >= wrapped.size()) {
-      throw_java_exception(env, INDEX_OOB_CLASS, "NOT IN BOUNDS");
+      throw_java_exception(env, INDEX_OOB_EXCEPTION_CLASS, "NOT IN BOUNDS");
     }
     return data()[index];
   }
@@ -385,7 +389,7 @@ class native_jpointerArray {
   void assert_no_nulls() const
   {
     if (std::any_of(data(), data() + size(), [](T* const ptr) { return ptr == nullptr; })) {
-      throw_java_exception(env, NPE_CLASS, "pointer is NULL");
+      throw_java_exception(env, NPE_EXCEPTION_CLASS, "pointer is NULL");
     }
   }
 
@@ -607,7 +611,9 @@ class native_jobjectArray {
 
   T get(int index) const
   {
-    if (orig == NULL) { throw_java_exception(env, NPE_CLASS, "jobjectArray pointer is NULL"); }
+    if (orig == NULL) {
+      throw_java_exception(env, NPE_EXCEPTION_CLASS, "jobjectArray pointer is NULL");
+    }
     T ret = static_cast<T>(env->GetObjectArrayElement(orig, index));
     check_java_exception(env);
     return ret;
@@ -615,7 +621,9 @@ class native_jobjectArray {
 
   void set(int index, T const& val)
   {
-    if (orig == NULL) { throw_java_exception(env, NPE_CLASS, "jobjectArray pointer is NULL"); }
+    if (orig == NULL) {
+      throw_java_exception(env, NPE_EXCEPTION_CLASS, "jobjectArray pointer is NULL");
+    }
     env->SetObjectArrayElement(orig, index, val);
     check_java_exception(env);
   }
@@ -695,7 +703,7 @@ class native_jstringArray {
   native_jstring& get(int index) const
   {
     if (arr.is_null()) {
-      throw_java_exception(env, cudf::jni::NPE_CLASS, "jstringArray pointer is NULL");
+      throw_java_exception(env, cudf::jni::NPE_EXCEPTION_CLASS, "jstringArray pointer is NULL");
     }
     init_cache();
     return cache[index];

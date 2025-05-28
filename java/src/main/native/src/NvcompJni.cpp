@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,8 +13,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 #include "check_nvcomp_output_sizes.hpp"
 #include "cudf_jni_apis.hpp"
+#include "error.hpp"
 
 #include <rmm/device_uvector.hpp>
 
@@ -26,18 +28,18 @@ namespace {
 
 constexpr char const* NVCOMP_ERROR_CLASS      = "ai/rapids/cudf/nvcomp/NvcompException";
 constexpr char const* NVCOMP_CUDA_ERROR_CLASS = "ai/rapids/cudf/nvcomp/NvcompCudaException";
-constexpr char const* ILLEGAL_ARG_CLASS       = "java/lang/IllegalArgumentException";
-constexpr char const* UNSUPPORTED_CLASS       = "java/lang/UnsupportedOperationException";
 
 void check_nvcomp_status(JNIEnv* env, nvcompStatus_t status)
 {
   switch (status) {
     case nvcompSuccess: break;
     case nvcompErrorInvalidValue:
-      cudf::jni::throw_java_exception(env, ILLEGAL_ARG_CLASS, "nvcomp invalid value");
+      cudf::jni::throw_java_exception(
+        env, cudf::jni::ILLEGAL_ARG_EXCEPTION_CLASS, "nvcomp invalid value");
       break;
     case nvcompErrorNotSupported:
-      cudf::jni::throw_java_exception(env, UNSUPPORTED_CLASS, "nvcomp unsupported");
+      cudf::jni::throw_java_exception(
+        env, cudf::jni::UNSUPPORTED_EXCEPTION_CLASS, "nvcomp unsupported");
       break;
     case nvcompErrorCannotDecompress:
       cudf::jni::throw_java_exception(env, NVCOMP_ERROR_CLASS, "nvcomp cannot decompress");
