@@ -45,9 +45,7 @@ class Literal(Expr):
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
         return Column(
-            plc.Column.from_scalar(
-                plc.Scalar.from_py(self.value, self.dtype.plc_dtype), 1
-            )
+            plc.Column.from_scalar(plc.Scalar.from_py(self.value, self.dtype.plc), 1)
         )
 
     @property
@@ -73,7 +71,7 @@ class LiteralColumn(Expr):
         # This is stricter than necessary, but we only need this hash
         # for identity in groupby replacements so it's OK. And this
         # way we avoid doing potentially expensive compute.
-        return (type(self), self.dtype.plc_dtype, id(self.value))
+        return (type(self), self.dtype.plc, id(self.value))
 
     def do_evaluate(
         self, df: DataFrame, *, context: ExecutionContext = ExecutionContext.FRAME

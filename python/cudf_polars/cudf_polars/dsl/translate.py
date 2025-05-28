@@ -696,7 +696,7 @@ def _(
         )
         named_aggs = [agg for agg, _ in aggs]
         orderby = node.options.index_column
-        orderby_dtype = schema[orderby].plc_dtype
+        orderby_dtype = schema[orderby].plc
         if plc.traits.is_integral(orderby_dtype):
             # Integer orderby column is cast in implementation to int64 in polars
             orderby_dtype = plc.DataType(plc.TypeId.INT64)
@@ -826,9 +826,9 @@ def _(
     # Push casts into literals so we can handle Cast(Literal(Null))
     if isinstance(inner, expr.Literal):
         plc_column = plc.Column.from_scalar(
-            plc.Scalar.from_py(inner.value, inner.dtype.plc_dtype), 1
+            plc.Scalar.from_py(inner.value, inner.dtype.plc), 1
         )
-        casted_column = plc.unary.cast(plc_column, dtype.plc_dtype)
+        casted_column = plc.unary.cast(plc_column, dtype.plc)
         casted_py_scalar = plc.interop.to_arrow(
             plc.copying.get_element(casted_column, 0)
         ).as_py()

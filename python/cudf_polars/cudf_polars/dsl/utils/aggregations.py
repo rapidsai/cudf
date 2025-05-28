@@ -113,7 +113,7 @@ def decompose_single_agg(
         else:
             (child,) = agg.children
         needs_masking = agg.name in {"min", "max"} and plc.traits.is_floating_point(
-            child.dtype.plc_dtype
+            child.dtype.plc
         )
         if needs_masking and agg.options:
             # pl.col("a").nan_max or nan_min
@@ -136,7 +136,7 @@ def decompose_single_agg(
             col = (
                 expr.Cast(agg.dtype, expr.Col(DataType(pl.datatypes.Int64()), name))
                 if (
-                    plc.traits.is_integral(agg.dtype.plc_dtype)
+                    plc.traits.is_integral(agg.dtype.plc)
                     and agg.dtype.id() != plc.TypeId.INT64
                 )
                 else expr.Col(agg.dtype, name)

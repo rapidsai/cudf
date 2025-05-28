@@ -31,7 +31,7 @@ class Cast(Expr):
         self.dtype = dtype
         self.children = (value,)
         self.is_pointwise = True
-        if not dtypes.can_cast(value.dtype.plc_dtype, self.dtype.plc_dtype):
+        if not dtypes.can_cast(value.dtype.plc, self.dtype.plc):
             raise NotImplementedError(
                 f"Can't cast {value.dtype.id().name} to {self.dtype.id().name}"
             )
@@ -42,7 +42,7 @@ class Cast(Expr):
         """Evaluate this expression given a dataframe for context."""
         (child,) = self.children
         column = child.evaluate(df, context=context)
-        return column.astype(self.dtype.plc_dtype)
+        return column.astype(self.dtype.plc)
 
 
 class Len(Expr):
@@ -59,7 +59,7 @@ class Len(Expr):
         """Evaluate this expression given a dataframe for context."""
         return Column(
             plc.Column.from_scalar(
-                plc.Scalar.from_py(df.num_rows, self.dtype.plc_dtype),
+                plc.Scalar.from_py(df.num_rows, self.dtype.plc),
                 1,
             )
         )
@@ -231,7 +231,7 @@ class UnaryFunction(Expr):
                 return column
             if isinstance(self.children[1], Literal):
                 arg = plc.Scalar.from_py(
-                    self.children[1].value, self.children[1].dtype.plc_dtype
+                    self.children[1].value, self.children[1].dtype.plc
                 )
             else:
                 evaluated = self.children[1].evaluate(df, context=context)
@@ -248,7 +248,7 @@ class UnaryFunction(Expr):
         elif self.name in self._OP_MAPPING:
             column = self.children[0].evaluate(df, context=context)
             if column.obj.type().id() != self.dtype.id():
-                arg = plc.unary.cast(column.obj, self.dtype.plc_dtype)
+                arg = plc.unary.cast(column.obj, self.dtype.plc)
             else:
                 arg = column.obj
             return Column(plc.unary.unary_operation(arg, self._OP_MAPPING[self.name]))

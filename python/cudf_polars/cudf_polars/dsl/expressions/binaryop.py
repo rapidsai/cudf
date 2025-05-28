@@ -33,7 +33,7 @@ class BinOp(Expr):
         right: Expr,
     ) -> None:
         self.dtype = dtype
-        if plc.traits.is_boolean(self.dtype.plc_dtype):
+        if plc.traits.is_boolean(self.dtype.plc):
             # For boolean output types, bitand and bitor implement
             # boolean logic, so translate. bitxor also does, but the
             # default behaviour is correct.
@@ -42,7 +42,7 @@ class BinOp(Expr):
         self.children = (left, right)
         self.is_pointwise = True
         if not plc.binaryop.is_supported_operation(
-            self.dtype.plc_dtype, left.dtype.plc_dtype, right.dtype.plc_dtype, op
+            self.dtype.plc, left.dtype.plc, right.dtype.plc, op
         ):
             raise NotImplementedError(
                 f"Operation {op.name} not supported "
@@ -95,5 +95,5 @@ class BinOp(Expr):
             elif right.is_scalar:
                 rop = right.obj_scalar
         return Column(
-            plc.binaryop.binary_operation(lop, rop, self.op, self.dtype.plc_dtype),
+            plc.binaryop.binary_operation(lop, rop, self.op, self.dtype.plc),
         )

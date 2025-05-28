@@ -5,7 +5,6 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 from functools import cache
 
 from typing_extensions import assert_never
@@ -95,21 +94,20 @@ def _from_polars(dtype: pl.DataType) -> plc.DataType:
         raise NotImplementedError(f"{dtype=} conversion not supported")
 
 
-@dataclass
 class DataType:
     """A datatype, preserving polars metadata."""
 
-    polars_dtype: pl.datatypes.DataType
-    plc_dtype: plc.DataType = field(init=False)
+    polars: pl.datatypes.DataType
+    plc_dtype: plc.DataType
 
-    def __post_init__(self) -> None:
-        """Convert the polars dtype to a pylibcudf one."""
-        self.plc_dtype = _from_polars(self.polars_dtype)
+    def __init__(self, polars_dtype: pl.DataType) -> None:
+        self.polars = polars_dtype
+        self.plc = _from_polars(polars_dtype)
 
     def id(self) -> plc.TypeId:
         """The pylibcudf.TypeId of this Dtype."""
-        return self.plc_dtype.id()
+        return self.plc.id()
 
     def __hash__(self) -> int:
-        """Hash of the dtype."""
-        return hash((self.plc_dtype, self.polars_dtype))
+        """Hash of the DataType."""
+        return hash(self.polars)
