@@ -22,7 +22,6 @@
 
 #include <nvbench/nvbench.cuh>
 
-// template <bool use_validity, int shift_factor>
 static void bench_shift(nvbench::state& state)
 {
   auto const num_rows     = static_cast<cudf::size_type>(state.get_int64("num_rows"));
