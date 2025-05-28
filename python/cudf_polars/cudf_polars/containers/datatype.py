@@ -98,7 +98,7 @@ class DataType:
     """A datatype, preserving polars metadata."""
 
     polars: pl.datatypes.DataType
-    plc_dtype: plc.DataType
+    plc: plc.DataType
 
     def __init__(self, polars_dtype: pl.DataType) -> None:
         self.polars = polars_dtype
