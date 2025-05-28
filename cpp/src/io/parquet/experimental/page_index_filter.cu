@@ -244,17 +244,16 @@ struct page_stats_caster : public stats_caster_base {
    *
    * @return A pair containing the output data buffer and nullmask
    */
-  template <typename T>
-  [[nodiscard]] std::enable_if_t<not cudf::is_compound<T>(),
-                                 std::pair<rmm::device_buffer, rmm::device_buffer>>
-  build_data_and_nullmask(mutable_column_view input_column,
-                          bitmask_type const* page_nullmask,
-                          cudf::device_span<size_type const> page_indices,
-                          cudf::host_span<size_type const> page_row_offsets,
-                          size_type total_pages,
-                          cudf::data_type dtype,
-                          rmm::cuda_stream_view stream,
-                          rmm::device_async_resource_ref mr) const
+  template <typename T, CUDF_ENABLE_IF(not cudf::is_compound<T>())>
+  [[nodiscard]] std::pair<rmm::device_buffer, rmm::device_buffer> build_data_and_nullmask(
+    mutable_column_view input_column,
+    bitmask_type const* page_nullmask,
+    cudf::device_span<size_type const> page_indices,
+    cudf::host_span<size_type const> page_row_offsets,
+    size_type total_pages,
+    cudf::data_type dtype,
+    rmm::cuda_stream_view stream,
+    rmm::device_async_resource_ref mr) const
   {
     // Buffer for output data
     auto output_data = rmm::device_buffer(cudf::size_of(dtype) * total_rows, stream, mr);
