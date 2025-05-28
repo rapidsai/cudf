@@ -5,8 +5,8 @@
 
 from __future__ import annotations
 
-__all__: list[str] = ["Column", "DType", "DataFrame"]
+__all__: list[str] = ["Column", "DataFrame", "DataType"]
 
 from cudf_polars.containers.column import Column
 from cudf_polars.containers.dataframe import DataFrame
-from cudf_polars.containers.dtype import DType
+from cudf_polars.containers.datatype import DataType

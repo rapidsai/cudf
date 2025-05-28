@@ -20,7 +20,7 @@ from polars.polars import _expr_nodes as pl_expr, _ir_nodes as pl_ir
 
 import pylibcudf as plc
 
-from cudf_polars.containers.dtype import DType
+from cudf_polars.containers import DataType
 from cudf_polars.dsl import expr, ir
 from cudf_polars.dsl.to_ast import insert_colrefs
 from cudf_polars.dsl.utils.aggregations import decompose_single_agg
@@ -101,7 +101,7 @@ class Translator:
         with ctx:
             polars_schema = self.visitor.get_schema()
             try:
-                schema = {k: DType(v) for k, v in polars_schema.items()}
+                schema = {k: DataType(v) for k, v in polars_schema.items()}
             except Exception as e:
                 self.errors.append(NotImplementedError(str(e)))
                 return ir.ErrorNode({}, str(e))
@@ -150,7 +150,7 @@ class Translator:
         to determine if the query is supported.
         """
         node = self.visitor.view_expression(n)
-        dtype = DType(self.visitor.get_dtype(n))
+        dtype = DataType(self.visitor.get_dtype(n))
         try:
             return _translate_expr(node, self, dtype, schema)
         except Exception as e:
@@ -351,7 +351,7 @@ def _(node: pl_ir.Join, translator: Translator, schema: Schema) -> ir.IR:
         else:
             ops = [op1, op2]
 
-        dtype = DType(pl.datatypes.Boolean())
+        dtype = DataType(pl.datatypes.Boolean())
         predicate = functools.reduce(
             functools.partial(
                 expr.BinOp, dtype, plc.binaryop.BinaryOperator.LOGICAL_AND
@@ -564,7 +564,7 @@ def translate_named_expr(
 
 @singledispatch
 def _translate_expr(
-    node: Any, translator: Translator, dtype: DType, schema: Schema
+    node: Any, translator: Translator, dtype: DataType, schema: Schema
 ) -> expr.Expr:
     raise NotImplementedError(
         f"Translation for {type(node).__name__}"
@@ -573,7 +573,7 @@ def _translate_expr(
 
 @_translate_expr.register
 def _(
-    node: pl_expr.Function, translator: Translator, dtype: DType, schema: Schema
+    node: pl_expr.Function, translator: Translator, dtype: DataType, schema: Schema
 ) -> expr.Expr:
     name, *options = node.function_data
     options = tuple(options)
@@ -685,7 +685,7 @@ def _(
 
 @_translate_expr.register
 def _(
-    node: pl_expr.Window, translator: Translator, dtype: DType, schema: Schema
+    node: pl_expr.Window, translator: Translator, dtype: DataType, schema: Schema
 ) -> expr.Expr:
     if isinstance(node.options, pl_expr.RollingGroupOptions):
         # pl.col("a").rolling(...)
@@ -741,7 +741,7 @@ def _(
 
 @_translate_expr.register
 def _(
-    node: pl_expr.Literal, translator: Translator, dtype: DType, schema: Schema
+    node: pl_expr.Literal, translator: Translator, dtype: DataType, schema: Schema
 ) -> expr.Expr:
     if isinstance(node.value, plrs.PySeries):
         data = pl.Series._from_pyseries(node.value).to_arrow(
@@ -759,7 +759,7 @@ def _(
 
 @_translate_expr.register
 def _(
-    node: pl_expr.Sort, translator: Translator, dtype: DType, schema: Schema
+    node: pl_expr.Sort, translator: Translator, dtype: DataType, schema: Schema
 ) -> expr.Expr:
     # TODO: raise in groupby
     return expr.Sort(
@@ -769,7 +769,7 @@ def _(
 
 @_translate_expr.register
 def _(
-    node: pl_expr.SortBy, translator: Translator, dtype: DType, schema: Schema
+    node: pl_expr.SortBy, translator: Translator, dtype: DataType, schema: Schema
 ) -> expr.Expr:
     options = node.sort_options
     return expr.SortBy(
@@ -782,7 +782,7 @@ def _(
 
 @_translate_expr.register
 def _(
-    node: pl_expr.Slice, translator: Translator, dtype: DType, schema: Schema
+    node: pl_expr.Slice, translator: Translator, dtype: DataType, schema: Schema
 ) -> expr.Expr:
     offset = translator.translate_expr(n=node.offset, schema=schema)
     length = translator.translate_expr(n=node.length, schema=schema)
@@ -798,7 +798,7 @@ def _(
 
 @_translate_expr.register
 def _(
-    node: pl_expr.Gather, translator: Translator, dtype: DType, schema: Schema
+    node: pl_expr.Gather, translator: Translator, dtype: DataType, schema: Schema
 ) -> expr.Expr:
     return expr.Gather(
         dtype,
@@ -809,7 +809,7 @@ def _(
 
 @_translate_expr.register
 def _(
-    node: pl_expr.Filter, translator: Translator, dtype: DType, schema: Schema
+    node: pl_expr.Filter, translator: Translator, dtype: DataType, schema: Schema
 ) -> expr.Expr:
     return expr.Filter(
         dtype,
@@ -820,7 +820,7 @@ def _(
 
 @_translate_expr.register
 def _(
-    node: pl_expr.Cast, translator: Translator, dtype: DType, schema: Schema
+    node: pl_expr.Cast, translator: Translator, dtype: DataType, schema: Schema
 ) -> expr.Expr:
     inner = translator.translate_expr(n=node.expr, schema=schema)
     # Push casts into literals so we can handle Cast(Literal(Null))
@@ -842,14 +842,14 @@ def _(
 
 @_translate_expr.register
 def _(
-    node: pl_expr.Column, translator: Translator, dtype: DType, schema: Schema
+    node: pl_expr.Column, translator: Translator, dtype: DataType, schema: Schema
 ) -> expr.Expr:
     return expr.Col(dtype, node.name)
 
 
 @_translate_expr.register
 def _(
-    node: pl_expr.Agg, translator: Translator, dtype: DType, schema: Schema
+    node: pl_expr.Agg, translator: Translator, dtype: DataType, schema: Schema
 ) -> expr.Expr:
     value = expr.Agg(
         dtype,
@@ -864,7 +864,7 @@ def _(
 
 @_translate_expr.register
 def _(
-    node: pl_expr.Ternary, translator: Translator, dtype: DType, schema: Schema
+    node: pl_expr.Ternary, translator: Translator, dtype: DataType, schema: Schema
 ) -> expr.Expr:
     return expr.Ternary(
         dtype,
@@ -878,7 +878,7 @@ def _(
 def _(
     node: pl_expr.BinaryExpr,
     translator: Translator,
-    dtype: DType,
+    dtype: DataType,
     schema: Schema,
 ) -> expr.Expr:
     return expr.BinOp(
@@ -891,7 +891,7 @@ def _(
 
 @_translate_expr.register
 def _(
-    node: pl_expr.Len, translator: Translator, dtype: DType, schema: Schema
+    node: pl_expr.Len, translator: Translator, dtype: DataType, schema: Schema
 ) -> expr.Expr:
     value = expr.Len(dtype)
     if dtype.id() != plc.TypeId.INT32:

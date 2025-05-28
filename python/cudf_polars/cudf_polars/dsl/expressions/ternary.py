@@ -17,7 +17,7 @@ from cudf_polars.dsl.expressions.base import (
 )
 
 if TYPE_CHECKING:
-    from cudf_polars.containers import DType, DataFrame
+    from cudf_polars.containers import DataFrame, DataType
 
 
 __all__ = ["Ternary"]
@@ -27,7 +27,9 @@ class Ternary(Expr):
     __slots__ = ()
     _non_child = ("dtype",)
 
-    def __init__(self, dtype: DType, when: Expr, then: Expr, otherwise: Expr) -> None:
+    def __init__(
+        self, dtype: DataType, when: Expr, then: Expr, otherwise: Expr
+    ) -> None:
         self.dtype = dtype
         self.children = (when, then, otherwise)
         self.is_pointwise = True

@@ -16,7 +16,7 @@ from cudf_polars.dsl.expressions.base import ExecutionContext, Expr
 from cudf_polars.dsl.expressions.literal import Literal
 
 if TYPE_CHECKING:
-    from cudf_polars.containers import DType, DataFrame
+    from cudf_polars.containers import DataFrame, DataType
 
 __all__ = ["Agg"]
 
@@ -25,7 +25,9 @@ class Agg(Expr):
     __slots__ = ("name", "op", "options", "request")
     _non_child = ("dtype", "name", "options")
 
-    def __init__(self, dtype: DType, name: str, options: Any, *children: Expr) -> None:
+    def __init__(
+        self, dtype: DataType, name: str, options: Any, *children: Expr
+    ) -> None:
         self.dtype = dtype
         self.name = name
         self.options = options

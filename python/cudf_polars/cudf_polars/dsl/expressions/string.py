@@ -25,7 +25,7 @@ if TYPE_CHECKING:
 
     from polars.polars import _expr_nodes as pl_expr
 
-    from cudf_polars.containers import DType, DataFrame
+    from cudf_polars.containers import DataFrame, DataType
 
 __all__ = ["StringFunction"]
 
@@ -96,7 +96,7 @@ class StringFunction(Expr):
 
     def __init__(
         self,
-        dtype: DType,
+        dtype: DataType,
         name: StringFunction.Name,
         options: tuple[Any, ...],
         *children: Expr,

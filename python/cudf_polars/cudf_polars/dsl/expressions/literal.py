@@ -12,7 +12,7 @@ import polars as pl
 
 import pylibcudf as plc
 
-from cudf_polars.containers import Column, DType
+from cudf_polars.containers import Column, DataType
 from cudf_polars.dsl.expressions.base import ExecutionContext, Expr
 
 if TYPE_CHECKING:
@@ -30,11 +30,11 @@ class Literal(Expr):
     _non_child = ("dtype", "value")
     value: Any  # Python scalar
 
-    def __init__(self, dtype: DType, value: Any) -> None:
+    def __init__(self, dtype: DataType, value: Any) -> None:
         if value is None and dtype.id() == plc.TypeId.EMPTY:
             # TypeId.EMPTY not supported by libcudf
             # cuDF Python also maps EMPTY to INT8
-            dtype = DType(pl.datatypes.Int8())
+            dtype = DataType(pl.datatypes.Int8())
         self.dtype = dtype
         self.value = value
         self.children = ()
@@ -62,7 +62,7 @@ class LiteralColumn(Expr):
     _non_child = ("dtype", "value")
     value: pa.Array[Any]
 
-    def __init__(self, dtype: DType, value: pa.Array) -> None:
+    def __init__(self, dtype: DataType, value: pa.Array) -> None:
         self.dtype = dtype
         self.value = value
         self.children = ()

@@ -8,7 +8,7 @@ import polars as pl
 
 import pylibcudf as plc
 
-from cudf_polars.containers.dtype import DType
+from cudf_polars.containers import DataType
 from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
@@ -66,7 +66,7 @@ def test_timelike_literal(timestamp, timedelta):
         adjusted=timestamp + timedelta,
         two_delta=timedelta + timedelta,
     )
-    schema = {k: DType(v).plc_dtype for k, v in q.collect_schema().items()}
+    schema = {k: DataType(v).plc_dtype for k, v in q.collect_schema().items()}
     if plc.binaryop.is_supported_operation(
         schema["adjusted"],
         schema["time"],

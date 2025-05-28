@@ -27,7 +27,7 @@ if TYPE_CHECKING:
 
     import pylibcudf as plc
 
-    from cudf_polars.containers import DType, DataFrame
+    from cudf_polars.containers import DataFrame, DataType
     from cudf_polars.dsl import expr, ir, nodebase
 
 __all__: list[str] = [
@@ -82,7 +82,7 @@ PolarsExpr: TypeAlias = Union[
     pl_expr.PyExprIR,
 ]
 
-Schema: TypeAlias = dict[str, "DType"]
+Schema: TypeAlias = dict[str, "DataType"]
 
 Slice: TypeAlias = tuple[int, int | None]
 

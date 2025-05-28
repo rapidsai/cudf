@@ -8,13 +8,13 @@ import polars as pl
 
 import pylibcudf as plc
 
-from cudf_polars.containers import DType
+from cudf_polars.containers import DataType
 from cudf_polars.dsl import expr
 from cudf_polars.experimental.utils import _leaf_column_names
 
 
 def test_leaf_column_names():
-    dt = DType(pl.datatypes.Int32())
+    dt = DataType(pl.datatypes.Int32())
     a = expr.Col(dt, "a")
     b = expr.Literal(dt, pa.scalar(1, type=pa.int32()))
     c = expr.Col(dt, "c")

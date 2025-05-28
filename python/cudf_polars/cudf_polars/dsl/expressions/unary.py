@@ -16,7 +16,7 @@ from cudf_polars.utils import dtypes
 from cudf_polars.utils.versions import POLARS_VERSION_LT_128
 
 if TYPE_CHECKING:
-    from cudf_polars.containers import DType, DataFrame
+    from cudf_polars.containers import DataFrame, DataType
 
 __all__ = ["Cast", "Len", "UnaryFunction"]
 
@@ -27,7 +27,7 @@ class Cast(Expr):
     __slots__ = ()
     _non_child = ("dtype",)
 
-    def __init__(self, dtype: DType, value: Expr) -> None:
+    def __init__(self, dtype: DataType, value: Expr) -> None:
         self.dtype = dtype
         self.children = (value,)
         self.is_pointwise = True
@@ -48,7 +48,7 @@ class Cast(Expr):
 class Len(Expr):
     """Class representing the length of an expression."""
 
-    def __init__(self, dtype: DType) -> None:
+    def __init__(self, dtype: DataType) -> None:
         self.dtype = dtype
         self.children = ()
         self.is_pointwise = False
@@ -122,7 +122,7 @@ class UnaryFunction(Expr):
     )
 
     def __init__(
-        self, dtype: DType, name: str, options: tuple[Any, ...], *children: Expr
+        self, dtype: DataType, name: str, options: tuple[Any, ...], *children: Expr
     ) -> None:
         self.dtype = dtype
         self.name = name

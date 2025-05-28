@@ -14,7 +14,7 @@ import polars as pl
 
 import pylibcudf as plc
 
-__all__ = ["DType"]
+__all__ = ["DataType"]
 
 
 @cache
@@ -96,7 +96,7 @@ def _from_polars(dtype: pl.DataType) -> plc.DataType:
 
 
 @dataclass
-class DType:
+class DataType:
     """A datatype, preserving polars metadata."""
 
     polars_dtype: pl.datatypes.DataType

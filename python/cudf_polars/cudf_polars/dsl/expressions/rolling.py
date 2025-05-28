@@ -18,7 +18,7 @@ from cudf_polars.dsl.utils.windows import range_window_bounds
 if TYPE_CHECKING:
     import pyarrow as pa
 
-    from cudf_polars.containers import DType, DataFrame
+    from cudf_polars.containers import DataFrame, DataType
     from cudf_polars.typing import ClosedInterval
 
 __all__ = ["GroupedRollingWindow", "RollingWindow", "to_request"]
@@ -66,7 +66,7 @@ class RollingWindow(Expr):
 
     def __init__(
         self,
-        dtype: DType,
+        dtype: DataType,
         preceding: pa.Scalar,
         following: pa.Scalar,
         closed_window: ClosedInterval,
@@ -135,7 +135,7 @@ class GroupedRollingWindow(Expr):
     __slots__ = ("options",)
     _non_child = ("dtype", "options")
 
-    def __init__(self, dtype: DType, options: Any, agg: Expr, *by: Expr) -> None:
+    def __init__(self, dtype: DataType, options: Any, agg: Expr, *by: Expr) -> None:
         self.dtype = dtype
         self.options = options
         self.children = (agg, *by)

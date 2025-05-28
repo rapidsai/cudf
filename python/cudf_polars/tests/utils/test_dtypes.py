@@ -9,7 +9,7 @@ import polars as pl
 
 import pylibcudf as plc
 
-from cudf_polars.containers import DType
+from cudf_polars.containers import DataType
 from cudf_polars.utils.dtypes import is_order_preserving_cast
 
 INT8 = plc.DataType(plc.TypeId.INT8)
@@ -43,7 +43,7 @@ FLOAT64 = plc.DataType(plc.TypeId.FLOAT64)
 )
 def test_unhandled_dtype_conversion_raises(pltype):
     with pytest.raises(NotImplementedError):
-        _ = DType(pltype)
+        _ = DataType(pltype)
 
 
 def test_is_order_preserving_cast():

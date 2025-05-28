@@ -16,7 +16,7 @@ from cudf_polars.containers import Column
 from cudf_polars.dsl.expressions.base import ExecutionContext, Expr
 
 if TYPE_CHECKING:
-    from cudf_polars.containers import DType, DataFrame
+    from cudf_polars.containers import DataFrame, DataType
 
 __all__ = ["BinOp"]
 
@@ -27,7 +27,7 @@ class BinOp(Expr):
 
     def __init__(
         self,
-        dtype: DType,
+        dtype: DataType,
         op: plc.binaryop.BinaryOperator,
         left: Expr,
         right: Expr,

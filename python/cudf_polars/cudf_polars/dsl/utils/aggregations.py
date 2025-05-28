@@ -13,7 +13,7 @@ import polars as pl
 
 import pylibcudf as plc
 
-from cudf_polars.containers import DType
+from cudf_polars.containers import DataType
 from cudf_polars.dsl import expr, ir
 
 if TYPE_CHECKING:
@@ -134,7 +134,7 @@ def decompose_single_agg(
             )
         elif agg.name == "sum":
             col = (
-                expr.Cast(agg.dtype, expr.Col(DType(pl.datatypes.Int64()), name))
+                expr.Cast(agg.dtype, expr.Col(DataType(pl.datatypes.Int64()), name))
                 if (
                     plc.traits.is_integral(agg.dtype.plc_dtype)
                     and agg.dtype.id() != plc.TypeId.INT64
