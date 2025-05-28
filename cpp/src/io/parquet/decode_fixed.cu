@@ -1103,7 +1103,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
       if constexpr (has_dict_t) {
         skip_decode<rolling_buf_size>(dict_stream, skipped_leaf_values, t);
       } else if constexpr (has_strings_t) {
-        gpuInitStringDescriptors<true>(
+        gpuInitStringDescriptors<is_calc_sizes_only::YES>(
           s, sb, skipped_leaf_values, cooperative_groups::this_thread_block());
         if (t == 0) { s->dict_pos = processed_count; }
         __syncthreads();
@@ -1162,7 +1162,8 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
       __syncthreads();
     } else if constexpr (has_strings_t) {
       auto const target_pos = next_valid_count + skipped_leaf_values;
-      gpuInitStringDescriptors<false>(s, sb, target_pos, cooperative_groups::this_thread_block());
+      gpuInitStringDescriptors<is_calc_sizes_only::NO>(
+        s, sb, target_pos, cooperative_groups::this_thread_block());
       if (t == 0) { s->dict_pos = target_pos; }
       __syncthreads();
     } else if constexpr (has_bools_t) {
