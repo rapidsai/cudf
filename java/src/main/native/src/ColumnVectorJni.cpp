@@ -28,11 +28,9 @@
 #include <cudf/lists/combine.hpp>
 #include <cudf/lists/detail/concatenate.hpp>
 #include <cudf/lists/filling.hpp>
-#include <cudf/lists/lists_column_view.hpp>
 #include <cudf/reshape.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/strings/combine.hpp>
-#include <cudf/structs/structs_column_view.hpp>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
@@ -176,21 +174,25 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_fromArrow(JNIEnv* env,
     switch (n_type) {
       case cudf::type_id::DECIMAL32:
         JNI_THROW_NEW(
-          env, cudf::jni::ILLEGAL_ARG_CLASS, "Don't support converting DECIMAL32 yet", 0);
+          env, cudf::jni::ILLEGAL_ARG_EXCEPTION_CLASS, "Don't support converting DECIMAL32 yet", 0);
         break;
       case cudf::type_id::DECIMAL64:
         JNI_THROW_NEW(
-          env, cudf::jni::ILLEGAL_ARG_CLASS, "Don't support converting DECIMAL64 yet", 0);
+          env, cudf::jni::ILLEGAL_ARG_EXCEPTION_CLASS, "Don't support converting DECIMAL64 yet", 0);
         break;
       case cudf::type_id::STRUCT:
-        JNI_THROW_NEW(env, cudf::jni::ILLEGAL_ARG_CLASS, "Don't support converting STRUCT yet", 0);
+        JNI_THROW_NEW(
+          env, cudf::jni::ILLEGAL_ARG_EXCEPTION_CLASS, "Don't support converting STRUCT yet", 0);
         break;
       case cudf::type_id::LIST:
-        JNI_THROW_NEW(env, cudf::jni::ILLEGAL_ARG_CLASS, "Don't support converting LIST yet", 0);
+        JNI_THROW_NEW(
+          env, cudf::jni::ILLEGAL_ARG_EXCEPTION_CLASS, "Don't support converting LIST yet", 0);
         break;
       case cudf::type_id::DICTIONARY32:
-        JNI_THROW_NEW(
-          env, cudf::jni::ILLEGAL_ARG_CLASS, "Don't support converting DICTIONARY32 yet", 0);
+        JNI_THROW_NEW(env,
+                      cudf::jni::ILLEGAL_ARG_EXCEPTION_CLASS,
+                      "Don't support converting DICTIONARY32 yet",
+                      0);
         break;
       case cudf::type_id::STRING:
         arrow_array = std::make_shared<arrow::StringArray>(

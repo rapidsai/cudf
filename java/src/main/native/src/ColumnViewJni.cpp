@@ -26,14 +26,10 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/concatenate.hpp>
 #include <cudf/datetime.hpp>
-#include <cudf/detail/null_mask.hpp>
-#include <cudf/filling.hpp>
-#include <cudf/hashing.hpp>
 #include <cudf/json/json.hpp>
 #include <cudf/lists/combine.hpp>
 #include <cudf/lists/contains.hpp>
 #include <cudf/lists/count_elements.hpp>
-#include <cudf/lists/detail/concatenate.hpp>
 #include <cudf/lists/extract.hpp>
 #include <cudf/lists/gather.hpp>
 #include <cudf/lists/lists_column_view.hpp>
@@ -48,7 +44,6 @@
 #include <cudf/reshape.hpp>
 #include <cudf/rolling.hpp>
 #include <cudf/round.hpp>
-#include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/search.hpp>
 #include <cudf/stream_compaction.hpp>
 #include <cudf/strings/attributes.hpp>
@@ -2127,7 +2122,9 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_bitwiseMergeAndSetValidit
         copy->set_null_mask(std::move(new_bitmask), null_count);
         break;
       }
-      default: JNI_THROW_NEW(env, cudf::jni::ILLEGAL_ARG_CLASS, "Unsupported merge operation", 0);
+      default:
+        JNI_THROW_NEW(
+          env, cudf::jni::ILLEGAL_ARG_EXCEPTION_CLASS, "Unsupported merge operation", 0);
     }
     auto const copy_cv = copy->view();
     if (cudf::has_nonempty_nulls(copy_cv)) { copy = cudf::purge_nonempty_nulls(copy_cv); }
