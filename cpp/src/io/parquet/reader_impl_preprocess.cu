@@ -1589,7 +1589,8 @@ void reader::impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num
                      std::overflow_error);
         out_buf.create_with_mask(
           out_buf_size, cudf::mask_state::UNINITIALIZED, false, _stream, _mr);
-        memset_bufs.emplace_back(static_cast<cuda::std::byte*>(out_buf.data()), out_buf.data_size());
+        memset_bufs.emplace_back(static_cast<cuda::std::byte*>(out_buf.data()),
+                                 out_buf.data_size());
         nullmask_bufs.emplace_back(
           out_buf.null_mask(),
           cudf::util::round_up_safe(out_buf.null_mask_size(), sizeof(cudf::bitmask_type)) /
@@ -1704,7 +1705,8 @@ void reader::impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num
           // we're going to start null mask as all valid and then turn bits off if necessary
           out_buf.create_with_mask(
             buffer_size, cudf::mask_state::UNINITIALIZED, false, _stream, _mr);
-          memset_bufs.emplace_back(static_cast<cuda::std::byte*>(out_buf.data()), out_buf.data_size());
+          memset_bufs.emplace_back(static_cast<cuda::std::byte*>(out_buf.data()),
+                                   out_buf.data_size());
           nullmask_bufs.emplace_back(
             out_buf.null_mask(),
             cudf::util::round_up_safe(out_buf.null_mask_size(), sizeof(cudf::bitmask_type)) /
