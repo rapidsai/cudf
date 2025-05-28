@@ -35,6 +35,9 @@ cdef class OwnerMaskWithCAI:
     cdef create(column_view cv, object owner)
 
 
+cdef gpumemoryview _copy_array_to_device(object buf)
+
+
 cdef class Column:
     # TODO: Should we document these attributes? Should we mark them readonly?
     cdef:

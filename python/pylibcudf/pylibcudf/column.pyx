@@ -32,7 +32,6 @@ from pylibcudf.libcudf.strings.strings_column_view cimport strings_column_view
 from pylibcudf.libcudf.types cimport size_type, size_of as cpp_size_of, bitmask_type
 from pylibcudf.libcudf.utilities.traits cimport is_fixed_width
 from pylibcudf.libcudf.copying cimport get_element
-from pylibcudf.libcudf.binaryop cimport binary_operator
 
 
 from rmm.pylibrmm.device_buffer cimport DeviceBuffer
@@ -40,7 +39,6 @@ from rmm.pylibrmm.stream cimport Stream
 
 from .gpumemoryview cimport gpumemoryview
 from .filling cimport sequence
-from .binaryop cimport binary_operation
 from .gpumemoryview cimport gpumemoryview
 from .scalar cimport Scalar
 from .traits cimport (
@@ -137,7 +135,7 @@ class ArrayInterfaceWrapper:
         self.__array_interface__ = iface
 
 
-def _copy_array_to_device(buf: array.array) -> gpumemoryview:
+cdef gpumemoryview _copy_array_to_device(object buf):
     """
     Copy a host-side array.array buffer to device memory.
 
@@ -783,20 +781,16 @@ cdef class Column:
                 children=[],
             )
 
-        int32_dtype = <DataType>DataType(type_id.INT32)
+        int32_dtype = DataType(type_id.INT32)
         nested = base
 
         for i in range(ndim - 1, 0, -1):
             outer_len = functools.reduce(operator.mul, shape[:i])
 
-            range_col = <Column>sequence(
+            offsets_col = sequence(
                 outer_len + 1,
                 Scalar.from_py(0, int32_dtype),
-                Scalar.from_py(1, int32_dtype),
-            )
-            stride = <Scalar>Scalar.from_py(shape[i], int32_dtype)
-            offsets_col = binary_operation(
-                range_col, stride, binary_operator.MUL, int32_dtype
+                Scalar.from_py(shape[i], int32_dtype),
             )
 
             nested = Column(
