@@ -88,7 +88,7 @@ struct page_state_s {
 };
 
 // buffers only used in the decode kernel.  separated from page_state_s to keep
-// shared memory usage in other kernels (eg, gpuComputePageSizes) down.
+// shared memory usage in other kernels (eg, compute_page_sizes) down.
 template <int _nz_buf_size, int _dict_buf_size, int _str_buf_size>
 struct page_state_buffers_s {
   static constexpr int nz_buf_size   = _nz_buf_size;
@@ -1111,7 +1111,7 @@ enum class page_processing_stage {
  * @param[in] filter Filtering function used to decide which pages to operate on
  * @param[in] stage What stage of the decoding process is this being called from
  * @tparam Filter Function that takes a PageInfo reference and returns true if the given page should
- * be operated on Currently only used by gpuComputePageSizes step)
+ * be operated on Currently only used by compute_page_sizes step)
  * @return True if this page should be processed further
  */
 template <typename Filter>

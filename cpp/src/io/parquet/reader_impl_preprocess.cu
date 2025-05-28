@@ -1412,7 +1412,7 @@ void reader::impl::preprocess_subpass_pages(read_mode mode, size_t chunk_read_li
       cols          = &out_buf.children;
 
       // if this has a list parent, we have to get column sizes from the
-      // data computed during ComputePageSizes
+      // data computed during launch_compute_page_sizes
       if (out_buf.user_data & PARQUET_COLUMN_BUFFER_FLAG_HAS_LIST_PARENT) {
         has_lists = true;
         break;
@@ -1434,14 +1434,14 @@ void reader::impl::preprocess_subpass_pages(read_mode mode, size_t chunk_read_li
     // if:
     // - user has passed custom row bounds
     // - we will be doing a chunked read
-    ComputePageSizes(subpass.pages,
-                     pass.chunks,
-                     0,  // 0-max size_t. process all possible rows
-                     std::numeric_limits<size_t>::max(),
-                     true,                  // compute num_rows
-                     chunk_read_limit > 0,  // compute string sizes
-                     _pass_itm_data->level_type_size,
-                     _stream);
+    launch_compute_page_sizes(subpass.pages,
+                              pass.chunks,
+                              0,  // 0-max size_t. process all possible rows
+                              std::numeric_limits<size_t>::max(),
+                              true,                  // compute num_rows
+                              chunk_read_limit > 0,  // compute string sizes
+                              _pass_itm_data->level_type_size,
+                              _stream);
   }
 
   auto iter = thrust::make_counting_iterator(0);
@@ -1547,14 +1547,14 @@ void reader::impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num
   // respect the user bounds. It is only necessary to do this second pass if uses_custom_row_bounds
   // is set (if the user has specified artificial bounds).
   if (uses_custom_row_bounds(mode)) {
-    ComputePageSizes(subpass.pages,
-                     pass.chunks,
-                     skip_rows,
-                     num_rows,
-                     false,  // num_rows is already computed
-                     false,  // no need to compute string sizes
-                     pass.level_type_size,
-                     _stream);
+    launch_compute_page_sizes(subpass.pages,
+                              pass.chunks,
+                              skip_rows,
+                              num_rows,
+                              false,  // num_rows is already computed
+                              false,  // no need to compute string sizes
+                              pass.level_type_size,
+                              _stream);
   }
 
   // iterate over all input columns and allocate any associated output
@@ -1575,7 +1575,7 @@ void reader::impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num
       cols          = &out_buf.children;
 
       // if this has a list parent, we have to get column sizes from the
-      // data computed during ComputePageSizes
+      // data computed during launch_compute_page_sizes
       if (out_buf.user_data & PARQUET_COLUMN_BUFFER_FLAG_HAS_LIST_PARENT) {
         has_lists = true;
       }

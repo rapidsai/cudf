@@ -752,14 +752,14 @@ uint32_t GetAggregatedDecodeKernelMask(cudf::detail::hostdevice_span<PageInfo co
  * @param level_type_size Size in bytes of the type for level decoding
  * @param stream CUDA stream to use
  */
-void ComputePageSizes(cudf::detail::hostdevice_span<PageInfo> pages,
-                      cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
-                      size_t min_row,
-                      size_t num_rows,
-                      bool compute_num_rows,
-                      bool compute_string_sizes,
-                      int level_type_size,
-                      rmm::cuda_stream_view stream);
+void launch_compute_page_sizes(cudf::detail::hostdevice_span<PageInfo> pages,
+                               cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
+                               size_t min_row,
+                               size_t num_rows,
+                               bool compute_num_rows,
+                               bool compute_string_sizes,
+                               int level_type_size,
+                               rmm::cuda_stream_view stream);
 
 /**
  * @brief Compute string page output size information.

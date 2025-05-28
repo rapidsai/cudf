@@ -331,7 +331,7 @@ class reader::impl {
   [[nodiscard]] bool uses_custom_row_bounds(read_mode mode) const
   {
     // TODO: `read_mode` is hardcoded to `true` when `read_mode::CHUNKED_READ` to enforce
-    // `ComputePageSizes()` computation for all remaining chunks.
+    // `launch_compute_page_sizes()` computation for all remaining chunks.
     return (mode == read_mode::READ_ALL)
              ? (_options.num_rows.has_value() or _options.skip_rows != 0)
              : true;
