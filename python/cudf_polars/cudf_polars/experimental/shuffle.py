@@ -269,15 +269,14 @@ def _(
         try:
             from rapidsmpf.integrations.dask import rapidsmpf_shuffle_graph
 
-            with nvtx.annotate(message="rapidsmpf_shuffle_graph", domain="rapidsmpf"):
-                return rapidsmpf_shuffle_graph(
-                    get_key_name(ir.children[0]),
-                    get_key_name(ir),
-                    partition_info[ir.children[0]].count,
-                    partition_info[ir].count,
-                    RMPFIntegration,
-                    {"on": shuffle_on, "column_names": list(ir.schema.keys())},
-                )
+            return rapidsmpf_shuffle_graph(
+                get_key_name(ir.children[0]),
+                get_key_name(ir),
+                partition_info[ir.children[0]].count,
+                partition_info[ir].count,
+                RMPFIntegration,
+                {"on": shuffle_on, "column_names": list(ir.schema.keys())},
+            )
         except (ImportError, ValueError) as err:
             # ImportError: rapidsmpf is not installed
             # ValueError: rapidsmpf couldn't find a distributed client
