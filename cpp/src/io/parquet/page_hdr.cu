@@ -433,7 +433,7 @@ void __launch_bounds__(decode_page_headers_block_size)
 
   auto const lane_id = warp.thread_rank();
   auto const warp_id = warp.meta_group_rank();
-  int const chunk    = (cg::this_grid().block_rank() * warp.meta_group_size()) + warp_id;
+  int const chunk    = (cg::this_grid().block_rank() * num_warps_per_block) + warp_id;
   auto const bs      = &bs_g[warp_id];
 
   if (chunk < num_chunks and lane_id == 0) { bs->ck = chunks[chunk]; }
@@ -567,8 +567,7 @@ CUDF_KERNEL void __launch_bounds__(build_string_dict_index_block_size)
   auto const block  = cg::this_thread_block();
   auto const warp   = cg::tiled_partition<cudf::detail::warp_size>(block);
   int const lane_id = warp.thread_rank();
-  int const chunk =
-    (cg::this_grid().block_rank() * warp.meta_group_size()) + warp.meta_group_rank();
+  int const chunk   = (cg::this_grid().block_rank() * num_warps_per_block) + warp.meta_group_rank();
   ColumnChunkDesc* const ck = &chunk_g[warp.meta_group_rank()];
   if (chunk < num_chunks and lane_id == 0) *ck = chunks[chunk];
   block.sync();

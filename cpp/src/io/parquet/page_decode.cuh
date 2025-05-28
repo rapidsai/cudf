@@ -239,7 +239,7 @@ enum class is_calc_sizes_only : bool { NO = false, YES = true };
  * @param[out] sb Page state buffer output
  * @param[in] target_pos Target index position in dict_idx buffer (may exceed this value by up to
  * 31)
- * @param[in] t Warp cooperative group
+ * @param[in] warp Warp cooperative group
  * @tparam sizes_only Indicates if only sizes are to be calculated
  * @tparam state_buf Typename of the `state_buf` (usually inferred)
  *
@@ -259,14 +259,15 @@ __device__ cuda::std::pair<int, int> decode_dictionary_indices(
   int dict_bits      = s->dict_bits;
   int pos            = s->dict_pos;
   int str_len        = 0;
+  int const t        = warp.thread_rank();
 
-  // NOTE: racecheck warns about a RAW involving s->dict_pos, which is likely a false positive
-  // because the only path that does not include a sync will lead to s->dict_pos being overwritten
-  // with the same value
+  // NOTE: racecheck warns about a RAW involving s->dict_pos, which is likely a false
+  // positive because the only path that does not include a sync will lead to
+  // s->dict_pos being overwritten with the same value
 
   while (pos < target_pos) {
     int is_literal, batch_len;
-    if (warp.thread_rank() == 0) {
+    if (t == 0) {
       uint32_t run       = s->dict_run;
       uint8_t const* cur = s->data_start;
       if (run <= 1) {
@@ -310,10 +311,10 @@ __device__ cuda::std::pair<int, int> decode_dictionary_indices(
 
     // compute dictionary index.
     int dict_idx = 0;
-    if (warp.thread_rank() < batch_len) {
+    if (t < batch_len) {
       dict_idx = s->dict_val;
       if (is_literal) {
-        int32_t ofs      = (warp.thread_rank() - ((batch_len + 7) & ~7)) * dict_bits;
+        int32_t ofs      = (t - ((batch_len + 7) & ~7)) * dict_bits;
         uint8_t const* p = s->data_start + (ofs >> 3);
         ofs &= 7;
         if (p < end) {
@@ -334,16 +335,14 @@ __device__ cuda::std::pair<int, int> decode_dictionary_indices(
 
       // if we're not computing sizes, store off the dictionary index
       if constexpr (sizes_only == is_calc_sizes_only::NO) {
-        sb->dict_idx[rolling_index<state_buf::dict_buf_size>(pos + warp.thread_rank())] = dict_idx;
+        sb->dict_idx[rolling_index<state_buf::dict_buf_size>(pos + t)] = dict_idx;
       }
     }
 
     // if we're computing sizes, add the length(s)
     if constexpr (sizes_only == is_calc_sizes_only::YES) {
       int const len = [&]() {
-        if (warp.thread_rank() >= batch_len || (pos + warp.thread_rank() >= target_pos)) {
-          return 0;
-        }
+        if (t >= batch_len || (pos + t >= target_pos)) { return 0; }
         uint32_t const dict_pos = (s->dict_bits > 0) ? dict_idx * sizeof(string_index_pair) : 0;
         if (dict_pos < (uint32_t)s->dict_size) {
           const auto* src = reinterpret_cast<const string_index_pair*>(s->dict_base + dict_pos);
@@ -383,6 +382,7 @@ inline __device__ int decode_rle_booleans(
 {
   uint8_t const* end = s->data_end;
   int64_t pos        = s->dict_pos;
+  int const t        = warp.thread_rank();
 
   // NOTE: racecheck warns about a RAW involving s->dict_pos, which is likely a false positive
   // because the only path that does not include a sync will lead to s->dict_pos being overwritten
@@ -390,7 +390,7 @@ inline __device__ int decode_rle_booleans(
 
   while (pos < target_pos) {
     int is_literal, batch_len;
-    if (warp.thread_rank() == 0) {
+    if (t == 0) {
       uint32_t run       = s->dict_run;
       uint8_t const* cur = s->data_start;
       if (run <= 1) {
@@ -423,16 +423,16 @@ inline __device__ int decode_rle_booleans(
     is_literal = shuffle(is_literal);
     batch_len  = shuffle(batch_len);
 
-    if (warp.thread_rank() < batch_len) {
+    if (t < batch_len) {
       int dict_idx;
       if (is_literal) {
-        int32_t ofs      = warp.thread_rank() - ((batch_len + 7) & ~7);
+        int32_t ofs      = t - ((batch_len + 7) & ~7);
         uint8_t const* p = s->data_start + (ofs >> 3);
         dict_idx         = (p < end) ? (p[0] >> (ofs & 7u)) & 1 : 0;
       } else {
         dict_idx = s->dict_val;
       }
-      sb->dict_idx[rolling_index<state_buf::dict_buf_size>(pos + warp.thread_rank())] = dict_idx;
+      sb->dict_idx[rolling_index<state_buf::dict_buf_size>(pos + t)] = dict_idx;
     }
     pos += batch_len;
   }
@@ -631,7 +631,7 @@ inline __device__ void store_validity(int valid_map_offset,
       valid_map[word_offset] = valid_mask;
     } else {
       auto validity_map_word_ref =
-        cuda::atomic_ref<bitmask_type, cuda::thread_scope_block>(valid_map[word_offset]);
+        cuda::atomic_ref<bitmask_type, cuda::thread_scope_device>(valid_map[word_offset]);
       validity_map_word_ref.fetch_and(~(relevant_mask << bit_offset),
                                       cuda::std::memory_order_relaxed);
       validity_map_word_ref.fetch_or((valid_mask & relevant_mask) << bit_offset,
