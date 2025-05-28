@@ -316,8 +316,8 @@ void generate_depth_remappings(
               kernel_error::to_string(error));
   }
 
-  for (size_t c = 0; c < chunks.size(); c++) {
-    total_pages += chunks[c].num_data_pages + chunks[c].num_dict_pages;
+  for (auto& chunk : chunks) {
+    total_pages += chunk.num_data_pages + chunk.num_dict_pages;
   }
 
   return total_pages;
@@ -965,7 +965,7 @@ void reader::impl::allocate_level_decode_space()
     rmm::device_buffer(decode_buf_size, _stream, cudf::get_current_device_resource_ref());
 
   // distribute the buffers
-  uint8_t* buf = static_cast<uint8_t*>(subpass.level_decode_data.data());
+  auto* buf = static_cast<uint8_t*>(subpass.level_decode_data.data());
   for (size_t idx = 0; idx < pages.size(); idx++) {
     auto& p = pages[idx];
 
@@ -1402,8 +1402,7 @@ void reader::impl::preprocess_subpass_pages(read_mode mode, size_t chunk_read_li
   // TODO: we could do this once at the file level instead of every time we get in here. the set of
   // columns we are processing does not change over multiple passes/subpasses/output chunks.
   bool has_lists = false;
-  for (size_t idx = 0; idx < _input_columns.size(); idx++) {
-    auto const& input_col  = _input_columns[idx];
+  for (const auto& input_col : _input_columns) {
     size_t const max_depth = input_col.nesting_depth();
 
     auto* cols = &_output_buffers;
@@ -1519,13 +1518,13 @@ void reader::impl::preprocess_subpass_pages(read_mode mode, size_t chunk_read_li
       max_col_row--;
     }
 
-    max_row = min(max_row, max_col_row);
+    max_row = std::min(max_row, max_col_row);
 
     first_page_index += subpass.column_page_count[idx];
   }
   subpass.skip_rows   = pass.skip_rows + pass.processed_rows;
   auto const pass_end = pass.skip_rows + pass.num_rows;
-  max_row             = min(max_row, pass_end);
+  max_row             = std::min(max_row, pass_end);
   CUDF_EXPECTS(max_row >= subpass.skip_rows, "Unexpected short subpass", std::underflow_error);
   subpass.num_rows = max_row - subpass.skip_rows;
 
@@ -1566,8 +1565,7 @@ void reader::impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num
   // Validity Buffer is a uint32_t pointer
   std::vector<cudf::device_span<cudf::bitmask_type>> nullmask_bufs;
 
-  for (size_t idx = 0; idx < _input_columns.size(); idx++) {
-    auto const& input_col  = _input_columns[idx];
+  for (const auto& input_col : _input_columns) {
     size_t const max_depth = input_col.nesting_depth();
 
     auto* cols = &_output_buffers;
@@ -1591,12 +1589,11 @@ void reader::impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num
                      std::overflow_error);
         out_buf.create_with_mask(
           out_buf_size, cudf::mask_state::UNINITIALIZED, false, _stream, _mr);
-        memset_bufs.push_back(cudf::device_span<cuda::std::byte>(
-          static_cast<cuda::std::byte*>(out_buf.data()), out_buf.data_size()));
-        nullmask_bufs.push_back(cudf::device_span<cudf::bitmask_type>(
+        memset_bufs.emplace_back(static_cast<cuda::std::byte*>(out_buf.data()), out_buf.data_size());
+        nullmask_bufs.emplace_back(
           out_buf.null_mask(),
           cudf::util::round_up_safe(out_buf.null_mask_size(), sizeof(cudf::bitmask_type)) /
-            sizeof(cudf::bitmask_type)));
+            sizeof(cudf::bitmask_type));
       }
     }
   }
@@ -1707,12 +1704,11 @@ void reader::impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num
           // we're going to start null mask as all valid and then turn bits off if necessary
           out_buf.create_with_mask(
             buffer_size, cudf::mask_state::UNINITIALIZED, false, _stream, _mr);
-          memset_bufs.push_back(cudf::device_span<cuda::std::byte>(
-            static_cast<cuda::std::byte*>(out_buf.data()), out_buf.data_size()));
-          nullmask_bufs.push_back(cudf::device_span<cudf::bitmask_type>(
+          memset_bufs.emplace_back(static_cast<cuda::std::byte*>(out_buf.data()), out_buf.data_size());
+          nullmask_bufs.emplace_back(
             out_buf.null_mask(),
             cudf::util::round_up_safe(out_buf.null_mask_size(), sizeof(cudf::bitmask_type)) /
-              sizeof(cudf::bitmask_type)));
+              sizeof(cudf::bitmask_type));
         }
       }
     }
