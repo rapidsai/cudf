@@ -298,7 +298,7 @@ struct page_stats_caster : public stats_caster_base {
    *
    * @return A pair containing the output data buffer and nullmask
    */
-  [[nodiscard]] std::tuple<rmm::device_buffer, rmm::device_uvector<std::size_t>, rmm::device_buffer>
+  [[nodiscard]] std::tuple<rmm::device_buffer, rmm::device_uvector<size_t>, rmm::device_buffer>
   build_string_data_and_nullmask(cudf::host_span<cudf::string_view const> host_strings,
                                  bitmask_type const* host_page_nullmask,
                                  cudf::device_span<size_type const> page_indices,
@@ -315,7 +315,7 @@ struct page_stats_caster : public stats_caster_base {
         });
       auto chars   = cudf::detail::make_empty_host_vector<char>(total_char_count, stream);
       auto sizes   = cudf::detail::make_empty_host_vector<cudf::size_type>(total_pages, stream);
-      auto offsets = cudf::detail::make_empty_host_vector<std::size_t>(total_pages + 1, stream);
+      auto offsets = cudf::detail::make_empty_host_vector<size_t>(total_pages + 1, stream);
       offsets.push_back(0);
       for (auto const& str : host_strings) {
         auto tmp =
@@ -330,7 +330,7 @@ struct page_stats_caster : public stats_caster_base {
     }();
 
     // Buffer for row-level string sizes (output).
-    auto row_str_sizes = rmm::device_uvector<std::size_t>(total_rows, stream, mr);
+    auto row_str_sizes = rmm::device_uvector<size_t>(total_rows, stream, mr);
     // Gather string sizes from page to row level
     thrust::gather(rmm::exec_policy_nosync(stream),
                    page_indices.begin(),
@@ -359,7 +359,7 @@ struct page_stats_caster : public stats_caster_base {
 
     // Buffer for row-level string offsets (output).
     auto row_str_offsets =
-      cudf::detail::make_zeroed_device_uvector_async<std::size_t>(total_rows + 1, stream, mr);
+      cudf::detail::make_zeroed_device_uvector_async<size_t>(total_rows + 1, stream, mr);
     thrust::inclusive_scan(rmm::exec_policy_nosync(stream),
                            row_str_sizes.begin(),
                            row_str_sizes.end(),
@@ -373,29 +373,29 @@ struct page_stats_caster : public stats_caster_base {
 
     // Iterator for input (page-level) string chars
     auto src_iter = thrust::make_transform_iterator(
-      thrust::make_counting_iterator<std::size_t>(0),
+      thrust::make_counting_iterator<size_t>(0),
       cuda::proclaim_return_type<char*>(
         [chars        = page_str_chars.begin(),
          offsets      = page_str_offsets.begin(),
-         page_indices = page_indices.begin()] __device__(std::size_t index) {
+         page_indices = page_indices.begin()] __device__(size_t index) {
           auto const page_index = page_indices[index];
           return chars + offsets[page_index];
         }));
 
     // Iterator for output (row-level) string chars
     auto dst_iter = thrust::make_transform_iterator(
-      thrust::make_counting_iterator<std::size_t>(0),
+      thrust::make_counting_iterator<size_t>(0),
       cuda::proclaim_return_type<char*>(
         [chars   = reinterpret_cast<char*>(row_str_chars.data()),
-         offsets = row_str_offsets.begin()] __device__(std::size_t index) {
+         offsets = row_str_offsets.begin()] __device__(size_t index) {
           return chars + offsets[index];
         }));
 
     // Iterator for string sizes
     auto size_iter = thrust::make_transform_iterator(
-      thrust::make_counting_iterator<std::size_t>(0),
+      thrust::make_counting_iterator<size_t>(0),
       cuda::proclaim_return_type<size_t>(
-        [sizes = row_str_sizes.begin()] __device__(std::size_t index) { return sizes[index]; }));
+        [sizes = row_str_sizes.begin()] __device__(size_t index) { return sizes[index]; }));
 
     // Gather page-level string chars to row-level string chars
     cudf::detail::batched_memcpy_async(src_iter, dst_iter, size_iter, total_rows, stream);
@@ -425,8 +425,8 @@ struct page_stats_caster : public stats_caster_base {
     rmm::device_async_resource_ref mr) const
   {
     // List, Struct, Dictionary types are not supported
-    if constexpr (cudf::is_compound<T>() && !std::is_same_v<T, string_view>) {
-      CUDF_FAIL("Compound types do not have statistics");
+    if constexpr (cudf::is_compound<T>() and not cuda::std::is_same_v<T, string_view>) {
+      CUDF_FAIL("Compound types other than strings do not have statistics");
     } else {
       // Compute column chunk level page count offsets, and page level row counts and row offsets.
       auto const [page_row_counts, page_row_offsets, col_chunk_page_offsets] =
@@ -490,7 +490,7 @@ struct page_stats_caster : public stats_caster_base {
 
       // For non-strings columns, directly gather the page-level column data and bitmask to the
       // row-level.
-      if constexpr (not std::is_same_v<T, cudf::string_view>) {
+      if constexpr (not cuda::std::is_same_v<T, cudf::string_view>) {
         // Move host columns to device
         auto mincol = min.to_device(dtype, stream, mr);
         auto maxcol = max.to_device(dtype, stream, mr);
