@@ -18,6 +18,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, MutableMapping
     from typing import Any
 
+    from cudf_polars.experimental.task import DaskKey
     from cudf_polars.utils.config import ConfigOptions
 
 
@@ -107,7 +108,7 @@ def wrap_func_spillable(
 
 def wrap_dataframe_in_spillable(
     graph: MutableMapping[Any, Any],
-    ignore_key: str | tuple[str, int],
+    ignore_key: DaskKey,
     config_options: ConfigOptions,
 ) -> MutableMapping[Any, Any]:
     """
@@ -135,9 +136,9 @@ def wrap_dataframe_in_spillable(
     )
     target_partition_size = config_options.executor.target_partition_size
 
-    ret = {}
-    for key, task in graph.items():
-        assert isinstance(task, tuple)
+    ret: MutableMapping[Any, Any] = {}
+    for key, task in graph.items():  # type: ignore
+        # assert isinstance(task, tuple)
         ret[key] = tuple(
             wrap_func_spillable(
                 a,

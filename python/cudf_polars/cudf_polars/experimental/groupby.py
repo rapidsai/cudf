@@ -156,7 +156,7 @@ def _(
     shuffled = partition_info[child].partitioned_on == ir.keys
 
     assert ir.config_options.executor.name == "streaming", (
-        "'in-memory' executor not supported in 'generate_ir_tasks'"
+        "'in-memory' executor not supported in 'lower_ir_node'"
     )
 
     cardinality_factor = {
@@ -237,7 +237,7 @@ def _(
     else:
         # N-ary tree reduction
         assert ir.config_options.executor.name == "streaming", (
-            "'in-memory' executor not supported in 'generate_ir_tasks'"
+            "'in-memory' executor not supported in 'lower_ir_node'"
         )
 
         n_ary = ir.config_options.executor.groupby_n_ary

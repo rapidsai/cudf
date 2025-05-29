@@ -6,14 +6,20 @@ from __future__ import annotations
 
 import operator
 from functools import reduce
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from cudf_polars.dsl.ir import ConditionalJoin, Join
 from cudf_polars.experimental.base import PartitionInfo, get_key_name
 from cudf_polars.experimental.dispatch import generate_ir_tasks, lower_ir_node
 from cudf_polars.experimental.repartition import Repartition
 from cudf_polars.experimental.shuffle import Shuffle, _partition_dataframe
-from cudf_polars.experimental.utils import _concat, _fallback_inform, _lower_ir_fallback
+from cudf_polars.experimental.task import Key, Task
+from cudf_polars.experimental.utils import (
+    _concat,
+    _fallback_inform,
+    _getitem,
+    _lower_ir_fallback,
+)
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
@@ -21,6 +27,7 @@ if TYPE_CHECKING:
     from cudf_polars.dsl.expr import NamedExpr
     from cudf_polars.dsl.ir import IR
     from cudf_polars.experimental.parallel import LowerIRTransformer
+    from cudf_polars.experimental.task import TaskGraph
     from cudf_polars.utils.config import ConfigOptions
 
 
@@ -124,7 +131,7 @@ def _should_bcast_join(
     #    We may want to account for the number of workers.
     # 3. The "kind" of join is compatible with a broadcast join
     assert ir.config_options.executor.name == "streaming", (
-        "'in-memory' executor not supported in 'generate_ir_tasks'"
+        "'in-memory' executor not supported in 'lower_ir_node'"
     )
 
     return (
@@ -262,9 +269,7 @@ def _(
 
 
 @generate_ir_tasks.register(Join)
-def _(
-    ir: Join, partition_info: MutableMapping[IR, PartitionInfo]
-) -> MutableMapping[Any, Any]:
+def _(ir: Join, partition_info: MutableMapping[IR, PartitionInfo]) -> TaskGraph:
     left, right = ir.children
     output_count = partition_info[ir].count
 
@@ -282,11 +287,10 @@ def _(
         left_name = get_key_name(left)
         right_name = get_key_name(right)
         return {
-            key: (
+            key: Task(
                 ir.do_evaluate,
-                *ir._non_child_args,
-                (left_name, i),
-                (right_name, i),
+                args=ir._non_child_args,
+                deps=(Key(left_name, i), Key(right_name, i)),
             )
             for i, key in enumerate(partition_info[ir].keys(ir))
         }
@@ -307,7 +311,7 @@ def _(
             large_name = get_key_name(right)
             large_on = ir.right_on
 
-        graph: MutableMapping[Any, Any] = {}
+        graph: TaskGraph = {}
 
         out_name = get_key_name(ir)
         out_size = partition_info[ir].count
@@ -322,37 +326,35 @@ def _(
 
         for part_out in range(out_size):
             if split_large:
-                graph[(split_name, part_out)] = (
+                graph[Key(split_name, part_out)] = Task(
                     _partition_dataframe,
-                    (large_name, part_out),
-                    large_on,
-                    small_size,
+                    args=[large_on, small_size],
+                    deps=[Key(large_name, part_out)],
                 )
 
             _concat_list = []
             for j in range(small_size):
-                left_key: tuple[str, int] | tuple[str, int, int]
                 if split_large:
-                    left_key = (getit_name, part_out, j)
-                    graph[left_key] = (operator.getitem, (split_name, part_out), j)
+                    left_key = Key(getit_name, part_out, j)
+                    graph[left_key] = Task(
+                        _getitem, args=(j,), deps=[Key(split_name, part_out)]
+                    )
                 else:
-                    left_key = (large_name, part_out)
-                join_children = [left_key, (small_name, j)]
+                    left_key = Key(large_name, part_out)
+                join_children = [left_key, Key(small_name, j)]
                 if small_side == "Left":
                     join_children.reverse()
 
-                inter_key = (inter_name, part_out, j)
-                graph[(inter_name, part_out, j)] = (
+                inter_key = Key(inter_name, part_out, j)
+                graph[inter_key] = Task(
                     ir.do_evaluate,
-                    ir.left_on,
-                    ir.right_on,
-                    ir.options,
-                    *join_children,
+                    args=(ir.left_on, ir.right_on, ir.options),
+                    deps=join_children,
                 )
                 _concat_list.append(inter_key)
             if len(_concat_list) == 1:
-                graph[(out_name, part_out)] = graph.pop(_concat_list[0])
+                graph[Key(out_name, part_out)] = graph.pop(_concat_list[0])
             else:
-                graph[(out_name, part_out)] = (_concat, *_concat_list)
+                graph[Key(out_name, part_out)] = Task(_concat, deps=_concat_list)
 
         return graph

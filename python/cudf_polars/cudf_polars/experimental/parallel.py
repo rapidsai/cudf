@@ -32,6 +32,7 @@ from cudf_polars.experimental.dispatch import (
     generate_ir_tasks,
     lower_ir_node,
 )
+from cudf_polars.experimental.task import Key, Task
 from cudf_polars.experimental.utils import _concat, _lower_ir_fallback
 
 if TYPE_CHECKING:
@@ -40,6 +41,7 @@ if TYPE_CHECKING:
 
     from cudf_polars.containers import DataFrame
     from cudf_polars.experimental.dispatch import LowerIRTransformer
+    from cudf_polars.experimental.task import DaskKey, TaskGraph
     from cudf_polars.utils.config import ConfigOptions
 
 
@@ -87,7 +89,7 @@ def lower_ir_graph(
 
 def task_graph(
     ir: IR, partition_info: MutableMapping[IR, PartitionInfo]
-) -> tuple[MutableMapping[Any, Any], str | tuple[str, int]]:
+) -> tuple[TaskGraph, Key]:
     """
     Construct a task graph for evaluation of an IR graph.
 
@@ -123,10 +125,10 @@ def task_graph(
     key_name = get_key_name(ir)
     partition_count = partition_info[ir].count
     if partition_count > 1:
-        graph[key_name] = (_concat, *partition_info[ir].keys(ir))
-        return graph, key_name
+        graph[Key(key_name)] = Task(_concat, deps=tuple(partition_info[ir].keys(ir)))
+        return graph, Key(key_name)
     else:
-        return graph, (key_name, 0)
+        return graph, Key(key_name, 0)
 
 
 # The true type signature for get_scheduler() needs an overload. Not worth it.
@@ -160,10 +162,10 @@ def get_scheduler(config_options: ConfigOptions) -> Any:
 
 
 def post_process_task_graph(
-    graph: MutableMapping[Any, Any],
-    key: str | tuple[str, int],
+    graph: TaskGraph,
+    key: Key,
     config_options: ConfigOptions,
-) -> MutableMapping[Any, Any]:
+) -> tuple[TaskGraph, Key] | tuple[MutableMapping[Any, Any], DaskKey]:
     """
     Post-process the task graph.
 
@@ -185,13 +187,25 @@ def post_process_task_graph(
         "'in-memory' executor not supported in 'post_process_task_graph'"
     )
 
-    if config_options.executor.rapidsmpf_spill:  # pragma: no cover
-        from cudf_polars.experimental.spilling import wrap_dataframe_in_spillable
+    if config_options.executor.scheduler == "distributed":
+        # Convert to a Dask graph for distributed execution
+        dask_key = key.to_dask()
+        dask_graph: MutableMapping[Any, Any] = {
+            (k.to_dask() if isinstance(k, Key) else k): (
+                t.to_dask() if isinstance(t, (Key, Task)) else t
+            )
+            for k, t in graph.items()
+        }
+        if config_options.executor.rapidsmpf_spill:  # pragma: no cover
+            from cudf_polars.experimental.spilling import wrap_dataframe_in_spillable
 
-        return wrap_dataframe_in_spillable(
-            graph, ignore_key=key, config_options=config_options
-        )
-    return graph
+            dask_graph = wrap_dataframe_in_spillable(
+                dask_graph,
+                ignore_key=dask_key,
+                config_options=config_options,
+            )
+        return dask_graph, dask_key
+    return graph, key
 
 
 def evaluate_streaming(ir: IR, config_options: ConfigOptions) -> DataFrame:
@@ -213,24 +227,22 @@ def evaluate_streaming(ir: IR, config_options: ConfigOptions) -> DataFrame:
 
     graph, key = task_graph(ir, partition_info)
 
-    graph = post_process_task_graph(graph, key, config_options)
-
-    return get_scheduler(config_options)(graph, key)
+    return get_scheduler(config_options)(
+        *post_process_task_graph(graph, key, config_options)
+    )
 
 
 @generate_ir_tasks.register(IR)
-def _(
-    ir: IR, partition_info: MutableMapping[IR, PartitionInfo]
-) -> MutableMapping[Any, Any]:
+def _(ir: IR, partition_info: MutableMapping[IR, PartitionInfo]) -> TaskGraph:
     # Generate pointwise (embarrassingly-parallel) tasks by default
     child_names = [get_key_name(c) for c in ir.children]
     bcast_child = [partition_info[c].count == 1 for c in ir.children]
     return {
-        key: (
+        key: Task(
             ir.do_evaluate,
-            *ir._non_child_args,
-            *[
-                (child_name, 0 if bcast_child[j] else i)
+            args=ir._non_child_args,
+            deps=[
+                Key(child_name, 0 if bcast_child[j] else i)
                 for j, child_name in enumerate(child_names)
             ],
         )
@@ -262,13 +274,11 @@ def _(
 
 
 @generate_ir_tasks.register(Union)
-def _(
-    ir: Union, partition_info: MutableMapping[IR, PartitionInfo]
-) -> MutableMapping[Any, Any]:
+def _(ir: Union, partition_info: MutableMapping[IR, PartitionInfo]) -> TaskGraph:
     key_name = get_key_name(ir)
     partition = itertools.count()
     return {
-        (key_name, next(partition)): child_key
+        Key(key_name, next(partition)): child_key
         for child in ir.children
         for child_key in partition_info[child].keys(child)
     }

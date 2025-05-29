@@ -5,20 +5,15 @@
 from __future__ import annotations
 
 from collections import Counter
-from collections.abc import MutableMapping
 from itertools import chain
-from typing import TYPE_CHECKING, Any, TypeVar
+from typing import TYPE_CHECKING, Any
 
-from typing_extensions import Unpack
+from cudf_polars.experimental.task import Key, Task, _task_deps
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
-    from typing import TypeAlias
+    from collections.abc import MutableMapping
 
-
-Key: TypeAlias = str | tuple[str, Unpack[tuple[int, ...]]]
-Graph: TypeAlias = MutableMapping[Key, Any]
-T_ = TypeVar("T_")
+    from cudf_polars.experimental.task import TaskGraph
 
 
 # NOTE: This is a slimmed-down version of the single-threaded
@@ -30,59 +25,7 @@ T_ = TypeVar("T_")
 # * We do not support nested tasks.
 
 
-def istask(x: Any) -> bool:
-    """Check if x is a callable task."""
-    return isinstance(x, tuple) and bool(x) and callable(x[0])
-
-
-def is_hashable(x: Any) -> bool:
-    """Check if x is hashable."""
-    try:
-        hash(x)
-    except BaseException:
-        return False
-    else:
-        return True
-
-
-def _execute_task(arg: Any, cache: Mapping) -> Any:
-    """Execute a compute task."""
-    if istask(arg):
-        return arg[0](*(_execute_task(a, cache) for a in arg[1:]))
-    elif is_hashable(arg):
-        return cache.get(arg, arg)
-    else:
-        return arg
-
-
-def required_keys(key: Key, graph: Graph) -> list[Key]:
-    """
-    Return the dependencies to extract a key from the graph.
-
-    Parameters
-    ----------
-    key
-        Root key we want to extract.
-    graph
-        The full task graph.
-
-    Returns
-    -------
-    List of other keys needed to extract ``key``.
-    """
-    maybe_task = graph[key]
-    return [
-        k
-        for k in (
-            maybe_task[1:]
-            if istask(maybe_task)
-            else [maybe_task]  # maybe_task might be a key
-        )
-        if is_hashable(k) and k in graph
-    ]
-
-
-def toposort(graph: Graph, dependencies: Mapping[Key, list[Key]]) -> list[Key]:
+def toposort(graph: TaskGraph) -> list[Key]:
     """Return a list of task keys sorted in topological order."""
     # Stack-based depth-first search traversal. This is based on Tarjan's
     # algorithm for strongly-connected components
@@ -103,8 +46,7 @@ def toposort(graph: Graph, dependencies: Mapping[Key, list[Key]]) -> list[Key]:
                 continue
 
             # Add direct descendants of current to nodes stack
-            next_nodes = set(dependencies[current]) - completed
-            if next_nodes:
+            if next_nodes := set(_task_deps(graph[current])) - completed:
                 nodes.extend(next_nodes)
             else:
                 # Current has no more descendants to explore
@@ -116,7 +58,7 @@ def toposort(graph: Graph, dependencies: Mapping[Key, list[Key]]) -> list[Key]:
 
 
 def synchronous_scheduler(
-    graph: Graph,
+    graph: TaskGraph,
     key: Key,
     *,
     cache: MutableMapping | None = None,
@@ -142,12 +84,19 @@ def synchronous_scheduler(
     if cache is None:
         cache = {}
 
-    dependencies = {k: required_keys(k, graph) for k in graph}
-    refcount = Counter(chain.from_iterable(dependencies.values()))
+    refcount = Counter(chain.from_iterable(_task_deps(val) for val in graph.values()))
+    for k in toposort(graph):
+        # Execute the task or retrieve the result from cache
+        task_or_key = graph[k]
+        if isinstance(task_or_key, Key):
+            cache[k] = cache[task_or_key]
+        elif isinstance(task_or_key, Task):
+            cache[k] = task_or_key.execute(cache)
+        else:  # pragma: no cover
+            raise TypeError(f"Expected Key or Task, got {task_or_key}")
 
-    for k in toposort(graph, dependencies):
-        cache[k] = _execute_task(graph[k], cache)
-        for dep in dependencies[k]:
+        # Clean up the cache
+        for dep in _task_deps(task_or_key):
             refcount[dep] -= 1
             if refcount[dep] == 0 and dep != key:
                 del cache[dep]

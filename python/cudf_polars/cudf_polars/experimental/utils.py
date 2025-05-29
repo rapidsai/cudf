@@ -8,7 +8,7 @@ import operator
 import warnings
 from functools import reduce
 from itertools import chain
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from cudf_polars.dsl.expr import Col
 from cudf_polars.dsl.ir import Union
@@ -98,3 +98,7 @@ def _leaf_column_names(expr: Expr) -> tuple[str, ...]:
         return (expr.name,)
     else:
         return ()
+
+
+def _getitem(key: Any, container: dict[int, Any]) -> Any:
+    return container.get(key)

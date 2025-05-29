@@ -6,6 +6,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from cudf_polars.experimental.task import Key
+
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
@@ -30,10 +32,10 @@ class PartitionInfo:
         self.count = count
         self.partitioned_on = partitioned_on
 
-    def keys(self, node: Node) -> Iterator[tuple[str, int]]:
+    def keys(self, node: Node) -> Iterator[Key]:
         """Return the partitioned keys for a given node."""
         name = get_key_name(node)
-        yield from ((name, i) for i in range(self.count))
+        yield from (Key(name, i) for i in range(self.count))
 
 
 def get_key_name(node: Node) -> str:

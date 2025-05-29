@@ -4,7 +4,6 @@
 
 from __future__ import annotations
 
-import operator
 from typing import TYPE_CHECKING, Any, TypedDict
 
 import pylibcudf as plc
@@ -16,7 +15,8 @@ from cudf_polars.dsl.expr import Col
 from cudf_polars.dsl.ir import IR
 from cudf_polars.experimental.base import get_key_name
 from cudf_polars.experimental.dispatch import generate_ir_tasks, lower_ir_node
-from cudf_polars.experimental.utils import _concat
+from cudf_polars.experimental.task import Key, Task
+from cudf_polars.experimental.utils import _concat, _getitem
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping, Sequence
@@ -24,6 +24,7 @@ if TYPE_CHECKING:
     from cudf_polars.dsl.expr import NamedExpr
     from cudf_polars.experimental.dispatch import LowerIRTransformer
     from cudf_polars.experimental.parallel import PartitionInfo
+    from cudf_polars.experimental.task import TaskGraph
     from cudf_polars.typing import Schema
     from cudf_polars.utils.config import ConfigOptions
 
@@ -131,9 +132,9 @@ class Shuffle(IR):
 
 
 def _partition_dataframe(
-    df: DataFrame,
     keys: tuple[NamedExpr, ...],
     count: int,
+    df: DataFrame,
 ) -> dict[int, DataFrame]:
     """
     Partition an input DataFrame for shuffling.
@@ -194,28 +195,27 @@ def _simple_shuffle_graph(
     keys: tuple[NamedExpr, ...],
     count_in: int,
     count_out: int,
-) -> MutableMapping[Any, Any]:
+) -> TaskGraph:
     """Make a simple all-to-all shuffle graph."""
     split_name = f"split-{name_out}"
     inter_name = f"inter-{name_out}"
 
-    graph: MutableMapping[Any, Any] = {}
+    graph: TaskGraph = {}
     for part_out in range(count_out):
         _concat_list = []
         for part_in in range(count_in):
-            graph[(split_name, part_in)] = (
+            graph[Key(split_name, part_in)] = Task(
                 _partition_dataframe,
-                (name_in, part_in),
-                keys,
-                count_out,
+                args=[keys, count_out],
+                deps=[Key(name_in, part_in)],
             )
-            _concat_list.append((inter_name, part_out, part_in))
-            graph[_concat_list[-1]] = (
-                operator.getitem,
-                (split_name, part_in),
-                part_out,
+            _concat_list.append(Key(inter_name, part_out, part_in))
+            graph[_concat_list[-1]] = Task(
+                _getitem,
+                args=[part_out],
+                deps=[Key(split_name, part_in)],
             )
-        graph[(name_out, part_out)] = (_concat, *_concat_list)
+        graph[Key(name_out, part_out)] = Task(_concat, deps=_concat_list)
     return graph
 
 
@@ -245,9 +245,7 @@ def _(
 
 
 @generate_ir_tasks.register(Shuffle)
-def _(
-    ir: Shuffle, partition_info: MutableMapping[IR, PartitionInfo]
-) -> MutableMapping[Any, Any]:
+def _(ir: Shuffle, partition_info: MutableMapping[IR, PartitionInfo]) -> TaskGraph:
     # Extract "shuffle_method" configuration
     assert ir.config_options.executor.name == "streaming", (
         "'in-memory' executor not supported in 'generate_ir_tasks'"
@@ -263,6 +261,8 @@ def _(
     ) == len(ir.keys):  # pragma: no cover
         shuffle_on = [k.name for k in _keys]
         try:
+            # TODO: How to deal with `rapidsmpf_shuffle_graph`
+            # using "general" tuple task spec??
             from rapidsmpf.integrations.dask import rapidsmpf_shuffle_graph
 
             return rapidsmpf_shuffle_graph(
