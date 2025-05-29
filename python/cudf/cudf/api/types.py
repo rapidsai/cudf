@@ -8,7 +8,7 @@ import warnings
 from collections import abc
 from functools import wraps
 from inspect import isclass
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
 import cupy as cp
 import numpy as np
@@ -35,6 +35,10 @@ from cudf.core.dtypes import (  # noqa: F401
     is_struct_dtype,
 )
 from cudf.utils.dtypes import CUDF_STRING_DTYPE
+
+if TYPE_CHECKING:
+    from cudf.core.index import CategoricalIndex
+    from cudf.core.series import Series
 
 
 def is_numeric_dtype(obj):
@@ -208,7 +212,7 @@ def _wrap_pandas_is_dtype_api(func):
 
 
 def _union_categoricals(
-    to_union: list[cudf.Series | cudf.CategoricalIndex],
+    to_union: list[Series | CategoricalIndex],
     sort_categories: bool = False,
     ignore_order: bool = False,
 ):
