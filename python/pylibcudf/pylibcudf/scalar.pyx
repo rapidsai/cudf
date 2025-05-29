@@ -184,21 +184,25 @@ cdef class Scalar:
             return (<numeric_scalar[cbool]*>self.c_obj.get()).value()
         elif self.type().id() == type_id.STRING:
             return (<string_scalar*>self.c_obj.get()).to_string().decode()
-        elif is_floating_point(self.type()):
+        elif self.type().id() == type_id.FLOAT32:
+            return (<numeric_scalar[float]*>self.c_obj.get()).value()
+        elif self.type().id() == type_id.FLOAT64:
             return (<numeric_scalar[double]*>self.c_obj.get()).value()
-        elif self.type().id() in {
-            type_id.INT8,
-            type_id.INT16,
-            type_id.INT32,
-            type_id.INT64,
-        }:
+        elif self.type().id() == type_id.INT8:
+            return (<numeric_scalar[int8_t]*>self.c_obj.get()).value()
+        elif self.type().id() == type_id.INT16:
+            return (<numeric_scalar[int16_t]*>self.c_obj.get()).value()
+        elif self.type().id() == type_id.INT32:
+            return (<numeric_scalar[int32_t]*>self.c_obj.get()).value()
+        elif self.type().id() == type_id.INT64:
             return (<numeric_scalar[int64_t]*>self.c_obj.get()).value()
-        elif self.type().id() in {
-            type_id.UINT8,
-            type_id.UINT16,
-            type_id.UINT32,
-            type_id.UINT64,
-        }:
+        elif self.type().id() == type_id.UINT8:
+            return (<numeric_scalar[uint8_t]*>self.c_obj.get()).value()
+        elif self.type().id() == type_id.UINT16:
+            return (<numeric_scalar[uint16_t]*>self.c_obj.get()).value()
+        elif self.type().id() == type_id.UINT32:
+            return (<numeric_scalar[uint32_t]*>self.c_obj.get()).value()
+        elif self.type().id() == type_id.UINT64:
             return (<numeric_scalar[uint64_t]*>self.c_obj.get()).value()
         else:
             raise NotImplementedError(
