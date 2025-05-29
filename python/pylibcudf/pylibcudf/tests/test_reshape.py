@@ -13,7 +13,7 @@ from pylibcudf.types import TypeId
 def reshape_data():
     data = [[1, 2, 3], [4, 5, 6]]
     arrow_tbl = pa.Table.from_arrays(data, names=["a", "b"])
-    return data, plc.Table(arrow_tbl)
+    return data, plc.Table.from_arrow(arrow_tbl)
 
 
 def test_interleave_columns(reshape_data):
@@ -57,7 +57,7 @@ def test_table_to_array(dtype, type_id):
         pa.array([4, 5, 6], type=arrow_type),
     ]
     arrow_tbl = pa.Table.from_arrays(arrs, names=["a", "b"])
-    tbl = plc.interop.from_arrow(arrow_tbl)
+    tbl = plc.Table.from_arrow(arrow_tbl)
 
     rows, cols = tbl.num_rows(), tbl.num_columns()
     got = cp.empty((rows, cols), dtype=dtype, order="F")

@@ -2733,8 +2733,6 @@ def test_groupby_shift_row_mixed_fill(
     # simulate it column by column
     expected = pdf.copy()
     for col, single_fill in zip(pdf.iloc[:, 1:], fill_value):
-        if isinstance(single_fill, cudf.Scalar):
-            single_fill = single_fill._host_value
         expected[col] = (
             pdf[col]
             .groupby(pdf["0"])
@@ -2866,7 +2864,6 @@ def test_groupby_diff_row_zero_shift(nelem):
     )
 
 
-# TODO: test for category columns when cudf.Scalar supports category type
 @pytest.mark.parametrize("nelem", [10, 100, 1000])
 @pytest.mark.skipif(
     PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
@@ -2915,7 +2912,6 @@ def test_groupby_fillna_multi_value(nelem):
     assert_groupby_results_equal(expect[value_cols], got[value_cols])
 
 
-# TODO: test for category columns when cudf.Scalar supports category type
 # TODO: cudf.fillna does not support decimal column to column fill yet
 @pytest.mark.parametrize("nelem", [10, 100, 1000])
 @pytest.mark.skipif(
