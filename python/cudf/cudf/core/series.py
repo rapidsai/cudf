@@ -6,7 +6,7 @@ import functools
 import inspect
 import textwrap
 import warnings
-from collections import abc
+from collections.abc import Mapping
 from shutil import get_terminal_size
 from typing import TYPE_CHECKING, Any, Literal
 
@@ -70,7 +70,7 @@ from cudf.utils.performance_tracking import _performance_tracking
 from cudf.utils.utils import _EQUALITY_OPS, _is_same_name
 
 if TYPE_CHECKING:
-    from collections.abc import MutableMapping
+    from collections.abc import Hashable, MutableMapping
 
     import pyarrow as pa
 
@@ -575,7 +575,7 @@ class Series(SingleColumnFrame, IndexedFrame):
         cls,
         column: ColumnBase,
         *,
-        name: abc.Hashable = None,
+        name: Hashable = None,
         index: Index | None = None,
     ) -> Self:
         ca = ColumnAccessor({name: column}, verify=False)
@@ -1009,7 +1009,7 @@ class Series(SingleColumnFrame, IndexedFrame):
         )
 
     @_performance_tracking
-    def to_frame(self, name: abc.Hashable = no_default) -> DataFrame:
+    def to_frame(self, name: Hashable = no_default) -> DataFrame:
         """Convert Series into a DataFrame
 
         Parameters
@@ -1701,7 +1701,7 @@ class Series(SingleColumnFrame, IndexedFrame):
     ):
         if isinstance(value, pd.Series):
             value = Series.from_pandas(value)
-        elif isinstance(value, abc.Mapping):
+        elif isinstance(value, Mapping):
             value = Series(value)
         if isinstance(value, cudf.Series):
             if not self.index.equals(value.index):
@@ -1937,7 +1937,7 @@ class Series(SingleColumnFrame, IndexedFrame):
     @_performance_tracking
     def astype(
         self,
-        dtype: Dtype | dict[abc.Hashable, Dtype],
+        dtype: Dtype | dict[Hashable, Dtype],
         copy: bool = False,
         errors: Literal["raise", "ignore"] = "raise",
     ) -> Self:
