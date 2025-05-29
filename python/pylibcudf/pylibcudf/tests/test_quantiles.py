@@ -51,7 +51,7 @@ def col_data(request, numeric_pa_type):
     ],
 )
 def plc_tbl_data(request):
-    return plc.Table(pa.Table.from_arrays(**request.param))
+    return plc.Table.from_arrow(pa.Table.from_arrays(**request.param))
 
 
 @pytest.mark.parametrize("q", [[], [0], [0.5], [0.1, 0.5, 0.7, 0.9]])
