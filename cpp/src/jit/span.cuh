@@ -18,7 +18,7 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/bit.hpp>
 
-namespace CUDF_EXPORT cudf {
+namespace cudf {
 
 namespace jit {
 
@@ -153,4 +153,4 @@ struct device_optional_span : device_span<T> {
 };
 
 }  // namespace jit
-}  // namespace CUDF_EXPORT cudf
+}  // namespace cudf
