@@ -12,14 +12,12 @@
 # the License.
 # =============================================================================
 
-# Jitify doesn't have a version :/
-
 # This function finds Jitify and sets any additional necessary environment variables.
 function(find_and_configure_jitify)
   rapids_cpm_find(
     jitify 2.0.0
     GIT_REPOSITORY https://github.com/NVIDIA/jitify.git
-    GIT_TAG 9df3902
+    GIT_TAG 7cb0b59
     GIT_SHALLOW TRUE
     DOWNLOAD_ONLY TRUE
   )
