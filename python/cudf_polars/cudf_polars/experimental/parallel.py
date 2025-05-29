@@ -241,8 +241,7 @@ def _(
                 for j, child_name in enumerate(child_names)
             ],
         )
-        wrapper_options = ir._tracing_options(*args)
-        wrapper = partial(wrap_do_evaluate, wrapper_options=wrapper_options)
+        wrapper = partial(wrap_do_evaluate, name=type(ir).__name__)
         tasks[key] = (wrapper, ir.do_evaluate, *args)
 
     return tasks

@@ -17,12 +17,9 @@ import argparse
 import dataclasses
 import importlib
 import json
-import logging
 import os
 import sys
-import threading
 import time
-import uuid
 from collections import defaultdict
 from datetime import date, datetime, timezone
 from typing import TYPE_CHECKING, Any
@@ -48,65 +45,6 @@ except ImportError:
 
 if TYPE_CHECKING:
     import pathlib
-
-
-def _thread_name(_: Any, __: Any, event_dict: dict[str, Any]) -> dict[str, Any]:
-    event_dict["thread"] = threading.current_thread().name
-    return event_dict
-
-
-try:
-    import structlog
-
-    HAS_STRUCTLOG = True
-except ImportError:
-    HAS_STRUCTLOG = False
-
-
-def setup_logging() -> structlog.BoundLogger | None:
-    """Setup logging with structlog."""
-    if not HAS_STRUCTLOG:
-        return None
-    processors = [
-        structlog.contextvars.merge_contextvars,
-        _thread_name,
-        structlog.processors.add_log_level,
-        structlog.processors.StackInfoRenderer(),
-        structlog.dev.set_exc_info,
-        structlog.processors.TimeStamper(fmt="iso"),
-    ]
-    if os.environ.get("CUDF_POLARS_DEBUG"):
-        processors.append(structlog.dev.ConsoleRenderer())
-    else:
-        processors.extend(
-            [structlog.processors.dict_tracebacks, structlog.processors.JSONRenderer()]
-        )
-
-    structlog.configure(
-        processors=processors,
-        wrapper_class=structlog.make_filtering_bound_logger(logging.NOTSET),
-        context_class=dict,
-        logger_factory=structlog.stdlib.LoggerFactory(),
-        cache_logger_on_first_use=False,
-    )
-
-    logging.basicConfig(
-        filename="trace.log", level=logging.NOTSET, format="%(message)s", filemode="a"
-    )
-
-    return structlog.get_logger()
-
-
-def add_context(q_id: int, i: int, run_id: str, executor: str, scheduler: str):
-    """Add PDSH context to the structlog context."""
-    structlog.contextvars.bind_contextvars(
-        query=q_id,
-        iteration=i,
-        run_id=run_id,
-        executor=executor,
-        scheduler=scheduler,
-    )
-
 
 # Without this setting, the first IO task to run
 # on each worker takes ~15 sec extra
@@ -1245,7 +1183,6 @@ def run(args: argparse.Namespace) -> None:
         # Avoid UVM in distributed cluster
         client = Client(LocalCUDACluster(**kwargs))
         client.wait_for_workers(run_config.n_workers)
-        client.run(setup_logging)
         if run_config.shuffle != "tasks":
             try:
                 from rapidsmpf.integrations.dask import bootstrap_dask_cluster
@@ -1294,9 +1231,6 @@ def run(args: argparse.Namespace) -> None:
             executor_options=executor_options,
         )
 
-    logger = setup_logging()
-
-    run_id = str(uuid.uuid4())
     for q_id in run_config.queries:
         try:
             q = getattr(PDSHQueries, f"q{q_id}")(run_config)
@@ -1324,19 +1258,6 @@ def run(args: argparse.Namespace) -> None:
 
         for i in range(args.iterations):
             t0 = time.monotonic()
-
-            if HAS_STRUCTLOG:
-                add_context(q_id, i, run_id, run_config.executor, run_config.scheduler)
-                if client is not None:
-                    # this isn't working for some reason.
-                    client.run(
-                        add_context,
-                        q_id,
-                        i,
-                        run_id,
-                        run_config.executor,
-                        run_config.scheduler,
-                    )
 
             with nvtx.annotate(
                 message=f"Query {q_id} - Iteration {i}",
@@ -1368,12 +1289,7 @@ def run(args: argparse.Namespace) -> None:
             if args.print_results:
                 print(result)
 
-            if logger is not None:
-                logger.info(event="Query finished", duration=f"{record.duration:0.4f}s")
-            else:
-                print(
-                    f"Query {q_id} - Iteration {i} finished in {record.duration:0.4f}s"
-                )
+            print(f"Query {q_id} - Iteration {i} finished in {record.duration:0.4f}s")
             records[q_id].append(record)
 
     run_config = dataclasses.replace(run_config, records=dict(records))
