@@ -15,10 +15,10 @@ from rapidsmpf.integrations.dask.spilling import SpillableWrapper
 from cudf_polars.containers import DataFrame
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, MutableMapping
+    from collections.abc import Callable
     from typing import Any
 
-    from cudf_polars.experimental.task import DaskKey
+    from cudf_polars.experimental.task import DaskKey, DaskTaskGraph
     from cudf_polars.utils.config import ConfigOptions
 
 
@@ -107,10 +107,10 @@ def wrap_func_spillable(
 
 
 def wrap_dataframe_in_spillable(
-    graph: MutableMapping[Any, Any],
+    graph: DaskTaskGraph,
     ignore_key: DaskKey,
     config_options: ConfigOptions,
-) -> MutableMapping[Any, Any]:
+) -> DaskTaskGraph:
     """
     Wraps functions within a task graph to handle spillable DataFrames.
 
@@ -136,7 +136,7 @@ def wrap_dataframe_in_spillable(
     )
     target_partition_size = config_options.executor.target_partition_size
 
-    ret: MutableMapping[Any, Any] = {}
+    ret: DaskTaskGraph = {}
     for key, task in graph.items():  # type: ignore
         # assert isinstance(task, tuple)
         ret[key] = tuple(

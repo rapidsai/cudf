@@ -41,7 +41,7 @@ if TYPE_CHECKING:
 
     from cudf_polars.containers import DataFrame
     from cudf_polars.experimental.dispatch import LowerIRTransformer
-    from cudf_polars.experimental.task import DaskKey, TaskGraph
+    from cudf_polars.experimental.task import DaskKey, DaskTaskGraph, TaskGraph
     from cudf_polars.utils.config import ConfigOptions
 
 
@@ -165,7 +165,7 @@ def post_process_task_graph(
     graph: TaskGraph,
     key: Key,
     config_options: ConfigOptions,
-) -> tuple[TaskGraph, Key] | tuple[MutableMapping[Any, Any], DaskKey]:
+) -> tuple[TaskGraph, Key] | tuple[DaskTaskGraph, DaskKey]:
     """
     Post-process the task graph.
 
@@ -190,7 +190,7 @@ def post_process_task_graph(
     if config_options.executor.scheduler == "distributed":
         # Convert to a Dask graph for distributed execution
         dask_key = key.to_dask()
-        dask_graph: MutableMapping[Any, Any] = {
+        dask_graph: DaskTaskGraph = {
             (k.to_dask() if isinstance(k, Key) else k): (
                 t.to_dask() if isinstance(t, (Key, Task)) else t
             )

@@ -4,13 +4,13 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, MutableMapping
 from typing import TYPE_CHECKING, Any, TypeAlias
 
 from typing_extensions import Unpack
 
 if TYPE_CHECKING:
-    from collections.abc import MutableMapping, Sequence
+    from collections.abc import Sequence
 
 
 DaskKey: TypeAlias = str | tuple[str, Unpack[tuple[int, ...]]]
@@ -121,5 +121,4 @@ def _task_deps(task_or_key: Key | Task) -> tuple[Key, ...]:
 
 
 TaskGraph: TypeAlias = dict[Key, Key | Task]
-DaskTaskGraph: TypeAlias = dict[DaskKey, DaskTask | DaskKey]
-AnyGraph: TypeAlias = dict[DaskKey | Key, DaskTask | Task | DaskKey | Key]
+DaskTaskGraph: TypeAlias = MutableMapping[Any, Any]
