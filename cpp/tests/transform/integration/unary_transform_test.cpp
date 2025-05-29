@@ -188,6 +188,9 @@ __device__ inline void    fdsf   (
 
   test_udf<dtype>(cuda.c_str(), op, data_init, 500, false);
   test_udf<dtype>(ptx.c_str(), op, data_init, 500, true);
+
+  test_udf<dtype>(cuda.c_str(), op, data_init, 0, false);
+  test_udf<dtype>(ptx.c_str(), op, data_init, 0, true);
 }
 
 TEST_F(UnaryOperationIntegrationTest, Transform_INT32_INT32)
@@ -572,6 +575,7 @@ TEST_F(StringOperationTest, Output)
   auto b = cudf::test::strings_column_wrapper{"aa", "is", "dd", "ddd", "e", "fff"};
   auto c = cudf::test::strings_column_wrapper{"a", "b", "the", "dddd", "e", "fff"};
   auto d = cudf::test::strings_column_wrapper{"a", "b", "d", "largest", "lexicographical", "test"};
+  auto empty = cudf::test::strings_column_wrapper{};
 
   std::string cuda = R"***(
     __device__ void transform(cudf::string_view * out, cudf::string_view a, cudf::string_view b, cudf::string_view c, cudf::string_view d){
@@ -584,6 +588,12 @@ TEST_F(StringOperationTest, Output)
   auto result = cudf::transform({a, b, c, d}, cuda, cudf::data_type(cudf::type_id::STRING), false);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+
+  auto expected_empty = cudf::test::strings_column_wrapper{};
+  auto result_empty   = cudf::transform(
+    {empty, empty, empty, empty}, cuda, cudf::data_type(cudf::type_id::STRING), false);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_empty, result_empty->view());
 }
 
 TEST_F(StringOperationTest, StringConcat)
