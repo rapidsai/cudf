@@ -138,7 +138,7 @@ def wrap_dataframe_in_spillable(
 
     ret: DaskTaskGraph = {}
     for key, task in graph.items():  # type: ignore
-        # assert isinstance(task, tuple)
+        assert isinstance(task, tuple)
         ret[key] = tuple(
             wrap_func_spillable(
                 a,

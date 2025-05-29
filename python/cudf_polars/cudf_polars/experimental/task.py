@@ -109,11 +109,11 @@ class Task:
 
 def _task_deps(task_or_key: Key | Task) -> tuple[Key, ...]:
     """
-    Return the dependencies for a given Task or Key.
+    Return the dependencies of a given Task or Key.
 
     Notes
     -----
-    The only dependency for a Key is the Key itself.
+    The only dependency of a Key is the Key itself.
     """
     if isinstance(task_or_key, Key):
         return (task_or_key,)
