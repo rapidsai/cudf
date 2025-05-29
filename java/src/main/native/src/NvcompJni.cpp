@@ -26,9 +26,6 @@
 
 namespace {
 
-constexpr char const* NVCOMP_ERROR_CLASS      = "ai/rapids/cudf/nvcomp/NvcompException";
-constexpr char const* NVCOMP_CUDA_ERROR_CLASS = "ai/rapids/cudf/nvcomp/NvcompCudaException";
-
 void check_nvcomp_status(JNIEnv* env, nvcompStatus_t status)
 {
   switch (status) {
@@ -42,16 +39,20 @@ void check_nvcomp_status(JNIEnv* env, nvcompStatus_t status)
         env, cudf::jni::UNSUPPORTED_EXCEPTION_CLASS, "nvcomp unsupported");
       break;
     case nvcompErrorCannotDecompress:
-      cudf::jni::throw_java_exception(env, NVCOMP_ERROR_CLASS, "nvcomp cannot decompress");
+      cudf::jni::throw_java_exception(
+        env, cudf::jni::NVCOMP_EXCEPTION_CLASS, "nvcomp cannot decompress");
       break;
     case nvcompErrorCudaError:
-      cudf::jni::throw_java_exception(env, NVCOMP_CUDA_ERROR_CLASS, "nvcomp CUDA error");
+      cudf::jni::throw_java_exception(
+        env, cudf::jni::NVCOMP_CUDA_EXCEPTION_CLASS, "nvcomp CUDA error");
       break;
     case nvcompErrorInternal:
-      cudf::jni::throw_java_exception(env, NVCOMP_ERROR_CLASS, "nvcomp internal error");
+      cudf::jni::throw_java_exception(
+        env, cudf::jni::NVCOMP_EXCEPTION_CLASS, "nvcomp internal error");
       break;
     default:
-      cudf::jni::throw_java_exception(env, NVCOMP_ERROR_CLASS, "nvcomp unknown error");
+      cudf::jni::throw_java_exception(
+        env, cudf::jni::NVCOMP_EXCEPTION_CLASS, "nvcomp unknown error");
       break;
   }
 }
@@ -186,7 +187,7 @@ Java_ai_rapids_cudf_nvcomp_NvcompJni_batchedLZ4DecompressAsync(JNIEnv* env,
     if (!cudf::java::check_nvcomp_output_sizes(
           uncompressed_sizes, actual_uncompressed_sizes.data(), batch_size, stream)) {
       cudf::jni::throw_java_exception(
-        env, NVCOMP_ERROR_CLASS, "nvcomp decompress output size mismatch");
+        env, cudf::jni::NVCOMP_EXCEPTION_CLASS, "nvcomp decompress output size mismatch");
     }
   }
   CATCH_STD(env, );
@@ -340,7 +341,7 @@ Java_ai_rapids_cudf_nvcomp_NvcompJni_batchedZstdDecompressAsync(JNIEnv* env,
     if (!cudf::java::check_nvcomp_output_sizes(
           uncompressed_sizes, actual_uncompressed_sizes.data(), batch_size, stream)) {
       cudf::jni::throw_java_exception(
-        env, NVCOMP_ERROR_CLASS, "nvcomp decompress output size mismatch");
+        env, cudf::jni::NVCOMP_EXCEPTION_CLASS, "nvcomp decompress output size mismatch");
     }
   }
   CATCH_STD(env, );

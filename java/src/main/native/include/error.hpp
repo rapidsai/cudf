@@ -30,6 +30,8 @@ constexpr char const* CUDA_FATAL_EXCEPTION_CLASS = "ai/rapids/cudf/CudaFatalExce
 constexpr char const* CUDF_EXCEPTION_CLASS       = "ai/rapids/cudf/CudfException";
 constexpr char const* CUDF_OVERFLOW_EXCEPTION_CLASS =
   "ai/rapids/cudf/CudfColumnSizeOverflowException";
+constexpr char const* NVCOMP_EXCEPTION_CLASS      = "ai/rapids/cudf/nvcomp/NvcompException";
+constexpr char const* NVCOMP_CUDA_EXCEPTION_CLASS = "ai/rapids/cudf/nvcomp/NvcompCudaException";
 
 // Java exceptions classes.
 constexpr char const* INDEX_OOB_EXCEPTION_CLASS   = "java/lang/ArrayIndexOutOfBoundsException";
