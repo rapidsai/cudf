@@ -1022,9 +1022,9 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - pytest-env
-          - sqlframe
           - pip:
+              - pytest-env
+              - sqlframe
               - ibis-framework[duckdb]
   depends_on_libcudf:
     common:
