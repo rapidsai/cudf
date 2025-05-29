@@ -22,7 +22,6 @@ include(${rapids-cmake-dir}/cuda/set_runtime.cmake)
 include(rapids-export)
 include(rapids-find)
 
-set (CMAKE_CUDA_ARCHITECTURES "NATIVE")
 rapids_cuda_init_architectures(CUDF)
 
 project(
