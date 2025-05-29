@@ -117,3 +117,7 @@ class DataType:
     def __hash__(self) -> int:
         """Hash of the DataType."""
         return hash(self.polars)
+
+    def __repr__(self) -> str:
+        """Representation of the DataType."""
+        return f"<DataType(polars={self.polars}, plc={self.id()!r})>"
