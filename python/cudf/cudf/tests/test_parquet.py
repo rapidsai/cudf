@@ -2944,22 +2944,26 @@ def test_per_column_encoding_option(encoding):
     fmd = pf.metadata
     assert encoding_name in fmd.row_group(0).column(0).encodings
 
+
 @pytest.mark.parametrize("compression", ["SNAPPY", "ZSTD"])
 def test_per_column_compression_option(set_decomp_env_vars, compression):
-    pdf = pd.DataFrame({"ilist": [[1, 2, 3, 1, 2, 3]], "i1": [[1, 2, 3, 1, 2, 3]]})
+    pdf = pd.DataFrame(
+        {"ilist": [[1, 2, 3, 1, 2, 3]], "i1": [[1, 2, 3, 1, 2, 3]]}
+    )
     cdf = cudf.from_pandas(pdf)
     buffer = BytesIO()
     cdf.to_parquet(
         buffer,
         compression=compression,
         skip_compression={"ilist.list.element"},
-        use_dictionary=False, # to make sure that data is compressible
+        use_dictionary=False,  # to make sure that data is compressible
     )
 
     pf = pq.ParquetFile(buffer)
     fmd = pf.metadata
     assert fmd.row_group(0).column(0).compression == "UNCOMPRESSED"
     assert fmd.row_group(0).column(1).compression == compression
+
 
 @pytest.mark.parametrize(
     "encoding",
