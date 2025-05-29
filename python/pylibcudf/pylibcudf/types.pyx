@@ -23,6 +23,7 @@ from pylibcudf.libcudf.types import sorted as Sorted  # no-cython-lint, isort:sk
 
 try:
     from pyarrow import lib as pa
+    pa_err = None
 
     ARROW_TO_PYLIBCUDF_TYPES = {
         pa.int8(): type_id.INT8,
@@ -60,8 +61,9 @@ try:
     # Because we map 2-3 pyarrow string types to type_id.STRING,
     # just map type_id.STRING to pa.string
     LIBCUDF_TO_ARROW_TYPES[type_id.STRING] = pa.string()
-except ImportError:
+except ImportError as e:
     pa = None
+    pa_err = e
 
 
 __all__ = [
@@ -181,7 +183,7 @@ cdef class DataType:
         return ret
 
     @staticmethod
-    def from_arrow(cls, pa_typ):
+    def from_arrow(pa_typ) -> DataType:
         """
         Construct a DataType from a Python type.
 
@@ -197,14 +199,18 @@ cdef class DataType:
 
         Raises
         ------
+        ImportError
+            If pyarrow is not installed.
         TypeError
             If the Python type is not supported.
         """
-        return _from_arrow(py_val, dtype)
+        if pa_err is not None:
+            raise pa_err
+        return DataType._from_arrow(pa_typ)
 
     if pa is not None:
         @staticmethod
-        def _from_arrow(obj: pa.DataType):
+        def _from_arrow(obj: pa.DataType) -> DataType:
             if isinstance(obj, pa.Decimal128Type):
                 return DataType(type_id.DECIMAL128, scale=-obj.scale)
             elif isinstance(obj, pa.StructType):

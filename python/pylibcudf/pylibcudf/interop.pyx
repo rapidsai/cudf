@@ -23,7 +23,8 @@ from pylibcudf.libcudf.table.table cimport table
 from .column cimport Column
 from .scalar cimport Scalar
 from .table cimport Table
-from .types cimport DataType, type_id, LIBCUDF_TO_ARROW_TYPES
+from .types cimport DataType, type_id
+from .types import LIBCUDF_TO_ARROW_TYPES
 from ._interop_helpers import ColumnMetadata
 
 __all__ = [

@@ -157,7 +157,7 @@ def source_scalar(pa_type):
             )
     else:
         raise ValueError("Unsupported type")
-    return pa_scalar, plc.interop.from_arrow(pa_scalar)
+    return pa_scalar, plc.Scalar.from_arrow(pa_scalar)
 
 
 @pytest.fixture(scope="module")

@@ -141,7 +141,7 @@ def validate_empty_column(col, mask_state, dtype):
 
 
 def test_make_numeric_column(numeric_pa_type, mask_state):
-    plc_type = plc.interop.from_arrow(numeric_pa_type)
+    plc_type = plc.DataType.from_arrow(numeric_pa_type)
 
     got = plc.column_factories.make_numeric_column(
         plc_type, EMPTY_COL_SIZE, mask_state
@@ -153,7 +153,7 @@ def test_make_numeric_column(numeric_pa_type, mask_state):
     "non_numeric_pa_type", [t for t in ALL_TYPES if t not in NUMERIC_TYPES]
 )
 def test_make_numeric_column_dtype_err(non_numeric_pa_type):
-    plc_type = plc.interop.from_arrow(non_numeric_pa_type)
+    plc_type = plc.DataType.from_arrow(non_numeric_pa_type)
     with pytest.raises(TypeError):
         plc.column_factories.make_numeric_column(
             plc_type, 3, plc.types.MaskState.UNALLOCATED
@@ -161,7 +161,7 @@ def test_make_numeric_column_dtype_err(non_numeric_pa_type):
 
 
 def test_make_numeric_column_negative_size_err(numeric_pa_type):
-    plc_type = plc.interop.from_arrow(numeric_pa_type)
+    plc_type = plc.DataType.from_arrow(numeric_pa_type)
     with pytest.raises(RuntimeError):
         plc.column_factories.make_numeric_column(
             plc_type, -1, plc.types.MaskState.UNALLOCATED
@@ -169,7 +169,7 @@ def test_make_numeric_column_negative_size_err(numeric_pa_type):
 
 
 def test_make_fixed_point_column(fixed_point_pa_type, mask_state):
-    plc_type = plc.interop.from_arrow(fixed_point_pa_type)
+    plc_type = plc.DataType.from_arrow(fixed_point_pa_type)
 
     got = plc.column_factories.make_fixed_point_column(
         plc_type, EMPTY_COL_SIZE, mask_state
@@ -182,7 +182,7 @@ def test_make_fixed_point_column(fixed_point_pa_type, mask_state):
     "non_fixed_point_pa_type", [t for t in ALL_TYPES if t not in DECIMAL_TYPES]
 )
 def test_make_fixed_point_column_dtype_err(non_fixed_point_pa_type):
-    plc_type = plc.interop.from_arrow(non_fixed_point_pa_type)
+    plc_type = plc.DataType.from_arrow(non_fixed_point_pa_type)
     with pytest.raises(TypeError):
         plc.column_factories.make_fixed_point_column(
             plc_type, 3, plc.types.MaskState.UNALLOCATED
@@ -190,7 +190,7 @@ def test_make_fixed_point_column_dtype_err(non_fixed_point_pa_type):
 
 
 def test_make_fixed_point_column_negative_size_err(fixed_point_pa_type):
-    plc_type = plc.interop.from_arrow(fixed_point_pa_type)
+    plc_type = plc.DataType.from_arrow(fixed_point_pa_type)
     with pytest.raises(RuntimeError):
         plc.column_factories.make_fixed_point_column(
             plc_type, -1, plc.types.MaskState.UNALLOCATED
@@ -198,7 +198,7 @@ def test_make_fixed_point_column_negative_size_err(fixed_point_pa_type):
 
 
 def test_make_timestamp_column(timestamp_pa_type, mask_state):
-    plc_type = plc.interop.from_arrow(timestamp_pa_type)
+    plc_type = plc.DataType.from_arrow(timestamp_pa_type)
 
     got = plc.column_factories.make_timestamp_column(
         plc_type, EMPTY_COL_SIZE, mask_state
@@ -210,7 +210,7 @@ def test_make_timestamp_column(timestamp_pa_type, mask_state):
     "non_timestamp_pa_type", [t for t in ALL_TYPES if t not in TIMESTAMP_TYPES]
 )
 def test_make_timestamp_column_dtype_err(non_timestamp_pa_type):
-    plc_type = plc.interop.from_arrow(non_timestamp_pa_type)
+    plc_type = plc.DataType.from_arrow(non_timestamp_pa_type)
     with pytest.raises(TypeError):
         plc.column_factories.make_timestamp_column(
             plc_type, 3, plc.types.MaskState.UNALLOCATED
@@ -218,7 +218,7 @@ def test_make_timestamp_column_dtype_err(non_timestamp_pa_type):
 
 
 def test_make_timestamp_column_negative_size_err(timestamp_pa_type):
-    plc_type = plc.interop.from_arrow(timestamp_pa_type)
+    plc_type = plc.DataType.from_arrow(timestamp_pa_type)
     with pytest.raises(RuntimeError):
         plc.column_factories.make_timestamp_column(
             plc_type, -1, plc.types.MaskState.UNALLOCATED
@@ -226,7 +226,7 @@ def test_make_timestamp_column_negative_size_err(timestamp_pa_type):
 
 
 def test_make_duration_column(duration_pa_type, mask_state):
-    plc_type = plc.interop.from_arrow(duration_pa_type)
+    plc_type = plc.DataType.from_arrow(duration_pa_type)
 
     got = plc.column_factories.make_duration_column(
         plc_type, EMPTY_COL_SIZE, mask_state
@@ -238,7 +238,7 @@ def test_make_duration_column(duration_pa_type, mask_state):
     "non_duration_pa_type", [t for t in ALL_TYPES if t not in DURATION_TYPES]
 )
 def test_make_duration_column_dtype_err(non_duration_pa_type):
-    plc_type = plc.interop.from_arrow(non_duration_pa_type)
+    plc_type = plc.DataType.from_arrow(non_duration_pa_type)
     with pytest.raises(TypeError):
         plc.column_factories.make_duration_column(
             plc_type, 3, plc.types.MaskState.UNALLOCATED
@@ -246,7 +246,7 @@ def test_make_duration_column_dtype_err(non_duration_pa_type):
 
 
 def test_make_duration_column_negative_size_err(duration_pa_type):
-    plc_type = plc.interop.from_arrow(duration_pa_type)
+    plc_type = plc.DataType.from_arrow(duration_pa_type)
     with pytest.raises(RuntimeError):
         plc.column_factories.make_duration_column(
             plc_type, -1, plc.types.MaskState.UNALLOCATED

@@ -53,11 +53,17 @@ try:
 except ImportError:
     pa = None
 
-from . cimport copying
 from .column cimport Column
 from .traits cimport is_floating_point
 from .types cimport DataType
-from functools import singledispatchimport pyarrow as pa
+from functools import singledispatch
+
+try:
+    import pyarrow as pa
+    pa_err = None
+except ImportError as e:
+    pa = None
+    pa_err = e
 
 import datetime
 
@@ -110,7 +116,7 @@ cdef class Scalar:
         return self.get().is_valid()
 
     @staticmethod
-    def from_arrow(cls, pa_val, dtype: DataType | None = None):
+    def from_arrow(pa_val, dtype: DataType | None = None) -> Scalar:
         """
         Convert a pyarrow scalar to a pylibcudf.Scalar.
 
@@ -127,19 +133,21 @@ cdef class Scalar:
         Scalar
             New pylibcudf.Scalar
         """
-        return _from_arrow(py_val, dtype)
+        if pa_err is not None:
+            raise pa_err
+        return Scalar._from_arrow(pa_val, dtype)
 
     if pa is not None:
         @staticmethod
-        def _from_arrow(obj: pa.Scalar, dtype: DataType | None = None):
-            dtype = plc.DataType.from_arrow(obj.type) if dtype is None else dtype
+        def _from_arrow(obj: pa.Scalar, dtype: DataType | None = None) -> Scalar:
             if isinstance(obj.type, pa.ListType) and obj.as_py() is None:
                 # pyarrow doesn't correctly handle None values for list types, so
                 # we have to create this one manually.
                 # https://github.com/apache/arrow/issues/40319
                 pa_array = pa.array([None], type=obj.type)
-                return Column.from_arrow(pa_array).to_scalar()
-            return Scalar.from_py(obj.as_py(), dtype=dtype)
+            else:
+                pa_array = pa.array([obj])
+            return Column.from_arrow(pa_array, dtype=dtype).to_scalar()
 
     @staticmethod
     cdef Scalar empty_like(Column column):
