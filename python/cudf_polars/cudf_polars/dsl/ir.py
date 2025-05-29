@@ -2182,7 +2182,9 @@ class MapFunction(IR):
                 plc.Table(
                     [
                         plc.Column(
-                            pl.Series(values=pivotees, dtype=schema[variable_name])
+                            pl.Series(
+                                values=pivotees, dtype=schema[variable_name].polars
+                            )
                         )
                     ]
                 ),

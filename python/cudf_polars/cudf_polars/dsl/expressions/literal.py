@@ -56,7 +56,7 @@ class Literal(Expr):
 class LiteralColumn(Expr):
     __slots__ = ("value",)
     _non_child = ("dtype", "value")
-    value: pl.PySeries
+    value: pl.Series
 
     def __init__(self, dtype: DataType, value: pl.Series) -> None:
         self.dtype = dtype
@@ -75,7 +75,7 @@ class LiteralColumn(Expr):
         self, df: DataFrame, *, context: ExecutionContext = ExecutionContext.FRAME
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
-        return Column(self.value)
+        return Column(plc.Column(self.value))
 
     @property
     def agg_request(self) -> NoReturn:  # noqa: D102
