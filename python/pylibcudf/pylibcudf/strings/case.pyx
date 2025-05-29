@@ -52,7 +52,7 @@ cpdef Column to_upper(Column input):
 
 cpdef Column swapcase(Column input):
     """Returns a column of strings where the lowercase characters
-    are converted to uppercase and the uppercase characters 
+    are converted to uppercase and the uppercase characters
     are converted to lowercase.
 
     For details, see :cpp:func:`cudf::strings::swapcase`.
