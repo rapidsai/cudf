@@ -7,8 +7,6 @@ from __future__ import annotations
 
 import pyarrow as pa
 
-import polars as pl
-
 import pylibcudf as plc
 from pylibcudf.traits import (
     is_floating_point,
@@ -17,17 +15,10 @@ from pylibcudf.traits import (
 )
 
 __all__ = [
-    "TO_ARROW_COMPAT_LEVEL",
     "can_cast",
     "downcast_arrow_lists",
     "is_order_preserving_cast",
 ]
-
-TO_ARROW_COMPAT_LEVEL = (
-    pl.CompatLevel.newest()
-    if hasattr(pa.lib, "Type_STRING_VIEW")
-    else pl.CompatLevel.oldest()
-)
 
 
 def downcast_arrow_lists(typ: pa.DataType) -> pa.DataType:

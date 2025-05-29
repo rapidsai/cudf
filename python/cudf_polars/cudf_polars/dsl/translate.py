@@ -587,7 +587,7 @@ def _(
             )
             if isinstance(chars, expr.Literal):
                 # We check for null first because we want to use the
-                # chars pyarrow type, but it is invalid to try and
+                # chars type, but it is invalid to try and
                 # produce a string scalar with a null dtype.
                 if chars.value is None:
                     # Polars uses None to mean "strip all whitespace"
