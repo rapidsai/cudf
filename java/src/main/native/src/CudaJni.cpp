@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,15 +14,13 @@
  * limitations under the License.
  */
 
-#include <cudf/utilities/error.hpp>
+#include "jni_utils.hpp"
 
 #include <rmm/device_buffer.hpp>
 
 #ifdef CUDF_JNI_ENABLE_PROFILING
 #include <cuda_profiler_api.h>
 #endif
-
-#include "jni_utils.hpp"
 
 namespace {
 
@@ -158,7 +156,7 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Cuda_setDevice(JNIEnv* env, jclass, j
   try {
     if (Cudf_device != cudaInvalidDeviceId && dev != Cudf_device) {
       cudf::jni::throw_java_exception(
-        env, cudf::jni::CUDF_ERROR_CLASS, "Cannot change device after RMM init");
+        env, cudf::jni::CUDF_EXCEPTION_CLASS, "Cannot change device after RMM init");
     }
     CUDF_CUDA_TRY(cudaSetDevice(dev));
   }
@@ -407,7 +405,7 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Cuda_profilerStart(JNIEnv* env, jclas
   CATCH_STD(env, );
 #else
   cudf::jni::throw_java_exception(
-    env, cudf::jni::CUDF_ERROR_CLASS, "This library was built without CUDA profiler support.");
+    env, cudf::jni::CUDF_EXCEPTION_CLASS, "This library was built without CUDA profiler support.");
 #endif
 }
 
@@ -420,7 +418,7 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Cuda_profilerStop(JNIEnv* env, jclass
   CATCH_STD(env, );
 #else
   cudf::jni::throw_java_exception(
-    env, cudf::jni::CUDF_ERROR_CLASS, "This library was built without CUDA profiler support.");
+    env, cudf::jni::CUDF_EXCEPTION_CLASS, "This library was built without CUDA profiler support.");
 #endif
 }
 
