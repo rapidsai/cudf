@@ -5,10 +5,7 @@
 
 from __future__ import annotations
 
-from functools import cache
-
 import pyarrow as pa
-from typing_extensions import assert_never
 
 import polars as pl
 
@@ -23,7 +20,6 @@ __all__ = [
     "TO_ARROW_COMPAT_LEVEL",
     "can_cast",
     "downcast_arrow_lists",
-    "from_polars",
     "is_order_preserving_cast",
 ]
 
@@ -145,81 +141,3 @@ def is_order_preserving_cast(from_: plc.DataType, to: plc.DataType) -> bool:
     return (is_integral_not_bool(from_) and is_floating_point(to)) or (
         is_floating_point(from_) and is_integral_not_bool(to)
     )
-
-
-@cache
-def from_polars(dtype: pl.DataType) -> plc.DataType:
-    """
-    Convert a polars datatype to a pylibcudf one.
-
-    Parameters
-    ----------
-    dtype
-        Polars dtype to convert
-
-    Returns
-    -------
-    Matching pylibcudf DataType object.
-
-    Raises
-    ------
-    NotImplementedError
-        For unsupported conversions.
-    """
-    if isinstance(dtype, pl.Boolean):
-        return plc.DataType(plc.TypeId.BOOL8)
-    elif isinstance(dtype, pl.Int8):
-        return plc.DataType(plc.TypeId.INT8)
-    elif isinstance(dtype, pl.Int16):
-        return plc.DataType(plc.TypeId.INT16)
-    elif isinstance(dtype, pl.Int32):
-        return plc.DataType(plc.TypeId.INT32)
-    elif isinstance(dtype, pl.Int64):
-        return plc.DataType(plc.TypeId.INT64)
-    if isinstance(dtype, pl.UInt8):
-        return plc.DataType(plc.TypeId.UINT8)
-    elif isinstance(dtype, pl.UInt16):
-        return plc.DataType(plc.TypeId.UINT16)
-    elif isinstance(dtype, pl.UInt32):
-        return plc.DataType(plc.TypeId.UINT32)
-    elif isinstance(dtype, pl.UInt64):
-        return plc.DataType(plc.TypeId.UINT64)
-    elif isinstance(dtype, pl.Float32):
-        return plc.DataType(plc.TypeId.FLOAT32)
-    elif isinstance(dtype, pl.Float64):
-        return plc.DataType(plc.TypeId.FLOAT64)
-    elif isinstance(dtype, pl.Date):
-        return plc.DataType(plc.TypeId.TIMESTAMP_DAYS)
-    elif isinstance(dtype, pl.Time):
-        raise NotImplementedError("Time of day dtype not implemented")
-    elif isinstance(dtype, pl.Datetime):
-        if dtype.time_zone is not None:
-            raise NotImplementedError("Time zone support")
-        if dtype.time_unit == "ms":
-            return plc.DataType(plc.TypeId.TIMESTAMP_MILLISECONDS)
-        elif dtype.time_unit == "us":
-            return plc.DataType(plc.TypeId.TIMESTAMP_MICROSECONDS)
-        elif dtype.time_unit == "ns":
-            return plc.DataType(plc.TypeId.TIMESTAMP_NANOSECONDS)
-        assert dtype.time_unit is not None  # pragma: no cover
-        assert_never(dtype.time_unit)
-    elif isinstance(dtype, pl.Duration):
-        if dtype.time_unit == "ms":
-            return plc.DataType(plc.TypeId.DURATION_MILLISECONDS)
-        elif dtype.time_unit == "us":
-            return plc.DataType(plc.TypeId.DURATION_MICROSECONDS)
-        elif dtype.time_unit == "ns":
-            return plc.DataType(plc.TypeId.DURATION_NANOSECONDS)
-        assert dtype.time_unit is not None  # pragma: no cover
-        assert_never(dtype.time_unit)
-    elif isinstance(dtype, pl.String):
-        return plc.DataType(plc.TypeId.STRING)
-    elif isinstance(dtype, pl.Null):
-        # TODO: Hopefully
-        return plc.DataType(plc.TypeId.EMPTY)
-    elif isinstance(dtype, pl.List):
-        # Recurse to catch unsupported inner types
-        _ = from_polars(dtype.inner)
-        return plc.DataType(plc.TypeId.LIST)
-    else:
-        raise NotImplementedError(f"{dtype=} conversion not supported")
