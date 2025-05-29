@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 import warnings
-from collections import abc
-from collections.abc import MutableSequence, Sequence
+from collections.abc import Iterable, Iterator, MutableSequence, Sequence
 from functools import cached_property
 from itertools import chain
 from types import SimpleNamespace
@@ -81,6 +80,7 @@ from cudf.utils.utils import (
 
 if TYPE_CHECKING:
     import builtins
+    from collections.abc import Generator, Mapping
 
     from cudf._typing import ColumnLike, Dtype, DtypeObj, ScalarLike
     from cudf.core.column.categorical import CategoricalColumn
@@ -1844,7 +1844,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         )
 
     @property
-    def __cuda_array_interface__(self) -> abc.Mapping[str, Any]:
+    def __cuda_array_interface__(self) -> Mapping[str, Any]:
         output = {
             "shape": (len(self),),
             "strides": (self.dtype.itemsize,),
@@ -2155,9 +2155,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         )
 
     @acquire_spill_lock()
-    def one_hot_encode(
-        self, categories: ColumnBase
-    ) -> abc.Generator[ColumnBase]:
+    def one_hot_encode(self, categories: ColumnBase) -> Generator[ColumnBase]:
         plc_table = plc.transform.one_hot_encode(
             self.to_pylibcudf(mode="read"),
             categories.to_pylibcudf(mode="read"),
@@ -3002,11 +3000,11 @@ def as_column(
         except (ValueError, TypeError):
             arbitrary = np.asarray(arbitrary)
         return as_column(arbitrary, dtype=dtype, nan_as_null=nan_as_null)
-    elif not isinstance(arbitrary, (abc.Iterable, abc.Sequence)):
+    elif not isinstance(arbitrary, (Iterable, Sequence)):
         raise TypeError(
             f"{type(arbitrary).__name__} must be an iterable or sequence."
         )
-    elif isinstance(arbitrary, abc.Iterator):
+    elif isinstance(arbitrary, Iterator):
         arbitrary = list(arbitrary)
 
     # Start of arbitrary that's not handed above but dtype provided

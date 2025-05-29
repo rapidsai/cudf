@@ -4,8 +4,14 @@ from __future__ import annotations
 
 import itertools
 import sys
-from collections import abc
-from collections.abc import Iterable, Mapping
+from collections.abc import (
+    Callable,
+    Hashable,
+    Iterable,
+    Iterator,
+    Mapping,
+    MutableMapping,
+)
 from functools import cached_property, reduce
 from typing import TYPE_CHECKING, Any, cast
 
@@ -40,7 +46,7 @@ class _NestedGetItemDict(dict):
     """
 
     @classmethod
-    def from_zip(cls, data: abc.Iterator):
+    def from_zip(cls, data: Iterator):
         """Create from zip, specialized factory for nesting."""
         obj = cls()
         for key, value in data:
@@ -72,7 +78,7 @@ def _to_flat_dict_inner(d: dict, parents: tuple = ()):
             yield from _to_flat_dict_inner(d=v, parents=(*parents, k))
 
 
-class ColumnAccessor(abc.MutableMapping):
+class ColumnAccessor(MutableMapping):
     """
     Parameters
     ----------
@@ -96,12 +102,12 @@ class ColumnAccessor(abc.MutableMapping):
         column length and data.values() are all Columns
     """
 
-    _data: dict[abc.Hashable, ColumnBase]
-    _level_names: tuple[abc.Hashable, ...]
+    _data: dict[Hashable, ColumnBase]
+    _level_names: tuple[Hashable, ...]
 
     def __init__(
         self,
-        data: abc.MutableMapping[abc.Hashable, ColumnBase] | Self,
+        data: MutableMapping[Hashable, ColumnBase] | Self,
         multiindex: bool = False,
         level_names=None,
         rangeindex: bool = False,
@@ -114,7 +120,7 @@ class ColumnAccessor(abc.MutableMapping):
             self.multiindex: bool = data.multiindex
             self.rangeindex: bool = data.rangeindex
             self.label_dtype: Dtype | None = data.label_dtype
-        elif isinstance(data, abc.MutableMapping):
+        elif isinstance(data, MutableMapping):
             # This code path is performance-critical for copies and should be
             # modified with care.
             if data and verify:
@@ -146,16 +152,16 @@ class ColumnAccessor(abc.MutableMapping):
                 f"data must be a ColumnAccessor or MutableMapping, not {type(data).__name__}"
             )
 
-    def __iter__(self) -> abc.Iterator:
+    def __iter__(self) -> Iterator:
         return iter(self._data)
 
-    def __getitem__(self, key: abc.Hashable) -> ColumnBase:
+    def __getitem__(self, key: Hashable) -> ColumnBase:
         return self._data[key]
 
-    def __setitem__(self, key: abc.Hashable, value: ColumnBase) -> None:
+    def __setitem__(self, key: Hashable, value: ColumnBase) -> None:
         self.set_by_label(key, value)
 
-    def __delitem__(self, key: abc.Hashable) -> None:
+    def __delitem__(self, key: Hashable) -> None:
         old_ncols = len(self)
         del self._data[key]
         new_ncols = len(self)
@@ -178,7 +184,7 @@ class ColumnAccessor(abc.MutableMapping):
         return f"{type_info}\n{column_info}"
 
     def _from_columns_like_self(
-        self, columns: abc.Iterable[ColumnBase], verify: bool = True
+        self, columns: Iterable[ColumnBase], verify: bool = True
     ) -> Self:
         """
         Return a new ColumnAccessor with columns and the properties of self.
@@ -210,7 +216,7 @@ class ColumnAccessor(abc.MutableMapping):
         )
 
     @property
-    def level_names(self) -> tuple[abc.Hashable, ...]:
+    def level_names(self) -> tuple[Hashable, ...]:
         if self.is_cached("to_pandas_index"):
             return self.to_pandas_index.names
         if self._level_names is None or len(self._level_names) == 0:
@@ -231,7 +237,7 @@ class ColumnAccessor(abc.MutableMapping):
             return len(next(iter(self.keys())))
 
     @property
-    def name(self) -> abc.Hashable:
+    def name(self) -> Hashable:
         return self.level_names[-1]
 
     @cached_property
@@ -242,7 +248,7 @@ class ColumnAccessor(abc.MutableMapping):
             return len(next(iter(self.values())))
 
     @cached_property
-    def names(self) -> tuple[abc.Hashable, ...]:
+    def names(self) -> tuple[Hashable, ...]:
         return tuple(self.keys())
 
     @cached_property
@@ -250,7 +256,7 @@ class ColumnAccessor(abc.MutableMapping):
         return tuple(self.values())
 
     @cached_property
-    def _grouped_data(self) -> abc.MutableMapping:
+    def _grouped_data(self) -> MutableMapping:
         """
         If self.multiindex is True,
         return the underlying mapping as a nested mapping.
@@ -328,9 +334,7 @@ class ColumnAccessor(abc.MutableMapping):
             )
         return result
 
-    def insert(
-        self, name: abc.Hashable, value: ColumnBase, loc: int = -1
-    ) -> None:
+    def insert(self, name: Hashable, value: ColumnBase, loc: int = -1) -> None:
         """
         Insert column into the ColumnAccessor at the specified location.
 
@@ -478,7 +482,7 @@ class ColumnAccessor(abc.MutableMapping):
             verify=False,
         )
 
-    def swaplevel(self, i: abc.Hashable = -2, j: abc.Hashable = -1) -> Self:
+    def swaplevel(self, i: Hashable = -2, j: Hashable = -1) -> Self:
         """
         Swap level i with level j.
         Calling this method does not change the ordering of the values.
@@ -526,7 +530,7 @@ class ColumnAccessor(abc.MutableMapping):
             verify=False,
         )
 
-    def set_by_label(self, key: abc.Hashable, value: ColumnBase) -> None:
+    def set_by_label(self, key: Hashable, value: ColumnBase) -> None:
         """
         Add (or modify) column by name.
 
@@ -576,7 +580,7 @@ class ColumnAccessor(abc.MutableMapping):
             verify=False,
         )
 
-    def _select_by_label_grouped(self, key: abc.Hashable) -> Self:
+    def _select_by_label_grouped(self, key: Hashable) -> Self:
         result = self._grouped_data[key]
         if isinstance(result, column.ColumnBase):
             # self._grouped_data[key] = self._data[key] so skip validation
@@ -647,9 +651,7 @@ class ColumnAccessor(abc.MutableMapping):
             verify=False,
         )
 
-    def _pad_key(
-        self, key: abc.Hashable, pad_value: str | slice = ""
-    ) -> abc.Hashable:
+    def _pad_key(self, key: Hashable, pad_value: str | slice = "") -> Hashable:
         """
         Pad the provided key to a length equal to the number
         of levels.
@@ -662,7 +664,7 @@ class ColumnAccessor(abc.MutableMapping):
 
     def rename_levels(
         self,
-        mapper: Mapping[abc.Hashable, abc.Hashable] | abc.Callable,
+        mapper: Mapping[Hashable, Hashable] | Callable,
         level: int | None = None,
     ) -> Self:
         """
@@ -693,7 +695,7 @@ class ColumnAccessor(abc.MutableMapping):
         to the given mapper and level.
 
         """
-        new_col_names: abc.Iterable
+        new_col_names: Iterable
         if self.multiindex:
 
             def rename_column(x):
@@ -763,7 +765,7 @@ class ColumnAccessor(abc.MutableMapping):
         self._clear_cache(old_ncols, new_ncols)
 
 
-def _keys_equal(target: abc.Hashable, key: abc.Iterable) -> bool:
+def _keys_equal(target: Hashable, key: Iterable) -> bool:
     """
     Compare `key` to `target`.
 
@@ -781,7 +783,7 @@ def _keys_equal(target: abc.Hashable, key: abc.Iterable) -> bool:
     return True
 
 
-def _remove_key_level(key: tuple, level: int) -> abc.Hashable:
+def _remove_key_level(key: tuple, level: int) -> Hashable:
     """
     Remove a level from key. If detupleize is True, and if only a
     single level remains, convert the tuple to a scalar.
@@ -793,8 +795,8 @@ def _remove_key_level(key: tuple, level: int) -> abc.Hashable:
 
 
 def _get_level(
-    x: abc.Hashable, nlevels: int, level_names: tuple[abc.Hashable, ...]
-) -> abc.Hashable:
+    x: Hashable, nlevels: int, level_names: tuple[Hashable, ...]
+) -> Hashable:
     """Get the level index from a level number or name.
 
     If given an integer, this function will handle wraparound for
