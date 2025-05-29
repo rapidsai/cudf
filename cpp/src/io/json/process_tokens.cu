@@ -1,6 +1,6 @@
 
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,7 +17,6 @@
 
 #include "io/utilities/trie.cuh"
 #include "nested_json.hpp"
-#include "tabulate_output_iterator.cuh"
 
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
@@ -28,6 +27,7 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
+#include <thrust/iterator/tabulate_output_iterator.h>
 #include <thrust/transform_scan.h>
 
 namespace cudf::io::json {
@@ -287,7 +287,7 @@ void validate_token_stream(device_span<char const> d_input,
   });
 
   auto conditional_invalidout_it =
-    cudf::detail::make_tabulate_output_iterator(cuda::proclaim_return_type<void>(
+    thrust::tabulate_output_iterator(cuda::proclaim_return_type<void>(
       [d_invalid = d_invalid.begin()] __device__(size_type i, bool x) -> void {
         if (x) { d_invalid[i] = true; }
       }));
@@ -299,7 +299,7 @@ void validate_token_stream(device_span<char const> d_input,
 
   using scan_type            = write_if::scan_type;
   auto conditional_write     = write_if{tokens.begin(), num_tokens};
-  auto conditional_output_it = cudf::detail::make_tabulate_output_iterator(conditional_write);
+  auto conditional_output_it = thrust::tabulate_output_iterator(conditional_write);
   auto binary_op             = cuda::proclaim_return_type<scan_type>(
     [] __device__(scan_type prev, scan_type curr) -> scan_type {
       auto op_result = (prev.first == token_t::ErrorBegin ? prev.first : curr.first);

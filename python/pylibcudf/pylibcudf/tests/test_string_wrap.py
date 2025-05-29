@@ -16,7 +16,7 @@ def test_wrap():
             None,
         ]
     )
-    got = plc.strings.wrap.wrap(plc.Column(pa_array), width)
+    got = plc.strings.wrap.wrap(plc.Column.from_arrow(pa_array), width)
     expect = pa.array(
         [
             textwrap.fill(val, width) if isinstance(val, str) else val

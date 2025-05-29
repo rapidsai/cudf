@@ -17,8 +17,8 @@ def edit_distance_data():
 def test_edit_distance(edit_distance_data):
     input_col, targets = edit_distance_data
     got = plc.nvtext.edit_distance.edit_distance(
-        plc.Column(input_col),
-        plc.Column(targets),
+        plc.Column.from_arrow(input_col),
+        plc.Column.from_arrow(targets),
     )
     expect = pa.array([1, 7, 0], type=pa.int32())
     assert_column_eq(expect, got)
@@ -26,7 +26,9 @@ def test_edit_distance(edit_distance_data):
 
 def test_edit_distance_matrix(edit_distance_data):
     input_col, _ = edit_distance_data
-    got = plc.nvtext.edit_distance.edit_distance_matrix(plc.Column(input_col))
+    got = plc.nvtext.edit_distance.edit_distance_matrix(
+        plc.Column.from_arrow(input_col)
+    )
     expect = pa.array(
         [[0, 7, 4], [7, 0, 6], [4, 6, 0]], type=pa.list_(pa.int32())
     )
