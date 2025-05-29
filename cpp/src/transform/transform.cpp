@@ -303,11 +303,6 @@ void launch_span_kernel(jitify2::ConfiguredKernel& kernel,
   kernel->launch(args.data());
 }
 
-bool is_scalar(cudf::size_type base_column_size, cudf::size_type column_size)
-{
-  return column_size == 1 && column_size != base_column_size;
-}
-
 std::tuple<rmm::device_buffer, size_type> make_transform_null_mask(
   column_view base_column,
   std::vector<column_view> const& inputs,
