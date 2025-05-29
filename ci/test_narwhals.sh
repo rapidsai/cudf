@@ -67,8 +67,8 @@ rapids-logger "Run narwhals tests for cuDF Pandas"
 TESTS_THAT_NEED_CUDF_FIX=" \
 test_is_finite_expr or \
 test_is_finite_series or \
-test_maybe_convert_dtypes_pandas \
-test_log_dtype_pandas \
+test_maybe_convert_dtypes_pandas or \
+test_log_dtype_pandas or \
 test_len_over_2369 \
 "
 
