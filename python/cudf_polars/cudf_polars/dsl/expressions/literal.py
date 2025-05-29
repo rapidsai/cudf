@@ -56,21 +56,15 @@ class Literal(Expr):
 
     def astype(self, dtype: DataType) -> Literal:
         """Cast self to dtype."""
-        # Avoid casting with pylibcudf as much as possible
-        # since these are just Python scalars
         if self.value is None:
             return Literal(dtype, self.value)
-        elif dtype.id() == plc.TypeId.STRING:
-            return Literal(dtype, str(self.value))
-        elif dtype.id() == plc.TypeId.BOOL8:
-            return Literal(dtype, bool(self.value))
         else:
-            plc_column = plc.Column.from_scalar(
-                plc.Scalar.from_py(self.value, self.dtype.plc), 1
-            )
-            casted_column = plc.unary.cast(plc_column, dtype.plc)
-            casted_py_scalar = plc.copying.get_element(casted_column, 0).to_py()
-            return Literal(dtype, casted_py_scalar)
+            # Use polars to cast instead of pylibcudf
+            # since there are just Python scalars
+            casted = pl.Series(values=[self.value], dtype=self.dtype.polars).cast(
+                dtype.polars
+            )[0]
+            return Literal(dtype, casted)
 
 
 class LiteralColumn(Expr):
