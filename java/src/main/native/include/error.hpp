@@ -24,7 +24,7 @@
 
 namespace cudf::jni {
 
-// Wrapper for native C++ exception classes, which also support stacktrace.
+// Wrapper for cudf JNI exception classes, which also store native stacktrace.
 constexpr char const* CUDA_EXCEPTION_CLASS       = "ai/rapids/cudf/CudaException";
 constexpr char const* CUDA_FATAL_EXCEPTION_CLASS = "ai/rapids/cudf/CudaFatalException";
 constexpr char const* CUDF_EXCEPTION_CLASS       = "ai/rapids/cudf/CudfException";
@@ -43,29 +43,28 @@ constexpr char const* UNSUPPORTED_EXCEPTION_CLASS = "java/lang/UnsupportedOperat
 constexpr char const* OOM_ERROR_CLASS = "java/lang/OutOfMemoryError";
 
 /**
- * @brief indicates that a JNI error of some kind was thrown and the main
+ * @brief Exception class indicating that a JNI error of some kind was thrown and the main
  * function should return.
  */
 class jni_exception : public std::runtime_error {
  public:
   jni_exception(char const* const message) : std::runtime_error(message) {}
-
   jni_exception(std::string const& message) : std::runtime_error(message) {}
 };
 
 /**
- * @brief throw a java exception and a C++ one for flow control.
+ * @brief Throw a Java exception and a C++ one for flow control.
  */
 inline void throw_java_exception(JNIEnv* const env, char const* class_name, char const* message)
 {
   jclass ex_class = env->FindClass(class_name);
-  if (ex_class != NULL) { env->ThrowNew(ex_class, message); }
+  if (ex_class != nullptr) { env->ThrowNew(ex_class, message); }
   throw jni_exception(message);
 }
 
 /**
- * @brief check if an java exceptions have been thrown and if so throw a C++
- * exception so the flow control stop processing.
+ * @brief Check if a Java exceptions have been thrown and if so throw a C++ exception so the flow
+ * control stop processing.
  */
 inline void check_java_exception(JNIEnv* const env)
 {
@@ -77,44 +76,40 @@ inline void check_java_exception(JNIEnv* const env)
 }
 
 /**
- * @brief create a cuda exception from a given cudaError_t
+ * @brief Create a cuda exception from a given cudaError_t.
  */
-inline jthrowable cuda_exception(JNIEnv* const env, cudaError_t status, jthrowable cause = NULL)
+inline jthrowable cuda_exception(JNIEnv* const env, cudaError_t status, jthrowable cause = nullptr)
 {
-  char const* ex_class_name;
-
   // Calls cudaGetLastError twice. It is nearly certain that a fatal error occurred if the second
   // call doesn't return with cudaSuccess.
   cudaGetLastError();
   auto const last = cudaGetLastError();
-  // Call cudaDeviceSynchronize to ensure `last` did not result from an asynchronous error.
+  // Call cudaDeviceSynchronize to ensure `last` did not result from an asynchronous error
   // between two calls.
-  if (status == last && last == cudaDeviceSynchronize()) {
-    ex_class_name = cudf::jni::CUDA_FATAL_EXCEPTION_CLASS;
-  } else {
-    ex_class_name = cudf::jni::CUDA_EXCEPTION_CLASS;
-  }
+  auto const ex_class_name = status == last && last == cudaDeviceSynchronize()
+                               ? CUDA_FATAL_EXCEPTION_CLASS
+                               : CUDA_EXCEPTION_CLASS;
 
   jclass ex_class = env->FindClass(ex_class_name);
-  if (ex_class == NULL) { return NULL; }
+  if (ex_class == nullptr) { return nullptr; }
   jmethodID ctor_id =
     env->GetMethodID(ex_class, "<init>", "(Ljava/lang/String;ILjava/lang/Throwable;)V");
-  if (ctor_id == NULL) { return NULL; }
+  if (ctor_id == nullptr) { return nullptr; }
 
   jstring msg = env->NewStringUTF(cudaGetErrorString(status));
-  if (msg == NULL) { return NULL; }
+  if (msg == nullptr) { return nullptr; }
 
   jint err_code = static_cast<jint>(status);
 
   jobject ret = env->NewObject(ex_class, ctor_id, msg, err_code, cause);
-  return (jthrowable)ret;
+  return static_cast<jthrowable>(ret);
 }
 
 inline void jni_cuda_check(JNIEnv* const env, cudaError_t cuda_status)
 {
   if (cudaSuccess != cuda_status) {
     jthrowable jt = cuda_exception(env, cuda_status);
-    if (jt != NULL) { env->Throw(jt); }
+    if (jt != nullptr) { env->Throw(jt); }
     throw jni_exception(std::string("CUDA ERROR: code ") +
                         std::to_string(static_cast<int>(cuda_status)));
   }
@@ -129,7 +124,7 @@ inline void jni_cuda_check(JNIEnv* const env, cudaError_t cuda_status)
 #define JNI_THROW_NEW(env, class_name, message, ret_val) \
   {                                                      \
     jclass ex_class = env->FindClass(class_name);        \
-    if (ex_class == NULL) { return ret_val; }            \
+    if (ex_class == nullptr) { return ret_val; }         \
     env->ThrowNew(ex_class, message);                    \
     return ret_val;                                      \
   }
