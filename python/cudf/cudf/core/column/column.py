@@ -84,8 +84,12 @@ if TYPE_CHECKING:
 
     from cudf._typing import ColumnLike, Dtype, DtypeObj, ScalarLike
     from cudf.core.column.categorical import CategoricalColumn
+    from cudf.core.column.datetime import DatetimeColumn
+    from cudf.core.column.decimal import DecimalBaseColumn
+    from cudf.core.column.interval import IntervalColumn
     from cudf.core.column.numerical import NumericalColumn
     from cudf.core.column.strings import StringColumn
+    from cudf.core.column.timedelta import TimeDeltaColumn
     from cudf.core.index import Index
 
 if PANDAS_GE_210:
@@ -1231,7 +1235,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
     def _scatter_by_column(
         self,
-        key: cudf.core.column.NumericalColumn,
+        key: NumericalColumn,
         value: plc.Scalar | ColumnBase,
         bounds_check: bool = True,
     ) -> Self:
@@ -1742,7 +1746,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         return result
 
     def as_categorical_column(
-        self, dtype: cudf.CategoricalDtype
+        self, dtype: CategoricalDtype
     ) -> CategoricalColumn:
         ordered = dtype.ordered
 
@@ -1782,32 +1786,22 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             children=(labels,),
         )
 
-    def as_numerical_column(
-        self, dtype: np.dtype
-    ) -> cudf.core.column.NumericalColumn:
+    def as_numerical_column(self, dtype: np.dtype) -> NumericalColumn:
         raise NotImplementedError
 
-    def as_datetime_column(
-        self, dtype: np.dtype
-    ) -> cudf.core.column.DatetimeColumn:
+    def as_datetime_column(self, dtype: np.dtype) -> DatetimeColumn:
         raise NotImplementedError
 
-    def as_interval_column(
-        self, dtype: IntervalDtype
-    ) -> cudf.core.column.IntervalColumn:
+    def as_interval_column(self, dtype: IntervalDtype) -> IntervalColumn:
         raise NotImplementedError
 
-    def as_timedelta_column(
-        self, dtype: np.dtype
-    ) -> cudf.core.column.TimeDeltaColumn:
+    def as_timedelta_column(self, dtype: np.dtype) -> TimeDeltaColumn:
         raise NotImplementedError
 
     def as_string_column(self) -> StringColumn:
         raise NotImplementedError
 
-    def as_decimal_column(
-        self, dtype: DecimalDtype
-    ) -> cudf.core.column.decimal.DecimalBaseColumn:
+    def as_decimal_column(self, dtype: DecimalDtype) -> DecimalBaseColumn:
         raise NotImplementedError
 
     def apply_boolean_mask(self, mask) -> ColumnBase:
@@ -1823,7 +1817,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         self,
         ascending: bool = True,
         na_position: Literal["first", "last"] = "last",
-    ) -> cudf.core.column.NumericalColumn:
+    ) -> NumericalColumn:
         if (ascending and self.is_monotonic_increasing) or (
             not ascending and self.is_monotonic_decreasing
         ):

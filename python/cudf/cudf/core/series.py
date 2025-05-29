@@ -80,6 +80,7 @@ if TYPE_CHECKING:
         NotImplementedType,
         ScalarLike,
     )
+    from cudf.core.dataframe import DataFrame
 
 
 def _format_percentile_names(percentiles):
@@ -181,7 +182,7 @@ class _SeriesIlocIndexer(_FrameIndexer):
     For integer-location based selection.
     """
 
-    _frame: cudf.Series
+    _frame: Series
 
     @_performance_tracking
     def __getitem__(self, arg):
@@ -1008,7 +1009,7 @@ class Series(SingleColumnFrame, IndexedFrame):
         )
 
     @_performance_tracking
-    def to_frame(self, name: Hashable = no_default) -> cudf.DataFrame:
+    def to_frame(self, name: Hashable = no_default) -> DataFrame:
         """Convert Series into a DataFrame
 
         Parameters
@@ -4343,7 +4344,7 @@ class DatetimeProperties(BaseDatelikeProperties):
         )
 
     @_performance_tracking
-    def isocalendar(self) -> cudf.DataFrame:
+    def isocalendar(self) -> DataFrame:
         """
         Returns a DataFrame with the year, week, and day
         calculated according to the ISO 8601 standard.
@@ -5038,7 +5039,7 @@ class TimedeltaProperties(BaseDatelikeProperties):
 
     @property  # type: ignore
     @_performance_tracking
-    def components(self) -> cudf.DataFrame:
+    def components(self) -> DataFrame:
         """
         Return a Dataframe of the components of the Timedeltas.
 

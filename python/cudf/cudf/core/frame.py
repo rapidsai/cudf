@@ -54,6 +54,7 @@ if TYPE_CHECKING:
     from types import ModuleType
 
     from cudf._typing import Dtype, DtypeObj, ScalarLike
+    from cudf.core.series import Series
 
 
 class Frame(BinaryOperand, Scannable, Serializable):
@@ -799,7 +800,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
     @_performance_tracking
     def fillna(
         self,
-        value: None | ScalarLike | cudf.Series = None,
+        value: None | ScalarLike | Series = None,
         method: Literal["ffill", "bfill", "pad", "backfill", None] = None,
         axis=None,
         inplace: bool = False,
