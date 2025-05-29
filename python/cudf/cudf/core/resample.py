@@ -33,6 +33,7 @@ from cudf.core.groupby.groupby import (
 
 if TYPE_CHECKING:
     from cudf._typing import DataFrameOrSeries
+    from cudf.core.index import Index
 
 
 class _Resampler(GroupBy):
@@ -124,7 +125,7 @@ class SeriesResampler(_Resampler, SeriesGroupBy):
 
 
 class _ResampleGrouping(_Grouping):
-    bin_labels: cudf.Index
+    bin_labels: Index
 
     def __init__(self, obj, by=None, level=None):
         self._freq = getattr(by, "freq", None)

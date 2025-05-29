@@ -15,6 +15,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterable
 
     from cudf._typing import DtypeObj
+    from cudf.core.dtypes import DecimalDtype
 
 np_dtypes_to_pandas_dtypes = {
     np.dtype("uint8"): pd.UInt8Dtype(),
@@ -73,9 +74,7 @@ BOOL_TYPES = {"bool"}
 ALL_TYPES = NUMERIC_TYPES | DATETIME_TYPES | TIMEDELTA_TYPES | OTHER_TYPES
 
 
-def _find_common_type_decimal(
-    dtypes: Iterable[cudf.core.dtypes.DecimalDtype],
-) -> cudf.core.dtypes.DecimalDtype:
+def _find_common_type_decimal(dtypes: Iterable[DecimalDtype]) -> DecimalDtype:
     # Find the largest scale and the largest difference between
     # precision and scale of the columns to be concatenated
     s = max(dtype.scale for dtype in dtypes)
