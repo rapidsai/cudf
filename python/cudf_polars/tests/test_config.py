@@ -240,7 +240,7 @@ def test_validate_max_rows_per_partition(option: str) -> None:
         )
 
 
-@pytest.mark.parametrize("option", ["chunked", "chunk_read_limit", "pass_read_limit"])
+@pytest.mark.parametrize("option", ["chunked", "chunked_writer", "chunk_read_limit", "pass_read_limit"])
 def test_validate_parquet_options(option: str) -> None:
     with pytest.raises(TypeError, match=f"{option} must be"):
         ConfigOptions.from_polars_engine(
