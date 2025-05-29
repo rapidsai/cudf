@@ -632,10 +632,14 @@ inline __device__ void store_validity(int valid_map_offset,
     } else {
       auto validity_map_word_ref =
         cuda::atomic_ref<bitmask_type, cuda::thread_scope_device>(valid_map[word_offset]);
-      validity_map_word_ref.fetch_and(~(relevant_mask << bit_offset),
-                                      cuda::std::memory_order_relaxed);
-      validity_map_word_ref.fetch_or((valid_mask & relevant_mask) << bit_offset,
-                                     cuda::std::memory_order_relaxed);
+      // Update the bitmask word using a Compare and Swap (CAS) operation
+      auto expected_word = validity_map_word_ref.load(cuda::std::memory_order_relaxed);
+      auto desired_word  = bitmask_type{};
+      do {
+        desired_word = (expected_word & ~(relevant_mask << bit_offset)) |
+                       ((valid_mask & relevant_mask) << bit_offset);
+      } while (not validity_map_word_ref.compare_exchange_weak(
+        expected_word, desired_word, cuda::std::memory_order_relaxed));
     }
   }
   // we're going to spill over into the next word.
@@ -651,17 +655,25 @@ inline __device__ void store_validity(int valid_map_offset,
     uint32_t mask_word0    = valid_mask & relevant_mask;
     auto validity_map_first_word_ref =
       cuda::atomic_ref<bitmask_type, cuda::thread_scope_device>(valid_map[word_offset]);
-    validity_map_first_word_ref.fetch_and(~(relevant_mask << bit_offset),
-                                          cuda::std::memory_order_relaxed);
-    validity_map_first_word_ref.fetch_or(mask_word0 << bit_offset, cuda::std::memory_order_relaxed);
+    // Update the bitmask word using a Compare and Swap (CAS) operation
+    auto expected_word = validity_map_first_word_ref.load(cuda::std::memory_order_relaxed);
+    auto desired_word  = bitmask_type{};
+    do {
+      desired_word = (expected_word & ~(relevant_mask << bit_offset)) | (mask_word0 << bit_offset);
+    } while (not validity_map_first_word_ref.compare_exchange_weak(
+      expected_word, desired_word, cuda::std::memory_order_relaxed));
 
     // second word. strip the remainder of the bits off the end and store that
     auto validity_map_second_word_ref =
       cuda::atomic_ref<bitmask_type, cuda::thread_scope_device>(valid_map[word_offset + 1]);
     relevant_mask       = ((1 << (value_count - bits_left)) - 1);
     uint32_t mask_word1 = valid_mask & (relevant_mask << bits_left);
-    validity_map_second_word_ref.fetch_and(~(relevant_mask), cuda::std::memory_order_relaxed);
-    validity_map_second_word_ref.fetch_or(mask_word1 >> bits_left, cuda::std::memory_order_relaxed);
+    expected_word       = validity_map_second_word_ref.load(cuda::std::memory_order_relaxed);
+    // Update the bitmask word in a combined atomic operation
+    do {
+      desired_word = (expected_word & ~relevant_mask) | (mask_word1 >> bits_left);
+    } while (not validity_map_second_word_ref.compare_exchange_weak(
+      expected_word, desired_word, cuda::std::memory_order_relaxed));
   }
 }
 
