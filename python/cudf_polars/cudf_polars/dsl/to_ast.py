@@ -190,7 +190,7 @@ def _(node: expr.BooleanFunction, self: Transformer) -> plc_expr.Expression:
             # 16 is an arbitrary limit
             needle_ref = self(needles)
             if haystack.dtype.id() == plc.TypeId.LIST:
-                # Because we originally translated pl_expr.Literal with a list scalar,
+                # Because we originally translated pl_expr.Literal with a list scalar
                 # to a expr.LiteralColumn, so the actual type is in the inner type
                 plc_dtype = DataType(haystack.dtype.polars.inner).plc
             else:
