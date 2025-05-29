@@ -492,7 +492,7 @@ additional configuration as a set of dataclasses defined in
 # Profiling
 
 You can profile `cudf_polars` using NVIDIA NSight Systems. Each `.collect()` or
-`.sink()` call is has two top-level ranges under the `cudf_polars` domain:
+`.sink()` call has two top-level ranges under the `cudf_polars` domain:
 
 1. `ConvertIR`: measures the time spent converting the polars query plan to
    cudf-polars' IR.
