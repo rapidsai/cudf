@@ -2159,7 +2159,11 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     ) -> Generator[Self, None, None]:
         for cols in copying.columns_split([self], offsets):
             for col in cols:
-                yield type(self).from_pylibcudf(col)
+                yield (  # type: ignore[misc]
+                    type(self)
+                    .from_pylibcudf(col)
+                    ._with_type_metadata(self.dtype)
+                )
 
     @acquire_spill_lock()
     def one_hot_encode(self, categories: ColumnBase) -> Generator[ColumnBase]:
