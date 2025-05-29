@@ -188,7 +188,10 @@ def _(node: expr.BooleanFunction, self: Transformer) -> plc_expr.Expression:
         if isinstance(haystack, expr.LiteralColumn) and len(haystack.value) < 16:
             # 16 is an arbitrary limit
             needle_ref = self(needles)
-            values = (plc_expr.Literal(haystack.dtype, val) for val in haystack.value)
+            values = (
+                plc_expr.Literal(plc.Scalar.from_py(val, haystack.dtype.plc))
+                for val in haystack.value
+            )
             return reduce(
                 partial(plc_expr.Operation, plc_expr.ASTOperator.LOGICAL_OR),
                 (
