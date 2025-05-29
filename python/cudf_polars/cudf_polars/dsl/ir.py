@@ -65,10 +65,14 @@ __all__ = [
     "HStack",
     "Join",
     "MapFunction",
+    "MergeSorted",
     "Projection",
     "PythonScan",
+    "Reduce",
+    "Rolling",
     "Scan",
     "Select",
+    "Sink",
     "Slice",
     "Sort",
     "Union",
@@ -616,51 +620,30 @@ class Scan(IR):
                 options.set_columns(with_columns)
             if filters is not None:
                 options.set_filter(filters)
+            if n_rows != -1:
+                options.set_num_rows(n_rows)
+            if skip_rows != 0:
+                options.set_skip_rows(skip_rows)
             if config_options.parquet_options.chunked:
-                # We handle skip_rows != 0 by reading from the
-                # up to n_rows + skip_rows and slicing off the
-                # first skip_rows entries.
-                # TODO: Remove this workaround once
-                # https://github.com/rapidsai/cudf/issues/16186
-                # is fixed
-                nrows = n_rows + skip_rows
-                if nrows > -1:
-                    options.set_num_rows(nrows)
                 reader = plc.io.parquet.ChunkedParquetReader(
                     options,
                     chunk_read_limit=config_options.parquet_options.chunk_read_limit,
                     pass_read_limit=config_options.parquet_options.pass_read_limit,
                 )
                 chunk = reader.read_chunk()
-                rows_left_to_skip = skip_rows
-
-                def slice_skip(tbl: plc.Table) -> plc.Table:
-                    nonlocal rows_left_to_skip
-                    if rows_left_to_skip > 0:
-                        table_rows = tbl.num_rows()
-                        chunk_skip = min(rows_left_to_skip, table_rows)
-                        # TODO: Check performance impact of skipping this
-                        # call and creating an empty table manually when the
-                        # slice would be empty (chunk_skip == table_rows).
-                        (tbl,) = plc.copying.slice(tbl, [chunk_skip, table_rows])
-                        rows_left_to_skip -= chunk_skip
-                    return tbl
-
-                tbl = slice_skip(chunk.tbl)
+                tbl = chunk.tbl
                 # TODO: Nested column names
                 names = chunk.column_names(include_children=False)
                 concatenated_columns = tbl.columns()
                 while reader.has_next():
                     chunk = reader.read_chunk()
-                    tbl = slice_skip(chunk.tbl)
-
+                    tbl = chunk.tbl
                     for i in range(tbl.num_columns()):
                         concatenated_columns[i] = plc.concatenate.concatenate(
                             [concatenated_columns[i], tbl._columns[i]]
                         )
                         # Drop residual columns to save memory
                         tbl._columns[i] = None
-
                 df = DataFrame.from_table(
                     plc.Table(concatenated_columns),
                     names=names,
@@ -670,10 +653,6 @@ class Scan(IR):
                         include_file_paths, paths, chunk.num_rows_per_source, df
                     )
             else:
-                if n_rows != -1:
-                    options.set_num_rows(n_rows)
-                if skip_rows != 0:
-                    options.set_skip_rows(skip_rows)
                 tbl_w_meta = plc.io.parquet.read_parquet(options)
                 df = DataFrame.from_table(
                     tbl_w_meta.tbl,
@@ -687,7 +666,6 @@ class Scan(IR):
             if filters is not None:
                 # Mask must have been applied.
                 return df
-
         elif typ == "ndjson":
             json_schema: list[plc.io.json.NameAndType] = [
                 (name, typ, []) for name, typ in schema.items()
@@ -868,6 +846,7 @@ class Sink(IR):
         options: dict[str, Any],
         df: DataFrame,
     ) -> DataFrame:
+        """Write the dataframe to a file."""
         target = plc.io.SinkInfo([path])
 
         if options.get("mkdir", False):
@@ -1149,9 +1128,9 @@ class Rolling(IR):
     )
     index: expr.NamedExpr
     """Column being rolled over."""
-    preceding: pa.Scalar
+    preceding: plc.Scalar
     """Preceding window extent defining start of window."""
-    following: pa.Scalar
+    following: plc.Scalar
     """Following window extent defining end of window."""
     closed_window: ClosedInterval
     """Treatment of window endpoints."""
@@ -1166,8 +1145,8 @@ class Rolling(IR):
         self,
         schema: Schema,
         index: expr.NamedExpr,
-        preceding: pa.Scalar,
-        following: pa.Scalar,
+        preceding: plc.Scalar,
+        following: plc.Scalar,
         closed_window: ClosedInterval,
         keys: Sequence[expr.NamedExpr],
         agg_requests: Sequence[expr.NamedExpr],
@@ -1212,14 +1191,15 @@ class Rolling(IR):
     def do_evaluate(
         cls,
         index: expr.NamedExpr,
-        preceding: pa.Scalar,
-        following: pa.Scalar,
+        preceding: plc.Scalar,
+        following: plc.Scalar,
         closed_window: ClosedInterval,
         keys_in: Sequence[expr.NamedExpr],
         aggs: Sequence[expr.NamedExpr],
         zlice: Zlice | None,
         df: DataFrame,
     ) -> DataFrame:
+        """Evaluate and return a dataframe."""
         keys = broadcast(*(k.evaluate(df) for k in keys_in), target_length=df.num_rows)
         orderby = index.evaluate(df)
         # Polars casts integral orderby to int64, but only for calculating window bounds
@@ -2072,6 +2052,7 @@ class MergeSorted(IR):
 
     @classmethod
     def do_evaluate(cls, key: str, *dfs: DataFrame) -> DataFrame:
+        """Evaluate and return a dataframe."""
         left, right = dfs
         right = right.discard_columns(right.column_names_set - left.column_names_set)
         on_col_left = left.select_columns({key})[0]

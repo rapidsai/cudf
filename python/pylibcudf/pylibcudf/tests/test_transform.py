@@ -51,7 +51,7 @@ def test_bools_to_mask_roundtrip():
 
 def test_encode():
     got_tbl, got_col = plc.transform.encode(
-        plc.Table(pa.table({"a": [1, 3, 4], "b": [1, 2, 4]}))
+        plc.Table.from_arrow(pa.table({"a": [1, 3, 4], "b": [1, 2, 4]}))
     )
 
     expect = pa.table(

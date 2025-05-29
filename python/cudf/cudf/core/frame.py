@@ -48,6 +48,7 @@ if TYPE_CHECKING:
     from types import ModuleType
 
     from cudf._typing import Dtype, DtypeObj, ScalarLike
+    from cudf.core.series import Series
 
 
 class Frame(BinaryOperand, Scannable, Serializable):
@@ -179,7 +180,14 @@ class Frame(BinaryOperand, Scannable, Serializable):
         """
         Construct cls from a ColumnAccessor-like mapping.
         """
-        obj = cls.__new__(cls)
+        from cudf.core.index import Index
+
+        if cls is Index:
+            # Because Index.__new__ is overridden as a constructor,
+            # to copy pandas...
+            obj = object.__new__(cls)
+        else:
+            obj = cls.__new__(cls)
         Frame.__init__(obj, data)
         return obj
 
@@ -302,7 +310,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
 
     @property
     @_performance_tracking
-    def empty(self):
+    def empty(self) -> bool:
         """
         Indicator whether DataFrame or Series is empty.
 
@@ -786,7 +794,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
     @_performance_tracking
     def fillna(
         self,
-        value: None | ScalarLike | cudf.Series = None,
+        value: None | ScalarLike | Series = None,
         method: Literal["ffill", "bfill", "pad", "backfill", None] = None,
         axis=None,
         inplace: bool = False,
@@ -1587,10 +1595,9 @@ class Frame(BinaryOperand, Scannable, Serializable):
             self._data._from_columns_like_self(data_columns)
         )
 
-    @classmethod
+    @staticmethod
     @_performance_tracking
     def _colwise_binop(
-        cls,
         operands: dict[str | None, tuple[ColumnBase, Any, bool, Any]],
         fn: str,
     ):
@@ -1659,6 +1666,13 @@ class Frame(BinaryOperand, Scannable, Serializable):
                 if reflect
                 else getattr(operator, fn)(left_column, right_column)
             )
+            if isinstance(outcol, bool) and fn in {"__eq__", "__ne__"}:
+                # Both columns returned NotImplemented, Python compared using is/is not
+                # TODO: A better solution is to ensure each Column._binaryop
+                # implementation accounts for this case.
+                outcol = left_column._all_bools_with_nulls(
+                    right_column, fn != "__eq__"
+                )
 
             if output_mask is not None:
                 outcol = outcol.set_mask(output_mask)

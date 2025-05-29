@@ -39,6 +39,8 @@ if TYPE_CHECKING:
 
     from cudf._typing import Dtype, DtypeObj
     from cudf.core.buffer import Buffer
+    from cudf.core.column.column import ColumnBase
+    from cudf.core.index import Index
 
 
 def dtype(arbitrary: Any) -> DtypeObj:
@@ -190,7 +192,7 @@ class CategoricalDtype(_BaseDtype):
         self._ordered = ordered
 
     @property
-    def categories(self) -> cudf.Index:
+    def categories(self) -> Index:
         """
         An ``Index`` containing the unique categories allowed.
 
@@ -267,9 +269,7 @@ class CategoricalDtype(_BaseDtype):
             categories = self._categories.to_pandas()
         return pd.CategoricalDtype(categories=categories, ordered=self.ordered)
 
-    def _init_categories(
-        self, categories: Any
-    ) -> cudf.core.column.ColumnBase | None:
+    def _init_categories(self, categories: Any) -> ColumnBase | None:
         if categories is None:
             return categories
         if len(categories) == 0 and not isinstance(
@@ -1061,7 +1061,7 @@ def _is_categorical_dtype(obj):
         return True
     if isinstance(
         obj,
-        (cudf.core.index.BaseIndex, cudf.core.column.ColumnBase, cudf.Series),
+        (cudf.Index, cudf.core.column.ColumnBase, cudf.Series),
     ):
         return isinstance(obj.dtype, cudf.CategoricalDtype)
     if isinstance(obj, (pd.Series, pd.Index)):
@@ -1181,7 +1181,7 @@ def _is_interval_dtype(obj):
             ),
         )
         or obj is IntervalDtype
-        or (isinstance(obj, cudf.core.index.BaseIndex) and obj._is_interval())
+        or (isinstance(obj, cudf.Index) and obj._is_interval())
         or (isinstance(obj, str) and obj == IntervalDtype.name)
         or (
             isinstance(
