@@ -7,7 +7,7 @@ import itertools
 import textwrap
 import types
 import warnings
-from collections import abc
+from collections.abc import Mapping
 from functools import cached_property, singledispatch
 from typing import TYPE_CHECKING, Any, Literal
 
@@ -3542,7 +3542,7 @@ class _Grouping(Serializable):
                     self._handle_series(by)
                 elif isinstance(by, Index):
                     self._handle_index(by)
-                elif isinstance(by, abc.Mapping):
+                elif isinstance(by, Mapping):
                     self._handle_mapping(by)
                 elif isinstance(by, Grouper):
                     self._handle_grouper(by)
@@ -3676,7 +3676,7 @@ def _is_multi_agg(aggs):
     Returns True if more than one aggregation is performed
     on any of the columns as specified in `aggs`.
     """
-    if isinstance(aggs, abc.Mapping):
+    if isinstance(aggs, Mapping):
         return any(is_list_like(agg) for agg in aggs.values())
     if is_list_like(aggs):
         return True
