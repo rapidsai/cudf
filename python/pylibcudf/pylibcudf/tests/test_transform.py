@@ -23,7 +23,7 @@ def test_nans_to_nulls(has_nans):
     ]
 
     h_input = pa.array(values, type=pa.float32())
-    input = plc.Column(h_input)
+    input = plc.Column.from_arrow(h_input)
     assert input.null_count() == h_input.null_count
     expect = pa.array(replaced, type=pa.float32())
 
@@ -37,7 +37,7 @@ def test_nans_to_nulls(has_nans):
 
 def test_bools_to_mask_roundtrip():
     pa_array = pa.array([True, None, False])
-    plc_input = plc.Column(pa_array)
+    plc_input = plc.Column.from_arrow(pa_array)
     mask, result_null_count = plc.transform.bools_to_mask(plc_input)
 
     assert result_null_count == 2
@@ -51,7 +51,7 @@ def test_bools_to_mask_roundtrip():
 
 def test_encode():
     got_tbl, got_col = plc.transform.encode(
-        plc.Table(pa.table({"a": [1, 3, 4], "b": [1, 2, 4]}))
+        plc.Table.from_arrow(pa.table({"a": [1, 3, 4], "b": [1, 2, 4]}))
     )
 
     expect = pa.table(
@@ -70,8 +70,8 @@ def test_encode():
 
 
 def test_one_hot_encode():
-    plc_input = plc.Column(pa.array([1, 2, 3]))
-    plc_categories = plc.Column(pa.array([0, 0, 0]))
+    plc_input = plc.Column.from_arrow(pa.array([1, 2, 3]))
+    plc_categories = plc.Column.from_arrow(pa.array([0, 0, 0]))
     got = plc.transform.one_hot_encode(plc_input, plc_categories)
     expect = pa.table(
         [[False] * 3] * 3,
@@ -99,9 +99,9 @@ def test_transform_udf():
     expect = pa.array([(A + B) * C] * 100)
     got = plc.transform.transform(
         [
-            plc.Column(pa.array([A] * 100)),
-            plc.Column(pa.array([B] * 100)),
-            plc.Column(pa.array([C])),
+            plc.Column.from_arrow(pa.array([A] * 100)),
+            plc.Column.from_arrow(pa.array([B] * 100)),
+            plc.Column.from_arrow(pa.array([C])),
         ],
         transform_udf=ptx,
         output_type=plc.DataType(plc.TypeId.FLOAT64),

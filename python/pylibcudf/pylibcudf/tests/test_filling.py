@@ -22,7 +22,7 @@ def pa_table():
 
 def test_fill(pa_col):
     result = plc.filling.fill(
-        plc.Column(pa_col),
+        plc.Column.from_arrow(pa_col),
         1,
         3,
         plc.interop.from_arrow(pa.scalar(5)),
@@ -32,7 +32,7 @@ def test_fill(pa_col):
 
 
 def test_fill_in_place(pa_col):
-    result = plc.Column(pa_col)
+    result = plc.Column.from_arrow(pa_col)
     plc.filling.fill_in_place(
         result,
         1,
@@ -57,7 +57,7 @@ def test_sequence():
 
 
 def test_repeat_with_count_int(pa_table):
-    input_table = plc.Table(pa_table)
+    input_table = plc.Table.from_arrow(pa_table)
     count = 2
     result = plc.filling.repeat(input_table, count)
     expect = pa.table([[1, 1, 2, 2, 3, 3]], names=["a"])
@@ -65,8 +65,8 @@ def test_repeat_with_count_int(pa_table):
 
 
 def test_repeat_with_count_column(pa_table):
-    input_table = plc.Table(pa_table)
-    count = plc.Column(pa.array([1, 2, 3]))
+    input_table = plc.Table.from_arrow(pa_table)
+    count = plc.Column.from_arrow(pa.array([1, 2, 3]))
     result = plc.filling.repeat(input_table, count)
     expect = pa.table([[1] + [2] * 2 + [3] * 3], names=["a"])
     assert_table_eq(expect, result)
