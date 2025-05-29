@@ -26,6 +26,7 @@
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/config_utils.hpp>
+#include <cudf/reduction/detail/reduction.cuh>
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/exec_policy.hpp>
@@ -34,7 +35,6 @@
 #include <thrust/binary_search.h>
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/discard_iterator.h>
-#include <thrust/logical.h>
 #include <thrust/sort.h>
 #include <thrust/transform_scan.h>
 #include <thrust/unique.h>
@@ -961,13 +961,30 @@ struct codec_stats {
     cudf::io::detail::gpu_copy_uncompressed_blocks(d_copy_in, d_copy_out, stream);
   }
 
-  CUDF_EXPECTS(thrust::all_of(rmm::exec_policy(stream),
-                              comp_res.begin(),
-                              comp_res.end(),
-                              [] __device__(auto const& res) {
-                                return res.status == compression_status::SUCCESS;
-                              }),
-               "Error during decompression");
+  bool const all_decompression_success = [&]() -> bool {
+    // reduce with bit_and on bool-iterator to check if all pages have success status (equivalent to
+    // thrust::all_of)
+    std::unique_ptr<scalar> d_reduce_result = cudf::reduction::detail::reduce(
+      thrust::make_transform_iterator(comp_res.begin(),
+                                      [] __device__(auto const& res) -> bool {
+                                        return res.status == compression_status::SUCCESS;
+                                      }),
+      num_comp_pages,
+      cudf::reduction::detail::op::bit_and{},
+      std::optional<bool /**ResultType*/>(std::nullopt),
+      stream,
+      cudf::get_current_device_resource_ref());
+
+    auto h_reduce_result =
+      cudf::detail::make_pinned_vector<bool>(
+        cudf::device_span<bool>{
+          static_cast<cudf::numeric_scalar<bool>*>(d_reduce_result.get())->data(), 1},
+        stream)
+        .front();  // front() to access only one element
+
+    return h_reduce_result;
+  }();
+  CUDF_EXPECTS(all_decompression_success, "Error during decompression");
 
   return {std::move(pass_decomp_pages), std::move(subpass_decomp_pages)};
 }
@@ -1024,24 +1041,61 @@ void detect_malformed_pages(device_span<PageInfo const> pages,
     thrust::make_transform_iterator(pages.begin(), flat_column_num_rows{chunks.data()});
   auto const row_counts_begin = row_counts.begin();
   auto page_keys              = make_page_key_iterator(pages);
-  auto const row_counts_end   = thrust::reduce_by_key(rmm::exec_policy(stream),
-                                                    page_keys,
-                                                    page_keys + pages.size(),
-                                                    size_iter,
-                                                    thrust::make_discard_iterator(),
-                                                    row_counts_begin)
-                                .second;
+
+  // reduce_by_key on page_keys [input keys] and size_iter [input values] resulting in
+  // row_counts_begin [output values]
+  auto d_num_runs_out = cudf::detail::make_pinned_vector_async<cudf::size_type>(1, stream);
+  cudf::reduction::detail::reduce_by_key(page_keys,
+                                         thrust::make_discard_iterator(),  // discarding output keys
+                                         size_iter,
+                                         row_counts_begin,
+                                         d_num_runs_out.data(),
+                                         cudf::reduction::detail::op::sum{},
+                                         pages.size(),
+                                         stream,
+                                         cudf::get_current_device_resource_ref());
+  stream.synchronize();
+  auto const row_counts_end = row_counts_begin + d_num_runs_out.front();
 
   // make sure all non-zero row counts are the same
   rmm::device_uvector<size_type> compacted_row_counts(pages.size(), stream);
   auto const compacted_row_counts_begin = compacted_row_counts.begin();
-  auto const compacted_row_counts_end   = thrust::copy_if(rmm::exec_policy(stream),
-                                                        row_counts_begin,
-                                                        row_counts_end,
-                                                        compacted_row_counts_begin,
-                                                        row_counts_nonzero{});
+
+  auto d_num_selected_out = cudf::detail::make_pinned_vector_async<size_type>(1, stream);
+  {
+    // CUB implementation equivalent to thrust::copy_if with predicate row_counts_nonzero{}
+    rmm::device_buffer d_temp_storage;
+    size_t temp_storage_bytes = 0;
+    const auto num_items      = row_counts_end - row_counts_begin;
+    CUDF_CUDA_TRY(cub::DeviceSelect::If(d_temp_storage.data(),
+                                        temp_storage_bytes,
+                                        row_counts_begin,
+                                        compacted_row_counts_begin,
+                                        d_num_selected_out.data(),
+                                        num_items,
+                                        row_counts_nonzero{},
+                                        stream));
+    d_temp_storage =
+      rmm::device_buffer{temp_storage_bytes, stream, cudf::get_current_device_resource_ref()};
+    CUDF_CUDA_TRY(cub::DeviceSelect::If(d_temp_storage.data(),
+                                        temp_storage_bytes,
+                                        row_counts_begin,
+                                        compacted_row_counts_begin,
+                                        d_num_selected_out.data(),
+                                        num_items,
+                                        row_counts_nonzero{},
+                                        stream));
+    stream.synchronize();
+  }
+  auto const compacted_row_counts_size = d_num_selected_out.front();
+  auto const compacted_row_counts_end  = compacted_row_counts_begin + compacted_row_counts_size;
+
   if (compacted_row_counts_end != compacted_row_counts_begin) {
-    auto const found_row_count = static_cast<size_t>(compacted_row_counts.element(0, stream));
+    // copy compacted_row_counts.element(0) via host pinned memory
+    size_t const found_row_count =
+      cudf::detail::make_pinned_vector<size_type>(
+        cudf::device_span<size_type>{compacted_row_counts.data(), 1}, stream)
+        .front();
 
     // if we somehow don't match the expected row count from the row groups themselves
     if (expected_row_count.has_value()) {
@@ -1050,13 +1104,28 @@ void detect_malformed_pages(device_span<PageInfo const> pages,
     }
 
     // all non-zero row counts must be the same
-    auto const chk =
-      thrust::count_if(rmm::exec_policy(stream),
-                       compacted_row_counts_begin,
-                       compacted_row_counts_end,
-                       row_counts_different{static_cast<size_type>(found_row_count)});
-    CUDF_EXPECTS(chk == 0,
-                 "Encountered malformed parquet page data (row count mismatch in page data)");
+    bool const chk = [&]() -> bool {
+      // reduce with bit_or on bool-iterator to check if any pages having row counts not same
+      // (equivalent to thrust::count_if)
+      std::unique_ptr<scalar> d_reduce_result = cudf::reduction::detail::reduce(
+        thrust::make_transform_iterator(
+          compacted_row_counts_begin,
+          row_counts_different{static_cast<size_type>(found_row_count)}),
+        compacted_row_counts_size,
+        cudf::reduction::detail::op::bit_or{},
+        std::optional<bool /**ResultType*/>(std::nullopt),
+        stream,
+        cudf::get_current_device_resource_ref());
+
+      auto h_reduce_result =
+        cudf::detail::make_pinned_vector<bool>(
+          cudf::device_span<bool>{
+            static_cast<cudf::numeric_scalar<bool>*>(d_reduce_result.get())->data(), 1},
+          stream)
+          .front();  // front() to access only one element
+      return h_reduce_result;
+    }();
+    CUDF_EXPECTS(!chk, "Encountered malformed parquet page data (row count mismatch in page data)");
   }
 }
 
@@ -1272,9 +1341,24 @@ void reader::impl::setup_next_pass(read_mode mode)
     // subpasses
     auto chunk_iter =
       thrust::make_transform_iterator(pass.chunks.d_begin(), get_chunk_compressed_size{});
-    pass.base_mem_size =
-      decomp_dict_data_size +
-      thrust::reduce(rmm::exec_policy(_stream), chunk_iter, chunk_iter + pass.chunks.size());
+
+    // reduce chunk_iter with sum to compute the total compressed size after stream-sync
+    std::unique_ptr<scalar> d_reduce_result =
+      cudf::reduction::detail::reduce(chunk_iter,
+                                      pass.chunks.size(),
+                                      cudf::reduction::detail::op::sum{},
+                                      std::optional<size_t /**ResultType*/>(0),
+                                      _stream,
+                                      cudf::get_current_device_resource_ref());
+
+    auto h_reduce_result =
+      cudf::detail::make_pinned_vector<size_t>(
+        cudf::device_span<size_t>{
+          static_cast<cudf::numeric_scalar<size_t>*>(d_reduce_result.get())->data(), 1},
+        _stream)
+        .front();  // front() to access only one element
+
+    pass.base_mem_size = pass.decomp_dict_data.size() + h_reduce_result;
 
     // if we are doing subpass reading, generate more accurate num_row estimates for list columns.
     // this helps us to generate more accurate subpass splits.

@@ -24,6 +24,7 @@
 #include <cudf/detail/utilities/functional.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/reduction/detail/reduction.cuh>
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/exec_policy.hpp>
@@ -608,13 +609,27 @@ void decode_page_headers(pass_intermediate_data& pass,
       return static_cast<int>(
         max(c.level_bits[level_type::REPETITION], c.level_bits[level_type::DEFINITION]));
     }));
+
   // max level data bit size.
-  int const max_level_bits = thrust::reduce(rmm::exec_policy(stream),
-                                            level_bit_size,
-                                            level_bit_size + pass.chunks.size(),
-                                            0,
-                                            cudf::detail::maximum<int>());
-  pass.level_type_size     = std::max(1, cudf::util::div_rounding_up_safe(max_level_bits, 8));
+  int const max_level_bits = [&]() {
+    // reduce level_bit_size with max to compute max_level_bits
+    std::unique_ptr<scalar> d_reduce_result =
+      cudf::reduction::detail::reduce(level_bit_size,
+                                      pass.chunks.size(),
+                                      cudf::reduction::detail::op::max{},
+                                      std::optional<int /**ResultType*/>(std::nullopt),
+                                      stream,
+                                      cudf::get_current_device_resource_ref());
+    auto h_reduce_result =
+      cudf::detail::make_pinned_vector<int>(
+        cudf::device_span<int>{
+          static_cast<cudf::numeric_scalar<int>*>(d_reduce_result.get())->data(), 1},
+        stream)
+        .front();  // front() to access only one element
+    return h_reduce_result;
+  }();
+
+  pass.level_type_size = std::max(1, cudf::util::div_rounding_up_safe(max_level_bits, 8));
 
   // sort the pages in chunk/schema order.
   pass.pages = sort_pages(unsorted_pages, pass.chunks, stream);
@@ -624,14 +639,23 @@ void decode_page_headers(pass_intermediate_data& pass,
   //
   // result:      0,          4,          8
   rmm::device_uvector<size_type> page_counts(pass.pages.size() + 1, stream);
-  auto page_keys             = make_page_key_iterator(pass.pages);
-  auto const page_counts_end = thrust::reduce_by_key(rmm::exec_policy(stream),
-                                                     page_keys,
-                                                     page_keys + pass.pages.size(),
-                                                     thrust::make_constant_iterator(1),
-                                                     thrust::make_discard_iterator(),
-                                                     page_counts.begin())
-                                 .second;
+  auto page_keys = make_page_key_iterator(pass.pages);
+
+  // reduce_by_key on page_keys [input keys] and constant_iterator [input values] resulting in
+  // page_counts [output values]
+  auto d_num_runs_out = cudf::detail::make_pinned_vector_async<cudf::size_type>(1, stream);
+  cudf::reduction::detail::reduce_by_key(page_keys,
+                                         thrust::make_discard_iterator(),  // discarding output keys
+                                         thrust::make_constant_iterator(1),
+                                         page_counts.begin(),
+                                         d_num_runs_out.data(),
+                                         cudf::reduction::detail::op::sum{},
+                                         pass.pages.size(),
+                                         stream,
+                                         cudf::get_current_device_resource_ref());
+  stream.synchronize();
+  auto const page_counts_end = page_counts.begin() + d_num_runs_out.front();
+
   auto const num_page_counts = page_counts_end - page_counts.begin();
   pass.page_offsets          = rmm::device_uvector<size_type>(num_page_counts + 1, stream);
   thrust::exclusive_scan(rmm::exec_policy_nosync(stream),
@@ -760,8 +784,24 @@ void reader::impl::build_string_dict_indices()
                    pass.pages.d_end(),
                    set_str_dict_index_count{str_dict_index_count, pass.chunks});
 
-  size_t const total_str_dict_indexes = thrust::reduce(
-    rmm::exec_policy(_stream), str_dict_index_count.begin(), str_dict_index_count.end());
+  size_t const total_str_dict_indexes = [&]() {
+    // reduce str_dict_index_count with sum to compute total_str_dict_indexes
+    std::unique_ptr<scalar> d_reduce_result =
+      cudf::reduction::detail::reduce(str_dict_index_count.begin(),
+                                      str_dict_index_count.size(),
+                                      cudf::reduction::detail::op::sum{},
+                                      std::optional<size_t /**ResultType*/>(std::nullopt),
+                                      _stream,
+                                      cudf::get_current_device_resource_ref());
+    auto h_reduce_result =
+      cudf::detail::make_pinned_vector<size_t>(
+        cudf::device_span<size_t>{
+          static_cast<cudf::numeric_scalar<size_t>*>(d_reduce_result.get())->data(), 1},
+        _stream)
+        .front();  // front() to access only one element
+    return h_reduce_result;
+  }();
+
   if (total_str_dict_indexes == 0) { return; }
 
   // convert to offsets
@@ -1741,14 +1781,20 @@ cudf::detail::host_vector<size_t> reader::impl::calculate_page_string_offsets()
                                 page_offset_output_iter{subpass.pages.device_ptr()});
 
   // now sum up page sizes
-  rmm::device_uvector<int> reduce_keys(d_col_sizes.size(), _stream);
-  thrust::reduce_by_key(rmm::exec_policy_nosync(_stream),
-                        page_keys,
-                        page_keys + subpass.pages.size(),
-                        val_iter,
-                        reduce_keys.begin(),
-                        d_col_sizes.begin());
 
+  // reduce_by_key on page_keys [input keys] and val_iter [input values] resulting in
+  // d_col_sizes [output values]
+  auto d_num_runs_out = cudf::detail::make_pinned_vector_async<cudf::size_type>(1, _stream);
+  cudf::reduction::detail::reduce_by_key(page_keys,
+                                         thrust::make_discard_iterator(),
+                                         val_iter,
+                                         d_col_sizes.begin(),
+                                         d_num_runs_out.data(),
+                                         cudf::reduction::detail::op::sum{},
+                                         subpass.pages.size(),
+                                         _stream,
+                                         cudf::get_current_device_resource_ref());
+  _stream.synchronize();
   return cudf::detail::make_host_vector(d_col_sizes, _stream);
 }
 

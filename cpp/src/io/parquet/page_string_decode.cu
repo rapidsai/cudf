@@ -23,9 +23,9 @@
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/functional.hpp>
 #include <cudf/detail/utilities/stream_pool.hpp>
+#include <cudf/reduction/detail/reduction.cuh>
 #include <cudf/strings/detail/gather.cuh>
 
-#include <thrust/logical.h>
 #include <thrust/transform_scan.h>
 
 #include <bitset>
@@ -996,12 +996,27 @@ void ComputePageStringSizes(cudf::detail::hostdevice_span<PageInfo> pages,
   cudf::detail::join_streams(streams, stream);
 
   // check for needed temp space for DELTA_BYTE_ARRAY
-  auto const need_sizes =
-    thrust::any_of(rmm::exec_policy(stream),
-                   pages.device_begin(),
-                   pages.device_end(),
-                   cuda::proclaim_return_type<bool>(
-                     [] __device__(auto& page) { return page.temp_string_size != 0; }));
+  bool const need_sizes = [&]() -> bool {
+    // reduce with bit_or on bool-iterator to check if any pages needing temp space (equivalent to
+    // thrust::any_of)
+    std::unique_ptr<scalar> d_reduce_result = cudf::reduction::detail::reduce(
+      thrust::make_transform_iterator(
+        pages.device_begin(),
+        [] __device__(auto const& page) -> bool { return page.temp_string_size != 0; }),
+      pages.size(),
+      cudf::reduction::detail::op::bit_or{},
+      std::optional<bool /**ResultType*/>(std::nullopt),
+      stream,
+      cudf::get_current_device_resource_ref());
+
+    auto h_reduce_result =
+      cudf::detail::make_pinned_vector<bool>(
+        cudf::device_span<bool>{
+          static_cast<cudf::numeric_scalar<bool>*>(d_reduce_result.get())->data(), 1},
+        stream)
+        .front();  // front() to access only one element
+    return h_reduce_result;
+  }();
 
   if (need_sizes) {
     // sum up all of the temp_string_sizes

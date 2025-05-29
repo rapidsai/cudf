@@ -50,9 +50,14 @@ void batched_memset(std::vector<cudf::device_span<T>> const& bufs,
   // define task and bytes parameters
   auto const num_bufs = bufs.size();
 
+  auto host_pinned_bufs = cudf::detail::make_pinned_vector_async<cudf::device_span<T>>(
+    bufs, stream);  // host pageble -> host pinned memory
+
   // copy bufs into device memory and then get sizes
-  auto gpu_bufs =
-    cudf::detail::make_device_uvector_async(bufs, stream, cudf::get_current_device_resource_ref());
+  auto gpu_bufs = cudf::detail::make_device_uvector_async(
+    host_pinned_bufs,
+    stream,
+    cudf::get_current_device_resource_ref());  // host pinned -> device memory
 
   // get a vector with the sizes of all buffers
   auto sizes = thrust::make_transform_iterator(

@@ -18,12 +18,12 @@
 #include "page_decode.cuh"
 
 #include <cudf/detail/utilities/batched_memcpy.hpp>
+#include <cudf/reduction/detail/reduction.cuh>
 
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/std/iterator>
 #include <thrust/iterator/transform_iterator.h>
-#include <thrust/reduce.h>
 
 namespace cudf::io::parquet::detail {
 
@@ -475,11 +475,22 @@ uint32_t GetAggregatedDecodeKernelMask(cudf::detail::hostdevice_span<PageInfo co
 {
   // determine which kernels to invoke
   auto mask_iter = thrust::make_transform_iterator(pages.device_begin(), mask_tform{});
-  return thrust::reduce(rmm::exec_policy(stream),
-                        mask_iter,
-                        mask_iter + pages.size(),
-                        0U,
-                        cuda::std::bit_or<uint32_t>{});
+
+  // reduce mask_iter with bit_or to compute the return value
+  std::unique_ptr<cudf::scalar> d_reduce_result =
+    cudf::reduction::detail::reduce(mask_iter,
+                                    pages.size(),
+                                    cudf::reduction::detail::op::bit_or{},
+                                    std::optional<uint32_t /**ResultType*/>(std::nullopt),
+                                    stream,
+                                    cudf::get_current_device_resource_ref());
+  auto h_reduce_result =
+    cudf::detail::make_pinned_vector<uint32_t>(
+      cudf::device_span<uint32_t>{
+        static_cast<cudf::numeric_scalar<uint32_t>*>(d_reduce_result.get())->data(), 1},
+      stream)
+      .front();  // front() to access only one element
+  return h_reduce_result;
 }
 
 /**
@@ -538,9 +549,14 @@ void WriteFinalOffsets(host_span<size_type const> offsets,
                        host_span<size_type* const> buff_addrs,
                        rmm::cuda_stream_view stream)
 {
+  // copy offsets and buff_addrs into host pinned memory
+  auto host_pinned_offsets = cudf::detail::make_pinned_vector_async<size_type>(offsets, stream);
+  auto host_pinned_buff_addrs =
+    cudf::detail::make_pinned_vector_async<size_type*>(buff_addrs, stream);
+
   // Copy offsets to device and create an iterator
   auto d_src_data = cudf::detail::make_device_uvector_async(
-    offsets, stream, cudf::get_current_device_resource_ref());
+    host_pinned_offsets, stream, cudf::get_current_device_resource_ref());
   // Iterator for the source (scalar) data
   auto src_iter = thrust::make_transform_iterator(
     thrust::make_counting_iterator<std::size_t>(0),
@@ -549,7 +565,7 @@ void WriteFinalOffsets(host_span<size_type const> offsets,
 
   // Copy buffer addresses to device and create an iterator
   auto d_dst_addrs = cudf::detail::make_device_uvector_async(
-    buff_addrs, stream, cudf::get_current_device_resource_ref());
+    host_pinned_buff_addrs, stream, cudf::get_current_device_resource_ref());
   // size_iter is simply a constant iterator of sizeof(size_type) bytes.
   auto size_iter = thrust::make_constant_iterator(sizeof(size_type));
 
