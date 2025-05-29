@@ -105,7 +105,7 @@ def test_sink_parquet(
             "row_group_size": row_group_size,
         },
         engine=pl.GPUEngine(
-            raise_on_fail=True, parquet_options={"chunked": is_chunked}
+            raise_on_fail=True, parquet_options={"chunked_writer": is_chunked}
         ),
     )
 
