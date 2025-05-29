@@ -57,15 +57,11 @@ requirements:
     - dlpack >=0.8,<1.0
     - libcudf =${{ version }}
     - rmm =${{ minor_version }}
-    - if: cuda_major == "11"
+    - cuda-cudart-dev
+    - cuda-nvrtc
+    - if: linux and x86_64
       then:
-        - cudatoolkit
-      else:
-        - cuda-cudart-dev
-        - cuda-nvrtc
-        - if: linux and x86_64
-          then:
-            - libcufile-dev
+        - libcufile-dev
     - cuda-version =${{ cuda_version }}
   run:
     - python
@@ -76,25 +72,21 @@ requirements:
     - libcudf =${{ version }}
     - ${{ pin_compatible("rmm", upper_bound="x.x") }}
     - fsspec >=0.6.0
-    - if: cuda_major == "11"
-      then:
-        - cuda-python >=11.8.5,<12.0a0
-      else:
-        - cuda-python >=12.6.2,<13.0a0
+    - cuda-python >=12.6.2,<13.0a0
     - nvtx >=0.2.1
     - packaging
   ignore_run_exports:
     from_package:
-      - if: cuda_major != "11"
+      - ${{ compiler("c") }}
+      - ${{ compiler("cxx") }}
+      - ${{ compiler("cuda") }}
+      - ${{ stdlib("c") }}
+      - cuda-cudart-dev
+      - if: linux and x86_64
         then:
-          - cuda-cudart-dev
-          - if: linux and x86_64
-            then:
-              - libcufile-dev
+          - libcufile-dev
     by_name:
       - cuda-version
-      - if: cuda_major == "11"
-        then: cudatoolkit
 
 tests:
   - python:
