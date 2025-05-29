@@ -111,14 +111,16 @@ def test_parquet_options(executor: str) -> None:
         )
     )
     assert config.parquet_options.chunked is True
+    assert config.parquet_options.chunked_writer is False
 
     config = ConfigOptions.from_polars_engine(
         pl.GPUEngine(
             executor=executor,
-            parquet_options={"chunked": False},
+            parquet_options={"chunked": False, "chunked_writer": True},
         )
     )
     assert config.parquet_options.chunked is False
+    assert config.parquet_options.chunked_writer is True
 
 
 def test_validate_streaming_executor_shuffle_method() -> None:

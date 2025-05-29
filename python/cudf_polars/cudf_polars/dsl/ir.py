@@ -923,7 +923,7 @@ class Sink(IR):
             data_page_size = options.get("data_page_size")
             row_group_size = options.get("row_group_size")
 
-            if config_options.parquet_options.chunked:
+            if config_options.parquet_options.chunked_writer:
                 builder = plc.io.parquet.ChunkedParquetWriterOptions.builder(
                     target
                 ).metadata(metadata)
