@@ -47,7 +47,9 @@ def lists_column():
 
 
 def test_concatenate_rows(test_data):
-    plc_tbl = plc.Table(pa.Table.from_arrays(test_data[0], names=["a", "b"]))
+    plc_tbl = plc.Table.from_arrow(
+        pa.Table.from_arrays(test_data[0], names=["a", "b"])
+    )
 
     got = plc.lists.concatenate_rows(plc_tbl)
 

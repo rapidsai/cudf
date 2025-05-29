@@ -3,11 +3,15 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, TypeAlias
+from typing import TYPE_CHECKING, Any, TypeAlias
 
 import cudf
 from cudf.api.types import _is_scalar_or_zero_d_array, is_integer
 from cudf.core.copy_types import BooleanMask, GatherMap
+
+if TYPE_CHECKING:
+    from cudf.core.dataframe import DataFrame
+    from cudf.core.series import Series
 
 
 class EmptyIndexer:
@@ -52,7 +56,7 @@ ColumnLabels: TypeAlias = list[str]
 
 
 def destructure_iloc_key(
-    key: Any, frame: cudf.Series | cudf.DataFrame
+    key: Any, frame: Series | DataFrame
 ) -> tuple[Any, ...]:
     """
     Destructure a potentially tuple-typed key into row and column indexers.
@@ -116,7 +120,7 @@ def destructure_iloc_key(
 
 
 def destructure_dataframe_iloc_indexer(
-    key: Any, frame: cudf.DataFrame
+    key: Any, frame: DataFrame
 ) -> tuple[Any, tuple[bool, ColumnLabels]]:
     """Destructure an index key for DataFrame iloc getitem.
 
@@ -164,7 +168,7 @@ def destructure_dataframe_iloc_indexer(
     return rows, (scalar, column_names)
 
 
-def destructure_series_iloc_indexer(key: Any, frame: cudf.Series) -> Any:
+def destructure_series_iloc_indexer(key: Any, frame: Series) -> Any:
     """Destructure an index key for Series iloc getitem.
 
     Parameters
