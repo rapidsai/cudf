@@ -13,7 +13,6 @@ __all__ = [
     "CharacterNormalizer"
     "normalize_characters",
     "normalize_spaces",
-    "characters_normalize"
 ]
 
 cdef class CharacterNormalizer:
@@ -54,37 +53,6 @@ cpdef Column normalize_spaces(Column input):
 
     with nogil:
         c_result = cpp_normalize.normalize_spaces(input.view())
-
-    return Column.from_libcudf(move(c_result))
-
-
-cpdef Column characters_normalize(Column input, bool do_lower_case):
-    """
-    Normalizes strings characters for tokenizing.
-
-    For details, see :cpp:func:`normalize_characters`
-
-    Parameters
-    ----------
-    input : Column
-        Input strings
-    do_lower_case : bool
-        If true, upper-case characters are converted to lower-case
-        and accents are stripped from those characters. If false,
-        accented and upper-case characters are not transformed.
-
-    Returns
-    -------
-    Column
-        Normalized strings column
-    """
-    cdef unique_ptr[column] c_result
-
-    with nogil:
-        c_result = cpp_normalize.normalize_characters(
-            input.view(),
-            do_lower_case
-        )
 
     return Column.from_libcudf(move(c_result))
 
