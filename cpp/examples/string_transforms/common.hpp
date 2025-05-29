@@ -100,6 +100,7 @@ int main(int argc, char const** argv)
     std::string{argc > 5 ? std::string(argv[5]) : std::string("cuda")};
 
   auto resource = create_memory_resource(memory_resource_name);
+  auto stream   = cudf::get_default_stream();
   cudf::set_current_device_resource(resource.get());
 
   cudf::io::csv_reader_options in_opts =
@@ -114,8 +115,13 @@ int main(int argc, char const** argv)
 
   // TODO(lamarrr): make the transform return a table instead since the data is now sampled
 
+  stream.synchronize();
+
   auto start  = std::chrono::steady_clock::now();
   auto result = transform(table_view);
+
+  // ensure transform operation completes and the wall-time is only for the transform computation
+  stream.synchronize();
 
   std::chrono::duration<double> elapsed = std::chrono::steady_clock::now() - start;
 

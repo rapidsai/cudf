@@ -38,6 +38,12 @@ target_compile_options(output_public PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_
 target_link_libraries(output_public PRIVATE cudf::cudf nvToolsExt)
 install(TARGETS output_public DESTINATION bin/examples/libcudf)
 
+add_executable(preallocated preallocated.cpp)
+target_compile_features(preallocated PRIVATE cxx_std_17)
+target_compile_options(preallocated PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>")
+target_link_libraries(preallocated PRIVATE cudf::cudf nvToolsExt)
+install(TARGETS preallocated DESTINATION bin/examples/libcudf)
+
 add_executable(preallocated_public preallocated_public.cpp)
 target_compile_features(preallocated_public PRIVATE cxx_std_17)
 target_compile_options(preallocated_public PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>")
