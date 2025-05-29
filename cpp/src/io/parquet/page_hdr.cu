@@ -617,12 +617,11 @@ void decode_page_headers(ColumnChunkDesc* chunks,
                 "Block size for decode page headers kernel must be a multiple of warp size");
 
   auto constexpr num_warps_per_block = decode_page_headers_block_size / cudf::detail::warp_size;
+  auto const num_blocks =
+    cudf::util::div_rounding_up_safe(num_chunks, num_warps_per_block);  // 1 warp per chunk
 
-  auto const num_blocks = cudf::util::div_rounding_up_safe(
-    num_chunks, num_warps_per_block);  // 1 warp per chunk, 4 warps per block
   dim3 dim_block(decode_page_headers_block_size, 1);
-  dim3 dim_grid(num_blocks,
-                1);  // 1 chunk per warp, 4 warps per block
+  dim3 dim_grid(num_blocks, 1);
 
   decode_page_headers_kernel<<<dim_grid, dim_block, 0, stream.value()>>>(
     chunks, chunk_pages, num_chunks, error_code);
