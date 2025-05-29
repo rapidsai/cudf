@@ -12,11 +12,6 @@ cdef extern from "nvtext/normalize.hpp" namespace "nvtext" nogil:
         const column_view & strings
     ) except +libcudf_exception_handler
 
-    cdef unique_ptr[column] normalize_characters(
-        const column_view & strings,
-        bool do_lower_case
-    ) except +libcudf_exception_handler
-
     cdef struct character_normalizer "nvtext::character_normalizer":
         pass
 
