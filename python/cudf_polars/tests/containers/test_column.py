@@ -68,7 +68,7 @@ def test_shallow_copy():
 def test_mask_nans(typeid):
     dtype = plc.DataType(typeid)
     values = pyarrow.array([0, 0, 0], type=plc.interop.to_arrow(dtype))
-    column = Column(plc.Column(values))
+    column = Column(plc.Column.from_arrow(values))
     masked = column.mask_nans()
     assert column.null_count == masked.null_count
 
@@ -76,7 +76,7 @@ def test_mask_nans(typeid):
 def test_mask_nans_float():
     dtype = plc.DataType(plc.TypeId.FLOAT32)
     values = pyarrow.array([0, 0, float("nan")], type=plc.interop.to_arrow(dtype))
-    column = Column(plc.Column(values))
+    column = Column(plc.Column.from_arrow(values))
     masked = column.mask_nans()
     expect = pyarrow.array([0, 0, None], type=plc.interop.to_arrow(dtype))
     got = pyarrow.array(plc.interop.to_arrow(masked.obj))
