@@ -804,7 +804,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_reverseStringsOrLists(JNI
       default:
         JNI_THROW_NEW(env,
                       cudf::jni::ILLEGAL_ARG_EXCEPTION_CLASS,
-                      "In of type string or list is required for reverse()",
+                      "A column of type string or list is required for reverse()",
                       0);
     }
   }
