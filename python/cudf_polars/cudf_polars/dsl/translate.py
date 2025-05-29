@@ -825,12 +825,7 @@ def _(
     inner = translator.translate_expr(n=node.expr, schema=schema)
     # Push casts into literals so we can handle Cast(Literal(Null))
     if isinstance(inner, expr.Literal):
-        plc_column = plc.Column.from_scalar(
-            plc.Scalar.from_py(inner.value, inner.dtype.plc), 1
-        )
-        casted_column = plc.unary.cast(plc_column, dtype.plc)
-        casted_py_scalar = plc.copying.get_element(casted_column, 0).to_py()
-        return expr.Literal(dtype, casted_py_scalar)
+        return inner.astype(dtype)
     elif isinstance(inner, expr.Cast):
         # Translation of Len/Count-agg put in a cast, remove double
         # casts if we have one.

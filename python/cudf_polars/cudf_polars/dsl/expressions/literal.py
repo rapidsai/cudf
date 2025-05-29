@@ -54,6 +54,24 @@ class Literal(Expr):
             "Not expecting to require agg request of literal"
         )  # pragma: no cover
 
+    def astype(self, dtype: DataType) -> Literal:
+        """Cast self to dtype."""
+        # Avoid casting with pylibcudf as much as possible
+        # since these are just Python scalars
+        if self.value is None:
+            return Literal(dtype, self.value)
+        elif dtype.id() == plc.TypeId.STRING:
+            return Literal(dtype, str(self.value))
+        elif dtype.id() == plc.TypeId.BOOL8:
+            return Literal(dtype, bool(self.value))
+        else:
+            plc_column = plc.Column.from_scalar(
+                plc.Scalar.from_py(self.value, self.dtype.plc), 1
+            )
+            casted_column = plc.unary.cast(plc_column, dtype.plc)
+            casted_py_scalar = plc.copying.get_element(casted_column, 0).to_py()
+            return Literal(dtype, casted_py_scalar)
+
 
 class LiteralColumn(Expr):
     __slots__ = ("value",)
