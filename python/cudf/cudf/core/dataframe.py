@@ -67,6 +67,7 @@ from cudf.core.dtypes import (
     Decimal32Dtype,
     Decimal64Dtype,
     Decimal128Dtype,
+    IntervalDtype,
     StructDtype,
 )
 from cudf.core.groupby.groupby import DataFrameGroupBy, groupby_doc_template
@@ -8646,7 +8647,7 @@ def from_pandas(obj, nan_as_null=no_default):
     elif isinstance(obj, pd.CategoricalDtype):
         return CategoricalDtype.from_pandas(obj)
     elif isinstance(obj, pd.IntervalDtype):
-        return CategoricalDtype.from_pandas(obj)
+        return IntervalDtype.from_pandas(obj)
     else:
         raise TypeError(
             f"from_pandas unsupported for object of type {type(obj).__name__}"
