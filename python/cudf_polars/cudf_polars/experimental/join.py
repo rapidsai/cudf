@@ -362,8 +362,13 @@ def _(
         getit_name = f"getit-{out_name}"
         inter_name = f"inter-{out_name}"
 
+        # Split each large partition if we have
+        # multiple small partitions (unless this
+        # is an inner join)
+        split_large = ir.options[0] != "Inner" and small_size > 1
+
         for part_out in range(out_size):
-            if ir.options[0] != "Inner":
+            if split_large:
                 graph[(split_name, part_out)] = (
                     _partition_dataframe,
                     (large_name, part_out),
@@ -374,7 +379,7 @@ def _(
             _concat_list = []
             for j in range(small_size):
                 left_key: tuple[str, int] | tuple[str, int, int]
-                if ir.options[0] != "Inner":
+                if split_large:
                     left_key = (getit_name, part_out, j)
                     graph[left_key] = (operator.getitem, (split_name, part_out), j)
                 else:
