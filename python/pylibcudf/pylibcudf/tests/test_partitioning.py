@@ -11,7 +11,7 @@ import pylibcudf as plc
 def partitioning_data():
     data = {"a": [1, 2, 3], "b": [1, 2, 5], "c": [1, 2, 10]}
     pa_table = pa.table(data)
-    plc_table = plc.Table(pa_table)
+    plc_table = plc.Table.from_arrow(pa_table)
     return data, plc_table, pa_table
 
 

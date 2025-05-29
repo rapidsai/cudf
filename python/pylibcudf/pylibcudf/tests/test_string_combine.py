@@ -9,7 +9,7 @@ import pylibcudf as plc
 
 
 def test_concatenate_scalar_seperator():
-    plc_table = plc.Table(
+    plc_table = plc.Table.from_arrow(
         pa.table({"a": ["a", None, "c"], "b": ["a", "b", None]})
     )
     sep = plc.interop.from_arrow(pa.scalar("-"))
@@ -36,7 +36,7 @@ def test_concatenate_scalar_seperator():
 
 
 def test_concatenate_column_seperator():
-    plc_table = plc.Table(
+    plc_table = plc.Table.from_arrow(
         pa.table({"a": ["a", None, "c"], "b": ["a", "b", None]})
     )
     sep = plc.Column.from_arrow(pa.array(["-", "?", ","]))

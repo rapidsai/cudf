@@ -120,14 +120,14 @@ def mutable_target_column(target_column):
 def source_table(input_column):
     pa_input_column, _ = input_column
     pa_table = pa.table([pa_input_column] * 3, [""] * 3)
-    return pa_table, plc.Table(pa_table)
+    return pa_table, plc.Table.from_arrow(pa_table)
 
 
 @pytest.fixture(scope="module")
 def target_table(target_column):
     pa_target_column, _ = target_column
     pa_table = pa.table([pa_target_column] * 3, [""] * 3)
-    return pa_table, plc.Table(pa_table)
+    return pa_table, plc.Table.from_arrow(pa_table)
 
 
 @pytest.fixture(scope="module")
@@ -365,7 +365,7 @@ def test_scatter_table_type_mismatch(source_table, index_column, target_table):
         ncol = plc_source_table.num_columns()
         pa_table = pa.table([pa_array] * ncol, [""] * ncol)
         plc.copying.scatter(
-            plc.Table(pa_table),
+            plc.Table.from_arrow(pa_table),
             plc_index_column,
             plc_target_table,
         )
