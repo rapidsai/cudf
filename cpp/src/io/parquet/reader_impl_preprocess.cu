@@ -1577,7 +1577,7 @@ void reader::impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num
   // if we have any list columns that need further processing.
   bool has_lists = false;
   // Casting to std::byte since data buffer pointer is void *
-  std::vector<cudf::device_span<std::byte>> memset_bufs;
+  std::vector<cudf::device_span<cuda::std::byte>> memset_bufs;
   // Validity Buffer is a uint32_t pointer
   std::vector<cudf::device_span<cudf::bitmask_type>> nullmask_bufs;
 
@@ -1605,7 +1605,8 @@ void reader::impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num
                      std::overflow_error);
         out_buf.create_with_mask(
           out_buf_size, cudf::mask_state::UNINITIALIZED, false, _stream, _mr);
-        memset_bufs.emplace_back(static_cast<std::byte*>(out_buf.data()), out_buf.data_size());
+        memset_bufs.emplace_back(static_cast<cuda::std::byte*>(out_buf.data()),
+                                 out_buf.data_size());
         nullmask_bufs.emplace_back(
           out_buf.null_mask(),
           cudf::util::round_up_safe(out_buf.null_mask_size(), sizeof(cudf::bitmask_type)) /
@@ -1720,7 +1721,8 @@ void reader::impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num
           // we're going to start null mask as all valid and then turn bits off if necessary
           out_buf.create_with_mask(
             buffer_size, cudf::mask_state::UNINITIALIZED, false, _stream, _mr);
-          memset_bufs.emplace_back(static_cast<std::byte*>(out_buf.data()), out_buf.data_size());
+          memset_bufs.emplace_back(static_cast<cuda::std::byte*>(out_buf.data()),
+                                   out_buf.data_size());
           nullmask_bufs.emplace_back(
             out_buf.null_mask(),
             cudf::util::round_up_safe(out_buf.null_mask_size(), sizeof(cudf::bitmask_type)) /
@@ -1730,9 +1732,10 @@ void reader::impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num
     }
   }
 
-  cudf::detail::batched_memset(memset_bufs, static_cast<std::byte>(0), _stream);
+  cudf::detail::batched_memset<cuda::std::byte>(
+    memset_bufs, static_cast<cuda::std::byte>(0), _stream);
   // Need to set null mask bufs to all high bits
-  cudf::detail::batched_memset(
+  cudf::detail::batched_memset<cudf::bitmask_type>(
     nullmask_bufs, std::numeric_limits<cudf::bitmask_type>::max(), _stream);
 }
 

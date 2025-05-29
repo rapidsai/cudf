@@ -16,7 +16,9 @@ def input_col():
     "delimiter", [None, plc.interop.from_arrow(pa.scalar("."))]
 )
 def test_tokenize_scalar(input_col, delimiter):
-    got = plc.nvtext.tokenize.tokenize_scalar(plc.Column(input_col), delimiter)
+    got = plc.nvtext.tokenize.tokenize_scalar(
+        plc.Column.from_arrow(input_col), delimiter
+    )
     if delimiter is None:
         expect = pa.array(["a", "b", "c", "d.e:f;"])
     else:
@@ -26,7 +28,8 @@ def test_tokenize_scalar(input_col, delimiter):
 
 def test_tokenize_column(input_col):
     got = plc.nvtext.tokenize.tokenize_column(
-        plc.Column(input_col), plc.Column(pa.array([" ", ".", ":", ";"]))
+        plc.Column.from_arrow(input_col),
+        plc.Column.from_arrow(pa.array([" ", ".", ":", ";"])),
     )
     expect = pa.array(["a", "b", "c", "d", "e", "f"])
     assert_column_eq(expect, got)
@@ -37,7 +40,7 @@ def test_tokenize_column(input_col):
 )
 def test_count_tokens_scalar(input_col, delimiter):
     got = plc.nvtext.tokenize.count_tokens_scalar(
-        plc.Column(input_col), delimiter
+        plc.Column.from_arrow(input_col), delimiter
     )
     if delimiter is None:
         expect = pa.array([1, 2, 1], type=pa.int32())
@@ -48,14 +51,17 @@ def test_count_tokens_scalar(input_col, delimiter):
 
 def test_count_tokens_column(input_col):
     got = plc.nvtext.tokenize.count_tokens_column(
-        plc.Column(input_col), plc.Column(pa.array([" ", ".", ":", ";"]))
+        plc.Column.from_arrow(input_col),
+        plc.Column.from_arrow(pa.array([" ", ".", ":", ";"])),
     )
     expect = pa.array([1, 2, 3], type=pa.int32())
     assert_column_eq(expect, got)
 
 
 def test_character_tokenize(input_col):
-    got = plc.nvtext.tokenize.character_tokenize(plc.Column(input_col))
+    got = plc.nvtext.tokenize.character_tokenize(
+        plc.Column.from_arrow(input_col)
+    )
     expect = pa.array(["a", "b", " ", "c", "d", ".", "e", ":", "f", ";"])
     assert_column_eq(expect, got)
 
@@ -66,7 +72,7 @@ def test_character_tokenize(input_col):
 def test_detokenize(input_col, delimiter):
     row_indices = pa.array([0, 0, 1])
     got = plc.nvtext.tokenize.detokenize(
-        plc.Column(input_col), plc.Column(row_indices)
+        plc.Column.from_arrow(input_col), plc.Column.from_arrow(row_indices)
     )
     expect = pa.array(["a b c", "d.e:f;"])
     assert_column_eq(expect, got)
@@ -75,8 +81,10 @@ def test_detokenize(input_col, delimiter):
 @pytest.mark.parametrize("default_id", [-1, 0])
 def test_tokenize_with_vocabulary(input_col, default_id):
     got = plc.nvtext.tokenize.tokenize_with_vocabulary(
-        plc.Column(input_col),
-        plc.nvtext.tokenize.TokenizeVocabulary(plc.Column(input_col)),
+        plc.Column.from_arrow(input_col),
+        plc.nvtext.tokenize.TokenizeVocabulary(
+            plc.Column.from_arrow(input_col)
+        ),
         plc.interop.from_arrow(pa.scalar(" ")),
         default_id,
     )
