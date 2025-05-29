@@ -20,7 +20,7 @@ cmake -S . -B build/
 # Build
 cmake --build build/ --parallel $PARALLEL_LEVEL
 # Execute
-build/output info.csv
+build/output info.csv output.csv 100000
 ```
 
 If your machine does not come with a pre-built libcudf binary, expect the

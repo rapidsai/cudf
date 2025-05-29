@@ -32,7 +32,7 @@ std::unique_ptr<cudf::column> transform(cudf::table_view const& table)
   auto stream = rmm::cuda_stream_default;
   auto mr     = cudf::get_current_device_resource_ref();
 
-  auto regex = cudf::strings::regex_program::create(".*?@(.*?)");
+  auto regex = cudf::strings::regex_program::create(".*@(.*)");
 
   auto alt = cudf::string_scalar(cudf::string_view{"(unknown)", 9}, true, stream, mr);
 

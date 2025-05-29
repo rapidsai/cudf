@@ -112,18 +112,23 @@ int main(int argc, char const** argv)
 
   auto table_view = input->view();
 
-  std::cout << "table: " << table_view.num_rows() << " rows " << table_view.num_columns()
-            << " columns\n";
+  // TODO(lamarrr): make the transform return a table instead since the data is now sampled
 
-  auto st     = std::chrono::steady_clock::now();
+  auto start  = std::chrono::steady_clock::now();
   auto result = transform(table_view);
 
-  std::chrono::duration<double> elapsed = std::chrono::steady_clock::now() - st;
-  std::cout << "Wall time: " << elapsed.count() << " seconds\n";
+  std::chrono::duration<double> elapsed = std::chrono::steady_clock::now() - start;
 
-  auto out_table = cudf::table({std::move(result)});
+  std::vector<std::unique_ptr<cudf::column>> output_columns;
+  output_columns.emplace_back(std::move(result));
 
-  write_csv(out_table, out_csv);
+  auto output = cudf::table(std::move(output_columns));
+
+  write_csv(output, out_csv);
+
+  std::cout << "Wall time: " << elapsed.count() << " seconds\n"
+            << "Table: " << table_view.num_rows() << " rows " << table_view.num_columns()
+            << " columns" << std::endl;
 
   return 0;
 }
