@@ -26,8 +26,20 @@ def wrap_do_evaluate(
     """
     Wrapper for IR.do_evaluate.
 
-    Note that this appears in the Task Graph. We'd like to avoid placing the actual
-    concrete IR nodes in the task graph, and so don't do things like that.
+    This adds an nvtx annotation in the cudf_polars domain.
+
+    Parameters
+    ----------
+    ir_do_evaluate
+        The do_evaluate method of an IR node.
+    *args
+        The arguments to pass to the do_evaluate method.
+    name
+        The name of the IR node, typically from ``type(ir).__name__``.
+
+    Returns
+    -------
+    The result of the do_evaluate method.
     """
     with nvtx.annotate(
         message=name,
