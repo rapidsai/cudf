@@ -53,12 +53,12 @@ constexpr int rolling_buf_size  = decode_block_size * 2;
  */
 template <int lvl_buf_size, typename level_t>
 CUDF_KERNEL void __launch_bounds__(decode_block_size)
-  decode_split_page_data(PageInfo* pages,
-                         device_span<ColumnChunkDesc const> chunks,
-                         size_t min_row,
-                         size_t num_rows,
-                         cudf::device_span<bool const> page_mask,
-                         kernel_error::pointer error_code)
+  decode_split_page_data_kernel(PageInfo* pages,
+                                device_span<ColumnChunkDesc const> chunks,
+                                size_t min_row,
+                                size_t num_rows,
+                                cudf::device_span<bool const> page_mask,
+                                kernel_error::pointer error_code)
 {
   __shared__ __align__(16) page_state_s state_g;
   __shared__ __align__(16)
@@ -486,16 +486,16 @@ uint32_t GetAggregatedDecodeKernelMask(cudf::detail::hostdevice_span<PageInfo co
 }
 
 /**
- * @copydoc cudf::io::parquet::detail::launch_decode_page_data
+ * @copydoc cudf::io::parquet::detail::decode_page_data
  */
-void launch_decode_page_data(cudf::detail::hostdevice_span<PageInfo> pages,
-                             cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
-                             size_t num_rows,
-                             size_t min_row,
-                             int level_type_size,
-                             cudf::device_span<bool const> page_mask,
-                             kernel_error::pointer error_code,
-                             rmm::cuda_stream_view stream)
+void decode_page_data(cudf::detail::hostdevice_span<PageInfo> pages,
+                      cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
+                      size_t num_rows,
+                      size_t min_row,
+                      int level_type_size,
+                      cudf::device_span<bool const> page_mask,
+                      kernel_error::pointer error_code,
+                      rmm::cuda_stream_view stream)
 {
   CUDF_EXPECTS(pages.size() > 0, "There is no page to decode");
 
@@ -512,16 +512,16 @@ void launch_decode_page_data(cudf::detail::hostdevice_span<PageInfo> pages,
 }
 
 /**
- * @copydoc cudf::io::parquet::detail::launch_decode_split_page_data
+ * @copydoc cudf::io::parquet::detail::decode_split_page_data
  */
-void launch_decode_split_page_data(cudf::detail::hostdevice_span<PageInfo> pages,
-                                   cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
-                                   size_t num_rows,
-                                   size_t min_row,
-                                   int level_type_size,
-                                   cudf::device_span<bool const> page_mask,
-                                   kernel_error::pointer error_code,
-                                   rmm::cuda_stream_view stream)
+void decode_split_page_data(cudf::detail::hostdevice_span<PageInfo> pages,
+                            cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
+                            size_t num_rows,
+                            size_t min_row,
+                            int level_type_size,
+                            cudf::device_span<bool const> page_mask,
+                            kernel_error::pointer error_code,
+                            rmm::cuda_stream_view stream)
 {
   CUDF_EXPECTS(pages.size() > 0, "There is no page to decode");
 
@@ -529,11 +529,13 @@ void launch_decode_split_page_data(cudf::detail::hostdevice_span<PageInfo> pages
   dim3 dim_grid(pages.size(), 1);  // 1 threadblock per page
 
   if (level_type_size == 1) {
-    decode_split_page_data<rolling_buf_size, uint8_t><<<dim_grid, dim_block, 0, stream.value()>>>(
-      pages.device_ptr(), chunks, min_row, num_rows, page_mask, error_code);
+    decode_split_page_data_kernel<rolling_buf_size, uint8_t>
+      <<<dim_grid, dim_block, 0, stream.value()>>>(
+        pages.device_ptr(), chunks, min_row, num_rows, page_mask, error_code);
   } else {
-    decode_split_page_data<rolling_buf_size, uint16_t><<<dim_grid, dim_block, 0, stream.value()>>>(
-      pages.device_ptr(), chunks, min_row, num_rows, page_mask, error_code);
+    decode_split_page_data_kernel<rolling_buf_size, uint16_t>
+      <<<dim_grid, dim_block, 0, stream.value()>>>(
+        pages.device_ptr(), chunks, min_row, num_rows, page_mask, error_code);
   }
 }
 

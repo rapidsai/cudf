@@ -1278,18 +1278,18 @@ template <int value>
 using int_tag_t = std::integral_constant<int, value>;
 
 /**
- * @copydoc cudf::io::paruquet::detail::launch_decode_page_data
+ * @copydoc cudf::io::paruquet::detail::decode_page_data
  */
-void launch_decode_page_data(cudf::detail::hostdevice_span<PageInfo> pages,
-                             cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
-                             size_t num_rows,
-                             size_t min_row,
-                             int level_type_size,
-                             decode_kernel_mask kernel_mask,
-                             cudf::device_span<bool const> page_mask,
-                             cudf::device_span<size_t> initial_str_offsets,
-                             kernel_error::pointer error_code,
-                             rmm::cuda_stream_view stream)
+void decode_page_data(cudf::detail::hostdevice_span<PageInfo> pages,
+                      cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
+                      size_t num_rows,
+                      size_t min_row,
+                      int level_type_size,
+                      decode_kernel_mask kernel_mask,
+                      cudf::device_span<bool const> page_mask,
+                      cudf::device_span<size_t> initial_str_offsets,
+                      kernel_error::pointer error_code,
+                      rmm::cuda_stream_view stream)
 {
   // No template parameters on lambdas until C++20, so use type tags instead
   auto launch_kernel = [&](auto block_size_tag, auto kernel_mask_tag) {

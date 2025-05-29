@@ -414,13 +414,12 @@ struct gpuParsePageHeader {
  * @param[in] chunks List of column chunks
  * @param[in] num_chunks Number of column chunks
  */
-// blockDim {128,1,1}
 CUDF_KERNEL
 void __launch_bounds__(decode_page_headers_block_size)
-  decode_page_headers(ColumnChunkDesc* chunks,
-                      chunk_page_info* chunk_pages,
-                      int32_t num_chunks,
-                      kernel_error::pointer error_code)
+  decode_page_headers_kernel(ColumnChunkDesc* chunks,
+                             chunk_page_info* chunk_pages,
+                             int32_t num_chunks,
+                             kernel_error::pointer error_code)
 {
   auto constexpr num_warps_per_block = decode_page_headers_block_size / cudf::detail::warp_size;
   gpuParsePageHeader parse_page_header;
@@ -557,9 +556,8 @@ void __launch_bounds__(decode_page_headers_block_size)
  * @param[in] chunks List of column chunks
  * @param[in] num_chunks Number of column chunks
  */
-// blockDim {128,1,1}
 CUDF_KERNEL void __launch_bounds__(build_string_dict_index_block_size)
-  build_string_dictionary_index(ColumnChunkDesc* chunks, int32_t num_chunks)
+  build_string_dictionary_index_kernel(ColumnChunkDesc* chunks, int32_t num_chunks)
 {
   auto constexpr num_warps_per_block = build_string_dict_index_block_size / cudf::detail::warp_size;
   __shared__ ColumnChunkDesc chunk_g[num_warps_per_block];
@@ -609,11 +607,11 @@ CUDF_KERNEL void __launch_bounds__(build_string_dict_index_block_size)
   }
 }
 
-void launch_decode_page_headers(ColumnChunkDesc* chunks,
-                                chunk_page_info* chunk_pages,
-                                int32_t num_chunks,
-                                kernel_error::pointer error_code,
-                                rmm::cuda_stream_view stream)
+void decode_page_headers(ColumnChunkDesc* chunks,
+                         chunk_page_info* chunk_pages,
+                         int32_t num_chunks,
+                         kernel_error::pointer error_code,
+                         rmm::cuda_stream_view stream)
 {
   static_assert(decode_page_headers_block_size % cudf::detail::warp_size == 0,
                 "Block size for decode page headers kernel must be a multiple of warp size");
@@ -626,26 +624,26 @@ void launch_decode_page_headers(ColumnChunkDesc* chunks,
   dim3 dim_grid(num_blocks,
                 1);  // 1 chunk per warp, 4 warps per block
 
-  decode_page_headers<<<dim_grid, dim_block, 0, stream.value()>>>(
+  decode_page_headers_kernel<<<dim_grid, dim_block, 0, stream.value()>>>(
     chunks, chunk_pages, num_chunks, error_code);
 }
 
-void launch_build_string_dictionary_index(ColumnChunkDesc* chunks,
-                                          int32_t num_chunks,
-                                          rmm::cuda_stream_view stream)
+void build_string_dictionary_index(ColumnChunkDesc* chunks,
+                                   int32_t num_chunks,
+                                   rmm::cuda_stream_view stream)
 {
   static_assert(
     build_string_dict_index_block_size % cudf::detail::warp_size == 0,
     "Block size for build string dictionary index kernel must be a multiple of warp size");
   auto constexpr num_warps_per_block = build_string_dict_index_block_size / cudf::detail::warp_size;
-  auto const num_blocks              = cudf::util::div_rounding_up_safe(
-    num_chunks, num_warps_per_block);  // 1 warp per chunk, 4 warps per block
+  auto const num_blocks =
+    cudf::util::div_rounding_up_safe(num_chunks, num_warps_per_block);  // 1 warp per chunk
 
   dim3 dim_block(build_string_dict_index_block_size, 1);
-  dim3 dim_grid(num_blocks,
-                1);  // 1 chunk per warp, 4 warps per block
+  dim3 dim_grid(num_blocks, 1);
 
-  build_string_dictionary_index<<<dim_grid, dim_block, 0, stream.value()>>>(chunks, num_chunks);
+  build_string_dictionary_index_kernel<<<dim_grid, dim_block, 0, stream.value()>>>(chunks,
+                                                                                   num_chunks);
 }
 
 }  // namespace cudf::io::parquet::detail

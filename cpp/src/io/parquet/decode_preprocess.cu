@@ -333,12 +333,12 @@ __device__ void update_page_sizes(page_state_s* s,
  */
 template <typename level_t>
 CUDF_KERNEL void __launch_bounds__(preprocess_block_size)
-  compute_page_sizes(PageInfo* pages,
-                     device_span<ColumnChunkDesc const> chunks,
-                     size_t min_row,
-                     size_t num_rows,
-                     bool is_base_pass,
-                     bool compute_string_sizes)
+  compute_page_sizes_kernel(PageInfo* pages,
+                            device_span<ColumnChunkDesc const> chunks,
+                            size_t min_row,
+                            size_t num_rows,
+                            bool is_base_pass,
+                            bool compute_string_sizes)
 {
   __shared__ __align__(16) page_state_s state_g;
 
@@ -507,16 +507,16 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size)
 }  // anonymous namespace
 
 /**
- * @copydoc cudf::io::parquet::gpu::launch_compute_page_sizes
+ * @copydoc cudf::io::parquet::gpu::compute_page_sizes
  */
-void launch_compute_page_sizes(cudf::detail::hostdevice_span<PageInfo> pages,
-                               cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
-                               size_t min_row,
-                               size_t num_rows,
-                               bool compute_num_rows,
-                               bool compute_string_sizes,
-                               int level_type_size,
-                               rmm::cuda_stream_view stream)
+void compute_page_sizes(cudf::detail::hostdevice_span<PageInfo> pages,
+                        cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
+                        size_t min_row,
+                        size_t num_rows,
+                        bool compute_num_rows,
+                        bool compute_string_sizes,
+                        int level_type_size,
+                        rmm::cuda_stream_view stream)
 {
   dim3 dim_block(preprocess_block_size, 1);
   dim3 dim_grid(pages.size(), 1);  // 1 threadblock per page
@@ -527,10 +527,10 @@ void launch_compute_page_sizes(cudf::detail::hostdevice_span<PageInfo> pages,
   // If uses_custom_row_bounds is set to true, we have to do a second pass later that "trims"
   // the starting and ending read values to account for these bounds.
   if (level_type_size == 1) {
-    compute_page_sizes<uint8_t><<<dim_grid, dim_block, 0, stream.value()>>>(
+    compute_page_sizes_kernel<uint8_t><<<dim_grid, dim_block, 0, stream.value()>>>(
       pages.device_ptr(), chunks, min_row, num_rows, compute_num_rows, compute_string_sizes);
   } else {
-    compute_page_sizes<uint16_t><<<dim_grid, dim_block, 0, stream.value()>>>(
+    compute_page_sizes_kernel<uint16_t><<<dim_grid, dim_block, 0, stream.value()>>>(
       pages.device_ptr(), chunks, min_row, num_rows, compute_num_rows, compute_string_sizes);
   }
 }
