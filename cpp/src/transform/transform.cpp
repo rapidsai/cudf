@@ -38,6 +38,11 @@ namespace transformation {
 namespace jit {
 namespace {
 
+constexpr bool is_scalar(cudf::size_type base_column_size, cudf::size_type column_size)
+{
+  return column_size == 1 && column_size != base_column_size;
+}
+
 struct input_column_reflection {
   std::string type_name;
   bool is_scalar = false;
@@ -164,8 +169,8 @@ jitify2::Kernel get_kernel(std::string const& kernel_name, std::string const& cu
 
 input_column_reflection reflect_input_column(size_type base_column_size, column_view column)
 {
-  CUDF_EXPECTS(column.size() == 1 || column.size() == base_column_size, "");
-  return input_column_reflection{type_to_name(column.type()), column.size() != base_column_size};
+  return input_column_reflection{type_to_name(column.type()),
+                                 is_scalar(base_column_size, column.size())};
 }
 
 std::vector<input_column_reflection> reflect_input_columns(size_type base_column_size,
