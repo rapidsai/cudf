@@ -54,7 +54,7 @@ def pa_col():
 
 @pytest.fixture
 def plc_col(pa_col):
-    return plc.Column(pa_col)
+    return plc.Column.from_arrow(pa_col)
 
 
 @pytest.fixture(params=strip_chars)

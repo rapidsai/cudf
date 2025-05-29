@@ -45,7 +45,7 @@ def test_struct_dtype_roundtrip():
 
 def test_table_with_nested_dtype_to_arrow():
     pa_array = pa.array([[{"": 1}]])
-    plc_table = plc.Table([plc.Column(pa_array)])
+    plc_table = plc.Table([plc.Column.from_arrow(pa_array)])
     result = plc.interop.to_arrow(plc_table)
     expected_schema = pa.schema(
         [
@@ -127,10 +127,10 @@ def test_from_dlpack_error():
 
 def test_device_interop_column():
     pa_arr = pa.array([{"a": [1, None]}, None, {"b": [None, 4]}])
-    plc_col = plc.Column(pa_arr)
+    plc_col = plc.Column.from_arrow(pa_arr)
 
     na_arr = nanoarrow.device.c_device_array(plc_col)
-    new_col = plc.Column(na_arr)
+    new_col = plc.Column.from_arrow(na_arr)
     assert_column_eq(pa_arr, new_col)
 
 
@@ -181,5 +181,5 @@ def test_device_interop_table():
 )
 def test_column_from_arrow_stream(data):
     pa_arr = pa.chunked_array(data)
-    col = plc.Column(pa_arr)
+    col = plc.Column.from_arrow(pa_arr)
     assert_column_eq(pa_arr, col)

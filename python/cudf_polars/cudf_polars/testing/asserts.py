@@ -149,7 +149,8 @@ def assert_ir_translation_raises(q: pl.LazyFrame, *exceptions: type[Exception]) 
     if errors := translator.errors:
         for err in errors:
             assert any(isinstance(err, err_type) for err_type in exceptions), (
-                f"Translation DID NOT RAISE {exceptions}"
+                f"Translation DID NOT RAISE {exceptions}. The following "
+                f"errors were seen instead: {errors}"
             )
         return
     else:
