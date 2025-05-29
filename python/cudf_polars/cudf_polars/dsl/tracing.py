@@ -5,7 +5,6 @@
 
 from __future__ import annotations
 
-import os
 import typing
 
 import nvtx
@@ -16,12 +15,7 @@ if typing.TYPE_CHECKING:
     import cudf_polars.containers.dataframe
 
 
-NVTX_ENABLED = os.environ.get("CUDF_POLARS_TRACE_NVTX", "").lower() in {
-    "1",
-    "true",
-    "yes",
-    "on",
-}
+CUDF_POLARS_NVTX_DOMAIN = "cudf_polars"
 
 
 def wrap_do_evaluate(
@@ -35,17 +29,8 @@ def wrap_do_evaluate(
     Note that this appears in the Task Graph. We'd like to avoid placing the actual
     concrete IR nodes in the task graph, and so don't do things like that.
     """
-    # *args2, wrapper_options = args
-
-    if NVTX_ENABLED:
-        rng = nvtx.start_range(
-            message=name,
-            domain="cudf_polars",
-        )
-
-    result = ir_do_evaluate(*args)
-
-    if NVTX_ENABLED:
-        nvtx.end_range(rng)
-
-    return result
+    with nvtx.annotate(
+        message=name,
+        domain=CUDF_POLARS_NVTX_DOMAIN,
+    ):
+        return ir_do_evaluate(*args)
