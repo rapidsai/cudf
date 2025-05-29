@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 
     from polars.polars import _expr_nodes as pl_expr
 
-    from cudf_polars.containers import DataFrame
+    from cudf_polars.containers import DataFrame, DataType
 
 __all__ = ["TemporalFunction"]
 
@@ -116,7 +116,7 @@ class TemporalFunction(Expr):
 
     def __init__(
         self,
-        dtype: plc.DataType,
+        dtype: DataType,
         name: TemporalFunction.Name,
         options: tuple[Any, ...],
         *children: Expr,
@@ -130,7 +130,7 @@ class TemporalFunction(Expr):
             raise NotImplementedError(f"Temporal function {self.name}")
 
         if self.name is TemporalFunction.Name.ToString and plc.traits.is_duration(
-            self.children[0].dtype
+            self.children[0].dtype.plc
         ):
             raise NotImplementedError("ToString is not supported on duration types")
 

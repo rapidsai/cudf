@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -8,11 +8,11 @@ import polars as pl
 
 import pylibcudf as plc
 
+from cudf_polars.containers import DataType
 from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
-from cudf_polars.utils import dtypes
 
 
 @pytest.fixture(
@@ -66,7 +66,7 @@ def test_timelike_literal(timestamp, timedelta):
         adjusted=timestamp + timedelta,
         two_delta=timedelta + timedelta,
     )
-    schema = {k: dtypes.from_polars(v) for k, v in q.collect_schema().items()}
+    schema = {k: DataType(v).plc for k, v in q.collect_schema().items()}
     if plc.binaryop.is_supported_operation(
         schema["adjusted"],
         schema["time"],

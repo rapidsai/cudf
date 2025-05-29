@@ -26,7 +26,7 @@ def test_jaccard_index(input_data, width):
 
     input1, input2 = input_data
     got = plc.nvtext.jaccard.jaccard_index(
-        plc.Column(input1), plc.Column(input2), width
+        plc.Column.from_arrow(input1), plc.Column.from_arrow(input2), width
     )
     expect = pa.array(
         [
