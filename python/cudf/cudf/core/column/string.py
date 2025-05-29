@@ -22,7 +22,6 @@ from cudf.core.buffer import Buffer, acquire_spill_lock
 from cudf.core.column.column import ColumnBase, as_column, column_empty
 from cudf.core.column.lists import ListColumn
 from cudf.core.column.methods import ColumnMethods
-from cudf.core.scalar import pa_scalar_to_plc_scalar
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
@@ -30,6 +29,7 @@ from cudf.utils.dtypes import (
     can_convert_to_column,
     dtype_to_pylibcudf_type,
 )
+from cudf.utils.scalar import pa_scalar_to_plc_scalar
 from cudf.utils.temporal import infer_format
 from cudf.utils.utils import is_na_like
 
@@ -4676,62 +4676,6 @@ class StringMethods(ColumnMethods):
         """
         return self._return_or_inplace(self._column.normalize_spaces())
 
-    def normalize_characters(self, do_lower: bool = True) -> SeriesOrIndex:
-        r"""
-        Normalizes strings characters for tokenizing.
-
-        .. deprecated:: 25.04
-           Use `CharacterNormalizer` instead.
-
-        The normalizer function includes:
-
-            - adding padding around punctuation (unicode category starts with
-              "P") as well as certain ASCII symbols like "^" and "$"
-            - adding padding around the CJK Unicode block characters
-            - changing whitespace (e.g. ``\t``, ``\n``, ``\r``) to space
-            - removing control characters (unicode categories "Cc" and "Cf")
-
-        If `do_lower_case = true`, lower-casing also removes the accents.
-        The accents cannot be removed from upper-case characters without
-        lower-casing and lower-casing cannot be performed without also
-        removing accents. However, if the accented character is already
-        lower-case, then only the accent is removed.
-
-        Parameters
-        ----------
-        do_lower : bool, Default is True
-            If set to True, characters will be lower-cased and accents
-            will be removed. If False, accented and upper-case characters
-            are not transformed.
-
-        Returns
-        -------
-        Series or Index of object.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> ser = cudf.Series(["héllo, \tworld","ĂĆCĖÑTED","$99"])
-        >>> ser.str.normalize_characters()
-        0    hello ,  world
-        1          accented
-        2              $ 99
-        dtype: object
-        >>> ser.str.normalize_characters(do_lower=False)
-        0    héllo ,  world
-        1          ĂĆCĖÑTED
-        2              $ 99
-        dtype: object
-        """
-        warnings.warn(
-            "normalize_characters is deprecated and will be removed in a future "
-            "version. Use CharacterNormalizer instead.",
-            FutureWarning,
-        )
-        return self._return_or_inplace(
-            self._column.characters_normalize(do_lower)
-        )
-
     def tokenize(self, delimiter: str = " ") -> SeriesOrIndex:
         """
         Each string is split into tokens using the provided delimiter(s).
@@ -5825,9 +5769,6 @@ class StringMethods(ColumnMethods):
 def _massage_string_arg(
     value, name, allow_col: bool = False
 ) -> StringColumn | plc.Scalar:
-    if isinstance(value, cudf.Scalar):
-        return value
-
     if isinstance(value, str):
         return pa_scalar_to_plc_scalar(pa.scalar(value, type=pa.string()))
 
@@ -6036,6 +5977,12 @@ class StringColumn(ColumnBase):
             f"dtype {self.dtype} is not yet supported via "
             "`__cuda_array_interface__`"
         )
+
+    def element_indexing(self, index: int):
+        result = super().element_indexing(index)
+        if isinstance(result, pa.Scalar):
+            return result.as_py()
+        return result
 
     def to_arrow(self) -> pa.Array:
         """Convert to PyArrow Array
@@ -6535,15 +6482,6 @@ class StringColumn(ColumnBase):
         return type(self).from_pylibcudf(  # type: ignore[return-value]
             plc.nvtext.normalize.normalize_spaces(
                 self.to_pylibcudf(mode="read")
-            )
-        )
-
-    @acquire_spill_lock()
-    def characters_normalize(self, do_lower: bool = True) -> Self:
-        return ColumnBase.from_pylibcudf(  # type: ignore[return-value]
-            plc.nvtext.normalize.characters_normalize(
-                self.to_pylibcudf(mode="read"),
-                do_lower,
             )
         )
 

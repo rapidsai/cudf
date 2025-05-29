@@ -1041,7 +1041,7 @@ void detect_malformed_pages(device_span<PageInfo const> pages,
                                                         compacted_row_counts_begin,
                                                         row_counts_nonzero{});
   if (compacted_row_counts_end != compacted_row_counts_begin) {
-    size_t const found_row_count = static_cast<size_t>(compacted_row_counts.element(0, stream));
+    auto const found_row_count = static_cast<size_t>(compacted_row_counts.element(0, stream));
 
     // if we somehow don't match the expected row count from the row groups themselves
     if (expected_row_count.has_value()) {
@@ -1548,27 +1548,27 @@ void reader::impl::create_global_chunk_info()
       column_chunk_info const* const chunk_info =
         _has_page_index ? &rg.column_chunks.value()[column_mapping[i]] : nullptr;
 
-      chunks.push_back(ColumnChunkDesc(col_meta.total_compressed_size,
-                                       nullptr,
-                                       col_meta.num_values,
-                                       schema.type,
-                                       schema.type_length,
-                                       row_group_start,
-                                       row_group_rows,
-                                       schema.max_definition_level,
-                                       schema.max_repetition_level,
-                                       _metadata->get_output_nesting_depth(col.schema_idx),
-                                       required_bits(schema.max_definition_level),
-                                       required_bits(schema.max_repetition_level),
-                                       col_meta.codec,
-                                       logical_type,
-                                       clock_rate,
-                                       i,
-                                       col.schema_idx,
-                                       chunk_info,
-                                       list_bytes_per_row_est,
-                                       schema.type == Type::BYTE_ARRAY and _strings_to_categorical,
-                                       rg.source_index));
+      chunks.emplace_back(col_meta.total_compressed_size,
+                          nullptr,
+                          col_meta.num_values,
+                          schema.type,
+                          schema.type_length,
+                          row_group_start,
+                          row_group_rows,
+                          schema.max_definition_level,
+                          schema.max_repetition_level,
+                          _metadata->get_output_nesting_depth(col.schema_idx),
+                          required_bits(schema.max_definition_level),
+                          required_bits(schema.max_repetition_level),
+                          col_meta.codec,
+                          logical_type,
+                          clock_rate,
+                          i,
+                          col.schema_idx,
+                          chunk_info,
+                          list_bytes_per_row_est,
+                          schema.type == Type::BYTE_ARRAY and _strings_to_categorical,
+                          rg.source_index);
     }
     // Adjust for skip_rows when updating the remaining rows after the first group
     remaining_rows -=
