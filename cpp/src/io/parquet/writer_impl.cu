@@ -48,6 +48,7 @@
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
 
+#include <cuco/hash_functions.cuh>
 #include <thrust/fill.h>
 #include <thrust/for_each.h>
 
@@ -1307,8 +1308,8 @@ build_chunk_dictionaries(hostdevice_2dvector<EncColumnChunk>& chunks,
       chunk.use_dictionary = false;
     } else {
       chunk.use_dictionary = true;
-      chunk.dict_map_size =
-        static_cast<cudf::size_type>(cuco::make_bucket_extent<map_cg_size, bucket_size>(
+      chunk.dict_map_size  = static_cast<cudf::size_type>(
+        cuco::make_bucket_extent<probing_scheme_type<cuco::xxhash_32<int>>, storage_type>(
           static_cast<cudf::size_type>(occupancy_factor * chunk.num_values)));
       chunk.dict_map_offset = total_map_storage_size;
       total_map_storage_size += chunk.dict_map_size;

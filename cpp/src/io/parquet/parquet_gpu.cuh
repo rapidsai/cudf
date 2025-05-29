@@ -50,6 +50,11 @@ using storage_type     = cuco::bucket_storage<slot_type,
 using storage_ref_type = typename storage_type::ref_type;
 using bucket_type      = typename storage_type::bucket_type;
 
+// Choosing `linear_probing` over `double_hashing` for slighhhtly better performance seen in
+// benchmarks.
+template <typename Hash>
+using probing_scheme_type = cuco::linear_probing<map_cg_size, Hash>;
+
 /**
  * @brief Return the byte length of parquet dtypes that are physically represented by INT32
  */

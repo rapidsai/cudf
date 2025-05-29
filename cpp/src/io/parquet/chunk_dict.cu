@@ -72,15 +72,13 @@ struct map_insert_fn {
 
       using equality_fn_type = equality_functor<T>;
       using hash_fn_type     = hash_functor<T>;
-      // Choosing `linear_probing` over `double_hashing` for slighhhtly better performance seen in
-      // benchmarks.
-      using probing_scheme_type = cuco::linear_probing<map_cg_size, hash_fn_type>;
+      using probing_scheme_t = probing_scheme_type<hash_fn_type>;
 
       // Make a view of the hash map.
       auto hash_map_ref = cuco::static_map_ref{cuco::empty_key{KEY_SENTINEL},
                                                cuco::empty_value{VALUE_SENTINEL},
                                                equality_fn_type{data_col},
-                                               probing_scheme_type{hash_fn_type{data_col}},
+                                               probing_scheme_t{hash_fn_type{data_col}},
                                                cuco::thread_scope_block,
                                                storage_ref};
 
@@ -174,15 +172,13 @@ struct map_find_fn {
 
       using equality_fn_type = equality_functor<T>;
       using hash_fn_type     = hash_functor<T>;
-      // Choosing `linear_probing` over `double_hashing` for slighhhtly better performance seen in
-      // benchmarks.
-      using probing_scheme_type = cuco::linear_probing<map_cg_size, hash_fn_type>;
+      using probing_scheme_t = probing_scheme_type<hash_fn_type>;
 
       // Make a view of the hash map.
       auto hash_map_ref = cuco::static_map_ref{cuco::empty_key{KEY_SENTINEL},
                                                cuco::empty_value{VALUE_SENTINEL},
                                                equality_fn_type{data_col},
-                                               probing_scheme_type{hash_fn_type{data_col}},
+                                               probing_scheme_t{hash_fn_type{data_col}},
                                                cuco::thread_scope_block,
                                                storage_ref};
 
