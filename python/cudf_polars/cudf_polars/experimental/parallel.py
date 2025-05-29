@@ -226,7 +226,6 @@ def _(
     # Generate pointwise (embarrassingly-parallel) tasks by default
     child_names = [get_key_name(c) for c in ir.children]
     bcast_child = [partition_info[c].count == 1 for c in ir.children]
-    # this errors
     tasks = {}
 
     for i, key in enumerate(partition_info[ir].keys(ir)):
