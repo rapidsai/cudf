@@ -20,13 +20,13 @@ def data_col():
 @pytest.fixture(scope="module", params=["a", "c", "A", "Á", "aa", "ÁÁÁ"])
 def scalar_repl_target(request):
     pa_target = pa.scalar(request.param, type=pa.string())
-    return request.param, plc.interop.from_arrow(pa_target)
+    return request.param, plc.Scalar.from_arrow(pa_target)
 
 
 @pytest.fixture(scope="module", params=["b", "B", "", "B́"])
 def scalar_repl(request):
     pa_repl = pa.scalar(request.param, type=pa.string())
-    return request.param, plc.interop.from_arrow(pa_repl)
+    return request.param, plc.Scalar.from_arrow(pa_repl)
 
 
 @pytest.fixture(

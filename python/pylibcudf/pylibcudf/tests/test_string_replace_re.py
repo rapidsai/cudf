@@ -18,7 +18,7 @@ def test_replace_re_regex_program_scalar(max_replace_count):
         plc.strings.regex_program.RegexProgram.create(
             pat, plc.strings.regex_flags.RegexFlags.DEFAULT
         ),
-        plc.interop.from_arrow(pa.scalar(repl)),
+        plc.Scalar.from_arrow(pa.scalar(repl)),
         max_replace_count=max_replace_count,
     )
     expect = pc.replace_substring_regex(

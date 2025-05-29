@@ -241,11 +241,11 @@ def test_read_json_dtypes(table_data, source_or_sink):
                 )
             return typ_child_types
 
-        plc_type = plc.interop.from_arrow(field.type)
+        plc_type = plc.DataType.from_arrow(field.type)
         if pa.types.is_integer(field.type) or pa.types.is_unsigned_integer(
             field.type
         ):
-            plc_type = plc.interop.from_arrow(pa.float64())
+            plc_type = plc.DataType.from_arrow(pa.float64())
             field = field.with_type(pa.float64())
 
         dtypes.append((field.name, plc_type, child_types))

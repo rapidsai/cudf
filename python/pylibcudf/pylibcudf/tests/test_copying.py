@@ -428,9 +428,9 @@ def test_scatter_scalars_type_mismatch(index_column, target_table):
         if plc.traits.is_integral_not_bool(
             dtype := plc_target_table.columns()[0].type()
         ) or plc.traits.is_floating_point(dtype):
-            plc_source_scalar = [plc.interop.from_arrow(pa.scalar(True))]
+            plc_source_scalar = [plc.Scalar.from_arrow(pa.scalar(True))]
         else:
-            plc_source_scalar = [plc.interop.from_arrow(pa.scalar(1))]
+            plc_source_scalar = [plc.Scalar.from_arrow(pa.scalar(1))]
         plc.copying.scatter(
             plc_source_scalar * plc_target_table.num_columns(),
             plc_index_column,
@@ -650,9 +650,9 @@ def test_shift_type_mismatch(target_column):
     if plc.traits.is_integral_not_bool(
         dtype := plc_target_column.type()
     ) or plc.traits.is_floating_point(dtype):
-        fill_value = plc.interop.from_arrow(pa.scalar("a"))
+        fill_value = plc.Scalar.from_arrow(pa.scalar("a"))
     else:
-        fill_value = plc.interop.from_arrow(pa.scalar(1))
+        fill_value = plc.Scalar.from_arrow(pa.scalar(1))
 
     with cudf_raises(TypeError):
         plc.copying.shift(plc_target_column, 2, fill_value)

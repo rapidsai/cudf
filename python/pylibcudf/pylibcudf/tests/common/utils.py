@@ -276,9 +276,9 @@ def _convert_types(pa_table, input_pred, result_type):
         field = pa_table.schema.field(i)
         child_types = []
 
-        plc_type = plc.interop.from_arrow(field.type)
+        plc_type = plc.DataType.from_arrow(field.type)
         if input_pred(field.type):
-            plc_type = plc.interop.from_arrow(result_type)
+            plc_type = plc.DataType.from_arrow(result_type)
             field = field.with_type(result_type)
 
         dtypes.append((field.name, plc_type, child_types))

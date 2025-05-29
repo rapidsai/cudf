@@ -10,7 +10,7 @@ import pylibcudf as plc
 def test_literal_construction_invalid():
     with pytest.raises(ValueError):
         plc.expressions.Literal(
-            plc.interop.from_arrow(pa.scalar(None, type=pa.list_(pa.int64())))
+            plc.Scalar.from_arrow(pa.scalar(None, type=pa.list_(pa.int64())))
         )
 
 
@@ -66,7 +66,7 @@ def test_evaluation():
             plc.expressions.Operation(
                 plc.expressions.ASTOperator.ADD,
                 plc.expressions.ColumnReference(0),
-                plc.expressions.Literal(plc.interop.from_arrow(lit)),
+                plc.expressions.Literal(plc.Scalar.from_arrow(lit)),
             ),
         ),
     )

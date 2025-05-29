@@ -10,7 +10,7 @@ def test_to_floats():
     typ = pa.float32()
     arr = pa.array(["-1.23", "1", None])
     got = plc.strings.convert.convert_floats.to_floats(
-        plc.Column.from_arrow(arr), plc.interop.from_arrow(typ)
+        plc.Column.from_arrow(arr), plc.DataType.from_arrow(typ)
     )
     expect = arr.cast(typ)
     assert_column_eq(expect, got)

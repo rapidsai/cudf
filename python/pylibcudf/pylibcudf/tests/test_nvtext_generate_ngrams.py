@@ -19,7 +19,7 @@ def test_generate_ngrams(input_col, ngram, sep):
     got = plc.nvtext.generate_ngrams.generate_ngrams(
         plc.Column.from_arrow(input_col),
         ngram,
-        plc.interop.from_arrow(pa.scalar(sep)),
+        plc.Scalar.from_arrow(pa.scalar(sep)),
     )
     expect = pa.array([f"ab{sep}cde", f"cde{sep}fgh"])
     if ngram == 3:

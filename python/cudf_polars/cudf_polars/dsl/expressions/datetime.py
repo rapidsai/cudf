@@ -143,9 +143,9 @@ class TemporalFunction(Expr):
         if self.name is TemporalFunction.Name.CastTimeUnit:
             (unit,) = self.options
             if plc.traits.is_timestamp(column.obj.type()):
-                dtype = plc.interop.from_arrow(pa.timestamp(unit))
+                dtype = plc.DataType.from_arrow(pa.timestamp(unit))
             elif plc.traits.is_duration(column.obj.type()):
-                dtype = plc.interop.from_arrow(pa.duration(unit))
+                dtype = plc.DataType.from_arrow(pa.duration(unit))
             result = plc.unary.cast(column.obj, dtype)
             return Column(result)
         if self.name == TemporalFunction.Name.ToString:

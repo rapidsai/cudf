@@ -1025,7 +1025,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
         if len(dict_indices):
             dict_indices_table = pa.table(dict_indices)
             data = data.drop(dict_indices_table.column_names)
-            plc_indices = plc.interop.from_arrow(dict_indices_table)
+            plc_indices = plc.Table.from_arrow(dict_indices_table)
             # as dictionary size can vary, it can't be a single table
             cudf_dictionaries_columns = {
                 name: ColumnBase.from_arrow(dict_dictionaries[name])
@@ -1053,7 +1053,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
         cudf_non_category_frame = {
             name: ColumnBase.from_pylibcudf(plc_col)
             for name, plc_col in zip(
-                data.column_names, plc.interop.from_arrow(data).columns()
+                data.column_names, plc.Table.from_arrow(data).columns()
             )
         }
 

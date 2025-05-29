@@ -27,7 +27,7 @@ def pa_start_stop_step(request):
 
 @pytest.fixture(scope="module")
 def plc_start_stop_step(pa_start_stop_step):
-    return tuple(plc.interop.from_arrow(x) for x in pa_start_stop_step)
+    return tuple(plc.Scalar.from_arrow(x) for x in pa_start_stop_step)
 
 
 @pytest.fixture(scope="module")

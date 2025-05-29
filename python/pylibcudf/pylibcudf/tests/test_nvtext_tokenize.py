@@ -13,7 +13,7 @@ def input_col():
 
 
 @pytest.mark.parametrize(
-    "delimiter", [None, plc.interop.from_arrow(pa.scalar("."))]
+    "delimiter", [None, plc.Scalar.from_arrow(pa.scalar("."))]
 )
 def test_tokenize_scalar(input_col, delimiter):
     got = plc.nvtext.tokenize.tokenize_scalar(
@@ -36,7 +36,7 @@ def test_tokenize_column(input_col):
 
 
 @pytest.mark.parametrize(
-    "delimiter", [None, plc.interop.from_arrow(pa.scalar("."))]
+    "delimiter", [None, plc.Scalar.from_arrow(pa.scalar("."))]
 )
 def test_count_tokens_scalar(input_col, delimiter):
     got = plc.nvtext.tokenize.count_tokens_scalar(
@@ -67,7 +67,7 @@ def test_character_tokenize(input_col):
 
 
 @pytest.mark.parametrize(
-    "delimiter", [None, plc.interop.from_arrow(pa.scalar("."))]
+    "delimiter", [None, plc.Scalar.from_arrow(pa.scalar("."))]
 )
 def test_detokenize(input_col, delimiter):
     row_indices = pa.array([0, 0, 1])
@@ -85,7 +85,7 @@ def test_tokenize_with_vocabulary(input_col, default_id):
         plc.nvtext.tokenize.TokenizeVocabulary(
             plc.Column.from_arrow(input_col)
         ),
-        plc.interop.from_arrow(pa.scalar(" ")),
+        plc.Scalar.from_arrow(pa.scalar(" ")),
         default_id,
     )
     expect_type = plc.interop.to_arrow(

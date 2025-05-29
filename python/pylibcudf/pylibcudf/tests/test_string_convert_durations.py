@@ -32,10 +32,10 @@ def plc_duration_col(pa_duration_col):
 
 
 def test_to_duration(pa_duration_col, plc_duration_col, duration_type):
-    format = "%H:%M:%S"
+    fmt = "%H:%M:%S"
 
     def to_timedelta(duration_str):
-        date = datetime.strptime(duration_str, format)
+        date = datetime.strptime(duration_str, fmt)
         return date - datetime(1900, 1, 1)  # "%H:%M:%S" zero date
 
     expect = pa.array([to_timedelta(d.as_py()) for d in pa_duration_col]).cast(
@@ -44,8 +44,8 @@ def test_to_duration(pa_duration_col, plc_duration_col, duration_type):
 
     got = plc.strings.convert.convert_durations.to_durations(
         plc_duration_col,
-        plc.interop.from_arrow(duration_type),
-        format,
+        plc.DataType.from_arrow(duration_type),
+        fmt,
     )
     assert_column_eq(expect, got)
 

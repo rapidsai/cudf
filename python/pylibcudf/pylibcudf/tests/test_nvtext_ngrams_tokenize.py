@@ -29,8 +29,8 @@ def test_ngrams_tokenize(input_col, ngrams, delim, sep):
     result = plc.nvtext.ngrams_tokenize.ngrams_tokenize(
         plc.Column.from_arrow(input_col),
         ngrams,
-        plc.interop.from_arrow(pa.scalar(delim)),
-        plc.interop.from_arrow(pa.scalar(sep)),
+        plc.Scalar.from_arrow(pa.scalar(delim)),
+        plc.Scalar.from_arrow(pa.scalar(sep)),
     )
     expected = pa.array(
         ngrams_tokenize(input_col.to_pylist(), ngrams, delim, sep)

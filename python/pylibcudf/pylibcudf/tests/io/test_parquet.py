@@ -78,14 +78,14 @@ def test_read_parquet_filters_metadata(tmp_path, if_prune_rowgroup, result):
         filter = Operation(
             ASTOperator.GREATER,
             ColumnNameReference("a"),
-            Literal(plc.interop.from_arrow(pa.scalar(max_element))),
+            Literal(plc.Scalar.from_arrow(pa.scalar(max_element))),
         )
     else:
         # No real pruning
         filter = Operation(
             ASTOperator.GREATER,
             ColumnNameReference("a"),
-            Literal(plc.interop.from_arrow(pa.scalar(min_element))),
+            Literal(plc.Scalar.from_arrow(pa.scalar(min_element))),
         )
     options.set_filter(filter)
     plc_table_w_meta = plc.io.parquet.read_parquet(options)
@@ -103,7 +103,7 @@ def test_read_parquet_filters_metadata(tmp_path, if_prune_rowgroup, result):
             Operation(
                 ASTOperator.GREATER_EQUAL,
                 ColumnNameReference("col_int64"),
-                Literal(plc.interop.from_arrow(pa.scalar(10))),
+                Literal(plc.Scalar.from_arrow(pa.scalar(10))),
             ),
         ),
         (
@@ -113,12 +113,12 @@ def test_read_parquet_filters_metadata(tmp_path, if_prune_rowgroup, result):
                 Operation(
                     ASTOperator.GREATER_EQUAL,
                     ColumnNameReference("col_int64"),
-                    Literal(plc.interop.from_arrow(pa.scalar(10))),
+                    Literal(plc.Scalar.from_arrow(pa.scalar(10))),
                 ),
                 Operation(
                     ASTOperator.LESS,
                     ColumnNameReference("col_double"),
-                    Literal(plc.interop.from_arrow(pa.scalar(0.0))),
+                    Literal(plc.Scalar.from_arrow(pa.scalar(0.0))),
                 ),
             ),
         ),
@@ -127,7 +127,7 @@ def test_read_parquet_filters_metadata(tmp_path, if_prune_rowgroup, result):
             Operation(
                 ASTOperator.EQUAL,
                 ColumnReference(0),
-                Literal(plc.interop.from_arrow(pa.scalar(10))),
+                Literal(plc.Scalar.from_arrow(pa.scalar(10))),
             ),
         ),
     ],
