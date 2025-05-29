@@ -563,9 +563,9 @@ class Scan(IR):
                     .decimal(decimal)
                     .keep_default_na(keep_default_na=False)
                     .na_filter(na_filter=True)
+                    .delimiter(str(sep))
                     .build()
                 )
-                options.set_delimiter(str(sep))
                 if column_names is not None:
                     options.set_names([str(name) for name in column_names])
                 else:
@@ -576,7 +576,7 @@ class Scan(IR):
                         column_names = read_csv_header(path, str(sep))
                         options.set_names(column_names)
                 options.set_header(header)
-                options.set_dtypes(schema)
+                options.set_dtypes({name: dtype.plc for name, dtype in schema.items()})
                 if usecols is not None:
                     options.set_use_cols_names([str(name) for name in usecols])
                 options.set_na_values(null_values)
@@ -668,7 +668,7 @@ class Scan(IR):
                 return df
         elif typ == "ndjson":
             json_schema: list[plc.io.json.NameAndType] = [
-                (name, typ, []) for name, typ in schema.items()
+                (name, typ.plc, []) for name, typ in schema.items()
             ]
             plc_tbl_w_meta = plc.io.json.read_json(
                 plc.io.json._setup_json_reader_options(
@@ -694,7 +694,7 @@ class Scan(IR):
         if row_index is not None:
             name, offset = row_index
             offset += skip_rows
-            dtype = schema[name]
+            dtype = schema[name].plc
             step = plc.Scalar.from_py(1, dtype)
             init = plc.Scalar.from_py(offset, dtype)
             index_col = Column(
@@ -707,7 +707,9 @@ class Scan(IR):
             df = DataFrame([index_col, *df.columns])
             if next(iter(schema)) != name:
                 df = df.select(schema)
-        assert all(c.obj.type() == schema[name] for name, c in df.column_map.items())
+        assert all(
+            c.obj.type() == schema[name].plc for name, c in df.column_map.items()
+        )
         if predicate is None:
             return df
         else:
@@ -756,7 +758,7 @@ class Sink(IR):
         child_schema = df.schema.values()
         if kind == "Csv":
             if not all(
-                plc.io.csv.is_supported_write_csv(dtype) for dtype in child_schema
+                plc.io.csv.is_supported_write_csv(dtype.plc) for dtype in child_schema
             ):
                 # Nested types are unsupported in polars and libcudf
                 raise NotImplementedError(
@@ -807,7 +809,7 @@ class Sink(IR):
             kind == "Json"
         ):  # pragma: no cover; options are validated on the polars side
             if not all(
-                plc.io.json.is_supported_write_json(dtype) for dtype in child_schema
+                plc.io.json.is_supported_write_json(dtype.plc) for dtype in child_schema
             ):
                 # Nested types are unsupported in polars and libcudf
                 raise NotImplementedError(
@@ -1028,7 +1030,7 @@ class DataFrameScan(IR):
             df = df.select(projection)
         df = DataFrame.from_polars(df)
         assert all(
-            c.obj.type() == dtype
+            c.obj.type() == dtype.plc
             for c, dtype in zip(df.columns, schema.values(), strict=True)
         )
         return df
@@ -1162,7 +1164,7 @@ class Rolling(IR):
         self.agg_requests = tuple(agg_requests)
         if not all(
             plc.rolling.is_valid_rolling_aggregation(
-                agg.value.dtype, agg.value.agg_request
+                agg.value.dtype.plc, agg.value.agg_request
             )
             for agg in self.agg_requests
         ):
@@ -2123,7 +2125,8 @@ class MapFunction(IR):
                 index = frozenset(indices)
                 pivotees = [name for name in df.schema if name not in index]
             if not all(
-                dtypes.can_cast(df.schema[p], self.schema[value_name]) for p in pivotees
+                dtypes.can_cast(df.schema[p].plc, self.schema[value_name].plc)
+                for p in pivotees
             ):
                 raise NotImplementedError(
                     "Unpivot cannot cast all input columns to "
@@ -2183,7 +2186,7 @@ class MapFunction(IR):
                         plc.interop.from_arrow(
                             pa.array(
                                 pivotees,
-                                type=plc.interop.to_arrow(schema[variable_name]),
+                                type=plc.interop.to_arrow(schema[variable_name].plc),
                             ),
                         )
                     ]
@@ -2192,7 +2195,7 @@ class MapFunction(IR):
             ).columns()
             value_column = plc.concatenate.concatenate(
                 [
-                    df.column_map[pivotee].astype(schema[value_name]).obj
+                    df.column_map[pivotee].astype(schema[value_name].plc).obj
                     for pivotee in pivotees
                 ]
             )
@@ -2205,7 +2208,7 @@ class MapFunction(IR):
             )
         elif name == "row_index":
             col_name, offset = options
-            dtype = schema[col_name]
+            dtype = schema[col_name].plc
             step = plc.Scalar.from_py(1, dtype)
             init = plc.Scalar.from_py(offset, dtype)
             index_col = Column(
