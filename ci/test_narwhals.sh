@@ -93,7 +93,7 @@ NARWHALS_DEFAULT_CONSTRUCTORS=pandas python -m pytest \
         ${TESTS_TO_ALWAYS_SKIP} or \
         ${TEST_THAT_NEED_NARWHALS_FIX} \
     )" \
-    --numprocesses=8 \
+    --numprocesses=1 \
     --dist=worksteal
 
 popd || exit 1
