@@ -20,6 +20,7 @@ from pylibcudf.libcudf.scalar.scalar cimport (
     scalar,
     duration_scalar,
     numeric_scalar,
+    string_scalar,
     timestamp_scalar,
 )
 from pylibcudf.libcudf.scalar.scalar_factories cimport (
@@ -167,6 +168,43 @@ cdef class Scalar:
             New pylibcudf.Scalar
         """
         return _from_numpy(np_val)
+
+    def to_py(self):
+        """
+        Convert a Scalar to a Python scalar.
+
+        Returns
+        -------
+        Python scalar
+            A Python scalar associated with the type of the Scalar.
+        """
+        if not self.is_valid():
+            return None
+        elif self.type().id() == type_id.BOOL8:
+            return (<numeric_scalar[cbool]*>self.c_obj.get()).value()
+        elif self.type().id() == type_id.STRING:
+            return (<string_scalar*>self.c_obj.get()).to_string().decode()
+        elif is_floating_point(self.type()):
+            return (<numeric_scalar[double]*>self.c_obj.get()).value()
+        elif self.type().id() in {
+            type_id.INT8,
+            type_id.INT16,
+            type_id.INT32,
+            type_id.INT64,
+        }:
+            return (<numeric_scalar[int64_t]*>self.c_obj.get()).value()
+        elif self.type().id() in {
+            type_id.UINT8,
+            type_id.UINT16,
+            type_id.UINT32,
+            type_id.UINT64,
+        }:
+            return (<numeric_scalar[uint64_t]*>self.c_obj.get()).value()
+        else:
+            raise NotImplementedError(
+                f"Converting to Python scalar for type {self.type().id()!r} "
+                "is not supported."
+            )
 
 
 cdef Scalar _new_scalar(unique_ptr[scalar] c_obj, DataType dtype):

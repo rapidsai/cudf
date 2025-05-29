@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 from typing import Any
 
@@ -17,3 +17,4 @@ class Scalar:
     def from_py(cls, py_val: Any, dtype: DataType | None = None) -> Scalar: ...
     @classmethod
     def from_numpy(cls, np_val: NpGeneric) -> Scalar: ...
+    def to_py(self) -> None | int | float | str | bool: ...
