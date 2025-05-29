@@ -29,7 +29,7 @@ def str_data():
             None,
         ]
     )
-    return pa_data, plc.Column(pa_data)
+    return pa_data, plc.Column.from_arrow(pa_data)
 
 
 def test_capitalize(str_data):
