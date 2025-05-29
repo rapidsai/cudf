@@ -28,37 +28,6 @@ def test_normalize_spaces(norm_spaces_input_data):
 
 
 @pytest.mark.parametrize("do_lower", [True, False])
-def test_normalize_characters(norm_chars_input_data, do_lower):
-    got = plc.nvtext.normalize.characters_normalize(
-        plc.Column.from_arrow(norm_chars_input_data),
-        do_lower,
-    )
-    if do_lower:
-        expect = pa.array(
-            [
-                "eaio eaio",
-                "acenu",
-                "acenu",
-                " $ 24 . 08",
-                " [ a , bb ] ",
-                " [ pad ] ",
-            ]
-        )
-    else:
-        expect = pa.array(
-            [
-                "éâîô eaio",
-                "ĂĆĖÑÜ",
-                "ACENU",
-                " $ 24 . 08",
-                " [ a , bb ] ",
-                " [ pad ] ",
-            ]
-        )
-    assert_column_eq(expect, got)
-
-
-@pytest.mark.parametrize("do_lower", [True, False])
 def test_normalizer(norm_chars_input_data, do_lower):
     got = plc.nvtext.normalize.normalize_characters(
         plc.Column.from_arrow(norm_chars_input_data),
