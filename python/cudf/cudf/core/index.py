@@ -46,7 +46,6 @@ from cudf.core.copy_types import GatherMap
 from cudf.core.dtypes import IntervalDtype
 from cudf.core.join._join_helpers import _match_join_keys
 from cudf.core.mixins import BinaryOperand
-from cudf.core.scalar import pa_scalar_to_plc_scalar
 from cudf.core.single_column_frame import SingleColumnFrame
 from cudf.errors import MixedTypeError
 from cudf.utils.docutils import copy_docstring
@@ -62,6 +61,7 @@ from cudf.utils.dtypes import (
     is_mixed_with_object_dtype,
 )
 from cudf.utils.performance_tracking import _performance_tracking
+from cudf.utils.scalar import pa_scalar_to_plc_scalar
 from cudf.utils.utils import _is_same_name, _warn_no_dask_cudf
 
 if TYPE_CHECKING:
@@ -69,8 +69,11 @@ if TYPE_CHECKING:
     from datetime import tzinfo
 
     from cudf._typing import ColumnLike, Dtype
+    from cudf.core.dataframe import DataFrame
     from cudf.core.frame import Frame
+    from cudf.core.multiindex import MultiIndex
     from cudf.core.series import Series
+    from cudf.core.tools.datetimes import DateOffset
 
 
 def ensure_index(index_like: Any) -> Index:
@@ -91,7 +94,7 @@ def _get_result_name(
 
 
 def _lexsorted_equal_range(
-    idx: Index | cudf.MultiIndex,
+    idx: Index | MultiIndex,
     keys: list[ColumnBase],
     is_sorted: bool,
 ) -> tuple[int, int, ColumnBase | None]:
@@ -379,7 +382,7 @@ class Index(SingleColumnFrame):  # type: ignore[misc]
 
     @classmethod
     @_performance_tracking
-    def from_arrow(cls, obj: pa.Array) -> Index | cudf.MultiIndex:
+    def from_arrow(cls, obj: pa.Array) -> Index | MultiIndex:
         """Create from PyArrow Array/ChunkedArray.
 
         Parameters
@@ -2276,7 +2279,7 @@ class Index(SingleColumnFrame):  # type: ignore[misc]
 
     def to_frame(
         self, index: bool = True, name: Hashable = no_default
-    ) -> cudf.DataFrame:
+    ) -> DataFrame:
         """Create a DataFrame with a column containing this Index
 
         Parameters
@@ -2905,7 +2908,7 @@ class RangeIndex(Index):
 
     def to_frame(
         self, index: bool = True, name: Hashable = no_default
-    ) -> cudf.DataFrame:
+    ) -> DataFrame:
         return self._as_int_index().to_frame(index=index, name=name)
 
     @property
@@ -3629,11 +3632,11 @@ class DatetimeIndex(Index):
         return self._column.astype(np.dtype(np.int64)).values
 
     @property
-    def inferred_freq(self) -> cudf.DateOffset | None:
+    def inferred_freq(self) -> DateOffset | None:
         raise NotImplementedError("inferred_freq is currently not implemented")
 
     @property
-    def freq(self) -> cudf.DateOffset | None:
+    def freq(self) -> DateOffset | None:
         return self._freq
 
     @freq.setter
@@ -4147,7 +4150,7 @@ class DatetimeIndex(Index):
         return Index._from_column(month_names, name=self.name)
 
     @_performance_tracking
-    def isocalendar(self) -> cudf.DataFrame:
+    def isocalendar(self) -> DataFrame:
         """
         Returns a DataFrame with the year, week, and day
         calculated according to the ISO 8601 standard.
@@ -4522,7 +4525,7 @@ class TimedeltaIndex(Index):
         raise NotImplementedError("as_unit is currently not implemented")
 
     @property
-    def freq(self) -> cudf.DateOffset | None:
+    def freq(self) -> DateOffset | None:
         raise NotImplementedError("freq is currently not implemented")
 
     @property
@@ -4605,7 +4608,7 @@ class TimedeltaIndex(Index):
 
     @property  # type: ignore
     @_performance_tracking
-    def days(self) -> cudf.Index:
+    def days(self) -> Index:
         """
         Number of days for each element.
         """
@@ -4616,7 +4619,7 @@ class TimedeltaIndex(Index):
 
     @property  # type: ignore
     @_performance_tracking
-    def seconds(self) -> cudf.Index:
+    def seconds(self) -> Index:
         """
         Number of seconds (>= 0 and less than 1 day) for each element.
         """
@@ -4626,7 +4629,7 @@ class TimedeltaIndex(Index):
 
     @property  # type: ignore
     @_performance_tracking
-    def microseconds(self) -> cudf.Index:
+    def microseconds(self) -> Index:
         """
         Number of microseconds (>= 0 and less than 1 second) for each element.
         """
@@ -4637,7 +4640,7 @@ class TimedeltaIndex(Index):
 
     @property  # type: ignore
     @_performance_tracking
-    def nanoseconds(self) -> cudf.Index:
+    def nanoseconds(self) -> Index:
         """
         Number of nanoseconds (>= 0 and less than 1 microsecond) for each
         element.
@@ -4648,7 +4651,7 @@ class TimedeltaIndex(Index):
 
     @property  # type: ignore
     @_performance_tracking
-    def components(self) -> cudf.DataFrame:
+    def components(self) -> DataFrame:
         """
         Return a dataframe of the components (days, hours, minutes,
         seconds, milliseconds, microseconds, nanoseconds) of the Timedeltas.
@@ -4823,7 +4826,7 @@ class CategoricalIndex(Index):
 
     @property  # type: ignore
     @_performance_tracking
-    def codes(self) -> cudf.Index:
+    def codes(self) -> Index:
         """
         The category codes of this categorical.
         """
@@ -4831,7 +4834,7 @@ class CategoricalIndex(Index):
 
     @property  # type: ignore
     @_performance_tracking
-    def categories(self) -> cudf.Index:
+    def categories(self) -> Index:
         """
         The categories of this categorical.
         """
@@ -5589,7 +5592,7 @@ def _get_indexer_basic(index, positions, method, target_col, tolerance):
 
 def _get_nearest_indexer(
     index: Index,
-    positions: cudf.Series,
+    positions: Series,
     target_col: ColumnBase,
     tolerance: int | float,
 ):
@@ -5628,7 +5631,7 @@ def _get_nearest_indexer(
     return indexer
 
 
-def _validate_freq(freq: Any) -> cudf.DateOffset | None:
+def _validate_freq(freq: Any) -> DateOffset | None:
     if isinstance(freq, str):
         return cudf.DateOffset._from_freqstr(freq)
     elif freq is None:

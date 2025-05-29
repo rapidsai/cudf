@@ -51,7 +51,6 @@ from cudf.core.index import Index, RangeIndex, _index_from_data, ensure_index
 from cudf.core.missing import NA
 from cudf.core.multiindex import MultiIndex
 from cudf.core.resample import _Resampler
-from cudf.core.scalar import pa_scalar_to_plc_scalar
 from cudf.core.udf.utils import (
     _get_input_args_from_frame,
     _post_process_output_col,
@@ -69,6 +68,7 @@ from cudf.utils.dtypes import (
     is_dtype_obj_numeric,
 )
 from cudf.utils.performance_tracking import _performance_tracking
+from cudf.utils.scalar import pa_scalar_to_plc_scalar
 from cudf.utils.utils import _warn_no_dask_cudf
 
 if TYPE_CHECKING:
@@ -81,6 +81,7 @@ if TYPE_CHECKING:
         DtypeObj,
         NotImplementedType,
     )
+    from cudf.core.series import Series
 
 
 doc_reset_index_template = """
@@ -2767,7 +2768,7 @@ class IndexedFrame(Frame):
             "sha512",
         ] = "murmur3",
         seed: int | None = None,
-    ) -> cudf.Series:
+    ) -> Series:
         """Compute the hash of values in this column.
 
         Parameters
@@ -3078,7 +3079,7 @@ class IndexedFrame(Frame):
     @_performance_tracking
     def duplicated(
         self, subset=None, keep: Literal["first", "last", False] = "first"
-    ) -> cudf.Series:
+    ) -> Series:
         """
         Return boolean Series denoting duplicate rows.
 
