@@ -16,8 +16,6 @@ from cudf_polars.dsl.expressions.base import ExecutionContext, Expr
 from cudf_polars.dsl.utils.windows import range_window_bounds
 
 if TYPE_CHECKING:
-    import pyarrow as pa
-
     from cudf_polars.containers import DataFrame, DataType
     from cudf_polars.typing import ClosedInterval
 
@@ -67,8 +65,8 @@ class RollingWindow(Expr):
     def __init__(
         self,
         dtype: DataType,
-        preceding: pa.Scalar,
-        following: pa.Scalar,
+        preceding: plc.Scalar,
+        following: plc.Scalar,
         closed_window: ClosedInterval,
         orderby: str,
         agg: Expr,
