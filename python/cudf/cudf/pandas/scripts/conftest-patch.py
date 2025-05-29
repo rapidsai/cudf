@@ -13305,6 +13305,8 @@ NODEIDS_THAT_FAIL_WITH_CUDF_PANDAS = {
 NODEIDS_THAT_XPASS_WITH_CUDF_PANDAS = {
     "tests/arrays/string_/test_string.py::test_add_2d[pyarrow]",
     "tests/arrays/string_/test_string.py::test_add_2d[pyarrow_numpy]",
+    "tests/computation/test_eval.py::test_eval_no_support_column_name[inf]",
+    "tests/computation/test_eval.py::test_eval_no_support_column_name[Inf]",
     "tests/extension/decimal/test_decimal.py::TestDecimalArray::test_getitem_series_integer_with_missing_raises[integer-array]",
     "tests/extension/json/test_json.py::TestJSONArray::test_getitem_series_integer_with_missing_raises[integer-array]",
     "tests/extension/test_arrow.py::TestArrowArray::test_getitem_series_integer_with_missing_raises[binary-integer-array]",
@@ -13411,9 +13413,6 @@ NODEIDS_THAT_XPASS_WITH_CUDF_PANDAS = {
     "tests/window/moments/test_moments_consistency_rolling.py::test_rolling_apply_consistency_sum[all_data15-rolling_consistency_cases0-False-sum]",
     "tests/window/moments/test_moments_consistency_rolling.py::test_rolling_apply_consistency_sum[all_data15-rolling_consistency_cases0-True-sum]",
     "tests/window/moments/test_moments_consistency_rolling.py::test_rolling_apply_consistency_sum[all_data16-rolling_consistency_cases0-False-sum]",
-    "tests/window/moments/test_moments_consistency_rolling.py::test_rolling_apply_consistency_sum[all_data16-rolling_consistency_cases0-True-sum]",
-    "tests/window/moments/test_moments_consistency_rolling.py::test_rolling_apply_consistency_sum[all_data17-rolling_consistency_cases0-False-sum]",
-    "tests/window/moments/test_moments_consistency_rolling.py::test_rolling_apply_consistency_sum[all_data17-rolling_consistency_cases0-True-sum]",
 }
 
 

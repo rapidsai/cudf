@@ -999,9 +999,9 @@ def _pivot(
     Parameters
     ----------
     col_accessor : DataFrame
-    index : cudf.Index
+    index : Index
         Index labels of the result
-    columns : cudf.Index
+    columns : Index
         Column labels of the result
     """
     columns_labels, columns_idx = columns._encode()

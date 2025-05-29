@@ -81,6 +81,7 @@ if TYPE_CHECKING:
         DtypeObj,
         NotImplementedType,
     )
+    from cudf.core.series import Series
 
 
 doc_reset_index_template = """
@@ -2767,7 +2768,7 @@ class IndexedFrame(Frame):
             "sha512",
         ] = "murmur3",
         seed: int | None = None,
-    ) -> cudf.Series:
+    ) -> Series:
         """Compute the hash of values in this column.
 
         Parameters
@@ -3078,7 +3079,7 @@ class IndexedFrame(Frame):
     @_performance_tracking
     def duplicated(
         self, subset=None, keep: Literal["first", "last", False] = "first"
-    ) -> cudf.Series:
+    ) -> Series:
         """
         Return boolean Series denoting duplicate rows.
 
