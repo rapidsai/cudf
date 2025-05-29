@@ -101,8 +101,8 @@ struct device_span {
 /**
  * @brief A span type with optional/nullable elements.
  * Optional implies the span contains nullable elements.
- * The nullability of the elements is internally represented by an optional bitmask which is nullptr
- * when all the elements are empty.
+ * The nullability of the elements is internally represented by an optional bitmask which can be
+ * nullptr when all the elements are non-null.
  *
  */
 template <typename T>
@@ -129,6 +129,8 @@ struct device_optional_span : device_span<T> {
   /// @copydoc column_device_view::nullable
   [[nodiscard]] CUDF_HOST_DEVICE bool nullable() const { return _null_mask != nullptr; }
 
+#ifdef __CUDACC__
+
   /// @copydoc column_device_view::is_valid_nocheck
   [[nodiscard]] __device__ bool is_valid_nocheck(size_t element_index) const
   {
@@ -146,6 +148,8 @@ struct device_optional_span : device_span<T> {
   {
     return !is_valid(element_index);
   }
+
+#endif
 };
 
 }  // namespace jit

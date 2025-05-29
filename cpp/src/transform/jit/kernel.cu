@@ -14,8 +14,9 @@
  * limitations under the License.
  */
 
+#include "jit/span.cuh"
+
 #include <cudf/column/column_device_view_base.cuh>
-#include <cudf/jit/span.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/traits.hpp>

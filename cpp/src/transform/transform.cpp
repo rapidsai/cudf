@@ -16,6 +16,7 @@
 
 #include "jit/cache.hpp"
 #include "jit/parser.hpp"
+#include "jit/span.cuh"
 #include "jit/util.hpp"
 
 #include <cudf/column/column.hpp>
@@ -24,7 +25,6 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/transform.hpp>
 #include <cudf/jit/runtime_support.hpp>
-#include <cudf/jit/span.cuh>
 #include <cudf/null_mask.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
