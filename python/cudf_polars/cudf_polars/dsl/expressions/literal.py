@@ -75,7 +75,7 @@ class LiteralColumn(Expr):
         self, df: DataFrame, *, context: ExecutionContext = ExecutionContext.FRAME
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
-        return Column(plc.Column(self.value))
+        return Column(plc.Column.from_arrow(self.value))
 
     @property
     def agg_request(self) -> NoReturn:  # noqa: D102

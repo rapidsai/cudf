@@ -477,8 +477,12 @@ class Scan(IR):
         Each path is repeated according to the number of rows read from it.
         """
         (filepaths,) = plc.filling.repeat(
-            plc.Table([plc.Column(pl.Series(values=[str(pth) for pth in paths]))]),
-            plc.Column(pl.Series(values=rows_per_path, dtype=pl.datatypes.Int32())),
+            plc.Table(
+                [plc.Column.from_arrow(pl.Series(values=[str(pth) for pth in paths]))]
+            ),
+            plc.Column.from_arrow(
+                pl.Series(values=rows_per_path, dtype=pl.datatypes.Int32())
+            ),
         ).columns()
         return df.with_columns([Column(filepaths, name=name)])
 
@@ -2181,7 +2185,7 @@ class MapFunction(IR):
             (variable_column,) = plc.filling.repeat(
                 plc.Table(
                     [
-                        plc.Column(
+                        plc.Column.from_arrow(
                             pl.Series(
                                 values=pivotees, dtype=schema[variable_name].polars
                             )
