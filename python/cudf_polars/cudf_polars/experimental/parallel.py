@@ -216,8 +216,7 @@ def evaluate_streaming(ir: IR, config_options: ConfigOptions) -> DataFrame:
 
     graph = post_process_task_graph(graph, key, config_options)
 
-    scheduler = get_scheduler(config_options)
-    return scheduler(graph, key)
+    return get_scheduler(config_options)(graph, key)
 
 
 @generate_ir_tasks.register(IR)
