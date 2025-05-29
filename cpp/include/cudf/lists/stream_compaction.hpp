@@ -96,35 +96,6 @@ std::unique_ptr<column> distinct(
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
-/**
- * @brief Create a new list column without duplicate elements in each list.
- *
- * Given a lists column `input`, distinct elements of each list are copied to the corresponding
- * output list. The order of lists is preserved while the order of elements within each list is not
- * guaranteed.
- *
- * @deprecated Deprecated in 25.06, to be removed in 25.08
- *
- * Example:
- * @code{.pseudo}
- * input  = { {0, 1, 2, 3, 2}, {3, 1, 2}, null, {4, null, null, 5} }
- * result = { {0, 1, 2, 3}, {3, 1, 2}, null, {4, null, 5} }
- * @endcode
- *
- * @param input The input lists column
- * @param nulls_equal Flag to specify whether null elements should be considered as equal
- * @param nans_equal Flag to specify whether floating-point NaNs should be considered as equal
- * @param stream CUDA stream used for device memory operations and kernel launches
- * @param mr Device memory resource used to allocate the returned object
- * @return The resulting lists column containing lists without duplicates
- */
-[[deprecated]] std::unique_ptr<column> distinct(
-  lists_column_view const& input,
-  null_equality nulls_equal,
-  nan_equality nans_equal,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
-
 /** @} */  // end of group
 
 }  // namespace lists
