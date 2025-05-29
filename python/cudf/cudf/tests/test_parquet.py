@@ -2926,15 +2926,13 @@ def test_parquet_flba_round_trip(tmpdir):
         "USE_DEFAULT",
     ],
 )
-def test_per_column_options(tmpdir, encoding):
+def test_per_column_encoding_option(encoding):
     pdf = pd.DataFrame({"ilist": [[1, 2, 3, 1, 2, 3]], "i1": [1]})
     cdf = cudf.from_pandas(pdf)
-    fname = tmpdir.join("ilist.parquet")
+    buffer = BytesIO()
     cdf.to_parquet(
-        fname,
+        buffer,
         column_encoding={"ilist.list.element": encoding},
-        compression="SNAPPY",
-        skip_compression={"ilist.list.element"},
     )
     # DICTIONARY and USE_DEFAULT should both result in a PLAIN_DICTIONARY encoding in parquet
     encoding_name = (
@@ -2942,12 +2940,26 @@ def test_per_column_options(tmpdir, encoding):
         if encoding == "DICTIONARY" or encoding == "USE_DEFAULT"
         else encoding
     )
-    pf = pq.ParquetFile(fname)
+    pf = pq.ParquetFile(buffer)
     fmd = pf.metadata
     assert encoding_name in fmd.row_group(0).column(0).encodings
-    assert fmd.row_group(0).column(0).compression == "UNCOMPRESSED"
-    assert fmd.row_group(0).column(1).compression == "SNAPPY"
 
+@pytest.mark.parametrize("compression", ["SNAPPY", "ZSTD"])
+def test_per_column_compression_option(set_decomp_env_vars, compression):
+    pdf = pd.DataFrame({"ilist": [[1, 2, 3, 1, 2, 3]], "i1": [[1, 2, 3, 1, 2, 3]]})
+    cdf = cudf.from_pandas(pdf)
+    buffer = BytesIO()
+    cdf.to_parquet(
+        buffer,
+        compression=compression,
+        skip_compression={"ilist.list.element"},
+        use_dictionary=False, # to make sure that data is compressible
+    )
+
+    pf = pq.ParquetFile(buffer)
+    fmd = pf.metadata
+    assert fmd.row_group(0).column(0).compression == "UNCOMPRESSED"
+    assert fmd.row_group(0).column(1).compression == compression
 
 @pytest.mark.parametrize(
     "encoding",
