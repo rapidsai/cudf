@@ -135,19 +135,7 @@ cdef class Scalar:
         """
         if pa_err is not None:
             raise pa_err
-        return Scalar._from_arrow(pa_val, dtype)
-
-    if pa is not None:
-        @staticmethod
-        def _from_arrow(obj: pa.Scalar, dtype: DataType | None = None) -> Scalar:
-            if isinstance(obj.type, pa.ListType) and obj.as_py() is None:
-                # pyarrow doesn't correctly handle None values for list types, so
-                # we have to create this one manually.
-                # https://github.com/apache/arrow/issues/40319
-                pa_array = pa.array([None], type=obj.type)
-            else:
-                pa_array = pa.array([obj])
-            return Column.from_arrow(pa_array, dtype=dtype).to_scalar()
+        return _from_arrow(pa_val, dtype)
 
     @staticmethod
     cdef Scalar empty_like(Column column):
@@ -686,3 +674,15 @@ if np is not None:
         (<numeric_scalar[double]*>c_obj.get()).set_value(np_val)
         cdef Scalar slr = _new_scalar(move(c_obj), dtype)
         return slr
+
+
+if pa is not None:
+    def _from_arrow(obj: pa.Scalar, dtype: DataType | None = None) -> Scalar:
+        if isinstance(obj.type, pa.ListType) and obj.as_py() is None:
+            # pyarrow doesn't correctly handle None values for list types, so
+            # we have to create this one manually.
+            # https://github.com/apache/arrow/issues/40319
+            pa_array = pa.array([None], type=obj.type)
+        else:
+            pa_array = pa.array([obj])
+        return Column.from_arrow(pa_array, dtype=dtype).to_scalar()

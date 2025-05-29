@@ -21,8 +21,12 @@ from pylibcudf.libcudf.types import null_order as NullOrder  # no-cython-lint, i
 from pylibcudf.libcudf.types import order as Order  # no-cython-lint, isort:skip
 from pylibcudf.libcudf.types import sorted as Sorted  # no-cython-lint, isort:skip
 
+from packaging.version import parse
+
 try:
-    from pyarrow import lib as pa
+    from pyarrow import __version__ as pa_version, lib as pa
+
+    PYARROW_VERSION = parse(pa_version)
     pa_err = None
 
     ARROW_TO_PYLIBCUDF_TYPES = {
@@ -206,22 +210,7 @@ cdef class DataType:
         """
         if pa_err is not None:
             raise pa_err
-        return DataType._from_arrow(pa_typ)
-
-    if pa is not None:
-        @staticmethod
-        def _from_arrow(obj: pa.DataType) -> DataType:
-            if isinstance(obj, pa.Decimal128Type):
-                return DataType(type_id.DECIMAL128, scale=-obj.scale)
-            elif isinstance(obj, pa.StructType):
-                return DataType(type_id.STRUCT)
-            elif isinstance(obj, pa.ListType):
-                return DataType(type_id.LIST)
-            else:
-                try:
-                    return DataType(ARROW_TO_PYLIBCUDF_TYPES[obj])
-                except KeyError:
-                    raise TypeError(f"Unable to convert {obj} to cudf datatype")
+        return _from_arrow(pa_typ)
 
     @staticmethod
     def from_py(typ: type) -> DataType:
@@ -277,6 +266,25 @@ cpdef size_t size_of(DataType t):
     """
     with nogil:
         return cpp_size_of(t.c_obj)
+
+if pa is not None:
+    def _from_arrow(obj: pa.DataType) -> DataType:
+        if PYARROW_VERSION > parse("19.0.0"):
+            if isinstance(obj, pa.Decimal32Type):
+                return DataType(type_id.DECIMAL32, scale=-obj.scale)
+            if isinstance(obj, pa.Decimal64Type):
+                return DataType(type_id.DECIMAL64, scale=-obj.scale)
+        if isinstance(obj, pa.Decimal128Type):
+            return DataType(type_id.DECIMAL128, scale=-obj.scale)
+        elif isinstance(obj, pa.StructType):
+            return DataType(type_id.STRUCT)
+        elif isinstance(obj, pa.ListType):
+            return DataType(type_id.LIST)
+        else:
+            try:
+                return DataType(ARROW_TO_PYLIBCUDF_TYPES[obj])
+            except KeyError:
+                raise TypeError(f"Unable to convert {obj} to cudf datatype")
 
 SIZE_TYPE = DataType(type_to_id[size_type]())
 SIZE_TYPE_ID = SIZE_TYPE.id()
