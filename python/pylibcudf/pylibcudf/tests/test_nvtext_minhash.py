@@ -22,10 +22,10 @@ def test_minhash(minhash_input_data, width):
         else plc.nvtext.minhash.minhash64
     )
     result = minhash_func(
-        plc.Column(input_arr),
+        plc.Column.from_arrow(input_arr),
         0,
-        plc.Column(seeds),
-        plc.Column(seeds),
+        plc.Column.from_arrow(seeds),
+        plc.Column.from_arrow(seeds),
         width,
     )
     pa_result = plc.interop.to_arrow(result)
@@ -68,11 +68,11 @@ def test_minhash_ngrams(minhash_ngrams_input_data, ngrams):
         else plc.nvtext.minhash.minhash64_ngrams
     )
     result = minhash_func(
-        plc.Column(input_arr),
+        plc.Column.from_arrow(input_arr),
         ngrams,
         0,
-        plc.Column(ab),
-        plc.Column(ab),
+        plc.Column.from_arrow(ab),
+        plc.Column.from_arrow(ab),
     )
     pa_result = plc.interop.to_arrow(result)
     assert all(len(got) == len(ab) for got, s in zip(pa_result, input_arr))

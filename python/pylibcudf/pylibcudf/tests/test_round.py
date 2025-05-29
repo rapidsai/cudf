@@ -14,7 +14,7 @@ def column(request, has_nulls):
     typ = {"float32": pa.float32(), "float64": pa.float64()}[request.param]
     if has_nulls:
         values[2] = None
-    return plc.Column(pa.array(values, type=typ))
+    return plc.Column.from_arrow(pa.array(values, type=typ))
 
 
 @pytest.mark.parametrize(
