@@ -261,8 +261,13 @@ def _(ir: Shuffle, partition_info: MutableMapping[IR, PartitionInfo]) -> TaskGra
     ) == len(ir.keys):  # pragma: no cover
         shuffle_on = [k.name for k in _keys]
         try:
-            # TODO: How to deal with `rapidsmpf_shuffle_graph`
-            # using "general" tuple task spec??
+            # TODO: The output of `rapidsmpf_shuffle_graph`
+            # will NOT be a proper `TaskGraph`. For now,
+            # we can ignore this, because the graph will
+            # always be converted to a Dask-compatible graph
+            # when rapidsmpf is used. However, we should
+            # update rapidsmpf to (optionally) use the Task
+            # spec defined in cudf-polars.
             from rapidsmpf.integrations.dask import rapidsmpf_shuffle_graph
 
             return rapidsmpf_shuffle_graph(
