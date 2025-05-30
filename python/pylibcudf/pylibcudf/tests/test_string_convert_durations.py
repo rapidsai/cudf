@@ -28,7 +28,7 @@ def pa_duration_col():
 
 @pytest.fixture(scope="module")
 def plc_duration_col(pa_duration_col):
-    return plc.Column(pa_duration_col)
+    return plc.Column.from_arrow(pa_duration_col)
 
 
 def test_to_duration(pa_duration_col, plc_duration_col, duration_type):
@@ -56,7 +56,7 @@ def test_from_durations(format):
         [timedelta(days=1, hours=1, minutes=1, seconds=1), None]
     )
     got = plc.strings.convert.convert_durations.from_durations(
-        plc.Column(pa_array), format
+        plc.Column.from_arrow(pa_array), format
     )
     expect = pa.array(["1 days 01:01:01", None])
     assert_column_eq(expect, got)

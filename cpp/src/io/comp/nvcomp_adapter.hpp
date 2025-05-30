@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -73,12 +73,20 @@ size_t batched_decompress_temp_size(compression_type compression,
                                                     uint32_t max_uncomp_chunk_size);
 
 /**
- * @brief Gets input and output alignment requirements for the given compression type.
+ * @brief Gets input and output alignment requirements for compression.
  *
  * @param compression Compression type
  * @returns required alignment
  */
-[[nodiscard]] size_t required_alignment(compression_type compression);
+[[nodiscard]] size_t compress_required_alignment(compression_type compression);
+
+/**
+ * @brief Gets input and output alignment requirements for decompression.
+ *
+ * @param compression Compression type
+ * @returns required alignment
+ */
+[[nodiscard]] size_t decompress_required_alignment(compression_type compression);
 
 /**
  * @brief Maximum size of uncompressed chunks that can be compressed with nvCOMP.

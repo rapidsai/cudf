@@ -7,7 +7,7 @@ import itertools
 import textwrap
 import types
 import warnings
-from collections import abc
+from collections.abc import Mapping
 from functools import cached_property, singledispatch
 from typing import TYPE_CHECKING, Any, Literal
 
@@ -50,7 +50,6 @@ from cudf.core.join._join_helpers import _match_join_keys
 from cudf.core.mixins import GetAttrGetItemMixin, Reducible, Scannable
 from cudf.core.multiindex import MultiIndex
 from cudf.core.reshape import concat
-from cudf.core.scalar import pa_scalar_to_plc_scalar
 from cudf.core.udf.groupby_utils import _can_be_jitted, jit_groupby_apply
 from cudf.options import get_option
 from cudf.utils.dtypes import (
@@ -60,6 +59,7 @@ from cudf.utils.dtypes import (
     is_dtype_obj_numeric,
 )
 from cudf.utils.performance_tracking import _performance_tracking
+from cudf.utils.scalar import pa_scalar_to_plc_scalar
 
 if TYPE_CHECKING:
     from collections.abc import Generator, Hashable, Iterable, Sequence
@@ -218,15 +218,6 @@ def _is_all_scan_aggregate(all_aggs: list[list[str]]) -> bool:
             "Cannot perform both aggregation and scan in one operation"
         )
     return all_scan and any_scan
-
-
-def _deprecate_collect():
-    warnings.warn(
-        "Groupby.collect is deprecated and "
-        "will be removed in a future version. "
-        "Use `.agg(list)` instead.",
-        FutureWarning,
-    )
 
 
 # The three functions below return the quantiles [25%, 50%, 75%]
@@ -2693,12 +2684,6 @@ class GroupBy(Serializable, Reducible, Scannable):
         return self.agg(func)
 
     @_performance_tracking
-    def collect(self):
-        """Get a list of all the values for each column in each group."""
-        _deprecate_collect()
-        return self.agg(list)
-
-    @_performance_tracking
     def unique(self):
         """Get a list of the unique values for each column in each group."""
         return self.agg("unique")
@@ -3557,7 +3542,7 @@ class _Grouping(Serializable):
                     self._handle_series(by)
                 elif isinstance(by, Index):
                     self._handle_index(by)
-                elif isinstance(by, abc.Mapping):
+                elif isinstance(by, Mapping):
                     self._handle_mapping(by)
                 elif isinstance(by, Grouper):
                     self._handle_grouper(by)
@@ -3691,7 +3676,7 @@ def _is_multi_agg(aggs):
     Returns True if more than one aggregation is performed
     on any of the columns as specified in `aggs`.
     """
-    if isinstance(aggs, abc.Mapping):
+    if isinstance(aggs, Mapping):
         return any(is_list_like(agg) for agg in aggs.values())
     if is_list_like(aggs):
         return True

@@ -16,8 +16,9 @@
 #pragma once
 
 #include <cudf/types.hpp>
+#include <cudf/utilities/bit.hpp>
 
-namespace CUDF_EXPORT cudf {
+namespace cudf {
 
 namespace jit {
 
@@ -97,5 +98,59 @@ struct device_span {
   CUDF_HOST_DEVICE [[nodiscard]] constexpr element_type* end() const { return _data + _size; }
 };
 
+/**
+ * @brief A span type with optional/nullable elements.
+ *
+ * Optional implies the span contains nullable elements.
+ * The nullability of the elements is internally represented by an optional bitmask which can be
+ * nullptr when all the elements are non-null.
+ */
+template <typename T>
+struct device_optional_span : device_span<T> {
+ private:
+  using base               = device_span<T>;
+  bitmask_type* _null_mask = nullptr;
+
+ public:
+  CUDF_HOST_DEVICE constexpr device_optional_span() {}
+
+  /**
+   * @brief Constructs an optional span from a span and a null-mask.
+   *
+   * @param span Span containing the elements
+   * @param null_mask The null-mask determining the validity of the elements or nullptr if all
+   * valid.
+   */
+  CUDF_HOST_DEVICE device_optional_span(device_span<T> span, bitmask_type* null_mask)
+    : base{span}, _null_mask{null_mask}
+  {
+  }
+
+  /// @copydoc column_device_view::nullable
+  [[nodiscard]] CUDF_HOST_DEVICE bool nullable() const { return _null_mask != nullptr; }
+
+#ifdef __CUDACC__
+
+  /// @copydoc column_device_view::is_valid_nocheck
+  [[nodiscard]] __device__ bool is_valid_nocheck(size_t element_index) const
+  {
+    return bit_is_set(_null_mask, element_index);
+  }
+
+  /// @copydoc column_device_view::is_valid
+  [[nodiscard]] __device__ bool is_valid(size_t element_index) const
+  {
+    return not nullable() or is_valid_nocheck(element_index);
+  }
+
+  /// @copydoc column_device_view::is_null
+  [[nodiscard]] __device__ bool is_null(size_t element_index) const
+  {
+    return !is_valid(element_index);
+  }
+
+#endif
+};
+
 }  // namespace jit
-}  // namespace CUDF_EXPORT cudf
+}  // namespace cudf

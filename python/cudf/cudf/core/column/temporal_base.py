@@ -40,7 +40,7 @@ class TemporalBaseColumn(ColumnBase):
     Base class for TimeDeltaColumn and DatetimeColumn.
     """
 
-    _PANDAS_NA_REPR = str(pd.NaT)
+    _PANDAS_NA_VALUE = pd.NaT
     _UNDERLYING_DTYPE = np.dtype(np.int64)
     _NP_SCALAR: np.datetime64 | np.timedelta64
     _PD_SCALAR: pd.Timestamp | pd.Timedelta
@@ -199,9 +199,14 @@ class TemporalBaseColumn(ColumnBase):
 
     def element_indexing(self, index: int) -> ScalarLike:
         result = super().element_indexing(index)
+        if result is self._PANDAS_NA_VALUE:
+            return result
+        result = result.as_py()
         if cudf.get_option("mode.pandas_compatible"):
             return self._PD_SCALAR(result)
-        return result
+        elif isinstance(result, self._PD_SCALAR):
+            return result.to_numpy()
+        return self.dtype.type(result).astype(self.dtype, copy=False)
 
     def to_pandas(
         self,

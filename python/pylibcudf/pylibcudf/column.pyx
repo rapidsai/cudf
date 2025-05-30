@@ -58,6 +58,7 @@ from .gpumemoryview import _datatype_from_dtype_desc
 from ._interop_helpers import ArrowLike, ColumnMetadata
 
 import array
+from itertools import accumulate
 import functools
 import operator
 from typing import Iterable
@@ -129,6 +130,34 @@ cdef class OwnerMaskWithCAI:
         return self.cai
 
 
+class ArrayInterfaceWrapper:
+    def __init__(self, iface):
+        self.__array_interface__ = iface
+
+
+cdef gpumemoryview _copy_array_to_device(object buf):
+    """
+    Copy a host-side array.array buffer to device memory.
+
+    Parameters
+    ----------
+    buf : array.array
+        Array of bytes.
+
+    Returns
+    -------
+    gpumemoryview
+        A device memory view backed by an rmm.DeviceBuffer.
+    """
+    cdef memoryview mv = memoryview(buf)
+    cdef uintptr_t ptr = <uintptr_t>mv.obj.buffer_info()[0]
+    cdef size_t nbytes = len(mv) * mv.itemsize
+
+    return gpumemoryview(DeviceBuffer.to_device(
+        <const unsigned char[:nbytes:1]><const unsigned char*>ptr
+    ))
+
+
 def _infer_list_depth_and_dtype(obj: list) -> tuple[int, type]:
     """Infer the nesting depth and final scalar type."""
     depth = 0
@@ -141,7 +170,7 @@ def _infer_list_depth_and_dtype(obj: list) -> tuple[int, type]:
     if not current and depth == 0:
         raise ValueError("Cannot infer dtype from empty input")
 
-    if not isinstance(current, (int, float, bool)):
+    if not isinstance(current, (int, float, bool, str)):
         raise TypeError(f"Unsupported scalar type: {type(current).__name__}")
 
     return depth, type(current)
@@ -184,40 +213,6 @@ def _flatten(obj: list, out: list, offset: int) -> int:
     for sub in obj:
         offset = _flatten(sub, out, offset)
     return offset
-
-
-def _python_typecode_from_dtype(dtype: DataType) -> str:
-    """The Python type string."""
-    return {
-        type_id.INT8: 'b',
-        type_id.INT16: 'h',
-        type_id.INT32: 'i',
-        type_id.INT64: 'q',
-        type_id.UINT8: 'B',
-        type_id.UINT16: 'H',
-        type_id.UINT32: 'I',
-        type_id.UINT64: 'Q',
-        type_id.FLOAT32: 'f',
-        type_id.FLOAT64: 'd',
-        type_id.BOOL8: 'b'
-    }[dtype.id()]
-
-
-def _typestr_from_dtype(dtype: DataType) -> str:
-    """The array interface type string."""
-    return {
-        type_id.INT8: "|i1",
-        type_id.INT16: "<i2",
-        type_id.INT32: "<i4",
-        type_id.INT64: "<i8",
-        type_id.UINT8: "|u1",
-        type_id.UINT16: "<u2",
-        type_id.UINT32: "<u4",
-        type_id.UINT64: "<u8",
-        type_id.FLOAT32: "<f4",
-        type_id.FLOAT64: "<f8",
-        type_id.BOOL8: "|b1",
-    }[dtype.id()]
 
 
 def _prepare_array_metadata(
@@ -274,7 +269,7 @@ def _prepare_array_metadata(
     size_type_row_limit = numeric_limits[size_type].max()
     if (
         shape[0] > size_type_row_limit if len(shape) == 1
-        # >= because we do list column construction _from_gpumemoryview
+        # >= because we do list column construction _wrap_nested_list_column
         else shape[0] >= size_type_row_limit
     ):
         raise ValueError(
@@ -315,26 +310,9 @@ cdef class Column:
     children : list
         The children of this column if it is a compound column type.
     """
-    def __init__(self, obj=None, *args, **kwargs):
-        self._init(obj, *args, **kwargs)
-
     __hash__ = None
 
-    @functools.singledispatchmethod
-    def _init(self, obj, *args, **kwargs):
-        if obj is None:
-            if (data_type := kwargs.get("data_type")) is not None:
-                kwargs.pop("data_type")
-                self._init(data_type, *args, **kwargs)
-                return
-            elif (arrow_like := kwargs.get("arrow_like")) is not None:
-                kwargs.pop("arrow_like")
-                self._init(arrow_like, *args, **kwargs)
-                return
-        raise ValueError(f"Invalid input type {type(obj)}")
-
-    @_init.register(DataType)
-    def _(
+    def __init__(
         self, DataType data_type not None, size_type size, gpumemoryview data,
         gpumemoryview mask, size_type null_count, size_type offset,
         list children
@@ -350,15 +328,54 @@ cdef class Column:
         self._children = children
         self._num_children = len(children)
 
-    @_init.register(ArrowLike)
-    def _(self, arrow_like):
+    @staticmethod
+    def from_arrow(obj: ArrowLike, dtype: DataType | None = None) -> Column:
+        """
+        Create a Column from an Arrow-like object using the Arrow C Data Interface.
+
+        This method supports host and device Arrow arrays or streams. It detects
+        the type of Arrow object provided and constructs a `pylibcudf.Column`
+        accordingly using the appropriate Arrow C pointer-based interface.
+
+        Parameters
+        ----------
+        obj : Arrow-like
+            An object implementing one of the following:
+            - `__arrow_c_array__` (host Arrow array)
+            - `__arrow_c_device_array__` (device Arrow array)
+            - `__arrow_c_stream__` (host Arrow stream)
+            - `__arrow_c_device_stream__` (device Arrow stream)
+        dtype : DataType | None
+            The pylibcudf data type.
+
+        Returns
+        -------
+        Column
+            A `pylibcudf.Column` representing the Arrow data.
+
+        Raises
+        ------
+        NotImplementedError
+            If the Arrow-like object is a device stream (`__arrow_c_device_stream__`).
+            If the dtype argument is not None.
+        ValueError
+            If the object does not implement a known Arrow C interface.
+
+        Notes
+        -----
+        - This method supports zero-copy construction for device arrays.
+        """
+        if dtype is not None:
+            raise NotImplementedError(
+                "Creating a Column with the dtype argument specified."
+            )
         cdef ArrowSchema* c_schema
         cdef ArrowArray* c_array
         cdef ArrowDeviceArray* c_device_array
         cdef _ArrowColumnHolder result
         cdef unique_ptr[arrow_column] c_result
-        if hasattr(arrow_like, "__arrow_c_device_array__"):
-            schema, d_array = arrow_like.__arrow_c_device_array__()
+        if hasattr(obj, "__arrow_c_device_array__"):
+            schema, d_array = obj.__arrow_c_device_array__()
             c_schema = <ArrowSchema*>PyCapsule_GetPointer(schema, "arrow_schema")
             c_device_array = (
                 <ArrowDeviceArray*>PyCapsule_GetPointer(d_array, "arrow_device_array")
@@ -371,18 +388,9 @@ cdef class Column:
                 )
             result.col.swap(c_result)
 
-            tmp = Column.from_column_view_of_arbitrary(result.col.get().view(), result)
-            self._init(
-                tmp.type(),
-                tmp.size(),
-                tmp.data(),
-                tmp.null_mask(),
-                tmp.null_count(),
-                tmp.offset(),
-                tmp.children(),
-            )
-        elif hasattr(arrow_like, "__arrow_c_array__"):
-            schema, h_array = arrow_like.__arrow_c_array__()
+            return Column.from_column_view_of_arbitrary(result.col.get().view(), result)
+        elif hasattr(obj, "__arrow_c_array__"):
+            schema, h_array = obj.__arrow_c_array__()
             c_schema = <ArrowSchema*>PyCapsule_GetPointer(schema, "arrow_schema")
             c_array = <ArrowArray*>PyCapsule_GetPointer(h_array, "arrow_array")
 
@@ -393,18 +401,9 @@ cdef class Column:
                 )
             result.col.swap(c_result)
 
-            tmp = Column.from_column_view_of_arbitrary(result.col.get().view(), result)
-            self._init(
-                tmp.type(),
-                tmp.size(),
-                tmp.data(),
-                tmp.null_mask(),
-                tmp.null_count(),
-                tmp.offset(),
-                tmp.children(),
-            )
-        elif hasattr(arrow_like, "__arrow_c_stream__"):
-            stream = arrow_like.__arrow_c_stream__()
+            return Column.from_column_view_of_arbitrary(result.col.get().view(), result)
+        elif hasattr(obj, "__arrow_c_stream__"):
+            stream = obj.__arrow_c_stream__()
             c_stream = (
                 <ArrowArrayStream*>PyCapsule_GetPointer(stream, "arrow_array_stream")
             )
@@ -416,17 +415,8 @@ cdef class Column:
                 )
             result.col.swap(c_result)
 
-            tmp = Column.from_column_view_of_arbitrary(result.col.get().view(), result)
-            self._init(
-                tmp.type(),
-                tmp.size(),
-                tmp.data(),
-                tmp.null_mask(),
-                tmp.null_count(),
-                tmp.offset(),
-                tmp.children(),
-            )
-        elif hasattr(arrow_like, "__arrow_c_device_stream__"):
+            return Column.from_column_view_of_arbitrary(result.col.get().view(), result)
+        elif hasattr(obj, "__arrow_c_device_stream__"):
             # TODO: When we add support for this case, it should be moved above
             # the __arrow_c_array__ case since we should prioritize device
             # data if possible.
@@ -756,13 +746,16 @@ cdef class Column:
         return Column.from_libcudf(move(c_result))
 
     @staticmethod
-    cdef Column _from_gpumemoryview(
+    cdef Column _wrap_nested_list_column(
         gpumemoryview data,
         tuple shape,
         DataType dtype,
+        Column base=None,
     ):
         """
-        Construct a Column from a gpumemoryview and array metadata.
+        Construct a list Column from a gpumemoryview and array
+        metadata, or wrap an existing Column in a nested list
+        column matching the given shape.
 
         This non-public method does not perform validation. It assumes
         all arguments have been checked for correctness (e.g., shape,
@@ -771,36 +764,41 @@ cdef class Column:
         """
         ndim = len(shape)
         flat_size = functools.reduce(operator.mul, shape)
-        data_col = Column(
-            data_type=dtype,
-            size=flat_size,
-            data=data,
-            mask=None,
-            null_count=0,
-            offset=0,
-            children=[],
-        )
+
+        if base is None:
+            base = Column(
+                data_type=dtype,
+                size=flat_size,
+                data=data,
+                mask=None,
+                null_count=0,
+                offset=0,
+                children=[],
+            )
 
         int32_dtype = DataType(type_id.INT32)
+        nested = base
 
         for i in range(ndim - 1, 0, -1):
-            total_rows = functools.reduce(operator.mul, shape[:i])
+            outer_len = functools.reduce(operator.mul, shape[:i])
+
             offsets_col = sequence(
-                total_rows + 1,
+                outer_len + 1,
                 Scalar.from_py(0, int32_dtype),
                 Scalar.from_py(shape[i], int32_dtype),
             )
-            data_col = Column(
+
+            nested = Column(
                 data_type=DataType(type_id.LIST),
-                size=total_rows,
+                size=outer_len,
                 data=None,
                 mask=None,
                 null_count=0,
                 offset=0,
-                children=[offsets_col, data_col],
+                children=[offsets_col, nested],
             )
 
-        return data_col
+        return nested
 
     @classmethod
     def from_array_interface(cls, obj):
@@ -847,7 +845,7 @@ cdef class Column:
             <const unsigned char[:nbytes:1]><const unsigned char*><uintptr_t>data_ptr
         )
 
-        return Column._from_gpumemoryview(gpumemoryview(dbuf), shape, dtype)
+        return Column._wrap_nested_list_column(gpumemoryview(dbuf), shape, dtype)
 
     @classmethod
     def from_cuda_array_interface(cls, obj):
@@ -881,7 +879,7 @@ cdef class Column:
 
         _, _, shape, _, dtype = _prepare_array_metadata(iface)
 
-        return Column._from_gpumemoryview(gpumemoryview(obj), shape, dtype)
+        return Column._wrap_nested_list_column(gpumemoryview(obj), shape, dtype)
 
     @classmethod
     def from_array(cls, obj):
@@ -932,9 +930,9 @@ cdef class Column:
         Parameters
         ----------
         obj : Iterable
-            An iterable of scalar values (e.g., int, float, bool) or a nested iterable.
+            An iterable of Python scalar values (int, float, bool, str) or nested lists.
         dtype : DataType | None
-            The data type of the elements. If not specified, the type is inferred.
+            The type of the leaf elements. If not specified, the type is inferred.
 
         Returns
         -------
@@ -950,11 +948,16 @@ cdef class Column:
 
         Notes
         -----
-        - Only scalar types int, float, and bool are supported.
+        - Only scalar types int, float, bool, and str are supported.
         - Nested iterables must be materialized as lists.
+        - Jagged nested lists are not supported. Inner lists must have the same shape.
+        - Nulls (None) are not currently supported in input values.
+        - dtype must match the inferred or actual type of the scalar values
+        - Large strings are supported, meaning the combined length of all strings
+          (in bytes) can exceed the maximum 32-bit integer value. In that case,
+          the offsets column is automatically promoted to use 64-bit integers.
         """
 
-        # TODO: Investigate when we can avoid full list materialization.
         obj = list(obj)
 
         if not obj:
@@ -970,20 +973,56 @@ cdef class Column:
 
         flat, shape = _flatten_nested_list(obj, depth)
 
-        buf = array.array(_python_typecode_from_dtype(dtype), flat)
+        if dtype.id() == type_id.STRING:
+            encoded = [s.encode() for s in flat]
+            offsets = [0] + list(accumulate(len(s) for s in encoded))
+
+            offset_dtype = (
+                DataType(type_id.INT64)
+                if offsets[-1] > numeric_limits[size_type].max()
+                else DataType(type_id.INT32)
+            )
+
+            offsets_data = _copy_array_to_device(
+                array.array(offset_dtype._python_typecode, offsets)
+            )
+            chars_data = _copy_array_to_device(array.array("B", b"".join(encoded)))
+
+            offsets_col = Column(
+                offset_dtype,
+                len(offsets),
+                offsets_data,
+                None,
+                0,
+                0,
+                [],
+            )
+
+            base = Column(
+                DataType(type_id.STRING),
+                len(flat),
+                chars_data,
+                None,
+                0,
+                0,
+                [offsets_col],
+            )
+
+            return (
+                base if depth == 1
+                else Column._wrap_nested_list_column(None, shape, dtype, base=base)
+            )
+
+        buf = array.array(dtype._python_typecode, flat)
         mv = memoryview(buf).cast("B")
 
         iface = {
             "data": (mv.obj.buffer_info()[0], False),
             "shape": shape,
-            "typestr": _typestr_from_dtype(dtype),
+            "typestr": dtype.typestr,
             "strides": None,
             "version": 3,
         }
-
-        class ArrayInterfaceWrapper:
-            def __init__(self, iface):
-                self.__array_interface__ = iface
 
         return Column.from_array_interface(ArrayInterfaceWrapper(iface))
 
