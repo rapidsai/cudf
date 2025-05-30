@@ -9,7 +9,7 @@ import pylibcudf as plc
 
 
 def test_concatenate_scalar_seperator():
-    plc_table = plc.Table(
+    plc_table = plc.Table.from_arrow(
         pa.table({"a": ["a", None, "c"], "b": ["a", "b", None]})
     )
     sep = plc.interop.from_arrow(pa.scalar("-"))
@@ -36,10 +36,10 @@ def test_concatenate_scalar_seperator():
 
 
 def test_concatenate_column_seperator():
-    plc_table = plc.Table(
+    plc_table = plc.Table.from_arrow(
         pa.table({"a": ["a", None, "c"], "b": ["a", "b", None]})
     )
-    sep = plc.Column(pa.array(["-", "?", ","]))
+    sep = plc.Column.from_arrow(pa.array(["-", "?", ","]))
     got = plc.strings.combine.concatenate(
         plc_table,
         sep,
@@ -49,7 +49,7 @@ def test_concatenate_column_seperator():
 
     got = plc.strings.combine.concatenate(
         plc_table,
-        plc.Column(pa.array([None, "?", ","])),
+        plc.Column.from_arrow(pa.array([None, "?", ","])),
         narep=plc.interop.from_arrow(pa.scalar("1")),
         col_narep=plc.interop.from_arrow(pa.scalar("*")),
     )
@@ -61,7 +61,7 @@ def test_join_strings():
     pa_arr = pa.array(list("abc"))
     sep = pa.scalar("")
     got = plc.strings.combine.join_strings(
-        plc.Column(pa_arr),
+        plc.Column.from_arrow(pa_arr),
         plc.interop.from_arrow(sep),
         plc.interop.from_arrow(pa.scalar("")),
     )
@@ -73,7 +73,7 @@ def test_join_list_elements():
     pa_arr = pa.array([["a", "a"], ["b", "b"]])
     sep = pa.scalar("")
     got = plc.strings.combine.join_list_elements(
-        plc.Column(pa_arr),
+        plc.Column.from_arrow(pa_arr),
         plc.interop.from_arrow(sep),
         plc.interop.from_arrow(pa.scalar("")),
         plc.interop.from_arrow(pa.scalar("")),

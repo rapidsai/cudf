@@ -10,7 +10,7 @@ import pylibcudf as plc
 def test_all_characters_of_type():
     pa_array = pa.array(["1", "A"])
     got = plc.strings.char_types.all_characters_of_type(
-        plc.Column(pa_array),
+        plc.Column.from_arrow(pa_array),
         plc.strings.char_types.StringCharacterTypes.ALPHA,
         plc.strings.char_types.StringCharacterTypes.ALL_TYPES,
     )
@@ -21,7 +21,7 @@ def test_all_characters_of_type():
 def test_filter_characters_of_type():
     pa_array = pa.array(["=A="])
     got = plc.strings.char_types.filter_characters_of_type(
-        plc.Column(pa_array),
+        plc.Column.from_arrow(pa_array),
         plc.strings.char_types.StringCharacterTypes.ALPHANUM,
         plc.interop.from_arrow(pa.scalar(" ")),
         plc.strings.char_types.StringCharacterTypes.ALL_TYPES,

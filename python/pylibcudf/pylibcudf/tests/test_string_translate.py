@@ -13,7 +13,7 @@ def data_col():
         ["aa", "bbb", "cccc", "abcd", None],
         type=pa.string(),
     )
-    return pa_data_col, plc.Column(pa_data_col)
+    return pa_data_col, plc.Column.from_arrow(pa_data_col)
 
 
 @pytest.fixture

@@ -11,9 +11,11 @@ import pylibcudf as plc
 @pytest.mark.parametrize("separators", [None, pa.array([",", "[", "]"])])
 def test_format_list_column(na_rep, separators):
     got = plc.strings.convert.convert_lists.format_list_column(
-        plc.Column(pa.array([["1", "A"], None])),
+        plc.Column.from_arrow(pa.array([["1", "A"], None])),
         na_rep if na_rep is None else plc.interop.from_arrow(na_rep),
-        separators if separators is None else plc.Column(separators),
+        separators
+        if separators is None
+        else plc.Column.from_arrow(separators),
     )
     expect = pa.array(["[1,A]", ""])
     assert_column_eq(expect, got)
