@@ -7,8 +7,6 @@ import pytest
 
 import polars as pl
 
-from cudf_polars import Translator
-from cudf_polars.experimental.parallel import evaluate_streaming
 from cudf_polars.testing.asserts import DEFAULT_SCHEDULER, assert_gpu_result_equal
 from cudf_polars.utils.versions import POLARS_VERSION_LT_130
 
@@ -105,7 +103,9 @@ def test_sort(df, engine):
     "nulls_last,descending", [(True, False), (True, True), (False, True)]
 )
 def test_large_sort(large_df, by, engine_large, stable, nulls_last, descending):
-    q = large_df.sort(by=by, nulls_last=nulls_last, maintain_order=stable, descending=descending)
+    q = large_df.sort(
+        by=by, nulls_last=nulls_last, maintain_order=stable, descending=descending
+    )
     assert_gpu_result_equal(q, engine=engine_large)
 
 
