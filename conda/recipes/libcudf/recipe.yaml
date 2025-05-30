@@ -220,7 +220,10 @@ outputs:
         overlinking_behavior: "error"
     requirements:
       build:
+        - ${{ compiler("c") }}
         - ${{ compiler("cuda") }}
+        - ${{ compiler("cxx") }}
+        - ${{ stdlib("c") }}
         - cmake ${{ cmake_version }}
         - cuda-version =${{ cuda_version }}
         - ninja
