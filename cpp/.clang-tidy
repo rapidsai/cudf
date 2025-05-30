@@ -13,6 +13,10 @@
 #     for more information.
 # modernize-use-bool-literals:
 #     Our tests use int flags for validity masks extensively and we prefer that
+# modernize-use-constraints:
+#     New check in C++20; enable once the code is updated to stop using SFINAE
+# modernize-use-ranges:
+#     New check in C++20; need to discuss if we want to follow this style
 # clang-analyzer-cplusplus.NewDeleteLeaks:
 #     This check has numerous bugs, see
 #     https://github.com/llvm/llvm-project/issues?q=is%3Aissue+is%3Aopen+newdeleteleaks
@@ -34,6 +38,8 @@ Checks:
        -modernize-use-trailing-return-type,
        -modernize-return-braced-init-list,
        -modernize-use-bool-literals,
+       -modernize-use-constraints,
+       -modernize-use-ranges,
        clang-analyzer-*,
        -clang-analyzer-cplusplus.NewDeleteLeaks,
        -clang-analyzer-optin.core.EnumCastOutOfRange,
