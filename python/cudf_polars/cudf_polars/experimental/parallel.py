@@ -226,23 +226,19 @@ def _(
     # Generate pointwise (embarrassingly-parallel) tasks by default
     child_names = [get_key_name(c) for c in ir.children]
     bcast_child = [partition_info[c].count == 1 for c in ir.children]
-    tasks = {}
 
     traced = do_evaluate_with_tracing(ir.do_evaluate, name=type(ir).__name__)
-    for i, key in enumerate(partition_info[ir].keys(ir)):
-        # Problem: dask doesn't recurse in to `args` to substitute values for task keys
-        # when args is a tuple rather than a top-level *args.
-        # Solution: use partial to wrap the function with the wrapper_options.
-        args = (
+    return {
+        key: (
+            traced,
             *ir._non_child_args,
             *[
                 (child_name, 0 if bcast_child[j] else i)
                 for j, child_name in enumerate(child_names)
             ],
         )
-        tasks[key] = (traced, *args)
-
-    return tasks
+        for i, key in enumerate(partition_info[ir].keys(ir))
+    }
 
 
 @lower_ir_node.register(Union)
