@@ -60,7 +60,7 @@ namespace {
 /**
  * @brief Make a device vector where each row contains the index of the page it belongs to
  */
-[[nodiscard]] rmm::device_uvector<size_type> make_page_indices(
+[[nodiscard]] rmm::device_uvector<size_type> make_page_indices_async(
   cudf::host_span<cudf::size_type const> page_row_counts,
   cudf::host_span<cudf::size_type const> page_row_offsets,
   cudf::size_type total_rows,
@@ -68,7 +68,7 @@ namespace {
 {
   auto mr = cudf::get_current_device_resource_ref();
 
-  // Move page-level row counts and offsets to device
+  // Copy page-level row counts and offsets to device
   auto row_counts  = cudf::detail::make_device_uvector_async(page_row_counts, stream, mr);
   auto row_offsets = cudf::detail::make_device_uvector_async(page_row_offsets, stream, mr);
 
@@ -98,14 +98,26 @@ namespace {
 [[nodiscard]] auto make_page_row_counts_and_offsets(
   cudf::host_span<metadata_base const> per_file_metadata,
   cudf::host_span<std::vector<size_type> const> row_group_indices,
-  size_type schema_idx)
+  size_type schema_idx,
+  rmm::cuda_stream_view stream)
 {
+  // Set initial capacity to at least two data pages per row group
+  auto const initial_capacity =
+    std::accumulate(row_group_indices.begin(),
+                    row_group_indices.end(),
+                    size_t{0},
+                    [](auto sum, auto const& rg_indices) { return sum + (2 * rg_indices.size()); });
+
   // Vector to store how many rows are present in each page
-  std::vector<size_type> page_row_counts;
+  auto page_row_counts = cudf::detail::make_empty_host_vector<size_type>(initial_capacity, stream);
   // Vector to store the cumulative number of rows in each page
-  std::vector<size_type> page_row_offsets{0};
+  auto page_row_offsets =
+    cudf::detail::make_empty_host_vector<size_type>(initial_capacity + 1, stream);
+  page_row_offsets.push_back(0);
   // Vector to store the cumulative number of pages in each column chunk
-  std::vector<size_type> col_chunk_page_offsets{0};
+  auto col_chunk_page_offsets =
+    cudf::detail::make_empty_host_vector<size_type>(initial_capacity + 1, stream);
+  col_chunk_page_offsets.push_back(0);
 
   // For all data sources
   std::for_each(
@@ -138,8 +150,8 @@ namespace {
                        "mismatch between size of min/max page values and the size of page "
                        "locations");
           // Update the cumulative number of pages in this column chunk
-          col_chunk_page_offsets.emplace_back(col_chunk_page_offsets.back() +
-                                              offset_index.page_locations.size());
+          col_chunk_page_offsets.push_back(col_chunk_page_offsets.back() +
+                                           offset_index.page_locations.size());
 
           // For all pages in this column chunk, update page row counts and offsets.
           std::for_each(
@@ -154,8 +166,8 @@ namespace {
                   : row_group.num_rows;
 
               // Update the page row counts and offsets
-              page_row_counts.emplace_back(last_row_idx - first_row_idx);
-              page_row_offsets.emplace_back(page_row_offsets.back() + page_row_counts.back());
+              page_row_counts.push_back(last_row_idx - first_row_idx);
+              page_row_offsets.push_back(page_row_offsets.back() + page_row_counts.back());
             });
         }
       });
@@ -200,7 +212,7 @@ namespace {
  * @brief Construct a vector of all required data pages from the page row counts
  */
 [[nodiscard]] auto all_required_data_pages(
-  cudf::host_span<std::vector<size_type> const> page_row_counts)
+  cudf::host_span<cudf::detail::host_vector<size_type> const> page_row_counts)
 {
   std::vector<thrust::host_vector<bool>> all_required_data_pages;
   all_required_data_pages.reserve(page_row_counts.size());
@@ -429,7 +441,7 @@ struct page_stats_caster : public stats_caster_base {
     } else {
       // Compute column chunk level page count offsets, and page level row counts and row offsets.
       auto const [page_row_counts, page_row_offsets, col_chunk_page_offsets] =
-        make_page_row_counts_and_offsets(per_file_metadata, row_group_indices, schema_idx);
+        make_page_row_counts_and_offsets(per_file_metadata, row_group_indices, schema_idx, stream);
 
       CUDF_EXPECTS(
         page_row_offsets.back() == total_rows,
@@ -485,7 +497,7 @@ struct page_stats_caster : public stats_caster_base {
 
       // Construct a row indices mapping based on page row counts and offsets
       auto const page_indices =
-        make_page_indices(page_row_counts, page_row_offsets, total_rows, stream);
+        make_page_indices_async(page_row_counts, page_row_offsets, total_rows, stream);
 
       // For non-strings columns, directly gather the page-level column data and bitmask to the
       // row-level.
@@ -651,13 +663,19 @@ std::vector<thrust::host_vector<bool>> aggregate_reader_metadata::compute_data_p
   auto const total_rows  = row_mask.size();
   auto const num_columns = output_dtypes.size();
 
-  CUDF_EXPECTS(compute_has_page_index(per_file_metadata, row_group_indices, output_column_schemas),
+  auto const has_page_index =
+    compute_has_page_index(per_file_metadata, row_group_indices, output_column_schemas);
+  CUDF_EXPECTS(has_page_index,
                "Data page mask computation requires the Parquet page index for all output columns");
 
   // Compute page row counts, offsets, and column chunk page offsets for each column
-  std::vector<std::vector<size_type>> page_row_counts(num_columns);
-  std::vector<std::vector<size_type>> page_row_offsets(num_columns);
-  std::vector<std::vector<size_type>> col_chunk_page_offsets(num_columns);
+  std::vector<cudf::detail::host_vector<size_type>> page_row_counts;
+  std::vector<cudf::detail::host_vector<size_type>> page_row_offsets;
+  std::vector<cudf::detail::host_vector<size_type>> col_chunk_page_offsets;
+  page_row_counts.reserve(num_columns);
+  page_row_offsets.reserve(num_columns);
+  col_chunk_page_offsets.reserve(num_columns);
+
   auto zip_iter =
     thrust::make_zip_iterator(thrust::make_tuple(thrust::counting_iterator<cudf::size_type>(0),
                                                  page_row_counts.begin(),
@@ -666,8 +684,11 @@ std::vector<thrust::host_vector<bool>> aggregate_reader_metadata::compute_data_p
   std::for_each(zip_iter, zip_iter + num_columns, [&](auto const& item) {
     auto const col_idx    = thrust::get<0>(item);
     auto const schema_idx = output_column_schemas[col_idx];
-    std::tie(thrust::get<1>(item), thrust::get<2>(item), thrust::get<3>(item)) =
-      make_page_row_counts_and_offsets(per_file_metadata, row_group_indices, schema_idx);
+    auto [counts, offsets, chunk_offsets] =
+      make_page_row_counts_and_offsets(per_file_metadata, row_group_indices, schema_idx, stream);
+    page_row_counts.push_back(std::move(counts));
+    page_row_offsets.push_back(std::move(offsets));
+    col_chunk_page_offsets.push_back(std::move(chunk_offsets));
   });
 
   CUDF_EXPECTS(page_row_offsets.back().back() == total_rows,
@@ -694,7 +715,7 @@ std::vector<thrust::host_vector<bool>> aggregate_reader_metadata::compute_data_p
   // Vector to hold data page mask for each column
   auto data_page_mask = std::vector<thrust::host_vector<bool>>();
   data_page_mask.reserve(num_columns);
-  auto total_filtered_pages = size_t{0};
+  auto total_surviving_pages = size_t{0};
 
   // For all columns, look up which pages contain at least one required row. i.e.
   // !validity_it[row_idx] or is_row_required[row_idx] satisfies, and add its byte range to the
@@ -703,8 +724,8 @@ std::vector<thrust::host_vector<bool>> aggregate_reader_metadata::compute_data_p
     // Construct a row indices mapping based on page row counts and offsets
     auto const total_pages_in_this_column = page_row_counts[col_idx].size();
 
-    auto const page_indices =
-      make_page_indices(page_row_counts[col_idx], page_row_offsets[col_idx], total_rows, stream);
+    auto const page_indices = make_page_indices_async(
+      page_row_counts[col_idx], page_row_offsets[col_idx], total_rows, stream);
 
     // Device vector to hold page indices with at least one valid row
     rmm::device_uvector<size_type> select_page_indices(total_rows, stream, mr);
@@ -728,14 +749,15 @@ std::vector<thrust::host_vector<bool>> aggregate_reader_metadata::compute_data_p
       rmm::exec_policy_nosync(stream), select_page_indices.begin(), filtered_pages_end_iter);
 
     // Number of final filtered pages for this column
-    size_t const num_filtered_pages =
+    size_t const num_surviving_pages_this_column =
       thrust::distance(select_page_indices.begin(), filtered_uniq_page_end_iter);
 
-    total_filtered_pages += num_filtered_pages;
+    total_surviving_pages += num_surviving_pages_this_column;
 
     // Copy the filtered page indices for this column to host
     auto host_select_page_indices = cudf::detail::make_host_vector(
-      cudf::device_span<cudf::size_type const>{select_page_indices.data(), num_filtered_pages},
+      cudf::device_span<cudf::size_type const>{select_page_indices.data(),
+                                               num_surviving_pages_this_column},
       stream);
 
     // Vector to data page mask the this column
@@ -748,8 +770,8 @@ std::vector<thrust::host_vector<bool>> aggregate_reader_metadata::compute_data_p
   }
 
   CUDF_EXPECTS(
-    total_filtered_pages <= total_pages,
-    "Number of filtered pages must be less than or equal to the total number of input pages");
+    total_surviving_pages <= total_pages,
+    "Number of surviving pages must be less than or equal to the total number of input pages");
 
   return data_page_mask;
 }
