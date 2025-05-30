@@ -277,9 +277,7 @@ def _(
         partition_info[right].partitioned_on == ir.right_on
         and partition_info[right].count == output_count
     )
-    evaluate_with_tracing = do_evaluate_with_tracing(
-        ir.do_evaluate, name=type(ir).__name__
-    )
+    evaluate_with_tracing = do_evaluate_with_tracing(ir)
 
     if output_count == 1 or (left_partitioned and right_partitioned):
         # Partition-wise join

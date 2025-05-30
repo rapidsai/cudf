@@ -16,6 +16,7 @@ from rmm.pylibrmm.stream import DEFAULT_STREAM
 from cudf_polars.containers import DataFrame
 from cudf_polars.dsl.expr import Col
 from cudf_polars.dsl.ir import IR
+from cudf_polars.dsl.tracing import CUDF_POLARS_NVTX_DOMAIN
 from cudf_polars.experimental.base import get_key_name
 from cudf_polars.experimental.dispatch import generate_ir_tasks, lower_ir_node
 from cudf_polars.experimental.utils import _concat
@@ -46,7 +47,9 @@ class RMPFIntegration:  # pragma: no cover
     """cuDF-Polars protocol for rapidsmpf shuffler."""
 
     @staticmethod
-    @nvtx.annotate(message="RMPFIntegration.insert_partition", domain="cudf_polars")
+    @nvtx.annotate(
+        message="RMPFIntegration.insert_partition", domain=CUDF_POLARS_NVTX_DOMAIN
+    )
     def insert_partition(
         df: DataFrame,
         partition_id: int,  # Not currently used
@@ -71,7 +74,9 @@ class RMPFIntegration:  # pragma: no cover
         shuffler.insert_chunks(packed_inputs)
 
     @staticmethod
-    @nvtx.annotate(message="RMPFIntegration.extract_partition", domain="cudf_polars")
+    @nvtx.annotate(
+        message="RMPFIntegration.extract_partition", domain=CUDF_POLARS_NVTX_DOMAIN
+    )
     def extract_partition(
         partition_id: int,
         shuffler: Any,

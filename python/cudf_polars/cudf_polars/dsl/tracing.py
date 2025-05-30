@@ -14,15 +14,14 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     import cudf_polars.containers.dataframe
+    from cudf_polars.dsl.ir import IR
 
 
 CUDF_POLARS_NVTX_DOMAIN = "cudf_polars"
 
 
 def do_evaluate_with_tracing(
-    ir_do_evaluate: Callable[..., cudf_polars.containers.dataframe.DataFrame],
-    *,
-    name: str,
+    ir: IR,
 ) -> Callable[..., cudf_polars.containers.dataframe.DataFrame]:
     """
     Wrapper for IR.do_evaluate.
@@ -31,23 +30,22 @@ def do_evaluate_with_tracing(
 
     Parameters
     ----------
-    ir_do_evaluate
-        The do_evaluate method of an IR node.
-    name
-        The name of the IR node, typically from ``type(ir).__name__``.
-        This will be used as the nvtx message.
+    ir
+        The IR node to evaluate. Its ``do_evaluate`` method will be
+        called inside an nvtx annotation.
 
     Returns
     -------
     The result of the do_evaluate method.
     """
+    cls = type(ir)
 
-    @functools.wraps(ir_do_evaluate)
+    @functools.wraps(cls.do_evaluate)
     def wrapped(*args: Any) -> cudf_polars.containers.dataframe.DataFrame:
         with nvtx.annotate(
-            message=name,
+            message=cls.__name__,
             domain=CUDF_POLARS_NVTX_DOMAIN,
         ):
-            return ir_do_evaluate(*args)
+            return cls.do_evaluate(*args)
 
     return wrapped
