@@ -250,6 +250,7 @@ DataFrame = make_final_proxy_type(
     additional_attributes={
         "__array__": array_method,
         "__dir__": _DataFrame__dir__,
+        "__arrow_c_stream__": _FastSlowAttribute("__arrow_c_stream__"),
         "_constructor": _FastSlowAttribute("_constructor"),
         "_constructor_sliced": _FastSlowAttribute("_constructor_sliced"),
         "_accessors": set(),
@@ -555,6 +556,9 @@ PeriodDtype = make_final_proxy_type(
     pd.PeriodDtype,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
+    additional_attributes={
+        "__hash__": _FastSlowAttribute("__hash__"),
+    },
 )
 
 Period = make_final_proxy_type(
