@@ -27,7 +27,7 @@ def test_ngrams_tokenize(input_col, ngrams, delim, sep):
         return tokens
 
     result = plc.nvtext.ngrams_tokenize.ngrams_tokenize(
-        plc.Column(input_col),
+        plc.Column.from_arrow(input_col),
         ngrams,
         plc.interop.from_arrow(pa.scalar(delim)),
         plc.interop.from_arrow(pa.scalar(sep)),

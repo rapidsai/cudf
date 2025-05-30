@@ -14,9 +14,7 @@ from cudf_polars.dsl.expressions.base import (
 )
 
 if TYPE_CHECKING:
-    import pylibcudf as plc
-
-    from cudf_polars.containers import Column, DataFrame
+    from cudf_polars.containers import Column, DataFrame, DataType
 
 
 __all__ = ["Slice"]
@@ -28,7 +26,7 @@ class Slice(Expr):
 
     def __init__(
         self,
-        dtype: plc.DataType,
+        dtype: DataType,
         offset: int,
         length: int,
         column: Expr,

@@ -212,7 +212,8 @@ class reader::impl {
    * more accurately, we would like to have a more accurate guess of the real number of rows per
    * page.
    */
-  void generate_list_column_row_count_estimates();
+  enum class is_estimate_row_counts : bool { NO = false, YES = true };
+  void generate_list_column_row_counts(is_estimate_row_counts is_estimate_row_counts);
 
   /**
    * @brief Perform some preprocessing for subpass page data and also compute the split locations
