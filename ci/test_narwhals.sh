@@ -36,8 +36,11 @@ python -m pytest \
 
 # test_dtypes: With cudf.pandas loaded, to_pandas() preserves Arrow dtypes like list and struct, so pandas
 # columns aren't object anymore. The test expects object, causing a mismatch.
-TEST_THAT_NEED_NARWHALS_FIX=" \
+# test_nan: Narwhals expect this test to fail, but as of polars 1.30 we raise a RuntimeError,
+# not polars ComputeError. So the test is looking for the wrong error and fails.
+TESTS_THAT_NEED_NARWHALS_FIX_FOR_CUDF_POLARS=" \
 test_dtypes \
+test_nan \
 "
 
 # Temporarily skipping these tests in 25.04 and will unskip them in 25.06, which will support Polars 1.26.
@@ -54,7 +57,8 @@ NARWHALS_POLARS_GPU=1 python -m pytest \
     --cache-clear \
     --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf-polars-narwhals.xml" \
     -k "not ( \
-        ${TEMPORARILY_SKIP} \
+        ${TEMPORARILY_SKIP} or \
+        ${TESTS_THAT_NEED_NARWHALS_FIX_FOR_CUDF_POLARS} \
     )" \
     --numprocesses=8 \
     --dist=worksteal \
@@ -84,6 +88,12 @@ test_to_arrow_with_nulls or \
 test_pandas_object_series \
 "
 
+# test_dtypes: With cudf.pandas loaded, to_pandas() preserves Arrow dtypes like list and struct, so pandas
+# columns aren't object anymore. The test expects object, causing a mismatch.
+TESTS_THAT_NEED_NARWHALS_FIX_FOR_CUDF_PANDAS=" \
+test_dtypes \
+"
+
 NARWHALS_DEFAULT_CONSTRUCTORS=pandas python -m pytest \
     -p cudf.pandas \
     --cache-clear \
@@ -91,7 +101,7 @@ NARWHALS_DEFAULT_CONSTRUCTORS=pandas python -m pytest \
     -k "not ( \
         ${TESTS_THAT_NEED_CUDF_FIX} or \
         ${TESTS_TO_ALWAYS_SKIP} or \
-        ${TEST_THAT_NEED_NARWHALS_FIX} \
+        ${TESTS_THAT_NEED_NARWHALS_FIX_FOR_CUDF_PANDAS} \
     )" \
     --numprocesses=8 \
     --dist=worksteal

@@ -84,6 +84,34 @@ def test_boolean_function_unary(expr, has_nans, has_nulls):
     assert_gpu_result_equal(q)
 
 
+def test_nan_in_non_floating_point_column():
+    ldf = pl.LazyFrame({"int": [-1, 1, None]}).with_columns(
+        float=pl.col("int").cast(pl.Float64),
+        float_na=pl.col("int") ** 0.5,
+    )
+
+    q = ldf.select(
+        [
+            pl.col("int").is_nan().alias("int"),
+            pl.col("float").is_nan().alias("float"),
+            pl.col("float_na").is_nan().alias("float_na"),
+        ]
+    )
+
+    if POLARS_VERSION_LT_130:
+        with pytest.raises(
+            pl.exceptions.ComputeError,
+            match="NAN is not supported in a Non-floating point type column",
+        ):
+            assert_gpu_result_equal(q)
+    else:
+        with pytest.raises(
+            RuntimeError,
+            match="NAN is not supported in a Non-floating point type column",
+        ):
+            assert_gpu_result_equal(q)
+
+
 @pytest.mark.parametrize(
     "expr",
     [
@@ -207,3 +235,9 @@ def test_boolean_is_in_with_nested_list_raises():
     else:
         with pytest.raises(RuntimeError, match="Column types mismatch"):
             assert_gpu_result_equal(q)
+
+
+def test_expr_is_in_empty_list():
+    ldf = pl.LazyFrame({"a": [1, 2, 3, 4]})
+    q = ldf.select(pl.col("a").is_in([]))
+    assert_gpu_result_equal(q)

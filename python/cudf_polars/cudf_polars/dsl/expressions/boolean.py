@@ -286,7 +286,11 @@ class BooleanFunction(Expr):
             )
         elif self.name is BooleanFunction.Name.IsIn:
             needles, haystack = columns
-            return Column(plc.search.contains(haystack.obj, needles.obj))
+            if haystack.size:
+                return Column(plc.search.contains(haystack.obj, needles.obj))
+            return Column(
+                plc.Column.from_scalar(plc.Scalar.from_py(py_val=False), needles.size)
+            )
         elif self.name is BooleanFunction.Name.Not:
             (column,) = columns
             return Column(
