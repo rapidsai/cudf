@@ -39,7 +39,7 @@ python -m pytest \
 # test_nan: Narwhals expect this test to fail, but as of polars 1.30 we raise a RuntimeError,
 # not polars ComputeError. So the test is looking for the wrong error and fails.
 TESTS_THAT_NEED_NARWHALS_FIX_FOR_CUDF_POLARS=" \
-test_dtypes \
+test_dtypes or \
 test_nan \
 "
 
