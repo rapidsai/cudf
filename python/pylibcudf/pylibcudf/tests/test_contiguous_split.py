@@ -33,7 +33,7 @@ param_pyarrow_tables = [
 
 @pytest.mark.parametrize("arrow_tbl", param_pyarrow_tables)
 def test_pack_and_unpack(arrow_tbl):
-    plc_tbl = plc.Table(arrow_tbl)
+    plc_tbl = plc.Table.from_arrow(arrow_tbl)
     packed = plc.contiguous_split.pack(plc_tbl)
 
     res = plc.contiguous_split.unpack(packed)
@@ -42,7 +42,7 @@ def test_pack_and_unpack(arrow_tbl):
 
 @pytest.mark.parametrize("arrow_tbl", param_pyarrow_tables)
 def test_pack_and_unpack_from_memoryviews(arrow_tbl):
-    plc_tbl = plc.Table(arrow_tbl)
+    plc_tbl = plc.Table.from_arrow(arrow_tbl)
     packed = plc.contiguous_split.pack(plc_tbl)
 
     metadata, gpudata = packed.release()
@@ -69,7 +69,7 @@ def test_chunked_pack(bufsize):
     temp_mr = rmm.mr.CudaMemoryResource()
     staging_buf = rmm.DeviceBuffer(size=bufsize)
     metadata, h_pack = plc.contiguous_split.ChunkedPack.create(
-        plc.Table(h_table), bufsize, stream, temp_mr
+        plc.Table.from_arrow(h_table), bufsize, stream, temp_mr
     ).pack_to_host(staging_buf)
 
     result = plc.contiguous_split.unpack_from_memoryviews(

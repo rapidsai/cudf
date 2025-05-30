@@ -57,10 +57,7 @@ jobs:
         if: ${{ vars.TELEMETRY_ENABLED == 'true' }}
         uses: rapidsai/shared-actions/telemetry-dispatch-stash-base-env-vars@main
   check-nightly-ci:
-    # Switch to ubuntu-latest once it defaults to a version of Ubuntu that
-    # provides at least Python 3.11 (see
-    # https://docs.python.org/3/library/datetime.html#datetime.date.fromisoformat)
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     env:
       RAPIDS_GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:

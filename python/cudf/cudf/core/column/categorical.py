@@ -30,8 +30,7 @@ from cudf.utils.scalar import pa_scalar_to_plc_scalar
 from cudf.utils.utils import _is_null_host_scalar
 
 if TYPE_CHECKING:
-    from collections import abc
-    from collections.abc import Mapping, Sequence
+    from collections.abc import Mapping, MutableSequence, Sequence
 
     import numba.cuda
 
@@ -52,6 +51,8 @@ if TYPE_CHECKING:
         StringColumn,
         TimeDeltaColumn,
     )
+    from cudf.core.index import Index
+    from cudf.core.series import Series
 
 
 # Using np.int8(-1) to allow silent wrap-around when casting to uint
@@ -132,14 +133,14 @@ class CategoricalAccessor(ColumnMethods):
         super().__init__(parent=parent)
 
     @property
-    def categories(self) -> cudf.Index:
+    def categories(self) -> Index:
         """
         The categories of this categorical.
         """
         return self._column.dtype.categories
 
     @property
-    def codes(self) -> cudf.Series:
+    def codes(self) -> Series:
         """
         Return Series of codes as well as the index.
         """
@@ -1101,9 +1102,7 @@ class CategoricalColumn(column.ColumnBase):
             )
             return fill_value.codes.astype(self.codes.dtype)
 
-    def indices_of(
-        self, value: ScalarLike
-    ) -> cudf.core.column.NumericalColumn:
+    def indices_of(self, value: ScalarLike) -> NumericalColumn:
         return self.codes.indices_of(self._encode(value))
 
     @property
@@ -1114,7 +1113,7 @@ class CategoricalColumn(column.ColumnBase):
     def is_monotonic_decreasing(self) -> bool:
         return bool(self.ordered) and self.codes.is_monotonic_decreasing
 
-    def as_categorical_column(self, dtype: cudf.CategoricalDtype) -> Self:
+    def as_categorical_column(self, dtype: CategoricalDtype) -> Self:
         if not isinstance(self.categories, type(dtype.categories._column)):
             if isinstance(
                 self.categories.dtype, cudf.StructDtype
@@ -1195,7 +1194,7 @@ class CategoricalColumn(column.ColumnBase):
 
     @staticmethod
     def _concat(
-        objs: abc.MutableSequence[CategoricalColumn],
+        objs: MutableSequence[CategoricalColumn],
     ) -> CategoricalColumn:
         # TODO: This function currently assumes it is being called from
         # column.concat_columns, at least to the extent that all the

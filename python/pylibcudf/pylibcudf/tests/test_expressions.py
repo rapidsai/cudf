@@ -52,7 +52,7 @@ def test_astoperation_construction(kwargs):
 def test_evaluation():
     table_h = pa.table({"a": [1, 2, 3], "b": [4, 5, 6], "c": [7, 8, 9]})
     lit = pa.scalar(42, type=pa.int64())
-    table = plc.Table(table_h)
+    table = plc.Table.from_arrow(table_h)
     # expr = abs(b * c - (a + 42))
     expr = plc.expressions.Operation(
         plc.expressions.ASTOperator.ABS,
