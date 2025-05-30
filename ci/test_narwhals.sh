@@ -30,6 +30,7 @@ python -m pytest \
     --cache-clear \
     --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf-narwhals.xml" \
     -p cudf.testing.narwhals_test_plugin \
+    --numprocesses=8 \
     --dist=worksteal \
     --constructors=cudf
 
@@ -55,6 +56,7 @@ NARWHALS_POLARS_GPU=1 python -m pytest \
     -k "not ( \
         ${TEMPORARILY_SKIP} \
     )" \
+    --numprocesses=8 \
     --dist=worksteal \
     --constructors=polars[lazy]
 
@@ -91,6 +93,7 @@ NARWHALS_DEFAULT_CONSTRUCTORS=pandas python -m pytest \
         ${TESTS_TO_ALWAYS_SKIP} or \
         ${TEST_THAT_NEED_NARWHALS_FIX} \
     )" \
+    --numprocesses=8 \
     --dist=worksteal
 
 popd || exit 1
