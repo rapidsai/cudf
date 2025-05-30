@@ -26,7 +26,7 @@ from cudf_polars.dsl.ir import (
     Projection,
     Union,
 )
-from cudf_polars.dsl.tracing import wrap_do_evaluate
+from cudf_polars.dsl.tracing import do_evaluate_traced
 from cudf_polars.dsl.traversal import CachingVisitor, traversal
 from cudf_polars.experimental.base import PartitionInfo, get_key_name
 from cudf_polars.experimental.dispatch import (
@@ -228,6 +228,7 @@ def _(
     bcast_child = [partition_info[c].count == 1 for c in ir.children]
     tasks = {}
 
+    traced = do_evaluate_traced(name=type(ir).__name__)
     for i, key in enumerate(partition_info[ir].keys(ir)):
         # Problem: dask doesn't recurse in to `args` to substitute values for task keys
         # when args is a tuple rather than a top-level *args.
@@ -239,8 +240,7 @@ def _(
                 for j, child_name in enumerate(child_names)
             ],
         )
-        wrapper = partial(wrap_do_evaluate, name=type(ir).__name__)
-        tasks[key] = (wrapper, ir.do_evaluate, *args)
+        tasks[key] = (traced, ir.do_evaluate, *args)
 
     return tasks
 

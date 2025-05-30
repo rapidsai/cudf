@@ -18,11 +18,9 @@ if typing.TYPE_CHECKING:
 CUDF_POLARS_NVTX_DOMAIN = "cudf_polars"
 
 
-def wrap_do_evaluate(
-    ir_do_evaluate: Callable[..., cudf_polars.containers.dataframe.DataFrame],
-    *args: typing.Any,
+def do_evaluate_traced(
     name: str,
-) -> cudf_polars.containers.dataframe.DataFrame:
+) -> Callable[..., cudf_polars.containers.dataframe.DataFrame]:
     """
     Wrapper for IR.do_evaluate.
 
@@ -41,8 +39,15 @@ def wrap_do_evaluate(
     -------
     The result of the do_evaluate method.
     """
-    with nvtx.annotate(
-        message=name,
-        domain=CUDF_POLARS_NVTX_DOMAIN,
-    ):
-        return ir_do_evaluate(*args)
+
+    def wrapper(
+        ir_do_evaluate: Callable[..., cudf_polars.containers.dataframe.DataFrame],
+        *args: typing.Any,
+    ) -> cudf_polars.containers.dataframe.DataFrame:
+        with nvtx.annotate(
+            message=name,
+            domain=CUDF_POLARS_NVTX_DOMAIN,
+        ):
+            return ir_do_evaluate(*args)
+
+    return wrapper

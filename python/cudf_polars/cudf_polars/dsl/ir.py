@@ -34,7 +34,7 @@ from cudf_polars.dsl.expressions import rolling
 from cudf_polars.dsl.expressions.base import ExecutionContext
 from cudf_polars.dsl.nodebase import Node
 from cudf_polars.dsl.to_ast import to_ast, to_parquet_filter
-from cudf_polars.dsl.tracing import wrap_do_evaluate
+from cudf_polars.dsl.tracing import do_evaluate_traced
 from cudf_polars.dsl.utils.windows import range_window_bounds
 from cudf_polars.utils import dtypes
 from cudf_polars.utils.versions import POLARS_VERSION_LT_128
@@ -237,7 +237,7 @@ class IR(Node["IR"]):
             return result
         else:
             args = (*self._non_child_args, *children)
-            return wrap_do_evaluate(self.do_evaluate, *args, name=type(self).__name__)
+            return do_evaluate_traced(type(self).__name__)(self.do_evaluate, *args)
 
 
 class ErrorNode(IR):
