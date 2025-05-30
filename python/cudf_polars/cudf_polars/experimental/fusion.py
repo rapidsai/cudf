@@ -239,11 +239,9 @@ def fuse_ir_graph(
         in the new graph to associated partitioning information.
     """
     parents: defaultdict[IR, int] = defaultdict(int)
-    # if _is_fusible_ir_node(ir, partition_info):
     parents[ir] = 1
     for node in traversal([ir]):
         for child in node.children:
-            # if _is_fusible_ir_node(child, partition_info):
             parents[child] += 1
     unique_subplans = {node for node, count in parents.items() if count == 1}
     state = {"unique_subplans": unique_subplans, "partition_info": partition_info}

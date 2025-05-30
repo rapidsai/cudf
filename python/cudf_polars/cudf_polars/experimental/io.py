@@ -262,7 +262,7 @@ def _sample_pq_statistics(ir: Scan) -> dict[str, np.floating[T]]:
     import numpy as np
 
     # Use average total_uncompressed_size of three files
-    n_sample = 5  # TODO: Make this configurable
+    n_sample = 3  # TODO: Make this configurable
     stride = max(1, int(len(ir.paths) / n_sample))
     metadata = plc.io.parquet_metadata.read_parquet_metadata(
         plc.io.SourceInfo(ir.paths[: stride * n_sample : stride])
