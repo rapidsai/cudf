@@ -147,7 +147,7 @@ class TemporalFunction(Expr):
                     dtype = plc.DataType(plc.TypeId.TIMESTAMP_MICROSECONDS)
                 elif unit == "ms":
                     dtype = plc.DataType(plc.TypeId.TIMESTAMP_MILLISECONDS)
-                elif unit == "s":
+                elif unit == "s":  # pragma: no cover
                     dtype = plc.DataType(
                         plc.TypeId.TIMESTAMP_SECONDS
                     )  # pragma: no cover
@@ -162,7 +162,7 @@ class TemporalFunction(Expr):
                     dtype = plc.DataType(plc.TypeId.DURATION_MICROSECONDS)
                 elif unit == "ms":
                     dtype = plc.DataType(plc.TypeId.DURATION_MILLISECONDS)
-                elif unit == "s":
+                elif unit == "s":  # pragma: no cover
                     dtype = plc.DataType(
                         plc.TypeId.DURATION_SECONDS
                     )  # pragma: no cover
