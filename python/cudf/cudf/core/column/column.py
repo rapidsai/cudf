@@ -872,10 +872,10 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             )
             with acquire_spill_lock():
                 codes = cls.from_pylibcudf(
-                    plc.interop.from_arrow(indices_table).columns()[0]
+                    plc.Table.from_arrow(indices_table).columns()[0]
                 )
                 categories = cls.from_pylibcudf(
-                    plc.interop.from_arrow(dictionaries_table).columns()[0]
+                    plc.Table.from_arrow(dictionaries_table).columns()[0]
                 )
             codes = cudf.core.column.categorical.as_unsigned_codes(
                 len(categories),
@@ -892,7 +892,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             )
         else:
             result = cls.from_pylibcudf(
-                plc.interop.from_arrow(data).columns()[0]
+                plc.Table.from_arrow(data).columns()[0]
             )
             # TODO: cudf_dtype_from_pa_type may be less necessary for some types
             return result._with_type_metadata(
