@@ -7,7 +7,10 @@
 from __future__ import annotations
 
 from enum import IntEnum, auto
+from io import StringIO
 from typing import TYPE_CHECKING, Any, ClassVar
+
+import pylibcudf as plc
 
 from cudf_polars.containers import Column
 from cudf_polars.dsl.expressions.base import ExecutionContext, Expr
@@ -86,11 +89,29 @@ class StructFunction(Expr):
         elif self.name == StructFunction.Name.FieldByName:
             field_names = [field.name for field in self.children[0].dtype.polars.fields]
             return Column(column.obj.children()[field_names.index(self.options[0])])
+        elif self.name == StructFunction.Name.JsonEncode:
+            buff = StringIO()
+            target = plc.io.SinkInfo([buff])
+            table = plc.Table(column.obj.children())
+            metadata = plc.io.TableWithMetadata(
+                table,
+                [(field.name, []) for field in self.children[0].dtype.polars.fields],
+            )
+            options = (
+                plc.io.json.JsonWriterOptions.builder(target, table)
+                .lines(val=True)
+                .na_rep("null")
+                .include_nulls(val=True)
+                .metadata(metadata)
+                .utf8_escaped(val=False)
+                .build()
+            )
+            plc.io.json.write_json(options)
+            return Column(plc.Column.from_iterable_of_py(buff.getvalue().split()))
         elif (
             self.name == StructFunction.Name.RenameFields
             or self.name == StructFunction.Name.PrefixFields
             or self.name == StructFunction.Name.SuffixFields
-            or self.name == StructFunction.Name.JsonEncode
         ):
             raise NotImplementedError(f"Struct function {self.name}")
         else:
