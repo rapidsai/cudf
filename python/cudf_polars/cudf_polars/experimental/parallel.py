@@ -228,7 +228,7 @@ def _(
     bcast_child = [partition_info[c].count == 1 for c in ir.children]
     tasks = {}
 
-    traced = do_evaluate_traced(name=type(ir).__name__)
+    traced = do_evaluate_traced(ir.do_evaluate, name=type(ir).__name__)
     for i, key in enumerate(partition_info[ir].keys(ir)):
         # Problem: dask doesn't recurse in to `args` to substitute values for task keys
         # when args is a tuple rather than a top-level *args.
@@ -240,7 +240,7 @@ def _(
                 for j, child_name in enumerate(child_names)
             ],
         )
-        tasks[key] = (traced, ir.do_evaluate, *args)
+        tasks[key] = (traced, *args)
 
     return tasks
 

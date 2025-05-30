@@ -237,7 +237,7 @@ class IR(Node["IR"]):
             return result
         else:
             args = (*self._non_child_args, *children)
-            return do_evaluate_traced(type(self).__name__)(self.do_evaluate, *args)
+            return do_evaluate_traced(self.do_evaluate, name=type(self).__name__)(*args)
 
 
 class ErrorNode(IR):

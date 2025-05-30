@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import functools
 import typing
 
 import nvtx
@@ -19,6 +20,8 @@ CUDF_POLARS_NVTX_DOMAIN = "cudf_polars"
 
 
 def do_evaluate_traced(
+    ir_do_evaluate: Callable[..., cudf_polars.containers.dataframe.DataFrame],
+    *,
     name: str,
 ) -> Callable[..., cudf_polars.containers.dataframe.DataFrame]:
     """
@@ -30,24 +33,21 @@ def do_evaluate_traced(
     ----------
     ir_do_evaluate
         The do_evaluate method of an IR node.
-    *args
-        The arguments to pass to the do_evaluate method.
     name
         The name of the IR node, typically from ``type(ir).__name__``.
+        This will be used as the nvtx message.
 
     Returns
     -------
     The result of the do_evaluate method.
     """
 
-    def wrapper(
-        ir_do_evaluate: Callable[..., cudf_polars.containers.dataframe.DataFrame],
-        *args: typing.Any,
-    ) -> cudf_polars.containers.dataframe.DataFrame:
+    @functools.wraps(ir_do_evaluate)
+    def wrapped(*args: typing.Any) -> cudf_polars.containers.dataframe.DataFrame:
         with nvtx.annotate(
             message=name,
             domain=CUDF_POLARS_NVTX_DOMAIN,
         ):
             return ir_do_evaluate(*args)
 
-    return wrapper
+    return wrapped
