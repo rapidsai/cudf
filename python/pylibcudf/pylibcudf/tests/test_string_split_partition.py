@@ -10,7 +10,7 @@ import pylibcudf as plc
 @pytest.fixture
 def data_col():
     pa_arr = pa.array(["ab_cd", "def_g_h", None])
-    plc_column = plc.Column(pa_arr)
+    plc_column = plc.Column.from_arrow(pa_arr)
     return pa_arr, plc_column
 
 

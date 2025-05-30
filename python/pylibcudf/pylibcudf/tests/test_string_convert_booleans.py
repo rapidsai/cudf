@@ -9,7 +9,7 @@ import pylibcudf as plc
 def test_to_booleans():
     pa_array = pa.array(["true", None, "True"])
     got = plc.strings.convert.convert_booleans.to_booleans(
-        plc.Column(pa_array),
+        plc.Column.from_arrow(pa_array),
         plc.interop.from_arrow(pa.scalar("True")),
     )
     expect = pa.array([False, None, True])
@@ -19,7 +19,7 @@ def test_to_booleans():
 def test_from_booleans():
     pa_array = pa.array([True, None, False])
     got = plc.strings.convert.convert_booleans.from_booleans(
-        plc.Column(pa_array),
+        plc.Column.from_arrow(pa_array),
         plc.interop.from_arrow(pa.scalar("A")),
         plc.interop.from_arrow(pa.scalar("B")),
     )

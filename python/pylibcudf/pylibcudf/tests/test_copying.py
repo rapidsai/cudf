@@ -53,14 +53,14 @@ def input_column(pa_type):
             )
     else:
         raise ValueError("Unsupported type")
-    return pa_array, plc.Column(pa_array)
+    return pa_array, plc.Column.from_arrow(pa_array)
 
 
 @pytest.fixture(scope="module")
 def index_column():
     # Index column for testing gather/scatter, always integral.
     pa_array = pa.array([1, 2, 3])
-    return pa_array, plc.Column(pa_array)
+    return pa_array, plc.Column.from_arrow(pa_array)
 
 
 @pytest.fixture(scope="module")
@@ -107,7 +107,7 @@ def target_column(pa_type):
             )
     else:
         raise ValueError("Unsupported type")
-    return pa_array, plc.Column(pa_array)
+    return pa_array, plc.Column.from_arrow(pa_array)
 
 
 @pytest.fixture
@@ -120,14 +120,14 @@ def mutable_target_column(target_column):
 def source_table(input_column):
     pa_input_column, _ = input_column
     pa_table = pa.table([pa_input_column] * 3, [""] * 3)
-    return pa_table, plc.Table(pa_table)
+    return pa_table, plc.Table.from_arrow(pa_table)
 
 
 @pytest.fixture(scope="module")
 def target_table(target_column):
     pa_target_column, _ = target_column
     pa_table = pa.table([pa_target_column] * 3, [""] * 3)
-    return pa_table, plc.Table(pa_table)
+    return pa_table, plc.Table.from_arrow(pa_table)
 
 
 @pytest.fixture(scope="module")
@@ -164,7 +164,7 @@ def source_scalar(pa_type):
 def mask(target_column):
     pa_target_column, _ = target_column
     pa_mask = pa.array([True, False] * (len(pa_target_column) // 2))
-    return pa_mask, plc.Column(pa_mask)
+    return pa_mask, plc.Column.from_arrow(pa_mask)
 
 
 def test_gather(target_table, index_column):
@@ -181,7 +181,7 @@ def test_gather(target_table, index_column):
 
 def test_gather_map_has_nulls(target_table):
     _, plc_target_table = target_table
-    gather_map = plc.Column(pa.array([0, 1, None]))
+    gather_map = plc.Column.from_arrow(pa.array([0, 1, None]))
     with cudf_raises(ValueError):
         plc.copying.gather(
             plc_target_table,
@@ -331,7 +331,9 @@ def test_scatter_table_num_row_mismatch(source_table, target_table):
     with cudf_raises(ValueError):
         plc.copying.scatter(
             plc_source_table,
-            plc.Column(pa.array(range(plc_source_table.num_rows() * 2))),
+            plc.Column.from_arrow(
+                pa.array(range(plc_source_table.num_rows() * 2))
+            ),
             plc_target_table,
         )
 
@@ -342,7 +344,9 @@ def test_scatter_table_map_has_nulls(source_table, target_table):
     with cudf_raises(ValueError):
         plc.copying.scatter(
             plc_source_table,
-            plc.Column(pa.array([None] * plc_source_table.num_rows())),
+            plc.Column.from_arrow(
+                pa.array([None] * plc_source_table.num_rows())
+            ),
             plc_target_table,
         )
 
@@ -361,7 +365,7 @@ def test_scatter_table_type_mismatch(source_table, index_column, target_table):
         ncol = plc_source_table.num_columns()
         pa_table = pa.table([pa_array] * ncol, [""] * ncol)
         plc.copying.scatter(
-            plc.Table(pa_table),
+            plc.Table.from_arrow(pa_table),
             plc_index_column,
             plc_target_table,
         )
@@ -412,7 +416,7 @@ def test_scatter_scalars_map_has_nulls(source_scalar, target_table):
     with cudf_raises(ValueError):
         plc.copying.scatter(
             [plc_source_scalar] * plc_target_table.num_columns(),
-            plc.Column(pa.array([None, None])),
+            plc.Column.from_arrow(pa.array([None, None])),
             plc_target_table,
         )
 
@@ -524,9 +528,9 @@ def test_copy_range_in_place_different_types(mutable_target_column):
     if plc.traits.is_integral_not_bool(
         dtype := mutable_target_column.type()
     ) or plc.traits.is_floating_point(dtype):
-        plc_input_column = plc.Column(pa.array(["a", "b", "c"]))
+        plc_input_column = plc.Column.from_arrow(pa.array(["a", "b", "c"]))
     else:
-        plc_input_column = plc.Column(pa.array([1, 2, 3]))
+        plc_input_column = plc.Column.from_arrow(pa.array([1, 2, 3]))
 
     with cudf_raises(TypeError):
         plc.copying.copy_range_in_place(
@@ -549,7 +553,7 @@ def test_copy_range_in_place_null_mismatch(
             pa_input_column,
             pa.scalar(None, type=pa_input_column.type),
         )
-        input_column = plc.Column(pa_input_column)
+        input_column = plc.Column.from_arrow(pa_input_column)
         with cudf_raises(ValueError):
             plc.copying.copy_range_in_place(
                 input_column,
@@ -610,9 +614,9 @@ def test_copy_range_different_types(target_column):
     if plc.traits.is_integral_not_bool(
         dtype := plc_target_column.type()
     ) or plc.traits.is_floating_point(dtype):
-        plc_input_column = plc.Column(pa.array(["a", "b", "c"]))
+        plc_input_column = plc.Column.from_arrow(pa.array(["a", "b", "c"]))
     else:
-        plc_input_column = plc.Column(pa.array([1, 2, 3]))
+        plc_input_column = plc.Column.from_arrow(pa.array([1, 2, 3]))
 
     with cudf_raises(TypeError):
         plc.copying.copy_range(
@@ -731,7 +735,7 @@ def test_copy_if_else_column_column(target_column, mask, source_scalar):
     pa_other_column = pa.concat_arrays(
         [pa.array([pa_source_scalar] * 2), pa_target_column[:-2]]
     )
-    plc_other_column = plc.Column(pa_other_column)
+    plc_other_column = plc.Column.from_arrow(pa_other_column)
 
     result = plc.copying.copy_if_else(
         plc_target_column,
@@ -753,11 +757,13 @@ def test_copy_if_else_wrong_type(target_column, mask):
     if plc.traits.is_integral_not_bool(
         dtype := plc_target_column.type()
     ) or plc.traits.is_floating_point(dtype):
-        plc_input_column = plc.Column(
+        plc_input_column = plc.Column.from_arrow(
             pa.array(["a"] * plc_target_column.size())
         )
     else:
-        plc_input_column = plc.Column(pa.array([1] * plc_target_column.size()))
+        plc_input_column = plc.Column.from_arrow(
+            pa.array([1] * plc_target_column.size())
+        )
 
     with cudf_raises(TypeError):
         plc.copying.copy_if_else(plc_input_column, plc_target_column, plc_mask)
@@ -769,7 +775,9 @@ def test_copy_if_else_wrong_type_mask(target_column):
         plc.copying.copy_if_else(
             plc_target_column,
             plc_target_column,
-            plc.Column(pa.array([1.0, 2.0] * (plc_target_column.size() // 2))),
+            plc.Column.from_arrow(
+                pa.array([1.0, 2.0] * (plc_target_column.size() // 2))
+            ),
         )
 
 
@@ -777,9 +785,9 @@ def test_copy_if_else_wrong_size(target_column):
     _, plc_target_column = target_column
     with cudf_raises(ValueError):
         plc.copying.copy_if_else(
-            plc.Column(pa.array([1])),
+            plc.Column.from_arrow(pa.array([1])),
             plc_target_column,
-            plc.Column(
+            plc.Column.from_arrow(
                 pa.array([True, False] * (plc_target_column.size() // 2))
             ),
         )
@@ -791,7 +799,7 @@ def test_copy_if_else_wrong_size_mask(target_column):
         plc.copying.copy_if_else(
             plc_target_column,
             plc_target_column,
-            plc.Column(pa.array([True])),
+            plc.Column.from_arrow(pa.array([True])),
         )
 
 
@@ -921,7 +929,7 @@ def test_boolean_mask_scatter_from_wrong_num_cols(source_table, target_table):
         plc.copying.boolean_mask_scatter(
             plc.Table(plc_source_table.columns()[:2]),
             plc_target_table,
-            plc.Column(pa.array([True, False] * 3)),
+            plc.Column.from_arrow(pa.array([True, False] * 3)),
         )
 
 
@@ -932,7 +940,7 @@ def test_boolean_mask_scatter_from_wrong_mask_size(source_table, target_table):
         plc.copying.boolean_mask_scatter(
             plc_source_table,
             plc_target_table,
-            plc.Column(pa.array([True, False] * 2)),
+            plc.Column.from_arrow(pa.array([True, False] * 2)),
         )
 
 
@@ -943,7 +951,9 @@ def test_boolean_mask_scatter_from_wrong_num_true(source_table, target_table):
         plc.copying.boolean_mask_scatter(
             plc.Table(plc_source_table.columns()[:2]),
             plc_target_table,
-            plc.Column(pa.array([True, False] * 2 + [False, False])),
+            plc.Column.from_arrow(
+                pa.array([True, False] * 2 + [False, False])
+            ),
         )
 
 
@@ -953,9 +963,9 @@ def test_boolean_mask_scatter_from_wrong_col_type(target_table, mask):
     if plc.traits.is_integral_not_bool(
         dtype := plc_target_table.columns()[0].type()
     ) or plc.traits.is_floating_point(dtype):
-        input_column = plc.Column(pa.array(["a", "b", "c"]))
+        input_column = plc.Column.from_arrow(pa.array(["a", "b", "c"]))
     else:
-        input_column = plc.Column(pa.array([1, 2, 3]))
+        input_column = plc.Column.from_arrow(pa.array([1, 2, 3]))
 
     with cudf_raises(TypeError):
         plc.copying.boolean_mask_scatter(
@@ -970,7 +980,7 @@ def test_boolean_mask_scatter_from_wrong_mask_type(source_table, target_table):
         plc.copying.boolean_mask_scatter(
             plc_source_table,
             plc_target_table,
-            plc.Column(pa.array([1.0, 2.0] * 3)),
+            plc.Column.from_arrow(pa.array([1.0, 2.0] * 3)),
         )
 
 

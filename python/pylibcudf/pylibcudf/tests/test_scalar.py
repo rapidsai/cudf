@@ -244,4 +244,4 @@ def test_non_constant_column_to_scalar_raises():
     with pytest.raises(
         ValueError, match="to_scalar only works for columns of size 1"
     ):
-        plc.Column(pa.array([0, 1])).to_scalar()
+        plc.Column.from_arrow(pa.array([0, 1])).to_scalar()
