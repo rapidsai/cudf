@@ -5,7 +5,7 @@ import errno
 import itertools
 import os
 import warnings
-from collections import abc
+from collections.abc import Collection, Mapping
 from io import BytesIO, StringIO
 from typing import TYPE_CHECKING, cast
 
@@ -34,6 +34,8 @@ from cudf.utils.dtypes import (
 from cudf.utils.performance_tracking import _performance_tracking
 
 if TYPE_CHECKING:
+    from collections.abc import Hashable
+
     from cudf._typing import DtypeObj
 
 
@@ -168,11 +170,11 @@ def read_csv(
         elif header == "infer":
             header = 0
 
-    hex_cols: list[abc.Hashable] = []
-    cudf_dtypes: list[DtypeObj] | dict[abc.Hashable, DtypeObj] | DtypeObj = []
-    plc_dtypes: list[plc.DataType] | dict[abc.Hashable, plc.DataType] = []
+    hex_cols: list[Hashable] = []
+    cudf_dtypes: list[DtypeObj] | dict[Hashable, DtypeObj] | DtypeObj = []
+    plc_dtypes: list[plc.DataType] | dict[Hashable, plc.DataType] = []
     if dtype is not None:
-        if isinstance(dtype, abc.Mapping):
+        if isinstance(dtype, Mapping):
             plc_dtypes = {}
             cudf_dtypes = {}
             for k, col_type in dtype.items():
@@ -200,7 +202,7 @@ def read_csv(
                 dtype = cudf_dtype(dtype)
             cudf_dtypes = dtype
             cast(list, plc_dtypes).append(_get_plc_data_type_from_dtype(dtype))
-        elif isinstance(dtype, abc.Collection):
+        elif isinstance(dtype, Collection):
             for index, col_dtype in enumerate(dtype):
                 if (
                     isinstance(col_dtype, str)
@@ -328,7 +330,7 @@ def read_csv(
         else:
             df = df.set_index(index_col)
 
-    if dtype is None or isinstance(dtype, abc.Mapping):
+    if dtype is None or isinstance(dtype, Mapping):
         # There exists some dtypes in the result columns that is inferred.
         # Find them and map them to the default dtypes.
         specified_dtypes = {} if dtype is None else dtype

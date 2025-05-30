@@ -66,8 +66,8 @@ def tests(request, nulls):
     ltype, rtype, py_outtype, plc_op, py_op = request.param
     pa_lhs, pa_rhs = make_col(ltype, nulls), make_col(rtype, nulls)
     plc_lhs, plc_rhs = (
-        plc.Column(pa_lhs),
-        plc.Column(pa_rhs),
+        plc.Column.from_arrow(pa_lhs),
+        plc.Column.from_arrow(pa_rhs),
     )
     plc_dtype = plc.interop.from_arrow(
         pa.from_numpy_dtype(np.dtype(py_outtype))

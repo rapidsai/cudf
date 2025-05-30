@@ -12,10 +12,11 @@ import re
 import sys
 import textwrap
 import warnings
-from collections import abc, defaultdict
+from collections import defaultdict
 from collections.abc import (
     Callable,
     Hashable,
+    Iterable,
     Iterator,
     Mapping,
     MutableMapping,
@@ -1655,9 +1656,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
     def memory_usage(
         self, index: bool = True, deep: bool = False
     ) -> cudf.Series:
-        mem_usage: abc.Iterable[int] = (
-            col.memory_usage for col in self._columns
-        )
+        mem_usage: Iterable[int] = (col.memory_usage for col in self._columns)
         result_index = self._data.to_pandas_index
         if index:
             mem_usage = itertools.chain([self.index.memory_usage()], mem_usage)
@@ -2030,7 +2029,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
 
     def astype(
         self,
-        dtype: Dtype | dict[abc.Hashable, Dtype],
+        dtype: Dtype | dict[Hashable, Dtype],
         copy: bool = False,
         errors: Literal["raise", "ignore"] = "raise",
     ) -> Self:
@@ -2273,12 +2272,12 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 )
             elif self._data._level_names == other._data._level_names:
                 ca_attributes["level_names"] = self._data.level_names
-        elif isinstance(other, (dict, abc.Mapping)):
+        elif isinstance(other, (dict, Mapping)):
             # Need to fail early on host mapping types because we ultimately
             # convert everything to a dict.
             return NotImplemented, None, ca_attributes
 
-        if not isinstance(rhs, (dict, abc.Mapping)):
+        if not isinstance(rhs, (dict, Mapping)):
             return NotImplemented, None, ca_attributes
 
         operands = {
@@ -2565,7 +2564,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 cons = type(into)  # type: ignore[assignment]
                 if isinstance(into, defaultdict):
                     cons = functools.partial(cons, into.default_factory)
-            elif issubclass(into, abc.Mapping):
+            elif issubclass(into, Mapping):
                 cons = into  # type: ignore[assignment]
                 if issubclass(into, defaultdict):
                     raise TypeError(
@@ -3237,7 +3236,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 # Align value.index to self.index
                 value = value.reindex(self.index)
             value = dict(value.items())
-        elif isinstance(value, abc.Mapping):
+        elif isinstance(value, Mapping):
             # Align value.indexes to self.index
             value = {
                 key: value.reindex(self.index)
@@ -3389,7 +3388,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         col_level=0,
         col_fill="",
         allow_duplicates: bool = False,
-        names: abc.Hashable | abc.Sequence[abc.Hashable] | None = None,
+        names: Hashable | Sequence[Hashable] | None = None,
     ):
         return self._mimic_inplace(
             DataFrame._from_data(
@@ -3932,9 +3931,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         if axis == 0 or axis is not None:
             raise NotImplementedError("axis not implemented yet")
 
-        if isinstance(aggs, abc.Iterable) and not isinstance(
-            aggs, (str, dict)
-        ):
+        if isinstance(aggs, Iterable) and not isinstance(aggs, (str, dict)):
             result = DataFrame()
             # TODO : Allow simultaneous pass for multi-aggregation as
             # a future optimization
@@ -3970,12 +3967,12 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                         )
                     res[key] = getattr(col, value)()
                 result = Series(list(res.values()), index=res.keys())
-            elif all(isinstance(val, abc.Iterable) for val in aggs.values()):
+            elif all(isinstance(val, Iterable) for val in aggs.values()):
                 idxs = set()
                 for val in aggs.values():
                     if isinstance(val, str):
                         idxs.add(val)
-                    elif isinstance(val, abc.Iterable):
+                    elif isinstance(val, Iterable):
                         idxs.update(val)
                 idxs = sorted(list(idxs))
                 for agg in idxs:
@@ -3988,7 +3985,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                     col = self[key]
                     col_empty = column_empty(len(idxs), dtype=col.dtype)
                     ans = Series._from_column(col_empty, index=Index(idxs))
-                    if isinstance(aggs.get(key), abc.Iterable):
+                    if isinstance(aggs.get(key), Iterable):
                         # TODO : Allow simultaneous pass for multi-aggregation
                         # as a future optimization
                         for agg in aggs.get(key):
@@ -5199,7 +5196,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         """
         key_indices = [self._column_names.index(k) for k in columns]
         if keep_index:
-            cols: abc.Iterable[ColumnBase] = itertools.chain(
+            cols: Iterable[ColumnBase] = itertools.chain(
                 self.index._columns, self._columns
             )
             key_indices = [i + len(self.index._columns) for i in key_indices]
@@ -7994,7 +7991,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
     def _from_columns_like_self(
         self,
         columns: list[ColumnBase],
-        column_names: abc.Iterable[str] | None = None,
+        column_names: Iterable[str] | None = None,
         index_names: list[str] | None = None,
     ) -> DataFrame:
         result = super()._from_columns_like_self(
@@ -8779,7 +8776,7 @@ def extract_col(df, col):
 def _index_from_listlike_of_series(
     series_list: Sequence[Series],
 ) -> Index:
-    names_list: Sequence[abc.Hashable] = []
+    names_list: Sequence[Hashable] = []
     unnamed_count = 0
     for series in series_list:
         if series.name is None:

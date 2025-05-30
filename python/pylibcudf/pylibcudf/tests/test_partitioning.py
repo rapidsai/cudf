@@ -19,7 +19,7 @@ def test_partition(partitioning_data):
     raw_data, plc_table, pa_table = partitioning_data
     got, offsets = plc.partitioning.partition(
         plc_table,
-        plc.Column(pa.array([0, 0, 0])),
+        plc.Column.from_arrow(pa.array([0, 0, 0])),
         1,
     )
     expect = pa.table(

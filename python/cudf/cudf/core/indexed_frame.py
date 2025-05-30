@@ -7,7 +7,8 @@ import itertools
 import operator
 import textwrap
 import warnings
-from collections import Counter, abc
+from collections import Counter
+from collections.abc import Mapping
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -72,7 +73,13 @@ from cudf.utils.scalar import pa_scalar_to_plc_scalar
 from cudf.utils.utils import _warn_no_dask_cudf
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, MutableMapping
+    from collections.abc import (
+        Callable,
+        Hashable,
+        Iterable,
+        MutableMapping,
+        Sequence,
+    )
 
     from cudf._typing import (
         ColumnLike,
@@ -329,7 +336,7 @@ class IndexedFrame(Frame):
     def _from_columns_like_self(
         self,
         columns: list[ColumnBase],
-        column_names: abc.Iterable[str] | None = None,
+        column_names: Iterable[str] | None = None,
         index_names: list[str] | None = None,
     ) -> Self:
         """Construct a `Frame` from a list of columns with metadata from self.
@@ -3011,7 +3018,7 @@ class IndexedFrame(Frame):
 
     def _positions_from_column_names(
         self,
-        column_names: set[abc.Hashable],
+        column_names: set[Hashable],
         offset_by_index_columns: bool = True,
     ) -> list[int]:
         """Map each column name into their positions in the frame.
@@ -3955,7 +3962,7 @@ class IndexedFrame(Frame):
             decimals = decimals.to_dict()
         elif isinstance(decimals, int):
             decimals = {name: decimals for name in self._column_names}
-        elif not isinstance(decimals, abc.Mapping):
+        elif not isinstance(decimals, Mapping):
             raise TypeError(
                 "decimals must be an integer, a dict-like or a Series"
             )
@@ -4422,7 +4429,7 @@ class IndexedFrame(Frame):
         col_level=0,
         col_fill="",
         allow_duplicates: bool = False,
-        names: abc.Hashable | abc.Sequence[abc.Hashable] | None = None,
+        names: Hashable | Sequence[Hashable] | None = None,
     ):
         """Shared path for DataFrame.reset_index and Series.reset_index."""
         if allow_duplicates is not False:
@@ -4972,7 +4979,7 @@ class IndexedFrame(Frame):
 
     def astype(
         self,
-        dtype: Dtype | dict[abc.Hashable, Dtype],
+        dtype: Dtype | dict[Hashable, Dtype],
         copy: bool = False,
         errors: Literal["raise", "ignore"] = "raise",
     ) -> Self:
@@ -5094,7 +5101,7 @@ class IndexedFrame(Frame):
 
     @_performance_tracking
     def _drop_column(
-        self, name: abc.Hashable, errors: Literal["ignore", "raise"] = "raise"
+        self, name: Hashable, errors: Literal["ignore", "raise"] = "raise"
     ) -> None:
         """Drop a column by *name* inplace."""
         try:
@@ -6277,7 +6284,7 @@ class IndexedFrame(Frame):
             other=other, op="__ge__", fill_value=fill_value, can_reindex=True
         )
 
-    def _preprocess_subset(self, subset) -> set[abc.Hashable]:
+    def _preprocess_subset(self, subset) -> set[Hashable]:
         if subset is None:
             subset = self._column_names
         elif (
@@ -6670,7 +6677,7 @@ def _is_series(obj: Any) -> bool:
 @_performance_tracking
 def _drop_rows_by_labels(
     obj: DataFrameOrSeries,
-    labels: ColumnLike | abc.Iterable | str,
+    labels: ColumnLike | Iterable | str,
     level: int | str,
     errors: str,
 ) -> DataFrameOrSeries:

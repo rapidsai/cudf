@@ -30,8 +30,7 @@ from cudf.utils.scalar import pa_scalar_to_plc_scalar
 from cudf.utils.utils import _is_null_host_scalar
 
 if TYPE_CHECKING:
-    from collections import abc
-    from collections.abc import Mapping, Sequence
+    from collections.abc import Mapping, MutableSequence, Sequence
 
     import numba.cuda
 
@@ -1195,7 +1194,7 @@ class CategoricalColumn(column.ColumnBase):
 
     @staticmethod
     def _concat(
-        objs: abc.MutableSequence[CategoricalColumn],
+        objs: MutableSequence[CategoricalColumn],
     ) -> CategoricalColumn:
         # TODO: This function currently assumes it is being called from
         # column.concat_columns, at least to the extent that all the

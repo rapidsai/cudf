@@ -14,7 +14,7 @@ def data_col():
         ["a", "c", "A", "aa", None, "aaaaaaaaa", "AAAA", "ÁÁÁÁ"],
         type=pa.string(),
     )
-    return pa_data_col, plc.Column(pa_data_col)
+    return pa_data_col, plc.Column.from_arrow(pa_data_col)
 
 
 @pytest.fixture(scope="module", params=["a", "c", "A", "Á", "aa", "ÁÁÁ"])
@@ -37,7 +37,7 @@ def scalar_repl(request):
 )
 def col_repl_target(request):
     pa_target = pa.array(request.param, type=pa.string())
-    return (pa_target, plc.Column(pa_target))
+    return (pa_target, plc.Column.from_arrow(pa_target))
 
 
 @pytest.fixture(
@@ -53,7 +53,7 @@ def col_repl_target(request):
 )
 def col_repl(request):
     pa_repl = pa.array(request.param, type=pa.string())
-    return (pa_repl, plc.Column(pa_repl))
+    return (pa_repl, plc.Column.from_arrow(pa_repl))
 
 
 @pytest.mark.parametrize("maxrepl", [-1, 1, 2, 10])

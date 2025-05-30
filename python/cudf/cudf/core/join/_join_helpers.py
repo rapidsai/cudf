@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import warnings
-from collections import abc
+from collections.abc import Iterable
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
@@ -177,7 +177,7 @@ def _match_categorical_dtypes_both(
 
 
 def _coerce_to_tuple(obj):
-    if isinstance(obj, abc.Iterable) and not isinstance(obj, str):
+    if isinstance(obj, Iterable) and not isinstance(obj, str):
         return tuple(obj)
     else:
         return (obj,)

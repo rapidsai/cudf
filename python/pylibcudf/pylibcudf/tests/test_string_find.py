@@ -54,7 +54,7 @@ def data_col():
             None,
         ]
     )
-    return pa_array, plc.Column(pa_array)
+    return pa_array, plc.Column.from_arrow(pa_array)
 
 
 @pytest.fixture(scope="module")
@@ -103,7 +103,7 @@ def target_col():
             None,  # ends_with
         ]
     )
-    return pa_array, plc.Column(pa_array)
+    return pa_array, plc.Column.from_arrow(pa_array)
 
 
 @pytest.fixture(params=["a", " ", "A", "Ab", "23"], scope="module")

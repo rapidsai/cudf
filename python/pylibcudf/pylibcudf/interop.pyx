@@ -129,10 +129,7 @@ def _from_arrow_scalar(pyarrow_object, *, DataType data_type=None):
 
 @from_arrow.register(pa.Array)
 def _from_arrow_column(pyarrow_object, *, DataType data_type=None):
-    if data_type is not None:
-        raise ValueError("data_type may not be passed for arrays")
-
-    return Column(pyarrow_object)
+    return Column.from_arrow(pyarrow_object, dtype=data_type)
 
 
 @singledispatch
