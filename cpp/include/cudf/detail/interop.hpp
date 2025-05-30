@@ -24,6 +24,8 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <numbers>
+
 namespace CUDF_EXPORT cudf {
 namespace detail {
 
@@ -54,7 +56,7 @@ template <typename T>
 constexpr std::size_t max_precision()
 {
   auto constexpr num_bits = sizeof(T) * 8;
-  return std::floor(num_bits * std::log(2) / std::log(10));
+  return std::floor(num_bits * std::numbers::ln2 / std::numbers::ln10);
 }
 
 }  // namespace detail
