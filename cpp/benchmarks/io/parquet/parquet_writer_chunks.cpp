@@ -137,4 +137,4 @@ NVBENCH_BENCH(PQ_write_chunked)
   .set_name("parquet_chunked_write")
   .set_min_samples(4)
   .add_int64_axis("num_cols", {8, 1024})
-  .add_int64_axis("num_chunks", {1, 2, 4, 8});
+  .add_int64_axis("num_chunks", {1, 2, 4, 8, 32, 64});
