@@ -20,7 +20,7 @@ rapids-logger "pytest narwhals"
 NARWHALS_VERSION=$(python -c "import narwhals; print(narwhals.__version__)")
 git clone https://github.com/narwhals-dev/narwhals.git --depth=1 -b "v${NARWHALS_VERSION}" narwhals
 pushd narwhals || exit 1
-rapids-pip-retry install -U -e . pytest-env "hypothesis>=6.131.7" sqlframe ibis-framework[duckdb]
+rapids-pip-retry install -U -e .
 
 rapids-logger "Check narwhals versions"
 python -c "import narwhals; print(narwhals.show_versions())"
