@@ -3797,13 +3797,13 @@ def test_parquet_chunked_reader(
     assert_eq(expected, actual)
 
 
-@pytest.mark.parametrize("chunk_read_limit", [0, 240, 1024000000])
-@pytest.mark.parametrize("pass_read_limit", [0, 240, 1024000000])
-@pytest.mark.parametrize("num_rows", [997, 2997, None])
+@pytest.mark.parametrize("chunk_read_limit", [1024, 10240])
+@pytest.mark.parametrize("pass_read_limit", [1024, 10240])
+@pytest.mark.parametrize("num_rows", [99, 2901])
+@pytest.mark.parametrize("skip_rows", [4912, 6001])
+@pytest.mark.parametrize("data_size", [1000, 2000])
 def test_parquet_chunked_reader_structs(
-    chunk_read_limit,
-    pass_read_limit,
-    num_rows,
+    chunk_read_limit, pass_read_limit, num_rows, skip_rows, data_size
 ):
     data = [
         {
@@ -3824,15 +3824,15 @@ def test_parquet_chunked_reader_structs(
             "c": [18, 19],
         },
         {"a": None, "b": None, "c": None},
-    ] * 1000
+    ] * data_size
 
     pa_struct = pa.Table.from_pydict({"struct": data})
     df = cudf.DataFrame.from_arrow(pa_struct)
     buffer = BytesIO()
-    df.to_parquet(buffer)
+    df.to_parquet(buffer, row_group_size_rows=7000, max_page_size_rows=100)
 
     # Number of rows to read
-    nrows = num_rows if num_rows is not None else len(df)
+    nrows = num_rows if skip_rows + num_rows < len(df) else len(df) - skip_rows
 
     with cudf.option_context("io.parquet.low_memory", True):
         actual = cudf.read_parquet(
@@ -3840,11 +3840,11 @@ def test_parquet_chunked_reader_structs(
             _chunk_read_limit=chunk_read_limit,
             _pass_read_limit=pass_read_limit,
             nrows=nrows,
-        )
+            skip_rows=skip_rows,
+        ).reset_index(drop=True)
     expected = cudf.read_parquet(
-        buffer,
-        nrows=nrows,
-    )
+        buffer, nrows=nrows, skip_rows=skip_rows
+    ).reset_index(drop=True)
     assert_eq(expected, actual)
 
 
@@ -3902,23 +3902,78 @@ def test_parquet_chunked_reader_string_decoders(
 
 
 @pytest.mark.parametrize(
-    "nrows,skip_rows",
+    "nrows, skip_rows",
     [
         (0, 0),
-        (1000, 0),
-        (0, 1000),
-        (1000, 10000),
+        (99, 1001),
+        (9898, 6001),
+        (99, 10101),
+        (1001, 16001),
+        (999, 19001),
     ],
 )
-def test_parquet_reader_nrows_skiprows(nrows, skip_rows):
-    df = pd.DataFrame(
-        {"a": [1, 2, 3, 4] * 100000, "b": ["av", "qw", "hi", "xyz"] * 100000}
+@pytest.mark.parametrize(
+    "row_group_size_rows, page_size_rows",
+    [
+        (10000, 10000),  # 1 RG, 1 page per RG
+        (10000, 1000),  # 1 RG, multiple pages per RG
+        (1000, 1000),  # multiple RGs, 1 page per RG
+        (1000, 100),  # multiple RGs, multiple pages per RG
+    ],
+)
+@pytest.mark.parametrize(
+    "chunk_read_limit, pass_read_limit",
+    [
+        (1024, 5024),  # small chunk and pass read limits
+        (0, 5024),  # zero chunk and small pass read limit
+        (1024, 0),  # small chunk and zero pass read limit
+        (1024000, 1024000),  # large chunk and pass read limits
+    ],
+)
+def test_chunked_parquet_reader_nrows_skiprows(
+    nrows,
+    skip_rows,
+    row_group_size_rows,
+    page_size_rows,
+    chunk_read_limit,
+    pass_read_limit,
+):
+    df = cudf.DataFrame(
+        {
+            "a": list(
+                [
+                    ["cat", "lion", "deer"],
+                    ["bear", "ibex", None],
+                    ["tiger", None, "bull"],
+                    [None, "wolf", "fox"],
+                ]
+            )
+            * 5000,
+            "b": ["av", "qw", None, "xyz"] * 5000,
+        }
     )
     expected = df[skip_rows : skip_rows + nrows]
     buffer = BytesIO()
-    df.to_parquet(buffer)
+    df.to_parquet(
+        buffer,
+        row_group_size_rows=row_group_size_rows,
+        max_page_size_rows=page_size_rows,
+    )
     got = cudf.read_parquet(buffer, nrows=nrows, skip_rows=skip_rows)
     assert_eq(expected, got)
+
+    # Check for chunked parquet reader
+    with cudf.option_context("io.parquet.low_memory", True):
+        got = cudf.read_parquet(
+            [buffer],
+            _chunk_read_limit=chunk_read_limit,
+            _pass_read_limit=pass_read_limit,
+            nrows=nrows,
+            skip_rows=skip_rows,
+        ).reset_index(drop=True)
+        # Reset index for comparison
+        expected = expected.reset_index(drop=True)
+        assert_eq(expected, got)
 
 
 def test_parquet_reader_pandas_compatibility():

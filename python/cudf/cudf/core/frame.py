@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import operator
 import warnings
-from collections import abc
+from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any, Literal
 
 import cupy
@@ -44,10 +44,17 @@ from cudf.utils.performance_tracking import _performance_tracking
 from cudf.utils.utils import _array_ufunc, _warn_no_dask_cudf
 
 if TYPE_CHECKING:
-    from collections.abc import MutableMapping
+    from collections.abc import (
+        Callable,
+        Generator,
+        Hashable,
+        Iterable,
+        MutableMapping,
+    )
     from types import ModuleType
 
     from cudf._typing import Dtype, DtypeObj, ScalarLike
+    from cudf.core.series import Series
 
 
 class Frame(BinaryOperand, Scannable, Serializable):
@@ -83,11 +90,11 @@ class Frame(BinaryOperand, Scannable, Serializable):
     @property
     def _column_labels_and_values(
         self,
-    ) -> abc.Iterable[tuple[abc.Hashable, ColumnBase]]:
+    ) -> Iterable[tuple[Hashable, ColumnBase]]:
         return zip(self._column_names, self._columns)
 
     @property
-    def _dtypes(self) -> abc.Generator[tuple[abc.Hashable, Dtype], None, None]:
+    def _dtypes(self) -> Generator[tuple[Hashable, Dtype], None, None]:
         for label, col in self._column_labels_and_values:
             yield label, col.dtype
 
@@ -202,7 +209,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
     def _from_columns_like_self(
         self,
         columns: list[ColumnBase],
-        column_names: abc.Iterable[str] | None = None,
+        column_names: Iterable[str] | None = None,
     ):
         """Construct a Frame from a list of columns with metadata from self.
 
@@ -391,7 +398,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
 
     @_performance_tracking
     def astype(
-        self, dtype: dict[abc.Hashable, DtypeObj], copy: bool = False
+        self, dtype: dict[Hashable, DtypeObj], copy: bool = False
     ) -> Self:
         casted = (
             col.astype(dtype.get(col_name, col.dtype), copy=copy)
@@ -536,7 +543,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
     @_performance_tracking
     def _to_array(
         self,
-        get_array: abc.Callable,
+        get_array: Callable,
         module: ModuleType,
         copy: bool,
         dtype: Dtype | None = None,
@@ -793,7 +800,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
     @_performance_tracking
     def fillna(
         self,
-        value: None | ScalarLike | cudf.Series = None,
+        value: None | ScalarLike | Series = None,
         method: Literal["ffill", "bfill", "pad", "backfill", None] = None,
         axis=None,
         inplace: bool = False,
@@ -926,7 +933,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
 
         if is_scalar(value):
             value = {name: value for name in self._column_names}
-        elif not isinstance(value, (abc.Mapping, cudf.Series)):
+        elif not isinstance(value, (Mapping, cudf.Series)):
             raise TypeError(
                 f'"value" parameter must be a scalar, dict '
                 f"or Series, but you passed a "

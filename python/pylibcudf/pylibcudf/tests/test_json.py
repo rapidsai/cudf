@@ -11,7 +11,7 @@ def plc_col():
     arr = pa.array(
         ['{"foo": {"bar": [{"a": 1, "b": 2}, {"a": 3, "b": 4}]', None]
     )
-    return plc.Column(arr)
+    return plc.Column.from_arrow(arr)
 
 
 @pytest.fixture(scope="module")

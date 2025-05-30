@@ -23,9 +23,9 @@ def targets():
 def test_replace_tokens(input_col, targets, delim):
     replacements = pa.array(["slow", "cat", "looked", "rat"])
     got = plc.nvtext.replace.replace_tokens(
-        plc.Column(input_col),
-        plc.Column(targets),
-        plc.Column(replacements),
+        plc.Column.from_arrow(input_col),
+        plc.Column.from_arrow(targets),
+        plc.Column.from_arrow(replacements),
         plc.interop.from_arrow(pa.scalar(delim)) if delim else None,
     )
     expect = pa.array(["slow", "cat", "jumps*over the", "rat"])
@@ -41,7 +41,7 @@ def test_replace_tokens(input_col, targets, delim):
 @pytest.mark.parametrize("delim", ["*", None])
 def test_filter_tokens(input_col, min_token_length, replace, delim):
     got = plc.nvtext.replace.filter_tokens(
-        plc.Column(input_col),
+        plc.Column.from_arrow(input_col),
         min_token_length,
         plc.interop.from_arrow(pa.scalar(replace)) if replace else None,
         plc.interop.from_arrow(pa.scalar(delim)) if delim else None,
