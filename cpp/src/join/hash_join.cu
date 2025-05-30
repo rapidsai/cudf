@@ -333,12 +333,6 @@ std::size_t get_full_join_size(
 
   auto const probe_nulls = cudf::nullate::DYNAMIC{has_nulls};
 
-  auto const row_hash           = cudf::experimental::row::hash::row_hasher{preprocessed_probe};
-  auto const hash_probe         = row_hash.device_hasher(probe_nulls);
-  auto const empty_key_sentinel = hash_table.get_empty_key_sentinel();
-  auto const iter               = cudf::detail::make_counting_transform_iterator(
-    0, make_pair_function{hash_probe, empty_key_sentinel});
-
   cudf::size_type const probe_table_num_rows = probe_table.num_rows();
 
   auto const out1_zip_begin = thrust::make_zip_iterator(
@@ -346,19 +340,43 @@ std::size_t get_full_join_size(
   auto const out2_zip_begin = thrust::make_zip_iterator(
     thrust::make_tuple(thrust::make_discard_iterator(), right_indices->begin()));
 
-  auto const row_comparator =
-    cudf::experimental::row::equality::two_table_comparator{preprocessed_probe, preprocessed_build};
-  auto const comparator_helper = [&](auto device_comparator) {
-    pair_equality equality{device_comparator};
+  auto const empty_key_sentinel = hash_table.get_empty_key_sentinel();
+
+  // Apply primitive row operator logic
+  if (cudf::is_primitive_row_op_compatible(build_table)) {
+    auto const d_hasher = cudf::row::primitive::row_hasher{probe_nulls, preprocessed_probe};
+    auto const d_equal  = cudf::row::primitive::row_equality_comparator{
+      probe_nulls, preprocessed_probe, preprocessed_build, compare_nulls};
+    auto const iter = cudf::detail::make_counting_transform_iterator(
+      0, make_pair_function{d_hasher, empty_key_sentinel});
+    auto const equality = primitive_equality{d_equal};
+
     hash_table.pair_retrieve_outer(
       iter, iter + probe_table_num_rows, out1_zip_begin, out2_zip_begin, equality, stream.value());
-  };
-  if (cudf::detail::has_nested_columns(probe_table)) {
-    auto const device_comparator = row_comparator.equal_to<true>(probe_nulls, compare_nulls);
-    comparator_helper(device_comparator);
   } else {
-    auto const device_comparator = row_comparator.equal_to<false>(probe_nulls, compare_nulls);
-    comparator_helper(device_comparator);
+    auto const row_hash   = cudf::experimental::row::hash::row_hasher{preprocessed_probe};
+    auto const hash_probe = row_hash.device_hasher(probe_nulls);
+    auto const iter       = cudf::detail::make_counting_transform_iterator(
+      0, make_pair_function{hash_probe, empty_key_sentinel});
+
+    auto const row_comparator = cudf::experimental::row::equality::two_table_comparator{
+      preprocessed_probe, preprocessed_build};
+    auto const comparator_helper = [&](auto device_comparator) {
+      pair_equality equality{device_comparator};
+      hash_table.pair_retrieve_outer(iter,
+                                     iter + probe_table_num_rows,
+                                     out1_zip_begin,
+                                     out2_zip_begin,
+                                     equality,
+                                     stream.value());
+    };
+    if (cudf::detail::has_nested_columns(probe_table)) {
+      auto const device_comparator = row_comparator.equal_to<true>(probe_nulls, compare_nulls);
+      comparator_helper(device_comparator);
+    } else {
+      auto const device_comparator = row_comparator.equal_to<false>(probe_nulls, compare_nulls);
+      comparator_helper(device_comparator);
+    }
   }
 
   // Release intermediate memory allocation
@@ -385,7 +403,7 @@ std::size_t get_full_join_size(
 
     // invalid_index_map[index_ptr[i]] = 0 for i = 0 to right_table_row_count
     // Thus specifying that those locations are valid
-    thrust::scatter_if(rmm::exec_policy(stream),
+    thrust::scatter_if(rmm::exec_policy_nosync(stream),
                        thrust::make_constant_iterator(0),
                        thrust::make_constant_iterator(0) + right_indices->size(),
                        right_indices->begin(),      // Index locations
@@ -394,7 +412,7 @@ std::size_t get_full_join_size(
                        valid);                      // Stencil Predicate
 
     // Create list of indices that have been marked as invalid
-    left_join_complement_size = thrust::count_if(rmm::exec_policy(stream),
+    left_join_complement_size = thrust::count_if(rmm::exec_policy_nosync(stream),
                                                  invalid_index_map->begin(),
                                                  invalid_index_map->end(),
                                                  cuda::std::identity());
