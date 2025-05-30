@@ -94,5 +94,3 @@ rapids-telemetry-record sccache-stats-cudf-polars.txt sccache --show-adv-stats
 
 # remove build_cache directory
 rm -rf "$RAPIDS_CONDA_BLD_OUTPUT_DIR"/build_cache
-
-rapids-upload-conda-to-s3 python

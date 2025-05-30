@@ -1,6 +1,6 @@
 # Copyright (c) 2023-2025, NVIDIA CORPORATION.
 
-from cpython cimport bool as py_bool, datetime
+from cpython cimport bool as py_bool
 from cython cimport no_gc_clear
 from libc.stdint cimport (
     int8_t,
@@ -52,6 +52,8 @@ from .column cimport Column
 from .traits cimport is_floating_point
 from .types cimport DataType
 from functools import singledispatch
+
+import datetime
 
 try:
     import numpy as np
