@@ -14,6 +14,11 @@ def ldf():
     return pl.LazyFrame({"a": [{"b": "c", "d": "e"}, {"b": None, "d": "g"}]})
 
 
+def test_field_getitem(ldf):
+    query = ldf.select(pl.col("a").struct[0])
+    assert_gpu_result_equal(query)
+
+
 def test_field(ldf):
     query = ldf.select(pl.col("a").struct.field("b"))
     assert_gpu_result_equal(query)
