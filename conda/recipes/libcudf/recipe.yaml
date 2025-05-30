@@ -124,8 +124,6 @@ outputs:
       run_exports:
         - ${{ pin_subpackage("libcudf", upper_bound="x.x") }}
       ignore_run_exports:
-        from_package:
-          - ${{ compiler("cuda") }}
         by_name:
           - cuda-cudart
           - cuda-nvrtc
@@ -167,8 +165,6 @@ outputs:
         - librdkafka ${{ librdkafka_version }}
         - ${{ pin_subpackage("libcudf", exact=True) }}
       ignore_run_exports:
-        from_package:
-          - ${{ compiler("cuda") }}
         by_name:
           - cuda-cudart
           - cuda-nvrtc
@@ -238,7 +234,6 @@ outputs:
         - cuda-nvtx
       ignore_run_exports:
         from_package:
-          - ${{ compiler("cuda") }}
           - cuda-nvtx-dev
         by_name:
           - cuda-cudart
@@ -287,7 +282,6 @@ outputs:
         - libcurand
       ignore_run_exports:
         from_package:
-          - ${{ compiler("cuda") }}
           - libcurand-dev
         by_name:
           - cuda-cudart
