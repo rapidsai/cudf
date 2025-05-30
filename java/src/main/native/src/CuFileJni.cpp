@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -291,11 +291,12 @@ extern "C" {
  */
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_CuFileDriver_create(JNIEnv* env, jclass)
 {
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
     return reinterpret_cast<jlong>(new cufile_driver());
   }
-  CATCH_STD(env, 0);
+  JNI_CATCH(env, 0);
 }
 
 /**
@@ -306,11 +307,12 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_CuFileDriver_create(JNIEnv* env, jcl
  */
 JNIEXPORT void JNICALL Java_ai_rapids_cudf_CuFileDriver_destroy(JNIEnv* env, jclass, jlong pointer)
 {
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
     delete reinterpret_cast<cufile_driver*>(pointer);
   }
-  CATCH_STD(env, );
+  JNI_CATCH(env, );
 }
 
 /**
@@ -325,13 +327,14 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_CuFileDriver_destroy(JNIEnv* env, jcl
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_CuFileBuffer_create(
   JNIEnv* env, jclass, jlong device_pointer, jlong size, jboolean register_buffer)
 {
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
     auto* buffer =
       new cufile_buffer(reinterpret_cast<void*>(device_pointer), size, register_buffer);
     return reinterpret_cast<jlong>(buffer);
   }
-  CATCH_STD(env, 0);
+  JNI_CATCH(env, 0);
 }
 
 /**
@@ -342,11 +345,12 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_CuFileBuffer_create(
  */
 JNIEXPORT void JNICALL Java_ai_rapids_cudf_CuFileBuffer_destroy(JNIEnv* env, jclass, jlong pointer)
 {
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
     delete reinterpret_cast<cufile_buffer*>(pointer);
   }
-  CATCH_STD(env, );
+  JNI_CATCH(env, );
 }
 
 /**
@@ -360,12 +364,13 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_CuFileReadHandle_create(JNIEnv* env,
                                                                     jclass,
                                                                     jstring path)
 {
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
     auto file = cufile_file::make_reader(env->GetStringUTFChars(path, nullptr));
     return reinterpret_cast<jlong>(file.release());
   }
-  CATCH_STD(env, 0);
+  JNI_CATCH(env, 0);
 }
 
 /**
@@ -379,13 +384,14 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_CuFileReadHandle_create(JNIEnv* env,
 JNIEXPORT void JNICALL Java_ai_rapids_cudf_CuFileReadHandle_readIntoBuffer(
   JNIEnv* env, jclass, jlong file, jlong file_offset, jlong buffer)
 {
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
     auto* file_ptr   = reinterpret_cast<cufile_file*>(file);
     auto* buffer_ptr = reinterpret_cast<cufile_buffer*>(buffer);
     file_ptr->read(*buffer_ptr, file_offset);
   }
-  CATCH_STD(env, );
+  JNI_CATCH(env, );
 }
 
 /**
@@ -399,12 +405,13 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_CuFileWriteHandle_create(JNIEnv* env
                                                                      jclass,
                                                                      jstring path)
 {
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
     auto file = cufile_file::make_writer(env->GetStringUTFChars(path, nullptr));
     return reinterpret_cast<jlong>(file.release());
   }
-  CATCH_STD(env, 0);
+  JNI_CATCH(env, 0);
 }
 
 /**
@@ -419,13 +426,14 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_CuFileWriteHandle_create(JNIEnv* env
 JNIEXPORT void JNICALL Java_ai_rapids_cudf_CuFileWriteHandle_writeFromBuffer(
   JNIEnv* env, jclass, jlong file, jlong file_offset, jlong buffer, jlong size)
 {
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
     auto* file_ptr   = reinterpret_cast<cufile_file*>(file);
     auto* buffer_ptr = reinterpret_cast<cufile_buffer*>(buffer);
     file_ptr->write(*buffer_ptr, size, file_offset);
   }
-  CATCH_STD(env, );
+  JNI_CATCH(env, );
 }
 
 /**
@@ -440,13 +448,14 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_CuFileWriteHandle_writeFromBuffer(
 JNIEXPORT long JNICALL Java_ai_rapids_cudf_CuFileWriteHandle_appendFromBuffer(
   JNIEnv* env, jclass, jlong file, jlong buffer, jlong size)
 {
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
     auto* file_ptr   = reinterpret_cast<cufile_file*>(file);
     auto* buffer_ptr = reinterpret_cast<cufile_buffer*>(buffer);
     return file_ptr->append(*buffer_ptr, size);
   }
-  CATCH_STD(env, -1);
+  JNI_CATCH(env, -1);
 }
 
 /**
@@ -457,11 +466,12 @@ JNIEXPORT long JNICALL Java_ai_rapids_cudf_CuFileWriteHandle_appendFromBuffer(
  */
 JNIEXPORT void JNICALL Java_ai_rapids_cudf_CuFileHandle_destroy(JNIEnv* env, jclass, jlong pointer)
 {
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
     delete reinterpret_cast<cufile_file*>(pointer);
   }
-  CATCH_STD(env, );
+  JNI_CATCH(env, );
 }
 
 /**
@@ -476,13 +486,14 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_CuFileHandle_destroy(JNIEnv* env, jcl
 JNIEXPORT void JNICALL Java_ai_rapids_cudf_CuFile_writeToFile(
   JNIEnv* env, jclass, jstring path, jlong file_offset, jlong device_pointer, jlong size)
 {
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
     cufile_buffer buffer{reinterpret_cast<void*>(device_pointer), static_cast<std::size_t>(size)};
     auto writer = cufile_file::make_writer(env->GetStringUTFChars(path, nullptr));
     writer->write(buffer, size, file_offset);
   }
-  CATCH_STD(env, );
+  JNI_CATCH(env, );
 }
 
 /**
@@ -497,13 +508,14 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_CuFile_writeToFile(
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_CuFile_appendToFile(
   JNIEnv* env, jclass, jstring path, jlong device_pointer, jlong size)
 {
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
     cufile_buffer buffer{reinterpret_cast<void*>(device_pointer), static_cast<std::size_t>(size)};
     auto writer = cufile_file::make_writer(env->GetStringUTFChars(path, nullptr));
     return writer->append(buffer, size);
   }
-  CATCH_STD(env, -1);
+  JNI_CATCH(env, -1);
 }
 
 /**
@@ -518,13 +530,14 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_CuFile_appendToFile(
 JNIEXPORT void JNICALL Java_ai_rapids_cudf_CuFile_readFromFile(
   JNIEnv* env, jclass, jlong device_pointer, jlong size, jstring path, jlong file_offset)
 {
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
     cufile_buffer buffer{reinterpret_cast<void*>(device_pointer), static_cast<std::size_t>(size)};
     auto const reader = cufile_file::make_reader(env->GetStringUTFChars(path, nullptr));
     reader->read(buffer, file_offset);
   }
-  CATCH_STD(env, );
+  JNI_CATCH(env, );
 }
 
 }  // extern "C"

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -132,7 +132,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ContiguousTable_createPackedMetadata
   JNIEnv* env, jclass, jlong j_table, jlong j_buffer_addr, jlong j_buffer_length)
 {
   JNI_NULL_CHECK(env, j_table, "input table is null", 0);
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
     auto table        = reinterpret_cast<cudf::table_view const*>(j_table);
     auto data_addr    = reinterpret_cast<uint8_t const*>(j_buffer_addr);
@@ -140,7 +141,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ContiguousTable_createPackedMetadata
     auto metadata_ptr = new std::vector<uint8_t>(cudf::pack_metadata(*table, data_addr, data_size));
     return reinterpret_cast<jlong>(metadata_ptr);
   }
-  CATCH_STD(env, 0);
+  JNI_CATCH(env, 0);
 }
 
 }  // extern "C"

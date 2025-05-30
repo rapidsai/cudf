@@ -200,7 +200,7 @@ class java_event_handler_memory_resource : public device_memory_resource {
   {
     // This should normally be called by a JVM thread. If the JVM environment is missing then this
     // is likely being triggered by the C++ runtime during shutdown. In that case the JVM may
-    // already be destroyed and this thread should not try to attach to get an environment.
+    // already be destroyed and this thread should not JNI_TRY to attach to get an environment.
     JNIEnv* env = nullptr;
     if (jvm->GetEnv(reinterpret_cast<void**>(&env), cudf::jni::MINIMUM_JNI_VERSION) == JNI_OK) {
       handler_obj = cudf::jni::del_global_ref(env, handler_obj);
@@ -291,24 +291,30 @@ class java_event_handler_memory_resource : public device_memory_resource {
     // that had previously failed.
     int retry_count = 0;
     while (true) {
-      try {
+      JNI_TRY
+      {
         total_before = tracker->get_total_allocated();
         result       = resource->allocate(num_bytes, stream);
         break;
-      } catch (rmm::out_of_memory const& e) {
+      }
+      catch (rmm::out_of_memory const& e)
+      {
         if (!on_alloc_fail(num_bytes, retry_count++)) { throw; }
       }
     }
     auto total_after = tracker->get_total_allocated();
 
-    try {
+    JNI_TRY
+    {
       check_for_threshold_callback(total_before,
                                    total_after,
                                    alloc_thresholds,
                                    on_alloc_threshold_method,
                                    "onAllocThreshold",
                                    total_after);
-    } catch (std::exception const& e) {
+    }
+    catch (std::exception const& e)
+    {
       // Free the allocation as app will think the exception means the memory was not allocated.
       resource->deallocate(result, num_bytes, stream);
       throw;
@@ -395,7 +401,7 @@ inline auto& prior_cudf_pinned_mr()
 }
 
 /**
- * This is a pinned fallback memory resource that will try to allocate `pool`
+ * This is a pinned fallback memory resource that will JNI_TRY to allocate `pool`
  * and if that fails, attempt to allocate from the prior resource used by cuDF
  * `prior_cudf_pinned_mr`.
  *
@@ -440,10 +446,10 @@ class pinned_fallback_host_memory_resource {
   void* allocate(std::size_t bytes,
                  [[maybe_unused]] std::size_t alignment = rmm::RMM_DEFAULT_HOST_ALIGNMENT)
   {
-    try {
-      return _pool->allocate(bytes, alignment);
-    } catch (std::exception const& unused) {
-      // try to allocate using the underlying pinned resource
+    JNI_TRY { return _pool->allocate(bytes, alignment); }
+    catch (std::exception const& unused)
+    {
+      // JNI_TRY to allocate using the underlying pinned resource
       return prior_cudf_pinned_mr().allocate(bytes, alignment);
     }
     // we should not reached here
@@ -609,230 +615,189 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_cleanupDefaultCudaDevice(JNIEnv* 
   cudf::jni::set_cudf_device(cudaInvalidDeviceId);
 }
 
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_allocInternal(JNIEnv* env,
-                                                              jclass clazz,
-                                                              jlong size,
-                                                              jlong stream)
-{
-  try {
-    cudf::jni::auto_set_device(env);
-    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref();
-    auto c_stream = rmm::cuda_stream_view(reinterpret_cast<cudaStream_t>(stream));
-    void* ret     = mr.allocate_async(size, rmm::CUDA_ALLOCATION_ALIGNMENT, c_stream);
-    return reinterpret_cast<jlong>(ret);
-  }
-  CATCH_STD(env, 0)
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_allocInternal(
+  JNIEnv* env, jclass clazz, jlong size, jlong stream){JNI_TRY{cudf::jni::auto_set_device(env);
+rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref();
+auto c_stream                     = rmm::cuda_stream_view(reinterpret_cast<cudaStream_t>(stream));
+void* ret = mr.allocate_async(size, rmm::CUDA_ALLOCATION_ALIGNMENT, c_stream);
+return reinterpret_cast<jlong>(ret);
+}
+JNI_CATCH(env, 0)
 }
 
 JNIEXPORT void JNICALL
-Java_ai_rapids_cudf_Rmm_free(JNIEnv* env, jclass clazz, jlong ptr, jlong size, jlong stream)
-{
-  try {
-    cudf::jni::auto_set_device(env);
-    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref();
-    void* cptr                        = reinterpret_cast<void*>(ptr);
-    auto c_stream = rmm::cuda_stream_view(reinterpret_cast<cudaStream_t>(stream));
-    mr.deallocate_async(cptr, size, rmm::CUDA_ALLOCATION_ALIGNMENT, c_stream);
-  }
-  CATCH_STD(env, )
+Java_ai_rapids_cudf_Rmm_free(JNIEnv* env, jclass clazz, jlong ptr, jlong size, jlong stream){
+  JNI_TRY{cudf::jni::auto_set_device(env);
+rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref();
+void* cptr                        = reinterpret_cast<void*>(ptr);
+auto c_stream                     = rmm::cuda_stream_view(reinterpret_cast<cudaStream_t>(stream));
+mr.deallocate_async(cptr, size, rmm::CUDA_ALLOCATION_ALIGNMENT, c_stream);
+}
+JNI_CATCH(env, )
 }
 
 JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_freeDeviceBuffer(JNIEnv* env,
                                                                 jclass clazz,
                                                                 jlong ptr)
 {
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
     rmm::device_buffer* cptr = reinterpret_cast<rmm::device_buffer*>(ptr);
     delete cptr;
   }
-  CATCH_STD(env, );
+  JNI_CATCH(env, );
 }
 
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_allocCudaInternal(JNIEnv* env,
-                                                                  jclass clazz,
-                                                                  jlong size,
-                                                                  jlong stream)
-{
-  try {
-    cudf::jni::auto_set_device(env);
-    void* ptr{nullptr};
-    RMM_CUDA_TRY_ALLOC(cudaMalloc(&ptr, size), size);
-    return reinterpret_cast<jlong>(ptr);
-  }
-  CATCH_STD(env, 0)
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_allocCudaInternal(
+  JNIEnv* env, jclass clazz, jlong size, jlong stream){JNI_TRY{cudf::jni::auto_set_device(env);
+void* ptr{nullptr};
+RMM_CUDA_TRY_ALLOC(cudaMalloc(&ptr, size), size);
+return reinterpret_cast<jlong>(ptr);
+}
+JNI_CATCH(env, 0)
 }
 
 JNIEXPORT void JNICALL
-Java_ai_rapids_cudf_Rmm_freeCuda(JNIEnv* env, jclass clazz, jlong ptr, jlong size, jlong stream)
-{
-  try {
-    cudf::jni::auto_set_device(env);
-    void* cptr = reinterpret_cast<void*>(ptr);
-    RMM_ASSERT_CUDA_SUCCESS(cudaFree(cptr));
-  }
-  CATCH_STD(env, )
+Java_ai_rapids_cudf_Rmm_freeCuda(JNIEnv* env, jclass clazz, jlong ptr, jlong size, jlong stream){
+  JNI_TRY{cudf::jni::auto_set_device(env);
+void* cptr = reinterpret_cast<void*>(ptr);
+RMM_ASSERT_CUDA_SUCCESS(cudaFree(cptr));
+}
+JNI_CATCH(env, )
 }
 
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_newCudaMemoryResource(JNIEnv* env, jclass clazz)
-{
-  try {
-    cudf::jni::auto_set_device(env);
-    auto ret = new rmm::mr::cuda_memory_resource();
-    return reinterpret_cast<jlong>(ret);
-  }
-  CATCH_STD(env, 0)
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_newCudaMemoryResource(JNIEnv* env, jclass clazz){
+  JNI_TRY{cudf::jni::auto_set_device(env);
+auto ret = new rmm::mr::cuda_memory_resource();
+return reinterpret_cast<jlong>(ret);
+}
+JNI_CATCH(env, 0)
 }
 
-JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_releaseCudaMemoryResource(JNIEnv* env,
-                                                                         jclass clazz,
-                                                                         jlong ptr)
-{
-  try {
-    cudf::jni::auto_set_device(env);
-    auto mr = reinterpret_cast<rmm::mr::cuda_memory_resource*>(ptr);
-    delete mr;
-  }
-  CATCH_STD(env, )
+JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_releaseCudaMemoryResource(
+  JNIEnv* env, jclass clazz, jlong ptr){JNI_TRY{cudf::jni::auto_set_device(env);
+auto mr = reinterpret_cast<rmm::mr::cuda_memory_resource*>(ptr);
+delete mr;
+}
+JNI_CATCH(env, )
 }
 
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_newManagedMemoryResource(JNIEnv* env, jclass clazz)
-{
-  try {
-    cudf::jni::auto_set_device(env);
-    auto ret = new rmm::mr::managed_memory_resource();
-    return reinterpret_cast<jlong>(ret);
-  }
-  CATCH_STD(env, 0)
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_newManagedMemoryResource(JNIEnv* env, jclass clazz){
+  JNI_TRY{cudf::jni::auto_set_device(env);
+auto ret = new rmm::mr::managed_memory_resource();
+return reinterpret_cast<jlong>(ret);
+}
+JNI_CATCH(env, 0)
 }
 
-JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_releaseManagedMemoryResource(JNIEnv* env,
-                                                                            jclass clazz,
-                                                                            jlong ptr)
-{
-  try {
-    cudf::jni::auto_set_device(env);
-    auto mr = reinterpret_cast<rmm::mr::managed_memory_resource*>(ptr);
-    delete mr;
-  }
-  CATCH_STD(env, )
+JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_releaseManagedMemoryResource(
+  JNIEnv* env, jclass clazz, jlong ptr){JNI_TRY{cudf::jni::auto_set_device(env);
+auto mr = reinterpret_cast<rmm::mr::managed_memory_resource*>(ptr);
+delete mr;
+}
+JNI_CATCH(env, )
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_newPoolMemoryResource(
   JNIEnv* env, jclass clazz, jlong child, jlong init, jlong max)
 {
   JNI_NULL_CHECK(env, child, "child is null", 0);
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
     auto wrapped = reinterpret_cast<rmm::mr::device_memory_resource*>(child);
     auto ret =
       new rmm::mr::pool_memory_resource<rmm::mr::device_memory_resource>(wrapped, init, max);
     return reinterpret_cast<jlong>(ret);
   }
-  CATCH_STD(env, 0)
+  JNI_CATCH(env, 0)
 }
 
-JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_releasePoolMemoryResource(JNIEnv* env,
-                                                                         jclass clazz,
-                                                                         jlong ptr)
-{
-  try {
-    cudf::jni::auto_set_device(env);
-    auto mr =
-      reinterpret_cast<rmm::mr::pool_memory_resource<rmm::mr::device_memory_resource>*>(ptr);
-    delete mr;
-  }
-  CATCH_STD(env, )
+JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_releasePoolMemoryResource(
+  JNIEnv* env, jclass clazz, jlong ptr){JNI_TRY{cudf::jni::auto_set_device(env);
+auto mr = reinterpret_cast<rmm::mr::pool_memory_resource<rmm::mr::device_memory_resource>*>(ptr);
+delete mr;
+}
+JNI_CATCH(env, )
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_newArenaMemoryResource(
   JNIEnv* env, jclass clazz, jlong child, jlong init, jboolean dump_on_oom)
 {
   JNI_NULL_CHECK(env, child, "child is null", 0);
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
     auto wrapped = reinterpret_cast<rmm::mr::device_memory_resource*>(child);
     auto ret     = new rmm::mr::arena_memory_resource<rmm::mr::device_memory_resource>(
       wrapped, init, dump_on_oom);
     return reinterpret_cast<jlong>(ret);
   }
-  CATCH_STD(env, 0)
+  JNI_CATCH(env, 0)
 }
 
-JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_releaseArenaMemoryResource(JNIEnv* env,
-                                                                          jclass clazz,
-                                                                          jlong ptr)
-{
-  try {
-    cudf::jni::auto_set_device(env);
-    auto mr =
-      reinterpret_cast<rmm::mr::arena_memory_resource<rmm::mr::device_memory_resource>*>(ptr);
-    delete mr;
-  }
-  CATCH_STD(env, )
+JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_releaseArenaMemoryResource(
+  JNIEnv* env, jclass clazz, jlong ptr){JNI_TRY{cudf::jni::auto_set_device(env);
+auto mr = reinterpret_cast<rmm::mr::arena_memory_resource<rmm::mr::device_memory_resource>*>(ptr);
+delete mr;
+}
+JNI_CATCH(env, )
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_newCudaAsyncMemoryResource(
-  JNIEnv* env, jclass clazz, jlong init, jlong release, jboolean fabric)
-{
-  try {
-    cudf::jni::auto_set_device(env);
+  JNIEnv* env, jclass clazz, jlong init, jlong release, jboolean fabric){
+  JNI_TRY{cudf::jni::auto_set_device(env);
 
-    auto handle_type =
-      fabric ? std::optional{rmm::mr::cuda_async_memory_resource::allocation_handle_type::fabric}
-             : std::nullopt;
+auto handle_type =
+  fabric ? std::optional{rmm::mr::cuda_async_memory_resource::allocation_handle_type::fabric}
+         : std::nullopt;
 
-    auto ret = new rmm::mr::cuda_async_memory_resource(init, release, handle_type);
+auto ret = new rmm::mr::cuda_async_memory_resource(init, release, handle_type);
 
-    return reinterpret_cast<jlong>(ret);
-  }
-  CATCH_STD(env, 0)
+return reinterpret_cast<jlong>(ret);
+}
+JNI_CATCH(env, 0)
 }
 
-JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_releaseCudaAsyncMemoryResource(JNIEnv* env,
-                                                                              jclass clazz,
-                                                                              jlong ptr)
-{
-  try {
-    cudf::jni::auto_set_device(env);
-    auto mr = reinterpret_cast<rmm::mr::cuda_async_memory_resource*>(ptr);
-    delete mr;
-  }
-  CATCH_STD(env, )
+JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_releaseCudaAsyncMemoryResource(
+  JNIEnv* env, jclass clazz, jlong ptr){JNI_TRY{cudf::jni::auto_set_device(env);
+auto mr = reinterpret_cast<rmm::mr::cuda_async_memory_resource*>(ptr);
+delete mr;
+}
+JNI_CATCH(env, )
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_newLimitingResourceAdaptor(
   JNIEnv* env, jclass clazz, jlong child, jlong limit, jlong align)
 {
   JNI_NULL_CHECK(env, child, "child is null", 0);
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
     auto wrapped = reinterpret_cast<rmm::mr::device_memory_resource*>(child);
     auto ret     = new rmm::mr::limiting_resource_adaptor<rmm::mr::device_memory_resource>(
       wrapped, limit, align);
     return reinterpret_cast<jlong>(ret);
   }
-  CATCH_STD(env, 0)
+  JNI_CATCH(env, 0)
 }
 
-JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_releaseLimitingResourceAdaptor(JNIEnv* env,
-                                                                              jclass clazz,
-                                                                              jlong ptr)
-{
-  try {
-    cudf::jni::auto_set_device(env);
-    auto mr =
-      reinterpret_cast<rmm::mr::limiting_resource_adaptor<rmm::mr::device_memory_resource>*>(ptr);
-    delete mr;
-  }
-  CATCH_STD(env, )
+JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_releaseLimitingResourceAdaptor(
+  JNIEnv* env, jclass clazz, jlong ptr){JNI_TRY{cudf::jni::auto_set_device(env);
+auto mr =
+  reinterpret_cast<rmm::mr::limiting_resource_adaptor<rmm::mr::device_memory_resource>*>(ptr);
+delete mr;
+}
+JNI_CATCH(env, )
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_newLoggingResourceAdaptor(
   JNIEnv* env, jclass clazz, jlong child, jint type, jstring jpath, jboolean auto_flush)
 {
   JNI_NULL_CHECK(env, child, "child is null", 0);
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
     auto wrapped = reinterpret_cast<rmm::mr::device_memory_resource*>(child);
     switch (type) {
@@ -858,20 +823,16 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_newLoggingResourceAdaptor(
       default: throw std::logic_error("unsupported logging location type");
     }
   }
-  CATCH_STD(env, 0)
+  JNI_CATCH(env, 0)
 }
 
-JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_releaseLoggingResourceAdaptor(JNIEnv* env,
-                                                                             jclass clazz,
-                                                                             jlong ptr)
-{
-  try {
-    cudf::jni::auto_set_device(env);
-    auto mr =
-      reinterpret_cast<rmm::mr::logging_resource_adaptor<rmm::mr::device_memory_resource>*>(ptr);
-    delete mr;
-  }
-  CATCH_STD(env, )
+JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_releaseLoggingResourceAdaptor(
+  JNIEnv* env, jclass clazz, jlong ptr){JNI_TRY{cudf::jni::auto_set_device(env);
+auto mr =
+  reinterpret_cast<rmm::mr::logging_resource_adaptor<rmm::mr::device_memory_resource>*>(ptr);
+delete mr;
+}
+JNI_CATCH(env, )
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_newTrackingResourceAdaptor(JNIEnv* env,
@@ -880,25 +841,22 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_newTrackingResourceAdaptor(JNIEn
                                                                            jlong align)
 {
   JNI_NULL_CHECK(env, child, "child is null", 0);
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
     auto wrapped = reinterpret_cast<rmm::mr::device_memory_resource*>(child);
     auto ret     = new tracking_resource_adaptor<rmm::mr::device_memory_resource>(wrapped, align);
     return reinterpret_cast<jlong>(ret);
   }
-  CATCH_STD(env, 0)
+  JNI_CATCH(env, 0)
 }
 
-JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_releaseTrackingResourceAdaptor(JNIEnv* env,
-                                                                              jclass clazz,
-                                                                              jlong ptr)
-{
-  try {
-    cudf::jni::auto_set_device(env);
-    auto mr = reinterpret_cast<tracking_resource_adaptor<rmm::mr::device_memory_resource>*>(ptr);
-    delete mr;
-  }
-  CATCH_STD(env, )
+JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_releaseTrackingResourceAdaptor(
+  JNIEnv* env, jclass clazz, jlong ptr){JNI_TRY{cudf::jni::auto_set_device(env);
+auto mr = reinterpret_cast<tracking_resource_adaptor<rmm::mr::device_memory_resource>*>(ptr);
+delete mr;
+}
+JNI_CATCH(env, )
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_nativeGetTotalBytesAllocated(JNIEnv* env,
@@ -906,12 +864,13 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_nativeGetTotalBytesAllocated(JNI
                                                                              jlong ptr)
 {
   JNI_NULL_CHECK(env, ptr, "adaptor is null", 0);
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
     auto mr = reinterpret_cast<tracking_resource_adaptor<rmm::mr::device_memory_resource>*>(ptr);
     return mr->get_total_allocated();
   }
-  CATCH_STD(env, 0)
+  JNI_CATCH(env, 0)
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_nativeGetMaxTotalBytesAllocated(JNIEnv* env,
@@ -919,12 +878,13 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_nativeGetMaxTotalBytesAllocated(
                                                                                 jlong ptr)
 {
   JNI_NULL_CHECK(env, ptr, "adaptor is null", 0);
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
     auto mr = reinterpret_cast<tracking_resource_adaptor<rmm::mr::device_memory_resource>*>(ptr);
     return mr->get_max_total_allocated();
   }
-  CATCH_STD(env, 0)
+  JNI_CATCH(env, 0)
 }
 
 JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_nativeResetScopedMaxTotalBytesAllocated(JNIEnv* env,
@@ -933,12 +893,13 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_nativeResetScopedMaxTotalBytesAll
                                                                                        jlong init)
 {
   JNI_NULL_CHECK(env, ptr, "adaptor is null", );
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
     auto mr = reinterpret_cast<tracking_resource_adaptor<rmm::mr::device_memory_resource>*>(ptr);
     mr->reset_scoped_max_total_allocated(init);
   }
-  CATCH_STD(env, )
+  JNI_CATCH(env, )
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_nativeGetScopedMaxTotalBytesAllocated(JNIEnv* env,
@@ -946,12 +907,13 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_nativeGetScopedMaxTotalBytesAllo
                                                                                       jlong ptr)
 {
   JNI_NULL_CHECK(env, ptr, "adaptor is null", 0);
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
     auto mr = reinterpret_cast<tracking_resource_adaptor<rmm::mr::device_memory_resource>*>(ptr);
     return mr->get_scoped_max_total_allocated();
   }
-  CATCH_STD(env, 0)
+  JNI_CATCH(env, 0)
 }
 
 JNIEXPORT jlong JNICALL
@@ -966,7 +928,8 @@ Java_ai_rapids_cudf_Rmm_newEventHandlerResourceAdaptor(JNIEnv* env,
 {
   JNI_NULL_CHECK(env, child, "child is null", 0);
   JNI_NULL_CHECK(env, tracker, "tracker is null", 0);
-  try {
+  JNI_TRY
+  {
     auto wrapped = reinterpret_cast<rmm::mr::device_memory_resource*>(child);
     auto t = reinterpret_cast<tracking_resource_adaptor<rmm::mr::device_memory_resource>*>(tracker);
     if (enable_debug) {
@@ -979,78 +942,59 @@ Java_ai_rapids_cudf_Rmm_newEventHandlerResourceAdaptor(JNIEnv* env,
       return reinterpret_cast<jlong>(ret);
     }
   }
-  CATCH_STD(env, 0)
+  JNI_CATCH(env, 0)
 }
 
 JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_releaseEventHandlerResourceAdaptor(
-  JNIEnv* env, jclass clazz, jlong ptr, jboolean enable_debug)
-{
-  try {
-    cudf::jni::auto_set_device(env);
-    if (enable_debug) {
-      auto mr = reinterpret_cast<java_debug_event_handler_memory_resource*>(ptr);
-      delete mr;
-    } else {
-      auto mr = reinterpret_cast<java_event_handler_memory_resource*>(ptr);
-      delete mr;
-    }
-  }
-  CATCH_STD(env, )
+  JNIEnv* env, jclass clazz, jlong ptr, jboolean enable_debug){
+  JNI_TRY{cudf::jni::auto_set_device(env);
+if (enable_debug) {
+  auto mr = reinterpret_cast<java_debug_event_handler_memory_resource*>(ptr);
+  delete mr;
+} else {
+  auto mr = reinterpret_cast<java_event_handler_memory_resource*>(ptr);
+  delete mr;
+}
+}
+JNI_CATCH(env, )
 }
 
-JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_setCurrentDeviceResourceInternal(JNIEnv* env,
-                                                                                jclass clazz,
-                                                                                jlong new_handle)
-{
-  try {
-    cudf::jni::auto_set_device(env);
-    auto mr = reinterpret_cast<rmm::mr::device_memory_resource*>(new_handle);
-    cudf::set_current_device_resource(mr);
-  }
-  CATCH_STD(env, )
+JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_setCurrentDeviceResourceInternal(
+  JNIEnv* env, jclass clazz, jlong new_handle){JNI_TRY{cudf::jni::auto_set_device(env);
+auto mr = reinterpret_cast<rmm::mr::device_memory_resource*>(new_handle);
+cudf::set_current_device_resource(mr);
+}
+JNI_CATCH(env, )
 }
 
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_newPinnedPoolMemoryResource(JNIEnv* env,
-                                                                            jclass clazz,
-                                                                            jlong init,
-                                                                            jlong max)
-{
-  try {
-    cudf::jni::auto_set_device(env);
-    auto pool = new rmm_pinned_pool_t(new rmm::mr::pinned_host_memory_resource(), init, max);
-    return reinterpret_cast<jlong>(pool);
-  }
-  CATCH_STD(env, 0)
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_newPinnedPoolMemoryResource(
+  JNIEnv* env, jclass clazz, jlong init, jlong max){JNI_TRY{cudf::jni::auto_set_device(env);
+auto pool = new rmm_pinned_pool_t(new rmm::mr::pinned_host_memory_resource(), init, max);
+return reinterpret_cast<jlong>(pool);
+}
+JNI_CATCH(env, 0)
 }
 
-JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_setCudfPinnedPoolMemoryResource(JNIEnv* env,
-                                                                               jclass clazz,
-                                                                               jlong pool_ptr)
-{
-  try {
-    cudf::jni::auto_set_device(env);
-    auto pool = reinterpret_cast<rmm_pinned_pool_t*>(pool_ptr);
-    // create a pinned fallback pool that will allocate pinned memory
-    // if the regular pinned pool is exhausted
-    pinned_fallback_mr.reset(new pinned_fallback_host_memory_resource(pool));
-    prior_cudf_pinned_mr() = cudf::set_pinned_memory_resource(*pinned_fallback_mr);
-  }
-  CATCH_STD(env, )
+JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_setCudfPinnedPoolMemoryResource(
+  JNIEnv* env, jclass clazz, jlong pool_ptr){JNI_TRY{cudf::jni::auto_set_device(env);
+auto pool = reinterpret_cast<rmm_pinned_pool_t*>(pool_ptr);
+// create a pinned fallback pool that will allocate pinned memory
+// if the regular pinned pool is exhausted
+pinned_fallback_mr.reset(new pinned_fallback_host_memory_resource(pool));
+prior_cudf_pinned_mr() = cudf::set_pinned_memory_resource(*pinned_fallback_mr);
+}
+JNI_CATCH(env, )
 }
 
-JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_releasePinnedPoolMemoryResource(JNIEnv* env,
-                                                                               jclass clazz,
-                                                                               jlong pool_ptr)
-{
-  try {
-    cudf::jni::auto_set_device(env);
-    // set the cuio host memory resource to what it was before, or the same
-    // if we didn't overwrite it with setCudfPinnedPoolMemoryResource
-    cudf::set_pinned_memory_resource(prior_cudf_pinned_mr());
-    pinned_fallback_mr.reset();
-    delete reinterpret_cast<rmm_pinned_pool_t*>(pool_ptr);
-  }
-  CATCH_STD(env, )
+JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_releasePinnedPoolMemoryResource(
+  JNIEnv* env, jclass clazz, jlong pool_ptr){JNI_TRY{cudf::jni::auto_set_device(env);
+// set the cuio host memory resource to what it was before, or the same
+// if we didn't overwrite it with setCudfPinnedPoolMemoryResource
+cudf::set_pinned_memory_resource(prior_cudf_pinned_mr());
+pinned_fallback_mr.reset();
+delete reinterpret_cast<rmm_pinned_pool_t*>(pool_ptr);
+}
+JNI_CATCH(env, )
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_allocFromPinnedPool(JNIEnv* env,
@@ -1058,26 +1002,24 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_allocFromPinnedPool(JNIEnv* env,
                                                                     jlong pool_ptr,
                                                                     jlong size)
 {
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
     auto pool = reinterpret_cast<rmm_pinned_pool_t*>(pool_ptr);
     void* ret = pool->allocate(size);
     return reinterpret_cast<jlong>(ret);
-  } catch (std::exception const& unused) {
-    return -1;
   }
+  catch (std::exception const& unused) { return -1; }
 }
 
 JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_freeFromPinnedPool(
-  JNIEnv* env, jclass clazz, jlong pool_ptr, jlong ptr, jlong size)
-{
-  try {
-    cudf::jni::auto_set_device(env);
-    auto pool  = reinterpret_cast<rmm_pinned_pool_t*>(pool_ptr);
-    void* cptr = reinterpret_cast<void*>(ptr);
-    pool->deallocate(cptr, size);
-  }
-  CATCH_STD(env, )
+  JNIEnv* env, jclass clazz, jlong pool_ptr, jlong ptr, jlong size){
+  JNI_TRY{cudf::jni::auto_set_device(env);
+auto pool  = reinterpret_cast<rmm_pinned_pool_t*>(pool_ptr);
+void* cptr = reinterpret_cast<void*>(ptr);
+pool->deallocate(cptr, size);
+}
+JNI_CATCH(env, )
 }
 
 // only for tests
@@ -1091,27 +1033,23 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_allocFromFallbackPinnedPool(JNIE
 }
 
 // only for tests
-JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_freeFromFallbackPinnedPool(JNIEnv* env,
-                                                                          jclass clazz,
-                                                                          jlong ptr,
-                                                                          jlong size)
-{
-  try {
-    cudf::jni::auto_set_device(env);
-    void* cptr = reinterpret_cast<void*>(ptr);
-    cudf::get_pinned_memory_resource().deallocate(cptr, size);
-  }
-  CATCH_STD(env, )
+JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_freeFromFallbackPinnedPool(
+  JNIEnv* env, jclass clazz, jlong ptr, jlong size){JNI_TRY{cudf::jni::auto_set_device(env);
+void* cptr = reinterpret_cast<void*>(ptr);
+cudf::get_pinned_memory_resource().deallocate(cptr, size);
+}
+JNI_CATCH(env, )
 }
 
 JNIEXPORT jboolean JNICALL Java_ai_rapids_cudf_Rmm_configureDefaultCudfPinnedPoolSize(JNIEnv* env,
                                                                                       jclass clazz,
                                                                                       jlong size)
 {
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
     return cudf::config_default_pinned_memory_resource(cudf::pinned_mr_options{size});
   }
-  CATCH_STD(env, false)
+  JNI_CATCH(env, false)
 }
 }

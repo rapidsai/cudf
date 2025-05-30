@@ -80,7 +80,7 @@ inline void check_java_exception(JNIEnv* const env)
 }
 
 /**
- * @brief Create a cuda exception from a given cudaError_t.
+ * @brief Create CudaException or CudaFatalException from a given cudaError_t code.
  */
 inline jthrowable cuda_exception(JNIEnv* const env, cudaError_t status, jthrowable cause = nullptr)
 {
@@ -256,6 +256,6 @@ inline void jni_cuda_check(JNIEnv* const env, cudaError_t cuda_status)
 
 // Separate special exceptions handling from std::exception to allow catching more special
 // exceptions in some situations by inserting additional catch blocks in between.
-#define CATCH_STD(env, ret_val)         \
+#define JNI_CATCH(env, ret_val)         \
   CATCH_SPECIAL_EXCEPTION(env, ret_val) \
   CATCH_STD_EXCEPTION(env, ret_val)
