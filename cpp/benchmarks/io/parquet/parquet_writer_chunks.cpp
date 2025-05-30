@@ -43,8 +43,7 @@ std::string format_throughput(double bytes_per_second, int precision = 2)
 
 // Size of the data in the benchmark dataframe; chosen to be low enough to allow benchmarks to
 // run on most GPUs, but large enough to allow highest throughput
-// constexpr int64_t data_size = 512 << 20;
-constexpr int64_t data_size = 4L << 30;
+constexpr int64_t data_size = 512 << 20;
 
 void PQ_write(nvbench::state& state)
 {
@@ -138,4 +137,4 @@ NVBENCH_BENCH(PQ_write_chunked)
   .set_name("parquet_chunked_write")
   .set_min_samples(4)
   .add_int64_axis("num_cols", {8, 1024})
-  .add_int64_axis("num_chunks", {1, 2, 4, 8, 16, 32});
+  .add_int64_axis("num_chunks", {1, 2, 4, 8});
