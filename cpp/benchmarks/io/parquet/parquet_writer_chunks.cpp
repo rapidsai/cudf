@@ -84,7 +84,7 @@ void PQ_write_chunked(nvbench::state& state)
       timer.start();
       cudf::io::chunked_parquet_writer_options opts =
         cudf::io::chunked_parquet_writer_options::builder(source_sink.make_sink_info());
-      cudf::io::parquet_chunked_writer writer(opts);
+      cudf::io::chunked_parquet_writer writer(opts);
       std::for_each(tables.begin(),
                     tables.end(),
                     [&writer](std::unique_ptr<cudf::table> const& tbl) { writer.write(*tbl); });
