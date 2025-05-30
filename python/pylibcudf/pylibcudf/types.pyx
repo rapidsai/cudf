@@ -21,6 +21,7 @@ from pylibcudf.libcudf.types import null_order as NullOrder  # no-cython-lint, i
 from pylibcudf.libcudf.types import order as Order  # no-cython-lint, isort:skip
 from pylibcudf.libcudf.types import sorted as Sorted  # no-cython-lint, isort:skip
 
+from functools import cache
 from packaging.version import parse
 
 try:
@@ -268,6 +269,7 @@ cpdef size_t size_of(DataType t):
         return cpp_size_of(t.c_obj)
 
 if pa is not None:
+    @cache
     def _from_arrow(obj: pa.DataType) -> DataType:
         if PYARROW_VERSION > parse("19.0.0"):
             if isinstance(obj, pa.Decimal32Type):
@@ -277,8 +279,13 @@ if pa is not None:
         if isinstance(obj, pa.Decimal128Type):
             return DataType(type_id.DECIMAL128, scale=-obj.scale)
         elif isinstance(obj, pa.StructType):
+            # Recurse to catch unsupported field types
+            for field in obj:
+                _from_arrow(field.type)
             return DataType(type_id.STRUCT)
         elif isinstance(obj, pa.ListType):
+            # Recurse to catch unsupported inner types
+            _from_arrow(obj.value_type)
             return DataType(type_id.LIST)
         else:
             try:
