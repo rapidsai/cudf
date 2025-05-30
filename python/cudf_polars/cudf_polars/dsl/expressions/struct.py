@@ -1,0 +1,97 @@
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-License-Identifier: Apache-2.0
+# TODO: remove need for this
+# ruff: noqa: D101
+"""Struct DSL nodes."""
+
+from __future__ import annotations
+
+from enum import IntEnum, auto
+from typing import TYPE_CHECKING, Any, ClassVar
+
+from cudf_polars.containers import Column
+from cudf_polars.dsl.expressions.base import ExecutionContext, Expr
+
+if TYPE_CHECKING:
+    from typing_extensions import Self
+
+    from polars.polars import _expr_nodes as pl_expr
+
+    from cudf_polars.containers import DataFrame, DataType
+
+__all__ = ["StructFunction"]
+
+
+class StructFunction(Expr):
+    class Name(IntEnum):
+        """Internal and picklable representation of polars' `StructFunction`."""
+
+        FieldByIndex = auto()
+        FieldByName = auto()
+        RenameFields = auto()
+        PrefixFields = auto()
+        SuffixFields = auto()
+        JsonEncode = auto()
+        WithFields = auto()  # TODO: Implement in Polars
+        MapFieldNames = auto()  # TODO: Implement in Polars
+        MultipleFields = auto()  # TODO: Implement in Polars
+
+        @classmethod
+        def from_polars(cls, obj: pl_expr.StructFunction) -> Self:
+            """Convert from polars' `StructFunction`."""
+            try:
+                function, name = str(obj).split(".", maxsplit=1)
+            except ValueError:
+                # Failed to unpack string
+                function = None
+            if function != "StructFunction":
+                raise ValueError("StructFunction required")
+            return getattr(cls, name)
+
+    __slots__ = ("name", "options")
+    _non_child = ("dtype", "name", "options")
+
+    _valid_ops: ClassVar[set[Name]] = {
+        Name.FieldByIndex,
+        Name.FieldByName,
+        Name.RenameFields,
+        Name.PrefixFields,
+        Name.SuffixFields,
+        Name.JsonEncode,
+    }
+
+    def __init__(
+        self,
+        dtype: DataType,
+        name: StructFunction.Name,
+        options: tuple[Any, ...],
+        *children: Expr,
+    ) -> None:
+        self.dtype = dtype
+        self.options = options
+        self.name = name
+        self.children = children
+        self.is_pointwise = True
+        if self.name not in self._valid_ops:
+            raise NotImplementedError(f"Struct function {self.name}")
+
+    def do_evaluate(
+        self, df: DataFrame, *, context: ExecutionContext = ExecutionContext.FRAME
+    ) -> Column:
+        """Evaluate this expression given a dataframe for context."""
+        columns = [child.evaluate(df, context=context) for child in self.children]
+        (column,) = columns
+        if self.name == StructFunction.Name.FieldByIndex:
+            return Column(column.obj.children()[self.options[0]])
+        elif self.name == StructFunction.Name.FieldByName:
+            field_names = [field.name for field in self.children[0].dtype.polars.fields]
+            return Column(column.obj.children()[field_names.index(self.options[0])])
+        elif (
+            self.name == StructFunction.Name.RenameFields
+            or self.name == StructFunction.Name.PrefixFields
+            or self.name == StructFunction.Name.SuffixFields
+            or self.name == StructFunction.Name.JsonEncode
+        ):
+            raise NotImplementedError(f"Struct function {self.name}")
+        else:
+            raise NotImplementedError(f"Struct function {self.name}")
