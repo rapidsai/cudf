@@ -31,6 +31,7 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
+#include <cuda/std/iterator>
 #include <thrust/binary_search.h>
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/discard_iterator.h>
@@ -595,7 +596,7 @@ struct get_page_span {
     auto start_page              = first_page_index;
     auto const update_start_page = has_page_index or (not is_list) or (not is_first_subpass);
     if (update_start_page) {
-      start_page += thrust::distance(
+      start_page += cuda::std::distance(
         column_page_start,
         thrust::lower_bound(thrust::seq, column_page_start, column_page_end, start_row));
     }
@@ -603,10 +604,11 @@ struct get_page_span {
       start_page++;
     }
 
-    auto end_page = thrust::distance(column_page_start,
-                                     thrust::lower_bound(
-                                       thrust::seq, column_page_start, column_page_end, end_row)) +
-                    first_page_index;
+    auto end_page =
+      cuda::std::distance(
+        column_page_start,
+        thrust::lower_bound(thrust::seq, column_page_start, column_page_end, end_row)) +
+      first_page_index;
     if (end_page < (first_page_index + num_pages)) { end_page++; }
 
     return {static_cast<size_t>(start_page), static_cast<size_t>(end_page)};
