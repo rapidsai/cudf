@@ -150,7 +150,9 @@ class TemporalFunction(Expr):
                 elif unit == "s":
                     dtype = plc.DataType(plc.TypeId.TIMESTAMP_SECONDS)
                 else:
-                    raise ValueError(f"Unsupported time unit: {unit}")
+                    raise ValueError(
+                        f"Unsupported time unit: {unit}"
+                    )  # pragma: no cover
             elif plc.traits.is_duration(column.obj.type()):
                 if unit == "ns":
                     dtype = plc.DataType(plc.TypeId.DURATION_NANOSECONDS)
@@ -161,7 +163,9 @@ class TemporalFunction(Expr):
                 elif unit == "s":
                     dtype = plc.DataType(plc.TypeId.DURATION_SECONDS)
                 else:
-                    raise ValueError(f"Unsupported time unit: {unit}")
+                    raise ValueError(
+                        f"Unsupported time unit: {unit}"
+                    )  # pragma: no cover
             result = plc.unary.cast(column.obj, dtype)
             return Column(result)
         if self.name == TemporalFunction.Name.ToString:
