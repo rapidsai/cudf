@@ -17,7 +17,7 @@ def input_col():
 @pytest.mark.parametrize("sep", ["_", "**", ","])
 def test_generate_ngrams(input_col, ngram, sep):
     got = plc.nvtext.generate_ngrams.generate_ngrams(
-        plc.Column(input_col),
+        plc.Column.from_arrow(input_col),
         ngram,
         plc.interop.from_arrow(pa.scalar(sep)),
     )
@@ -30,7 +30,7 @@ def test_generate_ngrams(input_col, ngram, sep):
 @pytest.mark.parametrize("ngram", [2, 3])
 def test_generate_character_ngrams(input_col, ngram):
     got = plc.nvtext.generate_ngrams.generate_character_ngrams(
-        plc.Column(input_col),
+        plc.Column.from_arrow(input_col),
         ngram,
     )
     expect = pa.array([["ab"], ["cd", "de"], ["fg", "gh"]])
@@ -43,7 +43,7 @@ def test_generate_character_ngrams(input_col, ngram):
 @pytest.mark.parametrize("seed", [0, 3])
 def test_hash_character_ngrams(input_col, ngram, seed):
     result = plc.nvtext.generate_ngrams.hash_character_ngrams(
-        plc.Column(input_col), ngram, seed
+        plc.Column.from_arrow(input_col), ngram, seed
     )
     pa_result = plc.interop.to_arrow(result)
     assert all(

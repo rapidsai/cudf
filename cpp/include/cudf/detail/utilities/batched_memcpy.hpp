@@ -30,8 +30,8 @@ namespace CUDF_EXPORT cudf {
 namespace detail {
 
 /**
- * @brief A helper function that copies a vector of vectors from source to destination addresses in
- * a batched manner.
+ * @brief Helper to batched memcpy specified numbers of bytes from source device iterators to
+ * destination device iterators
  *
  * @tparam SrcIterator **[inferred]** The type of device-accessible source addresses iterator
  * @tparam DstIterator **[inferred]** The type of device-accessible destination address iterator
