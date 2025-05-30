@@ -34,7 +34,7 @@ if TYPE_CHECKING:
 
 def find_sort_splits(
     tbl: plc.Table,
-    split_candidates: plc.Table,
+    split_candidates_unordered: plc.Table,
     my_part_id: int,
     num_partitions: int,
     column_order: Sequence[plc.types.Order],
@@ -52,7 +52,7 @@ def find_sort_splits(
     ----------
     tbl
         Local sorted table only containing sort columns.
-    split_candidates
+    split_candidates_unordered
         Table containing all global split candidates.  Compared to `tbl`
         must contain additional partition_id and local_row_number columns.
     my_part_id
@@ -74,16 +74,16 @@ def find_sort_splits(
     # The global split candidates need to be stable sorted to find the correct
     # final split points.
     # NOTE: This could be a merge if done earlier (but it should be small data).
-    split_candidates_tbl = plc.sorting.sort(
-        split_candidates,
+    split_candidates = plc.sorting.sort(
+        split_candidates_unordered,
         # split candidates has the additional partition_id and row_number columns
         column_order + [plc.types.Order.ASCENDING] * 2,
         null_order + [plc.types.NullOrder.AFTER] * 2,
     )
-    global_split_points = plc.Column(
+    global_split_points = plc.Column.from_arrow(
         pa.array(
             [
-                i * split_candidates_tbl.num_rows() // num_partitions
+                i * split_candidates.num_rows() // num_partitions
                 for i in range(1, num_partitions)
             ]
         )
@@ -143,7 +143,7 @@ def _select_local_split_candidates(
     """
     df = df.select(by)
     candidates = [i * df.num_rows // num_partitions for i in range(num_partitions)]
-    row_id = plc.Column(pa.array(candidates))
+    row_id = plc.Column.from_arrow(pa.array(candidates))
 
     res = plc.copying.gather(df.table, row_id, plc.copying.OutOfBoundsPolicy.DONT_CHECK)
     part_id = plc.Column.from_scalar(
@@ -415,7 +415,7 @@ def _(
         ir.by,
         ir.order,
         ir.null_order,
-        ir.config_options,
+        rec.state["config_options"],
         local_sort_node,
     )
     partition_info[shuffle] = partition_info[child]

@@ -1993,16 +1993,8 @@ class Distinct(IR):
 class Sort(IR):
     """Sort a dataframe."""
 
-    __slots__ = ("by", "config_options", "null_order", "order", "stable", "zlice")
-    _non_child = (
-        "schema",
-        "by",
-        "order",
-        "null_order",
-        "stable",
-        "zlice",
-        "config_options",
-    )
+    __slots__ = ("by", "null_order", "order", "stable", "zlice")
+    _non_child = ("schema", "by", "order", "null_order", "stable", "zlice")
     by: tuple[expr.NamedExpr, ...]
     """Sort keys."""
     order: tuple[plc.types.Order, ...]
@@ -2013,7 +2005,6 @@ class Sort(IR):
     """Should the sort be stable?"""
     zlice: Zlice | None
     """Optional slice to apply to the result."""
-    config_options: ConfigOptions
 
     def __init__(
         self,
@@ -2023,7 +2014,6 @@ class Sort(IR):
         null_order: Sequence[plc.types.NullOrder],
         stable: bool,  # noqa: FBT001
         zlice: Zlice | None,
-        config_options: ConfigOptions,
         df: IR,
     ):
         self.schema = schema
@@ -2032,14 +2022,12 @@ class Sort(IR):
         self.null_order = tuple(null_order)
         self.stable = stable
         self.zlice = zlice
-        self.config_options = config_options
         self._non_child_args = (
             self.by,
             self.order,
             self.null_order,
             self.stable,
             self.zlice,
-            config_options,
         )
         self.children = (df,)
 
@@ -2052,7 +2040,6 @@ class Sort(IR):
         null_order: Sequence[plc.types.NullOrder],
         stable: bool,  # noqa: FBT001
         zlice: Zlice | None,
-        config_options: ConfigOptions,
         df: DataFrame,
     ) -> DataFrame:
         """Evaluate and return a dataframe."""

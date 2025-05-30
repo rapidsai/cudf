@@ -431,16 +431,7 @@ def _(node: pl_ir.Sort, translator: Translator, schema: Schema) -> ir.IR:
     order, null_order = sorting.sort_order(
         descending, nulls_last=nulls_last, num_keys=len(by)
     )
-    return ir.Sort(
-        schema,
-        by,
-        order,
-        null_order,
-        stable,
-        node.slice,
-        translator.config_options,
-        inp,
-    )
+    return ir.Sort(schema, by, order, null_order, stable, node.slice, inp)
 
 
 @_translate_ir.register
