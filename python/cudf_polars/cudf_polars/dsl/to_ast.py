@@ -192,9 +192,11 @@ def _(node: expr.BooleanFunction, self: Transformer) -> plc_expr.Expression:
             if haystack.dtype.id() == plc.TypeId.LIST:
                 # Because we originally translated pl_expr.Literal with a list scalar
                 # to a expr.LiteralColumn, so the actual type is in the inner type
-                plc_dtype = DataType(haystack.dtype.polars.inner).plc
+                plc_dtype = DataType(
+                    haystack.dtype.polars.inner
+                ).plc  # pragma: no cover
             else:
-                plc_dtype = haystack.dtype.plc
+                plc_dtype = haystack.dtype.plc  # pragma: no cover
             values = (
                 plc_expr.Literal(plc.Scalar.from_py(val, plc_dtype))
                 for val in haystack.value
