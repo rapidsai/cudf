@@ -461,3 +461,31 @@ def test_string_to_numeric_invalid(numeric_type):
 def test_string_join(ldf, ignore_nulls, delimiter):
     q = ldf.select(pl.col("a").str.join(delimiter, ignore_nulls=ignore_nulls))
     assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize(
+    "fill",
+    [
+        0,
+        1,
+        2,
+        5,
+        999,
+        -1,
+        None,
+    ],
+)
+@pytest.mark.parametrize(
+    "input_strings",
+    [
+        ["1", "0"],
+        ["123", "45"],
+        ["", "0"],
+        ["-1", "+2"],
+        ["abc", "def"],
+    ],
+)
+def test_string_zfill(fill, input_strings):
+    ldf = pl.LazyFrame({"a": input_strings})
+    q = ldf.select(pl.col("a").str.zfill(fill))
+    assert_gpu_result_equal(q)

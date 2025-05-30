@@ -123,6 +123,7 @@ class StringFunction(Expr):
             StringFunction.Name.StripCharsStart,
             StringFunction.Name.StripCharsEnd,
             StringFunction.Name.Uppercase,
+            StringFunction.Name.ZFill,
         ):
             raise NotImplementedError(f"String function {self.name!r}")
         if self.name is StringFunction.Name.Contains:
@@ -222,6 +223,11 @@ class StringFunction(Expr):
                     plc.Scalar.from_py(None, plc.DataType(plc.TypeId.STRING)),
                 )
             )
+        elif self.name is StringFunction.Name.ZFill:
+            child, width = self.children
+            assert isinstance(width, Literal)
+            column = child.evaluate(df, context=context)
+            return Column(plc.strings.padding.zfill(column.obj, width.value))
         elif self.name is StringFunction.Name.Contains:
             child, arg = self.children
             column = child.evaluate(df, context=context)
