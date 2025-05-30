@@ -180,30 +180,33 @@ cdef class Scalar:
         """
         if not self.is_valid():
             return None
-        elif self.type().id() == type_id.BOOL8:
-            return (<numeric_scalar[cbool]*>self.c_obj.get()).value()
-        elif self.type().id() == type_id.STRING:
-            return (<string_scalar*>self.c_obj.get()).to_string().decode()
-        elif self.type().id() == type_id.FLOAT32:
-            return (<numeric_scalar[float]*>self.c_obj.get()).value()
-        elif self.type().id() == type_id.FLOAT64:
-            return (<numeric_scalar[double]*>self.c_obj.get()).value()
-        elif self.type().id() == type_id.INT8:
-            return (<numeric_scalar[int8_t]*>self.c_obj.get()).value()
-        elif self.type().id() == type_id.INT16:
-            return (<numeric_scalar[int16_t]*>self.c_obj.get()).value()
-        elif self.type().id() == type_id.INT32:
-            return (<numeric_scalar[int32_t]*>self.c_obj.get()).value()
-        elif self.type().id() == type_id.INT64:
-            return (<numeric_scalar[int64_t]*>self.c_obj.get()).value()
-        elif self.type().id() == type_id.UINT8:
-            return (<numeric_scalar[uint8_t]*>self.c_obj.get()).value()
-        elif self.type().id() == type_id.UINT16:
-            return (<numeric_scalar[uint16_t]*>self.c_obj.get()).value()
-        elif self.type().id() == type_id.UINT32:
-            return (<numeric_scalar[uint32_t]*>self.c_obj.get()).value()
-        elif self.type().id() == type_id.UINT64:
-            return (<numeric_scalar[uint64_t]*>self.c_obj.get()).value()
+
+        cdef type_id tid = self.type().id()
+        cdef const scalar* slr = self.c_obj.get()
+        if tid == type_id.BOOL8:
+            return (<numeric_scalar[cbool]*>slr).value()
+        elif tid == type_id.STRING:
+            return (<string_scalar*>slr).to_string().decode()
+        elif tid == type_id.FLOAT32:
+            return (<numeric_scalar[float]*>slr).value()
+        elif tid == type_id.FLOAT64:
+            return (<numeric_scalar[double]*>slr).value()
+        elif tid == type_id.INT8:
+            return (<numeric_scalar[int8_t]*>slr).value()
+        elif tid == type_id.INT16:
+            return (<numeric_scalar[int16_t]*>slr).value()
+        elif tid == type_id.INT32:
+            return (<numeric_scalar[int32_t]*>slr).value()
+        elif tid == type_id.INT64:
+            return (<numeric_scalar[int64_t]*>slr).value()
+        elif tid == type_id.UINT8:
+            return (<numeric_scalar[uint8_t]*>slr).value()
+        elif tid == type_id.UINT16:
+            return (<numeric_scalar[uint16_t]*>slr).value()
+        elif tid == type_id.UINT32:
+            return (<numeric_scalar[uint32_t]*>slr).value()
+        elif tid == type_id.UINT64:
+            return (<numeric_scalar[uint64_t]*>slr).value()
         else:
             raise NotImplementedError(
                 f"Converting to Python scalar for type {self.type().id()!r} "
