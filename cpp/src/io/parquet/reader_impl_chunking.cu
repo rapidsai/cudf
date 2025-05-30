@@ -31,6 +31,7 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
+#include <cuda/std/iterator>
 #include <thrust/binary_search.h>
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/discard_iterator.h>
@@ -595,7 +596,7 @@ struct get_page_span {
     auto start_page              = first_page_index;
     auto const update_start_page = has_page_index or (not is_list) or (not is_first_subpass);
     if (update_start_page) {
-      start_page += thrust::distance(
+      start_page += cuda::std::distance(
         column_page_start,
         thrust::lower_bound(thrust::seq, column_page_start, column_page_end, start_row));
     }
@@ -603,10 +604,11 @@ struct get_page_span {
       start_page++;
     }
 
-    auto end_page = thrust::distance(column_page_start,
-                                     thrust::lower_bound(
-                                       thrust::seq, column_page_start, column_page_end, end_row)) +
-                    first_page_index;
+    auto end_page =
+      cuda::std::distance(
+        column_page_start,
+        thrust::lower_bound(thrust::seq, column_page_start, column_page_end, end_row)) +
+      first_page_index;
     if (end_page < (first_page_index + num_pages)) { end_page++; }
 
     return {static_cast<size_t>(start_page), static_cast<size_t>(end_page)};
@@ -1136,12 +1138,9 @@ void include_decompression_scratch_size(device_span<ColumnChunkDesc const> chunk
   // retrieve to host so we can get compression scratch sizes
   auto h_decomp_info = cudf::detail::make_host_vector(decomp_info, stream);
   auto temp_cost     = cudf::detail::make_host_vector<size_t>(pages.size(), stream);
-  std::transform(h_decomp_info.begin(),
-                 h_decomp_info.end(),
-                 temp_cost.begin(),
-                 [num_pages = pages.size()](auto const& d) {
-                   return cudf::io::detail::get_decompression_scratch_size(d, num_pages);
-                 });
+  std::transform(h_decomp_info.begin(), h_decomp_info.end(), temp_cost.begin(), [](auto const& d) {
+    return cudf::io::detail::get_decompression_scratch_size(d);
+  });
 
   // add to the cumulative_page_info data
   rmm::device_uvector<size_t> d_temp_cost = cudf::detail::make_device_uvector_async(
