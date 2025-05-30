@@ -503,3 +503,7 @@ The majority of time should be spent in the `ExecuteIR` range. Within
 another `nvtx` range (e.g. `Scan.do_evaluate`, `GroupBy.do_evaluate`, etc.).
 These provide a higher-level grouping over the lower-level libcudf calls (e.g.
 `read_chunk`, `aggregate`).
+
+Finally, if using [rapidsmpf](https://docs.rapids.ai/api/rapidsmpf/nightly/)
+for shuffling, the methods inserting and extracting partitions to shuffle are
+annotated with nvtx ranges.
