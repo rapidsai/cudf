@@ -63,14 +63,6 @@ option(
          stream to external libraries."
   OFF
 )
-
-# Option to add all symbols to the dynamic symbol table in the library file, allowing to retrieve
-# human-readable stacktrace for debugging.
-option(
-  CUDF_BUILD_STACKTRACE_DEBUG
-  "Replace the current optimization flags by the options '-rdynamic -Og -NDEBUG', useful for debugging with stacktrace retrieval"
-  OFF
-)
 option(DISABLE_DEPRECATION_WARNINGS "Disable warnings generated from deprecated declarations." OFF)
 
 # Option to enable line info in CUDA device compilation to allow introspection when profiling /
@@ -113,10 +105,6 @@ message(VERBOSE "CUDF: Use a file cache for JIT compiled kernels: ${JITIFY_USE_C
 message(VERBOSE "CUDF: Build with per-thread default stream: ${CUDF_USE_PER_THREAD_DEFAULT_STREAM}")
 message(
   VERBOSE
-  "CUDF: Replace the current optimization flags by the options '-rdynamic -Og' (useful for debugging with stacktrace retrieval): ${CUDF_BUILD_STACKTRACE_DEBUG}"
-)
-message(
-  VERBOSE
   "CUDF: Disable warnings generated from deprecated declarations: ${DISABLE_DEPRECATION_WARNINGS}"
 )
 message(
@@ -138,10 +126,6 @@ if(BUILD_TESTS AND NOT CUDF_BUILD_TESTUTIL)
     FATAL_ERROR
       "Tests cannot be built without building cudf test utils. Please set CUDF_BUILD_TESTUTIL=ON or BUILD_TESTS=OFF"
   )
-endif()
-
-if(CUDF_BUILD_STACKTRACE_DEBUG AND NOT CMAKE_COMPILER_IS_GNUCXX)
-  message(FATAL_ERROR "CUDF_BUILD_STACKTRACE_DEBUG is only supported with GCC compiler")
 endif()
 
 set(CUDF_CXX_FLAGS "")
@@ -825,7 +809,6 @@ add_library(
   src/utilities/linked_column.cpp
   src/utilities/logger.cpp
   src/utilities/prefetch.cpp
-  src/utilities/stacktrace.cpp
   src/utilities/stream_pool.cpp
   src/utilities/traits.cpp
   src/utilities/type_checks.cpp
@@ -903,31 +886,6 @@ target_compile_options(
   cudf PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_FLAGS}>"
                "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>"
 )
-
-if(CUDF_BUILD_STACKTRACE_DEBUG)
-  # Remove any optimization level to avoid nvcc warning "incompatible redefinition for option
-  # 'optimize'".
-  string(REGEX REPLACE "(\-O[0123])" "" CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS}")
-  string(REGEX REPLACE "(\-O[0123])" "" CMAKE_CUDA_FLAGS_RELEASE "${CMAKE_CUDA_FLAGS_RELEASE}")
-  string(REGEX REPLACE "(\-O[0123])" "" CMAKE_CUDA_FLAGS_MINSIZEREL
-                       "${CMAKE_CUDA_FLAGS_MINSIZEREL}"
-  )
-  string(REGEX REPLACE "(\-O[0123])" "" CMAKE_CUDA_FLAGS_RELWITHDEBINFO
-                       "${CMAKE_CUDA_FLAGS_RELWITHDEBINFO}"
-  )
-
-  add_library(cudf_backtrace INTERFACE)
-  target_compile_definitions(cudf_backtrace INTERFACE CUDF_BUILD_STACKTRACE_DEBUG)
-  target_compile_options(
-    cudf_backtrace INTERFACE "$<$<COMPILE_LANGUAGE:CXX>:-Og>"
-                             "$<$<COMPILE_LANGUAGE:CUDA>:-Xcompiler=-Og>"
-  )
-  target_link_options(
-    cudf_backtrace INTERFACE "$<$<LINK_LANGUAGE:CXX>:-rdynamic>"
-    "$<$<LINK_LANGUAGE:CUDA>:-Xlinker=-rdynamic>"
-  )
-  target_link_libraries(cudf PRIVATE cudf_backtrace)
-endif()
 
 # Specify include paths for the current target and dependents
 target_include_directories(
@@ -1165,10 +1123,6 @@ if(CUDF_BUILD_STREAMS_TEST_UTIL)
     )
     target_include_directories(${_tgt} PRIVATE "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/include>")
     target_link_libraries(${_tgt} PUBLIC CUDA::cudart rmm::rmm)
-
-    if(CUDF_BUILD_STACKTRACE_DEBUG)
-      target_link_libraries(${_tgt} PRIVATE cudf_backtrace)
-    endif()
 
     rapids_cuda_set_runtime(${_tgt} USE_STATIC ${CUDA_STATIC_RUNTIME})
     add_library(cudf::${_tgt} ALIAS ${_tgt})

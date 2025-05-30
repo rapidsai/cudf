@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,15 +16,12 @@
 
 #pragma once
 
-#include <cudf/detail/utilities/stacktrace.hpp>
 #include <cudf/utilities/export.hpp>
 
-#include <cuda.h>
 #include <cuda_runtime_api.h>
 
 #include <stdexcept>
 #include <string>
-#include <type_traits>
 
 namespace CUDF_EXPORT cudf {
 /**
@@ -34,34 +31,12 @@ namespace CUDF_EXPORT cudf {
  */
 
 /**
- * @brief The struct to store the current stacktrace upon its construction.
- */
-struct stacktrace_recorder {
-  stacktrace_recorder()
-    // Exclude the current stackframe, as it is this constructor.
-    : _stacktrace{cudf::detail::get_stacktrace(cudf::detail::capture_last_stackframe::NO)}
-  {
-  }
-
- public:
-  /**
-   * @brief Get the stored stacktrace captured during object construction.
-   *
-   * @return The pointer to a null-terminated string storing the output stacktrace
-   */
-  [[nodiscard]] char const* stacktrace() const { return _stacktrace.c_str(); }
-
- protected:
-  std::string const _stacktrace;  //!< The whole stacktrace stored as one string.
-};
-
-/**
  * @brief Exception thrown when logical precondition is violated.
  *
  * This exception should not be thrown directly and is instead thrown by the
  * CUDF_EXPECTS macro.
  */
-struct logic_error : public std::logic_error, public stacktrace_recorder {
+struct logic_error : public std::logic_error {
   /**
    * @brief Constructs a logic_error with the error message.
    *
@@ -89,7 +64,7 @@ struct logic_error : public std::logic_error, public stacktrace_recorder {
  * @brief Exception thrown when a CUDA error is encountered.
  *
  */
-struct cuda_error : public std::runtime_error, public stacktrace_recorder {
+struct cuda_error : public std::runtime_error {
   /**
    * @brief Construct a new cuda error object with error message and code.
    *
@@ -124,7 +99,7 @@ struct fatal_cuda_error : public cuda_error {
  * unsupported data_type. This exception should not be thrown directly and is
  * instead thrown by the CUDF_EXPECTS or CUDF_FAIL macros.
  */
-struct data_type_error : public std::invalid_argument, public stacktrace_recorder {
+struct data_type_error : public std::invalid_argument {
   /**
    * @brief Constructs a data_type_error with the error message.
    *
