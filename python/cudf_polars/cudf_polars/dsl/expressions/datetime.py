@@ -142,17 +142,11 @@ class TemporalFunction(Expr):
             (unit,) = self.options
             if plc.traits.is_timestamp(column.obj.type()):
                 if unit == "ns":
-                    dtype = plc.DataType(
-                        plc.TypeId.TIMESTAMP_NANOSECONDS
-                    )  # pragma: no cover
+                    dtype = plc.DataType(plc.TypeId.TIMESTAMP_NANOSECONDS)
                 elif unit == "us":
-                    dtype = plc.DataType(
-                        plc.TypeId.TIMESTAMP_MICROSECONDS
-                    )  # pragma: no cover
+                    dtype = plc.DataType(plc.TypeId.TIMESTAMP_MICROSECONDS)
                 elif unit == "ms":
-                    dtype = plc.DataType(
-                        plc.TypeId.TIMESTAMP_MILLISECONDS
-                    )  # pragma: no cover
+                    dtype = plc.DataType(plc.TypeId.TIMESTAMP_MILLISECONDS)
                 elif unit == "s":
                     dtype = plc.DataType(
                         plc.TypeId.TIMESTAMP_SECONDS
@@ -163,17 +157,11 @@ class TemporalFunction(Expr):
                     )  # pragma: no cover
             elif plc.traits.is_duration(column.obj.type()):
                 if unit == "ns":
-                    dtype = plc.DataType(
-                        plc.TypeId.DURATION_NANOSECONDS
-                    )  # pragma: no cover
+                    dtype = plc.DataType(plc.TypeId.DURATION_NANOSECONDS)
                 elif unit == "us":
-                    dtype = plc.DataType(
-                        plc.TypeId.DURATION_MICROSECONDS
-                    )  # pragma: no cover
+                    dtype = plc.DataType(plc.TypeId.DURATION_MICROSECONDS)
                 elif unit == "ms":
-                    dtype = plc.DataType(
-                        plc.TypeId.DURATION_MILLISECONDS
-                    )  # pragma: no cover
+                    dtype = plc.DataType(plc.TypeId.DURATION_MILLISECONDS)
                 elif unit == "s":
                     dtype = plc.DataType(
                         plc.TypeId.DURATION_SECONDS
