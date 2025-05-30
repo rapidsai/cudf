@@ -23,15 +23,15 @@
 #include <cudf/io/parquet.hpp>
 
 // Base test fixture for chunked writer tests
-struct ChunkedParquetWriterTest : public cudf::test::BaseFixture {};
+struct ParquetChunkedWriterTest : public cudf::test::BaseFixture {};
 
 // Typed test fixture for numeric type tests
 template <typename T>
-struct ChunkedParquetWriterNumericTypeTest : public ChunkedParquetWriterTest {
+struct ParquetChunkedWriterNumericTypeTest : public ParquetChunkedWriterTest {
   auto type() { return cudf::data_type{cudf::type_to_id<T>()}; }
 };
 
-TEST_F(ChunkedParquetWriterTest, SingleTable)
+TEST_F(ParquetChunkedWriterTest, SingleTable)
 {
   srand(31337);
   auto table1 = create_random_fixed_table<int>(5, 5, true);
@@ -48,7 +48,7 @@ TEST_F(ChunkedParquetWriterTest, SingleTable)
   CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *table1);
 }
 
-TEST_F(ChunkedParquetWriterTest, SimpleTable)
+TEST_F(ParquetChunkedWriterTest, SimpleTable)
 {
   srand(31337);
   auto table1 = create_random_fixed_table<int>(5, 5, true);
@@ -68,7 +68,7 @@ TEST_F(ChunkedParquetWriterTest, SimpleTable)
   CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *full_table);
 }
 
-TEST_F(ChunkedParquetWriterTest, LargeTables)
+TEST_F(ParquetChunkedWriterTest, LargeTables)
 {
   srand(31337);
   auto table1 = create_random_fixed_table<int>(512, 4096, true);
@@ -89,7 +89,7 @@ TEST_F(ChunkedParquetWriterTest, LargeTables)
   CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *full_table);
 }
 
-TEST_F(ChunkedParquetWriterTest, ManyTables)
+TEST_F(ParquetChunkedWriterTest, ManyTables)
 {
   srand(31337);
   std::vector<std::unique_ptr<table>> tables;
@@ -120,7 +120,7 @@ TEST_F(ChunkedParquetWriterTest, ManyTables)
   CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *expected);
 }
 
-TEST_F(ChunkedParquetWriterTest, Strings)
+TEST_F(ParquetChunkedWriterTest, Strings)
 {
   std::vector<std::unique_ptr<cudf::column>> cols;
 
@@ -150,7 +150,7 @@ TEST_F(ChunkedParquetWriterTest, Strings)
   CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *expected);
 }
 
-TEST_F(ChunkedParquetWriterTest, ListColumn)
+TEST_F(ParquetChunkedWriterTest, ListColumn)
 {
   auto valids  = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2; });
   auto valids2 = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 3; });
@@ -209,7 +209,7 @@ TEST_F(ChunkedParquetWriterTest, ListColumn)
   CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *expected);
 }
 
-TEST_F(ChunkedParquetWriterTest, ListOfStruct)
+TEST_F(ParquetChunkedWriterTest, ListOfStruct)
 {
   // Table 1
   auto weight_1   = cudf::test::fixed_width_column_wrapper<float>{{57.5, 51.1, 15.3}};
@@ -269,7 +269,7 @@ TEST_F(ChunkedParquetWriterTest, ListOfStruct)
   cudf::test::expect_metadata_equal(expected_metadata, result.metadata);
 }
 
-TEST_F(ChunkedParquetWriterTest, ListOfStructOfStructOfListOfList)
+TEST_F(ParquetChunkedWriterTest, ListOfStructOfStructOfListOfList)
 {
   auto valids  = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2; });
   auto valids2 = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 3; });
@@ -362,7 +362,7 @@ TEST_F(ChunkedParquetWriterTest, ListOfStructOfStructOfListOfList)
   EXPECT_EQ(result_struct_2.nullable(), false);
 }
 
-TEST_F(ChunkedParquetWriterTest, MismatchedTypes)
+TEST_F(ParquetChunkedWriterTest, MismatchedTypes)
 {
   srand(31337);
   auto table1 = create_random_fixed_table<int>(4, 4, true);
@@ -377,7 +377,7 @@ TEST_F(ChunkedParquetWriterTest, MismatchedTypes)
   writer.close();
 }
 
-TEST_F(ChunkedParquetWriterTest, ChunkedWriteAfterClosing)
+TEST_F(ParquetChunkedWriterTest, ChunkedWriteAfterClosing)
 {
   srand(31337);
   auto table = create_random_fixed_table<int>(4, 4, true);
@@ -390,7 +390,7 @@ TEST_F(ChunkedParquetWriterTest, ChunkedWriteAfterClosing)
   EXPECT_THROW(writer.write(*table), cudf::logic_error);
 }
 
-TEST_F(ChunkedParquetWriterTest, ReadingUnclosedFile)
+TEST_F(ParquetChunkedWriterTest, ReadingUnclosedFile)
 {
   srand(31337);
   auto table = create_random_fixed_table<int>(4, 4, true);
@@ -406,7 +406,7 @@ TEST_F(ChunkedParquetWriterTest, ReadingUnclosedFile)
   EXPECT_THROW(cudf::io::read_parquet(read_opts), cudf::logic_error);
 }
 
-TEST_F(ChunkedParquetWriterTest, MismatchedStructure)
+TEST_F(ParquetChunkedWriterTest, MismatchedStructure)
 {
   srand(31337);
   auto table1 = create_random_fixed_table<int>(4, 4, true);
@@ -421,7 +421,7 @@ TEST_F(ChunkedParquetWriterTest, MismatchedStructure)
   writer.close();
 }
 
-TEST_F(ChunkedParquetWriterTest, MismatchedStructureList)
+TEST_F(ParquetChunkedWriterTest, MismatchedStructureList)
 {
   auto valids  = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2; });
   auto valids2 = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 3; });
@@ -460,7 +460,7 @@ TEST_F(ChunkedParquetWriterTest, MismatchedStructureList)
   EXPECT_THROW(writer.write(tbl1), cudf::logic_error);
 }
 
-TEST_F(ChunkedParquetWriterTest, DifferentNullability)
+TEST_F(ParquetChunkedWriterTest, DifferentNullability)
 {
   srand(31337);
   auto table1 = create_random_fixed_table<int>(5, 5, true);
@@ -480,7 +480,7 @@ TEST_F(ChunkedParquetWriterTest, DifferentNullability)
   CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *full_table);
 }
 
-TEST_F(ChunkedParquetWriterTest, DifferentNullabilityStruct)
+TEST_F(ParquetChunkedWriterTest, DifferentNullabilityStruct)
 {
   // Struct<is_human:bool (non-nullable),
   //        Struct<weight:float>,
@@ -530,7 +530,7 @@ TEST_F(ChunkedParquetWriterTest, DifferentNullabilityStruct)
   cudf::test::expect_metadata_equal(expected_metadata, result.metadata);
 }
 
-TEST_F(ChunkedParquetWriterTest, ForcedNullability)
+TEST_F(ParquetChunkedWriterTest, ForcedNullability)
 {
   srand(31337);
   auto table1 = create_random_fixed_table<int>(5, 5, false);
@@ -562,7 +562,7 @@ TEST_F(ChunkedParquetWriterTest, ForcedNullability)
   CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *full_table);
 }
 
-TEST_F(ChunkedParquetWriterTest, ForcedNullabilityList)
+TEST_F(ParquetChunkedWriterTest, ForcedNullabilityList)
 {
   srand(31337);
 
@@ -617,7 +617,7 @@ TEST_F(ChunkedParquetWriterTest, ForcedNullabilityList)
   CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *full_table);
 }
 
-TEST_F(ChunkedParquetWriterTest, ForcedNullabilityStruct)
+TEST_F(ParquetChunkedWriterTest, ForcedNullabilityStruct)
 {
   // Struct<is_human:bool (non-nullable),
   //        Struct<weight:float>,
@@ -664,7 +664,7 @@ TEST_F(ChunkedParquetWriterTest, ForcedNullabilityStruct)
   cudf::test::expect_metadata_equal(expected_metadata, result.metadata);
 }
 
-TEST_F(ChunkedParquetWriterTest, ReadRowGroups)
+TEST_F(ParquetChunkedWriterTest, ReadRowGroups)
 {
   srand(31337);
   auto table1 = create_random_fixed_table<int>(5, 5, true);
@@ -687,7 +687,7 @@ TEST_F(ChunkedParquetWriterTest, ReadRowGroups)
   CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *full_table);
 }
 
-TEST_F(ChunkedParquetWriterTest, ReadRowGroupsError)
+TEST_F(ParquetChunkedWriterTest, ReadRowGroupsError)
 {
   srand(31337);
   auto table1 = create_random_fixed_table<int>(5, 5, true);
@@ -706,7 +706,7 @@ TEST_F(ChunkedParquetWriterTest, ReadRowGroupsError)
   EXPECT_THROW(cudf::io::read_parquet(read_opts), cudf::logic_error);
 }
 
-TEST_F(ChunkedParquetWriterTest, RowGroupPageSizeMatch)
+TEST_F(ParquetChunkedWriterTest, RowGroupPageSizeMatch)
 {
   std::vector<char> out_buffer;
 
@@ -720,7 +720,7 @@ TEST_F(ChunkedParquetWriterTest, RowGroupPageSizeMatch)
   EXPECT_EQ(options.get_row_group_size_rows(), options.get_max_page_size_rows());
 }
 
-TEST_F(ChunkedParquetWriterTest, CompStats)
+TEST_F(ParquetChunkedWriterTest, CompStats)
 {
   auto table = create_random_fixed_table<int>(1, 100000, true);
 
@@ -747,7 +747,7 @@ TEST_F(ChunkedParquetWriterTest, CompStats)
   EXPECT_EQ(stats->num_skipped_bytes(), 0);
 }
 
-TEST_F(ChunkedParquetWriterTest, CompStatsEmptyTable)
+TEST_F(ParquetChunkedWriterTest, CompStatsEmptyTable)
 {
   auto table_no_rows = create_random_fixed_table<int>(20, 0, false);
 
@@ -762,9 +762,9 @@ TEST_F(ChunkedParquetWriterTest, CompStatsEmptyTable)
   expect_compression_stats_empty(stats);
 }
 
-TYPED_TEST_SUITE(ChunkedParquetWriterNumericTypeTest, SupportedTypes);
+TYPED_TEST_SUITE(ParquetChunkedWriterNumericTypeTest, SupportedTypes);
 
-TYPED_TEST(ChunkedParquetWriterNumericTypeTest, UnalignedSize)
+TYPED_TEST(ParquetChunkedWriterNumericTypeTest, UnalignedSize)
 {
   // write out two 31 row tables and make sure they get
   // read back with all their validity bits in the right place
@@ -812,7 +812,7 @@ TYPED_TEST(ChunkedParquetWriterNumericTypeTest, UnalignedSize)
   CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *expected);
 }
 
-TYPED_TEST(ChunkedParquetWriterNumericTypeTest, UnalignedSize2)
+TYPED_TEST(ParquetChunkedWriterNumericTypeTest, UnalignedSize2)
 {
   // write out two 33 row tables and make sure they get
   // read back with all their validity bits in the right place
