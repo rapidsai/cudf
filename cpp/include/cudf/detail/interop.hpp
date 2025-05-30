@@ -60,4 +60,4 @@ constexpr std::size_t max_precision()
 }
 
 }  // namespace detail
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf
