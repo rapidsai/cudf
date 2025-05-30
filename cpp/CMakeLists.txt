@@ -1101,9 +1101,7 @@ if(CUDF_BUILD_STREAMS_TEST_UTIL)
   # depending via ctest and whether it has been updated to expose public stream APIs.
   foreach(_mode cudf testing)
     set(_tgt "cudf_identify_stream_usage_mode_${_mode}")
-    add_library(
-      ${_tgt} SHARED src/utilities/stacktrace.cpp tests/utilities/identify_stream_usage.cpp
-    )
+    add_library(${_tgt} SHARED tests/utilities/identify_stream_usage.cpp)
 
     if(CUDF_USE_PER_THREAD_DEFAULT_STREAM)
       target_compile_definitions(
