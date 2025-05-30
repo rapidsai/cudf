@@ -125,10 +125,7 @@ outputs:
         - ${{ pin_subpackage("libcudf", upper_bound="x.x") }}
       ignore_run_exports:
         from_package:
-          - ${{ compiler("c") }}
-          - ${{ compiler("cxx") }}
           - ${{ compiler("cuda") }}
-          - ${{ stdlib("c") }}
         by_name:
           - cuda-cudart
           - cuda-nvrtc
@@ -171,10 +168,7 @@ outputs:
         - ${{ pin_subpackage("libcudf", exact=True) }}
       ignore_run_exports:
         from_package:
-          - ${{ compiler("c") }}
-          - ${{ compiler("cxx") }}
           - ${{ compiler("cuda") }}
-          - ${{ stdlib("c") }}
         by_name:
           - cuda-cudart
           - cuda-nvrtc
@@ -226,10 +220,7 @@ outputs:
         overlinking_behavior: "error"
     requirements:
       build:
-        - ${{ compiler("c") }}
         - ${{ compiler("cuda") }}
-        - ${{ compiler("cxx") }}
-        - ${{ stdlib("c") }}
         - cmake ${{ cmake_version }}
         - cuda-version =${{ cuda_version }}
         - ninja
@@ -244,10 +235,7 @@ outputs:
         - cuda-nvtx
       ignore_run_exports:
         from_package:
-          - ${{ compiler("c") }}
-          - ${{ compiler("cxx") }}
           - ${{ compiler("cuda") }}
-          - ${{ stdlib("c") }}
           - cuda-nvtx-dev
         by_name:
           - cuda-cudart
@@ -296,10 +284,7 @@ outputs:
         - libcurand
       ignore_run_exports:
         from_package:
-          - ${{ compiler("c") }}
-          - ${{ compiler("cxx") }}
           - ${{ compiler("cuda") }}
-          - ${{ stdlib("c") }}
           - libcurand-dev
         by_name:
           - cuda-cudart

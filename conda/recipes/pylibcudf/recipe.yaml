@@ -77,10 +77,7 @@ requirements:
     - packaging
   ignore_run_exports:
     from_package:
-      - ${{ compiler("c") }}
-      - ${{ compiler("cxx") }}
       - ${{ compiler("cuda") }}
-      - ${{ stdlib("c") }}
       - cuda-cudart-dev
       - if: linux and x86_64
         then:
