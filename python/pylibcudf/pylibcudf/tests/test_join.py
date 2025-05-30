@@ -41,8 +41,8 @@ def test_cross_join(left, right):
     # Remove the nulls so the calculation of the expected result works
     left = left[:-1]
     right = right[:-1]
-    pleft = plc.Table(left)
-    pright = plc.Table(right)
+    pleft = plc.Table.from_arrow(left)
+    pright = plc.Table.from_arrow(right)
 
     expect = pa.Table.from_arrays(
         [
@@ -76,8 +76,8 @@ sentinel = np.iinfo(np.int32).min
 def test_conditional_join(
     left, right, expr, join_type, expect_left, expect_right
 ):
-    pleft = plc.Table(left)
-    pright = plc.Table(right)
+    pleft = plc.Table.from_arrow(left)
+    pright = plc.Table.from_arrow(right)
 
     g_left, g_right = map(plc.interop.to_arrow, join_type(pleft, pright, expr))
 
@@ -94,8 +94,8 @@ def test_conditional_join(
     ids=["semi", "anti"],
 )
 def test_conditional_semianti_join(left, right, expr, join_type, expect):
-    pleft = plc.Table(left)
-    pright = plc.Table(right)
+    pleft = plc.Table.from_arrow(left)
+    pright = plc.Table.from_arrow(right)
 
     g_left = plc.interop.to_arrow(join_type(pleft, pright, expr))
 
@@ -123,8 +123,8 @@ def test_conditional_semianti_join(left, right, expr, join_type, expect):
 def test_mixed_join(
     left, right, expr, join_type, expect_left, expect_right, null_equality
 ):
-    pleft = plc.Table(left)
-    pright = plc.Table(right)
+    pleft = plc.Table.from_arrow(left)
+    pright = plc.Table.from_arrow(right)
 
     g_left, g_right = map(
         plc.interop.to_arrow,
@@ -158,8 +158,8 @@ def test_mixed_join(
 def test_mixed_semianti_join(
     left, right, expr, join_type, expect, null_equality
 ):
-    pleft = plc.Table(left)
-    pright = plc.Table(right)
+    pleft = plc.Table.from_arrow(left)
+    pright = plc.Table.from_arrow(right)
 
     g_left = plc.interop.to_arrow(
         join_type(

@@ -34,6 +34,19 @@ def dtype_info(request):
     return request.param
 
 
+@pytest.fixture
+def dummy_large_string_type():
+    class Bar(bytes):
+        def __len__(self):
+            return 2**31 + 1
+
+    class Foo(str):
+        def encode(self):
+            return Bar(b"x")
+
+    return Foo
+
+
 def generate_list_data(shape, dtype):
     def gen_values(n):
         if dtype is bool:
@@ -84,12 +97,6 @@ def test_from_list_irregular_shapes_raises():
 
 def test_from_list_nested_dicts_raises():
     data = [[{"a": 1}], [{"b": 2}]]
-    with pytest.raises(TypeError, match="Unsupported scalar type"):
-        plc.Column.from_iterable_of_py(data)
-
-
-def test_from_list_nested_strings_raises():
-    data = [["a", "b"], ["c", "d"]]
     with pytest.raises(TypeError, match="Unsupported scalar type"):
         plc.Column.from_iterable_of_py(data)
 
@@ -166,3 +173,46 @@ def test_from_custom_generator():
     )
     expect = pa.array([0, 1, 2, 3], type=pa.int64())
     assert_column_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "data, pa_type",
+    [
+        (["a", "b", "c"], pa.string()),
+        ([["a"], ["b"], ["c"]], pa.list_(pa.string())),
+        ([["foo"], ["bar"], ["baz"]], pa.list_(pa.string())),
+        ([["a", "b"], ["c", "d"]], pa.list_(pa.string())),
+        ([["a", "b", "c"], ["d", "e", "f"]], pa.list_(pa.string())),
+        ([[["a"]], [["b"]], [["c"]]], pa.list_(pa.list_(pa.string()))),
+        (lambda: map(str, ("x", "y", "z")), pa.string()),
+    ],
+)
+def test_from_iterable_of_str(data, pa_type):
+    if callable(data):
+        data = list(data())
+    got = plc.Column.from_iterable_of_py(data)
+    expect = pa.array(data, type=pa_type)
+    assert_column_eq(expect, got)
+
+
+def test_from_list_of_large_strings(dummy_large_string_type):
+    Foo = dummy_large_string_type
+    data = [Foo(), Foo()]
+    col = plc.Column.from_iterable_of_py(
+        data, dtype=plc.DataType(plc.TypeId.STRING)
+    )
+
+    assert col.type().id() == plc.TypeId.STRING
+    assert col.children()[0].type().id() == plc.TypeId.INT64
+
+
+def test_from_nested_list_of_large_strings(dummy_large_string_type):
+    Foo = dummy_large_string_type
+    nested_data = [[Foo(), Foo()], [Foo(), Foo()]]
+    col = plc.Column.from_iterable_of_py(
+        nested_data, dtype=plc.DataType(plc.TypeId.STRING)
+    )
+
+    assert col.type().id() == plc.TypeId.LIST
+    assert col.children()[1].type().id() == plc.TypeId.STRING
+    assert col.children()[1].children()[0].type().id() == plc.TypeId.INT64

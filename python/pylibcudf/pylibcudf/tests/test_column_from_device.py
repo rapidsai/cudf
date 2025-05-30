@@ -120,7 +120,8 @@ def test_from_rmm_buffer():
 def test_from_rmm_buffer_invalid(dtype, children_data):
     buff = rmm.DeviceBuffer.to_device(b"")
     children = [
-        plc.Column(pa.array(child_data)) for child_data in children_data
+        plc.Column.from_arrow(pa.array(child_data))
+        for child_data in children_data
     ]
     with pytest.raises(ValueError):
         plc.Column.from_rmm_buffer(
