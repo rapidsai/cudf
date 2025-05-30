@@ -15,7 +15,7 @@
 find_package(Threads REQUIRED)
 
 add_library(cudf_datagen STATIC common/generate_input.cu)
-target_compile_features(cudf_datagen PUBLIC cxx_std_17 cuda_std_17)
+target_compile_features(cudf_datagen PUBLIC cxx_std_20 cuda_std_20)
 
 target_compile_options(
   cudf_datagen PUBLIC "$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_FLAGS}>"
@@ -40,7 +40,7 @@ add_library(
   common/ndsh_data_generator/ndsh_data_generator.cpp common/ndsh_data_generator/table_helpers.cpp
   common/ndsh_data_generator/random_column_generator.cu
 )
-target_compile_features(ndsh_data_generator PUBLIC cxx_std_17 cuda_std_17)
+target_compile_features(ndsh_data_generator PUBLIC cxx_std_20 cuda_std_20)
 
 target_compile_options(
   ndsh_data_generator PUBLIC "$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_FLAGS}>"
