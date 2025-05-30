@@ -99,6 +99,11 @@ requirements:
       - ${{ compiler("cxx") }}
       - ${{ compiler("cuda") }}
       - ${{ stdlib("c") }}
+      - cuda-cudart-dev
+      - if: linux and x86_64
+        then: libcufile-dev
+    by_name:
+      - cuda-version
 
 tests:
   - python:

@@ -248,6 +248,7 @@ outputs:
           - ${{ compiler("cxx") }}
           - ${{ compiler("cuda") }}
           - ${{ stdlib("c") }}
+          - cuda-nvtx-dev
         by_name:
           - cuda-cudart
           - cuda-nvrtc
@@ -299,6 +300,7 @@ outputs:
           - ${{ compiler("cxx") }}
           - ${{ compiler("cuda") }}
           - ${{ stdlib("c") }}
+          - libcurand-dev
         by_name:
           - cuda-cudart
           - cuda-nvrtc

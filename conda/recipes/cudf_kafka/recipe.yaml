@@ -70,6 +70,7 @@ requirements:
       - ${{ compiler("cxx") }}
       - ${{ compiler("cuda") }}
       - ${{ stdlib("c") }}
+      - cuda-cudart-dev
     by_name:
       - cuda-version
 
