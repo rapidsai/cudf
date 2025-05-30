@@ -49,7 +49,7 @@ rmm::cuda_stream_view const get_default_stream() {
     if(std::getenv("CUDF_PER_THREAD_STREAM") != nullptr) {
       return rmm::cuda_stream_per_thread;
     } else {
-      return rmm::cuda_stream_legacy;
+      return detail::default_stream_value;
     }
   }();
 return default_stream;
