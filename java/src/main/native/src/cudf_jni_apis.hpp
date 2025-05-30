@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,15 +13,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 #pragma once
 
 #include "jni_utils.hpp"
 
 #include <cudf/contiguous_split.hpp>
-#include <cudf/detail/aggregation/aggregation.hpp>
 
-namespace cudf {
-namespace jni {
+namespace cudf::jni {
 
 /**
  * @brief Detach all columns from the specified table, and pointers to them as an array.
@@ -147,5 +146,4 @@ bool cache_data_source_jni(JNIEnv* env);
 
 void release_data_source_jni(JNIEnv* env);
 
-}  // namespace jni
-}  // namespace cudf
+}  // namespace cudf::jni

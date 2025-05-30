@@ -136,7 +136,7 @@ def _generate_table_data(types, nrows, seed=42):
     pa_table = pa.Table.from_pydict(table_dict)
 
     return plc.io.TableWithMetadata(
-        plc.Table(pa_table), column_names=colnames
+        plc.Table.from_arrow(pa_table), column_names=colnames
     ), pa_table
 
 

@@ -5,9 +5,9 @@ import abc
 import copyreg
 import functools
 import importlib
+import inspect
 import os
 import pickle
-import sys
 
 import pandas as pd
 
@@ -1051,6 +1051,17 @@ except ImportError:
     # Styler requires Jinja to be installed
     pass
 
+
+def _find_user_frame():
+    frame = inspect.currentframe()
+    while frame:
+        modname = frame.f_globals.get("__name__", "")
+        if modname == "__main__" or not modname.startswith("cudf."):
+            return frame
+        frame = frame.f_back
+    raise RuntimeError("Could not find the user's frame.")
+
+
 _eval_func = _FunctionProxy(_Unusable(), pd.eval)
 
 register_proxy_func(pd.read_pickle)(
@@ -1061,9 +1072,9 @@ register_proxy_func(pd.to_pickle)(_FunctionProxy(_Unusable(), pd.to_pickle))
 
 
 def _get_eval_locals_and_globals(level, local_dict=None, global_dict=None):
-    frame = sys._getframe(level + 3)
-    local_dict = frame.f_locals if local_dict is None else local_dict
-    global_dict = frame.f_globals if global_dict is None else global_dict
+    frame = _find_user_frame()
+    local_dict = dict(frame.f_locals) if local_dict is None else local_dict
+    global_dict = dict(frame.f_globals) if global_dict is None else global_dict
     return local_dict, global_dict
 
 

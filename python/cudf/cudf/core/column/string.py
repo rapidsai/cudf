@@ -52,6 +52,7 @@ if TYPE_CHECKING:
     from cudf.core.column.numerical import NumericalColumn
     from cudf.core.column.timedelta import TimeDeltaColumn
     from cudf.core.dtypes import DecimalDtype
+    from cudf.core.series import Series
 
 
 def _is_supported_regex_flags(flags: int) -> bool:
@@ -2207,9 +2208,7 @@ class StringMethods(ColumnMethods):
             result = ColumnBase.from_pylibcudf(plc_column)
         return self._return_or_inplace(result)
 
-    def slice_from(
-        self, starts: cudf.Series, stops: cudf.Series
-    ) -> SeriesOrIndex:
+    def slice_from(self, starts: Series, stops: Series) -> SeriesOrIndex:
         """
         Return substring of each string using positions for each string.
 
@@ -3794,7 +3793,7 @@ class StringMethods(ColumnMethods):
         """
         return self._findall(plc.strings.findall.find_re, pat, flags)
 
-    def find_multiple(self, patterns: SeriesOrIndex) -> cudf.Series:
+    def find_multiple(self, patterns: SeriesOrIndex) -> Series:
         """
         Find all first occurrences of patterns in the Series/Index.
 
@@ -4676,62 +4675,6 @@ class StringMethods(ColumnMethods):
         """
         return self._return_or_inplace(self._column.normalize_spaces())
 
-    def normalize_characters(self, do_lower: bool = True) -> SeriesOrIndex:
-        r"""
-        Normalizes strings characters for tokenizing.
-
-        .. deprecated:: 25.04
-           Use `CharacterNormalizer` instead.
-
-        The normalizer function includes:
-
-            - adding padding around punctuation (unicode category starts with
-              "P") as well as certain ASCII symbols like "^" and "$"
-            - adding padding around the CJK Unicode block characters
-            - changing whitespace (e.g. ``\t``, ``\n``, ``\r``) to space
-            - removing control characters (unicode categories "Cc" and "Cf")
-
-        If `do_lower_case = true`, lower-casing also removes the accents.
-        The accents cannot be removed from upper-case characters without
-        lower-casing and lower-casing cannot be performed without also
-        removing accents. However, if the accented character is already
-        lower-case, then only the accent is removed.
-
-        Parameters
-        ----------
-        do_lower : bool, Default is True
-            If set to True, characters will be lower-cased and accents
-            will be removed. If False, accented and upper-case characters
-            are not transformed.
-
-        Returns
-        -------
-        Series or Index of object.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> ser = cudf.Series(["héllo, \tworld","ĂĆCĖÑTED","$99"])
-        >>> ser.str.normalize_characters()
-        0    hello ,  world
-        1          accented
-        2              $ 99
-        dtype: object
-        >>> ser.str.normalize_characters(do_lower=False)
-        0    héllo ,  world
-        1          ĂĆCĖÑTED
-        2              $ 99
-        dtype: object
-        """
-        warnings.warn(
-            "normalize_characters is deprecated and will be removed in a future "
-            "version. Use CharacterNormalizer instead.",
-            FutureWarning,
-        )
-        return self._return_or_inplace(
-            self._column.characters_normalize(do_lower)
-        )
-
     def tokenize(self, delimiter: str = " ") -> SeriesOrIndex:
         """
         Each string is split into tokens using the provided delimiter(s).
@@ -4785,7 +4728,7 @@ class StringMethods(ColumnMethods):
         return result
 
     def detokenize(
-        self, indices: cudf.Series, separator: str = " "
+        self, indices: Series, separator: str = " "
     ) -> SeriesOrIndex:
         """
         Combines tokens into strings by concatenating them in the order
@@ -5794,7 +5737,7 @@ class StringMethods(ColumnMethods):
         result = ColumnBase.from_pylibcudf(plc_column)
         return self._return_or_inplace(result)
 
-    def jaccard_index(self, input: cudf.Series, width: int) -> SeriesOrIndex:
+    def jaccard_index(self, input: Series, width: int) -> SeriesOrIndex:
         """
         Compute the Jaccard index between this column and the given
         input strings column.
@@ -6538,15 +6481,6 @@ class StringColumn(ColumnBase):
         return type(self).from_pylibcudf(  # type: ignore[return-value]
             plc.nvtext.normalize.normalize_spaces(
                 self.to_pylibcudf(mode="read")
-            )
-        )
-
-    @acquire_spill_lock()
-    def characters_normalize(self, do_lower: bool = True) -> Self:
-        return ColumnBase.from_pylibcudf(  # type: ignore[return-value]
-            plc.nvtext.normalize.characters_normalize(
-                self.to_pylibcudf(mode="read"),
-                do_lower,
             )
         )
 

@@ -1,4 +1,5 @@
 # Copyright (c) 2020-2025, NVIDIA CORPORATION.
+from __future__ import annotations
 
 import itertools
 import string
@@ -6,6 +7,7 @@ import time
 from collections import abc
 from contextlib import contextmanager
 from decimal import Decimal
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
@@ -23,6 +25,9 @@ from cudf.core.udf.strings_lowering import cast_string_view_to_udf_string
 from cudf.core.udf.strings_typing import StringView, string_view, udf_string
 from cudf.utils import dtypes as dtypeutils
 from cudf.utils.temporal import unit_to_nanoseconds_conversion
+
+if TYPE_CHECKING:
+    from cudf.core.column.column import ColumnBase
 
 supported_numpy_dtypes = [
     "bool",
@@ -285,9 +290,7 @@ def does_not_raise():
     yield
 
 
-def assert_column_memory_eq(
-    lhs: cudf.core.column.ColumnBase, rhs: cudf.core.column.ColumnBase
-):
+def assert_column_memory_eq(lhs: ColumnBase, rhs: ColumnBase):
     """Assert the memory location and size of `lhs` and `rhs` are equivalent.
 
     Both data pointer and mask pointer are checked. Also recursively check for
@@ -313,9 +316,7 @@ def assert_column_memory_eq(
         assert_column_memory_eq(lhs.codes, rhs.codes)
 
 
-def assert_column_memory_ne(
-    lhs: cudf.core.column.ColumnBase, rhs: cudf.core.column.ColumnBase
-):
+def assert_column_memory_ne(lhs: ColumnBase, rhs: ColumnBase):
     try:
         assert_column_memory_eq(lhs, rhs)
     except AssertionError:
