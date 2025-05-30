@@ -48,11 +48,6 @@ from pylibcudf.libcudf.wrappers.timestamps cimport (
 
 from rmm.pylibrmm.memory_resource cimport get_current_device_resource
 
-try:
-    from pyarrow import lib as pa
-except ImportError:
-    pa = None
-
 from .column cimport Column
 from .traits cimport is_floating_point
 from .types cimport DataType
@@ -133,8 +128,6 @@ cdef class Scalar:
         Scalar
             New pylibcudf.Scalar
         """
-        if pa_err is not None:
-            raise pa_err
         return _from_arrow(pa_val, dtype)
 
     @staticmethod
@@ -686,3 +679,6 @@ if pa is not None:
         else:
             pa_array = pa.array([obj])
         return Column.from_arrow(pa_array, dtype=dtype).to_scalar()
+else:
+    def _from_arrow(obj: pa.Scalar, dtype: DataType | None = None) -> Scalar:
+        raise pa_err

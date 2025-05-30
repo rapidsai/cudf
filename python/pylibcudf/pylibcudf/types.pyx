@@ -22,12 +22,10 @@ from pylibcudf.libcudf.types import order as Order  # no-cython-lint, isort:skip
 from pylibcudf.libcudf.types import sorted as Sorted  # no-cython-lint, isort:skip
 
 from functools import cache
-from packaging.version import parse
 
 try:
-    from pyarrow import __version__ as pa_version, lib as pa
+    from pyarrow import lib as pa
 
-    PYARROW_VERSION = parse(pa_version)
     pa_err = None
 
     ARROW_TO_PYLIBCUDF_TYPES = {
@@ -209,8 +207,6 @@ cdef class DataType:
         TypeError
             If the Python type is not supported.
         """
-        if pa_err is not None:
-            raise pa_err
         return _from_arrow(pa_typ)
 
     @staticmethod
@@ -271,11 +267,16 @@ cpdef size_t size_of(DataType t):
 if pa is not None:
     @cache
     def _from_arrow(obj: pa.DataType) -> DataType:
-        if PYARROW_VERSION > parse("19.0.0"):
-            if isinstance(obj, pa.Decimal32Type):
-                return DataType(type_id.DECIMAL32, scale=-obj.scale)
-            if isinstance(obj, pa.Decimal64Type):
-                return DataType(type_id.DECIMAL64, scale=-obj.scale)
+        if (
+            getattr(pa, "Decimal32Type", None) is not None
+            and isinstance(obj, pa.Decimal32Type)
+        ):
+            return DataType(type_id.DECIMAL32, scale=-obj.scale)
+        if (
+            getattr(pa, "Decimal64Type", None) is not None
+            and isinstance(obj, pa.Decimal64Type)
+        ):
+            return DataType(type_id.DECIMAL64, scale=-obj.scale)
         if isinstance(obj, pa.Decimal128Type):
             return DataType(type_id.DECIMAL128, scale=-obj.scale)
         elif isinstance(obj, pa.StructType):
@@ -292,6 +293,9 @@ if pa is not None:
                 return DataType(ARROW_TO_PYLIBCUDF_TYPES[obj])
             except KeyError:
                 raise TypeError(f"Unable to convert {obj} to cudf datatype")
+else:
+    def _from_arrow(obj: pa.DataType) -> DataType:
+        raise pa_err
 
 SIZE_TYPE = DataType(type_to_id[size_type]())
 SIZE_TYPE_ID = SIZE_TYPE.id()
