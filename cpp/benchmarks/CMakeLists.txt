@@ -143,8 +143,7 @@ function(ConfigureNVBench CMAKE_BENCH_NAME)
 endfunction()
 
 # ##################################################################################################
-# * copying benchmarks
-# -----------------------------------------------------------------------------
+# * copying benchmarks ----------------------------------------------------------------------------
 ConfigureNVBench(
   COPYING_NVBENCH copying/concatenate.cpp copying/copy_if_else.cpp copying/gather.cu
   copying/scatter.cu copying/shift.cpp
@@ -152,7 +151,7 @@ ConfigureNVBench(
 
 # ##################################################################################################
 # * contiguous_split benchmark  -------------------------------------------------------------------
-ConfigureBench(CONTIGUOUS_SPLIT_BENCH copying/contiguous_split.cu)
+ConfigureBench(CONTIGUOUS_SPLIT_NVBENCH contiguous_split/contiguous_split.cpp)
 
 # ##################################################################################################
 # * lists scatter benchmark -----------------------------------------------------------------------
