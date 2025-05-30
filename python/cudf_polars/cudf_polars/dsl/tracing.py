@@ -19,7 +19,7 @@ if typing.TYPE_CHECKING:
 CUDF_POLARS_NVTX_DOMAIN = "cudf_polars"
 
 
-def do_evaluate_traced(
+def do_evaluate_with_tracing(
     ir_do_evaluate: Callable[..., cudf_polars.containers.dataframe.DataFrame],
     *,
     name: str,
