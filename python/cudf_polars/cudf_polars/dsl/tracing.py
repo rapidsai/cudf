@@ -6,11 +6,11 @@
 from __future__ import annotations
 
 import functools
-import typing
+from typing import TYPE_CHECKING, Any
 
 import nvtx
 
-if typing.TYPE_CHECKING:
+if TYPE_CHECKING:
     from collections.abc import Callable
 
     import cudf_polars.containers.dataframe
@@ -43,7 +43,7 @@ def do_evaluate_with_tracing(
     """
 
     @functools.wraps(ir_do_evaluate)
-    def wrapped(*args: typing.Any) -> cudf_polars.containers.dataframe.DataFrame:
+    def wrapped(*args: Any) -> cudf_polars.containers.dataframe.DataFrame:
         with nvtx.annotate(
             message=name,
             domain=CUDF_POLARS_NVTX_DOMAIN,
