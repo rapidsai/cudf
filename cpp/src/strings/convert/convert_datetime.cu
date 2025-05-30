@@ -545,7 +545,7 @@ struct check_datetime_format {
       switch (item.value) {
         case 'Y': {
           auto const [year, left] = parse_int(ptr, item.length);
-          result                  = (left < item.length);
+          result                  = (left < item.length) && (year <= 9999);
           dateparts.year          = static_cast<int16_t>(year);
           bytes_read -= left;
           break;
