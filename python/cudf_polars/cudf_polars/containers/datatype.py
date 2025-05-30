@@ -91,7 +91,7 @@ def _from_polars(dtype: pl.DataType) -> plc.DataType:
         _ = _from_polars(dtype.inner)
         return plc.DataType(plc.TypeId.LIST)
     elif isinstance(dtype, pl.Struct):
-        # Recurse to catch unsupported inner types
+        # Recurse to catch unsupported field types
         for field in dtype.fields:
             _ = _from_polars(field.dtype)
         return plc.DataType(plc.TypeId.STRUCT)
