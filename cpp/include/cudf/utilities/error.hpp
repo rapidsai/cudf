@@ -38,20 +38,20 @@ namespace CUDF_EXPORT cudf {
  * This exception should not be thrown directly and is instead thrown by the
  * CUDF_EXPECTS macro.
  */
-struct logic_error : public std::logic_error {
+struct logic_error : std::logic_error {
   /**
    * @brief Constructs a logic_error with the error message.
    *
    * @param message Message to be associated with the exception
    */
-  logic_error(char const* const message) : std::logic_error(message) {}
+  explicit logic_error(char const* const message) : std::logic_error(message) {}
 
   /**
    * @brief Construct a new logic error object with error message
    *
    * @param message Message to be associated with the exception
    */
-  logic_error(std::string const& message) : std::logic_error(message) {}
+  explicit logic_error(std::string const& message) : std::logic_error(message) {}
 
   // TODO Add an error code member? This would be useful for translating an
   // exception to an error code in a pure-C API
@@ -66,19 +66,18 @@ struct logic_error : public std::logic_error {
  * @brief Exception thrown when a CUDA error is encountered.
  *
  */
-struct cuda_error : public std::runtime_error {
+struct cuda_error : std::runtime_error {
   /**
    * @brief Construct a new cuda error object with error message and code.
    *
    * @param message Error message
    * @param error CUDA error code
    */
-  cuda_error(std::string const& message, cudaError_t const& error)
+  explicit cuda_error(std::string const& message, cudaError_t const& error)
     : std::runtime_error(message), _cudaError(error)
   {
   }
 
- public:
   /**
    * @brief Returns the CUDA error code associated with the exception.
    *
@@ -90,7 +89,7 @@ struct cuda_error : public std::runtime_error {
   cudaError_t _cudaError;  //!< CUDA error code
 };
 
-struct fatal_cuda_error : public cuda_error {
+struct fatal_cuda_error : cuda_error {
   using cuda_error::cuda_error;  // Inherit constructors
 };
 
@@ -101,20 +100,20 @@ struct fatal_cuda_error : public cuda_error {
  * unsupported data_type. This exception should not be thrown directly and is
  * instead thrown by the CUDF_EXPECTS or CUDF_FAIL macros.
  */
-struct data_type_error : public std::invalid_argument {
+struct data_type_error : std::invalid_argument {
   /**
    * @brief Constructs a data_type_error with the error message.
    *
    * @param message Message to be associated with the exception
    */
-  data_type_error(char const* const message) : std::invalid_argument(message) {}
+  explicit data_type_error(char const* const message) : std::invalid_argument(message) {}
 
   /**
    * @brief Construct a new data_type_error object with error message
    *
    * @param message Message to be associated with the exception
    */
-  data_type_error(std::string const& message) : std::invalid_argument(message) {}
+  explicit data_type_error(std::string const& message) : std::invalid_argument(message) {}
 };
 /** @} */
 
