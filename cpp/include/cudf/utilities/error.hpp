@@ -18,10 +18,12 @@
 
 #include <cudf/utilities/export.hpp>
 
+#include <cuda.h>
 #include <cuda_runtime_api.h>
 
 #include <stdexcept>
 #include <string>
+#include <type_traits>
 
 namespace CUDF_EXPORT cudf {
 /**
