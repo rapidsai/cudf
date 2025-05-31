@@ -130,7 +130,6 @@ def _lexsorted_equal_range(
 
 def _index_from_data(data: MutableMapping, name: Any = no_default):
     """Construct an index of the appropriate type from some data."""
-
     if len(data) == 0:
         raise ValueError("Cannot construct Index from any empty Table")
     if len(data) == 1:
@@ -455,6 +454,12 @@ class Index(SingleColumnFrame):  # type: ignore[misc]
                 stop=index.stop,
                 step=index.step,
                 name=index.name,
+            )
+        elif isinstance(index, pd.DatetimeIndex):
+            return cudf.DatetimeIndex._from_data(
+                {None: as_column(index, nan_as_null=nan_as_null)},
+                name=index.name,
+                freq=index.freq.freqstr if index.freq else None,
             )
         else:
             return cudf.Index._from_column(
@@ -3510,8 +3515,11 @@ class DatetimeIndex(Index):
         if yearfirst is not False:
             raise NotImplementedError("yearfirst == True is not yet supported")
 
-        if freq is None and isinstance(data, type(self)):
-            freq = data.freq
+        if freq is None:
+            if isinstance(data, type(self)):
+                freq = data.freq
+            if isinstance(data, pd.DatetimeIndex) and data.freq is not None:
+                freq = data.freq.freqstr
 
         name = _getdefault_name(data, name=name)
         data = as_column(data)
@@ -3535,11 +3543,34 @@ class DatetimeIndex(Index):
         self._freq = _validate_freq(freq)
         if self._freq is not None:
             unique_vals = self.to_series().diff().unique()
-            if len(unique_vals) > 2 or (
-                len(unique_vals) == 2
-                and unique_vals[1] != self._freq._maybe_as_fast_pandas_offset()
-            ):
-                raise ValueError("No unique frequency found")
+            if self._freq == cudf.DateOffset(months=1):
+                possible = pd.Series(
+                    [
+                        pd.NaT,
+                        pd.to_timedelta("28 days"),
+                        pd.to_timedelta("31 days"),
+                        pd.to_timedelta("30 days"),
+                    ]
+                )
+                if unique_vals.isin(possible).sum() != len(unique_vals):
+                    raise ValueError("No unique frequency found")
+            elif self._freq == cudf.DateOffset(years=1):
+                possible = pd.Series(
+                    [
+                        pd.NaT,
+                        pd.to_timedelta("365 days"),
+                        pd.to_timedelta("366 days"),
+                    ]
+                )
+                if unique_vals.isin(possible).sum() != len(unique_vals):
+                    raise ValueError("No unique frequency found")
+            else:
+                if len(unique_vals) > 2 or (
+                    len(unique_vals) == 2
+                    and unique_vals[1]
+                    != self._freq._maybe_as_fast_pandas_offset()
+                ):
+                    raise ValueError("No unique frequency found")
 
     @_performance_tracking
     def _copy_type_metadata(self: Self, other: Self) -> Self:
@@ -3812,7 +3843,7 @@ class DatetimeIndex(Index):
         >>> datetime_index = cudf.Index(pd.date_range("2000-01-01",
         ...             periods=3, freq="Y"))
         >>> datetime_index
-        DatetimeIndex(['2000-12-31', '2001-12-31', '2002-12-31'], dtype='datetime64[ns]')
+        DatetimeIndex(['2000-12-31', '2001-12-31', '2002-12-31'], dtype='datetime64[ns]', freq='Y')
         >>> datetime_index.year
         Index([2000, 2001, 2002], dtype='int16')
         """
@@ -3831,7 +3862,7 @@ class DatetimeIndex(Index):
         >>> datetime_index = cudf.Index(pd.date_range("2000-01-01",
         ...             periods=3, freq="M"))
         >>> datetime_index
-        DatetimeIndex(['2000-01-31', '2000-02-29', '2000-03-31'], dtype='datetime64[ns]')
+        DatetimeIndex(['2000-01-31', '2000-02-29', '2000-03-31'], dtype='datetime64[ns]', freq='M')
         >>> datetime_index.month
         Index([1, 2, 3], dtype='int16')
         """
@@ -3850,7 +3881,7 @@ class DatetimeIndex(Index):
         >>> datetime_index = cudf.Index(pd.date_range("2000-01-01",
         ...             periods=3, freq="D"))
         >>> datetime_index
-        DatetimeIndex(['2000-01-01', '2000-01-02', '2000-01-03'], dtype='datetime64[ns]')
+        DatetimeIndex(['2000-01-01', '2000-01-02', '2000-01-03'], dtype='datetime64[ns]', freq='D')
         >>> datetime_index.day
         Index([1, 2, 3], dtype='int16')
         """
@@ -3871,7 +3902,7 @@ class DatetimeIndex(Index):
         >>> datetime_index
         DatetimeIndex(['2000-01-01 00:00:00', '2000-01-01 01:00:00',
                     '2000-01-01 02:00:00'],
-                    dtype='datetime64[ns]')
+                    dtype='datetime64[ns]', freq='h')
         >>> datetime_index.hour
         Index([0, 1, 2], dtype='int16')
         """
@@ -3892,7 +3923,7 @@ class DatetimeIndex(Index):
         >>> datetime_index
         DatetimeIndex(['2000-01-01 00:00:00', '2000-01-01 00:01:00',
                     '2000-01-01 00:02:00'],
-                    dtype='datetime64[ns]')
+                    dtype='datetime64[ns]', freq='min')
         >>> datetime_index.minute
         Index([0, 1, 2], dtype='int16')
         """
@@ -3913,7 +3944,7 @@ class DatetimeIndex(Index):
         >>> datetime_index
         DatetimeIndex(['2000-01-01 00:00:00', '2000-01-01 00:00:01',
                     '2000-01-01 00:00:02'],
-                    dtype='datetime64[ns]')
+                    dtype='datetime64[ns]', freq='s')
         >>> datetime_index.second
         Index([0, 1, 2], dtype='int16')
         """
@@ -3934,7 +3965,7 @@ class DatetimeIndex(Index):
         >>> datetime_index
         DatetimeIndex([       '2000-01-01 00:00:00', '2000-01-01 00:00:00.000001',
                '2000-01-01 00:00:00.000002'],
-              dtype='datetime64[ns]')
+              dtype='datetime64[ns]', freq='us')
         >>> datetime_index.microsecond
         Index([0, 1, 2], dtype='int32')
         """
@@ -3966,7 +3997,7 @@ class DatetimeIndex(Index):
         DatetimeIndex([          '2000-01-01 00:00:00',
                        '2000-01-01 00:00:00.000000001',
                        '2000-01-01 00:00:00.000000002'],
-                      dtype='datetime64[ns]')
+                      dtype='datetime64[ns]', freq='ns')
         >>> datetime_index.nanosecond
         Index([0, 1, 2], dtype='int16')
         """
@@ -3988,7 +4019,7 @@ class DatetimeIndex(Index):
         DatetimeIndex(['2016-12-31', '2017-01-01', '2017-01-02', '2017-01-03',
                     '2017-01-04', '2017-01-05', '2017-01-06', '2017-01-07',
                     '2017-01-08'],
-                    dtype='datetime64[ns]')
+                    dtype='datetime64[ns]', freq='D')
         >>> datetime_index.weekday
         Index([5, 6, 0, 1, 2, 3, 4, 5, 6], dtype='int16')
         """
@@ -4010,7 +4041,7 @@ class DatetimeIndex(Index):
         DatetimeIndex(['2016-12-31', '2017-01-01', '2017-01-02', '2017-01-03',
                     '2017-01-04', '2017-01-05', '2017-01-06', '2017-01-07',
                     '2017-01-08'],
-                    dtype='datetime64[ns]')
+                    dtype='datetime64[ns]', freq='D')
         >>> datetime_index.dayofweek
         Index([5, 6, 0, 1, 2, 3, 4, 5, 6], dtype='int16')
         """
@@ -4033,7 +4064,7 @@ class DatetimeIndex(Index):
         DatetimeIndex(['2016-12-31', '2017-01-01', '2017-01-02', '2017-01-03',
                     '2017-01-04', '2017-01-05', '2017-01-06', '2017-01-07',
                     '2017-01-08'],
-                    dtype='datetime64[ns]')
+                    dtype='datetime64[ns]', freq='D')
         >>> datetime_index.dayofyear
         Index([366, 1, 2, 3, 4, 5, 6, 7, 8], dtype='int16')
         """
@@ -4056,7 +4087,7 @@ class DatetimeIndex(Index):
         DatetimeIndex(['2016-12-31', '2017-01-01', '2017-01-02', '2017-01-03',
                     '2017-01-04', '2017-01-05', '2017-01-06', '2017-01-07',
                     '2017-01-08'],
-                    dtype='datetime64[ns]')
+                    dtype='datetime64[ns]', freq='D')
         >>> datetime_index.day_of_year
         Index([366, 1, 2, 3, 4, 5, 6, 7, 8], dtype='int16')
         """
@@ -5470,6 +5501,12 @@ def _as_index(
             stop=data.stop,
             step=data.step,
             name=name,
+        )
+    elif isinstance(data, pd.DatetimeIndex):
+        return cudf.DatetimeIndex._from_data(
+            {None: as_column(data, nan_as_null=nan_as_null)},
+            name=data.name,
+            freq=data.freq.freqstr if data.freq else None,
         )
     elif isinstance(data, pd.MultiIndex):
         if dtype is not None:
