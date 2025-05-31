@@ -461,3 +461,19 @@ def test_string_to_numeric_invalid(numeric_type):
 def test_string_join(ldf, ignore_nulls, delimiter):
     q = ldf.select(pl.col("a").str.join(delimiter, ignore_nulls=ignore_nulls))
     assert_gpu_result_equal(q)
+
+
+def test_string_to_titlecase():
+    df = pl.DataFrame(
+        {
+            "quotes": [
+                "'e.t. phone home'",
+                "you talkin' to me?",
+                "to infinity,and BEYOND!",
+            ]
+        }
+    ).lazy()
+    q = df.with_columns(
+        quotes_title=pl.col("quotes").str.to_titlecase(),
+    )
+    assert_gpu_result_equal(q)
