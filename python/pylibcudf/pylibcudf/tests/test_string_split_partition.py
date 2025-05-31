@@ -17,7 +17,7 @@ def data_col():
 def test_partition(data_col):
     pa_arr, plc_column = data_col
     got = plc.strings.split.partition.partition(
-        plc_column, plc.interop.from_arrow(pa.scalar("_"))
+        plc_column, plc.Scalar.from_arrow(pa.scalar("_"))
     )
     expect = pa.table(
         {
@@ -32,7 +32,7 @@ def test_partition(data_col):
 def test_rpartition(data_col):
     pa_arr, plc_column = data_col
     got = plc.strings.split.partition.rpartition(
-        plc_column, plc.interop.from_arrow(pa.scalar("_"))
+        plc_column, plc.Scalar.from_arrow(pa.scalar("_"))
     )
     expect = pa.table(
         {
