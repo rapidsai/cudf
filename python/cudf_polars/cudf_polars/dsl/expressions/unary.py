@@ -13,7 +13,7 @@ from cudf_polars.containers import Column
 from cudf_polars.dsl.expressions.base import ExecutionContext, Expr
 from cudf_polars.dsl.expressions.literal import Literal
 from cudf_polars.utils import dtypes
-from cudf_polars.utils.versions import POLARS_VERSION_LT_128
+from cudf_polars.utils.versions import POLARS_VERSION_LT_128, POLARS_VERSION_LT_129
 
 if TYPE_CHECKING:
     from cudf_polars.containers import DataFrame, DataType
@@ -154,13 +154,27 @@ class UnaryFunction(Expr):
             (child,) = self.children
             return child.evaluate(df, context=context).mask_nans()
         if self.name == "round":
-            (decimal_places,) = self.options
+            round_mode = "half_away_from_zero"
+            if POLARS_VERSION_LT_129:
+                (decimal_places,) = self.options  # pragma: no cover
+            else:
+                # pragma: no cover
+                (
+                    decimal_places,
+                    round_mode,
+                ) = self.options
             (values,) = (child.evaluate(df, context=context) for child in self.children)
             return Column(
                 plc.round.round(
-                    values.obj, decimal_places, plc.round.RoundingMethod.HALF_UP
+                    values.obj,
+                    decimal_places,
+                    (
+                        plc.round.RoundingMethod.HALF_EVEN
+                        if round_mode == "half_to_even"
+                        else plc.round.RoundingMethod.HALF_UP
+                    ),
                 )
-            ).sorted_like(values)
+            ).sorted_like(values)  # pragma: no cover
         elif self.name == "unique":
             (maintain_order,) = self.options
             (values,) = (child.evaluate(df, context=context) for child in self.children)

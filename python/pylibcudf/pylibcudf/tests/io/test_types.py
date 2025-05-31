@@ -19,7 +19,7 @@ def pa_table():
 
 @pytest.fixture
 def expected(pa_table):
-    return plc.interop.from_arrow(pa_table)
+    return plc.Table.from_arrow(pa_table)
 
 
 @pytest.fixture

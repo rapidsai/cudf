@@ -52,6 +52,18 @@ class Literal(Expr):
             "Not expecting to require agg request of literal"
         )  # pragma: no cover
 
+    def astype(self, dtype: DataType) -> Literal:
+        """Cast self to dtype."""
+        if self.value is None:
+            return Literal(dtype, self.value)
+        else:
+            # Use polars to cast instead of pylibcudf
+            # since there are just Python scalars
+            casted = pl.Series(values=[self.value], dtype=self.dtype.polars).cast(
+                dtype.polars
+            )[0]
+            return Literal(dtype, casted)
+
 
 class LiteralColumn(Expr):
     __slots__ = ("value",)

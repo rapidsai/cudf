@@ -258,24 +258,20 @@ class Column:
         else:
             if is_floating_point(dtype):
                 floats = is_float(self.obj)
-                if not plc.interop.to_arrow(
-                    plc.reduce.reduce(
-                        floats,
-                        plc.aggregation.all(),
-                        plc.DataType(plc.TypeId.BOOL8),
-                    )
-                ).as_py():
+                if not plc.reduce.reduce(
+                    floats,
+                    plc.aggregation.all(),
+                    plc.DataType(plc.TypeId.BOOL8),
+                ).to_py():
                     raise InvalidOperationError("Conversion from `str` failed.")
                 return to_floats(self.obj, dtype)
             else:
                 integers = is_integer(self.obj)
-                if not plc.interop.to_arrow(
-                    plc.reduce.reduce(
-                        integers,
-                        plc.aggregation.all(),
-                        plc.DataType(plc.TypeId.BOOL8),
-                    )
-                ).as_py():
+                if not plc.reduce.reduce(
+                    integers,
+                    plc.aggregation.all(),
+                    plc.DataType(plc.TypeId.BOOL8),
+                ).to_py():
                     raise InvalidOperationError("Conversion from `str` failed.")
                 return to_integers(self.obj, dtype)
 
@@ -378,13 +374,11 @@ class Column:
     def nan_count(self) -> int:
         """Return the number of NaN values in the column."""
         if plc.traits.is_floating_point(self.obj.type()):
-            return plc.interop.to_arrow(
-                plc.reduce.reduce(
-                    plc.unary.is_nan(self.obj),
-                    plc.aggregation.sum(),
-                    plc.types.SIZE_TYPE,
-                )
-            ).as_py()
+            return plc.reduce.reduce(
+                plc.unary.is_nan(self.obj),
+                plc.aggregation.sum(),
+                plc.types.SIZE_TYPE,
+            ).to_py()
         return 0
 
     @property
