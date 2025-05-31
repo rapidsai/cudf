@@ -85,14 +85,15 @@ void print_cumulative_row_info(host_span<cumulative_page_info const> sizes,
                                std::optional<std::vector<row_range>> splits = std::nullopt)
 {
   if (splits.has_value()) {
-    printf("------------\nSplits (skip_rows, num_rows)\n");
+    std::cout << "------------\nSplits (skip_rows, num_rows)\n";
     for (size_t idx = 0; idx < splits->size(); idx++) {
-      printf("{%lu, %lu}\n", splits.value()[idx].skip_rows, splits.value()[idx].num_rows);
+      std::cout << "{" << splits.value()[idx].skip_rows << ", " << splits.value()[idx].num_rows
+                << "}\n";
     }
   }
 
-  printf("------------\nCumulative sizes %s (index, row_index, size_bytes, page_key)\n",
-         label.c_str());
+  std::cout << "------------\nCumulative sizes " << label.c_str()
+            << " (index, row_index, size_bytes, page_key)\n";
   for (size_t idx = 0; idx < sizes.size(); idx++) {
     printf(
       "{%lu, %lu, %lu, %d}", idx, sizes[idx].end_row_index, sizes[idx].size_bytes, sizes[idx].key);
@@ -110,19 +111,29 @@ void print_cumulative_row_info(host_span<cumulative_page_info const> sizes,
         return idx == 0 ? 0 : -1;
       }();
       if (split_index >= 0) {
-        printf(" <-- split {%lu, %lu}",
-               splits.value()[split_index].skip_rows,
-               splits.value()[split_index].num_rows);
+        std::cout << " <-- split {" << splits.value()[split_index].skip_rows << ", "
+                  << splits.value()[split_index].num_rows << "}";
       }
     }
-    printf("\n");
+    std::cout << "\n";
   }
 }
 #endif  // CHUNKING_DEBUG
 
-/**
- * @brief Returns the cudf compression type and whether it is supported by the parquet writer.
- */
+void codec_stats::add_pages(host_span<ColumnChunkDesc const> chunks,
+                            host_span<PageInfo> pages,
+                            page_selection selection)
+{
+  for (auto& page : pages) {
+    if (chunks[page.chunk_idx].codec == compression_type &&
+        (page.flags & PAGEINFO_FLAGS_DICTIONARY) == (selection == page_selection::DICT_PAGES)) {
+      ++num_pages;
+      total_decomp_size += page.uncompressed_page_size;
+      max_decompressed_size = std::max(max_decompressed_size, page.uncompressed_page_size);
+    }
+  }
+}
+
 CUDF_HOST_DEVICE cuda::std::pair<compression_type, bool> parquet_compression_support(
   Compression compression)
 {
@@ -139,9 +150,6 @@ CUDF_HOST_DEVICE cuda::std::pair<compression_type, bool> parquet_compression_sup
   return {compression_type::NONE, false};
 }
 
-/**
- * @brief Returns the string name of the Parquet compression type.
- */
 [[nodiscard]] std::string parquet_compression_name(Compression compression)
 {
   switch (compression) {
@@ -165,10 +173,6 @@ compression_type from_parquet_compression(Compression compression)
   return type;
 }
 
-/**
- * @brief Find the first entry in the aggreggated_info that corresponds to the specified row
- *
- */
 size_t find_start_index(cudf::host_span<cumulative_page_info const> aggregated_info,
                         size_t start_row)
 {
@@ -178,13 +182,6 @@ size_t find_start_index(cudf::host_span<cumulative_page_info const> aggregated_i
          start;
 }
 
-/**
- * @brief Given a current position and row index, find the next split based on the
- * specified size limit
- *
- * @returns The inclusive index within `sizes` where the next split should happen
- *
- */
 int64_t find_next_split(int64_t cur_pos,
                         size_t cur_row_index,
                         size_t cur_cumulative_size,
@@ -217,11 +214,6 @@ int64_t find_next_split(int64_t cur_pos,
   return split_pos;
 }
 
-/**
- * @brief Converts cuDF units to Parquet units.
- *
- * @return A tuple of Parquet clock rate and Parquet decimal type.
- */
 [[nodiscard]] std::tuple<int32_t, std::optional<LogicalType>> conversion_info(
   type_id column_type_id,
   type_id timestamp_type_id,
@@ -244,10 +236,6 @@ int64_t find_next_split(int64_t cur_pos,
   return {clock_rate, std::move(logical_type)};
 }
 
-/**
- * @brief return compressed and total size of the data in a row group
- *
- */
 std::pair<size_t, size_t> get_row_group_size(RowGroup const& rg)
 {
   auto compressed_size_iter = thrust::make_transform_iterator(
@@ -260,16 +248,6 @@ std::pair<size_t, size_t> get_row_group_size(RowGroup const& rg)
   return {compressed_size, total_size};
 }
 
-/**
- * @brief For a set of cumulative_page_info data, adjust the size_bytes field
- * such that it reflects the worst case for all pages that span the same rows.
- *
- * By doing this, we can now look at row X and know the total
- * byte cost for all pages that span row X, not just the cost up to row X itself.
- *
- * This function is asynchronous. Call stream.synchronize() before using the
- * results.
- */
 std::pair<rmm::device_uvector<cumulative_page_info>, rmm::device_uvector<int32_t>>
 adjust_cumulative_sizes(device_span<cumulative_page_info const> c_info,
                         device_span<PageInfo const> pages,
@@ -325,31 +303,6 @@ adjust_cumulative_sizes(device_span<cumulative_page_info const> c_info,
   return {std::move(aggregated_info), std::move(page_keys_by_split)};
 }
 
-/**
- * @brief Computes the next subpass within the current pass.
- *
- * A subpass is a subset of the pages within the parent pass that is decompressed
- * as a batch and decoded.  Subpasses are the level at which we control memory intermediate
- * memory usage. A pass consists of >= 1 subpass.  We cannot compute all subpasses in one
- * shot because we do not know how many rows we actually have in the pages of list columns.
- * So we have to make an educated guess that fits within the memory limits, and then adjust
- * for subsequent subpasses when we see how many rows we actually receive.
- *
- * @param c_info The cumulative page size information (row count and byte size) per column
- * @param pages All of the pages in the pass
- * @param chunks All of the chunks in the pass
- * @param page_offsets Offsets into the pages array representing the first page for each column
- * @param start_row The row to start the subpass at
- * @param size_limit The size limit in bytes of the subpass
- * @param num_columns The number of columns
- * @param is_first_subpass Boolean indicating if this is the first subpass
- * @param has_page_index Boolean indicating if we have a page index
- * @param stream The stream to execute cuda operations on
- * @returns A tuple containing a vector of page_span structs indicating the page indices to include
- * for each column to be processed, the total number of pages over all columns, and the total
- * expected memory usage (including scratch space)
- *
- */
 std::tuple<rmm::device_uvector<page_span>, size_t, size_t> compute_next_subpass(
   device_span<cumulative_page_info const> c_info,
   device_span<PageInfo const> pages,
@@ -439,39 +392,6 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
   return splits;
 }
 
-/**
- * @brief Stores basic information about pages compressed with a specific codec.
- */
-
-void codec_stats::add_pages(host_span<ColumnChunkDesc const> chunks,
-                            host_span<PageInfo> pages,
-                            page_selection selection)
-{
-  for (auto& page : pages) {
-    if (chunks[page.chunk_idx].codec == compression_type &&
-        (page.flags & PAGEINFO_FLAGS_DICTIONARY) == (selection == page_selection::DICT_PAGES)) {
-      ++num_pages;
-      total_decomp_size += page.uncompressed_page_size;
-      max_decompressed_size = std::max(max_decompressed_size, page.uncompressed_page_size);
-    }
-  }
-}
-
-/**
- * @brief Decompresses a mix of dictionary and non-dictionary pages from a set of column chunks.
- *
- * To avoid multiple calls to the decompression kernel, we batch pages by codec type, where the
- * batch can include both dictionary and non-dictionary pages. This allows us to decompress all
- * pages of a given codec type in one go.
- *
- * @param chunks List of column chunk descriptors
- * @param pass_pages List of page information for the pass
- * @param subpass_pages List of page information for the subpass
- * @param stream CUDA stream used for device memory operations and kernel launches
- *
- * @return A pair of device buffers containing the decompressed data for dictionary and
- * non-dictionary pages, respectively.
- */
 [[nodiscard]] std::pair<rmm::device_buffer, rmm::device_buffer> decompress_page_data(
   host_span<ColumnChunkDesc const> chunks,
   host_span<PageInfo> pass_pages,
@@ -632,21 +552,6 @@ void codec_stats::add_pages(host_span<ColumnChunkDesc const> chunks,
   return {std::move(pass_decomp_pages), std::move(subpass_decomp_pages)};
 }
 
-/**
- * @brief Detect malformed parquet input data.
- *
- * We have seen cases where parquet files can be oddly malformed. This function specifically
- * detects one case in particular:
- *
- * - When you have a file containing N rows
- * - For some reason, the sum total of the number of rows over all pages for a given column
- *   is != N
- *
- * @param pages All pages to be decoded
- * @param chunks Chunk data
- * @param expected_row_count Expected row count, if applicable
- * @param stream CUDA stream used for device memory operations and kernel launches
- */
 void detect_malformed_pages(device_span<PageInfo const> pages,
                             device_span<ColumnChunkDesc const> chunks,
                             std::optional<size_t> expected_row_count,
@@ -697,11 +602,6 @@ void detect_malformed_pages(device_span<PageInfo const> pages,
   }
 }
 
-/**
- * @brief Add the cost of decompression codec scratch space to the per-page cumulative
- * size information.
- *
- */
 void include_decompression_scratch_size(device_span<ColumnChunkDesc const> chunks,
                                         device_span<PageInfo const> pages,
                                         device_span<cumulative_page_info> c_info,
