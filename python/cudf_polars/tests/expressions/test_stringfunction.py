@@ -461,3 +461,8 @@ def test_string_to_numeric_invalid(numeric_type):
 def test_string_join(ldf, ignore_nulls, delimiter):
     q = ldf.select(pl.col("a").str.join(delimiter, ignore_nulls=ignore_nulls))
     assert_gpu_result_equal(q)
+
+
+def test_string_reverse(ldf):
+    query = ldf.select(pl.col("a").str.reverse())
+    assert_gpu_result_equal(query)
