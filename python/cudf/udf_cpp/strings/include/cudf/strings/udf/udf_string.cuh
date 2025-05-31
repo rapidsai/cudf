@@ -453,11 +453,6 @@ __device__ inline cudf::size_type udf_string::char_offset(cudf::size_type byte_p
   return cudf::strings::detail::characters_in_string(data(), byte_pos);
 }
 
-__device__ void udf_str_dtor(void* udf_str, size_t size, void* dtor_info)
-{
-  auto ptr = reinterpret_cast<udf_string*>(udf_str);
-  ptr->~udf_string();
-}
 
 }  // namespace udf
 }  // namespace strings

@@ -724,9 +724,25 @@ make_definition_corr(BlockCorr, int64, int64_t);
 }
 
 /**
+ * @brief Destructor for a udf_string object.
+ *
+ * NRT API compatible destructor for udf_string objects.
+ *
+ * @param udf_str Pointer to the udf_string object to be destructed.
+ * @param size Size of the udf_string object (not used).
+ * @param dtor_info Additional information for the destructor (not used).
+ */
+__device__ void udf_str_dtor(void* udf_str, size_t size, void* dtor_info)
+{
+  auto ptr = reinterpret_cast<udf_string*>(udf_str);
+  ptr->~udf_string();
+}
+
+
+/**
  * @brief Initialize a MemInfo to track a newly created cudf::udf_string.
  *
- * Shim functions return new cudf::udf_string objects into stack memory,
+ * Shim functions are passed stack memory into which udf_string objects are constructed
  * so this function persists a copy to the heap for use when destructing
  * the object later on. The returned MemInfo tracks the heap copy.
  *
@@ -756,6 +772,7 @@ extern "C" __device__ int init_udf_string_meminfo(void** out_meminfo, void* udf_
     *out_meminfo = &(mi_and_str->mi);
   } else {
     *out_meminfo = NULL;
+    __trap();
   }
   return 0;
 }

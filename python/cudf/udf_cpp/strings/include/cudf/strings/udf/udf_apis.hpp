@@ -22,6 +22,8 @@
 #include <rmm/device_buffer.hpp>
 
 #include <memory>
+#include <cudf/strings/udf/managed_udf_string.cuh>
+
 
 namespace cudf {
 namespace strings {
@@ -35,8 +37,6 @@ namespace udf {
 int get_cuda_build_version();
 
 class udf_string;
-class managed_udf_string;
-
 /**
  * @brief Return a cudf::string_view array for the given strings column
  *
