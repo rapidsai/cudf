@@ -110,10 +110,7 @@ class StructFunction(Expr):
             return Column(plc.Column.from_iterable_of_py(buff.getvalue().split()))
         elif self.name == StructFunction.Name.RenameFields:
             return column
-        elif (
-            self.name == StructFunction.Name.PrefixFields
-            or self.name == StructFunction.Name.SuffixFields
-        ):
-            raise NotImplementedError(f"Struct function {self.name}")
         else:
-            raise NotImplementedError(f"Struct function {self.name}")
+            raise NotImplementedError(
+                f"Struct function {self.name}"
+            )  # pragma: no cover

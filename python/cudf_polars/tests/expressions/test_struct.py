@@ -6,7 +6,10 @@ import pytest
 
 import polars as pl
 
-from cudf_polars.testing.asserts import assert_gpu_result_equal
+from cudf_polars.testing.asserts import (
+    assert_gpu_result_equal,
+    assert_ir_translation_raises,
+)
 
 
 @pytest.fixture
@@ -37,3 +40,10 @@ def test_json_encode(ldf):
 def test_rename_fields(ldf):
     query = ldf.select(pl.col("a").struct.rename_fields(["1", "2"]).struct.unnest())
     assert_gpu_result_equal(query)
+
+
+def test_with_fields(ldf):
+    query = ldf.select(
+        pl.col("a").struct.with_fields(pl.field("b").str.len_chars()).struct.unnest()
+    )
+    assert_ir_translation_raises(query, NotImplementedError)
