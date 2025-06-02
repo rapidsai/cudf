@@ -55,6 +55,7 @@ requirements:
     - rapids-build-backend >=0.3.0,<0.4.0.dev0
     - scikit-build-core >=0.10.0
     - dlpack >=0.8,<1.0
+    - numba-cuda >=0.13.0,<0.14.0a0
     - libcudf =${{ version }}
     - pylibcudf =${{ version }}
     - rmm =${{ minor_version }}
