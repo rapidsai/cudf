@@ -146,6 +146,14 @@ CUDF_KERNEL void kernel(cudf::mutable_column_device_view_core const* outputs,
 }
 
 template <bool has_user_data, typename Out, typename... In>
+CUDF_KERNEL void filter_kernel(cudf::jit::device_optional_span<typename Out::type> const* outputs,
+                               cudf::column_device_view_core const* inputs,
+                               void* user_data)
+{
+  // TODO:
+}
+
+template <bool has_user_data, typename Out, typename... In>
 CUDF_KERNEL void fixed_point_kernel(cudf::mutable_column_device_view_core const* outputs,
                                     cudf::column_device_view_core const* inputs,
                                     void* user_data)

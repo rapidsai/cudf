@@ -70,17 +70,45 @@ std::unique_ptr<column> transform(
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
-std::unique_ptr<column> filter_predicate(
-  std::vector<column_view> const& columns,
+/**
+ * @brief Creates a new column by applying a filter function against every
+ * element of the input columns.
+ *
+ * Computes:
+ * `out[i]... = predicate(predicate_columns[i]... ) ? F(table[i]...) : drop()`.
+ *
+ * Note that for every scalar in `predicate_columns` (columns of size 1), `predicate_columns[i] ==
+ * input[0]`
+ *
+ *
+ * @throws std::invalid_argument if any of the input columns have different sizes (except scalars of
+ * size 1)
+ * @throws std::invalid_argument if `output_type` or any of the inputs are not fixed-width or string
+ * types
+ * @throws std::invalid_argument if any of the input columns have nulls
+ * @throws std::logic_error if JIT is not supported by the runtime
+ *
+ * The size of the resulting column is the size of the largest column.
+ *
+ * @param target_columns        Immutable views of the columns to filter
+ * @param predicate_columns        Immutable views of the columns to use as predicates for filtering
+ * @param predicate_udf The PTX/CUDA string of the transform function to apply
+ * @param is_ptx        true: the UDF is treated as PTX code; false: the UDF is treated as CUDA code
+ * @param dropna true: drop the rows for which the filter does not apply
+ * @param user_data     User-defined device data to pass to the UDF.
+ * @param stream        CUDA stream used for device memory operations and kernel launches
+ * @param mr            Device memory resource used to allocate the returned column's device memory
+ * @return              The column resulting from applying the filter function to
+ *                      every element of the input
+ */
+std::vector<std::unique_ptr<column>> filter(
+  std::vector<column_view> const& target_columns,
+  std::vector<column_view> const& predicate_columns,
   std::string const& predicate_udf,
   bool is_ptx,
+  std::optional<void*> user_data    = std::nullopt,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
-
-void filter_gather(column_view mask,
-                   std::vector<column_view> const& columns,
-                   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-                   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Creates a null_mask from `input` by converting `NaN` to null and
