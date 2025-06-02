@@ -85,7 +85,7 @@ def test_concatenate_list_elements(test_data, dropna, expected):
 
 def test_contains_scalar(list_column, scalar):
     plc_column = plc.Column.from_arrow(pa.array(list_column))
-    plc_scalar = plc.interop.from_arrow(scalar)
+    plc_scalar = plc.Scalar.from_arrow(scalar)
     got = plc.lists.contains(plc_column, plc_scalar)
 
     expect = pa.array([True, False, False, False])
@@ -129,7 +129,7 @@ def test_index_of_scalar(list_column, scalar):
     arr = pa.array(list_column)
 
     plc_column = plc.Column.from_arrow(arr)
-    plc_scalar = plc.interop.from_arrow(scalar)
+    plc_scalar = plc.Scalar.from_arrow(scalar)
     got = plc.lists.index_of(
         plc_column, plc_scalar, plc.lists.DuplicateFindOption.FIND_FIRST
     )
