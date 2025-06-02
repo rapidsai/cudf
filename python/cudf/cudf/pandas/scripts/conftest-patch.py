@@ -1651,7 +1651,6 @@ NODEIDS_THAT_FAIL_WITH_CUDF_PANDAS = {
     "tests/window/test_rolling_functions.py::test_rolling_min_resample[5]",
     "tests/window/test_rolling_functions.py::test_rolling_min_resample[10]",
     "tests/window/test_rolling_functions.py::test_rolling_median_resample",
-    "tests/indexes/datetimes/test_partial_slicing.py::TestSlicing::test_slice_month",
     "tests/indexes/datetimes/test_partial_slicing.py::TestSlicing::test_getitem_with_datestring_with_UTC_offset[2018-12-02 21:52:00+00:00-2018-12-02 21:50:00+00:00]",
     "tests/indexes/datetimes/test_partial_slicing.py::TestSlicing::test_getitem_with_datestring_with_UTC_offset[2018-12-02 21:52:00+00:00-start2]",
     "tests/indexes/datetimes/test_partial_slicing.py::TestSlicing::test_getitem_with_datestring_with_UTC_offset[end1-2018-12-02 21:50:00+00:00]",
