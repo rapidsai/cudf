@@ -899,7 +899,10 @@ class Sink(IR):
             data_page_size = options.get("data_page_size")
             row_group_size = options.get("row_group_size")
 
-            if config_options.parquet_options.chunked_writer:
+            if (
+                config_options.parquet_options.chunked
+                and config_options.parquet_options.num_chunks != 1
+            ):
                 builder = plc.io.parquet.ChunkedParquetWriterOptions.builder(
                     target
                 ).metadata(metadata)
@@ -914,7 +917,20 @@ class Sink(IR):
                 writer = plc.io.parquet.ParquetChunkedWriter.from_options(
                     writer_options
                 )
-                writer.write(df.table)
+
+                # TODO: Replace with smarter chunking logic
+                num_chunks = config_options.parquet_options.num_chunks
+                table_chunks = plc.copying.split(
+                    df.table,
+                    [
+                        i * df.table.num_rows() // num_chunks
+                        for i in range(1, num_chunks)
+                    ],
+                )
+
+                for chunk in table_chunks:
+                    writer.write(chunk)
+
                 writer.close([])
 
             else:
