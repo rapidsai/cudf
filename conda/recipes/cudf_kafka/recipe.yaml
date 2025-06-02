@@ -51,7 +51,7 @@ requirements:
   host:
     - python =${{ py_version }}
     - pip
-    - cython >=3.0.3,<3.1.0a0
+    - cython >=3.0.3
     - cuda-version =${{ cuda_version }}
     - pylibcudf =${{ version }}
     - libcudf_kafka =${{ version }}

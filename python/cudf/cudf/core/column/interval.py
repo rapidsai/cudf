@@ -205,6 +205,8 @@ class IntervalColumn(StructColumn):
 
     def element_indexing(self, index: int):
         result = super().element_indexing(index)
-        if cudf.get_option("mode.pandas_compatible"):
+        if isinstance(result, dict) and cudf.get_option(
+            "mode.pandas_compatible"
+        ):
             return pd.Interval(**result, closed=self.dtype.closed)
         return result

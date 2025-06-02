@@ -591,7 +591,8 @@ TEST_F(OrcWriterTest, HostBuffer)
 
   cudf::io::orc_reader_options in_opts =
     cudf::io::orc_reader_options::builder(
-      cudf::io::source_info(out_buffer.data(), out_buffer.size()))
+      cudf::io::source_info{cudf::host_span<std::byte const>{
+        reinterpret_cast<std::byte const*>(out_buffer.data()), out_buffer.size()}})
       .use_index(false);
   auto const result = cudf::io::read_orc(in_opts);
 
@@ -1151,8 +1152,8 @@ TEST_F(OrcReaderTest, zstdCompressionRegression)
     0x9e, 0x75, 0x08, 0x2f, 0x10, 0x05, 0x18, 0x80, 0x80, 0x10, 0x22, 0x02, 0x00, 0x0c, 0x28, 0x00,
     0x30, 0x09, 0x82, 0xf4, 0x03, 0x03, 0x4f, 0x52, 0x43, 0x17};
 
-  auto source =
-    cudf::io::source_info(reinterpret_cast<char const*>(input_buffer.data()), input_buffer.size());
+  auto source = cudf::io::source_info{cudf::host_span<std::byte const>{
+    reinterpret_cast<std::byte const*>(input_buffer.data()), input_buffer.size()}};
   cudf::io::orc_reader_options in_opts =
     cudf::io::orc_reader_options::builder(source).use_index(false);
 
@@ -1327,8 +1328,9 @@ TEST_F(OrcStatisticsTest, HasNull)
     0x4F, 0x52, 0x43, 0x17,
   };
 
-  auto const stats = cudf::io::read_parsed_orc_statistics(
-    cudf::io::source_info{reinterpret_cast<char const*>(nulls_orc.data()), nulls_orc.size()});
+  auto const stats =
+    cudf::io::read_parsed_orc_statistics(cudf::io::source_info{cudf::host_span<std::byte const>{
+      reinterpret_cast<std::byte const*>(nulls_orc.data()), nulls_orc.size()}});
 
   EXPECT_EQ(stats.file_stats[1].has_null, true);
   EXPECT_EQ(stats.file_stats[2].has_null, false);
@@ -1359,13 +1361,15 @@ TEST_P(OrcWriterTestStripes, StripeSize)
     [&, &size_bytes = size_bytes, &size_rows = size_rows](std::vector<char> const& orc_buffer) {
       auto const expected_stripe_num =
         std::max<cudf::size_type>(num_rows / size_rows, (num_rows * sizeof(int64_t)) / size_bytes);
-      auto const stats = cudf::io::read_parsed_orc_statistics(
-        cudf::io::source_info(orc_buffer.data(), orc_buffer.size()));
+      auto const stats =
+        cudf::io::read_parsed_orc_statistics(cudf::io::source_info{cudf::host_span<std::byte const>{
+          reinterpret_cast<std::byte const*>(orc_buffer.data()), orc_buffer.size()}});
       EXPECT_EQ(stats.stripes_stats.size(), expected_stripe_num);
 
       cudf::io::orc_reader_options in_opts =
         cudf::io::orc_reader_options::builder(
-          cudf::io::source_info(orc_buffer.data(), orc_buffer.size()))
+          cudf::io::source_info{cudf::host_span<std::byte const>{
+            reinterpret_cast<std::byte const*>(orc_buffer.data()), orc_buffer.size()}})
           .use_index(false);
       auto result = cudf::io::read_orc(in_opts);
 
@@ -1587,7 +1591,8 @@ TEST_F(OrcReaderTest, EmptyColumnsParam)
 
   cudf::io::orc_reader_options read_opts =
     cudf::io::orc_reader_options::builder(
-      cudf::io::source_info{out_buffer.data(), out_buffer.size()})
+      cudf::io::source_info{cudf::host_span<std::byte const>{
+        reinterpret_cast<std::byte const*>(out_buffer.data()), out_buffer.size()}})
       .columns({});
   auto const result = cudf::io::read_orc(read_opts);
 
@@ -1907,8 +1912,9 @@ TEST_F(OrcStatisticsTest, AllNulls)
     cudf::io::orc_writer_options::builder(cudf::io::sink_info{&out_buffer}, expected);
   cudf::io::write_orc(out_opts);
 
-  auto const stats = cudf::io::read_parsed_orc_statistics(
-    cudf::io::source_info{out_buffer.data(), out_buffer.size()});
+  auto const stats =
+    cudf::io::read_parsed_orc_statistics(cudf::io::source_info{cudf::host_span<std::byte const>{
+      reinterpret_cast<std::byte const*>(out_buffer.data()), out_buffer.size()}});
 
   check_all_null_stats<cudf::io::integer_statistics>(stats.file_stats[1]);
   check_all_null_stats<cudf::io::double_statistics>(stats.file_stats[2]);
@@ -1928,8 +1934,9 @@ TEST_F(OrcWriterTest, UnorderedDictionary)
     cudf::io::orc_writer_options::builder(cudf::io::sink_info{&out_buffer_sorted}, expected);
   cudf::io::write_orc(out_opts_sorted);
 
-  cudf::io::orc_reader_options in_opts_sorted = cudf::io::orc_reader_options::builder(
-    cudf::io::source_info{out_buffer_sorted.data(), out_buffer_sorted.size()});
+  cudf::io::orc_reader_options in_opts_sorted =
+    cudf::io::orc_reader_options::builder(cudf::io::source_info{cudf::host_span<std::byte const>{
+      reinterpret_cast<std::byte const*>(out_buffer_sorted.data()), out_buffer_sorted.size()}});
   auto const from_sorted = cudf::io::read_orc(in_opts_sorted).tbl;
 
   std::vector<char> out_buffer_unsorted;
@@ -1938,8 +1945,9 @@ TEST_F(OrcWriterTest, UnorderedDictionary)
       .enable_dictionary_sort(false);
   cudf::io::write_orc(out_opts_unsorted);
 
-  cudf::io::orc_reader_options in_opts_unsorted = cudf::io::orc_reader_options::builder(
-    cudf::io::source_info{out_buffer_unsorted.data(), out_buffer_unsorted.size()});
+  cudf::io::orc_reader_options in_opts_unsorted =
+    cudf::io::orc_reader_options::builder(cudf::io::source_info{cudf::host_span<std::byte const>{
+      reinterpret_cast<std::byte const*>(out_buffer_unsorted.data()), out_buffer_unsorted.size()}});
   auto const from_unsorted = cudf::io::read_orc(in_opts_unsorted).tbl;
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(*from_sorted, *from_unsorted);
@@ -1961,8 +1969,9 @@ TEST_F(OrcStatisticsTest, Empty)
     cudf::io::orc_writer_options::builder(cudf::io::sink_info{&out_buffer}, expected);
   cudf::io::write_orc(out_opts);
 
-  auto const stats = cudf::io::read_parsed_orc_statistics(
-    cudf::io::source_info{out_buffer.data(), out_buffer.size()});
+  auto const stats =
+    cudf::io::read_parsed_orc_statistics(cudf::io::source_info{cudf::host_span<std::byte const>{
+      reinterpret_cast<std::byte const*>(out_buffer.data()), out_buffer.size()}});
 
   auto expected_column_names = std::vector<std::string>{""};
   std::generate_n(
@@ -2060,8 +2069,9 @@ void round_trip_basic(cudf::io::compression_type compression_type)
       .compression_statistics(stats);
   cudf::io::write_orc(out_opts);
 
-  cudf::io::orc_reader_options in_opts = cudf::io::orc_reader_options::builder(
-    cudf::io::source_info{out_buffer.data(), out_buffer.size()});
+  cudf::io::orc_reader_options in_opts =
+    cudf::io::orc_reader_options::builder(cudf::io::source_info{cudf::host_span<std::byte const>{
+      reinterpret_cast<std::byte const*>(out_buffer.data()), out_buffer.size()}});
   auto result = cudf::io::read_orc(in_opts);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
@@ -2115,7 +2125,8 @@ TEST_F(OrcReaderTest, SizeTypeRowsOverflow)
   }
 
   // Test reading the metadata
-  auto metadata = read_orc_metadata(cudf::io::source_info{out_buffer.data(), out_buffer.size()});
+  auto metadata = read_orc_metadata(cudf::io::source_info{cudf::host_span<std::byte const>{
+    reinterpret_cast<std::byte const*>(out_buffer.data()), out_buffer.size()}});
   EXPECT_EQ(metadata.num_rows(), total_rows);
   EXPECT_EQ(metadata.num_stripes(), total_rows / 1'000'000);
 
@@ -2125,7 +2136,8 @@ TEST_F(OrcReaderTest, SizeTypeRowsOverflow)
   // Read the last million rows
   cudf::io::orc_reader_options skip_opts =
     cudf::io::orc_reader_options::builder(
-      cudf::io::source_info{out_buffer.data(), out_buffer.size()})
+      cudf::io::source_info{cudf::host_span<std::byte const>{
+        reinterpret_cast<std::byte const*>(out_buffer.data()), out_buffer.size()}})
       .use_index(false)
       .skip_rows(num_rows_to_skip);
   auto const got_with_skip = cudf::io::read_orc(skip_opts).tbl;
@@ -2140,7 +2152,8 @@ TEST_F(OrcReaderTest, SizeTypeRowsOverflow)
   // Read the last stripe (still the last million rows)
   cudf::io::orc_reader_options stripe_opts =
     cudf::io::orc_reader_options::builder(
-      cudf::io::source_info{out_buffer.data(), out_buffer.size()})
+      cudf::io::source_info{cudf::host_span<std::byte const>{
+        reinterpret_cast<std::byte const*>(out_buffer.data()), out_buffer.size()}})
       .use_index(false)
       .stripes({{metadata.num_stripes() - 1}});
   auto const got_with_stripe_selection = cudf::io::read_orc(stripe_opts).tbl;
@@ -2217,8 +2230,9 @@ TEST_F(OrcReaderTest, DISABLED_Over65kRowGroups)
 
   cudf::io::write_orc(out_opts);
 
-  cudf::io::orc_reader_options read_opts = cudf::io::orc_reader_options::builder(
-    cudf::io::source_info{out_buffer.data(), out_buffer.size()});
+  cudf::io::orc_reader_options read_opts =
+    cudf::io::orc_reader_options::builder(cudf::io::source_info{cudf::host_span<std::byte const>{
+      reinterpret_cast<std::byte const*>(out_buffer.data()), out_buffer.size()}});
   auto result = cudf::io::read_orc(read_opts);
   CUDF_TEST_EXPECT_TABLES_EQUAL(chunk_table, result.tbl->view());
 }
@@ -2242,8 +2256,9 @@ TEST_F(OrcReaderTest, DISABLED_Over65kStripes)
 
   cudf::io::write_orc(out_opts);
 
-  cudf::io::orc_reader_options read_opts = cudf::io::orc_reader_options::builder(
-    cudf::io::source_info{out_buffer.data(), out_buffer.size()});
+  cudf::io::orc_reader_options read_opts =
+    cudf::io::orc_reader_options::builder(cudf::io::source_info{cudf::host_span<std::byte const>{
+      reinterpret_cast<std::byte const*>(out_buffer.data()), out_buffer.size()}});
   auto result = cudf::io::read_orc(read_opts);
   CUDF_TEST_EXPECT_TABLES_EQUAL(chunk_table, result.tbl->view());
 }
@@ -2263,8 +2278,9 @@ TEST_F(OrcWriterTest, DISABLED_Over65kColumns)
       .compression(cudf::io::compression_type::NONE);
   cudf::io::write_orc(out_opts);
 
-  cudf::io::orc_reader_options in_opts = cudf::io::orc_reader_options::builder(
-    cudf::io::source_info{out_buffer.data(), out_buffer.size()});
+  cudf::io::orc_reader_options in_opts =
+    cudf::io::orc_reader_options::builder(cudf::io::source_info{cudf::host_span<std::byte const>{
+      reinterpret_cast<std::byte const*>(out_buffer.data()), out_buffer.size()}});
   auto result = cudf::io::read_orc(in_opts);
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
 }
@@ -2282,8 +2298,9 @@ TEST_F(OrcWriterTest, MultipleBlocksInStripeFooter)
   // Write with compression on (default)
   cudf::io::write_orc(out_opts);
 
-  cudf::io::orc_reader_options in_opts = cudf::io::orc_reader_options::builder(
-    cudf::io::source_info{out_buffer.data(), out_buffer.size()});
+  cudf::io::orc_reader_options in_opts =
+    cudf::io::orc_reader_options::builder(cudf::io::source_info{cudf::host_span<std::byte const>{
+      reinterpret_cast<std::byte const*>(out_buffer.data()), out_buffer.size()}});
   auto result = cudf::io::read_orc(in_opts);
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
 }
