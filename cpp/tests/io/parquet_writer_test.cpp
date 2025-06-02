@@ -314,7 +314,7 @@ class custom_test_data_sink : public cudf::io::data_sink {
                                        size_t size,
                                        rmm::cuda_stream_view stream) override
   {
-    return std::async(std::launch::deferred, [=] {
+    return std::async(std::launch::deferred, [=, this] {
       char* ptr = nullptr;
       CUDF_CUDA_TRY(cudaMallocHost(&ptr, size));
       CUDF_CUDA_TRY(cudaMemcpyAsync(ptr, gpu_data, size, cudaMemcpyDefault, stream.value()));
@@ -2170,7 +2170,7 @@ class custom_test_memmap_sink : public cudf::io::data_sink {
                                        size_t size,
                                        rmm::cuda_stream_view stream) override
   {
-    return std::async(std::launch::deferred, [=] {
+    return std::async(std::launch::deferred, [=, this] {
       char* ptr = nullptr;
       CUDF_CUDA_TRY(cudaMallocHost(&ptr, size));
       CUDF_CUDA_TRY(cudaMemcpyAsync(ptr, gpu_data, size, cudaMemcpyDefault, stream.value()));
