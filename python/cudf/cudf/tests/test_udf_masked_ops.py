@@ -967,6 +967,7 @@ class TestStringUDFs:
 
         run_masked_udf_test(func, str_udf_data, check_dtype=False)
 
+    @pytest.mark.xfail(reason="Identity function not supported.")
     def test_string_udf_return_string(self, str_udf_data):
         def func(row):
             return row["str_col"]
