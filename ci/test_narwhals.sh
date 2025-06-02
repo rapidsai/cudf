@@ -20,7 +20,7 @@ rapids-logger "pytest narwhals"
 NARWHALS_VERSION=$(python -c "import narwhals; print(narwhals.__version__)")
 git clone https://github.com/narwhals-dev/narwhals.git --depth=1 -b "v${NARWHALS_VERSION}" narwhals
 pushd narwhals || exit 1
-rapids-pip-retry install -U -e . pytest-env "hypothesis>=6.131.7"
+rapids-pip-retry install -U -e .
 
 rapids-logger "Check narwhals versions"
 python -c "import narwhals; print(narwhals.show_versions())"
@@ -34,11 +34,13 @@ python -m pytest \
     --dist=worksteal \
     --constructors=cudf
 
-# Narwhals needs to allow for tests to be run for any backend without needing the other
-# backends installed. See https://github.com/rapidsai/cudf/pull/18297#issuecomment-2730310885
-TEST_THAT_NEED_NARWHALS_FIX=" \
-test_eager_only_sqlframe or \
-test_series_only_sqlframe \
+# test_dtypes: With cudf.pandas loaded, to_pandas() preserves Arrow dtypes like list and struct, so pandas
+# columns aren't object anymore. The test expects object, causing a mismatch.
+# test_nan: Narwhals expect this test to fail, but as of polars 1.30 we raise a RuntimeError,
+# not polars ComputeError. So the test is looking for the wrong error and fails.
+TESTS_THAT_NEED_NARWHALS_FIX_FOR_CUDF_POLARS=" \
+test_dtypes or \
+test_nan \
 "
 
 rapids-logger "Run narwhals tests for cuDF Polars"
@@ -46,7 +48,7 @@ NARWHALS_POLARS_GPU=1 python -m pytest \
     --cache-clear \
     --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf-polars-narwhals.xml" \
     -k "not ( \
-        ${TEST_THAT_NEED_NARWHALS_FIX} \
+        ${TESTS_THAT_NEED_NARWHALS_FIX_FOR_CUDF_POLARS} \
     )" \
     --numprocesses=8 \
     --dist=worksteal \
@@ -56,10 +58,14 @@ rapids-logger "Run narwhals tests for cuDF Pandas"
 
 # test_is_finite_expr & test_is_finite_series: https://github.com/rapidsai/cudf/issues/18257
 # test_maybe_convert_dtypes_pandas: https://github.com/rapidsai/cudf/issues/14149
+# test_log_dtype_pandas: cudf is promoting the type to float64
+# test_len_over_2369: It fails during fallback. The error is 'DataFrame' object has no attribute 'to_frame'
 TESTS_THAT_NEED_CUDF_FIX=" \
 test_is_finite_expr or \
 test_is_finite_series or \
-test_maybe_convert_dtypes_pandas \
+test_maybe_convert_dtypes_pandas or \
+test_log_dtype_pandas or \
+test_len_over_2369 \
 "
 
 # test_array_dunder_with_copy: https://github.com/rapidsai/cudf/issues/18248#issuecomment-2719234741
@@ -72,6 +78,12 @@ test_to_arrow_with_nulls or \
 test_pandas_object_series \
 "
 
+# test_dtypes: With cudf.pandas loaded, to_pandas() preserves Arrow dtypes like list and struct, so pandas
+# columns aren't object anymore. The test expects object, causing a mismatch.
+TESTS_THAT_NEED_NARWHALS_FIX_FOR_CUDF_PANDAS=" \
+test_dtypes \
+"
+
 NARWHALS_DEFAULT_CONSTRUCTORS=pandas python -m pytest \
     -p cudf.pandas \
     --cache-clear \
@@ -79,7 +91,7 @@ NARWHALS_DEFAULT_CONSTRUCTORS=pandas python -m pytest \
     -k "not ( \
         ${TESTS_THAT_NEED_CUDF_FIX} or \
         ${TESTS_TO_ALWAYS_SKIP} or \
-        ${TEST_THAT_NEED_NARWHALS_FIX} \
+        ${TESTS_THAT_NEED_NARWHALS_FIX_FOR_CUDF_PANDAS} \
     )" \
     --numprocesses=8 \
     --dist=worksteal

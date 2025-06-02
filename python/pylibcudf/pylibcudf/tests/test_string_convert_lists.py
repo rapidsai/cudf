@@ -12,7 +12,7 @@ import pylibcudf as plc
 def test_format_list_column(na_rep, separators):
     got = plc.strings.convert.convert_lists.format_list_column(
         plc.Column.from_arrow(pa.array([["1", "A"], None])),
-        na_rep if na_rep is None else plc.interop.from_arrow(na_rep),
+        na_rep if na_rep is None else plc.Scalar.from_arrow(na_rep),
         separators
         if separators is None
         else plc.Column.from_arrow(separators),
