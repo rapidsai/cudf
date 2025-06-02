@@ -108,7 +108,11 @@ class StructFunction(Expr):
             )
             plc.io.json.write_json(options)
             return Column(plc.Column.from_iterable_of_py(buff.getvalue().split()))
-        elif self.name == StructFunction.Name.RenameFields:
+        elif self.name in {
+            StructFunction.Name.RenameFields,
+            StructFunction.Name.PrefixFields,
+            StructFunction.Name.SuffixFields,
+        }:
             return column
         else:
             raise NotImplementedError(
