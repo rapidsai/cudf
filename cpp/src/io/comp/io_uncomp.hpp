@@ -107,8 +107,7 @@ struct decompression_info {
  * data.
  *
  */
-[[nodiscard]] size_t get_decompression_scratch_size(decompression_info const& di,
-                                                    size_t num_buffers);
+[[nodiscard]] size_t get_decompression_scratch_size(decompression_info const& di);
 
 /**
  * @brief Computes the uncompressed sizes of Snappy-compressed input data.

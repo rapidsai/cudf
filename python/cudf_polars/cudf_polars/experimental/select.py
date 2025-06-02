@@ -120,7 +120,7 @@ def _(
         count = scan.fast_count()
         dtype = ir.exprs[0].value.dtype
 
-        col = plc.Column.from_scalar(plc.Scalar.from_py(count, dtype), 1)
+        col = plc.Column.from_scalar(plc.Scalar.from_py(count, dtype.plc), 1)
         arr = plc.interop.to_arrow(col)
 
         lit_expr = expr.LiteralColumn(dtype, arr)
