@@ -113,26 +113,28 @@ CUDF_KERNEL void offset_bitmask_binop(Binop op,
 // warp per segment
 template <typename Binop>
 CUDF_KERNEL void segmented_offset_bitmask_binop(Binop op,
-                                      device_span<bitmask_type*> destinations,
-                                      size_type destination_size,
-                                      device_span<bitmask_type const* const> sources,
-                                      device_span<size_type const> source_begin_bitss,
-                                      size_type source_size_bits,
-                                      device_span<size_type const> segment_offsets,
-                                      device_span<size_type> count_ptrs)
+                                                device_span<bitmask_type*> destinations,
+                                                size_type destination_size,
+                                                device_span<bitmask_type const* const> sources,
+                                                device_span<size_type const> source_begin_bitss,
+                                                size_type source_size_bits,
+                                                device_span<size_type const> segment_offsets,
+                                                device_span<size_type> count_ptrs)
 {
   auto const warp_size = cudf::detail::warp_size;
-  auto const lane = threadIdx.x % warp_size;
-  auto const warp_id = threadIdx.x / warp_size;
+  auto const lane      = threadIdx.x % warp_size;
+  auto const warp_id   = threadIdx.x / warp_size;
 
   // assume one segment per warp. TODO: stride over warps
   // TODO: check if segment_id < num_segments
   auto const num_segments = segment_offsets.size() - 1;
-  auto const segment_id = blockIdx.x * (blockDim.x / warp_size) + warp_id;
+  auto const segment_id   = blockIdx.x * (blockDim.x / warp_size) + warp_id;
   if (segment_id < num_segments) {
     auto const destination = destinations[segment_id];
-    auto source = sources.subspan(segment_offsets[segment_id], segment_offsets[segment_id + 1] - segment_offsets[segment_id]);
-    auto source_begin_bits = source_begin_bitss.subspan(segment_offsets[segment_id], segment_offsets[segment_id + 1] - segment_offsets[segment_id]);
+    auto source            = sources.subspan(segment_offsets[segment_id],
+                                  segment_offsets[segment_id + 1] - segment_offsets[segment_id]);
+    auto source_begin_bits = source_begin_bitss.subspan(
+      segment_offsets[segment_id], segment_offsets[segment_id + 1] - segment_offsets[segment_id]);
 
     auto const last_bit_index  = source_size_bits - 1;
     auto const last_word_index = cudf::word_index(last_bit_index);
@@ -147,11 +149,12 @@ CUDF_KERNEL void segmented_offset_bitmask_binop(Binop op,
                                      source_begin_bits[0],
                                      source_begin_bits[0] + source_size_bits);
       for (size_type i = 1; i < source.size(); i++) {
-        destination_word = op(destination_word,
-                              detail::get_mask_offset_word(source[i],
-                                                           destination_word_index,
-                                                           source_begin_bits[i],
-                                                           source_begin_bits[i] + source_size_bits));
+        destination_word =
+          op(destination_word,
+             detail::get_mask_offset_word(source[i],
+                                          destination_word_index,
+                                          source_begin_bits[i],
+                                          source_begin_bits[i] + source_size_bits));
       }
 
       if (destination_word_index == last_word_index) {
@@ -246,14 +249,15 @@ size_type inplace_bitmask_binop(Binop op,
 }
 
 template <typename Binop>
-rmm::device_uvector<size_type> inplace_segmented_bitmask_binop(Binop op,
-                                device_span<bitmask_type*> dest_masks,
-                                size_type dest_mask_size,
-                                host_span<bitmask_type const* const> masks,
-                                host_span<size_type const> masks_begin_bits,
-                                size_type mask_size_bits,
-                                host_span<size_type const> segment_offsets,
-                                rmm::cuda_stream_view stream)
+rmm::device_uvector<size_type> inplace_segmented_bitmask_binop(
+  Binop op,
+  device_span<bitmask_type*> dest_masks,
+  size_type dest_mask_size,
+  host_span<bitmask_type const* const> masks,
+  host_span<size_type const> masks_begin_bits,
+  size_type mask_size_bits,
+  host_span<size_type const> segment_offsets,
+  rmm::cuda_stream_view stream)
 {
   CUDF_EXPECTS(
     std::all_of(masks_begin_bits.begin(), masks_begin_bits.end(), [](auto b) { return b >= 0; }),
@@ -265,17 +269,25 @@ rmm::device_uvector<size_type> inplace_segmented_bitmask_binop(Binop op,
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref();
   rmm::device_uvector<size_type> d_counters(segment_offsets.size() - 1, stream, mr);
 
-  auto d_masks      = cudf::detail::make_device_uvector_async(masks, stream, mr);
-  auto d_begin_bits = cudf::detail::make_device_uvector_async(masks_begin_bits, stream, mr);
+  auto d_masks           = cudf::detail::make_device_uvector_async(masks, stream, mr);
+  auto d_begin_bits      = cudf::detail::make_device_uvector_async(masks_begin_bits, stream, mr);
   auto d_segment_offsets = cudf::detail::make_device_uvector_async(segment_offsets, stream, mr);
 
   auto constexpr block_size = 256;
-  auto constexpr warps_per_block = util::div_rounding_up_safe<int>(block_size, cudf::detail::warp_size);
-  auto const num_blocks = util::div_rounding_up_safe<int>(segment_offsets.size() - 1, warps_per_block);
-  //std::printf("num_blocks = %d, block_size = %d\n", num_blocks, block_size);
-  segmented_offset_bitmask_binop
-    <<<num_blocks, block_size, 0, stream.value()>>>(
-      op, dest_masks, dest_mask_size, d_masks, d_begin_bits, mask_size_bits, d_segment_offsets, cudf::device_span<size_type>(d_counters.data(), d_counters.size()));
+  auto constexpr warps_per_block =
+    util::div_rounding_up_safe<int>(block_size, cudf::detail::warp_size);
+  auto const num_blocks =
+    util::div_rounding_up_safe<int>(segment_offsets.size() - 1, warps_per_block);
+  // std::printf("num_blocks = %d, block_size = %d\n", num_blocks, block_size);
+  segmented_offset_bitmask_binop<<<num_blocks, block_size, 0, stream.value()>>>(
+    op,
+    dest_masks,
+    dest_mask_size,
+    d_masks,
+    d_begin_bits,
+    mask_size_bits,
+    d_segment_offsets,
+    cudf::device_span<size_type>(d_counters.data(), d_counters.size()));
   CUDF_CHECK_CUDA(stream.value());
   return d_counters;
 }
