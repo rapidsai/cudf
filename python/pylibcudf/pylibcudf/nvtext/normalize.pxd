@@ -10,8 +10,6 @@ cdef class CharacterNormalizer:
 
 cpdef Column normalize_spaces(Column input)
 
-cpdef Column characters_normalize(Column input, bool do_lower_case)
-
 cpdef Column normalize_characters(
   Column input,
   CharacterNormalizer normalizer

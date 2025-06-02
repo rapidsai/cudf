@@ -394,6 +394,7 @@ files:
       - test_python_common
       - test_python_cudf_common
       - test_python_cudf
+      - test_python_narwhals
       - depends_on_cudf
       - depends_on_cudf_polars
       - depends_on_narwhals
@@ -831,7 +832,7 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - polars>=1.25,<1.29
+          - polars>=1.25,<1.31
   run_cudf_polars_experimental:
     common:
       - output_types: [conda, requirements, pyproject]
@@ -1017,6 +1018,14 @@ dependencies:
         packages:
           - dask-cuda==25.8.*,>=0.0.0a0
           - *numpy
+  test_python_narwhals:
+    common:
+      - output_types: [conda, requirements, pyproject]
+        packages:
+          - pip:
+              - pytest-env
+              - sqlframe
+              - ibis-framework[duckdb]
   depends_on_libcudf:
     common:
       - output_types: conda
@@ -1263,4 +1272,4 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - narwhals==1.33
+          - narwhals==1.41
