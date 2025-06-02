@@ -13443,6 +13443,7 @@ NODEIDS_THAT_FLAKY_XFAIL_WITH_CUDF_PANDAS = {
     "tests/generic/test_finalize.py::test_finalize_called[between_time', '12:00', '13:001]",
     "tests/generic/test_finalize.py::test_finalize_called[last', '3D0]",
     "tests/generic/test_finalize.py::test_finalize_called[last', '3D1]",
+    "tests/generic/test_finalize.py::test_finalize_called[to_period]",
 }
 
 
