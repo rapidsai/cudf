@@ -23,8 +23,6 @@
 #include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/table_utilities.hpp>
 
-#include <cudf/utilities/memory_resource.hpp>
-
 #include <fstream>
 #include <string>
 #include <vector>
