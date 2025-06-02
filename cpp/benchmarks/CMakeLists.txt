@@ -15,7 +15,7 @@
 find_package(Threads REQUIRED)
 
 add_library(cudf_datagen STATIC common/generate_input.cu)
-target_compile_features(cudf_datagen PUBLIC cxx_std_17 cuda_std_17)
+target_compile_features(cudf_datagen PUBLIC cxx_std_20 cuda_std_20)
 
 target_compile_options(
   cudf_datagen PUBLIC "$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_FLAGS}>"
@@ -40,7 +40,7 @@ add_library(
   common/ndsh_data_generator/ndsh_data_generator.cpp common/ndsh_data_generator/table_helpers.cpp
   common/ndsh_data_generator/random_column_generator.cu
 )
-target_compile_features(ndsh_data_generator PUBLIC cxx_std_17 cuda_std_17)
+target_compile_features(ndsh_data_generator PUBLIC cxx_std_20 cuda_std_20)
 
 target_compile_options(
   ndsh_data_generator PUBLIC "$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_FLAGS}>"
@@ -90,11 +90,11 @@ function(ConfigureBench CMAKE_BENCH_NAME)
     ${CMAKE_BENCH_NAME}
     PROPERTIES RUNTIME_OUTPUT_DIRECTORY "$<BUILD_INTERFACE:${CUDF_BINARY_DIR}/benchmarks>"
                INSTALL_RPATH "\$ORIGIN/../../../lib"
-               CXX_STANDARD 17
+               CXX_STANDARD 20
                CXX_STANDARD_REQUIRED ON
                # For std:: support of __int128_t. Can be removed once using cuda::std
                CXX_EXTENSIONS ON
-               CUDA_STANDARD 17
+               CUDA_STANDARD 20
                CUDA_STANDARD_REQUIRED ON
   )
   target_compile_definitions(

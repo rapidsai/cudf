@@ -25,7 +25,7 @@ def test_fill(pa_col):
         plc.Column.from_arrow(pa_col),
         1,
         3,
-        plc.interop.from_arrow(pa.scalar(5)),
+        plc.Scalar.from_arrow(pa.scalar(5)),
     )
     expect = pa.array([2, 5, 5, 7, 11])
     assert_column_eq(result, expect)
@@ -37,7 +37,7 @@ def test_fill_in_place(pa_col):
         result,
         1,
         3,
-        plc.interop.from_arrow(pa.scalar(5)),
+        plc.Scalar.from_arrow(pa.scalar(5)),
     )
     expect = pa.array([2, 5, 5, 7, 11])
     assert_column_eq(result, expect)
@@ -45,8 +45,8 @@ def test_fill_in_place(pa_col):
 
 def test_sequence():
     size = 5
-    init_scalar = plc.interop.from_arrow(pa.scalar(10))
-    step_scalar = plc.interop.from_arrow(pa.scalar(2))
+    init_scalar = plc.Scalar.from_arrow(pa.scalar(10))
+    step_scalar = plc.Scalar.from_arrow(pa.scalar(2))
     result = plc.filling.sequence(
         size,
         init_scalar,
@@ -75,9 +75,7 @@ def test_repeat_with_count_column(pa_table):
 def test_calendrical_month_sequence():
     n = 5
     init_date = datetime(2020, 1, 31)
-    init = plc.interop.from_arrow(
-        pa.scalar(init_date, type=pa.timestamp("ms"))
-    )
+    init = plc.Scalar.from_arrow(pa.scalar(init_date, type=pa.timestamp("ms")))
     months = 1
     result = plc.filling.calendrical_month_sequence(n, init, months)
     expected_dates = [

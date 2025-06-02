@@ -23,7 +23,7 @@ def test_filter_characters_of_type():
     got = plc.strings.char_types.filter_characters_of_type(
         plc.Column.from_arrow(pa_array),
         plc.strings.char_types.StringCharacterTypes.ALPHANUM,
-        plc.interop.from_arrow(pa.scalar(" ")),
+        plc.Scalar.from_arrow(pa.scalar(" ")),
         plc.strings.char_types.StringCharacterTypes.ALL_TYPES,
     )
     expect = pc.replace_substring(pa_array, "A", " ")

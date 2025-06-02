@@ -36,17 +36,11 @@ python -m pytest \
 
 # test_dtypes: With cudf.pandas loaded, to_pandas() preserves Arrow dtypes like list and struct, so pandas
 # columns aren't object anymore. The test expects object, causing a mismatch.
-TEST_THAT_NEED_NARWHALS_FIX=" \
-test_dtypes \
-"
-
-# Temporarily skipping these tests in 25.04 and will unskip them in 25.06, which will support Polars 1.26.
-# Will also prioritize https://github.com/rapidsai/cudf/issues/18191, which will switch us to testing against
-# Narwhals tags instead of the "stable" branch for 25.06. That change will allow us to require all
-# Narwhals tests to pass consistently for supported versions.
-TEMPORARILY_SKIP=" \
-test_rolling_std_expr_lazy_ungrouped or \
-test_rolling_var_expr_lazy_ungrouped \
+# test_nan: Narwhals expect this test to fail, but as of polars 1.30 we raise a RuntimeError,
+# not polars ComputeError. So the test is looking for the wrong error and fails.
+TESTS_THAT_NEED_NARWHALS_FIX_FOR_CUDF_POLARS=" \
+test_dtypes or \
+test_nan \
 "
 
 rapids-logger "Run narwhals tests for cuDF Polars"
@@ -54,7 +48,7 @@ NARWHALS_POLARS_GPU=1 python -m pytest \
     --cache-clear \
     --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf-polars-narwhals.xml" \
     -k "not ( \
-        ${TEMPORARILY_SKIP} \
+        ${TESTS_THAT_NEED_NARWHALS_FIX_FOR_CUDF_POLARS} \
     )" \
     --numprocesses=8 \
     --dist=worksteal \
@@ -84,6 +78,12 @@ test_to_arrow_with_nulls or \
 test_pandas_object_series \
 "
 
+# test_dtypes: With cudf.pandas loaded, to_pandas() preserves Arrow dtypes like list and struct, so pandas
+# columns aren't object anymore. The test expects object, causing a mismatch.
+TESTS_THAT_NEED_NARWHALS_FIX_FOR_CUDF_PANDAS=" \
+test_dtypes \
+"
+
 NARWHALS_DEFAULT_CONSTRUCTORS=pandas python -m pytest \
     -p cudf.pandas \
     --cache-clear \
@@ -91,7 +91,7 @@ NARWHALS_DEFAULT_CONSTRUCTORS=pandas python -m pytest \
     -k "not ( \
         ${TESTS_THAT_NEED_CUDF_FIX} or \
         ${TESTS_TO_ALWAYS_SKIP} or \
-        ${TEST_THAT_NEED_NARWHALS_FIX} \
+        ${TESTS_THAT_NEED_NARWHALS_FIX_FOR_CUDF_PANDAS} \
     )" \
     --numprocesses=8 \
     --dist=worksteal

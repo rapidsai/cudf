@@ -76,7 +76,7 @@ def test_from_list(shape, dtype_info):
     expect = pa.array(data, type=expect_type)
 
     got = plc.Column.from_iterable_of_py(
-        data, dtype=plc.interop.from_arrow(pa_type)
+        data, dtype=plc.DataType.from_arrow(pa_type)
     )
 
     assert_column_eq(expect, got)
@@ -130,7 +130,7 @@ def test_from_zero_dimensional_list_with_dtype():
 def test_from_builtin_iterables(factory, pa_type):
     materialized = list(factory())
     got = plc.Column.from_iterable_of_py(
-        iter(materialized), dtype=plc.interop.from_arrow(pa_type)
+        iter(materialized), dtype=plc.DataType.from_arrow(pa_type)
     )
     expect = pa.array(materialized, type=pa_type)
     assert_column_eq(expect, got)
