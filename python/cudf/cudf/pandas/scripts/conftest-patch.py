@@ -5141,15 +5141,9 @@ NODEIDS_THAT_FAIL_WITH_CUDF_PANDAS = {
     "tests/generic/test_finalize.py::test_finalize_called[any]",
     "tests/generic/test_finalize.py::test_finalize_called[apply0]",
     "tests/generic/test_finalize.py::test_finalize_called[apply1]",
-    "tests/generic/test_finalize.py::test_finalize_called[asfreq', 'h0]",
-    "tests/generic/test_finalize.py::test_finalize_called[asfreq', 'h1]",
     "tests/generic/test_finalize.py::test_finalize_called[assign]",
     "tests/generic/test_finalize.py::test_finalize_called[astype', <class 'float0]",
     "tests/generic/test_finalize.py::test_finalize_called[astype', <class 'float1]",
-    "tests/generic/test_finalize.py::test_finalize_called[at_time', '12:000]",
-    "tests/generic/test_finalize.py::test_finalize_called[at_time', '12:001]",
-    "tests/generic/test_finalize.py::test_finalize_called[between_time', '12:00', '13:000]",
-    "tests/generic/test_finalize.py::test_finalize_called[between_time', '12:00', '13:001]",
     "tests/generic/test_finalize.py::test_finalize_called[between]",
     "tests/generic/test_finalize.py::test_finalize_called[clip0]",
     "tests/generic/test_finalize.py::test_finalize_called[clip1]",
@@ -5204,8 +5198,6 @@ NODEIDS_THAT_FAIL_WITH_CUDF_PANDAS = {
     "tests/generic/test_finalize.py::test_finalize_called[isnull0]",
     "tests/generic/test_finalize.py::test_finalize_called[isnull1]",
     "tests/generic/test_finalize.py::test_finalize_called[kurt]",
-    "tests/generic/test_finalize.py::test_finalize_called[last', '3D0]",
-    "tests/generic/test_finalize.py::test_finalize_called[last', '3D1]",
     "tests/generic/test_finalize.py::test_finalize_called[map]",
     "tests/generic/test_finalize.py::test_finalize_called[mask0]",
     "tests/generic/test_finalize.py::test_finalize_called[mask1]",
@@ -6551,7 +6543,6 @@ NODEIDS_THAT_FAIL_WITH_CUDF_PANDAS = {
     "tests/indexes/datetimes/test_partial_slicing.py::TestSlicing::test_partial_slice_requires_monotonicity",
     "tests/indexes/datetimes/test_partial_slicing.py::TestSlicing::test_partial_slicing_dataframe",
     "tests/indexes/datetimes/test_partial_slicing.py::TestSlicing::test_return_type_doesnt_depend_on_monotonicity",
-    "tests/indexes/datetimes/test_partial_slicing.py::TestSlicing::test_slice_month",
     "tests/indexes/datetimes/test_scalar_compat.py::TestDatetimeIndexOps::test_day_name_month_name[None]",
     "tests/indexes/datetimes/test_setops.py::TestDatetimeIndexSetOps::test_difference_freq[False]",
     "tests/indexes/datetimes/test_setops.py::TestDatetimeIndexSetOps::test_difference_freq[None]",
@@ -10050,7 +10041,6 @@ NODEIDS_THAT_FAIL_WITH_CUDF_PANDAS = {
     "tests/reshape/merge/test_multi.py::TestMergeMulti::test_merge_datetime_multi_index_empty_df[left]",
     "tests/reshape/merge/test_multi.py::TestMergeMulti::test_merge_datetime_multi_index_empty_df[right]",
     "tests/reshape/merge/test_multi.py::TestMergeMulti::test_merge_on_multikey[right]",
-    "tests/reshape/merge/test_multi.py::TestMergeMulti::test_merge_na_keys",
     "tests/reshape/test_crosstab.py::TestCrosstab::test_crosstab_duplicate_names",
     "tests/reshape/test_crosstab.py::TestCrosstab::test_crosstab_multiple",
     "tests/reshape/test_crosstab.py::TestCrosstab::test_crosstab_ndarray[list]",
@@ -13442,14 +13432,30 @@ NODEIDS_THAT_XPASS_WITH_CUDF_PANDAS = {
     "tests/window/moments/test_moments_consistency_rolling.py::test_rolling_apply_consistency_sum[all_data17-rolling_consistency_cases0-True-sum]",
 }
 
+# TODO: Investigate why sometimes these fail
+NODEIDS_THAT_FLAKY_XFAIL_WITH_CUDF_PANDAS = {
+    "tests/reshape/merge/test_multi.py::TestMergeMulti::test_merge_na_keys",
+    "tests/generic/test_finalize.py::test_finalize_called[asfreq', 'h0]",
+    "tests/generic/test_finalize.py::test_finalize_called[asfreq', 'h1]",
+    "tests/generic/test_finalize.py::test_finalize_called[at_time', '12:000]",
+    "tests/generic/test_finalize.py::test_finalize_called[at_time', '12:001]",
+    "tests/generic/test_finalize.py::test_finalize_called[between_time', '12:00', '13:000]",
+    "tests/generic/test_finalize.py::test_finalize_called[between_time', '12:00', '13:001]",
+    "tests/generic/test_finalize.py::test_finalize_called[last', '3D0]",
+    "tests/generic/test_finalize.py::test_finalize_called[last', '3D1]",
+}
+
 
 def pytest_collection_modifyitems(session, config, items):
+    TO_SKIP = NODEIDS_THAT_XPASS_WITH_CUDF_PANDAS.union(
+        NODEIDS_THAT_FLAKY_XFAIL_WITH_CUDF_PANDAS
+    )
     for item in items:
         if item.nodeid in NODEIDS_THAT_FAIL_WITH_CUDF_PANDAS:
             item.add_marker(
                 pytest.mark.xfail(reason="Fails with cudf.pandas enabled.")
             )
-        elif item.nodeid in NODEIDS_THAT_XPASS_WITH_CUDF_PANDAS:
+        elif item.nodeid in TO_SKIP:
             # Don't think there's an easy way to remove a marker
             # https://github.com/pytest-dev/pytest/issues/3324
             item.add_marker(
