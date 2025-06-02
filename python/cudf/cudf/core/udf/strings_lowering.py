@@ -30,12 +30,6 @@ from cudf.core.udf.strings_typing import (
 _STR_VIEW_PTR = types.CPointer(string_view)
 _UDF_STRING_PTR = types.CPointer(udf_string)
 
-_UDF_STR_PTR_LLVM_TY = ir.PointerType(
-    default_manager[udf_string].get_value_type()
-)
-_STR_VIEW_PTR_LLVM_TY = ir.PointerType(
-    default_manager[string_view].get_value_type()
-)
 
 # CUDA function declarations
 # read-only (input is a string_view, output is a fixed with type)

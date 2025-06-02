@@ -3501,6 +3501,7 @@ class IndexedFrame(Frame):
                 kernel.forall(len(self))(*launch_args)
         except Exception as e:
             raise RuntimeError("UDF kernel execution failed.") from e
+
         col = _post_process_output_col(ans_col, retty)
 
         col.set_base_mask(ans_mask.as_mask())
