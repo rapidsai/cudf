@@ -269,6 +269,14 @@ cudf::size_type inplace_bitmask_and(device_span<bitmask_type> dest_mask,
                                     size_type mask_size_bits,
                                     rmm::cuda_stream_view stream);
 
+rmm::device_uvector<size_type> inplace_segmented_bitmask_and(device_span<bitmask_type*> dest_masks,
+                                    size_type dest_mask_size,
+                                    host_span<bitmask_type const* const> masks,
+                                    host_span<size_type const> masks_begin_bits,
+                                    size_type mask_size_bits,
+                                    host_span<size_type const> segment_offsets,
+                                    rmm::cuda_stream_view stream);
+
 /**
  * @brief Recursively set valid null masks for all children.
  *

@@ -319,7 +319,7 @@ std::unique_ptr<column> make_column(column_buffer_base<string_policy>& buffer,
     if (col->nullable()) {
       auto col_contents = col->release();
       for (auto& child : col_contents.children) {
-        child = structs::detail::superimpose_nulls(
+        child = structs::detail::superimpose_nulls_opt(
           static_cast<bitmask_type const*>(col_contents.null_mask->data()),
           buffer._null_count,
           std::move(child),
