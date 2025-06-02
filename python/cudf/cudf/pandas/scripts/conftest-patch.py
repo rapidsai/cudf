@@ -5277,8 +5277,6 @@ NODEIDS_THAT_FAIL_WITH_CUDF_PANDAS = {
     "tests/generic/test_finalize.py::test_finalize_called[transpose]",
     "tests/generic/test_finalize.py::test_finalize_called[truncate0]",
     "tests/generic/test_finalize.py::test_finalize_called[truncate1]",
-    "tests/generic/test_finalize.py::test_finalize_called[tz_localize', 'CET0]",
-    r"tests/generic/test_finalize.py::test_finalize_called[tz_localize', 'CET1]",
     "tests/generic/test_finalize.py::test_finalize_called[unstack]",
     "tests/generic/test_finalize.py::test_finalize_called[where0]",
     "tests/generic/test_finalize.py::test_finalize_called[where1]",
@@ -13443,6 +13441,8 @@ NODEIDS_THAT_FLAKY_XFAIL_WITH_CUDF_PANDAS = {
     "tests/generic/test_finalize.py::test_finalize_called[last', '3D0]",
     "tests/generic/test_finalize.py::test_finalize_called[last', '3D1]",
     "tests/generic/test_finalize.py::test_finalize_called[to_period]",
+    "tests/generic/test_finalize.py::test_finalize_called[tz_localize', 'CET0]",
+    "tests/generic/test_finalize.py::test_finalize_called[tz_localize', 'CET1]",
     "tests/indexes/datetimes/test_partial_slicing.py::TestSlicing::test_slice_month",
     "tests/reshape/merge/test_multi.py::TestMergeMulti::test_merge_na_keys",
 }
