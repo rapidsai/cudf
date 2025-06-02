@@ -277,7 +277,6 @@ def _(
         partition_info[right].partitioned_on == ir.right_on
         and partition_info[right].count == output_count
     )
-    evaluate_with_tracing = do_evaluate_with_tracing(ir)
 
     if output_count == 1 or (left_partitioned and right_partitioned):
         # Partition-wise join
@@ -285,7 +284,8 @@ def _(
         right_name = get_key_name(right)
         return {
             key: (
-                evaluate_with_tracing,
+                do_evaluate_with_tracing,
+                type(ir),
                 *ir._non_child_args,
                 (left_name, i),
                 (right_name, i),
@@ -345,7 +345,8 @@ def _(
 
                 inter_key = (inter_name, part_out, j)
                 graph[(inter_name, part_out, j)] = (
-                    evaluate_with_tracing,
+                    do_evaluate_with_tracing,
+                    type(ir),
                     ir.left_on,
                     ir.right_on,
                     ir.options,

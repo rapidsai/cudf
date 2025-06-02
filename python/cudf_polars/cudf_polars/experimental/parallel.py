@@ -227,10 +227,10 @@ def _(
     child_names = [get_key_name(c) for c in ir.children]
     bcast_child = [partition_info[c].count == 1 for c in ir.children]
 
-    traced = do_evaluate_with_tracing(ir)
     return {
         key: (
-            traced,
+            do_evaluate_with_tracing,
+            type(ir),
             *ir._non_child_args,
             *[
                 (child_name, 0 if bcast_child[j] else i)
