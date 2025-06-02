@@ -53,3 +53,8 @@ def test_with_fields(ldf):
 def test_prefix_suffix_fields(ldf, method):
     query = ldf.select(getattr(pl.col("a").name, method)("foo").struct.unnest())
     assert_gpu_result_equal(query)
+
+
+def test_map_field_names(ldf):
+    query = ldf.select(pl.col("a").name.map_fields(lambda x: x.upper()).struct.unnest())
+    assert_ir_translation_raises(query, NotImplementedError)
