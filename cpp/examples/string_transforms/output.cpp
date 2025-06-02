@@ -27,39 +27,55 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
-std::unique_ptr<cudf::column> transform(cudf::table_view const& table)
+cudf::table transform(cudf::table_view const& table)
 {
   auto stream = rmm::cuda_stream_default;
   auto mr     = cudf::get_current_device_resource_ref();
 
   auto udf = R"***(
-  __device__ void email_provider(cudf::string_view* out,
-                                 cudf::string_view const email,
-                                 cudf::string_view const alt)
-  {
-    auto pos = email.find('@');
+__device__ void email_provider(cudf::string_view* out,
+                               cudf::string_view const email,
+                               cudf::string_view const alt)
+{
+  auto at_pos = email.find('@');
 
-    if (pos == cudf::string_view::npos) {
-      *out = alt;
-      return;
-    }
-
-    auto provider_begin = pos + 1;
-    auto provider       = email.substr(provider_begin, email.length() - provider_begin);
-
-    *out = provider;
+  if (at_pos == cudf::string_view::npos) {
+    // malformed email, return alt
+    *out = alt;
+    return;
   }
+
+  auto provider_begin = at_pos + 1;
+
+  auto provider = email.substr(provider_begin, email.length() - provider_begin);
+
+  // find the position of '.' in the provider
+  auto dot_pos = provider.find('.');
+
+  if (dot_pos == cudf::string_view::npos) {
+    // malformed email, return alt
+    *out = alt;
+  } else {
+    // return only the part before the dot
+    *out = provider.substr(0, dot_pos);
+  }
+}
   )***";
 
   // a column with size 1 is considered a scalar
   auto alt = cudf::make_column_from_scalar(
     cudf::string_scalar(cudf::string_view{"(unknown)", 9}, true, stream, mr), 1, stream, mr);
 
-  return cudf::transform({table.column(1), *alt},
-                         udf,
-                         cudf::data_type{cudf::type_id::STRING},
-                         false,
-                         std::nullopt,
-                         stream,
-                         mr);
+  auto providers = cudf::transform({table.column(1), *alt},
+                                   udf,
+                                   cudf::data_type{cudf::type_id::STRING},
+                                   false,
+                                   std::nullopt,
+                                   stream,
+                                   mr);
+
+  std::vector<std::unique_ptr<cudf::column>> output_columns;
+  output_columns.emplace_back(std::move(providers));
+
+  return cudf::table(std::move(output_columns));
 }

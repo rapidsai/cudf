@@ -27,7 +27,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 
-std::unique_ptr<cudf::column> transform(cudf::table_view const& table)
+cudf::table transform(cudf::table_view const& table)
 {
   auto stream = rmm::cuda_stream_default;
   auto mr     = cudf::get_current_device_resource_ref();
@@ -42,15 +42,20 @@ std::unique_ptr<cudf::column> transform(cudf::table_view const& table)
   auto extension_symbol =
     cudf::make_column_from_scalar(cudf::string_scalar("-", true, stream, mr), num_rows, stream, mr);
 
-  return cudf::strings::concatenate(cudf::table_view({*country_symbol,
-                                                      country_code,
-                                                      *extension_symbol,
-                                                      area_code,
-                                                      *extension_symbol,
-                                                      phone_number}),
-                                    cudf::string_scalar("", true, stream, mr),
-                                    cudf::string_scalar("", false, stream, mr),
-                                    cudf::strings::separator_on_nulls::YES,
-                                    stream,
-                                    mr);
+  auto formatted = cudf::strings::concatenate(cudf::table_view({*country_symbol,
+                                                                country_code,
+                                                                *extension_symbol,
+                                                                area_code,
+                                                                *extension_symbol,
+                                                                phone_number}),
+                                              cudf::string_scalar("", true, stream, mr),
+                                              cudf::string_scalar("", false, stream, mr),
+                                              cudf::strings::separator_on_nulls::YES,
+                                              stream,
+                                              mr);
+
+  std::vector<std::unique_ptr<cudf::column>> output_columns;
+  output_columns.emplace_back(std::move(formatted));
+
+  return cudf::table(std::move(output_columns));
 }

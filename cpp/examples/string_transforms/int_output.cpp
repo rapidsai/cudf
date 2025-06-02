@@ -22,7 +22,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
-std::unique_ptr<cudf::column> transform(cudf::table_view const& table)
+cudf::table transform(cudf::table_view const& table)
 {
   auto stream = rmm::cuda_stream_default;
   auto mr     = cudf::get_current_device_resource_ref();
@@ -45,11 +45,16 @@ std::unique_ptr<cudf::column> transform(cudf::table_view const& table)
  }
    )***";
 
-  return cudf::transform({table.column(0), table.column(1)},
-                         udf,
-                         cudf::data_type{cudf::type_id::UINT16},
-                         false,
-                         std::nullopt,
-                         stream,
-                         mr);
+  auto result = cudf::transform({table.column(0), table.column(1)},
+                                udf,
+                                cudf::data_type{cudf::type_id::UINT16},
+                                false,
+                                std::nullopt,
+                                stream,
+                                mr);
+
+  std::vector<std::unique_ptr<cudf::column>> output_columns;
+  output_columns.emplace_back(std::move(result));
+
+  return cudf::table(std::move(output_columns));
 }

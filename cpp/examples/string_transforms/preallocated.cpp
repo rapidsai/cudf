@@ -27,7 +27,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 
-std::unique_ptr<cudf::column> transform(cudf::table_view const& table)
+cudf::table transform(cudf::table_view const& table)
 {
   auto stream = rmm::cuda_stream_default;
   auto mr     = cudf::get_current_device_resource_ref();
@@ -77,11 +77,16 @@ __device__ void e164_format(void* scratch,
   auto size = cudf::make_column_from_scalar(
     cudf::numeric_scalar<int32_t>(maximum_size, true, stream, mr), 1, stream, mr);
 
-  return cudf::transform({table.column(2), table.column(3), table.column(4), *size},
-                         udf,
-                         cudf::data_type{cudf::type_id::STRING},
-                         false,
-                         scratch.data(),
-                         stream,
-                         mr);
+  auto formatted = cudf::transform({table.column(2), table.column(3), table.column(4), *size},
+                                   udf,
+                                   cudf::data_type{cudf::type_id::STRING},
+                                   false,
+                                   scratch.data(),
+                                   stream,
+                                   mr);
+
+  std::vector<std::unique_ptr<cudf::column>> output_columns;
+  output_columns.emplace_back(std::move(formatted));
+
+  return cudf::table(std::move(output_columns));
 }

@@ -42,7 +42,7 @@
  * @param table Table to be transformed
  * @return Transformed result
  */
-std::unique_ptr<cudf::column> transform(cudf::table_view const& table);
+cudf::table transform(cudf::table_view const& table);
 
 /**
  * @brief Create CUDA memory resource
@@ -113,8 +113,6 @@ int main(int argc, char const** argv)
 
   auto table_view = input->view();
 
-  // TODO(lamarrr): make the transform return a table instead since the data is now sampled
-
   stream.synchronize();
 
   auto start  = std::chrono::steady_clock::now();
@@ -125,12 +123,7 @@ int main(int argc, char const** argv)
 
   std::chrono::duration<double> elapsed = std::chrono::steady_clock::now() - start;
 
-  std::vector<std::unique_ptr<cudf::column>> output_columns;
-  output_columns.emplace_back(std::move(result));
-
-  auto output = cudf::table(std::move(output_columns));
-
-  write_csv(output, out_csv);
+  write_csv(result, out_csv);
 
   std::cout << "Wall time: " << elapsed.count() << " seconds\n"
             << "Table: " << table_view.num_rows() << " rows " << table_view.num_columns()
