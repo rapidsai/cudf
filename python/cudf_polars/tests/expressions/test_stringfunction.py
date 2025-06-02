@@ -470,3 +470,11 @@ def test_string_to_numeric_invalid(numeric_type):
 def test_string_join(ldf, ignore_nulls, delimiter):
     q = ldf.select(pl.col("a").str.join(delimiter, ignore_nulls=ignore_nulls))
     assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize("width", [1, 0, 999, -1, None])
+@pytest.mark.parametrize("char", ["*", "a", " ", "", None])
+def test_string_pad(width, char):
+    df = pl.LazyFrame({"a": ["abc", "defg", "hij"]})
+    q = df.select(pl.col("a").str.pad_start(width, char))
+    assert_gpu_result_equal(q)

@@ -114,6 +114,8 @@ class StringFunction(Expr):
             StringFunction.Name.Contains,
             StringFunction.Name.EndsWith,
             StringFunction.Name.Lowercase,
+            StringFunction.Name.PadEnd,
+            StringFunction.Name.PadStart,
             StringFunction.Name.Replace,
             StringFunction.Name.ReplaceMany,
             StringFunction.Name.Slice,
@@ -351,6 +353,14 @@ class StringFunction(Expr):
             column, target, repl = columns
             return Column(
                 plc.strings.replace.replace_multiple(column.obj, target.obj, repl.obj)
+            )
+        elif self.name is StringFunction.Name.PadStart:
+            (column,) = columns
+            width, char = self.options
+            return Column(
+                plc.strings.padding.pad(
+                    column.obj, width, plc.strings.SideType.LEFT, char
+                )
             )
         raise NotImplementedError(
             f"StringFunction {self.name}"
