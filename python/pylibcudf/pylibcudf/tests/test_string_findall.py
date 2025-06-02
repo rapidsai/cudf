@@ -11,7 +11,7 @@ def test_findall():
     arr = pa.array(["bunny", "rabbit", "hare", "dog"])
     pattern = "[ab]"
     got = plc.strings.findall.findall(
-        plc.Column(arr),
+        plc.Column.from_arrow(arr),
         plc.strings.regex_program.RegexProgram.create(
             pattern, plc.strings.regex_flags.RegexFlags.DEFAULT
         ),
@@ -27,7 +27,7 @@ def test_find_re():
     arr = pa.array(["bunny", "rabbit", "hare", "dog"])
     pattern = "[eb]"
     got = plc.strings.findall.find_re(
-        plc.Column(arr),
+        plc.Column.from_arrow(arr),
         plc.strings.regex_program.RegexProgram.create(
             pattern, plc.strings.regex_flags.RegexFlags.DEFAULT
         ),

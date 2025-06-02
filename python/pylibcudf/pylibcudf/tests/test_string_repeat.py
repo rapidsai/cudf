@@ -12,8 +12,10 @@ import pylibcudf as plc
 def test_repeat_strings(repeats):
     arr = pa.array(["1", None])
     got = plc.strings.repeat.repeat_strings(
-        plc.Column(arr),
-        plc.Column(repeats) if not isinstance(repeats, int) else repeats,
+        plc.Column.from_arrow(arr),
+        plc.Column.from_arrow(repeats)
+        if not isinstance(repeats, int)
+        else repeats,
     )
     expect = pa.array(pc.binary_repeat(arr, repeats))
     assert_column_eq(expect, got)
