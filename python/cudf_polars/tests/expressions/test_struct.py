@@ -32,3 +32,8 @@ def test_unnest(ldf):
 def test_json_encode(ldf):
     query = ldf.select(pl.col("a").struct.json_encode())
     assert_gpu_result_equal(query)
+
+
+def test_rename_fields(ldf):
+    query = ldf.select(pl.col("a").struct.rename_fields(["1", "2"]).struct.unnest())
+    assert_gpu_result_equal(query)
