@@ -16,6 +16,7 @@ import cudf_polars.experimental.join
 import cudf_polars.experimental.select
 import cudf_polars.experimental.shuffle
 import cudf_polars.experimental.sort  # noqa: F401
+from cudf_polars.dsl import expr
 from cudf_polars.dsl.ir import (
     IR,
     Cache,
@@ -27,7 +28,12 @@ from cudf_polars.dsl.ir import (
     Union,
 )
 from cudf_polars.dsl.traversal import CachingVisitor, traversal
-from cudf_polars.experimental.base import PartitionInfo, get_key_name
+from cudf_polars.experimental.base import (
+    ColumnStats,
+    PartitionInfo,
+    TableStats,
+    get_key_name,
+)
 from cudf_polars.experimental.dispatch import (
     generate_ir_tasks,
     lower_ir_node,
@@ -257,7 +263,7 @@ def _(
 
     # Return reconstructed node and partition-info dict
     new_node = ir.reconstruct(children)
-    partition_info[new_node] = PartitionInfo(count=count)
+    partition_info[new_node] = PartitionInfo.new(new_node, partition_info, count=count)
     return new_node, partition_info
 
 
@@ -306,21 +312,54 @@ def _lower_ir_pwise(
             msg=f"Class {type(ir)} does not support children with mismatched partition counts.",
         )
 
-    # Preserve child partition_info if possible
-    if preserve_partitioning and len(children) == 1:
-        partition = partition_info[children[0]]
-    else:
-        partition = PartitionInfo(count=max(counts))
-
     # Return reconstructed node and partition-info dict
     new_node = ir.reconstruct(children)
-    partition_info[new_node] = partition
+    partition_info[new_node] = PartitionInfo.new(
+        new_node,
+        partition_info,
+        preserve_partitioned_on=preserve_partitioning,
+    )
     return new_node, partition_info
 
 
 _lower_ir_pwise_preserve = partial(_lower_ir_pwise, preserve_partitioning=True)
+
+
+@lower_ir_node.register(Filter)
+def _(
+    ir: Filter, rec: LowerIRTransformer
+) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+    new_node, partition_info = _lower_ir_pwise_preserve(ir, rec)
+
+    if (tstats := partition_info[new_node].table_stats) is not None:
+        # Guess that filtering removes 20% of the rows.
+        partition_info[new_node].table_stats = TableStats(
+            tstats.column_stats, max(1, int(tstats.num_rows * 0.8))
+        )
+    return new_node, partition_info
+
+
+@lower_ir_node.register(HStack)
+def _(
+    ir: HStack, rec: LowerIRTransformer
+) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+    new_node, partition_info = _lower_ir_pwise(ir, rec)
+
+    if (tstats := partition_info[new_node].table_stats) is not None:
+        extra_cstats = {}
+        for e in ir.columns:
+            if (
+                isinstance(e.value, expr.Col) and e.value.name in tstats.column_stats
+            ):  # pragma: no cover; TODO: Try to cover this
+                extra_cstats[e.name] = tstats.column_stats[e.value.name]
+            else:
+                extra_cstats[e.name] = ColumnStats.new(e.value.dtype, element_size=8)
+        partition_info[new_node].table_stats = TableStats(
+            tstats.column_stats | extra_cstats, tstats.num_rows
+        )
+    return new_node, partition_info
+
+
 lower_ir_node.register(Projection, _lower_ir_pwise_preserve)
-lower_ir_node.register(Filter, _lower_ir_pwise_preserve)
 lower_ir_node.register(Cache, _lower_ir_pwise)
-lower_ir_node.register(HStack, _lower_ir_pwise)
 lower_ir_node.register(HConcat, _lower_ir_pwise)

@@ -4,36 +4,251 @@
 
 from __future__ import annotations
 
+import dataclasses
+import itertools
+import operator
 from typing import TYPE_CHECKING
 
+import pylibcudf as plc
+
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Iterator, MutableMapping, Sequence
+
+    from typing_extensions import Self
 
     from cudf_polars.dsl.expr import NamedExpr
+    from cudf_polars.dsl.ir import IR
     from cudf_polars.dsl.nodebase import Node
+
+
+@dataclasses.dataclass(frozen=True)
+class ColumnStats:
+    """Estimated column statistics."""
+
+    dtype: plc.DataType
+    """Column data type."""
+    unique_count: int | None
+    """Estimated unique count for this column."""
+    unique_fraction: float | None
+    """Estimated unique fraction for this column."""
+    element_size: int
+    """Estimated byte size for each element of this column."""
+    file_size: int | None
+    """Estimated file size for this column."""
+
+    @classmethod
+    def new(
+        cls,
+        dtype: plc.DataType,
+        *,
+        unique_count: int | None = None,
+        unique_fraction: float | None = None,
+        element_size: int | None = None,
+        file_size: int | None = None,
+    ) -> Self:
+        """
+        Create a new ColumnStats object.
+
+        Parameters
+        ----------
+        dtype
+            Column datatype.
+        unique_count
+            Estimated unique count for this column.
+            Default is None.
+        unique_fraction
+            Estimated unique fraction for this column.
+            Default is None.
+        element_size
+            Estimated byte size for each element of this column.
+            Default is the size of ``dtype``.
+        file_size
+            Estimated file size for this column.
+            Default is None.
+        """
+        element_size = (
+            plc.types.size_of(dtype) if element_size is None else element_size
+        )
+        return cls(dtype, unique_count, unique_fraction, element_size, file_size)
+
+    @classmethod
+    def merge(cls, *stats: ColumnStats) -> Self:
+        """
+        Merge column stats that purportedly represent the same column.
+
+        Notes
+        -----
+        Merged ColumnStats will assume the maximum value for each attribute.
+        """
+        assert len(stats) > 0, "Expected one or more ColumnStats."
+        assert all(s.dtype == stats[0].dtype for s in stats), "Mismatched dtypes."
+        kwargs = {
+            attr: max(
+                (getattr(s, attr) for s in stats if getattr(s, attr) is not None),
+                default=None,
+            )
+            for attr in ("unique_count", "unique_fraction", "element_size", "file_size")
+        }
+        return cls.new(stats[0].dtype, **kwargs)
+
+
+@dataclasses.dataclass(frozen=True)
+class TableStats:
+    """Estimated table statistics."""
+
+    column_stats: dict[str, ColumnStats]
+    """Estimated column statistics."""
+    num_rows: int
+    """Estimated row count."""
+
+    @classmethod
+    def merge(
+        cls,
+        tables: Sequence[TableStats],
+        num_rows: int | None = None,
+    ) -> Self:
+        """
+        Merge multiple TableStats objects.
+
+        Parameters
+        ----------
+        tables
+            Sequence of TableStats objects to combine into
+            a single TableStats object. Each element
+            of ``tables`` will overwrite the ColumnStats
+            contributions from previous elements if the
+            column names match.
+        num_rows
+            The estimated row-count for the new TableStats
+            object. If nothing is specified, ``num_rows``
+            will be set to the maximum found in ``tables``.
+        """
+        column_stats = cls.merge_column_stats(*(t.column_stats for t in tables))
+        num_rows = max(t.num_rows for t in tables)
+        return cls(column_stats, num_rows)
+
+    @staticmethod
+    def merge_column_stats(*stats: dict[str, ColumnStats]) -> dict[str, ColumnStats]:
+        """Merge column stats dictionaries."""
+        assert len(stats) > 0, "Expected one or more arguments."
+        keyfunc = operator.itemgetter(0)
+        return {
+            name: ColumnStats.merge(*(stats for _, stats in group))
+            for name, group in itertools.groupby(
+                sorted(
+                    itertools.chain.from_iterable(s.items() for s in stats), key=keyfunc
+                ),
+                keyfunc,
+            )
+        }
 
 
 class PartitionInfo:
     """Partitioning information."""
 
-    __slots__ = ("count", "partitioned_on")
+    __slots__ = ("count", "partitioned_on", "table_stats")
     count: int
     """Partition count."""
     partitioned_on: tuple[NamedExpr, ...]
     """Columns the data is hash-partitioned on."""
+    table_stats: TableStats | None
+    """Table statistics (Optional)."""
 
     def __init__(
         self,
         count: int,
         partitioned_on: tuple[NamedExpr, ...] = (),
+        table_stats: TableStats | None = None,
     ):
         self.count = count
         self.partitioned_on = partitioned_on
+        self.table_stats = table_stats
 
     def keys(self, node: Node) -> Iterator[tuple[str, int]]:
         """Return the partitioned keys for a given node."""
         name = get_key_name(node)
         yield from ((name, i) for i in range(self.count))
+
+    @classmethod
+    def new(
+        cls,
+        ir: IR,
+        partition_info: MutableMapping[IR, PartitionInfo],
+        *,
+        count: int | None = None,
+        partitioned_on: tuple[NamedExpr, ...] | None = None,
+        preserve_partitioned_on: bool = False,
+        table_stats: TableStats | None = None,
+    ) -> Self:
+        """
+        Create a new PartitionInfo object.
+
+        Parameters
+        ----------
+        ir
+            The corresponding IR node.
+        partition_info
+            A mapping from unique IR nodes to the associated
+            PartitionInfo object.
+        count
+            The partition count. By default, the partition
+            count will be set to the maximum partition count
+            of ``ir.children``. If ``ir`` has no children,
+            the default partition count is ``1``.
+        partitioned_on
+            Columns the data is hash-partitioned on. This will be
+            copied from a child of ``ir`` if ``preserve_partitioned_on``
+            is set to ``True``.
+        preserve_partitioned_on
+            Whether to copy ``partitioned_on`` from a child of
+            ``ir``. This argument is ignored if ``partitioned_on``
+            is not ``None``, or if there are multiple children
+            with inconsistent ``partitioned_on`` attributes.
+        table_stats
+            Table statistics for ``ir``. By default, these statistics
+            are copied from ``ir.children``. Copied statistics will
+            include all column statistics, and ``num_rows`` will
+            be set to the maximum child row-count estimate.
+
+        Returns
+        -------
+        The new PartitionInfo object, and an updated mapping
+        from unique IR nodes to associated PartitionInfo objects.
+
+        Notes
+        -----
+        This function should be used in lieu of ``PartitionInfo()``
+        unless ``ir`` corresponds to a leaf node. This will ensure
+        that table statistics are propagated through the IR graph.
+        """
+        children = ir.children
+        count = count or (
+            max(partition_info[child].count for child in children) if children else 1
+        )
+        if preserve_partitioned_on:
+            if partitioned_on is not None:  # pragma: no cover
+                raise ValueError(
+                    "Cannot specify both preserve_partitioned_on and partitioned_on"
+                )
+            # Inherit partitioned_on
+            partitionining = {
+                partition_info[child].partitioned_on
+                for child in children
+                if partition_info[child].partitioned_on
+            }
+            partitioned_on = partitionining.pop() if len(partitionining) == 1 else ()
+
+        if table_stats is None:
+            # Inherit table statistics
+            child_table_stats: list[TableStats] = []
+            for child in children:
+                stats = partition_info[child].table_stats
+                if stats is not None:
+                    child_table_stats.append(stats)
+            if child_table_stats:
+                table_stats = TableStats.merge(child_table_stats)
+
+        return cls(count, partitioned_on or (), table_stats)
 
 
 def get_key_name(node: Node) -> str:

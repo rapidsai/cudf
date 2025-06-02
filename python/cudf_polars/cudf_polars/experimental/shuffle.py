@@ -235,9 +235,9 @@ def _(
         # Already shuffled
         return new_child, pi
     new_node = ir.reconstruct([new_child])
-    pi[new_node] = PartitionInfo(
-        # Default shuffle preserves partition count
-        count=pi[new_child].count,
+    pi[new_node] = PartitionInfo.new(
+        new_node,
+        pi,
         # Add partitioned_on info
         partitioned_on=ir.keys,
     )

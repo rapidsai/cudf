@@ -13,7 +13,11 @@ from cudf_polars.dsl.expressions.base import Col, NamedExpr
 from cudf_polars.dsl.ir import Distinct
 from cudf_polars.experimental.base import PartitionInfo
 from cudf_polars.experimental.dispatch import lower_ir_node
-from cudf_polars.experimental.utils import _fallback_inform, _lower_ir_fallback
+from cudf_polars.experimental.utils import (
+    _fallback_inform,
+    _get_unique_fractions,
+    _lower_ir_fallback,
+)
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
@@ -29,7 +33,7 @@ def lower_distinct(
     partition_info: MutableMapping[IR, PartitionInfo],
     config_options: ConfigOptions,
     *,
-    cardinality: float | None = None,
+    unique_fraction: float | None = None,
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     """
     Lower a Distinct IR into partition-wise stages.
@@ -46,8 +50,8 @@ def lower_distinct(
         associated partitioning information.
     config_options
         GPUEngine configuration options.
-    cardinality
-        Cardinality factor to use for algorithm selection.
+    unique_fraction
+        Fractional unique count to use for algorithm selection.
 
     Returns
     -------
@@ -86,8 +90,9 @@ def lower_distinct(
             )
         if not shuffled:
             child = Shuffle(child.schema, shuffle_keys, config_options, child)
-            partition_info[child] = PartitionInfo(
-                count=child_count,
+            partition_info[child] = PartitionInfo.new(
+                child,
+                partition_info,
                 partitioned_on=shuffle_keys,
             )
             shuffled = True
@@ -104,14 +109,14 @@ def lower_distinct(
             # partitions. For now, we raise an error to fall back
             # to one partition.
             raise NotImplementedError("Unsupported slice for multiple partitions.")
-    elif cardinality is not None:
-        # Use cardinality to determine partitioningcardinality
-        n_ary = min(max(int(1.0 / cardinality), 2), child_count)
-        output_count = max(int(cardinality * child_count), 1)
+    elif unique_fraction is not None:
+        # Use unique_fraction to determine partitioning
+        n_ary = min(max(int(1.0 / unique_fraction), 2), child_count)
+        output_count = max(int(unique_fraction * child_count), 1)
 
     if output_count > 1 and require_tree_reduction:
         # Need to reduce down to a single partition even
-        # if the cardinality is large.
+        # if unique_fraction is large.
         output_count = 1
         _fallback_inform(
             "Unsupported unique options for multiple partitions.",
@@ -121,23 +126,28 @@ def lower_distinct(
     # Partition-wise unique
     count = child_count
     new_node: IR = ir.reconstruct([child])
-    partition_info[new_node] = PartitionInfo(count=count)
+    partition_info[new_node] = PartitionInfo.new(new_node, partition_info)
 
     if shuffled or output_count == 1:
         # Tree reduction
         while count > output_count:
             new_node = Repartition(new_node.schema, new_node)
             count = max(math.ceil(count / n_ary), output_count)
-            partition_info[new_node] = PartitionInfo(count=count)
+            partition_info[new_node] = PartitionInfo.new(
+                new_node, partition_info, count=count
+            )
             new_node = ir.reconstruct([new_node])
-            partition_info[new_node] = PartitionInfo(count=count)
+            partition_info[new_node] = PartitionInfo.new(new_node, partition_info)
     else:
         # Shuffle
         new_node = Shuffle(new_node.schema, shuffle_keys, config_options, new_node)
-        partition_info[new_node] = PartitionInfo(count=output_count)
+        partition_info[new_node] = PartitionInfo.new(
+            new_node, partition_info, count=output_count
+        )
         new_node = ir.reconstruct([new_node])
-        partition_info[new_node] = PartitionInfo(
-            count=output_count,
+        partition_info[new_node] = PartitionInfo.new(
+            new_node,
+            partition_info,
             partitioned_on=shuffle_keys,
         )
 
@@ -151,24 +161,26 @@ def _(
     # Extract child partitioning
     child, partition_info = rec(ir.children[0])
     config_options = rec.state["config_options"]
-    assert config_options.executor.name == "streaming", (
-        "'in-memory' executor not supported in 'lower_ir_node'"
+
+    subset: frozenset[str] = ir.subset or frozenset(ir.schema)
+    unique_fraction_dict = _get_unique_fractions(
+        child,
+        tuple(subset),
+        partition_info,
+        config_options,
     )
 
-    subset: frozenset = ir.subset or frozenset(ir.schema)
-    cardinality_factor = {
-        c: max(min(f, 1.0), 0.00001)
-        for c, f in config_options.executor.cardinality_factor.items()
-        if c in subset
-    }
-    cardinality = max(cardinality_factor.values()) if cardinality_factor else None
+    unique_fraction = (
+        max(unique_fraction_dict.values()) if unique_fraction_dict else None
+    )
+
     try:
         return lower_distinct(
             ir,
             child,
             partition_info,
             config_options,
-            cardinality=cardinality,
+            unique_fraction=unique_fraction,
         )
     except NotImplementedError as err:
         return _lower_ir_fallback(ir, rec, msg=str(err))

@@ -9,7 +9,7 @@ from functools import reduce
 from typing import TYPE_CHECKING, Any
 
 from cudf_polars.dsl.ir import ConditionalJoin, Join
-from cudf_polars.experimental.base import PartitionInfo, get_key_name
+from cudf_polars.experimental.base import PartitionInfo, TableStats, get_key_name
 from cudf_polars.experimental.dispatch import generate_ir_tasks, lower_ir_node
 from cudf_polars.experimental.repartition import Repartition
 from cudf_polars.experimental.shuffle import Shuffle, _partition_dataframe
@@ -46,7 +46,9 @@ def _maybe_shuffle_frame(
             config_options,
             frame,
         )
-        partition_info[frame] = PartitionInfo(
+        partition_info[frame] = PartitionInfo.new(
+            frame,
+            partition_info,
             count=output_count,
             partitioned_on=on,
         )
@@ -57,6 +59,7 @@ def _make_hash_join(
     ir: Join,
     output_count: int,
     partition_info: MutableMapping[IR, PartitionInfo],
+    table_stats: TableStats | None,
     left: IR,
     right: IR,
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
@@ -86,11 +89,13 @@ def _make_hash_join(
         partitioned_on = ir.left_on
     elif ir.options[0] == "Right":
         partitioned_on = ir.right_on
-    partition_info[ir] = PartitionInfo(
+    partition_info[ir] = PartitionInfo.new(
+        ir,
+        partition_info,
         count=output_count,
         partitioned_on=partitioned_on,
+        table_stats=table_stats,
     )
-
     return ir, partition_info
 
 
@@ -119,9 +124,7 @@ def _should_bcast_join(
 
     # Broadcast-Join Criteria:
     # 1. Large dataframe isn't already shuffled
-    # 2. Small dataframe has 8 partitions (or fewer).
-    #    TODO: Make this value/heuristic configurable).
-    #    We may want to account for the number of workers.
+    # 2. Small dataframe meets broadcast_join_limit.
     # 3. The "kind" of join is compatible with a broadcast join
     assert ir.config_options.executor.name == "streaming", (
         "'in-memory' executor not supported in 'generate_ir_tasks'"
@@ -142,6 +145,7 @@ def _make_bcast_join(
     ir: Join,
     output_count: int,
     partition_info: MutableMapping[IR, PartitionInfo],
+    table_stats: TableStats | None,
     left: IR,
     right: IR,
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
@@ -180,7 +184,9 @@ def _make_bcast_join(
             )
 
     new_node = ir.reconstruct([left, right])
-    partition_info[new_node] = PartitionInfo(count=output_count)
+    partition_info[new_node] = PartitionInfo.new(
+        new_node, partition_info, count=output_count, table_stats=table_stats
+    )
     return new_node, partition_info
 
 
@@ -208,17 +214,19 @@ def _(
     if left_count < right_count:
         if left_count > 1:
             left = Repartition(left.schema, left)
-            pi_left[left] = PartitionInfo(count=1)
+            pi_left[left] = PartitionInfo.new(left, pi_left, count=1)
             _fallback_inform(fallback_msg, rec.state["config_options"])
     elif right_count > 1:
         right = Repartition(left.schema, right)
-        pi_right[right] = PartitionInfo(count=1)
+        pi_right[right] = PartitionInfo.new(right, pi_right, count=1)
         _fallback_inform(fallback_msg, rec.state["config_options"])
 
     # Reconstruct and return
     new_node = ir.reconstruct([left, right])
     partition_info = reduce(operator.or_, (pi_left, pi_right))
-    partition_info[new_node] = PartitionInfo(count=output_count)
+    partition_info[new_node] = PartitionInfo.new(
+        new_node, partition_info, count=output_count
+    )
     return new_node, partition_info
 
 
@@ -231,10 +239,44 @@ def _(
     partition_info = reduce(operator.or_, _partition_info)
 
     left, right = children
+    left_stats = partition_info[left].table_stats
+    right_stats = partition_info[right].table_stats
+    if left_stats is not None and right_stats is not None:
+        left_rows = left_stats.num_rows
+        right_rows = right_stats.num_rows
+        left_keys = [e.name for e in ir.left_on]
+        right_keys = [e.name for e in ir.right_on]
+        unique_counts = -1
+        for lname, rname in zip(left_keys, right_keys, strict=True):
+            uniques_left, uniques_right = None, None
+            if lname in left_stats.column_stats:
+                uniques_left = left_stats.column_stats[lname].unique_count
+            if rname in right_stats.column_stats:
+                uniques_right = right_stats.column_stats[rname].unique_count
+            uniques = (uniques_left, uniques_right)
+            unique_counts = max(
+                unique_counts,
+                max(
+                    (u for u in uniques if u is not None),
+                    default=min(left_rows, right_rows),
+                ),
+            )
+        estimated_output_rows = max(1, left_rows * right_rows // unique_counts)
+        join_stats = TableStats(
+            TableStats.merge_column_stats(
+                left_stats.column_stats, right_stats.column_stats
+            ),
+            estimated_output_rows,
+        )
+    else:  # pragma: no cover; We usually have basic table stats (num_rows)
+        join_stats = None
+
     output_count = max(partition_info[left].count, partition_info[right].count)
     if output_count == 1:
         new_node = ir.reconstruct(children)
-        partition_info[new_node] = PartitionInfo(count=1)
+        partition_info[new_node] = PartitionInfo.new(
+            new_node, partition_info, count=1, table_stats=join_stats
+        )
         return new_node, partition_info
     elif ir.options[0] == "Cross":  # pragma: no cover
         return _lower_ir_fallback(
@@ -243,22 +285,27 @@ def _(
 
     if _should_bcast_join(ir, left, right, partition_info, output_count):
         # Create a broadcast join
-        return _make_bcast_join(
+        joined, partition_info = _make_bcast_join(
             ir,
             output_count,
             partition_info,
+            join_stats,
             left,
             right,
         )
     else:
         # Create a hash join
-        return _make_hash_join(
+        joined, partition_info = _make_hash_join(
             ir,
             output_count,
             partition_info,
+            join_stats,
             left,
             right,
         )
+
+    # TODO: Use join_stats to repartition
+    return joined, partition_info
 
 
 @generate_ir_tasks.register(Join)

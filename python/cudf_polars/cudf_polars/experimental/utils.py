@@ -15,7 +15,7 @@ from cudf_polars.dsl.ir import Union
 from cudf_polars.experimental.base import PartitionInfo
 
 if TYPE_CHECKING:
-    from collections.abc import MutableMapping
+    from collections.abc import MutableMapping, Sequence
 
     from cudf_polars.containers import DataFrame
     from cudf_polars.dsl.expr import Expr
@@ -74,7 +74,7 @@ def _lower_ir_fallback(
             # Fall-back logic
             fallback = True
             child = Repartition(child.schema, child)
-            partition_info[child] = PartitionInfo(count=1)
+            partition_info[child] = PartitionInfo.new(child, partition_info, count=1)
         children.append(child)
 
     if fallback and msg:
@@ -84,7 +84,7 @@ def _lower_ir_fallback(
 
     # Reconstruct and return
     new_node = ir.reconstruct(children)
-    partition_info[new_node] = PartitionInfo(count=1)
+    partition_info[new_node] = PartitionInfo.new(new_node, partition_info)
     return new_node, partition_info
 
 
@@ -98,3 +98,39 @@ def _leaf_column_names(expr: Expr) -> tuple[str, ...]:
         return (expr.name,)
     else:
         return ()
+
+
+def _get_unique_fractions(
+    ir: IR,
+    column_names: Sequence[str],
+    partition_info: MutableMapping[IR, PartitionInfo],
+    config_options: ConfigOptions,
+) -> dict[str, float]:
+    assert config_options.executor.name == "streaming", (
+        "'in-memory' executor not supported in '_get_unique_fractions'"
+    )
+
+    # Start with table statistics
+    unique_fractions: dict[str, float] = {}
+    if (table_stats := partition_info[ir].table_stats) is not None:
+        for c, stats in table_stats.column_stats.items():
+            if c in column_names:
+                if stats.unique_count is not None:
+                    # Use the unique count statistic if available
+                    unique_fractions[c] = max(
+                        0.00001, min(1.0, stats.unique_count / table_stats.num_rows)
+                    )
+                elif stats.unique_fraction is not None:
+                    # Otherwise, use the unique fraction statistic
+                    unique_fractions[c] = stats.unique_fraction
+
+    # Update with user-defined `"unique_fraction"` config
+    unique_fractions.update(
+        {
+            c: max(min(f, 1.0), 0.00001)
+            for c, f in config_options.executor.unique_fraction.items()
+            if c in column_names
+        }
+    )
+
+    return unique_fractions

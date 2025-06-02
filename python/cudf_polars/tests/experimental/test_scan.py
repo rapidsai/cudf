@@ -8,6 +8,7 @@ import pytest
 import polars as pl
 
 from cudf_polars import Translator
+from cudf_polars.dsl.ir import Join
 from cudf_polars.experimental.parallel import lower_ir_graph
 from cudf_polars.testing.asserts import DEFAULT_SCHEDULER, assert_gpu_result_equal
 from cudf_polars.testing.io import make_partitioned_source
@@ -61,9 +62,122 @@ def test_target_partition_size(tmp_path, df, blocksize, n_files):
 
     # Check partitioning
     qir = Translator(q._ldf.visit(), engine).translate_ir()
-    ir, info = lower_ir_graph(qir, ConfigOptions(engine.config))
+    ir, info = lower_ir_graph(qir, ConfigOptions.from_polars_engine(engine))
     count = info[ir].count
     if blocksize <= 12_000:
         assert count > n_files
     else:
         assert count < n_files
+
+
+@pytest.mark.parametrize("parquet_metadata_samples", [1, 3])
+def test_table_statistics(tmp_path, df, parquet_metadata_samples):
+    make_partitioned_source(df, tmp_path, "parquet", n_files=3)
+    q = pl.scan_parquet(tmp_path)
+    engine = pl.GPUEngine(
+        raise_on_fail=True,
+        executor="streaming",
+        executor_options={
+            "target_partition_size": 10_000,
+            "scheduler": DEFAULT_SCHEDULER,
+            "parquet_metadata_samples": parquet_metadata_samples,
+        },
+    )
+    config_options = ConfigOptions.from_polars_engine(engine)
+
+    q1 = q.select(pl.col("y"))
+    qir1 = Translator(q1._ldf.visit(), engine).translate_ir()
+    ir1, pi1 = lower_ir_graph(qir1, config_options)
+    table_stats_1 = pi1[ir1].table_stats
+    element_size_y = table_stats_1.column_stats["y"].element_size
+    assert table_stats_1.num_rows > 0
+    assert element_size_y > 0
+
+    q2 = q.filter(pl.col("z") < 3).group_by(pl.col("y")).mean().select(pl.col("x"))
+    qir2 = Translator(q2._ldf.visit(), engine).translate_ir()
+    ir2, pi2 = lower_ir_graph(qir2, config_options)
+    table_stats_2 = pi2[ir2].table_stats
+    assert table_stats_2.num_rows > 0
+    assert table_stats_2.column_stats["y"].element_size == element_size_y
+    assert table_stats_2.column_stats["x"].element_size > 0
+
+    q3 = q.filter(pl.col("x") == 10).select(pl.col("y"))
+    qir3 = Translator(q3._ldf.visit(), engine).translate_ir()
+    ir3, pi3 = lower_ir_graph(qir3, config_options)
+    table_stats_3 = pi3[ir3].table_stats
+    assert table_stats_3.num_rows == 1
+    assert table_stats_3.column_stats["y"].element_size == element_size_y
+    assert table_stats_3.column_stats["x"].element_size > 0
+
+    # Group_by on column of all uniques to test
+    # unique_count statistics optimization.
+    q4 = q.unique().select(pl.col("y"))
+    assert_gpu_result_equal(q4, engine=engine, check_row_order=False)
+
+
+@pytest.mark.parametrize("parquet_rowgroup_samples", [1, 2])
+def test_table_statistics_join(tmp_path, parquet_rowgroup_samples):
+    # Left table
+    tmp_dir_left = tmp_path / "temp_dir_left"
+    tmp_dir_left.mkdir()
+    left = pl.DataFrame(
+        {
+            "x": range(300),
+            "y": range(0, 600, 2),
+            "z": [1.0, 2.0, 3.0, 4.0, 5.0] * 60,
+        }
+    )
+    make_partitioned_source(left, tmp_dir_left, "parquet", n_files=2)
+    dfl = pl.scan_parquet(tmp_dir_left)
+
+    # Right table
+    tmp_dir_right = tmp_path / "temp_dir_right"
+    tmp_dir_right.mkdir()
+    right = pl.DataFrame(
+        {
+            "xx": range(200),
+            "y": list(range(100)) * 2,
+            "zz": [1, 2, 3, 4, 5] * 40,
+        }
+    )
+    make_partitioned_source(right, tmp_dir_right, "parquet", n_files=2)
+    dfr = pl.scan_parquet(tmp_dir_right)
+
+    # Make sure we get many partitions
+    engine = pl.GPUEngine(
+        raise_on_fail=True,
+        executor="streaming",
+        executor_options={
+            "target_partition_size": 400,
+            "scheduler": DEFAULT_SCHEDULER,
+            "shuffle_method": "tasks",
+            "parquet_rowgroup_samples": parquet_rowgroup_samples,
+        },
+    )
+
+    # Check that we get the expected table stats
+    # after a simple join.
+    q = dfl.join(dfr, on="y", how="inner")
+    qir = Translator(q._ldf.visit(), engine).translate_ir()
+    ir, pi = lower_ir_graph(qir, ConfigOptions.from_polars_engine(engine))
+    ir = ir if isinstance(ir, Join) else ir.children[0]
+    table_stats_left = pi[ir.children[0]].table_stats
+    table_stats_right = pi[ir.children[1]].table_stats
+    table_stats = pi[ir].table_stats
+    expected_num_rows = int(
+        (table_stats_left.num_rows * table_stats_right.num_rows)
+        / table_stats_left.column_stats["y"].unique_count
+    )
+    assert table_stats.num_rows == expected_num_rows
+    assert_gpu_result_equal(q, engine=engine, check_row_order=False)
+
+    # Join on `q` again.
+    # This provides test coverage for automatic repartitioning
+    # of the smaller table (i.e. `q`).
+    tmp_dir_right_2 = tmp_path / "temp_dir_right_2"
+    tmp_dir_right_2.mkdir()
+    right_2 = pl.DataFrame({"xx": range(20), "yy": range(0, 40, 2)})
+    make_partitioned_source(right_2, tmp_dir_right_2, "parquet", n_files=1)
+    dfr2 = pl.scan_parquet(tmp_dir_right_2)
+    q2 = q.join(dfr2, on="xx", how="inner")
+    assert_gpu_result_equal(q2, engine=engine, check_row_order=False)
