@@ -16,8 +16,7 @@ def plc_col():
 
 @pytest.fixture(scope="module")
 def json_path():
-    slr = pa.scalar("$.foo.bar")
-    return plc.interop.from_arrow(slr)
+    return plc.Scalar.from_arrow(pa.scalar("$.foo.bar"))
 
 
 @pytest.mark.parametrize("allow_single_quotes", [True, False])
