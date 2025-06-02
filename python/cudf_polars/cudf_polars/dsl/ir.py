@@ -1134,9 +1134,8 @@ class Select(IR):
             and self.children[0].typ == "parquet"
             and self.children[0].predicate is None
         ):
-            # pragma: no cover
-            scan = self.children[0]
-            effective_rows = scan.fast_count()
+            scan = self.children[0]  # pragma: no cover
+            effective_rows = scan.fast_count()  # pragma: no cover
             col = Column(
                 plc.Column.from_scalar(
                     plc.Scalar.from_py(
@@ -1146,8 +1145,8 @@ class Select(IR):
                     1,
                 ),
                 name=self.exprs[0].name or "len",
-            )
-            return DataFrame([col])
+            )  # pragma: no cover
+            return DataFrame([col])  # pragma: no cover
 
         return super().evaluate(cache=cache, timer=timer)
 
