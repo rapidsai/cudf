@@ -28,7 +28,8 @@ rapids_find_package(
 
 # The below in inspired by legate dataframe
 execute_process(
-  COMMAND "python" -c "from numba.cuda.runtime.nrt import get_include; print(get_include())"
+  COMMAND "python" -c
+          "from numba.cuda.memory_management.nrt import get_include; print(get_include())"
   OUTPUT_VARIABLE NRT_INCLUDE_DIR
   ERROR_VARIABLE NRT_ERROR
   RESULT_VARIABLE NRT_RESULT
