@@ -101,6 +101,7 @@ class UnaryFunction(Expr):
     }
     _supported_misc_fns = frozenset(
         {
+            "as_struct",
             "drop_nulls",
             "fill_null",
             "mask_nans",
@@ -129,6 +130,7 @@ class UnaryFunction(Expr):
         self.options = options
         self.children = children
         self.is_pointwise = self.name not in (
+            "as_struct",
             "cum_min",
             "cum_max",
             "cum_prod",
@@ -245,6 +247,21 @@ class UnaryFunction(Expr):
                     plc.Column.from_scalar(arg, 1), column.obj.type()
                 ).to_scalar()
             return Column(plc.replace.replace_nulls(column.obj, arg))
+        elif self.name == "as_struct":
+            children = [
+                child.evaluate(df, context=context).obj for child in self.children
+            ]
+            return Column(
+                plc.Column(
+                    data_type=plc.DataType(plc.TypeId.STRUCT),
+                    size=children[0].size(),
+                    data=None,
+                    mask=None,
+                    null_count=0,
+                    offset=0,
+                    children=children,
+                )
+            )
         elif self.name in self._OP_MAPPING:
             column = self.children[0].evaluate(df, context=context)
             if column.obj.type().id() != self.dtype.id():

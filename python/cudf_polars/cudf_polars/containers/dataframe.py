@@ -62,7 +62,7 @@ class DataFrame:
         name_map = {f"column_{i}": name for i, name in enumerate(self.column_map)}
         table = plc.interop.to_arrow(
             self.table,
-            [plc.interop.ColumnMetadata(name=name) for name in name_map],
+            # [plc.interop.ColumnMetadata(name=name) for name in name_map],
         )
         df: pl.DataFrame = pl.from_arrow(table)
         return df.rename(name_map).with_columns(
