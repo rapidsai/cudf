@@ -16,9 +16,9 @@
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/strings/string_view.cuh>
+#include <cudf/strings/udf/managed_udf_string.cuh>
 #include <cudf/strings/udf/udf_apis.hpp>
 #include <cudf/strings/udf/udf_string.cuh>
-#include <cudf/strings/udf/managed_udf_string.cuh>
 #include <cudf/strings/utilities.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/memory_resource.hpp>
@@ -29,18 +29,13 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
 
-
-
 namespace cudf {
 namespace strings {
 namespace udf {
 
 namespace detail {
 
-
 namespace {
-
-
 
 /**
  * @brief Functor wraps string_view objects around udf_string objects

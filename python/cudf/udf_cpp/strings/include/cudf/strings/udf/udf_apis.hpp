@@ -18,12 +18,11 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
+#include <cudf/strings/udf/managed_udf_string.cuh>
 
 #include <rmm/device_buffer.hpp>
 
 #include <memory>
-#include <cudf/strings/udf/managed_udf_string.cuh>
-
 
 namespace cudf {
 namespace strings {

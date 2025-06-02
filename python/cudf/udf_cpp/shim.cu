@@ -738,7 +738,6 @@ __device__ void udf_str_dtor(void* udf_str, size_t size, void* dtor_info)
   ptr->~udf_string();
 }
 
-
 /**
  * @brief Initialize a MemInfo to track a newly created cudf::udf_string.
  *

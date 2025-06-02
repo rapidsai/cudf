@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -452,7 +452,6 @@ __device__ inline cudf::size_type udf_string::char_offset(cudf::size_type byte_p
 {
   return cudf::strings::detail::characters_in_string(data(), byte_pos);
 }
-
 
 }  // namespace udf
 }  // namespace strings
