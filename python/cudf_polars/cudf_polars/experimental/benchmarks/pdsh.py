@@ -1185,12 +1185,17 @@ def run(args: argparse.Namespace) -> None:
         client.wait_for_workers(run_config.n_workers)
         if run_config.shuffle != "tasks":
             try:
+                from rapidsmpf.config import Options
                 from rapidsmpf.integrations.dask import bootstrap_dask_cluster
 
                 bootstrap_dask_cluster(
                     client,
-                    spill_device=run_config.spill_device,
-                    oom_protection=args.rapidsmpf_oom_protection,
+                    options=Options(
+                        {
+                            "dask_spill_device": str(run_config.spill_device),
+                            "dask_statistics": str(args.rapidsmpf_oom_protection),
+                        }
+                    ),
                 )
             except ImportError as err:
                 if run_config.shuffle == "rapidsmpf":
