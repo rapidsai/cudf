@@ -469,8 +469,7 @@ void reader::impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num
         out_buf.user_data |= PARQUET_COLUMN_BUFFER_FLAG_LIST_TERMINATED;
       } else if (out_buf.type.id() == type_id::STRING) {
         // only if it is not a large strings column
-        if (col_string_sizes[idx] <=
-            static_cast<size_t>(strings::detail::get_offset64_threshold())) {
+        if (std::cmp_less_equal(col_string_sizes[idx], strings::detail::get_offset64_threshold())) {
           out_buffers.emplace_back(static_cast<size_type*>(out_buf.data()) + out_buf.size);
           final_offsets.emplace_back(static_cast<size_type>(col_string_sizes[idx]));
         }
