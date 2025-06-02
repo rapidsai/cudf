@@ -5,6 +5,12 @@
 
 set -euo pipefail
 
+source rapids-init-pip
+
+EXITCODE=0
+trap "EXITCODE=1" ERR
+set +e
+
 PANDAS_TESTS_BRANCH=${1}
 RAPIDS_FULL_VERSION=$(<./VERSION)
 rapids-logger "Running Pandas tests using $PANDAS_TESTS_BRANCH branch and rapids-version $RAPIDS_FULL_VERSION"
@@ -29,7 +35,8 @@ mkdir -p "${RAPIDS_TESTS_DIR}"
 
 bash python/cudf/cudf/pandas/scripts/run-pandas-tests.sh \
   --numprocesses 5 \
-  --tb=no \
+  --tb=line \
+  --disable-warnings \
   -m "not slow and not single_cpu and not db and not network" \
   --max-worker-restart=3 \
   --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf-pandas.xml" \
@@ -43,3 +50,5 @@ RAPIDS_ARTIFACTS_DIR=${RAPIDS_ARTIFACTS_DIR:-"${PWD}/artifacts"}
 mkdir -p "${RAPIDS_ARTIFACTS_DIR}"
 mv pandas-testing/"${SUMMARY_FILE_NAME}" "${RAPIDS_ARTIFACTS_DIR}"/
 rapids-upload-to-s3 "${RAPIDS_ARTIFACTS_DIR}"/"${SUMMARY_FILE_NAME}" "${RAPIDS_ARTIFACTS_DIR}"
+rapids-logger "Test script exiting with value: $EXITCODE"
+exit ${EXITCODE}

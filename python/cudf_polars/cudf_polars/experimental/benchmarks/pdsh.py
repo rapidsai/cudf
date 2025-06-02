@@ -22,23 +22,29 @@ import sys
 import time
 from collections import defaultdict
 from datetime import date, datetime, timezone
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
-import pynvml
 
 import polars as pl
 
-from cudf_polars.dsl.translate import Translator
-from cudf_polars.experimental.parallel import evaluate_streaming, lower_ir_graph
-from cudf_polars.utils.config import ConfigOptions
+try:
+    import pynvml
+except ImportError:
+    pynvml = None
+
+try:
+    from cudf_polars.dsl.translate import Translator
+    from cudf_polars.experimental.explain import explain_query
+    from cudf_polars.experimental.parallel import evaluate_streaming
+
+    CUDF_POLARS_AVAILABLE = True
+except ImportError:
+    CUDF_POLARS_AVAILABLE = False
 
 if TYPE_CHECKING:
     import pathlib
-    from collections.abc import MutableMapping
 
-    from cudf_polars.dsl.ir import IR
-    from cudf_polars.experimental.base import PartitionInfo
 
 # Without this setting, the first IO task to run
 # on each worker takes ~15 sec extra
@@ -69,18 +75,16 @@ class PackageVersions:
         packages = [
             "cudf_polars",
             "polars",
+            "rapidsmpf",
         ]
         versions = {}
         for name in packages:
-            package = importlib.import_module(name)
-            versions[name] = package.__version__
+            try:
+                package = importlib.import_module(name)
+                versions[name] = package.__version__
+            except (AttributeError, ImportError):  # noqa: PERF203
+                versions[name] = None
         versions["python"] = ".".join(str(v) for v in sys.version_info[:3])
-        try:
-            import rapidsmpf
-
-            versions["rapidsmpf"] = rapidsmpf.__version__
-        except (AttributeError, ImportError):
-            versions["rapidsmpf"] = None
         return cls(**versions)
 
 
@@ -119,8 +123,12 @@ class HardwareInfo:
     @classmethod
     def collect(cls) -> HardwareInfo:
         """Collect the hardware information."""
-        pynvml.nvmlInit()
-        gpus = [GPUInfo.from_index(i) for i in range(pynvml.nvmlDeviceGetCount())]
+        if pynvml is not None:
+            pynvml.nvmlInit()
+            gpus = [GPUInfo.from_index(i) for i in range(pynvml.nvmlDeviceGetCount())]
+        else:
+            # No GPUs -- probably running in CPU mode
+            gpus = []
         return cls(gpus=gpus)
 
 
@@ -139,14 +147,18 @@ class RunConfig:
     records: dict[int, list[Record]] = dataclasses.field(default_factory=dict)
     dataset_path: pathlib.Path
     shuffle: str | None = None
-    broadcast_join_limit: int
-    blocksize: int
+    broadcast_join_limit: int | None = None
+    blocksize: int | None = None
     threads: int
     iterations: int
     timestamp: str = dataclasses.field(
         default_factory=lambda: datetime.now(timezone.utc).isoformat()
     )
     hardware: HardwareInfo = dataclasses.field(default_factory=HardwareInfo.collect)
+    rmm_async: bool
+    rapidsmpf_oom_protection: bool
+    rapidsmpf_spill: bool
+    spill_device: float
 
     @classmethod
     def from_args(cls, args: argparse.Namespace) -> RunConfig:
@@ -157,23 +169,22 @@ class RunConfig:
         if executor == "in-memory" or executor == "cpu":
             scheduler = None
 
-        if scheduler == "distributed":
-            broadcast_join_limit = args.broadcast_join_limit or 2
-        else:
-            broadcast_join_limit = args.broadcast_join_limit or 32
-
         return cls(
             queries=args.query,
             executor=executor,
             scheduler=scheduler,
             n_workers=args.n_workers,
             shuffle=args.shuffle,
-            broadcast_join_limit=broadcast_join_limit,
+            broadcast_join_limit=args.broadcast_join_limit,
             dataset_path=args.path,
             blocksize=args.blocksize,
             threads=args.threads,
             iterations=args.iterations,
             suffix=args.suffix,
+            rmm_async=args.rmm_async,
+            rapidsmpf_oom_protection=args.rapidsmpf_oom_protection,
+            spill_device=args.spill_device,
+            rapidsmpf_spill=args.rapidsmpf_spill,
         )
 
     def serialize(self) -> dict:
@@ -197,12 +208,19 @@ class RunConfig:
                 if self.scheduler == "distributed":
                     print(f"n_workers: {self.n_workers}")
                     print(f"threads: {self.threads}")
-            print(f"iterations: {self.iterations}")
-            print("---------------------------------------")
-            print(f"min time : {min([record.duration for record in records]):0.4f}")
-            print(f"max time : {max(record.duration for record in records):0.4f}")
-            print(f"mean time: {np.mean([record.duration for record in records]):0.4f}")
-            print("=======================================")
+                    print(f"rmm_async: {self.rmm_async}")
+                    print(f"rapidsmpf_oom_protection: {self.rapidsmpf_oom_protection}")
+                    print(f"spill_device: {self.spill_device}")
+                    print(f"rapidsmpf_spill: {self.rapidsmpf_spill}")
+            if len(records) > 0:
+                print(f"iterations: {self.iterations}")
+                print("---------------------------------------")
+                print(f"min time : {min([record.duration for record in records]):0.4f}")
+                print(f"max time : {max(record.duration for record in records):0.4f}")
+                print(
+                    f"mean time: {np.mean([record.duration for record in records]):0.4f}"
+                )
+                print("=======================================")
 
 
 def get_data(
@@ -210,60 +228,6 @@ def get_data(
 ) -> pl.LazyFrame:
     """Get table from dataset."""
     return pl.scan_parquet(f"{path}/{table_name}{suffix}")
-
-
-def _explain(
-    ir: IR,
-    partition_info: MutableMapping[IR, PartitionInfo],
-    *,
-    offset: str = "",
-) -> str:
-    """Print the physical plan for an IR node."""
-    from cudf_polars.dsl.ir import GroupBy, Join, Projection, Scan, Select, Sort, Union
-    from cudf_polars.experimental.io import SplitScan
-
-    val = offset
-    count = partition_info[ir].count
-    if isinstance(ir, Union) and isinstance(ir.children[0], (Scan, SplitScan)):
-        scan = ir.children[0]
-        if isinstance(scan, SplitScan):
-            name = "SPLITSCAN"
-            scan = scan.base_scan
-        else:
-            name = "SCAN"
-        schema = tuple(ir.schema)
-        path = "/".join(scan.paths[0].split("/")[-2:])
-        val += f"UNION [{count} x {name} {schema} {path} ...]\n"
-    else:
-        if isinstance(ir, GroupBy):
-            keys = tuple(ne.name for ne in ir.keys)
-            val += f"GROUPBY {keys} [{count}]\n"
-        elif isinstance(ir, Join):
-            left_on = tuple(ne.name for ne in ir.left_on)
-            right_on = tuple(ne.name for ne in ir.right_on)
-            val += f"JOIN {ir.options[0]} {left_on} {right_on} [{count}]\n"
-        elif isinstance(ir, Projection):
-            schema = tuple(ir.schema)
-            val += f"PROJECTION {schema} [{count}]\n"
-        elif isinstance(ir, Select):
-            schema = tuple(ir.schema)
-            val += f"SELECT {schema} [{count}]\n"
-        elif isinstance(ir, Sort):
-            by = tuple(ne.name for ne in ir.by)
-            val += f"SORT {by} [{count}]\n"
-        else:
-            val += f"{type(ir).__name__.upper()} [{count}]\n"
-        for child in ir.children:
-            val += _explain(child, partition_info, offset=offset + "  ")
-    return val
-
-
-def explain_query(q: pl.LazyFrame, engine: pl.GPUEngine) -> str:
-    """Print the physical plan for a query."""
-    config_options = ConfigOptions.from_polars_engine(engine)
-    ir = Translator(q._ldf.visit(), engine).translate_ir()
-    ir, partition_info = lower_ir_graph(ir, config_options)
-    return _explain(ir, partition_info)
 
 
 class PDSHQueries:
@@ -1092,7 +1056,7 @@ parser.add_argument(
 )
 parser.add_argument(
     "--blocksize",
-    default=1000**3,
+    default=None,
     type=int,
     help="Approx. partition size.",
 )
@@ -1107,6 +1071,13 @@ parser.add_argument(
     default=False,
     action="store_true",
     help="Debug run.",
+)
+parser.add_argument(
+    "--protocol",
+    default="ucx",
+    type=str,
+    choices=["ucx", "ucxx"],
+    help="Communication protocol to use for Dask: ucx (UCX-Py) or ucxx)",
 )
 parser.add_argument(
     "--shuffle",
@@ -1134,6 +1105,30 @@ parser.add_argument(
     help="RMM pool size (fractional).",
 )
 parser.add_argument(
+    "--rmm-async",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help="Use RMM async memory resource.",
+)
+parser.add_argument(
+    "--rapidsmpf-oom-protection",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help="Use rapidsmpf CUDA managed memory-based OOM protection.",
+)
+parser.add_argument(
+    "--rapidsmpf-spill",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help="Use rapidsmpf for general spilling.",
+)
+parser.add_argument(
+    "--spill-device",
+    default=0.5,
+    type=float,
+    help="Rapidsmpf device spill threshold.",
+)
+parser.add_argument(
     "-o",
     "--output",
     type=argparse.FileType("at"),
@@ -1158,6 +1153,12 @@ parser.add_argument(
     help="Print an outline of the physical plan",
     default=False,
 )
+parser.add_argument(
+    "--explain-logical",
+    action=argparse.BooleanOptionalAction,
+    help="Print an outline of the logical plan",
+    default=False,
+)
 args = parser.parse_args()
 
 
@@ -1173,8 +1174,9 @@ def run(args: argparse.Namespace) -> None:
         kwargs = {
             "n_workers": run_config.n_workers,
             "dashboard_address": ":8585",
-            "protocol": "ucx",
+            "protocol": args.protocol,
             "rmm_pool_size": args.rmm_pool_size,
+            "rmm_async": args.rmm_async,
             "threads_per_worker": run_config.threads,
         }
 
@@ -1185,17 +1187,72 @@ def run(args: argparse.Namespace) -> None:
             try:
                 from rapidsmpf.integrations.dask import bootstrap_dask_cluster
 
-                bootstrap_dask_cluster(client, spill_device=0.5)
+                bootstrap_dask_cluster(
+                    client,
+                    spill_device=run_config.spill_device,
+                    oom_protection=args.rapidsmpf_oom_protection,
+                )
             except ImportError as err:
                 if run_config.shuffle == "rapidsmpf":
                     raise ImportError from err
 
     records: defaultdict[int, list[Record]] = defaultdict(list)
+    engine: pl.GPUEngine | None = None
+
+    if run_config.executor == "cpu":
+        engine = None
+    else:
+        executor_options: dict[str, Any] = {}
+        if run_config.executor == "streaming":
+            executor_options = {
+                "cardinality_factor": {
+                    "c_custkey": 0.05,  # Q10
+                    "l_orderkey": 1.0,  # Q18
+                    "l_partkey": 0.1,  # Q20
+                    "o_custkey": 0.25,  # Q22
+                },
+            }
+            if run_config.blocksize:
+                executor_options["target_partition_size"] = run_config.blocksize
+            if run_config.shuffle:
+                executor_options["shuffle_method"] = run_config.shuffle
+            if run_config.broadcast_join_limit:
+                executor_options["broadcast_join_limit"] = (
+                    run_config.broadcast_join_limit
+                )
+            if run_config.rapidsmpf_spill:
+                executor_options["rapidsmpf_spill"] = run_config.rapidsmpf_spill
+            if run_config.scheduler == "distributed":
+                executor_options["scheduler"] = "distributed"
+
+        engine = pl.GPUEngine(
+            raise_on_fail=True,
+            executor=run_config.executor,
+            executor_options=executor_options,
+        )
+
     for q_id in run_config.queries:
         try:
             q = getattr(PDSHQueries, f"q{q_id}")(run_config)
         except AttributeError as err:
             raise NotImplementedError(f"Query {q_id} not implemented.") from err
+
+        if run_config.executor == "cpu":
+            if args.explain_logical:
+                print(f"\nQuery {q_id} - Logical plan\n")
+                print(q.explain())
+        elif CUDF_POLARS_AVAILABLE:
+            assert isinstance(engine, pl.GPUEngine)
+            if args.explain_logical:
+                print(f"\nQuery {q_id} - Logical plan\n")
+                print(explain_query(q, engine, physical=False))
+            elif args.explain:
+                print(f"\nQuery {q_id} - Physical plan\n")
+                print(explain_query(q, engine))
+        else:
+            raise RuntimeError(
+                "Cannot provide the logical or physical plan because cudf_polars is not installed."
+            )
 
         records[q_id] = []
 
@@ -1204,27 +1261,8 @@ def run(args: argparse.Namespace) -> None:
 
             if run_config.executor == "cpu":
                 result = q.collect(new_streaming=True)
-            else:
-                if run_config.executor == "in-memory":
-                    executor_options = {}
-                else:
-                    executor_options = {
-                        "parquet_blocksize": run_config.blocksize,
-                        "shuffle_method": run_config.shuffle,
-                        "broadcast_join_limit": run_config.broadcast_join_limit,
-                        "cardinality_factor": {
-                            "c_custkey": 0.05,  # Q10
-                            "l_orderkey": 1.0,  # Q18
-                        },
-                    }
-                    if run_config.scheduler == "distributed":
-                        executor_options["scheduler"] = "distributed"
-
-                engine = pl.GPUEngine(
-                    raise_on_fail=True,
-                    executor=run_config.executor,
-                    executor_options=executor_options,
-                )
+            elif CUDF_POLARS_AVAILABLE:
+                assert isinstance(engine, pl.GPUEngine)
                 if args.debug:
                     translator = Translator(q._ldf.visit(), engine)
                     ir = translator.translate_ir()
@@ -1236,14 +1274,15 @@ def run(args: argparse.Namespace) -> None:
                         ).to_polars()
                 else:
                     result = q.collect(engine=engine)
+            else:
+                raise RuntimeError(
+                    "Cannot provide debug information because cudf_polars is not installed."
+                )
 
             t1 = time.monotonic()
             record = Record(query=q_id, duration=t1 - t0)
             if args.print_results:
                 print(result)
-            if args.explain:
-                print(f"\nQuery {q_id} - Physical plan\n")
-                print(explain_query(q, engine))
             print(f"Ran query={q_id} in {record.duration:0.4f}s", flush=True)
             records[q_id].append(record)
 

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -10,6 +10,7 @@ from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
+from cudf_polars.utils.versions import POLARS_VERSION_LT_128, POLARS_VERSION_LT_130
 
 
 @pytest.fixture(params=[False, True], ids=["no_nulls", "nulls"])
@@ -83,6 +84,34 @@ def test_boolean_function_unary(expr, has_nans, has_nulls):
     assert_gpu_result_equal(q)
 
 
+def test_nan_in_non_floating_point_column():
+    ldf = pl.LazyFrame({"int": [-1, 1, None]}).with_columns(
+        float=pl.col("int").cast(pl.Float64),
+        float_na=pl.col("int") ** 0.5,
+    )
+
+    q = ldf.select(
+        [
+            pl.col("int").is_nan().alias("int"),
+            pl.col("float").is_nan().alias("float"),
+            pl.col("float_na").is_nan().alias("float_na"),
+        ]
+    )
+
+    if POLARS_VERSION_LT_130:
+        with pytest.raises(
+            pl.exceptions.ComputeError,
+            match="NAN is not supported in a Non-floating point type column",
+        ):
+            assert_gpu_result_equal(q)
+    else:
+        with pytest.raises(
+            RuntimeError,
+            match="NAN is not supported in a Non-floating point type column",
+        ):
+            assert_gpu_result_equal(q)
+
+
 @pytest.mark.parametrize(
     "expr",
     [
@@ -150,9 +179,13 @@ def test_boolean_horizontal(expr, has_nulls, wide):
 @pytest.mark.parametrize(
     "expr",
     [
-        pl.col("a").is_in(pl.col("b")),
-        pl.col("a").is_in(pl.col("c")),
-        pl.col("c").is_in(pl.col("d")),
+        pytest.param(
+            pl.col("a").is_in(pl.col("b").implode()),
+            marks=pytest.mark.xfail(reason="Need to support implode agg"),
+        ),
+        pl.col("a").is_in([1, 2, 3]),
+        pl.col("a").is_in([3, 4, 2]),
+        pl.col("c").is_in([10, None, 11]),
     ],
 )
 def test_boolean_is_in(expr):
@@ -183,7 +216,28 @@ def test_boolean_kleene_logic(expr):
 
 
 def test_boolean_is_in_raises_unsupported():
+    # Needs implode agg
     ldf = pl.LazyFrame({"a": pl.Series([1, 2, 3], dtype=pl.Int64)})
     q = ldf.select(pl.col("a").is_in(pl.lit(1, dtype=pl.Int32())))
 
     assert_ir_translation_raises(q, NotImplementedError)
+
+
+def test_boolean_is_in_with_nested_list_raises():
+    ldf = pl.LazyFrame({"x": [1, 2, 3], "y": [[1, 2], [2, 3], [4]]})
+    q = ldf.select(pl.col("x").is_in(pl.col("y")))
+
+    if POLARS_VERSION_LT_128:
+        assert_ir_translation_raises(q, NotImplementedError)
+    elif POLARS_VERSION_LT_130:
+        with pytest.raises(pl.exceptions.ComputeError, match="Column types mismatch"):
+            assert_gpu_result_equal(q)
+    else:
+        with pytest.raises(RuntimeError, match="Column types mismatch"):
+            assert_gpu_result_equal(q)
+
+
+def test_expr_is_in_empty_list():
+    ldf = pl.LazyFrame({"a": [1, 2, 3, 4]})
+    q = ldf.select(pl.col("a").is_in([]))
+    assert_gpu_result_equal(q)

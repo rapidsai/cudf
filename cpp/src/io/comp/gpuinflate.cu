@@ -298,7 +298,7 @@ __device__ int construct(
     left <<= 1;                 // one more bit, double codes left
     left -= counts[len];        // deduct count from possible codes
     if (left < 0) return left;  // over-subscribed--return negative
-  }                             // left > 0 means incomplete
+  }  // left > 0 means incomplete
 
   // generate offsets into symbol table for each length for sorting
   offs[1] = 0;

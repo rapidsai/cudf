@@ -12,12 +12,10 @@ from io import BufferedWriter, BytesIO, IOBase, TextIOWrapper
 from threading import Thread
 from typing import TYPE_CHECKING, Any
 
-import fsspec
-import fsspec.implementations.local
+# import fsspec locally for performance
 import numpy as np
 import pandas as pd
 import pyarrow as pa
-from fsspec.core import expand_paths_if_needed, get_fs_token_paths
 
 import cudf
 from cudf.api.types import is_list_like
@@ -25,16 +23,11 @@ from cudf.core._compat import PANDAS_LT_300
 from cudf.utils.docutils import docfmt_partial
 from cudf.utils.dtypes import cudf_dtype_to_pa_type, np_dtypes_to_pandas_dtypes
 
-try:
-    import fsspec.parquet as fsspec_parquet
-except ImportError:
-    fsspec_parquet = None
-
-
 if TYPE_CHECKING:
     from collections.abc import Callable, Hashable
 
     from cudf.core.column import ColumnBase
+    from cudf.core.dataframe import DataFrame
 
 
 PARQUET_META_TYPE_MAP = {
@@ -105,17 +98,17 @@ Examples
 doc_read_avro: Callable = docfmt_partial(docstring=_docstring_read_avro)
 
 _docstring_read_parquet_metadata = """
-Read a Parquet file's metadata and schema
+Read metadata and schema of a list of Parquet files
 
 Parameters
 ----------
-path : string or path object
-    Path of file to be read
+paths : List of strings or path objects
+    Path of file(s) to be read
 
 Returns
 -------
 Total number of rows
-Number of row groups
+Total number of row groups
 List of column names
 Number of columns
 List of metadata of row groups
@@ -124,7 +117,7 @@ Examples
 --------
 >>> import cudf
 >>> num_rows, num_row_groups, names, num_columns, row_group_metadata = cudf.io.read_parquet_metadata(filename)
->>> df = [cudf.read_parquet(fname, row_group=i) for i in range(row_groups)]
+>>> df = [cudf.read_parquet(fname, row_group=i) for i in range(num_row_groups)]
 >>> df = cudf.concat(df)
 >>> df
   num1                datetime text
@@ -1095,28 +1088,6 @@ cudf.read_feather
 """
 doc_to_feather = docfmt_partial(docstring=_docstring_to_feather)
 
-_docstring_to_dlpack = """
-Converts a cuDF object into a DLPack tensor.
-
-DLPack is an open-source memory tensor structure:
-`dmlc/dlpack <https://github.com/dmlc/dlpack>`_.
-
-This function takes a cuDF object and converts it to a PyCapsule object
-which contains a pointer to a DLPack tensor. This function deep copies the
-data into the DLPack tensor from the cuDF object.
-
-Parameters
-----------
-cudf_obj : DataFrame, Series, Index, or Column
-
-Returns
--------
-pycapsule_obj : PyCapsule
-    Output DLPack tensor pointer which is encapsulated in a PyCapsule
-    object.
-"""
-doc_to_dlpack = docfmt_partial(docstring=_docstring_to_dlpack)
-
 _docstring_read_csv = """
 Load a comma-separated-values (CSV) dataset into a DataFrame
 
@@ -1533,7 +1504,7 @@ def _index_level_name(
         return f"__index_level_{level}__"
 
 
-def generate_pandas_metadata(table: cudf.DataFrame, index: bool | None) -> str:
+def generate_pandas_metadata(table: DataFrame, index: bool | None) -> str:
     col_names: list[Hashable] = []
     types = []
     index_levels = []
@@ -1624,7 +1595,7 @@ def generate_pandas_metadata(table: cudf.DataFrame, index: bool | None) -> str:
 
 
 def _update_pandas_metadata_types_inplace(
-    df: cudf.DataFrame, md_dict: dict
+    df: DataFrame, md_dict: dict
 ) -> None:
     # correct metadata for list and struct and nullable numeric types
     for col_meta in md_dict["columns"]:
@@ -1686,7 +1657,9 @@ def is_file_like(obj):
 
 
 def _is_local_filesystem(fs):
-    return isinstance(fs, fsspec.implementations.local.LocalFileSystem)
+    from fsspec.implementations.local import LocalFileSystem
+
+    return isinstance(fs, LocalFileSystem)
 
 
 def _select_single_source(sources: list, caller: str):
@@ -1704,9 +1677,11 @@ def is_directory(path_or_data, storage_options=None):
     """Returns True if the provided filepath is a directory"""
     path_or_data = stringify_pathlike(path_or_data)
     if isinstance(path_or_data, str):
+        import fsspec
+
         path_or_data = os.path.expanduser(path_or_data)
         try:
-            fs = get_fs_token_paths(
+            fs = fsspec.core.get_fs_token_paths(
                 path_or_data, mode="rb", storage_options=storage_options
             )[0]
         except ValueError as e:
@@ -1748,9 +1723,11 @@ def _get_filesystem_and_paths(
         else:
             path_or_data = [path_or_data]
 
+        import fsspec
+
         if filesystem is None:
             try:
-                fs, _, fs_paths = get_fs_token_paths(
+                fs, _, fs_paths = fsspec.core.get_fs_token_paths(
                     path_or_data, mode="rb", storage_options=storage_options
                 )
                 return_paths = fs_paths
@@ -1774,7 +1751,7 @@ def _get_filesystem_and_paths(
             fs = filesystem
             return_paths = [
                 fs._strip_protocol(u)
-                for u in expand_paths_if_needed(
+                for u in fsspec.core.expand_paths_if_needed(
                     path_or_data, "rb", 1, fs, None
                 )
             ]
@@ -1972,8 +1949,10 @@ def get_writer_filepath_or_buffer(path_or_data, mode, storage_options=None):
         storage_options = {}
 
     if isinstance(path_or_data, str):
+        import fsspec
+
         path_or_data = os.path.expanduser(path_or_data)
-        fs = get_fs_token_paths(
+        fs = fsspec.core.get_fs_token_paths(
             path_or_data, mode=mode or "w", storage_options=storage_options
         )[0]
 
@@ -2009,6 +1988,8 @@ def get_IOBase_writer(file_obj):
 
 
 def is_fsspec_open_file(file_obj):
+    import fsspec
+
     if isinstance(file_obj, fsspec.core.OpenFile):
         return True
     return False
@@ -2168,7 +2149,9 @@ def _prepare_filters(filters):
 
 def _ensure_filesystem(passed_filesystem, path, storage_options):
     if passed_filesystem is None:
-        return get_fs_token_paths(
+        import fsspec
+
+        return fsspec.core.get_fs_token_paths(
             path[0] if isinstance(path, list) else path,
             storage_options={} if storage_options is None else storage_options,
         )[0]
@@ -2340,11 +2323,15 @@ def _get_remote_bytes_parquet(
     row_groups=None,
     blocksize=_BYTES_PER_THREAD_DEFAULT,
 ):
-    if fsspec_parquet is None or (columns is None and row_groups is None):
+    if columns is None and row_groups is None:
+        return _get_remote_bytes_all(remote_paths, fs, blocksize=blocksize)
+    try:
+        import fsspec.parquet
+    except ImportError:
         return _get_remote_bytes_all(remote_paths, fs, blocksize=blocksize)
 
     sizes = fs.sizes(remote_paths)
-    data = fsspec_parquet._get_parquet_byte_ranges(
+    data = fsspec.parquet._get_parquet_byte_ranges(
         remote_paths,
         fs,
         columns=columns,
@@ -2394,9 +2381,7 @@ def _prefetch_remote_buffers(
         return paths
 
 
-def _add_df_col_struct_names(
-    df: cudf.DataFrame, child_names_dict: dict
-) -> None:
+def _add_df_col_struct_names(df: DataFrame, child_names_dict: dict) -> None:
     for name, child_names in child_names_dict.items():
         col = df._data[name]
         df._data[name] = _update_col_struct_field_names(col, child_names)

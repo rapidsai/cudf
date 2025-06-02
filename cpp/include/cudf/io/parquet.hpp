@@ -118,16 +118,18 @@ class parquet_reader_options {
    * @brief Default constructor.
    *
    * This has been added since Cython requires a default constructor to create objects on stack.
+   * The `hybrid_scan_reader` also uses this to create `parquet_reader_options` without a source.
    */
   explicit parquet_reader_options() = default;
 
   /**
-   * @brief Creates a parquet_reader_options_builder which will build parquet_reader_options.
+   * @brief Creates a `parquet_reader_options_builder` to build `parquet_reader_options`.
+   *        By default, build with empty data source info.
    *
    * @param src Source information to read parquet file
    * @return Builder to build reader options
    */
-  static parquet_reader_options_builder builder(source_info src);
+  static parquet_reader_options_builder builder(source_info src = source_info{});
 
   /**
    * @brief Returns source info.
@@ -137,8 +139,7 @@ class parquet_reader_options {
   [[nodiscard]] source_info const& get_source() const { return _source; }
 
   /**
-   * @brief Returns true/false depending on whether strings should be converted to categories or
-   * not.
+   * @brief Returns boolean depending on whether strings should be converted to categories.
    *
    * @return `true` if strings should be converted to categories
    */
@@ -148,21 +149,21 @@ class parquet_reader_options {
   }
 
   /**
-   * @brief Returns true/false depending whether to use pandas metadata or not while reading.
+   * @brief Returns boolean depending on whether to use pandas metadata while reading.
    *
    * @return `true` if pandas metadata is used while reading
    */
   [[nodiscard]] bool is_enabled_use_pandas_metadata() const { return _use_pandas_metadata; }
 
   /**
-   * @brief Returns true/false depending whether to use arrow schema while reading.
+   * @brief Returns boolean depending on whether to use arrow schema while reading.
    *
    * @return `true` if arrow schema is used while reading
    */
   [[nodiscard]] bool is_enabled_use_arrow_schema() const { return _use_arrow_schema; }
 
   /**
-   * @brief Returns true/false depending on whether to read matching projected and filter columns
+   * @brief Returns boolean depending on whether to read matching projected and filter columns
    * from mismatched Parquet sources.
    *
    * @return `true` if mismatched projected and filter columns will be read from mismatched Parquet
@@ -308,14 +309,14 @@ class parquet_reader_options {
   /**
    * @brief Sets to enable/disable use of pandas metadata to read.
    *
-   * @param val Boolean value whether to use pandas metadata
+   * @param val Boolean indicating whether to use pandas metadata
    */
   void enable_use_pandas_metadata(bool val) { _use_pandas_metadata = val; }
 
   /**
    * @brief Sets to enable/disable use of arrow schema to read.
    *
-   * @param val Boolean value whether to use arrow schema
+   * @param val Boolean indicating whether to use arrow schema
    */
   void enable_use_arrow_schema(bool val) { _use_arrow_schema = val; }
 
@@ -323,8 +324,8 @@ class parquet_reader_options {
    * @brief Sets to enable/disable reading of matching projected and filter columns from mismatched
    * Parquet sources.
    *
-   * @param val Boolean value whether to read matching projected and filter columns from mismatched
-   * Parquet sources.
+   * @param val Boolean indicating whether to read matching projected and filter columns from
+   * mismatched Parquet sources.
    */
   void enable_allow_mismatched_pq_schemas(bool val) { _allow_mismatched_pq_schemas = val; }
 
@@ -372,6 +373,7 @@ class parquet_reader_options_builder {
    * @brief Default constructor.
    *
    * This has been added since Cython requires a default constructor to create objects on stack.
+   * The `hybrid_scan_reader` also uses this to construct `parquet_reader_options` without a source.
    */
   parquet_reader_options_builder() = default;
 

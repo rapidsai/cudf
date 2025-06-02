@@ -20,6 +20,10 @@
 
 set -euo pipefail
 
+EXITCODE=0
+trap "EXITCODE=1" ERR
+set +e
+
 # Grab the Pandas source corresponding to the version
 # of Pandas installed.
 PANDAS_VERSION=$(python -c "import pandas; print(pandas.__version__)")
@@ -141,7 +145,6 @@ and not test_frame_op_subclass_nonclass_constructor \
 and not test_round_trip_current \
 and not test_pickle_frame_v124_unpickle_130"
 
-
 PYTEST_IGNORES="--ignore=tests/io/parser/common/test_read_errors.py \
 --ignore=tests/io/test_clipboard.py" # crashes pytest workers (possibly due to fixture patching clipboard functionality)
 
@@ -150,8 +153,10 @@ PANDAS_CI="1" timeout 90m python -m pytest -p cudf.pandas \
     --import-mode=importlib \
     -k "$TEST_THAT_NEED_MOTO_SERVER and $TEST_THAT_CRASH_PYTEST_WORKERS and $TEST_THAT_NEED_REASON_TO_SKIP" \
     ${PYTEST_IGNORES} \
-    "$@" || [ $? = 1 ]  # Exit success if exit code was 1 (permit test failures but not other errors)
+    "$@"
 
 mv *.json ..
 cd ..
 rm -rf pandas-testing/pandas-tests/
+rapids-logger "Test script exiting with value: $EXITCODE"
+exit ${EXITCODE}

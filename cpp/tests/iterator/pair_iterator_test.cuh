@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -60,17 +60,13 @@ void null_pair_iterator(IteratorTest<T>& testFixture)
                  host_values.end(),
                  host_bools.begin(),
                  value_and_validity.begin(),
-                 [](auto s, auto b) {
-                   return thrust::pair<T, bool>{s, b};
-                 });
+                 [](auto s, auto b) { return thrust::pair<T, bool>{s, b}; });
   thrust::host_vector<thrust::pair<T, bool>> value_all_valid(host_values.size());
   std::transform(host_values.begin(),
                  host_values.end(),
                  host_bools.begin(),
                  value_all_valid.begin(),
-                 [](auto s, auto b) {
-                   return thrust::pair<T, bool>{s, true};
-                 });
+                 [](auto s, auto b) { return thrust::pair<T, bool>{s, true}; });
 
   // GPU test
   auto it_dev = d_col->pair_begin<T, true>();

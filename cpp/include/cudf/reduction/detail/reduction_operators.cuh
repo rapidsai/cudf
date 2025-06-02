@@ -190,6 +190,30 @@ struct max : public simple_op<max> {
   using transformer = cudf::detail::cast_fn<ResultType>;
 };
 
+// operator for `bit_and`
+struct bit_and : public simple_op<bit_and> {
+  using op = cudf::DeviceBitAnd;
+
+  template <typename ResultType>
+  using transformer = cudf::detail::cast_fn<ResultType>;
+};
+
+// operator for `bit_or`
+struct bit_or : public simple_op<bit_or> {
+  using op = cudf::DeviceBitOr;
+
+  template <typename ResultType>
+  using transformer = cudf::detail::cast_fn<ResultType>;
+};
+
+// operator for `bit_xor`
+struct bit_xor : public simple_op<bit_xor> {
+  using op = cudf::DeviceBitXor;
+
+  template <typename ResultType>
+  using transformer = cudf::detail::cast_fn<ResultType>;
+};
+
 /**
  * @brief  Compound reduction operator CRTP Base class
  * This template class defines the interface for compound operators

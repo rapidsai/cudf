@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -78,9 +78,9 @@ struct replace_regex_fn {
                                      in_ptr + last_pos.byte_offset(),      // o:bbbb
                                      start_pos - last_pos.byte_offset());  //       ^
         out_ptr = copy_string(out_ptr, d_repl);                            // o:bbbbrrrrrr
-      }                                                                    //  out_ptr ---^
-      last_pos += (match->second - last_pos.position());                   // i:bbbbsssseeee
-                                                                           //  in_ptr --^
+      }  //  out_ptr ---^
+      last_pos += (match->second - last_pos.position());  // i:bbbbsssseeee
+                                                          //  in_ptr --^
 
       itr = last_pos + (match->first == match->second);
     }

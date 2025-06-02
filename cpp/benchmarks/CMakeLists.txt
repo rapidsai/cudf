@@ -98,9 +98,7 @@ function(ConfigureBench CMAKE_BENCH_NAME)
                CUDA_STANDARD_REQUIRED ON
   )
   target_compile_definitions(
-    ${CMAKE_BENCH_NAME}
-    PUBLIC _LIBCUDACXX_ATOMIC_UNSAFE_AUTOMATIC_STORAGE=1
-    PRIVATE THRUST_FORCE_32_BIT_OFFSET_TYPE=1 CCCL_AVOID_SORT_UNROLL=1
+    ${CMAKE_BENCH_NAME} PRIVATE THRUST_FORCE_32_BIT_OFFSET_TYPE=1 CCCL_AVOID_SORT_UNROLL=1
   )
   target_link_libraries(
     ${CMAKE_BENCH_NAME} PRIVATE cudf_benchmark_common cudf_datagen benchmark::benchmark_main
@@ -221,10 +219,9 @@ ConfigureNVBench(SEARCH_NVBENCH search/contains_scalar.cpp search/contains_table
 
 # ##################################################################################################
 # * sort benchmark --------------------------------------------------------------------------------
-ConfigureBench(SORT_BENCH sort/rank.cpp sort/sort.cpp sort/sort_strings.cpp)
 ConfigureNVBench(
-  SORT_NVBENCH sort/rank_lists.cpp sort/rank_structs.cpp sort/segmented_sort.cpp
-  sort/sort_lists.cpp sort/sort_structs.cpp
+  SORT_NVBENCH sort/rank.cpp sort/rank_lists.cpp sort/rank_structs.cpp sort/segmented_sort.cpp
+  sort/sort.cpp sort/sort_lists.cpp sort/sort_strings.cpp sort/sort_structs.cpp
 )
 
 # ##################################################################################################
@@ -366,6 +363,7 @@ ConfigureNVBench(TRANSFORM_NVBENCH transform/polynomials.cpp transform/transform
 ConfigureNVBench(
   TEXT_NVBENCH
   text/byte_pair_encoding.cpp
+  text/deduplicate.cpp
   text/edit_distance.cpp
   text/hash_ngrams.cpp
   text/jaccard.cpp
@@ -435,7 +433,7 @@ ConfigureNVBench(DECIMAL_NVBENCH decimal/convert_floating.cpp)
 # ##################################################################################################
 # * reshape benchmark
 # ---------------------------------------------------------------------------------
-ConfigureNVBench(RESHAPE_NVBENCH reshape/interleave.cpp)
+ConfigureNVBench(RESHAPE_NVBENCH reshape/interleave.cpp reshape/table_to_array.cpp)
 
 # ##################################################################################################
 # * rolling benchmark

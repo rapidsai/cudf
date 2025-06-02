@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 #include "csv_chunked_writer.hpp"
 #include "cudf_jni_apis.hpp"
 #include "dtype_utils.hpp"
@@ -28,7 +29,6 @@
 #include <cudf/copying.hpp>
 #include <cudf/filling.hpp>
 #include <cudf/groupby.hpp>
-#include <cudf/hashing.hpp>
 #include <cudf/interop.hpp>
 #include <cudf/io/avro.hpp>
 #include <cudf/io/csv.hpp>
@@ -55,10 +55,7 @@
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
-#include <rmm/cuda_stream_view.hpp>
 #include <rmm/mr/device/device_memory_resource.hpp>
-
-#include <thrust/iterator/counting_iterator.h>
 
 #include <arrow/api.h>
 #include <arrow/c/bridge.h>
@@ -1342,12 +1339,14 @@ Java_ai_rapids_cudf_Table_readCSVFromDataSource(JNIEnv* env,
     cudf::jni::native_jintArray n_types(env, j_types);
     cudf::jni::native_jintArray n_scales(env, j_scales);
     if (n_types.is_null() != n_scales.is_null()) {
-      JNI_THROW_NEW(env, cudf::jni::ILLEGAL_ARG_CLASS, "types and scales must match null", NULL);
+      JNI_THROW_NEW(
+        env, cudf::jni::ILLEGAL_ARG_EXCEPTION_CLASS, "types and scales must match null", NULL);
     }
     std::vector<cudf::data_type> data_types;
     if (!n_types.is_null()) {
       if (n_types.size() != n_scales.size()) {
-        JNI_THROW_NEW(env, cudf::jni::ILLEGAL_ARG_CLASS, "types and scales must match size", NULL);
+        JNI_THROW_NEW(
+          env, cudf::jni::ILLEGAL_ARG_EXCEPTION_CLASS, "types and scales must match size", NULL);
       }
       data_types.reserve(n_types.size());
       std::transform(n_types.begin(),
@@ -1415,10 +1414,13 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readCSV(JNIEnv* env,
     JNI_NULL_CHECK(env, inputfilepath, "input file or buffer must be supplied", NULL);
     read_buffer = false;
   } else if (inputfilepath != NULL) {
-    JNI_THROW_NEW(
-      env, cudf::jni::ILLEGAL_ARG_CLASS, "cannot pass in both a buffer and an inputfilepath", NULL);
+    JNI_THROW_NEW(env,
+                  cudf::jni::ILLEGAL_ARG_EXCEPTION_CLASS,
+                  "cannot pass in both a buffer and an inputfilepath",
+                  NULL);
   } else if (buffer_length <= 0) {
-    JNI_THROW_NEW(env, cudf::jni::ILLEGAL_ARG_CLASS, "An empty buffer is not supported", NULL);
+    JNI_THROW_NEW(
+      env, cudf::jni::ILLEGAL_ARG_EXCEPTION_CLASS, "An empty buffer is not supported", NULL);
   }
 
   try {
@@ -1427,12 +1429,14 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readCSV(JNIEnv* env,
     cudf::jni::native_jintArray n_types(env, j_types);
     cudf::jni::native_jintArray n_scales(env, j_scales);
     if (n_types.is_null() != n_scales.is_null()) {
-      JNI_THROW_NEW(env, cudf::jni::ILLEGAL_ARG_CLASS, "types and scales must match null", NULL);
+      JNI_THROW_NEW(
+        env, cudf::jni::ILLEGAL_ARG_EXCEPTION_CLASS, "types and scales must match null", NULL);
     }
     std::vector<cudf::data_type> data_types;
     if (!n_types.is_null()) {
       if (n_types.size() != n_scales.size()) {
-        JNI_THROW_NEW(env, cudf::jni::ILLEGAL_ARG_CLASS, "types and scales must match size", NULL);
+        JNI_THROW_NEW(
+          env, cudf::jni::ILLEGAL_ARG_EXCEPTION_CLASS, "types and scales must match size", NULL);
       }
       data_types.reserve(n_types.size());
       std::transform(n_types.begin(),
@@ -1446,7 +1450,8 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readCSV(JNIEnv* env,
 
     cudf::jni::native_jstring filename(env, inputfilepath);
     if (!read_buffer && filename.is_empty()) {
-      JNI_THROW_NEW(env, cudf::jni::ILLEGAL_ARG_CLASS, "inputfilepath can't be empty", NULL);
+      JNI_THROW_NEW(
+        env, cudf::jni::ILLEGAL_ARG_EXCEPTION_CLASS, "inputfilepath can't be empty", NULL);
     }
 
     cudf::jni::native_jstringArray n_null_values(env, null_values);
@@ -1454,9 +1459,11 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readCSV(JNIEnv* env,
     cudf::jni::native_jstringArray n_false_values(env, false_values);
     cudf::jni::native_jstringArray n_filter_col_names(env, filter_col_names);
 
-    auto source            = read_buffer ? cudf::io::source_info{reinterpret_cast<char*>(buffer),
-                                                      static_cast<std::size_t>(buffer_length)}
-                                         : cudf::io::source_info{filename.get()};
+    auto source =
+      read_buffer
+        ? cudf::io::source_info{cudf::host_span<std::byte const>(
+            reinterpret_cast<std::byte const*>(buffer), static_cast<std::size_t>(buffer_length))}
+        : cudf::io::source_info{filename.get()};
     auto const quote_style = static_cast<cudf::io::quote_style>(j_quote_style);
 
     cudf::io::csv_reader_options opts = cudf::io::csv_reader_options::builder(source)
@@ -1694,14 +1701,15 @@ Java_ai_rapids_cudf_Table_readAndInferJSON(JNIEnv* env,
 {
   JNI_NULL_CHECK(env, buffer, "buffer cannot be null", 0);
   if (buffer_length <= 0) {
-    JNI_THROW_NEW(env, cudf::jni::ILLEGAL_ARG_CLASS, "An empty buffer is not supported", 0);
+    JNI_THROW_NEW(
+      env, cudf::jni::ILLEGAL_ARG_EXCEPTION_CLASS, "An empty buffer is not supported", 0);
   }
 
   try {
     cudf::jni::auto_set_device(env);
 
-    auto source = cudf::io::source_info{reinterpret_cast<char*>(buffer),
-                                        static_cast<std::size_t>(buffer_length)};
+    auto source = cudf::io::source_info{cudf::host_span<std::byte const>(
+      reinterpret_cast<std::byte const*>(buffer), static_cast<std::size_t>(buffer_length))};
 
     auto const recovery_mode = recover_with_null ? cudf::io::json_recovery_mode_t::RECOVER_WITH_NULL
                                                  : cudf::io::json_recovery_mode_t::FAIL;
@@ -1844,13 +1852,16 @@ Java_ai_rapids_cudf_Table_readJSONFromDataSource(JNIEnv* env,
     cudf::jni::native_jintArray n_scales(env, j_scales);
     cudf::jni::native_jintArray n_children(env, j_num_children);
     if (n_types.is_null() != n_scales.is_null()) {
-      JNI_THROW_NEW(env, cudf::jni::ILLEGAL_ARG_CLASS, "types and scales must match null", 0);
+      JNI_THROW_NEW(
+        env, cudf::jni::ILLEGAL_ARG_EXCEPTION_CLASS, "types and scales must match null", 0);
     }
     if (n_types.is_null() != n_col_names.is_null()) {
-      JNI_THROW_NEW(env, cudf::jni::ILLEGAL_ARG_CLASS, "types and names must match null", 0);
+      JNI_THROW_NEW(
+        env, cudf::jni::ILLEGAL_ARG_EXCEPTION_CLASS, "types and names must match null", 0);
     }
     if (n_types.is_null() != n_children.is_null()) {
-      JNI_THROW_NEW(env, cudf::jni::ILLEGAL_ARG_CLASS, "types and num children must match null", 0);
+      JNI_THROW_NEW(
+        env, cudf::jni::ILLEGAL_ARG_EXCEPTION_CLASS, "types and num children must match null", 0);
     }
 
     auto ds = reinterpret_cast<cudf::io::datasource*>(ds_handle);
@@ -1880,15 +1891,16 @@ Java_ai_rapids_cudf_Table_readJSONFromDataSource(JNIEnv* env,
 
     if (!n_types.is_null()) {
       if (n_types.size() != n_scales.size()) {
-        JNI_THROW_NEW(env, cudf::jni::ILLEGAL_ARG_CLASS, "types and scales must match size", 0);
+        JNI_THROW_NEW(
+          env, cudf::jni::ILLEGAL_ARG_EXCEPTION_CLASS, "types and scales must match size", 0);
       }
       if (n_col_names.size() != n_types.size()) {
         JNI_THROW_NEW(
-          env, cudf::jni::ILLEGAL_ARG_CLASS, "types and column names must match size", 0);
+          env, cudf::jni::ILLEGAL_ARG_EXCEPTION_CLASS, "types and column names must match size", 0);
       }
       if (n_children.size() != n_types.size()) {
         JNI_THROW_NEW(
-          env, cudf::jni::ILLEGAL_ARG_CLASS, "types and num children must match size", 0);
+          env, cudf::jni::ILLEGAL_ARG_EXCEPTION_CLASS, "types and num children must match size", 0);
       }
 
       std::map<std::string, cudf::io::schema_element> data_types;
@@ -1945,10 +1957,13 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_readJSON(JNIEnv* env,
     JNI_NULL_CHECK(env, inputfilepath, "input file or buffer must be supplied", 0);
     read_buffer = false;
   } else if (inputfilepath != NULL) {
-    JNI_THROW_NEW(
-      env, cudf::jni::ILLEGAL_ARG_CLASS, "cannot pass in both a buffer and an inputfilepath", 0);
+    JNI_THROW_NEW(env,
+                  cudf::jni::ILLEGAL_ARG_EXCEPTION_CLASS,
+                  "cannot pass in both a buffer and an inputfilepath",
+                  0);
   } else if (buffer_length <= 0) {
-    JNI_THROW_NEW(env, cudf::jni::ILLEGAL_ARG_CLASS, "An empty buffer is not supported", 0);
+    JNI_THROW_NEW(
+      env, cudf::jni::ILLEGAL_ARG_EXCEPTION_CLASS, "An empty buffer is not supported", 0);
   }
 
   try {
@@ -1958,23 +1973,28 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_readJSON(JNIEnv* env,
     cudf::jni::native_jintArray n_scales(env, j_scales);
     cudf::jni::native_jintArray n_children(env, j_num_children);
     if (n_types.is_null() != n_scales.is_null()) {
-      JNI_THROW_NEW(env, cudf::jni::ILLEGAL_ARG_CLASS, "types and scales must match null", 0);
+      JNI_THROW_NEW(
+        env, cudf::jni::ILLEGAL_ARG_EXCEPTION_CLASS, "types and scales must match null", 0);
     }
     if (n_types.is_null() != n_col_names.is_null()) {
-      JNI_THROW_NEW(env, cudf::jni::ILLEGAL_ARG_CLASS, "types and names must match null", 0);
+      JNI_THROW_NEW(
+        env, cudf::jni::ILLEGAL_ARG_EXCEPTION_CLASS, "types and names must match null", 0);
     }
     if (n_types.is_null() != n_children.is_null()) {
-      JNI_THROW_NEW(env, cudf::jni::ILLEGAL_ARG_CLASS, "types and num children must match null", 0);
+      JNI_THROW_NEW(
+        env, cudf::jni::ILLEGAL_ARG_EXCEPTION_CLASS, "types and num children must match null", 0);
     }
 
     cudf::jni::native_jstring filename(env, inputfilepath);
     if (!read_buffer && filename.is_empty()) {
-      JNI_THROW_NEW(env, cudf::jni::ILLEGAL_ARG_CLASS, "inputfilepath can't be empty", 0);
+      JNI_THROW_NEW(env, cudf::jni::ILLEGAL_ARG_EXCEPTION_CLASS, "inputfilepath can't be empty", 0);
     }
 
-    auto source = read_buffer ? cudf::io::source_info{reinterpret_cast<char*>(buffer),
-                                                      static_cast<std::size_t>(buffer_length)}
-                              : cudf::io::source_info{filename.get()};
+    auto source =
+      read_buffer
+        ? cudf::io::source_info{cudf::host_span<std::byte const>(
+            reinterpret_cast<std::byte const*>(buffer), static_cast<std::size_t>(buffer_length))}
+        : cudf::io::source_info{filename.get()};
 
     cudf::io::json_recovery_mode_t recovery_mode =
       recover_with_null ? cudf::io::json_recovery_mode_t::RECOVER_WITH_NULL
@@ -2000,15 +2020,16 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_readJSON(JNIEnv* env,
 
     if (!n_types.is_null()) {
       if (n_types.size() != n_scales.size()) {
-        JNI_THROW_NEW(env, cudf::jni::ILLEGAL_ARG_CLASS, "types and scales must match size", 0);
+        JNI_THROW_NEW(
+          env, cudf::jni::ILLEGAL_ARG_EXCEPTION_CLASS, "types and scales must match size", 0);
       }
       if (n_col_names.size() != n_types.size()) {
         JNI_THROW_NEW(
-          env, cudf::jni::ILLEGAL_ARG_CLASS, "types and column names must match size", 0);
+          env, cudf::jni::ILLEGAL_ARG_EXCEPTION_CLASS, "types and column names must match size", 0);
       }
       if (n_children.size() != n_types.size()) {
         JNI_THROW_NEW(
-          env, cudf::jni::ILLEGAL_ARG_CLASS, "types and num children must match size", 0);
+          env, cudf::jni::ILLEGAL_ARG_EXCEPTION_CLASS, "types and num children must match size", 0);
       }
 
       std::map<std::string, cudf::io::schema_element> data_types;
@@ -2085,15 +2106,18 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readParquet(JNIEnv* env,
     JNI_NULL_CHECK(env, inputfilepath, "input file or buffer must be supplied", NULL);
     read_buffer = false;
   } else if (inputfilepath != NULL) {
-    JNI_THROW_NEW(
-      env, cudf::jni::ILLEGAL_ARG_CLASS, "cannot pass in both a buffer and an inputfilepath", NULL);
+    JNI_THROW_NEW(env,
+                  cudf::jni::ILLEGAL_ARG_EXCEPTION_CLASS,
+                  "cannot pass in both a buffer and an inputfilepath",
+                  NULL);
   }
 
   try {
     cudf::jni::auto_set_device(env);
     cudf::jni::native_jstring filename(env, inputfilepath);
     if (!read_buffer && filename.is_empty()) {
-      JNI_THROW_NEW(env, cudf::jni::ILLEGAL_ARG_CLASS, "inputfilepath can't be empty", NULL);
+      JNI_THROW_NEW(
+        env, cudf::jni::ILLEGAL_ARG_EXCEPTION_CLASS, "inputfilepath can't be empty", NULL);
     }
 
     cudf::jni::native_jstringArray n_filter_col_names(env, filter_col_names);
@@ -2157,24 +2181,30 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readAvro(JNIEnv* env,
   if (!read_buffer) {
     JNI_NULL_CHECK(env, inputfilepath, "input file or buffer must be supplied", NULL);
   } else if (inputfilepath != NULL) {
-    JNI_THROW_NEW(
-      env, cudf::jni::ILLEGAL_ARG_CLASS, "cannot pass in both a buffer and an inputfilepath", NULL);
+    JNI_THROW_NEW(env,
+                  cudf::jni::ILLEGAL_ARG_EXCEPTION_CLASS,
+                  "cannot pass in both a buffer and an inputfilepath",
+                  NULL);
   } else if (buffer_length <= 0) {
-    JNI_THROW_NEW(env, cudf::jni::ILLEGAL_ARG_CLASS, "An empty buffer is not supported", NULL);
+    JNI_THROW_NEW(
+      env, cudf::jni::ILLEGAL_ARG_EXCEPTION_CLASS, "An empty buffer is not supported", NULL);
   }
 
   try {
     cudf::jni::auto_set_device(env);
     cudf::jni::native_jstring filename(env, inputfilepath);
     if (!read_buffer && filename.is_empty()) {
-      JNI_THROW_NEW(env, cudf::jni::ILLEGAL_ARG_CLASS, "inputfilepath can't be empty", NULL);
+      JNI_THROW_NEW(
+        env, cudf::jni::ILLEGAL_ARG_EXCEPTION_CLASS, "inputfilepath can't be empty", NULL);
     }
 
     cudf::jni::native_jstringArray n_filter_col_names(env, filter_col_names);
 
-    auto source = read_buffer ? cudf::io::source_info(reinterpret_cast<char*>(buffer),
-                                                      static_cast<std::size_t>(buffer_length))
-                              : cudf::io::source_info(filename.get());
+    auto source =
+      read_buffer
+        ? cudf::io::source_info(cudf::host_span<std::byte const>(
+            reinterpret_cast<std::byte const*>(buffer), static_cast<std::size_t>(buffer_length)))
+        : cudf::io::source_info(filename.get());
 
     cudf::io::avro_reader_options opts = cudf::io::avro_reader_options::builder(source)
                                            .columns(n_filter_col_names.as_cpp_vector())
@@ -2435,26 +2465,30 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readORC(JNIEnv* env,
     JNI_NULL_CHECK(env, inputfilepath, "input file or buffer must be supplied", NULL);
     read_buffer = false;
   } else if (inputfilepath != NULL) {
-    JNI_THROW_NEW(
-      env, cudf::jni::ILLEGAL_ARG_CLASS, "cannot pass in both a buffer and an inputfilepath", NULL);
+    JNI_THROW_NEW(env,
+                  cudf::jni::ILLEGAL_ARG_EXCEPTION_CLASS,
+                  "cannot pass in both a buffer and an inputfilepath",
+                  NULL);
   } else if (buffer_length <= 0) {
-    JNI_THROW_NEW(env, cudf::jni::ILLEGAL_ARG_CLASS, "An empty buffer is not supported", NULL);
+    JNI_THROW_NEW(
+      env, cudf::jni::ILLEGAL_ARG_EXCEPTION_CLASS, "An empty buffer is not supported", NULL);
   }
 
   try {
     cudf::jni::auto_set_device(env);
     cudf::jni::native_jstring filename(env, inputfilepath);
     if (!read_buffer && filename.is_empty()) {
-      JNI_THROW_NEW(env, cudf::jni::ILLEGAL_ARG_CLASS, "inputfilepath can't be empty", NULL);
+      JNI_THROW_NEW(
+        env, cudf::jni::ILLEGAL_ARG_EXCEPTION_CLASS, "inputfilepath can't be empty", NULL);
     }
 
     cudf::jni::native_jstringArray n_filter_col_names(env, filter_col_names);
 
     cudf::jni::native_jstringArray n_dec128_col_names(env, dec128_col_names);
 
-    auto source = read_buffer
-                    ? cudf::io::source_info(reinterpret_cast<char*>(buffer), buffer_length)
-                    : cudf::io::source_info(filename.get());
+    auto source = read_buffer ? cudf::io::source_info(cudf::host_span<std::byte const>(
+                                  reinterpret_cast<std::byte const*>(buffer), buffer_length))
+                              : cudf::io::source_info(filename.get());
 
     auto builder = cudf::io::orc_reader_options::builder(source);
     if (n_filter_col_names.size() > 0) {
@@ -2863,12 +2897,12 @@ Java_ai_rapids_cudf_Table_convertArrowTableToCudf(JNIEnv* env, jclass, jlong arr
 
     ArrowSchema sch;
     if (!arrow::ExportSchema(*handle->get()->schema(), &sch).ok()) {
-      JNI_THROW_NEW(env, "java/lang/RuntimeException", "Unable to produce an ArrowSchema", 0)
+      JNI_THROW_NEW(env, cudf::jni::RUNTIME_EXCEPTION_CLASS, "Unable to produce an ArrowSchema", 0)
     }
     auto batch = handle->get()->CombineChunksToBatch().ValueOrDie();
     ArrowArray arr;
     if (!arrow::ExportRecordBatch(*batch, &arr).ok()) {
-      JNI_THROW_NEW(env, "java/lang/RuntimeException", "Unable to produce an ArrowArray", 0)
+      JNI_THROW_NEW(env, cudf::jni::RUNTIME_EXCEPTION_CLASS, "Unable to produce an ArrowArray", 0)
     }
     auto ret = cudf::from_arrow(&sch, &arr);
     arr.release(&arr);
@@ -4017,7 +4051,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_dropDuplicates(
         case 3: return cudf::duplicate_keep_option::KEEP_NONE;
         default:
           JNI_THROW_NEW(env,
-                        cudf::jni::ILLEGAL_ARG_CLASS,
+                        cudf::jni::ILLEGAL_ARG_EXCEPTION_CLASS,
                         "Invalid `keep` option",
                         cudf::duplicate_keep_option::KEEP_ANY);
       }
@@ -4243,7 +4277,7 @@ Java_ai_rapids_cudf_Table_rollingWindowAggregate(JNIEnv* env,
 
     if (not valid_window_parameters(values, agg_instances, min_periods, preceding, following)) {
       JNI_THROW_NEW(env,
-                    cudf::jni::ILLEGAL_ARG_CLASS,
+                    cudf::jni::ILLEGAL_ARG_EXCEPTION_CLASS,
                     "Number of aggregation columns must match number of agg ops, and window-specs",
                     nullptr);
     }
@@ -4337,7 +4371,7 @@ Java_ai_rapids_cudf_Table_rangeRollingWindowAggregate(JNIEnv* env,
 
     if (not valid_window_parameters(values, agg_instances, min_periods, preceding, following)) {
       JNI_THROW_NEW(env,
-                    cudf::jni::ILLEGAL_ARG_CLASS,
+                    cudf::jni::ILLEGAL_ARG_EXCEPTION_CLASS,
                     "Number of aggregation columns must match number of agg ops, and window-specs",
                     nullptr);
     }

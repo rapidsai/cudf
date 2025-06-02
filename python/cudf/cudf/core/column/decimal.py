@@ -16,7 +16,7 @@ import cudf
 from cudf.api.types import is_scalar
 from cudf.core._internals import binaryop
 from cudf.core.buffer import acquire_spill_lock, as_buffer
-from cudf.core.column.column import ColumnBase
+from cudf.core.column.column import ColumnBase, pa_mask_buffer_to_mask
 from cudf.core.column.numerical_base import NumericalBaseColumn
 from cudf.core.dtypes import (
     Decimal32Dtype,
@@ -25,16 +25,35 @@ from cudf.core.dtypes import (
     DecimalDtype,
 )
 from cudf.core.mixins import BinaryOperand
-from cudf.core.scalar import _to_plc_scalar, pa_scalar_to_plc_scalar
 from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
     cudf_dtype_to_pa_type,
 )
-from cudf.utils.utils import pa_mask_buffer_to_mask
+from cudf.utils.scalar import pa_scalar_to_plc_scalar
 
 if TYPE_CHECKING:
+    from typing_extensions import Self
+
     from cudf._typing import ColumnBinaryOperand, ColumnLike, Dtype, ScalarLike
     from cudf.core.buffer import Buffer
+    from cudf.core.column.numerical import NumericalColumn
+    from cudf.core.column.string import StringColumn
+
+
+def _to_plc_scalar(scalar: int | Decimal, dtype: DecimalDtype) -> plc.Scalar:
+    pa_scalar = pa.scalar(scalar, type=dtype.to_arrow())
+    plc_scalar = pa_scalar_to_plc_scalar(pa_scalar)
+    if isinstance(dtype, (Decimal32Dtype, Decimal64Dtype)):
+        # pyarrow only supports decimal128
+        if isinstance(dtype, Decimal32Dtype):
+            plc_type = plc.DataType(plc.TypeId.DECIMAL32, -dtype.scale)
+        elif isinstance(dtype, Decimal64Dtype):
+            plc_type = plc.DataType(plc.TypeId.DECIMAL64, -dtype.scale)
+        plc_column = plc.unary.cast(
+            plc.Column.from_scalar(plc_scalar, 1), plc_type
+        )
+        plc_scalar = plc.copying.get_element(plc_column, 0)
+    return plc_scalar
 
 
 class DecimalBaseColumn(NumericalBaseColumn):
@@ -72,6 +91,12 @@ class DecimalBaseColumn(NumericalBaseColumn):
             "Decimals are not yet supported via `__cuda_array_interface__`"
         )
 
+    def element_indexing(self, index: int):
+        result = super().element_indexing(index)
+        if isinstance(result, pa.Scalar):
+            return result.as_py()
+        return result
+
     def as_decimal_column(
         self,
         dtype: DecimalDtype,
@@ -86,7 +111,7 @@ class DecimalBaseColumn(NumericalBaseColumn):
             return self
         return self.cast(dtype=dtype)  # type: ignore[return-value]
 
-    def as_string_column(self) -> cudf.core.column.StringColumn:
+    def as_string_column(self) -> StringColumn:
         if len(self) > 0:
             with acquire_spill_lock():
                 plc_column = (
@@ -254,9 +279,7 @@ class DecimalBaseColumn(NumericalBaseColumn):
             return other, self.dtype._from_decimal(Decimal(other))
         return super()._normalize_binop_operand(other), self.dtype
 
-    def as_numerical_column(
-        self, dtype: np.dtype
-    ) -> cudf.core.column.NumericalColumn:
+    def as_numerical_column(self, dtype: np.dtype) -> NumericalColumn:
         return self.cast(dtype=dtype)  # type: ignore[return-value]
 
 
@@ -284,7 +307,7 @@ class Decimal32Column(DecimalBaseColumn):
         )
 
     @classmethod
-    def from_arrow(cls, data: pa.Array):
+    def from_arrow(cls, data: pa.Array) -> Self:
         dtype = Decimal32Dtype.from_arrow(data.type)
         mask_buf = data.buffers()[0]
         mask = (
@@ -365,7 +388,7 @@ class Decimal128Column(DecimalBaseColumn):
         )
 
     @classmethod
-    def from_arrow(cls, data: pa.Array):
+    def from_arrow(cls, data: pa.Array) -> Self:
         result = cast(Decimal128Dtype, super().from_arrow(data))
         result.dtype.precision = data.type.precision
         return result
@@ -406,7 +429,7 @@ class Decimal64Column(DecimalBaseColumn):
         )
 
     @classmethod
-    def from_arrow(cls, data: pa.Array):
+    def from_arrow(cls, data: pa.Array) -> Self:
         dtype = Decimal64Dtype.from_arrow(data.type)
         mask_buf = data.buffers()[0]
         mask = (

@@ -49,6 +49,7 @@ from cudf_polars.dsl.traversal import (
 from cudf_polars.dsl.utils.naming import unique_names
 from cudf_polars.experimental.base import PartitionInfo
 from cudf_polars.experimental.repartition import Repartition
+from cudf_polars.experimental.utils import _leaf_column_names
 
 if TYPE_CHECKING:
     from collections.abc import Generator, MutableMapping, Sequence
@@ -168,6 +169,19 @@ def _decompose_unique(
         names=names,
     )
     (column,) = columns
+
+    assert config_options.executor.name == "streaming", (
+        "'in-memory' executor not supported in '_decompose_unique'"
+    )
+
+    cardinality: float | None = None
+    if cardinality_factor := {
+        max(min(v, 1.0), 0.00001)
+        for k, v in config_options.executor.cardinality_factor.items()
+        if k in _leaf_column_names(child)
+    }:
+        cardinality = max(cardinality_factor)
+
     input_ir, partition_info = lower_distinct(
         Distinct(
             {column.name: column.dtype},
@@ -180,7 +194,9 @@ def _decompose_unique(
         input_ir,
         partition_info,
         config_options,
+        cardinality=cardinality,
     )
+
     return column, input_ir, partition_info
 
 
@@ -429,7 +445,7 @@ def _decompose(
     input_ir: IR
     assert len(input_irs) > 0  # Must have at least one input IR
     partition_count = max(partition_info[ir].count for ir in input_irs)
-    unique_input_irs = list(dict.fromkeys(input_irs))
+    unique_input_irs = [k for k in dict.fromkeys(input_irs) if not isinstance(k, Empty)]
     if len(unique_input_irs) > 1:
         # Need to make sure we only have a single input IR
         # TODO: Check that we aren't concatenating misaligned
@@ -445,7 +461,7 @@ def _decompose(
         )
         partition_info[input_ir] = PartitionInfo(count=partition_count)
     else:
-        input_ir = input_irs[0]
+        input_ir = unique_input_irs[0]
 
     # Call into class-specific logic to decompose ``expr``
     return _decompose_expr_node(

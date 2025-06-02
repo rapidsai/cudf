@@ -8,11 +8,12 @@ import operator
 from functools import reduce
 from typing import TYPE_CHECKING, Any
 
-from cudf_polars.dsl.ir import Join
+from cudf_polars.dsl.ir import ConditionalJoin, Join
 from cudf_polars.experimental.base import PartitionInfo, get_key_name
 from cudf_polars.experimental.dispatch import generate_ir_tasks, lower_ir_node
+from cudf_polars.experimental.repartition import Repartition
 from cudf_polars.experimental.shuffle import Shuffle, _partition_dataframe
-from cudf_polars.experimental.utils import _concat, _lower_ir_fallback
+from cudf_polars.experimental.utils import _concat, _fallback_inform, _lower_ir_fallback
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
@@ -183,6 +184,44 @@ def _make_bcast_join(
     return new_node, partition_info
 
 
+@lower_ir_node.register(ConditionalJoin)
+def _(
+    ir: ConditionalJoin, rec: LowerIRTransformer
+) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+    if ir.options[2]:  # pragma: no cover
+        return _lower_ir_fallback(
+            ir,
+            rec,
+            msg="Slice not supported in ConditionalJoin for multiple partitions.",
+        )
+
+    # Lower children
+    left, right = ir.children
+    left, pi_left = rec(left)
+    right, pi_right = rec(right)
+
+    # Fallback to single partition on the smaller table
+    left_count = pi_left[left].count
+    right_count = pi_right[right].count
+    output_count = max(left_count, right_count)
+    fallback_msg = "ConditionalJoin not supported for multiple partitions."
+    if left_count < right_count:
+        if left_count > 1:
+            left = Repartition(left.schema, left)
+            pi_left[left] = PartitionInfo(count=1)
+            _fallback_inform(fallback_msg, rec.state["config_options"])
+    elif right_count > 1:
+        right = Repartition(left.schema, right)
+        pi_right[right] = PartitionInfo(count=1)
+        _fallback_inform(fallback_msg, rec.state["config_options"])
+
+    # Reconstruct and return
+    new_node = ir.reconstruct([left, right])
+    partition_info = reduce(operator.or_, (pi_left, pi_right))
+    partition_info[new_node] = PartitionInfo(count=output_count)
+    return new_node, partition_info
+
+
 @lower_ir_node.register(Join)
 def _(
     ir: Join, rec: LowerIRTransformer
@@ -276,8 +315,13 @@ def _(
         getit_name = f"getit-{out_name}"
         inter_name = f"inter-{out_name}"
 
+        # Split each large partition if we have
+        # multiple small partitions (unless this
+        # is an inner join)
+        split_large = ir.options[0] != "Inner" and small_size > 1
+
         for part_out in range(out_size):
-            if ir.options[0] != "Inner":
+            if split_large:
                 graph[(split_name, part_out)] = (
                     _partition_dataframe,
                     (large_name, part_out),
@@ -288,7 +332,7 @@ def _(
             _concat_list = []
             for j in range(small_size):
                 left_key: tuple[str, int] | tuple[str, int, int]
-                if ir.options[0] != "Inner":
+                if split_large:
                     left_key = (getit_name, part_out, j)
                     graph[left_key] = (operator.getitem, (split_name, part_out), j)
                 else:

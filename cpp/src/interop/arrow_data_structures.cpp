@@ -276,6 +276,17 @@ arrow_column::arrow_column(ArrowSchema&& schema,
   cached_view  = tmp.cached_view;
 }
 
+arrow_column::arrow_column(ArrowArrayStream&& input,
+                           rmm::cuda_stream_view stream,
+                           rmm::device_async_resource_ref mr)
+{
+  auto col     = from_arrow_stream_column(&input, stream, mr);
+  auto tmp     = arrow_column(std::move(*col), get_column_metadata(col->view()), stream, mr);
+  container    = tmp.container;
+  view_columns = std::move(tmp.view_columns);
+  cached_view  = tmp.cached_view;
+}
+
 void arrow_column::to_arrow_schema(ArrowSchema* output,
                                    rmm::cuda_stream_view stream,
                                    rmm::device_async_resource_ref mr) const

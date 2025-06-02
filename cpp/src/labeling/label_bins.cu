@@ -208,7 +208,7 @@ std::unique_ptr<column> label_bins(column_view const& input,
                                    rmm::cuda_stream_view stream,
                                    rmm::device_async_resource_ref mr)
 {
-  CUDF_FUNC_RANGE()
+  CUDF_FUNC_RANGE();
   CUDF_EXPECTS(
     cudf::have_same_types(input, left_edges) && cudf::have_same_types(input, right_edges),
     "The input and edge columns must have the same types.",

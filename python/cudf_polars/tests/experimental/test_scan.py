@@ -46,14 +46,14 @@ def test_parallel_scan(tmp_path, df, fmt, scan_fn):
 
 @pytest.mark.parametrize("blocksize", [1_000, 10_000, 1_000_000])
 @pytest.mark.parametrize("n_files", [2, 3])
-def test_parquet_blocksize(tmp_path, df, blocksize, n_files):
+def test_target_partition_size(tmp_path, df, blocksize, n_files):
     make_partitioned_source(df, tmp_path, "parquet", n_files=n_files)
     q = pl.scan_parquet(tmp_path)
     engine = pl.GPUEngine(
         raise_on_fail=True,
         executor="streaming",
         executor_options={
-            "parquet_blocksize": blocksize,
+            "target_partition_size": blocksize,
             "scheduler": DEFAULT_SCHEDULER,
         },
     )

@@ -16,6 +16,7 @@ from pylibcudf.libcudf.types cimport bitmask_type, size_type
 
 from .gpumemoryview cimport gpumemoryview
 from .types cimport DataType
+from .scalar cimport Scalar
 
 
 cdef class OwnerWithCAI:
@@ -32,6 +33,9 @@ cdef class OwnerMaskWithCAI:
 
     @staticmethod
     cdef create(column_view cv, object owner)
+
+
+cdef gpumemoryview _copy_array_to_device(object buf)
 
 
 cdef class Column:
@@ -60,6 +64,15 @@ cdef class Column:
     @staticmethod
     cdef Column from_column_view_of_arbitrary(const column_view& cv, object owner)
 
+    @staticmethod
+    cdef Column _wrap_nested_list_column(
+        gpumemoryview data,
+        tuple shape,
+        DataType dtype,
+        Column base=*,
+    )
+
+    cpdef Scalar to_scalar(self)
     cpdef DataType type(self)
     cpdef Column child(self, size_type index)
     cpdef size_type num_children(self)

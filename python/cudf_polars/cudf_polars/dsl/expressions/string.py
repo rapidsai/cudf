@@ -25,7 +25,7 @@ if TYPE_CHECKING:
 
     from polars.polars import _expr_nodes as pl_expr
 
-    from cudf_polars.containers import DataFrame
+    from cudf_polars.containers import DataFrame, DataType
 
 __all__ = ["StringFunction"]
 
@@ -96,7 +96,7 @@ class StringFunction(Expr):
 
     def __init__(
         self,
-        dtype: plc.DataType,
+        dtype: DataType,
         name: StringFunction.Name,
         options: tuple[Any, ...],
         *children: Expr,
@@ -136,7 +136,7 @@ class StringFunction(Expr):
                     raise NotImplementedError(
                         "Regex contains only supports a scalar pattern"
                     )
-                pattern = self.children[1].value.as_py()
+                pattern = self.children[1].value
                 try:
                     self._regex_program = plc.strings.regex_program.RegexProgram.create(
                         pattern,
@@ -155,7 +155,7 @@ class StringFunction(Expr):
             target = self.children[1]
             # Above, we raise NotImplementedError if the target is not a Literal,
             # so we can safely access .value here.
-            if target.value == pa.scalar("", type=target.value.type):  # type: ignore[attr-defined]
+            if target.value == "":  # type: ignore[attr-defined]
                 raise NotImplementedError(
                     "libcudf replace does not support empty strings"
                 )
@@ -172,7 +172,12 @@ class StringFunction(Expr):
             target = self.children[1]
             # Above, we raise NotImplementedError if the target is not a Literal,
             # so we can safely access .value here.
-            if pc.any(pc.equal(target.value.cast(pa.string()), "")).as_py():  # type: ignore[attr-defined]
+            if (isinstance(target, Literal) and target.value == "") or (
+                isinstance(target, LiteralColumn)
+                and pc.any(
+                    pc.equal(target.value.cast(pa.string()), "")  # type: ignore[attr-defined]
+                ).as_py()
+            ):
                 raise NotImplementedError(
                     "libcudf replace_many is implemented differently from polars "
                     "for empty strings"
@@ -246,8 +251,8 @@ class StringFunction(Expr):
             # from the last element of the string. If the end index would be
             # below zero, an empty string is returned.
             # Do this maths on the host
-            start = expr_offset.value.as_py()
-            length = expr_length.value.as_py()
+            start = expr_offset.value
+            length = expr_length.value
 
             if length == 0:
                 stop = start
@@ -315,13 +320,11 @@ class StringFunction(Expr):
             )
 
             if strict:
-                if not plc.interop.to_arrow(
-                    plc.reduce.reduce(
-                        is_timestamps,
-                        plc.aggregation.all(),
-                        plc.DataType(plc.TypeId.BOOL8),
-                    )
-                ).as_py():
+                if not plc.reduce.reduce(
+                    is_timestamps,
+                    plc.aggregation.all(),
+                    plc.DataType(plc.TypeId.BOOL8),
+                ).to_py():
                     raise InvalidOperationError("conversion from `str` failed.")
             else:
                 not_timestamps = plc.unary.unary_operation(
@@ -333,7 +336,7 @@ class StringFunction(Expr):
                 )
                 return Column(
                     plc.strings.convert.convert_datetime.to_timestamps(
-                        res.columns()[0], self.dtype, format
+                        res.columns()[0], self.dtype.plc, format
                     )
                 )
         elif self.name is StringFunction.Name.Replace:

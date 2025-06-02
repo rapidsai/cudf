@@ -25,7 +25,6 @@ del validate_setup
 import cupy
 from numba import cuda
 
-import rmm
 from rmm.allocators.cupy import rmm_cupy_allocator
 from rmm.allocators.numba import RMMNumbaManager
 
@@ -51,7 +50,6 @@ from cudf.core.dtypes import (
 )
 from cudf.core.groupby import Grouper, NamedAgg
 from cudf.core.index import (
-    BaseIndex,
     CategoricalIndex,
     DatetimeIndex,
     Index,
@@ -71,8 +69,7 @@ from cudf.core.reshape import (
     pivot_table,
     unstack,
 )
-from cudf.core.scalar import Scalar
-from cudf.core.series import Series, isclose
+from cudf.core.series import Series
 from cudf.core.tools.datetimes import DateOffset, date_range, to_datetime
 from cudf.core.tools.numeric import to_numeric
 from cudf.io import (
@@ -92,7 +89,6 @@ from cudf.options import (
     option_context,
     set_option,
 )
-from cudf.utils.utils import clear_cache
 
 cuda.set_memory_manager(RMMNumbaManager)
 cupy.cuda.set_allocator(rmm_cupy_allocator)
@@ -102,14 +98,8 @@ del cupy
 del rmm_cupy_allocator
 del RMMNumbaManager
 
-rmm.register_reinitialize_hook(clear_cache)
-
-del clear_cache
-del rmm
-
 __all__ = [
     "NA",
-    "BaseIndex",
     "CategoricalDtype",
     "CategoricalIndex",
     "DataFrame",
@@ -127,7 +117,6 @@ __all__ = [
     "NaT",
     "NamedAgg",
     "RangeIndex",
-    "Scalar",
     "Series",
     "StructDtype",
     "TimedeltaIndex",
@@ -148,7 +137,6 @@ __all__ = [
     "get_option",
     "interval_range",
     "io",
-    "isclose",
     "melt",
     "merge",
     "option_context",

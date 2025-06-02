@@ -8,7 +8,7 @@ import warnings
 from collections import abc
 from functools import wraps
 from inspect import isclass
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
 import cupy as cp
 import numpy as np
@@ -35,6 +35,10 @@ from cudf.core.dtypes import (  # noqa: F401
     is_struct_dtype,
 )
 from cudf.utils.dtypes import CUDF_STRING_DTYPE
+
+if TYPE_CHECKING:
+    from cudf.core.index import CategoricalIndex
+    from cudf.core.series import Series
 
 
 def is_numeric_dtype(obj):
@@ -68,7 +72,7 @@ def is_numeric_dtype(obj):
             getattr(obj, "dtype", None), _BaseDtype
         ):
             return False
-    if isinstance(obj, cudf.BaseIndex):
+    if isinstance(obj, cudf.Index):
         return obj._is_numeric()
     return pd_types.is_numeric_dtype(obj)
 
@@ -80,8 +84,6 @@ def is_integer(obj):
     -------
     bool
     """
-    if isinstance(obj, cudf.Scalar):
-        return obj.dtype.kind in "iu"
     return pd.api.types.is_integer(obj)  # noqa: TID251
 
 
@@ -132,7 +134,6 @@ def is_scalar(val):
     return isinstance(
         val,
         (
-            cudf.Scalar,
             cudf.core.tools.datetimes.DateOffset,
             plc.Scalar,
             pa.Scalar,
@@ -211,7 +212,7 @@ def _wrap_pandas_is_dtype_api(func):
 
 
 def _union_categoricals(
-    to_union: list[cudf.Series | cudf.CategoricalIndex],
+    to_union: list[Series | CategoricalIndex],
     sort_categories: bool = False,
     ignore_order: bool = False,
 ):
@@ -280,7 +281,7 @@ def is_bool_dtype(arr_or_dtype):
     >>> is_bool_dtype(cudf.Series([True, False], dtype='category'))
     True
     """
-    if isinstance(arr_or_dtype, cudf.BaseIndex):
+    if isinstance(arr_or_dtype, cudf.Index):
         return arr_or_dtype._is_boolean()
     elif isinstance(arr_or_dtype, cudf.Series):
         if isinstance(arr_or_dtype.dtype, cudf.CategoricalDtype):
@@ -324,7 +325,7 @@ def is_object_dtype(arr_or_dtype):
     >>> is_object_dtype([1, 2, 3])
     False
     """
-    if isinstance(arr_or_dtype, cudf.BaseIndex):
+    if isinstance(arr_or_dtype, cudf.Index):
         return arr_or_dtype._is_object()
     elif isinstance(arr_or_dtype, cudf.Series):
         return pd_types.is_object_dtype(arr_or_dtype=arr_or_dtype.dtype)
@@ -364,7 +365,7 @@ def is_float_dtype(arr_or_dtype) -> bool:
     >>> is_float_dtype(cudf.Index([1, 2.]))
     True
     """
-    if isinstance(arr_or_dtype, cudf.BaseIndex):
+    if isinstance(arr_or_dtype, cudf.Index):
         return arr_or_dtype._is_floating()
     return _wrap_pandas_is_dtype_api(pd_types.is_float_dtype)(arr_or_dtype)
 
@@ -415,7 +416,7 @@ def is_integer_dtype(arr_or_dtype) -> bool:
     >>> is_integer_dtype(cudf.Index([1, 2.]))  # float
     False
     """
-    if isinstance(arr_or_dtype, cudf.BaseIndex):
+    if isinstance(arr_or_dtype, cudf.Index):
         return arr_or_dtype._is_integer()
     return _wrap_pandas_is_dtype_api(pd_types.is_integer_dtype)(arr_or_dtype)
 
@@ -476,37 +477,6 @@ def is_datetime64tz_dtype(obj):
         FutureWarning,
     )
     return _is_datetime64tz_dtype(obj)
-
-
-def _is_pandas_nullable_extension_dtype(dtype_to_check) -> bool:
-    if isinstance(
-        dtype_to_check,
-        (
-            pd.UInt8Dtype,
-            pd.UInt16Dtype,
-            pd.UInt32Dtype,
-            pd.UInt64Dtype,
-            pd.Int8Dtype,
-            pd.Int16Dtype,
-            pd.Int32Dtype,
-            pd.Int64Dtype,
-            pd.Float32Dtype,
-            pd.Float64Dtype,
-            pd.BooleanDtype,
-            pd.StringDtype,
-            pd.ArrowDtype,
-        ),
-    ):
-        return True
-    elif isinstance(dtype_to_check, pd.CategoricalDtype):
-        if dtype_to_check.categories is None:
-            return False
-        return _is_pandas_nullable_extension_dtype(
-            dtype_to_check.categories.dtype
-        )
-    elif isinstance(dtype_to_check, pd.IntervalDtype):
-        return _is_pandas_nullable_extension_dtype(dtype_to_check.subtype)
-    return False
 
 
 # TODO: The below alias is removed for now since improving cudf categorical

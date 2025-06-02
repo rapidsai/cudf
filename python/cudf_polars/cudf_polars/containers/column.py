@@ -177,6 +177,44 @@ class Column:
             null_order=like.null_order,
         )
 
+    def check_sorted(
+        self,
+        *,
+        order: plc.types.Order,
+        null_order: plc.types.NullOrder,
+    ) -> bool:
+        """
+        Check if the column is sorted.
+
+        Parameters
+        ----------
+        order
+            The requested sort order.
+        null_order
+            Where nulls sort to.
+
+        Returns
+        -------
+        True if the column is sorted, false otherwise.
+
+        Notes
+        -----
+        If the sortedness flag is not set, this launches a kernel to
+        check sortedness.
+        """
+        if self.obj.size() <= 1 or self.obj.size() == self.obj.null_count():
+            return True
+        if self.is_sorted == plc.types.Sorted.YES:
+            return self.order == order and (
+                self.obj.null_count() == 0 or self.null_order == null_order
+            )
+        if plc.sorting.is_sorted(plc.Table([self.obj]), [order], [null_order]):
+            self.sorted = plc.types.Sorted.YES
+            self.order = order
+            self.null_order = null_order
+            return True
+        return False
+
     def astype(self, dtype: plc.DataType) -> Column:
         """
         Cast the column to as the requested dtype.
@@ -220,24 +258,20 @@ class Column:
         else:
             if is_floating_point(dtype):
                 floats = is_float(self.obj)
-                if not plc.interop.to_arrow(
-                    plc.reduce.reduce(
-                        floats,
-                        plc.aggregation.all(),
-                        plc.DataType(plc.TypeId.BOOL8),
-                    )
-                ).as_py():
+                if not plc.reduce.reduce(
+                    floats,
+                    plc.aggregation.all(),
+                    plc.DataType(plc.TypeId.BOOL8),
+                ).to_py():
                     raise InvalidOperationError("Conversion from `str` failed.")
                 return to_floats(self.obj, dtype)
             else:
                 integers = is_integer(self.obj)
-                if not plc.interop.to_arrow(
-                    plc.reduce.reduce(
-                        integers,
-                        plc.aggregation.all(),
-                        plc.DataType(plc.TypeId.BOOL8),
-                    )
-                ).as_py():
+                if not plc.reduce.reduce(
+                    integers,
+                    plc.aggregation.all(),
+                    plc.DataType(plc.TypeId.BOOL8),
+                ).to_py():
                     raise InvalidOperationError("Conversion from `str` failed.")
                 return to_integers(self.obj, dtype)
 
@@ -340,13 +374,11 @@ class Column:
     def nan_count(self) -> int:
         """Return the number of NaN values in the column."""
         if plc.traits.is_floating_point(self.obj.type()):
-            return plc.interop.to_arrow(
-                plc.reduce.reduce(
-                    plc.unary.is_nan(self.obj),
-                    plc.aggregation.sum(),
-                    plc.types.SIZE_TYPE,
-                )
-            ).as_py()
+            return plc.reduce.reduce(
+                plc.unary.is_nan(self.obj),
+                plc.aggregation.sum(),
+                plc.types.SIZE_TYPE,
+            ).to_py()
         return 0
 
     @property

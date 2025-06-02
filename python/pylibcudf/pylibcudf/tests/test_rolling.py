@@ -65,15 +65,13 @@ def preceding_endpoint(request):
     elif request.param == "current_row":
         return plc.rolling.CurrentRow()
     elif request.param == "bounded_closed_positive":
-        return plc.rolling.BoundedClosed(plc.interop.from_arrow(pa.scalar(10)))
+        return plc.rolling.BoundedClosed(plc.Scalar.from_arrow(pa.scalar(10)))
     elif request.param == "bounded_closed_negative":
-        return plc.rolling.BoundedClosed(
-            plc.interop.from_arrow(pa.scalar(-10))
-        )
+        return plc.rolling.BoundedClosed(plc.Scalar.from_arrow(pa.scalar(-10)))
     elif request.param == "bounded_open_positive":
-        return plc.rolling.BoundedOpen(plc.interop.from_arrow(pa.scalar(10)))
+        return plc.rolling.BoundedOpen(plc.Scalar.from_arrow(pa.scalar(10)))
     elif request.param == "bounded_open_negative":
-        return plc.rolling.BoundedOpen(plc.interop.from_arrow(pa.scalar(-10)))
+        return plc.rolling.BoundedOpen(plc.Scalar.from_arrow(pa.scalar(-10)))
 
 
 @pytest.fixture(
@@ -92,13 +90,13 @@ def following_endpoint(request):
     elif request.param == "current_row":
         return plc.rolling.CurrentRow()
     elif request.param == "bounded_closed_positive":
-        return plc.rolling.BoundedClosed(plc.interop.from_arrow(pa.scalar(2)))
+        return plc.rolling.BoundedClosed(plc.Scalar.from_arrow(pa.scalar(2)))
     elif request.param == "bounded_closed_negative":
-        return plc.rolling.BoundedClosed(plc.interop.from_arrow(pa.scalar(-2)))
+        return plc.rolling.BoundedClosed(plc.Scalar.from_arrow(pa.scalar(-2)))
     elif request.param == "bounded_open_positive":
-        return plc.rolling.BoundedOpen(plc.interop.from_arrow(pa.scalar(2)))
+        return plc.rolling.BoundedOpen(plc.Scalar.from_arrow(pa.scalar(2)))
     elif request.param == "bounded_open_negative":
-        return plc.rolling.BoundedOpen(plc.interop.from_arrow(pa.scalar(-2)))
+        return plc.rolling.BoundedOpen(plc.Scalar.from_arrow(pa.scalar(-2)))
 
 
 @pytest.fixture
@@ -205,10 +203,10 @@ def test_rolling_windows(
     if len(groups) == 0:
         keys = plc.Table([])
     else:
-        keys = plc.Table([plc.interop.from_arrow(pa.array(groups))])
+        keys = plc.Table([plc.Column.from_arrow(pa.array(groups))])
 
-    orderby = plc.interop.from_arrow(pa.array(orderby))
-    values = plc.interop.from_arrow(pa.array(values))
+    orderby = plc.Column.from_arrow(pa.array(orderby))
+    values = plc.Column.from_arrow(pa.array(values))
 
     request = plc.rolling.RollingRequest(
         values, 1, plc.aggregation.collect_list()
@@ -222,4 +220,4 @@ def test_rolling_windows(
         following_endpoint,
         [request],
     ).columns()
-    assert_column_eq(got, expect)
+    assert_column_eq(expect, got)

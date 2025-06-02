@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -346,77 +346,81 @@ TEST_F(Unique, NullableListsKeepFirstLastNone)
   auto const key_idx = std::vector<cudf::size_type>{1};
 
   // KEEP FIRST
-  {// Nulls are equal.
-   {auto const exp_idx = int32s_col{0, 2, 1, 3, 5, 6, 4};
-  auto const exp_keys = lists_col{{{}, {1, 1}, {1}, {} /*NULL*/, {2}, {2, 1}, {2, 2}}, null_at(3)};
-  auto const expected = cudf::table_view{{exp_idx, exp_keys}};
+  {  // Nulls are equal.
+    {
+      auto const exp_idx = int32s_col{0, 2, 1, 3, 5, 6, 4};
+      auto const exp_keys =
+        lists_col{{{}, {1, 1}, {1}, {} /*NULL*/, {2}, {2, 1}, {2, 2}}, null_at(3)};
+      auto const expected = cudf::table_view{{exp_idx, exp_keys}};
 
-  auto const result = cudf::unique(input, key_idx, KEEP_FIRST);
+      auto const result = cudf::unique(input, key_idx, KEEP_FIRST);
 
-  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, *result);
-}
+      CUDF_TEST_EXPECT_TABLES_EQUAL(expected, *result);
+    }
 
-// Nulls are unequal.
-{
-  auto const exp_idx = int32s_col{0, 2, 1, 3, 4, 5, 6, 4};
-  auto const exp_keys =
-    lists_col{{{}, {1, 1}, {1}, {} /*NULL*/, {} /*NULL*/, {2}, {2, 1}, {2, 2}}, nulls_at({3, 4})};
-  auto const expected = cudf::table_view{{exp_idx, exp_keys}};
+    // Nulls are unequal.
+    {
+      auto const exp_idx  = int32s_col{0, 2, 1, 3, 4, 5, 6, 4};
+      auto const exp_keys = lists_col{
+        {{}, {1, 1}, {1}, {} /*NULL*/, {} /*NULL*/, {2}, {2, 1}, {2, 2}}, nulls_at({3, 4})};
+      auto const expected = cudf::table_view{{exp_idx, exp_keys}};
 
-  auto const result = cudf::unique(input, key_idx, KEEP_FIRST, NULL_UNEQUAL);
+      auto const result = cudf::unique(input, key_idx, KEEP_FIRST, NULL_UNEQUAL);
 
-  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, *result);
-}
-}
-
-// KEEP LAST
-{// Nulls are equal.
- {auto const exp_idx = int32s_col{1, 2, 2, 4, 6, 6, 5};
-auto const exp_keys = lists_col{{{}, {1, 1}, {1}, {} /*NULL*/, {2}, {2, 1}, {2, 2}}, null_at(3)};
-auto const expected = cudf::table_view{{exp_idx, exp_keys}};
-
-auto const result = cudf::unique(input, key_idx, KEEP_LAST);
-
-CUDF_TEST_EXPECT_TABLES_EQUAL(expected, *result);
-}
-
-// Nulls are unequal.
-{
-  auto const exp_idx = int32s_col{1, 2, 2, 3, 4, 6, 6, 5};
-  auto const exp_keys =
-    lists_col{{{}, {1, 1}, {1}, {} /*NULL*/, {} /*NULL*/, {2}, {2, 1}, {2, 2}}, nulls_at({3, 4})};
-  auto const expected = cudf::table_view{{exp_idx, exp_keys}};
-
-  auto const result = cudf::unique(input, key_idx, KEEP_LAST, NULL_UNEQUAL);
-
-  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, *result);
-}
-}
-
-// KEEP NONE
-{
-  // Nulls are equal.
-  {
-    auto const exp_idx  = int32s_col{2, 6};
-    auto const exp_keys = lists_col{{{1, 1}, {2, 1}}, nulls_at({})};
-    auto const expected = cudf::table_view{{exp_idx, exp_keys}};
-
-    auto const result = cudf::unique(input, key_idx, KEEP_NONE);
-
-    CUDF_TEST_EXPECT_TABLES_EQUAL(expected, *result);
+      CUDF_TEST_EXPECT_TABLES_EQUAL(expected, *result);
+    }
   }
 
-  // Nulls are unequal.
-  {
-    auto const exp_idx  = int32s_col{2, 3, 4, 6};
-    auto const exp_keys = lists_col{{{1, 1}, {} /*NULL*/, {} /*NULL*/, {2, 1}}, nulls_at({1, 2})};
-    auto const expected = cudf::table_view{{exp_idx, exp_keys}};
+  // KEEP LAST
+  {  // Nulls are equal.
+    {
+      auto const exp_idx = int32s_col{1, 2, 2, 4, 6, 6, 5};
+      auto const exp_keys =
+        lists_col{{{}, {1, 1}, {1}, {} /*NULL*/, {2}, {2, 1}, {2, 2}}, null_at(3)};
+      auto const expected = cudf::table_view{{exp_idx, exp_keys}};
 
-    auto const result = cudf::unique(input, key_idx, KEEP_NONE, NULL_UNEQUAL);
+      auto const result = cudf::unique(input, key_idx, KEEP_LAST);
 
-    CUDF_TEST_EXPECT_TABLES_EQUAL(expected, *result);
+      CUDF_TEST_EXPECT_TABLES_EQUAL(expected, *result);
+    }
+
+    // Nulls are unequal.
+    {
+      auto const exp_idx  = int32s_col{1, 2, 2, 3, 4, 6, 6, 5};
+      auto const exp_keys = lists_col{
+        {{}, {1, 1}, {1}, {} /*NULL*/, {} /*NULL*/, {2}, {2, 1}, {2, 2}}, nulls_at({3, 4})};
+      auto const expected = cudf::table_view{{exp_idx, exp_keys}};
+
+      auto const result = cudf::unique(input, key_idx, KEEP_LAST, NULL_UNEQUAL);
+
+      CUDF_TEST_EXPECT_TABLES_EQUAL(expected, *result);
+    }
   }
-}
+
+  // KEEP NONE
+  {
+    // Nulls are equal.
+    {
+      auto const exp_idx  = int32s_col{2, 6};
+      auto const exp_keys = lists_col{{{1, 1}, {2, 1}}, nulls_at({})};
+      auto const expected = cudf::table_view{{exp_idx, exp_keys}};
+
+      auto const result = cudf::unique(input, key_idx, KEEP_NONE);
+
+      CUDF_TEST_EXPECT_TABLES_EQUAL(expected, *result);
+    }
+
+    // Nulls are unequal.
+    {
+      auto const exp_idx  = int32s_col{2, 3, 4, 6};
+      auto const exp_keys = lists_col{{{1, 1}, {} /*NULL*/, {} /*NULL*/, {2, 1}}, nulls_at({1, 2})};
+      auto const expected = cudf::table_view{{exp_idx, exp_keys}};
+
+      auto const result = cudf::unique(input, key_idx, KEEP_NONE, NULL_UNEQUAL);
+
+      CUDF_TEST_EXPECT_TABLES_EQUAL(expected, *result);
+    }
+  }
 }
 
 TEST_F(Unique, ListsOfStructsKeepAny)

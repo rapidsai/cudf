@@ -9,7 +9,7 @@ context:
   date_string: '${{ env.get("RAPIDS_DATE_STRING") }}'
   py_version: ${{ env.get("RAPIDS_PY_VERSION") }}
   py_buildstring: ${{ py_version | version_to_buildstring }}
-  head_rev: ${{ git.head_rev(".")[:8] }}
+  head_rev: '${{ git.head_rev(".")[:8] }}'
 
 package:
   name: cudf-polars
@@ -49,7 +49,7 @@ requirements:
   run:
     - python
     - pylibcudf =${{ version }}
-    - polars >=1.24,<1.27
+    - polars >=1.24,<1.31
     - ${{ pin_compatible("cuda-version", upper_bound="x", lower_bound="x") }}
   ignore_run_exports:
     by_name:

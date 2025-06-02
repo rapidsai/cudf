@@ -425,13 +425,13 @@ def test_parquet_read_metadata(tmp_path, pdf):
         assert a == b
 
 
-def test_parquet_read_filtered(tmpdir):
+def test_parquet_read_filtered(set_decomp_env_vars, tmpdir):
     # Generate data
     fname = tmpdir.join("filtered.parquet")
     dg.generate(
         fname,
         dg.Parameters(
-            num_rows=2048,
+            num_rows=100,
             column_parameters=[
                 dg.ColumnParameters(
                     cardinality=40,
@@ -442,7 +442,7 @@ def test_parquet_read_filtered(tmpdir):
                                 string.ascii_letters, random.randint(4, 8)
                             )
                         )
-                        for _ in range(40)
+                        for _ in range(10)
                     ],
                     is_sorted=False,
                 ),
@@ -450,14 +450,15 @@ def test_parquet_read_filtered(tmpdir):
                     40,
                     0.2,
                     lambda: np.random.default_rng(seed=0).integers(
-                        0, 100, size=40
+                        0, 100, size=10
                     ),
                     True,
                 ),
             ],
             seed=42,
         ),
-        format={"name": "parquet", "row_group_size": 64},
+        format={"name": "parquet", "row_group_size": 10},
+        use_threads=False,
     )
 
     # Get dataframes to compare
@@ -470,7 +471,7 @@ def test_parquet_read_filtered(tmpdir):
     # with PyArrow is with the method we use and intend to test.
     tbl_filtered = pq.read_table(fname, filters=[("1", ">", 60)])
 
-    assert_eq(cudf.io.read_parquet_metadata(fname)[1], 2048 / 64)
+    assert_eq(cudf.io.read_parquet_metadata(fname)[1], 10)
     assert len(df_filtered) < len(df)
     assert len(tbl_filtered) <= len(df_filtered)
 
@@ -2353,16 +2354,14 @@ def test_parquet_writer_list_basic(tmpdir):
 
 
 def test_parquet_writer_list_large(tmpdir):
-    expect = pd.DataFrame({"a": list_gen(int_gen, 256, 80, 50)})
+    gdf = cudf.DataFrame({"a": list_gen(int_gen, 256, 80, 50)})
     fname = tmpdir.join("test_parquet_writer_list_large.parquet")
-
-    gdf = cudf.from_pandas(expect)
 
     gdf.to_parquet(fname)
     assert os.path.exists(fname)
 
     got = pd.read_parquet(fname)
-    assert_eq(expect, got)
+    assert gdf.to_arrow().equals(pa.Table.from_pandas(got))
 
 
 def test_parquet_writer_list_large_mixed(tmpdir):
@@ -2410,15 +2409,15 @@ def test_parquet_writer_list_chunked(tmpdir, store_schema):
     expect = cudf.concat([table1, table2])
     expect = expect.reset_index(drop=True)
 
-    writer = ParquetWriter(fname, store_schema=store_schema)
-    writer.write_table(table1)
-    writer.write_table(table2)
-    writer.close()
+    with ParquetWriter(fname, store_schema=store_schema) as writer:
+        writer.write_table(table1)
+        writer.write_table(table2)
 
     assert os.path.exists(fname)
-
-    got = pd.read_parquet(fname)
-    assert_eq(expect, got)
+    got = pq.read_table(fname)
+    # compare with pyarrow since pandas doesn't
+    # have a list or struct dtype
+    assert expect.to_arrow().equals(got)
 
 
 @pytest.mark.parametrize("engine", ["cudf", "pyarrow"])
@@ -2927,15 +2926,13 @@ def test_parquet_flba_round_trip(tmpdir):
         "USE_DEFAULT",
     ],
 )
-def test_per_column_options(tmpdir, encoding):
+def test_per_column_encoding_option(encoding):
     pdf = pd.DataFrame({"ilist": [[1, 2, 3, 1, 2, 3]], "i1": [1]})
     cdf = cudf.from_pandas(pdf)
-    fname = tmpdir.join("ilist.parquet")
+    buffer = BytesIO()
     cdf.to_parquet(
-        fname,
+        buffer,
         column_encoding={"ilist.list.element": encoding},
-        compression="SNAPPY",
-        skip_compression={"ilist.list.element"},
     )
     # DICTIONARY and USE_DEFAULT should both result in a PLAIN_DICTIONARY encoding in parquet
     encoding_name = (
@@ -2943,11 +2940,29 @@ def test_per_column_options(tmpdir, encoding):
         if encoding == "DICTIONARY" or encoding == "USE_DEFAULT"
         else encoding
     )
-    pf = pq.ParquetFile(fname)
+    pf = pq.ParquetFile(buffer)
     fmd = pf.metadata
     assert encoding_name in fmd.row_group(0).column(0).encodings
+
+
+@pytest.mark.parametrize("compression", ["SNAPPY", "ZSTD"])
+def test_per_column_compression_option(set_decomp_env_vars, compression):
+    pdf = pd.DataFrame(
+        {"ilist": [[1, 2, 3, 1, 2, 3]], "i1": [[1, 2, 3, 1, 2, 3]]}
+    )
+    cdf = cudf.from_pandas(pdf)
+    buffer = BytesIO()
+    cdf.to_parquet(
+        buffer,
+        compression=compression,
+        skip_compression={"ilist.list.element"},
+        use_dictionary=False,  # to make sure that data is compressible
+    )
+
+    pf = pq.ParquetFile(buffer)
+    fmd = pf.metadata
     assert fmd.row_group(0).column(0).compression == "UNCOMPRESSED"
-    assert fmd.row_group(0).column(1).compression == "SNAPPY"
+    assert fmd.row_group(0).column(1).compression == compression
 
 
 @pytest.mark.parametrize(
@@ -3798,13 +3813,13 @@ def test_parquet_chunked_reader(
     assert_eq(expected, actual)
 
 
-@pytest.mark.parametrize("chunk_read_limit", [0, 240, 1024000000])
-@pytest.mark.parametrize("pass_read_limit", [0, 240, 1024000000])
-@pytest.mark.parametrize("num_rows", [997, 2997, None])
+@pytest.mark.parametrize("chunk_read_limit", [1024, 10240])
+@pytest.mark.parametrize("pass_read_limit", [1024, 10240])
+@pytest.mark.parametrize("num_rows", [99, 2901])
+@pytest.mark.parametrize("skip_rows", [4912, 6001])
+@pytest.mark.parametrize("data_size", [1000, 2000])
 def test_parquet_chunked_reader_structs(
-    chunk_read_limit,
-    pass_read_limit,
-    num_rows,
+    chunk_read_limit, pass_read_limit, num_rows, skip_rows, data_size
 ):
     data = [
         {
@@ -3825,15 +3840,15 @@ def test_parquet_chunked_reader_structs(
             "c": [18, 19],
         },
         {"a": None, "b": None, "c": None},
-    ] * 1000
+    ] * data_size
 
     pa_struct = pa.Table.from_pydict({"struct": data})
     df = cudf.DataFrame.from_arrow(pa_struct)
     buffer = BytesIO()
-    df.to_parquet(buffer)
+    df.to_parquet(buffer, row_group_size_rows=7000, max_page_size_rows=100)
 
     # Number of rows to read
-    nrows = num_rows if num_rows is not None else len(df)
+    nrows = num_rows if skip_rows + num_rows < len(df) else len(df) - skip_rows
 
     with cudf.option_context("io.parquet.low_memory", True):
         actual = cudf.read_parquet(
@@ -3841,11 +3856,11 @@ def test_parquet_chunked_reader_structs(
             _chunk_read_limit=chunk_read_limit,
             _pass_read_limit=pass_read_limit,
             nrows=nrows,
-        )
+            skip_rows=skip_rows,
+        ).reset_index(drop=True)
     expected = cudf.read_parquet(
-        buffer,
-        nrows=nrows,
-    )
+        buffer, nrows=nrows, skip_rows=skip_rows
+    ).reset_index(drop=True)
     assert_eq(expected, actual)
 
 
@@ -3903,23 +3918,78 @@ def test_parquet_chunked_reader_string_decoders(
 
 
 @pytest.mark.parametrize(
-    "nrows,skip_rows",
+    "nrows, skip_rows",
     [
         (0, 0),
-        (1000, 0),
-        (0, 1000),
-        (1000, 10000),
+        (99, 1001),
+        (9898, 6001),
+        (99, 10101),
+        (1001, 16001),
+        (999, 19001),
     ],
 )
-def test_parquet_reader_nrows_skiprows(nrows, skip_rows):
-    df = pd.DataFrame(
-        {"a": [1, 2, 3, 4] * 100000, "b": ["av", "qw", "hi", "xyz"] * 100000}
+@pytest.mark.parametrize(
+    "row_group_size_rows, page_size_rows",
+    [
+        (10000, 10000),  # 1 RG, 1 page per RG
+        (10000, 1000),  # 1 RG, multiple pages per RG
+        (1000, 1000),  # multiple RGs, 1 page per RG
+        (1000, 100),  # multiple RGs, multiple pages per RG
+    ],
+)
+@pytest.mark.parametrize(
+    "chunk_read_limit, pass_read_limit",
+    [
+        (1024, 5024),  # small chunk and pass read limits
+        (0, 5024),  # zero chunk and small pass read limit
+        (1024, 0),  # small chunk and zero pass read limit
+        (1024000, 1024000),  # large chunk and pass read limits
+    ],
+)
+def test_chunked_parquet_reader_nrows_skiprows(
+    nrows,
+    skip_rows,
+    row_group_size_rows,
+    page_size_rows,
+    chunk_read_limit,
+    pass_read_limit,
+):
+    df = cudf.DataFrame(
+        {
+            "a": list(
+                [
+                    ["cat", "lion", "deer"],
+                    ["bear", "ibex", None],
+                    ["tiger", None, "bull"],
+                    [None, "wolf", "fox"],
+                ]
+            )
+            * 5000,
+            "b": ["av", "qw", None, "xyz"] * 5000,
+        }
     )
     expected = df[skip_rows : skip_rows + nrows]
     buffer = BytesIO()
-    df.to_parquet(buffer)
+    df.to_parquet(
+        buffer,
+        row_group_size_rows=row_group_size_rows,
+        max_page_size_rows=page_size_rows,
+    )
     got = cudf.read_parquet(buffer, nrows=nrows, skip_rows=skip_rows)
     assert_eq(expected, got)
+
+    # Check for chunked parquet reader
+    with cudf.option_context("io.parquet.low_memory", True):
+        got = cudf.read_parquet(
+            [buffer],
+            _chunk_read_limit=chunk_read_limit,
+            _pass_read_limit=pass_read_limit,
+            nrows=nrows,
+            skip_rows=skip_rows,
+        ).reset_index(drop=True)
+        # Reset index for comparison
+        expected = expected.reset_index(drop=True)
+        assert_eq(expected, got)
 
 
 def test_parquet_reader_pandas_compatibility():
@@ -4459,3 +4529,26 @@ def test_parquet_reader_empty_compressed_page(datadir):
 
     df = cudf.DataFrame({"value": cudf.Series([None], dtype="float32")})
     assert_eq(cudf.read_parquet(fname), df)
+
+
+@pytest.fixture(params=[12345], scope="module")
+def my_pdf(request):
+    return build_pdf(request, True)
+
+
+@pytest.mark.parametrize("compression", ["brotli", "gzip", "snappy", "zstd"])
+def test_parquet_decompression(set_decomp_env_vars, my_pdf, compression):
+    if compression == "snappy":
+        pytest.skip("Skipping because of a known issue on CUDA 11.8")
+
+    # PANDAS returns category objects whereas cuDF returns hashes
+    expect = my_pdf.drop(columns=["col_category"])
+
+    # Write the DataFrame to a Parquet file
+    buffer = BytesIO()
+    expect.to_parquet(buffer, compression=compression)
+
+    # Read the Parquet file back into a DataFrame
+    got = cudf.read_parquet(buffer)
+
+    assert_eq(expect, got)

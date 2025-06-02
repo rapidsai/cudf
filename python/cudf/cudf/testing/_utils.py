@@ -1,4 +1,5 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
+from __future__ import annotations
 
 import itertools
 import string
@@ -6,6 +7,7 @@ import time
 from collections import abc
 from contextlib import contextmanager
 from decimal import Decimal
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
@@ -18,10 +20,14 @@ from numba.cuda.cudaimpl import lower as cuda_lower
 import pylibcudf as plc
 
 import cudf
-from cudf.core.column.timedelta import _unit_to_nanoseconds_conversion
+from cudf.core.column.column import as_column
 from cudf.core.udf.strings_lowering import cast_string_view_to_udf_string
 from cudf.core.udf.strings_typing import StringView, string_view, udf_string
 from cudf.utils import dtypes as dtypeutils
+from cudf.utils.temporal import unit_to_nanoseconds_conversion
+
+if TYPE_CHECKING:
+    from cudf.core.column.column import ColumnBase
 
 supported_numpy_dtypes = [
     "bool",
@@ -244,7 +250,7 @@ def gen_rand(dtype, size, **kwargs):
         time_unit, _ = np.datetime_data(dtype)
         high = kwargs.get(
             "high",
-            int(1e18) / _unit_to_nanoseconds_conversion[time_unit],
+            int(1e18) / unit_to_nanoseconds_conversion[time_unit],
         )
         return pd.to_datetime(
             rng.integers(low=low, high=high, size=size), unit=time_unit
@@ -265,7 +271,9 @@ def gen_rand(dtype, size, **kwargs):
 def gen_rand_series(dtype, size, **kwargs):
     values = gen_rand(dtype, size, **kwargs)
     if kwargs.get("has_nulls", False):
-        return cudf.Series.from_masked_array(values, random_bitmask(size))
+        return cudf.Series._from_column(
+            as_column(values).set_mask(random_bitmask(size))
+        )
 
     return cudf.Series(values)
 
@@ -282,9 +290,7 @@ def does_not_raise():
     yield
 
 
-def assert_column_memory_eq(
-    lhs: cudf.core.column.ColumnBase, rhs: cudf.core.column.ColumnBase
-):
+def assert_column_memory_eq(lhs: ColumnBase, rhs: ColumnBase):
     """Assert the memory location and size of `lhs` and `rhs` are equivalent.
 
     Both data pointer and mask pointer are checked. Also recursively check for
@@ -310,9 +316,7 @@ def assert_column_memory_eq(
         assert_column_memory_eq(lhs.codes, rhs.codes)
 
 
-def assert_column_memory_ne(
-    lhs: cudf.core.column.ColumnBase, rhs: cudf.core.column.ColumnBase
-):
+def assert_column_memory_ne(lhs: ColumnBase, rhs: ColumnBase):
     try:
         assert_column_memory_eq(lhs, rhs)
     except AssertionError:

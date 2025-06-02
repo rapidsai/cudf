@@ -5,6 +5,7 @@ from typing import Any, Protocol, TypedDict
 
 from rmm.pylibrmm.device_buffer import DeviceBuffer
 
+from pylibcudf._interop_helpers import ArrowLike
 from pylibcudf.gpumemoryview import gpumemoryview
 from pylibcudf.scalar import Scalar
 from pylibcudf.types import DataType
@@ -12,7 +13,7 @@ from pylibcudf.types import DataType
 class ArrayInterface(TypedDict):
     shape: tuple[int, ...]
     typestr: str
-    data: tuple[int, bool]
+    data: None | tuple[int, bool]
     version: int
     strides: None | tuple[int, ...]
     descr: None | list[tuple[Any, ...]]
@@ -57,11 +58,16 @@ class Column:
     def list_view(self) -> ListColumnView: ...
     @staticmethod
     def from_scalar(scalar: Scalar, size: int) -> Column: ...
+    def to_scalar(self) -> Column: ...
     @staticmethod
     def all_null_like(like: Column, size: int) -> Column: ...
     @staticmethod
     def from_rmm_buffer(
         buff: DeviceBuffer, dtype: DataType, size: int, children: list[Column]
+    ) -> Column: ...
+    @staticmethod
+    def from_arrow(
+        obj: ArrowLike, dtype: DataType | None = None
     ) -> Column: ...
     @classmethod
     def from_cuda_array_interface(
@@ -69,8 +75,8 @@ class Column:
     ) -> Column: ...
     @classmethod
     def from_array_interface(cls, obj: SupportsArrayInterface) -> Column: ...
-    @classmethod
-    def from_arraylike(
+    @staticmethod
+    def from_array(
         cls, obj: SupportsCudaArrayInterface | SupportsArrayInterface
     ) -> Column: ...
 

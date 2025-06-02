@@ -10,8 +10,12 @@ import polars as pl
 from cudf_polars.testing.asserts import assert_gpu_result_equal
 
 
+@pytest.mark.parametrize("rapidsmpf_spill", [False, True])
 @pytest.mark.parametrize("max_rows_per_partition", [1, 5])
-def test_join_rapidsmpf(max_rows_per_partition: int) -> None:
+def test_join_rapidsmpf(
+    max_rows_per_partition: int,
+    rapidsmpf_spill: bool,  # noqa: FBT001
+) -> None:
     # Check that we have a distributed cluster running.
     # This tests must be run with:
     # --executor='streaming' --scheduler='distributed'
@@ -43,6 +47,7 @@ def test_join_rapidsmpf(max_rows_per_partition: int) -> None:
             "broadcast_join_limit": 2,
             "shuffle_method": "rapidsmpf",
             "scheduler": "distributed",
+            "rapidsmpf_spill": rapidsmpf_spill,
         },
     )
 

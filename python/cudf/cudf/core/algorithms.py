@@ -5,18 +5,16 @@ import warnings
 from typing import TYPE_CHECKING
 
 import cupy as cp
-import numpy as np
 import pyarrow as pa
 
 import cudf
 from cudf.core.column import as_column
-from cudf.core.index import Index, RangeIndex
+from cudf.core.dtypes import CategoricalDtype
 from cudf.options import get_option
 from cudf.utils.dtypes import can_convert_to_column, cudf_dtype_to_pa_type
 
 if TYPE_CHECKING:
-    from cudf.core.column.column import ColumnBase
-    from cudf.core.index import BaseIndex
+    from cudf.core.index import Index
 
 
 def factorize(
@@ -86,7 +84,6 @@ def factorize(
     >>> uniques
     Index([<NA>, 1.0, 2.0], dtype='float64')
     """
-
     return_cupy_array = isinstance(values, cp.ndarray)
 
     if not can_convert_to_column(values):
@@ -118,39 +115,11 @@ def factorize(
         dtype="int64" if get_option("mode.pandas_compatible") else None,
     ).values
 
-    return labels, cats.values if return_cupy_array else Index._from_column(
-        cats
+    # TODO: Avoid accessing Index from the top level namespace
+    return (
+        labels,
+        cats.values if return_cupy_array else cudf.Index._from_column(cats),
     )
-
-
-def _interpolation(column: ColumnBase, index: BaseIndex) -> ColumnBase:
-    """
-    Interpolate over a float column. assumes a linear interpolation
-    strategy using the index of the data to denote spacing of the x
-    values. For example the data and index [1.0, NaN, 4.0], [1, 3, 4]
-    would result in [1.0, 3.0, 4.0].
-    """
-    # figure out where the nans are
-    mask = column.isnull()
-
-    # trivial cases, all nan or no nans
-    if not mask.any() or mask.all():
-        return column.copy()
-
-    valid_locs = ~mask
-    if isinstance(index, RangeIndex):
-        # Each point is evenly spaced, index values don't matter
-        known_x = cp.flatnonzero(valid_locs.values)
-    else:
-        known_x = index._column.apply_boolean_mask(valid_locs).values  # type: ignore[attr-defined]
-    known_y = column.apply_boolean_mask(valid_locs).values
-
-    result = cp.interp(index.to_cupy(), known_x, known_y)
-
-    # find the first nan
-    first_nan_idx = valid_locs.values.argmax().item()
-    result[:first_nan_idx] = np.nan
-    return as_column(result)
 
 
 def unique(values):
@@ -254,6 +223,7 @@ def unique(values):
     >>> pd.unique(pd.Series([("a", "b"), ("b", "a"), ("a", "c"), ("b", "a")]).values)
     array([('a', 'b'), ('b', 'a'), ('a', 'c')], dtype=object)
     """
+    # TODO: Avoid accessing Index and Series from the top level namespace
     if not isinstance(values, (cudf.Series, cudf.Index, cp.ndarray)):
         raise ValueError(
             "Must pass cudf.Series, cudf.Index, or cupy.ndarray object"
@@ -265,7 +235,7 @@ def unique(values):
         return cp.asarray(cudf.Index(values).unique())
     if isinstance(values, cudf.Series):
         if get_option("mode.pandas_compatible"):
-            if isinstance(values.dtype, cudf.CategoricalDtype):
+            if isinstance(values.dtype, CategoricalDtype):
                 raise NotImplementedError(
                     "cudf.Categorical is not implemented"
                 )

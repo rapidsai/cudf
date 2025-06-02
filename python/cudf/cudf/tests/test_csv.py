@@ -887,10 +887,10 @@ def test_csv_reader_nrows(tmpdir):
     names = ["int1", "int2"]
     dtypes = ["int32", "int32"]
 
-    rows = 4000000
+    rows = 4000
     read_rows = (rows * 3) // 4
     skip_rows = (rows - read_rows) // 2
-    sample_skip = 1000
+    sample_skip = 100
 
     with open(str(fname), "w") as fp:
         fp.write(",".join(names) + "\n")

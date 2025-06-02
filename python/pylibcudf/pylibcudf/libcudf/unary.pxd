@@ -31,6 +31,7 @@ cdef extern from "cudf/unary.hpp" namespace "cudf" nogil:
         FLOOR
         ABS
         RINT
+        BIT_COUNT
         BIT_INVERT
         NOT
         NEGATE

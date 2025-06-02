@@ -7,7 +7,7 @@ import pandas as pd
 import pyarrow as pa
 
 import cudf
-from cudf.core.column.column import as_column
+from cudf.core.column.column import as_column, pa_mask_buffer_to_mask
 from cudf.core.column.struct import StructColumn
 from cudf.core.dtypes import IntervalDtype
 
@@ -56,7 +56,7 @@ class IntervalColumn(StructColumn):
         dtype = IntervalDtype.from_arrow(data.type)
         mask = data.buffers()[0]
         if mask is not None:
-            mask = cudf.utils.utils.pa_mask_buffer_to_mask(mask, len(data))
+            mask = pa_mask_buffer_to_mask(mask, len(data))
 
         offset = data.offset
         null_count = data.null_count
@@ -205,6 +205,8 @@ class IntervalColumn(StructColumn):
 
     def element_indexing(self, index: int):
         result = super().element_indexing(index)
-        if cudf.get_option("mode.pandas_compatible"):
+        if isinstance(result, dict) and cudf.get_option(
+            "mode.pandas_compatible"
+        ):
             return pd.Interval(**result, closed=self.dtype.closed)
         return result

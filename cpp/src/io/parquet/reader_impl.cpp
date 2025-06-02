@@ -570,9 +570,11 @@ reader::impl::impl(std::size_t chunk_read_limit,
                               _options.timestamp_type.id());
 
   // Save the states of the output buffers for reuse in `chunk_read()`.
-  for (auto const& buff : _output_buffers) {
-    _output_buffers_template.emplace_back(cudf::io::detail::inline_column_buffer::empty_like(buff));
-  }
+  std::transform(
+    _output_buffers.begin(),
+    _output_buffers.end(),
+    std::back_inserter(_output_buffers_template),
+    [](auto const& buff) { return cudf::io::detail::inline_column_buffer::empty_like(buff); });
 
   // Save the name to reference converter to extract output filter AST in
   // `preprocess_file()` and `finalize_output()`
@@ -725,17 +727,14 @@ std::vector<size_t> reader::impl::calculate_output_num_rows_per_source(size_t co
   // Binary search start_row and end_row in exclusive_sum_num_rows_per_source vector
   auto const start_iter =
     std::upper_bound(partial_sum_nrows_source.cbegin(), partial_sum_nrows_source.cend(), start_row);
-  auto const end_iter =
-    (end_row == _file_itm_data.global_skip_rows + _file_itm_data.global_num_rows)
-      ? partial_sum_nrows_source.cend() - 1
-      : std::upper_bound(start_iter, partial_sum_nrows_source.cend(), end_row);
+  auto const end_iter = std::lower_bound(start_iter, partial_sum_nrows_source.cend(), end_row);
 
   // Compute the array offset index for both iterators
-  auto const start_idx = std::distance(partial_sum_nrows_source.cbegin(), start_iter);
-  auto const end_idx   = std::distance(partial_sum_nrows_source.cbegin(), end_iter);
-
-  CUDF_EXPECTS(start_idx <= end_idx,
-               "Encountered invalid source files indexes for output chunk row bounds");
+  auto const start_idx   = std::distance(partial_sum_nrows_source.cbegin(), start_iter);
+  auto const end_idx     = std::distance(partial_sum_nrows_source.cbegin(), end_iter);
+  auto const num_sources = static_cast<cudf::size_type>(partial_sum_nrows_source.size());
+  CUDF_EXPECTS(start_idx <= end_idx and start_idx < num_sources and end_idx < num_sources,
+               "Encountered out of range output table chunk row bounds");
 
   // If the entire chunk is from the same source file, then the count is simply num_rows
   if (start_idx == end_idx) {
@@ -855,10 +854,10 @@ parquet_column_schema walk_schema(aggregate_reader_metadata const* mt, int idx)
 parquet_metadata read_parquet_metadata(host_span<std::unique_ptr<datasource> const> sources)
 {
   // Do not use arrow schema when reading information from parquet metadata.
-  static constexpr auto use_arrow_schema = false;
+  constexpr auto use_arrow_schema = false;
 
   // Do not select any columns when only reading the parquet metadata.
-  static constexpr auto has_column_projection = false;
+  constexpr auto has_column_projection = false;
 
   // Open and parse the source dataset metadata
   auto metadata = aggregate_reader_metadata(sources, use_arrow_schema, has_column_projection);
@@ -866,8 +865,10 @@ parquet_metadata read_parquet_metadata(host_span<std::unique_ptr<datasource> con
   return parquet_metadata{parquet_schema{walk_schema(&metadata, 0)},
                           metadata.get_num_rows(),
                           metadata.get_num_row_groups(),
+                          metadata.get_num_row_groups_per_file(),
                           metadata.get_key_value_metadata()[0],
-                          metadata.get_rowgroup_metadata()};
+                          metadata.get_rowgroup_metadata(),
+                          metadata.get_column_chunk_metadata()};
 }
 
 }  // namespace cudf::io::parquet::detail

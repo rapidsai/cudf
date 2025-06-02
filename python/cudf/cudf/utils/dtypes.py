@@ -15,6 +15,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterable
 
     from cudf._typing import DtypeObj
+    from cudf.core.dtypes import DecimalDtype
 
 np_dtypes_to_pandas_dtypes = {
     np.dtype("uint8"): pd.UInt8Dtype(),
@@ -73,9 +74,7 @@ BOOL_TYPES = {"bool"}
 ALL_TYPES = NUMERIC_TYPES | DATETIME_TYPES | TIMEDELTA_TYPES | OTHER_TYPES
 
 
-def _find_common_type_decimal(
-    dtypes: Iterable[cudf.core.dtypes.DecimalDtype],
-) -> cudf.core.dtypes.DecimalDtype:
+def _find_common_type_decimal(dtypes: Iterable[DecimalDtype]) -> DecimalDtype:
     # Find the largest scale and the largest difference between
     # precision and scale of the columns to be concatenated
     s = max(dtype.scale for dtype in dtypes)
@@ -375,6 +374,37 @@ def is_dtype_obj_numeric(
         )
     else:
         return is_non_decimal
+
+
+def is_pandas_nullable_extension_dtype(dtype_to_check) -> bool:
+    if isinstance(
+        dtype_to_check,
+        (
+            pd.UInt8Dtype,
+            pd.UInt16Dtype,
+            pd.UInt32Dtype,
+            pd.UInt64Dtype,
+            pd.Int8Dtype,
+            pd.Int16Dtype,
+            pd.Int32Dtype,
+            pd.Int64Dtype,
+            pd.Float32Dtype,
+            pd.Float64Dtype,
+            pd.BooleanDtype,
+            pd.StringDtype,
+            pd.ArrowDtype,
+        ),
+    ):
+        return True
+    elif isinstance(dtype_to_check, pd.CategoricalDtype):
+        if dtype_to_check.categories is None:
+            return False
+        return is_pandas_nullable_extension_dtype(
+            dtype_to_check.categories.dtype
+        )
+    elif isinstance(dtype_to_check, pd.IntervalDtype):
+        return is_pandas_nullable_extension_dtype(dtype_to_check.subtype)
+    return False
 
 
 def dtype_to_pylibcudf_type(dtype) -> plc.DataType:
