@@ -11,6 +11,7 @@ from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
+from cudf_polars.utils.versions import POLARS_VERSION_LT_130
 
 
 @pytest.mark.parametrize("time_unit", ["ns", "us", "ms"])
@@ -86,13 +87,20 @@ def test_rolling_collect_list_raises():
     )
 
 
-def test_unsorted_raises_computeerror():
+def test_unsorted_raises():
     df = pl.LazyFrame({"orderby": [1, 2, 4, 2], "values": [1, 2, 3, 4]})
     q = df.select(pl.col("values").sum().rolling("orderby", period="2i"))
     with pytest.raises(pl.exceptions.InvalidOperationError):
         q.collect(engine="in-memory")
-    with pytest.raises(pl.exceptions.ComputeError):
-        q.collect(engine=pl.GPUEngine(raise_on_fail=True))
+    if POLARS_VERSION_LT_130:
+        with pytest.raises(pl.exceptions.ComputeError):
+            q.collect(engine=pl.GPUEngine(raise_on_fail=True))
+    else:
+        with pytest.raises(
+            RuntimeError,
+            match=r"Index column.*in rolling is not sorted, please sort first",
+        ):
+            q.collect(engine=pl.GPUEngine(raise_on_fail=True))
 
 
 def test_orderby_nulls_raises_computeerror():
@@ -100,8 +108,14 @@ def test_orderby_nulls_raises_computeerror():
     q = df.select(pl.col("values").sum().rolling("orderby", period="2i"))
     with pytest.raises(pl.exceptions.InvalidOperationError):
         q.collect(engine="in-memory")
-    with pytest.raises(pl.exceptions.ComputeError):
-        q.collect(engine=pl.GPUEngine(raise_on_fail=True))
+    if POLARS_VERSION_LT_130:
+        with pytest.raises(pl.exceptions.ComputeError):
+            q.collect(engine=pl.GPUEngine(raise_on_fail=True))
+    else:
+        with pytest.raises(
+            RuntimeError, match=r"Index column.*in rolling may not contain nulls"
+        ):
+            q.collect(engine=pl.GPUEngine(raise_on_fail=True))
 
 
 def test_invalid_duration_spec_raises_in_translation():

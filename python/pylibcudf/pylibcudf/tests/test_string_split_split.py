@@ -18,7 +18,7 @@ def data_col():
 @pytest.fixture
 def delimiter():
     delimiter = "_"
-    plc_delimiter = plc.interop.from_arrow(pa.scalar(delimiter))
+    plc_delimiter = plc.Scalar.from_arrow(pa.scalar(delimiter))
     return delimiter, plc_delimiter
 
 

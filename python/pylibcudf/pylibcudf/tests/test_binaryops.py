@@ -69,7 +69,7 @@ def tests(request, nulls):
         plc.Column.from_arrow(pa_lhs),
         plc.Column.from_arrow(pa_rhs),
     )
-    plc_dtype = plc.interop.from_arrow(
+    plc_dtype = plc.DataType.from_arrow(
         pa.from_numpy_dtype(np.dtype(py_outtype))
     )
     return (
