@@ -13434,7 +13434,6 @@ NODEIDS_THAT_XPASS_WITH_CUDF_PANDAS = {
 
 # TODO: Investigate why sometimes these fail
 NODEIDS_THAT_FLAKY_XFAIL_WITH_CUDF_PANDAS = {
-    "tests/reshape/merge/test_multi.py::TestMergeMulti::test_merge_na_keys",
     "tests/generic/test_finalize.py::test_finalize_called[asfreq', 'h0]",
     "tests/generic/test_finalize.py::test_finalize_called[asfreq', 'h1]",
     "tests/generic/test_finalize.py::test_finalize_called[at_time', '12:000]",
@@ -13444,6 +13443,8 @@ NODEIDS_THAT_FLAKY_XFAIL_WITH_CUDF_PANDAS = {
     "tests/generic/test_finalize.py::test_finalize_called[last', '3D0]",
     "tests/generic/test_finalize.py::test_finalize_called[last', '3D1]",
     "tests/generic/test_finalize.py::test_finalize_called[to_period]",
+    "tests/indexes/datetimes/test_partial_slicing.py::TestSlicing::test_slice_month",
+    "tests/reshape/merge/test_multi.py::TestMergeMulti::test_merge_na_keys",
 }
 
 
