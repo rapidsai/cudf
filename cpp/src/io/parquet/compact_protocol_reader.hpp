@@ -21,6 +21,8 @@
 #include <cudf/io/parquet_schema.hpp>
 #include <cudf/utilities/export.hpp>
 
+#include <cuda/std/bit>
+
 #include <algorithm>
 #include <cstddef>
 #include <utility>
@@ -131,8 +133,7 @@ class CompactProtocolReader {
  public:
   static inline constexpr int NumRequiredBits(uint32_t max_level) noexcept
   {
-    // TODO: Use `std::countl_zero` instead of `__builtin_clz` once we migrate to C++20
-    return max_level > 0 ? 32 - __builtin_clz(max_level) : 0;
+    return 32 - cuda::std::countl_zero(max_level);
   }
   bool InitSchema(FileMetaData* md);
 

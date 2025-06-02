@@ -71,7 +71,8 @@ TEST_P(JsonReaderTest, ByteRange_SingleSource)
   // Initialize parsing options (reading json lines)
   cudf::io::json_reader_options json_lines_options =
     cudf::io::json_reader_options::builder(
-      cudf::io::source_info{json_string.c_str(), json_string.size()})
+      cudf::io::source_info{cudf::host_span<std::byte const>{
+        reinterpret_cast<std::byte const*>(json_string.c_str()), json_string.size()}})
       .compression(cudf::io::compression_type::NONE)
       .lines(true);
   cudf::io::json_reader_options cjson_lines_options =

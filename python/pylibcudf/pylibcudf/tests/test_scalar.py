@@ -42,6 +42,18 @@ def test_from_py(py_scalar):
     assert plc.interop.to_arrow(result.type()).equals(expected.type)
 
 
+def test_to_py_none():
+    assert plc.Scalar.from_py(None, DataType(TypeId.INT8)).to_py() is None
+
+
+def test_to_py(py_scalar):
+    if isinstance(py_scalar, (datetime.datetime, datetime.timedelta)):
+        with pytest.raises(NotImplementedError):
+            plc.Scalar.from_py(py_scalar).to_py()
+    else:
+        assert py_scalar == plc.Scalar.from_py(py_scalar).to_py()
+
+
 @pytest.mark.parametrize(
     "val,tid",
     [
@@ -244,4 +256,4 @@ def test_non_constant_column_to_scalar_raises():
     with pytest.raises(
         ValueError, match="to_scalar only works for columns of size 1"
     ):
-        plc.Column(pa.array([0, 1])).to_scalar()
+        plc.Column.from_arrow(pa.array([0, 1])).to_scalar()
