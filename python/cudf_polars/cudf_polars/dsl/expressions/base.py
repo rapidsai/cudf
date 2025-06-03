@@ -18,7 +18,7 @@ from cudf_polars.dsl.nodebase import Node
 if TYPE_CHECKING:
     from typing_extensions import Self
 
-    from cudf_polars.containers import Column, DataFrame
+    from cudf_polars.containers import Column, DataFrame, DataType
 
 __all__ = ["AggInfo", "Col", "ColRef", "ExecutionContext", "Expr", "NamedExpr"]
 
@@ -37,7 +37,7 @@ class Expr(Node["Expr"]):
     """An abstract expression object."""
 
     __slots__ = ("dtype", "is_pointwise")
-    dtype: plc.DataType
+    dtype: DataType
     """Data type of the expression."""
     is_pointwise: bool
     """Whether this expression acts pointwise on its inputs."""
@@ -136,7 +136,7 @@ class ErrorExpr(Expr):
     _non_child = ("dtype", "error")
     error: str
 
-    def __init__(self, dtype: plc.DataType, error: str) -> None:
+    def __init__(self, dtype: DataType, error: str) -> None:
         self.dtype = dtype
         self.error = error
         self.children = ()
@@ -223,7 +223,7 @@ class Col(Expr):
     _non_child = ("dtype", "name")
     name: str
 
-    def __init__(self, dtype: plc.DataType, name: str) -> None:
+    def __init__(self, dtype: DataType, name: str) -> None:
         self.dtype = dtype
         self.name = name
         self.is_pointwise = True
@@ -246,7 +246,7 @@ class ColRef(Expr):
 
     def __init__(
         self,
-        dtype: plc.DataType,
+        dtype: DataType,
         index: int,
         table_ref: plc.expressions.TableReference,
         column: Expr,

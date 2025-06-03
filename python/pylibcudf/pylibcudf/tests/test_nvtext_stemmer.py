@@ -21,9 +21,9 @@ def test_is_letter(input_col, check_vowels, indices):
         return (s[i] in vowels) == check
 
     got = plc.nvtext.stemmer.is_letter(
-        plc.Column(input_col),
+        plc.Column.from_arrow(input_col),
         check_vowels,
-        plc.Column(pa.array(indices))
+        plc.Column.from_arrow(pa.array(indices))
         if isinstance(indices, list)
         else indices,
     )
@@ -42,7 +42,7 @@ def test_is_letter(input_col, check_vowels, indices):
 
 def test_porter_stemmer_measure(input_col):
     got = plc.nvtext.stemmer.porter_stemmer_measure(
-        plc.Column(input_col),
+        plc.Column.from_arrow(input_col),
     )
     expect = pa.array([1, 1, 2], type=pa.int32())
     assert_column_eq(expect, got)
