@@ -146,6 +146,7 @@ def register() -> None:
                     "order": col.order,
                     "null_order": col.null_order,
                     "name": col.name,
+                    "dtype": col.dtype,
                 }
                 for col in x.columns
             ]

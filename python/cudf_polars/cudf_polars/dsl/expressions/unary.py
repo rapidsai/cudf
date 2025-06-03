@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any, ClassVar
 
 import pylibcudf as plc
 
-from cudf_polars.containers import Column
+from cudf_polars.containers import Column, DataType
 from cudf_polars.dsl.expressions.base import ExecutionContext, Expr
 from cudf_polars.dsl.expressions.literal import Literal
 from cudf_polars.utils import dtypes
@@ -234,15 +234,14 @@ class UnaryFunction(Expr):
         elif self.name == "value_counts":
             (sort, parallel, name, normalize) = self.options
             count_agg = plc.aggregation.count(plc.types.NullPolicy.INCLUDE)
-            gp_requests = [
+            gb_requests = [
                 plc.groupby.GroupByRequest(
                     child.evaluate(df, context=context).obj, [count_agg]
                 )
                 for child in self.children
             ]
-            # TODO: Can we always rely on 1 result of counts?
             (keys_table, (counts_table,)) = plc.groupby.GroupBy(df.table).aggregate(
-                gp_requests
+                gb_requests
             )
             if sort:
                 sort_indices = plc.sorting.stable_sorted_order(
@@ -256,7 +255,8 @@ class UnaryFunction(Expr):
                 keys_table = plc.copying.gather(
                     keys_table, sort_indices, plc.copying.OutOfBoundsPolicy.DONT_CHECK
                 )
-            counts_col = counts_table.column()[0]
+            keys_col = keys_table.columns()[0]
+            counts_col = counts_table.columns()[0]
             if normalize:
                 total_counts = plc.reduce.reduce(
                     counts_col, plc.aggregation.sum(), counts_col.dtype
@@ -267,6 +267,8 @@ class UnaryFunction(Expr):
                     plc.binaryop.BinaryOperator.DIV,
                     plc.DataType(plc.TypeId.FLOAT64),
                 )
+            elif counts_col.type().id() == plc.TypeId.INT32:
+                counts_col = plc.unary.cast(counts_col, plc.DataType(plc.TypeId.UINT32))
 
             plc_column = plc.Column(
                 plc.DataType(plc.TypeId.STRUCT),
@@ -275,10 +277,9 @@ class UnaryFunction(Expr):
                 None,
                 0,
                 0,
-                [counts_col],
+                [keys_col, counts_col],
             )
-            # TODO: Handle keys_table
-            return Column(plc_column, name=name)
+            return Column(plc_column, dtype=self.dtype)
         elif self.name == "drop_nulls":
             (column,) = (child.evaluate(df, context=context) for child in self.children)
             if column.null_count == 0:
