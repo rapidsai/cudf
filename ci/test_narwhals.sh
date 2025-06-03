@@ -26,7 +26,7 @@ rapids-logger "Check narwhals versions"
 python -c "import narwhals; print(narwhals.show_versions())"
 
 rapids-logger "Run narwhals tests for cuDF"
-python -m pytest \
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest \
     --cache-clear \
     --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf-narwhals.xml" \
     -p xdist \
@@ -54,7 +54,7 @@ test_rolling_var_expr_lazy_ungrouped \
 "
 
 rapids-logger "Run narwhals tests for cuDF Polars"
-NARWHALS_POLARS_GPU=1 python -m pytest \
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 NARWHALS_POLARS_GPU=1 python -m pytest \
     --cache-clear \
     --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf-polars-narwhals.xml" \
     -p xdist \
