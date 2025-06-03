@@ -81,7 +81,8 @@ void write_csv(cudf::table_view const& tbl_view, std::string const& file_path)
  * Command line parameters:
  * 1. CSV file name/path
  * 2. Out file name/path
- * 3. Memory resource (optional): 'pool' or 'cuda'
+ * 3. Number of rows from the CSV to transform
+ * 4. Memory resource (optional): 'pool' or 'cuda'
  *
  * The stdout includes the number of rows in the input and the output size in bytes.
  */
