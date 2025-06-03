@@ -286,8 +286,9 @@ class BooleanFunction(Expr):
             )
         elif self.name is BooleanFunction.Name.IsIn:
             needles, haystack = columns
-            # Unwrap values from the list column
-            haystack = Column(haystack.obj.children()[1]).astype(needles.obj.type())
+            if haystack.obj.type().id() == plc.TypeId.LIST:
+                # Unwrap values from the list column
+                haystack = Column(haystack.obj.children()[1]).astype(needles.obj.type())
             if haystack.size:
                 return Column(plc.search.contains(haystack.obj, needles.obj))
             return Column(
