@@ -26,7 +26,7 @@ rapids-logger "Check narwhals versions"
 python -c "import narwhals; print(narwhals.show_versions())"
 
 rapids-logger "Run narwhals tests for cuDF"
-python -m pytest \
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest \
     --cache-clear \
     --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf-narwhals.xml" \
     -p no:pytest_benchmark \
@@ -45,7 +45,7 @@ test_nan \
 "
 
 rapids-logger "Run narwhals tests for cuDF Polars"
-NARWHALS_POLARS_GPU=1 python -m pytest \
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 NARWHALS_POLARS_GPU=1 python -m pytest \
     --cache-clear \
     --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf-polars-narwhals.xml" \
     -p no:pytest_benchmark \
@@ -86,7 +86,7 @@ TESTS_THAT_NEED_NARWHALS_FIX_FOR_CUDF_PANDAS=" \
 test_dtypes \
 "
 
-NARWHALS_DEFAULT_CONSTRUCTORS=pandas python -m pytest \
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 NARWHALS_DEFAULT_CONSTRUCTORS=pandas python -m pytest \
     -p cudf.pandas \
     --cache-clear \
     --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf-pandas-narwhals.xml" \
