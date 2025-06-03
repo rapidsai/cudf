@@ -21,7 +21,7 @@ rapids_cmake_build_type("Release")
 # Configure your project here
 add_executable(deduplication deduplication.cpp)
 target_link_libraries(deduplication PRIVATE cudf::cudf)
-target_compile_features(deduplication PRIVATE cxx_std_17)
+target_compile_features(deduplication PRIVATE cxx_std_20)
 
 install(TARGETS deduplication DESTINATION bin/examples/libcudf)
 install(FILES ${CMAKE_CURRENT_LIST_DIR}/example.json DESTINATION bin/examples/libcudf)
