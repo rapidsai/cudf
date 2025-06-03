@@ -14,16 +14,34 @@
  * limitations under the License.
  */
 
+#include <cudf/context.hpp>
 #include <cudf/utilities/export.hpp>
 
-namespace CUDF_EXPORT cudf {
+#include <memory>
 
-/// @brief initialize the cudf global context
-/// @throws std::runtime_error if the context is already initialized
-void initialize();
+namespace cudf {
 
-/// @brief de-initialize the cudf global context
-/// @throws std::runtime_error if the context is already de-initialized
-void deinitialize();
+namespace jit {
+class program_cache;
+}
 
-}  // namespace CUDF_EXPORT cudf
+class context {
+ private:
+  std::unique_ptr<jit::program_cache> _program_cache;
+
+ public:
+  context();
+  context(context const&)            = delete;
+  context& operator=(context const&) = delete;
+  context(context&&)                 = delete;
+  context& operator=(context&&)      = delete;
+  ~context()                         = default;
+
+  jit::program_cache& program_cache();
+};
+
+std::unique_ptr<context>& get_context_ptr_ref();
+
+context& get_context();
+
+}  // namespace cudf

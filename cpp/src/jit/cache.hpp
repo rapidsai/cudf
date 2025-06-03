@@ -24,7 +24,7 @@
 #include <mutex>
 #include <string>
 
-namespace CUDF_EXPORT cudf {
+namespace cudf {
 namespace jit {
 
 class program_cache {
@@ -45,4 +45,4 @@ class program_cache {
 jitify2::ProgramCache<>& get_program_cache(jitify2::PreprocessedProgramData preprog);
 
 }  // namespace jit
-}  // namespace CUDF_EXPORT cudf
+}  // namespace cudf

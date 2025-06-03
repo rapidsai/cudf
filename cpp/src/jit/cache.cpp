@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include "runtime/context.hpp"
+
 #include <cudf/context.hpp>
 #include <cudf/utilities/error.hpp>
 
@@ -22,7 +24,6 @@
 #include <filesystem>
 
 namespace cudf {
-namespace jit {
 namespace {
 
 // Get the directory in home to use for storing the cache
@@ -111,7 +112,7 @@ std::size_t try_parse_numeric_env_var(char const* const env_name, std::size_t de
 }
 }  // namespace
 
-jitify2::ProgramCache<>& program_cache::get(jitify2::PreprocessedProgramData preprog)
+jitify2::ProgramCache<>& jit::program_cache::get(jitify2::PreprocessedProgramData preprog)
 {
   std::lock_guard<std::mutex> const caches_lock(_caches_mutex);
 
@@ -137,10 +138,8 @@ jitify2::ProgramCache<>& program_cache::get(jitify2::PreprocessedProgramData pre
   return *(existing_cache->second);
 }
 
-jitify2::ProgramCache<>& get_program_cache(jitify2::PreprocessedProgramData preprog)
+jitify2::ProgramCache<>& jit::get_program_cache(jitify2::PreprocessedProgramData preprog)
 {
-  return get_context().program_cache().get(preprog);
+  return cudf::get_context().program_cache().get(preprog);
 }
-
-}  // namespace jit
 }  // namespace cudf
