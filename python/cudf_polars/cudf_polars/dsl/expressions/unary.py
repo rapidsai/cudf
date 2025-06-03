@@ -259,7 +259,7 @@ class UnaryFunction(Expr):
             counts_col = counts_table.columns()[0]
             if normalize:
                 total_counts = plc.reduce.reduce(
-                    counts_col, plc.aggregation.sum(), counts_col.dtype
+                    counts_col, plc.aggregation.sum(), plc.DataType(plc.TypeId.UINT64)
                 )
                 counts_col = plc.binaryop.binary_operation(
                     counts_col,

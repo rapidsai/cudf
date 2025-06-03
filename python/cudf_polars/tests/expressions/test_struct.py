@@ -17,7 +17,10 @@ def ldf():
 
 
 @pytest.mark.parametrize("name", [None, "my_count"])
-def test_value_counts(ldf, name):
+@pytest.mark.parametrize("normalize", [True, False])
+def test_value_counts(ldf, name, normalize):
     # sort=True since order is non-deterministic
-    query = ldf.select(pl.col("a").value_counts(sort=True, name=name))
+    query = ldf.select(
+        pl.col("a").value_counts(sort=True, name=name, normalize=normalize)
+    )
     assert_gpu_result_equal(query)
