@@ -20,6 +20,18 @@ rapids_cmake_build_type("Release")
 
 list(APPEND CUDF_CUDA_FLAGS --expt-extended-lambda --expt-relaxed-constexpr)
 
+add_executable(branching branching.cpp)
+target_compile_features(branching PRIVATE cxx_std_20)
+target_compile_options(branching PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>")
+target_link_libraries(branching PRIVATE cudf::cudf nvtx3::nvtx3-cpp)
+install(TARGETS branching DESTINATION bin/examples/libcudf)
+
+add_executable(branching_public branching_public.cpp)
+target_compile_features(branching_public PRIVATE cxx_std_20)
+target_compile_options(branching_public PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>")
+target_link_libraries(branching_public PRIVATE cudf::cudf nvtx3::nvtx3-cpp)
+install(TARGETS branching_public DESTINATION bin/examples/libcudf)
+
 add_executable(int_output int_output.cpp)
 target_compile_features(int_output PRIVATE cxx_std_20)
 target_compile_options(int_output PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>")

@@ -57,12 +57,26 @@ __device__ void e164_format(void* scratch,
     it += size;
   };
 
-  push(cudf::string_view{"+", 1});
-  push(country_code);
-  push(cudf::string_view{"-", 1});
-  push(area_code);
-  push(cudf::string_view{"-", 1});
-  push(phone_number);
+  auto area_iter       = area_code.data();
+  auto const area_end  = area_iter + area_code.size_bytes();
+  auto phone_iter      = phone_number.data();
+  auto const phone_end = phone_iter + phone_number.size_bytes();
+
+  // skip leading zeros in area code and push non-dash digits
+  while (area_iter != area_end && *area_iter == '0') {
+    area_iter++;
+  }
+
+  while (area_iter != area_end) {
+    if (*area_iter != '-') { push(cudf::string_view{area_iter, 1}); }
+    area_iter++;
+  }
+
+  // push non-dash digits from phone number
+  while (phone_iter != phone_end) {
+    if (*phone_iter != '-') { push(cudf::string_view{phone_iter, 1}); }
+    phone_iter++;
+  }
 
   *out = cudf::string_view{begin, static_cast<cudf::size_type>(it - static_cast<char*>(begin))};
 }
