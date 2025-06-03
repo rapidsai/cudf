@@ -25,6 +25,9 @@ namespace jit {
 class program_cache;
 }
 
+/// @brief The context object contains global state internal to CUDF.
+/// It helps to ensure structured and well-defined construction and destruction of global
+/// objects/state across translation units.
 class context {
  private:
   std::unique_ptr<jit::program_cache> _program_cache;
