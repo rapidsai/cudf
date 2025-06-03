@@ -16,6 +16,8 @@ def ldf():
     return pl.LazyFrame({"a": [{"b": "c", "d": "e"}, {"b": None, "d": "g"}]})
 
 
-def test_value_counts(ldf):
-    query = ldf.select(pl.col("a").value_counts())
+@pytest.mark.parametrize("name", [None, "my_count"])
+def test_value_counts(ldf, name):
+    # sort=True since order is non-deterministic
+    query = ldf.select(pl.col("a").value_counts(sort=True, name=name))
     assert_gpu_result_equal(query)
