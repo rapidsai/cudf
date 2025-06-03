@@ -201,10 +201,11 @@ class flattened_table {
                                                               rmm::cuda_stream_view stream,
                                                               rmm::device_async_resource_ref mr);
 
-[[nodiscard]] std::vector<std::unique_ptr<column>> superimpose_nulls_opt(std::vector<bitmask_type const*> null_masks,
-                                              std::vector<std::unique_ptr<column>> inputs,
-                                              rmm::cuda_stream_view stream,
-                                              rmm::device_async_resource_ref mr);
+[[nodiscard]] std::vector<std::unique_ptr<column>> superimpose_nulls_opt(
+  std::vector<bitmask_type const*> null_masks,
+  std::vector<std::unique_ptr<column>> inputs,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr);
 
 /**
  * @brief Push down nulls from the given input column into its children columns, using bitwise AND.

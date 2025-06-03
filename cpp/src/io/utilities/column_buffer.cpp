@@ -319,7 +319,8 @@ std::unique_ptr<column> make_column(column_buffer_base<string_policy>& buffer,
   if (buffer.type.id() == type_id::STRUCT) {
     if (col->nullable()) {
       auto col_contents = col->release();
-      auto masks = std::vector<bitmask_type const*>(col_contents.children.size(), static_cast<bitmask_type const*>(col_contents.null_mask->data()));
+      auto masks = std::vector<bitmask_type const*>(col_contents.children.size(),
+  static_cast<bitmask_type const*>(col_contents.null_mask->data()));
       std::vector<std::unique_ptr<column>> cols;
       for (auto &child : col_contents.children)
         cols.push_back(std::move(child));
@@ -345,8 +346,8 @@ std::unique_ptr<column> make_column(column_buffer_base<string_policy>& buffer,
     if (col->nullable()) {
       auto col_contents = col->release();
       for (auto& child : col_contents.children) {
-        auto masks = std::vector<bitmask_type const*>(1, static_cast<bitmask_type const*>(col_contents.null_mask->data()));
-        std::vector<std::unique_ptr<column>> cols;
+        auto masks = std::vector<bitmask_type const*>(1, static_cast<bitmask_type
+  const*>(col_contents.null_mask->data())); std::vector<std::unique_ptr<column>> cols;
         cols.push_back(std::move(child));
         child = std::move(structs::detail::superimpose_nulls_opt(
           masks,
