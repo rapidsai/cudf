@@ -35,26 +35,28 @@ struct rolling_store_output_functor {
 // Specialization for MEAN
 template <typename _T>
 struct rolling_store_output_functor<_T, true> {
-  // SFINAE for non-bool types
+  // We need to avoid storing if count is zero because for mean aggregations
+  // this could perform integer division by zero (undefined behaviour), which
+  // could cause the compiler to deduce nonsense about the loop that increments
+  // count.
+
+  // SFINAE for non-bool, non-timestamp types
   template <typename T                                                             = _T,
             std::enable_if_t<!(cudf::is_boolean<T>() || cudf::is_timestamp<T>())>* = nullptr>
   CUDF_HOST_DEVICE inline void operator()(T& out, T& val, size_type count)
   {
-    out = val / count;
-  }
-
-  // SFINAE for bool type
-  template <typename T = _T, std::enable_if_t<cudf::is_boolean<T>()>* = nullptr>
-  CUDF_HOST_DEVICE inline void operator()(T& out, T& val, size_type count)
-  {
-    out = static_cast<int32_t>(val) / count;
+    if (count > 0) {
+      out = val / count;
+    }
   }
 
   // SFINAE for timestamp types
   template <typename T = _T, std::enable_if_t<cudf::is_timestamp<T>()>* = nullptr>
   CUDF_HOST_DEVICE inline void operator()(T& out, T& val, size_type count)
   {
-    out = static_cast<T>(val.time_since_epoch() / count);
+    if (count > 0) {
+      out = static_cast<T>(val.time_since_epoch() / count);
+    }
   }
 };
 
