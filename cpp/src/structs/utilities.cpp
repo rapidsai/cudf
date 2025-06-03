@@ -387,6 +387,7 @@ std::unique_ptr<column> superimpose_nulls(bitmask_type const* null_mask,
   CUDF_FUNC_RANGE();
   input = superimpose_nulls_no_sanitize(null_mask, null_count, std::move(input), stream, mr);
 
+  nvtxRangePushA("purging");
   if (auto const input_view = input->view(); cudf::detail::has_nonempty_nulls(input_view, stream)) {
     // We can't call `purge_nonempty_nulls` for individual child column(s) that need to be
     // sanitized. Instead, we have to call it from the top level column.
@@ -395,6 +396,7 @@ std::unique_ptr<column> superimpose_nulls(bitmask_type const* null_mask,
     // also different from the parent column, causing data corruption.
     return cudf::detail::purge_nonempty_nulls(input_view, stream, mr);
   }
+  nvtxRangePop();
 
   return std::move(input);
 }
