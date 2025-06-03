@@ -233,10 +233,10 @@ class UnaryFunction(Expr):
             )
         elif self.name == "value_counts":
             (sort, parallel, name, normalize) = self.options
-            count_agg = plc.aggregation.count(plc.types.NullPolicy.INCLUDE)
+            count_agg = [plc.aggregation.count(plc.types.NullPolicy.INCLUDE)]
             gb_requests = [
                 plc.groupby.GroupByRequest(
-                    child.evaluate(df, context=context).obj, [count_agg]
+                    child.evaluate(df, context=context).obj, count_agg
                 )
                 for child in self.children
             ]
