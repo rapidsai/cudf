@@ -109,7 +109,7 @@ def target_col():
 @pytest.fixture(params=["a", " ", "A", "Ab", "23"], scope="module")
 def target_scalar(request):
     pa_scalar = pa.scalar(request.param, type=pa.string())
-    return pa_scalar, plc.interop.from_arrow(pa_scalar)
+    return pa_scalar, plc.Scalar.from_arrow(pa_scalar)
 
 
 def test_find(data_col, target_scalar):

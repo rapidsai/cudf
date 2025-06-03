@@ -64,7 +64,7 @@ def pa_char(request):
 
 @pytest.fixture
 def plc_char(pa_char):
-    return plc.interop.from_arrow(pa_char)
+    return plc.Scalar.from_arrow(pa_char)
 
 
 def test_strip(pa_col, plc_col, pa_char, plc_char):

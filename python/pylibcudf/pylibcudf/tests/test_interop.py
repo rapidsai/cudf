@@ -14,7 +14,7 @@ import pylibcudf as plc
 
 def test_list_dtype_roundtrip():
     list_type = pa.list_(pa.int32())
-    plc_type = plc.interop.from_arrow(list_type)
+    plc_type = plc.DataType.from_arrow(list_type)
 
     assert plc_type == plc.types.DataType(plc.types.TypeId.LIST)
 
@@ -29,7 +29,7 @@ def test_list_dtype_roundtrip():
 
 def test_struct_dtype_roundtrip():
     struct_type = pa.struct([("a", pa.int32()), ("b", pa.string())])
-    plc_type = plc.interop.from_arrow(struct_type)
+    plc_type = plc.DataType.from_arrow(struct_type)
 
     assert plc_type == plc.types.DataType(plc.types.TypeId.STRUCT)
 
@@ -67,7 +67,7 @@ def test_table_with_nested_dtype_to_arrow():
 
 def test_decimal128_roundtrip():
     decimal_type = pa.decimal128(10, 2)
-    plc_type = plc.interop.from_arrow(decimal_type)
+    plc_type = plc.DataType.from_arrow(decimal_type)
 
     assert plc_type.id() == plc.types.TypeId.DECIMAL128
 
@@ -99,7 +99,7 @@ def test_decimal_other(data_type):
 
 def test_round_trip_dlpack_plc_table():
     expected = pa.table({"a": [1, 2, 3], "b": [5, 6, 7]})
-    plc_table = plc.interop.from_arrow(expected)
+    plc_table = plc.Table.from_arrow(expected)
     result = plc.interop.from_dlpack(plc.interop.to_dlpack(plc_table))
     assert_table_eq(expected, result)
 
@@ -156,7 +156,7 @@ def test_device_interop_table():
         ],
         schema=schema,
     )
-    plc_table = plc.interop.from_arrow(pa_tbl)
+    plc_table = plc.Table.from_arrow(pa_tbl)
 
     na_arr = nanoarrow.device.c_device_array(plc_table)
     actual_schema = pa.schema(na_arr.schema)

@@ -65,15 +65,13 @@ def preceding_endpoint(request):
     elif request.param == "current_row":
         return plc.rolling.CurrentRow()
     elif request.param == "bounded_closed_positive":
-        return plc.rolling.BoundedClosed(plc.interop.from_arrow(pa.scalar(10)))
+        return plc.rolling.BoundedClosed(plc.Scalar.from_arrow(pa.scalar(10)))
     elif request.param == "bounded_closed_negative":
-        return plc.rolling.BoundedClosed(
-            plc.interop.from_arrow(pa.scalar(-10))
-        )
+        return plc.rolling.BoundedClosed(plc.Scalar.from_arrow(pa.scalar(-10)))
     elif request.param == "bounded_open_positive":
-        return plc.rolling.BoundedOpen(plc.interop.from_arrow(pa.scalar(10)))
+        return plc.rolling.BoundedOpen(plc.Scalar.from_arrow(pa.scalar(10)))
     elif request.param == "bounded_open_negative":
-        return plc.rolling.BoundedOpen(plc.interop.from_arrow(pa.scalar(-10)))
+        return plc.rolling.BoundedOpen(plc.Scalar.from_arrow(pa.scalar(-10)))
 
 
 @pytest.fixture(
@@ -92,13 +90,13 @@ def following_endpoint(request):
     elif request.param == "current_row":
         return plc.rolling.CurrentRow()
     elif request.param == "bounded_closed_positive":
-        return plc.rolling.BoundedClosed(plc.interop.from_arrow(pa.scalar(2)))
+        return plc.rolling.BoundedClosed(plc.Scalar.from_arrow(pa.scalar(2)))
     elif request.param == "bounded_closed_negative":
-        return plc.rolling.BoundedClosed(plc.interop.from_arrow(pa.scalar(-2)))
+        return plc.rolling.BoundedClosed(plc.Scalar.from_arrow(pa.scalar(-2)))
     elif request.param == "bounded_open_positive":
-        return plc.rolling.BoundedOpen(plc.interop.from_arrow(pa.scalar(2)))
+        return plc.rolling.BoundedOpen(plc.Scalar.from_arrow(pa.scalar(2)))
     elif request.param == "bounded_open_negative":
-        return plc.rolling.BoundedOpen(plc.interop.from_arrow(pa.scalar(-2)))
+        return plc.rolling.BoundedOpen(plc.Scalar.from_arrow(pa.scalar(-2)))
 
 
 @pytest.fixture

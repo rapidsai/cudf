@@ -320,13 +320,11 @@ class StringFunction(Expr):
             )
 
             if strict:
-                if not plc.interop.to_arrow(
-                    plc.reduce.reduce(
-                        is_timestamps,
-                        plc.aggregation.all(),
-                        plc.DataType(plc.TypeId.BOOL8),
-                    )
-                ).as_py():
+                if not plc.reduce.reduce(
+                    is_timestamps,
+                    plc.aggregation.all(),
+                    plc.DataType(plc.TypeId.BOOL8),
+                ).to_py():
                     raise InvalidOperationError("conversion from `str` failed.")
             else:
                 not_timestamps = plc.unary.unary_operation(
