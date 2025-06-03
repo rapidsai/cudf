@@ -103,10 +103,10 @@ namespace {
 {
   // Set initial capacity to at least two data pages per row group
   auto const initial_capacity =
-    std::accumulate(row_group_indices.begin(),
-                    row_group_indices.end(),
-                    size_t{0},
-                    [](auto sum, auto const& rg_indices) { return sum + (2 * rg_indices.size()); });
+    2 * std::accumulate(row_group_indices.begin(),
+                        row_group_indices.end(),
+                        size_t{0},
+                        [](auto sum, auto const& rg_indices) { return sum + rg_indices.size(); });
 
   // Vector to store how many rows are present in each page
   auto page_row_counts = cudf::detail::make_empty_host_vector<size_type>(initial_capacity, stream);
