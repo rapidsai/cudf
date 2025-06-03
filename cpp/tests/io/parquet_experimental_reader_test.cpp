@@ -34,6 +34,7 @@
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
+#include <cudf/utilities/traits.hpp>
 
 #include <src/io/parquet/parquet_gpu.hpp>
 
@@ -41,10 +42,6 @@
 struct ParquetExperimentalReaderTest : public cudf::test::BaseFixture {};
 
 namespace {
-
-// Check if the type is timestamp or duration
-template <typename T>
-constexpr auto is_temporal_type = cudf::is_duration<T>() or cudf::is_timestamp<T>();
 
 /**
  * @brief Fetches a host span of Parquet footer bytes from the input buffer span
@@ -149,12 +146,11 @@ cudf::test::strings_column_wrapper constant_strings(cudf::size_type value)
 /**
  * @brief Fail for types other than duration or timestamp
  */
-template <typename T>
-std::enable_if_t<not is_temporal_type<T>(), cudf::test::fixed_width_column_wrapper<T>>
-descending_low_cardinality()
+template <typename T, CUDF_ENABLE_IF(not cudf::is_chrono<T>())>
+cudf::test::fixed_width_column_wrapper<T> descending_low_cardinality()
 {
   static_assert(
-    is_temporal_type<T>(),
+    cudf::is_chrono<T>(),
     "Use testdata::descending<T>() to generate descending values for non-temporal types");
 }
 
@@ -164,9 +160,8 @@ descending_low_cardinality()
  * @tparam T Duration type
  * @return Column wrapper
  */
-template <typename T>
-std::enable_if_t<cudf::is_duration<T>(), cudf::test::fixed_width_column_wrapper<T>>
-descending_low_cardinality()
+template <typename T, CUDF_ENABLE_IF(cudf::is_duration<T>())>
+cudf::test::fixed_width_column_wrapper<T> descending_low_cardinality()
 {
   auto elements = cudf::detail::make_counting_transform_iterator(
     0, [](auto i) { return T((num_ordered_rows - i) / 100); });
@@ -179,9 +174,8 @@ descending_low_cardinality()
  * @tparam T Timestamp type
  * @return Column wrapper
  */
-template <typename T>
-std::enable_if_t<cudf::is_timestamp<T>(), cudf::test::fixed_width_column_wrapper<T>>
-descending_low_cardinality()
+template <typename T, CUDF_ENABLE_IF(cudf::is_timestamp<T>())>
+cudf::test::fixed_width_column_wrapper<T> descending_low_cardinality()
 {
   auto elements = cudf::detail::make_counting_transform_iterator(
     0, [](auto i) { return T(typename T::duration((num_ordered_rows - i) / 100)); });
@@ -212,7 +206,7 @@ auto create_parquet_with_stats(
 
   auto col0 = testdata::ascending<T>();
   auto col1 = []() {
-    if constexpr (is_temporal_type<T>) {
+    if constexpr (cudf::is_chrono<T>()) {
       return descending_low_cardinality<T>();
     } else {
       return testdata::descending<T>();
@@ -782,7 +776,7 @@ TYPED_TEST(RowGroupFilteringWithDictTest, FilterSomeLiteralsTyped)
       if constexpr (cuda::std::is_same_v<T, cudf::string_view>) {
         return std::vector<cudf::size_type>{
           0, 1, 2, 3};  // Constant string value "0100" is present in all RGs
-      } else if constexpr (is_temporal_type<T> or cuda::std::is_signed_v<T>) {
+      } else if constexpr (cudf::is_chrono<T>() or cuda::std::is_signed_v<T>) {
         return std::vector<cudf::size_type>{
           1, 2};  // Descending temporal and signed value (100) is present in RGs: 1,2
       } else {
@@ -919,7 +913,7 @@ TYPED_TEST(RowGroupFilteringWithDictTest, FilterManyLiteralsTyped)
       if constexpr (cuda::std::is_same_v<T, cudf::string_view>) {
         return std::vector<cudf::size_type>{
           0, 1, 2, 3};  // Constant string value present in all RGs
-      } else if constexpr (is_temporal_type<T>) {
+      } else if constexpr (cudf::is_chrono<T>()) {
         return std::vector<cudf::size_type>{
           1, 2, 3};  // Descending temporal values present in three RGs: 1,2,3
       } else if constexpr (cuda::std::is_signed_v<T>) {
