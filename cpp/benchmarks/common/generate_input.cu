@@ -204,7 +204,7 @@ double non_fixed_width_size<cudf::struct_view>(data_profile const& profile)
     std::accumulate(dist_params.leaf_types.cbegin(),
                     dist_params.leaf_types.cend(),
                     0ul,
-                    [&](auto& sum, auto type_id) {
+                    [&](auto sum, auto type_id) {
                       return sum + avg_element_size(profile, cudf::data_type{type_id});
                     });
 
