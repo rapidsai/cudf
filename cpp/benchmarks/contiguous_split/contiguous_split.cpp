@@ -133,10 +133,11 @@ void bench_contiguous_split_strings(nvbench::state& state)
   constexpr auto string_len = 8;
   auto const col_len_bytes  = total_desired_bytes / num_cols;
   auto const num_rows       = col_len_bytes / string_len;
+  auto const index_type     = cudf::type_to_id<cudf::size_type>();
 
   // generate input table
   data_profile profile = data_profile_builder().no_validity().cardinality(0).distribution(
-    cudf::type_id::INT32,
+    index_type,
     distribution_id::UNIFORM,
     0,
     (include_validity ? one_sv.size() * 2 : one_sv.size() - 1));  // out of bounds nullified
