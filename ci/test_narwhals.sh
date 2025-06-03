@@ -29,6 +29,7 @@ rapids-logger "Run narwhals tests for cuDF"
 python -m pytest \
     --cache-clear \
     --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf-narwhals.xml" \
+    -p no:pytest_benchmark \
     -p cudf.testing.narwhals_test_plugin \
     --numprocesses=8 \
     --dist=worksteal \
@@ -47,6 +48,7 @@ rapids-logger "Run narwhals tests for cuDF Polars"
 NARWHALS_POLARS_GPU=1 python -m pytest \
     --cache-clear \
     --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf-polars-narwhals.xml" \
+    -p no:pytest_benchmark \
     -k "not ( \
         ${TESTS_THAT_NEED_NARWHALS_FIX_FOR_CUDF_POLARS} \
     )" \
@@ -88,6 +90,7 @@ NARWHALS_DEFAULT_CONSTRUCTORS=pandas python -m pytest \
     -p cudf.pandas \
     --cache-clear \
     --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf-pandas-narwhals.xml" \
+    -p no:pytest_benchmark \
     -k "not ( \
         ${TESTS_THAT_NEED_CUDF_FIX} or \
         ${TESTS_TO_ALWAYS_SKIP} or \
