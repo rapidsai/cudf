@@ -16,13 +16,7 @@
 
 #include "common.hpp"
 
-#include <cudf/binaryop.hpp>
 #include <cudf/column/column_factories.hpp>
-#include <cudf/replace.hpp>
-#include <cudf/strings/extract.hpp>
-#include <cudf/strings/regex/regex_program.hpp>
-#include <cudf/strings/strings_column_view.hpp>
-#include <cudf/table/table_view.hpp>
 #include <cudf/transform.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
