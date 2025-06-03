@@ -488,4 +488,12 @@ def test_string_join(ldf, ignore_nulls, delimiter):
 def test_string_zfill(fill, input_strings):
     ldf = pl.LazyFrame({"a": input_strings})
     q = ldf.select(pl.col("a").str.zfill(fill))
-    assert_gpu_result_equal(q)
+
+    if fill is not None and fill < 0:
+        assert_collect_raises(
+            q,
+            polars_except=pl.exceptions.InvalidOperationError,
+            cudf_except=pl.exceptions.ComputeError,
+        )
+    else:
+        assert_gpu_result_equal(q)

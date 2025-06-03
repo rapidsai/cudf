@@ -226,7 +226,19 @@ class StringFunction(Expr):
         elif self.name is StringFunction.Name.ZFill:
             child, width = self.children
             assert isinstance(width, Literal)
+            try:
+                pa.scalar(width.value, type=pa.uint64())
+            except OverflowError:
+                raise InvalidOperationError(
+                    f"conversion from `i32` to `u64` failed in column 'literal' for 1 out of 1 values: [{width.value}]"
+                ) from None
             column = child.evaluate(df, context=context)
+            if width.value is None:
+                return Column(
+                    plc.interop.from_arrow(
+                        pa.array([None] * column.size, type=pa.string())
+                    )
+                )
             return Column(plc.strings.padding.zfill(column.obj, width.value))
         elif self.name is StringFunction.Name.Contains:
             child, arg = self.children
