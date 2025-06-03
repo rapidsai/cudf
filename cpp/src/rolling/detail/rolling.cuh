@@ -130,9 +130,8 @@ struct DeviceRolling {
       // store the output value, one per thread, but only if the
       // output is valid. min_periods is required to be >= 1, and so
       // here, count must be nonzero. We need to avoid storing if
-      // count is zero because for mean aggregations this could
-      // perform integer division by zero (undefined behaviour), which
-      // could cause the compiler to deduce nonsense about the loop
+      // count is zero since this could could UB in some aggregations,
+      // which may cause the compiler to deduce nonsense about the loop
       // that increments count.
       cudf::detail::rolling_store_output_functor<OutputType, op == aggregation::MEAN>{}(
         output.element<OutputType>(current_index), val, count);
