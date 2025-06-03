@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#pragma once
+
 #include <cudf/utilities/export.hpp>
 
 namespace CUDF_EXPORT cudf {
