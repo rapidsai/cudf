@@ -99,7 +99,6 @@ int main(int argc, char const** argv)
   auto const memory_resource_name =
     std::string{argc > 5 ? std::string(argv[5]) : std::string("cuda")};
 
-    // cudf::initialize();
   auto resource = create_memory_resource(memory_resource_name);
   auto stream   = cudf::get_default_stream();
   cudf::set_current_device_resource(resource.get());
@@ -135,8 +134,6 @@ int main(int argc, char const** argv)
   std::cout << "Wall time: " << elapsed.count() << " seconds\n"
             << "Table: " << table_view.num_rows() << " rows " << table_view.num_columns()
             << " columns" << std::endl;
-
-            // cudf::deinitialize();
 
   return 0;
 }
