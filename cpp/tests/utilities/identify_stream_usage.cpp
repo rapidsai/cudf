@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include <cudf/detail/utilities/stacktrace.hpp>
 #include <cudf/detail/utilities/stream_pool.hpp>
 
 #include <rmm/cuda_stream.hpp>
@@ -22,9 +21,7 @@
 
 #include <cuda_runtime.h>
 
-#include <cxxabi.h>
 #include <dlfcn.h>
-#include <execinfo.h>
 
 #include <cstdlib>
 #include <cstring>
@@ -119,15 +116,11 @@ bool stream_is_invalid(cudaStream_t stream)
 }
 
 /**
- * @brief Print a backtrace and raise an error if stream is a default stream.
+ * @brief Raise an error if stream is invalid.
  */
 void check_stream_and_error(cudaStream_t stream)
 {
   if (stream_is_invalid(stream)) {
-    // Exclude the current function from stacktrace.
-    std::cout << cudf::detail::get_stacktrace(cudf::detail::capture_last_stackframe::NO)
-              << std::endl;
-
     char const* env_stream_error_mode{std::getenv("GTEST_CUDF_STREAM_ERROR_MODE")};
     if (env_stream_error_mode && !strcmp(env_stream_error_mode, "print")) {
       std::cout << "cudf_identify_stream_usage found unexpected stream!" << std::endl;
