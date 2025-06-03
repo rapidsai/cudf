@@ -184,6 +184,7 @@ class ColumnOptions(TypedDict):
     order: plc.types.Order
     null_order: plc.types.NullOrder
     name: str | None
+    dtype: DataType | None
 
 
 class ColumnHeader(TypedDict):

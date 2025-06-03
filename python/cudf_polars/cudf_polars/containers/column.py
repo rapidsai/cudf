@@ -116,6 +116,7 @@ class Column:
             "order": self.order,
             "null_order": self.null_order,
             "name": self.name,
+            "dtype": self.dtype,
         }
         header: ColumnHeader = {
             "column_kwargs": column_kwargs,
@@ -178,6 +179,7 @@ class Column:
         return type(self)(
             self.obj,
             name=self.name,
+            dtype=self.dtype,
             is_sorted=like.is_sorted,
             order=like.order,
             null_order=like.null_order,
@@ -363,6 +365,7 @@ class Column:
             order=self.order,
             null_order=self.null_order,
             name=self.name,
+            dtype=self.dtype,
         )
 
     def mask_nans(self) -> Self:
