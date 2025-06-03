@@ -53,19 +53,18 @@ namespace {
 namespace cg = cooperative_groups;
 
 /// Size of INT96 physical type
-auto constexpr int96_size = 12;
+auto constexpr INT96_SIZE = 12;
 /// Decode kernel block size. Must be a multiple of warp_size
-auto constexpr decode_block_size = 4 * cudf::detail::warp_size;
+auto constexpr DECODE_BLOCK_SIZE = 4 * cudf::detail::warp_size;
 /// Maximum number of literals to evaluate while decoding column dictionaries
-auto constexpr max_inline_literals = 2;
+auto constexpr MAX_INLINE_LITERALS = 2;
 
 // cuCollections static set parameters
 using key_type = cudf::size_type;                  ///< Using column indices (size_type) as set keys
-auto constexpr empty_key_sentinel = key_type{-1};  ///< We will never encounter a -1 index.
-auto constexpr set_cg_size        = 1;             ///< Cooperative group size for cuco::static_set
-auto constexpr bucket_size        = 1;             ///< Number of buckets per set slot
-auto constexpr occupancy_factor = 70;  ///< cuCollections suggests targeting a 70% occupancy factor
-uint32_t constexpr hasher_seed  = 0;   ///< default seed for the hashers
+auto constexpr EMPTY_KEY_SENTINEL = key_type{-1};  ///< We will never encounter a -1 index.
+auto constexpr SET_CG_SIZE        = 1;             ///< Cooperative group size for cuco::static_set
+auto constexpr BUCKET_SIZE        = 1;             ///< Number of buckets per set slot
+auto constexpr OCCUPANCY_FACTOR = 70;  ///< cuCollections suggests targeting a 70% occupancy factor
 
 /// Supported fixed width types for row group pruning using dictionaries
 template <typename T>
@@ -83,46 +82,36 @@ using hasher_type = cudf::hashing::detail::MurmurHash3_x86_32<T>;
 
 /// cuco::static_set_ref storage type
 using storage_type     = cuco::bucket_storage<key_type,
-                                              bucket_size,
+                                              BUCKET_SIZE,
                                               cuco::extent<std::size_t>,
                                               cudf::detail::cuco_allocator<char>>;
 using storage_ref_type = typename storage_type::ref_type;
 using bucket_type      = typename storage_type::bucket_type;
 
-/// hash set operation type
-enum class set_operation_type : uint8_t { INSERT, QUERY };
-
 /**
- * @brief Hash functor for inserting values into `cuco::static_set`
+ * @brief Hash functor for inserting values into a `cuco::static_set`
  *
  * @tparam T Underlying data type of the cudf column
- * @tparam op Type of `cuco::static_set` operation
  */
-template <typename T, set_operation_type op>
-struct hash_functor {
+template <typename T>
+struct insert_hash_functor {
   cudf::device_span<T const> const decoded_data;
-  uint32_t const seed{hasher_seed};
-  static constexpr auto is_insert = op == set_operation_type::INSERT;
-  static constexpr auto is_query  = op == set_operation_type::QUERY;
-
-  /**
-   * @brief Hasher operator for inserting values into `cuco::static_set`
-   *
-   * @note Enabled via is_insert as T can be the same as key_type in dispatch
-   */
-  template <bool is_insert = is_insert, CUDF_ENABLE_IF(is_insert)>
+  uint32_t const seed{DEFAULT_HASH_SEED};
   constexpr __device__ __forceinline__ typename hasher_type<T>::result_type operator()(
     key_type key) const noexcept
   {
     return hasher_type<T>{seed}(decoded_data[key]);
   }
+};
 
-  /**
-   * @brief Hasher operator for querying values from hash set
-   *
-   * @note Enabled via is_query as T can be the same as key_type in dispatch
-   */
-  template <bool is_query = is_query, CUDF_ENABLE_IF(is_query)>
+/**
+ * @brief Hash functor for querying values from a `cuco::static_set`
+ *
+ * @tparam T Underlying data type of the cudf column
+ */
+template <typename T>
+struct query_hash_functor {
+  uint32_t const seed{DEFAULT_HASH_SEED};
   constexpr __device__ __forceinline__ typename hasher_type<T>::result_type operator()(
     T const& value) const noexcept
   {
@@ -131,35 +120,28 @@ struct hash_functor {
 };
 
 /**
- * @brief Equality functor for `cuco::static_set`
+ * @brief Equality functor for inserting values into a `cuco::static_set`
  *
  * @tparam T Underlying data type of the cudf column
- * @tparam op Type of `cuco::static_set` operation
  */
-template <typename T, set_operation_type op>
-struct equality_functor {
+template <typename T>
+struct insert_equality_functor {
   cudf::device_span<T const> const decoded_data;
-  static constexpr auto is_insert = op == set_operation_type::INSERT;
-  static constexpr auto is_query  = op == set_operation_type::QUERY;
-
-  /**
-   * @brief Equality operator for inserting values into hash set
-   *
-   * @note Enabled via is_insert as T can be the same as key_type in dispatch
-   */
-  template <bool is_insert = is_insert, CUDF_ENABLE_IF(is_insert)>
   constexpr __device__ __forceinline__ bool operator()(key_type lhs_key,
                                                        key_type rhs_key) const noexcept
   {
     return decoded_data[lhs_key] == decoded_data[rhs_key];
   }
+};
 
-  /**
-   * @brief Equality operator for querying values from hash set.
-   *
-   * @note Enabled via is_query as T can be the same as key_type in dispatch
-   */
-  template <bool is_query = is_query, CUDF_ENABLE_IF(is_query)>
+/**
+ * @brief Equality functor for querying values from a `cuco::static_set`
+ *
+ * @tparam T Underlying data type of the cudf column
+ */
+template <typename T>
+struct query_equality_functor {
+  cudf::device_span<T const> const decoded_data;
   constexpr __device__ __forceinline__ bool operator()(T const& value, key_type key) const noexcept
   {
     return value == decoded_data[key];
@@ -213,28 +195,27 @@ __device__ __forceinline__ bool is_error_set(kernel_error::pointer error)
  * @param clock_rate Clock rate of the column
  * @return Timestamp scale
  */
-__device__ __forceinline__ int32_t
-calc_timestamp_scale(std::optional<LogicalType> const& logical_type, int32_t clock_rate)
+__device__ __forceinline__ int32_t calc_timestamp_scale(LogicalType const& logical_type,
+                                                        int32_t clock_rate)
 {
   // Note: This function has been extracted from the snippet at:
   // https://github.com/rapidsai/cudf/blob/c89c83c00c729a86c56570693b627f31408bc2c9/cpp/src/io/parquet/page_decode.cuh#L1219-L1236
 
-  auto timestamp_scale = 0;
   // Adjust for timestamps
-  if (logical_type.has_value()) {
-    auto units = 0;
-    if (logical_type.value().is_timestamp_millis()) {
-      units = cudf::timestamp_ms::period::den;
-    } else if (logical_type.value().is_timestamp_micros()) {
-      units = cudf::timestamp_us::period::den;
-    } else if (logical_type.value().is_timestamp_nanos()) {
-      units = cudf::timestamp_ns::period::den;
-    }
-    if (units and units != clock_rate) {
-      timestamp_scale = (clock_rate < units) ? -(units / clock_rate) : (clock_rate / units);
-    }
+  auto units = 0;
+  if (logical_type.is_timestamp_millis()) {
+    units = cudf::timestamp_ms::period::den;
+  } else if (logical_type.is_timestamp_micros()) {
+    units = cudf::timestamp_us::period::den;
+  } else if (logical_type.is_timestamp_nanos()) {
+    units = cudf::timestamp_ns::period::den;
   }
-  return timestamp_scale;
+
+  if (units and units != clock_rate) {
+    return (clock_rate < units) ? -(units / clock_rate) : (clock_rate / units);
+  }
+
+  return 0;
 }
 
 /**
@@ -359,9 +340,9 @@ CUDF_KERNEL cuda::std::enable_if_t<is_supported_dictionary_type<T>, void> query_
   // Result vector for this scalar
   auto result = results[scalar_idx];
 
-  using equality_fn_type    = equality_functor<T, set_operation_type::QUERY>;
-  using hash_fn_type        = hash_functor<T, set_operation_type::QUERY>;
-  using probing_scheme_type = cuco::linear_probing<set_cg_size, hash_fn_type>;
+  using equality_fn_type    = query_equality_functor<T>;
+  using hash_fn_type        = query_hash_functor<T>;
+  using probing_scheme_type = cuco::linear_probing<SET_CG_SIZE, hash_fn_type>;
 
   // Evaluate the scalar against all cuco hash sets of this column
   for (auto set_idx = group.thread_rank(); set_idx < total_row_groups; set_idx += group.size()) {
@@ -376,7 +357,7 @@ CUDF_KERNEL cuda::std::enable_if_t<is_supported_dictionary_type<T>, void> query_
                                        set_storage + set_offsets[set_idx]};
 
     // Create a view of the hash set
-    auto hash_set_ref = cuco::static_set_ref{cuco::empty_key{empty_key_sentinel},
+    auto hash_set_ref = cuco::static_set_ref{cuco::empty_key{EMPTY_KEY_SENTINEL},
                                              equality_fn_type{decoded_data},
                                              probing_scheme_type{hash_fn_type{}},
                                              cuco::thread_scope_block,
@@ -423,7 +404,10 @@ __device__ T decode_fixed_width_value(PageInfo const& page,
   auto const& page_data = page.page_data;
 
   // Calculate the timestamp scale if this chunk has a timestamp logical type
-  auto const timestamp_scale = calc_timestamp_scale(chunk.logical_type, chunk.ts_clock_rate);
+  auto const timestamp_scale =
+    chunk.logical_type.has_value()
+      ? calc_timestamp_scale(chunk.logical_type.value(), chunk.ts_clock_rate)
+      : int32_t{0};
 
   // FLBA length (0 if not FLBA type)
   auto const flba_length = chunk.type_length;
@@ -443,12 +427,12 @@ __device__ T decode_fixed_width_value(PageInfo const& page,
   switch (physical_type) {
     case parquet::Type::INT96: {
       // Check if we have a stream overrun
-      if (is_stream_overrun(value_idx * int96_size, int96_size, page.uncompressed_page_size)) {
+      if (is_stream_overrun(value_idx * INT96_SIZE, INT96_SIZE, page.uncompressed_page_size)) {
         set_error(error, decode_error::DATA_STREAM_OVERRUN);
         return {};
       }
       // Check if the flba length is valid
-      if (flba_length != int96_size or not cuda::std::is_same_v<T, int64_t>) {
+      if (flba_length != INT96_SIZE or not cuda::std::is_same_v<T, int64_t>) {
         set_error(error, decode_error::INVALID_DATA_TYPE);
         return {};
       }
@@ -643,7 +627,7 @@ __device__ cudf::string_view decode_string_value(uint8_t const* page_data,
  * @param dictionary_col_idx Index of the current dictionary column
  * @param error Pointer to the kernel error code
  */
-CUDF_KERNEL void __launch_bounds__(decode_block_size)
+CUDF_KERNEL void __launch_bounds__(DECODE_BLOCK_SIZE)
   build_string_dictionaries(PageInfo const* pages,
                             cudf::device_span<cudf::string_view> decoded_data,
                             bucket_type* const set_storage,
@@ -674,16 +658,16 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
   // If empty buffer or no input values, then return early
   if (page.num_input_values == 0 or page_data_size == 0) { return; }
 
-  using equality_fn_type    = equality_functor<cudf::string_view, set_operation_type::INSERT>;
-  using hash_fn_type        = hash_functor<cudf::string_view, set_operation_type::INSERT>;
-  using probing_scheme_type = cuco::linear_probing<set_cg_size, hash_fn_type>;
+  using equality_fn_type    = insert_equality_functor<cudf::string_view>;
+  using hash_fn_type        = insert_hash_functor<cudf::string_view>;
+  using probing_scheme_type = cuco::linear_probing<SET_CG_SIZE, hash_fn_type>;
 
   // Set storage reference for the current cuco hash set
   storage_ref_type const storage_ref{set_offsets[row_group_idx + 1] - set_offsets[row_group_idx],
                                      set_storage + set_offsets[row_group_idx]};
 
   // Create a view of the hash set
-  auto hash_set_ref   = cuco::static_set_ref{cuco::empty_key<key_type>{empty_key_sentinel},
+  auto hash_set_ref   = cuco::static_set_ref{cuco::empty_key<key_type>{EMPTY_KEY_SENTINEL},
                                            equality_fn_type{decoded_data},
                                            probing_scheme_type{hash_fn_type{decoded_data}},
                                            cuco::thread_scope_thread,
@@ -739,7 +723,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
  */
 template <typename T>
 CUDF_KERNEL cuda::std::enable_if_t<is_supported_fixed_width_type<T>, void> __launch_bounds__(
-  decode_block_size) build_fixed_width_dictionaries(PageInfo const* pages,
+  DECODE_BLOCK_SIZE) build_fixed_width_dictionaries(PageInfo const* pages,
                                                     ColumnChunkDesc const* chunks,
                                                     cudf::device_span<T> decoded_data,
                                                     bucket_type* const set_storage,
@@ -772,12 +756,12 @@ CUDF_KERNEL cuda::std::enable_if_t<is_supported_fixed_width_type<T>, void> __lau
   storage_ref_type const storage_ref{set_offsets[row_group_idx + 1] - set_offsets[row_group_idx],
                                      set_storage + set_offsets[row_group_idx]};
 
-  using equality_fn_type    = equality_functor<T, set_operation_type::INSERT>;
-  using hash_fn_type        = hash_functor<T, set_operation_type::INSERT>;
-  using probing_scheme_type = cuco::linear_probing<set_cg_size, hash_fn_type>;
+  using equality_fn_type    = insert_equality_functor<T>;
+  using hash_fn_type        = insert_hash_functor<T>;
+  using probing_scheme_type = cuco::linear_probing<SET_CG_SIZE, hash_fn_type>;
 
   // Create a view of the hash set
-  auto hash_set_ref   = cuco::static_set_ref{cuco::empty_key{empty_key_sentinel},
+  auto hash_set_ref   = cuco::static_set_ref{cuco::empty_key{EMPTY_KEY_SENTINEL},
                                            equality_fn_type{decoded_data},
                                            probing_scheme_type{hash_fn_type{decoded_data}},
                                            cuco::thread_scope_block,
@@ -810,13 +794,13 @@ CUDF_KERNEL cuda::std::enable_if_t<is_supported_fixed_width_type<T>, void> __lau
  * @param results Span of device vector start pointers to store query results, one per predicate
  * @param scalars Span of scalar device views, one per predicate
  * @param operators Span of corresponding (in)equality operators, one per predicate
- * @param total_num_scalars Total number of predicates (scalars or operators)
+ * @param total_num_scalars Total number of predicates
  * @param total_row_groups Total number of row groups
  * @param num_dictionary_columns Total number of columns with dictionaries
  * @param dictionary_col_idx Index of the current dictionary column
  * @param error Pointer to the kernel error code
  */
-CUDF_KERNEL void __launch_bounds__(decode_block_size)
+CUDF_KERNEL void __launch_bounds__(DECODE_BLOCK_SIZE)
   evaluate_some_string_literals(PageInfo const* pages,
                                 cudf::device_span<bool*> results,
                                 ast::generic_scalar_device_view const* scalars,
@@ -933,7 +917,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
  */
 template <typename T>
 CUDF_KERNEL cuda::std::enable_if_t<is_supported_fixed_width_type<T>, void> __launch_bounds__(
-  decode_block_size)
+  DECODE_BLOCK_SIZE)
   evaluate_some_fixed_width_literals(PageInfo const* pages,
                                      ColumnChunkDesc const* chunks,
                                      cudf::device_span<bool*> results,
@@ -1084,7 +1068,7 @@ struct dictionary_caster {
         // Compute the number of hash set slots needed to target the desired occupancy factor
         host_set_offsets.emplace_back(host_set_offsets.back() +
                                       static_cast<cudf::size_type>(compute_hash_table_size(
-                                        num_input_values, occupancy_factor)));
+                                        num_input_values, OCCUPANCY_FACTOR)));
       });
 
     // Device vectors to store the running number of hash set slots and decoded values for all
@@ -1104,7 +1088,7 @@ struct dictionary_caster {
       cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream}};
 
     // Initialize storage with the empty key sentinel
-    set_storage.initialize_async(empty_key_sentinel, {stream.value()});
+    set_storage.initialize_async(EMPTY_KEY_SENTINEL, {stream.value()});
 
     // Device vector to store the decoded values for all dictionaries
     rmm::device_uvector<T> decoded_data{
@@ -1143,7 +1127,7 @@ struct dictionary_caster {
       // Decode fixed width dictionaries and insert them to cuco hash sets, one dictionary per
       // thread block
       build_fixed_width_dictionaries<T>
-        <<<total_row_groups, decode_block_size, 0, stream.value()>>>(pages.device_begin(),
+        <<<total_row_groups, DECODE_BLOCK_SIZE, 0, stream.value()>>>(pages.device_begin(),
                                                                      chunks.device_begin(),
                                                                      decoded_data,
                                                                      set_storage.data(),
@@ -1156,20 +1140,20 @@ struct dictionary_caster {
 
     } else {
       // Check if the decode block size is a multiple of the warp size
-      static_assert(decode_block_size % cudf::detail::warp_size == 0,
-                    "decode_block_size must be a multiple of warp_size");
+      static_assert(DECODE_BLOCK_SIZE % cudf::detail::warp_size == 0,
+                    "DECODE_BLOCK_SIZE must be a multiple of warp_size");
       // Check if the physical type is a string
       CUDF_EXPECTS(physical_type == parquet::Type::BYTE_ARRAY, "Unsupported physical type");
 
       // Number of warps per thread block
-      size_t const warps_per_block = decode_block_size / cudf::detail::warp_size;
+      size_t const warps_per_block = DECODE_BLOCK_SIZE / cudf::detail::warp_size;
       // Number of thread blocks to get at least `total_row_groups` warps
       auto const num_blocks =
         cudf::util::div_rounding_up_safe<size_t>(total_row_groups, warps_per_block);
 
       // Decode string dictionaries and insert them to cuco hash sets, one dictionary per
       // warp
-      build_string_dictionaries<<<num_blocks, decode_block_size, 0, stream.value()>>>(
+      build_string_dictionaries<<<num_blocks, DECODE_BLOCK_SIZE, 0, stream.value()>>>(
         pages.device_begin(),
         decoded_data,
         set_storage.data(),
@@ -1262,7 +1246,7 @@ struct dictionary_caster {
       // Decode fixed width dictionaries and evaluate literals against them, one dictionary per
       // thread block
       evaluate_some_fixed_width_literals<T>
-        <<<total_row_groups, decode_block_size, 0, stream.value()>>>(pages.device_begin(),
+        <<<total_row_groups, DECODE_BLOCK_SIZE, 0, stream.value()>>>(pages.device_begin(),
                                                                      chunks.device_begin(),
                                                                      results_ptrs,
                                                                      scalars.data(),
@@ -1273,19 +1257,19 @@ struct dictionary_caster {
                                                                      dictionary_col_idx,
                                                                      error_code.data());
     } else {
-      static_assert(decode_block_size % cudf::detail::warp_size == 0,
+      static_assert(DECODE_BLOCK_SIZE % cudf::detail::warp_size == 0,
                     "decoder block size must be a multiple of warp_size");
       CUDF_EXPECTS(physical_type == parquet::Type::BYTE_ARRAY, "Unsupported physical type");
 
       // Number of warps per thread block
-      size_t const warps_per_block = decode_block_size / cudf::detail::warp_size;
+      size_t const warps_per_block = DECODE_BLOCK_SIZE / cudf::detail::warp_size;
       // Number of thread blocks to get at least `total_row_groups` warps
       auto const num_blocks =
         cudf::util::div_rounding_up_safe<size_t>(total_row_groups, warps_per_block);
 
       // Decode string dictionaries and evaluate all literals against them, one dictionary per
       // warp
-      evaluate_some_string_literals<<<num_blocks, decode_block_size, 0, stream.value()>>>(
+      evaluate_some_string_literals<<<num_blocks, DECODE_BLOCK_SIZE, 0, stream.value()>>>(
         pages.device_begin(),
         results_ptrs,
         scalars.data(),
@@ -1328,7 +1312,7 @@ struct dictionary_caster {
       });
 
       // If there is only one literal, just evaluate expression while decoding dictionary data
-      if (literals.size() <= max_inline_literals) {
+      if (literals.size() <= MAX_INLINE_LITERALS) {
         return evaluate_some_literals<T>(literals, operators);
       } else {
         // Else, decode dictionaries to `cudf::static_set`s and evaluate all expressions

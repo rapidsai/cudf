@@ -19,43 +19,19 @@
 #include "io/parquet/parquet_gpu.hpp"
 #include "io/utilities/time_utils.cuh"
 
-#include <cudf/column/column_view.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/detail/utilities/batched_memset.hpp>
-#include <cudf/detail/utilities/functional.hpp>
-#include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/parquet_schema.hpp>
-#include <cudf/null_mask.hpp>
 #include <cudf/types.hpp>
-#include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
-#include <thrust/binary_search.h>
-#include <thrust/fill.h>
-#include <thrust/functional.h>
-#include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/iterator/discard_iterator.h>
-#include <thrust/iterator/iterator_categories.h>
-#include <thrust/iterator/transform_iterator.h>
-#include <thrust/logical.h>
 #include <thrust/reduce.h>
-#include <thrust/scan.h>
-#include <thrust/sequence.h>
-#include <thrust/sort.h>
-#include <thrust/transform.h>
-#include <thrust/transform_scan.h>
-#include <thrust/unique.h>
-
-#include <bitset>
-#include <limits>
-#include <numeric>
 
 namespace cudf::io::parquet::experimental::detail {
 
@@ -108,7 +84,7 @@ void decode_dictionary_page_headers(cudf::detail::hostdevice_span<ColumnChunkDes
                          chunk_page_counts.end(),
                          chunk_page_counts.begin(),
                          size_t{0},
-                         thrust::plus<size_t>{});
+                         cuda::std::plus<size_t>{});
 
   rmm::device_uvector<chunk_page_info> d_chunk_page_info(chunks.size(), stream);
 

@@ -14,14 +14,11 @@
  * limitations under the License.
  */
 
-#include "hybrid_scan_helpers.hpp"
 #include "hybrid_scan_impl.hpp"
 #include "io/comp/gpuinflate.hpp"
 #include "io/comp/io_uncomp.hpp"
 #include "io/comp/nvcomp_adapter.hpp"
 #include "io/parquet/compact_protocol_reader.hpp"
-#include "io/parquet/reader_impl_chunking.hpp"
-#include "io/utilities/time_utils.cuh"
 
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
@@ -33,16 +30,7 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
-#include <thrust/binary_search.h>
-#include <thrust/host_vector.h>
-#include <thrust/iterator/constant_iterator.h>
-#include <thrust/iterator/discard_iterator.h>
 #include <thrust/logical.h>
-#include <thrust/sort.h>
-#include <thrust/transform_scan.h>
-#include <thrust/unique.h>
-
-#include <numeric>
 
 namespace cudf::io::parquet::experimental::detail {
 
