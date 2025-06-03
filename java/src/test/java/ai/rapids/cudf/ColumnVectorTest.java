@@ -89,10 +89,10 @@ public class ColumnVectorTest extends CudfTestBase {
 
   @Test
   void testTransformVector() {
-    try (ColumnVector cv = ColumnVector.fromBoxedInts(2,3,4);
+    try (ColumnVector cv = ColumnVector.fromBoxedInts(2, 3, null, 4);
          ColumnVector cv1 = cv.transform(ptx, true);
          ColumnVector cv2 = cv.transform(cuda, false);
-         ColumnVector expected = ColumnVector.fromBoxedInts(2*2-2, 3*3-3, 4*4-4)) {
+         ColumnVector expected = ColumnVector.fromBoxedInts(2 * 2 - 2, 3 * 3 - 3, null, 4 * 4 - 4)) {
       assertColumnsAreEqual(expected, cv1);
       assertColumnsAreEqual(expected, cv2);
     }

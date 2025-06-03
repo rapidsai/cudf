@@ -9,6 +9,7 @@ import polars as pl
 from polars.testing import assert_frame_equal
 
 from cudf_polars.testing.asserts import DEFAULT_SCHEDULER, assert_gpu_result_equal
+from cudf_polars.utils.versions import POLARS_VERSION_LT_130
 
 
 @pytest.fixture(scope="module")
@@ -59,7 +60,10 @@ def test_unique_fallback(df):
         },
     )
     q = df.unique(keep="first", maintain_order=True)
-    with pytest.raises(pl.exceptions.ComputeError, match="Unsupported unique options"):
+    with pytest.raises(
+        pl.exceptions.ComputeError if POLARS_VERSION_LT_130 else NotImplementedError,
+        match="Unsupported unique options",
+    ):
         assert_gpu_result_equal(q, engine=engine)
 
 
