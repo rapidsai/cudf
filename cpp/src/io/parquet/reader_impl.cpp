@@ -20,6 +20,7 @@
 
 #include <cudf/detail/stream_compaction.hpp>
 #include <cudf/detail/transform.hpp>
+#include <cudf/detail/structs/utilities.hpp>
 #include <cudf/detail/utilities/stream_pool.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/strings/detail/utilities.hpp>
@@ -683,6 +684,56 @@ table_with_metadata reader::impl::read_chunk_internal(read_mode mode)
       out_columns.emplace_back(make_column(_output_buffers[i], nullptr, metadata, _stream));
     }
   }
+
+  nvtxRangePushA("superimpose nulls");
+  std::vector<size_type> struct_column_positions;
+  std::vector<bitmask_type const*> struct_root_masks;
+  std::vector<std::unique_ptr<column>> struct_child_cols;
+  struct contents {
+    size_type null_count;
+    std::unique_ptr<rmm::device_buffer> null_mask;
+    size_t num_children;
+    size_t num_elements;
+
+    contents(size_type nc, size_t num_c, size_t num_e) : null_count{nc}, num_children{num_c}, num_elements{num_e} {}
+    void set_null_mask(std::unique_ptr<rmm::device_buffer>& nm) {
+      null_mask = std::move(nm);
+    }
+  };
+  std::vector<contents> struct_contents;
+  for(size_t i = 0; i < out_columns.size(); i++) {
+    if (out_columns[i]->type().id() == cudf::type_id::STRUCT && out_columns[i]->nullable()) {
+      struct_column_positions.push_back(i);
+      struct_contents.push_back(contents(out_columns[i]->null_count(), out_columns[i]->num_children(), out_columns[i]->size()));
+      auto col_contents = out_columns[i]->release();
+      struct_contents.back().set_null_mask(col_contents.null_mask);
+      struct_root_masks.insert(struct_root_masks.end(), col_contents.children.size(), static_cast<bitmask_type const*>(struct_contents.back().null_mask->data()));
+      for (auto &child : col_contents.children)
+        struct_child_cols.push_back(std::move(child));
+    }
+  }
+  if (!struct_root_masks.empty()) {
+    struct_child_cols = structs::detail::superimpose_nulls_opt(
+      struct_root_masks,
+      std::move(struct_child_cols),
+      _stream,
+      _mr);
+  }
+  auto offset = 0;
+  for(size_t i = 0; i < struct_column_positions.size(); i++) {
+    std::vector<std::unique_ptr<column>> children;
+    for(size_t j = 0; j < struct_contents[i].num_children; j++)
+      children.push_back(std::move(struct_child_cols[offset + j]));
+    offset += struct_contents[i].num_children;
+    out_columns[struct_column_positions[i]] = std::make_unique<column>(
+        cudf::data_type{type_id::STRUCT},
+        struct_contents[i].num_elements,
+        rmm::device_buffer{},  // Empty data buffer. Structs hold no data.
+        std::move(*struct_contents[i].null_mask),
+        struct_contents[i].null_count,
+        std::move(children));
+  }
+  nvtxRangePop();
 
   // Check if number of rows per source should be included in output metadata.
   if (include_output_num_rows_per_source()) {

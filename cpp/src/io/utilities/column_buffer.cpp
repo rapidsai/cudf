@@ -315,16 +315,45 @@ std::unique_ptr<column> make_column(column_buffer_base<string_policy>& buffer,
   };
 
   auto col = construct_column(buffer, schema_info, schema);
+  /*
+  if (buffer.type.id() == type_id::STRUCT) {
+    if (col->nullable()) {
+      auto col_contents = col->release();
+      auto masks = std::vector<bitmask_type const*>(col_contents.children.size(), static_cast<bitmask_type const*>(col_contents.null_mask->data()));
+      std::vector<std::unique_ptr<column>> cols;
+      for (auto &child : col_contents.children)
+        cols.push_back(std::move(child));
+      auto updated_cols = structs::detail::superimpose_nulls_opt(
+        masks,
+        std::move(cols),
+        stream,
+        buffer._mr);
+      for (size_t i = 0; i < col_contents.children.size(); i++)
+        col_contents.children[i] = std::move(updated_cols[i]);
+      return std::make_unique<column>(
+        cudf::data_type{type_id::STRUCT},
+        buffer.size,
+        rmm::device_buffer{},  // Empty data buffer. Structs hold no data.
+        std::move(*col_contents.null_mask),
+        buffer._null_count,
+        std::move(col_contents.children));
+    }
+  }
+  */
+  /*
   if (buffer.type.id() == type_id::STRUCT) {
     if (col->nullable()) {
       auto col_contents = col->release();
       for (auto& child : col_contents.children) {
-        child = structs::detail::superimpose_nulls_opt(
-          static_cast<bitmask_type const*>(col_contents.null_mask->data()),
+        auto masks = std::vector<bitmask_type const*>(1, static_cast<bitmask_type const*>(col_contents.null_mask->data()));
+        std::vector<std::unique_ptr<column>> cols;
+        cols.push_back(std::move(child));
+        child = std::move(structs::detail::superimpose_nulls_opt(
+          masks,
           buffer._null_count,
-          std::move(child),
+          std::move(cols),
           stream,
-          buffer._mr);
+          buffer._mr)[0]);
       }
 
       return std::make_unique<column>(
@@ -336,6 +365,7 @@ std::unique_ptr<column> make_column(column_buffer_base<string_policy>& buffer,
         std::move(col_contents.children));
     }
   }
+  */
 
   return std::move(col);
 }
