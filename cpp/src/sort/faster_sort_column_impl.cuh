@@ -37,9 +37,9 @@ namespace detail {
  *
  * @tparam method Whether to use stable sort
  * @param input Column to sort. The column data is not modified.
+ * @param indices The result of the sort
  * @param ascending Sort order
  * @param stream CUDA stream used for device memory operations and kernel launches
- * @return Sorted indices for the input column.
  */
 template <sort_method method>
 void faster_sorted_order(column_view const& input,
@@ -88,13 +88,13 @@ struct faster_sorted_order_fn {
 
     auto const do_sort = [&](auto const comp) {
       if constexpr (method == sort_method::STABLE) {
-        thrust::stable_sort_by_key(rmm::exec_policy(stream),
+        thrust::stable_sort_by_key(rmm::exec_policy_nosync(stream),
                                    input.begin<T>(),
                                    input.end<T>(),
                                    indices.begin<size_type>(),
                                    comp);
       } else {
-        thrust::sort_by_key(rmm::exec_policy(stream),
+        thrust::sort_by_key(rmm::exec_policy_nosync(stream),
                             input.begin<T>(),
                             input.end<T>(),
                             indices.begin<size_type>(),
