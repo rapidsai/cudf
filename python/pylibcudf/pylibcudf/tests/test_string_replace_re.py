@@ -14,11 +14,11 @@ def test_replace_re_regex_program_scalar(max_replace_count):
     pat = "f."
     repl = "ba"
     got = plc.strings.replace_re.replace_re(
-        plc.Column(arr),
+        plc.Column.from_arrow(arr),
         plc.strings.regex_program.RegexProgram.create(
             pat, plc.strings.regex_flags.RegexFlags.DEFAULT
         ),
-        plc.interop.from_arrow(pa.scalar(repl)),
+        plc.Scalar.from_arrow(pa.scalar(repl)),
         max_replace_count=max_replace_count,
     )
     expect = pc.replace_substring_regex(
@@ -44,9 +44,9 @@ def test_replace_re_list_str_columns(flags):
     pats = ["oo", "uz"]
     repls = ["a", "b"]
     got = plc.strings.replace_re.replace_re(
-        plc.Column(arr),
+        plc.Column.from_arrow(arr),
         pats,
-        plc.Column(pa.array(repls)),
+        plc.Column.from_arrow(pa.array(repls)),
         flags=flags,
     )
     expect = arr
@@ -62,7 +62,7 @@ def test_replace_re_list_str_columns(flags):
 def test_replace_with_backrefs():
     arr = pa.array(["Z756", None])
     got = plc.strings.replace_re.replace_with_backrefs(
-        plc.Column(arr),
+        plc.Column.from_arrow(arr),
         plc.strings.regex_program.RegexProgram.create(
             "(\\d)(\\d)", plc.strings.regex_flags.RegexFlags.DEFAULT
         ),

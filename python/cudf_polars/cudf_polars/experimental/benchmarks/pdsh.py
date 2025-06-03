@@ -1073,6 +1073,13 @@ parser.add_argument(
     help="Debug run.",
 )
 parser.add_argument(
+    "--protocol",
+    default="ucx",
+    type=str,
+    choices=["ucx", "ucxx"],
+    help="Communication protocol to use for Dask: ucx (UCX-Py) or ucxx)",
+)
+parser.add_argument(
     "--shuffle",
     default=None,
     type=str,
@@ -1167,7 +1174,7 @@ def run(args: argparse.Namespace) -> None:
         kwargs = {
             "n_workers": run_config.n_workers,
             "dashboard_address": ":8585",
-            "protocol": "ucxx",
+            "protocol": args.protocol,
             "rmm_pool_size": args.rmm_pool_size,
             "rmm_async": args.rmm_async,
             "threads_per_worker": run_config.threads,
@@ -1178,12 +1185,17 @@ def run(args: argparse.Namespace) -> None:
         client.wait_for_workers(run_config.n_workers)
         if run_config.shuffle != "tasks":
             try:
+                from rapidsmpf.config import Options
                 from rapidsmpf.integrations.dask import bootstrap_dask_cluster
 
                 bootstrap_dask_cluster(
                     client,
-                    spill_device=run_config.spill_device,
-                    oom_protection=args.rapidsmpf_oom_protection,
+                    options=Options(
+                        {
+                            "dask_spill_device": str(run_config.spill_device),
+                            "dask_statistics": str(args.rapidsmpf_oom_protection),
+                        }
+                    ),
                 )
             except ImportError as err:
                 if run_config.shuffle == "rapidsmpf":
