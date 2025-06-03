@@ -35,10 +35,9 @@ struct rolling_store_output_functor {
 // Specialization for MEAN
 template <typename _T>
 struct rolling_store_output_functor<_T, true> {
-  // We need to avoid storing if count is zero because for mean aggregations
-  // this could perform integer division by zero (undefined behaviour), which
-  // could cause the compiler to deduce nonsense about the loop that increments
-  // count.
+  // Don't store the output if count is zero since integral division by zero is
+  // undefined behaviour. The caller must ensure that the relevant row is
+  // marked as invalid with a null.
 
   // SFINAE for non-bool, non-timestamp types
   template <typename T                                                             = _T,
