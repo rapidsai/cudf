@@ -53,7 +53,7 @@ class RMPFIntegration:  # pragma: no cover
         *other: Any,
     ) -> None:
         """Add cudf-polars DataFrame chunks to an RMP shuffler."""
-        from rapidsmpf.shuffler import partition_and_pack
+        from rapidsmpf.integrations.cudf.partition import partition_and_pack
 
         on = options["on"]
         assert not other, f"Unexpected arguments: {other}"
@@ -74,7 +74,7 @@ class RMPFIntegration:  # pragma: no cover
         options: ShuffleOptions,
     ) -> DataFrame:
         """Extract a finished partition from the RMP shuffler."""
-        from rapidsmpf.shuffler import unpack_and_concat
+        from rapidsmpf.integrations.cudf.partition import unpack_and_concat
 
         shuffler.wait_on(partition_id)
         column_names = options["column_names"]
