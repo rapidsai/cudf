@@ -686,9 +686,9 @@ std::vector<thrust::host_vector<bool>> aggregate_reader_metadata::compute_data_p
     auto const schema_idx = output_column_schemas[col_idx];
     auto [counts, offsets, chunk_offsets] =
       make_page_row_counts_and_offsets(per_file_metadata, row_group_indices, schema_idx, stream);
-    page_row_counts.push_back(std::move(counts));
-    page_row_offsets.push_back(std::move(offsets));
-    col_chunk_page_offsets.push_back(std::move(chunk_offsets));
+    page_row_counts.emplace_back(std::move(counts));
+    page_row_offsets.emplace_back(std::move(offsets));
+    col_chunk_page_offsets.emplace_back(std::move(chunk_offsets));
   });
 
   CUDF_EXPECTS(page_row_offsets.back().back() == total_rows,
