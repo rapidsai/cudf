@@ -27,6 +27,7 @@ if TYPE_CHECKING:
 
     import polars as pl
 
+    from cudf_polars.containers import DataType
     from cudf_polars.typing import ColumnHeader, ColumnOptions, Slice
 
 __all__: list[str] = ["Column"]
@@ -43,6 +44,9 @@ class Column:
     # Optional name, only ever set by evaluation of NamedExpr nodes
     # The internal evaluation should not care about the name.
     name: str | None
+    # Optional dtype, used for preserving dtype metadata like
+    # struct fields
+    dtype: DataType | None
 
     def __init__(
         self,
@@ -52,10 +56,12 @@ class Column:
         order: plc.types.Order = plc.types.Order.ASCENDING,
         null_order: plc.types.NullOrder = plc.types.NullOrder.BEFORE,
         name: str | None = None,
+        dtype: DataType | None = None,
     ):
         self.obj = column
         self.is_scalar = self.size == 1
         self.name = name
+        self.dtype = dtype
         self.set_sorted(is_sorted=is_sorted, order=order, null_order=null_order)
 
     @classmethod

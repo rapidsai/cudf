@@ -260,7 +260,8 @@ class UnaryFunction(Expr):
                     null_count=0,
                     offset=0,
                     children=children,
-                )
+                ),
+                dtype=self.dtype,
             )
         elif self.name in self._OP_MAPPING:
             column = self.children[0].evaluate(df, context=context)

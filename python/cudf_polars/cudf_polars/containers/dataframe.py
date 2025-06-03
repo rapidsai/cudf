@@ -60,11 +60,15 @@ class DataFrame:
         # To guarantee we produce correct names, we therefore
         # serialise with names we control and rename with that map.
         name_map = {f"column_{i}": name for i, name in enumerate(self.column_map)}
-        table = plc.interop.to_arrow(
-            self.table,
-            # [plc.interop.ColumnMetadata(name=name) for name in name_map],
+        table = plc.interop.to_arrow(self.table)
+        schema_overrides = {
+            name: column.dtype.polars
+            for name, column in zip(name_map, self.columns, strict=True)
+            if column.dtype is not None
+        }
+        df: pl.DataFrame = pl.from_arrow(
+            table, schema=list(name_map), schema_overrides=schema_overrides or None
         )
-        df: pl.DataFrame = pl.from_arrow(table)
         return df.rename(name_map).with_columns(
             pl.col(c.name).set_sorted(descending=c.order == plc.types.Order.DESCENDING)
             if c.is_sorted
