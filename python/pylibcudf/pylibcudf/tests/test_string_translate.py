@@ -13,7 +13,7 @@ def data_col():
         ["aa", "bbb", "cccc", "abcd", None],
         type=pa.string(),
     )
-    return pa_data_col, plc.Column(pa_data_col)
+    return pa_data_col, plc.Column.from_arrow(pa_data_col)
 
 
 @pytest.fixture
@@ -43,7 +43,7 @@ def test_translate(data_col, trans_table):
 def test_filter_characters(data_col, trans_table, keep):
     pa_array, plc_col = data_col
     got = plc.strings.translate.filter_characters(
-        plc_col, trans_table, keep, plc.interop.from_arrow(pa.scalar("*"))
+        plc_col, trans_table, keep, plc.Scalar.from_arrow(pa.scalar("*"))
     )
     exp_data = []
     flat_trans = set(trans_table.keys()).union(trans_table.values())

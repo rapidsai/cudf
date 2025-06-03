@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import operator
 import warnings
-from collections import abc
+from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any, Literal
 
 import cupy
@@ -34,20 +34,27 @@ from cudf.core.column import (
 from cudf.core.column.categorical import CategoricalColumn, as_unsigned_codes
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.mixins import BinaryOperand, Scannable
-from cudf.utils import ioutils
 from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
     cudf_dtype_from_pa_type,
     find_common_type,
+    is_dtype_obj_numeric,
 )
 from cudf.utils.performance_tracking import _performance_tracking
 from cudf.utils.utils import _array_ufunc, _warn_no_dask_cudf
 
 if TYPE_CHECKING:
-    from collections.abc import MutableMapping
+    from collections.abc import (
+        Callable,
+        Generator,
+        Hashable,
+        Iterable,
+        MutableMapping,
+    )
     from types import ModuleType
 
     from cudf._typing import Dtype, DtypeObj, ScalarLike
+    from cudf.core.series import Series
 
 
 class Frame(BinaryOperand, Scannable, Serializable):
@@ -83,17 +90,17 @@ class Frame(BinaryOperand, Scannable, Serializable):
     @property
     def _column_labels_and_values(
         self,
-    ) -> abc.Iterable[tuple[abc.Hashable, ColumnBase]]:
+    ) -> Iterable[tuple[Hashable, ColumnBase]]:
         return zip(self._column_names, self._columns)
 
     @property
-    def _dtypes(self) -> abc.Generator[tuple[abc.Hashable, Dtype], None, None]:
+    def _dtypes(self) -> Generator[tuple[Hashable, Dtype], None, None]:
         for label, col in self._column_labels_and_values:
             yield label, col.dtype
 
     @property
     def ndim(self) -> int:
-        raise NotImplementedError()
+        raise NotImplementedError
 
     @_performance_tracking
     def serialize(self):
@@ -179,7 +186,14 @@ class Frame(BinaryOperand, Scannable, Serializable):
         """
         Construct cls from a ColumnAccessor-like mapping.
         """
-        obj = cls.__new__(cls)
+        from cudf.core.index import Index
+
+        if cls is Index:
+            # Because Index.__new__ is overridden as a constructor,
+            # to copy pandas...
+            obj = object.__new__(cls)
+        else:
+            obj = cls.__new__(cls)
         Frame.__init__(obj, data)
         return obj
 
@@ -195,7 +209,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
     def _from_columns_like_self(
         self,
         columns: list[ColumnBase],
-        column_names: abc.Iterable[str] | None = None,
+        column_names: Iterable[str] | None = None,
     ):
         """Construct a Frame from a list of columns with metadata from self.
 
@@ -302,7 +316,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
 
     @property
     @_performance_tracking
-    def empty(self):
+    def empty(self) -> bool:
         """
         Indicator whether DataFrame or Series is empty.
 
@@ -384,7 +398,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
 
     @_performance_tracking
     def astype(
-        self, dtype: dict[abc.Hashable, DtypeObj], copy: bool = False
+        self, dtype: dict[Hashable, DtypeObj], copy: bool = False
     ) -> Self:
         casted = (
             col.astype(dtype.get(col_name, col.dtype), copy=copy)
@@ -529,7 +543,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
     @_performance_tracking
     def _to_array(
         self,
-        get_array: abc.Callable,
+        get_array: Callable,
         module: ModuleType,
         copy: bool,
         dtype: Dtype | None = None,
@@ -595,6 +609,42 @@ class Frame(BinaryOperand, Scannable, Serializable):
         Instead, it should be called on subclasses like DataFrame/Series.
         """
         raise NotImplementedError(f"{type(self)} must implement to_pylibcudf")
+
+    @_performance_tracking
+    def to_pandas(self, *, nullable: bool = False, arrow_type: bool = False):
+        raise NotImplementedError(f"{type(self)} must implement to_pandas")
+
+    @_performance_tracking
+    def to_dlpack(self):
+        """
+        Converts a cuDF object to a DLPack tensor.
+        DLPack is an open-source memory tensor structure:
+        `dmlc/dlpack <https://github.com/dmlc/dlpack>`_.
+
+        Returns
+        -------
+        PyCapsule
+            A DLPack tensor pointer which is encapsulated in a PyCapsule object.
+
+        Notes
+        -----
+        The result is in column-major (Fortran order) format. If the
+        output tensor needs to be row major, transpose the output of this function.
+        """
+        dtypes = []
+        for _, dtype in self._dtypes:
+            if not is_dtype_obj_numeric(dtype, include_decimal=False):
+                raise NotImplementedError(
+                    "non-numeric data is not yet supported"
+                )
+            dtypes.append(dtype)
+        dtype = find_common_type(dtypes)
+        casted = self.astype(dtype)
+        return plc.interop.to_dlpack(
+            plc.Table(
+                [col.to_pylibcudf(mode="read") for col in casted._columns]
+            )
+        )
 
     @_performance_tracking
     def to_cupy(
@@ -786,7 +836,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
     @_performance_tracking
     def fillna(
         self,
-        value: None | ScalarLike | cudf.Series = None,
+        value: None | ScalarLike | Series = None,
         method: Literal["ffill", "bfill", "pad", "backfill", None] = None,
         axis=None,
         inplace: bool = False,
@@ -919,7 +969,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
 
         if is_scalar(value):
             value = {name: value for name in self._column_names}
-        elif not isinstance(value, (abc.Mapping, cudf.Series)):
+        elif not isinstance(value, (Mapping, cudf.Series)):
             raise TypeError(
                 f'"value" parameter must be a scalar, dict '
                 f"or Series, but you passed a "
@@ -1017,7 +1067,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
         if len(dict_indices):
             dict_indices_table = pa.table(dict_indices)
             data = data.drop(dict_indices_table.column_names)
-            plc_indices = plc.interop.from_arrow(dict_indices_table)
+            plc_indices = plc.Table.from_arrow(dict_indices_table)
             # as dictionary size can vary, it can't be a single table
             cudf_dictionaries_columns = {
                 name: ColumnBase.from_arrow(dict_dictionaries[name])
@@ -1045,7 +1095,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
         cudf_non_category_frame = {
             name: ColumnBase.from_pylibcudf(plc_col)
             for name, plc_col in zip(
-                data.column_names, plc.interop.from_arrow(data).columns()
+                data.column_names, plc.Table.from_arrow(data).columns()
             )
         }
 
@@ -1587,10 +1637,9 @@ class Frame(BinaryOperand, Scannable, Serializable):
             self._data._from_columns_like_self(data_columns)
         )
 
-    @classmethod
+    @staticmethod
     @_performance_tracking
     def _colwise_binop(
-        cls,
         operands: dict[str | None, tuple[ColumnBase, Any, bool, Any]],
         fn: str,
     ):
@@ -1659,6 +1708,13 @@ class Frame(BinaryOperand, Scannable, Serializable):
                 if reflect
                 else getattr(operator, fn)(left_column, right_column)
             )
+            if isinstance(outcol, bool) and fn in {"__eq__", "__ne__"}:
+                # Both columns returned NotImplemented, Python compared using is/is not
+                # TODO: A better solution is to ensure each Column._binaryop
+                # implementation accounts for this case.
+                outcol = left_column._all_bools_with_nulls(
+                    right_column, fn != "__eq__"
+                )
 
             if output_mask is not None:
                 outcol = outcol.set_mask(output_mask)
@@ -1951,13 +2007,6 @@ class Frame(BinaryOperand, Scannable, Serializable):
             skipna=skipna,
             **kwargs,
         )
-
-    @_performance_tracking
-    @ioutils.doc_to_dlpack()
-    def to_dlpack(self):
-        """{docstring}"""
-
-        return cudf.io.dlpack.to_dlpack(self)
 
     @_performance_tracking
     def __str__(self) -> str:

@@ -14,7 +14,7 @@ def pa_col():
 
 @pytest.fixture(scope="module")
 def plc_col(pa_col):
-    return plc.Column(pa_col)
+    return plc.Column.from_arrow(pa_col)
 
 
 @pytest.fixture(
@@ -27,7 +27,7 @@ def pa_start_stop_step(request):
 
 @pytest.fixture(scope="module")
 def plc_start_stop_step(pa_start_stop_step):
-    return tuple(plc.interop.from_arrow(x) for x in pa_start_stop_step)
+    return tuple(plc.Scalar.from_arrow(x) for x in pa_start_stop_step)
 
 
 @pytest.fixture(scope="module")
@@ -37,7 +37,7 @@ def pa_starts_col():
 
 @pytest.fixture(scope="module")
 def plc_starts_col(pa_starts_col):
-    return plc.Column(pa_starts_col)
+    return plc.Column.from_arrow(pa_starts_col)
 
 
 @pytest.fixture(scope="module")
@@ -47,7 +47,7 @@ def pa_stops_col():
 
 @pytest.fixture(scope="module")
 def plc_stops_col(pa_stops_col):
-    return plc.Column(pa_stops_col)
+    return plc.Column.from_arrow(pa_stops_col)
 
 
 def test_slice(pa_col, plc_col, pa_start_stop_step, plc_start_stop_step):

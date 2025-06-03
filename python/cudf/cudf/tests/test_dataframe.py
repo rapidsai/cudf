@@ -7191,12 +7191,6 @@ def test_dataframe_info_null_counts():
     assert str_cmp == actual_string
 
 
-def test_is_close_deprecation():
-    ser = cudf.Series([1])
-    with pytest.warns(FutureWarning):
-        cudf.isclose(ser, ser)
-
-
 @pytest.mark.parametrize(
     "orient", ["dict", "list", "split", "tight", "records", "index", "series"]
 )
@@ -8970,7 +8964,7 @@ def test_dataframe_constructor_columns(df, columns, index, request):
 
     gdf = cudf.from_pandas(df)
     host_columns = (
-        columns.to_pandas() if isinstance(columns, cudf.BaseIndex) else columns
+        columns.to_pandas() if isinstance(columns, cudf.Index) else columns
     )
 
     expected = pd.DataFrame(df, columns=host_columns, index=index)
@@ -11169,3 +11163,29 @@ def test_setitem_reset_label_dtype():
     result["a"] = [2]
     expected["a"] = [2]
     assert_eq(result, expected)
+
+
+def test_dataframe_midx_cols_getitem():
+    df = cudf.DataFrame(
+        {
+            "a": ["a", "b", "c"],
+            "b": ["b", "", ""],
+            "c": [10, 11, 12],
+        }
+    )
+    df.columns = df.set_index(["a", "b"]).index
+    pdf = df.to_pandas()
+
+    expected = df["c"]
+    actual = pdf["c"]
+    assert_eq(expected, actual)
+    df = cudf.DataFrame(
+        [[1, 0], [0, 1]],
+        columns=[
+            ["foo", "foo"],
+            ["location", "location"],
+            ["x", "y"],
+        ],
+    )
+    df = df.assign(bools=cudf.Series([True, False], dtype="bool"))
+    assert_eq(df["bools"], df.to_pandas()["bools"])

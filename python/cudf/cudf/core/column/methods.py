@@ -73,7 +73,7 @@ class ColumnMethods(NotIterable):
                 # is a Table
                 table = new_col
 
-                if isinstance(self._parent, cudf.BaseIndex):
+                if isinstance(self._parent, cudf.Index):
                     idx = self._parent._constructor_expanddim._from_data(table)
                     idx.names = None
                     return idx
@@ -87,7 +87,7 @@ class ColumnMethods(NotIterable):
                     name=self._parent.name,
                     index=self._parent.index if retain_index else None,
                 )
-            elif isinstance(self._parent, cudf.BaseIndex):
+            elif isinstance(self._parent, cudf.Index):
                 return cudf.Index._from_column(new_col, name=self._parent.name)
             else:
                 return self._parent._mimic_inplace(new_col, inplace=False)

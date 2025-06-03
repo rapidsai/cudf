@@ -49,7 +49,7 @@ from cudf.utils.performance_tracking import _dask_cudf_performance_tracking
 PYARROW_GE_15 = Version(pa.__version__) >= Version("15.0.0")
 
 
-@meta_nonempty.register(cudf.BaseIndex)
+@meta_nonempty.register(cudf.Index)
 @_dask_cudf_performance_tracking
 def _nonempty_index(idx):
     """Return a non-empty cudf.Index as metadata."""
@@ -190,7 +190,7 @@ def make_meta_cudf(x, index=None):
     return x.head(0)
 
 
-@make_meta_dispatch.register(cudf.BaseIndex)
+@make_meta_dispatch.register(cudf.Index)
 @_dask_cudf_performance_tracking
 def make_meta_cudf_index(x, index=None):
     return x[:0]
@@ -274,7 +274,7 @@ def make_meta_object_cudf(x, index=None):
     raise TypeError(f"Don't know how to create metadata from {x}")
 
 
-@concat_dispatch.register((cudf.DataFrame, cudf.Series, cudf.BaseIndex))
+@concat_dispatch.register((cudf.DataFrame, cudf.Series, cudf.Index))
 @_dask_cudf_performance_tracking
 def concat_cudf(
     dfs,
@@ -297,22 +297,20 @@ def concat_cudf(
     return cudf.concat(dfs, axis=axis, ignore_index=ignore_index)
 
 
-@categorical_dtype_dispatch.register(
-    (cudf.DataFrame, cudf.Series, cudf.BaseIndex)
-)
+@categorical_dtype_dispatch.register((cudf.DataFrame, cudf.Series, cudf.Index))
 @_dask_cudf_performance_tracking
 def categorical_dtype_cudf(categories=None, ordered=False):
     return cudf.CategoricalDtype(categories=categories, ordered=ordered)
 
 
-@tolist_dispatch.register((cudf.Series, cudf.BaseIndex))
+@tolist_dispatch.register((cudf.Series, cudf.Index))
 @_dask_cudf_performance_tracking
 def tolist_cudf(obj):
     return obj.to_pandas().tolist()
 
 
 @is_categorical_dtype_dispatch.register(
-    (cudf.Series, cudf.BaseIndex, cudf.CategoricalDtype)  # , Series)
+    (cudf.Series, cudf.Index, cudf.CategoricalDtype)  # , Series)
 )
 @_dask_cudf_performance_tracking
 def is_categorical_dtype_cudf(obj):
@@ -324,7 +322,7 @@ def get_grouper_cudf(obj):
     return cudf.core.groupby.Grouper
 
 
-@percentile_lookup.register((cudf.Series, cp.ndarray, cudf.BaseIndex))
+@percentile_lookup.register((cudf.Series, cp.ndarray, cudf.Index))
 @_dask_cudf_performance_tracking
 def percentile_cudf(a, q, interpolation="linear"):
     # Cudf dispatch to the equivalent of `np.percentile`:
@@ -401,7 +399,7 @@ def _table_to_cudf(obj, table, self_destruct=None, **kwargs):
     return obj.from_arrow(table)
 
 
-@union_categoricals_dispatch.register((cudf.Series, cudf.BaseIndex))
+@union_categoricals_dispatch.register((cudf.Series, cudf.Index))
 @_dask_cudf_performance_tracking
 def union_categoricals_cudf(
     to_union, sort_categories=False, ignore_order=False
@@ -419,7 +417,7 @@ def hash_object_cudf(frame, index=True):
     return frame.hash_values()
 
 
-@hash_object_dispatch.register(cudf.BaseIndex)
+@hash_object_dispatch.register(cudf.Index)
 @_dask_cudf_performance_tracking
 def hash_object_cudf_index(ind, index=None):
     if isinstance(ind, cudf.MultiIndex):
@@ -453,7 +451,7 @@ def sizeof_cudf_dataframe(df):
     )
 
 
-@sizeof_dispatch.register((cudf.Series, cudf.BaseIndex))
+@sizeof_dispatch.register((cudf.Series, cudf.Index))
 @_dask_cudf_performance_tracking
 def sizeof_cudf_series_index(obj):
     return obj.memory_usage()

@@ -25,8 +25,6 @@ Attributes
    Series.dtypes
    Series.shape
    Series.ndim
-   Series.nullable
-   Series.nullmask
    Series.null_count
    Series.size
    Series.T
@@ -396,7 +394,6 @@ String handling
    minhash
    ngrams
    ngrams_tokenize
-   normalize_characters
    normalize_spaces
    pad
    partition
@@ -536,8 +533,6 @@ Serialization / IO / conversion
    Series.to_pandas
    Series.to_string
    Series.from_arrow
-   Series.from_categorical
-   Series.from_masked_array
    Series.from_pandas
    Series.hash_values
    Series.to_pylibcudf

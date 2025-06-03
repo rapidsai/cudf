@@ -13,7 +13,7 @@ def target_col():
     pa_array = pa.array(
         ["AbC", "de", "FGHI", "j", "kLm", "nOPq", None, "RsT", None, "uVw"]
     )
-    return pa_array, plc.Column(pa_array)
+    return pa_array, plc.Column.from_arrow(pa_array)
 
 
 @pytest.fixture(
@@ -53,7 +53,7 @@ def test_count_re():
     pattern = "[1-9][a-z]"
     arr = pa.array(["A1a2A3a4", "A1A2A3", None])
     got = plc.strings.contains.count_re(
-        plc.Column(arr),
+        plc.Column.from_arrow(arr),
         plc.strings.regex_program.RegexProgram.create(
             pattern, plc.strings.regex_flags.RegexFlags.DEFAULT
         ),
@@ -66,7 +66,7 @@ def test_match_re():
     pattern = "[1-9][a-z]"
     arr = pa.array(["1a2b", "b1a2", None])
     got = plc.strings.contains.matches_re(
-        plc.Column(arr),
+        plc.Column.from_arrow(arr),
         plc.strings.regex_program.RegexProgram.create(
             pattern, plc.strings.regex_flags.RegexFlags.DEFAULT
         ),
@@ -79,8 +79,8 @@ def test_like():
     pattern = "%a"
     arr = pa.array(["1a2aa3aaa"])
     got = plc.strings.contains.like(
-        plc.Column(arr),
-        plc.Column(pa.array([pattern])),
+        plc.Column.from_arrow(arr),
+        plc.Column.from_arrow(pa.array([pattern])),
     )
     expect = pc.match_like(arr, pattern)
     assert_column_eq(expect, got)

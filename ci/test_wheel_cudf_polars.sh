@@ -3,6 +3,8 @@
 
 set -eou pipefail
 
+source rapids-init-pip
+
 rapids-logger "Download wheels"
 
 RAPIDS_PY_CUDA_SUFFIX="$(rapids-wheel-ctk-name-gen "${RAPIDS_CUDA_VERSION}")"
@@ -17,10 +19,16 @@ rapids-logger "Installing cudf_polars and its dependencies"
 # generate constraints (possibly pinning to oldest support versions of dependencies)
 rapids-generate-pip-constraints py_test_cudf_polars ./constraints.txt
 
-# echo to expand wildcard before adding `[test,experimental]` requires for pip
+# notes:
+#
+#   * echo to expand wildcard before adding `[test,experimental]` requires for pip
+#   * need to provide --constraint="${PIP_CONSTRAINT}" because that environment variable is
+#     ignored if any other --constraint are passed via the CLI
+#
 rapids-pip-retry install \
     -v \
     --constraint ./constraints.txt \
+    --constraint "${PIP_CONSTRAINT}" \
     "$(echo "${CUDF_POLARS_WHEELHOUSE}"/cudf_polars_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)[test,experimental]" \
     "$(echo "${LIBCUDF_WHEELHOUSE}"/libcudf_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)" \
     "$(echo "${PYLIBCUDF_WHEELHOUSE}"/pylibcudf_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)"

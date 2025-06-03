@@ -20,6 +20,7 @@ from polars.polars import _expr_nodes as pl_expr, _ir_nodes as pl_ir
 
 import pylibcudf as plc
 
+from cudf_polars.containers import DataType
 from cudf_polars.dsl import expr, ir
 from cudf_polars.dsl.to_ast import insert_colrefs
 from cudf_polars.dsl.utils.aggregations import decompose_single_agg
@@ -100,7 +101,7 @@ class Translator:
         with ctx:
             polars_schema = self.visitor.get_schema()
             try:
-                schema = {k: dtypes.from_polars(v) for k, v in polars_schema.items()}
+                schema = {k: DataType(v) for k, v in polars_schema.items()}
             except Exception as e:
                 self.errors.append(NotImplementedError(str(e)))
                 return ir.ErrorNode({}, str(e))
@@ -149,7 +150,7 @@ class Translator:
         to determine if the query is supported.
         """
         node = self.visitor.view_expression(n)
-        dtype = dtypes.from_polars(self.visitor.get_dtype(n))
+        dtype = DataType(self.visitor.get_dtype(n))
         try:
             return _translate_expr(node, self, dtype, schema)
         except Exception as e:
@@ -350,7 +351,7 @@ def _(node: pl_ir.Join, translator: Translator, schema: Schema) -> ir.IR:
         else:
             ops = [op1, op2]
 
-        dtype = plc.DataType(plc.TypeId.BOOL8)
+        dtype = DataType(pl.datatypes.Boolean())
         predicate = functools.reduce(
             functools.partial(
                 expr.BinOp, dtype, plc.binaryop.BinaryOperator.LOGICAL_AND
@@ -494,9 +495,7 @@ def _(node: pl_ir.HConcat, translator: Translator, schema: Schema) -> ir.IR:
 
 
 @_translate_ir.register
-def _(
-    node: pl_ir.Sink, translator: Translator, schema: dict[str, plc.DataType]
-) -> ir.IR:
+def _(node: pl_ir.Sink, translator: Translator, schema: Schema) -> ir.IR:
     payload = json.loads(node.payload)
     try:
         file = payload["File"]
@@ -565,7 +564,7 @@ def translate_named_expr(
 
 @singledispatch
 def _translate_expr(
-    node: Any, translator: Translator, dtype: plc.DataType, schema: Schema
+    node: Any, translator: Translator, dtype: DataType, schema: Schema
 ) -> expr.Expr:
     raise NotImplementedError(
         f"Translation for {type(node).__name__}"
@@ -574,7 +573,7 @@ def _translate_expr(
 
 @_translate_expr.register
 def _(
-    node: pl_expr.Function, translator: Translator, dtype: plc.DataType, schema: Schema
+    node: pl_expr.Function, translator: Translator, dtype: DataType, schema: Schema
 ) -> expr.Expr:
     name, *options = node.function_data
     options = tuple(options)
@@ -591,13 +590,10 @@ def _(
                 # We check for null first because we want to use the
                 # chars pyarrow type, but it is invalid to try and
                 # produce a string scalar with a null dtype.
-                if chars.value == pa.scalar(None, type=pa.null()):
+                if chars.value is None:
                     # Polars uses None to mean "strip all whitespace"
-                    chars = expr.Literal(
-                        column.dtype,
-                        pa.scalar("", type=plc.interop.to_arrow(column.dtype)),
-                    )
-                elif chars.value == pa.scalar("", type=chars.value.type):
+                    chars = expr.Literal(column.dtype, "")
+                elif chars.value == "":
                     # No-op in polars, but libcudf uses empty string
                     # as signifier to remove whitespace.
                     return column
@@ -666,7 +662,7 @@ def _(
                 dtype,
                 plc.binaryop.BinaryOperator.LOG_BASE,
                 child,
-                expr.Literal(dtype, pa.scalar(base, type=plc.interop.to_arrow(dtype))),
+                expr.Literal(dtype, base),
             )
         elif name == "pow":
             return expr.BinOp(dtype, plc.binaryop.BinaryOperator.POW, *children)
@@ -677,7 +673,7 @@ def _(
             return expr.Slice(
                 dtype,
                 0,
-                k.value.as_py(),
+                k.value,
                 expr.Sort(dtype, (False, True, not descending), col),
             )
 
@@ -689,7 +685,7 @@ def _(
 
 @_translate_expr.register
 def _(
-    node: pl_expr.Window, translator: Translator, dtype: plc.DataType, schema: Schema
+    node: pl_expr.Window, translator: Translator, dtype: DataType, schema: Schema
 ) -> expr.Expr:
     if isinstance(node.options, pl_expr.RollingGroupOptions):
         # pl.col("a").rolling(...)
@@ -700,7 +696,7 @@ def _(
         )
         named_aggs = [agg for agg, _ in aggs]
         orderby = node.options.index_column
-        orderby_dtype = schema[orderby]
+        orderby_dtype = schema[orderby].plc
         if plc.traits.is_integral(orderby_dtype):
             # Integer orderby column is cast in implementation to int64 in polars
             orderby_dtype = plc.DataType(plc.TypeId.INT64)
@@ -745,7 +741,7 @@ def _(
 
 @_translate_expr.register
 def _(
-    node: pl_expr.Literal, translator: Translator, dtype: plc.DataType, schema: Schema
+    node: pl_expr.Literal, translator: Translator, dtype: DataType, schema: Schema
 ) -> expr.Expr:
     if isinstance(node.value, plrs.PySeries):
         data = pl.Series._from_pyseries(node.value).to_arrow(
@@ -758,13 +754,12 @@ def _(
         # TODO: Find an alternative to pa.infer_type
         data = pa.array(node.value, type=pa.infer_type(node.value))
         return expr.LiteralColumn(dtype, data)
-    value = pa.scalar(node.value, type=plc.interop.to_arrow(dtype))
-    return expr.Literal(dtype, value)
+    return expr.Literal(dtype, node.value)
 
 
 @_translate_expr.register
 def _(
-    node: pl_expr.Sort, translator: Translator, dtype: plc.DataType, schema: Schema
+    node: pl_expr.Sort, translator: Translator, dtype: DataType, schema: Schema
 ) -> expr.Expr:
     # TODO: raise in groupby
     return expr.Sort(
@@ -774,7 +769,7 @@ def _(
 
 @_translate_expr.register
 def _(
-    node: pl_expr.SortBy, translator: Translator, dtype: plc.DataType, schema: Schema
+    node: pl_expr.SortBy, translator: Translator, dtype: DataType, schema: Schema
 ) -> expr.Expr:
     options = node.sort_options
     return expr.SortBy(
@@ -787,7 +782,7 @@ def _(
 
 @_translate_expr.register
 def _(
-    node: pl_expr.Slice, translator: Translator, dtype: plc.DataType, schema: Schema
+    node: pl_expr.Slice, translator: Translator, dtype: DataType, schema: Schema
 ) -> expr.Expr:
     offset = translator.translate_expr(n=node.offset, schema=schema)
     length = translator.translate_expr(n=node.length, schema=schema)
@@ -795,15 +790,15 @@ def _(
     assert isinstance(length, expr.Literal)
     return expr.Slice(
         dtype,
-        offset.value.as_py(),
-        length.value.as_py(),
+        offset.value,
+        length.value,
         translator.translate_expr(n=node.input, schema=schema),
     )
 
 
 @_translate_expr.register
 def _(
-    node: pl_expr.Gather, translator: Translator, dtype: plc.DataType, schema: Schema
+    node: pl_expr.Gather, translator: Translator, dtype: DataType, schema: Schema
 ) -> expr.Expr:
     return expr.Gather(
         dtype,
@@ -814,7 +809,7 @@ def _(
 
 @_translate_expr.register
 def _(
-    node: pl_expr.Filter, translator: Translator, dtype: plc.DataType, schema: Schema
+    node: pl_expr.Filter, translator: Translator, dtype: DataType, schema: Schema
 ) -> expr.Expr:
     return expr.Filter(
         dtype,
@@ -825,12 +820,12 @@ def _(
 
 @_translate_expr.register
 def _(
-    node: pl_expr.Cast, translator: Translator, dtype: plc.DataType, schema: Schema
+    node: pl_expr.Cast, translator: Translator, dtype: DataType, schema: Schema
 ) -> expr.Expr:
     inner = translator.translate_expr(n=node.expr, schema=schema)
     # Push casts into literals so we can handle Cast(Literal(Null))
     if isinstance(inner, expr.Literal):
-        return expr.Literal(dtype, inner.value.cast(plc.interop.to_arrow(dtype)))
+        return inner.astype(dtype)
     elif isinstance(inner, expr.Cast):
         # Translation of Len/Count-agg put in a cast, remove double
         # casts if we have one.
@@ -840,14 +835,14 @@ def _(
 
 @_translate_expr.register
 def _(
-    node: pl_expr.Column, translator: Translator, dtype: plc.DataType, schema: Schema
+    node: pl_expr.Column, translator: Translator, dtype: DataType, schema: Schema
 ) -> expr.Expr:
     return expr.Col(dtype, node.name)
 
 
 @_translate_expr.register
 def _(
-    node: pl_expr.Agg, translator: Translator, dtype: plc.DataType, schema: Schema
+    node: pl_expr.Agg, translator: Translator, dtype: DataType, schema: Schema
 ) -> expr.Expr:
     value = expr.Agg(
         dtype,
@@ -862,7 +857,7 @@ def _(
 
 @_translate_expr.register
 def _(
-    node: pl_expr.Ternary, translator: Translator, dtype: plc.DataType, schema: Schema
+    node: pl_expr.Ternary, translator: Translator, dtype: DataType, schema: Schema
 ) -> expr.Expr:
     return expr.Ternary(
         dtype,
@@ -876,7 +871,7 @@ def _(
 def _(
     node: pl_expr.BinaryExpr,
     translator: Translator,
-    dtype: plc.DataType,
+    dtype: DataType,
     schema: Schema,
 ) -> expr.Expr:
     return expr.BinOp(
@@ -889,7 +884,7 @@ def _(
 
 @_translate_expr.register
 def _(
-    node: pl_expr.Len, translator: Translator, dtype: plc.DataType, schema: Schema
+    node: pl_expr.Len, translator: Translator, dtype: DataType, schema: Schema
 ) -> expr.Expr:
     value = expr.Len(dtype)
     if dtype.id() != plc.TypeId.INT32:

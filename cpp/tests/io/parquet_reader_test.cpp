@@ -737,9 +737,9 @@ TEST_F(ParquetReaderTest, DecimalRead)
       0x62, 0x65, 0x62, 0x64, 0x31, 0x29, 0x19, 0x3c, 0x1c, 0x00, 0x00, 0x1c, 0x00, 0x00, 0x1c,
       0x00, 0x00, 0x00, 0xd3, 0x02, 0x00, 0x00, 0x50, 0x41, 0x52, 0x31};
 
-    cudf::io::parquet_reader_options read_opts =
-      cudf::io::parquet_reader_options::builder(cudf::io::source_info{
-        reinterpret_cast<char const*>(decimals_parquet.data()), decimals_parquet_len});
+    cudf::io::parquet_reader_options read_opts = cudf::io::parquet_reader_options::builder(
+      cudf::io::source_info{cudf::host_span<std::byte const>{
+        reinterpret_cast<std::byte const*>(decimals_parquet.data()), decimals_parquet.size()}});
     auto result = cudf::io::read_parquet(read_opts);
 
     auto validity =
@@ -880,9 +880,9 @@ TEST_F(ParquetReaderTest, DecimalRead)
 
     unsigned int parquet_len = 1226;
 
-    cudf::io::parquet_reader_options read_opts =
-      cudf::io::parquet_reader_options::builder(cudf::io::source_info{
-        reinterpret_cast<char const*>(fixed_len_bytes_decimal_parquet.data()), parquet_len});
+    cudf::io::parquet_reader_options read_opts = cudf::io::parquet_reader_options::builder(
+      cudf::io::source_info{cudf::host_span<std::byte const>{
+        reinterpret_cast<std::byte const*>(fixed_len_bytes_decimal_parquet.data()), parquet_len}});
     auto result = cudf::io::read_parquet(read_opts);
     EXPECT_EQ(result.tbl->view().num_columns(), 3);
 
@@ -1000,7 +1000,8 @@ TEST_F(ParquetReaderTest, EmptyColumnsParam)
 
   cudf::io::parquet_reader_options read_opts =
     cudf::io::parquet_reader_options::builder(
-      cudf::io::source_info{out_buffer.data(), out_buffer.size()})
+      cudf::io::source_info{cudf::host_span<std::byte const>{
+        reinterpret_cast<std::byte const*>(out_buffer.data()), out_buffer.size()}})
       .columns({});
   auto const result = cudf::io::read_parquet(read_opts);
 
@@ -1240,7 +1241,8 @@ TEST_F(ParquetReaderTest, SingleLevelLists)
 
   // read single level list reproducing parquet file
   cudf::io::parquet_reader_options read_opts = cudf::io::parquet_reader_options::builder(
-    cudf::io::source_info{reinterpret_cast<char const*>(list_bytes.data()), list_bytes.size()});
+    cudf::io::source_info{cudf::host_span<std::byte const>{
+      reinterpret_cast<std::byte const*>(list_bytes.data()), list_bytes.size()}});
   auto table = cudf::io::read_parquet(read_opts);
 
   auto const c0 = table.tbl->get_column(0);
@@ -1272,7 +1274,8 @@ TEST_F(ParquetReaderTest, ChunkedSingleLevelLists)
   auto reader = cudf::io::chunked_parquet_reader(
     1L << 31,
     cudf::io::parquet_reader_options::builder(
-      cudf::io::source_info{reinterpret_cast<char const*>(list_bytes.data()), list_bytes.size()}));
+      cudf::io::source_info{cudf::host_span<std::byte const>{
+        reinterpret_cast<std::byte const*>(list_bytes.data()), list_bytes.size()}}));
   int iterations = 0;
   while (reader.has_next() && iterations < 10) {
     auto chunk = reader.read_chunk();
@@ -1997,9 +2000,10 @@ TEST_F(ParquetReaderTest, RepeatedNoAnnotations)
     0x61, 0x38, 0x33, 0x39, 0x31, 0x36, 0x63, 0x36, 0x39, 0x62, 0x35, 0x65, 0x29, 0x00, 0x32, 0x01,
     0x00, 0x00, 0x50, 0x41, 0x52, 0x31};
 
-  auto read_opts = cudf::io::parquet_reader_options::builder(cudf::io::source_info{
-    reinterpret_cast<char const*>(repeated_bytes.data()), repeated_bytes.size()});
-  auto result    = cudf::io::read_parquet(read_opts);
+  auto read_opts = cudf::io::parquet_reader_options::builder(
+    cudf::io::source_info{cudf::host_span<std::byte const>{
+      reinterpret_cast<std::byte const*>(repeated_bytes.data()), repeated_bytes.size()}});
+  auto result = cudf::io::read_parquet(read_opts);
 
   EXPECT_EQ(result.tbl->view().column(0).size(), 6);
   EXPECT_EQ(result.tbl->view().num_columns(), 2);
@@ -2139,7 +2143,8 @@ TEST_F(ParquetReaderTest, DeltaSkipRowsWithNulls)
     cudf::io::write_parquet(out_opts2);
 
     cudf::io::parquet_reader_options default_in_opts = cudf::io::parquet_reader_options::builder(
-      cudf::io::source_info{out_buffer.data(), out_buffer.size()});
+      cudf::io::source_info{cudf::host_span<std::byte const>{
+        reinterpret_cast<std::byte const*>(out_buffer.data()), out_buffer.size()}});
     auto const result2 = cudf::io::read_parquet(default_in_opts);
 
     CUDF_TEST_EXPECT_TABLES_EQUAL(result.tbl->view(), result2.tbl->view());
@@ -2390,7 +2395,7 @@ TEST_F(ParquetReaderTest, NumRowsPerSource)
   // Read rows_to_read rows skipping rows_to_skip (> two sources) from ten data sources
   {
     auto constexpr rows_to_skip = 25'999;
-    auto constexpr rows_to_read = 47'232;
+    auto constexpr rows_to_read = 10'900;
 
     auto constexpr nsources = 10;
     std::vector<std::string> const datasources(nsources, filepath);
@@ -2852,8 +2857,9 @@ TEST_P(ParquetDecompressionTest, RoundTripBasic)
       .compression(compression_type);
   cudf::io::write_parquet(args);
 
-  cudf::io::parquet_reader_options custom_args =
-    cudf::io::parquet_reader_options::builder(cudf::io::source_info{buffer.data(), buffer.size()});
+  cudf::io::parquet_reader_options custom_args = cudf::io::parquet_reader_options::builder(
+    cudf::io::source_info{cudf::host_span<std::byte const>{
+      reinterpret_cast<std::byte const*>(buffer.data()), buffer.size()}});
   auto custom_tbl = cudf::io::read_parquet(custom_args);
   CUDF_TEST_EXPECT_TABLES_EQUAL(custom_tbl.tbl->view(), expected->view());
 }
@@ -2912,8 +2918,9 @@ TEST_F(ParquetReaderTest, DISABLED_ListsWideTable)
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{&buffer}, expected).build();
   cudf::io::write_parquet(out_opts);
 
-  cudf::io::parquet_reader_options default_in_opts =
-    cudf::io::parquet_reader_options::builder(cudf::io::source_info(buffer.data(), buffer.size()));
+  cudf::io::parquet_reader_options default_in_opts = cudf::io::parquet_reader_options::builder(
+    cudf::io::source_info{cudf::host_span<std::byte const>{
+      reinterpret_cast<std::byte const*>(buffer.data()), buffer.size()}});
   auto const [result, _] = cudf::io::read_parquet(default_in_opts);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result->view());

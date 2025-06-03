@@ -2287,7 +2287,6 @@ def test_binops_decimal_scalar_compare(args, reflected):
     Tested compare operations:
         eq, lt, gt, le, ge
     Each operation has 3 data setups: pyints, Decimal, and
-    decimal cudf.Scalar
     For each data setup, there is at least one row that lead to one of the
     following compare results: {True, False, None}.
     """
@@ -2644,3 +2643,26 @@ def test_cat_non_cat_compare_ops(comp_op, data_left, data_right, ordered):
         expected = comp_op(pd_non_cat, pd_cat)
         result = comp_op(cudf_non_cat, cudf_cat)
         assert_eq(result, expected)
+
+
+@pytest.mark.parametrize(
+    "left_data, right_data",
+    [[["a", "b"], [1, 2]], [[[1, 2, 3], [4, 5]], [{"a": 1}, {"a": 2}]]],
+)
+@pytest.mark.parametrize(
+    "op, expected_data",
+    [[operator.eq, [False, False]], [operator.ne, [True, True]]],
+)
+@pytest.mark.parametrize("with_na", [True, False])
+def test_eq_ne_non_comparable_types(
+    left_data, right_data, op, expected_data, with_na
+):
+    if with_na:
+        left_data[0] = None
+    left = cudf.Series(left_data)
+    right = cudf.Series(right_data)
+    result = op(left, right)
+    if with_na:
+        expected_data[0] = None
+    expected = cudf.Series(expected_data)
+    assert_eq(result, expected)
