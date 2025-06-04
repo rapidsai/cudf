@@ -20,6 +20,7 @@ from pylibcudf.libcudf.scalar.scalar cimport (
     scalar,
     duration_scalar,
     numeric_scalar,
+    string_scalar,
     timestamp_scalar,
 )
 from pylibcudf.libcudf.scalar.scalar_factories cimport (
@@ -194,6 +195,50 @@ cdef class Scalar:
             New pylibcudf.Scalar
         """
         return _from_numpy(np_val)
+
+    def to_py(self):
+        """
+        Convert a Scalar to a Python scalar.
+
+        Returns
+        -------
+        Python scalar
+            A Python scalar associated with the type of the Scalar.
+        """
+        if not self.is_valid():
+            return None
+
+        cdef type_id tid = self.type().id()
+        cdef const scalar* slr = self.c_obj.get()
+        if tid == type_id.BOOL8:
+            return (<numeric_scalar[cbool]*>slr).value()
+        elif tid == type_id.STRING:
+            return (<string_scalar*>slr).to_string().decode()
+        elif tid == type_id.FLOAT32:
+            return (<numeric_scalar[float]*>slr).value()
+        elif tid == type_id.FLOAT64:
+            return (<numeric_scalar[double]*>slr).value()
+        elif tid == type_id.INT8:
+            return (<numeric_scalar[int8_t]*>slr).value()
+        elif tid == type_id.INT16:
+            return (<numeric_scalar[int16_t]*>slr).value()
+        elif tid == type_id.INT32:
+            return (<numeric_scalar[int32_t]*>slr).value()
+        elif tid == type_id.INT64:
+            return (<numeric_scalar[int64_t]*>slr).value()
+        elif tid == type_id.UINT8:
+            return (<numeric_scalar[uint8_t]*>slr).value()
+        elif tid == type_id.UINT16:
+            return (<numeric_scalar[uint16_t]*>slr).value()
+        elif tid == type_id.UINT32:
+            return (<numeric_scalar[uint32_t]*>slr).value()
+        elif tid == type_id.UINT64:
+            return (<numeric_scalar[uint64_t]*>slr).value()
+        else:
+            raise NotImplementedError(
+                f"Converting to Python scalar for type {self.type().id()!r} "
+                "is not supported."
+            )
 
 
 cdef Scalar _new_scalar(unique_ptr[scalar] c_obj, DataType dtype):
