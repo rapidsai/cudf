@@ -139,7 +139,9 @@ class DataFrame:
         if table.num_columns() != len(names):
             raise ValueError("Mismatching name and table length.")
         return cls(
-            Column(c, name=name) for c, name in zip(table.columns(), names, strict=True)
+            # TODO: Pass along dtypes here
+            Column(c, name=name)
+            for c, name in zip(table.columns(), names, strict=True)
         )
 
     @classmethod
