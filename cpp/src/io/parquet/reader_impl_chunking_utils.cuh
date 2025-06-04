@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023-2025, NVIDIA CORPORATION.
+ * Copyright (c) 2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -157,9 +157,9 @@ std::tuple<rmm::device_uvector<page_span>, size_t, size_t> compute_next_subpass(
 /**
  * @brief Computes the page splits for a given set of pages based on row count and size limit
  *
- * MH: AI generated, check: This function computes the page splits based on the cumulative page
- * information, the number of rows to skip, the total number of rows, and the size limit. It returns
- * a vector of row_range structs indicating the start and end rows for each split.
+ * This function computes the page splits based on the cumulative page information, the number of
+ * rows to skip, the total number of rows, and the size limit. It returns a vector of row_range
+ * structs indicating the start and end rows for each split.
  *
  * @param c_info The cumulative page size information (row count and byte size) per column
  * @param pages All of the pages in the pass

@@ -16,7 +16,7 @@
 
 #include "reader_impl.hpp"
 #include "reader_impl_chunking.hpp"
-#include "reader_impl_chunking_utils.hpp"
+#include "reader_impl_chunking_utils.cuh"
 
 #include <cudf/detail/iterator.cuh>
 #include <cudf/utilities/memory_resource.hpp>

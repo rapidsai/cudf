@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023-2025, NVIDIA CORPORATION.
+ * Copyright (c) 2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,7 +18,7 @@
 #include "io/comp/io_uncomp.hpp"
 #include "io/utilities/time_utils.cuh"
 #include "reader_impl_chunking.hpp"
-#include "reader_impl_chunking_utils.hpp"
+#include "reader_impl_chunking_utils.cuh"
 
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
@@ -95,8 +95,9 @@ void print_cumulative_row_info(host_span<cumulative_page_info const> sizes,
   std::cout << "------------\nCumulative sizes " << label.c_str()
             << " (index, row_index, size_bytes, page_key)\n";
   for (size_t idx = 0; idx < sizes.size(); idx++) {
-    printf(
-      "{%lu, %lu, %lu, %d}", idx, sizes[idx].end_row_index, sizes[idx].size_bytes, sizes[idx].key);
+    std::cout << "{" << idx << ", " << sizes[idx].end_row_index << ", " << sizes[idx].size_bytes
+              << ", " << sizes[idx].key << "}\n";
+
     if (splits.has_value()) {
       // if we have a split at this row count and this is the last instance of this row count
       auto start             = thrust::make_transform_iterator(splits->begin(),
