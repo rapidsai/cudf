@@ -237,8 +237,9 @@ class StringFunction(Expr):
             column = child.evaluate(df, context=context)
             if width.value is None:
                 return Column(
-                    plc.interop.from_arrow(
-                        pa.array([None] * column.size, type=pa.string())
+                    plc.Column.from_scalar(
+                        plc.Scalar.from_py(None, plc.DataType(plc.TypeId.STRING)),
+                        column.size,
                     )
                 )
             return Column(plc.strings.padding.zfill(column.obj, width.value))
