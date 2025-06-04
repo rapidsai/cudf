@@ -23,7 +23,6 @@
 #include <cudf/ast/detail/operators.hpp>
 #include <cudf/ast/expressions.hpp>
 #include <cudf/detail/cuco_helpers.hpp>
-#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/hashing/detail/default_hash.cuh>
 #include <cudf/hashing/detail/helper_functions.cuh>
@@ -82,9 +81,9 @@ using hasher_type = cudf::hashing::detail::MurmurHash3_x86_32<T>;
 
 /// cuco::static_set_ref storage type
 using storage_type     = cuco::bucket_storage<key_type,
-                                              BUCKET_SIZE,
-                                              cuco::extent<std::size_t>,
-                                              cudf::detail::cuco_allocator<char>>;
+                                          BUCKET_SIZE,
+                                          cuco::extent<std::size_t>,
+                                          cudf::detail::cuco_allocator<char>>;
 using storage_ref_type = typename storage_type::ref_type;
 using bucket_type      = typename storage_type::bucket_type;
 
@@ -224,22 +223,20 @@ __device__ __forceinline__ int32_t calc_timestamp_scale(LogicalType const& logic
  * @param logical_type Logical type of the column
  * @return Length of the INT32 physical type
  */
-__device__ __forceinline__ int32_t
-get_int32_type_len(std::optional<LogicalType> const& logical_type)
+__device__ __forceinline__ int32_t get_int32_type_len(LogicalType const& logical_type)
 {
   // Note: This function has been extracted from the snippet at:
   // https://github.com/rapidsai/cudf/blob/c89c83c00c729a86c56570693b627f31408bc2c9/cpp/src/io/parquet/page_decode.cuh#L1278-L1287
 
   // Check for smaller bitwidths
-  if (logical_type.has_value()) {
-    if (logical_type.value().type == LogicalType::INTEGER) {
-      return logical_type.value().bit_width() / 8;
-    } else if (logical_type.value().is_time_millis()) {
-      // cudf outputs as INT64
-      return 8;
-    }
+  if (logical_type.type == LogicalType::INTEGER) {
+    return logical_type.bit_width() / 8;
+  } else if (logical_type.is_time_millis()) {
+    // cudf outputs as INT64
+    return 8;
   }
-  return sizeof(int32_t);
+
+  return sizeof(uint32_t);
 }
 
 /**
@@ -480,7 +477,9 @@ __device__ T decode_fixed_width_value(PageInfo const& page,
       }
 
       // Calculate the bitwidth of the int32 encoded value
-      auto const int32_type_len = get_int32_type_len(chunk.logical_type);
+      auto const int32_type_len = chunk.logical_type.has_value()
+                                    ? get_int32_type_len(chunk.logical_type.value())
+                                    : sizeof(uint32_t);
       // Check if we are reading INT32 TIME_MILLIS into 64-bit DURATION_MILLISECONDS
       if (int32_type_len == sizeof(int64_t) and not cudf::is_duration<T>) {
         set_error(error, decode_error::INVALID_DATA_TYPE);
