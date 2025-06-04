@@ -96,7 +96,7 @@ void print_cumulative_row_info(host_span<cumulative_page_info const> sizes,
             << " (index, row_index, size_bytes, page_key)\n";
   for (size_t idx = 0; idx < sizes.size(); idx++) {
     std::cout << "{" << idx << ", " << sizes[idx].end_row_index << ", " << sizes[idx].size_bytes
-              << ", " << sizes[idx].key << "}\n";
+              << ", " << sizes[idx].key << "}";
 
     if (splits.has_value()) {
       // if we have a split at this row count and this is the last instance of this row count
