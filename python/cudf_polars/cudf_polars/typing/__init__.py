@@ -19,15 +19,15 @@ from typing import (
 
 from polars.polars import _expr_nodes as pl_expr, _ir_nodes as pl_ir
 
-import pylibcudf as plc
-
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
     from typing import TypeAlias
 
     import polars as pl
 
-    from cudf_polars.containers import DataFrame
+    import pylibcudf as plc
+
+    from cudf_polars.containers import DataFrame, DataType
     from cudf_polars.dsl import expr, ir, nodebase
 
 __all__: list[str] = [
@@ -82,7 +82,7 @@ PolarsExpr: TypeAlias = Union[
     pl_expr.PyExprIR,
 ]
 
-Schema: TypeAlias = dict[str, plc.DataType]
+Schema: TypeAlias = dict[str, "DataType"]
 
 Slice: TypeAlias = tuple[int, int | None]
 

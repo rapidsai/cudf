@@ -14,8 +14,9 @@
  * limitations under the License.
  */
 
+#include "jit/span.cuh"
+
 #include <cudf/column/column_device_view_base.cuh>
-#include <cudf/jit/span.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/traits.hpp>
@@ -60,6 +61,12 @@ struct column_accessor {
   {
     outputs[index].assign<T>(row, value);
   }
+
+  static __device__ bool is_null(cudf::mutable_column_device_view_core const* inputs,
+                                 cudf::size_type row)
+  {
+    return inputs[index].is_null(row);
+  }
 };
 
 template <typename T, int32_t Index>
@@ -67,16 +74,23 @@ struct span_accessor {
   using type                     = T;
   static constexpr int32_t index = Index;
 
-  static __device__ type& element(cudf::jit::device_span<T> const* spans, cudf::size_type row)
+  static __device__ type& element(cudf::jit::device_optional_span<T> const* spans,
+                                  cudf::size_type row)
   {
     return spans[index][row];
   }
 
-  static __device__ void assign(cudf::jit::device_span<T> const* outputs,
+  static __device__ void assign(cudf::jit::device_optional_span<T> const* outputs,
                                 cudf::size_type row,
                                 T value)
   {
     outputs[index][row] = value;
+  }
+
+  static __device__ bool is_null(cudf::jit::device_optional_span<T> const* inputs,
+                                 cudf::size_type row)
+  {
+    return inputs[index].is_null(row);
   }
 };
 
@@ -86,19 +100,19 @@ struct scalar {
   static constexpr int32_t index = Accessor::index;
 
   static __device__ decltype(auto) element(cudf::mutable_column_device_view_core const* outputs,
-                                           cudf::size_type row)
+                                           cudf::size_type)
   {
     return Accessor::element(outputs, 0);
   }
 
   static __device__ decltype(auto) element(cudf::column_device_view_core const* inputs,
-                                           cudf::size_type row)
+                                           cudf::size_type)
   {
     return Accessor::element(inputs, 0);
   }
 
   static __device__ void assign(cudf::mutable_column_device_view_core const* outputs,
-                                cudf::size_type row,
+                                cudf::size_type,
                                 type value)
   {
     return Accessor::assign(outputs, 0, value);
@@ -121,6 +135,8 @@ CUDF_KERNEL void kernel(cudf::mutable_column_device_view_core const* outputs,
   thread_index_type const size   = outputs[0].size();
 
   for (auto i = start; i < size; i += stride) {
+    if (Out::is_null(outputs, i)) { continue; }
+
     if constexpr (has_user_data) {
       GENERIC_TRANSFORM_OP(user_data, i, &Out::element(outputs, i), In::element(inputs, i)...);
     } else {
@@ -145,6 +161,8 @@ CUDF_KERNEL void fixed_point_kernel(cudf::mutable_column_device_view_core const*
   for (auto i = start; i < size; i += stride) {
     typename Out::type result{numeric::scaled_integer<typename Out::type::rep>{0, output_scale}};
 
+    if (Out::is_null(outputs, i)) { continue; }
+
     if constexpr (has_user_data) {
       GENERIC_TRANSFORM_OP(user_data, i, &result, In::element(inputs, i)...);
     } else {
@@ -156,7 +174,7 @@ CUDF_KERNEL void fixed_point_kernel(cudf::mutable_column_device_view_core const*
 }
 
 template <bool has_user_data, typename Out, typename... In>
-CUDF_KERNEL void span_kernel(cudf::jit::device_span<typename Out::type> const* outputs,
+CUDF_KERNEL void span_kernel(cudf::jit::device_optional_span<typename Out::type> const* outputs,
                              cudf::column_device_view_core const* inputs,
                              void* user_data)
 {
@@ -168,6 +186,8 @@ CUDF_KERNEL void span_kernel(cudf::jit::device_span<typename Out::type> const* o
   thread_index_type const size   = outputs[0].size();
 
   for (auto i = start; i < size; i += stride) {
+    if (Out::is_null(outputs, i)) { continue; }
+
     if constexpr (has_user_data) {
       GENERIC_TRANSFORM_OP(user_data, i, &Out::element(outputs, i), In::element(inputs, i)...);
     } else {

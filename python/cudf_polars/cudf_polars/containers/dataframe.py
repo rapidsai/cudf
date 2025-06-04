@@ -106,7 +106,7 @@ class DataFrame:
         -------
         New dataframe representing the input.
         """
-        plc_table = plc.Table(df)
+        plc_table = plc.Table.from_arrow(df)
         return cls(
             Column(d_col, name=name).copy_metadata(h_col)
             for d_col, h_col, name in zip(

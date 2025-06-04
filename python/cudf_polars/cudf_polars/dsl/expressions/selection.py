@@ -14,7 +14,7 @@ from cudf_polars.containers import Column
 from cudf_polars.dsl.expressions.base import ExecutionContext, Expr
 
 if TYPE_CHECKING:
-    from cudf_polars.containers import DataFrame
+    from cudf_polars.containers import DataFrame, DataType
 
 __all__ = ["Filter", "Gather"]
 
@@ -23,7 +23,7 @@ class Gather(Expr):
     __slots__ = ()
     _non_child = ("dtype",)
 
-    def __init__(self, dtype: plc.DataType, values: Expr, indices: Expr) -> None:
+    def __init__(self, dtype: DataType, values: Expr, indices: Expr) -> None:
         self.dtype = dtype
         self.children = (values, indices)
         self.is_pointwise = False
@@ -36,8 +36,8 @@ class Gather(Expr):
             child.evaluate(df, context=context) for child in self.children
         )
         lo, hi = plc.reduce.minmax(indices.obj)
-        lo = plc.interop.to_arrow(lo).as_py()
-        hi = plc.interop.to_arrow(hi).as_py()
+        lo = lo.to_py()
+        hi = hi.to_py()
         n = df.num_rows
         if hi >= n or lo < -n:
             raise ValueError("gather indices are out of bounds")
@@ -58,7 +58,7 @@ class Filter(Expr):
     __slots__ = ()
     _non_child = ("dtype",)
 
-    def __init__(self, dtype: plc.DataType, values: Expr, indices: Expr):
+    def __init__(self, dtype: DataType, values: Expr, indices: Expr):
         self.dtype = dtype
         self.children = (values, indices)
         self.is_pointwise = False
