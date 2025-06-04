@@ -2287,7 +2287,6 @@ def test_binops_decimal_scalar_compare(args, reflected):
     Tested compare operations:
         eq, lt, gt, le, ge
     Each operation has 3 data setups: pyints, Decimal, and
-    decimal cudf.Scalar
     For each data setup, there is at least one row that lead to one of the
     following compare results: {True, False, None}.
     """

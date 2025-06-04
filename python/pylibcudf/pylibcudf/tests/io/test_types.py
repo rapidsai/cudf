@@ -19,7 +19,7 @@ def pa_table():
 
 @pytest.fixture
 def expected(pa_table):
-    return plc.interop.from_arrow(pa_table)
+    return plc.Table.from_arrow(pa_table)
 
 
 @pytest.fixture
@@ -51,7 +51,7 @@ def test_gc_with_table_and_column_input_metadata():
         def __del__(self):
             pass
 
-    plc_table = plc.Table(
+    plc_table = plc.Table.from_arrow(
         pa.table({"a": pa.array([1, 2, 3]), "b": pa.array(["a", "b", "c"])})
     )
 

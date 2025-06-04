@@ -8,6 +8,7 @@ import pytest
 import polars as pl
 
 from cudf_polars.testing.asserts import DEFAULT_SCHEDULER, assert_gpu_result_equal
+from cudf_polars.utils.versions import POLARS_VERSION_LT_130
 
 
 @pytest.fixture(scope="module")
@@ -37,10 +38,17 @@ def df():
 
 def test_sort(df, engine):
     q = df.sort(by=["y", "z"])
-    with pytest.raises(
-        pl.exceptions.ComputeError, match="Sort does not support multiple partitions."
-    ):
-        assert_gpu_result_equal(q, engine=engine)
+    if POLARS_VERSION_LT_130:
+        with pytest.raises(
+            pl.exceptions.ComputeError,
+            match="Sort does not support multiple partitions.",
+        ):
+            assert_gpu_result_equal(q, engine=engine)
+    else:
+        with pytest.raises(
+            NotImplementedError, match="Sort does not support multiple partitions."
+        ):
+            assert_gpu_result_equal(q, engine=engine)
 
 
 def test_sort_head(df, engine):

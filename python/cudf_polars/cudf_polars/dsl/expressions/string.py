@@ -25,7 +25,7 @@ if TYPE_CHECKING:
 
     from polars.polars import _expr_nodes as pl_expr
 
-    from cudf_polars.containers import DataFrame
+    from cudf_polars.containers import DataFrame, DataType
 
 __all__ = ["StringFunction"]
 
@@ -96,7 +96,7 @@ class StringFunction(Expr):
 
     def __init__(
         self,
-        dtype: plc.DataType,
+        dtype: DataType,
         name: StringFunction.Name,
         options: tuple[Any, ...],
         *children: Expr,
@@ -338,13 +338,11 @@ class StringFunction(Expr):
             )
 
             if strict:
-                if not plc.interop.to_arrow(
-                    plc.reduce.reduce(
-                        is_timestamps,
-                        plc.aggregation.all(),
-                        plc.DataType(plc.TypeId.BOOL8),
-                    )
-                ).as_py():
+                if not plc.reduce.reduce(
+                    is_timestamps,
+                    plc.aggregation.all(),
+                    plc.DataType(plc.TypeId.BOOL8),
+                ).to_py():
                     raise InvalidOperationError("conversion from `str` failed.")
             else:
                 not_timestamps = plc.unary.unary_operation(
@@ -356,7 +354,7 @@ class StringFunction(Expr):
                 )
                 return Column(
                     plc.strings.convert.convert_datetime.to_timestamps(
-                        res.columns()[0], self.dtype, format
+                        res.columns()[0], self.dtype.plc, format
                     )
                 )
         elif self.name is StringFunction.Name.Replace:

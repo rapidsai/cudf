@@ -16,11 +16,11 @@ def input_col():
 @pytest.mark.parametrize("min_width", [10, 20])
 def test_substring_duplicates(input_col, min_width):
     sa = plc.nvtext.deduplicate.build_suffix_array(
-        plc.Column(input_col),
+        plc.Column.from_arrow(input_col),
         min_width,
     )
     result = plc.nvtext.deduplicate.resolve_duplicates(
-        plc.Column(input_col),
+        plc.Column.from_arrow(input_col),
         sa,
         min_width,
     )

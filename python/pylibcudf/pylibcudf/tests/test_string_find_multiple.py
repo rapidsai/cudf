@@ -10,8 +10,8 @@ def test_find_multiple():
     arr = pa.array(["abc", "def"])
     targets = pa.array(["a", "c", "e"])
     got = plc.strings.find_multiple.find_multiple(
-        plc.Column(arr),
-        plc.Column(targets),
+        plc.Column.from_arrow(arr),
+        plc.Column.from_arrow(targets),
     )
     expect = pa.array(
         [
