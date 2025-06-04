@@ -26,6 +26,20 @@ if TYPE_CHECKING:
 __all__: list[str] = ["DataFrame"]
 
 
+def _create_polars_column_metadata(
+    name: str | None, dtype: pl.DataType | None
+) -> plc.interop.ColumnMetadata:
+    """Create ColumnMetadata preserving pl.Struct field names."""
+    if isinstance(dtype, pl.Struct):
+        children_meta = [
+            _create_polars_column_metadata(field.name, field.dtype)
+            for field in dtype.fields
+        ]
+    else:
+        children_meta = []
+    return plc.interop.ColumnMetadata(name=name, children_meta=children_meta)
+
+
 # Pacify the type checker. DataFrame init asserts that all the columns
 # have a string name, so let's narrow the type.
 class NamedColumn(Column):
@@ -60,10 +74,15 @@ class DataFrame:
         # To guarantee we produce correct names, we therefore
         # serialise with names we control and rename with that map.
         name_map = {f"column_{i}": name for i, name in enumerate(self.column_map)}
-        table = plc.interop.to_arrow(
-            self.table,
-            [plc.interop.ColumnMetadata(name=name) for name in name_map],
-        )
+        metadata = [
+            _create_polars_column_metadata(
+                name,
+                # Can remove the getattr if we ever consistently set Column.dtype
+                getattr(col.dtype, "polars", None),
+            )
+            for name, col in zip(name_map, self.columns, strict=True)
+        ]
+        table = plc.interop.to_arrow(self.table, metadata=metadata)
         df: pl.DataFrame = pl.from_arrow(table)
         return df.rename(name_map).with_columns(
             pl.col(c.name).set_sorted(descending=c.order == plc.types.Order.DESCENDING)
@@ -200,6 +219,7 @@ class DataFrame:
                 "order": col.order,
                 "null_order": col.null_order,
                 "name": col.name,
+                "dtype": col.dtype,
             }
             for col in self.columns
         ]
