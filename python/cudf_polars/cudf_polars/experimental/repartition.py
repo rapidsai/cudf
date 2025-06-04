@@ -5,17 +5,19 @@
 from __future__ import annotations
 
 import itertools
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from cudf_polars.dsl.ir import IR
 from cudf_polars.experimental.base import get_key_name
 from cudf_polars.experimental.dispatch import generate_ir_tasks
+from cudf_polars.experimental.task import Key, Task
 from cudf_polars.experimental.utils import _concat
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
 
     from cudf_polars.experimental.parallel import PartitionInfo
+    from cudf_polars.experimental.task import TaskGraph
     from cudf_polars.typing import Schema
 
 
@@ -43,9 +45,7 @@ class Repartition(IR):
 
 
 @generate_ir_tasks.register(Repartition)
-def _(
-    ir: Repartition, partition_info: MutableMapping[IR, PartitionInfo]
-) -> MutableMapping[Any, Any]:
+def _(ir: Repartition, partition_info: MutableMapping[IR, PartitionInfo]) -> TaskGraph:
     # Repartition an IR node.
     # Only supports rapartitioning to fewer (for now).
 
@@ -64,6 +64,6 @@ def _(
     offsets = [0, *itertools.accumulate(n + (i < remainder) for i in range(count_out))]
     child_keys = tuple(partition_info[child].keys(child))
     return {
-        (key_name, i): (_concat, *child_keys[offsets[i] : offsets[i + 1]])
+        Key(key_name, i): Task(_concat, deps=child_keys[offsets[i] : offsets[i + 1]])
         for i in range(count_out)
     }

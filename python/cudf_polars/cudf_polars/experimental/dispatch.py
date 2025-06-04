@@ -1,11 +1,11 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 """Multi-partition dispatch functions."""
 
 from __future__ import annotations
 
 from functools import singledispatch
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
@@ -13,6 +13,7 @@ if TYPE_CHECKING:
 
     from cudf_polars.dsl.ir import IR
     from cudf_polars.experimental.base import PartitionInfo
+    from cudf_polars.experimental.task import TaskGraph
     from cudf_polars.typing import GenericTransformer
 
 
@@ -56,7 +57,7 @@ def lower_ir_node(
 @singledispatch
 def generate_ir_tasks(
     ir: IR, partition_info: MutableMapping[IR, PartitionInfo]
-) -> MutableMapping[Any, Any]:
+) -> TaskGraph:
     """
     Generate a task graph for evaluation of an IR node.
 

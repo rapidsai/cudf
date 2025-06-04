@@ -37,7 +37,7 @@ def _(
     ir: DataFrameScan, rec: LowerIRTransformer
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     assert ir.config_options.executor.name == "streaming", (
-        "'in-memory' executor not supported in 'generate_ir_tasks'"
+        "'in-memory' executor not supported in 'lower_ir_node'"
     )
 
     rows_per_partition = ir.config_options.executor.max_rows_per_partition
@@ -102,7 +102,7 @@ class ScanPartitionPlan:
         if ir.typ == "parquet":
             # TODO: Use system info to set default blocksize
             assert ir.config_options.executor.name == "streaming", (
-                "'in-memory' executor not supported in 'generate_ir_tasks'"
+                "'in-memory' executor not supported in 'lower_ir_node'"
             )
 
             blocksize: int = ir.config_options.executor.target_partition_size
