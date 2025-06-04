@@ -29,6 +29,7 @@
 #include <rmm/mr/device/device_memory_resource.hpp>
 #include <rmm/mr/device/owning_wrapper.hpp>
 #include <rmm/mr/device/pool_memory_resource.hpp>
+#include <rmm/mr/device/statistics_resource_adaptor.hpp>
 
 #include <chrono>
 #include <iostream>
@@ -63,8 +64,12 @@ auto make_pool_mr()
  */
 std::shared_ptr<rmm::mr::device_memory_resource> create_memory_resource(std::string const& name)
 {
-  if (name == "pool") { return make_pool_mr(); }
-  return make_cuda_mr();
+  if (name == "pool" || name == "pool-stats") {
+    return make_pool_mr();
+  } else if (name == "cuda" || name == "cuda-stats") {
+    return make_cuda_mr();
+  }
+  CUDF_FAIL("Unrecognized memory resource name", std::invalid_argument);
 }
 
 void write_csv(cudf::table_view const& tbl_view, std::string const& file_path)
@@ -99,10 +104,20 @@ int main(int argc, char const** argv)
   auto const num_rows = argc > 3 ? std::optional{std::stoi(std::string(argv[3]))} : std::nullopt;
   auto const memory_resource_name =
     std::string{argc > 4 ? std::string(argv[4]) : std::string("cuda")};
+  auto const enable_stats =
+    (memory_resource_name == "cuda-stats" || memory_resource_name == "pool-stats");
 
   auto resource = create_memory_resource(memory_resource_name);
   auto stream   = cudf::get_default_stream();
-  cudf::set_current_device_resource(resource.get());
+
+  rmm::mr::statistics_resource_adaptor<rmm::mr::device_memory_resource> stats_adaptor{
+    resource.get()};
+
+  if (enable_stats) {
+    cudf::set_current_device_resource(&stats_adaptor);
+  } else {
+    cudf::set_current_device_resource(resource.get());
+  }
 
   cudf::io::csv_reader_options in_opts =
     cudf::io::csv_reader_options::builder(cudf::io::source_info{in_csv}).header(0);
@@ -134,7 +149,20 @@ int main(int argc, char const** argv)
 
   std::cout << "Wall time: " << elapsed.count() << " seconds\n"
             << "Table: " << table_view.num_rows() << " rows " << table_view.num_columns()
-            << " columns" << std::endl;
+            << " columns\n\n";
+
+  if (enable_stats) {
+    auto bytes  = stats_adaptor.get_bytes_counter();
+    auto allocs = stats_adaptor.get_allocations_counter();
+
+    std::cout << "Peak Memory Allocated: " << bytes.peak << " bytes\n"
+              << "Total Memory Allocated: " << bytes.total << " bytes\n";
+
+    std::cout << "Peak Allocations: " << allocs.peak << " allocations\n"
+              << "Total Allocations: " << allocs.total << " allocations\n\n";
+  }
+
+  std::cout.flush();
 
   return 0;
 }
