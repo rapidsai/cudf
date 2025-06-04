@@ -238,7 +238,7 @@ struct delta_binary_decoder {
       // negative indexes
       d_start += (warp_size * mb_bits) / 8;
 
-      // unpack deltas. modified from version in gpuDecodeDictionaryIndices(), but
+      // unpack deltas. modified from version in decode_dictionary_indices(), but
       // that one only unpacks up to bitwidths of 24. simplified some since this
       // will always do batches of 32.
       // NOTE: because this needs to handle up to 64 bits, the branching used in the other
