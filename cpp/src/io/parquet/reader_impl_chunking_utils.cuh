@@ -17,6 +17,7 @@
 #pragma once
 
 #include "compact_protocol_reader.hpp"
+#include "cudf/types.hpp"
 #include "io/comp/io_uncomp.hpp"
 #include "reader_impl_chunking.hpp"
 
@@ -410,7 +411,7 @@ struct row_counts_different {
 struct row_size_functor {
   __device__ inline size_t validity_size(size_t num_rows, bool nullable)
   {
-    return nullable ? (cudf::util::div_rounding_up_safe(num_rows, size_t{32}) * 4) : 0;
+    return nullable ? cudf::num_bitmask_words(num_rows) * sizeof(bitmask_type) : 0;
   }
 
   template <typename T>
