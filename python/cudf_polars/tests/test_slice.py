@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -7,6 +7,7 @@ import pytest
 import polars as pl
 
 from cudf_polars.testing.asserts import assert_gpu_result_equal
+from cudf_polars.utils.versions import POLARS_VERSION_LT_130
 
 
 @pytest.mark.parametrize(
@@ -32,4 +33,9 @@ def test_slice(offset, length, slice_pushdown):
         .sort(by=pl.col("a"))
         .slice(offset, length)
     )
-    assert_gpu_result_equal(query, collect_kwargs={"slice_pushdown": slice_pushdown})
+    assert_gpu_result_equal(
+        query,
+        collect_kwargs={"slice_pushdown": slice_pushdown}
+        if POLARS_VERSION_LT_130
+        else {"optimizations": pl.QueryOptFlags(slice_pushdown=slice_pushdown)},
+    )
