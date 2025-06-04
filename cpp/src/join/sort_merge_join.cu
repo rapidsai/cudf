@@ -196,6 +196,8 @@ std::unique_ptr<rmm::device_uvector<size_type>> merge<LargerIterator, SmallerIte
                       match_counts_update_it,
                       comp);
 
+  stream.synchronize();
+
   return std::make_unique<rmm::device_uvector<size_type>>(std::move(match_counts));
 }
 
@@ -206,6 +208,7 @@ merge<LargerIterator, SmallerIterator>::operator()(rmm::cuda_stream_view stream,
                                                    rmm::device_async_resource_ref mr)
 {
   auto temp_mr             = cudf::get_current_device_resource_ref();
+  auto const larger_numrows = larger.num_rows();
   auto smaller_dv_ptr      = cudf::table_device_view::create(smaller, stream);
   auto larger_dv_ptr       = cudf::table_device_view::create(larger, stream);
   auto list_lex_preprocess = [stream](table_view const& table) {
@@ -227,39 +230,15 @@ merge<LargerIterator, SmallerIterator>::operator()(rmm::cuda_stream_view stream,
   auto [smaller_dremel, smaller_dremel_dv] = list_lex_preprocess(smaller);
   auto [larger_dremel, larger_dremel_dv]   = list_lex_preprocess(larger);
 
-  // naive: iterate through larger table and binary search on smaller table
-  auto const larger_numrows = larger.num_rows();
   rmm::device_scalar<bound_type> d_lb_type(bound_type::LOWER, stream, temp_mr);
-  rmm::device_scalar<bound_type> d_ub_type(bound_type::UPPER, stream, temp_mr);
+  row_comparator lb_comp(
+    *larger_dv_ptr, *smaller_dv_ptr, larger_dremel_dv, smaller_dremel_dv, d_lb_type.data());
 
-  auto match_counts =
-    cudf::detail::make_zeroed_device_uvector_async<size_type>(larger_numrows + 1, stream, temp_mr);
-
-  row_comparator comp(
-    *larger_dv_ptr, *smaller_dv_ptr, larger_dremel_dv, smaller_dremel_dv, d_ub_type.data());
-  auto match_counts_it = match_counts.begin();
-  thrust::upper_bound(rmm::exec_policy_nosync(stream),
-                      sorted_smaller_order_begin,
-                      sorted_smaller_order_end,
-                      thrust::counting_iterator(0),
-                      thrust::counting_iterator(0) + larger_numrows,
-                      match_counts_it,
-                      comp);
-
-  comp._d_ptr = d_lb_type.data();
-  auto match_counts_update_it =
-    thrust::tabulate_output_iterator([match_counts = match_counts.begin()] __device__(
-                                       size_type idx, size_type val) { match_counts[idx] -= val; });
-  thrust::lower_bound(rmm::exec_policy_nosync(stream),
-                      sorted_smaller_order_begin,
-                      sorted_smaller_order_end,
-                      thrust::counting_iterator(0),
-                      thrust::counting_iterator(0) + larger_numrows,
-                      match_counts_update_it,
-                      comp);
+  // naive: iterate through larger table and binary search on smaller table
+  auto match_counts = matches_per_row(stream, temp_mr);
 
   auto count_matches_it = thrust::transform_iterator(
-    match_counts.begin(),
+    match_counts->begin(),
     cuda::proclaim_return_type<size_type>([] __device__(auto c) -> size_type { return c != 0; }));
   auto const count_matches =
     thrust::reduce(rmm::exec_policy(stream), count_matches_it, count_matches_it + larger_numrows);
@@ -267,13 +246,13 @@ merge<LargerIterator, SmallerIterator>::operator()(rmm::cuda_stream_view stream,
   thrust::copy_if(rmm::exec_policy_nosync(stream),
                   thrust::counting_iterator(0),
                   thrust::counting_iterator(0) + larger_numrows,
-                  match_counts.begin(),
+                  match_counts->begin(),
                   nonzero_matches.begin(),
                   cuda::std::identity{});
 
   thrust::exclusive_scan(
-    rmm::exec_policy(stream), match_counts.begin(), match_counts.end(), match_counts.begin());
-  auto const total_matches = match_counts.back_element(stream);
+    rmm::exec_policy(stream), match_counts->begin(), match_counts->end(), match_counts->begin());
+  auto const total_matches = match_counts->back_element(stream);
 
   // populate larger indices
   auto larger_indices =
@@ -281,7 +260,7 @@ merge<LargerIterator, SmallerIterator>::operator()(rmm::cuda_stream_view stream,
   thrust::scatter(rmm::exec_policy_nosync(stream),
                   nonzero_matches.begin(),
                   nonzero_matches.end(),
-                  thrust::permutation_iterator(match_counts.begin(), nonzero_matches.begin()),
+                  thrust::permutation_iterator(match_counts->begin(), nonzero_matches.begin()),
                   larger_indices.begin());
   thrust::inclusive_scan(rmm::exec_policy_nosync(stream),
                          larger_indices.begin(),
@@ -295,7 +274,7 @@ merge<LargerIterator, SmallerIterator>::operator()(rmm::cuda_stream_view stream,
     rmm::exec_policy_nosync(stream), smaller_indices.begin(), smaller_indices.end(), 1);
   auto smaller_tabulate_it = thrust::tabulate_output_iterator(
     [nonzero_matches = nonzero_matches.begin(),
-     match_counts    = match_counts.begin(),
+     match_counts    = match_counts->begin(),
      smaller_indices = smaller_indices.begin()] __device__(auto idx, auto lb) {
       auto const lhs_idx   = nonzero_matches[idx];
       auto const pos       = match_counts[lhs_idx];
@@ -307,7 +286,7 @@ merge<LargerIterator, SmallerIterator>::operator()(rmm::cuda_stream_view stream,
                       nonzero_matches.begin(),
                       nonzero_matches.end(),
                       smaller_tabulate_it,
-                      comp);
+                      lb_comp);
   thrust::inclusive_scan_by_key(rmm::exec_policy_nosync(stream),
                                 larger_indices.begin(),
                                 larger_indices.end(),
@@ -320,6 +299,7 @@ merge<LargerIterator, SmallerIterator>::operator()(rmm::cuda_stream_view stream,
                     mapping_functor<SmallerIterator>{sorted_smaller_order_begin});
 
   stream.synchronize();
+
   return {std::make_unique<rmm::device_uvector<size_type>>(std::move(smaller_indices)),
           std::make_unique<rmm::device_uvector<size_type>>(std::move(larger_indices))};
 }
@@ -664,6 +644,15 @@ std::unique_ptr<rmm::device_uvector<size_type>> sort_merge_join::inner_join_size
             thrust::counting_iterator(0),
             thrust::counting_iterator(larger._null_processed_table_view.num_rows()));
   return obj.matches_per_row(stream, mr);
+}
+
+std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+          std::unique_ptr<rmm::device_uvector<size_type>>>
+sort_merge_join::partitioned_inner_join(size_type left_partition_begin,
+             size_type left_partition_end,
+             rmm::cuda_stream_view stream,
+             rmm::device_async_resource_ref mr) {
+  
 }
 
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
