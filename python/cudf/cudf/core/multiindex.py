@@ -52,6 +52,7 @@ if TYPE_CHECKING:
     from typing_extensions import Self
 
     from cudf._typing import DataFrameOrSeries, Dtype
+    from cudf.core.dataframe import DataFrame
 
 
 def _maybe_indices_to_slice(indices: cp.ndarray) -> slice | cp.ndarray:
@@ -1013,7 +1014,7 @@ class MultiIndex(Index):
         index: bool = True,
         name=no_default,
         allow_duplicates: bool = False,
-    ) -> cudf.DataFrame:
+    ) -> DataFrame:
         """
         Create a DataFrame with the levels of the MultiIndex as columns.
 
@@ -1124,7 +1125,7 @@ class MultiIndex(Index):
         return level, level_idx
 
     @_performance_tracking
-    def get_level_values(self, level) -> cudf.Index:
+    def get_level_values(self, level) -> Index:
         """
         Return the values at the requested level
 
@@ -1317,7 +1318,7 @@ class MultiIndex(Index):
     @_performance_tracking
     def from_frame(
         cls,
-        df: pd.DataFrame | cudf.DataFrame,
+        df: pd.DataFrame | DataFrame,
         sortorder: int | None = None,
         names=None,
     ) -> Self:
@@ -1550,7 +1551,7 @@ class MultiIndex(Index):
         return midx
 
     @_performance_tracking
-    def droplevel(self, level=-1) -> Self | cudf.Index:
+    def droplevel(self, level=-1) -> Self | Index:
         """
         Removes the specified levels from the MultiIndex.
 
@@ -1799,7 +1800,7 @@ class MultiIndex(Index):
         return super().fillna(value=value)
 
     @_performance_tracking
-    def unique(self, level: int | None = None) -> Self | cudf.Index:
+    def unique(self, level: int | None = None) -> Self | Index:
         if level is None:
             return self.drop_duplicates(keep="first")
         else:
@@ -2221,7 +2222,7 @@ class MultiIndex(Index):
     def repeat(self, repeats, axis=None) -> Self:
         return self._from_data(
             self._data._from_columns_like_self(
-                super()._repeat(self._columns, repeats, axis)
+                self._repeat(self._columns, repeats, axis)
             )
         )
 

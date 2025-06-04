@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,6 +23,8 @@
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+
+#include <numbers>
 
 namespace CUDF_EXPORT cudf {
 namespace detail {
@@ -54,7 +56,7 @@ template <typename T>
 constexpr std::size_t max_precision()
 {
   auto constexpr num_bits = sizeof(T) * 8;
-  return std::floor(num_bits * std::log(2) / std::log(10));
+  return std::floor(num_bits * std::numbers::ln2 / std::numbers::ln10);
 }
 
 }  // namespace detail

@@ -40,6 +40,8 @@ if TYPE_CHECKING:
 
     from cudf._typing import ColumnBinaryOperand, ColumnLike, Dtype, ScalarLike
     from cudf.core.buffer import Buffer
+    from cudf.core.column.numerical import NumericalColumn
+    from cudf.core.column.string import StringColumn
 
 
 def _to_plc_scalar(scalar: int | Decimal, dtype: DecimalDtype) -> plc.Scalar:
@@ -113,7 +115,7 @@ class DecimalBaseColumn(NumericalBaseColumn):
             return self
         return self.cast(dtype=dtype)  # type: ignore[return-value]
 
-    def as_string_column(self, dtype) -> cudf.core.column.StringColumn:
+    def as_string_column(self, dtype) -> StringColumn:
         if len(self) > 0:
             with acquire_spill_lock():
                 plc_column = (
@@ -281,9 +283,7 @@ class DecimalBaseColumn(NumericalBaseColumn):
             return other, self.dtype._from_decimal(Decimal(other))
         return super()._normalize_binop_operand(other), self.dtype
 
-    def as_numerical_column(
-        self, dtype: np.dtype
-    ) -> cudf.core.column.NumericalColumn:
+    def as_numerical_column(self, dtype: np.dtype) -> NumericalColumn:
         return self.cast(dtype=dtype)  # type: ignore[return-value]
 
 
