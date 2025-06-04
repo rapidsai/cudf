@@ -17,6 +17,7 @@ from cudf_polars.testing.asserts import (
     assert_ir_translation_raises,
 )
 from cudf_polars.utils.config import ConfigOptions
+from cudf_polars.utils.versions import POLARS_VERSION_LT_130
 
 
 def test_polars_verbose_warns(monkeypatch):
@@ -49,15 +50,26 @@ def test_unsupported_config_raises():
 @pytest.mark.parametrize("device", [-1, "foo"])
 def test_invalid_device_raises(device):
     q = pl.LazyFrame({})
-    with pytest.raises(pl.exceptions.ComputeError):
-        q.collect(engine=pl.GPUEngine(device=device))
+    if POLARS_VERSION_LT_130:
+        with pytest.raises(pl.exceptions.ComputeError):
+            q.collect(engine=pl.GPUEngine(device=device))
+    elif isinstance(device, int):
+        with pytest.raises(rmm._cuda.gpu.CUDARuntimeError):
+            q.collect(engine=pl.GPUEngine(device=device))
+    elif isinstance(device, str):
+        with pytest.raises(TypeError):
+            q.collect(engine=pl.GPUEngine(device=device))
 
 
 @pytest.mark.parametrize("mr", [1, object()])
 def test_invalid_memory_resource_raises(mr):
     q = pl.LazyFrame({})
-    with pytest.raises(pl.exceptions.ComputeError):
-        q.collect(engine=pl.GPUEngine(memory_resource=mr))
+    if POLARS_VERSION_LT_130:
+        with pytest.raises(pl.exceptions.ComputeError):
+            q.collect(engine=pl.GPUEngine(memory_resource=mr))
+    else:
+        with pytest.raises(TypeError):
+            q.collect(engine=pl.GPUEngine(memory_resource=mr))
 
 
 @pytest.mark.parametrize("disable_managed_memory", ["1", "0"])
