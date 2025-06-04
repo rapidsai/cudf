@@ -29,7 +29,7 @@ import polars as pl
 import pylibcudf as plc
 
 import cudf_polars.dsl.expr as expr
-from cudf_polars.containers import Column, DataFrame
+from cudf_polars.containers import Column, DataFrame, DataType
 from cudf_polars.dsl.expressions import rolling
 from cudf_polars.dsl.expressions.base import ExecutionContext
 from cudf_polars.dsl.nodebase import Node
@@ -482,7 +482,8 @@ class Scan(IR):
             plc.Table([plc.interop.from_arrow(pa.array(map(str, paths)))]),
             plc.interop.from_arrow(pa.array(rows_per_path, type=pa.int32())),
         ).columns()
-        return df.with_columns([Column(filepaths, name=name)])
+        dtype = DataType(pl.String())
+        return df.with_columns([Column(filepaths, name=name, dtype=dtype)])
 
     def fast_count(self) -> int:  # pragma: no cover
         """Get the number of rows in a Parquet Scan."""
@@ -704,15 +705,16 @@ class Scan(IR):
         if row_index is not None:
             name, offset = row_index
             offset += skip_rows
-            dtype = schema[name].plc
-            step = plc.Scalar.from_py(1, dtype)
-            init = plc.Scalar.from_py(offset, dtype)
+            dtype = schema[name]
+            step = plc.Scalar.from_py(1, dtype.plc)
+            init = plc.Scalar.from_py(offset, dtype.plc)
             index_col = Column(
                 plc.filling.sequence(df.num_rows, init, step),
                 is_sorted=plc.types.Sorted.YES,
                 order=plc.types.Order.ASCENDING,
                 null_order=plc.types.NullOrder.AFTER,
                 name=name,
+                dtype=dtype,
             )
             df = DataFrame([index_col, *df.columns])
             if next(iter(schema)) != name:
@@ -1136,15 +1138,14 @@ class Select(IR):
         ):
             scan = self.children[0]  # pragma: no cover
             effective_rows = scan.fast_count()  # pragma: no cover
+            dtype = DataType(pl.UInt32())  # pragma: no cover
             col = Column(
                 plc.Column.from_scalar(
-                    plc.Scalar.from_py(
-                        effective_rows,
-                        plc.DataType(plc.TypeId.UINT32),
-                    ),
+                    plc.Scalar.from_py(effective_rows, dtype.plc),
                     1,
                 ),
                 name=self.exprs[0].name or "len",
+                dtype=dtype,
             )  # pragma: no cover
             return DataFrame([col])  # pragma: no cover
 
@@ -1816,6 +1817,7 @@ class Join(IR):
                         Column(
                             plc.replace.replace_nulls(left_col.obj, right_col.obj),
                             name=left_col.name,
+                            dtype=left_col.dtype,
                         )
                         for left_col, right_col in zip(
                             left.select_columns(left_on.column_names_set),
@@ -2303,21 +2305,24 @@ class MapFunction(IR):
             return DataFrame(
                 [
                     *index_columns,
-                    Column(variable_column, name=variable_name),
-                    Column(value_column, name=value_name),
+                    Column(
+                        variable_column, name=variable_name, dtype=schema[variable_name]
+                    ),
+                    Column(value_column, name=value_name, dtype=schema[value_name]),
                 ]
             )
         elif name == "row_index":
             col_name, offset = options
-            dtype = schema[col_name].plc
-            step = plc.Scalar.from_py(1, dtype)
-            init = plc.Scalar.from_py(offset, dtype)
+            dtype = schema[col_name]
+            step = plc.Scalar.from_py(1, dtype.plc)
+            init = plc.Scalar.from_py(offset, dtype.plc)
             index_col = Column(
                 plc.filling.sequence(df.num_rows, init, step),
                 is_sorted=plc.types.Sorted.YES,
                 order=plc.types.Order.ASCENDING,
                 null_order=plc.types.NullOrder.AFTER,
                 name=col_name,
+                dtype=dtype,
             )
             return DataFrame([index_col, *df.columns])
         else:
