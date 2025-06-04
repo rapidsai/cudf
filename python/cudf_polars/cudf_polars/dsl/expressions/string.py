@@ -13,6 +13,7 @@ import pyarrow as pa
 import pyarrow.compute as pc
 
 from polars.exceptions import InvalidOperationError
+from polars.polars import dtype_str_repr
 
 import pylibcudf as plc
 
@@ -226,11 +227,12 @@ class StringFunction(Expr):
         elif self.name is StringFunction.Name.ZFill:
             child, width = self.children
             assert isinstance(width, Literal)
-            try:
-                pa.scalar(width.value, type=pa.uint64())
-            except OverflowError:
+            if width.value is not None and width.value < 0:
+                dtypestr = dtype_str_repr(width.dtype.polars)
                 raise InvalidOperationError(
-                    f"conversion from `i32` to `u64` failed in column 'literal' for 1 out of 1 values: [{width.value}]"
+                    f"conversion from `{dtypestr}` to `u64` "
+                    f"failed in column 'literal' for 1 out of "
+                    f"1 values: [{width.value}]"
                 ) from None
             column = child.evaluate(df, context=context)
             if width.value is None:
