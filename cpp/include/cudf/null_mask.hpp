@@ -74,7 +74,7 @@ std::size_t bitmask_allocation_size_bytes(size_type number_of_bits,
  * @param number_of_bits The number of bits that need to be represented
  * @return The necessary number of `bitmask_type` elements
  */
-CUDF_HOST_DEVICE size_type num_bitmask_words(size_type number_of_bits);
+size_type num_bitmask_words(size_type number_of_bits);
 
 /**
  * @brief Creates a `device_buffer` for use as a null value indicator bitmask of

@@ -73,7 +73,7 @@ std::size_t bitmask_allocation_size_bytes(size_type number_of_bits, std::size_t 
 }
 
 // Computes number of *actual* bitmask_type elements needed
-CUDF_HOST_DEVICE size_type num_bitmask_words(size_type number_of_bits)
+size_type num_bitmask_words(size_type number_of_bits)
 {
   return cudf::util::div_rounding_up_safe<size_type>(number_of_bits,
                                                      detail::size_in_bits<bitmask_type>());
