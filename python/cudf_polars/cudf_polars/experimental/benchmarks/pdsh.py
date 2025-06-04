@@ -1014,23 +1014,30 @@ def _query_type(query: int | str) -> list[int]:
 parser = argparse.ArgumentParser(
     prog="Cudf-Polars PDS-H Benchmarks",
     description="Experimental streaming-executor benchmarks.",
+    formatter_class=argparse.RawTextHelpFormatter,
 )
 parser.add_argument(
     "query",
     type=_query_type,
-    help="Query number.",
+    help=(
+        "Query to run. One of the following:\n"
+        "  - A single number (e.g., 11)\n"
+        "  - A comma-separated list of query numbers (e.g., 1,3,7)\n"
+        "  - The string 'all' to run all queries (1 through 22)"
+    ),
 )
 parser.add_argument(
     "--path",
     type=str,
     default=os.environ.get("PDSH_DATASET_PATH"),
-    help="Root PDS-H dataset directory path.",
+    help="Path to the root directory of the PDS-H dataset.\n"
+    "Defaults to the PDSH_DATASET_PATH environment variable.",
 )
 parser.add_argument(
     "--suffix",
     type=str,
     default=".parquet",
-    help="Table file suffix.",
+    help="File suffix for input table files.\nDefault: .parquet",
 )
 parser.add_argument(
     "-e",
@@ -1038,15 +1045,19 @@ parser.add_argument(
     default="streaming",
     type=str,
     choices=["in-memory", "streaming", "cpu"],
-    help="Executor.",
+    help="Query executor backend:\n"
+    "  - in-memory : Evaluate query in GPU memory\n"
+    "  - streaming : Partitioned evaluation (default)\n"
+    "  - cpu       : Use Polars CPU engine",
 )
 parser.add_argument(
     "-s",
     "--scheduler",
     default="synchronous",
-    type=str,
     choices=["synchronous", "distributed"],
-    help="Scheduler to use with the 'streaming' executor.",
+    help="Scheduler type to use with the 'streaming' executor.\n"
+    "  - synchronous : Run locally single-process\n"
+    "  - distributed : Use Dask for multi-GPU execution",
 )
 parser.add_argument(
     "--n-workers",
@@ -1102,7 +1113,8 @@ parser.add_argument(
     "--rmm-pool-size",
     default=0.5,
     type=float,
-    help="RMM pool size (fractional).",
+    help="Fraction of total GPU memory to allocate for RMM pool.\n"
+    "Default: 0.5 (50%% of GPU memory)",
 )
 parser.add_argument(
     "--rmm-async",
