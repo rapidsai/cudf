@@ -190,8 +190,9 @@ std::unique_ptr<column> zfill_by_widths(strings_column_view const& input,
 {
   if (input.is_empty()) { return make_empty_column(type_id::STRING); }
   CUDF_EXPECTS(widths.size() == input.size(),
-               "widths column must be the same size as the input column");
-  CUDF_EXPECTS(!widths.has_nulls(), "widths column must not contain nulls");
+               "widths column must be the same size as the input column",
+               std::invalid_argument);
+  CUDF_EXPECTS(!widths.has_nulls(), "widths column must not contain nulls", std::invalid_argument);
 
   auto d_strings  = column_device_view::create(input.parent(), stream);
   auto widths_itr = cudf::detail::indexalator_factory::make_input_iterator(widths);

@@ -187,6 +187,17 @@ TEST_F(StringsPadTest, ZFillByWidths)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
+TEST_F(StringsPadTest, ZFillError)
+{
+  auto input = cudf::test::strings_column_wrapper({"654321", "-12345", "", ""}, {1, 1, 0, 1});
+  auto sv    = cudf::strings_column_view(input);
+  auto widths =
+    cudf::test::fixed_width_column_wrapper<cudf::size_type>({6, 5, 4, 3, 0}, {1, 1, 1, 1, 0});
+  EXPECT_THROW(cudf::strings::zfill_by_widths(sv, widths), std::invalid_argument);
+  auto widths2 = cudf::test::fixed_width_column_wrapper<cudf::size_type>({6, 5, 4, 3, 2});
+  EXPECT_THROW(cudf::strings::zfill_by_widths(sv, widths2), std::invalid_argument);
+}
+
 TEST_F(StringsPadTest, Wrap1)
 {
   std::vector<char const*> h_strings{"12345", "thesé", nullptr, "ARE THE", "tést strings", ""};
