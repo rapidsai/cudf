@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#pragma once
+
 #include "compact_protocol_reader.hpp"
 #include "io/comp/io_uncomp.hpp"
 #include "reader_impl_chunking.hpp"
