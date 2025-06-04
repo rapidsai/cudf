@@ -26,6 +26,7 @@
 #include <cudf/detail/transform.hpp>
 #include <cudf/jit/runtime_support.hpp>
 #include <cudf/null_mask.hpp>
+#include <cudf/stream_compaction.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
@@ -453,6 +454,53 @@ std::unique_ptr<column> transform(std::vector<column_view> const& inputs,
   }
 }
 
+std::vector<std::unique_ptr<column>> filter(std::vector<column_view> const& target_columns,
+                                            std::vector<column_view> const& predicate_columns,
+                                            std::string const& predicate_udf,
+                                            bool is_ptx,
+                                            std::optional<void*> user_data,
+                                            rmm::cuda_stream_view stream,
+                                            rmm::device_async_resource_ref mr)
+{
+  CUDF_EXPECTS(
+    !target_columns.empty(), "Filters must have at least 1 target column", std::invalid_argument);
+  CUDF_EXPECTS(!predicate_columns.empty(),
+               "Filters must have at least 1 predicate column",
+               std::invalid_argument);
+
+  auto const base_column = std::max_element(predicate_columns.begin(),
+                                            predicate_columns.end(),
+                                            [](auto& a, auto& b) { return a.size() < b.size(); });
+
+  CUDF_EXPECTS(
+    std::all_of(target_columns.begin(),
+                target_columns.end(),
+                [&](column_view const& col) { return col.size() == base_column->size(); }),
+    "Filter's target columns must have the same size as the predicate base column",
+    std::invalid_argument);
+
+  auto const predicate_output_type = cudf::data_type{cudf::type_id::BOOL8};
+
+  transformation::jit::perform_checks(*base_column, predicate_output_type, predicate_columns);
+
+  auto filter_bools = transformation::jit::transform_operation(*base_column,
+                                                               predicate_output_type,
+                                                               predicate_columns,
+                                                               predicate_udf,
+                                                               is_ptx,
+                                                               user_data,
+                                                               stream,
+                                                               mr);
+
+  // [ ] skip this and create a custom  kernel that outputs an index and uses cudf::detail::gather
+  // as in:
+  // https://github.com/lamarrr/cudf/blob/013b5603702929f61901316005be0e2104cdfa23/cpp/include/cudf/detail/copy_if.cuh#L78
+  auto filtered =
+    cudf::apply_boolean_mask(cudf::table_view{target_columns}, *filter_bools, stream, mr);
+
+  return filtered->release();
+}
+
 }  // namespace detail
 
 std::unique_ptr<column> transform(std::vector<column_view> const& inputs,
@@ -465,6 +513,19 @@ std::unique_ptr<column> transform(std::vector<column_view> const& inputs,
 {
   CUDF_FUNC_RANGE();
   return detail::transform(inputs, udf, output_type, is_ptx, user_data, stream, mr);
+}
+
+std::vector<std::unique_ptr<column>> filter(std::vector<column_view> const& target_columns,
+                                            std::vector<column_view> const& predicate_columns,
+                                            std::string const& predicate_udf,
+                                            bool is_ptx,
+                                            std::optional<void*> user_data,
+                                            rmm::cuda_stream_view stream,
+                                            rmm::device_async_resource_ref mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::filter(
+    target_columns, predicate_columns, predicate_udf, is_ptx, user_data, stream, mr);
 }
 
 }  // namespace cudf
