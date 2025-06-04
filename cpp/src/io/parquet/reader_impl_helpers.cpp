@@ -40,6 +40,24 @@ namespace flatbuf = cudf::io::parquet::flatbuf;
 
 namespace {
 
+/**
+ * @brief Computes the total number of row groups in input span of row group indices
+ */
+[[nodiscard]] size_type compute_total_row_groups(
+  host_span<std::vector<size_type> const> row_group_indices)
+{
+  auto const total_row_groups =
+    std::accumulate(row_group_indices.begin(),
+                    row_group_indices.end(),
+                    size_t{0},
+                    [](auto sum, auto const& row_groups) { return sum + row_groups.size(); });
+
+  // Check if we have less than 2B total row groups.
+  CUDF_EXPECTS(total_row_groups <= std::numeric_limits<size_type>::max(),
+               "Total number of row groups exceed the cudf::size_type's limit");
+  return static_cast<size_type>(total_row_groups);
+}
+
 std::optional<LogicalType> converted_to_logical_type(SchemaElement const& schema)
 {
   if (schema.converted_type.has_value()) {
@@ -1256,18 +1274,9 @@ aggregate_reader_metadata::select_row_groups(
   }
 
   // Compute total number of input row groups
-  size_type const total_row_groups = [&]() {
-    size_t const total_row_groups =
-      std::accumulate(current_row_group_indices.begin(),
-                      current_row_group_indices.end(),
-                      size_t{0},
-                      [](size_t sum, auto const& pfm) { return sum + pfm.size(); });
-
-    // Check if we have less than 2B total row groups.
-    CUDF_EXPECTS(total_row_groups <= std::numeric_limits<cudf::size_type>::max(),
-                 "Total number of row groups exceed the size_type's limit");
-    return static_cast<size_type>(total_row_groups);
-  }();
+  size_type const total_input_row_groups = row_group_indices.empty()
+                                             ? num_row_groups  // Use pre-computed member variable
+                                             : compute_total_row_groups(current_row_group_indices);
 
   // Flag to check if the row groups will be filtered using row bounds
   bool const is_trimmed_row_groups =
@@ -1286,6 +1295,11 @@ aggregate_reader_metadata::select_row_groups(
     current_row_group_indices = host_span<std::vector<size_type> const>(trimmed_row_group_indices);
   }
 
+  // Compute number of input row groups after row bounds filter
+  size_type const total_row_bounds_filtered_row_groups =
+    is_trimmed_row_groups ? compute_total_row_groups(current_row_group_indices)
+                          : total_input_row_groups;
+
   // Struct to store the number of row groups after filtering using stats and bloom filters
   surviving_row_group_metrics num_row_groups_after_filters{};
 
@@ -1299,7 +1313,7 @@ aggregate_reader_metadata::select_row_groups(
     std::tie(filtered_row_group_indices, num_row_groups_after_filters) =
       filter_row_groups(sources,
                         current_row_group_indices,
-                        total_row_groups,
+                        total_row_bounds_filtered_row_groups,
                         output_dtypes,
                         output_column_schemas,
                         filter.value(),
@@ -1380,7 +1394,7 @@ aggregate_reader_metadata::select_row_groups(
           rows_to_read,
           std::move(selection),
           std::move(num_rows_per_source),
-          total_row_groups,
+          total_row_bounds_filtered_row_groups,
           std::move(num_row_groups_after_filters)};
 }
 
