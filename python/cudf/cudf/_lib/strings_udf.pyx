@@ -16,11 +16,10 @@ from cudf.core.buffer import as_buffer
 
 from pylibcudf.libcudf.column.column cimport column, column_view
 from pylibcudf.libcudf.strings_udf cimport (
-    column_from_udf_string_array as cpp_column_from_udf_string_array,
-    free_udf_string_array as cpp_free_udf_string_array,
+    column_from_managed_udf_string_array as cpp_column_from_managed_udf_string_array,
     get_cuda_build_version as cpp_get_cuda_build_version,
     to_string_view_array as cpp_to_string_view_array,
-    udf_string,
+    managed_udf_string,
 )
 from rmm.librmm.device_buffer cimport device_buffer
 from rmm.pylibrmm.device_buffer cimport DeviceBuffer
@@ -42,14 +41,13 @@ def column_to_string_view_array(plc_Column strings_col):
     return as_buffer(db, exposed=True)
 
 
-def column_from_udf_string_array(DeviceBuffer d_buffer):
-    cdef size_t size = int(d_buffer.c_size() / sizeof(udf_string))
-    cdef udf_string* data = <udf_string*>d_buffer.c_data()
+def column_from_managed_udf_string_array(DeviceBuffer d_buffer):
+    cdef size_t size = int(d_buffer.c_size() / sizeof(managed_udf_string))
+    cdef managed_udf_string* data = <managed_udf_string*>d_buffer.c_data()
     cdef unique_ptr[column] c_result
 
     with nogil:
-        c_result = move(cpp_column_from_udf_string_array(data, size))
-        cpp_free_udf_string_array(data, size)
+        c_result = move(cpp_column_from_managed_udf_string_array(data, size))
 
     return plc_Column.from_libcudf(move(c_result))
 
