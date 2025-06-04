@@ -32,6 +32,7 @@ from cudf_polars.experimental.dispatch import (
     generate_ir_tasks,
     lower_ir_node,
 )
+from cudf_polars.experimental.fusion import fuse_ir_graph
 from cudf_polars.experimental.utils import _concat, _lower_ir_fallback
 
 if TYPE_CHECKING:
@@ -81,8 +82,15 @@ def lower_ir_graph(
     --------
     lower_ir_node
     """
+    assert config_options.executor.name == "streaming", (
+        "'in-memory' executor not supported in 'lower_ir_graph'"
+    )
+
     mapper = CachingVisitor(lower_ir_node, state={"config_options": config_options})
-    return mapper(ir)
+    lowered_ir, partition_info = mapper(ir)
+    if config_options.executor.task_fusion:
+        return fuse_ir_graph(lowered_ir, partition_info)
+    return lowered_ir, partition_info
 
 
 def task_graph(
@@ -319,8 +327,8 @@ def _lower_ir_pwise(
 
 
 _lower_ir_pwise_preserve = partial(_lower_ir_pwise, preserve_partitioning=True)
-lower_ir_node.register(Projection, _lower_ir_pwise_preserve)
 lower_ir_node.register(Filter, _lower_ir_pwise_preserve)
+lower_ir_node.register(Projection, _lower_ir_pwise_preserve)
 lower_ir_node.register(Cache, _lower_ir_pwise)
 lower_ir_node.register(HStack, _lower_ir_pwise)
 lower_ir_node.register(HConcat, _lower_ir_pwise)

@@ -191,6 +191,9 @@ class StreamingExecutor:
     rapidsmpf_spill
         Whether to wrap task arguments and output in objects that are
         spillable by 'rapidsmpf'.
+    task_fusion
+        Whether to fuse sequential partition-wise IR nodes into
+        a single task per partition.
     """
 
     name: Literal["streaming"] = dataclasses.field(default="streaming", init=False)
@@ -203,6 +206,7 @@ class StreamingExecutor:
     broadcast_join_limit: int = 0
     shuffle_method: ShuffleMethod | None = None
     rapidsmpf_spill: bool = False
+    task_fusion: bool = True
 
     def __post_init__(self) -> None:
         if self.scheduler == "synchronous" and self.shuffle_method == "rapidsmpf":
@@ -244,6 +248,8 @@ class StreamingExecutor:
             raise TypeError("broadcast_join_limit must be an int")
         if not isinstance(self.rapidsmpf_spill, bool):
             raise TypeError("rapidsmpf_spill must be bool")
+        if not isinstance(self.task_fusion, bool):
+            raise TypeError("task_fusion must be bool")
 
     def __hash__(self) -> int:
         # cardinality factory, a dict, isn't natively hashable. We'll dump it

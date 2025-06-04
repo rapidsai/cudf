@@ -158,6 +158,7 @@ class RunConfig:
     rmm_async: bool
     rapidsmpf_oom_protection: bool
     rapidsmpf_spill: bool
+    task_fusion: bool
     spill_device: float
 
     @classmethod
@@ -185,6 +186,7 @@ class RunConfig:
             rapidsmpf_oom_protection=args.rapidsmpf_oom_protection,
             spill_device=args.spill_device,
             rapidsmpf_spill=args.rapidsmpf_spill,
+            task_fusion=args.task_fusion,
         )
 
     def serialize(self) -> dict:
@@ -205,6 +207,7 @@ class RunConfig:
                 print(f"blocksize: {self.blocksize}")
                 print(f"shuffle_method: {self.shuffle}")
                 print(f"broadcast_join_limit: {self.broadcast_join_limit}")
+                print(f"task-fusion: {self.task_fusion}")
                 if self.scheduler == "distributed":
                     print(f"n_workers: {self.n_workers}")
                     print(f"threads: {self.threads}")
@@ -1159,6 +1162,12 @@ parser.add_argument(
     help="Print an outline of the logical plan",
     default=False,
 )
+parser.add_argument(
+    "--task-fusion",
+    action=argparse.BooleanOptionalAction,
+    default=True,
+    help="Enable task fusion.",
+)
 args = parser.parse_args()
 
 
@@ -1225,6 +1234,7 @@ def run(args: argparse.Namespace) -> None:
                 executor_options["broadcast_join_limit"] = (
                     run_config.broadcast_join_limit
                 )
+            executor_options["task_fusion"] = run_config.task_fusion
             if run_config.rapidsmpf_spill:
                 executor_options["rapidsmpf_spill"] = run_config.rapidsmpf_spill
             if run_config.scheduler == "distributed":

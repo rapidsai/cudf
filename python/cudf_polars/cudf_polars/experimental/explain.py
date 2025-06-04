@@ -17,6 +17,7 @@ from cudf_polars.dsl.ir import (
     Sort,
 )
 from cudf_polars.dsl.translate import Translator
+from cudf_polars.experimental.fusion import Fused, FusedIO
 from cudf_polars.experimental.parallel import lower_ir_graph
 from cudf_polars.utils.config import ConfigOptions
 
@@ -30,7 +31,10 @@ if TYPE_CHECKING:
 
 
 def explain_query(
-    q: pl.LazyFrame, engine: pl.GPUEngine, *, physical: bool = True
+    q: pl.LazyFrame,
+    engine: pl.GPUEngine,
+    *,
+    physical: bool = True,
 ) -> str:
     """
     Return a formatted string representation of the IR plan.
@@ -125,3 +129,16 @@ def _(ir: Sort, *, offset: str = "") -> str:
 def _(ir: Scan, *, offset: str = "") -> str:
     label = f"SCAN {ir.typ.upper()}"
     return _repr_header(offset, label, ir.schema)
+
+
+@_repr_ir.register
+def _(ir: Fused, *, offset: str = "") -> str:
+    nodes = tuple(type(node).__name__.upper() for node in ir.subnodes)
+    return _repr_header(offset, f"FUSED {nodes}", ir.schema)
+
+
+@_repr_ir.register
+def _(ir: FusedIO, *, offset: str = "") -> str:
+    nodes = tuple(type(node).__name__.upper() for node in ir.subnodes)
+    nodes = (type(ir.fused_io.children[0]).__name__.upper(), *nodes)
+    return _repr_header(offset, f"FUSEDIO {nodes}", ir.schema)

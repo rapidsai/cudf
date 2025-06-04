@@ -63,6 +63,7 @@ def test_explain_physical_plan(tmp_path, df):
         executor_options={
             "target_partition_size": 10_000,
             "scheduler": DEFAULT_SCHEDULER,
+            "task_fusion": False,
         },
     )
 
@@ -73,7 +74,8 @@ def test_explain_physical_plan(tmp_path, df):
     assert "SELECT ('sum', 'y')" in plan or "PROJECTION ('sum', 'y')" in plan
 
 
-def test_explain_physical_plan_with_groupby(tmp_path, df):
+@pytest.mark.parametrize("task_fusion", [True, False])
+def test_explain_physical_plan_with_groupby(tmp_path, df, task_fusion):
     make_partitioned_source(df, tmp_path, fmt="parquet", n_files=1)
 
     q = (
@@ -89,12 +91,17 @@ def test_explain_physical_plan_with_groupby(tmp_path, df):
         executor_options={
             "target_partition_size": 10_000,
             "scheduler": DEFAULT_SCHEDULER,
+            "task_fusion": task_fusion,
         },
     )
 
-    plan = explain_query(q, engine, physical=True)
-
-    assert "GROUPBY ('g',)" in plan
+    if task_fusion:
+        plan = explain_query(q, engine, physical=True)
+        assert "FUSED ('GROUPBY'" in plan
+        assert "FUSEDIO ('SPLITSCAN'" in plan
+    else:
+        plan = explain_query(q, engine, physical=True)
+        assert "GROUPBY ('g',)" in plan
 
 
 def test_explain_logical_plan_with_join(tmp_path, df):
