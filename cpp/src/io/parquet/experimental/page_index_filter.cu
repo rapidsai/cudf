@@ -138,17 +138,23 @@ namespace {
       std::for_each(rg_indices.cbegin(), rg_indices.cend(), [&](auto rg_idx) {
         auto const& row_group = per_file_metadata[src_idx].row_groups[rg_idx];
         // Find the column chunk with the given schema index
-        auto col = std::find_if(
+        auto colchunk_iter = std::find_if(
           row_group.columns.begin(), row_group.columns.end(), [schema_idx](ColumnChunk const& col) {
             return col.schema_idx == schema_idx;
           });
 
-        if (col != std::end(row_group.columns) and col->offset_index.has_value()) {
-          CUDF_EXPECTS(col->column_index.has_value(),
+        CUDF_EXPECTS(colchunk_iter != row_group.columns.end(),
+                     "Column chunk with schema index " + std::to_string(schema_idx) +
+                       " not found in row group",
+                     std::invalid_argument);
+
+        // Compute page row counts and offsets if this column chunk has column and offset indexes
+        if (colchunk_iter->offset_index.has_value()) {
+          CUDF_EXPECTS(colchunk_iter->column_index.has_value(),
                        "Both offset and column indexes must be present");
           // Get the offset and column indexes of the column chunk
-          auto const& offset_index = col->offset_index.value();
-          auto const& column_index = col->column_index.value();
+          auto const& offset_index = colchunk_iter->offset_index.value();
+          auto const& column_index = colchunk_iter->column_index.value();
 
           // Number of pages in this column chunk
           auto const row_group_num_pages = offset_index.page_locations.size();
@@ -321,13 +327,14 @@ struct page_stats_caster : public stats_caster_base {
    *
    * @return A pair containing the output data buffer and nullmask
    */
-  [[nodiscard]] std::tuple<rmm::device_buffer, rmm::device_uvector<size_t>, rmm::device_buffer>
-  build_string_data_and_nullmask(cudf::host_span<cudf::string_view const> host_strings,
-                                 bitmask_type const* host_page_nullmask,
-                                 cudf::device_span<size_type const> page_indices,
-                                 cudf::host_span<size_type const> page_row_offsets,
-                                 rmm::cuda_stream_view stream,
-                                 rmm::device_async_resource_ref mr) const
+  [[nodiscard]] std::
+    tuple<rmm::device_buffer, rmm::device_uvector<cudf::size_type>, rmm::device_buffer>
+    build_string_data_and_nullmask(cudf::host_span<cudf::string_view const> host_strings,
+                                   bitmask_type const* host_page_nullmask,
+                                   cudf::device_span<size_type const> page_indices,
+                                   cudf::host_span<size_type const> page_row_offsets,
+                                   rmm::cuda_stream_view stream,
+                                   rmm::device_async_resource_ref mr) const
   {
     // Total number of pages in the column
     size_type const total_pages = page_row_offsets.size() - 1;
@@ -338,9 +345,10 @@ struct page_stats_caster : public stats_caster_base {
         host_strings.begin(), host_strings.end(), size_t{0}, [](auto sum, auto const& str) {
           return sum + str.size_bytes();
         });
+
       auto chars   = cudf::detail::make_empty_host_vector<char>(total_char_count, stream);
       auto sizes   = cudf::detail::make_empty_host_vector<cudf::size_type>(total_pages, stream);
-      auto offsets = cudf::detail::make_empty_host_vector<size_t>(total_pages + 1, stream);
+      auto offsets = cudf::detail::make_empty_host_vector<cudf::size_type>(total_pages + 1, stream);
       offsets.push_back(0);
       for (auto const& str : host_strings) {
         auto tmp =
@@ -363,6 +371,16 @@ struct page_stats_caster : public stats_caster_base {
                    page_str_sizes.begin(),
                    row_str_sizes.begin());
 
+    // Total bytes in the output chars buffer
+    auto const total_bytes = thrust::reduce(rmm::exec_policy_nosync(stream),
+                                            row_str_sizes.begin(),
+                                            row_str_sizes.end(),
+                                            size_t{0},
+                                            cuda::std::plus<size_t>());
+
+    CUDF_EXPECTS(total_bytes <= cuda::std::numeric_limits<cudf::size_type>::max(),
+                 "Page statistics columns cannot be large strings");
+
     // page-level strings nullmask (input)
     auto const input_nullmask = host_page_nullmask;
 
@@ -384,14 +402,11 @@ struct page_stats_caster : public stats_caster_base {
 
     // Buffer for row-level string offsets (output).
     auto row_str_offsets =
-      cudf::detail::make_zeroed_device_uvector_async<size_t>(total_rows + 1, stream, mr);
+      cudf::detail::make_zeroed_device_uvector_async<cudf::size_type>(total_rows + 1, stream, mr);
     thrust::inclusive_scan(rmm::exec_policy_nosync(stream),
                            row_str_sizes.begin(),
                            row_str_sizes.end(),
                            row_str_offsets.begin() + 1);
-
-    // Total bytes in the output chars buffer
-    auto const total_bytes = row_str_offsets.back_element(stream);
 
     // Buffer for row-level string chars (output).
     auto row_str_chars = rmm::device_buffer(total_bytes, stream, mr);
@@ -478,34 +493,33 @@ struct page_stats_caster : public stats_caster_base {
           auto const& rg_indices = row_group_indices[src_idx];
           std::for_each(rg_indices.cbegin(), rg_indices.cend(), [&](auto rg_idx) {
             auto const& row_group = per_file_metadata[src_idx].row_groups[rg_idx];
-            auto col              = std::find_if(
+            // Find colchunk_iter in row_group.columns. Guaranteed to be found as already verified
+            // in make_page_row_counts_and_offsets()
+            auto colchunk_iter = std::find_if(
               row_group.columns.begin(),
               row_group.columns.end(),
               [schema_idx](ColumnChunk const& col) { return col.schema_idx == schema_idx; });
 
-            // No need to check column_index and offset_index again
-            if (col != std::end(row_group.columns)) {
-              auto const& colchunk               = *col;
-              auto const& column_index           = colchunk.column_index.value();
-              auto const& offset_index           = colchunk.offset_index.value();
-              auto const num_pages_in_colchunk   = column_index.min_values.size();
-              auto const page_offset_in_colchunk = col_chunk_page_offsets[page_offset_idx++];
+            auto const& colchunk               = *colchunk_iter;
+            auto const& column_index           = colchunk.column_index.value();
+            auto const& offset_index           = colchunk.offset_index.value();
+            auto const num_pages_in_colchunk   = column_index.min_values.size();
+            auto const page_offset_in_colchunk = col_chunk_page_offsets[page_offset_idx++];
 
-              // For all pages in this column chunk
-              std::for_each(
-                thrust::counting_iterator<size_t>(0),
-                thrust::counting_iterator(num_pages_in_colchunk),
-                [&](auto page_idx) {
-                  // To support deprecated min, max fields.
-                  auto const& min_value = column_index.min_values[page_idx];
-                  auto const& max_value = column_index.min_values[page_idx];
-                  // Translate binary data to Type then to <T>
-                  min.set_index(
-                    page_offset_in_colchunk + page_idx, min_value, colchunk.meta_data.type);
-                  max.set_index(
-                    page_offset_in_colchunk + page_idx, max_value, colchunk.meta_data.type);
-                });
-            }
+            // For all pages in this column chunk
+            std::for_each(
+              thrust::counting_iterator<size_t>(0),
+              thrust::counting_iterator(num_pages_in_colchunk),
+              [&](auto page_idx) {
+                // To support deprecated min, max fields.
+                auto const& min_value = column_index.min_values[page_idx];
+                auto const& max_value = column_index.min_values[page_idx];
+                // Translate binary data to Type then to <T>
+                min.set_index(
+                  page_offset_in_colchunk + page_idx, min_value, colchunk.meta_data.type);
+                max.set_index(
+                  page_offset_in_colchunk + page_idx, max_value, colchunk.meta_data.type);
+              });
           });
         });
 
