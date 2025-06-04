@@ -42,7 +42,7 @@ class Cast(Expr):
         """Evaluate this expression given a dataframe for context."""
         (child,) = self.children
         column = child.evaluate(df, context=context)
-        return column.astype(self.dtype.plc)
+        return column.astype(self.dtype)
 
 
 class Len(Expr):

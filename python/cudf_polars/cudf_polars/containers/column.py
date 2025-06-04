@@ -223,7 +223,7 @@ class Column:
             return True
         return False
 
-    def astype(self, dtype: plc.DataType) -> Column:
+    def astype(self, dtype: DataType) -> Column:
         """
         Cast the column to as the requested dtype.
 
@@ -246,14 +246,18 @@ class Column:
         This only produces a copy if the requested dtype doesn't match
         the current one.
         """
-        if self.obj.type() == dtype:
+        plc_dtype = dtype.plc
+        if self.obj.type() == plc_dtype:
             return self
 
-        if dtype.id() == plc.TypeId.STRING or self.obj.type().id() == plc.TypeId.STRING:
-            return Column(self._handle_string_cast(dtype))
+        if (
+            plc_dtype.id() == plc.TypeId.STRING
+            or self.obj.type().id() == plc.TypeId.STRING
+        ):
+            return Column(self._handle_string_cast(plc_dtype), dtype=dtype)
         else:
-            result = Column(plc.unary.cast(self.obj, dtype))
-            if is_order_preserving_cast(self.obj.type(), dtype):
+            result = Column(plc.unary.cast(self.obj, plc_dtype), dtype=dtype)
+            if is_order_preserving_cast(self.obj.type(), plc_dtype):
                 return result.sorted_like(self)
             return result
 
