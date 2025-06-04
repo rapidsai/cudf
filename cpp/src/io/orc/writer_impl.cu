@@ -1146,7 +1146,17 @@ cudf::detail::hostdevice_vector<uint8_t> allocate_and_encode_blobs(
   // figure out the buffer size needed for protobuf format
   orc_init_statistics_buffersize(
     stats_merge_groups.device_ptr(), stat_chunks.data(), num_stat_blobs, stream);
-  auto max_blobs = stats_merge_groups.element(num_stat_blobs - 1, stream);
+
+  // get stats_merge_groups[num_stat_blobs - 1] via a host pinned bounce buffer
+  auto host_pinned_memory =
+    cudf::detail::make_pinned_vector_async<statistics_merge_group>(1, stream);
+  CUDF_CUDA_TRY(cudaMemcpyAsync(host_pinned_memory.data(),
+                                stats_merge_groups.device_ptr(num_stat_blobs - 1),
+                                sizeof(statistics_merge_group),
+                                cudaMemcpyDeviceToHost,
+                                stream.value()));
+  stream.synchronize();
+  auto max_blobs = host_pinned_memory.front();
 
   cudf::detail::hostdevice_vector<uint8_t> blobs(max_blobs.start_chunk + max_blobs.num_chunks,
                                                  stream);
