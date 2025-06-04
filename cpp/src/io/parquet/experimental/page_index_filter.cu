@@ -104,21 +104,24 @@ namespace {
   size_type schema_idx,
   rmm::cuda_stream_view stream)
 {
-  // Set initial capacity to at least two data pages per row group
-  auto const initial_capacity =
-    2 * std::accumulate(row_group_indices.begin(),
-                        row_group_indices.end(),
-                        size_t{0},
-                        [](auto sum, auto const& rg_indices) { return sum + rg_indices.size(); });
+  // Compute total number of row groups
+  auto const total_row_groups =
+    std::accumulate(row_group_indices.begin(),
+                    row_group_indices.end(),
+                    size_t{0},
+                    [](auto sum, auto const& rg_indices) { return sum + rg_indices.size(); });
 
-  // Vector to store how many rows are present in each page
-  auto page_row_counts = cudf::detail::make_empty_host_vector<size_type>(initial_capacity, stream);
-  // Vector to store the cumulative number of rows in each page
+  // Vector to store how many rows are present in each page - set initial capacity to two data pages
+  // per row group
+  auto page_row_counts =
+    cudf::detail::make_empty_host_vector<size_type>(2 * total_row_groups, stream);
+  // Vector to store the cumulative number of rows in each page - - set initial capacity to two data
+  // pages per row group
   auto page_row_offsets =
-    cudf::detail::make_empty_host_vector<size_type>(initial_capacity + 1, stream);
+    cudf::detail::make_empty_host_vector<size_type>((2 * total_row_groups) + 1, stream);
   // Vector to store the cumulative number of pages in each column chunk
   auto col_chunk_page_offsets =
-    cudf::detail::make_empty_host_vector<size_type>(initial_capacity + 1, stream);
+    cudf::detail::make_empty_host_vector<size_type>(total_row_groups + 1, stream);
 
   page_row_offsets.push_back(0);
   col_chunk_page_offsets.push_back(0);
@@ -256,7 +259,6 @@ struct page_stats_caster : public stats_caster_base {
    * @param page_nullmask Nullmask of the input page-level column
    * @param page_indices Device vector containing the page index for each row index
    * @param page_row_offsets Host vector row offsets of each page
-   * @param total_pages Total number of pages
    * @param dtype The data type of the column
    * @param stream CUDA stream
    * @param mr Device memory resource
@@ -269,11 +271,13 @@ struct page_stats_caster : public stats_caster_base {
     bitmask_type const* page_nullmask,
     cudf::device_span<size_type const> page_indices,
     cudf::host_span<size_type const> page_row_offsets,
-    size_type total_pages,
     cudf::data_type dtype,
     rmm::cuda_stream_view stream,
     rmm::device_async_resource_ref mr) const
   {
+    // Total number of pages in the column
+    size_type const total_pages = page_row_offsets.size() - 1;
+
     // Buffer for output data
     auto output_data = rmm::device_buffer(cudf::size_of(dtype) * total_rows, stream, mr);
 
@@ -310,7 +314,6 @@ struct page_stats_caster : public stats_caster_base {
    * @param host_nullmask Nullmask of the input page-level host column
    * @param page_indices Device vector containing the page index for each row index
    * @param page_row_offsets Host vector row offsets of each page
-   * @param total_pages Total number of pages
    * @param stream CUDA stream
    * @param mr Device memory resource
    *
@@ -321,10 +324,12 @@ struct page_stats_caster : public stats_caster_base {
                                  bitmask_type const* host_page_nullmask,
                                  cudf::device_span<size_type const> page_indices,
                                  cudf::host_span<size_type const> page_row_offsets,
-                                 size_type total_pages,
                                  rmm::cuda_stream_view stream,
                                  rmm::device_async_resource_ref mr) const
   {
+    // Total number of pages in the column
+    size_type const total_pages = page_row_offsets.size() - 1;
+
     // Construct device vectors containing page-level (input) string data, sizes, and offsets.
     auto [page_str_chars, page_str_sizes, page_str_offsets] = [&]() {
       auto const total_char_count = std::accumulate(
@@ -519,7 +524,6 @@ struct page_stats_caster : public stats_caster_base {
                                                                   min.null_mask.data(),
                                                                   page_indices,
                                                                   page_row_offsets,
-                                                                  total_pages,
                                                                   dtype,
                                                                   stream,
                                                                   mr);
@@ -527,7 +531,6 @@ struct page_stats_caster : public stats_caster_base {
                                                                   min.null_mask.data(),
                                                                   page_indices,
                                                                   page_row_offsets,
-                                                                  total_pages,
                                                                   dtype,
                                                                   stream,
                                                                   mr);
@@ -548,9 +551,9 @@ struct page_stats_caster : public stats_caster_base {
       // directly and gather string chars using a batched memcpy.
       else {
         auto [min_data, min_offsets, min_nullmask] = build_string_data_and_nullmask(
-          min.val, min.null_mask.data(), page_indices, page_row_offsets, total_pages, stream, mr);
+          min.val, min.null_mask.data(), page_indices, page_row_offsets, stream, mr);
         auto [max_data, max_offsets, max_nullmask] = build_string_data_and_nullmask(
-          max.val, max.null_mask.data(), page_indices, page_row_offsets, total_pages, stream, mr);
+          max.val, max.null_mask.data(), page_indices, page_row_offsets, stream, mr);
 
         // Count nulls in min and max columns
         auto const min_nulls = cudf::detail::null_count(
