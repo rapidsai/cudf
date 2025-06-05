@@ -751,9 +751,7 @@ std::vector<thrust::host_vector<bool>> aggregate_reader_metadata::compute_data_p
                       }));
                   });
 
-    // Synchronize the streams
-    cudf::detail::join_streams(streams, stream);
-
+    // Collect results from all tasks
     std::for_each(page_row_counts_and_offsets_tasks.begin(),
                   page_row_counts_and_offsets_tasks.end(),
                   [&](auto& task) {
@@ -843,9 +841,7 @@ std::vector<thrust::host_vector<bool>> aggregate_reader_metadata::compute_data_p
       }));
     });
 
-  // Synchronize the streams
-  cudf::detail::join_streams(streams, stream);
-
+  // Collect results from all tasks
   std::transform(data_page_mask_tasks.begin(),
                  data_page_mask_tasks.end(),
                  std::back_inserter(data_page_mask),
