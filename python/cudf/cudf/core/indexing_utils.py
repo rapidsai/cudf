@@ -14,6 +14,7 @@ from cudf.core._internals import copying, sorting
 from cudf.core.column.column import as_column
 from cudf.core.copy_types import BooleanMask, GatherMap
 from cudf.core.dtypes import CategoricalDtype
+from cudf.core.index import Index
 from cudf.core.multiindex import MultiIndex
 
 if TYPE_CHECKING:
@@ -22,7 +23,6 @@ if TYPE_CHECKING:
     from cudf.core.column.column import ColumnBase
     from cudf.core.column_accessor import ColumnAccessor
     from cudf.core.dataframe import DataFrame
-    from cudf.core.index import Index
     from cudf.core.series import Series
 
 
@@ -93,8 +93,13 @@ def destructure_dataframe_indexer(
     get_ca: str,
 ):
     rows, cols = destructure(key, frame)
+
+    from cudf.core.series import Series
+
     if cols is Ellipsis:
         cols = slice(None)
+    elif isinstance(cols, (Index, Series)):
+        cols = cols.to_pandas()
     try:
         ca = getattr(frame._data, get_ca)(cols)
     except TypeError as e:
