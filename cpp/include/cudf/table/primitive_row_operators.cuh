@@ -61,19 +61,32 @@ class element_equality_comparator {
    * @return True if lhs and rhs element are equal
    */
   template <typename Element, CUDF_ENABLE_IF(cudf::is_equality_comparable<Element, Element>())>
-  __device__ bool operator()(column_device_view const& lhs,
+  __device__ bool operator()(cudf::nullate::DYNAMIC const& has_nulls,
+                             column_device_view const& lhs,
                              column_device_view const& rhs,
+                             null_equality const& nulls_are_equal,
                              size_type lhs_element_index,
                              size_type rhs_element_index) const
   {
+    if (has_nulls) {
+      bool const lhs_is_null{lhs.is_null(lhs_element_index)};
+      bool const rhs_is_null{rhs.is_null(rhs_element_index)};
+      if (lhs_is_null and rhs_is_null) {
+        return nulls_are_equal == null_equality::EQUAL;
+      } else if (lhs_is_null != rhs_is_null) {
+        return false;
+      }
+    }
     return cudf::equality_compare(lhs.element<Element>(lhs_element_index),
                                   rhs.element<Element>(rhs_element_index));
   }
 
   // @cond
   template <typename Element, CUDF_ENABLE_IF(not cudf::is_equality_comparable<Element, Element>())>
-  __device__ bool operator()(column_device_view const&,
+  __device__ bool operator()(cudf::nullate::DYNAMIC const&,
                              column_device_view const&,
+                             column_device_view const&,
+                             null_equality const&,
                              size_type,
                              size_type) const
   {
@@ -114,21 +127,18 @@ class row_equality_comparator {
    */
   __device__ bool operator()(size_type lhs_row_index, size_type rhs_row_index) const
   {
-    if (_has_nulls) {
-      bool const lhs_is_null{_lhs.column(0).is_null(lhs_row_index)};
-      bool const rhs_is_null{_rhs.column(0).is_null(rhs_row_index)};
-      if (lhs_is_null and rhs_is_null) {
-        return _nulls_are_equal == null_equality::EQUAL;
-      } else if (lhs_is_null != rhs_is_null) {
-        return false;
-      }
+    bool equal = true;
+    for (size_type i = 0; i < _lhs.num_columns(); ++i) {
+      equal &= cudf::type_dispatcher<dispatch_primitive_type>(_lhs.column(i).type(),
+                                                              element_equality_comparator{},
+                                                              _has_nulls,
+                                                              _lhs.column(i),
+                                                              _rhs.column(i),
+                                                              _nulls_are_equal,
+                                                              lhs_row_index,
+                                                              rhs_row_index);
     }
-    return cudf::type_dispatcher<dispatch_primitive_type>(_lhs.begin()->type(),
-                                                          element_equality_comparator{},
-                                                          _lhs.column(0),
-                                                          _rhs.column(0),
-                                                          lhs_row_index,
-                                                          rhs_row_index);
+    return equal;
   }
 
  private:
@@ -156,16 +166,23 @@ class element_hasher {
    * @return The hash value of the given element
    */
   template <typename T, CUDF_ENABLE_IF(column_device_view::has_element_accessor<T>())>
-  __device__ hash_value_type operator()(hash_value_type seed,
+  __device__ hash_value_type operator()(cudf::nullate::DYNAMIC const& has_nulls,
+                                        hash_value_type seed,
                                         column_device_view const& col,
                                         size_type row_index) const
   {
+    if (has_nulls && col.is_null(row_index)) {
+      return cuda::std::numeric_limits<hash_value_type>::max();
+    }
     return Hash<T>{seed}(col.element<T>(row_index));
   }
 
   // @cond
   template <typename T, CUDF_ENABLE_IF(not column_device_view::has_element_accessor<T>())>
-  __device__ hash_value_type operator()(hash_value_type, column_device_view const&, size_type) const
+  __device__ hash_value_type operator()(cudf::nullate::DYNAMIC const&,
+                                        hash_value_type,
+                                        column_device_view const&,
+                                        size_type) const
   {
     CUDF_UNREACHABLE("Unsupported type in hash.");
   }
@@ -219,8 +236,15 @@ class row_hasher {
     if (_has_nulls && _table.column(0).is_null(row_index)) {
       return cuda::std::numeric_limits<hash_value_type>::max();
     }
-    return cudf::type_dispatcher<dispatch_primitive_type>(
-      _table.column(0).type(), element_hasher<Hash>{}, _seed, _table.column(0), row_index);
+    auto hash = hash_value_type{0};
+
+    for (size_type i = 0; i < _table.num_columns(); ++i) {
+      hash = cudf::hashing::detail::hash_combine(
+        hash,
+        cudf::type_dispatcher<dispatch_primitive_type>(
+          _table.column(i).type(), element_hasher<Hash>{}, _seed, _table.column(i), row_index));
+    }
+    return hash;
   }
 
  private:
