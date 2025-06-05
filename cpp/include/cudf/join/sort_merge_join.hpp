@@ -82,17 +82,74 @@ class sort_merge_join {
              rmm::cuda_stream_view stream      = cudf::get_default_stream(),
              rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
-  std::unique_ptr<rmm::device_uvector<size_type>> inner_join_size_per_row(table_view const &left,
-             sorted is_left_sorted,
-             rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-             rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+  /**
+   * @brief Returns a vector containing the number of matching rows in the right table
+   * for each row in the left table.
+   *
+   * This method computes, for each row in the left table, how many matching rows exist in
+   * the right table according to inner join semantics. This is useful for determining the
+   * output size requirements or identifying rows with multiple matches without performing
+   * the inner join.
+   *
+   * @param left The left table to join with the pre-processed right table
+   * @param is_left_sorted Enum to indicate if left table is pre-sorted
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource used to allocate the result device memory
+   *
+   * @return A device vector containing the count of matching rows in the right table
+   * for each row in the left table. The vector's size equals the number of rows in
+   * the left table.
+   */
+  std::unique_ptr<rmm::device_uvector<size_type>> inner_join_size_per_row(
+    table_view const& left,
+    sorted is_left_sorted,
+    rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
+  /**
+   * @brief Returns the row indices that can be used to construct the result of performing
+   * a partitioned inner join between a specific range of rows from the left table and the
+   * right table.
+   *
+   * This function should be called after `inner_join_size_per_row` to perform a partitioned
+   * join operation. The caller typically first uses `inner_join_size_per_row` to determine
+   * the join size for each row in the left table, then partitions the left table based on
+   * resource constraints, and finally calls this function for each partition.
+   *
+   * This function assumes that the left table has already been processed by a previous
+   * call to `inner_join_size_per_row` using the same `sort_merge_join` object.
+   *
+   * Example:
+   * ```
+   * // After determining join sizes
+   * auto join_sizes = join_obj.inner_join_size_per_row(left_table, sorted::NO);
+   *
+   * // Determine partitions based on resource constraints
+   * std::vector<std::pair<size_t, size_t>> partitions = compute_partitions(*join_sizes);
+   *
+   * // Process each partition
+   * for (auto [start, end] : partitions) {
+   *   auto [left_indices, right_indices] = join_obj.partitioned_inner_join(start, end);
+   *   // Use left_indices and right_indices to construct join result for this partition
+   * }
+   * ```
+   * @param left_partition_begin The starting row index of the current left table partition
+   * @param left_partition_end The ending row index (exclusive) of the current left table partition
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource used to allocate the join indices' device memory
+   *
+   * @return A pair of device vectors [`left_indices`, `right_indices`] that can be used to
+   * construct the result of performing an inner join between the right table and the specified
+   * partition of the left table. The left_indices will be relative to the overall left table,
+   * not just the partition.
+   */
   std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
             std::unique_ptr<rmm::device_uvector<size_type>>>
-  partitioned_inner_join(size_type left_partition_begin,
-             size_type left_partition_end,
-             rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-             rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+  partitioned_inner_join(
+    size_type left_partition_begin,
+    size_type left_partition_end,
+    rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
  private:
   /**

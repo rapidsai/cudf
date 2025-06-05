@@ -124,9 +124,10 @@ std::vector<cudf::size_type> inner_join_size_per_row(
   // TODO: implement for HASH algo
   auto left_selected  = left_input.select(left_on);
   auto right_selected = right_input.select(right_on);
-  auto stream = cudf::get_default_stream();
+  auto stream         = cudf::get_default_stream();
   cudf::sort_merge_join obj(right_selected, cudf::sorted::NO, compare_nulls, stream);
-  auto per_row_counts = obj.inner_join_size_per_row(left_selected, cudf::sorted::NO, stream, cudf::get_current_device_resource_ref());
+  auto per_row_counts = obj.inner_join_size_per_row(
+    left_selected, cudf::sorted::NO, stream, cudf::get_current_device_resource_ref());
 
   return cudf::detail::make_std_vector<cudf::size_type>(*per_row_counts, stream);
 }
@@ -855,13 +856,13 @@ TEST_P(JoinParameterizedTest, InnerJoinSizePerRowNoNulls)
   for (const auto eq : {cudf::null_equality::EQUAL, cudf::null_equality::UNEQUAL}) {
     // single column
     {
-      auto size_per_row            = inner_join_size_per_row(t0, t1, {0}, {0}, eq, algo);
-      auto expected = std::vector<cudf::size_type>{1, 0, 2, 1, 2};
+      auto size_per_row = inner_join_size_per_row(t0, t1, {0}, {0}, eq, algo);
+      auto expected     = std::vector<cudf::size_type>{1, 0, 2, 1, 2};
       EXPECT_EQ(size_per_row, expected);
     }
     // multi column
     {
-      auto result            = inner_join_size_per_row(t0, t1, {0, 1}, {0, 1}, eq, algo);
+      auto result   = inner_join_size_per_row(t0, t1, {0, 1}, {0, 1}, eq, algo);
       auto expected = std::vector<cudf::size_type>{1, 0, 1, 0, 1};
       EXPECT_EQ(result, expected);
     }
@@ -892,25 +893,28 @@ TEST_P(JoinParameterizedTest, InnerJoinSizePerRowWithNulls)
 
   // single column, null_equality::EQUAL
   {
-    auto size_per_row            = inner_join_size_per_row(t0, t1, {0}, {0}, cudf::null_equality::EQUAL, algo);
-    auto expected = std::vector<cudf::size_type>{1, 0, 2, 1, 2};
+    auto size_per_row = inner_join_size_per_row(t0, t1, {0}, {0}, cudf::null_equality::EQUAL, algo);
+    auto expected     = std::vector<cudf::size_type>{1, 0, 2, 1, 2};
     EXPECT_EQ(size_per_row, expected);
   }
   // multi column, null_equality::EQUAL
   {
-    auto size_per_row            = inner_join_size_per_row(t0, t1, {0, 1}, {0, 1}, cudf::null_equality::EQUAL, algo);
+    auto size_per_row =
+      inner_join_size_per_row(t0, t1, {0, 1}, {0, 1}, cudf::null_equality::EQUAL, algo);
     auto expected = std::vector<cudf::size_type>{1, 0, 1, 0, 0};
     EXPECT_EQ(size_per_row, expected);
   }
   // single column, null_equality::UNEQUAL
   {
-    auto size_per_row            = inner_join_size_per_row(t0, t1, {0}, {0}, cudf::null_equality::UNEQUAL, algo);
+    auto size_per_row =
+      inner_join_size_per_row(t0, t1, {0}, {0}, cudf::null_equality::UNEQUAL, algo);
     auto expected = std::vector<cudf::size_type>{1, 0, 2, 1, 2};
     EXPECT_EQ(size_per_row, expected);
   }
   // multi column, null_equality::UNEQUAL
   {
-    auto size_per_row            = inner_join_size_per_row(t0, t1, {0, 1}, {0, 1}, cudf::null_equality::UNEQUAL, algo);
+    auto size_per_row =
+      inner_join_size_per_row(t0, t1, {0, 1}, {0, 1}, cudf::null_equality::UNEQUAL, algo);
     auto expected = std::vector<cudf::size_type>{1, 0, 0, 0, 0};
     EXPECT_EQ(size_per_row, expected);
   }
@@ -937,19 +941,22 @@ TEST_F(JoinTest, PartitionedInnerJoinWithNulls)
   Table t0(std::move(cols0));
   Table t1(std::move(cols1));
 
-  auto left_on = std::vector<cudf::size_type>({0, 1});
-  auto right_on = std::vector<cudf::size_type>({0, 1});
+  auto left_on       = std::vector<cudf::size_type>({0, 1});
+  auto right_on      = std::vector<cudf::size_type>({0, 1});
   auto compare_nulls = cudf::null_equality::EQUAL;
-  auto expected_result            = inner_join(t0, t1, left_on, right_on, compare_nulls, algorithm::SORT_MERGE);
+  auto expected_result =
+    inner_join(t0, t1, left_on, right_on, compare_nulls, algorithm::SORT_MERGE);
   auto expected_result_sort_order = cudf::sorted_order(expected_result->view());
-  auto expected_sorted_result     = cudf::gather(expected_result->view(), *expected_result_sort_order);
+  auto expected_sorted_result = cudf::gather(expected_result->view(), *expected_result_sort_order);
 
   auto stream = cudf::get_default_stream();
   cudf::sort_merge_join obj(t1.select(right_on), cudf::sorted::NO, compare_nulls, stream);
-  obj.inner_join_size_per_row(t0.select(left_on), cudf::sorted::NO, stream, cudf::get_current_device_resource_ref());
-  auto join_and_gather = [&t0, &t1, &obj, stream](cudf::size_type partition_begin, cudf::size_type partition_end) {
-    auto const [left_join_indices, right_join_indices] =
-      obj.partitioned_inner_join(partition_begin, partition_end, stream, cudf::get_current_device_resource_ref());
+  obj.inner_join_size_per_row(
+    t0.select(left_on), cudf::sorted::NO, stream, cudf::get_current_device_resource_ref());
+  auto join_and_gather = [&t0, &t1, &obj, stream](cudf::size_type partition_begin,
+                                                  cudf::size_type partition_end) {
+    auto const [left_join_indices, right_join_indices] = obj.partitioned_inner_join(
+      partition_begin, partition_end, stream, cudf::get_current_device_resource_ref());
 
     auto left_indices_span  = cudf::device_span<cudf::size_type const>{*left_join_indices};
     auto right_indices_span = cudf::device_span<cudf::size_type const>{*right_join_indices};
@@ -968,16 +975,18 @@ TEST_F(JoinTest, PartitionedInnerJoinWithNulls)
     return std::make_unique<cudf::table>(std::move(joined_cols));
   };
   std::vector<std::unique_ptr<cudf::table>> partial_tables;
-  for(cudf::size_type i = 0; i < t0.num_rows(); i++) {
-    partial_tables.push_back(join_and_gather(i, i+1));
+  for (cudf::size_type i = 0; i < t0.num_rows(); i++) {
+    partial_tables.push_back(join_and_gather(i, i + 1));
   }
   std::vector<cudf::table_view> partial_table_views;
-  for(auto const &tbl : partial_tables) {
+  for (auto const& tbl : partial_tables) {
     partial_table_views.push_back(tbl->view());
   }
-  auto concatenated_result = cudf::concatenate(partial_table_views, stream, cudf::get_current_device_resource_ref());
+  auto concatenated_result =
+    cudf::concatenate(partial_table_views, stream, cudf::get_current_device_resource_ref());
   auto concatenated_result_sort_order = cudf::sorted_order(concatenated_result->view());
-  auto concatenated_sorted_result     = cudf::gather(concatenated_result->view(), *concatenated_result_sort_order);
+  auto concatenated_sorted_result =
+    cudf::gather(concatenated_result->view(), *concatenated_result_sort_order);
 
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*expected_sorted_result, *concatenated_sorted_result);
 }
