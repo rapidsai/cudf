@@ -92,6 +92,7 @@ from cudf.core.resample import DataFrameResampler
 from cudf.core.series import Series
 from cudf.core.udf.row_function import DataFrameApplyKernel
 from cudf.errors import MixedTypeError
+from cudf.options import get_option
 from cudf.utils import applyutils, docutils, ioutils, queryutils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
@@ -942,7 +943,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         if copy is not None:
             raise NotImplementedError("copy is not currently implemented.")
         if nan_as_null is no_default:
-            nan_as_null = not cudf.get_option("mode.pandas_compatible")
+            nan_as_null = not get_option("mode.pandas_compatible")
 
         if columns is not None:
             if isinstance(columns, (Index, Series, cupy.ndarray)):
@@ -1336,6 +1337,8 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 return result
             except TypeError:
                 # Couldn't find a common type, just return a 1xN dataframe.
+                if get_option("mode.pandas_compatible"):
+                    raise
                 return result
         elif isinstance(spec, indexing_utils.EmptyIndexer):
             return frame._empty_like(keep_index=True)
@@ -3349,7 +3352,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 "allow_duplicates is currently not implemented."
             )
         if nan_as_null is no_default:
-            nan_as_null = not cudf.get_option("mode.pandas_compatible")
+            nan_as_null = not get_option("mode.pandas_compatible")
         return self._insert(
             loc=loc,
             name=column,
@@ -5632,7 +5635,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         """
         if nan_as_null is no_default:
             nan_as_null = (
-                False if cudf.get_option("mode.pandas_compatible") else None
+                False if get_option("mode.pandas_compatible") else None
             )
 
         if isinstance(dataframe, pd.DataFrame):
@@ -6511,7 +6514,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                         col.null_count
                         + (
                             col.nan_count
-                            if cudf.get_option("mode.pandas_compatible")
+                            if get_option("mode.pandas_compatible")
                             else 0
                         )
                     )
@@ -8541,9 +8544,7 @@ def from_pandas(obj, nan_as_null=no_default):
     <class 'pandas.core.indexes.multi.MultiIndex'>
     """
     if nan_as_null is no_default:
-        nan_as_null = (
-            False if cudf.get_option("mode.pandas_compatible") else None
-        )
+        nan_as_null = False if get_option("mode.pandas_compatible") else None
 
     if isinstance(obj, pd.DataFrame):
         return DataFrame.from_pandas(obj, nan_as_null=nan_as_null)
