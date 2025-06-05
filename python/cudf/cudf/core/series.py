@@ -50,7 +50,6 @@ from cudf.core.index import (
 from cudf.core.indexed_frame import (
     IndexedFrame,
     _FrameIndexer,
-    _get_label_range_or_mask,
     _indices_from_labels,
     doc_reset_index_template,
 )
@@ -246,6 +245,15 @@ class _SeriesLocIndexer(_FrameIndexer):
 
     @_performance_tracking
     def __getitem__(self, arg: Any) -> ScalarLike | DataFrameOrSeries:
+        if not isinstance(self._frame.index, cudf.MultiIndex):
+            indexing_spec = indexing_utils.parse_row_loc_indexer(
+                indexing_utils.destructure_series_loc_indexer(
+                    arg, self._frame
+                ),
+                self._frame.index,
+            )
+            return self._frame._getitem_preprocessed(indexing_spec)
+
         if isinstance(arg, pd.MultiIndex):
             arg = cudf.from_pandas(arg)
 
@@ -354,9 +362,15 @@ class _SeriesLocIndexer(_FrameIndexer):
                 raise KeyError("Label scalar is out of bounds")
 
         elif isinstance(arg, slice):
-            return _get_label_range_or_mask(
-                self._frame.index, arg.start, arg.stop, arg.step
+            indexer = indexing_utils.find_label_range_or_mask(
+                arg, self._frame.index
             )
+            if isinstance(indexer, indexing_utils.EmptyIndexer):
+                return slice(0, 0, 1)
+            elif isinstance(indexer, indexing_utils.SliceIndexer):
+                return indexer.key
+            else:
+                return indexer.key.column
         elif isinstance(arg, (cudf.MultiIndex, pd.MultiIndex)):
             if isinstance(arg, pd.MultiIndex):
                 arg = cudf.MultiIndex.from_pandas(arg)
@@ -1229,6 +1243,15 @@ class Series(SingleColumnFrame, IndexedFrame):
     @_performance_tracking
     def __getitem__(self, arg):
         if isinstance(arg, slice):
+            return self.iloc[arg]
+        elif is_integer(arg) and self.index.dtype.kind not in {"i", "u", "f"}:
+            warnings.warn(
+                "Series.__getitem__ treating keys as positions is deprecated "
+                "In a future version, integer keys will always be treated as labels "
+                "(consistent with DataFrame behavior) To access a value by position, "
+                "use `ser.iloc[pos]`",
+                FutureWarning,
+            )
             return self.iloc[arg]
         else:
             return self.loc[arg]
