@@ -185,13 +185,12 @@ std::unique_ptr<column> make_column(column_buffer_base<string_policy>& buffer,
 {
   std::function<std::unique_ptr<column>(column_buffer_base<string_policy> & buffer,
                                         column_name_info * schema_info,
-                                        std::optional<reader_column_schema> const& schema)>
-    construct_column;
-  construct_column =
-    [&construct_column, stream](
-      column_buffer_base<string_policy>& buffer,
-      column_name_info* schema_info,
-      std::optional<reader_column_schema> const& schema) -> std::unique_ptr<column> {
+                                        std::optional<reader_column_schema> const& schema)> const
+    construct_column =
+      [&construct_column, stream](
+        column_buffer_base<string_policy>& buffer,
+        column_name_info* schema_info,
+        std::optional<reader_column_schema> const& schema) -> std::unique_ptr<column> {
     if (schema_info != nullptr) {
       schema_info->name        = buffer.name;
       schema_info->is_nullable = buffer.is_nullable;
@@ -337,7 +336,7 @@ std::unique_ptr<column> make_column(column_buffer_base<string_policy>& buffer,
     }
   }
 
-  return std::move(col);
+  return col;
 }
 
 /**
