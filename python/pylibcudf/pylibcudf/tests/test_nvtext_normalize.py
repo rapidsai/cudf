@@ -20,21 +20,21 @@ def norm_chars_input_data():
 
 
 def test_normalize_spaces(norm_spaces_input_data):
-    result = plc.nvtext.normalize.normalize_spaces(
-        plc.interop.from_arrow(norm_spaces_input_data)
+    got = plc.nvtext.normalize.normalize_spaces(
+        plc.Column(norm_spaces_input_data)
     )
-    expected = pa.array(["a b", "c d", "e f"])
-    assert_column_eq(result, expected)
+    expect = pa.array(["a b", "c d", "e f"])
+    assert_column_eq(expect, got)
 
 
 @pytest.mark.parametrize("do_lower", [True, False])
 def test_normalize_characters(norm_chars_input_data, do_lower):
-    result = plc.nvtext.normalize.characters_normalize(
-        plc.interop.from_arrow(norm_chars_input_data),
+    got = plc.nvtext.normalize.characters_normalize(
+        plc.Column(norm_chars_input_data),
         do_lower,
     )
     if do_lower:
-        expected = pa.array(
+        expect = pa.array(
             [
                 "eaio eaio",
                 "acenu",
@@ -45,7 +45,7 @@ def test_normalize_characters(norm_chars_input_data, do_lower):
             ]
         )
     else:
-        expected = pa.array(
+        expect = pa.array(
             [
                 "éâîô eaio",
                 "ĂĆĖÑÜ",
@@ -55,20 +55,20 @@ def test_normalize_characters(norm_chars_input_data, do_lower):
                 " [ pad ] ",
             ]
         )
-    assert_column_eq(result, expected)
+    assert_column_eq(expect, got)
 
 
 @pytest.mark.parametrize("do_lower", [True, False])
 def test_normalizer(norm_chars_input_data, do_lower):
-    result = plc.nvtext.normalize.normalize_characters(
-        plc.interop.from_arrow(norm_chars_input_data),
+    got = plc.nvtext.normalize.normalize_characters(
+        plc.Column(norm_chars_input_data),
         plc.nvtext.normalize.CharacterNormalizer(
             do_lower,
             plc.column_factories.make_empty_column(plc.types.TypeId.STRING),
         ),
     )
     if do_lower:
-        expected = pa.array(
+        expect = pa.array(
             [
                 "eaio eaio",
                 "acenu",
@@ -79,7 +79,7 @@ def test_normalizer(norm_chars_input_data, do_lower):
             ]
         )
     else:
-        expected = pa.array(
+        expect = pa.array(
             [
                 "éâîô eaio",
                 "ĂĆĖÑÜ",
@@ -89,20 +89,20 @@ def test_normalizer(norm_chars_input_data, do_lower):
                 " [ pad ] ",
             ]
         )
-    assert_column_eq(result, expected)
+    assert_column_eq(expect, got)
 
 
 @pytest.mark.parametrize("do_lower", [True, False])
 def test_normalizer_with_special_tokens(norm_chars_input_data, do_lower):
     special_tokens = pa.array(["[pad]"])
-    result = plc.nvtext.normalize.normalize_characters(
-        plc.interop.from_arrow(norm_chars_input_data),
+    got = plc.nvtext.normalize.normalize_characters(
+        plc.Column(norm_chars_input_data),
         plc.nvtext.normalize.CharacterNormalizer(
-            do_lower, plc.interop.from_arrow(special_tokens)
+            do_lower, plc.Column(special_tokens)
         ),
     )
     if do_lower:
-        expected = pa.array(
+        expect = pa.array(
             [
                 "eaio eaio",
                 "acenu",
@@ -113,7 +113,7 @@ def test_normalizer_with_special_tokens(norm_chars_input_data, do_lower):
             ]
         )
     else:
-        expected = pa.array(
+        expect = pa.array(
             [
                 "éâîô eaio",
                 "ĂĆĖÑÜ",
@@ -123,4 +123,4 @@ def test_normalizer_with_special_tokens(norm_chars_input_data, do_lower):
                 " [pad] ",
             ]
         )
-    assert_column_eq(result, expected)
+    assert_column_eq(expect, got)

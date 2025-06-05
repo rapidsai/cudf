@@ -125,7 +125,7 @@ rmm::device_buffer decompress_stripe_data(
                                  decompressor.GetBlockSize(),
                                  decompressor.GetLog2MaxCompressionRatio(),
                                  stream);
-    compinfo.device_to_host_sync(stream);
+    compinfo.device_to_host(stream);
 
     for (std::size_t i = 0; i < compinfo.size(); ++i) {
       num_compressed_blocks += compinfo[i].num_compressed_blocks;
@@ -224,7 +224,7 @@ rmm::device_buffer decompress_stripe_data(
   any_block_failure.device_to_host_async(stream);
 
   post_decompression_reassemble(compinfo.device_ptr(), compinfo.size(), stream);
-  compinfo.device_to_host_sync(stream);  // This also sync stream for `any_block_failure`.
+  compinfo.device_to_host(stream);  // This also sync stream for `any_block_failure`.
 
   // We can check on host after stream synchronize
   CUDF_EXPECTS(not any_block_failure[0], "Error during decompression");
@@ -289,7 +289,7 @@ void update_null_mask(cudf::detail::hostdevice_2dvector<column_desc>& chunks,
   for (std::size_t col_idx = 0; col_idx < num_columns; ++col_idx) {
     if (chunks[0][col_idx].parent_validity_info.valid_map_base != nullptr) {
       if (not is_mask_updated) {
-        chunks.device_to_host_sync(stream);
+        chunks.device_to_host(stream);
         is_mask_updated = true;
       }
 
@@ -344,7 +344,7 @@ void update_null_mask(cudf::detail::hostdevice_2dvector<column_desc>& chunks,
         chunk.valid_map_base = out_buffers[col_idx].null_mask();
       }
     }
-    chunks.host_to_device_sync(stream);
+    chunks.host_to_device(stream);
   }
 }
 
@@ -657,7 +657,7 @@ std::vector<range> find_table_splits(table_view const& input,
                          segmented_sizes.d_end(),
                          segmented_sizes.d_begin(),
                          cumulative_size_plus{});
-  segmented_sizes.device_to_host_sync(stream);
+  segmented_sizes.device_to_host(stream);
 
   return find_splits<cumulative_size>(segmented_sizes, input.num_rows(), size_limit);
 }
@@ -972,7 +972,7 @@ void reader_impl::decompress_and_decode_stripes(read_mode mode)
       scan_null_counts(
         chunks, null_count_prefix_sums.data() + num_processed_lvl_columns * stripe_count, _stream);
 
-      row_groups.device_to_host_sync(_stream);
+      row_groups.device_to_host(_stream);
       aggregate_child_meta(
         level, _selected_columns, chunks, row_groups, nested_cols, _out_buffers[level], col_meta);
 

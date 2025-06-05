@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,6 +15,8 @@
  */
 
 #include <benchmarks/join/join_common.hpp>
+
+#include <cudf/join/mixed_join.hpp>
 
 template <typename Key, bool Nullable>
 void nvbench_mixed_inner_join(nvbench::state& state,

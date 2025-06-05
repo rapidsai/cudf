@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,8 +31,8 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
+#include <cuda/std/iterator>
 #include <thrust/binary_search.h>
-#include <thrust/distance.h>
 #include <thrust/execution_policy.h>
 #include <thrust/iterator/transform_iterator.h>
 
@@ -186,11 +186,11 @@ CUDF_KERNEL void gather_chars_fn_char_parallel(StringIterator strings_begin,
        out_ibyte += blockDim.x) {
     // binary search for the string index corresponding to out_ibyte
     auto const string_idx_iter =
-      thrust::prev(thrust::upper_bound(thrust::seq,
-                                       out_offsets_threadblock,
-                                       out_offsets_threadblock + strings_current_threadblock,
-                                       out_ibyte));
-    size_type string_idx = thrust::distance(out_offsets_threadblock, string_idx_iter);
+      cuda::std::prev(thrust::upper_bound(thrust::seq,
+                                          out_offsets_threadblock,
+                                          out_offsets_threadblock + strings_current_threadblock,
+                                          out_ibyte));
+    size_type string_idx = cuda::std::distance(out_offsets_threadblock, string_idx_iter);
 
     // calculate which character to load within the string
     auto const icharacter = out_ibyte - out_offsets_threadblock[string_idx];

@@ -2,6 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
+import os
+
 import pytest
 
 DISTRIBUTED_CLUSTER_KEY = pytest.StashKey[dict]()
@@ -16,15 +18,17 @@ def pytest_addoption(parser):
     parser.addoption(
         "--executor",
         action="store",
-        default="pylibcudf",
-        choices=("pylibcudf", "dask-experimental"),
+        default="in-memory",
+        choices=("in-memory", "streaming"),
         help="Executor to use for GPUEngine.",
     )
 
     parser.addoption(
-        "--dask-cluster",
-        action="store_true",
-        help="Executor to use for GPUEngine.",
+        "--scheduler",
+        action="store",
+        default="synchronous",
+        choices=("synchronous", "distributed"),
+        help="Scheduler to use for 'streaming' executor.",
     )
 
 
@@ -32,29 +36,30 @@ def pytest_configure(config):
     import cudf_polars.testing.asserts
 
     if (
-        config.getoption("--dask-cluster")
-        and config.getoption("--executor") != "dask-experimental"
+        config.getoption("--scheduler") == "distributed"
+        and config.getoption("--executor") != "streaming"
     ):
-        raise pytest.UsageError(
-            "--dask-cluster requires --executor='dask-experimental'"
-        )
+        raise pytest.UsageError("Distributed scheduler requires --executor='streaming'")
 
-    cudf_polars.testing.asserts.Executor = config.getoption("--executor")
+    cudf_polars.testing.asserts.DEFAULT_EXECUTOR = config.getoption("--executor")
+    cudf_polars.testing.asserts.DEFAULT_SCHEDULER = config.getoption("--scheduler")
 
 
 def pytest_sessionstart(session):
     if (
-        session.config.getoption("--dask-cluster")
-        and session.config.getoption("--executor") == "dask-experimental"
+        session.config.getoption("--scheduler") == "distributed"
+        and session.config.getoption("--executor") == "streaming"
     ):
         from dask import config
-        from dask.distributed import Client, LocalCluster
+        from dask.distributed import Client
+        from dask_cuda import LocalCUDACluster
 
         # Avoid "Sending large graph of size ..." warnings
         # (We expect these for tests using literal/random arrays)
         config.set({"distributed.admin.large-graph-warning-threshold": "20MB"})
 
-        cluster = LocalCluster()
+        n_workers = int(os.environ.get("CUDF_POLARS_NUM_WORKERS", "1"))
+        cluster = LocalCUDACluster(n_workers=n_workers)
         client = Client(cluster)
         session.stash[DISTRIBUTED_CLUSTER_KEY] = {"cluster": cluster, "client": client}
 

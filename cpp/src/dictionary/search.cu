@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,8 +28,8 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/std/iterator>
 #include <thrust/binary_search.h>
-#include <thrust/distance.h>
 #include <thrust/execution_policy.h>
 
 namespace cudf {
@@ -88,8 +88,8 @@ struct find_index_fn {
       rmm::exec_policy(stream), keys_view->begin<Element>(), keys_view->end<Element>(), find_key);
     return type_dispatcher(input.indices().type(),
                            dispatch_scalar_index{},
-                           thrust::distance(keys_view->begin<Element>(), iter.first),
-                           (thrust::distance(iter.first, iter.second) > 0),
+                           cuda::std::distance(keys_view->begin<Element>(), iter.first),
+                           (cuda::std::distance(iter.first, iter.second) > 0),
                            stream,
                            mr);
   }
@@ -132,7 +132,7 @@ struct find_insert_index_fn {
       rmm::exec_policy(stream), keys_view->begin<Element>(), keys_view->end<Element>(), find_key);
     return type_dispatcher(input.indices().type(),
                            dispatch_scalar_index{},
-                           thrust::distance(keys_view->begin<Element>(), iter),
+                           cuda::std::distance(keys_view->begin<Element>(), iter),
                            true,
                            stream,
                            mr);

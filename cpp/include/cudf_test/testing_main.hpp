@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,6 +33,9 @@
 #include <rmm/mr/device/managed_memory_resource.hpp>
 #include <rmm/mr/device/owning_wrapper.hpp>
 #include <rmm/mr/device/pool_memory_resource.hpp>
+#include <rmm/mr/device/statistics_resource_adaptor.hpp>
+
+#include <iostream>
 
 namespace CUDF_EXPORT cudf {
 namespace test {
@@ -226,10 +229,19 @@ inline void init_cudf_test(int argc, char** argv, cudf::test::config const& conf
  * This `main` function is a wrapper around the google test generated `main`,
  * maintaining the original functionality.
  */
-#define CUDF_TEST_PROGRAM_MAIN()            \
-  int main(int argc, char** argv)           \
-  {                                         \
-    ::testing::InitGoogleTest(&argc, argv); \
-    init_cudf_test(argc, argv);             \
-    return RUN_ALL_TESTS();                 \
+#define CUDF_TEST_PROGRAM_MAIN()                                                                 \
+  int main(int argc, char** argv)                                                                \
+  {                                                                                              \
+    ::testing::InitGoogleTest(&argc, argv);                                                      \
+    init_cudf_test(argc, argv);                                                                  \
+    if (std::getenv("GTEST_CUDF_MEMORY_PEAK")) {                                                 \
+      auto mr = rmm::mr::statistics_resource_adaptor<rmm::mr::device_memory_resource>(           \
+        cudf::get_current_device_resource());                                                    \
+      cudf::set_current_device_resource(&mr);                                                    \
+      auto rc = RUN_ALL_TESTS();                                                                 \
+      std::cout << "Peak memory usage " << mr.get_bytes_counter().peak << " bytes" << std::endl; \
+      return rc;                                                                                 \
+    } else {                                                                                     \
+      return RUN_ALL_TESTS();                                                                    \
+    }                                                                                            \
   }

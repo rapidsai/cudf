@@ -6,7 +6,7 @@ import numba
 import pyarrow as pa
 import pytest
 from numba import cuda
-from utils import assert_column_eq
+from utils import assert_column_eq, assert_table_eq
 
 import pylibcudf as plc
 
@@ -23,7 +23,7 @@ def test_nans_to_nulls(has_nans):
     ]
 
     h_input = pa.array(values, type=pa.float32())
-    input = plc.interop.from_arrow(h_input)
+    input = plc.Column(h_input)
     assert input.null_count() == h_input.null_count
     expect = pa.array(replaced, type=pa.float32())
 
@@ -37,27 +37,24 @@ def test_nans_to_nulls(has_nans):
 
 def test_bools_to_mask_roundtrip():
     pa_array = pa.array([True, None, False])
-    plc_input = plc.interop.from_arrow(pa_array)
+    plc_input = plc.Column(pa_array)
     mask, result_null_count = plc.transform.bools_to_mask(plc_input)
 
     assert result_null_count == 2
-    result = plc_input.with_mask(mask, result_null_count)
-    assert_column_eq(pa.array([True, None, None]), result)
+    got = plc_input.with_mask(mask, result_null_count)
+    assert_column_eq(pa.array([True, None, None]), got)
 
-    plc_output = plc.transform.mask_to_bools(mask.ptr, 0, len(pa_array))
-    result_pa = plc.interop.to_arrow(plc_output)
-    expected_pa = pa.chunked_array([[True, False, False]])
-    assert result_pa.equals(expected_pa)
+    got = plc.transform.mask_to_bools(mask.ptr, 0, len(pa_array))
+    expect = pa.array([True, False, False])
+    assert_column_eq(expect, got)
 
 
 def test_encode():
-    pa_table = pa.table({"a": [1, 3, 4], "b": [1, 2, 4]})
-    plc_input = plc.interop.from_arrow(pa_table)
-    result_table, result_column = plc.transform.encode(plc_input)
-    pa_table_result = plc.interop.to_arrow(result_table)
-    pa_column_result = plc.interop.to_arrow(result_column)
+    got_tbl, got_col = plc.transform.encode(
+        plc.Table(pa.table({"a": [1, 3, 4], "b": [1, 2, 4]}))
+    )
 
-    pa_table_expected = pa.table(
+    expect = pa.table(
         [[1, 3, 4], [1, 2, 4]],
         schema=pa.schema(
             [
@@ -66,24 +63,21 @@ def test_encode():
             ]
         ),
     )
-    assert pa_table_result.equals(pa_table_expected)
+    assert_table_eq(expect, got_tbl)
 
-    pa_column_expected = pa.chunked_array([[0, 1, 2]], type=pa.int32())
-    assert pa_column_result.equals(pa_column_expected)
+    expect = pa.array([0, 1, 2], type=pa.int32())
+    assert_column_eq(expect, got_col)
 
 
 def test_one_hot_encode():
-    pa_column = pa.array([1, 2, 3])
-    pa_categories = pa.array([0, 0, 0])
-    plc_input = plc.interop.from_arrow(pa_column)
-    plc_categories = plc.interop.from_arrow(pa_categories)
-    plc_table = plc.transform.one_hot_encode(plc_input, plc_categories)
-    result = plc.interop.to_arrow(plc_table)
-    expected = pa.table(
+    plc_input = plc.Column(pa.array([1, 2, 3]))
+    plc_categories = plc.Column(pa.array([0, 0, 0]))
+    got = plc.transform.one_hot_encode(plc_input, plc_categories)
+    expect = pa.table(
         [[False] * 3] * 3,
         schema=pa.schema([pa.field("", pa.bool_(), nullable=False)] * 3),
     )
-    assert result.equals(expected)
+    assert_table_eq(expect, got)
 
 
 def test_transform_udf():
@@ -102,18 +96,15 @@ def test_transform_udf():
     B = 20.0
     C = 0.5
 
-    a = pa.array([A] * 100)
-    b = pa.array([B] * 100)
-    c = pa.array([C])
-    expected = pa.array([(A + B) * C] * 100)
-    result = plc.transform.transform(
+    expect = pa.array([(A + B) * C] * 100)
+    got = plc.transform.transform(
         [
-            plc.interop.from_arrow(a),
-            plc.interop.from_arrow(b),
-            plc.interop.from_arrow(c),
+            plc.Column(pa.array([A] * 100)),
+            plc.Column(pa.array([B] * 100)),
+            plc.Column(pa.array([C])),
         ],
         transform_udf=ptx,
         output_type=plc.DataType(plc.TypeId.FLOAT64),
         is_ptx=True,
     )
-    assert_column_eq(expected, result)
+    assert_column_eq(expect, got)

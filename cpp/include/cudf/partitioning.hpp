@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -68,7 +68,7 @@ enum class hash_id {
  *
  * @param t The table to partition
  * @param partition_map Non-nullable column of integer values that map each row
- * in `t` to it's partition.
+ * in `t` to its partition.
  * @param num_partitions The total number of partitions
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned table's device memory

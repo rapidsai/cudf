@@ -114,7 +114,7 @@ struct host_udf_reduction_example : cudf::reduce_host_udf {
                                                    thrust::make_counting_iterator(input.size()),
                                                    transform_fn{*input_dv_ptr},
                                                    static_cast<OutputType>(init_value),
-                                                   thrust::plus<>{});
+                                                   cuda::std::plus<>{});
 
       auto output = cudf::make_numeric_scalar(output_dtype, stream, mr);
       static_cast<cudf::scalar_type_t<OutputType>*>(output.get())->set_value(result, stream);

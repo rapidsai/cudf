@@ -8,7 +8,7 @@ You will need:
    preferred configuration. Or else, use
    [rustup](https://www.rust-lang.org/tools/install)
 2. A [cudf development
-   environment](https://github.com/rapidsai/cudf/blob/branch-25.04/CONTRIBUTING.md#setting-up-your-build-environment).
+   environment](https://github.com/rapidsai/cudf/blob/branch-25.06/CONTRIBUTING.md#setting-up-your-build-environment).
    The combined devcontainer works, or whatever your favourite approach is.
 
 :::{note}
@@ -467,10 +467,24 @@ q = ...
 ir = Translator(q._ldf.visit(), pl.GPUEngine()).translate_ir()
 
 # DataFrame living on the device
-result = ir.evaluate(cache={})
+result = ir.evaluate(cache={}, timer=None)
 
 # Polars dataframe
 host_result = result.to_polars()
 ```
 
 If we get any exceptions, we can then debug as normal in Python.
+
+# Configuration
+
+Polars users can configure various options about how the plan is executed
+through the `pl.GPUEngine()`. This includes some configuration options
+defined in polars itself: https://docs.pola.rs/api/python/dev/reference/lazyframe/api/polars.lazyframe.engine_config.GPUEngine.html
+
+All additional keyword arguments are made available to cudf-polars through
+`engine.config`.
+
+To centralize validation and keep things well-typed internally, we model our
+additional configuration as a set of dataclasses defined in
+`cudf_polars/utils/config.py`. To transition from user-provided options to our
+(validated) internal options, use `ConfigOptions.from_polars_engine`.

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -293,10 +293,10 @@ TEST_F(StringsContainsTests, HexTest)
   std::vector<cudf::size_type> offsets(
     {thrust::make_counting_iterator<cudf::size_type>(0),
      thrust::make_counting_iterator<cudf::size_type>(0) + count + 1});
-  auto d_chars = cudf::detail::make_device_uvector_sync(
+  auto d_chars = cudf::detail::make_device_uvector(
     ascii_chars, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
   auto d_offsets = std::make_unique<cudf::column>(
-    cudf::detail::make_device_uvector_sync(
+    cudf::detail::make_device_uvector(
       offsets, cudf::get_default_stream(), cudf::get_current_device_resource_ref()),
     rmm::device_buffer{},
     0);
@@ -541,7 +541,7 @@ TEST_F(StringsContainsTests, QuantifierErrors)
 TEST_F(StringsContainsTests, OverlappedClasses)
 {
   auto input = cudf::test::strings_column_wrapper({"abcdefg", "defghí", "", "éééééé", "ghijkl"});
-  auto sv = cudf::strings_column_view(input);
+  auto sv    = cudf::strings_column_view(input);
 
   {
     auto pattern = std::string("[e-gb-da-c]");
@@ -562,7 +562,7 @@ TEST_F(StringsContainsTests, OverlappedClasses)
 TEST_F(StringsContainsTests, NegatedClasses)
 {
   auto input = cudf::test::strings_column_wrapper({"abcdefg", "def\tghí", "", "éeé\néeé", "ABC"});
-  auto sv = cudf::strings_column_view(input);
+  auto sv    = cudf::strings_column_view(input);
 
   {
     auto pattern = std::string("[^a-f]");
@@ -788,7 +788,7 @@ TEST_F(StringsContainsTests, DotAll)
 TEST_F(StringsContainsTests, ASCII)
 {
   auto input = cudf::test::strings_column_wrapper({"abc \t\f\r 12", "áé 　❽❽", "aZ ❽4", "XYZ　8"});
-  auto view = cudf::strings_column_view(input);
+  auto view  = cudf::strings_column_view(input);
 
   std::array patterns = {R"(\w+[\s]+\d+)",
                          R"([^\W]+\s+[^\D]+)",

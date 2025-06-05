@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,26 +35,23 @@ struct rolling_store_output_functor {
 // Specialization for MEAN
 template <typename _T>
 struct rolling_store_output_functor<_T, true> {
-  // SFINAE for non-bool types
+  // Don't store the output if count is zero since integral division by zero is
+  // undefined behaviour. The caller must ensure that the relevant row is
+  // marked as invalid with a null.
+
+  // SFINAE for non-bool, non-timestamp types
   template <typename T                                                             = _T,
             std::enable_if_t<!(cudf::is_boolean<T>() || cudf::is_timestamp<T>())>* = nullptr>
   CUDF_HOST_DEVICE inline void operator()(T& out, T& val, size_type count)
   {
-    out = val / count;
-  }
-
-  // SFINAE for bool type
-  template <typename T = _T, std::enable_if_t<cudf::is_boolean<T>()>* = nullptr>
-  CUDF_HOST_DEVICE inline void operator()(T& out, T& val, size_type count)
-  {
-    out = static_cast<int32_t>(val) / count;
+    if (count > 0) { out = val / count; }
   }
 
   // SFINAE for timestamp types
   template <typename T = _T, std::enable_if_t<cudf::is_timestamp<T>()>* = nullptr>
   CUDF_HOST_DEVICE inline void operator()(T& out, T& val, size_type count)
   {
-    out = static_cast<T>(val.time_since_epoch() / count);
+    if (count > 0) { out = static_cast<T>(val.time_since_epoch() / count); }
   }
 };
 
@@ -95,6 +92,8 @@ std::unique_ptr<column> rolling_window(column_view const& input,
                                        rolling_aggregation const& agg,
                                        rmm::cuda_stream_view stream,
                                        rmm::device_async_resource_ref mr);
+
+bool is_valid_rolling_aggregation(data_type input_type, aggregation::Kind kind);
 }  // namespace detail
 
 }  // namespace cudf

@@ -82,7 +82,7 @@ def test_cudf_pandas_script_repl():
         "print(pd.Series(range(2)).sum())\n",
         "print(pd.Series(range(5)).sum())\n",
         "import sys\n",
-        "print(pd.Series(list('abcd')), out=sys.stderr)\n",
+        "print(pd.Series(list('abcd')), file=sys.stderr)\n",
     ]
 
     res = get_repl_output(p1, commands)

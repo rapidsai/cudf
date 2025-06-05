@@ -17,7 +17,7 @@
  * limitations under the License.
  */
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -55,7 +55,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
-#include <thrust/distance.h>
+#include <cuda/std/iterator>
 #include <thrust/execution_policy.h>
 #include <thrust/find.h>
 #include <thrust/pair.h>
@@ -79,7 +79,7 @@ __device__ auto get_new_value(cudf::size_type idx,
   bool output_is_valid{true};
 
   if (found_ptr != values_to_replace_end) {
-    auto d    = thrust::distance(values_to_replace_begin, found_ptr);
+    auto d    = cuda::std::distance(values_to_replace_begin, found_ptr);
     new_value = d_replacement_values[d];
     if (replacement_has_nulls) { output_is_valid = cudf::bit_is_set(replacement_valid, d); }
   } else {

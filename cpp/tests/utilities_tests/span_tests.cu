@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -294,7 +294,7 @@ TEST(MdSpanTest, DeviceReadWrite)
 
   readwrite_kernel<<<1, 1, 0, cudf::get_default_stream().value()>>>(vector);
   readwrite_kernel<<<1, 1, 0, cudf::get_default_stream().value()>>>(vector);
-  vector.device_to_host_sync(cudf::get_default_stream());
+  vector.device_to_host(cudf::get_default_stream());
   EXPECT_EQ(vector[5][6], 30);
 }
 
@@ -419,7 +419,7 @@ TEST(HostDeviceSpanTest, CanSendToDevice)
 {
   auto message = get_test_hostdevice_vector();
 
-  message.host_to_device_sync(cudf::get_default_stream());
+  message.host_to_device(cudf::get_default_stream());
 
   char d_message[12];
   cudaMemcpy(d_message, message.device_ptr(), 11, cudaMemcpyDefault);
@@ -440,10 +440,10 @@ CUDF_KERNEL void simple_device_char_kernel(device_span<char> result)
 TEST(HostDeviceSpanTest, CanGetFromDevice)
 {
   auto message = get_test_hostdevice_vector();
-  message.host_to_device_sync(cudf::get_default_stream());
+  message.host_to_device(cudf::get_default_stream());
   simple_device_char_kernel<<<1, 1, 0, cudf::get_default_stream()>>>(message);
 
-  message.device_to_host_sync(cudf::get_default_stream());
+  message.device_to_host(cudf::get_default_stream());
   expect_match("world hello", cudf::detail::hostdevice_span<char>(message));
 }
 

@@ -70,16 +70,13 @@ void print_tree(host_span<SymbolT const> input,
                 tree_meta_t const& d_gpu_tree,
                 rmm::cuda_stream_view stream)
 {
-  print_vec(cudf::detail::make_host_vector_sync(d_gpu_tree.node_categories, stream),
-            "node_categories",
-            to_cat);
-  print_vec(cudf::detail::make_host_vector_sync(d_gpu_tree.parent_node_ids, stream),
-            "parent_node_ids",
-            to_int);
   print_vec(
-    cudf::detail::make_host_vector_sync(d_gpu_tree.node_levels, stream), "node_levels", to_int);
-  auto node_range_begin = cudf::detail::make_host_vector_sync(d_gpu_tree.node_range_begin, stream);
-  auto node_range_end   = cudf::detail::make_host_vector_sync(d_gpu_tree.node_range_end, stream);
+    cudf::detail::make_host_vector(d_gpu_tree.node_categories, stream), "node_categories", to_cat);
+  print_vec(
+    cudf::detail::make_host_vector(d_gpu_tree.parent_node_ids, stream), "parent_node_ids", to_int);
+  print_vec(cudf::detail::make_host_vector(d_gpu_tree.node_levels, stream), "node_levels", to_int);
+  auto node_range_begin = cudf::detail::make_host_vector(d_gpu_tree.node_range_begin, stream);
+  auto node_range_end   = cudf::detail::make_host_vector(d_gpu_tree.node_range_end, stream);
   print_vec(node_range_begin, "node_range_begin", to_int);
   print_vec(node_range_end, "node_range_end", to_int);
   for (int i = 0; i < int(node_range_begin.size()); i++) {
@@ -544,7 +541,7 @@ table_with_metadata device_parse_nested_json(device_span<SymbolT const> d_input,
   bool const is_array_of_arrays = [&]() {
     auto const size_to_copy = std::min(size_t{2}, gpu_tree.node_categories.size());
     if (size_to_copy == 0) return false;
-    auto const h_node_categories = cudf::detail::make_host_vector_sync(
+    auto const h_node_categories = cudf::detail::make_host_vector(
       device_span<NodeT const>{gpu_tree.node_categories.data(), size_to_copy}, stream);
 
     if (options.is_enabled_lines()) return h_node_categories[0] == NC_LIST;

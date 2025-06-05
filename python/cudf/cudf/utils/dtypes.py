@@ -1,11 +1,8 @@
 # Copyright (c) 2020-2025, NVIDIA CORPORATION.
 from __future__ import annotations
 
-import datetime
-from decimal import Decimal
 from typing import TYPE_CHECKING
 
-import cupy as cp
 import numpy as np
 import pandas as pd
 import pyarrow as pa
@@ -136,86 +133,6 @@ def cudf_dtype_from_pa_type(typ: pa.DataType) -> DtypeObj:
         return CUDF_STRING_DTYPE
     else:
         return cudf.api.types.pandas_dtype(typ.to_pandas_dtype())
-
-
-def to_cudf_compatible_scalar(val, dtype=None):
-    """
-    Converts the value `val` to a numpy/Pandas scalar,
-    optionally casting to `dtype`.
-
-    If `val` is None, returns None.
-    """
-
-    if cudf.utils.utils._is_null_host_scalar(val) or isinstance(
-        val, cudf.Scalar
-    ):
-        return val
-
-    if not cudf.api.types._is_scalar_or_zero_d_array(val):
-        raise ValueError(
-            f"Cannot convert value of type {type(val).__name__} to cudf scalar"
-        )
-
-    if isinstance(val, Decimal):
-        return val
-
-    if isinstance(val, (np.ndarray, cp.ndarray)) and val.ndim == 0:
-        val = val.item()
-
-    if (
-        (dtype is None) and isinstance(val, str)
-    ) or cudf.api.types.is_string_dtype(dtype):
-        dtype = "str"
-
-        if isinstance(val, str) and val.endswith("\x00"):
-            # Numpy string dtypes are fixed width and use NULL to
-            # indicate the end of the string, so they cannot
-            # distinguish between "abc\x00" and "abc".
-            # https://github.com/numpy/numpy/issues/20118
-            # In this case, don't try going through numpy and just use
-            # the string value directly (cudf.DeviceScalar will DTRT)
-            return val
-
-    tz_error_msg = (
-        "Cannot covert a timezone-aware timestamp to timezone-naive scalar."
-    )
-    if isinstance(val, pd.Timestamp):
-        if val.tz is not None:
-            raise NotImplementedError(tz_error_msg)
-
-        val = val.to_datetime64()
-    elif isinstance(val, pd.Timedelta):
-        val = val.to_timedelta64()
-    elif isinstance(val, datetime.datetime):
-        if val.tzinfo is not None:
-            raise NotImplementedError(tz_error_msg)
-        val = np.datetime64(val)
-    elif isinstance(val, datetime.timedelta):
-        val = np.timedelta64(val)
-
-    if dtype is not None:
-        dtype = np.dtype(dtype)
-        if isinstance(val, str) and dtype.kind == "M":
-            # pd.Timestamp can handle str, but not np.str_
-            val = pd.Timestamp(str(val)).to_datetime64().astype(dtype)
-        else:
-            # At least datetimes cannot be converted to scalar via dtype.type:
-            val = np.array(val, dtype)[()]
-    else:
-        val = _maybe_convert_to_default_type(
-            cudf.api.types.pandas_dtype(type(val))
-        ).type(val)
-
-    if val.dtype.type is np.datetime64:
-        time_unit, _ = np.datetime_data(val.dtype)
-        if time_unit in ("D", "W", "M", "Y"):
-            val = val.astype("datetime64[s]")
-    elif val.dtype.type is np.timedelta64:
-        time_unit, _ = np.datetime_data(val.dtype)
-        if time_unit in ("D", "W", "M", "Y"):
-            val = val.astype("timedelta64[ns]")
-
-    return val
 
 
 def is_column_like(obj):
@@ -458,6 +375,37 @@ def is_dtype_obj_numeric(
         )
     else:
         return is_non_decimal
+
+
+def is_pandas_nullable_extension_dtype(dtype_to_check) -> bool:
+    if isinstance(
+        dtype_to_check,
+        (
+            pd.UInt8Dtype,
+            pd.UInt16Dtype,
+            pd.UInt32Dtype,
+            pd.UInt64Dtype,
+            pd.Int8Dtype,
+            pd.Int16Dtype,
+            pd.Int32Dtype,
+            pd.Int64Dtype,
+            pd.Float32Dtype,
+            pd.Float64Dtype,
+            pd.BooleanDtype,
+            pd.StringDtype,
+            pd.ArrowDtype,
+        ),
+    ):
+        return True
+    elif isinstance(dtype_to_check, pd.CategoricalDtype):
+        if dtype_to_check.categories is None:
+            return False
+        return is_pandas_nullable_extension_dtype(
+            dtype_to_check.categories.dtype
+        )
+    elif isinstance(dtype_to_check, pd.IntervalDtype):
+        return is_pandas_nullable_extension_dtype(dtype_to_check.subtype)
+    return False
 
 
 def dtype_to_pylibcudf_type(dtype) -> plc.DataType:

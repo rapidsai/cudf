@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -43,9 +43,9 @@ static void bench_replace(nvbench::state& state)
 
   auto stream = cudf::get_default_stream();
   state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
-  auto const chars_size = input.chars_size(stream);
-  state.add_global_memory_reads<nvbench::int8_t>(chars_size);
-  state.add_global_memory_writes<nvbench::int8_t>(chars_size);
+  auto const data_size = column->alloc_size();
+  state.add_global_memory_reads<nvbench::int8_t>(data_size);
+  state.add_global_memory_writes<nvbench::int8_t>(data_size);
 
   if (api == "scalar") {
     cudf::string_scalar target("+");

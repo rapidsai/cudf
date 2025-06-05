@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -46,7 +46,7 @@ struct linked_column_view : public column_view_base {
   linked_column_view(column_view const& col);
 
   /**
-   * @brief Construct from column_view with it's parent
+   * @brief Construct from column_view with its parent
    *
    * @param parent Pointer to the column_view's parent column_view
    * @param col column_view to wrap
@@ -54,7 +54,7 @@ struct linked_column_view : public column_view_base {
   linked_column_view(linked_column_view* parent, column_view const& col);
 
   /**
-   * @brief Conversion operator to cast this instance to it's column_view
+   * @brief Conversion operator to cast this instance to its column_view
    */
   operator column_view() const;
 

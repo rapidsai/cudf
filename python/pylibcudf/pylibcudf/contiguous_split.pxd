@@ -1,9 +1,14 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 from libc.stdint cimport uint8_t
+from libc.stddef cimport size_t
+from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 from libcpp.vector cimport vector
-from pylibcudf.libcudf.contiguous_split cimport packed_columns
+from pylibcudf.libcudf.contiguous_split cimport packed_columns, chunked_pack
+from rmm.pylibrmm.device_buffer cimport DeviceBuffer
+from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
+from rmm.pylibrmm.stream cimport Stream
 
 from .gpumemoryview cimport gpumemoryview
 from .table cimport Table
@@ -26,6 +31,19 @@ cdef class PackedColumns:
     @staticmethod
     cdef PackedColumns from_libcudf(unique_ptr[packed_columns] data)
     cpdef tuple release(self)
+
+cdef class ChunkedPack:
+    cdef unique_ptr[chunked_pack] c_obj
+    cdef Table table
+    cdef DeviceMemoryResource mr
+    cdef Stream stream
+
+    cpdef bool has_next(self)
+    cpdef size_t next(self, DeviceBuffer buf)
+    cpdef size_t get_total_contiguous_size(self)
+    cpdef memoryview build_metadata(self)
+    cpdef tuple pack_to_host(self, DeviceBuffer buf)
+
 
 cpdef PackedColumns pack(Table input)
 

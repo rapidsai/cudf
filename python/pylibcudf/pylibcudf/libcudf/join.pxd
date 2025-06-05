@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
 
 from libc.stddef cimport size_t
 from libcpp cimport bool
@@ -18,7 +18,7 @@ from rmm.librmm.device_uvector cimport device_uvector
 ctypedef unique_ptr[device_uvector[size_type]] gather_map_type
 ctypedef pair[gather_map_type, gather_map_type] gather_map_pair_type
 
-cdef extern from "cudf/join.hpp" namespace "cudf" nogil:
+cdef extern from "cudf/join/join.hpp" namespace "cudf" nogil:
     cdef gather_map_pair_type inner_join(
         const table_view left_keys,
         const table_view right_keys,
@@ -79,6 +79,7 @@ cdef extern from "cudf/join.hpp" namespace "cudf" nogil:
         const table_view right,
     ) except +
 
+cdef extern from "cudf/join/conditional_join.hpp" namespace "cudf" nogil:
     cdef gather_map_pair_type conditional_inner_join(
         const table_view left,
         const table_view right,
@@ -144,6 +145,7 @@ cdef extern from "cudf/join.hpp" namespace "cudf" nogil:
         optional[size_t] output_size
     ) except +libcudf_exception_handler
 
+cdef extern from "cudf/join/mixed_join.hpp" namespace "cudf" nogil:
     cdef gather_map_pair_type mixed_inner_join(
         const table_view left_equality,
         const table_view right_equality,

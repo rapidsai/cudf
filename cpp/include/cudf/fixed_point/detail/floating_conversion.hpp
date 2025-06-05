@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -39,7 +39,7 @@ namespace detail {
 template <typename T,
           CUDF_ENABLE_IF(std::is_same_v<T, uint32_t> || std::is_same_v<T, uint64_t> ||
                          std::is_same_v<T, __uint128_t>)>
-CUDF_HOST_DEVICE inline int count_significant_bits(T value)
+CUDF_HOST_DEVICE inline constexpr int count_significant_bits(T value)
 {
 #ifdef __CUDA_ARCH__
   if constexpr (std::is_same_v<T, uint64_t>) {
@@ -56,6 +56,7 @@ CUDF_HOST_DEVICE inline int count_significant_bits(T value)
   // Undefined behavior to call __builtin_clzll() with zero in gcc and clang
   if (value == 0) { return 0; }
 
+  // TODO: Use `std::countl_zero` instead of `__builtin_clzXX` once we migrate to C++20
   if constexpr (std::is_same_v<T, uint64_t>) {
     return 64 - __builtin_clzll(value);
   } else if constexpr (std::is_same_v<T, uint32_t>) {

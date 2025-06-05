@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,10 +29,9 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
+#include <cuda/std/iterator>
 #include <cuda/std/optional>
-#include <thrust/advance.h>
 #include <thrust/binary_search.h>
-#include <thrust/distance.h>
 #include <thrust/execution_policy.h>
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
@@ -124,7 +123,7 @@ std::unique_ptr<table> explode(table_view const& input_table,
   auto offsets = explode_col.offsets_begin();
   // offsets + 1 here to skip the 0th offset, which removes a - 1 operation later.
   auto offsets_minus_one = thrust::make_transform_iterator(
-    thrust::next(offsets), cuda::proclaim_return_type<size_type>([offsets] __device__(auto i) {
+    cuda::std::next(offsets), cuda::proclaim_return_type<size_type>([offsets] __device__(auto i) {
       return (i - offsets[0]) - 1;
     }));
   auto counting_iter = thrust::make_counting_iterator(0);
@@ -182,7 +181,7 @@ std::unique_ptr<table> explode_position(table_view const& input_table,
                                            offsets,
                                            offset_size =
                                              explode_col.size()] __device__(auto idx) -> size_type {
-      auto lb_idx = thrust::distance(
+      auto lb_idx = cuda::std::distance(
         offsets_minus_one,
         thrust::lower_bound(thrust::seq, offsets_minus_one, offsets_minus_one + offset_size, idx));
       position_array[idx] = idx - (offsets[lb_idx] - offsets[0]);
@@ -241,7 +240,7 @@ std::unique_ptr<table> explode_outer(table_view const& input_table,
 
   // offsets + 1 here to skip the 0th offset, which removes a - 1 operation later.
   auto offsets_minus_one = thrust::make_transform_iterator(
-    thrust::next(offsets), cuda::proclaim_return_type<size_type>([offsets] __device__(auto i) {
+    cuda::std::next(offsets), cuda::proclaim_return_type<size_type>([offsets] __device__(auto i) {
       return (i - offsets[0]) - 1;
     }));
 
@@ -256,10 +255,10 @@ std::unique_ptr<table> explode_outer(table_view const& input_table,
                            null_or_empty,
                            offset_size = explode_col.offsets().size() - 1] __device__(auto idx) {
     if (idx < sliced_child_size) {
-      auto lb_idx =
-        thrust::distance(offsets_minus_one,
-                         thrust::lower_bound(
-                           thrust::seq, offsets_minus_one, offsets_minus_one + (offset_size), idx));
+      auto lb_idx = cuda::std::distance(
+        offsets_minus_one,
+        thrust::lower_bound(
+          thrust::seq, offsets_minus_one, offsets_minus_one + (offset_size), idx));
       auto index_to_write                      = null_or_empty_offset_p[lb_idx] + idx;
       gather_map_p[index_to_write]             = lb_idx;
       explode_col_gather_map_p[index_to_write] = idx;

@@ -45,6 +45,7 @@ This page provides API documentation for pylibcudf.
     transpose
     types
     unary
+    utilities
 
 .. toctree::
     :maxdepth: 2

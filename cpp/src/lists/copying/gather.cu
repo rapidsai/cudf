@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,8 +20,8 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <cuda/std/iterator>
 #include <thrust/binary_search.h>
-#include <thrust/distance.h>
 #include <thrust/execution_policy.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
@@ -79,7 +79,7 @@ struct list_gatherer {
     // "step 1" from above
     auto const bound =
       thrust::upper_bound(thrust::seq, upper_bound_start, upper_bound_start + offset_count, index);
-    size_type offset_index = thrust::distance(upper_bound_start, bound);
+    size_type offset_index = cuda::std::distance(upper_bound_start, bound);
     // "step 2" from above
     size_type offset_subindex = offset_index == 0 ? index : index - offsets[offset_index];
     // "step 3" from above

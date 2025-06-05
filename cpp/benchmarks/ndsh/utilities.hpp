@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,7 +28,7 @@
 class table_with_names {
  public:
   table_with_names(std::unique_ptr<cudf::table> tbl, std::vector<std::string> col_names)
-    : tbl(std::move(tbl)), col_names(col_names){};
+    : tbl(std::move(tbl)), col_names(col_names) {};
   /**
    * @brief Return the table view
    */

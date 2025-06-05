@@ -7,7 +7,7 @@ context:
   cuda_version: ${{ (env.get("RAPIDS_CUDA_VERSION") | split("."))[:2] | join(".") }}
   cuda_major: '${{ (env.get("RAPIDS_CUDA_VERSION") | split("."))[0] }}'
   date_string: '${{ env.get("RAPIDS_DATE_STRING") }}'
-  head_rev: ${{ git.head_rev(".")[:8] }}
+  head_rev: '${{ git.head_rev(".")[:8] }}'
 
 recipe:
   name: libcudf-split
@@ -27,6 +27,9 @@ cache:
         export CFLAGS=$(echo $CFLAGS | sed -E 's@\-fdebug\-prefix\-map[^ ]*@@g')
         export CXXFLAGS=$(echo $CXXFLAGS | sed -E 's@\-fdebug\-prefix\-map[^ ]*@@g')
         set +x
+
+        cudf_ROOT="$(realpath ./cpp/build)"
+        export cudf_ROOT
 
         ./build.sh -n -v \
             libcudf libcudf_kafka benchmarks tests \
@@ -115,6 +118,7 @@ outputs:
       host:
         - cuda-version =${{ cuda_version }}
         - libkvikio =${{ minor_version }}
+        - librmm =${{ minor_version }}
         - nvcomp ${{ nvcomp_version }}
         - rapids-logger =0.1
         - zlib ${{ zlib_version }}

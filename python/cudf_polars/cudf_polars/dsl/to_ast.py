@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 """Conversion of expression nodes to libcudf AST nodes."""
@@ -140,7 +140,7 @@ def _(node: expr.ColRef, self: Transformer) -> plc_expr.Expression:
 
 @_to_ast.register
 def _(node: expr.Literal, self: Transformer) -> plc_expr.Expression:
-    return plc_expr.Literal(plc.interop.from_arrow(node.value))
+    return plc_expr.Literal(plc.Scalar.from_py(node.value, node.dtype))
 
 
 @_to_ast.register
@@ -188,8 +188,10 @@ def _(node: expr.BooleanFunction, self: Transformer) -> plc_expr.Expression:
         if isinstance(haystack, expr.LiteralColumn) and len(haystack.value) < 16:
             # 16 is an arbitrary limit
             needle_ref = self(needles)
+            plc_dtype = plc.interop.from_arrow(haystack.value.type)
             values = [
-                plc_expr.Literal(plc.interop.from_arrow(v)) for v in haystack.value
+                plc_expr.Literal(plc.Scalar.from_py(v, plc_dtype))
+                for v in haystack.value.to_pylist()
             ]
             return reduce(
                 partial(plc_expr.Operation, plc_expr.ASTOperator.LOGICAL_OR),

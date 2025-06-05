@@ -39,7 +39,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <thrust/advance.h>
+#include <cuda/std/iterator>
 #include <thrust/binary_search.h>
 #include <thrust/copy.h>
 #include <thrust/execution_policy.h>
@@ -93,7 +93,7 @@ auto create_device_views(host_span<column_view const> views, rmm::cuda_stream_vi
     device_views.cend(),
     std::next(offsets.begin()),
     [](auto const& col) { return col.size(); },
-    thrust::plus{});
+    cuda::std::plus{});
   auto d_offsets =
     make_device_uvector_async(offsets, stream, cudf::get_current_device_resource_ref());
   auto const output_size = offsets.back();
@@ -209,7 +209,7 @@ CUDF_KERNEL void fused_concatenate_kernel(column_device_view const* input_views,
   if (Nullable) { active_mask = __ballot_sync(0xFFFF'FFFFu, output_index < output_size); }
   while (output_index < output_size) {
     // Lookup input index by searching for output index in offsets
-    auto const offset_it            = thrust::prev(thrust::upper_bound(
+    auto const offset_it            = cuda::std::prev(thrust::upper_bound(
       thrust::seq, input_offsets, input_offsets + num_input_views, output_index));
     size_type const partition_index = offset_it - input_offsets;
 

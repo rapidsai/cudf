@@ -126,9 +126,16 @@ struct DeviceRolling {
 
     bool output_is_valid = (count >= min_periods);
 
-    // store the output value, one per thread
-    cudf::detail::rolling_store_output_functor<OutputType, op == aggregation::MEAN>{}(
-      output.element<OutputType>(current_index), val, count);
+    if (output_is_valid) {
+      // store the output value, one per thread, but only if the
+      // output is valid. min_periods is required to be >= 1, and so
+      // here, count must be nonzero. We need to avoid storing if
+      // count is zero since this could cause UB in some aggregations,
+      // which may cause the compiler to deduce nonsense about the loop
+      // that increments count.
+      cudf::detail::rolling_store_output_functor<OutputType, op == aggregation::MEAN>{}(
+        output.element<OutputType>(current_index), val, count);
+    }
 
     return output_is_valid;
   }
@@ -914,8 +921,12 @@ class rolling_aggregation_postprocessor final : public cudf::detail::aggregation
                                                      stream,
                                                      cudf::get_current_device_resource_ref());
 
-    result = lists::detail::distinct(
-      lists_column_view{collected_list->view()}, agg._nulls_equal, agg._nans_equal, stream, mr);
+    result = lists::detail::distinct(lists_column_view{collected_list->view()},
+                                     agg._nulls_equal,
+                                     agg._nans_equal,
+                                     duplicate_keep_option::KEEP_ANY,
+                                     stream,
+                                     mr);
   }
 
   // perform the element-wise square root operation on result of VARIANCE

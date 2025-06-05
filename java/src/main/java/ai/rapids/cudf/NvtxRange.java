@@ -57,6 +57,18 @@ public class NvtxRange implements AutoCloseable {
     }
   }
 
+  public static void pushRange(String name, NvtxColor color) {
+    if (isEnabled) {
+      push(name, color.colorBits);
+    }
+  }
+
+  public static void popRange() {
+    if (isEnabled) {
+      pop();
+    }
+  }
+
   @Override
   public void close() {
     if (isEnabled) {
@@ -64,6 +76,6 @@ public class NvtxRange implements AutoCloseable {
     }
   }
 
-  private native void push(String name, int colorBits);
-  private native void pop();
+  private static native void push(String name, int colorBits);
+  private static native void pop();
 }

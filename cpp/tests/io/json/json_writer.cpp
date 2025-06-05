@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -609,6 +609,64 @@ TEST_P(JsonCompressedWriterTest, Unicode)
 {"col1":"C\ud835\udfb5\ud835\udcd3\ud835\udcbb","col2":"\ud883\udf91\ud885\udd08\ud888\udf49","int16":4}
 )";
   run_test(out_options, expected);
+}
+
+TEST_P(JsonCompressedWriterTest, UnicodeUnescaped)
+{
+  cudf::test::strings_column_wrapper col1{"\"\\/\b\f\n\r\t", "ராபிட்ஸ்", "$€𐐷𤭢", "C𝞵𝓓𝒻"};
+  cudf::test::strings_column_wrapper col2{"CႮ≪ㇳ䍏凹沦王辿龸ꁗ믜스폶ﴠ",
+                                          "𐀀𑿪𒐦𓃰𔙆 𖦆𗿿𘳕𚿾[↳] 𜽆𝓚𞤁🄰",
+                                          "𠘨𡥌𢗉𣇊𤊩𥅽𦉱𧴱𨁲𩁹𪐢𫇭𬬭𭺷𮊦屮",
+                                          "𰾑𱔈𲍉"};
+  cudf::test::fixed_width_column_wrapper<int16_t> col3{{1, 2, 3, 4},
+                                                       cudf::test::iterators::nulls_at({0, 2})};
+  cudf::table_view tbl_view{{col1, col2, col3}};
+  cudf::io::table_metadata mt{{{"col1"}, {"col2"}, {"int16"}}};
+
+  std::vector<char> out_buffer;
+  auto destination = cudf::io::sink_info(&out_buffer);
+  auto out_options = cudf::io::json_writer_options_builder(destination, tbl_view)
+                       .include_nulls(true)
+                       .metadata(mt)
+                       .lines(true)
+                       .na_rep("null")
+                       .utf8_escaped(false)
+                       .build();
+
+  cudf::io::write_json(out_options, cudf::test::get_default_stream());
+
+  std::string const expected =
+    u8R"({"col1":"\"\\\/\b\f\n\r\t","col2":"CႮ≪ㇳ䍏凹沦王辿龸ꁗ믜스폶ﴠ","int16":null}
+{"col1":"ராபிட்ஸ்","col2":"𐀀𑿪𒐦𓃰𔙆 𖦆𗿿𘳕𚿾[↳] 𜽆𝓚𞤁🄰","int16":2}
+{"col1":"$€𐐷𤭢","col2":"𠘨𡥌𢗉𣇊𤊩𥅽𦉱𧴱𨁲𩁹𪐢𫇭𬬭𭺷𮊦屮","int16":null}
+{"col1":"C𝞵𝓓𝒻","col2":"𰾑𱔈𲍉","int16":4}
+)";
+
+  std::string const output(out_buffer.data(), out_buffer.size());
+  EXPECT_EQ(expected, output);
+}
+
+struct JsonWriterTypeSupportTest : public cudf::test::BaseFixture {};
+
+TEST(JsonWriterTypeSupportTest, SupportedTypes)
+{
+  using cudf::io::is_supported_write_json;
+
+  EXPECT_TRUE(is_supported_write_json(cudf::data_type{cudf::type_id::INT32}));
+  EXPECT_TRUE(is_supported_write_json(cudf::data_type{cudf::type_id::FLOAT64}));
+  EXPECT_TRUE(is_supported_write_json(cudf::data_type{cudf::type_id::STRING}));
+  EXPECT_TRUE(is_supported_write_json(cudf::data_type{cudf::type_id::DECIMAL64}));
+  EXPECT_TRUE(is_supported_write_json(cudf::data_type{cudf::type_id::TIMESTAMP_NANOSECONDS}));
+  EXPECT_TRUE(is_supported_write_json(cudf::data_type{cudf::type_id::DURATION_SECONDS}));
+}
+
+TEST(JsonWriterTypeSupportTest, UnsupportedTypes)
+{
+  using cudf::io::is_supported_write_json;
+
+  EXPECT_FALSE(is_supported_write_json(cudf::data_type{cudf::type_id::LIST}));
+  EXPECT_FALSE(is_supported_write_json(cudf::data_type{cudf::type_id::STRUCT}));
+  EXPECT_FALSE(is_supported_write_json(cudf::data_type{cudf::type_id::DICTIONARY32}));
 }
 
 CUDF_TEST_PROGRAM_MAIN()

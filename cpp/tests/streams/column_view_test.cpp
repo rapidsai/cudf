@@ -32,7 +32,7 @@ struct TypedColumnTest : public cudf::test::BaseFixture {
   cudf::data_type type() { return cudf::data_type{cudf::type_to_id<T>()}; }
 
   TypedColumnTest(rmm::cuda_stream_view stream = cudf::test::get_default_stream())
-    : data{_num_elements * cudf::size_of(type()), stream},
+    : data{_num_elements * sizeof(T), stream},
       mask{cudf::bitmask_allocation_size_bytes(_num_elements), stream}
   {
     std::vector<char> h_data(std::max(data.size(), mask.size()));

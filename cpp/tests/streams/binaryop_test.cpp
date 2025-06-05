@@ -17,6 +17,7 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/default_stream.hpp>
+#include <cudf_test/testing_main.hpp>
 
 #include <cudf/binaryop.hpp>
 #include <cudf/jit/runtime_support.hpp>
@@ -122,5 +123,8 @@ TEST_F(BinaryopPTXTest, ColumnColumnPTX)
 
   cudf::binary_operation(
     lhs, rhs, ptx, cudf::data_type(cudf::type_to_id<int32_t>()), cudf::test::get_default_stream());
-  cudf::binary_operation(lhs, rhs, ptx, cudf::data_type(cudf::type_to_id<int64_t>()));
+  cudf::binary_operation(
+    lhs, rhs, ptx, cudf::data_type(cudf::type_to_id<int64_t>()), cudf::test::get_default_stream());
 }
+
+CUDF_TEST_PROGRAM_MAIN()

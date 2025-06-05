@@ -26,6 +26,7 @@ from pylibcudf.libcudf.io.parquet cimport (
     parquet_reader_options,
     read_parquet as cpp_read_parquet,
     write_parquet as cpp_write_parquet,
+    is_supported_write_parquet as cpp_is_supported_write_parquet,
     parquet_writer_options,
     parquet_chunked_writer as cpp_parquet_chunked_writer,
     chunked_parquet_writer_options,
@@ -272,14 +273,14 @@ cdef class ChunkedParquetReader:
         size_t chunk_read_limit=0,
         size_t pass_read_limit=1024000000,
     ):
-        cdef Stream s = _get_stream(stream)
+        self.stream = _get_stream(stream)
         with nogil:
             self.reader.reset(
                 new cpp_chunked_parquet_reader(
                     chunk_read_limit,
                     pass_read_limit,
                     options.c_obj,
-                    s.view(),
+                    self.stream.view(),
                 )
             )
 
@@ -312,7 +313,7 @@ cdef class ChunkedParquetReader:
         with nogil:
             c_result = move(self.reader.get()[0].read_chunk())
 
-        return TableWithMetadata.from_libcudf(c_result)
+        return TableWithMetadata.from_libcudf(c_result, self.stream)
 
 
 cpdef read_parquet(ParquetReaderOptions options, Stream stream = None):
@@ -335,7 +336,7 @@ cpdef read_parquet(ParquetReaderOptions options, Stream stream = None):
     with nogil:
         c_result = move(cpp_read_parquet(options.c_obj, s.view()))
 
-    return TableWithMetadata.from_libcudf(c_result)
+    return TableWithMetadata.from_libcudf(c_result, stream)
 
 
 cdef class ParquetChunkedWriter:
@@ -958,6 +959,14 @@ cpdef memoryview write_parquet(ParquetWriterOptions options, Stream stream = Non
         c_result = cpp_write_parquet(move(options.c_obj), s.view())
 
     return memoryview(HostBuffer.from_unique_ptr(move(c_result)))
+
+
+cpdef bool is_supported_write_parquet(compression_type compression):
+    """Check if the compression type is supported for writing Parquet files.
+
+    For details, see :cpp:func:`is_supported_write_parquet`.
+    """
+    return cpp_is_supported_write_parquet(compression)
 
 
 cpdef memoryview merge_row_group_metadata(list metdata_list):

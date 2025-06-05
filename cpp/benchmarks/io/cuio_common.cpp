@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,6 +24,7 @@
 
 #include <unistd.h>
 
+#include <array>
 #include <cstdio>
 #include <fstream>
 #include <numeric>
@@ -215,6 +216,13 @@ void try_drop_l3_cache()
     log_l3_warning_once();
     return;
   }
+
+  // When data are written to a file, Linux first places them in dirty pages, and then uses a
+  // writeback mechanism to move them to the file system. sysctl vm.drop_caches=3 is only capable of
+  // dropping the clean cache. The dirty pages may still affect the performance of cold cache
+  // benchmark. A call to sync() triggers the writeback process and makes dirty pages clean, ready
+  // to be dropped. This function never fails and does not require sudo.
+  sync();
 
   std::array drop_cache_cmds{"/sbin/sysctl vm.drop_caches=3", "sudo /sbin/sysctl vm.drop_caches=3"};
   CUDF_EXPECTS(std::any_of(drop_cache_cmds.cbegin(),

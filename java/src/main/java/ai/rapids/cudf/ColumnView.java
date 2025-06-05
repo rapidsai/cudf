@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ *  Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -1335,7 +1335,16 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   }
 
   /**
-   * invert the bits, output is the same type as input.
+   * Count the number of set bit for each integer value.
+   */
+  public final ColumnVector bitCount() {
+    return unaryOp(UnaryOp.BIT_COUNT);
+  }
+
+  /**
+   * Invert the bits, output is the same type as input.
+   * For BOOL8 type, this is equivalent to logical not (UnaryOp.NOT), but this does not
+   * matter since Spark does not support bitwise inverting on boolean type.
    */
   public final ColumnVector bitInvert() {
     return unaryOp(UnaryOp.BIT_INVERT);
@@ -2538,13 +2547,26 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Create a new LIST column by copying elements from the current LIST column ignoring duplicate,
    * producing a LIST column in which each list contain only unique elements.
    *
-   * Order of the output elements within each list are not guaranteed to be preserved as in the
-   * input.
+   * Relative ordering elements will be kept the same, by default can keep any of the duplicates
+   * Example: [0,3,4,0] may produce either [0,3,4] or [3,4,0], both of which are valid here
    *
    * @return A new LIST column having unique list elements.
    */
   public final ColumnVector dropListDuplicates() {
-    return new ColumnVector(dropListDuplicates(getNativeView()));
+    return new ColumnVector(dropListDuplicates(getNativeView(), DuplicateKeepOption.KEEP_ANY.nativeId));
+  }
+
+  /**
+   * Create a new LIST column by copying elements from the current LIST column ignoring duplicate,
+   * producing a LIST column in which each list contain only unique elements.
+   *
+   * Order of the output elements within each list will be preserved as in the input
+   *
+   * @param keep_option Flag to specify which element to keep (first, last, any)
+   * @return A new LIST column having unique list elements.
+   */
+  public final ColumnVector dropListDuplicates(DuplicateKeepOption keepOption) {
+    return new ColumnVector(dropListDuplicates(getNativeView(), keepOption.nativeId));
   }
 
   /**
@@ -4614,7 +4636,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   private static native long extractListElementV(long nativeView, long indicesView);
 
-  private static native long dropListDuplicates(long nativeView);
+  private static native long dropListDuplicates(long nativeView, int keep_option);
 
   private static native long dropListDuplicatesWithKeysValues(long nativeHandle);
 

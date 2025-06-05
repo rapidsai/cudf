@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 import pyarrow as pa
 import pytest
 from utils import assert_column_eq
@@ -11,7 +11,7 @@ def plc_col():
     arr = pa.array(
         ['{"foo": {"bar": [{"a": 1, "b": 2}, {"a": 3, "b": 4}]', None]
     )
-    return plc.interop.from_arrow(arr)
+    return plc.Column(arr)
 
 
 @pytest.fixture(scope="module")

@@ -1,6 +1,6 @@
 
 /*
- * Copyright (c) 2018-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,7 +34,7 @@ template <typename state_buf>
 inline __device__ void gpuOutputString(page_state_s* s, state_buf* sb, int src_pos, void* dstv)
 {
   auto [ptr, len] = gpuGetStringData(s, sb, src_pos);
-  if (s->col.is_strings_to_cat and s->col.physical_type == BYTE_ARRAY) {
+  if (s->col.is_strings_to_cat and s->col.physical_type == Type::BYTE_ARRAY) {
     // Output hash. This hash value is used if the option to convert strings to
     // categoricals is enabled. The seed value is chosen arbitrarily.
     uint32_t constexpr hash_seed = 33;

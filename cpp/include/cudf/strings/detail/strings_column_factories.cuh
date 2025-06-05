@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,8 +28,8 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
+#include <cuda/std/iterator>
 #include <thrust/copy.h>
-#include <thrust/distance.h>
 #include <thrust/for_each.h>
 #include <thrust/functional.h>
 #include <thrust/iterator/counting_iterator.h>
@@ -67,7 +67,7 @@ std::unique_ptr<column> make_strings_column(IndexPairIterator begin,
                                             rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  size_type strings_count = thrust::distance(begin, end);
+  size_type strings_count = cuda::std::distance(begin, end);
   if (strings_count == 0) return make_empty_column(type_id::STRING);
 
   // build offsets column from the strings sizes
@@ -124,7 +124,7 @@ std::unique_ptr<column> make_strings_column(CharIterator chars_begin,
                                             rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  size_type strings_count = thrust::distance(offsets_begin, offsets_end) - 1;
+  size_type strings_count = cuda::std::distance(offsets_begin, offsets_end) - 1;
   if (strings_count == 0) { return make_empty_column(type_id::STRING); }
 
   int64_t const bytes = std::distance(chars_begin, chars_end) * sizeof(char);

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import itertools
+from datetime import date
 
 import numpy as np
 import pytest
@@ -22,7 +23,23 @@ def df():
             "key1": [1, 1, 1, 2, 3, 1, 4, 6, 7],
             "key2": [2, 2, 2, 2, 6, 1, 4, 6, 8],
             "int": [1, 2, 3, 4, 5, 6, 7, 8, 9],
+            "int32": pl.Series([1, 2, 3, 4, 5, 6, 7, 8, 9], dtype=pl.Int32()),
+            "uint16_with_null": pl.Series(
+                [1, None, 2, None, None, None, 4, 5, 6], dtype=pl.UInt16()
+            ),
             "float": [7.0, 1, 2, 3, 4, 5, 6, 7, 8],
+            "string": ["abc", "def", "hijk", "lmno", "had", "to", "be", "or", "not"],
+            "datetime": [
+                date(1970, 1, 1),
+                date(1972, 1, 10),
+                date(2000, 1, 1),
+                date(2004, 12, 1),
+                date(2004, 10, 1),
+                date(1971, 2, 1),
+                date(2003, 12, 1),
+                date(2001, 1, 1),
+                date(1999, 12, 31),
+            ],
         }
     )
 
@@ -45,15 +62,34 @@ def keys(request):
 
 @pytest.fixture(
     params=[
+        [],
         ["int"],
         ["float", "int"],
         [pl.col("float") + pl.col("int")],
-        [pl.col("float").max() - pl.col("int").min()],
+        [pl.col("float").is_not_null()],
+        [pl.col("int32").sum()],
+        [pl.col("int32").mean()],
+        [
+            pl.col("uint16_with_null").sum(),
+            pl.col("uint16_with_null").mean().alias("mean"),
+        ],
+        [pl.col("float").max() - pl.col("int").min() + pl.col("int").max()],
         [pl.col("float").mean(), pl.col("int").std()],
         [(pl.col("float") - pl.lit(2)).max()],
+        [pl.lit(10).alias("literal_value")],
         [pl.col("float").sum().round(decimals=1)],
         [pl.col("float").round(decimals=1).sum()],
         [pl.col("int").first(), pl.col("float").last()],
+        [pl.col("int").sum(), pl.col("string").str.replace("h", "foo", literal=True)],
+        [pl.col("float").quantile(0.3, interpolation="nearest")],
+        [pl.col("float").quantile(0.3, interpolation="higher")],
+        [pl.col("float").quantile(0.3, interpolation="lower")],
+        [pl.col("float").quantile(0.3, interpolation="midpoint")],
+        [pl.col("float").quantile(0.3, interpolation="linear")],
+        [
+            pl.col("datetime").max(),
+            pl.col("datetime").max().dt.is_leap_year().alias("leapyear"),
+        ],
     ],
     ids=lambda aggs: "-".join(map(str, aggs)),
 )
@@ -112,8 +148,10 @@ def test_groupby_len(df, keys):
 @pytest.mark.parametrize(
     "expr",
     [
-        pl.col("float").is_not_null(),
         (pl.col("int").max() + pl.col("float").min()).max(),
+        pl.when(pl.col("int") < pl.lit(2))
+        .then(pl.col("float").sum())
+        .otherwise(pl.lit(-2)),
     ],
 )
 def test_groupby_unsupported(df, expr):
@@ -191,6 +229,11 @@ def test_groupby_literal_in_agg(df, key, expr):
 )
 def test_groupby_unary_non_pointwise_raises(df, expr):
     q = df.group_by("key1").agg(expr)
+    assert_ir_translation_raises(q, NotImplementedError)
+
+
+def test_groupby_agg_broadcast_raises(df):
+    q = df.group_by("key1").agg(pl.col("int") + pl.col("float").max())
     assert_ir_translation_raises(q, NotImplementedError)
 
 

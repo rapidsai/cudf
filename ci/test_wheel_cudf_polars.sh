@@ -3,27 +3,35 @@
 
 set -eou pipefail
 
+source rapids-init-pip
+
 rapids-logger "Download wheels"
 
 RAPIDS_PY_CUDA_SUFFIX="$(rapids-wheel-ctk-name-gen "${RAPIDS_CUDA_VERSION}")"
-RAPIDS_PY_WHEEL_NAME="cudf_polars_${RAPIDS_PY_CUDA_SUFFIX}" RAPIDS_PY_WHEEL_PURE="1" rapids-download-wheels-from-s3 python ./dist
+CUDF_POLARS_WHEELHOUSE=$(RAPIDS_PY_WHEEL_NAME="cudf_polars_${RAPIDS_PY_CUDA_SUFFIX}" RAPIDS_PY_WHEEL_PURE="1" rapids-download-wheels-from-github python)
 
 # Download libcudf and pylibcudf built in the previous step
-RAPIDS_PY_WHEEL_NAME="libcudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-s3 cpp ./dist
-RAPIDS_PY_WHEEL_NAME="pylibcudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-s3 python ./dist
+LIBCUDF_WHEELHOUSE=$(RAPIDS_PY_WHEEL_NAME="libcudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-github cpp)
+PYLIBCUDF_WHEELHOUSE=$(RAPIDS_PY_WHEEL_NAME="pylibcudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-github python)
 
 rapids-logger "Installing cudf_polars and its dependencies"
 
 # generate constraints (possibly pinning to oldest support versions of dependencies)
 rapids-generate-pip-constraints py_test_cudf_polars ./constraints.txt
 
-# echo to expand wildcard before adding `[test,experimental]` requires for pip
+# notes:
+#
+#   * echo to expand wildcard before adding `[test,experimental]` requires for pip
+#   * need to provide --constraint="${PIP_CONSTRAINT}" because that environment variable is
+#     ignored if any other --constraint are passed via the CLI
+#
 rapids-pip-retry install \
     -v \
     --constraint ./constraints.txt \
-    "$(echo ./dist/cudf_polars_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)[test,experimental]" \
-    "$(echo ./dist/libcudf_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)" \
-    "$(echo ./dist/pylibcudf_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)"
+    --constraint "${PIP_CONSTRAINT}" \
+    "$(echo "${CUDF_POLARS_WHEELHOUSE}"/cudf_polars_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)[test,experimental]" \
+    "$(echo "${LIBCUDF_WHEELHOUSE}"/libcudf_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)" \
+    "$(echo "${PYLIBCUDF_WHEELHOUSE}"/pylibcudf_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)"
 
 rapids-logger "Run cudf_polars tests"
 

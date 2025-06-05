@@ -27,6 +27,7 @@ from cudf.utils.dtypes import (
     min_signed_type,
     min_unsigned_type,
 )
+from cudf.utils.utils import _is_null_host_scalar
 
 if TYPE_CHECKING:
     from collections import abc
@@ -582,11 +583,8 @@ class CategoricalColumn(column.ColumnBase):
     def _process_values_for_isin(
         self, values: Sequence
     ) -> tuple[ColumnBase, ColumnBase]:
-        lhs = self
-        # We need to convert values to same type as self,
-        # hence passing dtype=self.dtype
-        rhs = cudf.core.column.as_column(values, dtype=self.dtype)
-        return lhs, rhs
+        # Convert values to categorical dtype like self
+        return self, column.as_column(values, dtype=self.dtype)
 
     def set_base_mask(self, value: Buffer | None) -> None:
         super().set_base_mask(value)
@@ -624,7 +622,7 @@ class CategoricalColumn(column.ColumnBase):
         return self.dtype.ordered
 
     def __setitem__(self, key, value):
-        if is_scalar(value) and cudf.utils.utils._is_null_host_scalar(value):
+        if is_scalar(value) and _is_null_host_scalar(value):
             to_add_categories = 0
         else:
             if is_scalar(value):

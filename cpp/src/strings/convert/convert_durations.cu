@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -153,8 +153,8 @@ struct format_compiler {
     }
 
     // create program in device memory
-    d_items = cudf::detail::make_device_uvector_sync(
-      items, stream, cudf::get_current_device_resource_ref());
+    d_items =
+      cudf::detail::make_device_uvector(items, stream, cudf::get_current_device_resource_ref());
   }
 
   format_item const* compiled_format_items() { return d_items.data(); }
@@ -360,7 +360,7 @@ struct from_durations_fn {
         return (item.length != -1) ? item.length : format_length(item.value, &timeparts);
       },
       size_type{0},
-      thrust::plus<size_type>());
+      cuda::std::plus<size_type>());
   }
 
   __device__ void set_chars(size_type idx)

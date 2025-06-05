@@ -48,6 +48,7 @@ Launch on Google Colab
 
 .. toctree::
    :maxdepth: 1
-   :caption: Engine Config Options:
+   :caption: Contents:
 
+   usage
    engine_options

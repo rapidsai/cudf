@@ -92,6 +92,17 @@ struct hash_join {
             rmm::cuda_stream_view stream);
 
   /**
+   * @copydoc hash_join(cudf::table_view const&, bool, null_equality, rmm::cuda_stream_view)
+   *
+   * @param load_factor The hash table occupancy ratio in (0,1]. A value of 0.5 means 50% occupancy.
+   */
+  hash_join(cudf::table_view const& build,
+            bool has_nulls,
+            cudf::null_equality compare_nulls,
+            double load_factor,
+            rmm::cuda_stream_view stream);
+
+  /**
    * @copydoc cudf::hash_join::inner_join
    */
   std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,

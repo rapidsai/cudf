@@ -439,7 +439,7 @@ cpdef TableWithMetadata read_orc(OrcReaderOptions options, Stream stream = None)
     with nogil:
         c_result = move(cpp_read_orc(options.c_obj, s.view()))
 
-    return TableWithMetadata.from_libcudf(c_result)
+    return TableWithMetadata.from_libcudf(c_result, s)
 
 
 cpdef ParsedOrcStatistics read_parsed_orc_statistics(

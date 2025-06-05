@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -100,6 +100,8 @@ struct json_column {
   json_column& operator=(json_column&&)      = default;
   json_column(json_column const&)            = delete;
   json_column& operator=(json_column const&) = delete;
+
+  json_column(json_col_t type) : type(type) {}
 
   /**
    * @brief Fills the rows up to the given \p up_to_row_offset with nulls.

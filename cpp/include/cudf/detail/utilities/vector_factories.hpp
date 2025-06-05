@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -73,14 +73,29 @@ rmm::device_uvector<T> make_zeroed_device_uvector_async(std::size_t size,
  * @return A device_uvector containing zeros
  */
 template <typename T>
-rmm::device_uvector<T> make_zeroed_device_uvector_sync(std::size_t size,
-                                                       rmm::cuda_stream_view stream,
-                                                       rmm::device_async_resource_ref mr)
+rmm::device_uvector<T> make_zeroed_device_uvector(std::size_t size,
+                                                  rmm::cuda_stream_view stream,
+                                                  rmm::device_async_resource_ref mr)
 {
   rmm::device_uvector<T> ret(size, stream, mr);
   CUDF_CUDA_TRY(cudaMemsetAsync(ret.data(), 0, size * sizeof(T), stream.value()));
   stream.synchronize();
   return ret;
+}
+
+/**
+ * @copydoc cudf::detail::make_zeroed_device_uvector(std::size_t size, rmm::cuda_stream_view
+ * stream, rmm::device_async_resource_ref mr)
+ *
+ * @deprecated This function is deprecated. Use `make_zeroed_device_uvector` instead.
+ */
+template <typename T>
+[[deprecated("Use make_zeroed_device_uvector instead")]] rmm::device_uvector<T>
+make_zeroed_device_uvector_sync(std::size_t size,
+                                rmm::cuda_stream_view stream,
+                                rmm::device_async_resource_ref mr)
+{
+  return make_zeroed_device_uvector<T>(size, stream, mr);
 }
 
 /**
@@ -191,13 +206,26 @@ rmm::device_uvector<typename Container::value_type> make_device_uvector_async(
  * @return A device_uvector containing the copied data
  */
 template <typename T>
-rmm::device_uvector<T> make_device_uvector_sync(host_span<T const> source_data,
-                                                rmm::cuda_stream_view stream,
-                                                rmm::device_async_resource_ref mr)
+rmm::device_uvector<T> make_device_uvector(host_span<T const> source_data,
+                                           rmm::cuda_stream_view stream,
+                                           rmm::device_async_resource_ref mr)
 {
   auto ret = make_device_uvector_async(source_data, stream, mr);
   stream.synchronize();
   return ret;
+}
+
+/**
+ * @copydoc cudf::detail::make_device_uvector(host_span<T const> source_data, rmm::cuda_stream_view
+ * stream, rmm::device_async_resource_ref mr)
+ *
+ * @deprecated This function is deprecated. Use `make_device_uvector` instead.
+ */
+template <typename T>
+[[deprecated("Use make_device_uvector instead")]] rmm::device_uvector<T> make_device_uvector_sync(
+  host_span<T const> source_data, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
+{
+  return make_device_uvector(source_data, stream, mr);
 }
 
 /**
@@ -217,10 +245,29 @@ template <
   typename Container,
   std::enable_if_t<
     std::is_convertible_v<Container, host_span<typename Container::value_type const>>>* = nullptr>
-rmm::device_uvector<typename Container::value_type> make_device_uvector_sync(
+rmm::device_uvector<typename Container::value_type> make_device_uvector(
   Container const& c, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
 {
-  return make_device_uvector_sync(host_span<typename Container::value_type const>{c}, stream, mr);
+  return make_device_uvector(host_span<typename Container::value_type const>{c}, stream, mr);
+}
+
+/**
+ * @copydoc cudf::detail::make_device_uvector(Container const& c, rmm::cuda_stream_view stream,
+ * rmm::device_async_resource_ref mr)
+ *
+ * @deprecated This function is deprecated. Use `make_device_uvector` instead.
+ */
+template <
+  typename Container,
+  std::enable_if_t<
+    std::is_convertible_v<Container, host_span<typename Container::value_type const>>>* = nullptr>
+[[deprecated(
+  "Use make_device_uvector instead")]] rmm::device_uvector<typename Container::value_type>
+make_device_uvector_sync(Container const& c,
+                         rmm::cuda_stream_view stream,
+                         rmm::device_async_resource_ref mr)
+{
+  return make_device_uvector(c, stream, mr);
 }
 
 /**
@@ -236,13 +283,26 @@ rmm::device_uvector<typename Container::value_type> make_device_uvector_sync(
  * @return A device_uvector containing the copied data
  */
 template <typename T>
-rmm::device_uvector<T> make_device_uvector_sync(device_span<T const> source_data,
-                                                rmm::cuda_stream_view stream,
-                                                rmm::device_async_resource_ref mr)
+rmm::device_uvector<T> make_device_uvector(device_span<T const> source_data,
+                                           rmm::cuda_stream_view stream,
+                                           rmm::device_async_resource_ref mr)
 {
   auto ret = make_device_uvector_async(source_data, stream, mr);
   stream.synchronize();
   return ret;
+}
+
+/**
+ * @copydoc cudf::detail::make_device_uvector(device_span<T const> source_data,
+ * rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
+ *
+ * @deprecated This function is deprecated. Use `make_device_uvector` instead.
+ */
+template <typename T>
+[[deprecated("Use make_device_uvector instead")]] rmm::device_uvector<T> make_device_uvector_sync(
+  device_span<T const> source_data, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
+{
+  return make_device_uvector(source_data, stream, mr);
 }
 
 /**
@@ -262,10 +322,29 @@ template <
   typename Container,
   std::enable_if_t<
     std::is_convertible_v<Container, device_span<typename Container::value_type const>>>* = nullptr>
-rmm::device_uvector<typename Container::value_type> make_device_uvector_sync(
+rmm::device_uvector<typename Container::value_type> make_device_uvector(
   Container const& c, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
 {
-  return make_device_uvector_sync(device_span<typename Container::value_type const>{c}, stream, mr);
+  return make_device_uvector(device_span<typename Container::value_type const>{c}, stream, mr);
+}
+
+/**
+ * @copydoc cudf::detail::make_device_uvector(Container const& c, rmm::cuda_stream_view stream,
+ * rmm::device_async_resource_ref mr)
+ *
+ * @deprecated This function is deprecated. Use `make_device_uvector` instead.
+ */
+template <
+  typename Container,
+  std::enable_if_t<
+    std::is_convertible_v<Container, device_span<typename Container::value_type const>>>* = nullptr>
+[[deprecated(
+  "Use make_device_uvector instead")]] rmm::device_uvector<typename Container::value_type>
+make_device_uvector_sync(Container const& c,
+                         rmm::cuda_stream_view stream,
+                         rmm::device_async_resource_ref mr)
+{
+  return make_device_uvector(c, stream, mr);
 }
 
 /**
@@ -322,11 +401,23 @@ std::vector<typename Container::value_type> make_std_vector_async(Container cons
  * @return The data copied to the host
  */
 template <typename T>
-std::vector<T> make_std_vector_sync(device_span<T const> v, rmm::cuda_stream_view stream)
+std::vector<T> make_std_vector(device_span<T const> v, rmm::cuda_stream_view stream)
 {
   auto result = make_std_vector_async(v, stream);
   stream.synchronize();
   return result;
+}
+
+/**
+ * @copydoc cudf::detail::make_std_vector(device_span<T const> v, rmm::cuda_stream_view stream)
+ *
+ * @deprecated This function is deprecated. Use `make_std_vector` instead.
+ */
+template <typename T>
+[[deprecated("Use make_std_vector instead")]] std::vector<T> make_std_vector_sync(
+  device_span<T const> v, rmm::cuda_stream_view stream)
+{
+  return make_std_vector(v, stream);
 }
 
 /**
@@ -345,10 +436,25 @@ template <
   typename Container,
   std::enable_if_t<
     std::is_convertible_v<Container, device_span<typename Container::value_type const>>>* = nullptr>
-std::vector<typename Container::value_type> make_std_vector_sync(Container const& c,
-                                                                 rmm::cuda_stream_view stream)
+std::vector<typename Container::value_type> make_std_vector(Container const& c,
+                                                            rmm::cuda_stream_view stream)
 {
-  return make_std_vector_sync(device_span<typename Container::value_type const>{c}, stream);
+  return make_std_vector(device_span<typename Container::value_type const>{c}, stream);
+}
+
+/**
+ * @copydoc cudf::detail::make_std_vector(Container const& c, rmm::cuda_stream_view stream)
+ *
+ * @deprecated This function is deprecated. Use `make_std_vector` instead.
+ */
+template <
+  typename Container,
+  std::enable_if_t<
+    std::is_convertible_v<Container, device_span<typename Container::value_type const>>>* = nullptr>
+[[deprecated("Use make_std_vector instead")]] std::vector<typename Container::value_type>
+make_std_vector_sync(Container const& c, rmm::cuda_stream_view stream)
+{
+  return make_std_vector(c, stream);
 }
 
 /**
@@ -441,11 +547,23 @@ host_vector<typename Container::value_type> make_host_vector_async(Container con
  * @return The data copied to the host
  */
 template <typename T>
-host_vector<T> make_host_vector_sync(device_span<T const> v, rmm::cuda_stream_view stream)
+host_vector<T> make_host_vector(device_span<T const> v, rmm::cuda_stream_view stream)
 {
   auto result = make_host_vector_async(v, stream);
   stream.synchronize();
   return result;
+}
+
+/**
+ * @copydoc cudf::detail::make_host_vector(device_span<T const> v, rmm::cuda_stream_view stream)
+ *
+ * @deprecated This function is deprecated. Use `make_host_vector` instead.
+ */
+template <typename T>
+[[deprecated("Use make_host_vector instead")]] host_vector<T> make_host_vector_sync(
+  device_span<T const> v, rmm::cuda_stream_view stream)
+{
+  return make_host_vector(v, stream);
 }
 
 /**
@@ -464,10 +582,25 @@ template <
   typename Container,
   std::enable_if_t<
     std::is_convertible_v<Container, device_span<typename Container::value_type const>>>* = nullptr>
-host_vector<typename Container::value_type> make_host_vector_sync(Container const& c,
-                                                                  rmm::cuda_stream_view stream)
+host_vector<typename Container::value_type> make_host_vector(Container const& c,
+                                                             rmm::cuda_stream_view stream)
 {
-  return make_host_vector_sync(device_span<typename Container::value_type const>{c}, stream);
+  return make_host_vector(device_span<typename Container::value_type const>{c}, stream);
+}
+
+/**
+ * @copydoc cudf::detail::make_host_vector(Container const& c, rmm::cuda_stream_view stream)
+ *
+ * @deprecated This function is deprecated. Use `make_host_vector` instead.
+ */
+template <
+  typename Container,
+  std::enable_if_t<
+    std::is_convertible_v<Container, device_span<typename Container::value_type const>>>* = nullptr>
+[[deprecated("Use make_host_vector instead")]] host_vector<typename Container::value_type>
+make_host_vector_sync(Container const& c, rmm::cuda_stream_view stream)
+{
+  return make_host_vector(c, stream);
 }
 
 /**
@@ -497,11 +630,23 @@ host_vector<T> make_pinned_vector_async(size_t size, rmm::cuda_stream_view strea
  * @return A host_vector of the given size
  */
 template <typename T>
-host_vector<T> make_pinned_vector_sync(size_t size, rmm::cuda_stream_view stream)
+host_vector<T> make_pinned_vector(size_t size, rmm::cuda_stream_view stream)
 {
   auto result = make_pinned_vector_async<T>(size, stream);
   stream.synchronize();
   return result;
+}
+
+/**
+ * @copydoc cudf::detail::make_pinned_vector(size_t size, rmm::cuda_stream_view stream)
+ *
+ * @deprecated This function is deprecated. Use `make_pinned_vector` instead.
+ */
+template <typename T>
+[[deprecated("Use make_pinned_vector instead")]] host_vector<T> make_pinned_vector_sync(
+  size_t size, rmm::cuda_stream_view stream)
+{
+  return make_pinned_vector<T>(size, stream);
 }
 
 }  // namespace detail

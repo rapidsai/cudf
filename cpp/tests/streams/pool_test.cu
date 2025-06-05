@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/default_stream.hpp>
+#include <cudf_test/testing_main.hpp>
 
 #include <cudf/detail/utilities/stream_pool.hpp>
 
@@ -32,3 +33,5 @@ TEST_F(StreamPoolTest, ForkStreams)
     do_nothing_kernel<<<1, 32, 0, stream.value()>>>();
   }
 }
+
+CUDF_TEST_PROGRAM_MAIN()

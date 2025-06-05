@@ -63,10 +63,11 @@ def install():
     except RuntimeError as e:
         warnings.warn(str(e))
         return
-    default_rmm_mode = (
-        "managed_pool" if managed_memory_is_supported else "pool"
-    )
-    rmm_mode = os.getenv("CUDF_PANDAS_RMM_MODE", default_rmm_mode)
+
+    rmm_mode = os.getenv("CUDF_PANDAS_RMM_MODE")
+    rmm_mode_explicitly_set = rmm_mode is not None
+    if rmm_mode is None:
+        rmm_mode = "managed_pool" if managed_memory_is_supported else "pool"
 
     if "managed" in rmm_mode and not managed_memory_is_supported:
         raise ValueError(
@@ -76,10 +77,13 @@ def install():
     # Check if a non-default memory resource is set
     current_mr = rmm.mr.get_current_device_resource()
     if not isinstance(current_mr, rmm.mr.CudaMemoryResource):
-        warnings.warn(
-            f"cudf.pandas detected an already configured memory resource, ignoring 'CUDF_PANDAS_RMM_MODE'={rmm_mode!s}",
-            UserWarning,
-        )
+        # Warn only if the user explicitly set CUDF_PANDAS_RMM_MODE
+        if rmm_mode_explicitly_set:
+            warnings.warn(
+                "cudf.pandas detected an already configured memory resource, ignoring "
+                f"'CUDF_PANDAS_RMM_MODE={rmm_mode}'",
+                UserWarning,
+            )
         return
 
     free_memory, _ = rmm.mr.available_device_memory()

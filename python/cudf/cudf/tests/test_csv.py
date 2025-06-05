@@ -887,10 +887,10 @@ def test_csv_reader_nrows(tmpdir):
     names = ["int1", "int2"]
     dtypes = ["int32", "int32"]
 
-    rows = 4000000
+    rows = 4000
     read_rows = (rows * 3) // 4
     skip_rows = (rows - read_rows) // 2
-    sample_skip = 1000
+    sample_skip = 100
 
     with open(str(fname), "w") as fp:
         fp.write(",".join(names) + "\n")
@@ -1183,7 +1183,7 @@ def test_csv_reader_byte_range_type_corner_case(tmpdir):
     ).to_csv(fname, chunksize=100000)
 
     byte_range = (2_147_483_648, 0)
-    with pytest.raises(OverflowError, match="Offset is past end of file"):
+    with pytest.raises(ValueError, match="Invalid byte range offset"):
         cudf.read_csv(fname, byte_range=byte_range, header=None)
 
 

@@ -57,6 +57,7 @@ cdef class ParquetReaderOptionsBuilder:
 
 
 cdef class ChunkedParquetReader:
+    cdef readonly Stream stream
     cdef unique_ptr[cpp_chunked_parquet_reader] reader
 
     cpdef bool has_next(self)
@@ -154,5 +155,7 @@ cdef class ParquetWriterOptionsBuilder:
     cpdef ParquetWriterOptions build(self)
 
 cpdef memoryview write_parquet(ParquetWriterOptions options, Stream stream = *)
+
+cpdef bool is_supported_write_parquet(compression_type compression)
 
 cpdef memoryview merge_row_group_metadata(list metdata_list)

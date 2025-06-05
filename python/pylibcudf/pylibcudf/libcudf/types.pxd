@@ -1,4 +1,5 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION.
+from libc.stddef cimport size_t
 from libc.stdint cimport int32_t, uint32_t
 from libcpp cimport bool
 from pylibcudf.exception_handler cimport libcudf_exception_handler
@@ -100,4 +101,4 @@ cdef extern from "cudf/types.hpp" namespace "cudf" nogil:
         MIDPOINT
         NEAREST
 
-    cdef size_type size_of(data_type t) except +libcudf_exception_handler
+    cdef size_t size_of(data_type t) except +libcudf_exception_handler

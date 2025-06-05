@@ -12,6 +12,10 @@ exclude = [
     "dask_cudf/dask_cudf/tests/",
  ]
 
+[[tool.mypy.overrides]]
+module = ["cudf_polars.*"]
+disallow_untyped_defs = true
+
 [tool.codespell]
 # note: pre-commit passes explicit lists of files here, which this skip file list doesn't override -
 # this is only to allow you to run codespell interactively

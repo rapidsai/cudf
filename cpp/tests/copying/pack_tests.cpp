@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,6 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
+#include <tests/copying/slice_tests.cuh>
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
@@ -577,4 +579,18 @@ TEST_F(PackUnpackTest, SlicedEmpty)
   auto packed   = cudf::pack(t);
   auto unpacked = cudf::unpack(packed);
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(t, unpacked);
+}
+
+TEST_F(PackUnpackTest, LongOffsets)
+{
+  auto str = make_long_offsets_string_column();
+  cudf::table_view tbl({*str});
+  this->run_test(tbl);
+}
+
+TEST_F(PackUnpackTest, DISABLED_LongOffsetsAndChars)
+{
+  auto str = make_long_offsets_and_chars_string_column();
+  cudf::table_view tbl({*str});
+  this->run_test(tbl);
 }

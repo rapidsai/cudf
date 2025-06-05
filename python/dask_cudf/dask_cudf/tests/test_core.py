@@ -859,6 +859,16 @@ def test_implicit_array_conversion_cupy():
     dd.assert_eq(result.to_dask_dataframe(), s, check_index=False)
 
 
+def test_array_conversion_cupy_chunks():
+    pdf = pd.DataFrame({"x": range(10), "y": range(10)})
+    df = dd.from_pandas(pdf, npartitions=2)
+    arr = df.to_dask_array()
+    garr = df.to_backend("cudf").to_dask_array()
+    arr.compute_chunk_sizes()
+    garr.compute_chunk_sizes()
+    assert arr.chunks == garr.chunks
+
+
 def test_implicit_array_conversion_cupy_sparse():
     cupyx = pytest.importorskip("cupyx")
 

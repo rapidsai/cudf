@@ -210,4 +210,4 @@ def test_to_dlpack_mixed_dtypes():
 def test_from_dlpack_zero_sizes(shape):
     arr = cupy.empty(shape, dtype=float)
     df = cudf.io.dlpack.from_dlpack(arr.__dlpack__())
-    assert_eq(df, cudf.DataFrame(arr))
+    assert_eq(df, cudf.DataFrame(columns=range(shape[1]), dtype=float))

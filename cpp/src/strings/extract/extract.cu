@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -56,7 +56,7 @@ struct extract_fn {
 
   __device__ void operator()(size_type const idx,
                              reprog_device const d_prog,
-                             int32_t const prog_idx)
+                             int32_t const prog_idx) const
   {
     auto const groups = d_prog.group_counts();
     auto d_output     = d_indices[idx];
@@ -85,7 +85,6 @@ struct extract_fn {
     thrust::fill(thrust::seq, d_output.begin(), d_output.end(), string_index_pair{nullptr, 0});
   }
 };
-
 }  // namespace
 
 //
@@ -128,6 +127,59 @@ std::unique_ptr<table> extract(strings_column_view const& input,
   return std::make_unique<table>(std::move(results));
 }
 
+namespace {
+struct extract_single_fn {
+  column_device_view const d_strings;
+  size_type group_id;
+
+  __device__ string_index_pair operator()(size_type const idx,
+                                          reprog_device const d_prog,
+                                          int32_t const prog_idx) const
+  {
+    auto result = string_index_pair{nullptr, 0};
+    if (d_strings.is_valid(idx)) {
+      auto const d_str = d_strings.element<string_view>(idx);
+      auto const match = d_prog.find(prog_idx, d_str, d_str.begin());
+      if (match) {
+        auto const itr       = d_str.begin() + match->first;
+        auto const extracted = d_prog.extract(prog_idx, d_str, itr, match->second, group_id);
+        if (extracted) {
+          auto const d_extracted = string_from_match(*extracted, d_str, itr);
+
+          result = string_index_pair{d_extracted.data(), d_extracted.size_bytes()};
+        }
+      }
+    }
+    return result;
+  }
+};
+}  // namespace
+
+std::unique_ptr<column> extract_single(strings_column_view const& input,
+                                       regex_program const& prog,
+                                       size_type group,
+                                       rmm::cuda_stream_view stream,
+                                       rmm::device_async_resource_ref mr)
+{
+  // create device object from regex_program
+  auto d_prog = regex_device_builder::create_prog_device(prog, stream);
+
+  auto const groups = d_prog->group_counts();
+  CUDF_EXPECTS(groups > 0, "capture groups not found in regex pattern", std::invalid_argument);
+  CUDF_EXPECTS(group >= 0 && group < groups,
+               "group parameter outside the range of capture groups found in the regex pattern",
+               std::invalid_argument);
+
+  auto indices = rmm::device_uvector<string_index_pair>(input.size(), stream);
+
+  auto const d_strings = column_device_view::create(input.parent(), stream);
+
+  launch_transform_kernel(
+    extract_single_fn{*d_strings, group}, *d_prog, indices.data(), input.size(), stream);
+
+  return make_strings_column(indices.begin(), indices.end(), stream, mr);
+}
+
 }  // namespace detail
 
 // external API
@@ -141,5 +193,14 @@ std::unique_ptr<table> extract(strings_column_view const& input,
   return detail::extract(input, prog, stream, mr);
 }
 
+std::unique_ptr<column> extract_single(strings_column_view const& input,
+                                       regex_program const& prog,
+                                       size_type group,
+                                       rmm::cuda_stream_view stream,
+                                       rmm::device_async_resource_ref mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::extract_single(input, prog, group, stream, mr);
+}
 }  // namespace strings
 }  // namespace cudf

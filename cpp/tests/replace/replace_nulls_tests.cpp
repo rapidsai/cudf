@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Copyright 2018 BlazingDB, Inc.
  *     Copyright 2018 Alexander Ocsa <cristhian@blazingdb.com>
@@ -486,14 +486,12 @@ TYPED_TEST(ReplaceNullsFixedPointTest, ReplaceColumn)
 {
   auto const scale = numeric::scale_type{0};
   auto const sz    = std::size_t{1000};
-  auto data_begin  = cudf::detail::make_counting_transform_iterator(0, [&](auto i) {
-    return TypeParam{i, scale};
-  });
+  auto data_begin =
+    cudf::detail::make_counting_transform_iterator(0, [&](auto i) { return TypeParam{i, scale}; });
   auto valid_begin =
     cudf::detail::make_counting_transform_iterator(0, [&](auto i) { return i % 3 ? 1 : 0; });
-  auto replace_begin  = cudf::detail::make_counting_transform_iterator(0, [&](auto i) {
-    return TypeParam{-2, scale};
-  });
+  auto replace_begin =
+    cudf::detail::make_counting_transform_iterator(0, [&](auto i) { return TypeParam{-2, scale}; });
   auto expected_begin = cudf::detail::make_counting_transform_iterator(0, [&](auto i) {
     int val = i % 3 ? static_cast<int>(i) : -2;
     return TypeParam{val, scale};
@@ -516,9 +514,8 @@ TYPED_TEST(ReplaceNullsFixedPointTest, ReplaceScalar)
 {
   auto const scale = numeric::scale_type{0};
   auto const sz    = std::size_t{1000};
-  auto data_begin  = cudf::detail::make_counting_transform_iterator(0, [&](auto i) {
-    return TypeParam{i, scale};
-  });
+  auto data_begin =
+    cudf::detail::make_counting_transform_iterator(0, [&](auto i) { return TypeParam{i, scale}; });
   auto valid_begin =
     cudf::detail::make_counting_transform_iterator(0, [&](auto i) { return i % 3 ? 1 : 0; });
   auto expected_begin = cudf::detail::make_counting_transform_iterator(0, [&](auto i) {
@@ -538,14 +535,12 @@ TYPED_TEST(ReplaceNullsFixedPointTest, ReplacementHasNulls)
 {
   auto const scale = numeric::scale_type{0};
   auto const sz    = std::size_t{1000};
-  auto data_begin  = cudf::detail::make_counting_transform_iterator(0, [&](auto i) {
-    return TypeParam{i, scale};
-  });
+  auto data_begin =
+    cudf::detail::make_counting_transform_iterator(0, [&](auto i) { return TypeParam{i, scale}; });
   auto data_valid_begin =
     cudf::detail::make_counting_transform_iterator(0, [&](auto i) { return i % 3 ? 1 : 0; });
-  auto replace_begin = cudf::detail::make_counting_transform_iterator(0, [&](auto i) {
-    return TypeParam{-2, scale};
-  });
+  auto replace_begin =
+    cudf::detail::make_counting_transform_iterator(0, [&](auto i) { return TypeParam{-2, scale}; });
   auto replace_valid_begin =
     cudf::detail::make_counting_transform_iterator(0, [&](auto i) { return i % 2 ? 1 : 0; });
   auto expected_begin = cudf::detail::make_counting_transform_iterator(0, [&](auto i) {

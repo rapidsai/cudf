@@ -203,10 +203,6 @@ struct BaseToArrowHostFixture : public cudf::test::BaseFixture {
 };
 
 struct ToArrowHostDeviceTest : public BaseToArrowHostFixture {};
-template <typename T>
-struct ToArrowHostDeviceTestDurationsTest : public BaseToArrowHostFixture {};
-
-TYPED_TEST_SUITE(ToArrowHostDeviceTestDurationsTest, cudf::test::DurationTypes);
 
 TEST_F(ToArrowHostDeviceTest, EmptyTable)
 {
@@ -285,6 +281,46 @@ TEST_F(ToArrowHostDeviceTest, DateTimeTable)
   ArrowArrayViewReset(&expected);
   ArrowArrayViewReset(&actual);
 }
+
+TEST_F(ToArrowHostDeviceTest, StringView)
+{
+  ArrowSchema schema;
+  NANOARROW_THROW_NOT_OK(ArrowSchemaInitFromType(&schema, NANOARROW_TYPE_STRING_VIEW));
+
+  auto data = cudf::test::strings_column_wrapper(
+    {"hello", "worldy", "much longer string", "", "another even longer string", "", "other string"},
+    {1, 1, 1, 0, 1, 1, 1});
+  auto result   = cudf::to_arrow_host_stringview(cudf::strings_column_view(data));
+  auto expected = cudf::from_arrow_column(&schema, &result->array);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected->view(), data);
+
+  auto sliced = cudf::split(data, {3}).front();
+  result      = cudf::to_arrow_host_stringview(cudf::strings_column_view(sliced));
+  expected    = cudf::from_arrow_column(&schema, &result->array);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected->view(), sliced);
+
+  data =
+    cudf::test::strings_column_wrapper({"all of", "these", "strings", "will", "fit", "inline"});
+  result   = cudf::to_arrow_host_stringview(cudf::strings_column_view(data));
+  expected = cudf::from_arrow_column(&schema, &result->array);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected->view(), data);
+
+  data = cudf::test::strings_column_wrapper(
+    {"all of these strings", "are longer and will", "not fit as inline ones"});
+  result   = cudf::to_arrow_host_stringview(cudf::strings_column_view(data));
+  expected = cudf::from_arrow_column(&schema, &result->array);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected->view(), data);
+
+  data     = cudf::test::strings_column_wrapper();  // empty column test
+  result   = cudf::to_arrow_host_stringview(cudf::strings_column_view(data));
+  expected = cudf::from_arrow_column(&schema, &result->array);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected->view(), data);
+}
+
+template <typename T>
+struct ToArrowHostDeviceTestDurationsTest : public BaseToArrowHostFixture {};
+
+TYPED_TEST_SUITE(ToArrowHostDeviceTestDurationsTest, cudf::test::DurationTypes);
 
 TYPED_TEST(ToArrowHostDeviceTestDurationsTest, DurationTable)
 {

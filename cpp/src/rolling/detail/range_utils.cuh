@@ -35,11 +35,11 @@
 #include <rmm/resource_ref.hpp>
 
 #include <cuda/functional>
+#include <cuda/std/iterator>
 #include <cuda/std/limits>
 #include <cuda/std/type_traits>
 #include <thrust/binary_search.h>
 #include <thrust/copy.h>
-#include <thrust/distance.h>
 #include <thrust/execution_policy.h>
 
 #include <optional>
@@ -313,12 +313,12 @@ struct current_row_distance_functor {
     }
     if (direction == direction::PRECEDING) {
       return 1 +
-             thrust::distance(
+             cuda::std::distance(
                thrust::lower_bound(
                  thrust::seq, begin + row_info.non_null_start(), begin + i, begin[i], Comp{order}),
                begin + i);
     } else {
-      return thrust::distance(
+      return cuda::std::distance(
                begin + i,
                thrust::upper_bound(
                  thrust::seq, begin + i, begin + row_info.non_null_end(), begin[i], Comp{order})) -
@@ -407,12 +407,12 @@ struct bounded_distance_functor {
                            offset_value = offset_value](auto&& cmp) {
       if (preceding) {
         // Search for first slot we can place the offset value
-        return 1 + thrust::distance(thrust::lower_bound(thrust::seq, start, end, offset_value, cmp),
-                                    current);
+        return 1 + cuda::std::distance(
+                     thrust::lower_bound(thrust::seq, start, end, offset_value, cmp), current);
       } else {
         // Search for last slot we can place the offset value
-        return thrust::distance(current,
-                                thrust::upper_bound(thrust::seq, start, end, offset_value, cmp)) -
+        return cuda::std::distance(
+                 current, thrust::upper_bound(thrust::seq, start, end, offset_value, cmp)) -
                1;
       }
     };

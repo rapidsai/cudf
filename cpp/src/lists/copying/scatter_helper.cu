@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,8 +25,8 @@
 #include <cudf/utilities/span.hpp>
 
 #include <cuda/functional>
+#include <cuda/std/iterator>
 #include <thrust/binary_search.h>
-#include <thrust/distance.h>
 #include <thrust/execution_policy.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
@@ -199,7 +199,7 @@ struct list_child_constructor {
         auto const list_index_iter =
           thrust::upper_bound(thrust::seq, offset_begin, offset_begin + offset_size, index);
         auto const list_index =
-          static_cast<size_type>(thrust::distance(offset_begin, list_index_iter) - 1);
+          static_cast<size_type>(cuda::std::distance(offset_begin, list_index_iter) - 1);
         auto const intra_index = static_cast<size_type>(index - offset_begin[list_index]);
         auto actual_list_row = d_list_vector[list_index].bind_to_column(source_lists, target_lists);
         return actual_list_row.template element<T>(intra_index);
@@ -252,7 +252,7 @@ struct list_child_constructor {
         auto const list_index_iter =
           thrust::upper_bound(thrust::seq, offset_begin, offset_begin + offset_size, index);
         auto const list_index =
-          static_cast<size_type>(thrust::distance(offset_begin, list_index_iter) - 1);
+          static_cast<size_type>(cuda::std::distance(offset_begin, list_index_iter) - 1);
         auto const intra_index = static_cast<size_type>(index - offset_begin[list_index]);
         auto row_index         = d_list_vector[list_index].row_index();
         auto actual_list_row = d_list_vector[list_index].bind_to_column(source_lists, target_lists);
@@ -318,7 +318,7 @@ struct list_child_constructor {
         auto const list_index_iter =
           thrust::upper_bound(thrust::seq, offset_begin, offset_begin + offset_size, index);
         auto const list_index =
-          static_cast<size_type>(thrust::distance(offset_begin, list_index_iter) - 1);
+          static_cast<size_type>(cuda::std::distance(offset_begin, list_index_iter) - 1);
         auto const intra_index = static_cast<size_type>(index - offset_begin[list_index]);
         auto label             = d_list_vector[list_index].label();
         auto row_index         = d_list_vector[list_index].row_index();

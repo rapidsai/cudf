@@ -17,6 +17,7 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/default_stream.hpp>
+#include <cudf_test/testing_main.hpp>
 
 #include <cudf/ast/expressions.hpp>
 #include <cudf/column/column_view.hpp>
@@ -45,6 +46,7 @@ void test_udf(char const* udf, Data data_init, cudf::size_type size, bool is_ptx
                   udf,
                   cudf::data_type(cudf::type_to_id<dtype>()),
                   is_ptx,
+                  std::nullopt,
                   cudf::test::get_default_stream());
 }
 
@@ -168,3 +170,5 @@ TEST_F(TransformTest, SegmentedRowBitCount)
   auto constexpr segment_length = 2;
   cudf::segmented_row_bit_count(input, segment_length, cudf::test::get_default_stream());
 }
+
+CUDF_TEST_PROGRAM_MAIN()

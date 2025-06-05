@@ -134,15 +134,15 @@ def pa_column(pa_dtype):
 
 @pytest.fixture(scope="module")
 def column(pa_column):
-    return plc.interop.from_arrow(pa_column)
+    return plc.Column(pa_column)
 
 
 def test_foo(pa_column, column):
     index = 1
-    result = plc.foo(column)
-    expected = pa.foo(pa_column)
+    got = plc.foo(column)
+    expect = pa.foo(pa_column)
 
-    assert_column_eq(result, expected)
+    assert_column_eq(expect, got)
 ```
 
 Some guidelines on what should be tested:

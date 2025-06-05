@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -209,7 +209,7 @@ tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
       return 1 + ((num_tokens - max_sequence_length + stride - 1) / stride);
     },
     uint32_t{0},
-    thrust::plus<uint32_t>());
+    cuda::std::plus<uint32_t>());
   // last element is the total number of output rows
   uint32_t const nrows_tensor_token_ids = offsets_per_tensor.element(strings_count, stream);
   // if there are no tokens at all, build a specific empty result

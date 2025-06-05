@@ -12,10 +12,11 @@ import pylibcudf as plc
 
 import cudf
 from cudf.core.buffer import Buffer, acquire_spill_lock
-from cudf.core.column.column import ColumnBase
+from cudf.core.column.column import ColumnBase, column_empty
 from cudf.core.missing import NA
 from cudf.core.mixins import Scannable
 from cudf.utils import cudautils
+from cudf.utils.dtypes import _get_nan_for_dtype
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -89,12 +90,12 @@ class NumericalBaseColumn(ColumnBase, Scannable):
         skipna = True if skipna is None else skipna
 
         if len(self) == 0 or self._can_return_nan(skipna=skipna):
-            return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
+            return _get_nan_for_dtype(self.dtype)
 
         self = self.nans_to_nulls().dropna()
 
         if len(self) < 4:
-            return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
+            return _get_nan_for_dtype(self.dtype)
 
         n = len(self)
         miu = self.mean()
@@ -114,12 +115,12 @@ class NumericalBaseColumn(ColumnBase, Scannable):
         skipna = True if skipna is None else skipna
 
         if len(self) == 0 or self._can_return_nan(skipna=skipna):
-            return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
+            return _get_nan_for_dtype(self.dtype)
 
         self = self.nans_to_nulls().dropna()
 
         if len(self) < 3:
-            return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
+            return _get_nan_for_dtype(self.dtype)
 
         n = len(self)
         miu = self.mean()
@@ -149,9 +150,7 @@ class NumericalBaseColumn(ColumnBase, Scannable):
         if len(self) == 0:
             result = cast(
                 NumericalBaseColumn,
-                cudf.core.column.column_empty(
-                    row_count=len(q), dtype=self.dtype
-                ),
+                column_empty(row_count=len(q), dtype=self.dtype),
             )
         else:
             no_nans = self.nans_to_nulls()
@@ -183,7 +182,7 @@ class NumericalBaseColumn(ColumnBase, Scannable):
                 except (TypeError, ValueError):
                     pass
             return (
-                cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
+                _get_nan_for_dtype(self.dtype)
                 if scalar_result is NA
                 else scalar_result
             )
@@ -206,7 +205,7 @@ class NumericalBaseColumn(ColumnBase, Scannable):
             "var", skipna=skipna, min_count=min_count, ddof=ddof
         )
         if result is NA:
-            return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
+            return _get_nan_for_dtype(self.dtype)
         return result
 
     def std(
@@ -219,14 +218,14 @@ class NumericalBaseColumn(ColumnBase, Scannable):
             "std", skipna=skipna, min_count=min_count, ddof=ddof
         )
         if result is NA:
-            return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
+            return _get_nan_for_dtype(self.dtype)
         return result
 
     def median(self, skipna: bool | None = None) -> NumericalBaseColumn:
         skipna = True if skipna is None else skipna
 
         if self._can_return_nan(skipna=skipna):
-            return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
+            return _get_nan_for_dtype(self.dtype)
 
         # enforce linear in case the default ever changes
         return self.quantile(
@@ -242,7 +241,7 @@ class NumericalBaseColumn(ColumnBase, Scannable):
             or len(other) == 0
             or (len(self) == 1 and len(other) == 1)
         ):
-            return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
+            return _get_nan_for_dtype(self.dtype)
 
         result = (self - self.mean()) * (other - other.mean())
         cov_sample = result.sum() / (len(self) - 1)
@@ -250,13 +249,13 @@ class NumericalBaseColumn(ColumnBase, Scannable):
 
     def corr(self, other: NumericalBaseColumn) -> float:
         if len(self) == 0 or len(other) == 0:
-            return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
+            return _get_nan_for_dtype(self.dtype)
 
         cov = self.cov(other)
         lhs_std, rhs_std = self.std(), other.std()
 
         if not cov or lhs_std == 0 or rhs_std == 0:
-            return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
+            return _get_nan_for_dtype(self.dtype)
         return cov / lhs_std / rhs_std
 
     def round(

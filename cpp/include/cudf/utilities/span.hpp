@@ -200,7 +200,7 @@ struct host_span : public cudf::detail::span_base<T, Extent, host_span<T, Extent
   /**
    * @brief Constructor from pointer and size
    *
-   * @note This needs to be host-device , as it's used by a host-device function in base_2dspan
+   * @note This needs to be host-device, as it's used by a host-device function in base_2dspan
    *
    * @param data Pointer to the first element in the span
    * @param size The number of elements in the span
@@ -540,8 +540,7 @@ class base_2dspan {
    * @param other The other 2D span
    */
   template <typename OtherT,
-            template <typename, size_t>
-            typename OtherRowType,
+            template <typename, size_t> typename OtherRowType,
             std::enable_if_t<std::is_convertible_v<OtherRowType<OtherT, dynamic_extent>,
                                                    RowType<T, dynamic_extent>>,
                              void>* = nullptr>

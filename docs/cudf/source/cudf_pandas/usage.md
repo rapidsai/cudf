@@ -26,6 +26,12 @@ df.groupby("size").total_bill.mean()  # uses the GPU
 df.apply(list, axis=1)                # uses the CPU (fallback)
 ```
 
+```{note}
+If you have already imported or used pandas in your current kernel session,
+you will need to restart your kernel and run `%load_ext cudf.pandas` as the
+first command before any pandas imports or usage.
+```
+
 ## Command Line Usage
 
 From the command line, run your Python scripts with `-m cudf.pandas`:

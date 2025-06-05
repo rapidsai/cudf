@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -87,7 +87,7 @@ std::vector<std::vector<column_view>> extract_ordered_struct_children(
  * @brief Check whether the specified column is of type LIST, or any LISTs in its descendent
  * columns.
  * @param col column to check for lists.
- * @return true if the column or any of it's children is a list, false otherwise.
+ * @return true if the column or any of its children is a list, false otherwise.
  */
 bool is_or_has_nested_lists(cudf::column_view const& col);
 

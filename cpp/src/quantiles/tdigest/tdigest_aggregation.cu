@@ -37,9 +37,8 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
-#include <thrust/advance.h>
+#include <cuda/std/iterator>
 #include <thrust/binary_search.h>
-#include <thrust/distance.h>
 #include <thrust/execution_policy.h>
 #include <thrust/functional.h>
 #include <thrust/iterator/constant_iterator.h>
@@ -1039,9 +1038,9 @@ struct group_key_func {
   __device__ size_type operator()(size_type index)
   {
     // what -original- tdigest index this absolute index corresponds to
-    auto const iter          = thrust::prev(thrust::upper_bound(
+    auto const iter          = cuda::std::prev(thrust::upper_bound(
       thrust::seq, tdigest_offsets, tdigest_offsets + num_tdigest_offsets, index));
-    auto const tdigest_index = thrust::distance(tdigest_offsets, iter);
+    auto const tdigest_index = cuda::std::distance(tdigest_offsets, iter);
 
     // what group index the original tdigest belongs to
     return group_labels[tdigest_index];

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,11 +37,10 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/std/iterator>
 #include <thrust/count.h>
-#include <thrust/distance.h>
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/iterator/iterator_traits.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/scatter.h>
 #include <thrust/sequence.h>
@@ -74,7 +73,7 @@ auto scatter_to_gather(MapIterator scatter_map_begin,
                        size_type gather_rows,
                        rmm::cuda_stream_view stream)
 {
-  using MapValueType = typename thrust::iterator_traits<MapIterator>::value_type;
+  using MapValueType = cuda::std::iter_value_t<MapIterator>;
 
   // The gather_map is initialized with `numeric_limits::lowest()` value to identify pass-through
   // entries when calling the gather_bitmask() which applies a pass-through whenever it finds a
@@ -122,7 +121,7 @@ auto scatter_to_gather_complement(MapIterator scatter_map_begin,
   auto const out_of_bounds_begin =
     thrust::make_constant_iterator(std::numeric_limits<size_type>::lowest());
   auto const out_of_bounds_end =
-    out_of_bounds_begin + thrust::distance(scatter_map_begin, scatter_map_end);
+    out_of_bounds_begin + cuda::std::distance(scatter_map_begin, scatter_map_end);
   thrust::scatter(rmm::exec_policy_nosync(stream),
                   out_of_bounds_begin,
                   out_of_bounds_end,
@@ -399,7 +398,7 @@ std::unique_ptr<table> scatter(table_view const& source,
 {
   CUDF_FUNC_RANGE();
 
-  using MapType = typename thrust::iterator_traits<MapIterator>::value_type;
+  using MapType = cuda::std::iter_value_t<MapIterator>;
 
   CUDF_EXPECTS(std::distance(scatter_map_begin, scatter_map_end) <= source.num_rows(),
                "scatter map size should be <= to number of rows in source");

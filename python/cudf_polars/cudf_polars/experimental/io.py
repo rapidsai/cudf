@@ -4,11 +4,12 @@
 
 from __future__ import annotations
 
+import dataclasses
 import enum
 import math
 import random
 from enum import IntEnum
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, TypeVar
 
 import pylibcudf as plc
 
@@ -19,20 +20,27 @@ from cudf_polars.experimental.dispatch import lower_ir_node
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
 
+    import numpy as np
+    import numpy.typing as npt
+
+    from cudf_polars.containers import DataFrame
     from cudf_polars.dsl.expr import NamedExpr
     from cudf_polars.experimental.dispatch import LowerIRTransformer
     from cudf_polars.typing import Schema
     from cudf_polars.utils.config import ConfigOptions
+
+    T = TypeVar("T", bound=npt.NBitBase)
 
 
 @lower_ir_node.register(DataFrameScan)
 def _(
     ir: DataFrameScan, rec: LowerIRTransformer
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
-    rows_per_partition = ir.config_options.get(
-        "executor_options.max_rows_per_partition",
-        default=1_000_000,
+    assert ir.config_options.executor.name == "streaming", (
+        "'in-memory' executor not supported in 'generate_ir_tasks'"
     )
+
+    rows_per_partition = ir.config_options.executor.max_rows_per_partition
 
     nrows = max(ir.df.shape()[0], 1)
     count = math.ceil(nrows / rows_per_partition)
@@ -93,12 +101,18 @@ class ScanPartitionPlan:
         """Extract the partitioning plan of a Scan operation."""
         if ir.typ == "parquet":
             # TODO: Use system info to set default blocksize
-            blocksize: int = ir.config_options.get(
-                "executor_options.parquet_blocksize",
-                default=1024**3,
+            assert ir.config_options.executor.name == "streaming", (
+                "'in-memory' executor not supported in 'generate_ir_tasks'"
             )
-            stats = _sample_pq_statistics(ir)
-            file_size = sum(float(stats[column]) for column in ir.schema)
+
+            blocksize: int = ir.config_options.executor.target_partition_size
+            # _sample_pq_statistics is generic over the bit-width of the array
+            # We don't care about that here, so we ignore it.
+            stats = _sample_pq_statistics(ir)  # type: ignore[var-annotated]
+            # Some columns (e.g., "include_file_paths") may be present in the schema
+            # but not in the Parquet statistics dict. We use stats.get(column, 0)
+            # to safely fall back to 0 in those cases.
+            file_size = sum(float(stats.get(column, 0)) for column in ir.schema)
             if file_size > 0:
                 if file_size > blocksize:
                     # Split large files
@@ -178,8 +192,9 @@ class SplitScan(IR):
         skip_rows: int,
         n_rows: int,
         row_index: tuple[str, int] | None,
+        include_file_paths: str | None,
         predicate: NamedExpr | None,
-    ):
+    ) -> DataFrame:
         """Evaluate and return a dataframe."""
         if typ not in ("parquet",):  # pragma: no cover
             raise NotImplementedError(f"Unhandled Scan type for file splitting: {typ}")
@@ -237,30 +252,37 @@ class SplitScan(IR):
             skip_rows,
             n_rows,
             row_index,
+            include_file_paths,
             predicate,
         )
 
 
-def _sample_pq_statistics(ir: Scan) -> dict[str, float]:
+def _sample_pq_statistics(ir: Scan) -> dict[str, np.floating[T]]:
+    import itertools
+
     import numpy as np
-    import pyarrow.dataset as pa_ds
 
     # Use average total_uncompressed_size of three files
-    # TODO: Use plc.io.parquet_metadata.read_parquet_metadata
     n_sample = min(3, len(ir.paths))
+    metadata = plc.io.parquet_metadata.read_parquet_metadata(
+        plc.io.SourceInfo(random.sample(ir.paths, n_sample))
+    )
     column_sizes = {}
-    ds = pa_ds.dataset(random.sample(ir.paths, n_sample), format="parquet")
-    for i, frag in enumerate(ds.get_fragments()):
-        md = frag.metadata
-        for rg in range(md.num_row_groups):
-            row_group = md.row_group(rg)
-            for col in range(row_group.num_columns):
-                column = row_group.column(col)
-                name = column.path_in_schema
-                if name not in column_sizes:
-                    column_sizes[name] = np.zeros(n_sample, dtype="int64")
-                column_sizes[name][i] += column.total_uncompressed_size
+    rowgroup_offsets_per_file = np.insert(
+        np.cumsum(metadata.num_rowgroups_per_file()), 0, 0
+    )
 
+    # For each column, calculate the `total_uncompressed_size` for each file
+    for name, uncompressed_sizes in metadata.columnchunk_metadata().items():
+        column_sizes[name] = np.array(
+            [
+                np.sum(uncompressed_sizes[start:end])
+                for (start, end) in itertools.pairwise(rowgroup_offsets_per_file)
+            ],
+            dtype="int64",
+        )
+
+    # Return the mean per-file `total_uncompressed_size` for each column
     return {name: np.mean(sizes) for name, sizes in column_sizes.items()}
 
 
@@ -274,8 +296,11 @@ def _(
         paths = list(ir.paths)
         if plan.flavor == ScanPartitionFlavor.SPLIT_FILES:
             # Disable chunked reader when splitting files
-            config_options = ir.config_options.set(
-                name="parquet_options.chunked", value=False
+            config_options = dataclasses.replace(
+                ir.config_options,
+                parquet_options=dataclasses.replace(
+                    ir.config_options.parquet_options, chunked=False
+                ),
             )
 
             slices: list[SplitScan] = []
@@ -291,6 +316,7 @@ def _(
                     ir.skip_rows,
                     ir.n_rows,
                     ir.row_index,
+                    ir.include_file_paths,
                     ir.predicate,
                 )
                 slices.extend(
@@ -314,6 +340,7 @@ def _(
                     ir.skip_rows,
                     ir.n_rows,
                     ir.row_index,
+                    ir.include_file_paths,
                     ir.predicate,
                 )
                 for i in range(0, len(paths), plan.factor)

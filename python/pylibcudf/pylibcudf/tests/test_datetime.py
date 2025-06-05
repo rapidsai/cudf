@@ -23,9 +23,7 @@ def datetime_column(has_nulls, request):
     ]
     if has_nulls:
         values[2] = None
-    return plc.interop.from_arrow(
-        pa.array(values, type=pa.timestamp(request.param))
-    )
+    return plc.Column(pa.array(values, type=pa.timestamp(request.param)))
 
 
 @pytest.fixture(

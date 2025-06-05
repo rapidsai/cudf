@@ -260,7 +260,7 @@ aggregate_orc_metadata::select_stripes(
       auto const buffer =
         per_file_metadata[mapping.source_idx].source->host_read(sf_comp_offset, sf_comp_length);
       auto sf_data = per_file_metadata[mapping.source_idx].decompressor->decompress_blocks(
-        {buffer->data(), buffer->size()}, stream);
+        {buffer->data(), buffer->size()});
       protobuf_reader(sf_data.data(), sf_data.size())
         .read(per_file_metadata[mapping.source_idx].stripefooters[i]);
       mapping.stripe_info[i].stripe_footer =

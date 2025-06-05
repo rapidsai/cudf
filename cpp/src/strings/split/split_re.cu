@@ -32,7 +32,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
-#include <thrust/distance.h>
+#include <cuda/std/iterator>
 #include <thrust/functional.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/pair.h>
@@ -112,7 +112,7 @@ struct token_reader_fn {
       // update first entry -- this happens when max_tokens is hit before the end of the string
       auto const first_offset =
         d_result[0].first
-          ? static_cast<size_type>(thrust::distance(d_str.data(), d_result[0].first))
+          ? static_cast<size_type>(cuda::std::distance(d_str.data(), d_result[0].first))
           : 0;
       if (first_offset) {
         d_result[0] = string_index_pair{d_str.data(), first_offset + d_result[0].second};

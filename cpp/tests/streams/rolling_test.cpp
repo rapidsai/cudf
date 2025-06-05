@@ -17,6 +17,7 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/default_stream.hpp>
+#include <cudf_test/testing_main.hpp>
 
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/rolling.hpp>
@@ -247,3 +248,5 @@ TEST_F(GroupedRangeRollingTest, RangeWindowBounds)
                                      *cudf::make_count_aggregation<cudf::rolling_aggregation>(),
                                      cudf::test::get_default_stream());
 }
+
+CUDF_TEST_PROGRAM_MAIN()

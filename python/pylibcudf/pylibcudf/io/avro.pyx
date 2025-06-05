@@ -156,4 +156,4 @@ cpdef TableWithMetadata read_avro(
     with nogil:
         c_result = move(cpp_read_avro(options.c_obj, s.view()))
 
-    return TableWithMetadata.from_libcudf(c_result)
+    return TableWithMetadata.from_libcudf(c_result, s)

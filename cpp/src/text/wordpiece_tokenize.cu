@@ -42,9 +42,9 @@
 #include <cub/cub.cuh>
 #include <cuco/static_map.cuh>
 #include <cuda/std/functional>
+#include <cuda/std/iterator>
 #include <cuda/std/limits>
 #include <thrust/copy.h>
-#include <thrust/distance.h>
 #include <thrust/execution_policy.h>
 #include <thrust/find.h>
 #include <thrust/iterator/transform_iterator.h>
@@ -252,7 +252,7 @@ wordpiece_vocabulary::wordpiece_vocabulary(cudf::strings_column_view const& inpu
                     thrust::counting_iterator<cudf::size_type>(sub_map_indices.size()),
                     sub_map_indices.begin(),
                     copy_pieces_fn{*d_vocabulary});
-  sub_map_indices.resize(thrust::distance(sub_map_indices.begin(), end), stream);
+  sub_map_indices.resize(cuda::std::distance(sub_map_indices.begin(), end), stream);
 
   // build a 2nd map with just the ## prefixed items
   auto vocab_sub_map = std::make_unique<detail::sub_vocabulary_map_type>(
@@ -319,7 +319,7 @@ __device__ cudf::string_view remove_last_char(cudf::string_view d_str)
   while ((end > begin) && cudf::strings::detail::is_utf8_continuation_char(*end)) {
     --end;
   }
-  auto const size = static_cast<cudf::size_type>(thrust::distance(begin, end));
+  auto const size = static_cast<cudf::size_type>(cuda::std::distance(begin, end));
   return cudf::string_view(begin, size);
 }
 
@@ -434,7 +434,6 @@ __device__ cudf::size_type wp_tokenize_fn(cudf::string_view word,
 template <typename MapRefType, typename SubMapRefType>
 CUDF_KERNEL void tokenize_all_kernel(cudf::device_span<int64_t const> d_edges,
                                      char const* d_chars,
-                                     // int64_t offset,
                                      MapRefType const d_map,
                                      SubMapRefType const d_sub_map,
                                      cudf::size_type unk_id,
@@ -445,9 +444,9 @@ CUDF_KERNEL void tokenize_all_kernel(cudf::device_span<int64_t const> d_edges,
   auto const begin    = d_chars + d_edges[idx];
   auto const end      = d_chars + d_edges[idx + 1];
   auto const word_end = thrust::find(thrust::seq, begin, end, ' ');
-  auto const size     = static_cast<cudf::size_type>(thrust::distance(begin, word_end));
+  auto const size     = static_cast<cudf::size_type>(cuda::std::distance(begin, word_end));
   if (size == 0) { return; }
-  auto d_output = d_tokens + d_edges[idx];  // - offset;
+  auto d_output = d_tokens + d_edges[idx];
   if (size >= max_word_size) {
     *d_output = unk_id;
     return;
@@ -532,7 +531,7 @@ rmm::device_uvector<cudf::size_type> compute_all_tokens(
     stream);
 
   auto const edges_count =
-    input.size() + 1 + static_cast<int64_t>(thrust::distance(d_edges.begin(), edges_end));
+    input.size() + 1 + static_cast<int64_t>(cuda::std::distance(d_edges.begin(), edges_end));
   // thrust::merge has an int32 max limit currently
   CUDF_EXPECTS(edges_count < std::numeric_limits<int32_t>::max(), "words exceed internal limit");
 
@@ -603,7 +602,7 @@ CUDF_KERNEL void find_words_kernel(cudf::column_device_view const d_strings,
   if (d_strings.is_null(str_idx)) { return; }
   auto const d_str = d_strings.element<cudf::string_view>(str_idx);
   if (d_str.empty()) { return; }
-  auto const str_offset = static_cast<int64_t>(thrust::distance(d_chars, d_str.data()));
+  auto const str_offset = static_cast<int64_t>(cuda::std::distance(d_chars, d_str.data()));
 
   auto const d_start_words = starts + offsets[str_idx];
   auto const d_word_sizes  = sizes + offsets[str_idx];
@@ -652,13 +651,14 @@ CUDF_KERNEL void find_words_kernel(cudf::column_device_view const d_strings,
       // look for word starts (non-space preceded by a space)
       if ((*itr != ' ') && ((itr == begin) || (*(itr - 1) == ' '))) {
         last_idx              = (k / 2) + 1;
-        start_words[last_idx] = static_cast<cudf::size_type>(thrust::distance(begin, itr));
+        start_words[last_idx] = static_cast<cudf::size_type>(cuda::std::distance(begin, itr));
       }
       // look for word ends (space preceded by non-space)
       if (((itr + 1) == end) || ((itr != begin) && (*itr == ' ') && (*(itr - 1) != ' '))) {
-        auto const adjust   = static_cast<cudf::size_type>(*itr != ' ');  // edge case
-        last_idx            = (k / 2) + adjust;
-        end_words[last_idx] = static_cast<cudf::size_type>(thrust::distance(begin, itr)) + adjust;
+        auto const adjust = static_cast<cudf::size_type>(*itr != ' ');  // edge case
+        last_idx          = (k / 2) + adjust;
+        end_words[last_idx] =
+          static_cast<cudf::size_type>(cuda::std::distance(begin, itr)) + adjust;
       }
       itr += tile_size;
     }
@@ -668,9 +668,9 @@ CUDF_KERNEL void find_words_kernel(cudf::column_device_view const d_strings,
     cudf::size_type output_count = 0;
     if (lane_idx == 0) {
       // compress out the no-words
-      auto const count       = static_cast<cudf::size_type>(thrust::distance(
+      auto const count       = static_cast<cudf::size_type>(cuda::std::distance(
         start_words, thrust::remove(thrust::seq, start_words, start_words + last_idx, no_word)));
-      auto const words_found = static_cast<cudf::size_type>(thrust::distance(
+      auto const words_found = static_cast<cudf::size_type>(cuda::std::distance(
         end_words, thrust::remove(thrust::seq, end_words, end_words + last_idx, no_word)));
       // this partially resolved word wraps around for the next iteration
       first_word   = (count > words_found) ? start_words[words_found] : no_word;
@@ -801,9 +801,9 @@ rmm::device_uvector<cudf::size_type> compute_some_tokens(
   auto const check =
     thrust::remove(rmm::exec_policy(stream), word_sizes.begin(), word_sizes.end(), no_word);
 
-  auto const total_words = static_cast<int64_t>(thrust::distance(start_words.begin(), end));
+  auto const total_words = static_cast<int64_t>(cuda::std::distance(start_words.begin(), end));
   // this should only trigger if there is a bug in the code above
-  CUDF_EXPECTS(total_words == static_cast<int64_t>(thrust::distance(word_sizes.begin(), check)),
+  CUDF_EXPECTS(total_words == static_cast<int64_t>(cuda::std::distance(word_sizes.begin(), check)),
                "error resolving word locations from input column");
   start_words.resize(total_words, stream);  // always
   word_sizes.resize(total_words, stream);   // smaller
@@ -832,7 +832,8 @@ std::unique_ptr<cudf::column> wordpiece_tokenize(cudf::strings_column_view const
                                                  rmm::cuda_stream_view stream,
                                                  rmm::device_async_resource_ref mr)
 {
-  CUDF_EXPECTS(max_words_per_row >= 0, "Invalid value for max_words_per_row argument");
+  CUDF_EXPECTS(
+    max_words_per_row >= 0, "Invalid value for max_words_per_row argument", std::invalid_argument);
 
   auto const output_type = cudf::data_type{cudf::type_to_id<cudf::size_type>()};
   if (input.size() == input.null_count()) {

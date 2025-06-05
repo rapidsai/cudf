@@ -152,12 +152,12 @@ __device__ inline bool is_list(ColumnChunkDesc const& chunk)
 
 __device__ inline bool is_byte_array(ColumnChunkDesc const& chunk)
 {
-  return chunk.physical_type == BYTE_ARRAY;
+  return chunk.physical_type == Type::BYTE_ARRAY;
 }
 
 __device__ inline bool is_boolean(ColumnChunkDesc const& chunk)
 {
-  return chunk.physical_type == BOOLEAN;
+  return chunk.physical_type == Type::BOOLEAN;
 }
 
 /**
@@ -569,7 +569,7 @@ CUDF_KERNEL void __launch_bounds__(128)
     int pos = 0, cur = 0;
     for (int i = 0; i < num_entries; i++) {
       int len = 0;
-      if (ck->physical_type == FIXED_LEN_BYTE_ARRAY) {
+      if (ck->physical_type == Type::FIXED_LEN_BYTE_ARRAY) {
         if (cur + ck->type_length <= dict_size) {
           len = ck->type_length;
           pos = cur;

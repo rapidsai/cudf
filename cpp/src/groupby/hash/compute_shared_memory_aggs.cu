@@ -111,13 +111,14 @@ __device__ void compute_pre_aggregrations(cudf::size_type col_start,
                                           cuda::std::byte* shmem_agg_storage,
                                           cudf::size_type* shmem_agg_res_offsets,
                                           cudf::size_type* shmem_agg_mask_offsets,
-                                          cudf::aggregation::Kind const* d_agg_kinds)
+                                          cudf::aggregation::Kind const* d_agg_kinds,
+                                          cudf::size_type agg_location_offset)
 {
   // Aggregates global memory sources to shared memory targets
   for (auto source_idx = cudf::detail::grid_1d::global_thread_id(); source_idx < num_input_rows;
        source_idx += cudf::detail::grid_1d::grid_stride()) {
     if (not skip_rows_with_nulls or cudf::bit_is_set(row_bitmask, source_idx)) {
-      auto const target_idx = local_mapping_index[source_idx];
+      auto const target_idx = local_mapping_index[source_idx] + agg_location_offset;
       for (auto col_idx = col_start; col_idx < col_end; col_idx++) {
         auto const source_col = source.column(col_idx);
 
@@ -145,6 +146,7 @@ __device__ void compute_final_aggregations(cooperative_groups::thread_block cons
                                            cudf::table_device_view input_values,
                                            cudf::mutable_table_device_view target,
                                            cudf::size_type cardinality,
+                                           cudf::size_type num_agg_locations,
                                            cudf::size_type* global_mapping_index,
                                            cuda::std::byte* shmem_agg_storage,
                                            cudf::size_type* agg_res_offsets,
@@ -152,9 +154,10 @@ __device__ void compute_final_aggregations(cooperative_groups::thread_block cons
                                            cudf::aggregation::Kind const* d_agg_kinds)
 {
   // Aggregates shared memory sources to global memory targets
-  for (auto idx = block.thread_rank(); idx < cardinality; idx += block.num_threads()) {
+  for (auto idx = block.thread_rank(); idx < num_agg_locations; idx += block.num_threads()) {
     auto const target_idx =
-      global_mapping_index[block.group_index().x * GROUPBY_SHM_MAX_ELEMENTS + idx];
+      global_mapping_index[(block.group_index().x * GROUPBY_SHM_MAX_ELEMENTS) +
+                           (idx % cardinality)];
     for (auto col_idx = col_start; col_idx < col_end; col_idx++) {
       auto target_col = target.column(col_idx);
 
@@ -191,7 +194,13 @@ CUDF_KERNEL void single_pass_shmem_aggs_kernel(cudf::size_type num_rows,
 {
   auto const block       = cooperative_groups::this_thread_block();
   auto const cardinality = block_cardinality[block.group_index().x];
-  if (cardinality >= GROUPBY_CARDINALITY_THRESHOLD) { return; }
+  if (cardinality >= GROUPBY_CARDINALITY_THRESHOLD or cardinality == 0) { return; }
+
+  auto constexpr min_shmem_agg_locations = 32;
+  auto const multiplication_factor       = min_shmem_agg_locations / cardinality;
+  auto const num_agg_locations           = cuda::std::max(multiplication_factor, 1) * cardinality;
+  auto const agg_location_offset =
+    multiplication_factor > 1 ? (block.thread_rank() % multiplication_factor) * cardinality : 0;
 
   auto const num_cols = output_values.num_columns();
 
@@ -219,7 +228,7 @@ CUDF_KERNEL void single_pass_shmem_aggs_kernel(cudf::size_type num_rows,
                                      num_cols,
                                      shmem_agg_res_offsets,
                                      shmem_agg_mask_offsets,
-                                     cardinality,
+                                     num_agg_locations,
                                      total_agg_size);
     }
     block.sync();
@@ -231,7 +240,7 @@ CUDF_KERNEL void single_pass_shmem_aggs_kernel(cudf::size_type num_rows,
                                   shmem_agg_storage,
                                   shmem_agg_res_offsets,
                                   shmem_agg_mask_offsets,
-                                  cardinality,
+                                  num_agg_locations,
                                   d_agg_kinds);
     block.sync();
 
@@ -245,7 +254,8 @@ CUDF_KERNEL void single_pass_shmem_aggs_kernel(cudf::size_type num_rows,
                               shmem_agg_storage,
                               shmem_agg_res_offsets,
                               shmem_agg_mask_offsets,
-                              d_agg_kinds);
+                              d_agg_kinds,
+                              agg_location_offset);
     block.sync();
 
     compute_final_aggregations(block,
@@ -254,6 +264,7 @@ CUDF_KERNEL void single_pass_shmem_aggs_kernel(cudf::size_type num_rows,
                                input_values,
                                output_values,
                                cardinality,
+                               num_agg_locations,
                                global_mapping_index,
                                shmem_agg_storage,
                                shmem_agg_res_offsets,

@@ -27,16 +27,20 @@ function(ConfigureTest CMAKE_TEST_NAME)
   set(one_value GPUS PERCENT STREAM_MODE)
   set(multi_value EXTRA_LIBS)
   cmake_parse_arguments(_CUDF_TEST "${options}" "${one_value}" "${multi_value}" ${ARGN})
+
   if(NOT DEFINED _CUDF_TEST_GPUS AND NOT DEFINED _CUDF_TEST_PERCENT)
     set(_CUDF_TEST_GPUS 1)
     set(_CUDF_TEST_PERCENT 15)
   endif()
+
   if(NOT DEFINED _CUDF_TEST_GPUS)
     set(_CUDF_TEST_GPUS 1)
   endif()
+
   if(NOT DEFINED _CUDF_TEST_PERCENT)
     set(_CUDF_TEST_PERCENT 100)
   endif()
+
   if(NOT DEFINED _CUDF_TEST_STREAM_MODE)
     set(_CUDF_TEST_STREAM_MODE cudf)
   endif()
@@ -52,6 +56,10 @@ function(ConfigureTest CMAKE_TEST_NAME)
                CXX_EXTENSIONS ON
                CUDA_STANDARD 17
                CUDA_STANDARD_REQUIRED ON
+  )
+
+  target_compile_definitions(
+    ${CMAKE_TEST_NAME} PRIVATE THRUST_FORCE_32_BIT_OFFSET_TYPE=1 CCCL_AVOID_SORT_UNROLL=1
   )
 
   target_link_libraries(
@@ -115,6 +123,7 @@ ConfigureTest(
   GROUPBY_TEST
   groupby/argmin_tests.cpp
   groupby/argmax_tests.cpp
+  groupby/bitwise_tests.cpp
   groupby/collect_list_tests.cpp
   groupby/collect_set_tests.cpp
   groupby/correlation_tests.cpp
@@ -210,6 +219,7 @@ ConfigureTest(
 # * reduction tests -------------------------------------------------------------------------------
 ConfigureTest(
   REDUCTIONS_TEST
+  reductions/bitwise_tests.cpp
   reductions/collect_ops_tests.cpp
   reductions/ewm_tests.cpp
   reductions/host_udf_example_tests.cu
@@ -309,6 +319,7 @@ ConfigureTest(
   io/parquet_bloom_filter_test.cu
   io/parquet_chunked_reader_test.cu
   io/parquet_chunked_writer_test.cpp
+  io/parquet_experimental_reader_test.cpp
   io/parquet_common.cpp
   io/parquet_misc_test.cpp
   io/parquet_reader_test.cpp
@@ -516,7 +527,7 @@ ConfigureTest(
 # * reshape test ----------------------------------------------------------------------------------
 ConfigureTest(
   RESHAPE_TEST reshape/byte_cast_tests.cpp reshape/interleave_columns_tests.cpp
-  reshape/tile_tests.cpp
+  reshape/table_to_array_tests.cpp reshape/tile_tests.cpp
 )
 
 # ##################################################################################################
@@ -601,6 +612,7 @@ ConfigureTest(STRUCTS_TEST structs/structs_column_tests.cpp structs/utilities_te
 ConfigureTest(
   TEXT_TEST
   text/bpe_tests.cpp
+  text/deduplicate_tests.cpp
   text/edit_distance_tests.cpp
   text/jaccard_tests.cpp
   text/minhash_tests.cpp
@@ -689,22 +701,24 @@ ConfigureTest(STREAM_BINARYOP_TEST streams/binaryop_test.cpp STREAM_MODE testing
 ConfigureTest(STREAM_COLUMN_VIEW_TEST streams/column_view_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_CONCATENATE_TEST streams/concatenate_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_COPYING_TEST streams/copying_test.cpp STREAM_MODE testing)
-ConfigureTest(STREAM_CSVIO_TEST streams/io/csv_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_DATETIME_TEST streams/datetime_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_DICTIONARY_TEST streams/dictionary_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_FILLING_TEST streams/filling_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_GROUPBY_TEST streams/groupby_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_HASHING_TEST streams/hash_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_INTEROP streams/interop_test.cpp STREAM_MODE testing)
+ConfigureTest(STREAM_IO_CSV_TEST streams/io/csv_test.cpp STREAM_MODE testing)
+ConfigureTest(STREAM_IO_JSON_TEST streams/io/json_test.cpp STREAM_MODE testing)
+ConfigureTest(
+  STREAM_IO_MULTIBYTE_SPLIT_TEST streams/io/multibyte_split_test.cpp STREAM_MODE testing
+)
+ConfigureTest(STREAM_IO_ORC_TEST streams/io/orc_test.cpp STREAM_MODE testing)
+ConfigureTest(STREAM_IO_PARQUET_TEST streams/io/parquet_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_JOIN_TEST streams/join_test.cpp STREAM_MODE testing)
-ConfigureTest(STREAM_JSONIO_TEST streams/io/json_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_LABELING_BINS_TEST streams/labeling_bins_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_LISTS_TEST streams/lists_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_MERGE_TEST streams/merge_test.cpp STREAM_MODE testing)
-ConfigureTest(STREAM_MULTIBYTE_SPLIT_TEST streams/io/multibyte_split_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_NULL_MASK_TEST streams/null_mask_test.cpp STREAM_MODE testing)
-ConfigureTest(STREAM_ORCIO_TEST streams/io/orc_test.cpp STREAM_MODE testing)
-ConfigureTest(STREAM_PARQUETIO_TEST streams/io/parquet_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_PARTITIONING_TEST streams/partitioning_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_POOL_TEST streams/pool_test.cu STREAM_MODE testing)
 ConfigureTest(STREAM_QUANTILE_TEST streams/quantile_test.cpp STREAM_MODE testing)
@@ -742,7 +756,6 @@ ConfigureTest(
   streams/text/ngrams_test.cpp
   streams/text/replace_test.cpp
   streams/text/stemmer_test.cpp
-  streams/text/subword_tokenize_test.cpp
   streams/text/tokenize_test.cpp
   STREAM_MODE
   testing

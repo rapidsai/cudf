@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,6 +23,8 @@
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/exec_policy.hpp>
+
+#include <cuda/std/iterator>
 
 #include <numeric>
 
@@ -64,7 +66,7 @@ std::vector<cudf::io::table_with_metadata> split_byte_range_reading(
     auto const first_delimiter_position_it =
       thrust::find(rmm::exec_policy(stream), readbufspan.begin(), readbufspan.end(), '\n');
     return first_delimiter_position_it != readbufspan.end()
-             ? thrust::distance(readbufspan.begin(), first_delimiter_position_it)
+             ? cuda::std::distance(readbufspan.begin(), first_delimiter_position_it)
              : -1;
   };
   size_t num_chunks                = (total_source_size + chunk_size - 1) / chunk_size;

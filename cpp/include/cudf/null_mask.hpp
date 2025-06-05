@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -36,7 +36,7 @@ namespace CUDF_EXPORT cudf {
 
 /**
  * @brief Returns the null count for a null mask of the specified `state`
- * representing `size` elements.
+ * representing `size` elements
  *
  * @throw std::invalid_argument if state is UNINITIALIZED
  *
@@ -48,7 +48,7 @@ size_type state_null_count(mask_state state, size_type size);
 
 /**
  * @brief Computes the required bytes necessary to represent the specified
- * number of bits with a given padding boundary.
+ * number of bits with a given padding boundary
  *
  * @note The Arrow specification for the null bitmask requires a 64B padding
  * boundary.
@@ -63,7 +63,7 @@ std::size_t bitmask_allocation_size_bytes(size_type number_of_bits,
 
 /**
  * @brief Returns the number of `bitmask_type` words required to represent the
- * specified number of bits.
+ * specified number of bits
  *
  * Unlike `bitmask_allocation_size_bytes`, which returns the number of *bytes*
  * needed for a bitmask allocation (including padding), this function returns
@@ -78,7 +78,7 @@ size_type num_bitmask_words(size_type number_of_bits);
 
 /**
  * @brief Creates a `device_buffer` for use as a null value indicator bitmask of
- * a `column`.
+ * a `column`
  *
  * @param size The number of elements to be represented by the mask
  * @param state The desired state of the mask
@@ -95,12 +95,12 @@ rmm::device_buffer create_null_mask(
 
 /**
  * @brief Sets a pre-allocated bitmask buffer to a given state in the range
- *  `[begin_bit, end_bit)`
+ * `[begin_bit, end_bit)`
  *
  * Sets `[begin_bit, end_bit)` bits of bitmask to valid if `valid==true`
  * or null otherwise.
  *
- * @param bitmask Pointer to bitmask (e.g. returned by `column_viewnull_mask()`)
+ * @param bitmask Pointer to bitmask (e.g. returned by `column_view::null_mask()`)
  * @param begin_bit Index of the first bit to set (inclusive)
  * @param end_bit Index of the last bit to set (exclusive)
  * @param valid If true set all entries to valid; otherwise, set all to null
@@ -113,8 +113,29 @@ void set_null_mask(bitmask_type* bitmask,
                    rmm::cuda_stream_view stream = cudf::get_default_stream());
 
 /**
+ * @brief Sets a vector of pre-allocated bitmask buffers to given states in the corresponding ranges
+ * in bulk
+ *
+ * Sets bit ranges `[begin_bit, end_bit)` of given bitmasks to specified valid states. The bitmask
+ * bit ranges must be non-aliasing. i.e., attempting to concurrently set bits within the same
+ * physical word across bitmasks will result in undefined behavior. This utility is optimized for
+ * bulk operation on 16 or more bitmasks sized 2^24 bits or less.
+ *
+ * @param bitmasks Pointers to bitmasks (e.g. returned by `column_view::null_mask()`)
+ * @param begin_bits Indices of the first bits to set (inclusive)
+ * @param end_bits Indices of the last bits to set (exclusive)
+ * @param valids Booleans indicating if the corresponding bitmasks should be set to valid or null
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ */
+void set_null_masks(cudf::host_span<bitmask_type*> bitmasks,
+                    cudf::host_span<size_type const> begin_bits,
+                    cudf::host_span<size_type const> end_bits,
+                    cudf::host_span<bool const> valids,
+                    rmm::cuda_stream_view stream = cudf::get_default_stream());
+
+/**
  * @brief Creates a `device_buffer` from a slice of bitmask defined by a range
- * of indices `[begin_bit, end_bit)`.
+ * of indices `[begin_bit, end_bit)`
  *
  * Returns empty `device_buffer` if `bitmask == nullptr`.
  *
@@ -155,7 +176,7 @@ rmm::device_buffer copy_bitmask(
 
 /**
  * @brief Performs bitwise AND of the bitmasks of columns of a table. Returns
- * a pair of resulting mask and count of unset bits.
+ * a pair of resulting mask and count of unset bits
  *
  * If any of the columns isn't nullable, it is considered all valid.
  * If no column in the table is nullable, an empty bitmask is returned.
@@ -172,7 +193,7 @@ std::pair<rmm::device_buffer, size_type> bitmask_and(
 
 /**
  * @brief Performs bitwise OR of the bitmasks of columns of a table. Returns
- * a pair of resulting mask and count of unset bits.
+ * a pair of resulting mask and count of unset bits
  *
  * If any of the columns isn't nullable, it is considered all valid.
  * If no column in the table is nullable, an empty bitmask is returned.
@@ -189,7 +210,7 @@ std::pair<rmm::device_buffer, size_type> bitmask_or(
 
 /**
  * @brief Given a validity bitmask, counts the number of null elements (unset bits)
- * in the range `[start, stop)`.
+ * in the range `[start, stop)`
  *
  * If `bitmask == nullptr`, all elements are assumed to be valid and the
  * function returns ``.

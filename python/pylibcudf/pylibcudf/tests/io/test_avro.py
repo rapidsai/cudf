@@ -8,6 +8,7 @@ import pyarrow as pa
 import pytest
 from utils import assert_table_and_meta_eq
 
+from rmm.pylibrmm.device_buffer import DeviceBuffer
 from rmm.pylibrmm.stream import Stream
 
 import pylibcudf as plc
@@ -64,18 +65,17 @@ def row_opts(request):
     return request.param
 
 
-@pytest.mark.parametrize("stream", [None, Stream()])
-@pytest.mark.parametrize("columns", [["prop1"], [], ["prop1", "prop2"]])
-@pytest.mark.parametrize("nullable", [True, False])
-def test_read_avro(
-    avro_dtypes, avro_dtype_data, row_opts, columns, nullable, stream
-):
+def _make_avro_table(avro_dtypes, avro_dtype_data, nullable=False):
     (avro_type1, expected_type1), (avro_type2, expected_type2) = avro_dtypes
 
     avro_type1 = avro_type1 if not nullable else ["null", avro_type1]
     avro_type2 = avro_type2 if not nullable else ["null", avro_type2]
 
-    skip_rows, num_rows = row_opts
+    if nullable:
+        avro_dtype_data = (
+            avro_dtype_data[0] + [None],
+            avro_dtype_data[1] + [None],
+        )
 
     schema = fastavro.parse_schema(
         {
@@ -88,12 +88,6 @@ def test_read_avro(
         }
     )
 
-    if nullable:
-        avro_dtype_data = (
-            avro_dtype_data[0] + [None],
-            avro_dtype_data[1] + [None],
-        )
-
     records = [
         {"prop1": val1, "prop2": val2} for val1, val2 in zip(*avro_dtype_data)
     ]
@@ -101,6 +95,26 @@ def test_read_avro(
     buffer = io.BytesIO()
     fastavro.writer(buffer, schema, records)
     buffer.seek(0)
+
+    expected = pa.Table.from_arrays(
+        [
+            pa.array(avro_dtype_data[0], type=expected_type1),
+            pa.array(avro_dtype_data[1], type=expected_type2),
+        ],
+        names=["prop1", "prop2"],
+    )
+
+    return buffer, expected
+
+
+@pytest.mark.parametrize("stream", [None, Stream()])
+@pytest.mark.parametrize("columns", [["prop1"], [], ["prop1", "prop2"]])
+@pytest.mark.parametrize("nullable", [True, False])
+def test_read_avro(
+    avro_dtypes, avro_dtype_data, row_opts, columns, nullable, stream
+):
+    skip_rows, num_rows = row_opts
+    buffer, expected = _make_avro_table(avro_dtypes, avro_dtype_data, nullable)
 
     res = plc.io.avro.read_avro(
         (
@@ -115,20 +129,26 @@ def test_read_avro(
         stream,
     )
 
-    expected = pa.Table.from_arrays(
-        [
-            pa.array(avro_dtype_data[0], type=expected_type1),
-            pa.array(avro_dtype_data[1], type=expected_type2),
-        ],
-        names=["prop1", "prop2"],
-    )
-
-    # Adjust for skip_rows/num_rows in result
     length = num_rows if num_rows != -1 else None
     expected = expected.slice(skip_rows, length=length)
 
-    # adjust for # of columns
     if columns != []:
         expected = expected.select(columns)
 
+    assert_table_and_meta_eq(expected, res)
+
+
+@pytest.mark.parametrize("stream", [None, Stream()])
+def test_read_avro_from_device_buffers(avro_dtypes, avro_dtype_data, stream):
+    buffer, expected = _make_avro_table(avro_dtypes, avro_dtype_data)
+    buf = buffer.getbuffer()
+    device_buf = DeviceBuffer.to_device(buf)
+
+    options = plc.io.avro.AvroReaderOptions.builder(
+        plc.io.types.SourceInfo([device_buf])
+    ).build()
+
+    res = plc.io.avro.read_avro(options, stream)
+
+    expected = pa.concat_tables([expected])
     assert_table_and_meta_eq(expected, res)

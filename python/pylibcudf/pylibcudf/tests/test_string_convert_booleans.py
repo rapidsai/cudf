@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 import pyarrow as pa
 from utils import assert_column_eq
@@ -8,20 +8,20 @@ import pylibcudf as plc
 
 def test_to_booleans():
     pa_array = pa.array(["true", None, "True"])
-    result = plc.strings.convert.convert_booleans.to_booleans(
-        plc.interop.from_arrow(pa_array),
+    got = plc.strings.convert.convert_booleans.to_booleans(
+        plc.Column(pa_array),
         plc.interop.from_arrow(pa.scalar("True")),
     )
-    expected = pa.array([False, None, True])
-    assert_column_eq(result, expected)
+    expect = pa.array([False, None, True])
+    assert_column_eq(expect, got)
 
 
 def test_from_booleans():
     pa_array = pa.array([True, None, False])
-    result = plc.strings.convert.convert_booleans.from_booleans(
-        plc.interop.from_arrow(pa_array),
+    got = plc.strings.convert.convert_booleans.from_booleans(
+        plc.Column(pa_array),
         plc.interop.from_arrow(pa.scalar("A")),
         plc.interop.from_arrow(pa.scalar("B")),
     )
-    expected = pa.array(["A", None, "B"])
-    assert_column_eq(result, expected)
+    expect = pa.array(["A", None, "B"])
+    assert_column_eq(expect, got)

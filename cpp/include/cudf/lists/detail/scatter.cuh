@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,7 +33,7 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
-#include <thrust/distance.h>
+#include <cuda/std/iterator>
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
@@ -56,7 +56,7 @@ rmm::device_uvector<unbound_list_view> list_vector_from_column(
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
-  auto n_rows = thrust::distance(index_begin, index_end);
+  auto n_rows = cuda::std::distance(index_begin, index_end);
 
   auto vector = rmm::device_uvector<unbound_list_view>(n_rows, stream, mr);
 
@@ -184,7 +184,7 @@ std::unique_ptr<column> scatter(column_view const& source,
   if (num_rows == 0) { return cudf::empty_like(target); }
 
   auto const source_device_view = column_device_view::create(source, stream);
-  auto const scatter_map_size   = thrust::distance(scatter_map_begin, scatter_map_end);
+  auto const scatter_map_size   = cuda::std::distance(scatter_map_begin, scatter_map_end);
   auto const source_vector =
     list_vector_from_column(unbound_list_view::label_type::SOURCE,
                             cudf::detail::lists_column_device_view(*source_device_view),
@@ -260,7 +260,7 @@ std::unique_ptr<column> scatter(scalar const& slr,
                              {offset_column->view(), lv->view()});
 
   auto const source_device_view = column_device_view::create(wrapped, stream);
-  auto const scatter_map_size   = thrust::distance(scatter_map_begin, scatter_map_end);
+  auto const scatter_map_size   = cuda::std::distance(scatter_map_begin, scatter_map_end);
   auto const source_vector =
     list_vector_from_column(unbound_list_view::label_type::SOURCE,
                             cudf::detail::lists_column_device_view(*source_device_view),

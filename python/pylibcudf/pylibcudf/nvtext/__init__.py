@@ -2,6 +2,7 @@
 
 from . import (
     byte_pair_encode,
+    deduplicate,
     edit_distance,
     generate_ngrams,
     jaccard,
@@ -17,6 +18,7 @@ from . import (
 
 __all__ = [
     "byte_pair_encode",
+    "deduplicate",
     "edit_distance",
     "generate_ngrams",
     "jaccard",

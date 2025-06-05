@@ -56,6 +56,13 @@
 
 namespace CUDF_EXPORT cudf {
 
+namespace row::primitive {
+class row_equality_comparator;  // Forward declaration
+
+template <template <typename> class Hash>
+class row_hasher;  // Forward declaration
+}  // namespace row::primitive
+
 namespace experimental {
 
 /**
@@ -1355,7 +1362,7 @@ class device_row_comparator {
   __device__ constexpr bool operator()(size_type const lhs_index,
                                        size_type const rhs_index) const noexcept
   {
-    auto equal_elements = [=](column_device_view l, column_device_view r) {
+    auto equal_elements = [lhs_index, rhs_index, this](column_device_view l, column_device_view r) {
       return cudf::type_dispatcher(
         l.type(),
         element_comparator{check_nulls, l, r, nulls_are_equal, comparator},
@@ -1527,7 +1534,7 @@ class device_row_comparator {
         return thrust::all_of(thrust::seq,
                               thrust::make_counting_iterator(0),
                               thrust::make_counting_iterator(0) + size,
-                              [=](auto i) { return comp.template operator()<Element>(i, i); });
+                              [this](auto i) { return comp.template operator()<Element>(i, i); });
       }
 
       template <typename Element,
@@ -1577,6 +1584,11 @@ struct preprocessed_table {
   friend class self_comparator;       ///< Allow self_comparator to access private members
   friend class two_table_comparator;  ///< Allow two_table_comparator to access private members
   friend class hash::row_hasher;      ///< Allow row_hasher to access private members
+  /// Allow primitive equality comparator to access private members
+  friend class ::cudf::row::primitive::row_equality_comparator;
+
+  template <template <typename> class Hash>
+  friend class ::cudf::row::primitive::row_hasher;
 
   using table_device_view_owner =
     std::invoke_result_t<decltype(table_device_view::create), table_view, rmm::cuda_stream_view>;
@@ -1871,13 +1883,14 @@ class device_row_hasher {
    */
   __device__ auto operator()(size_type row_index) const noexcept
   {
-    auto it = thrust::make_transform_iterator(_table.begin(), [=](auto const& column) {
-      return cudf::type_dispatcher<dispatch_storage_type>(
-        column.type(),
-        element_hasher_adapter<hash_function>{_check_nulls, _seed},
-        column,
-        row_index);
-    });
+    auto it =
+      thrust::make_transform_iterator(_table.begin(), [row_index, this](auto const& column) {
+        return cudf::type_dispatcher<dispatch_storage_type>(
+          column.type(),
+          element_hasher_adapter<hash_function>{_check_nulls, _seed},
+          column,
+          row_index);
+      });
 
     // Hash each element and combine all the hash values together
     return detail::accumulate(it, it + _table.num_columns(), _seed, [](auto hash, auto h) {
@@ -2010,10 +2023,10 @@ class row_hasher {
    * @param seed The seed to use for the hash function
    * @return A hash operator to use on the device
    */
-  template <template <typename> class hash_function = cudf::hashing::detail::default_hash,
-            template <template <typename> class, typename>
-            class DeviceRowHasher = device_row_hasher,
-            typename Nullate>
+  template <
+    template <typename> class hash_function = cudf::hashing::detail::default_hash,
+    template <template <typename> class, typename> class DeviceRowHasher = device_row_hasher,
+    typename Nullate>
   DeviceRowHasher<hash_function, Nullate> device_hasher(Nullate nullate = {},
                                                         uint32_t seed   = DEFAULT_HASH_SEED) const
   {

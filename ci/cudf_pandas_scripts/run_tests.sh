@@ -5,6 +5,8 @@
 
 set -eoxu pipefail
 
+source rapids-init-pip
+
 RAPIDS_TESTS_DIR=${RAPIDS_TESTS_DIR:-"${PWD}/test-results"}
 RAPIDS_COVERAGE_DIR=${RAPIDS_COVERAGE_DIR:-"${PWD}/coverage-results"}
 mkdir -p "${RAPIDS_TESTS_DIR}" "${RAPIDS_COVERAGE_DIR}"
@@ -49,22 +51,29 @@ else
     RAPIDS_PY_CUDA_SUFFIX="$(rapids-wheel-ctk-name-gen "${RAPIDS_CUDA_VERSION}")"
 
     # Download the cudf, libcudf, and pylibcudf built in the previous step
-    RAPIDS_PY_WHEEL_NAME="cudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-s3 python ./dist
-    RAPIDS_PY_WHEEL_NAME="libcudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-s3 cpp ./dist
-    RAPIDS_PY_WHEEL_NAME="pylibcudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-s3 python ./dist
+    CUDF_WHEELHOUSE=$(RAPIDS_PY_WHEEL_NAME="cudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-github python)
+    LIBCUDF_WHEELHOUSE=$(RAPIDS_PY_WHEEL_NAME="libcudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-github cpp)
+    PYLIBCUDF_WHEELHOUSE=$(RAPIDS_PY_WHEEL_NAME="pylibcudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-github python)
 
     # generate constraints (possibly pinning to oldest support versions of dependencies)
     rapids-generate-pip-constraints test_python_cudf_pandas ./constraints.txt
 
+    # notes:
+    #
+    #   * echo to expand wildcard before adding `[test,cudf-pandas-tests]` requires for pip
+    #   * need to provide --constraint="${PIP_CONSTRAINT}" because that environment variable is
+    #     ignored if any other --constraint are passed via the CLI
+    #
     python -m pip install \
         -v \
         --constraint ./constraints.txt \
-        "$(echo ./dist/cudf_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)[test,cudf-pandas-tests]" \
-        "$(echo ./dist/libcudf_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)" \
-        "$(echo ./dist/pylibcudf_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)"
+        --constraint "${PIP_CONSTRAINT}" \
+        "$(echo "${CUDF_WHEELHOUSE}"/cudf_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)[test,cudf-pandas-tests]" \
+        "$(echo "${LIBCUDF_WHEELHOUSE}"/libcudf_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)" \
+        "$(echo "${PYLIBCUDF_WHEELHOUSE}"/pylibcudf_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)"
 fi
 
-python -m pip install ipykernel
+python -m pip install certifi ipykernel
 python -m ipykernel install --user --name python3
 
 # The third-party integration tests are ignored because they are run in a separate nightly CI job
