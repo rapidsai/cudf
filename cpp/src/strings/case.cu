@@ -290,7 +290,8 @@ CUDF_KERNEL void count_bytes_kernel(convert_char_fn converter,
   auto const warp     = cg::tiled_partition<cudf::detail::warp_size>(cg::this_thread_block());
   auto const lane_idx = warp.thread_rank();
 
-  auto const str_idx = warp.meta_group_rank();
+  auto const tid     = cudf::detail::grid_1d::global_thread_id();
+  auto const str_idx = tid / cudf::detail::warp_size;
   if (str_idx >= d_strings.size()) { return; }
   if (d_strings.is_null(str_idx)) {
     if (lane_idx == 0) { d_sizes[str_idx] = 0; }
