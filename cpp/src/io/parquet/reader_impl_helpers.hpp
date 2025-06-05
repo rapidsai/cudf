@@ -386,7 +386,7 @@ class aggregate_reader_metadata {
   [[nodiscard]] auto const& get_schema(int schema_idx, int pfm_idx = 0) const
   {
     CUDF_EXPECTS(
-      schema_idx >= 0 and pfm_idx >= 0 and pfm_idx < static_cast<int>(per_file_metadata.size()),
+      schema_idx >= 0 and pfm_idx >= 0 and std::cmp_less(pfm_idx, per_file_metadata.size()),
       "Parquet reader encountered an invalid schema_idx or pfm_idx",
       std::out_of_range);
     return per_file_metadata[pfm_idx].schema[schema_idx];
