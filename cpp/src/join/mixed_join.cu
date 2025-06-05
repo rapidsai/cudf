@@ -165,7 +165,7 @@ mixed_join(
   auto const preprocessed_probe =
     experimental::row::equality::preprocessed_table::create(probe, stream);
 
-  auto compute_mixed_join = [&](auto const& d_hash, auto const& d_equality) {
+  auto compute_mixed_join = [&](auto const& d_hasher, auto const& d_equal) {
     std::size_t join_size;
     // Using an optional because we only need to allocate a new vector if one was
     // not passed as input, and rmm::device_uvector is not default constructible
@@ -189,8 +189,8 @@ mixed_join(
                                                                 *right_conditional_view,
                                                                 *probe_view,
                                                                 *build_view,
-                                                                d_hash,
-                                                                d_equality,
+                                                                d_hasher,
+                                                                d_equal,
                                                                 kernel_join_type,
                                                                 hash_table_view,
                                                                 parser.device_expression_data,
@@ -205,8 +205,8 @@ mixed_join(
                                                                  *right_conditional_view,
                                                                  *probe_view,
                                                                  *build_view,
-                                                                 d_hash,
-                                                                 d_equality,
+                                                                 d_hasher,
+                                                                 d_equal,
                                                                  kernel_join_type,
                                                                  hash_table_view,
                                                                  parser.device_expression_data,
@@ -249,8 +249,8 @@ mixed_join(
                               *right_conditional_view,
                               *probe_view,
                               *build_view,
-                              d_hash,
-                              d_equality,
+                              d_hasher,
+                              d_equal,
                               kernel_join_type,
                               hash_table_view,
                               join_output_l,
@@ -266,8 +266,8 @@ mixed_join(
                                *right_conditional_view,
                                *probe_view,
                                *build_view,
-                               d_hash,
-                               d_equality,
+                               d_hasher,
+                               d_equal,
                                kernel_join_type,
                                hash_table_view,
                                join_output_l,
@@ -299,13 +299,13 @@ mixed_join(
       nullate::DYNAMIC{has_nulls}, preprocessed_probe, preprocessed_build, compare_nulls};
     return compute_mixed_join(d_hasher, d_equal);
   } else {
-    auto const row_hash       = cudf::experimental::row::hash::row_hasher{preprocessed_probe};
-    auto const hash_probe     = row_hash.device_hasher(has_nulls);
+    auto const d_hasher =
+      cudf::experimental::row::hash::row_hasher{preprocessed_probe}.device_hasher(has_nulls);
     auto const row_comparator = cudf::experimental::row::equality::two_table_comparator{
       preprocessed_probe, preprocessed_build};
-    auto const equality_probe = row_comparator.equal_to<false>(has_nulls, compare_nulls);
+    auto const d_equal = row_comparator.equal_to<false>(has_nulls, compare_nulls);
 
-    return compute_mixed_join(hash_probe, equality_probe);
+    return compute_mixed_join(d_hasher, d_equal);
   }
 }
 
@@ -441,8 +441,7 @@ compute_mixed_join_output_size(table_view const& left_equality,
 
   auto const preprocessed_probe =
     experimental::row::equality::preprocessed_table::create(probe, stream);
-
-  auto compute_mixed_join_output_size = [&](auto const& d_hash, auto const& d_equality) {
+  auto compute_mixed_join_output_size = [&](auto const& d_hasher, auto const& d_equal) {
     // Determine number of output rows without actually building the output to simply
     // find what the size of the output will be.
     std::size_t size = 0;
@@ -451,8 +450,8 @@ compute_mixed_join_output_size(table_view const& left_equality,
                                                          *right_conditional_view,
                                                          *probe_view,
                                                          *build_view,
-                                                         d_hash,
-                                                         d_equality,
+                                                         d_hasher,
+                                                         d_equal,
                                                          join_type,
                                                          hash_table_view,
                                                          parser.device_expression_data,
@@ -467,8 +466,8 @@ compute_mixed_join_output_size(table_view const& left_equality,
                                                           *right_conditional_view,
                                                           *probe_view,
                                                           *build_view,
-                                                          d_hash,
-                                                          d_equality,
+                                                          d_hasher,
+                                                          d_equal,
                                                           join_type,
                                                           hash_table_view,
                                                           parser.device_expression_data,
@@ -489,13 +488,13 @@ compute_mixed_join_output_size(table_view const& left_equality,
       nullate::DYNAMIC{has_nulls}, preprocessed_probe, preprocessed_build, compare_nulls};
     return compute_mixed_join_output_size(d_hasher, d_equal);
   } else {
-    auto const row_hash       = cudf::experimental::row::hash::row_hasher{preprocessed_probe};
-    auto const hash_probe     = row_hash.device_hasher(has_nulls);
+    auto const d_hasher =
+      cudf::experimental::row::hash::row_hasher{preprocessed_probe}.device_hasher(has_nulls);
     auto const row_comparator = cudf::experimental::row::equality::two_table_comparator{
       preprocessed_probe, preprocessed_build};
-    auto const equality_probe = row_comparator.equal_to<false>(has_nulls, compare_nulls);
+    auto const d_equal = row_comparator.equal_to<false>(has_nulls, compare_nulls);
 
-    return compute_mixed_join_output_size(hash_probe, equality_probe);
+    return compute_mixed_join_output_size(d_hasher, d_equal);
   }
 }
 
