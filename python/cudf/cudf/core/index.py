@@ -3579,18 +3579,6 @@ class DatetimeIndex(Index):
         idx_copy = super().copy(name=name, deep=deep)
         return idx_copy._copy_type_metadata(self)
 
-    def searchsorted(
-        self,
-        value,
-        side: Literal["left", "right"] = "left",
-        ascending: bool = True,
-        na_position: Literal["first", "last"] = "last",
-    ):
-        value = self.dtype.type(value)
-        return super().searchsorted(
-            value, side=side, ascending=ascending, na_position=na_position
-        )
-
     def as_unit(self, unit: str, round_ok: bool = True) -> Self:
         """
         Convert to a dtype with the given unit resolution.

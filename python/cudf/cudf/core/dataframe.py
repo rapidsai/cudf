@@ -1336,9 +1336,9 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 result.name = new_name
                 return result
             except TypeError:
-                # Couldn't find a common type, just return a 1xN dataframe.
                 if get_option("mode.pandas_compatible"):
                     raise
+                # Couldn't find a common type, just return a 1xN dataframe.
                 return result
         elif isinstance(spec, indexing_utils.EmptyIndexer):
             return frame._empty_like(keep_index=True)
