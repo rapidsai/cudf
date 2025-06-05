@@ -44,7 +44,7 @@ namespace {
 uint32_t protobuf_reader::read_field_size(uint8_t const* end)
 {
   auto const size = get<uint32_t>();
-  CUDF_EXPECTS(size <= static_cast<uint32_t>(end - m_cur), "Protobuf parsing out of bounds");
+  CUDF_EXPECTS(std::cmp_less_equal(size, end - m_cur), "Protobuf parsing out of bounds");
   return size;
 }
 

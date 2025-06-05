@@ -215,7 +215,7 @@ bool OpenZipArchive(zip_archive_s* dst, uint8_t const* raw, size_t len)
           i + *reinterpret_cast<uint16_t const*>(eocd + 1) <= static_cast<ptrdiff_t>(len)) {
         auto const* cdfh = reinterpret_cast<zip_cdfh_s const*>(raw + eocd->cdir_offset);
         dst->eocd        = eocd;
-        if (i >= static_cast<ptrdiff_t>(sizeof(zip64_eocdl))) {
+        if (std::cmp_greater_equal(i, sizeof(zip64_eocdl))) {
           auto const* eocdl = reinterpret_cast<zip64_eocdl const*>(raw + i - sizeof(zip64_eocdl));
           if (eocdl->sig == 0x0706'4b50) { dst->eocdl = eocdl; }
         }
@@ -443,7 +443,7 @@ source_properties get_source_properties(compression_type compression, host_span<
       }
       if (open_succeeded) {
         size_t cdfh_ofs = 0;
-        for (int i = 0; i < za.eocd->num_entries; i++) {
+        for (uint16_t i = 0; i < za.eocd->num_entries; i++) {
           auto const* cdfh = reinterpret_cast<zip_cdfh_s const*>(
             reinterpret_cast<uint8_t const*>(za.cdfh) + cdfh_ofs);
           int const cdfh_len =

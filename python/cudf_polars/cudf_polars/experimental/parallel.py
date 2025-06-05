@@ -26,6 +26,7 @@ from cudf_polars.dsl.ir import (
     Projection,
     Union,
 )
+from cudf_polars.dsl.tracing import do_evaluate_with_tracing
 from cudf_polars.dsl.traversal import CachingVisitor, traversal
 from cudf_polars.experimental.base import PartitionInfo, get_key_name
 from cudf_polars.experimental.dispatch import (
@@ -86,7 +87,9 @@ def lower_ir_graph(
 
 
 def task_graph(
-    ir: IR, partition_info: MutableMapping[IR, PartitionInfo]
+    ir: IR,
+    partition_info: MutableMapping[IR, PartitionInfo],
+    config_options: ConfigOptions,
 ) -> tuple[MutableMapping[Any, Any], str | tuple[str, int]]:
     """
     Construct a task graph for evaluation of an IR graph.
@@ -98,6 +101,8 @@ def task_graph(
     partition_info
         A mapping from all unique IR nodes to the
         associated partitioning information.
+    config_options
+        GPUEngine configuration options.
 
     Returns
     -------
@@ -111,6 +116,9 @@ def task_graph(
     graph with root `ir`, and extracts the tasks for
     each node with :func:`generate_ir_tasks`.
 
+    The output is passed into :func:`post_process_task_graph` to
+    add any additional processing that is specific to the executor.
+
     See Also
     --------
     generate_ir_tasks
@@ -122,11 +130,16 @@ def task_graph(
 
     key_name = get_key_name(ir)
     partition_count = partition_info[ir].count
+
+    key: str | tuple[str, int]
     if partition_count > 1:
         graph[key_name] = (_concat, *partition_info[ir].keys(ir))
-        return graph, key_name
+        key = key_name
     else:
-        return graph, (key_name, 0)
+        key = (key_name, 0)
+
+    graph = post_process_task_graph(graph, key, config_options)
+    return graph, key
 
 
 # The true type signature for get_scheduler() needs an overload. Not worth it.
@@ -211,9 +224,7 @@ def evaluate_streaming(ir: IR, config_options: ConfigOptions) -> DataFrame:
     """
     ir, partition_info = lower_ir_graph(ir, config_options)
 
-    graph, key = task_graph(ir, partition_info)
-
-    graph = post_process_task_graph(graph, key, config_options)
+    graph, key = task_graph(ir, partition_info, config_options)
 
     return get_scheduler(config_options)(graph, key)
 
@@ -225,9 +236,11 @@ def _(
     # Generate pointwise (embarrassingly-parallel) tasks by default
     child_names = [get_key_name(c) for c in ir.children]
     bcast_child = [partition_info[c].count == 1 for c in ir.children]
+
     return {
         key: (
-            ir.do_evaluate,
+            do_evaluate_with_tracing,
+            type(ir),
             *ir._non_child_args,
             *[
                 (child_name, 0 if bcast_child[j] else i)
