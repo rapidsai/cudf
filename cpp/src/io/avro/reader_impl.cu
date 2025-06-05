@@ -16,8 +16,8 @@
 
 #include "avro.hpp"
 #include "avro_gpu.hpp"
+#include "io/comp/decompression.hpp"
 #include "io/comp/gpuinflate.hpp"
-#include "io/comp/io_uncomp.hpp"
 #include "io/utilities/column_buffer.hpp"
 #include "io/utilities/hostdevice_vector.hpp"
 

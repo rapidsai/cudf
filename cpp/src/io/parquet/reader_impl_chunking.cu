@@ -15,8 +15,8 @@
  */
 
 #include "compact_protocol_reader.hpp"
+#include "io/comp/decompression.hpp"
 #include "io/comp/gpuinflate.hpp"
-#include "io/comp/io_uncomp.hpp"
 #include "io/utilities/time_utils.cuh"
 #include "reader_impl.hpp"
 #include "reader_impl_chunking.hpp"

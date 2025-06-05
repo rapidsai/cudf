@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "io/comp/io_uncomp.hpp"
+#include "io/comp/decompression.hpp"
 #include "io/json/nested_json.hpp"
 #include "io/utilities/getenv_or.hpp"
 #include "read_json.hpp"

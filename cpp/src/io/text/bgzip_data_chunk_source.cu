@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "io/comp/io_uncomp.hpp"
+#include "io/comp/decompression.hpp"
 #include "io/text/device_data_chunks.hpp"
 
 #include <cudf/detail/nvtx/ranges.hpp>

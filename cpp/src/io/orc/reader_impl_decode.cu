@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
+#include "io/comp/decompression.hpp"
 #include "io/comp/gpuinflate.hpp"
-#include "io/comp/io_uncomp.hpp"
 #include "io/orc/reader_impl.hpp"
 #include "io/orc/reader_impl_chunking.hpp"
 #include "io/orc/reader_impl_helpers.hpp"

@@ -16,7 +16,7 @@
 
 #include "../io/json/json_utils.cuh"
 #include "io/comp/compression.hpp"
-#include "io/comp/io_uncomp.hpp"
+#include "io/comp/decompression.hpp"
 #include "large_strings_fixture.hpp"
 
 #include <cudf_test/column_wrapper.hpp>

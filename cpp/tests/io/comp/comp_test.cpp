@@ -16,8 +16,8 @@
 
 #include "cudf/io/types.hpp"
 #include "io/comp/compression.hpp"
+#include "io/comp/decompression.hpp"
 #include "io/comp/gpuinflate.hpp"
-#include "io/comp/io_uncomp.hpp"
 #include "io/utilities/hostdevice_vector.hpp"
 
 #include <cudf_test/base_fixture.hpp>

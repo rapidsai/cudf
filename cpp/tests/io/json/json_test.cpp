@@ -15,7 +15,7 @@
  */
 
 #include "io/comp/compression.hpp"
-#include "io/comp/io_uncomp.hpp"
+#include "io/comp/decompression.hpp"
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>

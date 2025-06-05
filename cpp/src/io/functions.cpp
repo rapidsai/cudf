@@ -15,7 +15,7 @@
  */
 
 #include "io/comp/compression.hpp"
-#include "io/comp/io_uncomp.hpp"
+#include "io/comp/decompression.hpp"
 #include "io/orc/orc.hpp"
 #include "io/utilities/getenv_or.hpp"
 

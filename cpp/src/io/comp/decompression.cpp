@@ -14,10 +14,11 @@
  * limitations under the License.
  */
 
+#include "decompression.hpp"
+
 #include "common_internal.hpp"
 #include "gpuinflate.hpp"
 #include "io/utilities/getenv_or.hpp"
-#include "io_uncomp.hpp"
 #include "nvcomp_adapter.hpp"
 #include "unbz2.hpp"  // bz2 uncompress
 
