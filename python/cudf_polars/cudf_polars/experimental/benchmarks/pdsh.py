@@ -25,6 +25,7 @@ from datetime import date, datetime, timezone
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
+import nvtx
 
 import polars as pl
 
@@ -45,7 +46,6 @@ except ImportError:
 if TYPE_CHECKING:
     import pathlib
     from collections.abc import Sequence
-
 
 # Without this setting, the first IO task to run
 # on each worker takes ~15 sec extra
@@ -1265,34 +1265,40 @@ def run(options: Sequence[str] | None = None) -> None:
 
         records[q_id] = []
 
-        for _ in range(args.iterations):
+        for i in range(args.iterations):
             t0 = time.monotonic()
 
-            if run_config.executor == "cpu":
-                result = q.collect(new_streaming=True)
-            elif CUDF_POLARS_AVAILABLE:
-                assert isinstance(engine, pl.GPUEngine)
-                if args.debug:
-                    translator = Translator(q._ldf.visit(), engine)
-                    ir = translator.translate_ir()
-                    if run_config.executor == "in-memory":
-                        result = ir.evaluate(cache={}, timer=None).to_polars()
-                    elif run_config.executor == "streaming":
-                        result = evaluate_streaming(
-                            ir, translator.config_options
-                        ).to_polars()
+            with nvtx.annotate(
+                message=f"Query {q_id} - Iteration {i}",
+                domain="cudf_polars",
+                color="green",
+            ):
+                if run_config.executor == "cpu":
+                    result = q.collect(new_streaming=True)
+                elif CUDF_POLARS_AVAILABLE:
+                    assert isinstance(engine, pl.GPUEngine)
+                    if args.debug:
+                        translator = Translator(q._ldf.visit(), engine)
+                        ir = translator.translate_ir()
+                        if run_config.executor == "in-memory":
+                            result = ir.evaluate(cache={}, timer=None).to_polars()
+                        elif run_config.executor == "streaming":
+                            result = evaluate_streaming(
+                                ir, translator.config_options
+                            ).to_polars()
+                    else:
+                        result = q.collect(engine=engine)
                 else:
-                    result = q.collect(engine=engine)
-            else:
-                raise RuntimeError(
-                    "Cannot provide debug information because cudf_polars is not installed."
-                )
+                    raise RuntimeError(
+                        "Cannot provide debug information because cudf_polars is not installed."
+                    )
 
             t1 = time.monotonic()
             record = Record(query=q_id, duration=t1 - t0)
             if args.print_results:
                 print(result)
-            print(f"Ran query={q_id} in {record.duration:0.4f}s", flush=True)
+
+            print(f"Query {q_id} - Iteration {i} finished in {record.duration:0.4f}s")
             records[q_id].append(record)
 
     run_config = dataclasses.replace(run_config, records=dict(records))

@@ -168,7 +168,7 @@ SpacesInContainerLiterals: true
 SpacesInCStyleCastParentheses: false
 SpacesInParentheses: false
 SpacesInSquareBrackets: false
-Standard: c++17
+Standard: c++20
 StatementMacros:
   - Q_UNUSED
   - QT_REQUIRE_VERSION
