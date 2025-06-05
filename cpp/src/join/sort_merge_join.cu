@@ -16,6 +16,7 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/copying.hpp>
 #include <cudf/detail/null_mask.cuh>
 #include <cudf/join/sort_merge_join.hpp>
 #include <cudf/lists/lists_column_view.hpp>
@@ -31,6 +32,7 @@
 #include <cuda/std/iterator>
 #include <cuda/std/tuple>
 #include <thrust/binary_search.h>
+#include <thrust/for_each.h>
 #include <thrust/iterator/tabulate_output_iterator.h>
 #include <thrust/iterator/transform_output_iterator.h>
 #include <thrust/sort.h>
@@ -438,28 +440,24 @@ void sort_merge_join::postprocess_indices(device_span<size_type> smaller_indices
                                           device_span<size_type> larger_indices,
                                           rmm::cuda_stream_view stream)
 {
-  bool is_left_smaller = preprocessed_left._null_processed_table_view.num_rows() <
-                         preprocessed_right._null_processed_table_view.num_rows();
   if (compare_nulls == null_equality::UNEQUAL) {
     // if a table has no nullable column, then there's no postprocessing to be done
     auto is_left_nullable  = has_nested_nulls(preprocessed_left._table_view);
     auto is_right_nullable = has_nested_nulls(preprocessed_right._table_view);
     if (is_left_nullable) {
       auto left_mapping       = preprocessed_left.map_table_to_unprocessed(stream);
-      auto& transform_indices = is_left_smaller ? smaller_indices : larger_indices;
       thrust::transform(rmm::exec_policy_nosync(stream),
-                        transform_indices.begin(),
-                        transform_indices.end(),
-                        transform_indices.begin(),
+                        larger_indices.begin(),
+                        larger_indices.end(),
+                        larger_indices.begin(),
                         mapping_functor<device_span<size_type>>{left_mapping});
     }
     if (is_right_nullable) {
       auto right_mapping      = preprocessed_right.map_table_to_unprocessed(stream);
-      auto& transform_indices = is_left_smaller ? larger_indices : smaller_indices;
       thrust::transform(rmm::exec_policy_nosync(stream),
-                        transform_indices.begin(),
-                        transform_indices.end(),
-                        transform_indices.begin(),
+                        smaller_indices.begin(),
+                        smaller_indices.end(),
+                        smaller_indices.begin(),
                         mapping_functor<device_span<size_type>>{right_mapping});
     }
   }
@@ -493,73 +491,63 @@ sort_merge_join::inner_join(table_view const& left,
   }
   if (is_left_sorted == cudf::sorted::NO) { preprocessed_left.get_sorted_order(stream); }
 
-  // Identify the smaller and larger tables for merge operation
-  bool is_left_smaller = preprocessed_left._null_processed_table_view.num_rows() <
-                         preprocessed_right._null_processed_table_view.num_rows();
-  auto& smaller = is_left_smaller ? preprocessed_left : preprocessed_right;
-  auto& larger  = is_left_smaller ? preprocessed_right : preprocessed_left;
-
   // Neither table was pre-sorted
-  if (smaller._null_processed_table_sorted_order.has_value() &&
-      larger._null_processed_table_sorted_order.has_value()) {
-    auto smaller_sorted_order = smaller._null_processed_table_sorted_order.value()->view();
-    auto larger_sorted_order  = larger._null_processed_table_sorted_order.value()->view();
-    merge obj(smaller._null_processed_table_view,
-              smaller_sorted_order.begin<size_type>(),
-              smaller_sorted_order.end<size_type>(),
-              larger._null_processed_table_view,
-              larger_sorted_order.begin<size_type>(),
-              larger_sorted_order.end<size_type>());
-    auto [smaller_indices, larger_indices] = obj(stream, mr);
-    postprocess_indices(*smaller_indices, *larger_indices, stream);
+  if (preprocessed_right._null_processed_table_sorted_order.has_value() &&
+      preprocessed_left._null_processed_table_sorted_order.has_value()) {
+    auto preprocessed_right_sorted_order = preprocessed_right._null_processed_table_sorted_order.value()->view();
+    auto preprocessed_left_sorted_order  = preprocessed_left._null_processed_table_sorted_order.value()->view();
+    merge obj(preprocessed_right._null_processed_table_view,
+              preprocessed_right_sorted_order.begin<size_type>(),
+              preprocessed_right_sorted_order.end<size_type>(),
+              preprocessed_left._null_processed_table_view,
+              preprocessed_left_sorted_order.begin<size_type>(),
+              preprocessed_left_sorted_order.end<size_type>());
+    auto [preprocessed_right_indices, preprocessed_left_indices] = obj(stream, mr);
+    postprocess_indices(*preprocessed_right_indices, *preprocessed_left_indices, stream);
     stream.synchronize();
-    if (is_left_smaller) { return {std::move(smaller_indices), std::move(larger_indices)}; }
-    return {std::move(larger_indices), std::move(smaller_indices)};
+    return {std::move(preprocessed_left_indices), std::move(preprocessed_right_indices)};
   }
-  // Only the larger table was pre-sorted
-  if (smaller._null_processed_table_sorted_order.has_value() &&
-      !larger._null_processed_table_sorted_order.has_value()) {
-    auto smaller_sorted_order = smaller._null_processed_table_sorted_order.value()->view();
-    merge obj(smaller._null_processed_table_view,
-              smaller_sorted_order.begin<size_type>(),
-              smaller_sorted_order.end<size_type>(),
-              larger._null_processed_table_view,
+  // Only the preprocessed_left table was pre-sorted
+  if (preprocessed_right._null_processed_table_sorted_order.has_value() &&
+      !preprocessed_left._null_processed_table_sorted_order.has_value()) {
+    auto preprocessed_right_sorted_order = preprocessed_right._null_processed_table_sorted_order.value()->view();
+    merge obj(preprocessed_right._null_processed_table_view,
+              preprocessed_right_sorted_order.begin<size_type>(),
+              preprocessed_right_sorted_order.end<size_type>(),
+              preprocessed_left._null_processed_table_view,
               thrust::counting_iterator(0),
-              thrust::counting_iterator(larger._null_processed_table_view.num_rows()));
-    auto [smaller_indices, larger_indices] = obj(stream, mr);
-    postprocess_indices(*smaller_indices, *larger_indices, stream);
+              thrust::counting_iterator(preprocessed_left._null_processed_table_view.num_rows()));
+    auto [preprocessed_right_indices, preprocessed_left_indices] = obj(stream, mr);
+    postprocess_indices(*preprocessed_right_indices, *preprocessed_left_indices, stream);
     stream.synchronize();
-    if (is_left_smaller) { return {std::move(smaller_indices), std::move(larger_indices)}; }
-    return {std::move(larger_indices), std::move(smaller_indices)};
+    return {std::move(preprocessed_left_indices), std::move(preprocessed_right_indices)};
   }
-  // Only the smaller table was pre-sorted
-  if (!smaller._null_processed_table_sorted_order.has_value() &&
-      larger._null_processed_table_sorted_order.has_value()) {
-    auto larger_sorted_order = larger._null_processed_table_sorted_order.value()->view();
-    merge obj(smaller._null_processed_table_view,
+  // Only the preprocessed_right table was pre-sorted
+  if (!preprocessed_right._null_processed_table_sorted_order.has_value() &&
+      preprocessed_left._null_processed_table_sorted_order.has_value()) {
+    auto preprocessed_left_sorted_order = preprocessed_left._null_processed_table_sorted_order.value()->view();
+    merge obj(preprocessed_right._null_processed_table_view,
               thrust::counting_iterator(0),
-              thrust::counting_iterator(smaller._null_processed_table_view.num_rows()),
-              larger._null_processed_table_view,
-              larger_sorted_order.begin<size_type>(),
-              larger_sorted_order.end<size_type>());
-    auto [smaller_indices, larger_indices] = obj(stream, mr);
-    postprocess_indices(*smaller_indices, *larger_indices, stream);
+              thrust::counting_iterator(preprocessed_right._null_processed_table_view.num_rows()),
+              preprocessed_left._null_processed_table_view,
+              preprocessed_left_sorted_order.begin<size_type>(),
+              preprocessed_left_sorted_order.end<size_type>());
+    auto [preprocessed_right_indices, preprocessed_left_indices] = obj(stream, mr);
+    postprocess_indices(*preprocessed_right_indices, *preprocessed_left_indices, stream);
     stream.synchronize();
-    if (is_left_smaller) { return {std::move(smaller_indices), std::move(larger_indices)}; }
-    return {std::move(larger_indices), std::move(smaller_indices)};
+    return {std::move(preprocessed_left_indices), std::move(preprocessed_right_indices)};
   }
   // Both tables were pre-sorted
-  merge obj(smaller._null_processed_table_view,
+  merge obj(preprocessed_right._null_processed_table_view,
             thrust::counting_iterator(0),
-            thrust::counting_iterator(smaller._null_processed_table_view.num_rows()),
-            larger._null_processed_table_view,
+            thrust::counting_iterator(preprocessed_right._null_processed_table_view.num_rows()),
+            preprocessed_left._null_processed_table_view,
             thrust::counting_iterator(0),
-            thrust::counting_iterator(larger._null_processed_table_view.num_rows()));
-  auto [smaller_indices, larger_indices] = obj(stream, mr);
-  postprocess_indices(*smaller_indices, *larger_indices, stream);
+            thrust::counting_iterator(preprocessed_left._null_processed_table_view.num_rows()));
+  auto [preprocessed_right_indices, preprocessed_left_indices] = obj(stream, mr);
+  postprocess_indices(*preprocessed_right_indices, *preprocessed_left_indices, stream);
   stream.synchronize();
-  if (is_left_smaller) { return {std::move(smaller_indices), std::move(larger_indices)}; }
-  return {std::move(larger_indices), std::move(smaller_indices)};
+  return {std::move(preprocessed_left_indices), std::move(preprocessed_right_indices)};
 }
 
 // The motivation for this API is to partition the left table in the case of exploding joins.
@@ -591,68 +579,199 @@ std::unique_ptr<rmm::device_uvector<size_type>> sort_merge_join::inner_join_size
   if (is_left_sorted == cudf::sorted::NO) { preprocessed_left.get_sorted_order(stream); }
 
   // The smaller table has to be the right table since we need to return match counts of the left table
-  bool is_left_smaller = preprocessed_left._null_processed_table_view.num_rows() <
-                         preprocessed_right._null_processed_table_view.num_rows();
-  auto& smaller = preprocessed_right;
-  auto& larger  = preprocessed_left;
-
   // Neither table was pre-sorted
-  if (smaller._null_processed_table_sorted_order.has_value() &&
-      larger._null_processed_table_sorted_order.has_value()) {
-    auto smaller_sorted_order = smaller._null_processed_table_sorted_order.value()->view();
-    auto larger_sorted_order  = larger._null_processed_table_sorted_order.value()->view();
-    merge obj(smaller._null_processed_table_view,
-              smaller_sorted_order.begin<size_type>(),
-              smaller_sorted_order.end<size_type>(),
-              larger._null_processed_table_view,
-              larger_sorted_order.begin<size_type>(),
-              larger_sorted_order.end<size_type>());
+  if (preprocessed_right._null_processed_table_sorted_order.has_value() &&
+      preprocessed_left._null_processed_table_sorted_order.has_value()) {
+    auto preprocessed_right_sorted_order = preprocessed_right._null_processed_table_sorted_order.value()->view();
+    auto preprocessed_left_sorted_order  = preprocessed_left._null_processed_table_sorted_order.value()->view();
+    merge obj(preprocessed_right._null_processed_table_view,
+              preprocessed_right_sorted_order.begin<size_type>(),
+              preprocessed_right_sorted_order.end<size_type>(),
+              preprocessed_left._null_processed_table_view,
+              preprocessed_left_sorted_order.begin<size_type>(),
+              preprocessed_left_sorted_order.end<size_type>());
     auto matches_per_row = obj.matches_per_row(stream, cudf::get_current_device_resource_ref());
-    // Now we need to post-process the matches i.e. insert zero counts for all the null positions
-    auto unprocessed_matches_per_row = cudf::detail::make_zeroed_device_uvector_async<size_type>(left.num_rows(), stream, mr);
-    return obj.matches_per_row(stream, mr);
+    matches_per_row->resize(matches_per_row->size() - 1, stream);
+    if (compare_nulls == null_equality::UNEQUAL && has_nested_nulls(preprocessed_left._table_view)) {
+      // Now we need to post-process the matches i.e. insert zero counts for all the null positions
+      auto unprocessed_matches_per_row = cudf::detail::make_zeroed_device_uvector_async<size_type>(preprocessed_left._table_view.num_rows(), stream, mr);
+      auto mapping = preprocessed_left.map_table_to_unprocessed(stream);
+      thrust::scatter(rmm::exec_policy(stream), matches_per_row->begin(), matches_per_row->end(), mapping.begin(), unprocessed_matches_per_row.begin());
+      return std::make_unique<rmm::device_uvector<size_type>>(std::move(unprocessed_matches_per_row));
+    }
+    return matches_per_row;
   }
-  // Only the larger table was pre-sorted
-  if (smaller._null_processed_table_sorted_order.has_value() &&
-      !larger._null_processed_table_sorted_order.has_value()) {
-    auto smaller_sorted_order = smaller._null_processed_table_sorted_order.value()->view();
-    merge obj(smaller._null_processed_table_view,
-              smaller_sorted_order.begin<size_type>(),
-              smaller_sorted_order.end<size_type>(),
-              larger._null_processed_table_view,
+  // Only the preprocessed_left table was pre-sorted
+  if (preprocessed_right._null_processed_table_sorted_order.has_value() &&
+      !preprocessed_left._null_processed_table_sorted_order.has_value()) {
+    auto preprocessed_right_sorted_order = preprocessed_right._null_processed_table_sorted_order.value()->view();
+    merge obj(preprocessed_right._null_processed_table_view,
+              preprocessed_right_sorted_order.begin<size_type>(),
+              preprocessed_right_sorted_order.end<size_type>(),
+              preprocessed_left._null_processed_table_view,
               thrust::counting_iterator(0),
-              thrust::counting_iterator(larger._null_processed_table_view.num_rows()));
-    return obj.matches_per_row(stream, mr);
+              thrust::counting_iterator(preprocessed_left._null_processed_table_view.num_rows()));
+    auto matches_per_row = obj.matches_per_row(stream, cudf::get_current_device_resource_ref());
+    matches_per_row->resize(matches_per_row->size() - 1, stream);
+    if (compare_nulls == null_equality::UNEQUAL && has_nested_nulls(preprocessed_left._table_view)) {
+      // Now we need to post-process the matches i.e. insert zero counts for all the null positions
+      auto unprocessed_matches_per_row = cudf::detail::make_zeroed_device_uvector_async<size_type>(preprocessed_left._table_view.num_rows(), stream, mr);
+      auto mapping = preprocessed_left.map_table_to_unprocessed(stream);
+      thrust::scatter(rmm::exec_policy(stream), matches_per_row->begin(), matches_per_row->end(), mapping.begin(), unprocessed_matches_per_row.begin());
+      return std::make_unique<rmm::device_uvector<size_type>>(std::move(unprocessed_matches_per_row));
+    }
+    return matches_per_row;
   }
-  // Only the smaller table was pre-sorted
-  if (!smaller._null_processed_table_sorted_order.has_value() &&
-      larger._null_processed_table_sorted_order.has_value()) {
-    auto larger_sorted_order = larger._null_processed_table_sorted_order.value()->view();
-    merge obj(smaller._null_processed_table_view,
+  // Only the preprocessed_right table was pre-sorted
+  if (!preprocessed_right._null_processed_table_sorted_order.has_value() &&
+      preprocessed_left._null_processed_table_sorted_order.has_value()) {
+    auto preprocessed_left_sorted_order = preprocessed_left._null_processed_table_sorted_order.value()->view();
+    merge obj(preprocessed_right._null_processed_table_view,
               thrust::counting_iterator(0),
-              thrust::counting_iterator(smaller._null_processed_table_view.num_rows()),
-              larger._null_processed_table_view,
-              larger_sorted_order.begin<size_type>(),
-              larger_sorted_order.end<size_type>());
-    return obj.matches_per_row(stream, mr);
+              thrust::counting_iterator(preprocessed_right._null_processed_table_view.num_rows()),
+              preprocessed_left._null_processed_table_view,
+              preprocessed_left_sorted_order.begin<size_type>(),
+              preprocessed_left_sorted_order.end<size_type>());
+    auto matches_per_row = obj.matches_per_row(stream, cudf::get_current_device_resource_ref());
+    matches_per_row->resize(matches_per_row->size() - 1, stream);
+    if (compare_nulls == null_equality::UNEQUAL && has_nested_nulls(preprocessed_left._table_view)) {
+      // Now we need to post-process the matches i.e. insert zero counts for all the null positions
+      auto unprocessed_matches_per_row = cudf::detail::make_zeroed_device_uvector_async<size_type>(preprocessed_left._table_view.num_rows(), stream, mr);
+      auto mapping = preprocessed_left.map_table_to_unprocessed(stream);
+      thrust::scatter(rmm::exec_policy(stream), matches_per_row->begin(), matches_per_row->end(), mapping.begin(), unprocessed_matches_per_row.begin());
+      return std::make_unique<rmm::device_uvector<size_type>>(std::move(unprocessed_matches_per_row));
+    }
+    return matches_per_row;
   }
   // Both tables were pre-sorted
-  merge obj(smaller._null_processed_table_view,
+  merge obj(preprocessed_right._null_processed_table_view,
             thrust::counting_iterator(0),
-            thrust::counting_iterator(smaller._null_processed_table_view.num_rows()),
-            larger._null_processed_table_view,
+            thrust::counting_iterator(preprocessed_right._null_processed_table_view.num_rows()),
+            preprocessed_left._null_processed_table_view,
             thrust::counting_iterator(0),
-            thrust::counting_iterator(larger._null_processed_table_view.num_rows()));
-  return obj.matches_per_row(stream, mr);
+            thrust::counting_iterator(preprocessed_left._null_processed_table_view.num_rows()));
+  auto matches_per_row = obj.matches_per_row(stream, cudf::get_current_device_resource_ref());
+  matches_per_row->resize(matches_per_row->size() - 1, stream);
+  if (compare_nulls == null_equality::UNEQUAL && has_nested_nulls(preprocessed_left._table_view)) {
+    // Now we need to post-process the matches i.e. insert zero counts for all the null positions
+    auto unprocessed_matches_per_row = cudf::detail::make_zeroed_device_uvector_async<size_type>(preprocessed_left._table_view.num_rows(), stream, mr);
+    auto mapping = preprocessed_left.map_table_to_unprocessed(stream);
+    thrust::scatter(rmm::exec_policy(stream), matches_per_row->begin(), matches_per_row->end(), mapping.begin(), unprocessed_matches_per_row.begin());
+    return std::make_unique<rmm::device_uvector<size_type>>(std::move(unprocessed_matches_per_row));
+  }
+  return matches_per_row;
 }
 
+// left_partition_end exclusive
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
 sort_merge_join::partitioned_inner_join(size_type left_partition_begin,
-             size_type left_partition_end,
-             rmm::cuda_stream_view stream,
-             rmm::device_async_resource_ref mr) {
-  
+           size_type left_partition_end,
+           rmm::cuda_stream_view stream, 
+           rmm::device_async_resource_ref mr) {
+
+  auto null_processed_table_begin = left_partition_begin;
+  auto null_processed_table_end = left_partition_end;
+  if (compare_nulls == null_equality::UNEQUAL && has_nested_nulls(preprocessed_left._table_view)) {
+    auto left_mapping = preprocessed_left.map_table_to_unprocessed(stream);
+    null_processed_table_begin = thrust::distance(left_mapping.begin(), thrust::lower_bound(rmm::exec_policy(stream), left_mapping.begin(), left_mapping.end(), left_partition_begin));
+    null_processed_table_end = thrust::distance(left_mapping.begin(), thrust::upper_bound(rmm::exec_policy(stream), left_mapping.begin(), left_mapping.end(), left_partition_end - 1));
+  }
+  auto null_preprocessed_left_partition = cudf::slice(preprocessed_left._null_processed_table_view, {left_partition_begin, left_partition_end}, stream)[0];
+
+  // Neither table was pre-sorted
+  if (preprocessed_right._null_processed_table_sorted_order.has_value() &&
+      preprocessed_left._null_processed_table_sorted_order.has_value()) {
+    auto preprocessed_right_sorted_order = preprocessed_right._null_processed_table_sorted_order.value()->view();
+    auto preprocessed_left_sorted_order  = preprocessed_left._null_processed_table_sorted_order.value()->view();
+    merge obj(preprocessed_right._null_processed_table_view,
+              preprocessed_right_sorted_order.begin<size_type>(),
+              preprocessed_right_sorted_order.end<size_type>(),
+              null_preprocessed_left_partition,
+              preprocessed_left_sorted_order.begin<size_type>() + null_processed_table_begin,
+              preprocessed_left_sorted_order.begin<size_type>() + null_processed_table_end);
+    auto [preprocessed_right_indices, preprocessed_left_indices] = obj(stream, mr);
+    // Map from slice to total null processed table
+    thrust::transform(rmm::exec_policy_nosync(stream), 
+        preprocessed_left_indices->begin(), 
+        preprocessed_left_indices->end(), 
+        preprocessed_left_indices->begin(), 
+        [left_partition_begin] __device__ (auto idx) { 
+          return left_partition_begin + idx; 
+        });
+    // Map from total null processed table to unprocessed table
+    postprocess_indices(*preprocessed_right_indices, *preprocessed_left_indices, stream);
+    stream.synchronize();
+    return {std::move(preprocessed_left_indices), std::move(preprocessed_right_indices)};
+  }
+  // Only the preprocessed_left table was pre-sorted
+  if (preprocessed_right._null_processed_table_sorted_order.has_value() &&
+      !preprocessed_left._null_processed_table_sorted_order.has_value()) {
+    auto preprocessed_right_sorted_order = preprocessed_right._null_processed_table_sorted_order.value()->view();
+    merge obj(preprocessed_right._null_processed_table_view,
+              preprocessed_right_sorted_order.begin<size_type>(),
+              preprocessed_right_sorted_order.end<size_type>(),
+              null_preprocessed_left_partition,
+              thrust::counting_iterator(null_processed_table_begin),
+              thrust::counting_iterator(null_processed_table_end));
+    auto [preprocessed_right_indices, preprocessed_left_indices] = obj(stream, mr);
+    // Map from slice to total null processed table
+    thrust::transform(rmm::exec_policy_nosync(stream), 
+        preprocessed_left_indices->begin(), 
+        preprocessed_left_indices->end(), 
+        preprocessed_left_indices->begin(), 
+        [left_partition_begin] __device__ (auto idx) { 
+          return left_partition_begin + idx; 
+        });
+    // Map from total null processed table to unprocessed table
+    postprocess_indices(*preprocessed_right_indices, *preprocessed_left_indices, stream);
+    stream.synchronize();
+    return {std::move(preprocessed_left_indices), std::move(preprocessed_right_indices)};
+  }
+  // Only the preprocessed_right table was pre-sorted
+  if (!preprocessed_right._null_processed_table_sorted_order.has_value() &&
+      preprocessed_left._null_processed_table_sorted_order.has_value()) {
+    auto preprocessed_left_sorted_order = preprocessed_left._null_processed_table_sorted_order.value()->view();
+    merge obj(preprocessed_right._null_processed_table_view,
+              thrust::counting_iterator(0),
+              thrust::counting_iterator(preprocessed_right._null_processed_table_view.num_rows()),
+              null_preprocessed_left_partition,
+              preprocessed_left_sorted_order.begin<size_type>() + null_processed_table_begin,
+              preprocessed_left_sorted_order.begin<size_type>() + null_processed_table_end);
+    auto [preprocessed_right_indices, preprocessed_left_indices] = obj(stream, mr);
+    // Map from slice to total null processed table
+    thrust::transform(rmm::exec_policy_nosync(stream), 
+        preprocessed_left_indices->begin(), 
+        preprocessed_left_indices->end(), 
+        preprocessed_left_indices->begin(), 
+        [left_partition_begin] __device__ (auto idx) { 
+          return left_partition_begin + idx; 
+        });
+    // Map from total null processed table to unprocessed table
+    postprocess_indices(*preprocessed_right_indices, *preprocessed_left_indices, stream);
+    stream.synchronize();
+    return {std::move(preprocessed_left_indices), std::move(preprocessed_right_indices)};
+  }
+  // Both tables were pre-sorted
+  merge obj(preprocessed_right._null_processed_table_view,
+            thrust::counting_iterator(0),
+            thrust::counting_iterator(preprocessed_right._null_processed_table_view.num_rows()),
+            null_preprocessed_left_partition,
+            thrust::counting_iterator(null_processed_table_begin),
+            thrust::counting_iterator(null_processed_table_end));
+  auto [preprocessed_right_indices, preprocessed_left_indices] = obj(stream, mr);
+  // Map from slice to total null processed table
+  thrust::transform(rmm::exec_policy_nosync(stream), 
+      preprocessed_left_indices->begin(), 
+      preprocessed_left_indices->end(), 
+      preprocessed_left_indices->begin(), 
+      [left_partition_begin] __device__ (auto idx) { 
+        return left_partition_begin + idx; 
+      });
+  // Map from total null processed table to unprocessed table
+  postprocess_indices(*preprocessed_right_indices, *preprocessed_left_indices, stream);
+  stream.synchronize();
+  return {std::move(preprocessed_left_indices), std::move(preprocessed_right_indices)};
 }
 
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
