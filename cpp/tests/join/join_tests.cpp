@@ -831,9 +831,8 @@ TEST_F(JoinTest, LeftJoinOnNulls)
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*sorted_gold, *sorted_result);
 }
 
-TEST_P(JoinParameterizedTest, InnerJoinSizePerRowNoNulls)
+TEST_F(JoinTest, SortMergeInnerJoinSizePerRowNoNulls)
 {
-  auto algo = GetParam();
   column_wrapper<int32_t> col0_0{{3, 1, 2, 0, 2}};
   strcol_wrapper col0_1({"s1", "s1", "s0", "s4", "s0"});
   column_wrapper<int32_t> col0_2{{0, 1, 2, 4, 1}};
@@ -856,22 +855,21 @@ TEST_P(JoinParameterizedTest, InnerJoinSizePerRowNoNulls)
   for (const auto eq : {cudf::null_equality::EQUAL, cudf::null_equality::UNEQUAL}) {
     // single column
     {
-      auto size_per_row = inner_join_size_per_row(t0, t1, {0}, {0}, eq, algo);
+      auto size_per_row = inner_join_size_per_row(t0, t1, {0}, {0}, eq, algorithm::SORT_MERGE);
       auto expected     = std::vector<cudf::size_type>{1, 0, 2, 1, 2};
       EXPECT_EQ(size_per_row, expected);
     }
     // multi column
     {
-      auto result   = inner_join_size_per_row(t0, t1, {0, 1}, {0, 1}, eq, algo);
+      auto result   = inner_join_size_per_row(t0, t1, {0, 1}, {0, 1}, eq, algorithm::SORT_MERGE);
       auto expected = std::vector<cudf::size_type>{1, 0, 1, 0, 1};
       EXPECT_EQ(result, expected);
     }
   }
 }
 
-TEST_P(JoinParameterizedTest, InnerJoinSizePerRowWithNulls)
+TEST_F(JoinTest, SortMergeInnerJoinSizePerRowWithNulls)
 {
-  auto algo = GetParam();
   column_wrapper<int32_t> col0_0{{3, 1, 2, 0, 2}};
   strcol_wrapper col0_1({"s1", "s1", "s0", "s4", "s0"}, {true, true, false, true, true});
   column_wrapper<int32_t> col0_2{{0, 1, 2, 4, 1}};
@@ -893,28 +891,29 @@ TEST_P(JoinParameterizedTest, InnerJoinSizePerRowWithNulls)
 
   // single column, null_equality::EQUAL
   {
-    auto size_per_row = inner_join_size_per_row(t0, t1, {0}, {0}, cudf::null_equality::EQUAL, algo);
-    auto expected     = std::vector<cudf::size_type>{1, 0, 2, 1, 2};
+    auto size_per_row =
+      inner_join_size_per_row(t0, t1, {0}, {0}, cudf::null_equality::EQUAL, algorithm::SORT_MERGE);
+    auto expected = std::vector<cudf::size_type>{1, 0, 2, 1, 2};
     EXPECT_EQ(size_per_row, expected);
   }
   // multi column, null_equality::EQUAL
   {
-    auto size_per_row =
-      inner_join_size_per_row(t0, t1, {0, 1}, {0, 1}, cudf::null_equality::EQUAL, algo);
+    auto size_per_row = inner_join_size_per_row(
+      t0, t1, {0, 1}, {0, 1}, cudf::null_equality::EQUAL, algorithm::SORT_MERGE);
     auto expected = std::vector<cudf::size_type>{1, 0, 1, 0, 0};
     EXPECT_EQ(size_per_row, expected);
   }
   // single column, null_equality::UNEQUAL
   {
-    auto size_per_row =
-      inner_join_size_per_row(t0, t1, {0}, {0}, cudf::null_equality::UNEQUAL, algo);
+    auto size_per_row = inner_join_size_per_row(
+      t0, t1, {0}, {0}, cudf::null_equality::UNEQUAL, algorithm::SORT_MERGE);
     auto expected = std::vector<cudf::size_type>{1, 0, 2, 1, 2};
     EXPECT_EQ(size_per_row, expected);
   }
   // multi column, null_equality::UNEQUAL
   {
-    auto size_per_row =
-      inner_join_size_per_row(t0, t1, {0, 1}, {0, 1}, cudf::null_equality::UNEQUAL, algo);
+    auto size_per_row = inner_join_size_per_row(
+      t0, t1, {0, 1}, {0, 1}, cudf::null_equality::UNEQUAL, algorithm::SORT_MERGE);
     auto expected = std::vector<cudf::size_type>{1, 0, 0, 0, 0};
     EXPECT_EQ(size_per_row, expected);
   }
