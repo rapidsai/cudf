@@ -8,10 +8,10 @@ import operator
 import warnings
 from functools import reduce
 from itertools import chain
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, TypeVar
 
 from cudf_polars.dsl.expr import Col
-from cudf_polars.dsl.ir import Union
+from cudf_polars.dsl.ir import IR, Union
 from cudf_polars.experimental.base import PartitionInfo
 
 if TYPE_CHECKING:
@@ -19,7 +19,6 @@ if TYPE_CHECKING:
 
     from cudf_polars.containers import DataFrame
     from cudf_polars.dsl.expr import Expr
-    from cudf_polars.dsl.ir import IR
     from cudf_polars.experimental.dispatch import LowerIRTransformer
     from cudf_polars.utils.config import ConfigOptions
 
@@ -50,12 +49,15 @@ def _fallback_inform(msg: str, config_options: ConfigOptions) -> None:
             )
 
 
+T = TypeVar("T", bound=IR)
+
+
 def _lower_ir_fallback(
-    ir: IR,
+    ir: T,
     rec: LowerIRTransformer,
     *,
     msg: str | None = None,
-) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+) -> tuple[T, MutableMapping[IR, PartitionInfo]]:
     # Catch-all single-partition lowering logic.
     # If any children contain multiple partitions,
     # those children will be collapsed with `Repartition`.

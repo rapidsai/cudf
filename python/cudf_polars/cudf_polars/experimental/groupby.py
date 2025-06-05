@@ -130,7 +130,7 @@ def decompose(
 @lower_ir_node.register(GroupBy)
 def _(
     ir: GroupBy, rec: LowerIRTransformer
-) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+) -> tuple[GroupBy | Select, MutableMapping[IR, PartitionInfo]]:
     # Extract child partitioning
     child, partition_info = rec(ir.children[0])
 
