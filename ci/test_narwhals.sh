@@ -25,6 +25,11 @@ rapids-pip-retry install -U -e .
 rapids-logger "Check narwhals versions"
 python -c "import narwhals; print(narwhals.show_versions())"
 
+# test_horizontal_slice_with_series: xpassing in Narwhals, fixed in cuDF https://github.com/rapidsai/cudf/pull/18558
+TESTS_THAT_NEED_NARWHALS_FIX_FOR_CUDF=" \
+test_horizontal_slice_with_series \
+"
+
 rapids-logger "Run narwhals tests for cuDF"
 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest \
     --cache-clear \
@@ -33,6 +38,9 @@ PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest \
     -p env \
     -p no:pytest_benchmark \
     -p cudf.testing.narwhals_test_plugin \
+    -k "not ( \
+        ${TESTS_THAT_NEED_NARWHALS_FIX_FOR_CUDF} \
+    )" \
     --numprocesses=8 \
     --dist=worksteal \
     --constructors=cudf
