@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "io/comp/comp.hpp"
+#include "io/comp/compression.hpp"
 #include "io/comp/io_uncomp.hpp"
 #include "io/orc/orc.hpp"
 #include "io/utilities/getenv_or.hpp"

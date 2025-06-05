@@ -502,8 +502,8 @@ add_library(
   src/io/avro/avro_gpu.cu
   src/io/avro/reader_impl.cu
   src/io/comp/brotli_dict.cpp
-  src/io/comp/comp.cpp
-  src/io/comp/comp.cu
+  src/io/comp/compression.cpp
+  src/io/comp/compression.cu
   src/io/comp/common.cpp
   src/io/comp/cpu_unbz2.cpp
   src/io/comp/debrotli.cu

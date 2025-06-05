@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include "io/comp/comp.hpp"
+#include "io/comp/compression.hpp"
 
 #include <cudf/io/nvcomp_adapter.hpp>
 #include <cudf/utilities/span.hpp>

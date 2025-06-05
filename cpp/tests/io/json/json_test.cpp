@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "io/comp/comp.hpp"
+#include "io/comp/compression.hpp"
 #include "io/comp/io_uncomp.hpp"
 
 #include <cudf_test/base_fixture.hpp>

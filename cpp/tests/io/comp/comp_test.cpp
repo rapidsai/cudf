@@ -15,7 +15,7 @@
  */
 
 #include "cudf/io/types.hpp"
-#include "io/comp/comp.hpp"
+#include "io/comp/compression.hpp"
 #include "io/comp/gpuinflate.hpp"
 #include "io/comp/io_uncomp.hpp"
 #include "io/utilities/hostdevice_vector.hpp"

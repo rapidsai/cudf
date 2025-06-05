@@ -22,7 +22,7 @@
 #include "arrow_schema_writer.hpp"
 #include "compact_protocol_reader.hpp"
 #include "compact_protocol_writer.hpp"
-#include "io/comp/comp.hpp"
+#include "io/comp/compression.hpp"
 #include "io/parquet/parquet_gpu.hpp"
 #include "io/statistics/column_statistics.cuh"
 #include "io/utilities/column_utils.cuh"

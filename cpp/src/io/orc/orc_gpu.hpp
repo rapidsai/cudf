@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include "io/comp/comp.hpp"
+#include "io/comp/compression.hpp"
 #include "io/statistics/statistics.cuh"
 #include "orc.hpp"
 

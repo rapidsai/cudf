@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "comp.hpp"
+#include "compression.hpp"
 
 #include "common_internal.hpp"
 #include "gpuinflate.hpp"

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "comp.hpp"
+#include "compression.hpp"
 
 #include <rmm/exec_policy.hpp>
 

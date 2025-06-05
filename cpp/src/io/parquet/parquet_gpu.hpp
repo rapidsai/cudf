@@ -17,7 +17,7 @@
 #pragma once
 
 #include "error.hpp"
-#include "io/comp/comp.hpp"
+#include "io/comp/compression.hpp"
 #include "io/parquet/parquet_common.hpp"
 #include "io/statistics/statistics.cuh"
 #include "io/utilities/column_buffer.hpp"
