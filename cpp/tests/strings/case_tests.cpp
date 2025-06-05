@@ -256,25 +256,31 @@ TEST_F(StringsCaseTest, Ascii)
 TEST_F(StringsCaseTest, LongStrings)
 {
   // average string length >= AVG_CHAR_BYTES_THRESHOLD as defined in case.cu
-  cudf::test::strings_column_wrapper input{
-    "abcdéfghijklmnopqrstuvwxyzABCDÉFGHIJKLMNOPQRSTUVWXYZ1234567890!@#$%^&*()_+=- ",
-    "ABCDÉFGHIJKLMNOPQRSTUVWXYZabcdéfghijklmnopqrstuvwxyz1234567890!@#$%^&*()_+=- ",
-    "ABCDÉFGHIJKLMNOPQRSTUVWXYZabcdéfghijklmnopqrstuvwxyz1234567890!@#$%^&*()_+=- ",
-    "ABCDÉFGHIJKLMNOPQRSTUVWXYZabcdéfghijklmnopqrstuvwxyz1234567890!@#$%^&*()_+=-"};
+  auto input = cudf::test::strings_column_wrapper(
+    {"abcdéfghijklmnopqrstuvwxyzABCDÉFGHIJKLMNOPQRSTUVWXYZ1234567890!@#$%^&*()_+=- ",
+     "ABCDÉFGHIJKLMNOPQRSTUVWXYZabcdéfghijklmnopqrstuvwxyz1234567890!@#$%^&*()_+=- ",
+     "ABCDÉFGHIJKLMNOPQRSTUVWXYZabcdéfghijklmnopqrstuvwxyz1234567890!@#$%^&*()_+=- ",
+     "",
+     "ABCDÉFGHIJKLMNOPQRSTUVWXYZabcdéfghijklmnopqrstuvwxyz1234567890!@#$%^&*()_+=-"},
+    {1, 1, 1, 0, 1});
   auto view     = cudf::strings_column_view(input);
-  auto expected = cudf::test::strings_column_wrapper{
-    "abcdéfghijklmnopqrstuvwxyzabcdéfghijklmnopqrstuvwxyz1234567890!@#$%^&*()_+=- ",
-    "abcdéfghijklmnopqrstuvwxyzabcdéfghijklmnopqrstuvwxyz1234567890!@#$%^&*()_+=- ",
-    "abcdéfghijklmnopqrstuvwxyzabcdéfghijklmnopqrstuvwxyz1234567890!@#$%^&*()_+=- ",
-    "abcdéfghijklmnopqrstuvwxyzabcdéfghijklmnopqrstuvwxyz1234567890!@#$%^&*()_+=-"};
+  auto expected = cudf::test::strings_column_wrapper(
+    {"abcdéfghijklmnopqrstuvwxyzabcdéfghijklmnopqrstuvwxyz1234567890!@#$%^&*()_+=- ",
+     "abcdéfghijklmnopqrstuvwxyzabcdéfghijklmnopqrstuvwxyz1234567890!@#$%^&*()_+=- ",
+     "abcdéfghijklmnopqrstuvwxyzabcdéfghijklmnopqrstuvwxyz1234567890!@#$%^&*()_+=- ",
+     "",
+     "abcdéfghijklmnopqrstuvwxyzabcdéfghijklmnopqrstuvwxyz1234567890!@#$%^&*()_+=-"},
+    {1, 1, 1, 0, 1});
   auto results = cudf::strings::to_lower(view);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 
-  expected = cudf::test::strings_column_wrapper{
-    "ABCDÉFGHIJKLMNOPQRSTUVWXYZABCDÉFGHIJKLMNOPQRSTUVWXYZ1234567890!@#$%^&*()_+=- ",
-    "ABCDÉFGHIJKLMNOPQRSTUVWXYZABCDÉFGHIJKLMNOPQRSTUVWXYZ1234567890!@#$%^&*()_+=- ",
-    "ABCDÉFGHIJKLMNOPQRSTUVWXYZABCDÉFGHIJKLMNOPQRSTUVWXYZ1234567890!@#$%^&*()_+=- ",
-    "ABCDÉFGHIJKLMNOPQRSTUVWXYZABCDÉFGHIJKLMNOPQRSTUVWXYZ1234567890!@#$%^&*()_+=-"};
+  expected = cudf::test::strings_column_wrapper(
+    {"ABCDÉFGHIJKLMNOPQRSTUVWXYZABCDÉFGHIJKLMNOPQRSTUVWXYZ1234567890!@#$%^&*()_+=- ",
+     "ABCDÉFGHIJKLMNOPQRSTUVWXYZABCDÉFGHIJKLMNOPQRSTUVWXYZ1234567890!@#$%^&*()_+=- ",
+     "ABCDÉFGHIJKLMNOPQRSTUVWXYZABCDÉFGHIJKLMNOPQRSTUVWXYZ1234567890!@#$%^&*()_+=- ",
+     "",
+     "ABCDÉFGHIJKLMNOPQRSTUVWXYZABCDÉFGHIJKLMNOPQRSTUVWXYZ1234567890!@#$%^&*()_+=-"},
+    {1, 1, 1, 0, 1});
   results = cudf::strings::to_upper(view);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 

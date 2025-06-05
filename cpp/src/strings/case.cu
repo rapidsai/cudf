@@ -291,7 +291,11 @@ CUDF_KERNEL void count_bytes_kernel(convert_char_fn converter,
   auto const lane_idx = warp.thread_rank();
 
   auto const str_idx = warp.meta_group_rank();
-  if (str_idx >= d_strings.size() or d_strings.is_null(str_idx)) { return; }
+  if (str_idx >= d_strings.size()) { return; }
+  if (d_strings.is_null(str_idx)) {
+    if (lane_idx == 0) { d_sizes[str_idx] = 0; }
+    return;
+  }
 
   auto const d_str   = d_strings.element<string_view>(str_idx);
   auto const str_ptr = d_str.data();
