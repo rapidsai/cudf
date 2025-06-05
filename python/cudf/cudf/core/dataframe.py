@@ -1304,7 +1304,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         if col_is_scalar:
             series = Series._from_data(ca, index=self.index)
             return series._getitem_preprocessed(spec)
-        if ca.names != self._data.names:
+        if ca.names != self._column_names:
             frame = self._from_data(ca, index=self.index)
         else:
             frame = self
@@ -1322,11 +1322,12 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 # turn any heterogeneous set of columns into a series if
                 # you only ask for one row.
                 new_name = result.index[0]
+                result_index = Index.from_pandas(result.keys())
                 result = Series._concat(
                     [result[name] for name in frame._column_names],
                     index=False,
                 )
-                result.index = Index(result.keys())
+                result.index = result_index
                 result.name = new_name
                 return result
             except TypeError:
