@@ -291,14 +291,46 @@ TEST_F(StringsCaseTest, LongStrings)
 
 TEST_F(StringsCaseTest, LongStringsSpecial)
 {
-  auto input = cudf::test::strings_column_wrapper{
-    "abcdéfghijklmnopqrstuvwxyzȺßCDÉFGHİJKLMNOPQRSTUVWXYZ1234567890!@#$%^&*()_+=- ",
-    "ȺßCDÉFGHİJKLMNOPQRSTUVWXYZabcdéfghijklmnopqrstuvwxyz1234567890!@#$%^&*()_+=-"};
+  auto input = cudf::test::strings_column_wrapper(
+    {"abcdéfghijklmnopqrstuvwxyzȺßCDÉFGHİJKLMNOPQRSTUVWXYZ1234567890!@#$%^&*()_+=- ",
+     "ȺßCDÉFGHİJKLMNOPQRSTUVWXYZ1234567890!@#$%^&*()_+=-abcdéfghijklmnopqrstuvwxyz ",
+     "bcdéfghijklmnopqrstuvwxyzȺßCDÉFGHİJKLMNOPQRSTUVWXYZ1234567890!@#$%^&*()_+=-a ",
+     "cdéfghijklmnopqrstuvwxyzȺßCDÉFGHİJKLMNOPQRSTUVWXYZ1234567890!@#$%^&*()_+=-ab ",
+     "défghijklmnopqrstuvwxyzȺßCDÉFGHİJKLMNOPQRSTUVWXYZ1234567890!@#$%^&*()_+=-abc ",
+     "éfghijklmnopqrstuvwxyzȺßCDÉFGHİJKLMNOPQRSTUVWXYZ1234567890!@#$%^&*()_+=-abcd ",
+     "",
+     "",
+     "",
+     "",
+     "",
+     "ȺßCDÉFGHİJKLMNOPQRSTUVWXYZ1234567890!@#$%^&*()_+=-abcdéfghijklmnopqrstuvwxyz ",
+     "bcdéfghijklmnopqrstuvwxyzȺßCDÉFGHİJKLMNOPQRSTUVWXYZ1234567890!@#$%^&*()_+=-a ",
+     "cdéfghijklmnopqrstuvwxyzȺßCDÉFGHİJKLMNOPQRSTUVWXYZ1234567890!@#$%^&*()_+=-ab ",
+     "défghijklmnopqrstuvwxyzȺßCDÉFGHİJKLMNOPQRSTUVWXYZ1234567890!@#$%^&*()_+=-abc ",
+     "éfghijklmnopqrstuvwxyzȺßCDÉFGHİJKLMNOPQRSTUVWXYZ1234567890!@#$%^&*()_+=-abcd ",
+     "ȺßCDÉFGHİJKLMNOPQRSTUVWXYZabcdéfghijklmnopqrstuvwxyz1234567890!@#$%^&*()_+=-"},
+    {1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1});
   auto view     = cudf::strings_column_view(input);
   auto results  = cudf::strings::to_lower(view);
-  auto expected = cudf::test::strings_column_wrapper{
-    "abcdéfghijklmnopqrstuvwxyzⱥßcdéfghi̇jklmnopqrstuvwxyz1234567890!@#$%^&*()_+=- ",
-    "ⱥßcdéfghi̇jklmnopqrstuvwxyzabcdéfghijklmnopqrstuvwxyz1234567890!@#$%^&*()_+=-"};
+  auto expected = cudf::test::strings_column_wrapper(
+    {"abcdéfghijklmnopqrstuvwxyzⱥßcdéfghi̇jklmnopqrstuvwxyz1234567890!@#$%^&*()_+=- ",
+     "ⱥßcdéfghi̇jklmnopqrstuvwxyz1234567890!@#$%^&*()_+=-abcdéfghijklmnopqrstuvwxyz ",
+     "bcdéfghijklmnopqrstuvwxyzⱥßcdéfghi̇jklmnopqrstuvwxyz1234567890!@#$%^&*()_+=-a ",
+     "cdéfghijklmnopqrstuvwxyzⱥßcdéfghi̇jklmnopqrstuvwxyz1234567890!@#$%^&*()_+=-ab ",
+     "défghijklmnopqrstuvwxyzⱥßcdéfghi̇jklmnopqrstuvwxyz1234567890!@#$%^&*()_+=-abc ",
+     "éfghijklmnopqrstuvwxyzⱥßcdéfghi̇jklmnopqrstuvwxyz1234567890!@#$%^&*()_+=-abcd ",
+     "",
+     "",
+     "",
+     "",
+     "",
+     "ⱥßcdéfghi̇jklmnopqrstuvwxyz1234567890!@#$%^&*()_+=-abcdéfghijklmnopqrstuvwxyz ",
+     "bcdéfghijklmnopqrstuvwxyzⱥßcdéfghi̇jklmnopqrstuvwxyz1234567890!@#$%^&*()_+=-a ",
+     "cdéfghijklmnopqrstuvwxyzⱥßcdéfghi̇jklmnopqrstuvwxyz1234567890!@#$%^&*()_+=-ab ",
+     "défghijklmnopqrstuvwxyzⱥßcdéfghi̇jklmnopqrstuvwxyz1234567890!@#$%^&*()_+=-abc ",
+     "éfghijklmnopqrstuvwxyzⱥßcdéfghi̇jklmnopqrstuvwxyz1234567890!@#$%^&*()_+=-abcd ",
+     "ⱥßcdéfghi̇jklmnopqrstuvwxyzabcdéfghijklmnopqrstuvwxyz1234567890!@#$%^&*()_+=-"},
+    {1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
