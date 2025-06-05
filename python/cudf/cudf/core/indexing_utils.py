@@ -535,7 +535,7 @@ def parse_single_row_loc_key(
     else:
         is_scalar = _is_scalar_or_zero_d_array(key)
         if is_scalar and isinstance(key, np.ndarray):
-            key = as_column(key.item(), dtype=key.dtype)
+            key = as_column(key.item())
         else:
             key = as_column(key)
         if (
@@ -544,18 +544,22 @@ def parse_single_row_loc_key(
         ):
             # TODO: is this right?
             key = key._get_decategorized_column()
-        if key.dtype.kind == "b":
-            # The only easy one.
-            return MaskIndexer(BooleanMask(key, n))
-        elif len(key) == 0:
+        if len(key) == 0:
             return EmptyIndexer()
         else:
             # TODO: promote to Index objects, so this can handle
             # categoricals correctly?
-            (haystack,) = index._columns
-            if index.dtype.kind == "M":
+            if key.dtype.kind == "b":
+                if is_scalar and index.dtype.kind != "b":
+                    raise KeyError(
+                        "boolean label can not be used without a boolean index"
+                    )
+                else:
+                    return MaskIndexer(BooleanMask(key, n))
+            elif index.dtype.kind == "M":
                 # Try to turn strings into datetimes
                 key = as_column(key, dtype=index.dtype)
+            haystack = index._column
             gather_map = ordered_find(key, haystack)
             if is_scalar and len(gather_map.column) == 1:
                 return ScalarIndexer(gather_map)

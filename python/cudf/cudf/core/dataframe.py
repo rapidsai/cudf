@@ -1322,7 +1322,11 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 # turn any heterogeneous set of columns into a series if
                 # you only ask for one row.
                 new_name = result.index[0]
-                result_index = Index.from_pandas(result.keys())
+                pd_new_index = result.keys()
+                if isinstance(pd_new_index, pd.MultiIndex):
+                    result_index = MultiIndex.from_pandas(pd_new_index)
+                else:
+                    result_index = Index.from_pandas(pd_new_index)
                 result = Series._concat(
                     [result[name] for name in frame._column_names],
                     index=False,
