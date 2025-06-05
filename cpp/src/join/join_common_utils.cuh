@@ -187,7 +187,7 @@ void build_join_hash_table(
     auto const pair_func = make_pair_function{d_hasher, empty_key_sentinel};
     auto const iter      = cudf::detail::make_counting_transform_iterator(0, pair_func);
 
-    if (nulls_equal == cudf::null_equality::EQUAL or (not nullable(build))) {
+    if (nulls_equal == cudf::null_equality::EQUAL or not nullable(build)) {
       hash_table.insert(iter, iter + build.num_rows(), stream.value());
     } else {
       auto const stencil = thrust::counting_iterator<size_type>{0};
