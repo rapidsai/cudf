@@ -529,7 +529,7 @@ source_properties get_source_properties(compression_type compression, host_span<
 void device_decompress(compression_type compression,
                        device_span<device_span<uint8_t const> const> inputs,
                        device_span<device_span<uint8_t> const> outputs,
-                       device_span<compression_result> results,
+                       device_span<codec_exec_result> results,
                        size_t max_uncomp_chunk_size,
                        size_t max_total_uncomp_size,
                        rmm::cuda_stream_view stream)
@@ -559,7 +559,7 @@ void device_decompress(compression_type compression,
 void host_decompress(compression_type compression,
                      device_span<device_span<uint8_t const> const> inputs,
                      device_span<device_span<uint8_t> const> outputs,
-                     device_span<compression_result> results,
+                     device_span<codec_exec_result> results,
                      rmm::cuda_stream_view stream)
 {
   if (compression == compression_type::NONE) { return; }
@@ -599,12 +599,12 @@ void host_decompress(compression_type compression,
     };
     tasks.emplace_back(cudf::detail::host_worker_pool().submit_task(std::move(task)));
   }
-  auto h_results = cudf::detail::make_pinned_vector<compression_result>(num_chunks, stream);
+  auto h_results = cudf::detail::make_pinned_vector<codec_exec_result>(num_chunks, stream);
   for (auto i = 0ul; i < num_chunks; ++i) {
-    h_results[task_order[i]] = {tasks[i].get(), compression_status::SUCCESS};
+    h_results[task_order[i]] = {tasks[i].get(), codec_status::SUCCESS};
   }
 
-  cudf::detail::cuda_memcpy<compression_result>(results, h_results, stream);
+  cudf::detail::cuda_memcpy<codec_exec_result>(results, h_results, stream);
 }
 
 enum class host_engine_state : uint8_t { ON, OFF, AUTO };
@@ -763,7 +763,7 @@ std::vector<uint8_t> decompress(compression_type compression, host_span<uint8_t 
 void decompress(compression_type compression,
                 device_span<device_span<uint8_t const> const> inputs,
                 device_span<device_span<uint8_t> const> outputs,
-                device_span<compression_result> results,
+                device_span<codec_exec_result> results,
                 size_t max_uncomp_chunk_size,
                 size_t max_total_uncomp_size,
                 rmm::cuda_stream_view stream)

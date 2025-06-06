@@ -1499,11 +1499,11 @@ void encode_pages(hostdevice_2dvector<EncColumnChunk>& chunks,
 
   rmm::device_uvector<device_span<uint8_t const>> comp_in(max_comp_pages, stream);
   rmm::device_uvector<device_span<uint8_t>> comp_out(max_comp_pages, stream);
-  rmm::device_uvector<compression_result> comp_res(max_comp_pages, stream);
+  rmm::device_uvector<codec_exec_result> comp_res(max_comp_pages, stream);
   thrust::fill(rmm::exec_policy(stream),
                comp_res.begin(),
                comp_res.end(),
-               compression_result{0, compression_status::FAILURE});
+               codec_exec_result{0, codec_status::FAILURE});
 
   EncodePages(pages, write_v2_headers, comp_in, comp_out, comp_res, stream);
   compress(compression, comp_in, comp_out, comp_res, stream);

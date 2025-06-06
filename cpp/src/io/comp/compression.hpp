@@ -57,7 +57,7 @@ namespace io::detail {
  */
 [[nodiscard]] writer_compression_statistics collect_compression_statistics(
   device_span<device_span<uint8_t const> const> inputs,
-  device_span<compression_result const> results,
+  device_span<codec_exec_result const> results,
   rmm::cuda_stream_view stream);
 
 }  // namespace io::detail

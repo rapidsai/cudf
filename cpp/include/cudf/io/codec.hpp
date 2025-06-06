@@ -40,7 +40,7 @@ namespace io {
 /**
  * @brief Status of a compression/decompression operation.
  */
-enum class compression_status : uint8_t {
+enum class codec_status : uint8_t {
   SUCCESS,          ///< Successful, output is valid
   FAILURE,          ///< Failed, output is invalid (e.g. input is unsupported in some way)
   SKIPPED,          ///< Operation skipped (if conversion, uncompressed data can be used)
@@ -48,11 +48,11 @@ enum class compression_status : uint8_t {
 };
 
 /**
- * @brief Descriptor of compression/decompression result.
+ * @brief Summary of a compression/decompression operation.
  */
-struct compression_result {
+struct codec_exec_result {
   uint64_t bytes_written;
-  compression_status status;
+  codec_status status;
 };
 
 /**
@@ -124,7 +124,7 @@ std::vector<uint8_t> compress(compression_type compression, host_span<uint8_t co
 void compress(compression_type compression,
               device_span<device_span<uint8_t const> const> inputs,
               device_span<device_span<uint8_t> const> outputs,
-              device_span<compression_result> results,
+              device_span<codec_exec_result> results,
               rmm::cuda_stream_view stream);
 
 /**
@@ -163,7 +163,7 @@ size_t decompress(compression_type compression,
 void decompress(compression_type compression,
                 device_span<device_span<uint8_t const> const> inputs,
                 device_span<device_span<uint8_t> const> outputs,
-                device_span<compression_result> results,
+                device_span<codec_exec_result> results,
                 size_t max_uncomp_chunk_size,
                 size_t max_total_uncomp_size,
                 rmm::cuda_stream_view stream);

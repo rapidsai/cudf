@@ -1914,7 +1914,7 @@ static __device__ void ProcessCommands(debrotli_state_s* s, brotli_dictionary_s 
 CUDF_KERNEL void __launch_bounds__(block_size, 2)
   gpu_debrotli_kernel(device_span<device_span<uint8_t const> const> inputs,
                       device_span<device_span<uint8_t> const> outputs,
-                      device_span<compression_result> results,
+                      device_span<codec_exec_result> results,
                       uint8_t* scratch,
                       uint32_t scratch_size)
 {
@@ -2017,8 +2017,7 @@ CUDF_KERNEL void __launch_bounds__(block_size, 2)
   // Output decompression status
   if (!t) {
     results[block_id].bytes_written = s->out - s->outbase;
-    results[block_id].status =
-      (s->error == 0) ? compression_status::SUCCESS : compression_status::FAILURE;
+    results[block_id].status = (s->error == 0) ? codec_status::SUCCESS : codec_status::FAILURE;
     // Return ext heap used by last block (statistics)
   }
 }
@@ -2079,7 +2078,7 @@ size_t get_gpu_debrotli_scratch_size(int max_num_inputs)
 
 void gpu_debrotli(device_span<device_span<uint8_t const> const> inputs,
                   device_span<device_span<uint8_t> const> outputs,
-                  device_span<compression_result> results,
+                  device_span<codec_exec_result> results,
                   rmm::cuda_stream_view stream)
 {
   // Scratch memory for decompressing

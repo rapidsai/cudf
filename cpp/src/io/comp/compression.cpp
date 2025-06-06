@@ -302,7 +302,7 @@ void append_varint(std::vector<uint8_t>& output, size_t v)
 void device_compress(compression_type compression,
                      device_span<device_span<uint8_t const> const> inputs,
                      device_span<device_span<uint8_t> const> outputs,
-                     device_span<compression_result> results,
+                     device_span<codec_exec_result> results,
                      rmm::cuda_stream_view stream)
 {
   if (compression == compression_type::NONE) { return; }
@@ -323,7 +323,7 @@ void device_compress(compression_type compression,
 void host_compress(compression_type compression,
                    device_span<device_span<uint8_t const> const> inputs,
                    device_span<device_span<uint8_t> const> outputs,
-                   device_span<compression_result> results,
+                   device_span<codec_exec_result> results,
                    rmm::cuda_stream_view stream)
 {
   if (compression == compression_type::NONE) { return; }
@@ -341,8 +341,8 @@ void host_compress(compression_type compression,
   });
 
   auto h_results =
-    cudf::detail::make_pinned_vector_async<compression_result>(results.size(), stream);
-  cudf::detail::cuda_memcpy<compression_result>(h_results, results, stream);
+    cudf::detail::make_pinned_vector_async<codec_exec_result>(results.size(), stream);
+  cudf::detail::cuda_memcpy<codec_exec_result>(h_results, results, stream);
 
   std::vector<std::future<std::pair<size_t, size_t>>> tasks;
   auto const num_streams =
@@ -351,7 +351,7 @@ void host_compress(compression_type compression,
   for (size_t i = 0; i < num_chunks; ++i) {
     auto const idx        = task_order[i];
     auto const cur_stream = streams[i % streams.size()];
-    if (h_results[task_order[i]].status == compression_status::SKIPPED) { continue; }
+    if (h_results[task_order[i]].status == codec_status::SKIPPED) { continue; }
 
     auto task = [d_in = h_inputs[idx], d_out = h_outputs[idx], cur_stream, compression, idx]() {
       auto h_in = cudf::detail::make_pinned_vector_async<uint8_t>(d_in.size(), cur_stream);
@@ -367,9 +367,9 @@ void host_compress(compression_type compression,
   }
   for (auto& task : tasks) {
     auto const [idx, bytes_written] = task.get();
-    h_results[idx]                  = {bytes_written, compression_status::SUCCESS};
+    h_results[idx]                  = {bytes_written, codec_status::SUCCESS};
   }
-  cudf::detail::cuda_memcpy<compression_result>(results, h_results, stream);
+  cudf::detail::cuda_memcpy<codec_exec_result>(results, h_results, stream);
 }
 
 [[nodiscard]] bool use_host_compression(
@@ -445,7 +445,7 @@ std::vector<std::uint8_t> compress(compression_type compression, host_span<uint8
 void compress(compression_type compression,
               device_span<device_span<uint8_t const> const> inputs,
               device_span<device_span<uint8_t> const> outputs,
-              device_span<compression_result> results,
+              device_span<codec_exec_result> results,
               rmm::cuda_stream_view stream)
 {
   CUDF_FUNC_RANGE();
