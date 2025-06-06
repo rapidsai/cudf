@@ -4,10 +4,8 @@
 
 from __future__ import annotations
 
-import functools
-from typing import TYPE_CHECKING, Any, Literal, overload
+from typing import TYPE_CHECKING, Any
 
-import nvtx
 from dask.sizeof import sizeof
 from distributed import get_worker
 from rapidsmpf.buffer.buffer import MemoryType
@@ -15,13 +13,11 @@ from rapidsmpf.integrations.dask.core import get_worker_context
 from rapidsmpf.integrations.dask.spilling import SpillableWrapper
 
 from cudf_polars.containers import DataFrame
-from cudf_polars.dsl.tracing import CUDF_POLARS_NVTX_DOMAIN, do_evaluate_with_tracing
 
 if TYPE_CHECKING:
     from collections.abc import Callable, MutableMapping
     from typing import Any
 
-    from cudf_polars.dsl.ir import IR
     from cudf_polars.utils.config import ConfigOptions
 
 
@@ -61,57 +57,31 @@ def unwrap_arg(obj: Any) -> Any:
     return obj
 
 
-@overload
-def do_evaluate_with_tracing_and_spilling(
-    cls: type[IR],
-    *args: Any,
-    make_func_output_spillable: Literal[False],
-    target_partition_size: int,
-) -> DataFrame: ...
-
-
-@overload
-def do_evaluate_with_tracing_and_spilling(
-    cls: type[IR],
-    *args: Any,
-    make_func_output_spillable: Literal[True],
-    target_partition_size: int,
-) -> SpillableWrapper: ...
-
-
-def do_evaluate_with_tracing_and_spilling(
-    cls: type[IR],
-    *args: Any,
+def wrap_func_spillable(
+    func: Callable,
+    *,
     make_func_output_spillable: bool,
     target_partition_size: int,
-) -> DataFrame | SpillableWrapper:
+) -> Callable:
     """
-    Evaluate an IR node with tracing and spilling.
+    Wraps a function to handle spillable DataFrames.
 
     Parameters
     ----------
-    cls
-        The type of the IR node to evaluate.
-    args
-        The arguments to pass to ``cls.do_evaluate``.
+    func
+        The function to be wrapped.
     make_func_output_spillable
-        Whether to make the output of the function spillable.
+        Whether to wrap the function's output in a SpillableWrapper.
     target_partition_size
-        The target partition size.
+        Target byte size for IO tasks.
 
     Returns
     -------
-    output
-        The result of calling ``cls.do_evaluate`` with the unwrapped arguments.
-        If ``make_func_output_spillable`` is True, the output will be wrapped in
-        a SpillableWrapper.
+    A wrapped function that processes spillable DataFrames.
     """
-    func = cls.do_evaluate
 
-    with nvtx.annotate(
-        message=cls.__name__,
-        domain=CUDF_POLARS_NVTX_DOMAIN,
-    ):
+    def wrapper(*args: Any) -> Any:
+        # Make headroom before executing the task
         headroom = 0
         probable_io_task = True
         for arg in args:
@@ -130,26 +100,9 @@ def do_evaluate_with_tracing_and_spilling(
         ret: Any = func(*(unwrap_arg(arg) for arg in args))
         if make_func_output_spillable:
             ret = wrap_arg(ret)
+        return ret
 
-    return ret
-
-
-def unwrap_and_apply(func: Callable, *args: Any) -> Any:
-    """
-    Unwrap any SpillableWrapper arguments before calling ``func``.
-
-    Parameters
-    ----------
-    func
-        The function to be called.
-    args
-        The arguments to be passed to the function.
-
-    Returns
-    -------
-    The result of calling ``func`` with the unwrapped arguments.
-    """
-    return func(*(unwrap_arg(arg) for arg in args))
+    return wrapper
 
 
 def wrap_dataframe_in_spillable(
@@ -183,33 +136,16 @@ def wrap_dataframe_in_spillable(
     target_partition_size = config_options.executor.target_partition_size
 
     ret = {}
-
-    apply_and_spill = functools.partial(
-        do_evaluate_with_tracing_and_spilling,
-        make_func_output_spillable=True,
-        target_partition_size=target_partition_size,
-    )
-    apply_no_spill = functools.partial(
-        do_evaluate_with_tracing_and_spilling,
-        make_func_output_spillable=False,
-        target_partition_size=target_partition_size,
-    )
-
     for key, task in graph.items():
         assert isinstance(task, tuple)
-
-        if task and task[0] is do_evaluate_with_tracing:
-            if key == ignore_key:
-                new = apply_no_spill
-            else:
-                new = apply_and_spill
-
-            ret[key] = (new, *task[1:])
-
-        elif task and callable(task[0]):
-            f, *args = task
-            ret[key] = (unwrap_and_apply, f, *args)
-        else:
-            ret[key] = task
-
+        ret[key] = tuple(
+            wrap_func_spillable(
+                a,
+                make_func_output_spillable=key != ignore_key,
+                target_partition_size=target_partition_size,
+            )
+            if callable(a)
+            else a
+            for a in task
+        )
     return ret
