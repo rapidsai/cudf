@@ -1,9 +1,7 @@
 # Copyright (c) 2018-2025, NVIDIA CORPORATION.
 from __future__ import annotations
 
-import errno
 import itertools
-import os
 import warnings
 from collections.abc import Collection, Mapping
 from io import BytesIO, StringIO
@@ -108,19 +106,6 @@ def read_csv(
 
     if na_values is not None and is_scalar(na_values):
         na_values = [na_values]
-
-    if not isinstance(filepath_or_buffer, (BytesIO, StringIO, bytes)):
-        if not os.path.isfile(filepath_or_buffer):
-            raise FileNotFoundError(
-                errno.ENOENT, os.strerror(errno.ENOENT), filepath_or_buffer
-            )
-
-    if isinstance(filepath_or_buffer, StringIO):
-        filepath_or_buffer = filepath_or_buffer.read().encode()
-    elif isinstance(filepath_or_buffer, str) and not os.path.isfile(
-        filepath_or_buffer
-    ):
-        filepath_or_buffer = filepath_or_buffer.encode()
 
     _validate_args(
         delimiter,
@@ -285,6 +270,9 @@ def read_csv(
 
     table_w_meta = plc.io.csv.read_csv(options)
     df = DataFrame.from_pylibcudf(table_w_meta)
+
+    if get_option("mode.pandas_compatible") and df.empty:
+        raise pd.errors.EmptyDataError("No columns to parse from file")
 
     # Cast result to categorical if specified in dtype=
     # since categorical is not handled in pylibcudf
