@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
+#include <cudf/detail/indexalator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/detail/pad_impl.cuh>
@@ -136,12 +137,30 @@ std::unique_ptr<column> pad(strings_column_view const& input,
 namespace {
 
 /**
- * @brief Zero-fill each string to specified width
+ * @brief Zero-fill each string to specified width(s)
  */
-struct zfill_fn : base_fn<zfill_fn> {
-  zfill_fn(column_device_view const& d_column, size_type width) : base_fn(d_column, width, 1) {}
+template <typename WidthsIterator>
+struct zfill_fn {
+  column_device_view const d_strings;
+  WidthsIterator widths;
+  size_type* d_sizes{};
+  char* d_chars{};
+  cudf::detail::input_offsetalator d_offsets;
 
-  __device__ void pad(string_view d_str, char* output) const { zfill_impl(d_str, width, output); }
+  __device__ void operator()(size_type idx)
+  {
+    if (d_strings.is_null(idx)) {
+      if (!d_chars) { d_sizes[idx] = 0; }
+      return;
+    }
+    auto const d_str = d_strings.element<string_view>(idx);
+    auto const width = widths[idx];
+    if (d_chars) {
+      zfill_impl(d_str, width, d_chars + d_offsets[idx]);
+    } else {
+      d_sizes[idx] = compute_padded_size(d_str, width, 1);
+    }
+  }
 };
 }  // namespace
 
@@ -153,8 +172,33 @@ std::unique_ptr<column> zfill(strings_column_view const& input,
   if (input.is_empty()) return make_empty_column(type_id::STRING);
 
   auto d_strings = column_device_view::create(input.parent(), stream);
+  auto widths    = thrust::constant_iterator<size_type>(width);
   auto [offsets_column, chars] =
-    make_strings_children(zfill_fn{*d_strings, width}, input.size(), stream, mr);
+    make_strings_children(zfill_fn<decltype(widths)>{*d_strings, widths}, input.size(), stream, mr);
+
+  return make_strings_column(input.size(),
+                             std::move(offsets_column),
+                             chars.release(),
+                             input.null_count(),
+                             cudf::detail::copy_bitmask(input.parent(), stream, mr));
+}
+
+std::unique_ptr<column> zfill_by_widths(strings_column_view const& input,
+                                        column_view const& widths,
+                                        rmm::cuda_stream_view stream,
+                                        rmm::device_async_resource_ref mr)
+{
+  if (input.is_empty()) { return make_empty_column(type_id::STRING); }
+  CUDF_EXPECTS(widths.size() == input.size(),
+               "widths column must be the same size as the input column",
+               std::invalid_argument);
+  CUDF_EXPECTS(!widths.has_nulls(), "widths column must not contain nulls", std::invalid_argument);
+
+  auto d_strings  = column_device_view::create(input.parent(), stream);
+  auto widths_itr = cudf::detail::indexalator_factory::make_input_iterator(widths);
+
+  auto [offsets_column, chars] = make_strings_children(
+    zfill_fn<decltype(widths_itr)>{*d_strings, widths_itr}, input.size(), stream, mr);
 
   return make_strings_column(input.size(),
                              std::move(offsets_column),
@@ -185,6 +229,15 @@ std::unique_ptr<column> zfill(strings_column_view const& input,
 {
   CUDF_FUNC_RANGE();
   return detail::zfill(input, width, stream, mr);
+}
+
+std::unique_ptr<column> zfill_by_widths(strings_column_view const& input,
+                                        column_view const& widths,
+                                        rmm::cuda_stream_view stream,
+                                        rmm::device_async_resource_ref mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::zfill_by_widths(input, widths, stream, mr);
 }
 
 }  // namespace strings
