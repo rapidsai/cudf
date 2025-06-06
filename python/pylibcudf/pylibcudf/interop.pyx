@@ -112,7 +112,7 @@ def _to_arrow_datatype(plc_object, **kwargs):
                 "Precision must be provided for decimal types"
             )
             # no pa.decimal32 or pa.decimal64
-        return pa.decimal128(precision, -plc_object.scale())
+        return pa.decimal128(precision, plc_object.scale())
     elif plc_object.id() == type_id.STRUCT:
         if not (fields := kwargs.get("fields")):
             raise ValueError(
@@ -157,9 +157,15 @@ def _to_arrow_array(plc_object, metadata=None):
 
 @to_arrow.register(Scalar)
 def _to_arrow_scalar(plc_object, metadata=None):
-    # Note that metadata for scalars is primarily important for preserving
-    # information on nested types since names are otherwise irrelevant.
-    return to_arrow(Column.from_scalar(plc_object, 1), metadata=metadata)[0]
+    dtype = plc_object.type()
+    if dtype.id() == type_id.DECIMAL128:
+        value = plc_object.to_py()
+        precision = len(value.as_tuple().digits)
+        return pa.scalar(value, type=pa.decimal128(precision, dtype.scale()))
+    else:
+        # Note that metadata for scalars is primarily important for preserving
+        # information on nested types since names are otherwise irrelevant.
+        return to_arrow(Column.from_scalar(plc_object, 1), metadata=metadata)[0]
 
 
 cpdef Table from_dlpack(object managed_tensor):
