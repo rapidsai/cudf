@@ -26,9 +26,12 @@ rapids-logger "Check narwhals versions"
 python -c "import narwhals; print(narwhals.show_versions())"
 
 rapids-logger "Run narwhals tests for cuDF"
-python -m pytest \
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest \
     --cache-clear \
     --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf-narwhals.xml" \
+    -p xdist \
+    -p env \
+    -p no:pytest_benchmark \
     -p cudf.testing.narwhals_test_plugin \
     --numprocesses=8 \
     --dist=worksteal \
@@ -43,21 +46,14 @@ test_dtypes or \
 test_nan \
 "
 
-# Temporarily skipping these tests in 25.04 and will unskip them in 25.06, which will support Polars 1.26.
-# Will also prioritize https://github.com/rapidsai/cudf/issues/18191, which will switch us to testing against
-# Narwhals tags instead of the "stable" branch for 25.06. That change will allow us to require all
-# Narwhals tests to pass consistently for supported versions.
-TEMPORARILY_SKIP=" \
-test_rolling_std_expr_lazy_ungrouped or \
-test_rolling_var_expr_lazy_ungrouped \
-"
-
 rapids-logger "Run narwhals tests for cuDF Polars"
-NARWHALS_POLARS_GPU=1 python -m pytest \
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 NARWHALS_POLARS_GPU=1 python -m pytest \
     --cache-clear \
     --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf-polars-narwhals.xml" \
+    -p xdist \
+    -p env \
+    -p no:pytest_benchmark \
     -k "not ( \
-        ${TEMPORARILY_SKIP} or \
         ${TESTS_THAT_NEED_NARWHALS_FIX_FOR_CUDF_POLARS} \
     )" \
     --numprocesses=8 \
@@ -94,10 +90,13 @@ TESTS_THAT_NEED_NARWHALS_FIX_FOR_CUDF_PANDAS=" \
 test_dtypes \
 "
 
-NARWHALS_DEFAULT_CONSTRUCTORS=pandas python -m pytest \
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 NARWHALS_DEFAULT_CONSTRUCTORS=pandas python -m pytest \
     -p cudf.pandas \
     --cache-clear \
     --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf-pandas-narwhals.xml" \
+    -p xdist \
+    -p env \
+    -p no:pytest_benchmark \
     -k "not ( \
         ${TESTS_THAT_NEED_CUDF_FIX} or \
         ${TESTS_TO_ALWAYS_SKIP} or \
