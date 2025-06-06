@@ -3513,11 +3513,11 @@ class IndexedFrame(Frame):
         self,
         by,
         axis=0,
-        ascending=True,
-        inplace=False,
-        kind="quicksort",
-        na_position="last",
-        ignore_index=False,
+        ascending: bool | list[bool] = True,
+        inplace: bool = False,
+        kind: str = "quicksort",
+        na_position: Literal["first", "last"] = "last",
+        ignore_index: bool = False,
         key=None,
     ):
         """Sort by the values along either axis.
