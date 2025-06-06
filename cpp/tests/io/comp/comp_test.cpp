@@ -34,8 +34,8 @@
 #include <vector>
 
 using cudf::device_span;
-using cudf::io::detail::compression_result;
-using cudf::io::detail::compression_status;
+using cudf::io::compression_result;
+using cudf::io::compression_status;
 namespace nvcomp = cudf::io::detail::nvcomp;
 
 enum class hw { CPU, GPU };
@@ -181,7 +181,7 @@ struct GzipDecompressTest : public DecompressTest<GzipDecompressTest> {
     CUDF_EXPECTS(comp_type == cudf::io::compression_type::AUTO ||
                    comp_type == cudf::io::compression_type::GZIP,
                  "Invalid compression type");
-    return cudf::io::detail::decompress(comp_type, compressed);
+    return cudf::io::decompress(comp_type, compressed);
   }
 };
 
@@ -199,7 +199,7 @@ struct ZstdDecompressTest : public DecompressTest<ZstdDecompressTest> {
     CUDF_EXPECTS(comp_type == cudf::io::compression_type::AUTO ||
                    comp_type == cudf::io::compression_type::ZSTD,
                  "Invalid compression type");
-    return cudf::io::detail::decompress(comp_type, compressed);
+    return cudf::io::decompress(comp_type, compressed);
   }
 };
 
@@ -224,7 +224,7 @@ struct SnappyDecompressTest : public DecompressTest<SnappyDecompressTest> {
     CUDF_EXPECTS(comp_type == cudf::io::compression_type::AUTO ||
                    comp_type == cudf::io::compression_type::SNAPPY,
                  "Invalid compression type");
-    return cudf::io::detail::decompress(comp_type, compressed);
+    return cudf::io::decompress(comp_type, compressed);
   }
 };
 
@@ -328,7 +328,7 @@ TEST_P(ZstdDecompressTest, HelloWorld)
 {
   std::string const uncompressed{"hello world"};
   std::vector<uint8_t> input = vector_from_string(uncompressed);
-  auto compressed            = cudf::io::detail::compress(cudf::io::compression_type::ZSTD, input);
+  auto compressed            = cudf::io::compress(cudf::io::compression_type::ZSTD, input);
   auto output                = Decompress(
     GetParam(), cudf::host_span<uint8_t const>(compressed.data(), compressed.size()), input.size());
   EXPECT_EQ(output, input);
@@ -411,7 +411,7 @@ void roundtrip_test(cudf::io::compression_type compression)
       hd_stats[0]   = compression_result{0, compression_status::FAILURE};
       hd_stats.host_to_device_async(stream);
 
-      cudf::io::detail::compress(compression, hd_srcs, hd_dsts, hd_stats, stream);
+      cudf::io::compress(compression, hd_srcs, hd_dsts, hd_stats, stream);
       hd_stats.device_to_host(stream);
       ASSERT_EQ(hd_stats[0].status, compression_status::SUCCESS);
       d_comp.resize(hd_stats[0].bytes_written, stream);
@@ -431,7 +431,7 @@ void roundtrip_test(cudf::io::compression_type compression)
       hd_stats[0]   = compression_result{0, compression_status::FAILURE};
       hd_stats.host_to_device_async(stream);
 
-      cudf::io::detail::decompress(
+      cudf::io::decompress(
         compression, hd_srcs, hd_dsts, hd_stats, expected.size(), expected.size(), stream);
       hd_stats.device_to_host(stream);
       ASSERT_EQ(hd_stats[0].status, compression_status::SUCCESS);

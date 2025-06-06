@@ -20,6 +20,7 @@
 #include "orc_field_reader.hpp"
 #include "orc_field_writer.hpp"
 
+#include <cudf/io/codec.hpp>
 #include <cudf/io/orc.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 
@@ -462,7 +463,7 @@ host_span<uint8_t const> orc_decompressor::decompress_blocks(host_span<uint8_t c
       dst_length += block_len;
     } else {
       // Compressed block
-      dst_length += cudf::io::detail::decompress(
+      dst_length += cudf::io::decompress(
         _compression, src.subspan(i, block_len), {m_buf.data() + dst_length, m_blockSize});
     }
     i += block_len;

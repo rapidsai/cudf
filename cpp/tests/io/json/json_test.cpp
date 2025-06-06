@@ -3502,11 +3502,11 @@ TEST_P(JsonCompressedIOTest, BasicJsonLines)
 
   std::vector<std::uint8_t> cdata;
   if (comptype != cudf::io::compression_type::NONE) {
-    cdata = cudf::io::detail::compress(
+    cdata = cudf::io::compress(
       comptype,
       cudf::host_span<uint8_t const>(reinterpret_cast<uint8_t const*>(data.data()), data.size()));
-    auto decomp_out_buffer = cudf::io::detail::decompress(
-      comptype, cudf::host_span<uint8_t const>(cdata.data(), cdata.size()));
+    auto decomp_out_buffer =
+      cudf::io::decompress(comptype, cudf::host_span<uint8_t const>(cdata.data(), cdata.size()));
     std::string const expected = R"({"0":1, "1":1.1}
 {"0":2, "1":2.2}
 {"0":3, "1":3.3})";

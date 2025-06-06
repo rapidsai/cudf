@@ -29,7 +29,8 @@
 #include <cstdint>
 #include <vector>
 
-namespace CUDF_EXPORT cudf::io {
+namespace CUDF_EXPORT cudf {
+namespace io {
 /**
  * @addtogroup io_codec
  * @{
@@ -74,7 +75,7 @@ struct compression_result {
  * @brief Check if host compression is supported for the given compression type.
  *
  * @param compression Compression type
- * @return Boolean indicating if the compression type is supported on host
+ * @return Boolean indicating if the compression type is supported by host engine
  */
 [[nodiscard]] bool is_host_compression_supported(compression_type compression);
 
@@ -82,7 +83,7 @@ struct compression_result {
  * @brief Check if device compression is supported for the given compression type.
  *
  * @param compression Compression type
- * @return Boolean indicating if the compression type is supported on device
+ * @return Boolean indicating if the compression type is supported by device engine
  */
 [[nodiscard]] bool is_device_compression_supported(compression_type compression);
 
@@ -90,7 +91,7 @@ struct compression_result {
  * @brief Check if host decompression is supported for the given compression type.
  *
  * @param compression Compression type
- * @return Boolean indicating if the compression type is supported on host
+ * @return Boolean indicating if the compression type is supported by host engine
  */
 [[nodiscard]] bool is_host_decompression_supported(compression_type compression);
 
@@ -98,24 +99,23 @@ struct compression_result {
  * @brief Check if device decompression is supported for the given compression type.
  *
  * @param compression Compression type
- * @return Boolean indicating if the compression type is supported on device
+ * @return Boolean indicating if the compression type is supported by device engine
  */
 [[nodiscard]] bool is_device_decompression_supported(compression_type compression);
 
 /**
- * @brief Compresses a system memory buffer.
+ * @brief Compress a host memory buffer.
  *
- * @param compression Type of compression of the input data
- * @param src Decompressed host buffer
- *
- * @return Vector containing the Compressed output
+ * @param compression Compression type
+ * @param src The input host buffer to compress
+ * @return Vector containing the compressed output
  */
 std::vector<uint8_t> compress(compression_type compression, host_span<uint8_t const> src);
 
 /**
- * @brief Compresses device memory buffers.
+ * @brief Compress device memory buffers.
  *
- * @param compression Type of compression of the input data
+ * @param compression Compression type
  * @param inputs Device memory buffers to compress
  * @param outputs Device memory buffers to store the compressed output
  * @param results Compression results
@@ -128,23 +128,21 @@ void compress(compression_type compression,
               rmm::cuda_stream_view stream);
 
 /**
- * @brief Decompresses a system memory buffer.
+ * @brief Decompresses a host memory buffer.
  *
- * @param compression Type of compression of the input data
- * @param src Compressed host buffer
- *
- * @return Vector containing the Decompressed output
+ * @param compression Compression type
+ * @param src The input host buffer to decompress
+ * @return Vector containing the decompressed output
  */
 [[nodiscard]] std::vector<uint8_t> decompress(compression_type compression,
                                               host_span<uint8_t const> src);
 
 /**
- * @brief Decompresses a system memory buffer.
+ * @brief Decompresses a host memory buffer.
  *
- * @param compression Type of compression of the input data
- * @param src Compressed host buffer
- * @param dst Destination host span to place decompressed buffer
- *
+ * @param compression Compression type
+ * @param src The input host buffer to decompress
+ * @param dst The host buffer to store decompressed output
  * @return Size of decompressed output
  */
 size_t decompress(compression_type compression,
@@ -154,10 +152,10 @@ size_t decompress(compression_type compression,
 /**
  * @brief Decompresses device memory buffers.
  *
- * @param compression Type of compression of the output data
+ * @param compression Compression type
  * @param inputs Device memory buffers to decompress
  * @param outputs Device memory buffers to store the decompressed output
- * @param results Compression results
+ * @param results Compression results for each input buffer
  * @param max_uncomp_chunk_size Maximum size of any single uncompressed chunk
  * @param max_total_uncomp_size Maximum size of the total uncompressed data
  * @param stream CUDA stream used for device memory operations and kernel launches
@@ -171,4 +169,5 @@ void decompress(compression_type compression,
                 rmm::cuda_stream_view stream);
 
 /** @} */  // end of group
-}  // namespace cudf::io
+}  // namespace io
+}  // namespace CUDF_EXPORT cudf

@@ -43,8 +43,8 @@
 namespace cudf::io::orc::detail {
 
 using cudf::detail::device_2dspan;
-using cudf::io::detail::compression_result;
-using cudf::io::detail::compression_status;
+using cudf::io::compression_result;
+using cudf::io::compression_status;
 
 constexpr int scratch_buffer_size        = 512 * 4;
 constexpr int compact_streams_block_size = 1024;
@@ -1385,7 +1385,7 @@ std::optional<writer_compression_statistics> compress_orc_data_streams(
                                                                          max_comp_blk_size,
                                                                          comp_block_align);
 
-  cudf::io::detail::compress(compression, comp_in, comp_out, comp_res, stream);
+  cudf::io::compress(compression, comp_in, comp_out, comp_res, stream);
 
   compact_compressed_blocks_kernel<<<num_blocks, 1024, 0, stream.value()>>>(
     strm_desc, comp_in, comp_out, comp_res, compressed_data, comp_blk_size, max_comp_blk_size);

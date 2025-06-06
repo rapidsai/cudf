@@ -18,13 +18,13 @@
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/debug_utilities.hpp>
 #include <cudf_test/default_stream.hpp>
 #include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/table_utilities.hpp>
 #include <cudf_test/testing_main.hpp>
 
 #include <cudf/detail/iterator.cuh>
+#include <cudf/io/codec.hpp>
 #include <cudf/io/json.hpp>
 #include <cudf/io/types.hpp>
 #include <cudf/types.hpp>
@@ -54,7 +54,7 @@ void run_test(cudf::io::json_writer_options const& wopts, std::string const& exp
   auto comptype = wopts.get_compression();
   cudf::io::write_json(wopts, cudf::test::get_default_stream());
   if (comptype != cudf::io::compression_type::NONE) {
-    auto decomp_out_buffer = cudf::io::detail::decompress(
+    auto decomp_out_buffer = cudf::io::decompress(
       comptype,
       cudf::host_span<uint8_t const>(reinterpret_cast<uint8_t*>(outbuf->data()), outbuf->size()));
     EXPECT_EQ(expected,

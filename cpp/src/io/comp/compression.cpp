@@ -26,6 +26,7 @@
 #include <cudf/detail/utilities/host_worker_pool.hpp>
 #include <cudf/detail/utilities/stream_pool.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/io/codec.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
 
@@ -37,10 +38,10 @@
 
 #include <numeric>
 
-namespace cudf::io::detail {
+namespace cudf::io {
+namespace detail {
 
 namespace {
-
 /**
  * @brief GZIP host compressor (includes header)
  */
@@ -371,31 +372,6 @@ void host_compress(compression_type compression,
   cudf::detail::cuda_memcpy<compression_result>(results, h_results, stream);
 }
 
-[[nodiscard]] bool is_host_compression_supported(compression_type compression)
-{
-  switch (compression) {
-    case compression_type::GZIP:
-    case compression_type::SNAPPY:
-    case compression_type::ZSTD:
-    case compression_type::NONE: return true;
-    default: return false;
-  }
-}
-
-[[nodiscard]] bool is_device_compression_supported(compression_type compression)
-{
-  auto const nvcomp_type = to_nvcomp_compression(compression);
-  switch (compression) {
-    case compression_type::GZIP:
-    case compression_type::LZ4:
-    case compression_type::ZLIB:
-    case compression_type::ZSTD: return not nvcomp::is_compression_disabled(nvcomp_type.value());
-    case compression_type::SNAPPY:
-    case compression_type::NONE: return true;
-    default: return false;
-  }
-}
-
 [[nodiscard]] bool use_host_compression(
   compression_type compression,
   [[maybe_unused]] device_span<device_span<uint8_t const> const> inputs,
@@ -451,14 +427,18 @@ std::optional<size_t> compress_max_allowed_chunk_size(compression_type compressi
   CUDF_FAIL("Unsupported compression type: " + compression_type_name(compression));
 }
 
+}  // namespace detail
+
 std::vector<std::uint8_t> compress(compression_type compression, host_span<uint8_t const> src)
 {
   CUDF_FUNC_RANGE();
+
   switch (compression) {
-    case compression_type::GZIP: return compress_gzip(src);
-    case compression_type::SNAPPY: return snappy::compress(src);
-    case compression_type::ZSTD: return compress_zstd(src);
-    default: CUDF_FAIL("Unsupported compression type: " + compression_type_name(compression));
+    case compression_type::GZIP: return detail::compress_gzip(src);
+    case compression_type::SNAPPY: return detail::snappy::compress(src);
+    case compression_type::ZSTD: return detail::compress_zstd(src);
+    default:
+      CUDF_FAIL("Unsupported compression type: " + detail::compression_type_name(compression));
   }
 }
 
@@ -469,10 +449,36 @@ void compress(compression_type compression,
               rmm::cuda_stream_view stream)
 {
   CUDF_FUNC_RANGE();
-  if (use_host_compression(compression, inputs, outputs)) {
-    return host_compress(compression, inputs, outputs, results, stream);
-  } else {
-    return device_compress(compression, inputs, outputs, results, stream);
+
+  if (detail::use_host_compression(compression, inputs, outputs)) {
+    return detail::host_compress(compression, inputs, outputs, results, stream);
+  }
+  return detail::device_compress(compression, inputs, outputs, results, stream);
+}
+
+[[nodiscard]] bool is_host_compression_supported(compression_type compression)
+{
+  switch (compression) {
+    case compression_type::GZIP:
+    case compression_type::SNAPPY:
+    case compression_type::ZSTD:
+    case compression_type::NONE: return true;
+    default: return false;
+  }
+}
+
+[[nodiscard]] bool is_device_compression_supported(compression_type compression)
+{
+  auto const nvcomp_type = detail::to_nvcomp_compression(compression);
+  switch (compression) {
+    case compression_type::GZIP:
+    case compression_type::LZ4:
+    case compression_type::ZLIB:
+    case compression_type::ZSTD:
+      return not detail::nvcomp::is_compression_disabled(nvcomp_type.value());
+    case compression_type::SNAPPY:
+    case compression_type::NONE: return true;
+    default: return false;
   }
 }
 
@@ -481,4 +487,4 @@ void compress(compression_type compression,
   return is_host_compression_supported(compression) or is_device_compression_supported(compression);
 }
 
-}  // namespace cudf::io::detail
+}  // namespace cudf::io

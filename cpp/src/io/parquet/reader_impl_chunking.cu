@@ -47,8 +47,8 @@ namespace cudf::io::parquet::detail {
 
 namespace {
 
-using cudf::io::detail::compression_result;
-using cudf::io::detail::compression_status;
+using cudf::io::compression_result;
+using cudf::io::compression_status;
 using cudf::io::detail::decompression_info;
 
 struct split_info {
@@ -959,13 +959,13 @@ struct codec_stats {
     device_span<device_span<uint8_t> const> d_comp_out_view(d_comp_out.data() + start_pos,
                                                             codec.num_pages);
     device_span<compression_result> d_comp_res_view(comp_res.data() + start_pos, codec.num_pages);
-    cudf::io::detail::decompress(from_parquet_compression(codec.compression_type),
-                                 d_comp_in_view,
-                                 d_comp_out_view,
-                                 d_comp_res_view,
-                                 codec.max_decompressed_size,
-                                 codec.total_decomp_size,
-                                 stream);
+    cudf::io::decompress(from_parquet_compression(codec.compression_type),
+                         d_comp_in_view,
+                         d_comp_out_view,
+                         d_comp_res_view,
+                         codec.max_decompressed_size,
+                         codec.total_decomp_size,
+                         stream);
 
     start_pos += codec.num_pages;
   }

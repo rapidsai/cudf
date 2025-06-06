@@ -25,6 +25,7 @@
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/stream_pool.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/io/codec.hpp>
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/detail/json.hpp>
 #include <cudf/utilities/error.hpp>
@@ -72,7 +73,7 @@ class compressed_host_buffer_source final : public datasource {
                                               _dbuf_ptr->size());
     _decompressed_ch_buffer_size = cudf::io::detail::get_uncompressed_size(_comptype, ch_buffer);
     if (_decompressed_ch_buffer_size == 0) {
-      _decompressed_buffer         = cudf::io::detail::decompress(_comptype, ch_buffer);
+      _decompressed_buffer         = cudf::io::decompress(_comptype, ch_buffer);
       _decompressed_ch_buffer_size = _decompressed_buffer.size();
     }
   }
@@ -82,7 +83,7 @@ class compressed_host_buffer_source final : public datasource {
     auto ch_buffer = host_span<uint8_t const>(reinterpret_cast<uint8_t const*>(_dbuf_ptr->data()),
                                               _dbuf_ptr->size());
     if (_decompressed_buffer.empty()) {
-      auto decompressed_hbuf = cudf::io::detail::decompress(_comptype, ch_buffer);
+      auto decompressed_hbuf = cudf::io::decompress(_comptype, ch_buffer);
       auto const count       = std::min(size, decompressed_hbuf.size() - offset);
       bool partial_read      = offset + count < decompressed_hbuf.size();
       if (!partial_read) {
@@ -101,7 +102,7 @@ class compressed_host_buffer_source final : public datasource {
     auto ch_buffer = host_span<uint8_t const>(reinterpret_cast<uint8_t const*>(_dbuf_ptr->data()),
                                               _dbuf_ptr->size());
     if (_decompressed_buffer.empty()) {
-      auto decompressed_hbuf = cudf::io::detail::decompress(_comptype, ch_buffer);
+      auto decompressed_hbuf = cudf::io::decompress(_comptype, ch_buffer);
       auto const count       = std::min(size, decompressed_hbuf.size() - offset);
       bool partial_read      = offset + count < decompressed_hbuf.size();
       if (!partial_read) {

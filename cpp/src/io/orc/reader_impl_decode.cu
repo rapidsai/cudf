@@ -192,13 +192,13 @@ rmm::device_buffer decompress_stripe_data(
 
   device_span<device_span<uint8_t const>> inflate_in_view{inflate_in.data(), num_compressed_blocks};
   device_span<device_span<uint8_t>> inflate_out_view{inflate_out.data(), num_compressed_blocks};
-  cudf::io::detail::decompress(decompressor.compression(),
-                               inflate_in_view,
-                               inflate_out_view,
-                               inflate_res,
-                               max_uncomp_block_size,
-                               total_decomp_size,
-                               stream);
+  cudf::io::decompress(decompressor.compression(),
+                       inflate_in_view,
+                       inflate_out_view,
+                       inflate_res,
+                       max_uncomp_block_size,
+                       total_decomp_size,
+                       stream);
 
   // Check if any block has been failed to decompress.
   // Not using `thrust::any` or `thrust::count_if` to defer stream sync.
