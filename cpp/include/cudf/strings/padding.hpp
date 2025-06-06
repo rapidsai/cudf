@@ -96,7 +96,7 @@ std::unique_ptr<column> zfill(
  * @brief Add '0' as padding to the left of each string.
  *
  * This is similar to `pad(width,left,'0')` but preserves the sign character
- * if it appears in the first position and the width is specified as a column.
+ * (if it appears in the first position) and the width is specified as a column.
  *
  * If the string is already width or more characters, no padding is performed.
  * No strings are truncated.
