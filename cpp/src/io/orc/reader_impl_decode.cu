@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
+#include "io/comp/decompression.hpp"
 #include "io/comp/gpuinflate.hpp"
-#include "io/comp/io_uncomp.hpp"
 #include "io/orc/reader_impl.hpp"
 #include "io/orc/reader_impl_chunking.hpp"
 #include "io/orc/reader_impl_helpers.hpp"
@@ -150,11 +150,11 @@ rmm::device_buffer decompress_stripe_data(
     num_compressed_blocks + num_uncompressed_blocks, stream);
   rmm::device_uvector<device_span<uint8_t>> inflate_out(
     num_compressed_blocks + num_uncompressed_blocks, stream);
-  rmm::device_uvector<compression_result> inflate_res(num_compressed_blocks, stream);
+  rmm::device_uvector<codec_exec_result> inflate_res(num_compressed_blocks, stream);
   thrust::fill(rmm::exec_policy_nosync(stream),
                inflate_res.begin(),
                inflate_res.end(),
-               compression_result{0, compression_status::FAILURE});
+               codec_exec_result{0, codec_status::FAILURE});
 
   // Parse again to populate the decompression input/output buffers
   std::size_t decomp_offset      = 0;
@@ -192,13 +192,13 @@ rmm::device_buffer decompress_stripe_data(
 
   device_span<device_span<uint8_t const>> inflate_in_view{inflate_in.data(), num_compressed_blocks};
   device_span<device_span<uint8_t>> inflate_out_view{inflate_out.data(), num_compressed_blocks};
-  cudf::io::detail::decompress(decompressor.compression(),
-                               inflate_in_view,
-                               inflate_out_view,
-                               inflate_res,
-                               max_uncomp_block_size,
-                               total_decomp_size,
-                               stream);
+  cudf::io::decompress(decompressor.compression(),
+                       inflate_in_view,
+                       inflate_out_view,
+                       inflate_res,
+                       max_uncomp_block_size,
+                       total_decomp_size,
+                       stream);
 
   // Check if any block has been failed to decompress.
   // Not using `thrust::any` or `thrust::count_if` to defer stream sync.
@@ -207,7 +207,7 @@ rmm::device_buffer decompress_stripe_data(
                    thrust::make_counting_iterator(inflate_res.size()),
                    [results           = inflate_res.begin(),
                     any_block_failure = any_block_failure.device_ptr()] __device__(auto const idx) {
-                     if (results[idx].status != compression_status::SUCCESS) {
+                     if (results[idx].status != codec_status::SUCCESS) {
                        *any_block_failure = true;
                      }
                    });

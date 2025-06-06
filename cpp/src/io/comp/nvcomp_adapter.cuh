@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include "comp.hpp"
+#include "compression.hpp"
 
 #include <cudf/utilities/span.hpp>
 
@@ -52,21 +52,21 @@ batched_args create_batched_nvcomp_args(device_span<device_span<uint8_t const> c
  */
 void update_compression_results(device_span<nvcompStatus_t const> nvcomp_stats,
                                 device_span<size_t const> actual_output_sizes,
-                                device_span<compression_result> results,
+                                device_span<codec_exec_result> results,
                                 rmm::cuda_stream_view stream);
 
 /**
  * @brief Fill the result array based on the actual output sizes.
  */
 void update_compression_results(device_span<size_t const> actual_output_sizes,
-                                device_span<compression_result> results,
+                                device_span<codec_exec_result> results,
                                 rmm::cuda_stream_view stream);
 
 /**
  * @brief Mark unsupported input chunks for skipping.
  */
 void skip_unsupported_inputs(device_span<size_t> input_sizes,
-                             device_span<compression_result> results,
+                             device_span<codec_exec_result> results,
                              std::optional<size_t> max_valid_input_size,
                              rmm::cuda_stream_view stream);
 

@@ -15,8 +15,8 @@
  */
 
 #include "../io/json/json_utils.cuh"
-#include "io/comp/comp.hpp"
-#include "io/comp/io_uncomp.hpp"
+#include "io/comp/compression.hpp"
+#include "io/comp/decompression.hpp"
 #include "large_strings_fixture.hpp"
 
 #include <cudf_test/column_wrapper.hpp>
@@ -71,7 +71,7 @@ TEST_P(JsonLargeReaderTest, MultiBatch)
 
   std::vector<std::uint8_t> cdata;
   if (comptype != cudf::io::compression_type::NONE) {
-    cdata = cudf::io::detail::compress(
+    cdata = cudf::io::compress(
       comptype,
       cudf::host_span<uint8_t const>(reinterpret_cast<uint8_t const*>(json_string.data()),
                                      json_string.size()));
@@ -170,7 +170,7 @@ TEST_P(JsonLargeReaderTest, MultiBatchWithNulls)
   auto json_string = json_string_b1 + json_string_b2 + json_string_b3;
   std::vector<std::uint8_t> cdata;
   if (comptype != cudf::io::compression_type::NONE) {
-    cdata = cudf::io::detail::compress(
+    cdata = cudf::io::compress(
       comptype,
       cudf::host_span<uint8_t const>(reinterpret_cast<uint8_t const*>(json_string.data()),
                                      json_string.size()));
@@ -229,7 +229,7 @@ TEST_P(JsonLargeReaderTest, MultiBatchDoubleBufferInput)
 
   std::vector<std::uint8_t> cdata;
   if (comptype != cudf::io::compression_type::NONE) {
-    cdata = cudf::io::detail::compress(
+    cdata = cudf::io::compress(
       comptype,
       cudf::host_span<uint8_t const>(reinterpret_cast<uint8_t const*>(json_string.data()),
                                      json_string.size()));
@@ -299,7 +299,7 @@ TEST_P(JsonLargeReaderTest, OverBatchLimitLine)
 
   std::vector<std::uint8_t> cdata;
   if (comptype != cudf::io::compression_type::NONE) {
-    cdata = cudf::io::detail::compress(
+    cdata = cudf::io::compress(
       comptype,
       cudf::host_span<uint8_t const>(reinterpret_cast<uint8_t const*>(json_string.data()),
                                      json_string.size()));

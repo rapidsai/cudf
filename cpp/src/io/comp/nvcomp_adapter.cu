@@ -60,7 +60,7 @@ batched_args create_batched_nvcomp_args(device_span<device_span<uint8_t const> c
 
 void update_compression_results(device_span<nvcompStatus_t const> nvcomp_stats,
                                 device_span<size_t const> actual_output_sizes,
-                                device_span<compression_result> results,
+                                device_span<codec_exec_result> results,
                                 rmm::cuda_stream_view stream)
 {
   thrust::transform_if(
@@ -71,18 +71,16 @@ void update_compression_results(device_span<nvcompStatus_t const> nvcomp_stats,
     results.begin(),
     results.begin(),
     [] __device__(auto const& nvcomp_status, auto const& size) {
-      return compression_result{size,
-                                nvcomp_status == nvcompStatus_t::nvcompSuccess
-                                  ? compression_status::SUCCESS
-                                  : compression_status::FAILURE};
+      return codec_exec_result{size,
+                               nvcomp_status == nvcompStatus_t::nvcompSuccess
+                                 ? codec_status::SUCCESS
+                                 : codec_status::FAILURE};
     },
-    [] __device__(auto const& cudf_status) {
-      return cudf_status.status != compression_status::SKIPPED;
-    });
+    [] __device__(auto const& cudf_status) { return cudf_status.status != codec_status::SKIPPED; });
 }
 
 void update_compression_results(device_span<size_t const> actual_output_sizes,
-                                device_span<compression_result> results,
+                                device_span<codec_exec_result> results,
                                 rmm::cuda_stream_view stream)
 {
   thrust::transform_if(
@@ -91,12 +89,12 @@ void update_compression_results(device_span<size_t const> actual_output_sizes,
     actual_output_sizes.end(),
     results.begin(),
     results.begin(),
-    [] __device__(auto const& size) { return compression_result{size}; },
-    [] __device__(auto const& results) { return results.status != compression_status::SKIPPED; });
+    [] __device__(auto const& size) { return codec_exec_result{size}; },
+    [] __device__(auto const& results) { return results.status != codec_status::SKIPPED; });
 }
 
 void skip_unsupported_inputs(device_span<size_t> input_sizes,
-                             device_span<compression_result> results,
+                             device_span<codec_exec_result> results,
                              std::optional<size_t> max_valid_input_size,
                              rmm::cuda_stream_view stream)
 {
@@ -109,7 +107,7 @@ void skip_unsupported_inputs(device_span<size_t> input_sizes,
       input_sizes.begin(),
       status_size_it,
       [] __device__(auto const& status) {
-        return thrust::pair{0, compression_result{0, compression_status::SKIPPED}};
+        return thrust::pair{0, codec_exec_result{0, codec_status::SKIPPED}};
       },
       [max_size = max_valid_input_size.value()] __device__(size_t input_size) {
         return input_size > max_size;
