@@ -26,7 +26,6 @@ from cudf_polars.dsl.ir import (
     Projection,
     Union,
 )
-from cudf_polars.dsl.tracing import do_evaluate_with_tracing
 from cudf_polars.dsl.traversal import CachingVisitor, traversal
 from cudf_polars.experimental.base import PartitionInfo, get_key_name
 from cudf_polars.experimental.dispatch import (
@@ -239,8 +238,7 @@ def _(
 
     return {
         key: (
-            do_evaluate_with_tracing,
-            type(ir),
+            ir.do_evaluate,
             *ir._non_child_args,
             *[
                 (child_name, 0 if bcast_child[j] else i)
