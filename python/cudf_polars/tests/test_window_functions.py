@@ -98,8 +98,10 @@ def test_over_with_sort(df: pl.LazyFrame):
 @pytest.mark.parametrize("mapping_strategy", ["group_to_rows", "explode", "join"])
 def test_over_mapping_strategy(df: pl.LazyFrame, mapping_strategy: str):
     """Test window functions with different mapping strategies."""
+    # ignore is for polars' WindowMappingStrategy, which isn't publicly exported.
+    # https://github.com/pola-rs/polars/issues/17420
     query = df.with_columns(
-        [pl.col("b").rank().over(pl.col("a"), mapping_strategy=mapping_strategy)]
+        [pl.col("b").rank().over(pl.col("a"), mapping_strategy=mapping_strategy)]  # type: ignore[arg-type]
     )
     assert_ir_translation_raises(query, NotImplementedError)
 
@@ -130,7 +132,9 @@ def test_rolling_unsupported(df: pl.LazyFrame, unsupported_agg_expr):
 @pytest.mark.parametrize("closed", ["left", "right", "both", "none"])
 def test_rolling_closed(df: pl.LazyFrame, closed: str):
     """Test rolling window functions with different closed parameters."""
+    # ignore is for polars' ClosedInterval, which isn't publicly exported.
+    # https://github.com/pola-rs/polars/issues/17420
     query = df.with_columns(
-        [pl.col("b").sum().rolling(period="2d", index_column="date", closed=closed)]
+        [pl.col("b").sum().rolling(period="2d", index_column="date", closed=closed)]  # type: ignore[arg-type]
     )
     assert_gpu_result_equal(query)
