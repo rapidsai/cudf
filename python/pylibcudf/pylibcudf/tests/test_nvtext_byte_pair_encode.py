@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 
 import pyarrow as pa
 import pytest
@@ -26,16 +26,14 @@ def input_col():
 
 
 @pytest.mark.parametrize(
-    "separator", [None, plc.interop.from_arrow(pa.scalar("e"))]
+    "separator", [None, plc.Scalar.from_arrow(pa.scalar("e"))]
 )
 def test_byte_pair_encoding(input_col, separator):
-    plc_col = plc.interop.from_arrow(
-        pa.array(["test sentence", "thisis test"])
-    )
+    plc_col = plc.Column.from_arrow(pa.array(["test sentence", "thisis test"]))
     result = plc.nvtext.byte_pair_encode.byte_pair_encoding(
         plc_col,
         plc.nvtext.byte_pair_encode.BPEMergePairs(
-            plc.interop.from_arrow(input_col)
+            plc.Column.from_arrow(input_col)
         ),
         separator,
     )

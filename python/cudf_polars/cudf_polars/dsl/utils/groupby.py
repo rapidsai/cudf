@@ -18,6 +18,7 @@ if TYPE_CHECKING:
     from typing import Any
 
     from cudf_polars.dsl import expr
+    from cudf_polars.typing import Schema
     from cudf_polars.utils import config
 
 __all__ = ["rewrite_groupby"]
@@ -25,7 +26,7 @@ __all__ = ["rewrite_groupby"]
 
 def rewrite_groupby(
     node: Any,
-    schema: dict[str, plc.DataType],
+    schema: Schema,
     keys: Sequence[expr.NamedExpr],
     aggs: Sequence[expr.NamedExpr],
     config_options: config.ConfigOptions,
