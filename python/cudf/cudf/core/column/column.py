@@ -2964,7 +2964,8 @@ def as_column(
             arbitrary = None
             if dtype is not None:
                 pa_type = cudf_dtype_to_pa_type(dtype)
-                dtype = None
+                if not cudf.get_option("mode.pandas_compatible"):
+                    dtype = None
             else:
                 raise ValueError(
                     "Need to pass dtype when passing pd.NA or None"
