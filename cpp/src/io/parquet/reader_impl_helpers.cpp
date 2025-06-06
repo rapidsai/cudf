@@ -60,6 +60,39 @@ namespace {
 }
 
 /**
+ * @brief Find a span of non-empty sources
+ *
+ * @param row_group_indices Span of row group indices
+ * @return Pair of indices representing the first (inclusive) and last (exclusive) non-empty source
+ */
+[[nodiscard]] std::pair<size_type, size_type> find_non_empty_source_span(
+  host_span<std::vector<size_type> const> row_group_indices)
+{
+  // Find the first non-empty source
+  auto const first_source_iter =
+    std::find_if(row_group_indices.begin(), row_group_indices.end(), [](auto const& indices) {
+      return not indices.empty();
+    });
+
+  // No non-empty sources found
+  if (first_source_iter == row_group_indices.end()) {
+    return std::pair{static_cast<cudf::size_type>(row_group_indices.size()),
+                     static_cast<cudf::size_type>(row_group_indices.size())};
+  }
+
+  // Find the last non-empty source using a reverse iterator
+  auto const last_source_iter =
+    std::find_if(std::make_reverse_iterator(row_group_indices.end()),
+                 std::make_reverse_iterator(first_source_iter),
+                 [](auto const& indices) { return not indices.empty(); });
+
+  return std::pair{
+    static_cast<cudf::size_type>(std::distance(row_group_indices.begin(), first_source_iter)),
+    static_cast<cudf::size_type>(
+      std::distance(row_group_indices.begin(), last_source_iter.base()))};
+}
+
+/**
  * @brief Checks if the specified lists of row group indices are contiguous
  *
  * Row groups are contiguous if the lists contains all row groups (from all sources) between the
@@ -87,7 +120,8 @@ namespace {
   CUDF_EXPECTS(row_group_indices.size() == file_metadatas.size(),
                "Number of row group indices must match number of file metadatas");
 
-  auto const is_contiguous = [&](auto const& indices) {
+  // Helper function to check if a list of row group indices is contiguous
+  auto const is_contiguous = [](auto const& indices) {
     if (indices.empty() or std::cmp_equal(indices.size(), 1)) { return true; }
 
     auto current_idx = indices.front();
@@ -95,89 +129,80 @@ namespace {
       indices.begin() + 1, indices.end(), [&](auto idx) { return idx == ++current_idx; });
   };
 
-  // Single source case - may start and end at any index within metadata.row_groups and be
-  // contiguous
-  if (std::cmp_equal(row_group_indices.size(), 1)) {
-    auto const& indices  = row_group_indices.front();
-    auto const& metadata = file_metadatas.front();
-    if (indices.empty()) { return true; }
-
+  // Helper function to check if a single source is contiguous
+  auto const is_single_source_contiguous = [is_contiguous](auto const& indices,
+                                                           auto const& metadata) {
     auto const first_rg_idx = indices.front();
     auto const last_rg_idx  = indices.back();
 
     // Check if both indices are within bounds
-    if (std::cmp_greater(indices.size(), metadata.row_groups.size()) or
-        std::cmp_greater_equal(first_rg_idx, metadata.row_groups.size()) or
-        std::cmp_greater_equal(last_rg_idx, metadata.row_groups.size())) {
-      return false;
-    }
+    return not(
+      std::cmp_greater(indices.size(), metadata.row_groups.size()) or     // Check size
+      std::cmp_greater(first_rg_idx, last_rg_idx) or                      // Check first rg index
+      std::cmp_greater_equal(last_rg_idx, metadata.row_groups.size()) or  // Check last rg index
+      not is_contiguous(indices));                                        // Check contiguity
+  };
 
-    // Check if the range of indices is contiguous
-    return is_contiguous(indices);
+  // Single source case - may start and end at any index within metadata.row_groups and be
+  // contiguous (empty source is contiguous)
+  if (std::cmp_equal(row_group_indices.size(), 1)) {
+    auto const& indices = row_group_indices.front();
+    return indices.empty() or is_single_source_contiguous(indices, file_metadatas.front());
   }
+  // Multiple souces case - Find a subspan of contiguous non-empty sources and check if the span is
+  // itself contiguous
+  else {
+    // Find the index of the first (inclusive) and last (exclusive) non-empty sources
+    auto const source_span      = find_non_empty_source_span(row_group_indices);
+    auto const first_source_idx = std::get<0>(source_span);
+    auto const last_source_idx  = std::get<1>(source_span);
 
-  // Find the index of the first (inclusive) and last (exclusive) non-empty sources
-  auto const [first_source_idx,
-              last_source_idx] = [&]() -> std::pair<cudf::size_type, cudf::size_type> {
-    // Find the first non-empty source
-    auto const first_source_iter =
-      std::find_if(row_group_indices.begin(), row_group_indices.end(), [](auto const& indices) {
-        return not indices.empty();
+    // Check if the first and last source indices are valid
+    CUDF_EXPECTS(first_source_idx >= 0 and first_source_idx <= last_source_idx,
+                 "Invalid source indices");
+
+    // If there is no non-empty source, the row groups are contiguous
+    if (first_source_idx == last_source_idx) { return true; }
+
+    // Verify contiguity of row groups between the first and last non-empty source indices
+    return std::all_of(
+      thrust::counting_iterator(first_source_idx),
+      thrust::counting_iterator(last_source_idx),
+      [&](auto const src_idx) {
+        auto const& indices  = row_group_indices[src_idx];
+        auto const& metadata = file_metadatas[src_idx];
+
+        // If there is an empty source between non-empty sources, row groups are not contiguous
+        if (indices.empty()) { return false; }
+
+        // First and last row group indices in this source
+        auto const first_rg_idx = indices.front();
+        auto const last_rg_idx  = indices.back();
+
+        // First row group index must be less than or equal to last row group index
+        if (std::cmp_greater(first_rg_idx, last_rg_idx)) { return false; }
+
+        // First source (may be the only source) - size <= metadata.row_groups and be contiguous
+        if (std::cmp_equal(src_idx, first_source_idx)) {
+          return is_single_source_contiguous(indices, metadata);
+        }
+
+        // Last source - must start at 0, size <= metadata.row_groups and be contiguous
+        else if (std::cmp_equal(src_idx, last_source_idx)) {
+          auto const max_size = std::min<size_t>(last_rg_idx + 1, metadata.row_groups.size());
+          return not(std::cmp_greater(indices.size(), max_size) or  // Check size
+                     std::cmp_not_equal(first_rg_idx, 0) or         // Check first rg index
+                     std::cmp_greater_equal(last_rg_idx,
+                                            metadata.row_groups.size()) or  // Check last rg index
+                     not is_contiguous(indices));
+        }
+        // Middle sources - must be of same size as metadata.row_groups and contiguous
+        else {
+          return not(std::cmp_not_equal(indices.size(), metadata.row_groups.size()) or
+                     not is_contiguous(indices));
+        }
       });
-
-    // No non-empty sources found
-    if (first_source_iter == row_group_indices.end()) { return {0, 0}; }
-
-    // Find the last non-empty source
-    auto last_source_iter = row_group_indices.end();
-    for (; last_source_iter != first_source_iter; --last_source_iter) {
-      if (not(last_source_iter - 1)->empty()) { break; }
-    }
-
-    return {std::distance(row_group_indices.begin(), first_source_iter),
-            std::distance(row_group_indices.begin(), last_source_iter)};
-  }();
-
-  // Verify contiguity of row groups between the first and last non-empty source indices
-  return std::all_of(
-    thrust::counting_iterator(first_source_idx),
-    thrust::counting_iterator(last_source_idx),
-    [&](auto src_idx) {
-      auto const& indices  = row_group_indices[src_idx];
-      auto const& metadata = file_metadatas[src_idx];
-
-      // If there is an empty source between non-empty sources, row groups are not contiguous
-      if (indices.empty()) { return false; }
-
-      // First and last row group indices in this source
-      auto const first_rg_idx = indices.front();
-      auto const last_rg_idx  = indices.back();
-
-      // First source (may be the only source) - size <= metadata.row_groups and be contiguous
-      if (std::cmp_equal(src_idx, first_source_idx)) {
-        return not(std::cmp_greater(indices.size(), metadata.row_groups.size()) or  // Check size
-                   std::cmp_greater_equal(first_rg_idx,
-                                          metadata.row_groups.size()) or  // Check first rg index
-                   std::cmp_greater_equal(last_rg_idx,
-                                          metadata.row_groups.size()) or  // Check last rg index
-                   not is_contiguous(indices));
-      }
-
-      // Last source - must start at 0, size <= metadata.row_groups and be contiguous
-      else if (std::cmp_equal(src_idx, last_source_idx)) {
-        auto const max_size = std::min<size_t>(last_rg_idx + 1, metadata.row_groups.size());
-        return not(std::cmp_greater(indices.size(), max_size) or  // Check size
-                   std::cmp_not_equal(first_rg_idx, 0) or         // Check first rg index
-                   std::cmp_greater_equal(last_rg_idx,
-                                          metadata.row_groups.size()) or  // Check last rg index
-                   not is_contiguous(indices));
-      }
-      // Middle sources - must be of same size as metadata.row_groups and contiguous
-      else {
-        return not(std::cmp_not_equal(indices.size(), metadata.row_groups.size()) or
-                   not is_contiguous(indices));
-      }
-    });
+  }
 }
 
 std::optional<LogicalType> converted_to_logical_type(SchemaElement const& schema)
@@ -1339,8 +1364,8 @@ aggregate_reader_metadata::select_row_groups(
   std::optional<std::reference_wrapper<ast::expression const>> filter,
   rmm::cuda_stream_view stream) const
 {
-  // Input row group indices must not exceed the number of data sources
-  CUDF_EXPECTS(row_group_indices.size() <= per_file_metadata.size(),
+  // Input row group indices must be either empty or equal to the number of data sources
+  CUDF_EXPECTS(row_group_indices.empty() or row_group_indices.size() == per_file_metadata.size(),
                "Encountered unexpected number of input row group indices");
 
   // Maximum number of rows in all row groups
@@ -1468,19 +1493,16 @@ aggregate_reader_metadata::select_row_groups(
   // Flag to check if this is the first row group (to apply row bounds)
   bool is_first_row_group = true;
 
-  // We need to recount `rows_to_read` as we select rows from row groups if either:
+  // We need to recount `rows_to_read` as we select rows from row groups if:
   // - Input row group indices are provided (no filtering with row bounds) OR
-  // - Row groups are filtered using stats or bloom filters and either:
+  // - Row groups are filtered using stats or bloom filters and:
   //     - Row groups are not filtered using row bounds OR
   //     - Final row group indices are not contiguous
   auto const is_rows_to_read_need_recount = [&]() {
-    if (not row_group_indices.empty()) {
-      return true;
-    } else if (is_filtered_row_groups) {
-      return not is_trimmed_row_groups or
-             not are_contiguous_row_groups(current_row_group_indices, per_file_metadata);
-    }
-    return false;
+    return not row_group_indices.empty() or
+           (is_filtered_row_groups and
+            (not is_trimmed_row_groups or
+             not are_contiguous_row_groups(current_row_group_indices, per_file_metadata)));
   }();
 
   // For each data source
@@ -1530,8 +1552,9 @@ aggregate_reader_metadata::select_row_groups(
 
           // If page-level indexes are present, then collect extra chunk and page info.
           // The page indexes rely on absolute row numbers - not adjusted for skip_rows.
-          column_info_for_row_group(selection.back(),
-                                    is_rows_to_read_need_recount ? 0 : row_group_start_row);
+          column_info_for_row_group(
+            selection.back(),
+            is_rows_to_read_need_recount ? total_selected_rows : row_group_start_row);
 
           // Disable the is_first_row_group flag
           is_first_row_group = false;
