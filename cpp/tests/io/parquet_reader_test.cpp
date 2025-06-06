@@ -3120,3 +3120,195 @@ TEST_F(ParquetReaderTest, RowBoundsAndFilter)
                 metadata.num_row_groups_after_stats_filter.value() == 3);  // RGs: 5,6,9
   }
 }
+
+TEST_F(ParquetReaderTest, RowBoundsAndFilterMultipleFiles)
+{
+  auto constexpr num_files                = 3;
+  auto constexpr num_rows                 = 100'000;
+  auto constexpr num_row_groups_per_table = 5;
+  auto constexpr total_num_rows           = num_rows * num_files;
+  auto constexpr rows_per_row_group       = num_rows / num_row_groups_per_table;
+
+  // Table with single col of ascending int64 values
+  auto int64_data = std::vector<int64_t>(num_rows);
+  std::iota(int64_data.begin(), int64_data.end(), 0);
+  auto const int64_col = column_wrapper<int64_t>{
+    int64_data.begin(), int64_data.end(), cudf::test::iterators::no_nulls()};
+  cudf::table_view const written_table({int64_col});
+
+  // Write to parquet
+  auto const filepath = temp_env->get_temp_filepath("RowBoundsAndFilterMultipleFiles.parquet");
+  {
+    cudf::io::parquet_writer_options out_opts =
+      cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, written_table)
+        .row_group_size_rows(rows_per_row_group)
+        .stats_level(cudf::io::statistics_freq::STATISTICS_ROWGROUP)
+        .build();
+    cudf::io::write_parquet(out_opts);
+  }
+
+  // int64 data for expected table
+  int64_data.resize(total_num_rows);
+  for (auto i = 0; i < num_files; i++) {
+    std::iota(int64_data.begin() + (i * num_rows), int64_data.begin() + (i + 1) * num_rows, 0);
+  }
+
+  // Helper function to read parquet data
+  auto const read_parquet_table =
+    [&](auto const& filter_expression, auto rows_to_skip, auto rows_to_read) {
+      auto const int64_col_row_bounded = column_wrapper<int64_t>{
+        int64_data.begin() + rows_to_skip,
+        int64_data.begin() + std::min(total_num_rows, rows_to_skip + rows_to_read),
+        cudf::test::iterators::no_nulls()};
+      cudf::table_view const expected_row_bounded({int64_col_row_bounded});
+      auto predicate = cudf::compute_column(expected_row_bounded, filter_expression);
+      auto expected  = cudf::apply_boolean_mask(expected_row_bounded, *predicate);
+
+      auto const in_opts = cudf::io::parquet_reader_options::builder(
+                             cudf::io::source_info{std::vector<std::string>{num_files, filepath}})
+                             .filter(filter_expression)
+                             .skip_rows(rows_to_skip)
+                             .num_rows(rows_to_read)
+                             .build();
+      return std::tuple{cudf::io::read_parquet(in_opts), std::move(expected)};
+    };
+
+  // Filtering AST - table[0] >= 40'000
+  {
+    auto constexpr rows_to_skip = 30'000;
+    auto constexpr rows_to_read = 40'000;
+
+    auto literal_value = cudf::numeric_scalar<int64_t>(40'000);
+    auto literal       = cudf::ast::literal(literal_value);
+    auto col_ref_0     = cudf::ast::column_reference(0);
+    auto filter_expression =
+      cudf::ast::operation(cudf::ast::ast_operator::GREATER_EQUAL, col_ref_0, literal);
+
+    auto const [table_with_metadata, expected] =
+      read_parquet_table(filter_expression, rows_to_skip, rows_to_read);
+
+    CUDF_TEST_EXPECT_TABLES_EQUAL(expected->view(), table_with_metadata.tbl->view());
+
+    auto const& metadata = table_with_metadata.metadata;
+    EXPECT_EQ(metadata.num_input_row_groups, 3);  // RGs: 1,2,3
+    EXPECT_TRUE(metadata.num_row_groups_after_stats_filter.has_value() and
+                metadata.num_row_groups_after_stats_filter.value() == 2);  // RGs: 2,3
+  }
+
+  // Filtering AST - table[0] >= 70000 and table[0] < 120000
+  {
+    auto constexpr rows_to_skip = 130'000;
+    auto constexpr rows_to_read = 100'000;
+
+    // Filtering AST - table[0] < 4000
+    auto literal_value  = cudf::numeric_scalar<int64_t>(70'000);
+    auto literal        = cudf::ast::literal(literal_value);
+    auto literal_value2 = cudf::numeric_scalar<int64_t>(120'000);
+    auto literal2       = cudf::ast::literal(literal_value2);
+
+    auto col_ref_0 = cudf::ast::column_reference(0);
+    auto filter_expression1 =
+      cudf::ast::operation(cudf::ast::ast_operator::GREATER_EQUAL, col_ref_0, literal);
+    auto filter_expression2 =
+      cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_0, literal2);
+    auto filter_expression = cudf::ast::operation(
+      cudf::ast::ast_operator::LOGICAL_AND, filter_expression1, filter_expression2);
+
+    auto const [table_with_metadata, expected] =
+      read_parquet_table(filter_expression, rows_to_skip, rows_to_read);
+
+    CUDF_TEST_EXPECT_TABLES_EQUAL(expected->view(), table_with_metadata.tbl->view());
+
+    auto const& metadata = table_with_metadata.metadata;
+    EXPECT_EQ(metadata.num_input_row_groups, 6);  // RGs: 6,7,8,9,10,11
+    EXPECT_TRUE(metadata.num_row_groups_after_stats_filter.has_value() and
+                metadata.num_row_groups_after_stats_filter.value() == 2);  // RGs: 8,9
+  }
+
+  // Filtering AST - table[0] < 40000 or table[0] >= 80000
+  {
+    auto constexpr rows_to_skip = 120'000;
+    auto constexpr rows_to_read = 180'000;
+
+    auto literal_value  = cudf::numeric_scalar<int64_t>(40'000);
+    auto literal        = cudf::ast::literal(literal_value);
+    auto literal_value2 = cudf::numeric_scalar<int64_t>(80'000);
+    auto literal2       = cudf::ast::literal(literal_value2);
+
+    auto col_ref_0 = cudf::ast::column_reference(0);
+    auto filter_expression1 =
+      cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_0, literal);
+    auto filter_expression2 =
+      cudf::ast::operation(cudf::ast::ast_operator::GREATER_EQUAL, col_ref_0, literal2);
+    auto filter_expression = cudf::ast::operation(
+      cudf::ast::ast_operator::LOGICAL_OR, filter_expression1, filter_expression2);
+
+    auto const [table_with_metadata, expected] =
+      read_parquet_table(filter_expression, rows_to_skip, rows_to_read);
+
+    CUDF_TEST_EXPECT_TABLES_EQUAL(expected->view(), table_with_metadata.tbl->view());
+
+    auto const& metadata = table_with_metadata.metadata;
+    EXPECT_EQ(metadata.num_input_row_groups, 9);  // RGs: 6,7,8,9,10,11,12,13,14
+    EXPECT_TRUE(metadata.num_row_groups_after_stats_filter.has_value() and
+                metadata.num_row_groups_after_stats_filter.value() == 5);  // RGs: 6,9,10,11,14
+  }
+
+  // Filtering AST - table[0] < 40000 and table[0] >= 80000
+  {
+    auto constexpr rows_to_skip = 110'000;
+    auto constexpr rows_to_read = 80'000;
+
+    auto literal_value  = cudf::numeric_scalar<int64_t>(40'000);
+    auto literal        = cudf::ast::literal(literal_value);
+    auto literal_value2 = cudf::numeric_scalar<int64_t>(80'000);
+    auto literal2       = cudf::ast::literal(literal_value2);
+
+    auto col_ref_0 = cudf::ast::column_reference(0);
+    auto filter_expression1 =
+      cudf::ast::operation(cudf::ast::ast_operator::GREATER_EQUAL, col_ref_0, literal);
+    auto filter_expression2 =
+      cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_0, literal2);
+    auto filter_expression = cudf::ast::operation(
+      cudf::ast::ast_operator::LOGICAL_AND, filter_expression1, filter_expression2);
+
+    auto const [table_with_metadata, expected] =
+      read_parquet_table(filter_expression, rows_to_skip, rows_to_read);
+
+    CUDF_TEST_EXPECT_TABLES_EQUAL(expected->view(), table_with_metadata.tbl->view());
+
+    auto const& metadata = table_with_metadata.metadata;
+    EXPECT_EQ(metadata.num_input_row_groups, 5);  // RGs: 5,6,7,8,9
+    EXPECT_TRUE(metadata.num_row_groups_after_stats_filter.has_value() and
+                metadata.num_row_groups_after_stats_filter.value() == 2);  // RGs: 7,8
+  }
+
+  // Filtering AST - table[0] < 40000 and table[0] >= 80000
+  {
+    auto constexpr rows_to_skip = 110'000;
+    auto constexpr rows_to_read = 80'000;
+
+    auto literal_value  = cudf::numeric_scalar<int64_t>(40'000);
+    auto literal        = cudf::ast::literal(literal_value);
+    auto literal_value2 = cudf::numeric_scalar<int64_t>(80'000);
+    auto literal2       = cudf::ast::literal(literal_value2);
+
+    auto col_ref_0 = cudf::ast::column_reference(0);
+    auto filter_expression1 =
+      cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_0, literal);
+    auto filter_expression2 =
+      cudf::ast::operation(cudf::ast::ast_operator::GREATER_EQUAL, col_ref_0, literal2);
+    auto filter_expression = cudf::ast::operation(
+      cudf::ast::ast_operator::LOGICAL_OR, filter_expression1, filter_expression2);
+
+    auto const [table_with_metadata, expected] =
+      read_parquet_table(filter_expression, rows_to_skip, rows_to_read);
+
+    CUDF_TEST_EXPECT_TABLES_EQUAL(expected->view(), table_with_metadata.tbl->view());
+
+    auto const& metadata = table_with_metadata.metadata;
+    EXPECT_EQ(metadata.num_input_row_groups, 5);  // RGs: 5,6,7,8,9
+    EXPECT_TRUE(metadata.num_row_groups_after_stats_filter.has_value() and
+                metadata.num_row_groups_after_stats_filter.value() == 3);  // RGs: 5,6,9
+  }
+}
