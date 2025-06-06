@@ -296,10 +296,10 @@ struct ShiftRight {
 struct ShiftRightUnsigned {
   template <typename TypeLhs, typename TypeRhs>
   __device__ inline auto operator()(TypeLhs x, TypeRhs y)
-    -> decltype(static_cast<std::make_unsigned_t<TypeLhs>>(x) >> y)
-    requires(std::is_integral_v<TypeLhs> and not is_boolean<TypeLhs>())
+    -> decltype(static_cast<cuda::std::make_unsigned_t<TypeLhs>>(x) >> y)
+    requires(cuda::std::is_integral_v<TypeLhs> and not is_boolean<TypeLhs>())
   {
-    return (static_cast<std::make_unsigned_t<TypeLhs>>(x) >> y);
+    return (static_cast<cuda::std::make_unsigned_t<TypeLhs>>(x) >> y);
   }
 };
 
