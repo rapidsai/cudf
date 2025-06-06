@@ -732,18 +732,33 @@ class Scan(IR):
 class Sink(IR):
     """Sink a dataframe to a file."""
 
-    __slots__ = ("cloud_options", "kind", "options", "path")
-    _non_child = ("schema", "kind", "path", "options", "cloud_options")
+    __slots__ = ("cloud_options", "config_options", "kind", "options", "path")
+    _non_child = (
+        "schema",
+        "kind",
+        "path",
+        "config_options",
+        "options",
+        "cloud_options",
+    )
 
     kind: str
+    """The type of file to write to. Eg. Parquet, CSV, etc."""
     path: str
+    """The path to write to"""
+    config_options: ConfigOptions
+    """GPU-specific configuration options"""
+    cloud_options: dict[str, Any] | None
+    """Cloud-related authentication options, currently ignored."""
     options: dict[str, Any]
+    """Sink options from Polars"""
 
     def __init__(
         self,
         schema: Schema,
         kind: str,
         path: str,
+        config_options: ConfigOptions,
         options: dict[str, Any],
         cloud_options: dict[str, Any],
         df: IR,
@@ -751,10 +766,11 @@ class Sink(IR):
         self.schema = schema
         self.kind = kind
         self.path = path
+        self.config_options = config_options
         self.options = options
         self.cloud_options = cloud_options
         self.children = (df,)
-        self._non_child_args = (schema, kind, path, options)
+        self._non_child_args = (schema, kind, path, config_options, options)
         if self.cloud_options is not None and any(
             self.cloud_options.get(k) is not None
             for k in ("config", "credential_provider")
@@ -847,6 +863,7 @@ class Sink(IR):
             schema_hash,
             self.kind,
             self.path,
+            self.config_options,
             json.dumps(self.options),
             json.dumps(self.cloud_options),
         )  # pragma: no cover
@@ -857,6 +874,7 @@ class Sink(IR):
         schema: Schema,
         kind: str,
         path: str,
+        config_options: ConfigOptions,
         options: dict[str, Any],
         df: DataFrame,
     ) -> DataFrame:
@@ -883,20 +901,64 @@ class Sink(IR):
             for i, name in enumerate(df.column_names):
                 metadata.column_metadata[i].set_name(name)
 
-            builder = plc.io.parquet.ParquetWriterOptions.builder(target, df.table)
             compression = options["compression"]
+            compression_type = None
             if compression != "Uncompressed":
-                builder.compression(
-                    getattr(plc.io.types.CompressionType, compression.upper())
+                compression_type = getattr(
+                    plc.io.types.CompressionType, compression.upper()
                 )
 
-            writer_options = builder.metadata(metadata).build()
-            if options["data_page_size"] is not None:
-                writer_options.set_max_page_size_bytes(options["data_page_size"])
-            if options["row_group_size"] is not None:
-                writer_options.set_row_group_size_rows(options["row_group_size"])
+            data_page_size = options.get("data_page_size")
+            row_group_size = options.get("row_group_size")
 
-            plc.io.parquet.write_parquet(writer_options)
+            if (
+                config_options.parquet_options.chunked
+                and config_options.parquet_options.num_chunks != 1
+            ):
+                builder = plc.io.parquet.ChunkedParquetWriterOptions.builder(
+                    target
+                ).metadata(metadata)
+                if compression_type is not None:
+                    builder = builder.compression(compression_type)
+                if data_page_size is not None:
+                    builder = builder.max_page_size_bytes(data_page_size)
+                if row_group_size is not None:
+                    builder = builder.row_group_size_rows(row_group_size)
+
+                writer_options = builder.build()
+                writer = plc.io.parquet.ParquetChunkedWriter.from_options(
+                    writer_options
+                )
+
+                # TODO: Replace with smarter chunking logic
+                num_chunks = config_options.parquet_options.num_chunks
+                table_chunks = plc.copying.split(
+                    df.table,
+                    [
+                        i * df.table.num_rows() // num_chunks
+                        for i in range(1, num_chunks)
+                    ],
+                )
+
+                for chunk in table_chunks:
+                    writer.write(chunk)
+
+                writer.close([])
+
+            else:
+                builder = plc.io.parquet.ParquetWriterOptions.builder(
+                    target, df.table
+                ).metadata(metadata)
+                if compression_type is not None:
+                    builder = builder.compression(compression_type)
+
+                writer_options = builder.build()
+                if data_page_size is not None:
+                    writer_options.set_max_page_size_bytes(data_page_size)
+                if row_group_size is not None:
+                    writer_options.set_row_group_size_rows(row_group_size)
+
+                plc.io.parquet.write_parquet(writer_options)
 
         elif kind == "Json":
             metadata = plc.io.TableWithMetadata(
