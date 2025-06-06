@@ -12,7 +12,7 @@ import polars as pl
 
 import pylibcudf as plc
 
-from cudf_polars.containers import Column
+from cudf_polars.containers import Column, DataType
 from cudf_polars.utils import conversion
 
 if TYPE_CHECKING:
@@ -110,7 +110,7 @@ class DataFrame:
         """
         plc_table = plc.Table.from_arrow(df)
         return cls(
-            Column(d_col, name=name).copy_metadata(h_col)
+            Column(d_col, name=name, dtype=DataType(h_col.dtype)).copy_metadata(h_col)
             for d_col, h_col, name in zip(
                 plc_table.columns(), df.iter_columns(), df.columns, strict=True
             )
@@ -141,7 +141,9 @@ class DataFrame:
         if table.num_columns() != len(names):
             raise ValueError("Mismatching name and table length.")
         return cls(
-            Column(c, name=name) for c, name in zip(table.columns(), names, strict=True)
+            # TODO: Pass along dtypes here
+            Column(c, name=name)
+            for c, name in zip(table.columns(), names, strict=True)
         )
 
     @classmethod
@@ -202,6 +204,7 @@ class DataFrame:
                 "order": col.order,
                 "null_order": col.null_order,
                 "name": col.name,
+                "dtype": col.dtype,
             }
             for col in self.columns
         ]

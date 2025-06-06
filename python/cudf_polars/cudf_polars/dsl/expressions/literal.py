@@ -45,7 +45,8 @@ class Literal(Expr):
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
         return Column(
-            plc.Column.from_scalar(plc.Scalar.from_py(self.value, self.dtype.plc), 1)
+            plc.Column.from_scalar(plc.Scalar.from_py(self.value, self.dtype.plc), 1),
+            dtype=self.dtype,
         )
 
     @property
@@ -90,7 +91,7 @@ class LiteralColumn(Expr):
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
         # datatype of pyarrow array is correct by construction.
-        return Column(plc.interop.from_arrow(self.value))
+        return Column(plc.interop.from_arrow(self.value), dtype=self.dtype)
 
     @property
     def agg_request(self) -> NoReturn:  # noqa: D102

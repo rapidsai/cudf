@@ -43,4 +43,7 @@ class Ternary(Expr):
         )
         then_obj = then.obj_scalar if then.is_scalar else then.obj
         otherwise_obj = otherwise.obj_scalar if otherwise.is_scalar else otherwise.obj
-        return Column(plc.copying.copy_if_else(then_obj, otherwise_obj, when.obj))
+        return Column(
+            plc.copying.copy_if_else(then_obj, otherwise_obj, when.obj),
+            dtype=self.dtype,
+        )

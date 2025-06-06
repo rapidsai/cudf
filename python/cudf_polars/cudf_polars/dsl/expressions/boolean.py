@@ -112,6 +112,7 @@ class BooleanFunction(Expr):
     @staticmethod
     def _distinct(
         column: Column,
+        dtype: DataType,
         *,
         keep: plc.stream_compaction.DuplicateKeepOption,
         source_value: plc.Scalar,
@@ -130,7 +131,8 @@ class BooleanFunction(Expr):
                 [source_value],
                 indices,
                 plc.Table([plc.Column.from_scalar(target_value, table.num_rows())]),
-            ).columns()[0]
+            ).columns()[0],
+            dtype=dtype,
         )
 
     _BETWEEN_OPS: ClassVar[
@@ -170,7 +172,9 @@ class BooleanFunction(Expr):
             is_finite = self.name is BooleanFunction.Name.IsFinite
             if child.dtype.id() not in (plc.TypeId.FLOAT32, plc.TypeId.FLOAT64):
                 value = plc.Scalar.from_py(is_finite)
-                return Column(plc.Column.from_scalar(value, df.num_rows))
+                return Column(
+                    plc.Column.from_scalar(value, df.num_rows), dtype=self.dtype
+                )
             needles = child.evaluate(df, context=context)
             to_search = [-float("inf"), float("inf")]
             if is_finite:
@@ -183,7 +187,7 @@ class BooleanFunction(Expr):
             result = plc.search.contains(haystack, needles.obj)
             if is_finite:
                 result = plc.unary.unary_operation(result, plc.unary.UnaryOperator.NOT)
-            return Column(result)
+            return Column(result, dtype=self.dtype)
         columns = [child.evaluate(df, context=context) for child in self.children]
         # Kleene logic for Any (OR) and All (AND) if ignore_nulls is
         # False
@@ -208,32 +212,37 @@ class BooleanFunction(Expr):
                 if (is_any and not h_result) or (not is_any and h_result):
                     # Any                     All
                     # False || Null => Null   True && Null => Null
-                    return Column(plc.Column.all_null_like(column.obj, 1))
-            return Column(plc.Column.from_scalar(result, 1))
+                    return Column(
+                        plc.Column.all_null_like(column.obj, 1), dtype=self.dtype
+                    )
+            return Column(plc.Column.from_scalar(result, 1), dtype=self.dtype)
         if self.name is BooleanFunction.Name.IsNull:
             (column,) = columns
-            return Column(plc.unary.is_null(column.obj))
+            return Column(plc.unary.is_null(column.obj), dtype=self.dtype)
         elif self.name is BooleanFunction.Name.IsNotNull:
             (column,) = columns
-            return Column(plc.unary.is_valid(column.obj))
+            return Column(plc.unary.is_valid(column.obj), dtype=self.dtype)
         elif self.name is BooleanFunction.Name.IsNan:
             (column,) = columns
             return Column(
                 plc.unary.is_nan(column.obj).with_mask(
                     column.obj.null_mask(), column.null_count
-                )
+                ),
+                dtype=self.dtype,
             )
         elif self.name is BooleanFunction.Name.IsNotNan:
             (column,) = columns
             return Column(
                 plc.unary.is_not_nan(column.obj).with_mask(
                     column.obj.null_mask(), column.null_count
-                )
+                ),
+                dtype=self.dtype,
             )
         elif self.name is BooleanFunction.Name.IsFirstDistinct:
             (column,) = columns
             return self._distinct(
                 column,
+                dtype=self.dtype,
                 keep=plc.stream_compaction.DuplicateKeepOption.KEEP_FIRST,
                 source_value=plc.Scalar.from_py(py_val=True, dtype=self.dtype.plc),
                 target_value=plc.Scalar.from_py(py_val=False, dtype=self.dtype.plc),
@@ -242,6 +251,7 @@ class BooleanFunction(Expr):
             (column,) = columns
             return self._distinct(
                 column,
+                dtype=self.dtype,
                 keep=plc.stream_compaction.DuplicateKeepOption.KEEP_LAST,
                 source_value=plc.Scalar.from_py(py_val=True, dtype=self.dtype.plc),
                 target_value=plc.Scalar.from_py(py_val=False, dtype=self.dtype.plc),
@@ -250,6 +260,7 @@ class BooleanFunction(Expr):
             (column,) = columns
             return self._distinct(
                 column,
+                dtype=self.dtype,
                 keep=plc.stream_compaction.DuplicateKeepOption.KEEP_NONE,
                 source_value=plc.Scalar.from_py(py_val=True, dtype=self.dtype.plc),
                 target_value=plc.Scalar.from_py(py_val=False, dtype=self.dtype.plc),
@@ -258,6 +269,7 @@ class BooleanFunction(Expr):
             (column,) = columns
             return self._distinct(
                 column,
+                dtype=self.dtype,
                 keep=plc.stream_compaction.DuplicateKeepOption.KEEP_NONE,
                 source_value=plc.Scalar.from_py(py_val=False, dtype=self.dtype.plc),
                 target_value=plc.Scalar.from_py(py_val=True, dtype=self.dtype.plc),
@@ -271,7 +283,8 @@ class BooleanFunction(Expr):
                         output_type=self.dtype.plc,
                     ),
                     (c.obj for c in columns),
-                )
+                ),
+                dtype=self.dtype,
             )
         elif self.name is BooleanFunction.Name.AnyHorizontal:
             return Column(
@@ -282,19 +295,24 @@ class BooleanFunction(Expr):
                         output_type=self.dtype.plc,
                     ),
                     (c.obj for c in columns),
-                )
+                ),
+                dtype=self.dtype,
             )
         elif self.name is BooleanFunction.Name.IsIn:
             needles, haystack = columns
             if haystack.size:
-                return Column(plc.search.contains(haystack.obj, needles.obj))
+                return Column(
+                    plc.search.contains(haystack.obj, needles.obj), dtype=self.dtype
+                )
             return Column(
-                plc.Column.from_scalar(plc.Scalar.from_py(py_val=False), needles.size)
+                plc.Column.from_scalar(plc.Scalar.from_py(py_val=False), needles.size),
+                dtype=self.dtype,
             )
         elif self.name is BooleanFunction.Name.Not:
             (column,) = columns
             return Column(
-                plc.unary.unary_operation(column.obj, plc.unary.UnaryOperator.NOT)
+                plc.unary.unary_operation(column.obj, plc.unary.UnaryOperator.NOT),
+                dtype=self.dtype,
             )
         else:
             raise NotImplementedError(
