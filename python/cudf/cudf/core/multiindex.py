@@ -1698,6 +1698,14 @@ class MultiIndex(Index):
     def dtype(self) -> np.dtype:
         return np.dtype("O")
 
+    @_performance_tracking
+    def _is_sorted(self, ascending: bool) -> bool:
+        return sorting.is_sorted(
+            self._columns,
+            ascending=itertools.repeat(ascending, times=self._num_columns),
+            na_position=itertools.repeat("first", times=self._num_columns),
+        )
+
     @cached_property
     @_performance_tracking
     def is_monotonic_increasing(self) -> bool:
@@ -1705,11 +1713,7 @@ class MultiIndex(Index):
         Return if the index is monotonic increasing
         (only equal or increasing) values.
         """
-        return sorting.is_sorted(
-            self._columns,
-            ascending=itertools.repeat(True, times=self._num_columns),
-            na_position=itertools.repeat("first", times=self._num_columns),
-        )
+        return self._is_sorted(True)
 
     @cached_property
     @_performance_tracking
@@ -1718,11 +1722,7 @@ class MultiIndex(Index):
         Return if the index is monotonic decreasing
         (only equal or decreasing) values.
         """
-        return sorting.is_sorted(
-            self._columns,
-            ascending=itertools.repeat(False, times=self._num_columns),
-            na_position=itertools.repeat("first", times=self._num_columns),
-        )
+        return self._is_sorted(False)
 
     @_performance_tracking
     def fillna(self, value) -> Self:
