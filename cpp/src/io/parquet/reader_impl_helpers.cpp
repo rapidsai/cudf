@@ -149,7 +149,7 @@ namespace {
     auto const& indices = row_group_indices.front();
     return indices.empty() or is_single_source_contiguous(indices, file_metadatas.front());
   }
-  // Multiple souces case - Find a subspan of contiguous non-empty sources and check if the span is
+  // Multiple sources case - Find a subspan of contiguous non-empty sources and check if the span is
   // itself contiguous
   else {
     // Find the index of the first (inclusive) and last (exclusive) non-empty sources
