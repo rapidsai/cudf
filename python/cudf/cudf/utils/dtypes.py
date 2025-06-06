@@ -505,6 +505,8 @@ def dtype_to_pandas_arrowdtype(dtype) -> pd.ArrowDtype:
             dtype = np.dtype(dtype)
         except TypeError:
             dtype = cudf.dtype(dtype)
+    if dtype is CUDF_STRING_DTYPE:
+        dtype = np.dtype("str")
     return pd.ArrowDtype(pa.from_numpy_dtype(dtype))
 
 
