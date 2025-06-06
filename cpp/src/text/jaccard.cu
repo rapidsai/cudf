@@ -268,8 +268,7 @@ CUDF_KERNEL void substring_hash_kernel(cudf::column_device_view const d_strings,
 {
   auto const idx     = cudf::detail::grid_1d::global_thread_id();
   auto const str_idx = idx / cudf::detail::warp_size;
-  if (str_idx >= d_strings.size()) { return; }
-  if (d_strings.is_null(str_idx)) { return; }
+  if (str_idx >= d_strings.size() or d_strings.is_null(str_idx)) { return; }
   auto const d_str = d_strings.element<cudf::string_view>(str_idx);
   if (d_str.empty()) { return; }
 
