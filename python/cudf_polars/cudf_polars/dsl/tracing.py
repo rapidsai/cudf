@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Tracing."""
+"""Utilities for tracing and monitoring IR execution."""
 
 from __future__ import annotations
 
