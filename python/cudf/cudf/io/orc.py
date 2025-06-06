@@ -329,7 +329,7 @@ def read_orc(
                     df = df.set_index(list(index_col_names.values()))
 
             if reset_index_name:
-                df.index.names = [None] * len(df.index.names)
+                df.index.names = [None] * df.index.nlevels
         return df
     else:
         from pyarrow import orc
@@ -465,7 +465,7 @@ def _plc_write_orc(
             tbl_meta.column_metadata[level].set_name(
                 ioutils._index_level_name(idx_name, level, table._column_names)  # type: ignore[arg-type]
             )
-        num_index_cols_meta = len(table.index.names)
+        num_index_cols_meta = table.index.nlevels
     else:
         plc_table = plc.Table(
             [col.to_pylibcudf(mode="read") for col in table._columns]
@@ -593,7 +593,7 @@ class ORCWriter:
                 self.tbl_meta = plc.io.types.TableInputMetadata(plc_table)
                 for level, idx_name in enumerate(table.index.names):
                     self.tbl_meta.column_metadata[level].set_name(idx_name)
-                num_index_cols_meta = len(table.index.names)
+                num_index_cols_meta = table.index.nlevels
             else:
                 if table.index.name is not None:
                     plc_table = plc.Table(

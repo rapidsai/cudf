@@ -381,6 +381,10 @@ class MultiIndex(Index):
             name=name,
         )
 
+    @property
+    def _num_columns(self) -> int:
+        return len(self._data)
+
     @_performance_tracking
     def _from_data_like_self(self, data: MutableMapping) -> Self:
         mi = type(self)._from_data(data, name=self.name)
@@ -888,7 +892,7 @@ class MultiIndex(Index):
                 row_tuple = slice(row_tuple.start, self[-1], row_tuple.step)
         self._validate_indexer(row_tuple)
         valid_indices = self._get_valid_indices_by_tuple(
-            df.index, row_tuple, len(df.index)
+            df.index, row_tuple, len(df)
         )
         if isinstance(valid_indices, column.ColumnBase):
             indices = cudf.Series._from_column(valid_indices)
@@ -1072,7 +1076,7 @@ class MultiIndex(Index):
             raise TypeError(
                 "'name' must be a list / sequence of column names."
             )
-        elif len(name) != len(self.levels):
+        elif len(name) != self.nlevels:
             raise ValueError(
                 "'name' should have the same length as "
                 "number of levels on index."
@@ -1688,7 +1692,7 @@ class MultiIndex(Index):
     @cached_property  # type: ignore
     @_performance_tracking
     def is_unique(self) -> bool:
-        return len(self) == len(self.unique())
+        return len(self) == self.nunique()
 
     @property
     def dtype(self) -> np.dtype:
@@ -2072,8 +2076,8 @@ class MultiIndex(Index):
         at least partly or list of None if they have completely
         different names.
         """
-        if len(self.names) != len(other.names):
-            return [None] * len(self.names)
+        if self.nlevels != other.nlevels:
+            return [None] * self.nlevels
         return [
             self_name if _is_same_name(self_name, other_name) else None
             for self_name, other_name in zip(self.names, other.names)

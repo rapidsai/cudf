@@ -1448,7 +1448,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
             values = [as_column(values)]
         else:
             values = [*values._columns]
-        if len(values) != len(self._data):
+        if len(values) != self._num_columns:
             raise ValueError("Mismatch number of columns to search for.")
 
         # TODO: Change behavior based on the decision in
