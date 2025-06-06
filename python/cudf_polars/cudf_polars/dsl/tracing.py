@@ -5,4 +5,12 @@
 
 from __future__ import annotations
 
+import functools
+
+import nvtx
+
 CUDF_POLARS_NVTX_DOMAIN = "cudf_polars"
+
+nvtx_annotate_cudf_polars = functools.partial(
+    nvtx.annotate, domain=CUDF_POLARS_NVTX_DOMAIN
+)
