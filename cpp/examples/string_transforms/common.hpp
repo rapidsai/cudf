@@ -17,6 +17,7 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
+#include <cudf/copying.hpp>
 #include <cudf/io/csv.hpp>
 #include <cudf/io/datasource.hpp>
 #include <cudf/strings/strings_column_view.hpp>
@@ -28,6 +29,7 @@
 #include <rmm/mr/device/device_memory_resource.hpp>
 #include <rmm/mr/device/owning_wrapper.hpp>
 #include <rmm/mr/device/pool_memory_resource.hpp>
+#include <rmm/mr/device/statistics_resource_adaptor.hpp>
 
 #include <chrono>
 #include <iostream>
@@ -62,8 +64,12 @@ auto make_pool_mr()
  */
 std::shared_ptr<rmm::mr::device_memory_resource> create_memory_resource(std::string const& name)
 {
-  if (name == "pool") { return make_pool_mr(); }
-  return make_cuda_mr();
+  if (name == "pool" || name == "pool-stats") {
+    return make_pool_mr();
+  } else if (name == "cuda" || name == "cuda-stats") {
+    return make_cuda_mr();
+  }
+  CUDF_FAIL("Unrecognized memory resource name", std::invalid_argument);
 }
 
 void write_csv(cudf::table_view const& tbl_view, std::string const& file_path)
@@ -80,45 +86,83 @@ void write_csv(cudf::table_view const& tbl_view, std::string const& file_path)
  * Command line parameters:
  * 1. CSV file name/path
  * 2. Out file name/path
- * 3. Memory resource (optional): 'pool' or 'cuda'
+ * 3. Number of rows from the CSV to transform
+ * 4. Memory resource (optional): 'pool' or 'cuda'
  *
  * The stdout includes the number of rows in the input and the output size in bytes.
  */
 int main(int argc, char const** argv)
 {
   if (argc < 3) {
-    std::cout << "required parameters: csv-file-path out-file-path\n";
+    std::cout
+      << "insufficient argurments.\n\t\tin-csv-path out-csv-path [num_rows [memory_resource]]\n";
     return 1;
   }
 
-  auto const mr_name = std::string{argc >= 4 ? std::string(argv[3]) : std::string("cuda")};
-  auto const out_csv = std::string{argv[2]};
-  auto const in_csv  = std::string{argv[1]};
-  auto resource      = create_memory_resource(mr_name);
-  cudf::set_current_device_resource(resource.get());
+  auto const in_csv   = std::string{argv[1]};
+  auto const out_csv  = std::string{argv[2]};
+  auto const num_rows = argc > 3 ? std::optional{std::stoi(std::string(argv[3]))} : std::nullopt;
+  auto const memory_resource_name =
+    std::string{argc > 4 ? std::string(argv[4]) : std::string("cuda")};
+  auto const enable_stats =
+    (memory_resource_name == "cuda-stats" || memory_resource_name == "pool-stats");
 
-  auto const csv_result = [in_csv] {
-    cudf::io::csv_reader_options in_opts =
-      cudf::io::csv_reader_options::builder(cudf::io::source_info{in_csv}).header(0);
-    return cudf::io::read_csv(in_opts).tbl;
-  }();
-  auto const csv_table = csv_result->view();
+  auto resource = create_memory_resource(memory_resource_name);
+  auto stream   = cudf::get_default_stream();
 
-  std::cout << "table: " << csv_table.num_rows() << " rows " << csv_table.num_columns()
-            << " columns\n";
+  rmm::mr::statistics_resource_adaptor<rmm::mr::device_memory_resource> stats_adaptor{
+    resource.get()};
 
-  auto st     = std::chrono::steady_clock::now();
-  auto result = transform(csv_table);
+  if (enable_stats) {
+    cudf::set_current_device_resource(&stats_adaptor);
+  } else {
+    cudf::set_current_device_resource(resource.get());
+  }
 
-  std::chrono::duration<double> elapsed = std::chrono::steady_clock::now() - st;
-  std::cout << "Wall time: " << elapsed.count() << " seconds\n";
+  cudf::io::csv_reader_options in_opts =
+    cudf::io::csv_reader_options::builder(cudf::io::source_info{in_csv}).header(0);
+  auto input = cudf::io::read_csv(in_opts).tbl;
 
-  std::vector<std::unique_ptr<cudf::column>> table_columns;
-  table_columns.push_back(std::move(result));
+  if (num_rows.has_value() && input->get_column(0).size() != num_rows.value()) {
+    input = cudf::sample(*input, num_rows.value(), cudf::sample_with_replacement::TRUE);
+  }
 
-  auto out_table = cudf::table(std::move(table_columns));
+  auto table_view = input->view();
 
-  write_csv(out_table, out_csv);
+  stream.synchronize();
+
+  auto start  = std::chrono::steady_clock::now();
+  auto result = transform(table_view);
+
+  // ensure transform operation completes and the wall-time is only for the transform computation
+  stream.synchronize();
+
+  std::chrono::duration<double> elapsed = std::chrono::steady_clock::now() - start;
+
+  std::vector<cudf::column_view> out_columns(table_view.begin(), table_view.end());
+
+  out_columns.emplace_back(result->view());
+
+  cudf::table_view table{out_columns};
+
+  write_csv(table, out_csv);
+
+  std::cout << "Wall time: " << elapsed.count() << " seconds\n"
+            << "Table: " << table_view.num_rows() << " rows " << table_view.num_columns()
+            << " columns\n\n";
+
+  if (enable_stats) {
+    auto bytes  = stats_adaptor.get_bytes_counter();
+    auto allocs = stats_adaptor.get_allocations_counter();
+
+    std::cout << "Peak Memory Allocated: " << bytes.peak << " bytes\n"
+              << "Total Memory Allocated: " << bytes.total << " bytes\n";
+
+    std::cout << "Peak Allocations: " << allocs.peak << " allocations\n"
+              << "Total Allocations: " << allocs.total << " allocations\n\n";
+  }
+
+  std::cout.flush();
 
   return 0;
 }

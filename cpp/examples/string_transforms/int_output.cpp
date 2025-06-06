@@ -44,11 +44,13 @@ std::unique_ptr<cudf::column> transform(cudf::table_view const& table)
  }
    )***";
 
-  return cudf::transform({table.column(0), table.column(1)},
-                         udf,
-                         cudf::data_type{cudf::type_id::UINT16},
-                         false,
-                         std::nullopt,
-                         stream,
-                         mr);
+  auto result = cudf::transform({table.column(0), table.column(1)},
+                                udf,
+                                cudf::data_type{cudf::type_id::UINT16},
+                                false,
+                                std::nullopt,
+                                stream,
+                                mr);
+
+  return result;
 }

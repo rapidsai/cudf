@@ -16,9 +16,7 @@
 
 #include "common.hpp"
 
-#include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
-#include <cudf/filling.hpp>
 #include <cudf/transform.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -54,12 +52,30 @@ __device__ void e164_format(void* scratch,
     it += size;
   };
 
+  auto country_iter      = country_code.data();
+  auto const country_end = country_iter + country_code.size_bytes();
+  auto phone_iter        = phone_number.data();
+  auto const phone_end   = phone_iter + phone_number.size_bytes();
+
   push(cudf::string_view{"+", 1});
-  push(country_code);
-  push(cudf::string_view{"-", 1});
+
+  // skip leading zeros in country code and push non-dash digits
+  while (country_iter != country_end && *country_iter == '0') {
+    country_iter++;
+  }
+
+  while (country_iter != country_end) {
+    if (*country_iter != '-') { push(cudf::string_view{country_iter, 1}); }
+    country_iter++;
+  }
+
   push(area_code);
-  push(cudf::string_view{"-", 1});
-  push(phone_number);
+
+  // push non-dash digits from phone number
+  while (phone_iter != phone_end) {
+    if (*phone_iter != '-') { push(cudf::string_view{phone_iter, 1}); }
+    phone_iter++;
+  }
 
   *out = cudf::string_view{begin, static_cast<cudf::size_type>(it - static_cast<char*>(begin))};
 }
@@ -74,11 +90,13 @@ __device__ void e164_format(void* scratch,
   auto size = cudf::make_column_from_scalar(
     cudf::numeric_scalar<int32_t>(maximum_size, true, stream, mr), 1, stream, mr);
 
-  return cudf::transform({table.column(2), table.column(3), table.column(4), *size},
-                         udf,
-                         cudf::data_type{cudf::type_id::STRING},
-                         false,
-                         scratch.data(),
-                         stream,
-                         mr);
+  auto formatted = cudf::transform({table.column(2), table.column(3), table.column(4), *size},
+                                   udf,
+                                   cudf::data_type{cudf::type_id::STRING},
+                                   false,
+                                   scratch.data(),
+                                   stream,
+                                   mr);
+
+  return formatted;
 }
