@@ -13,6 +13,7 @@ import pyarrow as pa
 import pyarrow.compute as pc
 
 from polars.exceptions import InvalidOperationError
+from polars.polars import dtype_str_repr
 
 import pylibcudf as plc
 
@@ -123,6 +124,7 @@ class StringFunction(Expr):
             StringFunction.Name.StripCharsStart,
             StringFunction.Name.StripCharsEnd,
             StringFunction.Name.Uppercase,
+            StringFunction.Name.ZFill,
         ):
             raise NotImplementedError(f"String function {self.name!r}")
         if self.name is StringFunction.Name.Contains:
@@ -222,6 +224,25 @@ class StringFunction(Expr):
                     plc.Scalar.from_py(None, plc.DataType(plc.TypeId.STRING)),
                 )
             )
+        elif self.name is StringFunction.Name.ZFill:
+            child, width = self.children
+            assert isinstance(width, Literal)
+            if width.value is not None and width.value < 0:
+                dtypestr = dtype_str_repr(width.dtype.polars)
+                raise InvalidOperationError(
+                    f"conversion from `{dtypestr}` to `u64` "
+                    f"failed in column 'literal' for 1 out of "
+                    f"1 values: [{width.value}]"
+                ) from None
+            column = child.evaluate(df, context=context)
+            if width.value is None:
+                return Column(
+                    plc.Column.from_scalar(
+                        plc.Scalar.from_py(None, plc.DataType(plc.TypeId.STRING)),
+                        column.size,
+                    )
+                )
+            return Column(plc.strings.padding.zfill(column.obj, width.value))
         elif self.name is StringFunction.Name.Contains:
             child, arg = self.children
             column = child.evaluate(df, context=context)
