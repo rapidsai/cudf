@@ -502,3 +502,35 @@ def test_string_pad_start(width, char):
     df = pl.LazyFrame({"a": ["abc", "defg", "hij"]})
     q = df.select(pl.col("a").str.pad_start(width, char))
     assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize(
+    "width",
+    [
+        1,
+        0,
+        999,
+        pytest.param(
+            -1, marks=pytest.mark.xfail(reason="negative width fails before collect")
+        ),
+        pytest.param(
+            None, marks=pytest.mark.xfail(reason="None width fails before collect")
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "char",
+    [
+        "*",
+        "a",
+        " ",
+        pytest.param("", marks=pytest.mark.xfail(reason="length one characters only")),
+        pytest.param(
+            None, marks=pytest.mark.xfail(reason="None char fails before collect")
+        ),
+    ],
+)
+def test_string_pad_end(width, char):
+    df = pl.LazyFrame({"a": ["abc", "defg", "hij"]})
+    q = df.select(pl.col("a").str.pad_end(width, char))
+    assert_gpu_result_equal(q)

@@ -362,6 +362,14 @@ class StringFunction(Expr):
                     column.obj, width, plc.strings.SideType.LEFT, char
                 )
             )
+        elif self.name is StringFunction.Name.PadEnd:
+            (column,) = columns
+            width, char = self.options
+            return Column(
+                plc.strings.padding.pad(
+                    column.obj, width, plc.strings.SideType.RIGHT, char
+                )
+            )
         raise NotImplementedError(
             f"StringFunction {self.name}"
         )  # pragma: no cover; handled by init raising
