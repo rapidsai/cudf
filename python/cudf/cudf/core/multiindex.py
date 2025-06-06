@@ -381,6 +381,10 @@ class MultiIndex(Index):
             name=name,
         )
 
+    @property
+    def _num_columns(self) -> int:
+        return len(self._data)
+
     @_performance_tracking
     def _from_data_like_self(self, data: MutableMapping) -> Self:
         mi = type(self)._from_data(data, name=self.name)
@@ -1694,67 +1698,30 @@ class MultiIndex(Index):
     def dtype(self) -> np.dtype:
         return np.dtype("O")
 
-    @_performance_tracking
-    def _is_sorted(self, ascending=None, null_position=None) -> bool:
-        """
-        Returns a boolean indicating whether the data of the MultiIndex are sorted
-        based on the parameters given. Does not account for the index.
-
-        Parameters
-        ----------
-        self : MultiIndex
-            MultiIndex whose columns are to be checked for sort order
-        ascending : None or list-like of booleans
-            None or list-like of boolean values indicating expected sort order
-            of each column. If list-like, size of list-like must be
-            len(columns). If None, all columns expected sort order is set to
-            ascending. False (0) - ascending, True (1) - descending.
-        null_position : None or list-like of booleans
-            None or list-like of boolean values indicating desired order of
-            nulls compared to other elements. If list-like, size of list-like
-            must be len(columns). If None, null order is set to before. False
-            (0) - before, True (1) - after.
-
-        Returns
-        -------
-        returns : boolean
-            Returns True, if sorted as expected by ``ascending`` and
-            ``null_position``, False otherwise.
-        """
-        if ascending is not None and not is_list_like(ascending):
-            raise TypeError(
-                f"Expected a list-like or None for `ascending`, got "
-                f"{type(ascending)}"
-            )
-        if null_position is not None and not is_list_like(null_position):
-            raise TypeError(
-                f"Expected a list-like or None for `null_position`, got "
-                f"{type(null_position)}"
-            )
-        return sorting.is_sorted(
-            self._columns,  # type: ignore[arg-type]
-            ascending=ascending,
-            null_position=null_position,
-        )
-
-    @cached_property  # type: ignore
+    @cached_property
     @_performance_tracking
     def is_monotonic_increasing(self) -> bool:
         """
         Return if the index is monotonic increasing
         (only equal or increasing) values.
         """
-        return self._is_sorted(ascending=None, null_position=None)
+        return sorting.is_sorted(
+            self._columns,
+            ascending=itertools.repeat(True, times=self._num_columns),
+            na_position=itertools.repeat("first", times=self._num_columns),
+        )
 
-    @cached_property  # type: ignore
+    @cached_property
     @_performance_tracking
     def is_monotonic_decreasing(self) -> bool:
         """
         Return if the index is monotonic decreasing
         (only equal or decreasing) values.
         """
-        return self._is_sorted(
-            ascending=[False] * len(self.levels), null_position=None
+        return sorting.is_sorted(
+            self._columns,
+            ascending=itertools.repeat(False, times=self._num_columns),
+            na_position=itertools.repeat("first", times=self._num_columns),
         )
 
     @_performance_tracking

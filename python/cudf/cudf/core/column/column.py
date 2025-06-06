@@ -32,7 +32,6 @@ from cudf.core._compat import PANDAS_GE_210
 from cudf.core._internals import (
     aggregation,
     copying,
-    search,
     sorting,
     stream_compaction,
 )
@@ -1638,13 +1637,13 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     @cached_property
     def is_monotonic_increasing(self) -> bool:
         return not self.has_nulls(include_nan=True) and sorting.is_sorted(
-            [self], [True], None
+            [self], [True], ["first"]
         )
 
     @cached_property
     def is_monotonic_decreasing(self) -> bool:
         return not self.has_nulls(include_nan=True) and sorting.is_sorted(
-            [self], [False], None
+            [self], [False], ["first"]
         )
 
     @acquire_spill_lock()
@@ -1833,7 +1832,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             )
         else:
             return ColumnBase.from_pylibcudf(  # type: ignore[return-value]
-                sorting.order_by([self], [ascending], na_position, stable=True)
+                sorting.order_by(
+                    [self], [ascending], [na_position], stable=True
+                )
             )
 
     def __arrow_array__(self, type=None):
@@ -1885,12 +1886,12 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 "Column searchsorted expects values to be column of same dtype"
             )
         return ColumnBase.from_pylibcudf(
-            search.search_sorted(  # type: ignore[return-value]
+            sorting.search_sorted(  # type: ignore[return-value]
                 [self],
                 [value],
                 side=side,
-                ascending=ascending,
-                na_position=na_position,
+                ascending=[ascending],
+                na_position=[na_position],
             )
         )
 

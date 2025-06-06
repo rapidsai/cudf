@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import itertools
 import operator
 import warnings
 from collections.abc import Hashable, MutableMapping
@@ -27,7 +28,7 @@ from cudf.api.types import (
     is_scalar,
 )
 from cudf.core._compat import PANDAS_LT_300
-from cudf.core._internals import copying, search, stream_compaction
+from cudf.core._internals import copying, sorting, stream_compaction
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import (
     CategoricalColumn,
@@ -108,20 +109,28 @@ def _lexsorted_equal_range(
     else:
         sort_inds = None
         sort_vals = idx
+    sources = sort_vals._columns
+    len_sources = len(sources)
     lower_bound = ColumnBase.from_pylibcudf(
-        search.search_sorted(
-            list(sort_vals._columns),
+        sorting.search_sorted(
+            sort_vals._columns,
             keys,
             side="left",
-            ascending=sort_vals.is_monotonic_increasing,
+            ascending=itertools.repeat(
+                sort_vals.is_monotonic_increasing, times=len_sources
+            ),
+            na_position=itertools.repeat("last", times=len_sources),
         )
     ).element_indexing(0)
     upper_bound = ColumnBase.from_pylibcudf(
-        search.search_sorted(
-            list(sort_vals._columns),
+        sorting.search_sorted(
+            sources,
             keys,
             side="right",
-            ascending=sort_vals.is_monotonic_increasing,
+            ascending=itertools.repeat(
+                sort_vals.is_monotonic_increasing, times=len_sources
+            ),
+            na_position=itertools.repeat("last", times=len_sources),
         )
     ).element_indexing(0)
 
