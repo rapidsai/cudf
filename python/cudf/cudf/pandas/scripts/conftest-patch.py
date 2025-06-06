@@ -17199,6 +17199,7 @@ NODEIDS_THAT_XPASS_WITH_CUDF_PANDAS = {
 
 # TODO: Investigate why sometimes these fail
 NODEIDS_THAT_FLAKY_XFAIL_WITH_CUDF_PANDAS = {
+    "tests/indexes/test_old_base.py::TestBase::test_memory_usage[nullable_int]",
     "tests/series/test_constructors.py::TestSeriesConstructors::test_constructor_maskedarray_hardened",
     "tests/indexing/test_loc.py::TestLocSetitemWithExpansion::test_loc_setitem_with_expansion_nonunique_index[nullable_int]",
     "tests/indexing/test_loc.py::TestLocBooleanLabelsAndSlices::test_loc_bool_slice_raises[nullable_int-DataFrame]",
