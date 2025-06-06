@@ -7,7 +7,6 @@ import pandas as pd
 from dask.dataframe.core import _concat
 from dask.dataframe.groupby import Aggregation
 
-from cudf.core.groupby.groupby import _deprecate_collect
 from cudf.utils.performance_tracking import _dask_cudf_performance_tracking
 
 from dask_cudf._expr import (
@@ -548,10 +547,6 @@ class GroupBy(DXGroupBy):
         )
         return g
 
-    def collect(self, **kwargs):
-        _deprecate_collect()
-        return self._single_agg(ListAgg, **kwargs)
-
     def aggregate(self, arg, fused=True, **kwargs):
         if (
             fused
@@ -567,10 +562,6 @@ class SeriesGroupBy(DXSeriesGroupBy):
     def __init__(self, *args, observed=None, **kwargs):
         observed = observed if observed is not None else True
         super().__init__(*args, observed=observed, **kwargs)
-
-    def collect(self, **kwargs):
-        _deprecate_collect()
-        return self._single_agg(ListAgg, **kwargs)
 
     def aggregate(self, arg, **kwargs):
         return super().aggregate(_translate_arg(arg), **kwargs)

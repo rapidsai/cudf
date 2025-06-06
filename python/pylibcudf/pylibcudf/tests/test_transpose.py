@@ -24,7 +24,7 @@ import pylibcudf as plc
 def test_transpose(arr):
     data = {"a": arr, "b": arr}
     arrow_tbl = pa.table(data)
-    plc_tbl = plc.Table(arrow_tbl)
+    plc_tbl = plc.Table.from_arrow(arrow_tbl)
     got = plc.transpose.transpose(plc_tbl)
     pa_got = plc.interop.to_arrow(got)
     expect = pa.table(

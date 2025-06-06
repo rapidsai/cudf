@@ -9,6 +9,7 @@ from functools import reduce
 from typing import TYPE_CHECKING, Any
 
 from cudf_polars.dsl.ir import ConditionalJoin, Join
+from cudf_polars.dsl.tracing import do_evaluate_with_tracing
 from cudf_polars.experimental.base import PartitionInfo, get_key_name
 from cudf_polars.experimental.dispatch import generate_ir_tasks, lower_ir_node
 from cudf_polars.experimental.repartition import Repartition
@@ -283,7 +284,8 @@ def _(
         right_name = get_key_name(right)
         return {
             key: (
-                ir.do_evaluate,
+                do_evaluate_with_tracing,
+                type(ir),
                 *ir._non_child_args,
                 (left_name, i),
                 (right_name, i),
@@ -315,8 +317,13 @@ def _(
         getit_name = f"getit-{out_name}"
         inter_name = f"inter-{out_name}"
 
+        # Split each large partition if we have
+        # multiple small partitions (unless this
+        # is an inner join)
+        split_large = ir.options[0] != "Inner" and small_size > 1
+
         for part_out in range(out_size):
-            if ir.options[0] != "Inner":
+            if split_large:
                 graph[(split_name, part_out)] = (
                     _partition_dataframe,
                     (large_name, part_out),
@@ -327,7 +334,7 @@ def _(
             _concat_list = []
             for j in range(small_size):
                 left_key: tuple[str, int] | tuple[str, int, int]
-                if ir.options[0] != "Inner":
+                if split_large:
                     left_key = (getit_name, part_out, j)
                     graph[left_key] = (operator.getitem, (split_name, part_out), j)
                 else:
@@ -338,7 +345,8 @@ def _(
 
                 inter_key = (inter_name, part_out, j)
                 graph[(inter_name, part_out, j)] = (
-                    ir.do_evaluate,
+                    do_evaluate_with_tracing,
+                    type(ir),
                     ir.left_on,
                     ir.right_on,
                     ir.options,

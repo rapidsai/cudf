@@ -11,14 +11,14 @@ import pylibcudf as plc
 @pytest.fixture
 def data_col():
     pa_array = pa.array(["a_b_c", "d-e-f", None])
-    plc_column = plc.Column(pa_array)
+    plc_column = plc.Column.from_arrow(pa_array)
     return pa_array, plc_column
 
 
 @pytest.fixture
 def delimiter():
     delimiter = "_"
-    plc_delimiter = plc.interop.from_arrow(pa.scalar(delimiter))
+    plc_delimiter = plc.Scalar.from_arrow(pa.scalar(delimiter))
     return delimiter, plc_delimiter
 
 
