@@ -1023,18 +1023,18 @@ def _pivot(
             scatter_map = (columns_idx * np.int32(nrows)) + index_idx
             target_col = column_empty(row_count=new_size, dtype=col.dtype)
             target_col[scatter_map] = col
-            target = cudf.Index._from_column(target_col)
             result.update(
-                {
-                    name: idx._column
-                    for name, idx in zip(
+                dict(
+                    zip(
                         names,
-                        target._split(list(range(nrows, new_size, nrows))),
+                        target_col.split_by_offsets(
+                            list(range(nrows, new_size, nrows))
+                        ),
                     )
-                }
+                )
             )
 
-    # the result of pivot always has a multicolumn
+    # the result of pivot always has a MultiIndex
     ca = ColumnAccessor(
         result,
         multiindex=True,
