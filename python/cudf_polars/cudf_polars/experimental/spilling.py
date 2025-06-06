@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 import functools
-from typing import TYPE_CHECKING, Any, Literal, TypeVar, overload
+from typing import TYPE_CHECKING, Any, Literal, overload
 
 import nvtx
 from dask.sizeof import sizeof
@@ -25,18 +25,7 @@ if TYPE_CHECKING:
     from cudf_polars.utils.config import ConfigOptions
 
 
-T = TypeVar("T")
-
-
-@overload
-def wrap_arg(obj: DataFrame) -> SpillableWrapper: ...
-
-
-@overload
-def wrap_arg(obj: T) -> T: ...
-
-
-def wrap_arg(obj: T) -> T | SpillableWrapper:
+def wrap_arg(obj: Any) -> Any:
     """
     Make `obj` spillable if it is a DataFrame.
 
@@ -54,9 +43,6 @@ def wrap_arg(obj: T) -> T | SpillableWrapper:
     return obj
 
 
-# We can't really express this type correctly. We know that
-# SpillableWrapper will always return a DataFrame, and all
-# other types will be unchanged.
 def unwrap_arg(obj: Any) -> Any:
     """
     Unwraps a SpillableWrapper to retrieve the original object.
@@ -150,7 +136,7 @@ def do_evaluate_with_tracing_and_spilling(
 
 def unwrap_and_apply(func: Callable, *args: Any) -> Any:
     """
-    Unwrap and SpillableWrapper arguments before calling ``func``.
+    Unwrap any SpillableWrapper arguments before calling ``func``.
 
     Parameters
     ----------
