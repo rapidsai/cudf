@@ -1148,15 +1148,17 @@ cudf::detail::hostdevice_vector<uint8_t> allocate_and_encode_blobs(
     stats_merge_groups.device_ptr(), stat_chunks.data(), num_stat_blobs, stream);
 
   // get stats_merge_groups[num_stat_blobs - 1] via a host pinned bounce buffer
-  auto host_pinned_memory =
-    cudf::detail::make_pinned_vector_async<statistics_merge_group>(1, stream);
-  CUDF_CUDA_TRY(cudaMemcpyAsync(host_pinned_memory.data(),
-                                stats_merge_groups.device_ptr(num_stat_blobs - 1),
-                                sizeof(statistics_merge_group),
-                                cudaMemcpyDeviceToHost,
-                                stream.value()));
-  stream.synchronize();
-  auto max_blobs = host_pinned_memory.front();
+  auto max_blobs = [&]() {
+    auto max_blobs_element =
+      cudf::detail::make_pinned_vector_async<statistics_merge_group>(1, stream);
+    cudf::detail::cuda_memcpy_async<statistics_merge_group>(
+      max_blobs_element,
+      cudf::device_span<statistics_merge_group>{stats_merge_groups.device_ptr(num_stat_blobs - 1),
+                                                1},
+      stream);
+    stream.synchronize();
+    return max_blobs_element.front();
+  }();
 
   cudf::detail::hostdevice_vector<uint8_t> blobs(max_blobs.start_chunk + max_blobs.num_chunks,
                                                  stream);
