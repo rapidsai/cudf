@@ -40,6 +40,7 @@ from cudf.core.column.lists import ListMethods
 from cudf.core.column.string import StringMethods
 from cudf.core.column.struct import StructMethods
 from cudf.core.column_accessor import ColumnAccessor
+from cudf.core.dtypes import CategoricalDtype
 from cudf.core.groupby.groupby import SeriesGroupBy, groupby_doc_template
 from cudf.core.index import (
     DatetimeIndex,
@@ -336,7 +337,7 @@ class _SeriesLocIndexer(_FrameIndexer):
             if not is_dtype_obj_numeric(
                 index_dtype, include_decimal=False
             ) and not (
-                isinstance(index_dtype, cudf.CategoricalDtype)
+                isinstance(index_dtype, CategoricalDtype)
                 and index_dtype.categories.dtype.kind in "iu"
             ):
                 # TODO: switch to cudf.utils.dtypes.is_integer(arg)
@@ -1244,7 +1245,13 @@ class Series(SingleColumnFrame, IndexedFrame):
     def __getitem__(self, arg):
         if isinstance(arg, slice):
             return self.iloc[arg]
-        elif is_integer(arg) and self.index.dtype.kind not in {"i", "u", "f"}:
+        elif is_integer(arg) and not (
+            (
+                isinstance(self.index.dtype, CategoricalDtype)
+                and self.index.dtype.categories.dtype.kind in {"i", "u", "f"}
+            )
+            or self.index.dtype.kind in {"i", "u", "f"}
+        ):
             warnings.warn(
                 "Series.__getitem__ treating keys as positions is deprecated "
                 "In a future version, integer keys will always be treated as labels "
@@ -1282,7 +1289,7 @@ class Series(SingleColumnFrame, IndexedFrame):
                 preprocess = cudf.concat([top, bottom])
         else:
             preprocess = self
-        if isinstance(preprocess.dtype, cudf.CategoricalDtype):
+        if isinstance(preprocess.dtype, CategoricalDtype):
             min_rows = (
                 height
                 if pd.get_option("display.min_rows") == 0
@@ -1318,7 +1325,7 @@ class Series(SingleColumnFrame, IndexedFrame):
             output = repr(preprocess._pandas_repr_compatible().to_pandas())
 
         lines = output.split("\n")
-        if isinstance(preprocess.dtype, cudf.CategoricalDtype):
+        if isinstance(preprocess.dtype, CategoricalDtype):
             category_memory = lines[-1]
             if preprocess.dtype.categories.dtype.kind == "f":
                 category_memory = category_memory.replace("'", "").split(": ")
@@ -1349,7 +1356,7 @@ class Series(SingleColumnFrame, IndexedFrame):
             lines = output.split(",")
             lines[-1] = " dtype: %s)" % self.dtype
             return ",".join(lines)
-        if isinstance(preprocess._column.dtype, cudf.CategoricalDtype):
+        if isinstance(preprocess._column.dtype, CategoricalDtype):
             lines.append(category_memory)
         return "\n".join(lines)
 
@@ -1454,20 +1461,16 @@ class Series(SingleColumnFrame, IndexedFrame):
                 if (
                     obj.null_count == len(obj)
                     or len(obj) == 0
-                    or isinstance(obj._column.dtype, cudf.CategoricalDtype)
-                    or isinstance(objs[0]._column.dtype, cudf.CategoricalDtype)
+                    or isinstance(obj._column.dtype, CategoricalDtype)
+                    or isinstance(objs[0]._column.dtype, CategoricalDtype)
                 ):
                     continue
 
                 if (
                     not dtype_mismatch
                     and (
-                        not isinstance(
-                            objs[0]._column.dtype, cudf.CategoricalDtype
-                        )
-                        and not isinstance(
-                            obj._column.dtype, cudf.CategoricalDtype
-                        )
+                        not isinstance(objs[0]._column.dtype, CategoricalDtype)
+                        and not isinstance(obj._column.dtype, CategoricalDtype)
                     )
                     and objs[0].dtype != obj.dtype
                 ):
@@ -3048,9 +3051,9 @@ class Series(SingleColumnFrame, IndexedFrame):
             res = res[res.index.notna()]
         else:
             res = self.groupby(self, dropna=dropna).count(dropna=dropna)
-            if isinstance(self.dtype, cudf.CategoricalDtype) and len(
-                res
-            ) != len(self.dtype.categories):
+            if isinstance(self.dtype, CategoricalDtype) and len(res) != len(
+                self.dtype.categories
+            ):
                 # For categorical dtypes: When there exists
                 # categories in dtypes and they are missing in the
                 # column, `value_counts` will have to return
