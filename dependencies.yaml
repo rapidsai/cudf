@@ -838,29 +838,7 @@ dependencies:
       - output_types: [conda, requirements, pyproject]
         packages:
           - rapids-dask-dependency==25.8.*,>=0.0.0a0
-      - output_types: conda
-        packages:
-          - &rapidsmpf_unsuffixed rapidsmpf==25.8.*,>=0.0.0a0
-      - output_types: requirements
-        packages:
-          # pip recognizes the index as a global option for the requirements.txt file
-          # This index is needed for rapidsmpf-cu{11,12}.
-          - --extra-index-url=https://pypi.nvidia.com
-          - --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple
-    specific:
-      - output_types: [requirements, pyproject]
-        matrices:
-          - matrix:
-              cuda: "12.*"
-              cuda_suffixed: "true"
-            packages:
-              - rapidsmpf-cu12==25.8.*,>=0.0.0a0
-          - matrix:
-              cuda: "11.*"
-              cuda_suffixed: "true"
-            packages:
-              - rapidsmpf-cu11==25.8.*,>=0.0.0a0
-          - {matrix: null, packages: [*rapidsmpf_unsuffixed]}
+          - rapidsmpf==25.8.*,>=0.0.0a0
   run_dask_cudf:
     common:
       - output_types: [conda, requirements, pyproject]
