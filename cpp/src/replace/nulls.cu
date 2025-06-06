@@ -212,11 +212,12 @@ struct replace_nulls_functor {
  *        `replace_nulls` with the appropriate data types.
  */
 struct replace_nulls_scalar_kernel_forwarder {
-  template <typename col_type, std::enable_if_t<cudf::is_fixed_width<col_type>()>* = nullptr>
+  template <typename col_type>
   std::unique_ptr<cudf::column> operator()(cudf::column_view const& input,
                                            cudf::scalar const& replacement,
                                            rmm::cuda_stream_view stream,
                                            rmm::device_async_resource_ref mr)
+    requires(cudf::is_fixed_width<col_type>())
   {
     CUDF_EXPECTS(
       cudf::have_same_types(input, replacement), "Data type mismatch", cudf::data_type_error);
@@ -238,11 +239,12 @@ struct replace_nulls_scalar_kernel_forwarder {
     return output;
   }
 
-  template <typename col_type, std::enable_if_t<not cudf::is_fixed_width<col_type>()>* = nullptr>
+  template <typename col_type>
   std::unique_ptr<cudf::column> operator()(cudf::column_view const&,
                                            cudf::scalar const&,
                                            rmm::cuda_stream_view,
                                            rmm::device_async_resource_ref)
+    requires(not cudf::is_fixed_width<col_type>())
   {
     CUDF_FAIL("No specialization exists for the given type.");
   }

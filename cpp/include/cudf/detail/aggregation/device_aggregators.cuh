@@ -190,23 +190,21 @@ struct update_target_element<
  *
  */
 struct update_target_from_dictionary {
-  template <typename Source,
-            aggregation::Kind k,
-            cuda::std::enable_if_t<!is_dictionary<Source>()>* = nullptr>
+  template <typename Source, aggregation::Kind k>
   __device__ void operator()(mutable_column_device_view target,
                              size_type target_index,
                              column_device_view source,
                              size_type source_index) const noexcept
+    requires(!is_dictionary<Source>())
   {
     update_target_element<Source, k>{}(target, target_index, source, source_index);
   }
-  template <typename Source,
-            aggregation::Kind k,
-            cuda::std::enable_if_t<is_dictionary<Source>()>* = nullptr>
+  template <typename Source, aggregation::Kind k>
   __device__ void operator()(mutable_column_device_view,
                              size_type,
                              column_device_view,
                              size_type) const noexcept
+    requires(is_dictionary<Source>())
   {
   }
 };

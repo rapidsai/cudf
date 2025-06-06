@@ -169,7 +169,7 @@ void flatten_hierarchy(ColIter begin,
  */
 struct flatten_functor {
   // fixed width
-  template <typename T, std::enable_if_t<cudf::is_fixed_width<T>()>* = nullptr>
+  template <typename T>
   void operator()(column_view const& col,
                   std::vector<cudf::column_view>& out,
                   std::vector<column_info>& info,
@@ -178,6 +178,7 @@ struct flatten_functor {
                   size_type cur_depth,
                   size_type cur_branch_depth,
                   cuda::std::optional<int>)
+    requires(cudf::is_fixed_width<T>())
   {
     out.push_back(col);
     info.push_back({cur_depth, cur_branch_depth, cur_branch_depth});
@@ -186,7 +187,7 @@ struct flatten_functor {
   }
 
   // strings
-  template <typename T, std::enable_if_t<std::is_same_v<T, string_view>>* = nullptr>
+  template <typename T>
   void operator()(column_view const& col,
                   std::vector<cudf::column_view>& out,
                   std::vector<column_info>& info,
@@ -195,6 +196,7 @@ struct flatten_functor {
                   size_type cur_depth,
                   size_type cur_branch_depth,
                   cuda::std::optional<int>)
+    requires(std::is_same_v<T, string_view>)
   {
     out.push_back(col);
     info.push_back({cur_depth, cur_branch_depth, cur_branch_depth});
@@ -202,7 +204,7 @@ struct flatten_functor {
   }
 
   // lists
-  template <typename T, std::enable_if_t<std::is_same_v<T, list_view>>* = nullptr>
+  template <typename T>
   void operator()(column_view const& col,
                   std::vector<cudf::column_view>& out,
                   std::vector<column_info>& info,
@@ -211,6 +213,7 @@ struct flatten_functor {
                   size_type cur_depth,
                   size_type cur_branch_depth,
                   cuda::std::optional<int> parent_index)
+    requires(std::is_same_v<T, list_view>)
   {
     // track branch depth as we reach this list and after we pass it
     auto const branch_depth_start = cur_branch_depth;
@@ -235,7 +238,7 @@ struct flatten_functor {
   }
 
   // structs
-  template <typename T, std::enable_if_t<std::is_same_v<T, struct_view>>* = nullptr>
+  template <typename T>
   void operator()(column_view const& col,
                   std::vector<cudf::column_view>& out,
                   std::vector<column_info>& info,
@@ -244,6 +247,7 @@ struct flatten_functor {
                   size_type cur_depth,
                   size_type cur_branch_depth,
                   cuda::std::optional<int>)
+    requires(std::is_same_v<T, struct_view>)
   {
     out.push_back(col);
     info.push_back({cur_depth, cur_branch_depth, cur_branch_depth});
@@ -266,10 +270,9 @@ struct flatten_functor {
 
   // everything else
   template <typename T, typename... Args>
-  std::enable_if_t<!cudf::is_fixed_width<T>() && !std::is_same_v<T, string_view> &&
-                     !std::is_same_v<T, list_view> && !std::is_same_v<T, struct_view>,
-                   void>
-  operator()(Args&&...)
+  void operator()(Args&&...)
+    requires(!cudf::is_fixed_width<T>() && !std::is_same_v<T, string_view> &&
+             !std::is_same_v<T, list_view> && !std::is_same_v<T, struct_view>)
   {
     CUDF_FAIL("Unsupported column type in row_bit_count");
   }

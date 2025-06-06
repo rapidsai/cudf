@@ -62,13 +62,13 @@ struct const_tabulator {
  * by init and step.
  */
 struct sequence_functor {
-  template <typename T,
-            std::enable_if_t<cudf::is_numeric<T>() and not cudf::is_boolean<T>()>* = nullptr>
+  template <typename T>
   std::unique_ptr<column> operator()(size_type size,
                                      scalar const& init,
                                      scalar const& step,
                                      rmm::cuda_stream_view stream,
                                      rmm::device_async_resource_ref mr)
+    requires(cudf::is_numeric<T>() and not cudf::is_boolean<T>())
   {
     auto result = make_fixed_width_column(init.type(), size, mask_state::UNALLOCATED, stream, mr);
     auto result_device_view = mutable_column_device_view::create(*result, stream);
@@ -89,12 +89,12 @@ struct sequence_functor {
     return result;
   }
 
-  template <typename T,
-            std::enable_if_t<cudf::is_numeric<T>() and not cudf::is_boolean<T>()>* = nullptr>
+  template <typename T>
   std::unique_ptr<column> operator()(size_type size,
                                      scalar const& init,
                                      rmm::cuda_stream_view stream,
                                      rmm::device_async_resource_ref mr)
+    requires(cudf::is_numeric<T>() and not cudf::is_boolean<T>())
   {
     auto result = make_fixed_width_column(init.type(), size, mask_state::UNALLOCATED, stream, mr);
     auto result_device_view = mutable_column_device_view::create(*result, stream);
@@ -114,8 +114,8 @@ struct sequence_functor {
   }
 
   template <typename T, typename... Args>
-  std::enable_if_t<not cudf::is_numeric<T>() or cudf::is_boolean<T>(), std::unique_ptr<column>>
-  operator()(Args&&...)
+  std::unique_ptr<column> operator()(Args&&...)
+    requires(not cudf::is_numeric<T>() or cudf::is_boolean<T>())
   {
     CUDF_FAIL("Unsupported sequence scalar type");
   }

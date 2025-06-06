@@ -175,12 +175,13 @@ CUDF_KERNEL void replace_kernel(cudf::column_device_view input,
  *        `replace_kernel` with the appropriate data types.
  */
 struct replace_kernel_forwarder {
-  template <typename col_type, std::enable_if_t<cudf::is_fixed_width<col_type>()>* = nullptr>
+  template <typename col_type>
   std::unique_ptr<cudf::column> operator()(cudf::column_view const& input_col,
                                            cudf::column_view const& values_to_replace,
                                            cudf::column_view const& replacement_values,
                                            rmm::cuda_stream_view stream,
                                            rmm::device_async_resource_ref mr)
+    requires(cudf::is_fixed_width<col_type>())
   {
     cudf::detail::device_scalar<cudf::size_type> valid_counter(0, stream);
     cudf::size_type* valid_count = valid_counter.data();
@@ -223,12 +224,13 @@ struct replace_kernel_forwarder {
     return output;
   }
 
-  template <typename col_type, std::enable_if_t<not cudf::is_fixed_width<col_type>()>* = nullptr>
+  template <typename col_type>
   std::unique_ptr<cudf::column> operator()(cudf::column_view const&,
                                            cudf::column_view const&,
                                            cudf::column_view const&,
                                            rmm::cuda_stream_view,
                                            rmm::device_async_resource_ref)
+    requires(not cudf::is_fixed_width<col_type>())
   {
     CUDF_FAIL("No specialization exists for this type");
   }

@@ -26,30 +26,29 @@
 namespace cudf {
 namespace {
 struct scalar_construction_helper {
-  template <typename T,
-            typename ScalarType                                                = scalar_type_t<T>,
-            std::enable_if_t<is_fixed_width<T>() and not is_fixed_point<T>()>* = nullptr>
+  template <typename T, typename ScalarType = scalar_type_t<T>>
   std::unique_ptr<scalar> operator()(rmm::cuda_stream_view stream,
                                      rmm::device_async_resource_ref mr) const
+    requires(is_fixed_width<T>() and not is_fixed_point<T>())
   {
     using Type = device_storage_type_t<T>;
     auto s     = new ScalarType(Type{}, false, stream, mr);
     return std::unique_ptr<scalar>(s);
   }
 
-  template <typename T,
-            typename ScalarType                    = scalar_type_t<T>,
-            std::enable_if_t<is_fixed_point<T>()>* = nullptr>
+  template <typename T, typename ScalarType = scalar_type_t<T>>
   std::unique_ptr<scalar> operator()(rmm::cuda_stream_view stream,
                                      rmm::device_async_resource_ref mr) const
+    requires(is_fixed_point<T>())
   {
     using Type = device_storage_type_t<T>;
     auto s     = new ScalarType(Type{}, numeric::scale_type{0}, false, stream, mr);
     return std::unique_ptr<scalar>(s);
   }
 
-  template <typename T, typename... Args, std::enable_if_t<not is_fixed_width<T>()>* = nullptr>
+  template <typename T, typename... Args>
   std::unique_ptr<scalar> operator()(Args... args) const
+    requires(not is_fixed_width<T>())
   {
     CUDF_FAIL("Invalid type.");
   }
@@ -121,16 +120,18 @@ namespace {
 struct default_scalar_functor {
   data_type type;
 
-  template <typename T, std::enable_if_t<not is_fixed_point<T>()>* = nullptr>
+  template <typename T>
   std::unique_ptr<cudf::scalar> operator()(rmm::cuda_stream_view stream,
                                            rmm::device_async_resource_ref mr)
+    requires(not is_fixed_point<T>())
   {
     return make_fixed_width_scalar(data_type(type_to_id<T>()), stream, mr);
   }
 
-  template <typename T, std::enable_if_t<is_fixed_point<T>()>* = nullptr>
+  template <typename T>
   std::unique_ptr<cudf::scalar> operator()(rmm::cuda_stream_view stream,
                                            rmm::device_async_resource_ref mr)
+    requires(is_fixed_point<T>())
   {
     auto const scale_ = numeric::scale_type{type.scale()};
     auto s            = make_fixed_point_scalar<T>(0, scale_, stream, mr);

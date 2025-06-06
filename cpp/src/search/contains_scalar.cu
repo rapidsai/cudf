@@ -63,9 +63,10 @@ struct contains_scalar_dispatch {
   // SFINAE with conditional return type because we need to support device lambda in this function.
   // This is required due to a limitation of nvcc.
   template <typename Element>
-  std::enable_if_t<!is_nested<Element>(), bool> operator()(column_view const& haystack,
-                                                           scalar const& needle,
-                                                           rmm::cuda_stream_view stream) const
+  bool operator()(column_view const& haystack,
+                  scalar const& needle,
+                  rmm::cuda_stream_view stream) const
+    requires(!is_nested<Element>())
   {
     CUDF_EXPECTS(cudf::have_same_types(haystack, needle),
                  "Scalar and column types must match",
@@ -90,9 +91,10 @@ struct contains_scalar_dispatch {
   }
 
   template <typename Element>
-  std::enable_if_t<is_nested<Element>(), bool> operator()(column_view const& haystack,
-                                                          scalar const& needle,
-                                                          rmm::cuda_stream_view stream) const
+  bool operator()(column_view const& haystack,
+                  scalar const& needle,
+                  rmm::cuda_stream_view stream) const
+    requires(is_nested<Element>())
   {
     CUDF_EXPECTS(cudf::have_same_types(haystack, needle),
                  "Scalar and column types must match",

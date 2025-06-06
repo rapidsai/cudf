@@ -74,11 +74,12 @@ struct in_place_copy_range_dispatch {
   cudf::column_view const& source;
   cudf::mutable_column_view& target;
 
-  template <typename T, CUDF_ENABLE_IF(cudf::is_rep_layout_compatible<T>())>
+  template <typename T>
   void operator()(cudf::size_type source_begin,
                   cudf::size_type source_end,
                   cudf::size_type target_begin,
                   rmm::cuda_stream_view stream)
+    requires(cudf::is_rep_layout_compatible<T>())
   {
     in_place_copy_range<T>(source, target, source_begin, source_end, target_begin, stream);
   }
@@ -94,13 +95,14 @@ struct out_of_place_copy_range_dispatch {
   cudf::column_view const& source;
   cudf::column_view const& target;
 
-  template <typename T, CUDF_ENABLE_IF(cudf::is_rep_layout_compatible<T>())>
+  template <typename T>
   std::unique_ptr<cudf::column> operator()(
     cudf::size_type source_begin,
     cudf::size_type source_end,
     cudf::size_type target_begin,
     rmm::cuda_stream_view stream,
     rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
+    requires(cudf::is_rep_layout_compatible<T>())
   {
     auto p_ret = std::make_unique<cudf::column>(target, stream, mr);
     if ((!p_ret->nullable()) && source.has_nulls(source_begin, source_end, stream)) {
@@ -118,8 +120,8 @@ struct out_of_place_copy_range_dispatch {
   }
 
   template <typename T, typename... Args>
-  std::enable_if_t<not cudf::is_rep_layout_compatible<T>(), std::unique_ptr<cudf::column>>
-  operator()(Args...)
+  std::unique_ptr<cudf::column> operator()(Args...)
+    requires(not cudf::is_rep_layout_compatible<T>())
   {
     CUDF_FAIL("Unsupported type for out of place copy.", cudf::data_type_error);
   }

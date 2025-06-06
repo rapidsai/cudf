@@ -26,21 +26,24 @@ namespace cudf {
 namespace {
 struct size_of_helper {
   cudf::data_type type;
-  template <typename T, std::enable_if_t<not is_fixed_width<T>()>* = nullptr>
+  template <typename T>
   constexpr int operator()() const
+    requires(not is_fixed_width<T>())
   {
     CUDF_FAIL("Invalid, non fixed-width element type.");
     return 0;
   }
 
-  template <typename T, std::enable_if_t<is_fixed_width<T>() && not is_fixed_point<T>()>* = nullptr>
+  template <typename T>
   constexpr int operator()() const noexcept
+    requires(is_fixed_width<T>() && not is_fixed_point<T>())
   {
     return sizeof(T);
   }
 
-  template <typename T, std::enable_if_t<is_fixed_point<T>()>* = nullptr>
+  template <typename T>
   constexpr int operator()() const noexcept
+    requires(is_fixed_point<T>())
   {
     // Only want the sizeof fixed_point::Rep as fixed_point::scale is stored in data_type
     return sizeof(typename T::rep);

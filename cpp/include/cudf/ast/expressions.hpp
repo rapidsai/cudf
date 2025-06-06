@@ -588,7 +588,8 @@ class tree {
    * @returns a reference to the added expression
    */
   template <typename Expr, typename... Args>
-  std::enable_if_t<std::is_base_of_v<expression, Expr>, Expr const&> emplace(Args&&... args)
+  Expr const& emplace(Args&&... args)
+    requires(std::is_base_of_v<expression, Expr>)
   {
     auto expr            = std::make_unique<Expr>(std::forward<Args>(args)...);
     Expr const& expr_ref = *expr;

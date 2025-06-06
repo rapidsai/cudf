@@ -315,14 +315,16 @@ class list_device_view {
     }
 
    private:
-    template <typename R, std::enable_if_t<std::is_same_v<R, rep_type>, void>* = nullptr>
+    template <typename R>
     __device__ inline rep_type get_rep(cudf::size_type i) const
+      requires(std::is_same_v<R, rep_type>)
     {
       return list.element<R>(i);
     }
 
-    template <typename R, std::enable_if_t<not std::is_same_v<R, rep_type>, void>* = nullptr>
+    template <typename R>
     __device__ inline rep_type get_rep(cudf::size_type i) const
+      requires(not std::is_same_v<R, rep_type>)
     {
       return list.element<R>(i).value();
     }
