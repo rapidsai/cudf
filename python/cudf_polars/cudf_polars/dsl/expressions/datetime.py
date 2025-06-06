@@ -9,8 +9,6 @@ from __future__ import annotations
 from enum import IntEnum, auto
 from typing import TYPE_CHECKING, Any, ClassVar
 
-import pyarrow as pa
-
 import pylibcudf as plc
 
 from cudf_polars.containers import Column
@@ -143,9 +141,35 @@ class TemporalFunction(Expr):
         if self.name is TemporalFunction.Name.CastTimeUnit:
             (unit,) = self.options
             if plc.traits.is_timestamp(column.obj.type()):
-                dtype = plc.DataType.from_arrow(pa.timestamp(unit))
+                if unit == "ns":
+                    dtype = plc.DataType(plc.TypeId.TIMESTAMP_NANOSECONDS)
+                elif unit == "us":
+                    dtype = plc.DataType(plc.TypeId.TIMESTAMP_MICROSECONDS)
+                elif unit == "ms":
+                    dtype = plc.DataType(plc.TypeId.TIMESTAMP_MILLISECONDS)
+                elif unit == "s":  # pragma: no cover
+                    dtype = plc.DataType(
+                        plc.TypeId.TIMESTAMP_SECONDS
+                    )  # pragma: no cover
+                else:
+                    raise ValueError(
+                        f"Unsupported time unit: {unit}"
+                    )  # pragma: no cover
             elif plc.traits.is_duration(column.obj.type()):
-                dtype = plc.DataType.from_arrow(pa.duration(unit))
+                if unit == "ns":
+                    dtype = plc.DataType(plc.TypeId.DURATION_NANOSECONDS)
+                elif unit == "us":
+                    dtype = plc.DataType(plc.TypeId.DURATION_MICROSECONDS)
+                elif unit == "ms":
+                    dtype = plc.DataType(plc.TypeId.DURATION_MILLISECONDS)
+                elif unit == "s":  # pragma: no cover
+                    dtype = plc.DataType(
+                        plc.TypeId.DURATION_SECONDS
+                    )  # pragma: no cover
+                else:
+                    raise ValueError(
+                        f"Unsupported time unit: {unit}"
+                    )  # pragma: no cover
             result = plc.unary.cast(column.obj, dtype)
             return Column(result)
         if self.name == TemporalFunction.Name.ToString:

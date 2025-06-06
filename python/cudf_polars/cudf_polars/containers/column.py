@@ -202,11 +202,11 @@ class Column:
         If the sortedness flag is not set, this launches a kernel to
         check sortedness.
         """
-        if self.obj.size() <= 1 or self.obj.size() == self.obj.null_count():
+        if self.size <= 1 or self.size == self.null_count:
             return True
         if self.is_sorted == plc.types.Sorted.YES:
             return self.order == order and (
-                self.obj.null_count() == 0 or self.null_order == null_order
+                self.null_count == 0 or self.null_order == null_order
             )
         if plc.sorting.is_sorted(plc.Table([self.obj]), [order], [null_order]):
             self.sorted = plc.types.Sorted.YES
