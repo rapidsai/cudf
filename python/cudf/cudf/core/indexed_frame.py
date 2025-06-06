@@ -197,45 +197,6 @@ def _indices_from_labels(obj, labels):
     return lhs.join(rhs).sort_values(by=["__", "_"])["_"]
 
 
-def _get_label_range_or_mask(index, start, stop, step):
-    if not (start is None and stop is None) and isinstance(
-        index, cudf.DatetimeIndex
-    ):
-        start = pd.to_datetime(start)
-        stop = pd.to_datetime(stop)
-        if start is not None and stop is not None:
-            if start > stop:
-                return slice(0, 0, None)
-            if (start in index) and (stop in index):
-                # when we have a non-monotonic datetime index, return
-                # values in the slice defined by index_of(start) and
-                # index_of(end)
-                start_loc = index.get_loc(start)
-                stop_loc = index.get_loc(stop) + 1
-                return slice(start_loc, stop_loc)
-            else:
-                raise KeyError(
-                    "Value based partial slicing on non-monotonic "
-                    "DatetimeIndexes with non-existing keys is not allowed.",
-                )
-        elif start is not None:
-            if index.is_monotonic_increasing:
-                return index >= start
-            elif index.is_monotonic_decreasing:
-                return index <= start
-            else:
-                return index.find_label_range(slice(start, stop, step))
-        else:
-            if index.is_monotonic_increasing:
-                return index <= stop
-            elif index.is_monotonic_decreasing:
-                return index >= stop
-            else:
-                return index.find_label_range(slice(start, stop, step))
-    else:
-        return index.find_label_range(slice(start, stop, step))
-
-
 class _FrameIndexer:
     """Parent class for indexers."""
 
