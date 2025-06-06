@@ -289,6 +289,13 @@ class StringFunction(Expr):
             column = self.children[0].evaluate(df, context=context)
 
             assert isinstance(self.children[1], Literal)
+            if self.children[1].value is None:
+                return Column(
+                    plc.Column.from_scalar(
+                        plc.Scalar.from_py(None, plc.DataType(plc.TypeId.STRING)),
+                        column.size,
+                    )
+                )
             start = -(self.children[1].value)
             end = 2**31 - 1
             return Column(
@@ -305,8 +312,13 @@ class StringFunction(Expr):
             assert isinstance(self.children[1], Literal)
 
             end = self.children[1].value
-            if end < 0:
-                raise InvalidOperationError("Negative head length not supported")
+            if end is None:
+                return Column(
+                    plc.Column.from_scalar(
+                        plc.Scalar.from_py(None, plc.DataType(plc.TypeId.STRING)),
+                        column.size,
+                    )
+                )
             return Column(
                 plc.strings.slice.slice_strings(
                     column.obj,
