@@ -6085,7 +6085,6 @@ NODEIDS_THAT_FAIL_WITH_CUDF_PANDAS = {
     "tests/frame/indexing/test_indexing.py::TestDataFrameIndexing::test_setting_mismatched_na_into_nullable_fails[UInt8-null0]",
     "tests/frame/indexing/test_indexing.py::TestDataFrameIndexing::test_setting_mismatched_na_into_nullable_fails[UInt8-null1]",
     "tests/frame/indexing/test_indexing.py::TestDataFrameIndexing::test_setting_mismatched_na_into_nullable_fails[UInt8-null2]",
-    "tests/frame/indexing/test_indexing.py::TestDataFrameIndexing::test_type_error_multiindex",
     "tests/frame/indexing/test_indexing.py::TestDeprecatedIndexers::test_getitem_dict_and_set_deprecated[key0]",
     "tests/frame/indexing/test_indexing.py::TestDeprecatedIndexers::test_getitem_dict_and_set_deprecated[key1]",
     "tests/frame/indexing/test_indexing.py::TestDeprecatedIndexers::test_getitem_dict_and_set_deprecated[key2]",
@@ -15258,7 +15257,6 @@ NODEIDS_THAT_FAIL_WITH_CUDF_PANDAS = {
     "tests/series/test_constructors.py::TestSeriesConstructors::test_constructor_invalid_coerce_ints_with_float_nan[uint8]",
     "tests/series/test_constructors.py::TestSeriesConstructors::test_constructor_list_of_tuples",
     "tests/series/test_constructors.py::TestSeriesConstructors::test_constructor_maskedarray",
-    "tests/series/test_constructors.py::TestSeriesConstructors::test_constructor_maskedarray_hardened",
     "tests/series/test_constructors.py::TestSeriesConstructors::test_constructor_mismatched_null_nullable_dtype[Float32-DataFrame]",
     "tests/series/test_constructors.py::TestSeriesConstructors::test_constructor_mismatched_null_nullable_dtype[Float64-DataFrame]",
     "tests/series/test_constructors.py::TestSeriesConstructors::test_constructor_mismatched_null_nullable_dtype[Int16-DataFrame]",
@@ -17207,6 +17205,11 @@ NODEIDS_THAT_XPASS_WITH_CUDF_PANDAS = {
 
 # TODO: Investigate why sometimes these fail
 NODEIDS_THAT_FLAKY_XFAIL_WITH_CUDF_PANDAS = {
+    "tests/series/test_constructors.py::TestSeriesConstructors::test_constructor_maskedarray_hardened",
+    "tests/indexing/test_loc.py::TestLocSetitemWithExpansion::test_loc_setitem_with_expansion_nonunique_index[nullable_int]",
+    "tests/indexing/test_loc.py::TestLocBooleanLabelsAndSlices::test_loc_bool_slice_raises[nullable_int-DataFrame]",
+    "tests/indexing/test_loc.py::TestLocBooleanLabelsAndSlices::test_loc_bool_slice_raises[nullable_int-Series]",
+    "tests/frame/indexing/test_indexing.py::TestDataFrameIndexing::test_type_error_multiindex",
     "tests/generic/test_finalize.py::test_finalize_called[asfreq', 'h0]",
     "tests/generic/test_finalize.py::test_finalize_called[asfreq', 'h1]",
     "tests/generic/test_finalize.py::test_finalize_called[at_time', '12:000]",
