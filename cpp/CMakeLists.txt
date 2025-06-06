@@ -560,6 +560,7 @@ add_library(
   src/io/parquet/reader.cpp
   src/io/parquet/reader_impl.cpp
   src/io/parquet/reader_impl_chunking.cu
+  src/io/parquet/reader_impl_chunking_utils.cu
   src/io/parquet/reader_impl_helpers.cpp
   src/io/parquet/reader_impl_preprocess.cu
   src/io/parquet/stats_filter_helpers.cpp
