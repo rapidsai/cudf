@@ -1468,6 +1468,21 @@ aggregate_reader_metadata::select_row_groups(
   // Flag to check if this is the first row group (to apply row bounds)
   bool is_first_row_group = true;
 
+  // We need to recount `rows_to_read` as we select rows from row groups if either:
+  // - Input row group indices are provided (no filtering with row bounds) OR
+  // - Row groups are filtered using stats or bloom filters and either:
+  //     - Row groups are not filtered using row bounds OR
+  //     - Final row group indices are not contiguous
+  auto const is_rows_to_read_need_recount = [&]() {
+    if (not row_group_indices.empty()) {
+      return true;
+    } else if (is_filtered_row_groups) {
+      return not is_trimmed_row_groups or
+             not are_contiguous_row_groups(current_row_group_indices, per_file_metadata);
+    }
+    return false;
+  }();
+
   // For each data source
   std::for_each(
     thrust::counting_iterator<size_t>(0),
@@ -1514,32 +1529,17 @@ aggregate_reader_metadata::select_row_groups(
           selection.emplace_back(rg_idx, row_group_start_row, src_idx);
 
           // If page-level indexes are present, then collect extra chunk and page info.
-          // The page indexes rely on absolute row numbers - not adjusted for skip_rows - or use
-          // zero as start row if row groups were filtered using stats and bloom filters.
+          // The page indexes rely on absolute row numbers - not adjusted for skip_rows.
           column_info_for_row_group(selection.back(),
-                                    is_filtered_row_groups ? 0 : row_group_start_row);
+                                    is_rows_to_read_need_recount ? 0 : row_group_start_row);
 
           // Disable the is_first_row_group flag
           is_first_row_group = false;
         });
     });
 
-  // We need to set `rows_to_read` to the total number of selected rows if either:
-  // - Input row group indices are provided (no filtering with row bounds) OR
-  // - Row groups are filtered using stats or bloom filters and either:
-  //     - Row groups are not filtered using row bounds OR
-  //     - Row groups are filtered using row bounds and final row group indices are not contiguous
-  auto const is_rows_to_read_need_adjustment = [&]() {
-    if (not row_group_indices.empty()) {
-      return true;
-    } else if (is_filtered_row_groups) {
-      return not is_trimmed_row_groups or
-             not are_contiguous_row_groups(current_row_group_indices, per_file_metadata);
-    }
-    return false;
-  }();
-
-  if (is_rows_to_read_need_adjustment) { rows_to_read = total_selected_rows; }
+  // Set rows_to_read to the recounted value if needed
+  if (is_rows_to_read_need_recount) { rows_to_read = total_selected_rows; }
 
   return {rows_to_skip,
           rows_to_read,
@@ -1718,8 +1718,8 @@ aggregate_reader_metadata::select_columns(
                           pfm_idx);
       }
 
-      // The path ends here. If this is a list/struct col (has children), then map all its
-      // children which must be identical.
+      // The path ends here. If this is a list/struct col (has children), then map all its children
+      // which must be identical.
       if (col_name_info == nullptr or col_name_info->children.empty()) {
         // Check the number of children to be equal to be mapped. An out_of_range error if the
         // number of children isn't equal.

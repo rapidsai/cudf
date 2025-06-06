@@ -2947,7 +2947,7 @@ TEST_F(ParquetReaderTest, RowBoundsAndFilter)
     cudf::io::chunked_parquet_writer_options out_opts =
       cudf::io::chunked_parquet_writer_options::builder(cudf::io::sink_info{filepath})
         .row_group_size_rows(rows_per_row_group)
-        .stats_level(cudf::io::statistics_freq::STATISTICS_ROWGROUP)
+        .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN)
         .build();
     cudf::io::chunked_parquet_writer writer(out_opts);
     for (auto i = 0; i < num_concat; i++) {
@@ -3142,7 +3142,7 @@ TEST_F(ParquetReaderTest, RowBoundsAndFilterMultipleFiles)
     cudf::io::parquet_writer_options out_opts =
       cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, written_table)
         .row_group_size_rows(rows_per_row_group)
-        .stats_level(cudf::io::statistics_freq::STATISTICS_ROWGROUP)
+        .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN)
         .build();
     cudf::io::write_parquet(out_opts);
   }
