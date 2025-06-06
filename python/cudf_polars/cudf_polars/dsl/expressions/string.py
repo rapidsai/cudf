@@ -296,16 +296,28 @@ class StringFunction(Expr):
                         column.size,
                     )
                 )
-            start = -(self.children[1].value)
-            end = 2**31 - 1
-            return Column(
-                plc.strings.slice.slice_strings(
-                    column.obj,
-                    plc.Scalar.from_py(start, plc.DataType(plc.TypeId.INT32)),
-                    plc.Scalar.from_py(end, plc.DataType(plc.TypeId.INT32)),
-                    None,
+            elif self.children[1].value == 0:
+                result = plc.Column.from_scalar(
+                    plc.Scalar.from_py("", plc.DataType(plc.TypeId.STRING)),
+                    column.size,
                 )
-            )
+                if column.obj.null_mask():
+                    result = result.with_mask(
+                        column.obj.null_mask(), column.obj.null_count()
+                    )
+                return Column(result)
+
+            else:
+                start = -(self.children[1].value)
+                end = 2**31 - 1
+                return Column(
+                    plc.strings.slice.slice_strings(
+                        column.obj,
+                        plc.Scalar.from_py(start, plc.DataType(plc.TypeId.INT32)),
+                        plc.Scalar.from_py(end, plc.DataType(plc.TypeId.INT32)),
+                        None,
+                    )
+                )
         elif self.name is StringFunction.Name.Head:
             column = self.children[0].evaluate(df, context=context)
 
