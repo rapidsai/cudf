@@ -11,7 +11,7 @@ import pylibcudf as plc
 @pytest.fixture
 def str_data():
     pa_data = pa.array(["A", None])
-    return pa_data, plc.Column(pa_data)
+    return pa_data, plc.Column.from_arrow(pa_data)
 
 
 def test_count_characters(str_data):

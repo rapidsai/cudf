@@ -7,6 +7,7 @@ import pytest
 import polars as pl
 
 from cudf_polars.testing.asserts import assert_gpu_result_equal
+from cudf_polars.utils.versions import POLARS_VERSION_LT_130
 
 
 @pytest.mark.parametrize("dtype", [pl.UInt32, pl.Int32, None])
@@ -23,7 +24,12 @@ def test_len(dtype, empty):
         q = df.select(pl.len().cast(dtype))
 
     # Workaround for https://github.com/pola-rs/polars/issues/16904
-    assert_gpu_result_equal(q, collect_kwargs={"projection_pushdown": False})
+    assert_gpu_result_equal(
+        q,
+        collect_kwargs={"projection_pushdown": False}
+        if POLARS_VERSION_LT_130
+        else {"optimizations": pl.QueryOptFlags(projection_pushdown=False)},
+    )
 
 
 @pytest.mark.parametrize("data", [[1, 2, 3], [1, 2, None]])

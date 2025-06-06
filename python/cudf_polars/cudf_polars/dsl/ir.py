@@ -34,6 +34,7 @@ from cudf_polars.dsl.expressions import rolling
 from cudf_polars.dsl.expressions.base import ExecutionContext
 from cudf_polars.dsl.nodebase import Node
 from cudf_polars.dsl.to_ast import to_ast, to_parquet_filter
+from cudf_polars.dsl.tracing import do_evaluate_with_tracing
 from cudf_polars.dsl.utils.windows import range_window_bounds
 from cudf_polars.utils import dtypes
 from cudf_polars.utils.versions import POLARS_VERSION_LT_128
@@ -235,7 +236,8 @@ class IR(Node["IR"]):
             timer.store(start, end, type(self).__name__)
             return result
         else:
-            return self.do_evaluate(*self._non_child_args, *children)
+            args = (*self._non_child_args, *children)
+            return do_evaluate_with_tracing(type(self), *args)
 
 
 class ErrorNode(IR):
@@ -484,6 +486,16 @@ class Scan(IR):
         ).columns()
         return df.with_columns([Column(filepaths, name=name)])
 
+    def fast_count(self) -> int:  # pragma: no cover
+        """Get the number of rows in a Parquet Scan."""
+        meta = plc.io.parquet_metadata.read_parquet_metadata(
+            plc.io.SourceInfo(self.paths)
+        )
+        total_rows = meta.num_rows() - self.skip_rows
+        if self.n_rows != -1:
+            total_rows = min(total_rows, self.n_rows)
+        return max(total_rows, 0)
+
     @classmethod
     def do_evaluate(
         cls,
@@ -563,9 +575,9 @@ class Scan(IR):
                     .decimal(decimal)
                     .keep_default_na(keep_default_na=False)
                     .na_filter(na_filter=True)
+                    .delimiter(str(sep))
                     .build()
                 )
-                options.set_delimiter(str(sep))
                 if column_names is not None:
                     options.set_names([str(name) for name in column_names])
                 else:
@@ -576,7 +588,7 @@ class Scan(IR):
                         column_names = read_csv_header(path, str(sep))
                         options.set_names(column_names)
                 options.set_header(header)
-                options.set_dtypes(schema)
+                options.set_dtypes({name: dtype.plc for name, dtype in schema.items()})
                 if usecols is not None:
                     options.set_use_cols_names([str(name) for name in usecols])
                 options.set_na_values(null_values)
@@ -620,51 +632,30 @@ class Scan(IR):
                 options.set_columns(with_columns)
             if filters is not None:
                 options.set_filter(filters)
+            if n_rows != -1:
+                options.set_num_rows(n_rows)
+            if skip_rows != 0:
+                options.set_skip_rows(skip_rows)
             if config_options.parquet_options.chunked:
-                # We handle skip_rows != 0 by reading from the
-                # up to n_rows + skip_rows and slicing off the
-                # first skip_rows entries.
-                # TODO: Remove this workaround once
-                # https://github.com/rapidsai/cudf/issues/16186
-                # is fixed
-                nrows = n_rows + skip_rows
-                if nrows > -1:
-                    options.set_num_rows(nrows)
                 reader = plc.io.parquet.ChunkedParquetReader(
                     options,
                     chunk_read_limit=config_options.parquet_options.chunk_read_limit,
                     pass_read_limit=config_options.parquet_options.pass_read_limit,
                 )
                 chunk = reader.read_chunk()
-                rows_left_to_skip = skip_rows
-
-                def slice_skip(tbl: plc.Table) -> plc.Table:
-                    nonlocal rows_left_to_skip
-                    if rows_left_to_skip > 0:
-                        table_rows = tbl.num_rows()
-                        chunk_skip = min(rows_left_to_skip, table_rows)
-                        # TODO: Check performance impact of skipping this
-                        # call and creating an empty table manually when the
-                        # slice would be empty (chunk_skip == table_rows).
-                        (tbl,) = plc.copying.slice(tbl, [chunk_skip, table_rows])
-                        rows_left_to_skip -= chunk_skip
-                    return tbl
-
-                tbl = slice_skip(chunk.tbl)
+                tbl = chunk.tbl
                 # TODO: Nested column names
                 names = chunk.column_names(include_children=False)
                 concatenated_columns = tbl.columns()
                 while reader.has_next():
                     chunk = reader.read_chunk()
-                    tbl = slice_skip(chunk.tbl)
-
+                    tbl = chunk.tbl
                     for i in range(tbl.num_columns()):
                         concatenated_columns[i] = plc.concatenate.concatenate(
                             [concatenated_columns[i], tbl._columns[i]]
                         )
                         # Drop residual columns to save memory
                         tbl._columns[i] = None
-
                 df = DataFrame.from_table(
                     plc.Table(concatenated_columns),
                     names=names,
@@ -674,10 +665,6 @@ class Scan(IR):
                         include_file_paths, paths, chunk.num_rows_per_source, df
                     )
             else:
-                if n_rows != -1:
-                    options.set_num_rows(n_rows)
-                if skip_rows != 0:
-                    options.set_skip_rows(skip_rows)
                 tbl_w_meta = plc.io.parquet.read_parquet(options)
                 df = DataFrame.from_table(
                     tbl_w_meta.tbl,
@@ -691,10 +678,9 @@ class Scan(IR):
             if filters is not None:
                 # Mask must have been applied.
                 return df
-
         elif typ == "ndjson":
             json_schema: list[plc.io.json.NameAndType] = [
-                (name, typ, []) for name, typ in schema.items()
+                (name, typ.plc, []) for name, typ in schema.items()
             ]
             plc_tbl_w_meta = plc.io.json.read_json(
                 plc.io.json._setup_json_reader_options(
@@ -720,7 +706,7 @@ class Scan(IR):
         if row_index is not None:
             name, offset = row_index
             offset += skip_rows
-            dtype = schema[name]
+            dtype = schema[name].plc
             step = plc.Scalar.from_py(1, dtype)
             init = plc.Scalar.from_py(offset, dtype)
             index_col = Column(
@@ -733,7 +719,9 @@ class Scan(IR):
             df = DataFrame([index_col, *df.columns])
             if next(iter(schema)) != name:
                 df = df.select(schema)
-        assert all(c.obj.type() == schema[name] for name, c in df.column_map.items())
+        assert all(
+            c.obj.type() == schema[name].plc for name, c in df.column_map.items()
+        )
         if predicate is None:
             return df
         else:
@@ -782,7 +770,7 @@ class Sink(IR):
         child_schema = df.schema.values()
         if kind == "Csv":
             if not all(
-                plc.io.csv.is_supported_write_csv(dtype) for dtype in child_schema
+                plc.io.csv.is_supported_write_csv(dtype.plc) for dtype in child_schema
             ):
                 # Nested types are unsupported in polars and libcudf
                 raise NotImplementedError(
@@ -833,7 +821,7 @@ class Sink(IR):
             kind == "Json"
         ):  # pragma: no cover; options are validated on the polars side
             if not all(
-                plc.io.json.is_supported_write_json(dtype) for dtype in child_schema
+                plc.io.json.is_supported_write_json(dtype.plc) for dtype in child_schema
             ):
                 # Nested types are unsupported in polars and libcudf
                 raise NotImplementedError(
@@ -1054,7 +1042,7 @@ class DataFrameScan(IR):
             df = df.select(projection)
         df = DataFrame.from_polars(df)
         assert all(
-            c.obj.type() == dtype
+            c.obj.type() == dtype.plc
             for c, dtype in zip(df.columns, schema.values(), strict=True)
         )
         return df
@@ -1082,6 +1070,24 @@ class Select(IR):
         self.should_broadcast = should_broadcast
         self.children = (df,)
         self._non_child_args = (self.exprs, should_broadcast)
+        if (
+            not POLARS_VERSION_LT_128
+            and Select._is_len_expr(self.exprs)
+            and isinstance(df, Scan)
+            and df.typ != "parquet"
+        ):  # pragma: no cover
+            raise NotImplementedError(f"Unsupported scan type: {df.typ}")
+
+    @staticmethod
+    def _is_len_expr(exprs: tuple[expr.NamedExpr, ...]) -> bool:  # pragma: no cover
+        if len(exprs) == 1:
+            expr0 = exprs[0].value
+            return (
+                isinstance(expr0, expr.Cast)
+                and len(expr0.children) == 1
+                and isinstance(expr0.children[0], expr.Len)
+            )
+        return False
 
     @classmethod
     def do_evaluate(
@@ -1096,6 +1102,55 @@ class Select(IR):
         if should_broadcast:
             columns = broadcast(*columns)
         return DataFrame(columns)
+
+    def evaluate(self, *, cache: CSECache, timer: Timer | None) -> DataFrame:
+        """
+        Evaluate the Select node with special handling for fast count queries.
+
+        Parameters
+        ----------
+        cache
+            Mapping from cached node ids to constructed DataFrames.
+            Used to implement evaluation of the `Cache` node.
+        timer
+            If not None, a Timer object to record timings for the
+            evaluation of the node.
+
+        Returns
+        -------
+        DataFrame
+            Result of evaluating this Select node. If the expression is a
+            count over a parquet scan, returns a constant row count directly
+            without evaluating the scan.
+
+        Raises
+        ------
+        NotImplementedError
+            If evaluation fails. Ideally this should not occur, since the
+            translation phase should fail earlier.
+        """
+        if (
+            not POLARS_VERSION_LT_128
+            and isinstance(self.children[0], Scan)
+            and Select._is_len_expr(self.exprs)
+            and self.children[0].typ == "parquet"
+            and self.children[0].predicate is None
+        ):
+            scan = self.children[0]  # pragma: no cover
+            effective_rows = scan.fast_count()  # pragma: no cover
+            col = Column(
+                plc.Column.from_scalar(
+                    plc.Scalar.from_py(
+                        effective_rows,
+                        plc.DataType(plc.TypeId.UINT32),
+                    ),
+                    1,
+                ),
+                name=self.exprs[0].name or "len",
+            )  # pragma: no cover
+            return DataFrame([col])  # pragma: no cover
+
+        return super().evaluate(cache=cache, timer=timer)
 
 
 class Reduce(IR):
@@ -1188,7 +1243,7 @@ class Rolling(IR):
         self.agg_requests = tuple(agg_requests)
         if not all(
             plc.rolling.is_valid_rolling_aggregation(
-                agg.value.dtype, agg.value.agg_request
+                agg.value.dtype.plc, agg.value.agg_request
             )
             for agg in self.agg_requests
         ):
@@ -2111,6 +2166,7 @@ class MapFunction(IR):
             "explode",
             "unpivot",
             "row_index",
+            "fast_count",
         ]
     )
 
@@ -2149,7 +2205,8 @@ class MapFunction(IR):
                 index = frozenset(indices)
                 pivotees = [name for name in df.schema if name not in index]
             if not all(
-                dtypes.can_cast(df.schema[p], self.schema[value_name]) for p in pivotees
+                dtypes.can_cast(df.schema[p].plc, self.schema[value_name].plc)
+                for p in pivotees
             ):
                 raise NotImplementedError(
                     "Unpivot cannot cast all input columns to "
@@ -2164,7 +2221,30 @@ class MapFunction(IR):
         elif self.name == "row_index":
             col_name, offset = options
             self.options = (col_name, offset)
+        elif self.name == "fast_count":
+            # TODO: Remove this once all scan types support projections
+            # using Select + Len. Currently, CSV is the only format that
+            # uses the legacy MapFunction(FastCount) path because it is
+            # faster than the new-streaming path for large files.
+            # See https://github.com/pola-rs/polars/pull/22363#issue-3010224808
+            raise NotImplementedError(
+                "Fast count unsupported for CSV scans"
+            )  # pragma: no cover
         self._non_child_args = (schema, name, self.options)
+
+    def get_hashable(self) -> Hashable:
+        """
+        Hashable representation of the node.
+
+        The options dictionaries are serialised for hashing purposes
+        as json strings.
+        """
+        return (
+            type(self),
+            self.name,
+            json.dumps(self.options),
+            tuple(self.schema.items()),
+        )
 
     @classmethod
     def do_evaluate(
@@ -2209,7 +2289,7 @@ class MapFunction(IR):
                         plc.interop.from_arrow(
                             pa.array(
                                 pivotees,
-                                type=plc.interop.to_arrow(schema[variable_name]),
+                                type=plc.interop.to_arrow(schema[variable_name].plc),
                             ),
                         )
                     ]
@@ -2218,7 +2298,7 @@ class MapFunction(IR):
             ).columns()
             value_column = plc.concatenate.concatenate(
                 [
-                    df.column_map[pivotee].astype(schema[value_name]).obj
+                    df.column_map[pivotee].astype(schema[value_name].plc).obj
                     for pivotee in pivotees
                 ]
             )
@@ -2231,7 +2311,7 @@ class MapFunction(IR):
             )
         elif name == "row_index":
             col_name, offset = options
-            dtype = schema[col_name]
+            dtype = schema[col_name].plc
             step = plc.Scalar.from_py(1, dtype)
             init = plc.Scalar.from_py(offset, dtype)
             index_col = Column(

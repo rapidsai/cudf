@@ -11,6 +11,7 @@ from polars.testing import assert_frame_equal
 import pylibcudf as plc
 
 from cudf_polars import Translator
+from cudf_polars.containers import DataType
 from cudf_polars.dsl import expr, ir
 from cudf_polars.dsl.traversal import (
     CachingVisitor,
@@ -29,7 +30,7 @@ def make_expr(dt, n1, n2):
 
 
 def test_traversal_unique():
-    dt = plc.DataType(plc.TypeId.INT8)
+    dt = DataType(pl.datatypes.Int8())
 
     e1 = make_expr(dt, "a", "a")
     unique_exprs = list(traversal([e1]))
@@ -61,7 +62,7 @@ def rename(e, rec):
 
 
 def test_caching_visitor():
-    dt = plc.DataType(plc.TypeId.INT8)
+    dt = DataType(pl.datatypes.Int8())
 
     e1 = make_expr(dt, "a", "b")
 
@@ -85,7 +86,7 @@ def test_caching_visitor():
 
 
 def test_noop_visitor():
-    dt = plc.DataType(plc.TypeId.INT8)
+    dt = DataType(pl.datatypes.Int8())
 
     e1 = make_expr(dt, "a", "b")
 
