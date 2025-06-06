@@ -1690,9 +1690,9 @@ aggregate_reader_metadata::select_columns(
       auto const& src_schema_elem = get_schema(src_schema_idx);
       auto const& dst_schema_elem = get_schema(dst_schema_idx, pfm_idx);
 
-      // Check the schema elements to be equal except their number of children as we only care
-      // about the specific column paths in the schema trees. Raise an invalid_argument error if
-      // the schema elements don't match.
+      // Check the schema elements to be equal except their number of children as we only care about
+      // the specific column paths in the schema trees. Raise an invalid_argument error if the
+      // schema elements don't match.
       CUDF_EXPECTS(equal_to_except_num_children(src_schema_elem, dst_schema_elem),
                    "Encountered mismatching SchemaElement properties for a column in "
                    "the selected path",
