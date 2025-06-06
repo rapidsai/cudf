@@ -59,6 +59,121 @@ namespace {
   return static_cast<size_type>(total_row_groups);
 }
 
+/**
+ * @brief Checks if the specified lists of row group indices are contiguous
+ *
+ * Row groups are contiguous if the lists contains all row groups (from all sources) between the
+ * very first and last row group indices. Consider each file may have up to 3 row groups, the
+ * following list of row group indices are contiguous:
+ *
+ * - [[1,2],[0,1,2],[0,1]]
+ * - [[],[0,1, 2],[0,1,2],[0],[]]
+ *
+ * Whereas, the following lists of row group indices are not contiguous:
+ *
+ * - [[0,1],[0,1,2][0,1]]
+ * - [[1,2],[0,1,2],[1,2]]
+ * - [[],[2],[],[0,1,2]]
+ *
+ * @param row_group_indices Lists of row group indices, one per file
+ * @param file_metadatas File metadatas, one per file
+ *
+ * @return Boolean indicating if the row groups are contiguous
+ */
+[[nodiscard]] bool are_contiguous_row_groups(
+  host_span<std::vector<size_type> const> row_group_indices,
+  cudf::host_span<metadata const> file_metadatas)
+{
+  CUDF_EXPECTS(row_group_indices.size() == file_metadatas.size(),
+               "Number of row group indices must match number of file metadatas");
+
+  auto const is_contiguous = [&](auto const& indices) {
+    if (indices.empty()) { return true; }
+
+    auto current_idx = indices.front();
+    return std::all_of(
+      indices.begin() + 1, indices.end(), [&](auto idx) { return idx == ++current_idx; });
+  };
+
+  // Single source case - may start and end at any index within metadata.row_groups and be
+  // contiguous
+  if (std::cmp_equal(row_group_indices.size(), 1)) {
+    auto const& indices  = row_group_indices.front();
+    auto const& metadata = file_metadatas.front();
+    if (indices.empty()) { return true; }
+
+    auto const first_rg_idx = indices.front();
+    auto const last_rg_idx  = indices.back();
+
+    // Check if both indices are within bounds
+    if (std::cmp_greater(indices.size(), metadata.row_groups.size()) or
+        std::cmp_greater_equal(first_rg_idx, metadata.row_groups.size()) or
+        std::cmp_greater_equal(last_rg_idx, metadata.row_groups.size())) {
+      return false;
+    }
+
+    // Check if the range of indices is contiguous
+    return is_contiguous(indices);
+  }
+
+  // Find the index of the first and last non-empty files
+  auto const [first_file_idx, last_file_idx] = [&]() {
+    auto const first_file_iter =
+      std::find_if(row_group_indices.begin(), row_group_indices.end(), [](auto const& indices) {
+        return not indices.empty();
+      });
+
+    auto last_file_iter = row_group_indices.end();
+    for (; last_file_iter != first_file_iter; --last_file_iter) {
+      if (not last_file_iter->empty()) { break; }
+    }
+
+    return std::pair{std::distance(row_group_indices.begin(), first_file_iter),
+                     std::distance(row_group_indices.begin(), last_file_iter)};
+  }();
+
+  // Verify contiguity of row groups between the first and last non-empty files
+  return std::all_of(
+    thrust::counting_iterator(first_file_idx),
+    thrust::counting_iterator(last_file_idx + 1),
+    [&](auto file_idx) {
+      auto const& indices  = row_group_indices[file_idx];
+      auto const& metadata = file_metadatas[file_idx];
+
+      // If there is an empty file between non-empty ones, row groups are not contiguous
+      if (indices.empty()) { return false; }
+
+      // First and last row group indices in this file
+      auto const first_rg_idx = indices.front();
+      auto const last_rg_idx  = indices.back();
+
+      // First file (may be the only file) - size <= metadata.row_groups and be contiguous
+      if (std::cmp_equal(file_idx, first_file_idx)) {
+        return not(std::cmp_greater(indices.size(), metadata.row_groups.size()) or  // Check size
+                   std::cmp_greater_equal(first_rg_idx,
+                                          metadata.row_groups.size()) or  // Check first rg index
+                   std::cmp_greater_equal(last_rg_idx,
+                                          metadata.row_groups.size()) or  // Check last rg index
+                   not is_contiguous(indices));
+      }
+
+      // Last file - must start at 0, size <= metadata.row_groups and be contiguous
+      else if (std::cmp_equal(file_idx, last_file_idx)) {
+        auto const max_size = std::min<size_t>(last_rg_idx + 1, metadata.row_groups.size());
+        return not(std::cmp_greater(indices.size(), max_size) or  // Check size
+                   std::cmp_not_equal(first_rg_idx, 0) or         // Check first rg index
+                   std::cmp_greater_equal(last_rg_idx,
+                                          metadata.row_groups.size()) or  // Check last rg index
+                   not is_contiguous(indices));
+      }
+      // Middle files - must be of same size as metadata.row_groups and contiguous
+      else {
+        return not(std::cmp_not_equal(indices.size(), metadata.row_groups.size()) or
+                   not is_contiguous(indices));
+      }
+    });
+}
+
 std::optional<LogicalType> converted_to_logical_type(SchemaElement const& schema)
 {
   if (schema.converted_type.has_value()) {
@@ -1348,19 +1463,20 @@ aggregate_reader_metadata::select_row_groups(
   bool is_first_row_group = true;
 
   // For each data source
-  std::for_each(thrust::counting_iterator<size_t>(0),
-                thrust::counting_iterator(current_row_group_indices.size()),
-                [&](auto const& src_idx) {
-                  auto const& file_metadata = per_file_metadata[src_idx];
+  std::for_each(
+    thrust::counting_iterator<size_t>(0),
+    thrust::counting_iterator(current_row_group_indices.size()),
+    [&](auto const& src_idx) {
+      auto const& file_metadata = per_file_metadata[src_idx];
 
-                  // For each row group in this data source
-                  std::for_each(current_row_group_indices[src_idx].begin(),
-                                current_row_group_indices[src_idx].end(),
-                                [&](auto const& rg_idx) {
-                                  // Validate the row group index
-          CUDF_EXPECTS(
-            rg_idx >= 0 and std::cmp_less(rg_idx, file_metadata.row_groups.size())),
-            "Invalid rowgroup index");
+      // For each row group in this data source
+      std::for_each(
+        current_row_group_indices[src_idx].begin(),
+        current_row_group_indices[src_idx].end(),
+        [&](auto const& rg_idx) {
+          // Validate the row group index
+          CUDF_EXPECTS(rg_idx >= 0 and std::cmp_less(rg_idx, file_metadata.row_groups.size()),
+                       "Invalid rowgroup index");
 
           // Get the row group
           auto const& rg = file_metadata.row_groups[rg_idx];
@@ -1399,11 +1515,18 @@ aggregate_reader_metadata::select_row_groups(
 
           // Disable the is_first_row_group flag
           is_first_row_group = false;
-                                });
-                });
+        });
+    });
 
-  // Set the final number of rows to read to the number of selected rows
-  rows_to_read = total_selected_rows;
+  auto const is_row_group_indices_specified = not row_group_indices.empty();
+  auto const is_rows_to_read_need_adjustment =
+    is_filtered_row_groups and
+    (not is_trimmed_row_groups or
+     not are_contiguous_row_groups(current_row_group_indices, per_file_metadata));
+
+  if (is_row_group_indices_specified or is_rows_to_read_need_adjustment) {
+    rows_to_read = total_selected_rows;
+  }
 
   return {rows_to_skip,
           rows_to_read,
@@ -1554,9 +1677,9 @@ aggregate_reader_metadata::select_columns(
       auto const& src_schema_elem = get_schema(src_schema_idx);
       auto const& dst_schema_elem = get_schema(dst_schema_idx, pfm_idx);
 
-      // Check the schema elements to be equal except their number of children as we only care about
-      // the specific column paths in the schema trees. Raise an invalid_argument error if the
-      // schema elements don't match.
+      // Check the schema elements to be equal except their number of children as we only care
+      // about the specific column paths in the schema trees. Raise an invalid_argument error if
+      // the schema elements don't match.
       CUDF_EXPECTS(equal_to_except_num_children(src_schema_elem, dst_schema_elem),
                    "Encountered mismatching SchemaElement properties for a column in "
                    "the selected path",
@@ -1582,8 +1705,8 @@ aggregate_reader_metadata::select_columns(
                           pfm_idx);
       }
 
-      // The path ends here. If this is a list/struct col (has children), then map all its children
-      // which must be identical.
+      // The path ends here. If this is a list/struct col (has children), then map all its
+      // children which must be identical.
       if (col_name_info == nullptr or col_name_info->children.empty()) {
         // Check the number of children to be equal to be mapped. An out_of_range error if the
         // number of children isn't equal.
