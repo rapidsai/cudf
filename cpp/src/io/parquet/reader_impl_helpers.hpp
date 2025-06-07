@@ -245,6 +245,22 @@ class aggregate_reader_metadata {
     host_span<int const> column_schemas) const;
 
   /**
+   * @brief Filters the row groups using row bounds (`skip_rows` and `num_rows`)
+   *
+   * @param rows_to_skip Number of rows to skip
+   * @param rows_to_read Number of rows to read
+   *
+   * @return A tuple of surviving row group indices, and two vectors of effective (trimmed) row
+   * counts and offsets across surviving row group indices respectively
+   */
+  [[nodiscard]] std::tuple<std::vector<std::vector<size_type>>,
+                           std::vector<std::vector<size_type>>,
+                           std::vector<std::vector<size_type>>>
+  apply_row_bounds_filter(cudf::host_span<std::vector<size_type> const> input_row_group_indices,
+                          int64_t rows_to_skip,
+                          int64_t rows_to_read) const;
+
+  /**
    * @brief Filters the row groups using stats filter
    *
    * @param input_row_group_indices Lists of input row groups, one per source
