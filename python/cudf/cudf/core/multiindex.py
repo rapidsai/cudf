@@ -381,6 +381,10 @@ class MultiIndex(Index):
             name=name,
         )
 
+    @property
+    def _num_columns(self) -> int:
+        return len(self._data)
+
     @_performance_tracking
     def _from_data_like_self(self, data: MutableMapping) -> Self:
         mi = type(self)._from_data(data, name=self.name)
