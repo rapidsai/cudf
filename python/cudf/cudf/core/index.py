@@ -2257,10 +2257,6 @@ class Index(SingleColumnFrame):  # type: ignore[misc]
         result = result._with_type_metadata(self.dtype)
         return type(self)._from_column(result, name=self.name)
 
-    @property
-    def values(self) -> cupy.ndarray:
-        return self._column.values
-
     def __contains__(self, item) -> bool:
         hash(item)
         return item in self._column
