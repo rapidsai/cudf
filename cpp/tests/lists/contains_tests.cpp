@@ -26,8 +26,9 @@
 #include <cudf/scalar/scalar_factories.hpp>
 
 namespace {
-template <typename T, std::enable_if_t<cudf::is_numeric<T>(), void>* = nullptr>
+template <typename T>
 auto create_scalar_search_key(T const& value)
+  requires(cudf::is_numeric<T>())
 {
   auto search_key = cudf::make_numeric_scalar(cudf::data_type{cudf::type_to_id<T>()});
   search_key->set_valid_async(true);
@@ -35,14 +36,16 @@ auto create_scalar_search_key(T const& value)
   return search_key;
 }
 
-template <typename T, std::enable_if_t<std::is_same_v<T, std::string>, void>* = nullptr>
+template <typename T>
 auto create_scalar_search_key(std::string const& value)
+  requires(std::is_same_v<T, std::string>)
 {
   return cudf::make_string_scalar(value);
 }
 
-template <typename T, std::enable_if_t<cudf::is_timestamp<T>(), void>* = nullptr>
+template <typename T>
 auto create_scalar_search_key(typename T::rep const& value)
+  requires(cudf::is_timestamp<T>())
 {
   auto search_key = cudf::make_timestamp_scalar(cudf::data_type{cudf::type_to_id<T>()});
   search_key->set_valid_async(true);
@@ -50,8 +53,9 @@ auto create_scalar_search_key(typename T::rep const& value)
   return search_key;
 }
 
-template <typename T, std::enable_if_t<cudf::is_duration<T>(), void>* = nullptr>
+template <typename T>
 auto create_scalar_search_key(typename T::rep const& value)
+  requires(cudf::is_duration<T>())
 {
   auto search_key = cudf::make_duration_scalar(cudf::data_type{cudf::type_to_id<T>()});
   search_key->set_valid_async(true);
@@ -65,24 +69,27 @@ auto make_struct_scalar(Args&&... args)
   return cudf::struct_scalar(std::vector<cudf::column_view>{std::forward<Args>(args)...});
 }
 
-template <typename T, std::enable_if_t<cudf::is_numeric<T>(), void>* = nullptr>
+template <typename T>
 auto create_null_search_key()
+  requires(cudf::is_numeric<T>())
 {
   auto search_key = cudf::make_numeric_scalar(cudf::data_type{cudf::type_to_id<T>()});
   search_key->set_valid_async(false);
   return search_key;
 }
 
-template <typename T, std::enable_if_t<cudf::is_timestamp<T>(), void>* = nullptr>
+template <typename T>
 auto create_null_search_key()
+  requires(cudf::is_timestamp<T>())
 {
   auto search_key = cudf::make_timestamp_scalar(cudf::data_type{cudf::type_to_id<T>()});
   search_key->set_valid_async(false);
   return search_key;
 }
 
-template <typename T, std::enable_if_t<cudf::is_duration<T>(), void>* = nullptr>
+template <typename T>
 auto create_null_search_key()
+  requires(cudf::is_duration<T>())
 {
   auto search_key = cudf::make_duration_scalar(cudf::data_type{cudf::type_to_id<T>()});
   search_key->set_valid_async(false);

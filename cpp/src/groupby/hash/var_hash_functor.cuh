@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -60,15 +60,19 @@ struct var_hash_functor {
   }
 
   template <typename Source>
-  __device__ cuda::std::enable_if_t<!is_supported<Source>()> operator()(
-    column_device_view const& source, size_type source_index, size_type target_index) noexcept
+  __device__ void operator()(column_device_view const& source,
+                             size_type source_index,
+                             size_type target_index) noexcept
+    requires(!is_supported<Source>())
   {
     CUDF_UNREACHABLE("Invalid source type for std, var aggregation combination.");
   }
 
   template <typename Source>
-  __device__ cuda::std::enable_if_t<is_supported<Source>()> operator()(
-    column_device_view const& source, size_type source_index, size_type target_index) noexcept
+  __device__ void operator()(column_device_view const& source,
+                             size_type source_index,
+                             size_type target_index) noexcept
+    requires(is_supported<Source>())
   {
     using Target    = cudf::detail::target_type_t<Source, aggregation::VARIANCE>;
     using SumType   = cudf::detail::target_type_t<Source, aggregation::SUM>;

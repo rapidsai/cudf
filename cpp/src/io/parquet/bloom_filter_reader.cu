@@ -58,13 +58,12 @@ struct bloom_filter_caster {
   enum class is_int96_timestamp : bool { YES, NO };
 
   template <typename T, is_int96_timestamp IS_INT96_TIMESTAMP = is_int96_timestamp::NO>
-  std::enable_if_t<not std::is_same_v<T, bool> and
-                     not(cudf::is_compound<T>() and not std::is_same_v<T, string_view>),
-                   std::unique_ptr<cudf::column>>
-  query_bloom_filter(cudf::size_type equality_col_idx,
-                     cudf::data_type dtype,
-                     ast::literal const* const literal,
-                     rmm::cuda_stream_view stream) const
+  std::unique_ptr<cudf::column> query_bloom_filter(cudf::size_type equality_col_idx,
+                                                   cudf::data_type dtype,
+                                                   ast::literal const* const literal,
+                                                   rmm::cuda_stream_view stream) const
+    requires(not std::is_same_v<T, bool> and
+             not(cudf::is_compound<T>() and not std::is_same_v<T, string_view>))
   {
     using key_type          = T;
     using policy_type       = cuco::arrow_filter_policy<key_type, cudf::hashing::detail::XXHash_64>;

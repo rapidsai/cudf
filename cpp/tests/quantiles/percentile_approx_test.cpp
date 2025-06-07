@@ -78,15 +78,13 @@ std::unique_ptr<cudf::column> arrow_percentile_approx(cudf::column_view const& _
 }
 
 struct percentile_approx_dispatch {
-  template <
-    typename T,
-    typename Func,
-    typename std::enable_if_t<cudf::is_numeric<T>() || cudf::is_fixed_point<T>()>* = nullptr>
+  template <typename T, typename Func>
   std::unique_ptr<cudf::column> operator()(Func op,
                                            cudf::column_view const& values,
                                            int delta,
                                            std::vector<double> const& percentages,
                                            cudf::size_type ulps)
+    requires(cudf::is_numeric<T>() || cudf::is_fixed_point<T>())
   {
     // arrow implementation.
     auto expected = [&]() {
@@ -111,15 +109,13 @@ struct percentile_approx_dispatch {
     return result;
   }
 
-  template <
-    typename T,
-    typename Func,
-    typename std::enable_if_t<!cudf::is_numeric<T>() && !cudf::is_fixed_point<T>()>* = nullptr>
+  template <typename T, typename Func>
   std::unique_ptr<cudf::column> operator()(Func op,
                                            cudf::column_view const& values,
                                            int delta,
                                            std::vector<double> const& percentages,
                                            cudf::size_type ulps)
+    requires(!cudf::is_numeric<T>() && !cudf::is_fixed_point<T>())
   {
     CUDF_FAIL("Invalid input type for percentile_approx test");
   }

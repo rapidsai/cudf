@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -87,8 +87,9 @@ data_type DLDataType_to_data_type(DLDataType type)
 }
 
 struct data_type_to_DLDataType_impl {
-  template <typename T, std::enable_if_t<is_numeric<T>()>* = nullptr>
+  template <typename T>
   DLDataType operator()()
+    requires(is_numeric<T>())
   {
     uint8_t const bits{sizeof(T) * 8};
     uint16_t const lanes{1};
@@ -101,8 +102,9 @@ struct data_type_to_DLDataType_impl {
     }
   }
 
-  template <typename T, std::enable_if_t<not is_numeric<T>()>* = nullptr>
+  template <typename T>
   DLDataType operator()()
+    requires(not is_numeric<T>())
   {
     CUDF_FAIL("Conversion of non-numeric types to DLPack is unsupported");
   }

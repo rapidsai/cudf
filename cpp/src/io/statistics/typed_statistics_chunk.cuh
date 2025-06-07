@@ -55,40 +55,43 @@ class union_member {
                        reference_type<U, T>>>;
 
   template <typename T, typename U>
-  __device__ static std::enable_if_t<std::is_integral_v<T> and std::is_unsigned_v<T>, type<T, U>>
-  get(U& val)
+  __device__ static type<T, U> get(U& val)
+    requires(std::is_integral_v<T> and std::is_unsigned_v<T>)
   {
     return val.u_val;
   }
 
   template <typename T, typename U>
-  __device__ static std::enable_if_t<std::is_integral_v<T> and std::is_signed_v<T>, type<T, U>> get(
-    U& val)
+  __device__ static type<T, U> get(U& val)
+    requires(std::is_integral_v<T> and std::is_signed_v<T>)
   {
     return val.i_val;
   }
 
   template <typename T, typename U>
-  __device__ static std::enable_if_t<std::is_same_v<T, __int128_t>, type<T, U>> get(U& val)
+  __device__ static type<T, U> get(U& val)
+    requires(std::is_same_v<T, __int128_t>)
   {
     return val.d128_val;
   }
 
   template <typename T, typename U>
-  __device__ static std::enable_if_t<std::is_floating_point_v<T>, type<T, U>> get(U& val)
+  __device__ static type<T, U> get(U& val)
+    requires(std::is_floating_point_v<T>)
   {
     return val.fp_val;
   }
 
   template <typename T, typename U>
-  __device__ static std::enable_if_t<std::is_same_v<T, string_view>, type<T, U>> get(U& val)
+  __device__ static type<T, U> get(U& val)
+    requires(std::is_same_v<T, string_view>)
   {
     return val.str_val;
   }
 
   template <typename T, typename U>
-  __device__ static std::enable_if_t<std::is_same_v<T, statistics::byte_array_view>, type<T, U>>
-  get(U& val)
+  __device__ static type<T, U> get(U& val)
+    requires(std::is_same_v<T, statistics::byte_array_view>)
   {
     return val.byte_val;
   }

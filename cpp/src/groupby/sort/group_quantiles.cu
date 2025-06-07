@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -84,15 +84,15 @@ struct calculate_quantile_fn {
 
 struct quantiles_functor {
   template <typename T>
-  std::enable_if_t<std::is_arithmetic_v<T>, std::unique_ptr<column>> operator()(
-    column_view const& values,
-    column_view const& group_sizes,
-    cudf::device_span<size_type const> group_offsets,
-    size_type const num_groups,
-    device_span<double const> quantile,
-    interpolation interpolation,
-    rmm::cuda_stream_view stream,
-    rmm::device_async_resource_ref mr)
+  std::unique_ptr<column> operator()(column_view const& values,
+                                     column_view const& group_sizes,
+                                     cudf::device_span<size_type const> group_offsets,
+                                     size_type const num_groups,
+                                     device_span<double const> quantile,
+                                     interpolation interpolation,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::device_async_resource_ref mr)
+    requires(std::is_arithmetic_v<T>)
   {
     using ResultType = cudf::detail::target_type_t<T, aggregation::QUANTILE>;
 
@@ -147,7 +147,8 @@ struct quantiles_functor {
   }
 
   template <typename T, typename... Args>
-  std::enable_if_t<!std::is_arithmetic_v<T>, std::unique_ptr<column>> operator()(Args&&...)
+  std::unique_ptr<column> operator()(Args&&...)
+    requires(!std::is_arithmetic_v<T>)
   {
     CUDF_FAIL("Only arithmetic types are supported in quantiles");
   }

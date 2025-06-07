@@ -977,14 +977,16 @@ struct pair_rep_accessor {
   }
 
  private:
-  template <typename R, std::enable_if_t<std::is_same_v<R, rep_type>, void>* = nullptr>
+  template <typename R>
   [[nodiscard]] __device__ inline auto get_rep(cudf::size_type i) const
+    requires(std::is_same_v<R, rep_type>)
   {
     return col.element<R>(i);
   }
 
-  template <typename R, std::enable_if_t<not std::is_same_v<R, rep_type>, void>* = nullptr>
+  template <typename R>
   [[nodiscard]] __device__ inline auto get_rep(cudf::size_type i) const
+    requires(not std::is_same_v<R, rep_type>)
   {
     return col.element<R>(i).value();
   }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -115,14 +115,16 @@ struct statistics_merge_group {
   uint32_t num_chunks{};                     //!< Number of chunks in group
 };
 
-template <typename T, std::enable_if_t<!std::is_same_v<T, statistics::byte_array_view>>* = nullptr>
+template <typename T>
 __device__ T get_element(column_device_view const& col, uint32_t row)
+  requires(!std::is_same_v<T, statistics::byte_array_view>)
 {
   return col.element<T>(row);
 }
 
-template <typename T, std::enable_if_t<std::is_same_v<T, statistics::byte_array_view>>* = nullptr>
+template <typename T>
 __device__ T get_element(column_device_view const& col, uint32_t row)
+  requires(std::is_same_v<T, statistics::byte_array_view>)
 {
   using et              = typename T::element_type;
   size_type const index = row + col.offset();  // account for this view's _offset

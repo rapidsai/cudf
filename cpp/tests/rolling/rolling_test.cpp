@@ -519,16 +519,13 @@ class RollingTest : public cudf::test::BaseFixture {
     return col.release();
   }
 
-  template <typename agg_op,
-            cudf::aggregation::Kind k,
-            typename OutputType,
-            bool is_mean,
-            std::enable_if_t<is_rolling_supported<T, k>()>* = nullptr>
+  template <typename agg_op, cudf::aggregation::Kind k, typename OutputType, bool is_mean>
   std::unique_ptr<cudf::column> create_reference_output(
     cudf::column_view const& input,
     std::vector<cudf::size_type> const& preceding_window_col,
     std::vector<cudf::size_type> const& following_window_col,
     cudf::size_type min_periods)
+    requires(is_rolling_supported<T, k>())
   {
     cudf::size_type num_rows = input.size();
     thrust::host_vector<OutputType> ref_data(num_rows);
@@ -573,16 +570,13 @@ class RollingTest : public cudf::test::BaseFixture {
     return col.release();
   }
 
-  template <typename agg_op,
-            cudf::aggregation::Kind k,
-            typename OutputType,
-            bool is_mean,
-            std::enable_if_t<!is_rolling_supported<T, k>()>* = nullptr>
+  template <typename agg_op, cudf::aggregation::Kind k, typename OutputType, bool is_mean>
   std::unique_ptr<cudf::column> create_reference_output(
     cudf::column_view const& input,
     std::vector<cudf::size_type> const& preceding_window_col,
     std::vector<cudf::size_type> const& following_window_col,
     cudf::size_type min_periods)
+    requires(!is_rolling_supported<T, k>())
   {
     CUDF_FAIL("Unsupported combination of type and aggregation");
   }

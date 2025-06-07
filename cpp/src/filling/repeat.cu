@@ -53,7 +53,8 @@ struct count_accessor {
   cudf::scalar const* p_scalar = nullptr;
 
   template <typename T>
-  std::enable_if_t<std::is_integral_v<T>, cudf::size_type> operator()(rmm::cuda_stream_view stream)
+  cudf::size_type operator()(rmm::cuda_stream_view stream)
+    requires(std::is_integral_v<T>)
   {
     using ScalarType = cudf::scalar_type_t<T>;
     auto p_count     = static_cast<ScalarType const*>(this->p_scalar);
@@ -66,7 +67,8 @@ struct count_accessor {
   }
 
   template <typename T>
-  std::enable_if_t<not std::is_integral_v<T>, cudf::size_type> operator()(rmm::cuda_stream_view)
+  cudf::size_type operator()(rmm::cuda_stream_view)
+    requires(not std::is_integral_v<T>)
   {
     CUDF_FAIL("count value should be a integral type.");
   }
@@ -76,7 +78,8 @@ struct count_checker {
   cudf::column_view const& count;
 
   template <typename T>
-  std::enable_if_t<std::is_integral_v<T>, void> operator()(rmm::cuda_stream_view stream)
+  void operator()(rmm::cuda_stream_view stream)
+    requires(std::is_integral_v<T>)
   {
     // static_cast is necessary due to bool
     if (static_cast<int64_t>(std::numeric_limits<T>::max()) >
@@ -90,7 +93,8 @@ struct count_checker {
   }
 
   template <typename T>
-  std::enable_if_t<not std::is_integral_v<T>, void> operator()(rmm::cuda_stream_view)
+  void operator()(rmm::cuda_stream_view)
+    requires(not std::is_integral_v<T>)
   {
     CUDF_FAIL("count value type should be integral.");
   }

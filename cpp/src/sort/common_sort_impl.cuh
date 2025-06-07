@@ -73,8 +73,9 @@ struct inplace_column_sort_fn {
    * @param stream CUDA stream used for device memory operations and kernel launches
    *
    */
-  template <typename T, std::enable_if_t<cudf::is_fixed_width<T>()>* = nullptr>
+  template <typename T>
   void operator()(mutable_column_view& col, order order, rmm::cuda_stream_view stream) const
+    requires(cudf::is_fixed_width<T>())
   {
     auto const do_sort = [&](auto const cmp) {
       if constexpr (method == sort_method::STABLE) {
@@ -90,8 +91,9 @@ struct inplace_column_sort_fn {
     }
   }
 
-  template <typename T, std::enable_if_t<!cudf::is_fixed_width<T>()>* = nullptr>
+  template <typename T>
   void operator()(mutable_column_view&, order, rmm::cuda_stream_view) const
+    requires(!cudf::is_fixed_width<T>())
   {
     CUDF_FAIL("Column type must be relationally comparable and fixed-width");
   }

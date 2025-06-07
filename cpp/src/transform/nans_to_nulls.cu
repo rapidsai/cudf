@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,11 +34,9 @@ namespace cudf {
 namespace detail {
 struct dispatch_nan_to_null {
   template <typename T>
-  std::enable_if_t<std::is_floating_point_v<T>,
-                   std::pair<std::unique_ptr<rmm::device_buffer>, cudf::size_type>>
-  operator()(column_view const& input,
-             rmm::cuda_stream_view stream,
-             rmm::device_async_resource_ref mr)
+  std::pair<std::unique_ptr<rmm::device_buffer>, cudf::size_type> operator()(
+    column_view const& input, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
+    requires(std::is_floating_point_v<T>)
   {
     auto input_device_view_ptr = column_device_view::create(input, stream);
     auto input_device_view     = *input_device_view_ptr;
@@ -72,11 +70,9 @@ struct dispatch_nan_to_null {
   }
 
   template <typename T>
-  std::enable_if_t<!std::is_floating_point_v<T>,
-                   std::pair<std::unique_ptr<rmm::device_buffer>, cudf::size_type>>
-  operator()(column_view const& input,
-             rmm::cuda_stream_view stream,
-             rmm::device_async_resource_ref mr)
+  std::pair<std::unique_ptr<rmm::device_buffer>, cudf::size_type> operator()(
+    column_view const& input, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
+    requires(!std::is_floating_point_v<T>)
   {
     CUDF_FAIL("Input column can't be a non-floating type");
   }

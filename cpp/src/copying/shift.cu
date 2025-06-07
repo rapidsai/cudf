@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -70,20 +70,19 @@ std::pair<rmm::device_buffer, size_type> create_null_mask(column_device_view con
 
 struct shift_functor {
   template <typename T, typename... Args>
-  std::enable_if_t<not cudf::is_fixed_width<T>() and not std::is_same_v<cudf::string_view, T>,
-                   std::unique_ptr<column>>
-  operator()(Args&&...)
+  std::unique_ptr<column> operator()(Args&&...)
+    requires(not cudf::is_fixed_width<T>() and not std::is_same_v<cudf::string_view, T>)
   {
     CUDF_FAIL("shift only supports fixed-width or string types.", cudf::data_type_error);
   }
 
   template <typename T, typename... Args>
-  std::enable_if_t<std::is_same_v<cudf::string_view, T>, std::unique_ptr<column>> operator()(
-    column_view const& input,
-    size_type offset,
-    scalar const& fill_value,
-    rmm::cuda_stream_view stream,
-    rmm::device_async_resource_ref mr)
+  std::unique_ptr<column> operator()(column_view const& input,
+                                     size_type offset,
+                                     scalar const& fill_value,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::device_async_resource_ref mr)
+    requires(std::is_same_v<cudf::string_view, T>)
   {
     auto output = cudf::strings::detail::shift(
       cudf::strings_column_view(input), offset, fill_value, stream, mr);
@@ -98,12 +97,12 @@ struct shift_functor {
   }
 
   template <typename T>
-  std::enable_if_t<cudf::is_fixed_width<T>(), std::unique_ptr<column>> operator()(
-    column_view const& input,
-    size_type offset,
-    scalar const& fill_value,
-    rmm::cuda_stream_view stream,
-    rmm::device_async_resource_ref mr)
+  std::unique_ptr<column> operator()(column_view const& input,
+                                     size_type offset,
+                                     scalar const& fill_value,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::device_async_resource_ref mr)
+    requires(cudf::is_fixed_width<T>())
   {
     using ScalarType = cudf::scalar_type_t<T>;
     auto& scalar     = static_cast<ScalarType const&>(fill_value);

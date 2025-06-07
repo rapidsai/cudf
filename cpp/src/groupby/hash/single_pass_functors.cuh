@@ -48,16 +48,16 @@ __device__ constexpr bool is_supported()
 }
 
 template <typename T, cudf::aggregation::Kind k>
-__device__ std::enable_if_t<not std::is_same_v<cudf::detail::corresponding_operator_t<k>, void>, T>
-identity_from_operator()
+__device__ T identity_from_operator()
+  requires(not std::is_same_v<cudf::detail::corresponding_operator_t<k>, void>)
 {
   using DeviceType = cudf::device_storage_type_t<T>;
   return cudf::detail::corresponding_operator_t<k>::template identity<DeviceType>();
 }
 
 template <typename T, cudf::aggregation::Kind k, typename Enable = void>
-__device__ std::enable_if_t<std::is_same_v<cudf::detail::corresponding_operator_t<k>, void>, T>
-identity_from_operator()
+__device__ T identity_from_operator()
+  requires(std::is_same_v<cudf::detail::corresponding_operator_t<k>, void>)
 {
   CUDF_UNREACHABLE("Unable to get identity/sentinel from device operator");
 }
