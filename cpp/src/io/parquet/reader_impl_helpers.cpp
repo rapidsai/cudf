@@ -60,7 +60,7 @@ namespace {
 }
 
 /**
- * @brief Find a span of non-empty sources
+ * @brief Find a index of the first and last non-empty source with non-zero row group indices
  *
  * @param row_group_indices Span of row group indices
  * @return Pair of indices representing the first (inclusive) and last (exclusive) non-empty source
