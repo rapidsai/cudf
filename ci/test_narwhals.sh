@@ -25,6 +25,8 @@ rapids-pip-retry install -U -e .
 rapids-logger "Check narwhals versions"
 python -c "import narwhals; print(narwhals.show_versions())"
 
+TESTS_TO_ALWAYS_SKIP_CUDF="test_date_lit[cudf]" # pa.date32() is not supported in cudf
+
 rapids-logger "Run narwhals tests for cuDF"
 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest \
     --cache-clear \
@@ -33,6 +35,9 @@ PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest \
     -p env \
     -p no:pytest_benchmark \
     -p cudf.testing.narwhals_test_plugin \
+    -k "not ( \
+        ${TESTS_TO_ALWAYS_SKIP_CUDF} \
+    )" \
     --numprocesses=8 \
     --dist=worksteal \
     --constructors=cudf

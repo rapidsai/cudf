@@ -1153,6 +1153,7 @@ def pivot(
     # MultiIndex to Index
     if not values_is_list:
         result._data.droplevel(0)
+        result._data.label_dtype = column_data.dtype
 
     return result
 
