@@ -122,8 +122,13 @@ struct out_of_place_copy_range_dispatch {
     return p_ret;
   }
 
-  template <typename T, typename... Args>
-  std::unique_ptr<cudf::column> operator()(Args...)
+  template <typename T>
+  std::unique_ptr<cudf::column> operator()(
+    cudf::size_type source_begin,
+    cudf::size_type source_end,
+    cudf::size_type target_begin,
+    rmm::cuda_stream_view stream,
+    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
     requires(not cudf::is_rep_layout_compatible<T>())
   {
     CUDF_FAIL("Unsupported type for out of place copy.", cudf::data_type_error);
