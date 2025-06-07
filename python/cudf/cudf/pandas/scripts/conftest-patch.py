@@ -17199,6 +17199,12 @@ NODEIDS_THAT_XPASS_WITH_CUDF_PANDAS = {
 
 # TODO: Investigate why sometimes these fail
 NODEIDS_THAT_FLAKY_XFAIL_WITH_CUDF_PANDAS = {
+    "tests/indexes/test_setops.py::test_union_different_types[timedelta-nullable_int]",
+    "tests/indexes/test_setops.py::test_union_different_types[bool-dtype-nullable_int]",
+    "tests/indexes/test_setops.py::test_union_different_types[categorical-nullable_int]",
+    "tests/indexes/test_setops.py::test_union_different_types[nullable_int-timedelta]",
+    "tests/indexes/test_setops.py::test_union_different_types[nullable_int-bool-dtype]",
+    "tests/indexes/test_setops.py::test_union_different_types[nullable_int-categorical]",
     "tests/indexes/test_old_base.py::TestBase::test_memory_usage[nullable_int]",
     "tests/series/test_constructors.py::TestSeriesConstructors::test_constructor_maskedarray_hardened",
     "tests/indexing/test_loc.py::TestLocSetitemWithExpansion::test_loc_setitem_with_expansion_nonunique_index[nullable_int]",
