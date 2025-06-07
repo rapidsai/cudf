@@ -86,20 +86,24 @@ using nullable_global_set_t = cuco::static_set<cudf::size_type,
                                                cuco::storage<GROUPBY_BUCKET_SIZE>>;
 
 template <typename Op>
-using hash_set_ref_t = cuco::static_set_ref<
-  cudf::size_type,
-  cuda::thread_scope_device,
-  row_comparator_t,
-  probing_scheme_t,
-  cuco::bucket_storage_ref<cudf::size_type, GROUPBY_BUCKET_SIZE, cuco::valid_extent<int64_t>>,
-  Op>;
+using hash_set_ref_t =
+  cuco::static_set_ref<cudf::size_type,
+                       cuda::thread_scope_device,
+                       row_comparator_t,
+                       probing_scheme_t,
+                       cuco::bucket_storage_ref<cudf::size_type,
+                                                GROUPBY_BUCKET_SIZE,
+                                                cuco::valid_extent<int64_t, cuco::dynamic_extent>>,
+                       Op>;
 
 template <typename Op>
-using nullable_hash_set_ref_t = cuco::static_set_ref<
-  cudf::size_type,
-  cuda::thread_scope_device,
-  nullable_row_comparator_t,
-  probing_scheme_t,
-  cuco::bucket_storage_ref<cudf::size_type, GROUPBY_BUCKET_SIZE, cuco::valid_extent<int64_t>>,
-  Op>;
+using nullable_hash_set_ref_t =
+  cuco::static_set_ref<cudf::size_type,
+                       cuda::thread_scope_device,
+                       nullable_row_comparator_t,
+                       probing_scheme_t,
+                       cuco::bucket_storage_ref<cudf::size_type,
+                                                GROUPBY_BUCKET_SIZE,
+                                                cuco::valid_extent<int64_t, cuco::dynamic_extent>>,
+                       Op>;
 }  // namespace cudf::groupby::detail::hash
