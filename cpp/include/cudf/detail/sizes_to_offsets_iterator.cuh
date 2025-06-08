@@ -203,7 +203,7 @@ struct sizes_to_offsets_iterator {
  *  auto begin = // begin input iterator
  *  auto end = // end input iterator
  *  auto result = rmm::device_uvector(std::distance(begin,end), stream);
- *  auto last = rmm::device_scalar<int64_t>(0, stream);
+ *  auto last = cudf::detail::device_scalar<int64_t>(0, stream);
  *  auto itr = make_sizes_to_offsets_iterator(result.begin(),
  *                                            result.end(),
  *                                            last.data());
@@ -270,7 +270,7 @@ auto sizes_to_offsets(SizesIterator begin,
                 "Only numeric types are supported by sizes_to_offsets");
 
   using LastType    = std::conditional_t<std::is_signed_v<SizeType>, int64_t, uint64_t>;
-  auto last_element = rmm::device_scalar<LastType>(0, stream);
+  auto last_element = cudf::detail::device_scalar<LastType>(0, stream);
   auto output_itr =
     make_sizes_to_offsets_iterator(result, result + std::distance(begin, end), last_element.data());
   // This function uses the type of the initialization parameter as the accumulator type
