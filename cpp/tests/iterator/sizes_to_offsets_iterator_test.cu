@@ -17,10 +17,10 @@
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/type_lists.hpp>
 
+#include <cudf/detail/device_scalar.hpp>
 #include <cudf/detail/sizes_to_offsets_iterator.cuh>
 #include <cudf/utilities/default_stream.hpp>
 
-#include <rmm/device_scalar.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 

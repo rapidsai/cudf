@@ -17,12 +17,12 @@
 #pragma once
 
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/device_scalar.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/device_scalar.hpp>
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
