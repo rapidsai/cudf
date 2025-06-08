@@ -19,13 +19,13 @@
 #include "reduction_operators.cuh"
 
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/device_scalar.hpp>
 #include <cudf/detail/utilities/cast_functor.cuh>
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
-#include <rmm/device_scalar.hpp>
 #include <rmm/exec_policy.hpp>
 
 #include <cub/device/device_reduce.cuh>
@@ -67,7 +67,7 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
 {
   auto const binary_op     = cudf::detail::cast_functor<OutputType>(op.get_binary_op());
   auto const initial_value = init.value_or(op.template get_identity<OutputType>());
-  auto dev_result          = rmm::device_scalar<OutputType>{initial_value, stream, mr};
+  auto dev_result          = cudf::detail::device_scalar<OutputType>{initial_value, stream, mr};
 
   // Allocate temporary storage
   rmm::device_buffer d_temp_storage;
@@ -127,7 +127,7 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
 {
   auto const binary_op     = cudf::detail::cast_functor<OutputType>(op.get_binary_op());
   auto const initial_value = init.value_or(op.template get_identity<OutputType>());
-  auto dev_result          = rmm::device_scalar<OutputType>{initial_value, stream};
+  auto dev_result          = cudf::detail::device_scalar<OutputType>{initial_value, stream};
 
   // Allocate temporary storage
   rmm::device_buffer d_temp_storage;
@@ -165,7 +165,6 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
  * @param[in] op          the reduction operator
  * @param[in] valid_count Number of valid items
  * @param[in] ddof        Delta degrees of freedom used for standard deviation and variance
- * @param[in] init        Optional initial value of the reduction
  * @param[in] stream      CUDA stream used for device memory operations and kernel launches
  * @param[in] mr          Device memory resource used to allocate the returned scalar's device
  * memory
@@ -194,7 +193,7 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
   auto const binary_op     = cudf::detail::cast_functor<IntermediateType>(op.get_binary_op());
   auto const initial_value = op.template get_identity<IntermediateType>();
 
-  rmm::device_scalar<IntermediateType> intermediate_result{initial_value, stream};
+  cudf::detail::device_scalar<IntermediateType> intermediate_result{initial_value, stream};
 
   // Allocate temporary storage
   rmm::device_buffer d_temp_storage;
