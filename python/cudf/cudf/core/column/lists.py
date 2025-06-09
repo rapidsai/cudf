@@ -20,8 +20,16 @@ from cudf.core.column.methods import ColumnMethods, ParentType
 from cudf.core.column.numerical import NumericalColumn
 from cudf.core.dtypes import ListDtype
 from cudf.core.missing import NA
-from cudf.core.scalar import pa_scalar_to_plc_scalar
-from cudf.utils.dtypes import SIZE_TYPE_DTYPE, is_dtype_obj_numeric
+from cudf.utils.dtypes import (
+    SIZE_TYPE_DTYPE,
+    get_dtype_of_same_kind,
+    is_dtype_obj_list,
+    is_dtype_obj_numeric,
+)
+from cudf.utils.scalar import (
+    maybe_nested_pa_scalar_to_py,
+    pa_scalar_to_plc_scalar,
+)
 from cudf.utils.utils import _is_null_host_scalar
 
 if TYPE_CHECKING:
@@ -49,7 +57,13 @@ class ListColumn(ColumnBase):
     ):
         if data is not None:
             raise ValueError("data must be None")
-        if not isinstance(dtype, ListDtype):
+        if (
+            not cudf.get_option("mode.pandas_compatible")
+            and not isinstance(dtype, ListDtype)
+        ) or (
+            cudf.get_option("mode.pandas_compatible")
+            and not is_dtype_obj_list(dtype)
+        ):
             raise ValueError("dtype must be a cudf.ListDtype")
         if not (
             len(children) == 2
@@ -115,10 +129,10 @@ class ListColumn(ColumnBase):
 
     def element_indexing(self, index: int) -> list:
         result = super().element_indexing(index)
-        if isinstance(result, list):
-            return self.dtype._recursively_replace_fields(result)
-        else:
-            return result
+        if isinstance(result, pa.Scalar):
+            py_element = maybe_nested_pa_scalar_to_py(result)
+            return self.dtype._recursively_replace_fields(py_element)
+        return result
 
     def _cast_setitem_value(self, value: Any) -> plc.Scalar:
         if isinstance(value, list) or value is None:
@@ -227,6 +241,11 @@ class ListColumn(ColumnBase):
                 null_count=self.null_count,
                 children=(self.base_children[0], elements),  # type: ignore[arg-type]
             )
+        # For pandas dtypes, store them directly in the column's dtype property
+        elif isinstance(dtype, pd.ArrowDtype) and isinstance(
+            dtype.pyarrow_dtype, pa.ListType
+        ):
+            self._dtype = dtype
 
         return self
 
@@ -279,11 +298,11 @@ class ListColumn(ColumnBase):
         )
         return res
 
-    def as_string_column(self) -> StringColumn:
+    def as_string_column(self, dtype) -> StringColumn:
         """
         Create a strings column from a list column
         """
-        lc = self._transform_leaves(lambda col: col.as_string_column())
+        lc = self._transform_leaves(lambda col: col.as_string_column(dtype))
 
         # Separator strings to match the Python format
         separators = as_column([", ", "[", "]"])
@@ -324,14 +343,32 @@ class ListColumn(ColumnBase):
             )
         return lc
 
+    @property
+    def element_type(self) -> Dtype:
+        """
+        Returns the element type of the list column.
+        """
+        if isinstance(self.dtype, ListDtype):
+            return self.dtype.element_type
+        else:
+            return get_dtype_of_same_kind(
+                self.dtype,
+                self.dtype.pyarrow_dtype.value_type.to_pandas_dtype(),
+            )
+
     def to_pandas(
         self,
         *,
         nullable: bool = False,
         arrow_type: bool = False,
     ) -> pd.Index:
-        if arrow_type or nullable:
+        if arrow_type or (
+            cudf.get_option("mode.pandas_compatible")
+            and isinstance(self.dtype, pd.ArrowDtype)
+        ):
             return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
+        elif nullable:
+            raise NotImplementedError(f"{nullable=} is not implemented.")
         else:
             return pd.Index(self.to_arrow().tolist(), dtype="object")
 
@@ -467,11 +504,17 @@ class ListMethods(ColumnMethods):
     _column: ListColumn
 
     def __init__(self, parent: ParentType):
-        if not isinstance(parent.dtype, ListDtype):
+        if not is_dtype_obj_list(parent.dtype):
             raise AttributeError(
                 "Can only use .list accessor with a 'list' dtype"
             )
         super().__init__(parent=parent)
+
+    def __getitem__(self, key):
+        if isinstance(key, slice):
+            return self.slice(start=key.start, stop=key.stop, step=key.step)
+        else:
+            return self.get(key)
 
     def get(
         self,
@@ -546,12 +589,13 @@ class ListMethods(ColumnMethods):
                     out_of_bounds_mask,
                     pa_scalar_to_plc_scalar(pa.scalar(default)),
                 )
-        if out.dtype != self._column.dtype.element_type:
+
+        if self._column.element_type != out.dtype:
             # libcudf doesn't maintain struct labels so we must transfer over
             # manually from the input column if we lost some information
             # somewhere. Not doing this unilaterally since the cost is
             # non-zero..
-            out = out._with_type_metadata(self._column.dtype.element_type)
+            out = out._with_type_metadata(self._column.element_type)
         return self._return_or_inplace(out)
 
     def contains(self, search_key: ScalarLike) -> ParentType:

@@ -23,7 +23,7 @@ def datetime_column(has_nulls, request):
     ]
     if has_nulls:
         values[2] = None
-    return plc.interop.from_arrow(
+    return plc.Column.from_arrow(
         pa.array(values, type=pa.timestamp(request.param))
     )
 
@@ -127,7 +127,10 @@ def test_calendrical_months(datetime_column, months):
 
     pa_col = plc.interop.to_arrow(datetime_column)
     got = plc.datetime.add_calendrical_months(
-        datetime_column, plc.interop.from_arrow(months)
+        datetime_column,
+        plc.Scalar.from_arrow(months)
+        if isinstance(months, pa.Scalar)
+        else plc.Column.from_arrow(months),
     )
     pa_got = plc.interop.to_arrow(got)
     expect = add_calendrical_months(pa_col, months).cast(pa_got.type)

@@ -9,13 +9,14 @@ import enum
 import math
 import random
 from enum import IntEnum
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, TypeVar
 
 import pylibcudf as plc
 
-from cudf_polars.dsl.ir import IR, DataFrameScan, Scan, Union
-from cudf_polars.experimental.base import PartitionInfo
-from cudf_polars.experimental.dispatch import lower_ir_node
+from cudf_polars.dsl.ir import IR, DataFrameScan, Scan, Sink, Union, broadcast
+from cudf_polars.experimental.base import PartitionInfo, get_key_name
+from cudf_polars.experimental.dispatch import generate_ir_tasks, lower_ir_node
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
@@ -242,7 +243,7 @@ class SplitScan(IR):
             n_rows = -1
 
         # Perform the partial read
-        return Scan.do_evaluate(
+        df = Scan.do_evaluate(
             schema,
             typ,
             reader_options,
@@ -253,30 +254,43 @@ class SplitScan(IR):
             n_rows,
             row_index,
             include_file_paths,
-            predicate,
+            None,
         )
+
+        if predicate is not None:
+            # TODO: Cannot pass both predicate and n_rows yet
+            # https://github.com/rapidsai/cudf/issues/19064
+            (mask,) = broadcast(predicate.evaluate(df), target_length=df.num_rows)
+            return df.filter(mask)
+        return df
 
 
 def _sample_pq_statistics(ir: Scan) -> dict[str, np.floating[T]]:
+    import itertools
+
     import numpy as np
-    import pyarrow.dataset as pa_ds
 
     # Use average total_uncompressed_size of three files
-    # TODO: Use plc.io.parquet_metadata.read_parquet_metadata
     n_sample = min(3, len(ir.paths))
+    metadata = plc.io.parquet_metadata.read_parquet_metadata(
+        plc.io.SourceInfo(random.sample(ir.paths, n_sample))
+    )
     column_sizes = {}
-    ds = pa_ds.dataset(random.sample(ir.paths, n_sample), format="parquet")
-    for i, frag in enumerate(ds.get_fragments()):
-        md = frag.metadata
-        for rg in range(md.num_row_groups):
-            row_group = md.row_group(rg)
-            for col in range(row_group.num_columns):
-                column = row_group.column(col)
-                name = column.path_in_schema
-                if name not in column_sizes:
-                    column_sizes[name] = np.zeros(n_sample, dtype="int64")
-                column_sizes[name][i] += column.total_uncompressed_size
+    rowgroup_offsets_per_file = np.insert(
+        np.cumsum(metadata.num_rowgroups_per_file()), 0, 0
+    )
 
+    # For each column, calculate the `total_uncompressed_size` for each file
+    for name, uncompressed_sizes in metadata.columnchunk_metadata().items():
+        column_sizes[name] = np.array(
+            [
+                np.sum(uncompressed_sizes[start:end])
+                for (start, end) in itertools.pairwise(rowgroup_offsets_per_file)
+            ],
+            dtype="int64",
+        )
+
+    # Return the mean per-file `total_uncompressed_size` for each column
     return {name: np.mean(sizes) for name, sizes in column_sizes.items()}
 
 
@@ -346,3 +360,72 @@ def _(
         return new_node, partition_info
 
     return ir, {ir: PartitionInfo(count=1)}  # pragma: no cover
+
+
+@lower_ir_node.register(Sink)
+def _(
+    ir: Sink, rec: LowerIRTransformer
+) -> tuple[Sink, MutableMapping[IR, PartitionInfo]]:
+    child, partition_info = rec(ir.children[0])
+    if Path(ir.path).exists():
+        # TODO: Support cloud storage
+        raise NotImplementedError(
+            "Writing to an existing path is not supported "
+            "by the GPU streaming executor."
+        )
+    new_node = ir.reconstruct([child])
+    partition_info[new_node] = partition_info[child]
+    return new_node, partition_info
+
+
+def _prepare_sink(path: str) -> None:
+    """Prepare for a multi-partition sink."""
+    # TODO: Support cloud storage
+    Path(path).mkdir(parents=True)
+
+
+def _sink_partition(
+    schema: Schema,
+    kind: str,
+    path: str,
+    options: dict[str, Any],
+    df: DataFrame,
+    ready: None,
+) -> DataFrame:
+    """Sink a partition to disk."""
+    return Sink.do_evaluate(schema, kind, path, options, df)
+
+
+@generate_ir_tasks.register(Sink)
+def _(
+    ir: Sink, partition_info: MutableMapping[IR, PartitionInfo]
+) -> MutableMapping[Any, Any]:
+    name = get_key_name(ir)
+    count = partition_info[ir].count
+    child_name = get_key_name(ir.children[0])
+    if count == 1:
+        return {
+            (name, 0): (
+                ir.do_evaluate,
+                *ir._non_child_args,
+                (child_name, 0),
+            )
+        }
+
+    setup_name = f"setup-{name}"
+    suffix = ir.kind.lower()
+    width = math.ceil(math.log10(count))
+    graph: MutableMapping[Any, Any] = {
+        (name, i): (
+            _sink_partition,
+            ir.schema,
+            ir.kind,
+            f"{ir.path}/part.{str(i).zfill(width)}.{suffix}",
+            ir.options,
+            (child_name, i),
+            setup_name,
+        )
+        for i in range(count)
+    }
+    graph[setup_name] = (_prepare_sink, ir.path)
+    return graph

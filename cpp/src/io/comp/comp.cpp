@@ -30,6 +30,8 @@
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
+#include <cuda/std/bit>
+
 #include <BS_thread_pool.hpp>
 #include <zlib.h>  // GZIP compression
 #include <zstd.h>
@@ -142,8 +144,7 @@ uint8_t* emit_literal(uint8_t* out_begin, uint8_t const* literal_begin, uint8_t 
     // Fits into a single tag byte
     *out_it++ = n << 2;
   } else {
-    // TODO: Use `std::countl_zero` instead of `__builtin_clz` once we migrate to C++20
-    auto const log2_n = 31 - __builtin_clz(static_cast<uint32_t>(n));
+    auto const log2_n = 31 - cuda::std::countl_zero(static_cast<uint32_t>(n));
     auto const count  = (log2_n >> 3) + 1;
     *out_it++         = (59 + count) << 2;
     std::memcpy(out_it, &n, count);
@@ -339,15 +340,20 @@ void host_compress(compression_type compression,
     return h_inputs[a].size() > h_inputs[b].size();
   });
 
-  std::vector<std::future<size_t>> tasks;
+  auto h_results =
+    cudf::detail::make_pinned_vector_async<compression_result>(results.size(), stream);
+  cudf::detail::cuda_memcpy<compression_result>(h_results, results, stream);
+
+  std::vector<std::future<std::pair<size_t, size_t>>> tasks;
   auto const num_streams =
     std::min<std::size_t>(num_chunks, cudf::detail::host_worker_pool().get_thread_count());
   auto const streams = cudf::detail::fork_streams(stream, num_streams);
   for (size_t i = 0; i < num_chunks; ++i) {
     auto const idx        = task_order[i];
     auto const cur_stream = streams[i % streams.size()];
-    auto task =
-      [d_in = h_inputs[idx], d_out = h_outputs[idx], cur_stream, compression]() -> size_t {
+    if (h_results[task_order[i]].status == compression_status::SKIPPED) { continue; }
+
+    auto task = [d_in = h_inputs[idx], d_out = h_outputs[idx], cur_stream, compression, idx]() {
       auto h_in = cudf::detail::make_pinned_vector_async<uint8_t>(d_in.size(), cur_stream);
       cudf::detail::cuda_memcpy<uint8_t>(h_in, d_in, cur_stream);
 
@@ -355,13 +361,13 @@ void host_compress(compression_type compression,
       h_in.clear();
 
       cudf::detail::cuda_memcpy<uint8_t>(d_out.subspan(0, h_out.size()), h_out, cur_stream);
-      return h_out.size();
+      return std::pair<size_t, size_t>{idx, h_out.size()};
     };
     tasks.emplace_back(cudf::detail::host_worker_pool().submit_task(std::move(task)));
   }
-  auto h_results = cudf::detail::make_pinned_vector<compression_result>(num_chunks, stream);
-  for (auto i = 0ul; i < num_chunks; ++i) {
-    h_results[task_order[i]] = {tasks[i].get(), compression_status::SUCCESS};
+  for (auto& task : tasks) {
+    auto const [idx, bytes_written] = task.get();
+    h_results[idx]                  = {bytes_written, compression_status::SUCCESS};
   }
   cudf::detail::cuda_memcpy<compression_result>(results, h_results, stream);
 }
@@ -433,7 +439,7 @@ std::optional<size_t> compress_max_allowed_chunk_size(compression_type compressi
     return 1ul;
   }
 
-  return nvcomp::required_alignment(*nvcomp_type);
+  return nvcomp::compress_required_alignment(*nvcomp_type);
 }
 
 [[nodiscard]] size_t max_compressed_size(compression_type compression, uint32_t uncompressed_size)

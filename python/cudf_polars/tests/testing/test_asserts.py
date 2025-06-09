@@ -1,7 +1,9 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
+
+from pathlib import Path
 
 import pytest
 
@@ -11,6 +13,7 @@ from cudf_polars.testing.asserts import (
     assert_collect_raises,
     assert_gpu_result_equal,
     assert_ir_translation_raises,
+    assert_sink_ir_translation_raises,
 )
 
 
@@ -82,4 +85,24 @@ def test_collect_assert_raises():
             q,
             polars_except=NotImplementedError,
             cudf_except=pl.exceptions.InvalidOperationError,
+        )
+
+
+def test_sink_ir_translation_raises_bad_extension():
+    df = pl.LazyFrame({"a": [1, 2, 3]})
+    # Should raise because ".foo" is not a recognized file extension
+    with pytest.raises(ValueError, match="Unsupported file format: .foo"):
+        assert_sink_ir_translation_raises(df, Path("out.foo"), {}, NotImplementedError)
+
+
+def test_sink_ir_translation_raises_sink_error_before_translation(tmp_path: Path):
+    df = pl.LazyFrame({"a": [1, 2, 3]})
+    # Should raise because "foo" is not a valid write kwarg,
+    # so the sink_* function fails before IR translation
+    with pytest.raises(
+        AssertionError,
+        match="Sink function raised an exception before translation: .*foo",
+    ):
+        assert_sink_ir_translation_raises(
+            df, tmp_path / "out.csv", {"foo": True}, NotImplementedError
         )

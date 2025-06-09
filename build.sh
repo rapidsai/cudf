@@ -159,9 +159,11 @@ function buildLibCudfJniInDocker {
                 -DCUDF_USE_PER_THREAD_DEFAULT_STREAM=ON \
                 -DCUDF_LARGE_STRINGS_DISABLED=ON \
                 -DRMM_LOGGING_LEVEL=OFF \
-                -DBUILD_SHARED_LIBS=OFF && \
+                -DBUILD_SHARED_LIBS=OFF \
+                -DCUDF_EXPORT_NVCOMP=ON && \
              cmake --build . --parallel ${PARALLEL_LEVEL} && \
              cd $workspaceRepoDir/java && \
+             CUDF_CPP_BUILD_DIR=$workspaceRepoDir/java/target/libcudf-cmake-build \
              mvn ${MVN_PHASES:-"package"} \
                 -Dmaven.repo.local=$workspaceMavenRepoDir \
                 -DskipTests=${SKIP_TESTS:-false} \
@@ -170,7 +172,6 @@ function buildLibCudfJniInDocker {
                                      -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
                                      -DCMAKE_CUDA_COMPILER_LAUNCHER=ccache \
                                      -DCMAKE_CXX_LINKER_LAUNCHER=ccache' \
-                -DCUDF_CPP_BUILD_DIR=$workspaceRepoDir/java/target/libcudf-cmake-build \
                 -DCUDA_STATIC_RUNTIME=ON \
                 -DCUDF_USE_PER_THREAD_DEFAULT_STREAM=ON \
                 -DUSE_GDS=ON \

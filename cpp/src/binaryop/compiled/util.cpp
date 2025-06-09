@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -131,7 +131,7 @@ struct is_supported_operation_functor {
     inline constexpr bool operator()(binary_operator op, data_type out_type) const
     {
       switch (op) {
-        // clang-format off
+          // clang-format off
         case binary_operator::ADD:                  return call<ops::Add>(out_type);
         case binary_operator::SUB:                  return call<ops::Sub>(out_type);
         case binary_operator::MUL:                  return call<ops::Mul>(out_type);

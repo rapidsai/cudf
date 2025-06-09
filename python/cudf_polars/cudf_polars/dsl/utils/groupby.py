@@ -7,6 +7,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+import pylibcudf as plc
+
 from cudf_polars.dsl import ir
 from cudf_polars.dsl.utils.aggregations import apply_pre_evaluation
 from cudf_polars.dsl.utils.naming import unique_names
@@ -15,9 +17,8 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
     from typing import Any
 
-    import pylibcudf as plc
-
     from cudf_polars.dsl import expr
+    from cudf_polars.typing import Schema
     from cudf_polars.utils import config
 
 __all__ = ["rewrite_groupby"]
@@ -25,7 +26,7 @@ __all__ = ["rewrite_groupby"]
 
 def rewrite_groupby(
     node: Any,
-    schema: dict[str, plc.DataType],
+    schema: Schema,
     keys: Sequence[expr.NamedExpr],
     aggs: Sequence[expr.NamedExpr],
     config_options: config.ConfigOptions,
@@ -71,18 +72,17 @@ def rewrite_groupby(
     unsupported.
     """
     if len(aggs) == 0:
-        # TODO: use Distinct when the partitioned executor supports it
-        return ir.GroupBy(
+        return ir.Distinct(
             schema,
-            keys,
-            [],
-            node.maintain_order,
+            plc.stream_compaction.DuplicateKeepOption.KEEP_ANY,
+            None,
             node.options.slice,
-            config_options,
-            inp,
+            node.maintain_order,
+            ir.Select(schema, keys, True, inp),  # noqa: FBT003
         )
-    inp, aggs, group_schema, apply_post_evaluation = apply_pre_evaluation(
-        schema, inp, keys, aggs, unique_names(schema.keys())
+
+    aggs, group_schema, apply_post_evaluation = apply_pre_evaluation(
+        schema, keys, aggs, unique_names(schema.keys())
     )
     # TODO: use Distinct when the partitioned executor supports it if
     # the requested aggregations are empty

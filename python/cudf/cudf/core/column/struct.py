@@ -11,7 +11,15 @@ import cudf
 from cudf.core.column.column import ColumnBase
 from cudf.core.column.methods import ColumnMethods
 from cudf.core.dtypes import StructDtype
-from cudf.core.scalar import pa_scalar_to_plc_scalar
+from cudf.utils.dtypes import (
+    get_dtype_of_same_kind,
+    is_dtype_obj_struct,
+    pyarrow_dtype_to_cudf_dtype,
+)
+from cudf.utils.scalar import (
+    maybe_nested_pa_scalar_to_py,
+    pa_scalar_to_plc_scalar,
+)
 from cudf.utils.utils import _is_null_host_scalar
 
 if TYPE_CHECKING:
@@ -78,7 +86,13 @@ class StructColumn(ColumnBase):
     @staticmethod
     def _validate_dtype_instance(dtype: StructDtype) -> StructDtype:
         # IntervalDtype is a subclass of StructDtype, so compare types exactly
-        if type(dtype) is not StructDtype:
+        if (
+            not cudf.get_option("mode.pandas_compatible")
+            and type(dtype) is not StructDtype
+        ) or (
+            cudf.get_option("mode.pandas_compatible")
+            and not is_dtype_obj_struct(dtype)
+        ):
             raise ValueError(
                 f"{type(dtype).__name__} must be a StructDtype exactly."
             )
@@ -93,12 +107,13 @@ class StructColumn(ColumnBase):
 
     def to_arrow(self) -> pa.Array:
         children = [child.to_arrow() for child in self.children]
-
+        dtype = (
+            pyarrow_dtype_to_cudf_dtype(self.dtype)
+            if isinstance(self.dtype, pd.ArrowDtype)
+            else self.dtype
+        )
         pa_type = pa.struct(
-            {
-                field: child.type
-                for field, child in zip(self.dtype.fields, children)
-            }
+            {field: child.type for field, child in zip(dtype.fields, children)}
         )
 
         if self.mask is not None:
@@ -118,7 +133,14 @@ class StructColumn(ColumnBase):
     ) -> pd.Index:
         # We cannot go via Arrow's `to_pandas` because of the following issue:
         # https://issues.apache.org/jira/browse/ARROW-12680
-        if arrow_type or nullable:
+        if (
+            arrow_type
+            or nullable
+            or (
+                cudf.get_option("mode.pandas_compatible")
+                and isinstance(self.dtype, pd.ArrowDtype)
+            )
+        ):
             return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
         else:
             return pd.Index(self.to_arrow().tolist(), dtype="object")
@@ -133,7 +155,10 @@ class StructColumn(ColumnBase):
 
     def element_indexing(self, index: int) -> dict:
         result = super().element_indexing(index)
-        return self.dtype._recursively_replace_fields(result)
+        if isinstance(result, pa.Scalar):
+            py_element = maybe_nested_pa_scalar_to_py(result)
+            return self.dtype._recursively_replace_fields(py_element)
+        return result
 
     def _cast_setitem_value(self, value: Any) -> plc.Scalar:
         if isinstance(value, dict):
@@ -205,6 +230,11 @@ class StructColumn(ColumnBase):
                 offset=self.offset,
                 null_count=self.null_count,
             )
+        # For pandas dtypes, store them directly in the column's dtype property
+        elif isinstance(dtype, pd.ArrowDtype) and isinstance(
+            dtype.pyarrow_dtype, pa.StructType
+        ):
+            self._dtype = dtype
 
         return self
 
@@ -217,7 +247,7 @@ class StructMethods(ColumnMethods):
     _column: StructColumn
 
     def __init__(self, parent=None):
-        if not isinstance(parent.dtype, StructDtype):
+        if not is_dtype_obj_struct(parent.dtype):
             raise AttributeError(
                 "Can only use .struct accessor with a 'struct' dtype"
             )
@@ -250,10 +280,19 @@ class StructMethods(ColumnMethods):
         1    3
         dtype: int64
         """
-        fields = list(self._column.dtype.fields.keys())
-        if key in fields:
-            pos = fields.index(key)
-            return self._return_or_inplace(self._column.children[pos])
+        struct_dtype_fields = StructDtype.from_struct_dtype(
+            self._column.dtype
+        ).fields
+        field_keys = list(struct_dtype_fields.keys())
+        if key in struct_dtype_fields:
+            pos = field_keys.index(key)
+            return self._return_or_inplace(
+                self._column.children[pos]._with_type_metadata(
+                    get_dtype_of_same_kind(
+                        self._column.dtype, struct_dtype_fields[key]
+                    )
+                )
+            )
         else:
             if isinstance(key, int):
                 try:

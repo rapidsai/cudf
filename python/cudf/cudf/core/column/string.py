@@ -22,14 +22,16 @@ from cudf.core.buffer import Buffer, acquire_spill_lock
 from cudf.core.column.column import ColumnBase, as_column, column_empty
 from cudf.core.column.lists import ListColumn
 from cudf.core.column.methods import ColumnMethods
-from cudf.core.scalar import pa_scalar_to_plc_scalar
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
     SIZE_TYPE_DTYPE,
     can_convert_to_column,
     dtype_to_pylibcudf_type,
+    is_dtype_obj_string,
+    is_pandas_nullable_extension_dtype,
 )
+from cudf.utils.scalar import pa_scalar_to_plc_scalar
 from cudf.utils.temporal import infer_format
 from cudf.utils.utils import is_na_like
 
@@ -52,6 +54,7 @@ if TYPE_CHECKING:
     from cudf.core.column.numerical import NumericalColumn
     from cudf.core.column.timedelta import TimeDeltaColumn
     from cudf.core.dtypes import DecimalDtype
+    from cudf.core.series import Series
 
 
 def _is_supported_regex_flags(flags: int) -> bool:
@@ -2207,9 +2210,7 @@ class StringMethods(ColumnMethods):
             result = ColumnBase.from_pylibcudf(plc_column)
         return self._return_or_inplace(result)
 
-    def slice_from(
-        self, starts: cudf.Series, stops: cudf.Series
-    ) -> SeriesOrIndex:
+    def slice_from(self, starts: Series, stops: Series) -> SeriesOrIndex:
         """
         Return substring of each string using positions for each string.
 
@@ -3794,7 +3795,7 @@ class StringMethods(ColumnMethods):
         """
         return self._findall(plc.strings.findall.find_re, pat, flags)
 
-    def find_multiple(self, patterns: SeriesOrIndex) -> cudf.Series:
+    def find_multiple(self, patterns: SeriesOrIndex) -> Series:
         """
         Find all first occurrences of patterns in the Series/Index.
 
@@ -4676,62 +4677,6 @@ class StringMethods(ColumnMethods):
         """
         return self._return_or_inplace(self._column.normalize_spaces())
 
-    def normalize_characters(self, do_lower: bool = True) -> SeriesOrIndex:
-        r"""
-        Normalizes strings characters for tokenizing.
-
-        .. deprecated:: 25.04
-           Use `CharacterNormalizer` instead.
-
-        The normalizer function includes:
-
-            - adding padding around punctuation (unicode category starts with
-              "P") as well as certain ASCII symbols like "^" and "$"
-            - adding padding around the CJK Unicode block characters
-            - changing whitespace (e.g. ``\t``, ``\n``, ``\r``) to space
-            - removing control characters (unicode categories "Cc" and "Cf")
-
-        If `do_lower_case = true`, lower-casing also removes the accents.
-        The accents cannot be removed from upper-case characters without
-        lower-casing and lower-casing cannot be performed without also
-        removing accents. However, if the accented character is already
-        lower-case, then only the accent is removed.
-
-        Parameters
-        ----------
-        do_lower : bool, Default is True
-            If set to True, characters will be lower-cased and accents
-            will be removed. If False, accented and upper-case characters
-            are not transformed.
-
-        Returns
-        -------
-        Series or Index of object.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> ser = cudf.Series(["héllo, \tworld","ĂĆCĖÑTED","$99"])
-        >>> ser.str.normalize_characters()
-        0    hello ,  world
-        1          accented
-        2              $ 99
-        dtype: object
-        >>> ser.str.normalize_characters(do_lower=False)
-        0    héllo ,  world
-        1          ĂĆCĖÑTED
-        2              $ 99
-        dtype: object
-        """
-        warnings.warn(
-            "normalize_characters is deprecated and will be removed in a future "
-            "version. Use CharacterNormalizer instead.",
-            FutureWarning,
-        )
-        return self._return_or_inplace(
-            self._column.characters_normalize(do_lower)
-        )
-
     def tokenize(self, delimiter: str = " ") -> SeriesOrIndex:
         """
         Each string is split into tokens using the provided delimiter(s).
@@ -4785,7 +4730,7 @@ class StringMethods(ColumnMethods):
         return result
 
     def detokenize(
-        self, indices: cudf.Series, separator: str = " "
+        self, indices: Series, separator: str = " "
     ) -> SeriesOrIndex:
         """
         Combines tokens into strings by concatenating them in the order
@@ -5344,28 +5289,6 @@ class StringMethods(ColumnMethods):
             self._column.is_letter(True, position)  # type: ignore[arg-type]
         )
 
-    def substring_duplicates(self, min_width: int) -> SeriesOrIndex:
-        """
-        Returns duplicate strings found anywhere in the input column
-        with min_width minimum number of bytes.
-
-        Parameters
-        ----------
-        min_width : int
-            The minimum number of bytes to determine duplicates
-
-        Returns
-        -------
-        Series of duplicate strings found
-
-        """
-        return self._return_or_inplace(
-            self._column.substring_duplicates(min_width),  # type: ignore[arg-type]
-            inplace=False,
-            expand=False,
-            retain_index=False,
-        )
-
     def build_suffix_array(self, min_width: int) -> SeriesOrIndex:
         """
         Builds a suffix array for the input strings column.
@@ -5389,6 +5312,74 @@ class StringMethods(ColumnMethods):
         """
         return self._return_or_inplace(
             self._column.build_suffix_array(min_width),  # type: ignore[arg-type]
+            inplace=False,
+            expand=False,
+            retain_index=False,
+        )
+
+    def resolve_duplicates(self, sa, min_width: int) -> SeriesOrIndex:
+        """
+        Returns duplicate strings found in the input column
+        with min_width minimum number of bytes.
+        The indices are expected to be the suffix array previously created
+        for input. Otherwise, the results are undefined.
+
+        For details, see :cpp:func:`resolve_duplicates`
+
+        Parameters
+        ----------
+        sa : Column
+            Suffix array from build_suffix_array
+        min_width : int
+            Minimum number of bytes that must match
+
+        Returns
+        -------
+        Column
+            New column of duplicates
+        """
+        sa_column = sa._column
+        return self._return_or_inplace(
+            self._column.resolve_duplicates(sa_column, min_width),  # type: ignore[arg-type]
+            inplace=False,
+            expand=False,
+            retain_index=False,
+        )
+
+    def resolve_duplicates_pair(
+        self, sa1, input2, sa2, min_width: int
+    ) -> SeriesOrIndex:
+        """
+        Returns duplicate strings in input1 found in input2
+        with min_width minimum number of bytes.
+        The indices are expected to be the suffix array previously
+        created for the inputs. Otherwise, the results are undefined.
+
+        For details, see :cpp:func:`resolve_duplicates_pair`
+
+        Parameters
+        ----------
+        sa1 : Column
+            Suffix array from build_suffix_array for this column
+        input2 : Column
+            2nd strings column of text
+        sa2 : Column
+            Suffix array from build_suffix_array for input2
+        min_width : int
+            Minimum number of bytes that must match
+
+        Returns
+        -------
+        Column
+            New column of duplicates
+        """
+        sa1_col = sa1._column
+        sa2_col = sa2._column
+        input2_col = input2._column
+        return self._return_or_inplace(
+            self._column.resolve_duplicates_pair(
+                sa1_col, input2_col, sa2_col, min_width
+            ),  # type: ignore[arg-type]
             inplace=False,
             expand=False,
             retain_index=False,
@@ -5748,7 +5739,7 @@ class StringMethods(ColumnMethods):
         result = ColumnBase.from_pylibcudf(plc_column)
         return self._return_or_inplace(result)
 
-    def jaccard_index(self, input: cudf.Series, width: int) -> SeriesOrIndex:
+    def jaccard_index(self, input: Series, width: int) -> SeriesOrIndex:
         """
         Compute the Jaccard index between this column and the given
         input strings column.
@@ -5779,9 +5770,6 @@ class StringMethods(ColumnMethods):
 def _massage_string_arg(
     value, name, allow_col: bool = False
 ) -> StringColumn | plc.Scalar:
-    if isinstance(value, cudf.Scalar):
-        return value
-
     if isinstance(value, str):
         return pa_scalar_to_plc_scalar(pa.scalar(value, type=pa.string()))
 
@@ -5855,7 +5843,13 @@ class StringColumn(ColumnBase):
     ):
         if not isinstance(data, Buffer):
             raise ValueError("data must be a Buffer")
-        if dtype != CUDF_STRING_DTYPE:
+        if (
+            not cudf.get_option("mode.pandas_compatible")
+            and dtype != CUDF_STRING_DTYPE
+        ) or (
+            cudf.get_option("mode.pandas_compatible")
+            and not is_dtype_obj_string(dtype)
+        ):
             raise ValueError(f"dtype must be {CUDF_STRING_DTYPE}")
         if len(children) > 1:
             raise ValueError("StringColumn must have at most 1 offset column.")
@@ -5991,6 +5985,12 @@ class StringColumn(ColumnBase):
             "`__cuda_array_interface__`"
         )
 
+    def element_indexing(self, index: int):
+        result = super().element_indexing(index)
+        if isinstance(result, pa.Scalar):
+            return result.as_py()
+        return result
+
     def to_arrow(self) -> pa.Array:
         """Convert to PyArrow Array
 
@@ -6040,6 +6040,17 @@ class StringColumn(ColumnBase):
         other = [item] if is_scalar(item) else item
         return self.contains(as_column(other, dtype=self.dtype)).any()
 
+    def _with_type_metadata(self: StringColumn, dtype: Dtype) -> StringColumn:
+        """
+        Copies type metadata from self onto other, returning a new column.
+        """
+        # For pandas dtypes, store them directly in the column's dtype property
+        if (
+            isinstance(dtype, pd.ArrowDtype) and dtype.kind == "U"
+        ) or isinstance(dtype, pd.StringDtype):
+            self._dtype = dtype
+        return self
+
     def as_numerical_column(self, dtype: np.dtype) -> NumericalColumn:
         if dtype.kind == "b":
             with acquire_spill_lock():
@@ -6047,7 +6058,10 @@ class StringColumn(ColumnBase):
                     self.to_pylibcudf(mode="read")
                 )
                 result = ColumnBase.from_pylibcudf(plc_column)
-            return (result > np.int8(0)).fillna(False)
+            result = result > np.int8(0)
+            if not is_pandas_nullable_extension_dtype(dtype):
+                result = result.fillna(False)
+            return result._with_type_metadata(dtype)  # type: ignore[return-value]
         elif dtype.kind in {"i", "u"}:
             if not self.is_integer().all():
                 raise ValueError(
@@ -6066,8 +6080,12 @@ class StringColumn(ColumnBase):
             raise ValueError(f"dtype must be a numerical type, not {dtype}")
         plc_dtype = dtype_to_pylibcudf_type(dtype)
         with acquire_spill_lock():
-            return type(self).from_pylibcudf(  # type: ignore[return-value]
-                cast_func(self.to_pylibcudf(mode="read"), plc_dtype)
+            return (
+                type(self)
+                .from_pylibcudf(  # type: ignore[return-value]
+                    cast_func(self.to_pylibcudf(mode="read"), plc_dtype)
+                )
+                ._with_type_metadata(dtype=dtype)
             )
 
     def strptime(
@@ -6149,7 +6167,13 @@ class StringColumn(ColumnBase):
         result.dtype.precision = dtype.precision  # type: ignore[union-attr]
         return result  # type: ignore[return-value]
 
-    def as_string_column(self) -> StringColumn:
+    def as_string_column(self, dtype) -> StringColumn:
+        if dtype != self.dtype:
+            if isinstance(dtype, pd.StringDtype) or (
+                isinstance(dtype, pd.ArrowDtype)
+                and pa.string() == dtype.pyarrow_dtype
+            ):
+                self._dtype = dtype
         return self
 
     @property
@@ -6172,11 +6196,16 @@ class StringColumn(ColumnBase):
         nullable: bool = False,
         arrow_type: bool = False,
     ) -> pd.Index:
-        if nullable and not arrow_type:
-            pandas_array = pd.StringDtype().__from_arrow__(self.to_arrow())
+        if (
+            cudf.get_option("mode.pandas_compatible")
+            and isinstance(self.dtype, pd.StringDtype)
+            and "pyarrow" in self.dtype.storage
+        ):
+            pandas_array = self.dtype.__from_arrow__(
+                self.to_arrow().cast(pa.large_string())
+            )
             return pd.Index(pandas_array, copy=False)
-        else:
-            return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
+        return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
 
     def can_cast_safely(self, to_dtype: DtypeObj) -> bool:
         if self.dtype == to_dtype:
@@ -6412,16 +6441,31 @@ class StringColumn(ColumnBase):
         return type(self).from_pylibcudf(result)  # type: ignore[return-value]
 
     @acquire_spill_lock()
-    def substring_duplicates(self, min_width: int) -> Self:
-        result = plc.nvtext.deduplicate.substring_duplicates(
+    def build_suffix_array(self, min_width: int) -> Self:
+        result = plc.nvtext.deduplicate.build_suffix_array(
             self.to_pylibcudf(mode="read"), min_width
         )
         return type(self).from_pylibcudf(result)  # type: ignore[return-value]
 
     @acquire_spill_lock()
-    def build_suffix_array(self, min_width: int) -> Self:
-        result = plc.nvtext.deduplicate.build_suffix_array(
-            self.to_pylibcudf(mode="read"), min_width
+    def resolve_duplicates(self, sa, min_width: int) -> Self:
+        result = plc.nvtext.deduplicate.resolve_duplicates(
+            self.to_pylibcudf(mode="read"),
+            sa.to_pylibcudf(mode="read"),
+            min_width,
+        )
+        return type(self).from_pylibcudf(result)  # type: ignore[return-value]
+
+    @acquire_spill_lock()
+    def resolve_duplicates_pair(
+        self, sa1, input2, sa2, min_width: int
+    ) -> Self:
+        result = plc.nvtext.deduplicate.resolve_duplicates_pair(
+            self.to_pylibcudf(mode="read"),
+            sa1.to_pylibcudf(mode="read"),
+            input2.to_pylibcudf(mode="read"),
+            sa2.to_pylibcudf(mode="read"),
+            min_width,
         )
         return type(self).from_pylibcudf(result)  # type: ignore[return-value]
 
@@ -6474,15 +6518,6 @@ class StringColumn(ColumnBase):
         return type(self).from_pylibcudf(  # type: ignore[return-value]
             plc.nvtext.normalize.normalize_spaces(
                 self.to_pylibcudf(mode="read")
-            )
-        )
-
-    @acquire_spill_lock()
-    def characters_normalize(self, do_lower: bool = True) -> Self:
-        return ColumnBase.from_pylibcudf(  # type: ignore[return-value]
-            plc.nvtext.normalize.characters_normalize(
-                self.to_pylibcudf(mode="read"),
-                do_lower,
             )
         )
 

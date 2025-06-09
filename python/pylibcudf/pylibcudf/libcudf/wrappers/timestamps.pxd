@@ -6,6 +6,7 @@ from pylibcudf.libcudf.wrappers.durations cimport (
     duration_ms,
     duration_us,
     duration_ns,
+    duration_D,
 )
 
 
@@ -16,13 +17,14 @@ cdef extern from "<chrono>" namespace "cuda::std::chrono" nogil:
         time_point(duration_ms) except +libcudf_exception_handler
         time_point(duration_ns) except +libcudf_exception_handler
         time_point(duration_us) except +libcudf_exception_handler
+        time_point(duration_D) except +libcudf_exception_handler
 
     cdef cppclass system_clock:
         pass
 
 
 cdef extern from "cudf/wrappers/timestamps.hpp" namespace "cudf" nogil:
-    ctypedef int32_t timestamp_D
+    ctypedef time_point[system_clock, duration_D] timestamp_D
     ctypedef time_point[system_clock, duration_s] timestamp_s
     ctypedef time_point[system_clock, duration_ms] timestamp_ms
     ctypedef time_point[system_clock, duration_us] timestamp_us

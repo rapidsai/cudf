@@ -2496,16 +2496,16 @@ def test_series_arrow_numeric_types_roundtrip(pandas_type):
     pdf = ps.to_frame()
 
     with cudf.option_context("mode.pandas_compatible", True):
-        with pytest.raises(NotImplementedError):
-            cudf.from_pandas(ps)
+        gs = cudf.from_pandas(ps)
+        assert_eq(ps, gs)
 
     with cudf.option_context("mode.pandas_compatible", True):
-        with pytest.raises(NotImplementedError):
-            cudf.from_pandas(pi)
+        gi = cudf.from_pandas(pi)
+        assert_eq(pi, gi)
 
     with cudf.option_context("mode.pandas_compatible", True):
-        with pytest.raises(NotImplementedError):
-            cudf.from_pandas(pdf)
+        gdf = cudf.from_pandas(pdf)
+        assert_eq(pdf, gdf)
 
 
 @pytest.mark.parametrize(
@@ -2517,16 +2517,16 @@ def test_series_arrow_bool_types_roundtrip(pandas_type):
     pdf = ps.to_frame()
 
     with cudf.option_context("mode.pandas_compatible", True):
-        with pytest.raises(NotImplementedError):
-            cudf.from_pandas(ps)
+        gs = cudf.from_pandas(ps)
+        assert_eq(ps, gs)
 
     with cudf.option_context("mode.pandas_compatible", True):
-        with pytest.raises(NotImplementedError):
-            cudf.from_pandas(pi)
+        gi = cudf.from_pandas(pi)
+        assert_eq(pi, gi)
 
     with cudf.option_context("mode.pandas_compatible", True):
-        with pytest.raises(NotImplementedError):
-            cudf.from_pandas(pdf)
+        gdf = cudf.from_pandas(pdf)
+        assert_eq(pdf, gdf)
 
 
 @pytest.mark.parametrize(
@@ -2538,16 +2538,16 @@ def test_series_arrow_string_types_roundtrip(pandas_type):
     pdf = ps.to_frame()
 
     with cudf.option_context("mode.pandas_compatible", True):
-        with pytest.raises(NotImplementedError):
-            cudf.from_pandas(ps)
+        gs = cudf.from_pandas(ps)
+        assert_eq(ps, gs)
 
     with cudf.option_context("mode.pandas_compatible", True):
-        with pytest.raises(NotImplementedError):
-            cudf.from_pandas(pi)
+        gi = cudf.from_pandas(pi)
+        assert_eq(pi, gi)
 
     with cudf.option_context("mode.pandas_compatible", True):
-        with pytest.raises(NotImplementedError):
-            cudf.from_pandas(pdf)
+        gdf = cudf.from_pandas(pdf)
+        assert_eq(pdf, gdf)
 
 
 def test_series_arrow_category_types_roundtrip():
@@ -2585,12 +2585,12 @@ def test_series_arrow_decimal_types_roundtrip(pa_type):
     pdf = ps.to_frame()
 
     with cudf.option_context("mode.pandas_compatible", True):
-        with pytest.raises(NotImplementedError):
-            cudf.from_pandas(ps)
+        gs = cudf.from_pandas(ps)
+        assert_eq(ps, gs)
 
     with cudf.option_context("mode.pandas_compatible", True):
-        with pytest.raises(NotImplementedError):
-            cudf.from_pandas(pdf)
+        gdf = cudf.from_pandas(pdf)
+        assert_eq(pdf, gdf)
 
 
 def test_series_arrow_struct_types_roundtrip():
@@ -2601,28 +2601,24 @@ def test_series_arrow_struct_types_roundtrip():
     pdf = ps.to_frame()
 
     with cudf.option_context("mode.pandas_compatible", True):
-        with pytest.raises(NotImplementedError):
-            cudf.from_pandas(ps)
+        gs = cudf.from_pandas(ps)
+        assert_eq(ps, gs)
 
     with cudf.option_context("mode.pandas_compatible", True):
-        with pytest.raises(NotImplementedError):
-            cudf.from_pandas(pdf)
+        gdf = cudf.from_pandas(pdf)
+        assert_eq(pdf, gdf)
 
 
 def test_series_arrow_list_types_roundtrip():
     ps = pd.Series([[1], [2], [4]], dtype=pd.ArrowDtype(pa.list_(pa.int64())))
     with cudf.option_context("mode.pandas_compatible", True):
-        with pytest.raises(NotImplementedError):
-            cudf.from_pandas(ps)
+        gs = cudf.from_pandas(ps)
+        assert_eq(ps, gs)
     pdf = ps.to_frame()
 
     with cudf.option_context("mode.pandas_compatible", True):
-        with pytest.raises(NotImplementedError):
-            cudf.from_pandas(ps)
-
-    with cudf.option_context("mode.pandas_compatible", True):
-        with pytest.raises(NotImplementedError):
-            cudf.from_pandas(pdf)
+        gdf = cudf.from_pandas(pdf)
+        assert_eq(pdf, gdf)
 
 
 @pytest.mark.parametrize("base_name", [None, "a"])
@@ -2706,8 +2702,9 @@ def test_series_error_nan_non_float_dtypes():
 def test_astype_pandas_nullable_pandas_compat(dtype, klass, kind):
     ser = klass([1, 2, 3])
     with cudf.option_context("mode.pandas_compatible", True):
-        with pytest.raises(NotImplementedError):
-            ser.astype(kind(dtype))
+        actual = ser.astype(kind(dtype))
+        expected = klass([1, 2, 3], dtype=kind(dtype))
+        assert_eq(actual, expected)
 
 
 @pytest.mark.parametrize("klass", [cudf.Series, cudf.Index])
@@ -3091,6 +3088,7 @@ def test_series_to_cupy(dtype, has_nulls, use_na_value):
 
     if not has_nulls:
         assert_eq(sr.values, cp.asarray(sr))
+        return
 
     if has_nulls and not use_na_value:
         with pytest.raises(ValueError, match="Column must have no nulls"):
@@ -3104,31 +3102,6 @@ def test_series_to_cupy(dtype, has_nulls, use_na_value):
     }.get(dtype, 0)
     expected = cp.asarray(sr.fillna(na_value)) if has_nulls else cp.asarray(sr)
     assert_eq(sr.to_cupy(na_value=na_value), expected)
-
-
-def test_nullmask_deprecation():
-    ser = cudf.Series([1, 2, 3, None])
-    with pytest.warns(FutureWarning):
-        ser.nullmask
-
-
-def test_nullable_deprecation():
-    ser = cudf.Series([1, 2, 3])
-    with pytest.warns(FutureWarning):
-        ser.nullable
-
-
-def test_from_masked_array_deprecation():
-    data = cudf.Series([10, 11, 12, 13, 14])
-    mask = cudf.Series([1, 2, 3, None, 4, None])._column.mask
-    with pytest.warns(FutureWarning):
-        cudf.Series.from_masked_array(data, mask)
-
-
-def test_from_categorical_deprecation():
-    pd_cat = pd.Categorical(pd.Series(["a", "b", "c", "a"], dtype="category"))
-    with pytest.warns(FutureWarning):
-        cudf.Series.from_categorical(pd_cat)
 
 
 def test_to_dense_array():

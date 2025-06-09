@@ -138,3 +138,23 @@ def test_join_then_shuffle(left, right):
     )
 
     assert_gpu_result_equal(q, engine=engine, check_row_order=False)
+
+
+@pytest.mark.parametrize("max_rows_per_partition", [3, 9])
+@pytest.mark.parametrize("reverse", [True, False])
+def test_join_conditional(reverse, max_rows_per_partition):
+    engine = pl.GPUEngine(
+        raise_on_fail=True,
+        executor="streaming",
+        executor_options={
+            "max_rows_per_partition": max_rows_per_partition,
+            "scheduler": DEFAULT_SCHEDULER,
+            "fallback_mode": "silent",
+        },
+    )
+    left = pl.LazyFrame({"x": range(15), "y": [1, 2, 3] * 5})
+    right = pl.LazyFrame({"xx": range(9), "yy": [2, 4, 3] * 3})
+    if reverse:
+        left, right = right, left
+    q = left.join_where(right, pl.col("y") < pl.col("yy"))
+    assert_gpu_result_equal(q, engine=engine, check_row_order=False)

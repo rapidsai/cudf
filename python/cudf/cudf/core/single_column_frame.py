@@ -30,6 +30,8 @@ if TYPE_CHECKING:
     import pyarrow as pa
 
     from cudf._typing import Dtype, NotImplementedType, ScalarLike
+    from cudf.core.dataframe import DataFrame
+    from cudf.core.index import Index
 
 
 class SingleColumnFrame(Frame, NotIterable):
@@ -139,26 +141,11 @@ class SingleColumnFrame(Frame, NotIterable):
         -------
         cupy.ndarray
         """
-        col = self._column
-        final_dtype = (
-            col.dtype if dtype is None else dtype
-        )  # some types do not support | operator
-        if (
-            not copy
-            and col.dtype.kind in {"i", "u", "f", "b"}
-            and cp.can_cast(col.dtype, final_dtype)
-            and not col.has_nulls()
-        ):
-            if col.has_nulls():
-                if na_value is not None:
-                    col = col.fillna(na_value)
-                else:
-                    return super().to_cupy(
-                        dtype=dtype, copy=copy, na_value=na_value
-                    )
-            return cp.asarray(col, dtype=final_dtype)
-
-        return super().to_cupy(dtype=dtype, copy=copy, na_value=na_value)
+        return (
+            super()
+            .to_cupy(dtype=dtype, copy=copy, na_value=na_value)
+            .reshape(len(self), order="F")
+        )
 
     @property  # type: ignore
     @_performance_tracking
@@ -210,15 +197,37 @@ class SingleColumnFrame(Frame, NotIterable):
         """
         return self._column.to_arrow()
 
-    def _to_frame(
-        self, name: Hashable, index: cudf.Index | None
-    ) -> cudf.DataFrame:
+    def tolist(self) -> None:
+        """Conversion to host memory lists is currently unsupported
+
+        Raises
+        ------
+        TypeError
+            If this method is called
+
+        Notes
+        -----
+        cuDF currently does not support implicit conversion from GPU stored series to
+        host stored lists. A `TypeError` is raised when this method is called.
+        Consider calling `.to_arrow().to_pylist()` to construct a Python list.
+        """
+        raise TypeError(
+            "cuDF does not support conversion to host memory "
+            "via the `tolist()` method. Consider using "
+            "`.to_arrow().to_pylist()` to construct a Python list."
+        )
+
+    to_list = tolist
+
+    def _to_frame(self, name: Hashable, index: Index | None) -> DataFrame:
         """Helper function for Series.to_frame, Index.to_frame"""
+
         if name is no_default:
             col_name = 0 if self.name is None else self.name
         else:
             col_name = name
         ca = ColumnAccessor({col_name: self._column}, verify=False)
+        # TODO: Avoid accessing DataFrame from the top level namespace
         return cudf.DataFrame._from_data(ca, index=index)
 
     @property  # type: ignore
@@ -272,7 +281,7 @@ class SingleColumnFrame(Frame, NotIterable):
     @_performance_tracking
     def factorize(
         self, sort: bool = False, use_na_sentinel: bool = True
-    ) -> tuple[cupy.ndarray, cudf.Index]:
+    ) -> tuple[cupy.ndarray, Index]:
         """Encode the input values as integer labels.
 
         Parameters
@@ -302,7 +311,8 @@ class SingleColumnFrame(Frame, NotIterable):
         >>> uniques
         Index(['a', 'c'], dtype='object')
         """
-        return cudf.core.algorithms.factorize(
+        # TODO: Avoid accessing factorize from the top level namespace
+        return cudf.factorize(
             self,
             sort=sort,
             use_na_sentinel=use_na_sentinel,
@@ -337,6 +347,7 @@ class SingleColumnFrame(Frame, NotIterable):
         Dict[Optional[str], Tuple[ColumnBase, Any, bool, Any]]
             The operands to be passed to _colwise_binop.
         """
+
         # Get the appropriate name for output operations involving two objects
         # that are Series-like objects. The output shares the lhs's name unless
         # the rhs is a _differently_ named Series-like object.
@@ -353,6 +364,7 @@ class SingleColumnFrame(Frame, NotIterable):
             if not hasattr(
                 other, "__cuda_array_interface__"
             ) and not isinstance(other, cudf.RangeIndex):
+                # TODO: Avoid accessing RangeIndex from the top level namespace
                 return NotImplemented
 
             # Non-scalar right operands are valid iff they convert to columns.

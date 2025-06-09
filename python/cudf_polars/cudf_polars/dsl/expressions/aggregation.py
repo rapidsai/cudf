@@ -16,7 +16,7 @@ from cudf_polars.dsl.expressions.base import ExecutionContext, Expr
 from cudf_polars.dsl.expressions.literal import Literal
 
 if TYPE_CHECKING:
-    from cudf_polars.containers import DataFrame
+    from cudf_polars.containers import DataFrame, DataType
 
 __all__ = ["Agg"]
 
@@ -26,7 +26,7 @@ class Agg(Expr):
     _non_child = ("dtype", "name", "options")
 
     def __init__(
-        self, dtype: plc.DataType, name: str, options: Any, *children: Expr
+        self, dtype: DataType, name: str, options: Any, *children: Expr
     ) -> None:
         self.dtype = dtype
         self.name = name
@@ -71,10 +71,10 @@ class Agg(Expr):
                 raise NotImplementedError("Only support literal quantile values")
             if options == "equiprobable":
                 raise NotImplementedError("Quantile with equiprobable interpolation")
-            if plc.traits.is_duration(child.dtype):
+            if plc.traits.is_duration(child.dtype.plc):
                 raise NotImplementedError("Quantile with duration data type")
             req = plc.aggregation.quantile(
-                quantiles=[quantile.value.as_py()], interp=Agg.interp_mapping[options]
+                quantiles=[quantile.value], interp=Agg.interp_mapping[options]
             )
         else:
             raise NotImplementedError(
@@ -86,7 +86,9 @@ class Agg(Expr):
             op = partial(self._reduce, request=req)
         elif name in {"min", "max"}:
             op = partial(op, propagate_nans=options)
-        elif name in {"count", "sum", "first", "last"}:
+        elif name == "count":
+            op = partial(op, include_nulls=options)
+        elif name in {"sum", "first", "last"}:
             pass
         else:
             raise NotImplementedError(
@@ -138,15 +140,16 @@ class Agg(Expr):
     ) -> Column:
         return Column(
             plc.Column.from_scalar(
-                plc.reduce.reduce(column.obj, request, self.dtype),
+                plc.reduce.reduce(column.obj, request, self.dtype.plc),
                 1,
             )
         )
 
-    def _count(self, column: Column) -> Column:
+    def _count(self, column: Column, *, include_nulls: bool) -> Column:
+        null_count = column.null_count if not include_nulls else 0
         return Column(
             plc.Column.from_scalar(
-                plc.Scalar.from_py(column.size - column.null_count, self.dtype),
+                plc.Scalar.from_py(column.size - null_count, self.dtype.plc),
                 1,
             )
         )
@@ -155,7 +158,7 @@ class Agg(Expr):
         if column.size == 0 or column.null_count == column.size:
             return Column(
                 plc.Column.from_scalar(
-                    plc.Scalar.from_py(0, self.dtype),
+                    plc.Scalar.from_py(0, self.dtype.plc),
                     1,
                 )
             )
@@ -165,7 +168,7 @@ class Agg(Expr):
         if propagate_nans and column.nan_count > 0:
             return Column(
                 plc.Column.from_scalar(
-                    plc.Scalar.from_py(float("nan"), self.dtype),
+                    plc.Scalar.from_py(float("nan"), self.dtype.plc),
                     1,
                 )
             )
@@ -177,7 +180,7 @@ class Agg(Expr):
         if propagate_nans and column.nan_count > 0:
             return Column(
                 plc.Column.from_scalar(
-                    plc.Scalar.from_py(float("nan"), self.dtype),
+                    plc.Scalar.from_py(float("nan"), self.dtype.plc),
                     1,
                 )
             )

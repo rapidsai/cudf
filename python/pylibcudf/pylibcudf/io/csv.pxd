@@ -24,6 +24,8 @@ from pylibcudf.libcudf.types cimport size_type
 
 from pylibcudf.table cimport Table
 
+from pylibcudf.types cimport DataType
+
 
 cdef class CsvReaderOptions:
     cdef csv_reader_options c_obj
@@ -65,6 +67,7 @@ cdef class CsvReaderOptionsBuilder:
     cpdef CsvReaderOptionsBuilder keep_default_na(self, bool keep_default_na)
     cpdef CsvReaderOptionsBuilder na_filter(self, bool na_filter)
     cpdef CsvReaderOptionsBuilder dayfirst(self, bool dayfirst)
+    cpdef CsvReaderOptionsBuilder delimiter(self, str delimiter)
     cpdef CsvReaderOptions build(self)
 
 cpdef TableWithMetadata read_csv(CsvReaderOptions options, Stream stream = *)
@@ -91,3 +94,5 @@ cdef class CsvWriterOptionsBuilder:
 
 
 cpdef void write_csv(CsvWriterOptions options, Stream stream = *)
+
+cpdef bool is_supported_write_csv(DataType type)

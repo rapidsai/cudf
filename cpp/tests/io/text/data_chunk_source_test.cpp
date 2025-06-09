@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,6 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
+#include "../compression_common.hpp"
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/testing_main.hpp>
@@ -94,9 +96,10 @@ void test_source(std::string const& content, cudf::io::text::data_chunk_source c
 TEST_F(DataChunkSourceTest, DataSourceHost)
 {
   std::string const content = "host buffer source";
-  auto const datasource =
-    cudf::io::datasource::create(cudf::io::host_buffer{content.data(), content.size()});
-  auto const source = cudf::io::text::make_source(*datasource);
+  auto const span           = cudf::host_span<std::byte const>(
+    reinterpret_cast<std::byte const*>(content.data()), content.size());
+  auto const datasource = cudf::io::datasource::create(span);
+  auto const source     = cudf::io::text::make_source(*datasource);
 
   test_source(content, *source);
 }
@@ -217,8 +220,9 @@ void write_bgzip(std::ostream& output_stream,
     cudf::io::text::detail::bgzip::write_uncompressed_block(output_stream, {});
   }
 }
+using DataChunkDecompressionTest = DecompressionTest<DataChunkSourceTest>;
 
-TEST_F(DataChunkSourceTest, BgzipSource)
+TEST_P(DataChunkDecompressionTest, BgzipSource)
 {
   auto const filename = temp_env->get_temp_filepath("bgzip_source");
   std::string input{"bananarama"};
@@ -383,5 +387,10 @@ TEST_F(DataChunkSourceTest, BgzipSourceVirtualOffsetsSingleCompressedGZipBlock)
 
   test_source(input, *source);
 }
+
+INSTANTIATE_TEST_CASE_P(Nvcomp,
+                        DataChunkDecompressionTest,
+                        ::testing::Combine(::testing::Values("NVCOMP", "DEVICE_INTERNAL", "HOST"),
+                                           ::testing::Values(cudf::io::compression_type::ZLIB)));
 
 CUDF_TEST_PROGRAM_MAIN()

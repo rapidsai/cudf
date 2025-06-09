@@ -2,15 +2,19 @@
 from __future__ import annotations
 
 import warnings
+from typing import TYPE_CHECKING
 
 import cupy as cp
 import pyarrow as pa
 
 import cudf
 from cudf.core.column import as_column
-from cudf.core.index import Index
+from cudf.core.dtypes import CategoricalDtype
 from cudf.options import get_option
 from cudf.utils.dtypes import can_convert_to_column, cudf_dtype_to_pa_type
+
+if TYPE_CHECKING:
+    from cudf.core.index import Index
 
 
 def factorize(
@@ -80,7 +84,6 @@ def factorize(
     >>> uniques
     Index([<NA>, 1.0, 2.0], dtype='float64')
     """
-
     return_cupy_array = isinstance(values, cp.ndarray)
 
     if not can_convert_to_column(values):
@@ -112,8 +115,10 @@ def factorize(
         dtype="int64" if get_option("mode.pandas_compatible") else None,
     ).values
 
-    return labels, cats.values if return_cupy_array else Index._from_column(
-        cats
+    # TODO: Avoid accessing Index from the top level namespace
+    return (
+        labels,
+        cats.values if return_cupy_array else cudf.Index._from_column(cats),
     )
 
 
@@ -218,6 +223,7 @@ def unique(values):
     >>> pd.unique(pd.Series([("a", "b"), ("b", "a"), ("a", "c"), ("b", "a")]).values)
     array([('a', 'b'), ('b', 'a'), ('a', 'c')], dtype=object)
     """
+    # TODO: Avoid accessing Index and Series from the top level namespace
     if not isinstance(values, (cudf.Series, cudf.Index, cp.ndarray)):
         raise ValueError(
             "Must pass cudf.Series, cudf.Index, or cupy.ndarray object"
@@ -229,7 +235,7 @@ def unique(values):
         return cp.asarray(cudf.Index(values).unique())
     if isinstance(values, cudf.Series):
         if get_option("mode.pandas_compatible"):
-            if isinstance(values.dtype, cudf.CategoricalDtype):
+            if isinstance(values.dtype, CategoricalDtype):
                 raise NotImplementedError(
                     "cudf.Categorical is not implemented"
                 )

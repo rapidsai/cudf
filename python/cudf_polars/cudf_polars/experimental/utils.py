@@ -7,8 +7,10 @@ from __future__ import annotations
 import operator
 import warnings
 from functools import reduce
+from itertools import chain
 from typing import TYPE_CHECKING
 
+from cudf_polars.dsl.expr import Col
 from cudf_polars.dsl.ir import Union
 from cudf_polars.experimental.base import PartitionInfo
 
@@ -16,6 +18,7 @@ if TYPE_CHECKING:
     from collections.abc import MutableMapping
 
     from cudf_polars.containers import DataFrame
+    from cudf_polars.dsl.expr import Expr
     from cudf_polars.dsl.ir import IR
     from cudf_polars.experimental.dispatch import LowerIRTransformer
     from cudf_polars.utils.config import ConfigOptions
@@ -83,3 +86,15 @@ def _lower_ir_fallback(
     new_node = ir.reconstruct(children)
     partition_info[new_node] = PartitionInfo(count=1)
     return new_node, partition_info
+
+
+def _leaf_column_names(expr: Expr) -> tuple[str, ...]:
+    """Find the leaf column names of an expression."""
+    if expr.children:
+        return tuple(
+            chain.from_iterable(_leaf_column_names(child) for child in expr.children)
+        )
+    elif isinstance(expr, Col):
+        return (expr.name,)
+    else:
+        return ()

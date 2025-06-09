@@ -25,7 +25,7 @@ if TYPE_CHECKING:
 
     from polars.polars import _expr_nodes as pl_expr
 
-    from cudf_polars.containers import DataFrame
+    from cudf_polars.containers import DataFrame, DataType
 
 __all__ = ["StringFunction"]
 
@@ -96,7 +96,7 @@ class StringFunction(Expr):
 
     def __init__(
         self,
-        dtype: plc.DataType,
+        dtype: DataType,
         name: StringFunction.Name,
         options: tuple[Any, ...],
         *children: Expr,
@@ -113,6 +113,7 @@ class StringFunction(Expr):
             StringFunction.Name.ConcatVertical,
             StringFunction.Name.Contains,
             StringFunction.Name.EndsWith,
+            StringFunction.Name.Head,
             StringFunction.Name.Lowercase,
             StringFunction.Name.Replace,
             StringFunction.Name.ReplaceMany,
@@ -123,6 +124,7 @@ class StringFunction(Expr):
             StringFunction.Name.StripCharsStart,
             StringFunction.Name.StripCharsEnd,
             StringFunction.Name.Uppercase,
+            StringFunction.Name.Tail,
         ):
             raise NotImplementedError(f"String function {self.name!r}")
         if self.name is StringFunction.Name.Contains:
@@ -136,7 +138,7 @@ class StringFunction(Expr):
                     raise NotImplementedError(
                         "Regex contains only supports a scalar pattern"
                     )
-                pattern = self.children[1].value.as_py()
+                pattern = self.children[1].value
                 try:
                     self._regex_program = plc.strings.regex_program.RegexProgram.create(
                         pattern,
@@ -155,7 +157,7 @@ class StringFunction(Expr):
             target = self.children[1]
             # Above, we raise NotImplementedError if the target is not a Literal,
             # so we can safely access .value here.
-            if target.value == pa.scalar("", type=target.value.type):  # type: ignore[attr-defined]
+            if target.value == "":  # type: ignore[attr-defined]
                 raise NotImplementedError(
                     "libcudf replace does not support empty strings"
                 )
@@ -172,7 +174,12 @@ class StringFunction(Expr):
             target = self.children[1]
             # Above, we raise NotImplementedError if the target is not a Literal,
             # so we can safely access .value here.
-            if pc.any(pc.equal(target.value.cast(pa.string()), "")).as_py():  # type: ignore[attr-defined]
+            if (isinstance(target, Literal) and target.value == "") or (
+                isinstance(target, LiteralColumn)
+                and pc.any(
+                    pc.equal(target.value.cast(pa.string()), "")  # type: ignore[attr-defined]
+                ).as_py()
+            ):
                 raise NotImplementedError(
                     "libcudf replace_many is implemented differently from polars "
                     "for empty strings"
@@ -246,8 +253,8 @@ class StringFunction(Expr):
             # from the last element of the string. If the end index would be
             # below zero, an empty string is returned.
             # Do this maths on the host
-            start = expr_offset.value.as_py()
-            length = expr_length.value.as_py()
+            start = expr_offset.value
+            length = expr_length.value
 
             if length == 0:
                 stop = start
@@ -277,6 +284,60 @@ class StringFunction(Expr):
             else:
                 side = plc.strings.SideType.BOTH
             return Column(plc.strings.strip.strip(column.obj, side, chars.obj_scalar))
+
+        elif self.name is StringFunction.Name.Tail:
+            column = self.children[0].evaluate(df, context=context)
+
+            assert isinstance(self.children[1], Literal)
+            if self.children[1].value is None:
+                return Column(
+                    plc.Column.from_scalar(
+                        plc.Scalar.from_py(None, plc.DataType(plc.TypeId.STRING)),
+                        column.size,
+                    )
+                )
+            elif self.children[1].value == 0:
+                result = plc.Column.from_scalar(
+                    plc.Scalar.from_py("", plc.DataType(plc.TypeId.STRING)),
+                    column.size,
+                )
+                if column.obj.null_mask():
+                    result = result.with_mask(
+                        column.obj.null_mask(), column.obj.null_count()
+                    )
+                return Column(result)
+
+            else:
+                start = -(self.children[1].value)
+                end = 2**31 - 1
+                return Column(
+                    plc.strings.slice.slice_strings(
+                        column.obj,
+                        plc.Scalar.from_py(start, plc.DataType(plc.TypeId.INT32)),
+                        plc.Scalar.from_py(end, plc.DataType(plc.TypeId.INT32)),
+                        None,
+                    )
+                )
+        elif self.name is StringFunction.Name.Head:
+            column = self.children[0].evaluate(df, context=context)
+
+            assert isinstance(self.children[1], Literal)
+
+            end = self.children[1].value
+            if end is None:
+                return Column(
+                    plc.Column.from_scalar(
+                        plc.Scalar.from_py(None, plc.DataType(plc.TypeId.STRING)),
+                        column.size,
+                    )
+                )
+            return Column(
+                plc.strings.slice.slice_strings(
+                    column.obj,
+                    plc.Scalar.from_py(0, plc.DataType(plc.TypeId.INT32)),
+                    plc.Scalar.from_py(end, plc.DataType(plc.TypeId.INT32)),
+                )
+            )
 
         columns = [child.evaluate(df, context=context) for child in self.children]
         if self.name is StringFunction.Name.Lowercase:
@@ -315,13 +376,11 @@ class StringFunction(Expr):
             )
 
             if strict:
-                if not plc.interop.to_arrow(
-                    plc.reduce.reduce(
-                        is_timestamps,
-                        plc.aggregation.all(),
-                        plc.DataType(plc.TypeId.BOOL8),
-                    )
-                ).as_py():
+                if not plc.reduce.reduce(
+                    is_timestamps,
+                    plc.aggregation.all(),
+                    plc.DataType(plc.TypeId.BOOL8),
+                ).to_py():
                     raise InvalidOperationError("conversion from `str` failed.")
             else:
                 not_timestamps = plc.unary.unary_operation(
@@ -333,7 +392,7 @@ class StringFunction(Expr):
                 )
                 return Column(
                     plc.strings.convert.convert_datetime.to_timestamps(
-                        res.columns()[0], self.dtype, format
+                        res.columns()[0], self.dtype.plc, format
                     )
                 )
         elif self.name is StringFunction.Name.Replace:
@@ -349,6 +408,7 @@ class StringFunction(Expr):
             return Column(
                 plc.strings.replace.replace_multiple(column.obj, target.obj, repl.obj)
             )
+
         raise NotImplementedError(
             f"StringFunction {self.name}"
         )  # pragma: no cover; handled by init raising

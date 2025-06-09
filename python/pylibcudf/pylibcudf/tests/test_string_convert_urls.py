@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 import urllib
 
 import pyarrow as pa
@@ -11,7 +11,7 @@ def test_url_encode():
     data = ["/home/nfs", None]
     arr = pa.array(data)
     result = plc.strings.convert.convert_urls.url_encode(
-        plc.interop.from_arrow(arr)
+        plc.Column.from_arrow(arr)
     )
     expected = pa.array(
         [
@@ -26,7 +26,7 @@ def test_url_decode():
     data = ["%2Fhome%2fnfs", None]
     arr = pa.array(data)
     result = plc.strings.convert.convert_urls.url_decode(
-        plc.interop.from_arrow(arr)
+        plc.Column.from_arrow(arr)
     )
     expected = pa.array(
         [

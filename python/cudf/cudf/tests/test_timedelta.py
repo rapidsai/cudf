@@ -785,7 +785,7 @@ def test_timedelta_index_properties(data, dtype, name):
     pdi = gdi.to_pandas()
 
     def local_assert(expected, actual):
-        if actual._values.null_count:
+        if actual._column.null_count:
             assert_eq(expected, actual.astype("float64"))
         else:
             assert_eq(expected, actual)
