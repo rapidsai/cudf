@@ -101,6 +101,7 @@ from cudf.utils.dtypes import (
     SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES,
     can_convert_to_column,
     find_common_type,
+    get_dtype_of_same_kind,
     is_column_like,
     is_dtype_obj_numeric,
     min_signed_type,
@@ -846,6 +847,7 @@ def _array_to_column_accessor(
 def _mapping_to_column_accessor(
     data: Mapping,
     index: None | Index,
+    dtype: None | Dtype,
     nan_as_null: bool,
 ) -> tuple[dict[Any, ColumnBase], Index, pd.Index]:
     """
@@ -868,7 +870,7 @@ def _mapping_to_column_accessor(
 
     # 1) Align indexes of all data.values() that are Series/dicts
     values_as_series = {
-        key: Series(val, nan_as_null=nan_as_null)
+        key: Series(val, nan_as_null=nan_as_null, dtype=dtype)
         for key, val in data.items()
         if isinstance(val, (pd.Series, Series, dict))
     }
@@ -908,7 +910,7 @@ def _mapping_to_column_accessor(
             if isinstance(key, tuple):
                 tuple_key_count += 1
                 tuple_key_lengths.add(len(key))
-            column = as_column(value, nan_as_null=nan_as_null)
+            column = as_column(value, nan_as_null=nan_as_null, dtype=dtype)
             value_lengths.add(len(column))
             col_data[key] = column
 
@@ -936,7 +938,7 @@ def _mapping_to_column_accessor(
         if scalar is None or scalar is cudf.NA:
             scalar = pa.scalar(None, type=pa.string())
         col_data[key] = as_column(
-            scalar, nan_as_null=nan_as_null, length=scalar_length
+            scalar, nan_as_null=nan_as_null, length=scalar_length, dtype=dtype
         )
 
     if tuple_key_count and len(tuple_key_lengths) > 1:
@@ -1233,7 +1235,12 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             )
         elif isinstance(data, Mapping):
             # Note: We excluded ColumnAccessor already above
-            result = _mapping_to_column_accessor(data, index, nan_as_null)
+            result = _mapping_to_column_accessor(
+                data,
+                index,
+                cudf.dtype(dtype) if dtype is not None else None,
+                nan_as_null,
+            )
             col_dict = result[0]
             index = result[1]
             columns, second_columns = result[2], columns
@@ -1472,6 +1479,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 nlevels = 1
             elif isinstance(arg, tuple):
                 nlevels = len(arg)
+
             if (
                 self._data.multiindex is False
                 or nlevels == self._data.nlevels
@@ -1992,7 +2000,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 out = out.set_index(out.index)
         for name, col in out._column_labels_and_values:
             out._data[name] = col._with_type_metadata(
-                tables[0]._data[name].dtype
+                tables[0]._data[name].dtype,
             )
 
         # Reassign index and column names
@@ -3494,7 +3502,12 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 )
 
         value = as_column(value, nan_as_null=nan_as_null)
-
+        if cudf.get_option("mode.pandas_compatible"):
+            dtype = value.dtype
+            if self._num_columns > 0:
+                _, first_dtype = next(self._dtypes)
+                dtype = get_dtype_of_same_kind(first_dtype, dtype)
+                value = value.astype(dtype)
         self._data.insert(name, value, loc=loc)
 
     @property  # type:ignore
@@ -6686,10 +6699,60 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 if source._data.multiindex:
                     idx = MultiIndex.from_pandas(pd_index)
                 else:
-                    idx = Index.from_pandas(pd_index)
-                return Series._from_column(
-                    as_column(axis_0_results), index=idx
+                    idx = cudf.Index.from_pandas(pd_index)
+
+                res = as_column(
+                    axis_0_results,
+                    nan_as_null=not cudf.get_option("mode.pandas_compatible"),
                 )
+
+                if cudf.get_option("mode.pandas_compatible"):
+                    res_dtype = res.dtype
+                    if res.isnull().all():
+                        if cudf.api.types.is_numeric_dtype(common_dtype):
+                            if op in {"sum", "product"}:
+                                if common_dtype.kind == "f":
+                                    res_dtype = (
+                                        np.dtype("float64")
+                                        if isinstance(
+                                            common_dtype, pd.ArrowDtype
+                                        )
+                                        else common_dtype
+                                    )
+                                elif common_dtype.kind == "u":
+                                    res_dtype = np.dtype("uint64")
+                                else:
+                                    res_dtype = np.dtype("int64")
+                            elif op == "sum_of_squares":
+                                res_dtype = find_common_type(
+                                    (common_dtype, np.dtype(np.uint64))
+                                )
+                            elif op in {
+                                "var",
+                                "std",
+                                "mean",
+                                "skew",
+                                "median",
+                            }:
+                                if common_dtype.kind == "f":
+                                    res_dtype = (
+                                        np.dtype("float64")
+                                        if isinstance(
+                                            common_dtype, pd.ArrowDtype
+                                        )
+                                        else common_dtype
+                                    )
+                                else:
+                                    res_dtype = np.dtype("float64")
+                            elif op in {"max", "min"}:
+                                res_dtype = common_dtype
+                        if op in {"any", "all"}:
+                            res_dtype = np.dtype(np.bool_)
+                    res = res.nans_to_nulls()
+                    new_dtype = get_dtype_of_same_kind(common_dtype, res_dtype)
+                    res = res.astype(new_dtype)
+
+                return Series._from_column(res, index=idx)
 
     @_performance_tracking
     def _scan(
@@ -7530,7 +7593,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                         )
                     )
                 )
-            stacked.append(interleaved_col)
+            stacked.append(interleaved_col._with_type_metadata(common_type))
 
         # Construct the resulting dataframe / series
         if not has_unnamed_levels:
