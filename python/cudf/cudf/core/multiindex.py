@@ -1692,7 +1692,7 @@ class MultiIndex(Index):
     @cached_property  # type: ignore
     @_performance_tracking
     def is_unique(self) -> bool:
-        return len(self) == self.nunique()
+        return len(self) == self.nunique(dropna=False)
 
     @property
     def dtype(self) -> np.dtype:
