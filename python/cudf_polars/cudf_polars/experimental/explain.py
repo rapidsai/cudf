@@ -18,7 +18,6 @@ from cudf_polars.dsl.ir import (
 )
 from cudf_polars.dsl.translate import Translator
 from cudf_polars.experimental.parallel import lower_ir_graph
-from cudf_polars.experimental.tablestats import collect_basic_statistics
 from cudf_polars.utils.config import ConfigOptions
 
 if TYPE_CHECKING:
@@ -53,13 +52,12 @@ def explain_query(
     """
     config = ConfigOptions.from_polars_engine(engine)
     ir = Translator(q._ldf.visit(), engine).translate_ir()
-    stats = collect_basic_statistics(ir)
 
     if physical:
         lowered_ir, partition_info = lower_ir_graph(ir, config)
         return _repr_ir_tree(lowered_ir, partition_info)
     else:
-        return _repr_ir_tree(ir, cardinality=stats.cardinality)
+        return _repr_ir_tree(ir)
 
 
 def _repr_ir_tree(
@@ -67,19 +65,14 @@ def _repr_ir_tree(
     partition_info: MutableMapping[IR, PartitionInfo] | None = None,
     *,
     offset: str = "",
-    cardinality: dict[IR, int] | None = None,
 ) -> str:
     header = _repr_ir(ir, offset=offset)
     count = partition_info[ir].count if partition_info else None
-    row_count = f"~{cardinality.get(ir, "unknown")}" if cardinality is not None else "unknown"
-    header = header.rstrip("\n") + f" {row_count=}\n"
     if count is not None:
         header = header.rstrip("\n") + f" [{count}]\n"
 
     children_strs = [
-        _repr_ir_tree(
-            child, partition_info, offset=offset + "  ", cardinality=cardinality
-        )
+        _repr_ir_tree(child, partition_info, offset=offset + "  ")
         for child in ir.children
     ]
 

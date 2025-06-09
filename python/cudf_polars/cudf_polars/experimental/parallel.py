@@ -33,6 +33,7 @@ from cudf_polars.experimental.dispatch import (
     generate_ir_tasks,
     lower_ir_node,
 )
+from cudf_polars.experimental.statistics import collect_source_statistics
 from cudf_polars.experimental.utils import _concat, _lower_ir_fallback
 
 if TYPE_CHECKING:
@@ -82,7 +83,13 @@ def lower_ir_graph(
     --------
     lower_ir_node
     """
-    mapper = CachingVisitor(lower_ir_node, state={"config_options": config_options})
+    mapper = CachingVisitor(
+        lower_ir_node,
+        state={
+            "config_options": config_options,
+            "statistics": collect_source_statistics(ir),
+        },
+    )
     return mapper(ir)
 
 
