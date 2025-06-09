@@ -122,7 +122,7 @@ namespace {
 
   // Helper function to check if a list of row group indices is contiguous
   auto const is_contiguous = [](auto const& indices) {
-    if (indices.empty() or std::cmp_equal(indices.size(), 1)) { return true; }
+    if (std::cmp_less_equal(indices.size(), 1)) { return true; }
 
     auto current_idx = indices.front();
     return std::all_of(
@@ -153,6 +153,8 @@ namespace {
   // itself contiguous
   else {
     // Find the index of the first (inclusive) and last (exclusive) non-empty sources
+    // Note: Not using structured bindings here because of a linter issue complaining about an
+    // invalid pointer dereference when used inside `std::all_of` below
     auto const source_span      = find_non_empty_source_span(row_group_indices);
     auto const first_source_idx = std::get<0>(source_span);
     auto const last_source_idx  = std::get<1>(source_span);
