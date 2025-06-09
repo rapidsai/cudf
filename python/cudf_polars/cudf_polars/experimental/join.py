@@ -9,7 +9,6 @@ from functools import reduce
 from typing import TYPE_CHECKING, Any
 
 from cudf_polars.dsl.ir import ConditionalJoin, Join
-from cudf_polars.dsl.tracing import do_evaluate_with_tracing
 from cudf_polars.experimental.base import PartitionInfo, get_key_name
 from cudf_polars.experimental.dispatch import generate_ir_tasks, lower_ir_node
 from cudf_polars.experimental.repartition import Repartition
@@ -284,8 +283,7 @@ def _(
         right_name = get_key_name(right)
         return {
             key: (
-                do_evaluate_with_tracing,
-                type(ir),
+                ir.do_evaluate,
                 *ir._non_child_args,
                 (left_name, i),
                 (right_name, i),
@@ -345,8 +343,7 @@ def _(
 
                 inter_key = (inter_name, part_out, j)
                 graph[(inter_name, part_out, j)] = (
-                    do_evaluate_with_tracing,
-                    type(ir),
+                    ir.do_evaluate,
                     ir.left_on,
                     ir.right_on,
                     ir.options,
