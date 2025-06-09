@@ -620,7 +620,7 @@ def _(py_val: decimal.Decimal, dtype: DataType | None):
 
     cdef int128_t val = <int128_t>as_int
 
-    dtype = DataType(type_id.DECIMAL128, scale)
+    dtype = DataType(type_id.DECIMAL128, -scale)
 
     if dtype.id() != type_id.DECIMAL128:
         raise TypeError("Expected dtype to be DECIMAL128")

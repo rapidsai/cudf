@@ -40,7 +40,12 @@ def py_scalar(request):
 def test_from_py(py_scalar):
     result = plc.Scalar.from_py(py_scalar)
     expected = pa.scalar(py_scalar)
-    assert plc.interop.to_arrow(result).equals(expected)
+    if isinstance(py_scalar, decimal.Decimal):
+        # libcudf decimals don't have precision so we must use to_py
+        # instead of to_arrow
+        assert result.to_py() == expected.as_py()
+    else:
+        assert plc.interop.to_arrow(result).equals(expected)
     if isinstance(py_scalar, decimal.Decimal):
         assert plc.interop.to_arrow(
             result.type(), precision=len(py_scalar.as_tuple().digits)
@@ -256,7 +261,12 @@ def test_round_trip_scalar_through_column(py_scalar):
         plc.Scalar.from_py(py_scalar), 1
     ).to_scalar()
     expected = pa.scalar(py_scalar)
-    assert plc.interop.to_arrow(result).equals(expected)
+    if isinstance(py_scalar, decimal.Decimal):
+        # libcudf decimals don't have precision so we must use to_py
+        # instead of to_arrow
+        assert result.to_py() == expected.as_py()
+    else:
+        assert plc.interop.to_arrow(result).equals(expected)
 
 
 def test_non_constant_column_to_scalar_raises():
