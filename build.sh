@@ -74,7 +74,7 @@ BUILD_REPORT_METRICS=OFF
 BUILD_REPORT_INCL_CACHE_STATS=OFF
 BUILD_DISABLE_LARGE_STRINGS=OFF
 USE_PROPRIETARY_NVCOMP=ON
-PYTHON_ARGS_FOR_INSTALL="-m pip install --no-build-isolation --no-deps --config-settings rapidsai.disable-cuda=true"
+PYTHON_ARGS_FOR_INSTALL=("-m" "pip" "install" "--no-build-isolation" "--no-deps" "--config-settings" "rapidsai.disable-cuda=true")
 
 # Set defaults for vars that may not have been defined externally
 #  FIXME: if INSTALL_PREFIX is not set, check PREFIX, then check
@@ -238,7 +238,7 @@ if hasArg --incl_cache_stats; then
     BUILD_REPORT_INCL_CACHE_STATS=ON
 fi
 if hasArg --pydevelop; then
-    PYTHON_ARGS_FOR_INSTALL="${PYTHON_ARGS_FOR_INSTALL} -e"
+    PYTHON_ARGS_FOR_INSTALL+=("-e")
 fi
 
 if hasArg --disable_large_strings; then
@@ -344,7 +344,7 @@ if buildAll || hasArg pylibcudf; then
 
     cd "${REPODIR}/python/pylibcudf"
     SKBUILD_CMAKE_ARGS="-DCMAKE_PREFIX_PATH=${INSTALL_PREFIX};-DCMAKE_LIBRARY_PATH=${LIBCUDF_BUILD_DIR};-DCMAKE_CUDA_ARCHITECTURES=${CUDF_CMAKE_CUDA_ARCHITECTURES};${EXTRA_CMAKE_ARGS[*]}" \
-        python "${PYTHON_ARGS_FOR_INSTALL}" .
+        python "${PYTHON_ARGS_FOR_INSTALL[@]}" .
 fi
 
 # Build and install the cudf Python package
@@ -352,21 +352,21 @@ if buildAll || hasArg cudf; then
 
     cd "${REPODIR}/python/cudf"
     SKBUILD_CMAKE_ARGS="-DCMAKE_PREFIX_PATH=${INSTALL_PREFIX};-DCMAKE_LIBRARY_PATH=${LIBCUDF_BUILD_DIR};-DCMAKE_CUDA_ARCHITECTURES=${CUDF_CMAKE_CUDA_ARCHITECTURES};${EXTRA_CMAKE_ARGS[*]}" \
-        python "${PYTHON_ARGS_FOR_INSTALL}" .
+        python "${PYTHON_ARGS_FOR_INSTALL[@]}" .
 fi
 
 # Build and install the cudf_polars Python package
 if buildAll || hasArg cudf_polars; then
 
     cd "${REPODIR}/python/cudf_polars"
-    python "${PYTHON_ARGS_FOR_INSTALL}" .
+    python "${PYTHON_ARGS_FOR_INSTALL[@]}" .
 fi
 
 # Build and install the dask_cudf Python package
 if buildAll || hasArg dask_cudf; then
 
     cd "${REPODIR}/python/dask_cudf"
-    python "${PYTHON_ARGS_FOR_INSTALL}" .
+    python "${PYTHON_ARGS_FOR_INSTALL[@]}" .
 fi
 
 if hasArg cudfjar; then
@@ -395,11 +395,11 @@ if hasArg cudf_kafka; then
     cd "${REPODIR}/python/cudf_kafka"
     # shellcheck disable=2034
     SKBUILD_CMAKE_ARGS="-DCMAKE_PREFIX_PATH=${INSTALL_PREFIX};-DCMAKE_LIBRARY_PATH=${LIBCUDF_BUILD_DIR};${EXTRA_CMAKE_ARGS[*]}"
-        python "${PYTHON_ARGS_FOR_INSTALL}" .
+        python "${PYTHON_ARGS_FOR_INSTALL[@]}" .
 fi
 
 # build custreamz Python package
 if hasArg custreamz; then
     cd "${REPODIR}/python/custreamz"
-    python "${PYTHON_ARGS_FOR_INSTALL}" .
+    python "${PYTHON_ARGS_FOR_INSTALL[@]}" .
 fi
