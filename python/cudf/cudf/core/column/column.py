@@ -348,12 +348,24 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         )
         if value is None:
             mask = None
-        elif hasattr(value, "__cuda_array_interface__"):
-            if value.__cuda_array_interface__["typestr"] not in ("|i1", "|u1"):
-                if isinstance(value, ColumnBase):
-                    value = value.data_array_view(mode="write")
-                value = cupy.asarray(value).view("|u1")
-            mask = as_buffer(value)
+        elif (
+            cai := getattr(value, "__cuda_array_interface__", None)
+        ) is not None:
+            if cai["typestr"][1] == "t":
+                mask_size = plc.null_mask.bitmask_allocation_size_bytes(
+                    cai["shape"][0]
+                )
+                mask = as_buffer(
+                    data=cai["data"][0], size=mask_size, owner=value
+                )
+            elif cai["typestr"][1] == "b":
+                mask = as_column(value).as_mask()
+            else:
+                if cai["typestr"] not in ("|i1", "|u1"):
+                    if isinstance(value, ColumnBase):
+                        value = value.data_array_view(mode="write")
+                    value = cupy.asarray(value).view("|u1")
+                mask = as_buffer(value)
             if mask.size < required_num_bytes:
                 raise ValueError(error_msg.format(str(value.size)))
             if mask.size < mask_size:
@@ -2649,12 +2661,26 @@ def build_column(
         raise TypeError(f"Unrecognized dtype: {dtype}")
 
 
-def check_invalid_array(shape: tuple, dtype):
+def check_invalid_array(shape: tuple, dtype: np.dtype) -> None:
     """Invalid ndarrays properties that are not supported"""
     if len(shape) > 1:
         raise ValueError("Data must be 1-dimensional")
     elif dtype == "float16":
         raise TypeError("Unsupported type float16")
+
+
+def maybe_reshape(
+    arbitrary: Any,
+    shape: tuple[int, ...],
+    strides: tuple[int, ...] | None,
+    dtype: np.dtype,
+) -> Any:
+    """Reshape ndarrays compatible with cuDF columns."""
+    if len(shape) == 0:
+        arbitrary = cupy.asarray(arbitrary)[np.newaxis]
+    if not plc.column.is_c_contiguous(shape, strides, dtype.itemsize):
+        arbitrary = cupy.ascontiguousarray(arbitrary)
+    return arbitrary
 
 
 def as_memoryview(arbitrary: Any) -> memoryview | None:
@@ -2736,36 +2762,35 @@ def as_column(
         if dtype is not None:
             return arbitrary.astype(dtype)
         return arbitrary
-    elif hasattr(arbitrary, "__cuda_array_interface__"):
-        desc = arbitrary.__cuda_array_interface__
-        check_invalid_array(desc["shape"], np.dtype(desc["typestr"]))
+    elif (
+        cai := getattr(arbitrary, "__cuda_array_interface__", None)
+    ) is not None:
+        cai_dtype = np.dtype(cai["typestr"])
+        check_invalid_array(cai["shape"], cai_dtype)
+        arbitrary = maybe_reshape(
+            arbitrary, cai["shape"], cai["strides"], cai_dtype
+        )
 
-        if desc.get("mask", None) is not None:
-            # Extract and remove the mask from arbitrary before
-            # passing to cupy.asarray
-            cai_copy = desc.copy()
-            mask = _mask_from_cuda_array_interface_desc(
-                arbitrary, cai_copy.pop("mask")
-            )
+        # Can remove once from_cuda_array_interface can handle masks
+        # https://github.com/rapidsai/cudf/issues/19122
+        if (mask := cai.get("mask", None)) is not None:
+            cai_copy = cai.copy()
+            cai_copy.pop("mask")
             arbitrary = SimpleNamespace(__cuda_array_interface__=cai_copy)
         else:
             mask = None
 
-        arbitrary = cupy.asarray(arbitrary, order="C")
-        if not arbitrary.dtype.isnative:
-            arbitrary = arbitrary.astype(arbitrary.dtype.newbyteorder("="))
-        data = as_buffer(arbitrary, exposed=cudf.get_option("copy_on_write"))
-        col = build_column(
-            data,
-            dtype=arbitrary.dtype,
-            mask=mask,
+        column = ColumnBase.from_pylibcudf(
+            plc.Column.from_cuda_array_interface(arbitrary),
+            data_ptr_exposed=cudf.get_option("copy_on_write"),
         )
+        if mask is not None:
+            column = column.set_mask(mask)
         if nan_as_null or (mask is None and nan_as_null is None):
-            col = col.nans_to_nulls()
+            column = column.nans_to_nulls()
         if dtype is not None:
-            col = col.astype(dtype)
-        return col
-
+            column = column.astype(dtype)
+        return column
     elif isinstance(arbitrary, (pa.Array, pa.ChunkedArray)):
         if (nan_as_null is None or nan_as_null) and pa.types.is_floating(
             arbitrary.type
