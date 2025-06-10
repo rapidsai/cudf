@@ -170,7 +170,7 @@ class DataFrame:
             packed_metadata, packed_gpu_data
         )
         return cls(
-            Column(c, **kw)
+            Column(c, **Column.deserialize_ctor_kwargs(kw))
             for c, kw in zip(table.columns(), header["columns_kwargs"], strict=True)
         )
 
@@ -199,14 +199,7 @@ class DataFrame:
 
         # Keyword arguments for `Column.__init__`.
         columns_kwargs: list[ColumnOptions] = [
-            {
-                "is_sorted": col.is_sorted,
-                "order": col.order,
-                "null_order": col.null_order,
-                "name": col.name,
-                "dtype": col.dtype,
-            }
-            for col in self.columns
+            col.serialize_ctor_kwargs() for col in self.columns
         ]
         header: DataFrameHeader = {
             "columns_kwargs": columns_kwargs,

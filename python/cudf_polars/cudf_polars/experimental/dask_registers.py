@@ -143,14 +143,7 @@ def register() -> None:
         with log_errors():
             # Keyword arguments for `Column.__init__`.
             columns_kwargs: list[ColumnOptions] = [
-                {
-                    "is_sorted": col.is_sorted,
-                    "order": col.order,
-                    "null_order": col.null_order,
-                    "name": col.name,
-                    "dtype": col.dtype,
-                }
-                for col in x.columns
+                col.serialize_ctor_kwargs() for col in x.columns
             ]
             header: DataFrameHeader = {
                 "columns_kwargs": columns_kwargs,

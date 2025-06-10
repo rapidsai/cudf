@@ -8,6 +8,7 @@ from __future__ import annotations
 import functools
 from typing import TYPE_CHECKING
 
+import polars as pl
 from polars.exceptions import InvalidOperationError
 
 import pylibcudf as plc
@@ -19,16 +20,19 @@ from pylibcudf.strings.convert.convert_integers import (
 )
 from pylibcudf.traits import is_floating_point
 
+from cudf_polars.containers import DataType
 from cudf_polars.utils import conversion
 from cudf_polars.utils.dtypes import is_order_preserving_cast
 
 if TYPE_CHECKING:
     from typing_extensions import Self
 
-    import polars as pl
-
-    from cudf_polars.containers import DataType
-    from cudf_polars.typing import ColumnHeader, ColumnOptions, Slice
+    from cudf_polars.typing import (
+        ColumnHeader,
+        ColumnOptions,
+        DeserializedColumnOptions,
+        Slice,
+    )
 
 __all__: list[str] = ["Column"]
 
@@ -87,7 +91,22 @@ class Column:
         (plc_column,) = plc.contiguous_split.unpack_from_memoryviews(
             packed_metadata, packed_gpu_data
         ).columns()
-        return cls(plc_column, **header["column_kwargs"])
+
+        deserialized_kwargs = cls.deserialize_ctor_kwargs(header["column_kwargs"])
+
+        return cls(plc_column, **deserialized_kwargs)
+
+    @staticmethod
+    def deserialize_ctor_kwargs(
+        column_kwargs: ColumnOptions,
+    ) -> DeserializedColumnOptions:
+        """Deserialize the constructor kwargs for a Column."""
+        if (serialized_dtype := column_kwargs.get("dtype", None)) is not None:
+            dtype = DataType(
+                pl.datatypes.convert.dtype_short_repr_to_dtype(serialized_dtype)
+            )
+            column_kwargs["dtype"] = dtype  # type: ignore[typeddict-item]
+        return column_kwargs  # type: ignore[return-value]
 
     def serialize(
         self,
@@ -111,18 +130,24 @@ class Column:
             Two-tuple of frames suitable for passing to `plc.contiguous_split.unpack_from_memoryviews`
         """
         packed = plc.contiguous_split.pack(plc.Table([self.obj]))
-        column_kwargs: ColumnOptions = {
+        header: ColumnHeader = {
+            "column_kwargs": self.serialize_ctor_kwargs(),
+            "frame_count": 2,
+        }
+        return header, packed.release()
+
+    def serialize_ctor_kwargs(self) -> ColumnOptions:
+        """Serialize the constructor kwargs for self."""
+        serialized_dtype = (
+            None if self.dtype is None else pl.polars.dtype_str_repr(self.dtype.polars)
+        )
+        return {
             "is_sorted": self.is_sorted,
             "order": self.order,
             "null_order": self.null_order,
             "name": self.name,
-            "dtype": self.dtype,
+            "dtype": serialized_dtype,
         }
-        header: ColumnHeader = {
-            "column_kwargs": column_kwargs,
-            "frame_count": 2,
-        }
-        return header, packed.release()
 
     @functools.cached_property
     def obj_scalar(self) -> plc.Scalar:
