@@ -91,10 +91,7 @@ class Column:
         (plc_column,) = plc.contiguous_split.unpack_from_memoryviews(
             packed_metadata, packed_gpu_data
         ).columns()
-
-        deserialized_kwargs = cls.deserialize_ctor_kwargs(header["column_kwargs"])
-
-        return cls(plc_column, **deserialized_kwargs)
+        return cls(plc_column, **cls.deserialize_ctor_kwargs(header["column_kwargs"]))
 
     @staticmethod
     def deserialize_ctor_kwargs(
