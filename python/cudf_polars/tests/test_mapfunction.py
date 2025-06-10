@@ -6,6 +6,7 @@ import pytest
 
 import polars as pl
 
+from cudf_polars.dsl.translate import Translator
 from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
@@ -94,3 +95,13 @@ def test_with_row_index_defaults():
     )
     q = lf.with_row_index()
     assert_gpu_result_equal(q)
+
+
+def test_unique_hash():
+    # https://github.com/rapidsai/cudf/pull/19121#issuecomment-2959305678
+    a = pl.DataFrame({"a": [1, 2, 3]}).lazy().rename({"a": "A"})
+    b = pl.DataFrame({"a": [4, 5, 6]}).lazy().rename({"a": "A"})
+    ir_a = Translator(a._ldf.visit(), pl.GPUEngine()).translate_ir()
+    ir_b = Translator(b._ldf.visit(), pl.GPUEngine()).translate_ir()
+
+    assert hash(ir_a) != hash(ir_b)

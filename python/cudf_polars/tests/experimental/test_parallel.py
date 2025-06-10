@@ -209,3 +209,14 @@ def test_task_graph_is_pickle_serializable(engine):
     graph, _ = task_graph(ir, partition_info, config_options)
 
     pickle.loads(pickle.dumps(graph))  # no exception
+
+
+def test_rename_concat(engine: pl.GPUEngine) -> None:
+    # https://github.com/rapidsai/cudf/pull/19121#issuecomment-2959305678
+    q = pl.concat(
+        [
+            pl.DataFrame({"a": [1, 2, 3]}).lazy().rename({"a": "A"}),
+            pl.DataFrame({"a": [4, 5, 6]}).lazy().rename({"a": "A"}),
+        ]
+    )
+    assert_gpu_result_equal(q, engine=engine)

@@ -2260,6 +2260,7 @@ class MapFunction(IR):
             self.name,
             json.dumps(self.options),
             tuple(self.schema.items()),
+            self._ctor_arguments(self.children)[1:],
         )
 
     @classmethod
