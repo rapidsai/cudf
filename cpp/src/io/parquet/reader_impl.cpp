@@ -685,7 +685,6 @@ table_with_metadata reader::impl::read_chunk_internal(read_mode mode)
     }
   }
 
-  /*
   nvtxRangePushA("superimpose nulls");
   std::vector<size_type> struct_column_positions;
   std::vector<bitmask_type const*> struct_root_masks;
@@ -706,7 +705,7 @@ table_with_metadata reader::impl::read_chunk_internal(read_mode mode)
   for (size_t i = 0; i < out_columns.size(); i++) {
     if (out_columns[i]->type().id() == cudf::type_id::STRUCT && out_columns[i]->nullable()) {
       struct_column_positions.push_back(i);
-      struct_contents.push_back(contents(
+      struct_contents.emplace_back(contents(
         out_columns[i]->null_count(), out_columns[i]->num_children(), out_columns[i]->size()));
       auto col_contents = out_columns[i]->release();
       struct_contents.back().set_null_mask(col_contents.null_mask);
@@ -737,7 +736,6 @@ table_with_metadata reader::impl::read_chunk_internal(read_mode mode)
                                std::move(children));
   }
   nvtxRangePop();
-  */
 
   // Check if number of rows per source should be included in output metadata.
   if (include_output_num_rows_per_source()) {

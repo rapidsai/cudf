@@ -191,6 +191,13 @@ std::pair<rmm::device_buffer, size_type> bitmask_and(
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
+// ensure that you pass only nullable columns
+std::pair<std::vector<std::unique_ptr<rmm::device_buffer>>, std::vector<size_type>> segmented_bitmask_and(
+  host_span<column_view const> colviews,
+  host_span<size_type const> segment_offsets,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
 /**
  * @brief Performs bitwise OR of the bitmasks of columns of a table. Returns
  * a pair of resulting mask and count of unset bits

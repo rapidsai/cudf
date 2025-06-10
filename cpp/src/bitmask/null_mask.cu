@@ -560,7 +560,8 @@ rmm::device_uvector<size_type> inplace_segmented_bitmask_and(
   host_span<size_type const> masks_begin_bits,
   size_type mask_size_bits,
   host_span<size_type const> segment_offsets,
-  rmm::cuda_stream_view stream)
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
 {
   return inplace_segmented_bitmask_binop(
     [] __device__(bitmask_type left, bitmask_type right) { return left & right; },
@@ -570,7 +571,8 @@ rmm::device_uvector<size_type> inplace_segmented_bitmask_and(
     masks_begin_bits,
     mask_size_bits,
     segment_offsets,
-    stream);
+    stream,
+    mr);
 }
 
 // Bitwise AND of the masks
@@ -620,6 +622,40 @@ std::pair<rmm::device_buffer, size_type> bitmask_and(table_view const& view,
   }
 
   return std::pair(std::move(null_mask), 0);
+}
+
+// Returns the bitwise AND of the null masks of all columns in the same segment of the input masks
+std::pair<std::vector<std::unique_ptr<rmm::device_buffer>>, std::vector<size_type>> segmented_bitmask_and(
+    host_span<column_view const> colviews,
+    host_span<size_type const> segment_offsets,
+    rmm::cuda_stream_view stream,
+    rmm::device_async_resource_ref mr)
+{
+  CUDF_FUNC_RANGE();
+
+  CUDF_EXPECTS(std::all_of(colviews.begin(), colviews.end(), 
+                [&](auto const& view) { return view.size() == colviews[0].size(); }),
+               "All column views must have the same number of elements");
+
+  rmm::device_buffer null_mask{0, stream, mr};
+  if (colviews[0].size() == 0 or colviews.size() == 0) {
+    return std::pair(std::vector<std::unique_ptr<rmm::device_buffer>>(), std::vector<size_type>());
+  }
+
+  std::vector<bitmask_type const*> masks;
+  std::vector<size_type> masks_begin_bits(colviews.size(), 0);
+  for (auto colview : colviews) {
+    masks.push_back(colview.null_mask());
+  }
+
+  return cudf::detail::segmented_bitmask_binop(
+    [] __device__(bitmask_type left, bitmask_type right) { return left & right; },
+    masks,
+    masks_begin_bits,
+    colviews[0].size(),
+    segment_offsets,
+    stream,
+    mr);
 }
 
 // Returns the bitwise OR of the null masks of all columns in the table view
@@ -698,6 +734,15 @@ std::pair<rmm::device_buffer, size_type> bitmask_and(table_view const& view,
 {
   CUDF_FUNC_RANGE();
   return detail::bitmask_and(view, stream, mr);
+}
+
+std::pair<std::vector<std::unique_ptr<rmm::device_buffer>>, std::vector<size_type>> segmented_bitmask_and(
+  host_span<column_view const> colviews,
+  host_span<size_type const> segment_offsets,
+  rmm::cuda_stream_view stream, 
+  rmm::device_async_resource_ref mr) {
+
+  return detail::segmented_bitmask_and(colviews, segment_offsets, stream, mr);
 }
 
 std::pair<rmm::device_buffer, size_type> bitmask_or(table_view const& view,

@@ -343,7 +343,7 @@ std::unique_ptr<column> make_column(column_buffer_base<string_policy>& buffer,
   nvtxRangePop();
 #endif
 
-#if 1
+#if 0
   if (buffer.type.id() == type_id::STRUCT) {
     if (col->nullable()) {
       auto col_contents = col->release();

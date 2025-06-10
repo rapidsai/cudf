@@ -243,6 +243,12 @@ std::pair<rmm::device_buffer, size_type> bitmask_and(table_view const& view,
                                                      rmm::cuda_stream_view stream,
                                                      rmm::device_async_resource_ref mr);
 
+std::pair<std::vector<std::unique_ptr<rmm::device_buffer>>, std::vector<size_type>> segmented_bitmask_and(
+  host_span<column_view const> colviews,
+  host_span<size_type const> segment_offsets,
+  rmm::cuda_stream_view stream, 
+  rmm::device_async_resource_ref mr);
+
 /**
  * @copydoc cudf::bitmask_or
  *
@@ -276,7 +282,8 @@ rmm::device_uvector<size_type> inplace_segmented_bitmask_and(
   host_span<size_type const> masks_begin_bits,
   size_type mask_size_bits,
   host_span<size_type const> segment_offsets,
-  rmm::cuda_stream_view stream);
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr);
 
 /**
  * @brief Recursively set valid null masks for all children.

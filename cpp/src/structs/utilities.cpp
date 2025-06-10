@@ -364,7 +364,7 @@ std::vector<std::unique_ptr<column>> superimpose_nulls_no_sanitize_opt(
   */
 
   auto null_counts = cudf::detail::inplace_segmented_bitmask_and(
-    destination_masks, num_words, sources, sources_begin_bits, num_rows, segment_offsets, stream);
+    destination_masks, num_words, sources, sources_begin_bits, num_rows, segment_offsets, stream, cudf::get_current_device_resource_ref());
   auto h_null_counts = cudf::detail::make_std_vector_async<size_type>(null_counts, stream);
 
   /*
