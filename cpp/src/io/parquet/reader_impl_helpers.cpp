@@ -1243,23 +1243,23 @@ aggregate_reader_metadata::select_row_groups(
                      static_cast<size_type>(from_opts.second)};
   }();
 
-  // Variable to rows to skip relative to the row offset of the first surviving row group index
-  auto first_row_group_relative_rows_to_skip = rows_to_skip;
-
   // If there are no input row groups specified and zero number of rows to read, return empty
   // selection
   if (row_group_indices.empty() and rows_to_read == 0) {
-    auto constexpr total_row_groups = 0;
+    auto constexpr total_row_bounds_filtered_row_groups = 0;
     // If filter is not empty, then set the number of row groups after filters to 0, else nullopt
     auto const num_filtered_row_groups =
-      filter.has_value() ? std::make_optional(total_row_groups) : std::nullopt;
+      filter.has_value() ? std::make_optional(total_row_bounds_filtered_row_groups) : std::nullopt;
     return {rows_to_skip,
             rows_to_read,
             {},
             std::vector<size_t>(per_file_metadata.size(), 0),
-            total_row_groups,
+            total_row_bounds_filtered_row_groups,
             {num_filtered_row_groups, num_filtered_row_groups}};
   }
+
+  // Variable to rows to skip relative to the row offset of the first surviving row group index
+  auto first_row_group_relative_rows_to_skip = rows_to_skip;
 
   // Vector to store all row group indices across all sources
   std::vector<std::vector<size_type>> all_row_group_indices;
@@ -1313,7 +1313,7 @@ aggregate_reader_metadata::select_row_groups(
   }
 
   // Compute number of input row groups after row bounds filter
-  size_type const total_row_bounds_filtered_row_groups =
+  auto const total_row_bounds_filtered_row_groups =
     is_trimmed_row_groups ? compute_total_row_groups(current_row_group_indices)
                           : total_input_row_groups;
 
