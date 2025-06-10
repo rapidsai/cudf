@@ -637,22 +637,21 @@ custom_memory_resource *mr...;
 rmm::device_buffer custom_buff(100, mr, stream);
 ```
 
-#### cudf::detail::device_scalar<T>
+#### rmm::device_scalar<T>
 Allocates a single element of the specified type initialized to the specified value. Use this for
 scalar input/outputs into device kernels, e.g., reduction results, null count, etc. This is
-effectively a convenience wrapper around a `rmm::device_vector<T>` of length 1 and a host-pinned bounce buffer.
+effectively a convenience wrapper around a `rmm::device_vector<T>` of length 1.
 
 ```c++
 // Allocates device memory for a single int using the specified resource and stream
 // and initializes the value to 42
-cudf::detail::device_scalar<int> int_scalar{42, stream, mr};
+rmm::device_scalar<int> int_scalar{42, stream, mr};
 
 // scalar.data() returns pointer to value in device memory
 kernel<<<...>>>(int_scalar.data(),...);
 
 // scalar.value() synchronizes the scalar's stream and copies the
 // value from device to host and returns the value
-// Note: This device-to-host transfer uses host-pinned bounce buffer for efficient memcpy
 int host_value = int_scalar.value();
 ```
 
