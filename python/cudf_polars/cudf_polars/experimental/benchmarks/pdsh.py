@@ -1333,7 +1333,7 @@ def run(options: Sequence[str] | None = None) -> None:
     if client is not None:
         client.close(timeout=60)
 
-    if args.validate:
+    if args.validate and run_config.executor != "cpu":
         print("\nValidation Summary")
         print("==================")
         if validation_failures:
