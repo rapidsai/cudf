@@ -3088,7 +3088,7 @@ TEST_F(ParquetReaderTest, RowBoundsAndFilter)
                 metadata.num_row_groups_after_stats_filter.value() == 2);  // RGs: {},{2,3},{}
   }
 
-  // Filtering AST - table[0] < 40000 and table[0] >= 80000
+  // Filtering AST - table[0] < 40000 or table[0] >= 80000
   {
     auto constexpr rows_to_skip = 110'000;
     auto constexpr rows_to_read = 80'000;
