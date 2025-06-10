@@ -606,6 +606,48 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             ),
         )
 
+    @classmethod
+    def from_cuda_array_interface(cls, arbitrary: Any) -> Self:
+        """
+        Create a Column from an object implementing the CUDA array interface.
+
+        Parameters
+        ----------
+        arbitrary : Any
+            The object to convert.
+
+        Returns
+        -------
+        Column
+        """
+        if (
+            cai := getattr(arbitrary, "__cuda_array_interface__", None)
+        ) is None:
+            raise ValueError("value does not define __cuda_array_interface__")
+
+        cai_dtype = np.dtype(cai["typestr"])
+        check_invalid_array(cai["shape"], cai_dtype)
+        arbitrary = maybe_reshape(
+            arbitrary, cai["shape"], cai["strides"], cai_dtype
+        )
+
+        # Can remove once from_cuda_array_interface can handle masks
+        # https://github.com/rapidsai/cudf/issues/19122
+        if (mask := cai.get("mask", None)) is not None:
+            cai_copy = cai.copy()
+            cai_copy.pop("mask")
+            arbitrary = SimpleNamespace(__cuda_array_interface__=cai_copy)
+        else:
+            mask = None
+
+        column = ColumnBase.from_pylibcudf(
+            plc.Column.from_cuda_array_interface(arbitrary),
+            data_ptr_exposed=cudf.get_option("copy_on_write"),
+        )
+        if mask is not None:
+            column = column.set_mask(mask)
+        return column  # type: ignore[return-value]
+
     def data_array_view(
         self, *, mode: Literal["write", "read"] = "write"
     ) -> "cuda.devicearray.DeviceNDArray":
@@ -2762,31 +2804,9 @@ def as_column(
         if dtype is not None:
             return arbitrary.astype(dtype)
         return arbitrary
-    elif (
-        cai := getattr(arbitrary, "__cuda_array_interface__", None)
-    ) is not None:
-        cai_dtype = np.dtype(cai["typestr"])
-        check_invalid_array(cai["shape"], cai_dtype)
-        arbitrary = maybe_reshape(
-            arbitrary, cai["shape"], cai["strides"], cai_dtype
-        )
-
-        # Can remove once from_cuda_array_interface can handle masks
-        # https://github.com/rapidsai/cudf/issues/19122
-        if (mask := cai.get("mask", None)) is not None:
-            cai_copy = cai.copy()
-            cai_copy.pop("mask")
-            arbitrary = SimpleNamespace(__cuda_array_interface__=cai_copy)
-        else:
-            mask = None
-
-        column = ColumnBase.from_pylibcudf(
-            plc.Column.from_cuda_array_interface(arbitrary),
-            data_ptr_exposed=cudf.get_option("copy_on_write"),
-        )
-        if mask is not None:
-            column = column.set_mask(mask)
-        if nan_as_null or (mask is None and nan_as_null is None):
+    elif hasattr(arbitrary, "__cuda_array_interface__"):
+        column = ColumnBase.from_cuda_array_interface(arbitrary)
+        if nan_as_null is not False:
             column = column.nans_to_nulls()
         if dtype is not None:
             column = column.astype(dtype)
