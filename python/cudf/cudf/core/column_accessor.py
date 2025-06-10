@@ -377,7 +377,13 @@ class ColumnAccessor(MutableMapping):
             self._data = dict(zip(new_keys, new_values))
         self._clear_cache(old_ncols, old_ncols + 1)
         # The type(name) may no longer match the prior label_dtype
-        self.label_dtype = None
+        if cudf.get_option("mode.pandas_compatible"):
+            try:
+                pd.Index([*list(self.names), name], dtype=self.label_dtype)
+            except Exception:
+                self.label_dtype = None
+        else:
+            self.label_dtype = None
 
     def copy(self, deep: bool = False) -> Self:
         """
