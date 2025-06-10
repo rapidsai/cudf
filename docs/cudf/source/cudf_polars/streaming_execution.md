@@ -18,29 +18,52 @@ will run in streaming mode.
 ## Single GPU streaming
 
 The simplest case, requiring no additional dependencies, is the
-`synchronous` executor. An appropriate engine is:
+`synchronous` scheduler. An appropriate engine is:
+
 ```python
-engine = pl.GPUEngine(
-    executor="streaming",
-    executor_options={"scheduler": "synchronous"},
-)
+engine = pl.GPUEngine(executor="streaming")
 ```
 
+This uses the default synchronous *scheduler* and is equivalent to
+`pl.GPUEngine(executor="streaming", executor_options={"scheduler": "synchronous"})`.
+
 When executed with this engine, any parquet inputs are split into
-"partitions" that are streamed through the query graph. We try and
+"partitions" that are streamed through the query graph. We try to
 pick a good default for the typical partition size (based on the
 amount of GPU memory available), however, it might not be optimal. You
 can configure the execution by providing more options to the executor.
-For example, to configure the max number of rows in each partition:
-``` executor_options={ ..., "max_rows_per_partition": 1_000_000, } ```
-A million rows per partition is a reasonable default. You may find, at
-the cost of higher memory footprint, that a larger value gives better
-performance.
+For example, to split input parquet files into 125 MB chunks:
+
+```python
+engine = pl.GPUEngine(
+    executor="streaming",
+    executor_options={
+        "target_partition_size": 125_000_000  # 125 MB
+    }
+)
+```
+
+Use the executor option `max_rows_per_partition` to control how in-memory
+``DataFrame`` inputs are split into multiple partitions.
+
+You may find, at the cost of higher memory footprint, that a larger value gives
+better performance.
 
 ````{note}
 If part of a query does not run in streaming mode, but _does_ run
 using the in-memory GPU engine, then we materialize the whole input
 and execute with the in-memory engine.
+
+The `fallback_mode` option can be used to raise an exception when
+this fallback occurs or silence the warning instead:
+
+
+    engine = pl.GPUEngine(
+        executor="streaming",
+        executor_options={
+            "fallback_mode": "raise",
+        }
+    )
 ````
 
 ## Multi GPU streaming
@@ -62,6 +85,15 @@ installed. In addition, we recommend that
 [ucxx](https://github.com/rapidsai/ucxx) and
 [rapidsmpf](https://github.com/rapidsai/rapidsmpf) are installed to
 take advantage of any high-performance networking.
+
+To quickly install all of these dependencies into a conda environment,
+you can run:
+
+```
+conda install -c rapidsai -c conda-forge -c nvidia \
+    cudf-polars rapidsmpf dask-cuda ucxx
+```
+
 
 ````{note}
 Unlike single-GPU streaming, if part of a query does not execute in
@@ -88,3 +120,9 @@ engine = pl.GPUEngine(
 )
 result = q.collect(engine=engine)
 ```
+
+## Get Started
+
+The streaming GPU executor is now experimentally available. For a quick
+walkthrough of a multi-GPU example workflow and performance on a real dataset,
+check out the [Multi GPU Polars Demo](https://github.com/rapidsai-community/showcase/blob/main/accelerated_data_processing_examples/multi_gpu_polars_demo.ipynb).
