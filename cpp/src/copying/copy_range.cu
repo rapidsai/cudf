@@ -42,9 +42,6 @@
 #include <memory>
 #include <stdexcept>
 
-namespace cudf {
-namespace detail {
-
 namespace {
 template <typename T>
 void in_place_copy_range(cudf::column_view const& source,
@@ -77,12 +74,11 @@ struct in_place_copy_range_dispatch {
   cudf::column_view const& source;
   cudf::mutable_column_view& target;
 
-  template <typename T>
+  template <typename T, CUDF_ENABLE_IF(cudf::is_rep_layout_compatible<T>())>
   void operator()(cudf::size_type source_begin,
                   cudf::size_type source_end,
                   cudf::size_type target_begin,
                   rmm::cuda_stream_view stream)
-    requires(cudf::is_rep_layout_compatible<T>())
   {
     in_place_copy_range<T>(source, target, source_begin, source_end, target_begin, stream);
   }
@@ -98,14 +94,13 @@ struct out_of_place_copy_range_dispatch {
   cudf::column_view const& source;
   cudf::column_view const& target;
 
-  template <typename T>
+  template <typename T, CUDF_ENABLE_IF(cudf::is_rep_layout_compatible<T>())>
   std::unique_ptr<cudf::column> operator()(
     cudf::size_type source_begin,
     cudf::size_type source_end,
     cudf::size_type target_begin,
     rmm::cuda_stream_view stream,
     rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
-    requires(cudf::is_rep_layout_compatible<T>())
   {
     auto p_ret = std::make_unique<cudf::column>(target, stream, mr);
     if ((!p_ret->nullable()) && source.has_nulls(source_begin, source_end, stream)) {
@@ -122,91 +117,87 @@ struct out_of_place_copy_range_dispatch {
     return p_ret;
   }
 
-  template <typename T>
-  std::unique_ptr<cudf::column> operator()(
-    cudf::size_type source_begin,
-    cudf::size_type source_end,
-    cudf::size_type target_begin,
-    rmm::cuda_stream_view stream,
-    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
-    requires(not cudf::is_rep_layout_compatible<T>() and not cudf::is_dictionary<T>() and
-             not cuda::std::is_same_v<T, cudf::string_view>)
+  template <typename T, typename... Args>
+  std::enable_if_t<not cudf::is_rep_layout_compatible<T>(), std::unique_ptr<cudf::column>>
+  operator()(Args...)
   {
     CUDF_FAIL("Unsupported type for out of place copy.", cudf::data_type_error);
   }
-
-  template <typename T>
-  std::unique_ptr<cudf::column> operator()(cudf::size_type source_begin,
-                                           cudf::size_type source_end,
-                                           cudf::size_type target_begin,
-                                           rmm::cuda_stream_view stream,
-                                           rmm::device_async_resource_ref mr)
-    requires(cuda::std::is_same_v<T, cudf::string_view>)
-  {
-    return cudf::strings::detail::copy_range(
-      source, target, source_begin, source_end, target_begin, stream, mr);
-  }
-
-  template <typename T>
-  std::unique_ptr<cudf::column> operator()(cudf::size_type source_begin,
-                                           cudf::size_type source_end,
-                                           cudf::size_type target_begin,
-                                           rmm::cuda_stream_view stream,
-                                           rmm::device_async_resource_ref mr)
-    requires(cudf::is_dictionary<T>())
-  {
-    // check the keys in the source and target
-    cudf::dictionary_column_view const dict_source(source);
-    cudf::dictionary_column_view const dict_target(target);
-    CUDF_EXPECTS(cudf::have_same_types(dict_source.keys(), dict_target.keys()),
-                 "dictionary keys must be the same type",
-                 cudf::data_type_error);
-
-    // combine keys so both dictionaries have the same set
-    auto target_matched =
-      cudf::dictionary::detail::add_keys(dict_target, dict_source.keys(), stream, mr);
-    auto const target_view = cudf::dictionary_column_view(target_matched->view());
-    auto source_matched    = cudf::dictionary::detail::set_keys(
-      dict_source, target_view.keys(), stream, cudf::get_current_device_resource_ref());
-    auto const source_view = cudf::dictionary_column_view(source_matched->view());
-
-    // build the new indices by calling in_place_copy_range on just the indices
-    auto const source_indices = source_view.get_indices_annotated();
-    auto target_contents      = target_matched->release();
-    auto target_indices(std::move(target_contents.children.front()));
-    cudf::mutable_column_view new_indices(
-      target_indices->type(),
-      dict_target.size(),
-      target_indices->mutable_view().head(),
-      static_cast<cudf::bitmask_type*>(target_contents.null_mask->data()),
-      dict_target.null_count());
-    cudf::type_dispatcher(new_indices.type(),
-                          in_place_copy_range_dispatch{source_indices, new_indices},
-                          source_begin,
-                          source_end,
-                          target_begin,
-                          stream);
-    auto null_count = new_indices.null_count();
-    auto indices_column =
-      std::make_unique<cudf::column>(new_indices.type(),
-                                     new_indices.size(),
-                                     std::move(*(target_indices->release().data.release())),
-                                     rmm::device_buffer{0, stream, mr},
-                                     0);
-
-    // take the keys from the matched column allocated using mr
-    auto keys_column(std::move(target_contents.children.back()));
-
-    // create column with keys_column and indices_column
-    return make_dictionary_column(std::move(keys_column),
-                                  std::move(indices_column),
-                                  std::move(*(target_contents.null_mask.release())),
-                                  null_count);
-  }
 };
+
+template <>
+std::unique_ptr<cudf::column> out_of_place_copy_range_dispatch::operator()<cudf::string_view>(
+  cudf::size_type source_begin,
+  cudf::size_type source_end,
+  cudf::size_type target_begin,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
+{
+  return cudf::strings::detail::copy_range(
+    source, target, source_begin, source_end, target_begin, stream, mr);
+}
+
+template <>
+std::unique_ptr<cudf::column> out_of_place_copy_range_dispatch::operator()<cudf::dictionary32>(
+  cudf::size_type source_begin,
+  cudf::size_type source_end,
+  cudf::size_type target_begin,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
+{
+  // check the keys in the source and target
+  cudf::dictionary_column_view const dict_source(source);
+  cudf::dictionary_column_view const dict_target(target);
+  CUDF_EXPECTS(cudf::have_same_types(dict_source.keys(), dict_target.keys()),
+               "dictionary keys must be the same type",
+               cudf::data_type_error);
+
+  // combine keys so both dictionaries have the same set
+  auto target_matched =
+    cudf::dictionary::detail::add_keys(dict_target, dict_source.keys(), stream, mr);
+  auto const target_view = cudf::dictionary_column_view(target_matched->view());
+  auto source_matched    = cudf::dictionary::detail::set_keys(
+    dict_source, target_view.keys(), stream, cudf::get_current_device_resource_ref());
+  auto const source_view = cudf::dictionary_column_view(source_matched->view());
+
+  // build the new indices by calling in_place_copy_range on just the indices
+  auto const source_indices = source_view.get_indices_annotated();
+  auto target_contents      = target_matched->release();
+  auto target_indices(std::move(target_contents.children.front()));
+  cudf::mutable_column_view new_indices(
+    target_indices->type(),
+    dict_target.size(),
+    target_indices->mutable_view().head(),
+    static_cast<cudf::bitmask_type*>(target_contents.null_mask->data()),
+    dict_target.null_count());
+  cudf::type_dispatcher(new_indices.type(),
+                        in_place_copy_range_dispatch{source_indices, new_indices},
+                        source_begin,
+                        source_end,
+                        target_begin,
+                        stream);
+  auto null_count = new_indices.null_count();
+  auto indices_column =
+    std::make_unique<cudf::column>(new_indices.type(),
+                                   new_indices.size(),
+                                   std::move(*(target_indices->release().data.release())),
+                                   rmm::device_buffer{0, stream, mr},
+                                   0);
+
+  // take the keys from the matched column allocated using mr
+  auto keys_column(std::move(target_contents.children.back()));
+
+  // create column with keys_column and indices_column
+  return make_dictionary_column(std::move(keys_column),
+                                std::move(indices_column),
+                                std::move(*(target_contents.null_mask.release())),
+                                null_count);
+}
 
 }  // namespace
 
+namespace cudf {
+namespace detail {
 void copy_range_in_place(column_view const& source,
                          mutable_column_view& target,
                          size_type source_begin,

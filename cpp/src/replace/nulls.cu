@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -54,9 +54,6 @@
 #include <thrust/scan.h>
 #include <thrust/transform.h>
 #include <thrust/tuple.h>
-
-namespace cudf {
-namespace detail {
 
 namespace {  // anonymous
 
@@ -215,13 +212,11 @@ struct replace_nulls_functor {
  *        `replace_nulls` with the appropriate data types.
  */
 struct replace_nulls_scalar_kernel_forwarder {
-  template <typename col_type>
+  template <typename col_type, std::enable_if_t<cudf::is_fixed_width<col_type>()>* = nullptr>
   std::unique_ptr<cudf::column> operator()(cudf::column_view const& input,
                                            cudf::scalar const& replacement,
                                            rmm::cuda_stream_view stream,
                                            rmm::device_async_resource_ref mr)
-    requires(cudf::is_fixed_width<col_type>() and not cudf::is_dictionary<col_type>() and
-             not cuda::std::is_same_v<col_type, cudf::string_view>)
   {
     CUDF_EXPECTS(
       cudf::have_same_types(input, replacement), "Data type mismatch", cudf::data_type_error);
@@ -243,42 +238,40 @@ struct replace_nulls_scalar_kernel_forwarder {
     return output;
   }
 
-  template <typename col_type>
+  template <typename col_type, std::enable_if_t<not cudf::is_fixed_width<col_type>()>* = nullptr>
   std::unique_ptr<cudf::column> operator()(cudf::column_view const&,
                                            cudf::scalar const&,
                                            rmm::cuda_stream_view,
                                            rmm::device_async_resource_ref)
-    requires(not cudf::is_fixed_width<col_type>() and not cudf::is_dictionary<col_type>() and
-             not cuda::std::is_same_v<col_type, cudf::string_view>)
   {
     CUDF_FAIL("No specialization exists for the given type.");
   }
-
-  template <typename col_type>
-  std::unique_ptr<cudf::column> operator()(cudf::column_view const& input,
-                                           cudf::scalar const& replacement,
-                                           rmm::cuda_stream_view stream,
-                                           rmm::device_async_resource_ref mr)
-    requires(cuda::std::is_same_v<col_type, cudf::string_view>)
-  {
-    CUDF_EXPECTS(
-      cudf::have_same_types(input, replacement), "Data type mismatch", cudf::data_type_error);
-    cudf::strings_column_view input_s(input);
-    auto const& repl = static_cast<cudf::string_scalar const&>(replacement);
-    return cudf::strings::detail::replace_nulls(input_s, repl, stream, mr);
-  }
-
-  template <typename col_type>
-  std::unique_ptr<cudf::column> operator()(cudf::column_view const& input,
-                                           cudf::scalar const& replacement,
-                                           rmm::cuda_stream_view stream,
-                                           rmm::device_async_resource_ref mr)
-    requires(cudf::is_dictionary<col_type>())
-  {
-    cudf::dictionary_column_view dict_input(input);
-    return cudf::dictionary::detail::replace_nulls(dict_input, replacement, stream, mr);
-  }
 };
+
+template <>
+std::unique_ptr<cudf::column> replace_nulls_scalar_kernel_forwarder::operator()<cudf::string_view>(
+  cudf::column_view const& input,
+  cudf::scalar const& replacement,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
+{
+  CUDF_EXPECTS(
+    cudf::have_same_types(input, replacement), "Data type mismatch", cudf::data_type_error);
+  cudf::strings_column_view input_s(input);
+  auto const& repl = static_cast<cudf::string_scalar const&>(replacement);
+  return cudf::strings::detail::replace_nulls(input_s, repl, stream, mr);
+}
+
+template <>
+std::unique_ptr<cudf::column> replace_nulls_scalar_kernel_forwarder::operator()<cudf::dictionary32>(
+  cudf::column_view const& input,
+  cudf::scalar const& replacement,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
+{
+  cudf::dictionary_column_view dict_input(input);
+  return cudf::dictionary::detail::replace_nulls(dict_input, replacement, stream, mr);
+}
 
 /**
  * @brief Function used by replace_nulls policy
@@ -320,6 +313,9 @@ std::unique_ptr<cudf::column> replace_nulls_policy_impl(cudf::column_view const&
 }
 
 }  // end anonymous namespace
+
+namespace cudf {
+namespace detail {
 
 std::unique_ptr<cudf::column> replace_nulls(cudf::column_view const& input,
                                             cudf::column_view const& replacement,
