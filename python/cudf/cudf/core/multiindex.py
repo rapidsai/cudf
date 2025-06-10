@@ -1483,6 +1483,7 @@ class MultiIndex(Index):
         codes = []
         levels = []
         names_from_arrays = []
+
         for array in arrays:
             if not (is_list_like(array) or is_column_like(array)):
                 raise TypeError(error_msg)
@@ -2221,7 +2222,7 @@ class MultiIndex(Index):
     def repeat(self, repeats, axis=None) -> Self:
         return self._from_data(
             self._data._from_columns_like_self(
-                super()._repeat(self._columns, repeats, axis)
+                self._repeat(self._columns, repeats, axis)
             )
         )
 

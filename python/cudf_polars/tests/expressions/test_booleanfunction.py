@@ -2,6 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import pytest
 
 import polars as pl
@@ -10,19 +12,23 @@ from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
+from cudf_polars.utils.versions import POLARS_VERSION_LT_128, POLARS_VERSION_LT_130
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
 @pytest.fixture(params=[False, True], ids=["no_nulls", "nulls"])
-def has_nulls(request):
+def has_nulls(request: pytest.FixtureRequest) -> bool:
     return request.param
 
 
 @pytest.fixture(params=[False, True], ids=["include_nulls", "ignore_nulls"])
-def ignore_nulls(request):
+def ignore_nulls(request: pytest.FixtureRequest) -> bool:
     return request.param
 
 
-def test_booleanfunction_reduction(ignore_nulls):
+def test_booleanfunction_reduction(*, ignore_nulls: bool) -> None:
     ldf = pl.LazyFrame(
         {
             "a": pl.Series([1, 2, 3.0, 2, 5], dtype=pl.Float64()),
@@ -69,7 +75,9 @@ def test_booleanfunction_all_any_kleene(expr, ignore_nulls):
     ids=lambda f: f"{f.__name__}()",
 )
 @pytest.mark.parametrize("has_nans", [False, True], ids=["no_nans", "nans"])
-def test_boolean_function_unary(expr, has_nans, has_nulls):
+def test_boolean_function_unary(
+    expr: Callable[[pl.Expr], pl.Expr], *, has_nans: bool, has_nulls: bool
+) -> None:
     values: list[float | None] = [1, 2, 3, 4, 5]
     if has_nans:
         values[3] = float("nan")
@@ -81,6 +89,34 @@ def test_boolean_function_unary(expr, has_nans, has_nulls):
     q = df.select(expr(pl.col("a")), expr(pl.col("a")).not_().alias("b"))
 
     assert_gpu_result_equal(q)
+
+
+def test_nan_in_non_floating_point_column():
+    ldf = pl.LazyFrame({"int": [-1, 1, None]}).with_columns(
+        float=pl.col("int").cast(pl.Float64),
+        float_na=pl.col("int") ** 0.5,
+    )
+
+    q = ldf.select(
+        [
+            pl.col("int").is_nan().alias("int"),
+            pl.col("float").is_nan().alias("float"),
+            pl.col("float_na").is_nan().alias("float_na"),
+        ]
+    )
+
+    if POLARS_VERSION_LT_130:
+        with pytest.raises(
+            pl.exceptions.ComputeError,
+            match="NAN is not supported in a Non-floating point type column",
+        ):
+            assert_gpu_result_equal(q)
+    else:
+        with pytest.raises(
+            RuntimeError,
+            match="NAN is not supported in a Non-floating point type column",
+        ):
+            assert_gpu_result_equal(q)
 
 
 @pytest.mark.parametrize(
@@ -187,7 +223,28 @@ def test_boolean_kleene_logic(expr):
 
 
 def test_boolean_is_in_raises_unsupported():
+    # Needs implode agg
     ldf = pl.LazyFrame({"a": pl.Series([1, 2, 3], dtype=pl.Int64)})
     q = ldf.select(pl.col("a").is_in(pl.lit(1, dtype=pl.Int32())))
 
     assert_ir_translation_raises(q, NotImplementedError)
+
+
+def test_boolean_is_in_with_nested_list_raises():
+    ldf = pl.LazyFrame({"x": [1, 2, 3], "y": [[1, 2], [2, 3], [4]]})
+    q = ldf.select(pl.col("x").is_in(pl.col("y")))
+
+    if POLARS_VERSION_LT_128:
+        assert_ir_translation_raises(q, NotImplementedError)
+    elif POLARS_VERSION_LT_130:
+        with pytest.raises(pl.exceptions.ComputeError, match="Column types mismatch"):
+            assert_gpu_result_equal(q)
+    else:
+        with pytest.raises(RuntimeError, match="Column types mismatch"):
+            assert_gpu_result_equal(q)
+
+
+def test_expr_is_in_empty_list():
+    ldf = pl.LazyFrame({"a": [1, 2, 3, 4]})
+    q = ldf.select(pl.col("a").is_in([]))
+    assert_gpu_result_equal(q)

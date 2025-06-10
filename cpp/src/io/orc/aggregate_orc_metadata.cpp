@@ -21,6 +21,7 @@
 #include <algorithm>
 #include <functional>
 #include <numeric>
+#include <utility>
 
 namespace cudf::io::orc::detail {
 
@@ -28,7 +29,7 @@ column_hierarchy::column_hierarchy(nesting_map child_map) : children{std::move(c
 {
   // Sort columns by nesting levels
   std::function<void(size_type, int32_t)> levelize = [&](size_type id, int32_t level) {
-    if (static_cast<int32_t>(levels.size()) == level) levels.emplace_back();
+    if (std::cmp_equal(levels.size(), level)) levels.emplace_back();
 
     levels[level].push_back({id, static_cast<int32_t>(children[id].size())});
 

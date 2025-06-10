@@ -12,10 +12,11 @@ import re
 import sys
 import textwrap
 import warnings
-from collections import abc, defaultdict
+from collections import defaultdict
 from collections.abc import (
     Callable,
     Hashable,
+    Iterable,
     Iterator,
     Mapping,
     MutableMapping,
@@ -100,6 +101,7 @@ from cudf.utils.dtypes import (
     SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES,
     can_convert_to_column,
     find_common_type,
+    get_dtype_of_same_kind,
     is_column_like,
     is_dtype_obj_numeric,
     min_signed_type,
@@ -843,6 +845,7 @@ def _array_to_column_accessor(
 def _mapping_to_column_accessor(
     data: Mapping,
     index: None | Index,
+    dtype: None | Dtype,
     nan_as_null: bool,
 ) -> tuple[dict[Any, ColumnBase], Index, pd.Index]:
     """
@@ -865,7 +868,7 @@ def _mapping_to_column_accessor(
 
     # 1) Align indexes of all data.values() that are Series/dicts
     values_as_series = {
-        key: Series(val, nan_as_null=nan_as_null)
+        key: Series(val, nan_as_null=nan_as_null, dtype=dtype)
         for key, val in data.items()
         if isinstance(val, (pd.Series, Series, dict))
     }
@@ -905,7 +908,7 @@ def _mapping_to_column_accessor(
             if isinstance(key, tuple):
                 tuple_key_count += 1
                 tuple_key_lengths.add(len(key))
-            column = as_column(value, nan_as_null=nan_as_null)
+            column = as_column(value, nan_as_null=nan_as_null, dtype=dtype)
             value_lengths.add(len(column))
             col_data[key] = column
 
@@ -933,7 +936,7 @@ def _mapping_to_column_accessor(
         if scalar is None or scalar is cudf.NA:
             scalar = pa.scalar(None, type=pa.string())
         col_data[key] = as_column(
-            scalar, nan_as_null=nan_as_null, length=scalar_length
+            scalar, nan_as_null=nan_as_null, length=scalar_length, dtype=dtype
         )
 
     if tuple_key_count and len(tuple_key_lengths) > 1:
@@ -1230,7 +1233,12 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             )
         elif isinstance(data, Mapping):
             # Note: We excluded ColumnAccessor already above
-            result = _mapping_to_column_accessor(data, index, nan_as_null)
+            result = _mapping_to_column_accessor(
+                data,
+                index,
+                cudf.dtype(dtype) if dtype is not None else None,
+                nan_as_null,
+            )
             col_dict = result[0]
             index = result[1]
             columns, second_columns = result[2], columns
@@ -1310,29 +1318,6 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         raise NotImplementedError(
             "_constructor_expanddim not supported for DataFrames!"
         )
-
-    def serialize(self):
-        header, frames = super().serialize()
-
-        header["index"], index_frames = self.index.device_serialize()
-        header["index_frame_count"] = len(index_frames)
-        # For backwards compatibility with older versions of cuDF, index
-        # columns are placed before data columns.
-        frames = index_frames + frames
-
-        return header, frames
-
-    @classmethod
-    def deserialize(cls, header, frames):
-        index_nframes = header["index_frame_count"]
-        obj = super().deserialize(
-            header, frames[header["index_frame_count"] :]
-        )
-
-        index = cls.device_deserialize(header["index"], frames[:index_nframes])
-        obj.index = index
-
-        return obj
 
     @property
     @_performance_tracking
@@ -1492,6 +1477,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 nlevels = 1
             elif isinstance(arg, tuple):
                 nlevels = len(arg)
+
             if (
                 self._data.multiindex is False
                 or nlevels == self._data.nlevels
@@ -1655,9 +1641,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
     def memory_usage(
         self, index: bool = True, deep: bool = False
     ) -> cudf.Series:
-        mem_usage: abc.Iterable[int] = (
-            col.memory_usage for col in self._columns
-        )
+        mem_usage: Iterable[int] = (col.memory_usage for col in self._columns)
         result_index = self._data.to_pandas_index
         if index:
             mem_usage = itertools.chain([self.index.memory_usage()], mem_usage)
@@ -2014,7 +1998,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 out = out.set_index(out.index)
         for name, col in out._column_labels_and_values:
             out._data[name] = col._with_type_metadata(
-                tables[0]._data[name].dtype
+                tables[0]._data[name].dtype,
             )
 
         # Reassign index and column names
@@ -2030,7 +2014,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
 
     def astype(
         self,
-        dtype: Dtype | dict[abc.Hashable, Dtype],
+        dtype: Dtype | dict[Hashable, Dtype],
         copy: bool = False,
         errors: Literal["raise", "ignore"] = "raise",
     ) -> Self:
@@ -2273,12 +2257,12 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 )
             elif self._data._level_names == other._data._level_names:
                 ca_attributes["level_names"] = self._data.level_names
-        elif isinstance(other, (dict, abc.Mapping)):
+        elif isinstance(other, (dict, Mapping)):
             # Need to fail early on host mapping types because we ultimately
             # convert everything to a dict.
             return NotImplemented, None, ca_attributes
 
-        if not isinstance(rhs, (dict, abc.Mapping)):
+        if not isinstance(rhs, (dict, Mapping)):
             return NotImplemented, None, ca_attributes
 
         operands = {
@@ -2565,7 +2549,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 cons = type(into)  # type: ignore[assignment]
                 if isinstance(into, defaultdict):
                     cons = functools.partial(cons, into.default_factory)
-            elif issubclass(into, abc.Mapping):
+            elif issubclass(into, Mapping):
                 cons = into  # type: ignore[assignment]
                 if issubclass(into, defaultdict):
                     raise TypeError(
@@ -3237,7 +3221,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 # Align value.index to self.index
                 value = value.reindex(self.index)
             value = dict(value.items())
-        elif isinstance(value, abc.Mapping):
+        elif isinstance(value, Mapping):
             # Align value.indexes to self.index
             value = {
                 key: value.reindex(self.index)
@@ -3389,7 +3373,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         col_level=0,
         col_fill="",
         allow_duplicates: bool = False,
-        names: abc.Hashable | abc.Sequence[abc.Hashable] | None = None,
+        names: Hashable | Sequence[Hashable] | None = None,
     ):
         return self._mimic_inplace(
             DataFrame._from_data(
@@ -3516,7 +3500,12 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 )
 
         value = as_column(value, nan_as_null=nan_as_null)
-
+        if cudf.get_option("mode.pandas_compatible"):
+            dtype = value.dtype
+            if self._num_columns > 0:
+                _, first_dtype = next(self._dtypes)
+                dtype = get_dtype_of_same_kind(first_dtype, dtype)
+                value = value.astype(dtype)
         self._data.insert(name, value, loc=loc)
 
     @property  # type:ignore
@@ -3932,9 +3921,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         if axis == 0 or axis is not None:
             raise NotImplementedError("axis not implemented yet")
 
-        if isinstance(aggs, abc.Iterable) and not isinstance(
-            aggs, (str, dict)
-        ):
+        if isinstance(aggs, Iterable) and not isinstance(aggs, (str, dict)):
             result = DataFrame()
             # TODO : Allow simultaneous pass for multi-aggregation as
             # a future optimization
@@ -3970,12 +3957,12 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                         )
                     res[key] = getattr(col, value)()
                 result = Series(list(res.values()), index=res.keys())
-            elif all(isinstance(val, abc.Iterable) for val in aggs.values()):
+            elif all(isinstance(val, Iterable) for val in aggs.values()):
                 idxs = set()
                 for val in aggs.values():
                     if isinstance(val, str):
                         idxs.add(val)
-                    elif isinstance(val, abc.Iterable):
+                    elif isinstance(val, Iterable):
                         idxs.update(val)
                 idxs = sorted(list(idxs))
                 for agg in idxs:
@@ -3988,7 +3975,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                     col = self[key]
                     col_empty = column_empty(len(idxs), dtype=col.dtype)
                     ans = Series._from_column(col_empty, index=Index(idxs))
-                    if isinstance(aggs.get(key), abc.Iterable):
+                    if isinstance(aggs.get(key), Iterable):
                         # TODO : Allow simultaneous pass for multi-aggregation
                         # as a future optimization
                         for agg in aggs.get(key):
@@ -5199,7 +5186,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         """
         key_indices = [self._column_names.index(k) for k in columns]
         if keep_index:
-            cols: abc.Iterable[ColumnBase] = itertools.chain(
+            cols: Iterable[ColumnBase] = itertools.chain(
                 self.index._columns, self._columns
             )
             key_indices = [i + len(self.index._columns) for i in key_indices]
@@ -6712,10 +6699,60 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 if source._data.multiindex:
                     idx = MultiIndex.from_pandas(pd_index)
                 else:
-                    idx = Index.from_pandas(pd_index)
-                return Series._from_column(
-                    as_column(axis_0_results), index=idx
+                    idx = cudf.Index.from_pandas(pd_index)
+
+                res = as_column(
+                    axis_0_results,
+                    nan_as_null=not cudf.get_option("mode.pandas_compatible"),
                 )
+
+                if cudf.get_option("mode.pandas_compatible"):
+                    res_dtype = res.dtype
+                    if res.isnull().all():
+                        if cudf.api.types.is_numeric_dtype(common_dtype):
+                            if op in {"sum", "product"}:
+                                if common_dtype.kind == "f":
+                                    res_dtype = (
+                                        np.dtype("float64")
+                                        if isinstance(
+                                            common_dtype, pd.ArrowDtype
+                                        )
+                                        else common_dtype
+                                    )
+                                elif common_dtype.kind == "u":
+                                    res_dtype = np.dtype("uint64")
+                                else:
+                                    res_dtype = np.dtype("int64")
+                            elif op == "sum_of_squares":
+                                res_dtype = find_common_type(
+                                    (common_dtype, np.dtype(np.uint64))
+                                )
+                            elif op in {
+                                "var",
+                                "std",
+                                "mean",
+                                "skew",
+                                "median",
+                            }:
+                                if common_dtype.kind == "f":
+                                    res_dtype = (
+                                        np.dtype("float64")
+                                        if isinstance(
+                                            common_dtype, pd.ArrowDtype
+                                        )
+                                        else common_dtype
+                                    )
+                                else:
+                                    res_dtype = np.dtype("float64")
+                            elif op in {"max", "min"}:
+                                res_dtype = common_dtype
+                        if op in {"any", "all"}:
+                            res_dtype = np.dtype(np.bool_)
+                    res = res.nans_to_nulls()
+                    new_dtype = get_dtype_of_same_kind(common_dtype, res_dtype)
+                    res = res.astype(new_dtype)
+
+                return Series._from_column(res, index=idx)
 
     @_performance_tracking
     def _scan(
@@ -7556,7 +7593,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                         )
                     )
                 )
-            stacked.append(interleaved_col)
+            stacked.append(interleaved_col._with_type_metadata(common_type))
 
         # Construct the resulting dataframe / series
         if not has_unnamed_levels:
@@ -7994,7 +8031,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
     def _from_columns_like_self(
         self,
         columns: list[ColumnBase],
-        column_names: abc.Iterable[str] | None = None,
+        column_names: Iterable[str] | None = None,
         index_names: list[str] | None = None,
     ) -> DataFrame:
         result = super()._from_columns_like_self(
@@ -8779,7 +8816,7 @@ def extract_col(df, col):
 def _index_from_listlike_of_series(
     series_list: Sequence[Series],
 ) -> Index:
-    names_list: Sequence[abc.Hashable] = []
+    names_list: Sequence[Hashable] = []
     unnamed_count = 0
     for series in series_list:
         if series.name is None:
