@@ -3256,21 +3256,6 @@ def as_column(
         return as_column(arbitrary, nan_as_null=nan_as_null, dtype=dtype)
 
 
-def _mask_from_cuda_array_interface_desc(obj, cai_mask) -> Buffer:
-    desc = cai_mask.__cuda_array_interface__
-    typestr = desc["typestr"]
-    typecode = typestr[1]
-    if typecode == "t":
-        mask_size = plc.null_mask.bitmask_allocation_size_bytes(
-            desc["shape"][0]
-        )
-        return as_buffer(data=desc["data"][0], size=mask_size, owner=obj)
-    elif typecode == "b":
-        return as_column(cai_mask).as_mask()
-    else:
-        raise NotImplementedError(f"Cannot infer mask from typestr {typestr}")
-
-
 def serialize_columns(columns: list[ColumnBase]) -> tuple[list[dict], list]:
     """
     Return the headers and frames resulting
