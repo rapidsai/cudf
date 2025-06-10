@@ -105,6 +105,14 @@ def is_string_dtype(obj):
             isinstance(obj, (cudf.Index, cudf.Series))
             and obj.dtype == CUDF_STRING_DTYPE
         )
+        or (isinstance(obj, pd.StringDtype))
+        or (
+            isinstance(obj, pd.ArrowDtype)
+            and (
+                pa.types.is_string(obj.pyarrow_dtype)
+                or pa.types.is_large_string(obj.pyarrow_dtype)
+            )
+        )
         or (isinstance(obj, cudf.core.column.StringColumn))
         or (
             pd.api.types.is_string_dtype(obj)  # noqa: TID251

@@ -30,6 +30,7 @@ from cudf.utils.dtypes import (
     _get_base_dtype,
     cudf_dtype_from_pa_type,
     cudf_dtype_to_pa_type,
+    get_dtype_of_same_type,
 )
 from cudf.utils.scalar import pa_scalar_to_plc_scalar
 
@@ -196,8 +197,13 @@ class DatetimeColumn(TemporalBaseColumn):
 
     @staticmethod
     def _validate_dtype_instance(dtype: np.dtype) -> np.dtype:
-        if not (isinstance(dtype, np.dtype) and dtype.kind == "M"):
-            raise ValueError("dtype must be a datetime, numpy dtype")
+        if (
+            cudf.get_option("mode.pandas_compatible") and not dtype.kind == "M"
+        ) or (
+            not cudf.get_option("mode.pandas_compatible")
+            and not (isinstance(dtype, np.dtype) and dtype.kind == "M")
+        ):
+            raise ValueError(f"dtype must be a datetime, got {dtype}")
         return dtype
 
     def __contains__(self, item: ScalarLike) -> bool:
@@ -468,7 +474,7 @@ class DatetimeColumn(TemporalBaseColumn):
                 )
             )
 
-    def as_string_column(self) -> StringColumn:
+    def as_string_column(self, dtype) -> StringColumn:
         format = _dtype_to_format_conversion.get(
             self.dtype.name, "%Y-%m-%d %H:%M:%S"
         )
@@ -617,6 +623,9 @@ class DatetimeColumn(TemporalBaseColumn):
                 offset=self.offset,
                 null_count=self.null_count,
             )
+        if cudf.get_option("mode.pandas_compatible"):
+            self._dtype = get_dtype_of_same_type(dtype, self.dtype)
+
         return self
 
     def _find_ambiguous_and_nonexistent(
@@ -771,7 +780,14 @@ class DatetimeTZColumn(DatetimeColumn):
         nullable: bool = False,
         arrow_type: bool = False,
     ) -> pd.Index:
-        if arrow_type or nullable:
+        if (
+            arrow_type
+            or nullable
+            or (
+                cudf.get_option("mode.pandas_compatible")
+                and isinstance(self.dtype, pd.ArrowDtype)
+            )
+        ):
             return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
         else:
             return self._local_time.to_pandas().tz_localize(
@@ -816,8 +832,8 @@ class DatetimeTZColumn(DatetimeColumn):
     def strftime(self, format: str) -> StringColumn:
         return self._local_time.strftime(format)
 
-    def as_string_column(self) -> StringColumn:
-        return self._local_time.as_string_column()
+    def as_string_column(self, dtype) -> StringColumn:
+        return self._local_time.as_string_column(dtype)
 
     def as_datetime_column(
         self, dtype: np.dtype | pd.DatetimeTZDtype
