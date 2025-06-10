@@ -895,7 +895,7 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - pytest<8
+          - pytest
           - pytest-cov
           - pytest-xdist
   test_python_cudf_common:
