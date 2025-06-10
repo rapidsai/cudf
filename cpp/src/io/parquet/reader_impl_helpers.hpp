@@ -250,10 +250,12 @@ class aggregate_reader_metadata {
    * @param rows_to_skip Number of rows to skip
    * @param rows_to_read Number of rows to read
    *
-   * @return A tuple of surviving row group indices, and two vectors of effective (trimmed) row
-   * counts and offsets across surviving row group indices respectively
+   * @return A tuple of number of rows to skip from the first surviving row group's row offset,
+   * a vector of surviving row group indices, and two vectors of effective (trimmed) row counts and
+   * offsets across surviving row group indices respectively
    */
-  [[nodiscard]] std::tuple<std::vector<std::vector<size_type>>,
+  [[nodiscard]] std::tuple<int64_t,
+                           std::vector<std::vector<size_type>>,
                            std::vector<std::vector<size_type>>,
                            std::vector<std::vector<size_type>>>
   apply_row_bounds_filter(cudf::host_span<std::vector<size_type> const> input_row_group_indices,

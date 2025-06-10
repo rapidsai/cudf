@@ -59,154 +59,6 @@ namespace {
   return static_cast<size_type>(total_row_groups);
 }
 
-/**
- * @brief Find a index of the first and last non-empty source with non-zero row group indices
- *
- * @param row_group_indices Span of row group indices
- * @return Pair of indices representing the first (inclusive) and last (exclusive) non-empty source
- */
-[[nodiscard]] std::pair<size_type, size_type> find_non_empty_source_span(
-  host_span<std::vector<size_type> const> row_group_indices)
-{
-  // Find the first non-empty source
-  auto const first_source_iter =
-    std::find_if(row_group_indices.begin(), row_group_indices.end(), [](auto const& indices) {
-      return not indices.empty();
-    });
-
-  // No non-empty sources found
-  if (first_source_iter == row_group_indices.end()) {
-    return std::pair{static_cast<cudf::size_type>(row_group_indices.size()),
-                     static_cast<cudf::size_type>(row_group_indices.size())};
-  }
-
-  // Find the last non-empty source using a reverse iterator
-  auto const last_source_iter =
-    std::find_if(std::make_reverse_iterator(row_group_indices.end()),
-                 std::make_reverse_iterator(first_source_iter),
-                 [](auto const& indices) { return not indices.empty(); });
-
-  return std::pair{
-    static_cast<cudf::size_type>(std::distance(row_group_indices.begin(), first_source_iter)),
-    static_cast<cudf::size_type>(
-      std::distance(row_group_indices.begin(), last_source_iter.base()))};
-}
-
-/**
- * @brief Checks if the specified lists of row group indices are contiguous
- *
- * Row groups are contiguous if the lists contains all row groups (from all sources) between the
- * very first and last row group indices. Consider each source may have up to 3 row groups, the
- * following list of row group indices are contiguous:
- *
- * - [[1,2],[0,1,2],[0,1]]
- * - [[],[0,1, 2],[0,1,2],[0],[]]
- *
- * Whereas, the following lists of row group indices are not contiguous:
- *
- * - [[0,1],[0,1,2][0,1]]
- * - [[1,2],[0,1,2],[1,2]]
- * - [[],[2],[],[0,1,2]]
- *
- * @param row_group_indices Lists of row group indices, one per source
- * @param file_metadatas File metadatas, one per source
- *
- * @return Boolean indicating if the row groups are contiguous
- */
-[[nodiscard]] bool are_contiguous_row_groups(
-  cudf::host_span<std::vector<size_type> const> row_group_indices,
-  cudf::host_span<metadata const> file_metadatas)
-{
-  CUDF_EXPECTS(row_group_indices.size() == file_metadatas.size(),
-               "Number of row group indices must match number of file metadatas");
-
-  // Helper function to check if a list of row group indices is contiguous
-  auto const is_contiguous = [](auto const& indices) {
-    if (std::cmp_less_equal(indices.size(), 1)) { return true; }
-
-    auto current_idx = indices.front();
-    return std::all_of(
-      indices.begin() + 1, indices.end(), [&](auto idx) { return idx == ++current_idx; });
-  };
-
-  // Helper function to check if a single source is contiguous
-  auto const is_single_source_contiguous = [is_contiguous](auto const& indices,
-                                                           auto const& metadata) {
-    auto const first_rg_idx = indices.front();
-    auto const last_rg_idx  = indices.back();
-
-    // Check if both indices are within bounds
-    return not(
-      std::cmp_greater(indices.size(), metadata.row_groups.size()) or     // Check size
-      std::cmp_greater(first_rg_idx, last_rg_idx) or                      // Check first rg index
-      std::cmp_greater_equal(last_rg_idx, metadata.row_groups.size()) or  // Check last rg index
-      not is_contiguous(indices));                                        // Check contiguity
-  };
-
-  // Single source case - may start and end at any index within metadata.row_groups and be
-  // contiguous (empty source is contiguous)
-  if (std::cmp_equal(row_group_indices.size(), 1)) {
-    auto const& indices = row_group_indices.front();
-    return indices.empty() or is_single_source_contiguous(indices, file_metadatas.front());
-  }
-  // Multiple sources case - Find a subspan of contiguous non-empty sources and check if the span is
-  // itself contiguous
-  else {
-    // Find the index of the first (inclusive) and last (exclusive) non-empty sources
-    // Note: Not using structured bindings here because of a linter issue complaining about an
-    // invalid pointer dereference when used inside `std::all_of` below
-    auto const source_span      = find_non_empty_source_span(row_group_indices);
-    auto const first_source_idx = std::get<0>(source_span);
-    auto const last_source_idx  = std::get<1>(source_span);
-
-    // Check if the first and last source indices are valid
-    CUDF_EXPECTS(first_source_idx >= 0 and first_source_idx <= last_source_idx,
-                 "Invalid source indices");
-
-    // If there is no non-empty source, the row groups are contiguous
-    if (first_source_idx == last_source_idx) { return true; }
-
-    // Verify contiguity of row groups between the first and last non-empty source indices
-    return std::all_of(
-      thrust::counting_iterator(first_source_idx),
-      thrust::counting_iterator(last_source_idx),
-      [&](auto const src_idx) {
-        auto const& indices  = row_group_indices[src_idx];
-        auto const& metadata = file_metadatas[src_idx];
-
-        // If there is an empty source between non-empty sources, row groups are not contiguous
-        if (indices.empty()) { return false; }
-
-        // First and last row group indices in this source
-        auto const first_rg_idx = indices.front();
-        auto const last_rg_idx  = indices.back();
-
-        // First row group index must be less than or equal to last row group index
-        if (std::cmp_greater(first_rg_idx, last_rg_idx)) { return false; }
-
-        // First source (may be the only source) - size <= metadata.row_groups and be contiguous
-        if (std::cmp_equal(src_idx, first_source_idx)) {
-          return is_single_source_contiguous(indices, metadata);
-        }
-
-        // Last source - must start at 0, size <= metadata.row_groups and be contiguous
-        else if (std::cmp_equal(src_idx, last_source_idx)) {
-          auto const max_size = std::min<size_t>(last_rg_idx + 1, metadata.row_groups.size());
-          return not(std::cmp_greater(indices.size(), max_size) or  // Check size
-                     std::cmp_not_equal(first_rg_idx, 0) or         // Check first rg index
-                     std::cmp_greater_equal(last_rg_idx,
-                                            metadata.row_groups.size()) or  // Check last rg index
-                     not is_contiguous(indices));
-        }
-        // Middle sources - must be of same size as metadata.row_groups and contiguous
-        else {
-          return not(std::cmp_not_equal(indices.size(), metadata.row_groups.size()) or
-                     not is_contiguous(indices));
-        }
-      });
-  }
-}
-
 std::optional<LogicalType> converted_to_logical_type(SchemaElement const& schema)
 {
   if (schema.converted_type.has_value()) {
@@ -1281,7 +1133,8 @@ std::vector<std::string> aggregate_reader_metadata::get_pandas_index_names() con
   return names;
 }
 
-std::tuple<std::vector<std::vector<size_type>>,
+std::tuple<int64_t,
+           std::vector<std::vector<size_type>>,
            std::vector<std::vector<size_type>>,
            std::vector<std::vector<size_type>>>
 aggregate_reader_metadata::apply_row_bounds_filter(
@@ -1302,6 +1155,9 @@ aggregate_reader_metadata::apply_row_bounds_filter(
   row_group_row_offsets.reserve(num_sources);
 
   size_type current_row_index = 0;
+
+  // Rows to skip with respect to the row offset of the first surviving row group index
+  int64_t first_row_group_relative_rows_to_skip = 0;
 
   // For each data source
   std::for_each(
@@ -1333,8 +1189,12 @@ aggregate_reader_metadata::apply_row_bounds_filter(
           current_row_index += rg.num_rows;
           row_group_row_offsets[src_idx][rg_idx] = chunk_start_row;
           if (current_row_index > rows_to_skip or current_row_index == 0) {
-            row_group_num_rows[src_idx][rg_idx] =
-              (chunk_start_row <= rows_to_skip) ? current_row_index - rows_to_skip : rg.num_rows;
+            if (chunk_start_row <= rows_to_skip) {
+              first_row_group_relative_rows_to_skip = rows_to_skip - chunk_start_row;
+              row_group_num_rows[src_idx][rg_idx]   = current_row_index - rows_to_skip;
+            } else {
+              row_group_num_rows[src_idx][rg_idx] = rg.num_rows;
+            }
 
             filtered_row_group_indices[src_idx].emplace_back(rg_idx);
           }
@@ -1345,7 +1205,8 @@ aggregate_reader_metadata::apply_row_bounds_filter(
         });
     });
 
-  return std::tuple{std::move(filtered_row_group_indices),
+  return std::tuple{first_row_group_relative_rows_to_skip,
+                    std::move(filtered_row_group_indices),
                     std::move(row_group_num_rows),
                     std::move(row_group_row_offsets)};
 }
@@ -1378,11 +1239,14 @@ aggregate_reader_metadata::select_row_groups(
     if (not row_group_indices.empty()) { return std::pair<int64_t, size_type>{}; }
     auto const from_opts =
       cudf::io::detail::skip_rows_num_rows_from_options(skip_rows_opt, num_rows_opt, max_num_rows);
-    CUDF_EXPECTS(from_opts.second <= static_cast<int64_t>(std::numeric_limits<size_type>::max()),
+    CUDF_EXPECTS(std::cmp_less_equal(from_opts.second, std::numeric_limits<size_type>::max()),
                  "Number of reading rows exceeds cudf's column size limit.");
     return std::pair{static_cast<int64_t>(from_opts.first),
                      static_cast<size_type>(from_opts.second)};
   }();
+
+  // Variable to rows to skip with respect to the row offset of the first surviving row group index
+  auto first_row_group_relative_rows_to_skip = rows_to_skip;
 
   // If there are no input row groups specified and zero number of rows to read, return empty
   // selection
@@ -1440,7 +1304,10 @@ aggregate_reader_metadata::select_row_groups(
   std::vector<std::vector<size_type>> row_group_row_offsets;
 
   if (is_trimmed_row_groups) {
-    std::tie(trimmed_row_group_indices, row_group_num_rows, row_group_row_offsets) =
+    std::tie(first_row_group_relative_rows_to_skip,
+             trimmed_row_group_indices,
+             row_group_num_rows,
+             row_group_row_offsets) =
       apply_row_bounds_filter(current_row_group_indices, rows_to_skip, rows_to_read);
 
     // Update the current span of row group indices
@@ -1455,9 +1322,6 @@ aggregate_reader_metadata::select_row_groups(
   // Struct to store the number of row groups after filtering using stats and bloom filters
   surviving_row_group_metrics num_row_groups_after_filters{};
 
-  // Flag to indicate if row groups were actually filtered using stats and bloom filters
-  bool is_filtered_row_groups = false;
-
   // Vector to store the stats and bloom filtered row group indices
   std::optional<std::vector<std::vector<size_type>>> filtered_row_group_indices;
 
@@ -1471,12 +1335,35 @@ aggregate_reader_metadata::select_row_groups(
                         filter.value(),
                         stream);
 
-    // If row groups were filtered, update the current span of row group indices and set the flag
+    // If row groups were filtered, update the current span of row group indices as well as the
+    // relative rows to skip with respect to the first surviving row group
     if (filtered_row_group_indices.has_value()) {
+      // Update the current span of row group indices
       current_row_group_indices =
         host_span<std::vector<size_type> const>(filtered_row_group_indices.value());
 
-      is_filtered_row_groups = true;
+      // Only need to update the relative rows to skip with respect to the first surviving row group
+      // if row bounds were previously applied
+      if (is_trimmed_row_groups) {
+        // Find the source index of the first non-empty row group
+        auto const first_non_empty_source_idx =
+          std::distance(current_row_group_indices.begin(),
+                        std::find_if(current_row_group_indices.begin(),
+                                     current_row_group_indices.end(),
+                                     [](auto const& indices) { return not indices.empty(); }));
+
+        // Update the relative rows to skip with respect to the first surviving row group
+        if (std::cmp_less(first_non_empty_source_idx, current_row_group_indices.size())) {
+          // Row group index of the first element in the first non-empty source
+          auto const first_non_empty_row_group_idx =
+            current_row_group_indices[first_non_empty_source_idx].front();
+
+          first_row_group_relative_rows_to_skip = std::max<int64_t>(
+            0,
+            rows_to_skip -
+              row_group_row_offsets[first_non_empty_source_idx][first_non_empty_row_group_idx]);
+        }
+      }
     }
   }
 
@@ -1489,84 +1376,59 @@ aggregate_reader_metadata::select_row_groups(
   // Track the starting row index of the current row group
   size_type current_row_index = 0;
 
-  // Track the number of rows read so far (can be different from the starting index)
+  // Track the number of rows read so far (may be different from the current row index if row
+  // bounds were applied)
   size_type total_selected_rows = 0;
 
-  // Flag to check if this is the first row group (to apply row bounds)
-  bool is_first_row_group = true;
-
-  // We need to recount `rows_to_read` as we select rows from row groups if:
-  // - Input row group indices are provided (no filtering with row bounds) OR
-  // - Row groups are filtered using stats or bloom filters and:
-  //     - Row groups are not filtered using row bounds OR
-  //     - Final row group indices are not contiguous
-  auto const is_rows_to_read_need_recount = [&]() {
-    return not row_group_indices.empty() or
-           (is_filtered_row_groups and
-            (not is_trimmed_row_groups or
-             not are_contiguous_row_groups(current_row_group_indices, per_file_metadata)));
-  }();
-
   // For each data source
-  std::for_each(
-    thrust::counting_iterator<size_t>(0),
-    thrust::counting_iterator(current_row_group_indices.size()),
-    [&](auto const& src_idx) {
-      auto const& file_metadata = per_file_metadata[src_idx];
+  std::for_each(thrust::counting_iterator<size_t>(0),
+                thrust::counting_iterator(current_row_group_indices.size()),
+                [&](auto const& src_idx) {
+                  auto const& file_metadata = per_file_metadata[src_idx];
 
-      // For each row group in this data source
-      std::for_each(
-        current_row_group_indices[src_idx].begin(),
-        current_row_group_indices[src_idx].end(),
-        [&](auto const& rg_idx) {
-          // Validate the row group index
-          CUDF_EXPECTS(rg_idx >= 0 and std::cmp_less(rg_idx, file_metadata.row_groups.size()),
-                       "Invalid rowgroup index");
+                  // For each row group in this data source
+                  std::for_each(
+                    current_row_group_indices[src_idx].begin(),
+                    current_row_group_indices[src_idx].end(),
+                    [&](auto const& rg_idx) {
+                      // Validate the row group index
+                      CUDF_EXPECTS(
+                        rg_idx >= 0 and std::cmp_less(rg_idx, file_metadata.row_groups.size()),
+                        "Invalid rowgroup index");
 
-          // Get the row group
-          auto const& rg = file_metadata.row_groups[rg_idx];
+                      // Get the row group
+                      auto const& rg = file_metadata.row_groups[rg_idx];
 
-          // Use the effective start index of this row group if row bounds filter was
-          // applied, else use the unadjusted start index
-          auto const row_group_start_row = (is_trimmed_row_groups and is_first_row_group)
-                                             ? row_group_row_offsets[src_idx][rg_idx]
-                                             : current_row_index;
+                      // Use the effective start index of this row group if row bounds filter was
+                      // applied, else use the unadjusted start index
+                      auto const row_group_start_row = current_row_index;
 
-          // Update the starting row index of the next row group
-          current_row_index += (is_trimmed_row_groups and is_first_row_group)
-                                 ? row_group_row_offsets[src_idx][rg_idx] + rg.num_rows
-                                 : rg.num_rows;
+                      // Update the starting row index of the next row group
+                      current_row_index += rg.num_rows;
+                      total_selected_rows +=
+                        is_trimmed_row_groups ? row_group_num_rows[src_idx][rg_idx] : rg.num_rows;
 
-          // Number of rows that can be selected from this row group is the effective number of rows
-          // if row bounds filter was applied, else the actual number of rows in this row group
-          auto const num_selected_rows_this_row_group =
-            is_trimmed_row_groups ? row_group_num_rows[src_idx][rg_idx] : rg.num_rows;
+                      // Update the number of rows read from this data source
+                      num_rows_per_source[src_idx] +=
+                        is_trimmed_row_groups ? row_group_num_rows[src_idx][rg_idx] : rg.num_rows;
 
-          // Update the number of rows read from this data source and the total number of selected
-          // rows
-          num_rows_per_source[src_idx] += num_selected_rows_this_row_group;
-          total_selected_rows += num_selected_rows_this_row_group;
+                      // We need the unadjusted start index of this row group to correctly
+                      // initialize ColumnChunkDesc for this row group in
+                      // create_global_chunk_info() and calculate the row offset for the first
+                      // pass in compute_input_passes().
+                      selection.emplace_back(rg_idx, row_group_start_row, src_idx);
 
-          // We need the unadjusted start index of this row group to correctly initialize
-          // ColumnChunkDesc for this row group in create_global_chunk_info() and calculate the
-          // row offset for the first pass in compute_input_passes().
-          selection.emplace_back(rg_idx, row_group_start_row, src_idx);
+                      // If page-level indexes are present, then collect extra chunk and page
+                      // info. The page indexes rely on absolute row numbers - not adjusted for
+                      // skip_rows.
+                      column_info_for_row_group(selection.back(), row_group_start_row);
+                    });
+                });
 
-          // If page-level indexes are present, then collect extra chunk and page info.
-          // The page indexes rely on absolute row numbers - not adjusted for skip_rows.
-          column_info_for_row_group(
-            selection.back(),
-            is_rows_to_read_need_recount ? total_selected_rows : row_group_start_row);
+  // Set rows_to_read to the total number of rows selected
+  rows_to_read = total_selected_rows;
 
-          // Disable the is_first_row_group flag
-          is_first_row_group = false;
-        });
-    });
-
-  // Set rows_to_read to the recounted value if needed
-  if (is_rows_to_read_need_recount) { rows_to_read = total_selected_rows; }
-
-  return {rows_to_skip,
+  return {first_row_group_relative_rows_to_skip,
           rows_to_read,
           std::move(selection),
           std::move(num_rows_per_source),
@@ -1715,9 +1577,9 @@ aggregate_reader_metadata::select_columns(
       auto const& src_schema_elem = get_schema(src_schema_idx);
       auto const& dst_schema_elem = get_schema(dst_schema_idx, pfm_idx);
 
-      // Check the schema elements to be equal except their number of children as we only care about
-      // the specific column paths in the schema trees. Raise an invalid_argument error if the
-      // schema elements don't match.
+      // Check the schema elements to be equal except their number of children as we only care
+      // about the specific column paths in the schema trees. Raise an invalid_argument error if
+      // the schema elements don't match.
       CUDF_EXPECTS(equal_to_except_num_children(src_schema_elem, dst_schema_elem),
                    "Encountered mismatching SchemaElement properties for a column in "
                    "the selected path",
@@ -1743,8 +1605,8 @@ aggregate_reader_metadata::select_columns(
                           pfm_idx);
       }
 
-      // The path ends here. If this is a list/struct col (has children), then map all its children
-      // which must be identical.
+      // The path ends here. If this is a list/struct col (has children), then map all its
+      // children which must be identical.
       if (col_name_info == nullptr or col_name_info->children.empty()) {
         // Check the number of children to be equal to be mapped. An out_of_range error if the
         // number of children isn't equal.
