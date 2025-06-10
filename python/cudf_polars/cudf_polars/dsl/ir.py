@@ -478,9 +478,7 @@ class Scan(IR):
         Each path is repeated according to the number of rows read from it.
         """
         (filepaths,) = plc.filling.repeat(
-            plc.Table(
-                [plc.Column.from_arrow(pl.Series(values=map(str, paths)))]
-            ),
+            plc.Table([plc.Column.from_arrow(pl.Series(values=map(str, paths)))]),
             plc.Column.from_arrow(
                 pl.Series(values=rows_per_path, dtype=pl.datatypes.Int32())
             ),
