@@ -1302,9 +1302,6 @@ def run(options: Sequence[str] | None = None) -> None:
                     )
 
                 if args.validate and run_config.executor != "cpu":
-                    print(
-                        f"Validating GPU result against CPU for query {q_id} (iteration {i})..."
-                    )
                     try:
                         assert_gpu_result_equal(
                             q,
