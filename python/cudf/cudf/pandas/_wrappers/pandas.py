@@ -126,6 +126,20 @@ def make_intermediate_proxy_type(name, fast_type, slow_type):
     )
 
 
+try:
+    # List Accessor in pandas was introduced in 2.2.0 only
+    pd_ListAccessor = pd.core.arrays.arrow.accessors.ListAccessor
+except AttributeError:
+    pd_ListAccessor = _Unusable
+
+
+try:
+    # Struct Accessor in pandas was introduced in 2.2.0 only
+    pd_StructAccessor = pd.core.arrays.arrow.accessors.StructAccessor
+except AttributeError:
+    pd_StructAccessor = _Unusable
+
+
 class _AccessorAttr:
     """
     Descriptor that ensures that accessors like `.dt` and `.str`
@@ -216,6 +230,17 @@ StringMethods = make_intermediate_proxy_type(
     pd.core.strings.accessor.StringMethods,
 )
 
+ListMethods = make_intermediate_proxy_type(
+    "ListMethods",
+    cudf.core.column.lists.ListMethods,
+    pd_ListAccessor,
+)
+
+StructAccessor = make_intermediate_proxy_type(
+    "StructAccessor",
+    cudf.core.column.struct.StructMethods,
+    pd_StructAccessor,
+)
 _CategoricalAccessor = make_intermediate_proxy_type(
     "CategoricalAccessor",
     cudf.core.column.categorical.CategoricalAccessor,
@@ -295,6 +320,8 @@ Series = make_final_proxy_type(
         "__iter__": custom_iter,
         "dt": _AccessorAttr(CombinedDatetimelikeProperties),
         "str": _AccessorAttr(StringMethods),
+        "list": _AccessorAttr(ListMethods),
+        "struct": _AccessorAttr(StructAccessor),
         "cat": _AccessorAttr(_CategoricalAccessor),
         "_constructor": _FastSlowAttribute("_constructor"),
         "_constructor_expanddim": _FastSlowAttribute("_constructor_expanddim"),

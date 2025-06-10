@@ -1748,7 +1748,7 @@ class ParquetWriter:
             .build()
         )
         options.set_dictionary_policy(dict_policy)
-        self.writer = plc.io.parquet.ParquetChunkedWriter.from_options(options)
+        self.writer = plc.io.parquet.ChunkedParquetWriter.from_options(options)
         self.initialized = True
 
 

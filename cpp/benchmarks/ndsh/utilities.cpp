@@ -385,7 +385,7 @@ void write_to_parquet_device_buffer(std::unique_ptr<cudf::table> const& table,
       return (i += num_row_per_chunk);
     });
     std::vector<cudf::table_view> split_tables = cudf::split(table->view(), splits, stream);
-    auto writer                                = cudf::io::parquet_chunked_writer(options, stream);
+    auto writer                                = cudf::io::chunked_parquet_writer(options, stream);
     for (auto const& chunk_table : split_tables) {
       writer.write(chunk_table);
     }
