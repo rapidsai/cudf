@@ -11751,7 +11751,6 @@ NODEIDS_THAT_FAIL_WITH_CUDF_PANDAS = {
     "tests/indexing/test_indexing.py::TestFancy::test_index_type_coercion[loc]",
     "tests/indexing/test_indexing.py::TestFancy::test_inf_upcast",
     "tests/indexing/test_indexing.py::TestFancy::test_multi_assign_broadcasting_rhs",
-    "tests/indexing/test_indexing.py::TestMisc::test_no_reference_cycle",
     "tests/indexing/test_indexing.py::TestMisc::test_slice_with_zero_step_raises[empty-setitem-DataFrame]",
     "tests/indexing/test_indexing.py::TestMisc::test_slice_with_zero_step_raises[empty-setitem-Series]",
     "tests/indexing/test_indexing.py::test_scalar_setitem_series_with_nested_value_length1[iloc-value2]",
