@@ -3001,16 +3001,16 @@ TEST_F(ParquetReaderTest, RowBoundsAndFilter)
                 metadata.num_row_groups_after_stats_filter.value() == 2);  // RGs: {2,3},{},{}
   }
 
-  // Filtering AST - table[0] < 20'000
+  // Filtering AST - table[0] < 20'000 but skipping 30'000 rows (empty table)
   {
     auto constexpr rows_to_skip = 30'000;
     auto constexpr rows_to_read = 40'000;
 
-    auto literal_value     = cudf::numeric_scalar<int64_t>(20'000);
-    auto literal           = cudf::ast::literal(literal_value);
-    auto col_ref_0         = cudf::ast::column_reference(0);
-    auto filter_expression = cudf::ast::operation(
-      cudf::ast::ast_operator::LESS, col_ref_0, literal);  // Should get an empty table here
+    auto literal_value = cudf::numeric_scalar<int64_t>(20'000);
+    auto literal       = cudf::ast::literal(literal_value);
+    auto col_ref_0     = cudf::ast::column_reference(0);
+    auto filter_expression =
+      cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_0, literal);
 
     auto const [table_with_metadata, expected] =
       read_parquet_table(filter_expression, rows_to_skip, rows_to_read);
@@ -3023,9 +3023,9 @@ TEST_F(ParquetReaderTest, RowBoundsAndFilter)
                 metadata.num_row_groups_after_stats_filter.value() == 0);  // RGs: {},{},{}
   }
 
-  // Filtering AST - table[0] <= 100'000
+  // Filtering AST - table[0] <= 100'000 but skipping 301'000 rows (empty table)
   {
-    auto constexpr rows_to_skip = 301'000;  // Skip all rows
+    auto constexpr rows_to_skip = 301'000;
     auto constexpr rows_to_read = 1'000;
 
     auto literal_value = cudf::numeric_scalar<int64_t>(100'000);
