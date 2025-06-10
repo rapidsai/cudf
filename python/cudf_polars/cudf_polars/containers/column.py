@@ -99,11 +99,18 @@ class Column:
     ) -> DeserializedColumnOptions:
         """Deserialize the constructor kwargs for a Column."""
         if (serialized_dtype := column_kwargs.get("dtype", None)) is not None:
-            dtype = DataType(
+            dtype: DataType | None = DataType(
                 pl.datatypes.convert.dtype_short_repr_to_dtype(serialized_dtype)
             )
-            column_kwargs["dtype"] = dtype  # type: ignore[typeddict-item]
-        return column_kwargs  # type: ignore[return-value]
+        else:  # pragma: no cover
+            dtype = None  # pragma: no cover
+        return {
+            "is_sorted": column_kwargs["is_sorted"],
+            "order": column_kwargs["order"],
+            "null_order": column_kwargs["null_order"],
+            "name": column_kwargs["name"],
+            "dtype": dtype,
+        }
 
     def serialize(
         self,
