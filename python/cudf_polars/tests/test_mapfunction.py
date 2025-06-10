@@ -99,8 +99,8 @@ def test_with_row_index_defaults():
 
 def test_unique_hash():
     # https://github.com/rapidsai/cudf/pull/19121#issuecomment-2959305678
-    a = pl.DataFrame({"a": [1, 2, 3]}).lazy().rename({"a": "A"})
-    b = pl.DataFrame({"a": [4, 5, 6]}).lazy().rename({"a": "A"})
+    a = pl.LazyFrame({"a": [1, 2, 3]}).rename({"a": "A"})
+    b = pl.LazyFrame({"a": [4, 5, 6]}).rename({"a": "A"})
     ir_a = Translator(a._ldf.visit(), pl.GPUEngine()).translate_ir()
     ir_b = Translator(b._ldf.visit(), pl.GPUEngine()).translate_ir()
 
