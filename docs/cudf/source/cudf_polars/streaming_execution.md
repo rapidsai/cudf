@@ -90,7 +90,7 @@ To quickly install all of these dependencies into a conda environment,
 you can run:
 
 ```
-conda install -c rapidsai -c conda-forge -c nvidia \
+conda install -c rapidsai -c conda-forge \
     cudf-polars rapidsmpf dask-cuda ucxx
 ```
 
@@ -123,6 +123,6 @@ result = q.collect(engine=engine)
 
 ## Get Started
 
-The streaming GPU executor is now experimentally available. For a quick
+The experimental streaming GPU executor is now available. For a quick
 walkthrough of a multi-GPU example workflow and performance on a real dataset,
 check out the [Multi GPU Polars Demo](https://github.com/rapidsai-community/showcase/blob/main/accelerated_data_processing_examples/multi_gpu_polars_demo.ipynb).
