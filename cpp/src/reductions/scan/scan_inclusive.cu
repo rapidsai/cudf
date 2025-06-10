@@ -203,7 +203,7 @@ std::unique_ptr<column> scan_inclusive(column_view const& input,
                   });
 
     // Replace the children columns.
-    output = cudf::make_structs_column(
+    output = cudf::create_structs_hierarchy(
       num_rows, std::move(content.children), null_count, std::move(*content.null_mask), stream, mr);
   }
 

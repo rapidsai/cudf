@@ -239,12 +239,12 @@ struct group_scan_functor<K,
       }
     }
 
-    return make_structs_column(values.size(),
-                               std::move(scanned_children),
-                               values.null_count(),
-                               cudf::detail::copy_bitmask(values, stream, mr),
-                               stream,
-                               mr);
+    return create_structs_hierarchy(values.size(),
+                                    std::move(scanned_children),
+                                    values.null_count(),
+                                    cudf::detail::copy_bitmask(values, stream, mr),
+                                    stream,
+                                    mr);
   }
 };
 
