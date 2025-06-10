@@ -15,11 +15,12 @@ from cudf_polars.dsl.ir import Union
 from cudf_polars.experimental.base import PartitionInfo
 
 if TYPE_CHECKING:
-    from collections.abc import MutableMapping
+    from collections.abc import MutableMapping, Sequence
 
     from cudf_polars.containers import DataFrame
     from cudf_polars.dsl.expr import Expr
     from cudf_polars.dsl.ir import IR
+    from cudf_polars.experimental.base import ColumnStats
     from cudf_polars.experimental.dispatch import LowerIRTransformer
     from cudf_polars.utils.config import ConfigOptions
 
@@ -98,3 +99,36 @@ def _leaf_column_names(expr: Expr) -> tuple[str, ...]:
         return (expr.name,)
     else:
         return ()
+
+
+def _get_unique_fractions(
+    ir: IR,
+    column_names: Sequence[str],
+    partition_info: MutableMapping[IR, PartitionInfo],
+    config_options: ConfigOptions,
+    column_statistics: MutableMapping[str, ColumnStats],
+) -> dict[str, float]:
+    assert config_options.executor.name == "streaming", (
+        "'in-memory' executor not supported in '_get_unique_fractions'"
+    )
+
+    # Start with table statistics
+    unique_fractions: dict[str, float] = {}
+    for c, stats in column_statistics.items():
+        if (
+            c in column_names
+            and (source_stats := stats.source_stats) is not None
+            and source_stats.unique_fraction is not None
+        ):
+            unique_fractions[c] = source_stats.unique_fraction
+
+    # Update with user-defined `"unique_fraction"` config
+    unique_fractions.update(
+        {
+            c: max(min(f, 1.0), 0.00001)
+            for c, f in config_options.executor.unique_fraction.items()
+            if c in column_names
+        }
+    )
+
+    return unique_fractions

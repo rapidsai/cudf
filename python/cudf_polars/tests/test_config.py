@@ -237,8 +237,10 @@ def test_validate_shuffle_method() -> None:
     "option",
     [
         "max_rows_per_partition",
-        "cardinality_factor",
+        "unique_fraction",
         "target_partition_size",
+        "parquet_metadata_samples",
+        "parquet_rowgroup_samples",
         "groupby_n_ary",
         "broadcast_join_limit",
         "rapidsmpf_spill",

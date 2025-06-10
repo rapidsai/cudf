@@ -306,8 +306,8 @@ def _sample_pq_statistics(ir: Scan) -> dict[str, ColumnSourceStats]:
         "'in-memory' executor not supported in '_sample_pq_statistics"
     )
 
-    num_file_samples = 3  # ir.config_options.executor.parquet_metadata_samples
-    num_rg_samples = 1  # ir.config_options.executor.parquet_rowgroup_samples
+    num_file_samples = ir.config_options.executor.parquet_metadata_samples
+    num_rg_samples = ir.config_options.executor.parquet_rowgroup_samples
     file_count = len(ir.paths)
     stride = max(1, int(file_count / num_file_samples))
     paths = ir.paths[: stride * num_file_samples : stride]
@@ -408,8 +408,7 @@ def _sample_pq_statistics(ir: Scan) -> dict[str, ColumnSourceStats]:
         # Leave out unique stats if they were defined by the
         # user. This allows us to avoid collecting stats for
         # columns that are know to be problematic.
-        # user_fractions = ir.config_options.executor.unique_fraction
-        user_fractions = ir.config_options.executor.cardinality_factor
+        user_fractions = ir.config_options.executor.unique_fraction
 
         if source_stats_cached:
             table_source = next(iter(source_stats_cached.values())).table_source

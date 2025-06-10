@@ -49,7 +49,7 @@ from cudf_polars.dsl.traversal import (
 from cudf_polars.dsl.utils.naming import unique_names
 from cudf_polars.experimental.base import PartitionInfo
 from cudf_polars.experimental.repartition import Repartition
-from cudf_polars.experimental.utils import _leaf_column_names
+from cudf_polars.experimental.utils import _get_unique_fractions, _leaf_column_names
 
 if TYPE_CHECKING:
     from collections.abc import Generator, MutableMapping, Sequence
@@ -57,6 +57,7 @@ if TYPE_CHECKING:
 
     from cudf_polars.dsl.expressions.base import Expr
     from cudf_polars.dsl.ir import IR
+    from cudf_polars.experimental.base import ColumnStats
     from cudf_polars.typing import GenericTransformer, Schema
     from cudf_polars.utils.config import ConfigOptions
 
@@ -128,6 +129,7 @@ def _decompose_unique(
     input_ir: IR,
     partition_info: MutableMapping[IR, PartitionInfo],
     config_options: ConfigOptions,
+    column_statistics: MutableMapping[str, ColumnStats],
     *,
     names: Generator[str, None, None],
 ) -> tuple[Expr, IR, MutableMapping[IR, PartitionInfo]]:
@@ -145,6 +147,8 @@ def _decompose_unique(
         associated partitioning information.
     config_options
         GPUEngine configuration options.
+    column_statistics
+        Column statistics.
     names
         Generator of unique names for temporaries.
 
@@ -170,17 +174,17 @@ def _decompose_unique(
     )
     (column,) = columns
 
-    assert config_options.executor.name == "streaming", (
-        "'in-memory' executor not supported in '_decompose_unique'"
+    unique_fraction_dict = _get_unique_fractions(
+        input_ir,
+        _leaf_column_names(child),
+        partition_info,
+        config_options,
+        column_statistics,
     )
 
-    cardinality: float | None = None
-    if cardinality_factor := {
-        max(min(v, 1.0), 0.00001)
-        for k, v in config_options.executor.cardinality_factor.items()
-        if k in _leaf_column_names(child)
-    }:
-        cardinality = max(cardinality_factor)
+    unique_fraction = (
+        max(unique_fraction_dict.values()) if unique_fraction_dict else None
+    )
 
     input_ir, partition_info = lower_distinct(
         Distinct(
@@ -194,7 +198,7 @@ def _decompose_unique(
         input_ir,
         partition_info,
         config_options,
-        cardinality=cardinality,
+        unique_fraction=unique_fraction,
     )
 
     return column, input_ir, partition_info
@@ -363,6 +367,7 @@ def _decompose_expr_node(
     input_ir: IR,
     partition_info: MutableMapping[IR, PartitionInfo],
     config_options: ConfigOptions,
+    column_statistics: MutableMapping[str, ColumnStats],
     *,
     names: Generator[str, None, None],
 ) -> tuple[Expr, IR, MutableMapping[IR, PartitionInfo]]:
@@ -380,6 +385,8 @@ def _decompose_expr_node(
         associated partitioning information.
     config_options
         GPUEngine configuration options.
+    column_statistics
+        Column statistics.
     names
         Generator of unique names for temporaries.
 
@@ -411,7 +418,12 @@ def _decompose_expr_node(
         )
     elif isinstance(expr, UnaryFunction) and expr.name == "unique":
         return _decompose_unique(
-            expr, input_ir, partition_info, config_options, names=names
+            expr,
+            input_ir,
+            partition_info,
+            config_options,
+            column_statistics,
+            names=names,
         )
     else:
         # This is an un-supported expression - raise.
@@ -432,6 +444,7 @@ def _decompose(
             rec.state["input_ir"],
             {rec.state["input_ir"]: rec.state["input_partition_info"]},
             rec.state["config_options"],
+            rec.state["column_statistics"],
             names=rec.state["unique_names"],
         )
 
@@ -469,6 +482,7 @@ def _decompose(
         input_ir,
         partition_info,
         rec.state["config_options"],
+        rec.state["column_statistics"],
         names=rec.state["unique_names"],
     )
 
@@ -478,6 +492,7 @@ def decompose_expr_graph(
     input_ir: IR,
     partition_info: MutableMapping[IR, PartitionInfo],
     config_options: ConfigOptions,
+    column_statistics: MutableMapping[str, ColumnStats],
 ) -> tuple[NamedExpr, IR, MutableMapping[IR, PartitionInfo]]:
     """
     Decompose a NamedExpr into stages.
@@ -494,6 +509,8 @@ def decompose_expr_graph(
         associated partitioning information.
     config_options
         GPUEngine configuration options.
+    column_statistics
+        Column statistics.
 
     Returns
     -------
@@ -514,6 +531,7 @@ def decompose_expr_graph(
         "input_ir": input_ir,
         "input_partition_info": partition_info[input_ir],
         "config_options": config_options,
+        "column_statistics": column_statistics,
         "unique_names": unique_names((named_expr.name, *input_ir.schema.keys())),
     }
     mapper = CachingVisitor(_decompose, state=state)

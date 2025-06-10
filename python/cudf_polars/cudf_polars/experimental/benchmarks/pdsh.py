@@ -1214,7 +1214,7 @@ def run(options: Sequence[str] | None = None) -> None:
         executor_options: dict[str, Any] = {}
         if run_config.executor == "streaming":
             executor_options = {
-                "cardinality_factor": {
+                "unique_fraction": {
                     "c_custkey": 0.05,  # Q10
                     "l_orderkey": 1.0,  # Q18
                     "l_partkey": 0.1,  # Q20

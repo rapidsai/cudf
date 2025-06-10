@@ -86,6 +86,7 @@ def lower_ir_graph(
         lower_ir_node,
         state={
             "config_options": config_options,
+            # TODO: Collect/attach "full" statistics
             "statistics": collect_source_statistics(ir),
         },
     )
