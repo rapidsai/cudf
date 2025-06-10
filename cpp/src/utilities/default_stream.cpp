@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -44,14 +44,15 @@ bool is_ptds_enabled()
 #endif
 }
 
-rmm::cuda_stream_view const get_default_stream() {
+rmm::cuda_stream_view const get_default_stream()
+{
   static auto const default_stream = []() {
-    if(std::getenv("CUDF_PER_THREAD_STREAM") != nullptr) {
+    if (std::getenv("CUDF_PER_THREAD_STREAM") != nullptr) {
       return rmm::cuda_stream_per_thread;
     } else {
       return detail::default_stream_value;
     }
   }();
-return default_stream;
+  return default_stream;
 }
 }  // namespace cudf
