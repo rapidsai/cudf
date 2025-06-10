@@ -27,7 +27,7 @@ dependencies:
 - cudatoolkit
 - cupy>=12.0.0
 - cxx-compiler
-- cython>=3.0.3,<3.1.0a0
+- cython>=3.0.3
 - dask-cuda==25.8.*,>=0.0.0a0
 - dlpack>=0.8,<1.0
 - doxygen=1.9.1
@@ -70,7 +70,7 @@ dependencies:
 - pandas
 - pandas>=2.0,<2.2.4dev0
 - pandoc
-- polars>=1.25,<1.29
+- polars>=1.25,<1.31
 - pre-commit
 - ptxcompiler
 - pyarrow>=14.0.0,<20.0.0a0

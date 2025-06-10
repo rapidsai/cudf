@@ -1,6 +1,6 @@
 # Copyright (c) 2023-2025, NVIDIA CORPORATION.
 
-from cpython cimport bool as py_bool, datetime
+from cpython cimport bool as py_bool
 from cython cimport no_gc_clear
 from libc.stdint cimport (
     int8_t,
@@ -20,6 +20,7 @@ from pylibcudf.libcudf.scalar.scalar cimport (
     scalar,
     duration_scalar,
     numeric_scalar,
+    string_scalar,
     timestamp_scalar,
 )
 from pylibcudf.libcudf.scalar.scalar_factories cimport (
@@ -52,6 +53,15 @@ from .column cimport Column
 from .traits cimport is_floating_point
 from .types cimport DataType
 from functools import singledispatch
+
+try:
+    import pyarrow as pa
+    pa_err = None
+except ImportError as e:
+    pa = None
+    pa_err = e
+
+import datetime
 
 try:
     import numpy as np
@@ -100,6 +110,26 @@ cdef class Scalar:
     cpdef bool is_valid(self):
         """True if the scalar is valid, false if not"""
         return self.get().is_valid()
+
+    @staticmethod
+    def from_arrow(pa_val, dtype: DataType | None = None) -> Scalar:
+        """
+        Convert a pyarrow scalar to a pylibcudf.Scalar.
+
+        Parameters
+        ----------
+        pa_val: pyarrow scalar
+            Value to convert to a pylibcudf.Scalar
+        dtype: DataType | None
+            The datatype to cast the value to. If None,
+            the type is inferred from the pyarrow scalar.
+
+        Returns
+        -------
+        Scalar
+            New pylibcudf.Scalar
+        """
+        return _from_arrow(pa_val, dtype)
 
     @staticmethod
     cdef Scalar empty_like(Column column):
@@ -165,6 +195,50 @@ cdef class Scalar:
             New pylibcudf.Scalar
         """
         return _from_numpy(np_val)
+
+    def to_py(self):
+        """
+        Convert a Scalar to a Python scalar.
+
+        Returns
+        -------
+        Python scalar
+            A Python scalar associated with the type of the Scalar.
+        """
+        if not self.is_valid():
+            return None
+
+        cdef type_id tid = self.type().id()
+        cdef const scalar* slr = self.c_obj.get()
+        if tid == type_id.BOOL8:
+            return (<numeric_scalar[cbool]*>slr).value()
+        elif tid == type_id.STRING:
+            return (<string_scalar*>slr).to_string().decode()
+        elif tid == type_id.FLOAT32:
+            return (<numeric_scalar[float]*>slr).value()
+        elif tid == type_id.FLOAT64:
+            return (<numeric_scalar[double]*>slr).value()
+        elif tid == type_id.INT8:
+            return (<numeric_scalar[int8_t]*>slr).value()
+        elif tid == type_id.INT16:
+            return (<numeric_scalar[int16_t]*>slr).value()
+        elif tid == type_id.INT32:
+            return (<numeric_scalar[int32_t]*>slr).value()
+        elif tid == type_id.INT64:
+            return (<numeric_scalar[int64_t]*>slr).value()
+        elif tid == type_id.UINT8:
+            return (<numeric_scalar[uint8_t]*>slr).value()
+        elif tid == type_id.UINT16:
+            return (<numeric_scalar[uint16_t]*>slr).value()
+        elif tid == type_id.UINT32:
+            return (<numeric_scalar[uint32_t]*>slr).value()
+        elif tid == type_id.UINT64:
+            return (<numeric_scalar[uint64_t]*>slr).value()
+        else:
+            raise NotImplementedError(
+                f"Converting to Python scalar for type {self.type().id()!r} "
+                "is not supported."
+            )
 
 
 cdef Scalar _new_scalar(unique_ptr[scalar] c_obj, DataType dtype):
@@ -638,3 +712,18 @@ if np is not None:
         (<numeric_scalar[double]*>c_obj.get()).set_value(np_val)
         cdef Scalar slr = _new_scalar(move(c_obj), dtype)
         return slr
+
+
+if pa is not None:
+    def _from_arrow(obj: pa.Scalar, dtype: DataType | None = None) -> Scalar:
+        if isinstance(obj.type, pa.ListType) and obj.as_py() is None:
+            # pyarrow doesn't correctly handle None values for list types, so
+            # we have to create this one manually.
+            # https://github.com/apache/arrow/issues/40319
+            pa_array = pa.array([None], type=obj.type)
+        else:
+            pa_array = pa.array([obj])
+        return Column.from_arrow(pa_array, dtype=dtype).to_scalar()
+else:
+    def _from_arrow(obj: pa.Scalar, dtype: DataType | None = None) -> Scalar:
+        raise pa_err

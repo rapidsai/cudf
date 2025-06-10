@@ -30,10 +30,10 @@ project(
   LANGUAGES C CXX CUDA
 )
 
-if(CMAKE_CUDA_COMPILER_ID STREQUAL "NVIDIA" AND CMAKE_CUDA_COMPILER_VERSION VERSION_LESS 11.5)
+if(CMAKE_CUDA_COMPILER_ID STREQUAL "NVIDIA" AND CMAKE_CUDA_COMPILER_VERSION VERSION_LESS 12.0)
   message(
     FATAL_ERROR
-      "libcudf requires CUDA Toolkit 11.5+ to compile (nvcc ${CMAKE_CUDA_COMPILER_VERSION} provided)"
+      "libcudf requires CUDA Toolkit 12.0+ to compile (nvcc ${CMAKE_CUDA_COMPILER_VERSION} provided)"
   )
 endif()
 
@@ -692,6 +692,8 @@ add_library(
   src/search/contains_scalar.cu
   src/search/contains_table.cu
   src/search/search_ordered.cu
+  src/sort/faster_sort_column.cu
+  src/sort/faster_stable_sort_column.cu
   src/sort/is_sorted.cu
   src/sort/rank.cu
   src/sort/segmented_sort.cu
@@ -856,12 +858,12 @@ set_target_properties(
   PROPERTIES BUILD_RPATH "\$ORIGIN"
              INSTALL_RPATH "\$ORIGIN"
              # set target compile options
-             CXX_STANDARD 17
+             CXX_STANDARD 20
              CXX_STANDARD_REQUIRED ON
              # For std:: support of __int128_t. Can be removed once using cuda::std
              CXX_EXTENSIONS ON
              CXX_VISIBILITY_PRESET hidden
-             CUDA_STANDARD 17
+             CUDA_STANDARD 20
              CUDA_STANDARD_REQUIRED ON
              CUDA_VISIBILITY_PRESET hidden
              POSITION_INDEPENDENT_CODE ON
@@ -1042,9 +1044,9 @@ if(CUDF_BUILD_TESTUTIL)
     PROPERTIES BUILD_RPATH "\$ORIGIN"
                INSTALL_RPATH "\$ORIGIN"
                # set target compile options
-               CXX_STANDARD 17
+               CXX_STANDARD 20
                CXX_STANDARD_REQUIRED ON
-               CUDA_STANDARD 17
+               CUDA_STANDARD 20
                CUDA_STANDARD_REQUIRED ON
                POSITION_INDEPENDENT_CODE ON
                INTERFACE_POSITION_INDEPENDENT_CODE ON
@@ -1065,9 +1067,9 @@ if(CUDF_BUILD_TESTUTIL)
     PROPERTIES BUILD_RPATH "\$ORIGIN"
                INSTALL_RPATH "\$ORIGIN"
                # set target compile options
-               CXX_STANDARD 17
+               CXX_STANDARD 20
                CXX_STANDARD_REQUIRED ON
-               CUDA_STANDARD 17
+               CUDA_STANDARD 20
                CUDA_STANDARD_REQUIRED ON
   )
 
@@ -1106,6 +1108,7 @@ if(CUDF_BUILD_TESTUTIL)
               $<INSTALL_INTERFACE:src/cudftestutil/utilities/tdigest_utilities.cu>
   )
   target_link_libraries(cudftestutil_impl INTERFACE cudf::cudftestutil)
+  target_compile_features(cudftestutil_impl INTERFACE cxx_std_20)
 
   # Base library for linking to cudf::cudftestutil, Note that targets should not directly link to
   # cudf::cudftestutil_impl and should instead link to an OBJECT library that contains the compiled
@@ -1156,7 +1159,7 @@ if(CUDF_BUILD_STREAMS_TEST_UTIL)
     set_target_properties(
       ${_tgt}
       PROPERTIES # set target compile options
-                 CXX_STANDARD 17
+                 CXX_STANDARD 20
                  CXX_STANDARD_REQUIRED ON
                  POSITION_INDEPENDENT_CODE ON
     )

@@ -64,7 +64,9 @@ class DataFrame:
             self.table,
             [plc.interop.ColumnMetadata(name=name) for name in name_map],
         )
-        df: pl.DataFrame = pl.from_arrow(table)
+        # from_arrow returns DataFrame | Series, but we know that it's a
+        # DataFrame since the input was a Table.
+        df = cast(pl.DataFrame, pl.from_arrow(table))
         return df.rename(name_map).with_columns(
             pl.col(c.name).set_sorted(descending=c.order == plc.types.Order.DESCENDING)
             if c.is_sorted
@@ -106,7 +108,7 @@ class DataFrame:
         -------
         New dataframe representing the input.
         """
-        plc_table = plc.Table(df)
+        plc_table = plc.Table.from_arrow(df)
         return cls(
             Column(d_col, name=name).copy_metadata(h_col)
             for d_col, h_col, name in zip(

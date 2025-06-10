@@ -999,9 +999,9 @@ def _pivot(
     Parameters
     ----------
     col_accessor : DataFrame
-    index : cudf.Index
+    index : Index
         Index labels of the result
-    columns : cudf.Index
+    columns : Index
         Column labels of the result
     """
     columns_labels, columns_idx = columns._encode()
@@ -1153,6 +1153,7 @@ def pivot(
     # MultiIndex to Index
     if not values_is_list:
         result._data.droplevel(0)
+        result._data.label_dtype = column_data.dtype
 
     return result
 

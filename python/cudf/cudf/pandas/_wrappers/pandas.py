@@ -5,9 +5,9 @@ import abc
 import copyreg
 import functools
 import importlib
+import inspect
 import os
 import pickle
-import sys
 
 import pandas as pd
 
@@ -126,6 +126,20 @@ def make_intermediate_proxy_type(name, fast_type, slow_type):
     )
 
 
+try:
+    # List Accessor in pandas was introduced in 2.2.0 only
+    pd_ListAccessor = pd.core.arrays.arrow.accessors.ListAccessor
+except AttributeError:
+    pd_ListAccessor = _Unusable
+
+
+try:
+    # Struct Accessor in pandas was introduced in 2.2.0 only
+    pd_StructAccessor = pd.core.arrays.arrow.accessors.StructAccessor
+except AttributeError:
+    pd_StructAccessor = _Unusable
+
+
 class _AccessorAttr:
     """
     Descriptor that ensures that accessors like `.dt` and `.str`
@@ -216,6 +230,17 @@ StringMethods = make_intermediate_proxy_type(
     pd.core.strings.accessor.StringMethods,
 )
 
+ListMethods = make_intermediate_proxy_type(
+    "ListMethods",
+    cudf.core.column.lists.ListMethods,
+    pd_ListAccessor,
+)
+
+StructAccessor = make_intermediate_proxy_type(
+    "StructAccessor",
+    cudf.core.column.struct.StructMethods,
+    pd_StructAccessor,
+)
 _CategoricalAccessor = make_intermediate_proxy_type(
     "CategoricalAccessor",
     cudf.core.column.categorical.CategoricalAccessor,
@@ -250,6 +275,7 @@ DataFrame = make_final_proxy_type(
     additional_attributes={
         "__array__": array_method,
         "__dir__": _DataFrame__dir__,
+        "__arrow_c_stream__": _FastSlowAttribute("__arrow_c_stream__"),
         "_constructor": _FastSlowAttribute("_constructor"),
         "_constructor_sliced": _FastSlowAttribute("_constructor_sliced"),
         "_accessors": set(),
@@ -294,6 +320,8 @@ Series = make_final_proxy_type(
         "__iter__": custom_iter,
         "dt": _AccessorAttr(CombinedDatetimelikeProperties),
         "str": _AccessorAttr(StringMethods),
+        "list": _AccessorAttr(ListMethods),
+        "struct": _AccessorAttr(StructAccessor),
         "cat": _AccessorAttr(_CategoricalAccessor),
         "_constructor": _FastSlowAttribute("_constructor"),
         "_constructor_expanddim": _FastSlowAttribute("_constructor_expanddim"),
@@ -555,6 +583,9 @@ PeriodDtype = make_final_proxy_type(
     pd.PeriodDtype,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
+    additional_attributes={
+        "__hash__": _FastSlowAttribute("__hash__"),
+    },
 )
 
 Period = make_final_proxy_type(
@@ -1051,6 +1082,17 @@ except ImportError:
     # Styler requires Jinja to be installed
     pass
 
+
+def _find_user_frame():
+    frame = inspect.currentframe()
+    while frame:
+        modname = frame.f_globals.get("__name__", "")
+        if modname == "__main__" or not modname.startswith("cudf."):
+            return frame
+        frame = frame.f_back
+    raise RuntimeError("Could not find the user's frame.")
+
+
 _eval_func = _FunctionProxy(_Unusable(), pd.eval)
 
 register_proxy_func(pd.read_pickle)(
@@ -1061,9 +1103,9 @@ register_proxy_func(pd.to_pickle)(_FunctionProxy(_Unusable(), pd.to_pickle))
 
 
 def _get_eval_locals_and_globals(level, local_dict=None, global_dict=None):
-    frame = sys._getframe(level + 3)
-    local_dict = frame.f_locals if local_dict is None else local_dict
-    global_dict = frame.f_globals if global_dict is None else global_dict
+    frame = _find_user_frame()
+    local_dict = dict(frame.f_locals) if local_dict is None else local_dict
+    global_dict = dict(frame.f_globals) if global_dict is None else global_dict
     return local_dict, global_dict
 
 

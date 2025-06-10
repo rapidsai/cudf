@@ -27,7 +27,7 @@ def pa_timestamp_col():
 
 @pytest.fixture(scope="module")
 def plc_timestamp_col(pa_timestamp_col):
-    return plc.Column(pa_timestamp_col)
+    return plc.Column.from_arrow(pa_timestamp_col)
 
 
 @pytest.mark.parametrize("format", ["%Y-%m-%d"])
@@ -37,7 +37,7 @@ def test_to_datetime(
     expect = pa.compute.strptime(pa_timestamp_col, format, timestamp_type.unit)
     got = plc.strings.convert.convert_datetime.to_timestamps(
         plc_timestamp_col,
-        plc.interop.from_arrow(timestamp_type),
+        plc.DataType.from_arrow(timestamp_type),
         format,
     )
     assert_column_eq(expect, got)
