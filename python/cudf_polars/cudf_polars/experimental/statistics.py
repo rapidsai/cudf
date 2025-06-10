@@ -1,24 +1,22 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Utilities for cardinality estimation."""
+"""Utilities for tracking column statistics."""
 
 from __future__ import annotations
 
 import itertools
 from functools import singledispatch
 
-import polars as pl
-
 from cudf_polars.dsl import expr
 from cudf_polars.dsl.ir import (
     IR,
+    ConditionalJoin,
     DataFrameScan,
     GroupBy,
     HConcat,
     HStack,
     Join,
-    Scan,
     Select,
     Union,
 )
@@ -40,6 +38,8 @@ class TableSourceStats:
         filtering or slicing has occurred. If None, the
         cardinality is unknown.
     """
+
+    __slots__ = ("cardinality", "paths")
 
     def __init__(
         self,
@@ -69,6 +69,8 @@ class ColumnSourceStats:
         calculate the partition count for an IR node.
     """
 
+    __slots__ = ("file_size", "table_source", "unique_count", "unique_fraction")
+
     def __init__(
         self,
         table_source: TableSourceStats,
@@ -97,6 +99,8 @@ class ColumnStats:
         Column-source statistics.
     """
 
+    __slots__ = ("name", "source_stats", "unique_count")
+
     def __init__(
         self,
         *,
@@ -112,23 +116,25 @@ class ColumnStats:
 class StatsCollector:
     """Column statistics collector."""
 
+    __slots__ = ("cardinality", "column_statistics")
+
     def __init__(self) -> None:
         self.cardinality: dict[IR, int] = {}
         self.column_statistics: dict[IR, dict[str, ColumnStats]] = {}
 
 
 @singledispatch
-def update_source_stats(ir: IR, stats: StatsCollector) -> None:
+def add_source_stats(ir: IR, stats: StatsCollector) -> None:
     """
-    Collect basic source statistics for an IR node.
+    Add basic source statistics for an IR node.
 
     Parameters
     ----------
     ir
-        The IR node to collect statistics for.
+        The IR node to collect source statistics for.
     stats
         The `StatsCollector` object to update with new
-        statistics.
+        source statistics.
     """
 
 
@@ -136,13 +142,13 @@ def collect_source_statistics(root: IR) -> StatsCollector:
     """Collect basic source statistics."""
     stats: StatsCollector = StatsCollector()
     for node in post_traversal([root]):
-        update_source_stats(node, stats)
+        add_source_stats(node, stats)
     return stats
 
 
-@update_source_stats.register(IR)
+@add_source_stats.register(IR)
 def _(ir: IR, stats: StatsCollector) -> None:
-    # Default `update_source_stats` implementation.
+    # Default `add_source_stats` implementation.
     if len(ir.children) == 1:
         (child,) = ir.children
         stats.column_statistics[ir] = {
@@ -152,46 +158,25 @@ def _(ir: IR, stats: StatsCollector) -> None:
     else:  # pragma: no cover
         # Multi-child nodes require custom logic
         raise NotImplementedError(
-            f"No update_source_stats dispatch registered for {type(ir)}."
+            f"No add_source_stats dispatch registered for {type(ir)}."
         )
 
 
-@update_source_stats.register(Scan)
-def _(ir: Scan, stats: StatsCollector) -> None:
-    if ir.typ == "parquet":
-        # TODO: Use pq metadata to collect statistics
-        nrows = pl.scan_parquet(ir.paths).select(pl.len()).collect().item(0, 0)
-        table_source_info = TableSourceStats(
-            paths=tuple(ir.paths),
-            cardinality=nrows,
-        )
-        stats.cardinality[ir] = nrows
-    else:
-        table_source_info = TableSourceStats(paths=tuple(ir.paths))
-    stats.column_statistics[ir] = {
-        name: ColumnStats(
-            name=name,
-            source_stats=ColumnSourceStats(table_source_info),
-        )
-        for name in ir.schema
-    }
-
-
-@update_source_stats.register(DataFrameScan)
+@add_source_stats.register(DataFrameScan)
 def _(ir: DataFrameScan, stats: StatsCollector) -> None:
     nrows = ir.df.height()
-    table_source_info = TableSourceStats(cardinality=nrows)
+    table_source = TableSourceStats(cardinality=nrows)
     stats.column_statistics[ir] = {
         name: ColumnStats(
             name=name,
-            source_stats=ColumnSourceStats(table_source_info),
+            source_stats=ColumnSourceStats(table_source),
         )
         for name in ir.schema
     }
     stats.cardinality[ir] = nrows
 
 
-@update_source_stats.register(Join)
+@add_source_stats.register(Join)
 def _(ir: Join, stats: StatsCollector) -> None:
     left, right = ir.children
     kstats = {
@@ -214,7 +199,13 @@ def _(ir: Join, stats: StatsCollector) -> None:
     stats.column_statistics[ir] = kstats | jstats
 
 
-@update_source_stats.register(GroupBy)
+@add_source_stats.register(ConditionalJoin)
+def _(ir: Join, stats: StatsCollector) -> None:
+    # TODO: Fix this.
+    stats.column_statistics[ir] = {name: ColumnStats(name=name) for name in ir.schema}
+
+
+@add_source_stats.register(GroupBy)
 def _(ir: GroupBy, stats: StatsCollector) -> None:
     (child,) = ir.children
     stats.column_statistics[ir] = {
@@ -224,7 +215,7 @@ def _(ir: GroupBy, stats: StatsCollector) -> None:
     } | {n.name: ColumnStats(name=n.name) for n in ir.agg_requests}
 
 
-@update_source_stats.register(HStack)
+@add_source_stats.register(HStack)
 def _(ir: HStack, stats: StatsCollector) -> None:
     (child,) = ir.children
     new_cols = {
@@ -236,7 +227,7 @@ def _(ir: HStack, stats: StatsCollector) -> None:
     stats.column_statistics[ir] = stats.column_statistics[child] | new_cols
 
 
-@update_source_stats.register(Select)
+@add_source_stats.register(Select)
 def _(ir: Select, stats: StatsCollector) -> None:
     (child,) = ir.children
     stats.column_statistics[ir] = {
@@ -247,7 +238,7 @@ def _(ir: Select, stats: StatsCollector) -> None:
     }
 
 
-@update_source_stats.register(HConcat)
+@add_source_stats.register(HConcat)
 def _(ir: HConcat, stats: StatsCollector) -> None:
     stats.column_statistics[ir] = dict(
         itertools.chain.from_iterable(
@@ -256,7 +247,7 @@ def _(ir: HConcat, stats: StatsCollector) -> None:
     )
 
 
-@update_source_stats.register(Union)
+@add_source_stats.register(Union)
 def _(ir: Union, stats: StatsCollector) -> None:
     # TODO: Might be able to preserve source statistics
     stats.column_statistics[ir] = {name: ColumnStats(name=name) for name in ir.schema}
