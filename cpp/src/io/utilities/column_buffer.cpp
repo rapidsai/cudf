@@ -295,12 +295,12 @@ std::unique_ptr<column> make_column(column_buffer_base<string_policy>& buffer,
             construct_column(buffer.children[i], child_info, child_schema));
         }
 
-        return make_structs_column_unsanitized(buffer.size,
-                                               std::move(output_children),
-                                               buffer._null_count,
-                                               std::move(buffer._null_mask),
-                                               stream,
-                                               buffer._mr);
+        return create_structs_hierarchy(buffer.size,
+                                        std::move(output_children),
+                                        buffer._null_count,
+                                        std::move(buffer._null_mask),
+                                        stream,
+                                        buffer._mr);
       } break;
 
       default: {
@@ -318,7 +318,7 @@ std::unique_ptr<column> make_column(column_buffer_base<string_policy>& buffer,
     if (col->nullable()) {
       auto col_contents = col->release();
       for (auto& child : col_contents.children) {
-        child = structs::detail::superimpose_nulls(
+        child = structs::detail::superimpose_and_sanitize_nulls(
           static_cast<bitmask_type const*>(col_contents.null_mask->data()),
           buffer._null_count,
           std::move(child),

@@ -46,11 +46,12 @@ std::unique_ptr<cudf::column> make_structs_column(
 
   if (!null_mask.is_empty()) {
     for (auto& child : child_columns) {
-      child = structs::detail::superimpose_nulls(static_cast<bitmask_type const*>(null_mask.data()),
-                                                 null_count,
-                                                 std::move(child),
-                                                 stream,
-                                                 mr);
+      child = structs::detail::superimpose_and_sanitize_nulls(
+        static_cast<bitmask_type const*>(null_mask.data()),
+        null_count,
+        std::move(child),
+        stream,
+        mr);
     }
   }
 
@@ -62,8 +63,8 @@ std::unique_ptr<cudf::column> make_structs_column(
                                   std::move(child_columns));
 }
 
-/// Column factory that adopts child columns without null sanitization.
-std::unique_ptr<cudf::column> make_structs_column_unsanitized(
+/// Column factory that adopts child columns and constructs struct hierarchy
+std::unique_ptr<cudf::column> create_structs_hierarchy(
   size_type num_rows,
   std::vector<std::unique_ptr<column>>&& child_columns,
   size_type null_count,
