@@ -56,6 +56,7 @@ from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
     SIZE_TYPE_DTYPE,
     cudf_dtype_to_pa_type,
+    get_dtype_of_same_kind,
     is_dtype_obj_numeric,
 )
 from cudf.utils.performance_tracking import _performance_tracking
@@ -805,6 +806,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         column_included = []
         requests = []
         result_columns: list[list[ColumnBase]] = []
+
         for i, (col, aggs) in enumerate(zip(values, aggregations)):
             valid_aggregations = get_valid_aggregation(col.dtype)
             included_aggregations_i = []
@@ -843,7 +845,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             else self._groupby.plc_groupby.aggregate(requests)
         )
 
-        for i, result in zip(column_included, results):
+        for i, result, val in zip(column_included, results, values):
             result_columns[i] = [
                 ColumnBase.from_pylibcudf(col) for col in result.columns()
             ]
@@ -1023,10 +1025,16 @@ class GroupBy(Serializable, Reducible, Scannable):
                     and orig_dtype != col.dtype.element_type
                 ):
                     # Structs lose their labels which we reconstruct here
-                    col = col._with_type_metadata(ListDtype(orig_dtype))
+                    col = col._with_type_metadata(
+                        get_dtype_of_same_kind(
+                            orig_dtype, ListDtype(orig_dtype)
+                        )
+                    )
 
                 if agg_kind in {"COUNT", "SIZE", "ARGMIN", "ARGMAX"}:
-                    data[key] = col.astype(np.dtype(np.int64))
+                    data[key] = col.astype(
+                        get_dtype_of_same_kind(orig_dtype, np.dtype(np.int64))
+                    )
                 elif (
                     self.obj.empty
                     and (
@@ -1041,7 +1049,15 @@ class GroupBy(Serializable, Reducible, Scannable):
                 ):
                     data[key] = col.astype(orig_dtype)
                 else:
-                    data[key] = col
+                    if isinstance(orig_dtype, DecimalDtype):
+                        # `col` has a different precision than `orig_dtype`
+                        # hence we only preserve the kind of the dtype
+                        # and not the precision.
+                        data[key] = col._with_type_metadata(
+                            get_dtype_of_same_kind(orig_dtype, col.dtype)
+                        )
+                    else:
+                        data[key] = col._with_type_metadata(orig_dtype)
         data = ColumnAccessor(data, multiindex=multilevel)
         if not multilevel:
             data = data.rename_levels({np.nan: None}, level=0)

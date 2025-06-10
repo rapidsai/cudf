@@ -65,6 +65,7 @@ from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
     SIZE_TYPE_DTYPE,
     can_convert_to_column,
+    get_dtype_of_same_kind,
     is_column_like,
     is_dtype_obj_numeric,
 )
@@ -447,7 +448,13 @@ class IndexedFrame(Frame):
             if cast_to_int and result_col.dtype.kind in "uib":
                 # For reductions that accumulate a value (e.g. sum, not max)
                 # pandas returns an int64 dtype for all int or bool dtypes.
-                result_col = result_col.astype(np.dtype(np.int64))
+                if cudf.get_option("mode.pandas_compatible"):
+                    dtype = get_dtype_of_same_kind(
+                        result_col.dtype, np.dtype(np.int64)
+                    )
+                else:
+                    dtype = np.dtype(np.int64)
+                result_col = result_col.astype(dtype)
             results.append(getattr(result_col, op)())
         return self._from_data_like_self(
             self._data._from_columns_like_self(results)
@@ -5357,17 +5364,48 @@ class IndexedFrame(Frame):
         element_type = cast(
             ListDtype, self._columns[column_index].dtype
         ).element_type
+
+        column_index += len(idx_cols)
         exploded = [
-            column._with_type_metadata(element_type)
+            new_column._with_type_metadata(
+                element_type,
+            )
             if i == column_index
-            else column
-            for i, column in enumerate(exploded, start=-len(idx_cols))
+            else new_column._with_type_metadata(old_column.dtype)
+            for i, (new_column, old_column) in enumerate(
+                zip(exploded, itertools.chain(idx_cols, self._columns))
+            )
         ]
-        return self._from_columns_like_self(
-            exploded,
-            self._column_names,
-            self.index.names if not ignore_index else None,
+
+        data = type(self._data)(
+            dict(zip(self._column_names, exploded[len(idx_cols) :])),
+            multiindex=self._data.multiindex,
+            level_names=self._data.level_names,
+            rangeindex=self._data.rangeindex,
+            label_dtype=self._data.label_dtype,
+            verify=False,
         )
+        if len(idx_cols):
+            index = _index_from_data(
+                dict(enumerate(exploded[: len(idx_cols)]))
+            )._copy_type_metadata(self.index)
+            if (
+                isinstance(self.index, cudf.CategoricalIndex)
+                and not isinstance(index, cudf.CategoricalIndex)
+            ) or (
+                isinstance(self.index, cudf.MultiIndex)
+                and not isinstance(index, cudf.MultiIndex)
+            ):
+                index = type(self.index)._from_data(index._data)
+            if isinstance(self.index, cudf.MultiIndex):
+                index.names = self.index.names
+            else:
+                index.name = self.index.name
+        else:
+            index = None
+
+        result = type(self)._from_data(data, index)
+        return result
 
     @_performance_tracking
     def tile(self, count: int):
@@ -6774,6 +6812,7 @@ def _drop_rows_by_labels(
             )
 
     else:
+        orig_index_type = obj.index.dtype
         if errors == "raise" and not labels.isin(obj.index).all():  # type: ignore[union-attr]
             raise KeyError("One or more values not found in axis")
 
@@ -6790,7 +6829,7 @@ def _drop_rows_by_labels(
         # Join changes the index to common type,
         # but we need to preserve the type of
         # index being returned, Hence this type-cast.
-        res.index = res.index.astype(obj.index.dtype)
+        res.index = res.index.astype(orig_index_type)
         return res
 
 

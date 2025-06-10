@@ -28,6 +28,8 @@ from cudf.utils.dtypes import (
     SIZE_TYPE_DTYPE,
     can_convert_to_column,
     dtype_to_pylibcudf_type,
+    is_dtype_obj_string,
+    is_pandas_nullable_extension_dtype,
 )
 from cudf.utils.scalar import pa_scalar_to_plc_scalar
 from cudf.utils.temporal import infer_format
@@ -5841,7 +5843,13 @@ class StringColumn(ColumnBase):
     ):
         if not isinstance(data, Buffer):
             raise ValueError("data must be a Buffer")
-        if dtype != CUDF_STRING_DTYPE:
+        if (
+            not cudf.get_option("mode.pandas_compatible")
+            and dtype != CUDF_STRING_DTYPE
+        ) or (
+            cudf.get_option("mode.pandas_compatible")
+            and not is_dtype_obj_string(dtype)
+        ):
             raise ValueError(f"dtype must be {CUDF_STRING_DTYPE}")
         if len(children) > 1:
             raise ValueError("StringColumn must have at most 1 offset column.")
@@ -6032,6 +6040,17 @@ class StringColumn(ColumnBase):
         other = [item] if is_scalar(item) else item
         return self.contains(as_column(other, dtype=self.dtype)).any()
 
+    def _with_type_metadata(self: StringColumn, dtype: Dtype) -> StringColumn:
+        """
+        Copies type metadata from self onto other, returning a new column.
+        """
+        # For pandas dtypes, store them directly in the column's dtype property
+        if (
+            isinstance(dtype, pd.ArrowDtype) and dtype.kind == "U"
+        ) or isinstance(dtype, pd.StringDtype):
+            self._dtype = dtype
+        return self
+
     def as_numerical_column(self, dtype: np.dtype) -> NumericalColumn:
         if dtype.kind == "b":
             with acquire_spill_lock():
@@ -6039,7 +6058,10 @@ class StringColumn(ColumnBase):
                     self.to_pylibcudf(mode="read")
                 )
                 result = ColumnBase.from_pylibcudf(plc_column)
-            return (result > np.int8(0)).fillna(False)
+            result = result > np.int8(0)
+            if not is_pandas_nullable_extension_dtype(dtype):
+                result = result.fillna(False)
+            return result._with_type_metadata(dtype)  # type: ignore[return-value]
         elif dtype.kind in {"i", "u"}:
             if not self.is_integer().all():
                 raise ValueError(
@@ -6058,8 +6080,12 @@ class StringColumn(ColumnBase):
             raise ValueError(f"dtype must be a numerical type, not {dtype}")
         plc_dtype = dtype_to_pylibcudf_type(dtype)
         with acquire_spill_lock():
-            return type(self).from_pylibcudf(  # type: ignore[return-value]
-                cast_func(self.to_pylibcudf(mode="read"), plc_dtype)
+            return (
+                type(self)
+                .from_pylibcudf(  # type: ignore[return-value]
+                    cast_func(self.to_pylibcudf(mode="read"), plc_dtype)
+                )
+                ._with_type_metadata(dtype=dtype)
             )
 
     def strptime(
@@ -6141,7 +6167,13 @@ class StringColumn(ColumnBase):
         result.dtype.precision = dtype.precision  # type: ignore[union-attr]
         return result  # type: ignore[return-value]
 
-    def as_string_column(self) -> StringColumn:
+    def as_string_column(self, dtype) -> StringColumn:
+        if dtype != self.dtype:
+            if isinstance(dtype, pd.StringDtype) or (
+                isinstance(dtype, pd.ArrowDtype)
+                and pa.string() == dtype.pyarrow_dtype
+            ):
+                self._dtype = dtype
         return self
 
     @property
@@ -6164,11 +6196,16 @@ class StringColumn(ColumnBase):
         nullable: bool = False,
         arrow_type: bool = False,
     ) -> pd.Index:
-        if nullable and not arrow_type:
-            pandas_array = pd.StringDtype().__from_arrow__(self.to_arrow())
+        if (
+            cudf.get_option("mode.pandas_compatible")
+            and isinstance(self.dtype, pd.StringDtype)
+            and "pyarrow" in self.dtype.storage
+        ):
+            pandas_array = self.dtype.__from_arrow__(
+                self.to_arrow().cast(pa.large_string())
+            )
             return pd.Index(pandas_array, copy=False)
-        else:
-            return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
+        return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
 
     def can_cast_safely(self, to_dtype: DtypeObj) -> bool:
         if self.dtype == to_dtype:
