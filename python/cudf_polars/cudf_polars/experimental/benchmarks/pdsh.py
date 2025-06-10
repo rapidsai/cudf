@@ -21,25 +21,22 @@ from collections import defaultdict
 from datetime import date
 from typing import TYPE_CHECKING, Any
 
-import nvtx
-
 import polars as pl
 
 try:
-    from cudf_polars.dsl.translate import Translator
     from cudf_polars.experimental.benchmarks.utils import (
         Record,
         RunConfig,
+        execute_query,
         get_data,
+        get_executor_options,
+        initialize_dask_cluster,
         parse_args,
+        print_query_plan,
     )
-    from cudf_polars.experimental.explain import explain_query
-    from cudf_polars.experimental.parallel import evaluate_streaming
     from cudf_polars.testing.asserts import assert_gpu_result_equal
-
-    CUDF_POLARS_AVAILABLE = True
 except ImportError:
-    CUDF_POLARS_AVAILABLE = False
+    pass
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -825,73 +822,24 @@ class PDSHQueries:
 def run(options: Sequence[str] | None = None) -> None:
     """Run the benchmark."""
     args = parse_args(options)
-    client = None
     run_config = RunConfig.from_args(args)
     validation_failures: list[int] = []
 
-    if run_config.scheduler == "distributed":
-        from dask_cuda import LocalCUDACluster
-        from distributed import Client
-
-        kwargs = {
-            "n_workers": run_config.n_workers,
-            "dashboard_address": ":8585",
-            "protocol": args.protocol,
-            "rmm_pool_size": args.rmm_pool_size,
-            "rmm_async": args.rmm_async,
-            "threads_per_worker": run_config.threads,
-        }
-
-        # Avoid UVM in distributed cluster
-        client = Client(LocalCUDACluster(**kwargs))
-        client.wait_for_workers(run_config.n_workers)
-        if run_config.shuffle != "tasks":
-            try:
-                from rapidsmpf.config import Options
-                from rapidsmpf.integrations.dask import bootstrap_dask_cluster
-
-                bootstrap_dask_cluster(
-                    client,
-                    options=Options(
-                        {
-                            "dask_spill_device": str(run_config.spill_device),
-                            "dask_statistics": str(args.rapidsmpf_oom_protection),
-                        }
-                    ),
-                )
-            except ImportError as err:
-                if run_config.shuffle == "rapidsmpf":
-                    raise ImportError from err
+    client = initialize_dask_cluster(run_config, args)  # type: ignore
 
     records: defaultdict[int, list[Record]] = defaultdict(list)
     engine: pl.GPUEngine | None = None
 
-    if run_config.executor == "cpu":
-        engine = None
-    else:
+    if run_config.executor != "cpu":
         executor_options: dict[str, Any] = {}
         if run_config.executor == "streaming":
-            executor_options = {
-                "cardinality_factor": {
-                    "c_custkey": 0.05,  # Q10
-                    "l_orderkey": 1.0,  # Q18
-                    "l_partkey": 0.1,  # Q20
-                    "o_custkey": 0.25,  # Q22
-                },
+            executor_options = get_executor_options(run_config)
+            executor_options["cardinality_factor"] = {
+                "c_custkey": 0.05,  # Q10
+                "l_orderkey": 1.0,  # Q18
+                "l_partkey": 0.1,  # Q20
+                "o_custkey": 0.25,  # Q22
             }
-            if run_config.blocksize:
-                executor_options["target_partition_size"] = run_config.blocksize
-            if run_config.shuffle:
-                executor_options["shuffle_method"] = run_config.shuffle
-            if run_config.broadcast_join_limit:
-                executor_options["broadcast_join_limit"] = (
-                    run_config.broadcast_join_limit
-                )
-            if run_config.rapidsmpf_spill:
-                executor_options["rapidsmpf_spill"] = run_config.rapidsmpf_spill
-            if run_config.scheduler == "distributed":
-                executor_options["scheduler"] = "distributed"
-
         engine = pl.GPUEngine(
             raise_on_fail=True,
             executor=run_config.executor,
@@ -904,65 +852,27 @@ def run(options: Sequence[str] | None = None) -> None:
         except AttributeError as err:
             raise NotImplementedError(f"Query {q_id} not implemented.") from err
 
-        if run_config.executor == "cpu":
-            if args.explain_logical:
-                print(f"\nQuery {q_id} - Logical plan\n")
-                print(q.explain())
-        elif CUDF_POLARS_AVAILABLE:
-            assert isinstance(engine, pl.GPUEngine)
-            if args.explain_logical:
-                print(f"\nQuery {q_id} - Logical plan\n")
-                print(explain_query(q, engine, physical=False))
-            elif args.explain:
-                print(f"\nQuery {q_id} - Physical plan\n")
-                print(explain_query(q, engine))
-        else:
-            raise RuntimeError(
-                "Cannot provide the logical or physical plan because cudf_polars is not installed."
-            )
+        print_query_plan(q_id, q, args, run_config, engine)
 
         records[q_id] = []
 
         for i in range(args.iterations):
             t0 = time.monotonic()
 
-            with nvtx.annotate(
-                message=f"Query {q_id} - Iteration {i}",
-                domain="cudf_polars",
-                color="green",
-            ):
-                if run_config.executor == "cpu":
-                    result = q.collect(new_streaming=True)
-                elif CUDF_POLARS_AVAILABLE:
-                    assert isinstance(engine, pl.GPUEngine)
-                    if args.debug:
-                        translator = Translator(q._ldf.visit(), engine)
-                        ir = translator.translate_ir()
-                        if run_config.executor == "in-memory":
-                            result = ir.evaluate(cache={}, timer=None).to_polars()
-                        elif run_config.executor == "streaming":
-                            result = evaluate_streaming(
-                                ir, translator.config_options
-                            ).to_polars()
-                    else:
-                        result = q.collect(engine=engine)
-                else:
-                    raise RuntimeError(
-                        "Cannot provide debug information because cudf_polars is not installed."
-                    )
+            result = execute_query(q_id, i, q, run_config, args, engine)
 
-                if args.validate and run_config.executor != "cpu":
-                    try:
-                        assert_gpu_result_equal(
-                            q,
-                            engine=engine,
-                            executor=run_config.executor,
-                            check_exact=False,
-                        )
-                        print(f"✅ Query {q_id} passed validation!")
-                    except AssertionError as e:
-                        validation_failures.append(q_id)
-                        print(f"❌ Query {q_id} failed validation!\n{e}")
+            if args.validate and run_config.executor != "cpu":
+                try:
+                    assert_gpu_result_equal(
+                        q,
+                        engine=engine,
+                        executor=run_config.executor,
+                        check_exact=False,
+                    )
+                    print(f"✅ Query {q_id} passed validation!")
+                except AssertionError as e:
+                    validation_failures.append(q_id)
+                    print(f"❌ Query {q_id} failed validation!\n{e}")
 
             t1 = time.monotonic()
             record = Record(query=q_id, duration=t1 - t0)

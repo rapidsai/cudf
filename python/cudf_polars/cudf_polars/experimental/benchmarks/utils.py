@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Utility functions/classes for running the PDS-H and TPC-DS (inspired) benchmarks."""
+"""Utility functions/classes for running the PDS-H and PDS-DS benchmarks."""
 
 from __future__ import annotations
 
@@ -11,9 +11,10 @@ import importlib
 import os
 import sys
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, TypeVar
 
 import numpy as np
+import nvtx
 
 import polars as pl
 
@@ -22,9 +23,23 @@ try:
 except ImportError:
     pynvml = None
 
+try:
+    from cudf_polars.dsl.translate import Translator
+    from cudf_polars.experimental.explain import explain_query
+    from cudf_polars.experimental.parallel import evaluate_streaming
+
+    CUDF_POLARS_AVAILABLE = True
+except ImportError:
+    CUDF_POLARS_AVAILABLE = False
+
 if TYPE_CHECKING:
-    import pathlib
-    from collections.abc import Sequence
+    from collections.abc import Callable, Sequence
+    from pathlib import Path
+
+    from distributed import Client
+
+
+DaskDistributedClient = TypeVar("DaskDistributedClient", bound="Client")
 
 
 @dataclasses.dataclass
@@ -120,7 +135,7 @@ class RunConfig:
         default_factory=PackageVersions.collect
     )
     records: dict[int, list[Record]] = dataclasses.field(default_factory=dict)
-    dataset_path: pathlib.Path
+    dataset_path: Path
     shuffle: str | None = None
     broadcast_join_limit: int | None = None
     blocksize: int | None = None
@@ -198,23 +213,151 @@ class RunConfig:
                 print("=======================================")
 
 
-def get_data(
-    path: str | pathlib.Path, table_name: str, suffix: str = ""
-) -> pl.LazyFrame:
+def get_data(path: str | Path, table_name: str, suffix: str = "") -> pl.LazyFrame:
     """Get table from dataset."""
     return pl.scan_parquet(f"{path}/{table_name}{suffix}")
 
 
-def _query_type(query: int | str) -> list[int]:
-    if isinstance(query, int):
-        return [query]
-    elif query == "all":
-        return list(range(1, 23))
+def get_executor_options(run_config: RunConfig) -> dict[str, Any]:
+    """Generate executor_options for GPUEngine based on RunConfig."""
+    executor_options: dict[str, Any] = {}
+
+    if run_config.blocksize:
+        executor_options["target_partition_size"] = run_config.blocksize
+    if run_config.shuffle:
+        executor_options["shuffle_method"] = run_config.shuffle
+    if run_config.broadcast_join_limit:
+        executor_options["broadcast_join_limit"] = run_config.broadcast_join_limit
+    if run_config.rapidsmpf_spill:
+        executor_options["rapidsmpf_spill"] = run_config.rapidsmpf_spill
+    if run_config.scheduler == "distributed":
+        executor_options["scheduler"] = "distributed"
+
+    return executor_options
+
+
+def print_query_plan(
+    q_id: int,
+    q: pl.LazyFrame,
+    args: argparse.Namespace,
+    run_config: RunConfig,
+    engine: None | pl.GPUEngine = None,
+) -> None:
+    """Print the query plan."""
+    if run_config.executor == "cpu":
+        if args.explain_logical:
+            print(f"\nQuery {q_id} - Logical plan\n")
+            print(q.explain())
+    elif CUDF_POLARS_AVAILABLE:
+        assert isinstance(engine, pl.GPUEngine)
+        if args.explain_logical:
+            print(f"\nQuery {q_id} - Logical plan\n")
+            print(explain_query(q, engine, physical=False))
+        elif args.explain:
+            print(f"\nQuery {q_id} - Physical plan\n")
+            print(explain_query(q, engine))
     else:
-        return [int(q) for q in query.split(",")]
+        raise RuntimeError(
+            "Cannot provide the logical or physical plan because cudf_polars is not installed."
+        )
 
 
-def parse_args(args: Sequence[str] | None = None) -> argparse.Namespace:
+def initialize_dask_cluster(run_config: RunConfig, args: argparse.Namespace):  # type: ignore
+    """Initialize a Dask distributed cluster."""
+    if run_config.scheduler != "distributed":
+        return None
+
+    from dask_cuda import LocalCUDACluster
+    from distributed import Client
+
+    kwargs = {
+        "n_workers": run_config.n_workers,
+        "dashboard_address": ":8585",
+        "protocol": args.protocol,
+        "rmm_pool_size": args.rmm_pool_size,
+        "rmm_async": args.rmm_async,
+        "threads_per_worker": run_config.threads,
+    }
+
+    # Avoid UVM in distributed cluster
+    client = Client(LocalCUDACluster(**kwargs))
+    client.wait_for_workers(run_config.n_workers)
+
+    if run_config.shuffle != "tasks":
+        try:
+            from rapidsmpf.config import Options
+            from rapidsmpf.integrations.dask import bootstrap_dask_cluster
+
+            bootstrap_dask_cluster(
+                client,
+                options=Options(
+                    {
+                        "dask_spill_device": str(run_config.spill_device),
+                        "dask_statistics": str(args.rapidsmpf_oom_protection),
+                    }
+                ),
+            )
+        except ImportError as err:
+            if run_config.shuffle == "rapidsmpf":
+                raise ImportError(
+                    "rapidsmpf is required for shuffle='rapidsmpf' but is not installed."
+                ) from err
+
+    return client
+
+
+def execute_query(
+    q_id: int,
+    i: int,
+    q: pl.LazyFrame,
+    run_config: RunConfig,
+    args: argparse.Namespace,
+    engine: None | pl.GPUEngine = None,
+) -> pl.DataFrame:
+    """Execute a query with NVTX annotation."""
+    with nvtx.annotate(
+        message=f"Query {q_id} - Iteration {i}",
+        domain="cudf_polars",
+        color="green",
+    ):
+        if run_config.executor == "cpu":
+            return q.collect(new_streaming=True)
+
+        elif CUDF_POLARS_AVAILABLE:
+            assert isinstance(engine, pl.GPUEngine)
+            if args.debug:
+                translator = Translator(q._ldf.visit(), engine)
+                ir = translator.translate_ir()
+                if run_config.executor == "in-memory":
+                    return ir.evaluate(cache={}, timer=None).to_polars()
+                elif run_config.executor == "streaming":
+                    return evaluate_streaming(ir, translator.config_options).to_polars()
+                else:
+                    raise ValueError("Should never reach here")
+            else:
+                return q.collect(engine=engine)
+
+        else:
+            raise RuntimeError(
+                "Cannot provide debug information because cudf_polars is not installed."
+            )
+
+
+def _query_type(num_queries: int) -> Callable[[str | int], list[int]]:
+    def parse(query: str | int) -> list[int]:
+        if isinstance(query, int):
+            return [query]
+        elif query == "all":
+            return list(range(1, num_queries + 1))
+        else:
+            return [int(q) for q in query.split(",")]
+
+    return parse
+
+
+def parse_args(
+    args: Sequence[str] | None = None, num_queries: int = 22
+) -> argparse.Namespace:
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(
         prog="Cudf-Polars PDS-H Benchmarks",
@@ -222,8 +365,8 @@ def parse_args(args: Sequence[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument(
         "query",
-        type=_query_type,
-        help="Query number.",
+        type=_query_type(num_queries),
+        help="Query number or comma-separated list, or 'all'.",
     )
     parser.add_argument(
         "--path",
