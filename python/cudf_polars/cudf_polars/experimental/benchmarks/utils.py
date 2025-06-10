@@ -11,7 +11,7 @@ import importlib
 import os
 import sys
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Any, TypeVar
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import nvtx
@@ -35,11 +35,6 @@ except ImportError:
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
     from pathlib import Path
-
-    from distributed import Client
-
-
-DaskDistributedClient = TypeVar("DaskDistributedClient", bound="Client")
 
 
 @dataclasses.dataclass
@@ -366,7 +361,7 @@ def parse_args(
     parser.add_argument(
         "query",
         type=_query_type(num_queries),
-        help="Query number or comma-separated list, or 'all'.",
+        help="Query number or comma-separated list of query numbers, or 'all'.",
     )
     parser.add_argument(
         "--path",
@@ -512,5 +507,11 @@ def parse_args(
         action=argparse.BooleanOptionalAction,
         default=False,
         help="Validate the result against CPU execution.",
+    )
+    parser.add_argument(
+        "--baseline",
+        choices=["duckdb", "cpu"],
+        default="duckdb",
+        help="Which engine to use as the baseline for validation.",
     )
     return parser.parse_args(args)
