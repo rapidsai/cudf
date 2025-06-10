@@ -364,4 +364,10 @@ def parse_args(args: Sequence[str] | None = None) -> argparse.Namespace:
         help="Print an outline of the logical plan",
         default=False,
     )
+    parser.add_argument(
+        "--validate",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Validate the result against CPU execution.",
+    )
     return parser.parse_args(args)

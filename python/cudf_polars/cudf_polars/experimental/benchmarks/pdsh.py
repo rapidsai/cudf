@@ -35,6 +35,7 @@ try:
     )
     from cudf_polars.experimental.explain import explain_query
     from cudf_polars.experimental.parallel import evaluate_streaming
+    from cudf_polars.testing.asserts import assert_gpu_result_equal
 
     CUDF_POLARS_AVAILABLE = True
 except ImportError:
@@ -826,6 +827,7 @@ def run(options: Sequence[str] | None = None) -> None:
     args = parse_args(options)
     client = None
     run_config = RunConfig.from_args(args)
+    validation_failures: list[int] = []
 
     if run_config.scheduler == "distributed":
         from dask_cuda import LocalCUDACluster
@@ -949,6 +951,19 @@ def run(options: Sequence[str] | None = None) -> None:
                         "Cannot provide debug information because cudf_polars is not installed."
                     )
 
+                if args.validate and run_config.executor != "cpu":
+                    try:
+                        assert_gpu_result_equal(
+                            q,
+                            engine=engine,
+                            executor=run_config.executor,
+                            check_exact=False,
+                        )
+                        print(f"✅ Query {q_id} passed validation!")
+                    except AssertionError as e:
+                        validation_failures.append(q_id)
+                        print(f"❌ Query {q_id} failed validation!\n{e}")
+
             t1 = time.monotonic()
             record = Record(query=q_id, duration=t1 - t0)
             if args.print_results:
@@ -965,6 +980,15 @@ def run(options: Sequence[str] | None = None) -> None:
     if client is not None:
         client.close(timeout=60)
 
+    if args.validate and run_config.executor != "cpu":
+        print("\nValidation Summary")
+        print("==================")
+        if validation_failures:
+            print(
+                f"{len(validation_failures)} queries failed validation: {sorted(set(validation_failures))}"
+            )
+        else:
+            print("All validated queries passed.")
     args.output.write(json.dumps(run_config.serialize()))
     args.output.write("\n")
 
