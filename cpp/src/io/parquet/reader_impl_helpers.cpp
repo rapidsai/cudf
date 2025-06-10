@@ -1156,7 +1156,7 @@ aggregate_reader_metadata::apply_row_bounds_filter(
 
   size_type current_row_index = 0;
 
-  // Rows to skip with respect to the row offset of the first surviving row group index
+  // Rows to skip relative to the row offset of the first surviving row group index
   int64_t first_row_group_relative_rows_to_skip = 0;
 
   // For each data source
@@ -1189,7 +1189,9 @@ aggregate_reader_metadata::apply_row_bounds_filter(
           current_row_index += rg.num_rows;
           row_group_row_offsets[src_idx][rg_idx] = chunk_start_row;
           if (current_row_index > rows_to_skip or current_row_index == 0) {
+            // Check if this is the first surviving row group
             if (chunk_start_row <= rows_to_skip) {
+              // Set the relative number of rows to skip relative to this row group's offset
               first_row_group_relative_rows_to_skip = rows_to_skip - chunk_start_row;
               row_group_num_rows[src_idx][rg_idx]   = current_row_index - rows_to_skip;
             } else {
@@ -1245,7 +1247,7 @@ aggregate_reader_metadata::select_row_groups(
                      static_cast<size_type>(from_opts.second)};
   }();
 
-  // Variable to rows to skip with respect to the row offset of the first surviving row group index
+  // Variable to rows to skip relative to the row offset of the first surviving row group index
   auto first_row_group_relative_rows_to_skip = rows_to_skip;
 
   // If there are no input row groups specified and zero number of rows to read, return empty
@@ -1336,13 +1338,13 @@ aggregate_reader_metadata::select_row_groups(
                         stream);
 
     // If row groups were filtered, update the current span of row group indices as well as the
-    // relative rows to skip with respect to the first surviving row group
+    // rows to skip relative to the first surviving row group
     if (filtered_row_group_indices.has_value()) {
       // Update the current span of row group indices
       current_row_group_indices =
         host_span<std::vector<size_type> const>(filtered_row_group_indices.value());
 
-      // Only need to update the relative rows to skip with respect to the first surviving row group
+      // Only need to update the rows to skip relative to the first surviving row group
       // if row bounds were previously applied
       if (is_trimmed_row_groups) {
         // Find the source index of the first non-empty row group
@@ -1352,7 +1354,7 @@ aggregate_reader_metadata::select_row_groups(
                                      current_row_group_indices.end(),
                                      [](auto const& indices) { return not indices.empty(); }));
 
-        // Update the relative rows to skip with respect to the first surviving row group
+        // Update the rows to skip relative to the first surviving row group
         if (std::cmp_less(first_non_empty_source_idx, current_row_group_indices.size())) {
           // Row group index of the first element in the first non-empty source
           auto const first_non_empty_row_group_idx =
@@ -1376,8 +1378,8 @@ aggregate_reader_metadata::select_row_groups(
   // Track the starting row index of the current row group
   size_type current_row_index = 0;
 
-  // Track the number of rows read so far (may be different from the current row index if row
-  // bounds were applied)
+  // Track the number of rows read so far (may be different from the current row index if row bounds
+  // were applied)
   size_type total_selected_rows = 0;
 
   // For each data source
@@ -1405,12 +1407,16 @@ aggregate_reader_metadata::select_row_groups(
 
                       // Update the starting row index of the next row group
                       current_row_index += rg.num_rows;
-                      total_selected_rows +=
+
+                      // Get the number of rows in this row group
+                      auto const num_rows_this_row_group =
                         is_trimmed_row_groups ? row_group_num_rows[src_idx][rg_idx] : rg.num_rows;
 
+                      // Update the total number of rows selected
+                      total_selected_rows += num_rows_this_row_group;
+
                       // Update the number of rows read from this data source
-                      num_rows_per_source[src_idx] +=
-                        is_trimmed_row_groups ? row_group_num_rows[src_idx][rg_idx] : rg.num_rows;
+                      num_rows_per_source[src_idx] += num_rows_this_row_group;
 
                       // We need the unadjusted start index of this row group to correctly
                       // initialize ColumnChunkDesc for this row group in
@@ -1425,10 +1431,12 @@ aggregate_reader_metadata::select_row_groups(
                     });
                 });
 
-  // Set rows_to_read to the total number of rows selected
+  // Set rows_to_read to the total number of rows selected and rows_to_skip to the number of rows
+  // to skip relative to the first surviving row group
   rows_to_read = total_selected_rows;
+  rows_to_skip = first_row_group_relative_rows_to_skip;
 
-  return {first_row_group_relative_rows_to_skip,
+  return {rows_to_skip,
           rows_to_read,
           std::move(selection),
           std::move(num_rows_per_source),

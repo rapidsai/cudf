@@ -2929,13 +2929,13 @@ TEST_F(ParquetReaderTest, DISABLED_ListsWideTable)
 TEST_F(ParquetReaderTest, RowBoundsAndFilter)
 {
   auto constexpr num_files                = 3;
-  auto constexpr num_rows                 = 100'000;
+  auto constexpr num_rows_per_file        = 100'000;
   auto constexpr num_row_groups_per_table = 5;
-  auto constexpr total_num_rows           = num_rows * num_files;
-  auto constexpr rows_per_row_group       = num_rows / num_row_groups_per_table;
+  auto constexpr total_num_rows           = num_rows_per_file * num_files;
+  auto constexpr rows_per_row_group       = num_rows_per_file / num_row_groups_per_table;
 
   // Table with single col of ascending int64 values
-  auto int64_data = std::vector<int64_t>(num_rows);
+  auto int64_data = std::vector<int64_t>(num_rows_per_file);
   std::iota(int64_data.begin(), int64_data.end(), 0);
   auto const int64_col = column_wrapper<int64_t>{
     int64_data.begin(), int64_data.end(), cudf::test::iterators::no_nulls()};
@@ -2953,17 +2953,18 @@ TEST_F(ParquetReaderTest, RowBoundsAndFilter)
   }
 
   // int64 data for expected table
-  int64_data.resize(total_num_rows);
+  auto expected_int64_data = std::vector<int64_t>{};
+  expected_int64_data.reserve(total_num_rows);
   for (auto i = 0; i < num_files; i++) {
-    std::iota(int64_data.begin() + (i * num_rows), int64_data.begin() + (i + 1) * num_rows, 0);
+    expected_int64_data.insert(expected_int64_data.end(), int64_data.cbegin(), int64_data.cend());
   }
 
   // Helper function to read parquet data
   auto const read_parquet_table =
     [&](auto const& filter_expression, auto rows_to_skip, auto rows_to_read) {
       auto const int64_col_row_bounded = column_wrapper<int64_t>{
-        int64_data.begin() + rows_to_skip,
-        int64_data.begin() + std::min(total_num_rows, rows_to_skip + rows_to_read),
+        expected_int64_data.begin() + std::min(total_num_rows, rows_to_skip),
+        expected_int64_data.begin() + std::min(total_num_rows, rows_to_skip + rows_to_read),
         cudf::test::iterators::no_nulls()};
       cudf::table_view const expected_row_bounded({int64_col_row_bounded});
       auto predicate = cudf::compute_column(expected_row_bounded, filter_expression);
@@ -3000,6 +3001,50 @@ TEST_F(ParquetReaderTest, RowBoundsAndFilter)
                 metadata.num_row_groups_after_stats_filter.value() == 2);  // RGs: {2,3},{},{}
   }
 
+  // Filtering AST - table[0] < 20'000
+  {
+    auto constexpr rows_to_skip = 30'000;
+    auto constexpr rows_to_read = 40'000;
+
+    auto literal_value     = cudf::numeric_scalar<int64_t>(20'000);
+    auto literal           = cudf::ast::literal(literal_value);
+    auto col_ref_0         = cudf::ast::column_reference(0);
+    auto filter_expression = cudf::ast::operation(
+      cudf::ast::ast_operator::LESS, col_ref_0, literal);  // Should get an empty table here
+
+    auto const [table_with_metadata, expected] =
+      read_parquet_table(filter_expression, rows_to_skip, rows_to_read);
+
+    CUDF_TEST_EXPECT_TABLES_EQUAL(expected->view(), table_with_metadata.tbl->view());
+
+    auto const& metadata = table_with_metadata.metadata;
+    EXPECT_EQ(metadata.num_input_row_groups, 3);  // RGs: {1,2,3},{},{}
+    EXPECT_TRUE(metadata.num_row_groups_after_stats_filter.has_value() and
+                metadata.num_row_groups_after_stats_filter.value() == 0);  // RGs: {},{},{}
+  }
+
+  // Filtering AST - table[0] <= 100'000
+  {
+    auto constexpr rows_to_skip = 301'000;  // Skip all rows
+    auto constexpr rows_to_read = 1'000;
+
+    auto literal_value = cudf::numeric_scalar<int64_t>(100'000);
+    auto literal       = cudf::ast::literal(literal_value);
+    auto col_ref_0     = cudf::ast::column_reference(0);
+    auto filter_expression =
+      cudf::ast::operation(cudf::ast::ast_operator::LESS_EQUAL, col_ref_0, literal);
+
+    auto const [table_with_metadata, expected] =
+      read_parquet_table(filter_expression, rows_to_skip, rows_to_read);
+
+    CUDF_TEST_EXPECT_TABLES_EQUAL(expected->view(), table_with_metadata.tbl->view());
+
+    auto const& metadata = table_with_metadata.metadata;
+    EXPECT_EQ(metadata.num_input_row_groups, 0);  // RGs: {},{},{}
+    EXPECT_TRUE(metadata.num_row_groups_after_stats_filter.has_value() and
+                metadata.num_row_groups_after_stats_filter.value() == 0);  // RGs: {},{},{}
+  }
+
   // Filtering AST - table[0] >= 70000 and table[0] < 120000
   {
     auto constexpr rows_to_skip = 130'000;
@@ -3033,7 +3078,7 @@ TEST_F(ParquetReaderTest, RowBoundsAndFilter)
   // Filtering AST - table[0] < 40000 or table[0] >= 80000
   {
     auto constexpr rows_to_skip = 120'000;
-    auto constexpr rows_to_read = 180'000;
+    auto constexpr rows_to_read = 190'000;  // Larger than the total number of rows in all files
 
     auto literal_value  = cudf::numeric_scalar<int64_t>(40'000);
     auto literal        = cudf::ast::literal(literal_value);
@@ -3059,7 +3104,7 @@ TEST_F(ParquetReaderTest, RowBoundsAndFilter)
                 metadata.num_row_groups_after_stats_filter.value() == 5);  // RGs: {},{1,4},{0,1,4}
   }
 
-  // Filtering AST - table[0] < 40000 and table[0] >= 80000
+  // Filtering AST - table[0] >= 40000 and table[0] < 80000
   {
     auto constexpr rows_to_skip = 110'000;
     auto constexpr rows_to_read = 80'000;
