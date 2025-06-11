@@ -217,10 +217,16 @@ std::unique_ptr<flattened_table> flatten_nested_columns(
 namespace {
 
 /**
- * @brief Superimpose the given null mask into the input column without any sanitization for
- * non-empty nulls.
+ * @brief Superimpose the given null mask into the input column and its descendants. This function
+ * does not enforce null consistency of the null masks of the descendant columns i.e. non-empty
+ * nulls that appear in the descendant columns due to the null mask update are not purged.
  *
- * @copydoc cudf::structs::detail::superimpose_and_sanitize_nulls
+ * @param null_mask Null mask to be applied to the input column
+ * @param null_count Null count in the given null mask
+ * @param input Column to apply the null mask to
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate new device memory
+ * @return A new column with potentially new null mask
  */
 std::unique_ptr<column> superimpose_nulls(bitmask_type const* null_mask,
                                           size_type null_count,
@@ -377,6 +383,9 @@ void temporary_nullable_data::emplace_back(temporary_nullable_data&& other)
   move_append(new_columns, other.new_columns);
 }
 
+/*
+ * @copydoc cudf::structs::detail::superimpose_and_sanitize_nulls
+ */
 std::unique_ptr<column> superimpose_and_sanitize_nulls(bitmask_type const* null_mask,
                                                        size_type null_count,
                                                        std::unique_ptr<column>&& input,

@@ -563,7 +563,7 @@ std::unique_ptr<cudf::column> make_structs_column(
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
- * @brief Construct a STRUCT column using specified child columns as members.
+ * @brief Construct a STRUCT column using specified child columns as members
  *
  * Specified child/member columns and null_mask are adopted by resultant
  * struct column i.e. the struct column hierarchy is created with the specified child
