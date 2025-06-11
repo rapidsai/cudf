@@ -1454,7 +1454,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
             values = [as_column(values)]
         else:
             values = [*values._columns]
-        if len(values) != len(self._data):
+        if len(values) != self._num_columns:
             raise ValueError("Mismatch number of columns to search for.")
 
         # TODO: Change behavior based on the decision in
@@ -1614,9 +1614,16 @@ class Frame(BinaryOperand, Scannable, Serializable):
 
     @_performance_tracking
     def _split(self, splits: list[int]) -> list[Self]:
-        """Split a frame with split points in ``splits``. Returns a list of
-        Frames of length `len(splits) + 1`.
         """
+        Split a frame with split points in ``splits``.
+
+        Returns
+        -------
+        list[Self]
+            Returns a list of Self of length len(splits) + 1.
+        """
+        if self._num_rows == 0:
+            return []
         return [
             self._from_columns_like_self(
                 [ColumnBase.from_pylibcudf(col) for col in split],
@@ -2035,26 +2042,6 @@ class Frame(BinaryOperand, Scannable, Serializable):
         """Bitwise invert (~) for integral dtypes, logical NOT for bools."""
         return self._from_data_like_self(
             self._data._from_columns_like_self((~col for col in self._columns))
-        )
-
-    @_performance_tracking
-    def nunique(self, dropna: bool = True):
-        """
-        Returns a per column mapping with counts of unique values for
-        each column.
-
-        Parameters
-        ----------
-        dropna : bool, default True
-            Don't include NaN in the counts.
-
-        Returns
-        -------
-        dict
-            Name and unique value counts of each column in frame.
-        """
-        raise NotImplementedError(
-            f"{type(self).__name__} does not implement nunique"
         )
 
     @staticmethod
