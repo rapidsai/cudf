@@ -226,7 +226,7 @@ CombinedDatetimelikeProperties = make_intermediate_proxy_type(
 
 StringMethods = make_intermediate_proxy_type(
     "StringMethods",
-    cudf.core.column.string.StringMethods,
+    cudf.core.accessors.string.StringMethods,
     pd.core.strings.accessor.StringMethods,
 )
 
