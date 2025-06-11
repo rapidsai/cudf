@@ -125,6 +125,7 @@ class StringFunction(Expr):
             StringFunction.Name.StripCharsEnd,
             StringFunction.Name.Uppercase,
             StringFunction.Name.Tail,
+            StringFunction.Name.Titlecase,
         ):
             raise NotImplementedError(f"String function {self.name!r}")
         if self.name is StringFunction.Name.Contains:
@@ -421,7 +422,9 @@ class StringFunction(Expr):
                 plc.strings.replace.replace_multiple(column.obj, target.obj, repl.obj),
                 dtype=self.dtype,
             )
-
+        elif self.name is StringFunction.Name.Titlecase:
+            (column,) = columns
+            return Column(plc.strings.capitalize.title(column.obj))
         raise NotImplementedError(
             f"StringFunction {self.name}"
         )  # pragma: no cover; handled by init raising

@@ -52,8 +52,6 @@ using storage_type     = cuco::bucket_storage<slot_type,
                                               cuco::extent<std::size_t>,
                                               cudf::detail::cuco_allocator<char>>;
 using storage_ref_type = typename storage_type::ref_type;
-using bucket_type      = typename storage_type::bucket_type;
-using slot_type        = cuco::pair<key_type, mapped_type>;
 
 auto constexpr KEY_SENTINEL   = size_type{-1};
 auto constexpr VALUE_SENTINEL = size_type{-1};
@@ -188,11 +186,11 @@ struct stripe_stream {
  */
 struct stripe_dictionary {
   // input
-  device_span<bucket_type> map_slots;  // hash map (buckets) storage
-  uint32_t column_idx      = 0;        // column index
-  size_type start_row      = 0;        // first row in the stripe
-  size_type start_rowgroup = 0;        // first rowgroup in the stripe
-  size_type num_rows       = 0;        // number of rows in the stripe
+  device_span<slot_type> map_slots;  // hash map (slots) storage
+  uint32_t column_idx      = 0;      // column index
+  size_type start_row      = 0;      // first row in the stripe
+  size_type start_rowgroup = 0;      // first rowgroup in the stripe
+  size_type num_rows       = 0;      // number of rows in the stripe
 
   // output
   device_span<uint32_t> data;        // index of elements in the column to include in the dictionary
