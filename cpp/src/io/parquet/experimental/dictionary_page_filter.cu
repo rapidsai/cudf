@@ -57,16 +57,16 @@ template <typename T>
 auto constexpr is_supported_fixed_width_type =
   not cuda::std::is_same_v<T, bool> and not cudf::is_compound<T>();
 
-/// Concept for supported fixed width types for row group pruning using dictionaries
-template <typename T>
-concept SupportedFixedWidthType = is_supported_fixed_width_type<T>;
-
 /// All supported types for row group pruning using dictionaries
 template <typename T>
 auto constexpr is_supported_dictionary_type =
   is_supported_fixed_width_type<T> or cuda::std::is_same_v<T, cudf::string_view>;
 
-/// Concept for supported types for row group pruning using dictionaries
+/// Concept for supported fixed width types for row group pruning using dictionaries
+template <typename T>
+concept SupportedFixedWidthType = is_supported_fixed_width_type<T>;
+
+/// Concept for all supported types for row group pruning using dictionaries
 template <typename T>
 concept SupportedDictionaryType = is_supported_dictionary_type<T>;
 
