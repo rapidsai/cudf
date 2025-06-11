@@ -104,3 +104,6 @@ filterwarnings = [
     "ignore:FNV hashing is not implemented in Numba.*:UserWarning"
 ]
 xfail_strict = true
+
+[tool.coverage.run]
+disable_warnings = ["module-not-measured"]
