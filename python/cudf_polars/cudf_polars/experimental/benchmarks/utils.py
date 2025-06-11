@@ -11,7 +11,7 @@ import importlib
 import os
 import sys
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal, assert_never
 
 import numpy as np
 import nvtx
@@ -35,6 +35,9 @@ except ImportError:
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
     from pathlib import Path
+
+
+ExecutorType = Literal["in-memory", "streaming", "cpu"]
 
 
 @dataclasses.dataclass
@@ -123,7 +126,7 @@ class RunConfig:
 
     queries: list[int]
     suffix: str
-    executor: str
+    executor: ExecutorType
     scheduler: str
     n_workers: int
     versions: PackageVersions = dataclasses.field(
@@ -148,7 +151,7 @@ class RunConfig:
     @classmethod
     def from_args(cls, args: argparse.Namespace) -> RunConfig:
         """Create a RunConfig from command line arguments."""
-        executor = args.executor
+        executor: ExecutorType = args.executor
         scheduler = args.scheduler
 
         if executor == "in-memory" or executor == "cpu":
@@ -327,8 +330,7 @@ def execute_query(
                     return ir.evaluate(cache={}, timer=None).to_polars()
                 elif run_config.executor == "streaming":
                     return evaluate_streaming(ir, translator.config_options).to_polars()
-                else:
-                    raise ValueError("Should never reach here")
+                assert_never(run_config.executor)
             else:
                 return q.collect(engine=engine)
 
