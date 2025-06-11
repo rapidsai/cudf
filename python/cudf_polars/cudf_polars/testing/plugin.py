@@ -34,7 +34,8 @@ def pytest_configure(config: pytest.Config) -> None:
     if no_fallback:
         collect = polars.LazyFrame.collect
         engine = polars.GPUEngine(raise_on_fail=no_fallback)
-        polars.LazyFrame.collect = partialmethod(collect, engine=engine)
+        # https://github.com/python/mypy/issues/2427
+        polars.LazyFrame.collect = partialmethod(collect, engine=engine)  # type: ignore[method-assign,assignment]
     else:
         polars.Config.set_engine_affinity("gpu")
     config.addinivalue_line(
