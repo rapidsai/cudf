@@ -20,6 +20,7 @@ from cudf_polars.dsl.expressions.base import (
     ExecutionContext,
     Expr,
 )
+from cudf_polars.dsl.expressions.literal import LiteralColumn
 from cudf_polars.utils.versions import POLARS_VERSION_LT_128
 
 if TYPE_CHECKING:
@@ -101,7 +102,12 @@ class BooleanFunction(Expr):
             raise NotImplementedError("IsIn doesn't support supertype casting")
         if self.name is BooleanFunction.Name.IsIn:
             _, haystack = self.children
-            if isinstance(haystack, Col) and isinstance(haystack.dtype.polars, pl.List):
+            if (
+                isinstance(haystack, Col) and isinstance(haystack.dtype.polars, pl.List)
+            ) or (
+                isinstance(haystack, LiteralColumn)
+                and isinstance(haystack.value.dtype, pl.List)
+            ):
                 raise NotImplementedError(
                     "IsIn does not support nested list column input"
                 )
