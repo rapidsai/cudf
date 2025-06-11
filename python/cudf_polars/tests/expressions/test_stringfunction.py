@@ -473,7 +473,7 @@ def test_string_join(ldf, ignore_nulls, delimiter):
 
 
 def test_string_to_titlecase():
-    df = pl.DataFrame(
+    df = pl.LazyFrame(
         {
             "quotes": [
                 "'e.t. phone home'",
@@ -481,7 +481,7 @@ def test_string_to_titlecase():
                 "to infinity,and BEYOND!",
             ]
         }
-    ).lazy()
+    )
     q = df.with_columns(
         quotes_title=pl.col("quotes").str.to_titlecase(),
     )
