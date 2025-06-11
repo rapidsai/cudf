@@ -25,7 +25,7 @@ rmm::device_buffer hybrid_scan_reader_impl::decompress_dictionary_page_data(
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
-  return std::get<0>(parquet::detail::decompress_page_data(chunks, pages, {}, {}, {}, stream, mr));
+  return std::get<0>(parquet::detail::decompress_page_data(chunks, pages, {}, {}, stream, mr));
 }
 
 }  // namespace cudf::io::parquet::experimental::detail
