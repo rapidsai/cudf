@@ -43,6 +43,7 @@ dependencies:
 - jupyter_client
 - libcurand-dev
 - libkvikio==25.8.*,>=0.0.0a0
+- libnvjitlink-dev
 - librdkafka>=2.8.0,<2.9.0a0
 - librmm==25.8.*,>=0.0.0a0
 - make
