@@ -298,8 +298,6 @@ class SplitScan(IR):
 
 
 def _sample_pq_statistics(ir: Scan) -> dict[str, ColumnSourceStats]:
-    # Use average total_uncompressed_size of three files
-
     assert ir.config_options.executor.name == "streaming", (
         "'in-memory' executor not supported in '_sample_pq_statistics"
     )
@@ -332,7 +330,7 @@ def _sample_pq_statistics(ir: Scan) -> dict[str, ColumnSourceStats]:
             np.cumsum(num_row_groups_per_file_samples), 0, 0
         )
 
-        # For each column, calculate the `total_uncompressed_size` for each file
+        # For each column, calculate the `mean_uncompressed_size` for a file
         column_sizes = {}
         for name, uncompressed_sizes in metadata.columnchunk_metadata().items():
             if name in need_columns:
@@ -351,8 +349,8 @@ def _sample_pq_statistics(ir: Scan) -> dict[str, ColumnSourceStats]:
     if need_columns:
         # We have un-cached column metadata to process
 
-        # Calculate the mean per-file `total_uncompressed_size` for each column
-        total_uncompressed_size = {
+        # Calculate the per-file `mean_uncompressed_size` for each column
+        mean_uncompressed_size = {
             name: np.mean(sizes) for name, sizes in column_sizes.items()
         }
 
@@ -403,31 +401,19 @@ def _sample_pq_statistics(ir: Scan) -> dict[str, ColumnSourceStats]:
                     if row_group_unique_count == row_group_num_rows:
                         unique_count_estimates[name] = num_rows_total
 
-        # Leave out unique stats if they were defined by the
-        # user. This allows us to avoid collecting stats for
-        # columns that are know to be problematic.
-        user_fractions = ir.config_options.executor.unique_fraction
-        cardinality = num_rows_total
+        # Check that the cached stats have the same row-count estimate
         if source_stats_cached:
             assert (
-                cardinality == next(iter(source_stats_cached.values())).cardinality
+                num_rows_total == next(iter(source_stats_cached.values())).cardinality
             ), "Unexpected cardinality in cache."
 
         # Construct estimated column statistics
         source_stats = {
             name: ColumnSourceStats(
-                cardinality=cardinality,
-                file_size=total_uncompressed_size[name],
-                unique_count=(
-                    unique_count_estimates.get(name)
-                    if name not in user_fractions
-                    else None
-                ),
-                unique_fraction=(
-                    unique_fraction_estimates.get(name)
-                    if name not in user_fractions
-                    else None
-                ),
+                cardinality=num_rows_total,
+                file_size=mean_uncompressed_size[name],
+                unique_count=unique_count_estimates.get(name),
+                unique_fraction=unique_fraction_estimates.get(name),
             )
             for name in need_columns
         }
