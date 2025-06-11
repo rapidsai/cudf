@@ -3110,13 +3110,6 @@ def as_column(
         return as_column(
             np.asarray(view), dtype=dtype, nan_as_null=nan_as_null
         )
-    elif hasattr(arbitrary, "__array__"):
-        # e.g. test_cuda_array_interface_pytorch
-        try:
-            arbitrary = cupy.asarray(arbitrary)
-        except (ValueError, TypeError):
-            arbitrary = np.asarray(arbitrary)
-        return as_column(arbitrary, dtype=dtype, nan_as_null=nan_as_null)
     elif not isinstance(arbitrary, (Iterable, Sequence)):
         raise TypeError(
             f"{type(arbitrary).__name__} must be an iterable or sequence."
