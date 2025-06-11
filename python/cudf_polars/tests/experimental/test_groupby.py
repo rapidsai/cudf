@@ -10,6 +10,7 @@ import pytest
 import polars as pl
 
 from cudf_polars.testing.asserts import DEFAULT_SCHEDULER, assert_gpu_result_equal
+from cudf_polars.utils.versions import POLARS_VERSION_LT_130
 
 
 @pytest.fixture(scope="module")
@@ -29,6 +30,7 @@ def df():
     return pl.LazyFrame(
         {
             "x": range(150),
+            "xx": list(range(75)) * 2,
             "y": [1, 2, 3] * 50,
             "z": [1.0, 2.0, 3.0, 4.0, 5.0] * 30,
         }
@@ -72,6 +74,12 @@ def test_groupby_agg(df, engine, op, keys):
     assert_gpu_result_equal(q, engine=engine, check_row_order=False)
 
 
+@pytest.mark.parametrize("keys", [("y",), ("y", "z")])
+def test_groupby_n_unique(df, engine, keys):
+    q = df.group_by(*keys).agg(pl.col("xx").n_unique().cast(pl.Int64))
+    assert_gpu_result_equal(q, engine=engine, check_row_order=False)
+
+
 @pytest.mark.parametrize("op", ["sum", "mean", "len", "count"])
 @pytest.mark.parametrize("keys", [("y",), ("y", "z")])
 def test_groupby_agg_config_options(df, op, keys):
@@ -90,6 +98,8 @@ def test_groupby_agg_config_options(df, op, keys):
     )
     agg = getattr(pl.col("x"), op)()
     if op in ("sum", "mean"):
+        if POLARS_VERSION_LT_130:
+            agg = agg.cast(pl.Float64)
         agg = agg.round(2)  # Unary test coverage
     q = df.group_by(*keys).agg(agg)
     assert_gpu_result_equal(q, engine=engine, check_row_order=False)
@@ -113,7 +123,12 @@ def test_groupby_fallback(df, engine, fallback_mode):
     if fallback_mode == "silent":
         ctx = contextlib.nullcontext()
     elif fallback_mode == "raise":
-        ctx = pytest.raises(pl.exceptions.ComputeError, match=match)
+        ctx = pytest.raises(
+            pl.exceptions.ComputeError
+            if POLARS_VERSION_LT_130
+            else NotImplementedError,
+            match=match,
+        )
     elif fallback_mode == "foo":
         ctx = pytest.raises(
             pl.exceptions.ComputeError,

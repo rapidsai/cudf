@@ -17,6 +17,7 @@ from cudf_polars.testing.asserts import (
     assert_ir_translation_raises,
 )
 from cudf_polars.utils.config import ConfigOptions
+from cudf_polars.utils.versions import POLARS_VERSION_LT_130
 
 
 def test_polars_verbose_warns(monkeypatch):
@@ -49,15 +50,26 @@ def test_unsupported_config_raises():
 @pytest.mark.parametrize("device", [-1, "foo"])
 def test_invalid_device_raises(device):
     q = pl.LazyFrame({})
-    with pytest.raises(pl.exceptions.ComputeError):
-        q.collect(engine=pl.GPUEngine(device=device))
+    if POLARS_VERSION_LT_130:
+        with pytest.raises(pl.exceptions.ComputeError):
+            q.collect(engine=pl.GPUEngine(device=device))
+    elif isinstance(device, int):
+        with pytest.raises(rmm._cuda.gpu.CUDARuntimeError):
+            q.collect(engine=pl.GPUEngine(device=device))
+    elif isinstance(device, str):
+        with pytest.raises(TypeError):
+            q.collect(engine=pl.GPUEngine(device=device))
 
 
 @pytest.mark.parametrize("mr", [1, object()])
 def test_invalid_memory_resource_raises(mr):
     q = pl.LazyFrame({})
-    with pytest.raises(pl.exceptions.ComputeError):
-        q.collect(engine=pl.GPUEngine(memory_resource=mr))
+    if POLARS_VERSION_LT_130:
+        with pytest.raises(pl.exceptions.ComputeError):
+            q.collect(engine=pl.GPUEngine(memory_resource=mr))
+    else:
+        with pytest.raises(TypeError):
+            q.collect(engine=pl.GPUEngine(memory_resource=mr))
 
 
 @pytest.mark.parametrize("disable_managed_memory", ["1", "0"])
@@ -128,6 +140,7 @@ def test_validate_streaming_executor_shuffle_method() -> None:
             executor_options={"shuffle_method": "tasks"},
         )
     )
+    assert config.executor.name == "streaming"
     assert config.executor.shuffle_method == "tasks"
 
     config = ConfigOptions.from_polars_engine(
@@ -139,6 +152,7 @@ def test_validate_streaming_executor_shuffle_method() -> None:
             },
         )
     )
+    assert config.executor.name == "streaming"
     assert config.executor.shuffle_method == "rapidsmpf"
 
     # rapidsmpf with sync is not allowed
@@ -189,6 +203,7 @@ def test_validate_scheduler() -> None:
             executor="streaming",
         )
     )
+    assert config.executor.name == "streaming"
     assert config.executor.scheduler == "synchronous"
 
     with pytest.raises(ValueError, match="'foo' is not a valid Scheduler"):
@@ -206,6 +221,7 @@ def test_validate_shuffle_method() -> None:
             executor="streaming",
         )
     )
+    assert config.executor.name == "streaming"
     assert config.executor.shuffle_method is None
 
     with pytest.raises(ValueError, match="'foo' is not a valid ShuffleMethod"):
@@ -252,7 +268,7 @@ def test_validate_parquet_options(option: str) -> None:
 def test_validate_raise_on_fail() -> None:
     with pytest.raises(TypeError, match="'raise_on_fail' must be"):
         ConfigOptions.from_polars_engine(
-            pl.GPUEngine(executor="streaming", raise_on_fail=object())
+            pl.GPUEngine(executor="streaming", raise_on_fail=object())  # type: ignore[arg-type]
         )
 
 

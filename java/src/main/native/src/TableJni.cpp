@@ -106,7 +106,7 @@ struct jni_table_writer_handle final : public jni_table_writer_handle_base {
   std::unique_ptr<Writer> writer;
 };
 
-typedef jni_table_writer_handle<cudf::io::parquet_chunked_writer> native_parquet_writer_handle;
+typedef jni_table_writer_handle<cudf::io::chunked_parquet_writer> native_parquet_writer_handle;
 typedef jni_table_writer_handle<cudf::io::orc_chunked_writer> native_orc_writer_handle;
 
 class native_arrow_ipc_writer_handle final {
@@ -2263,7 +2263,7 @@ Java_ai_rapids_cudf_Table_writeParquetBufferBegin(JNIEnv* env,
         .key_value_metadata({kv_metadata})
         .compression_statistics(stats)
         .build();
-    auto writer_ptr = std::make_unique<cudf::io::parquet_chunked_writer>(opts);
+    auto writer_ptr = std::make_unique<cudf::io::chunked_parquet_writer>(opts);
     cudf::jni::native_parquet_writer_handle* ret = new cudf::jni::native_parquet_writer_handle(
       std::move(writer_ptr), std::move(data_sink), std::move(stats));
     return ptr_as_jlong(ret);
@@ -2343,7 +2343,7 @@ Java_ai_rapids_cudf_Table_writeParquetFileBegin(JNIEnv* env,
         .compression_statistics(stats)
         .build();
 
-    auto writer_ptr = std::make_unique<cudf::io::parquet_chunked_writer>(opts);
+    auto writer_ptr = std::make_unique<cudf::io::chunked_parquet_writer>(opts);
     cudf::jni::native_parquet_writer_handle* ret =
       new cudf::jni::native_parquet_writer_handle(std::move(writer_ptr), nullptr, std::move(stats));
     return ptr_as_jlong(ret);

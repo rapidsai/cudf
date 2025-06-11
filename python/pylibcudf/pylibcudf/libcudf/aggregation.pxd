@@ -61,6 +61,7 @@ cdef extern from "cudf/aggregation.hpp" namespace "cudf" nogil:
         MERGE_TDIGEST
         HISTOGRAM
         MERGE_HISTOGRAM
+        BITWISE_AGG
 
     cdef cppclass aggregation:
         Kind kind
@@ -107,6 +108,11 @@ cdef extern from "cudf/aggregation.hpp" namespace "cudf" nogil:
         NONE
         ZERO_NORMALIZED
         ONE_NORMALIZED
+
+    cpdef enum class bitwise_op(int32_t):
+        AND
+        OR
+        XOR
 
     cdef unique_ptr[T] make_sum_aggregation[T]() except +libcudf_exception_handler
 
@@ -208,6 +214,21 @@ cdef extern from "cudf/aggregation.hpp" namespace "cudf" nogil:
     cdef unique_ptr[T] make_merge_m2_aggregation[T]() except +libcudf_exception_handler
 
     cdef unique_ptr[T] make_m2_aggregation[T]() except +libcudf_exception_handler
+
+    cdef unique_ptr[T] make_bitwise_aggregation[T](
+        bitwise_op op
+    ) except +libcudf_exception_handler
+
+    cdef unique_ptr[T] make_lag_aggregation[T](
+        size_type offset
+    ) except +libcudf_exception_handler
+
+    cdef unique_ptr[T] make_lead_aggregation[T](
+        size_type offset
+    ) except +libcudf_exception_handler
+
+    cdef unique_ptr[T] make_row_number_aggregation[T](
+    ) except +libcudf_exception_handler
 
     bool is_valid_aggregation(
         data_type source, Kind kind

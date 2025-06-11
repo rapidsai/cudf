@@ -108,8 +108,10 @@ def assert_gpu_result_equal(
         collect_kwargs, polars_collect_kwargs, cudf_collect_kwargs
     )
 
-    expect = lazydf.collect(**final_polars_collect_kwargs)
-    got = lazydf.collect(**final_cudf_collect_kwargs, engine=engine)
+    # These keywords are correct, but mypy doesn't see that.
+    # the 'misc' is for 'error: Keywords must be strings'
+    expect = lazydf.collect(**final_polars_collect_kwargs)  # type: ignore[call-overload,misc]
+    got = lazydf.collect(**final_cudf_collect_kwargs, engine=engine)  # type: ignore[call-overload,misc]
     assert_frame_equal(
         expect,
         got,
@@ -227,7 +229,7 @@ def assert_collect_raises(
     )
 
     try:
-        lazydf.collect(**final_polars_collect_kwargs)
+        lazydf.collect(**final_polars_collect_kwargs)  # type: ignore[call-overload,misc]
     except polars_except:
         pass
     except Exception as e:
@@ -240,7 +242,7 @@ def assert_collect_raises(
 
     engine = GPUEngine(raise_on_fail=True)
     try:
-        lazydf.collect(**final_cudf_collect_kwargs, engine=engine)
+        lazydf.collect(**final_cudf_collect_kwargs, engine=engine)  # type: ignore[call-overload,misc]
     except cudf_except:
         pass
     except Exception as e:

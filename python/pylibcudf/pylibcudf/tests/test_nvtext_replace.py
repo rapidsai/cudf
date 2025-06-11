@@ -26,7 +26,7 @@ def test_replace_tokens(input_col, targets, delim):
         plc.Column.from_arrow(input_col),
         plc.Column.from_arrow(targets),
         plc.Column.from_arrow(replacements),
-        plc.interop.from_arrow(pa.scalar(delim)) if delim else None,
+        plc.Scalar.from_arrow(pa.scalar(delim)) if delim else None,
     )
     expect = pa.array(["slow", "cat", "jumps*over the", "rat"])
     if not delim:
@@ -43,8 +43,8 @@ def test_filter_tokens(input_col, min_token_length, replace, delim):
     got = plc.nvtext.replace.filter_tokens(
         plc.Column.from_arrow(input_col),
         min_token_length,
-        plc.interop.from_arrow(pa.scalar(replace)) if replace else None,
-        plc.interop.from_arrow(pa.scalar(delim)) if delim else None,
+        plc.Scalar.from_arrow(pa.scalar(replace)) if replace else None,
+        plc.Scalar.from_arrow(pa.scalar(delim)) if delim else None,
     )
     expect = pa.array(["the quick", "brown fox", "jumps*over the", "lazy dog"])
     if not delim and not replace and min_token_length == 4:

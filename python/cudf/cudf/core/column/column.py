@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import pickle
 import warnings
 from collections.abc import Iterable, Iterator, MutableSequence, Sequence
 from functools import cached_property
@@ -65,11 +66,16 @@ from cudf.utils.dtypes import (
     dtype_to_pylibcudf_type,
     find_common_type,
     is_column_like,
+    is_dtype_obj_decimal,
+    is_dtype_obj_interval,
+    is_dtype_obj_list,
     is_dtype_obj_numeric,
+    is_dtype_obj_struct,
     is_mixed_with_object_dtype,
     is_pandas_nullable_extension_dtype,
     min_signed_type,
     min_unsigned_type,
+    np_dtypes_to_pandas_dtypes,
 )
 from cudf.utils.scalar import pa_scalar_to_plc_scalar
 from cudf.utils.utils import (
@@ -701,11 +707,27 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             raise ValueError(
                 f"{arrow_type=} and {nullable=} cannot both be set."
             )
-        elif nullable:
-            raise NotImplementedError(f"{nullable=} is not implemented.")
         pa_array = self.to_arrow()
-        if arrow_type:
+
+        # Check if dtype is an ArrowDtype or pd.ExtensionDtype subclass
+        if arrow_type or (
+            cudf.get_option("mode.pandas_compatible")
+            and isinstance(self.dtype, pd.ArrowDtype)
+        ):
             return pd.Index(pd.arrays.ArrowExtensionArray(pa_array))
+        elif (
+            nullable
+            or (
+                cudf.get_option("mode.pandas_compatible")
+                and is_pandas_nullable_extension_dtype(self.dtype)
+            )
+        ) and is_pandas_nullable_extension_dtype(
+            pandas_nullable_dtype := np_dtypes_to_pandas_dtypes.get(
+                self.dtype, self.dtype
+            )
+        ):
+            pandas_array = pandas_nullable_dtype.__from_arrow__(pa_array)
+            return pd.Index(pandas_array, copy=False)
         else:
             return pd.Index(pa_array.to_pandas())
 
@@ -837,6 +859,13 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         >>> import cudf
         >>> cudf.core.column.ColumnBase.from_arrow(pa.array([1, 2, 3, 4]))
         <cudf.core.column.numerical.NumericalColumn object at 0x7f8865497ef0>
+        [
+          1,
+          2,
+          3,
+          4
+        ]
+        dtype: int8
         """
         if not isinstance(array, (pa.Array, pa.ChunkedArray)):
             raise TypeError("array should be PyArrow array or chunked array")
@@ -872,10 +901,10 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             )
             with acquire_spill_lock():
                 codes = cls.from_pylibcudf(
-                    plc.interop.from_arrow(indices_table).columns()[0]
+                    plc.Table.from_arrow(indices_table).columns()[0]
                 )
                 categories = cls.from_pylibcudf(
-                    plc.interop.from_arrow(dictionaries_table).columns()[0]
+                    plc.Table.from_arrow(dictionaries_table).columns()[0]
                 )
             codes = cudf.core.column.categorical.as_unsigned_codes(
                 len(categories),
@@ -892,9 +921,10 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             )
         else:
             result = cls.from_pylibcudf(
-                plc.interop.from_arrow(data).columns()[0]
+                plc.Table.from_arrow(data).columns()[0]
             )
-            # TODO: cudf_dtype_from_pa_type may be less necessary for some types
+
+            # Return a column with the appropriately converted dtype
             return result._with_type_metadata(
                 cudf_dtype_from_pa_type(array.type)
             )
@@ -1680,7 +1710,11 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 order[0],
                 order[1],
             )
-            return type(self).from_pylibcudf(plc_table.columns()[0])  # type: ignore[return-value]
+            return (
+                type(self)  # type: ignore[return-value]
+                .from_pylibcudf(plc_table.columns()[0])
+                ._with_type_metadata(self.dtype)
+            )
 
     def distinct_count(self, dropna: bool = True) -> int:
         try:
@@ -1712,6 +1746,8 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             (cudf.Decimal128Dtype, cudf.Decimal64Dtype, cudf.Decimal32Dtype),
         ):
             result.dtype.precision = dtype.precision  # type: ignore[union-attr]
+        if cudf.get_option("mode.pandas_compatible") and result.dtype != dtype:
+            result._dtype = dtype
         return result
 
     def astype(self, dtype: DtypeObj, copy: bool = False) -> ColumnBase:
@@ -1722,22 +1758,22 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         else:
             if isinstance(dtype, CategoricalDtype):
                 result = self.as_categorical_column(dtype)
-            elif isinstance(dtype, IntervalDtype):
+            elif is_dtype_obj_interval(dtype):
                 result = self.as_interval_column(dtype)
-            elif isinstance(dtype, (ListDtype, StructDtype)):
+            elif is_dtype_obj_list(dtype) or is_dtype_obj_struct(dtype):
                 if self.dtype != dtype:
                     raise NotImplementedError(
                         f"Casting {self.dtype} columns not currently supported"
                     )
                 result = self
-            elif isinstance(dtype, DecimalDtype):
+            elif is_dtype_obj_decimal(dtype):
                 result = self.as_decimal_column(dtype)
             elif dtype.kind == "M":
                 result = self.as_datetime_column(dtype)
             elif dtype.kind == "m":
                 result = self.as_timedelta_column(dtype)
             elif dtype.kind == "O":
-                result = self.as_string_column()
+                result = self.as_string_column(dtype)
             else:
                 result = self.as_numerical_column(dtype)
 
@@ -1798,7 +1834,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     def as_timedelta_column(self, dtype: np.dtype) -> TimeDeltaColumn:
         raise NotImplementedError
 
-    def as_string_column(self) -> StringColumn:
+    def as_string_column(self, dtype) -> StringColumn:
         raise NotImplementedError
 
     def as_decimal_column(self, dtype: DecimalDtype) -> DecimalBaseColumn:
@@ -1928,7 +1964,10 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             frames.extend(dtype_frames)
             header["dtype-is-cudf-serialized"] = True
         except AttributeError:
-            header["dtype"] = self.dtype.str
+            if is_pandas_nullable_extension_dtype(self.dtype):
+                header["dtype"] = pickle.dumps(self.dtype)
+            else:
+                header["dtype"] = self.dtype.str
             header["dtype-is-cudf-serialized"] = False
 
         if self.data is not None:
@@ -1964,7 +2003,10 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         if header["dtype-is-cudf-serialized"]:
             dtype, frames = unpack(header["dtype"], frames)
         else:
-            dtype = np.dtype(header["dtype"])
+            try:
+                dtype = np.dtype(header["dtype"])
+            except TypeError:
+                dtype = pickle.loads(header["dtype"])
         if "data" in header:
             data, frames = unpack(header["data"], frames)
         else:
@@ -2062,6 +2104,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         When ``self`` is a nested column, recursively apply this function on
         the children of ``self``.
         """
+        # For Arrow dtypes, store them directly in the column's dtype property
+        if isinstance(dtype, pd.ArrowDtype):
+            self._dtype = cudf.dtype(dtype)
         return self
 
     def _label_encoding(
@@ -2528,7 +2573,11 @@ def build_column(
             offset=offset,
             null_count=null_count,
         )
-    elif dtype == CUDF_STRING_DTYPE:
+    elif (
+        dtype == CUDF_STRING_DTYPE
+        or isinstance(dtype, pd.StringDtype)
+        or (isinstance(dtype, pd.ArrowDtype) and dtype.kind == "U")
+    ):
         return cudf.core.column.StringColumn(
             data=data,  # type: ignore[arg-type]
             size=size,
@@ -2717,7 +2766,11 @@ def as_column(
         if not arbitrary.dtype.isnative:
             arbitrary = arbitrary.astype(arbitrary.dtype.newbyteorder("="))
         data = as_buffer(arbitrary, exposed=cudf.get_option("copy_on_write"))
-        col = build_column(data, dtype=arbitrary.dtype, mask=mask)
+        col = build_column(
+            data,
+            dtype=arbitrary.dtype,
+            mask=mask,
+        )
         if nan_as_null or (mask is None and nan_as_null is None):
             col = col.nans_to_nulls()
         if dtype is not None:
@@ -2762,19 +2815,6 @@ def as_column(
             raise NotImplementedError(
                 "cuDF does not yet support Intervals with timezone-aware datetimes"
             )
-        elif is_pandas_nullable_extension_dtype(arbitrary.dtype):
-            if cudf.get_option("mode.pandas_compatible"):
-                raise NotImplementedError("not supported")
-            if isinstance(arbitrary, (pd.Series, pd.Index)):
-                # pandas arrays define __arrow_array__ for better
-                # pyarrow.array conversion
-                arbitrary = arbitrary.array
-            return as_column(
-                pa.array(arbitrary, from_pandas=True),
-                nan_as_null=nan_as_null,
-                dtype=dtype,
-                length=length,
-            )
         elif isinstance(
             arbitrary.dtype,
             (pd.CategoricalDtype, pd.IntervalDtype, pd.DatetimeTZDtype),
@@ -2808,6 +2848,33 @@ def as_column(
                 dtype=dtype,
                 length=length,
             )
+        elif is_pandas_nullable_extension_dtype(arbitrary.dtype):
+            if (
+                isinstance(arbitrary.dtype, pd.ArrowDtype)
+                and (arrow_type := arbitrary.dtype.pyarrow_dtype) is not None
+                and (
+                    pa.types.is_date32(arrow_type)
+                    or pa.types.is_binary(arrow_type)
+                    or pa.types.is_dictionary(arrow_type)
+                )
+            ):
+                raise NotImplementedError(
+                    f"cuDF does not yet support {arbitrary.dtype}"
+                )
+            if isinstance(arbitrary, (pd.Series, pd.Index)):
+                # pandas arrays define __arrow_array__ for better
+                # pyarrow.array conversion
+                arbitrary = arbitrary.array
+            result = as_column(
+                pa.array(arbitrary, from_pandas=True),
+                nan_as_null=nan_as_null,
+                dtype=dtype,
+                length=length,
+            )
+            if cudf.get_option("mode.pandas_compatible"):
+                # Store pandas extension dtype directly in the column's dtype property
+                result = result._with_type_metadata(arbitrary.dtype)
+            return result
         elif isinstance(
             arbitrary.dtype, pd.api.extensions.ExtensionDtype
         ) and not isinstance(arbitrary, NumpyExtensionArray):
@@ -2908,7 +2975,8 @@ def as_column(
             arbitrary = None
             if dtype is not None:
                 pa_type = cudf_dtype_to_pa_type(dtype)
-                dtype = None
+                if not cudf.get_option("mode.pandas_compatible"):
+                    dtype = None
             else:
                 raise ValueError(
                     "Need to pass dtype when passing pd.NA or None"
@@ -2994,7 +3062,11 @@ def as_column(
                 # but maintain NaT as a value
                 mask = as_column(~is_nat).as_mask()
             buffer = as_buffer(arbitrary.view("|u1"))
-            col = build_column(data=buffer, mask=mask, dtype=arbitrary.dtype)
+            col = build_column(
+                data=buffer,
+                mask=mask,
+                dtype=arbitrary.dtype,
+            )
             if dtype:
                 col = col.astype(dtype)
             return col

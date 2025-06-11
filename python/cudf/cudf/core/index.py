@@ -479,7 +479,7 @@ class Index(SingleColumnFrame):  # type: ignore[misc]
         """
         Number of levels.
         """
-        return len(self._data)
+        return self._num_columns
 
     @property
     def names(self) -> pd.core.indexes.frozen.FrozenList:
@@ -2253,7 +2253,7 @@ class Index(SingleColumnFrame):  # type: ignore[misc]
         )
 
     def repeat(self, repeats, axis=None) -> Self:
-        result = super()._repeat([self._column], repeats, axis)[0]
+        result = self._repeat([self._column], repeats, axis)[0]
         result = result._with_type_metadata(self.dtype)
         return type(self)._from_column(result, name=self.name)
 

@@ -7,6 +7,7 @@ import polars as pl
 from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
 )
+from cudf_polars.utils.versions import POLARS_VERSION_LT_130
 
 
 def test_union():
@@ -40,4 +41,9 @@ def test_concat_diagonal_empty():
 
     q = pl.concat([df1, df2], how="diagonal_relaxed")
 
-    assert_gpu_result_equal(q, collect_kwargs={"no_optimization": True})
+    assert_gpu_result_equal(
+        q,
+        collect_kwargs={"no_optimization": True}
+        if POLARS_VERSION_LT_130
+        else {"optimizations": pl.QueryOptFlags()},
+    )
