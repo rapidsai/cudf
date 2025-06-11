@@ -57,7 +57,7 @@ if TYPE_CHECKING:
 
     from cudf_polars.dsl.expressions.base import Expr
     from cudf_polars.dsl.ir import IR
-    from cudf_polars.typing import GenericTransformer, Schema
+    from cudf_polars.typing import CachingVisitorState, GenericTransformer, Schema
     from cudf_polars.utils.config import ConfigOptions
 
 
@@ -510,7 +510,7 @@ def decompose_expr_graph(
     This function recursively decomposes ``named_expr.value`` and
     ``input_ir`` into multiple partition-wise stages.
     """
-    state = {
+    state: CachingVisitorState = {
         "input_ir": input_ir,
         "input_partition_info": partition_info[input_ir],
         "config_options": config_options,

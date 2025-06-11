@@ -66,19 +66,23 @@ def test_caching_visitor():
 
     e1 = make_expr(dt, "a", "b")
 
-    mapper = CachingVisitor(rename, state={"mapping": {"b": "c"}})
+    # This test adds an extra key to CachingVisitorState.
+    # That's just a TypedDict, so adding extra keys is fine at runtime.
+    # We don't want to include these test-only fields in the TypeDict,
+    # so we use an ignore here.
+    mapper = CachingVisitor(rename, state={"mapping": {"b": "c"}})  # type: ignore
 
     renamed = mapper(e1)
     assert renamed == make_expr(dt, "a", "c")
     assert len(mapper.cache) == 3
 
     e2 = make_expr(dt, "a", "a")
-    mapper = CachingVisitor(rename, state={"mapping": {"b": "c"}})
+    mapper = CachingVisitor(rename, state={"mapping": {"b": "c"}})  # type: ignore
 
     renamed = mapper(e2)
     assert renamed == make_expr(dt, "a", "a")
     assert len(mapper.cache) == 2
-    mapper = CachingVisitor(rename, state={"mapping": {"a": "c"}})
+    mapper = CachingVisitor(rename, state={"mapping": {"a": "c"}})  # type: ignore
 
     renamed = mapper(e2)
     assert renamed == make_expr(dt, "c", "c")
@@ -189,7 +193,7 @@ def test_rewrite_names_and_ops():
 
     @_transform.register
     def _(e: expr.Col, fn: ExprTransformer):
-        mapping = fn.state["mapping"]
+        mapping = fn.state["mapping"]  # type: ignore
         if e.name in mapping:
             return type(e)(e.dtype, mapping[e.name])
         return e
@@ -210,7 +214,7 @@ def test_rewrite_names_and_ops():
 
     @_rewrite.register
     def _(node: ir.Select, fn: IRTransformer):
-        expr_mapper = fn.state["expr_mapper"]
+        expr_mapper = fn.state["expr_mapper"]  # type: ignore
         return type(node)(
             node.schema,
             [expr.NamedExpr(e.name, expr_mapper(e.value)) for e in node.exprs],

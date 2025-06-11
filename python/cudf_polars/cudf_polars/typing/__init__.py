@@ -21,13 +21,16 @@ import polars as pl
 from polars.polars import _expr_nodes as pl_expr, _ir_nodes as pl_ir
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Mapping
+    from collections.abc import Callable, Generator, Mapping
     from typing import TypeAlias
 
     import pylibcudf as plc
 
     from cudf_polars.containers import DataFrame, DataType
     from cudf_polars.dsl import expr, ir, nodebase
+    from cudf_polars.experimental.base import PartitionInfo
+    from cudf_polars.utils.config import ConfigOptions
+
 
 __all__: list[str] = [
     "ClosedInterval",
@@ -158,7 +161,7 @@ class GenericTransformer(Protocol[U_contra, V_co]):
         ...
 
     @property
-    def state(self) -> Mapping[str, Any]:
+    def state(self) -> CachingVisitorState:
         """Arbitrary immutable state."""
         ...
 
@@ -198,3 +201,16 @@ class DataFrameHeader(TypedDict):
 
     columns_kwargs: list[ColumnOptions]
     frame_count: int
+
+
+class CachingVisitorState[NodeT](TypedDict, total=False):
+    """State for CachingVisitor."""
+
+    config_options: ConfigOptions
+    for_parquet: bool
+    input_ir: ir.IR
+    input_partition_info: PartitionInfo
+    name_to_index: Mapping[str, int]
+    replacements: Mapping[NodeT, NodeT]
+    table_ref: plc.expressions.TableReference
+    unique_names: Generator[str, None, None]

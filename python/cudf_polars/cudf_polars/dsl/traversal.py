@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 """Traversal and visitor utilities for nodes."""
@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Generic
 
-from cudf_polars.typing import U_contra, V_co
+from cudf_polars.typing import CachingVisitorState, U_contra, V_co
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator, Mapping, MutableMapping, Sequence
@@ -150,11 +150,11 @@ class CachingVisitor(Generic[U_contra, V_co]):
         self,
         fn: Callable[[U_contra, GenericTransformer[U_contra, V_co]], V_co],
         *,
-        state: Mapping[str, Any] | None = None,
+        state: CachingVisitorState | None = None,
     ) -> None:
         self.fn = fn
         self.cache: MutableMapping[U_contra, V_co] = {}
-        self.state = state if state is not None else {}
+        self.state = state if state is not None else CachingVisitorState()
 
     def __call__(self, value: U_contra) -> V_co:
         """
