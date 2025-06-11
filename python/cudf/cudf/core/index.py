@@ -479,7 +479,7 @@ class Index(SingleColumnFrame):  # type: ignore[misc]
         """
         Number of levels.
         """
-        return len(self._data)
+        return self._num_columns
 
     @property
     def names(self) -> pd.core.indexes.frozen.FrozenList:
@@ -2257,10 +2257,6 @@ class Index(SingleColumnFrame):  # type: ignore[misc]
         result = result._with_type_metadata(self.dtype)
         return type(self)._from_column(result, name=self.name)
 
-    @property
-    def values(self) -> cupy.ndarray:
-        return self._column.values
-
     def __contains__(self, item) -> bool:
         hash(item)
         return item in self._column
@@ -3205,10 +3201,8 @@ class RangeIndex(Index):
     def repeat(self, repeats, axis=None):
         return self._as_int_index().repeat(repeats, axis)
 
-    def _split(self, splits):
-        return Index._from_column(
-            self._as_int_index()._split(splits), name=self.name
-        )
+    def _split(self, splits: list[int]) -> list[Index]:
+        return self._as_int_index()._split(splits)
 
     def _binaryop(self, other, op: str):  # type: ignore[override]
         # TODO: certain binops don't require materializing range index and
