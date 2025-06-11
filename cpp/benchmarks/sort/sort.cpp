@@ -27,8 +27,8 @@ template <typename DataType>
 static void bench_sort(nvbench::state& state, nvbench::type_list<DataType>)
 {
   auto const stable    = static_cast<bool>(state.get_int64("stable"));
-  auto const n_rows    = static_cast<cudf::size_type>(state.get_int64("num_rows"));
-  auto const n_cols    = static_cast<cudf::size_type>(state.get_int64("num_cols"));
+  auto const num_rows  = static_cast<cudf::size_type>(state.get_int64("num_rows"));
+  auto const num_cols  = static_cast<cudf::size_type>(state.get_int64("num_cols"));
   auto const nulls     = state.get_float64("nulls");
   auto const data_type = cudf::type_to_id<DataType>();
 
@@ -36,12 +36,12 @@ static void bench_sort(nvbench::state& state, nvbench::type_list<DataType>)
     data_profile_builder().cardinality(0).null_probability(nulls).distribution(
       data_type, distribution_id::UNIFORM, 100, 10'000);
   auto input_table =
-    create_random_table(cycle_dtypes({data_type}, n_cols), row_count{n_rows}, profile);
+    create_random_table(cycle_dtypes({data_type}, num_cols), row_count{num_rows}, profile);
   cudf::table_view input{*input_table};
 
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
   state.add_global_memory_reads<nvbench::int8_t>(input_table->alloc_size());
-  state.add_global_memory_writes<nvbench::int32_t>(n_rows);
+  state.add_global_memory_writes<nvbench::int32_t>(num_rows);
 
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
     if (stable)
