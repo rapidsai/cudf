@@ -9,6 +9,7 @@ from collections.abc import Hashable, MutableMapping
 from typing import (
     TYPE_CHECKING,
     Any,
+    Generic,
     Literal,
     NewType,
     Protocol,
@@ -203,7 +204,7 @@ class DataFrameHeader(TypedDict):
     frame_count: int
 
 
-class CachingVisitorState[NodeT](TypedDict, total=False):
+class CachingVisitorState(Generic[NodeT], TypedDict, total=False):
     """State for CachingVisitor."""
 
     config_options: ConfigOptions
