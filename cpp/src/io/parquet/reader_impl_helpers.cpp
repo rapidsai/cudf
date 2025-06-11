@@ -1392,7 +1392,7 @@ aggregate_reader_metadata::select_row_groups(
                       // Validate the row group index
                       CUDF_EXPECTS(
                         rg_idx >= 0 and std::cmp_less(rg_idx, file_metadata.row_groups.size()),
-                        "Invalid rowgroup index",
+                        "Invalid row group index",
                         std::invalid_argument);
 
                       // Get the row group
