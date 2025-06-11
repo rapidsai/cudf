@@ -262,7 +262,7 @@ struct page_stats_caster : public stats_caster_base {
   /**
    * @brief Transforms a page-level stats column to a row-level stats column for non-string types
    *
-   * @tparam T The data type of the column
+   * @tparam T The data type of the column - must be non-compound
    * @param column Mutable view of input page-level device column
    * @param page_nullmask Nullmask of the input page-level column
    * @param page_indices Device vector containing the page index for each row index
@@ -273,7 +273,7 @@ struct page_stats_caster : public stats_caster_base {
    *
    * @return A pair containing the output data buffer and nullmask
    */
-  template <typename T, CUDF_ENABLE_IF(not cudf::is_compound<T>())>
+  template <typename T>
   [[nodiscard]] std::pair<rmm::device_buffer, rmm::device_buffer> build_data_and_nullmask(
     mutable_column_view input_column,
     bitmask_type const* page_nullmask,
@@ -281,7 +281,7 @@ struct page_stats_caster : public stats_caster_base {
     cudf::host_span<size_type const> page_row_offsets,
     cudf::data_type dtype,
     rmm::cuda_stream_view stream,
-    rmm::device_async_resource_ref mr) const
+    rmm::device_async_resource_ref mr) const requires(not cudf::is_compound<T>())
   {
     // Total number of pages in the column
     size_type const total_pages = page_row_offsets.size() - 1;
