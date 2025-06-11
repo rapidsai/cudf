@@ -74,6 +74,8 @@ concept SupportedDictionaryType = is_supported_dictionary_type<T>;
 auto constexpr INT96_SIZE = 12;
 /// Decode kernel block size. Must be a multiple of warp_size
 auto constexpr DECODE_BLOCK_SIZE = 4 * cudf::detail::warp_size;
+/// Maximum query block size. Must be a multiple of warp_size
+auto constexpr MAX_QUERY_BLOCK_SIZE = 4 * cudf::detail::warp_size;
 /// Maximum number of literals to evaluate while decoding column dictionaries
 auto constexpr MAX_INLINE_LITERALS = 2;
 
@@ -1190,7 +1192,7 @@ struct dictionary_caster {
       auto query_block_size = std::max<cudf::size_type>(cudf::detail::warp_size, total_row_groups);
       query_block_size      = cudf::size_type{1}
                          << (31 - cuda::std::countl_zero(static_cast<uint32_t>(query_block_size)));
-      return std::min<cudf::size_type>(query_block_size, 128);
+      return std::min<cudf::size_type>(query_block_size, MAX_QUERY_BLOCK_SIZE);
     }();
 
     // Query one predicate against all cuco hash sets of this column using a thread block
