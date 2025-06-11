@@ -623,7 +623,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         if (
             cai := getattr(arbitrary, "__cuda_array_interface__", None)
         ) is None:
-            raise ValueError("value does not define __cuda_array_interface__")
+            raise ValueError(
+                "Object does not implement __cuda_array_interface__"
+            )
 
         cai_dtype = np.dtype(cai["typestr"])
         check_invalid_array(cai["shape"], cai_dtype)
@@ -631,7 +633,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             arbitrary, cai["shape"], cai["strides"], cai_dtype
         )
 
-        # Can remove once from_cuda_array_interface can handle masks
+        # TODO: Can remove once from_cuda_array_interface can handle masks
         # https://github.com/rapidsai/cudf/issues/19122
         if (mask := cai.get("mask", None)) is not None:
             cai_copy = cai.copy()
