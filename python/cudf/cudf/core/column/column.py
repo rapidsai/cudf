@@ -2253,6 +2253,17 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             )
         )
 
+    def split_by_offsets(
+        self, offsets: list[int]
+    ) -> Generator[Self, None, None]:
+        for cols in copying.columns_split([self], offsets):
+            for col in cols:
+                yield (  # type: ignore[misc]
+                    type(self)
+                    .from_pylibcudf(col)
+                    ._with_type_metadata(self.dtype)
+                )
+
     @acquire_spill_lock()
     def one_hot_encode(self, categories: ColumnBase) -> Generator[ColumnBase]:
         plc_table = plc.transform.one_hot_encode(
