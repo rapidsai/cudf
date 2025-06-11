@@ -56,7 +56,8 @@ def ordering(
     na_position: Iterable[Literal["first", "last"]],
 ) -> tuple[list[plc.types.Order], list[plc.types.NullOrder]]:
     """
-    Covert bool ascending and string na_position to plc.types.Order and plc.types.NullOrder.
+    Convert bool ascending and string na_position to
+    plc.types.Order and plc.types.NullOrder, respectively.
 
     Parameters
     ----------
@@ -186,12 +187,18 @@ def search_sorted(
     Parameters
     ----------
     source : Iterable of columns
-        List of columns to search in
+        Iterable of columns to search in
     values : Iterable of columns
-        List of value columns to search for
+        Iterable of value columns to search for
     side : str {'left', 'right'} optional
         If 'left', the index of the first suitable location is given.
         If 'right', return the last such index
+    ascending : Iterable[bool]
+        Iterable of bools which correspond to each column's
+        sort order.
+    na_position : Iterable[str]
+        Iterable of strings which correspond to each column's
+        null position.
     """
     column_order, null_precedence = ordering(ascending, na_position)
     func = getattr(
