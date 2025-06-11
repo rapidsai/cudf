@@ -759,12 +759,12 @@ table_with_metadata chunked_parquet_reader::read_chunk() const
   return reader->read_chunk();
 }
 
-parquet_chunked_writer::parquet_chunked_writer() = default;
+chunked_parquet_writer::chunked_parquet_writer() = default;
 
 /**
- * @copydoc cudf::io::parquet_chunked_writer::parquet_chunked_writer
+ * @copydoc cudf::io::chunked_parquet_writer::chunked_parquet_writer
  */
-parquet_chunked_writer::parquet_chunked_writer(chunked_parquet_writer_options const& options,
+chunked_parquet_writer::chunked_parquet_writer(chunked_parquet_writer_options const& options,
                                                rmm::cuda_stream_view stream)
 {
   namespace io_detail = cudf::io::detail;
@@ -775,12 +775,12 @@ parquet_chunked_writer::parquet_chunked_writer(chunked_parquet_writer_options co
     std::move(sinks), options, io_detail::single_write_mode::NO, stream);
 }
 
-parquet_chunked_writer::~parquet_chunked_writer() = default;
+chunked_parquet_writer::~chunked_parquet_writer() = default;
 
 /**
- * @copydoc cudf::io::parquet_chunked_writer::write
+ * @copydoc cudf::io::chunked_parquet_writer::write
  */
-parquet_chunked_writer& parquet_chunked_writer::write(table_view const& table,
+chunked_parquet_writer& chunked_parquet_writer::write(table_view const& table,
                                                       std::vector<partition_info> const& partitions)
 {
   CUDF_FUNC_RANGE();
@@ -791,9 +791,9 @@ parquet_chunked_writer& parquet_chunked_writer::write(table_view const& table,
 }
 
 /**
- * @copydoc cudf::io::parquet_chunked_writer::close
+ * @copydoc cudf::io::chunked_parquet_writer::close
  */
-std::unique_ptr<std::vector<uint8_t>> parquet_chunked_writer::close(
+std::unique_ptr<std::vector<uint8_t>> chunked_parquet_writer::close(
   std::vector<std::string> const& column_chunks_file_path)
 {
   CUDF_FUNC_RANGE();
