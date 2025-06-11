@@ -177,13 +177,12 @@ size_type aggregate_reader_metadata::total_rows_in_row_groups(
                 [&](auto const src_idx) {
                   auto const& pfm = per_file_metadata[src_idx];
                   for (auto const row_group_idx : row_group_indices[src_idx]) {
-                    CUDF_EXPECTS(
-                      row_group_idx < static_cast<cudf::size_type>(pfm.row_groups.size()),
-                      "Row group index out of bounds");
+                    CUDF_EXPECTS(std::cmp_less(row_group_idx, pfm.row_groups.size()),
+                                 "Row group index out of bounds");
                     total_rows += pfm.row_groups[row_group_idx].num_rows;
                   }
                 });
-  CUDF_EXPECTS(total_rows <= static_cast<size_t>(std::numeric_limits<size_type>::max()),
+  CUDF_EXPECTS(std::cmp_less_equal(total_rows, std::numeric_limits<size_type>::max()),
                "Total number of rows exceeds cudf::size_type's limit");
 
   return static_cast<size_type>(total_rows);
@@ -285,10 +284,9 @@ aggregate_reader_metadata::select_row_groups(
   for (size_t src_idx = 0; src_idx < row_group_indices.size(); ++src_idx) {
     auto const& fmd = per_file_metadata[src_idx];
     for (auto const& rowgroup_idx : row_group_indices[src_idx]) {
-      CUDF_EXPECTS(
-        rowgroup_idx >= 0 && rowgroup_idx < static_cast<cudf::size_type>(fmd.row_groups.size()),
-        "Invalid rowgroup index",
-        std::invalid_argument);
+      CUDF_EXPECTS(rowgroup_idx >= 0 and std::cmp_less(rowgroup_idx, fmd.row_groups.size()),
+                   "Invalid rowgroup index",
+                   std::invalid_argument);
       auto const chunk_start_row  = rows_to_read;
       auto const num_rows_this_rg = get_row_group(rowgroup_idx, src_idx).num_rows;
       rows_to_read += num_rows_this_rg;
