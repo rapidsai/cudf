@@ -1057,7 +1057,7 @@ class IndexedFrame(Frame):
             other, (cudf.Series, cudf.DataFrame)
         ):
             common = self.index.union(other.index)
-            if len(common) > len(self.index) or len(common) > len(other.index):
+            if len(common) > max(len(self), len(other)):
                 raise ValueError("matrices are not aligned")
 
             lhs = self.reindex(index=common, copy=False).values
@@ -1068,9 +1068,7 @@ class IndexedFrame(Frame):
             other, (cudf.Series, cudf.DataFrame)
         ):
             common = self._data.to_pandas_index.union(other.index.to_pandas())
-            if len(common) > self._num_columns or len(common) > len(
-                other.index
-            ):
+            if len(common) > max(self._num_columns, len(other)):
                 raise ValueError("matrices are not aligned")
 
             lhs = self.reindex(columns=common, copy=False)
@@ -1101,12 +1099,12 @@ class IndexedFrame(Frame):
             lhs, rhs = rhs, lhs
 
         result = lhs.dot(rhs)
-        if len(result.shape) == 1:
+        if result.ndim == 1:
             return cudf.Series(
                 result,
                 index=self.index if result_index is None else result_index,
             )
-        if len(result.shape) == 2:
+        if result.ndim == 2:
             return cudf.DataFrame(
                 result,
                 index=self.index if result_index is None else result_index,
@@ -2488,7 +2486,7 @@ class IndexedFrame(Frame):
         1
         """
         axes = (
-            range(len(self.axes))
+            range(self.ndim)
             if axis is None
             else (self._get_axis_from_axis_arg(axis),)
         )
@@ -3247,7 +3245,7 @@ class IndexedFrame(Frame):
         result._data.rangeindex = self._data.rangeindex
         return result
 
-    def _split(self, splits, keep_index: bool = True) -> list[Self]:
+    def _split(self, splits: list[int], keep_index: bool = True) -> list[Self]:
         if self._num_rows == 0:
             return []
 
