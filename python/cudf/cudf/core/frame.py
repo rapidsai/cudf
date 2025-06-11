@@ -1453,7 +1453,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
             values = [as_column(values)]
         else:
             values = [*values._columns]
-        if len(values) != len(self._data):
+        if len(values) != self._num_columns:
             raise ValueError("Mismatch number of columns to search for.")
 
         # TODO: Change behavior based on the decision in
@@ -1612,9 +1612,16 @@ class Frame(BinaryOperand, Scannable, Serializable):
 
     @_performance_tracking
     def _split(self, splits: list[int]) -> list[Self]:
-        """Split a frame with split points in ``splits``. Returns a list of
-        Frames of length `len(splits) + 1`.
         """
+        Split a frame with split points in ``splits``.
+
+        Returns
+        -------
+        list[Self]
+            Returns a list of Self of length len(splits) + 1.
+        """
+        if self._num_rows == 0:
+            return []
         return [
             self._from_columns_like_self(
                 [ColumnBase.from_pylibcudf(col) for col in split],
