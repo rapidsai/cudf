@@ -105,6 +105,3 @@ filterwarnings = [
     "ignore:pkg_resources is deprecated as an API:DeprecationWarning",
 ]
 xfail_strict = true
-
-[tool.coverage.run]
-disable_warnings = ["module-not-measured"]
