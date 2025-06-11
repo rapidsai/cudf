@@ -135,11 +135,12 @@ CUDF_KERNEL void segmented_offset_bitmask_binop(Binop op,
     auto const last_bit_index  = source_size_bits - 1;
     auto const last_word_index = cudf::word_index(last_bit_index);
 
-    if(threadIdx.x == 0) {
-      std::printf("segment_id = %d, segment_offsets[%d] = %d\n", segment_id, segment_id, segment_offsets[segment_id]);
-      std::printf("sources.size() = %lu\n", sources.size());
-      std::printf("segment_id = %d, segment_offsets[%d] = %d, source_begin_bits[%d] = %d\n", segment_id, segment_id, segment_offsets[segment_id], segment_offsets[segment_id], source_begin_bits[segment_offsets[segment_id]]);
-      std::printf("last_bit_index = %d, last_word_index = %d\n", last_bit_index, last_word_index);
+    if(lane == 0) {
+      std::printf("warp_id = %d, segment_id = %d, segment_offsets[%d] = %d\n", warp_id, segment_id, segment_id, segment_offsets[segment_id]);
+      std::printf("warp_id = %d, sources.size() = %lu\n", warp_id, sources.size());
+      std::printf("warp_id = %d, destinations.size() = %lu\n", warp_id, destinations.size());
+      std::printf("warp_id = %d, segment_id = %d, segment_offsets[%d] = %d, source_begin_bits[%d] = %d\n", warp_id, segment_id, segment_id, segment_offsets[segment_id], segment_offsets[segment_id], source_begin_bits[segment_offsets[segment_id]]);
+      std::printf("warp_id = %d, last_bit_index = %d, last_word_index = %d\n", warp_id, last_bit_index, last_word_index);
     }
 
     for (size_type destination_word_index = lane; destination_word_index < destination_size;
@@ -162,15 +163,9 @@ CUDF_KERNEL void segmented_offset_bitmask_binop(Binop op,
       if (destination_word_index == last_word_index) {
         // mask out any bits not part of this word
         auto const num_bits_in_last_word = intra_word_index(last_bit_index);
-        if (threadIdx.x == 0) {
-          std::printf("num_bits_in_last_word = %d, bitmask_type_size = %d\n", num_bits_in_last_word, bitmask_type_size);
-        }
         if (num_bits_in_last_word <
             bitmask_type_size - 1) {
           destination_word &= set_least_significant_bits(num_bits_in_last_word + 1);
-          if (threadIdx.x == 0) {
-            std::printf("# of set bits = %d\n", __popc(destination_word));
-          }
           thread_count += num_bits_in_last_word + 1 - __popc(destination_word);
         }
         else {
@@ -191,7 +186,7 @@ CUDF_KERNEL void segmented_offset_bitmask_binop(Binop op,
   size_type warp_count = WarpReduce(temp_storage).Sum(thread_count);
 
   if (lane == 0 && segment_id < num_segments) { 
-    if (threadIdx.x == 0) std::printf("warp_count = %d\n", warp_count);
+    std::printf("warp_id = %d, warp_count = %d\n", warp_id, warp_count);
     null_counts[segment_id] = warp_count;
   }
 }
@@ -245,8 +240,9 @@ std::pair<std::vector<std::unique_ptr<rmm::device_buffer>>, std::vector<size_typ
   auto destination_masks = cudf::detail::make_device_uvector<bitmask_type*>(h_destination_masks_ptrs, stream, cudf::get_current_device_resource_ref());
 
   std::cout << "mask_size_bits = " << mask_size_bits << std::endl;
+  std::cout << "destination_size = " << num_bitmask_words(mask_size_bits) << std::endl;
   // for destination size, pass number of words in each destination buffer instead of number of bits
-  auto null_counts = inplace_segmented_bitmask_binop(op, destination_masks, mask_size_bits, masks, masks_begin_bits, mask_size_bits, segment_offsets, stream, cudf::get_current_device_resource_ref());
+  auto null_counts = inplace_segmented_bitmask_binop(op, destination_masks, num_bitmask_words(mask_size_bits), masks, masks_begin_bits, mask_size_bits, segment_offsets, stream, cudf::get_current_device_resource_ref());
 
   auto h_null_counts = cudf::detail::make_std_vector<size_type>(null_counts, stream);
   return std::pair(std::move(h_destination_masks), std::move(h_null_counts));
