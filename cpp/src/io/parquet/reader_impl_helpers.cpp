@@ -1164,7 +1164,7 @@ aggregate_reader_metadata::apply_row_bounds_filter(
 
                   // Fill row group rows counts and row offsets with zeros
                   row_group_row_counts.emplace_back(num_row_groups, size_type{0});
-                  row_group_row_offsets.emplace_back(num_row_groups, size_type{0});
+                  row_group_row_offsets.emplace_back(num_row_groups, current_row_index);
 
                   // Return early if we have reached the maximum number of rows
                   if (current_row_index >= rows_to_skip + rows_to_read) { return; }
@@ -1582,9 +1582,9 @@ aggregate_reader_metadata::select_columns(
       auto const& src_schema_elem = get_schema(src_schema_idx);
       auto const& dst_schema_elem = get_schema(dst_schema_idx, pfm_idx);
 
-      // Check the schema elements to be equal except their number of children as we only care
-      // about the specific column paths in the schema trees. Raise an invalid_argument error if
-      // the schema elements don't match.
+      // Check the schema elements to be equal except their number of children as we only care about
+      // the specific column paths in the schema trees. Raise an invalid_argument error if the
+      // schema elements don't match.
       CUDF_EXPECTS(equal_to_except_num_children(src_schema_elem, dst_schema_elem),
                    "Encountered mismatching SchemaElement properties for a column in "
                    "the selected path",
@@ -1610,8 +1610,8 @@ aggregate_reader_metadata::select_columns(
                           pfm_idx);
       }
 
-      // The path ends here. If this is a list/struct col (has children), then map all its
-      // children which must be identical.
+      // The path ends here. If this is a list/struct col (has children), then map all its children
+      // which must be identical.
       if (col_name_info == nullptr or col_name_info->children.empty()) {
         // Check the number of children to be equal to be mapped. An out_of_range error if the
         // number of children isn't equal.
