@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2023, NVIDIA CORPORATION.
+# Copyright (c) 2021-2025, NVIDIA CORPORATION.
 
 import operator
 
@@ -23,6 +23,7 @@ from cudf.core.udf.masked_typing import (
     NAType,
     _supported_masked_types,
 )
+from cudf.core.udf.strings_typing import managed_udf_string
 
 
 @cuda_lowering_registry.lower_constant(NAType)
@@ -277,6 +278,13 @@ def masked_scalar_is_null_impl(context, builder, sig, args):
 # else packs it up into a new one that is valid from the get go
 @cuda_lower(api.pack_return, MaskedType)
 def pack_return_masked_impl(context, builder, sig, args):
+    # Must incref any managed object we return from
+    # a handwritten lowering function
+    if sig.args[0].value_type is managed_udf_string:
+        struct = cgutils.create_struct_proxy(MaskedType(managed_udf_string))(
+            context, builder, value=args[0]
+        )
+        context.nrt.incref(builder, managed_udf_string, struct.value)
     return args[0]
 
 
@@ -285,6 +293,13 @@ def pack_return_masked_impl(context, builder, sig, args):
 @cuda_lower(api.pack_return, types.NPDatetime)
 @cuda_lower(api.pack_return, types.NPTimedelta)
 def pack_return_scalar_impl(context, builder, sig, args):
+    # Must incref any managed object we return from
+    # a handwritten lowering function
+    if sig.args[0] is managed_udf_string:
+        string = cgutils.create_struct_proxy(MaskedType(managed_udf_string))(
+            context, builder, value=args[0]
+        )
+        context.nrt.incref(builder, managed_udf_string, string)
     outdata = cgutils.create_struct_proxy(sig.return_type)(context, builder)
     outdata.value = args[0]
     outdata.valid = context.get_constant(types.boolean, 1)

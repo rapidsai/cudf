@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,6 +25,8 @@
 
 #include <cooperative_groups.h>
 #include <cuda/atomic>
+
+#include <nrt.cuh>
 
 #include <limits>
 #include <type_traits>
@@ -719,4 +721,57 @@ make_definition_corr(BlockCorr, int32, int32_t);
 make_definition_corr(BlockCorr, int64, int64_t);
 
 #undef make_definition_corr
+}
+
+/**
+ * @brief Destructor for a udf_string object.
+ *
+ * NRT API compatible destructor for udf_string objects.
+ *
+ * @param udf_str Pointer to the udf_string object to be destructed.
+ * @param size Size of the udf_string object (not used).
+ * @param dtor_info Additional information for the destructor (not used).
+ */
+__device__ void udf_str_dtor(void* udf_str, size_t size, void* dtor_info)
+{
+  auto ptr = reinterpret_cast<udf_string*>(udf_str);
+  ptr->~udf_string();
+}
+
+/**
+ * @brief Initialize a MemInfo to track a newly created cudf::udf_string.
+ *
+ * Shim functions are passed stack memory into which udf_string objects are constructed
+ * so this function persists a copy to the heap for use when destructing
+ * the object later on. The returned MemInfo tracks the heap copy.
+ *
+ * @param out_meminfo Pointer to value through which to return the MemInfo.
+ * @param udf_str Pointer to the newly created udf_string object.
+ *
+ *
+ */
+extern "C" __device__ int init_udf_string_meminfo(void** out_meminfo, void* udf_str)
+{
+  struct mi_str_allocation {
+    NRT_MemInfo mi;
+    udf_string st;
+  };
+  mi_str_allocation* mi_and_str = (mi_str_allocation*)NRT_Allocate(sizeof(mi_str_allocation));
+  if (mi_and_str != NULL) {
+    auto mi_ptr        = &(mi_and_str->mi);
+    udf_string* st_ptr = &(mi_and_str->st);
+
+    // udf_str_dtor can destruct the string without knowing the size
+    size_t size = 0;
+    NRT_MemInfo_init(mi_ptr, st_ptr, size, udf_str_dtor, NULL);
+
+    // copy the udf_string to the extra heap space
+    udf_string* in_str_ptr = reinterpret_cast<udf_string*>(udf_str);
+    memcpy(st_ptr, in_str_ptr, sizeof(udf_string));
+    *out_meminfo = &(mi_and_str->mi);
+  } else {
+    *out_meminfo = NULL;
+    __trap();
+  }
+  return 0;
 }
