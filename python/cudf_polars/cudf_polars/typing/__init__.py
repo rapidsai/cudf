@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import sys
 from collections.abc import Hashable, MutableMapping
 from typing import (
     TYPE_CHECKING,
@@ -14,7 +15,6 @@ from typing import (
     NewType,
     Protocol,
     TypeVar,
-    TypedDict,
     Union,
 )
 
@@ -31,6 +31,12 @@ if TYPE_CHECKING:
     from cudf_polars.dsl import expr, ir, nodebase
     from cudf_polars.experimental.base import PartitionInfo
     from cudf_polars.utils.config import ConfigOptions
+
+
+if sys.version_info >= (3, 11):
+    from typing import TypedDict
+else:
+    from typing_extensions import TypedDict
 
 
 __all__: list[str] = [
