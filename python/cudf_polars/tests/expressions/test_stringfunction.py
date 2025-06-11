@@ -486,3 +486,15 @@ def test_string_to_titlecase():
         quotes_title=pl.col("quotes").str.to_titlecase(),
     )
     assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize("tail", [1, 2, 999, -1, 0, None])
+def test_string_tail(ldf, tail):
+    q = ldf.select(pl.col("a").str.tail(tail))
+    assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize("head", [1, 2, 999, -1, 0, None])
+def test_string_head(ldf, head):
+    q = ldf.select(pl.col("a").str.head(head))
+    assert_gpu_result_equal(q)

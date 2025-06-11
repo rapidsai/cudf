@@ -1196,10 +1196,15 @@ class Frame(BinaryOperand, Scannable, Serializable):
 
         See `ColumnBase._with_type_metadata` for more information.
         """
-        for (name, col), (_, dtype) in zip(
-            self._column_labels_and_values, other._dtypes
+        for (name, self_col), (_, other_col) in zip(
+            self._column_labels_and_values, other._column_labels_and_values
         ):
-            self._data.set_by_label(name, col._with_type_metadata(dtype))
+            self._data.set_by_label(
+                name,
+                self_col._with_type_metadata(
+                    other_col.dtype,
+                ),
+            )
 
         return self
 
@@ -1448,7 +1453,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
             values = [as_column(values)]
         else:
             values = [*values._columns]
-        if len(values) != len(self._data):
+        if len(values) != self._num_columns:
             raise ValueError("Mismatch number of columns to search for.")
 
         # TODO: Change behavior based on the decision in

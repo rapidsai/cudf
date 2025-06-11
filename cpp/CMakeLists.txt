@@ -560,6 +560,7 @@ add_library(
   src/io/parquet/reader.cpp
   src/io/parquet/reader_impl.cpp
   src/io/parquet/reader_impl_chunking.cu
+  src/io/parquet/reader_impl_chunking_utils.cu
   src/io/parquet/reader_impl_helpers.cpp
   src/io/parquet/reader_impl_preprocess.cu
   src/io/parquet/stats_filter_helpers.cpp
@@ -692,6 +693,8 @@ add_library(
   src/search/contains_scalar.cu
   src/search/contains_table.cu
   src/search/search_ordered.cu
+  src/sort/faster_sort_column.cu
+  src/sort/faster_stable_sort_column.cu
   src/sort/is_sorted.cu
   src/sort/rank.cu
   src/sort/segmented_sort.cu
