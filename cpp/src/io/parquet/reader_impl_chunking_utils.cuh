@@ -188,8 +188,6 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
  *
  * @param chunks List of column chunk descriptors
  * @param pass_pages List of page information for the pass
- * @param pass_page_mask Boolean page mask indicating which pass pages to decompress. Empty
- * span indicates all pages should be decompressed
  * @param subpass_pages List of page information for the subpass
  * @param subpass_page_mask Boolean page mask indicating which subpass pages to decompress. Empty
  * span indicates all pages should be decompressed
@@ -202,7 +200,6 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
 [[nodiscard]] std::pair<rmm::device_buffer, rmm::device_buffer> decompress_page_data(
   host_span<ColumnChunkDesc const> chunks,
   host_span<PageInfo> pass_pages,
-  host_span<bool const> pass_page_mask,
   host_span<PageInfo> subpass_pages,
   host_span<bool const> subpass_page_mask,
   rmm::cuda_stream_view stream,

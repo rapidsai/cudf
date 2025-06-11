@@ -345,7 +345,6 @@ void reader::impl::setup_next_subpass(read_mode mode)
     auto [pass_data, subpass_data] =
       decompress_page_data(pass.chunks,
                            is_first_subpass ? pass.pages : host_span<PageInfo>{},
-                           empty_page_mask,
                            subpass.pages,
                            empty_page_mask,
                            _stream,

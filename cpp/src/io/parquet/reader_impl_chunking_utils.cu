@@ -406,7 +406,6 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
 [[nodiscard]] std::pair<rmm::device_buffer, rmm::device_buffer> decompress_page_data(
   host_span<ColumnChunkDesc const> chunks,
   host_span<PageInfo> pass_pages,
-  host_span<bool const> pass_page_mask,
   host_span<PageInfo> subpass_pages,
   host_span<bool const> subpass_page_mask,
   rmm::cuda_stream_view stream,
@@ -414,9 +413,6 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
 {
   CUDF_FUNC_RANGE();
 
-  CUDF_EXPECTS(pass_page_mask.empty() or pass_page_mask.size() == pass_pages.size(),
-               "Pass page mask must either be empty or have size equal to the number of pass pages",
-               std::invalid_argument);
   CUDF_EXPECTS(
     subpass_page_mask.empty() or subpass_page_mask.size() == subpass_pages.size(),
     "Subpass page mask must either be empty or have size equal to the number of subpass pages",
@@ -442,7 +438,8 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
 
   size_t total_pass_decomp_size = 0;
   for (auto& codec : codecs) {
-    codec.add_pages(chunks, pass_pages, codec_stats::page_selection::DICT_PAGES, pass_page_mask);
+    // Use an empty span as pass page mask as we don't want to filter out dictionary pages
+    codec.add_pages(chunks, pass_pages, codec_stats::page_selection::DICT_PAGES, {});
     total_pass_decomp_size += codec.total_decomp_size;
   }
 
@@ -528,8 +525,8 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
   size_t subpass_decomp_offset = 0;
   for (auto& codec : codecs) {
     if (codec.num_pages == 0) { continue; }
-    set_parameters(
-      codec, pass_pages, pass_page_mask, pass_decomp_pages.data(), true, pass_decomp_offset);
+    // Use empty span as pass page mask as we don't want to filter out dictionary pages
+    set_parameters(codec, pass_pages, {}, pass_decomp_pages.data(), true, pass_decomp_offset);
     set_parameters(codec,
                    subpass_pages,
                    subpass_page_mask,
