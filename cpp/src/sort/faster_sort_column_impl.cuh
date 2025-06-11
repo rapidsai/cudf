@@ -30,6 +30,17 @@
 namespace cudf {
 namespace detail {
 
+// clang-format off
+template <typename T>
+using underlying_storage_type_t =
+  timestamp_rep_type_t<T, duration_rep_type_t<T, device_storage_type_t<T>>>;
+// clang-format on
+
+template <cudf::type_id Id>
+struct dispatch_underlying_type {
+  using type = underlying_storage_type_t<id_to_type<Id>>;
+};
+
 /**
  * @brief Sort indices of a single column.
  *

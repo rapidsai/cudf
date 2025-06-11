@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -81,6 +81,29 @@ static_assert(sizeof(timestamp_s) == sizeof(typename timestamp_s::rep));
 static_assert(sizeof(timestamp_ms) == sizeof(typename timestamp_ms::rep));
 static_assert(sizeof(timestamp_us) == sizeof(typename timestamp_us::rep));
 static_assert(sizeof(timestamp_ns) == sizeof(typename timestamp_ns::rep));
+
+/**
+ * @brief Maps the timestamp type to its rep type
+ *
+ * Use this "type function" with the `using` type alias:
+ * @code
+ * using Type = timestamp_rep_type_t<ElementType>;
+ * @endcode
+ *
+ * @tparam T The literal timestamp type
+ * @tparam N The default type to return if T is not a timestamp type
+ */
+// clang-format off
+template <typename T, typename N=T>
+using timestamp_rep_type_t =
+  std::conditional_t<std::is_same_v<timestamp_D, T>,  timestamp_D::rep,
+  std::conditional_t<std::is_same_v<timestamp_h, T>,  timestamp_h::rep,
+  std::conditional_t<std::is_same_v<timestamp_m, T>,  timestamp_m::rep,
+  std::conditional_t<std::is_same_v<timestamp_s, T>,  timestamp_s::rep,
+  std::conditional_t<std::is_same_v<timestamp_ms, T>, timestamp_ms::rep,
+  std::conditional_t<std::is_same_v<timestamp_us, T>, timestamp_us::rep,
+  std::conditional_t<std::is_same_v<timestamp_ns, T>, timestamp_ns::rep, N>>>>>>>;
+// clang-format on
 
 /** @} */  // end of group
 }  // namespace CUDF_EXPORT cudf
