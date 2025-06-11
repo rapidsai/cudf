@@ -110,6 +110,7 @@ class StringFunction(Expr):
 
     def _validate_input(self) -> None:
         if self.name not in (
+            StringFunction.Name.ConcatHorizontal,
             StringFunction.Name.ConcatVertical,
             StringFunction.Name.Contains,
             StringFunction.Name.EndsWith,
@@ -212,7 +213,27 @@ class StringFunction(Expr):
         self, df: DataFrame, *, context: ExecutionContext = ExecutionContext.FRAME
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
-        if self.name is StringFunction.Name.ConcatVertical:
+        if self.name is StringFunction.Name.ConcatHorizontal:
+            columns = [
+                child.evaluate(df, context=context).obj for child in self.children
+            ]
+            delimiter, ignore_nulls = self.options
+
+            sep = plc.Scalar.from_py(delimiter, plc.DataType(plc.TypeId.STRING))
+            table = plc.Table(columns)
+
+            return Column(
+                plc.strings.combine.concatenate(
+                    table,
+                    sep,
+                    None
+                    if ignore_nulls
+                    else plc.Scalar.from_py(None, plc.DataType(plc.TypeId.STRING)),
+                    None,
+                    plc.strings.combine.SeparatorOnNulls.NO,
+                )
+            )
+        elif self.name is StringFunction.Name.ConcatVertical:
             (child,) = self.children
             column = child.evaluate(df, context=context)
             delimiter, ignore_nulls = self.options
