@@ -1,4 +1,4 @@
 # Configuration file for Python coverage tests
 [run]
 source = cudf
-disable_warnings=no-data-collected
+disable_warnings=module-not-measured
