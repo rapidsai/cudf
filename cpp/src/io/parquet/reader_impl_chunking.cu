@@ -345,10 +345,11 @@ void reader::impl::setup_next_subpass(read_mode mode)
     auto [pass_data, subpass_data] =
       decompress_page_data(pass.chunks,
                            is_first_subpass ? pass.pages : host_span<PageInfo>{},
+                           empty_page_mask,
                            subpass.pages,
                            empty_page_mask,
-                           empty_page_mask,
-                           _stream);
+                           _stream,
+                           _mr);
 
     if (is_first_subpass) {
       pass.decomp_dict_data = std::move(pass_data);

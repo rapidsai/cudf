@@ -99,7 +99,7 @@ void decode_dictionary_page_headers(cudf::detail::hostdevice_span<ColumnChunkDes
 
   parquet::kernel_error error_code(stream);
 
-  DecodePageHeaders(
+  parquet::detail::decode_page_headers(
     chunks.device_begin(), d_chunk_page_info.begin(), chunks.size(), error_code.data(), stream);
 
   if (auto const error = error_code.value_sync(stream); error != 0) {
