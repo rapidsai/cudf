@@ -60,16 +60,25 @@ namespace cudf {
 namespace tdigest {
 namespace detail {
 
+bool disable_cpu_cluster_computation = false;
+
 namespace {
 
 // performance tunables.
 
 // if we have <= 2x this many groups, run this many on the CPU. it represents the break
 // even point where the CPU and GPU take about the same amount of time for large input groups.
-constexpr size_type max_cpu_groups = 8;
-constexpr bool use_cpu_for_cluster_computation(size_type num_groups)
+// The theory is this:
+// - the cpu and the gpu take about the same time to do this many group cluster computations
+// (currently 32).
+// - so up to 2x (eg 32 on the CPU + 32 on the GPU) the time should be about the same
+// - above 32*2, do it all on the GPU because we can skip the step of copying to pinned and leave it
+// all in device memory, and the GPU time will remain flat (or nearly so) as the group count goes up
+// substantially.
+constexpr size_type max_cpu_groups = 32;
+bool use_cpu_for_cluster_computation(size_type num_groups)
 {
-  return num_groups <= max_cpu_groups * 2;
+  return disable_cpu_cluster_computation ? false : num_groups <= max_cpu_groups * 2;
 }
 
 // maximum temporary memory we will allow for using a worst-case allocation strategy that allows us
@@ -315,7 +324,7 @@ struct scalar_group_info_grouped {
   }
 };
 
-// retrieve group info (total weight, size, start offset) of scalar inputs
+// retrieve group info (total weight, size) of scalar inputs
 struct scalar_group_info {
   double const total_weight;
   size_type const size;
@@ -376,6 +385,7 @@ struct tdigest_max {
   }
 };
 
+//
 struct cluster_info {
   // Important: there is an optimization in place that makes it o that the cluster weight limits
   // may be over-allocated per group. Therefore we need to separately track the start and count
@@ -387,7 +397,10 @@ struct cluster_info {
   rmm::device_uvector<size_type> cluster_start{0, cudf::get_default_stream()};
   // number of weight limits, per group
   rmm::device_uvector<size_type> num_clusters{0, cudf::get_default_stream()};
-  bool requires_rescan = true;
+  bool requires_rescan =
+    true;  // in the case of our worst-case memory optimization, this flag
+           // is set to true to indicate that cluster_start needs to be rescanned
+           // (using num_clusters) as an input to generate proper final output offsets.
 
   size_type total_clusters;  // total cluster count across all groups
 };
@@ -397,12 +410,6 @@ struct cluster_info {
 // than at the ends.
 CUDF_HOST_DEVICE double scale_func_k1(double quantile, double delta_norm)
 {
-  /*
-    double k = delta_norm * static_cast<double>(asin(static_cast<float>(2.0 * quantile - 1.0)));
-    k += 1.0;
-    double const q = (static_cast<double>(sin(static_cast<float>(k / delta_norm))) + 1.0) / 2.0;
-    return q;
-    */
   double k = delta_norm * asin(2.0 * quantile - 1.0);
   k += 1.0;
   double const q = (sin(k / delta_norm) + 1.0) / 2.0;
@@ -435,18 +442,18 @@ std::unique_ptr<scalar> to_tdigest_scalar(std::unique_ptr<column>&& tdigest,
  * cluster sizes and total # of clusters, and once to compute the actual
  * weight limits per cluster.
  *
+ * @param group_index         index of the group being processed
  * @param delta               tdigest compression level
- * @param num_groups          The number of input groups
  * @param nearest_weight      A functor which returns the nearest weight in the input
  * stream that falls before our current cluster limit
  * @param group_info          A functor which returns the info for the specified group (total
  * weight, size and start offset)
+ * @param cumulative_weight   A functor which returns the cumulative wright for a given value index
  * @param group_cluster_wl    Output.  The set of cluster weight limits for each group.
  * @param group_num_clusters  Output.  The number of output clusters for each input group.
- * @param group_cluster_offsets  Offsets per-group to the start of it's clusters
+ * @param group_cluster_start Start pos per-group to the start of it's clusters
  * @param has_nulls Whether or not the input contains nulls
  */
-
 template <typename GroupInfo, typename NearestWeightFunc, typename CumulativeWeight>
 CUDF_HOST_DEVICE void generate_cluster_limit(int group_index,
                                              int delta,
@@ -586,6 +593,27 @@ CUDF_KERNEL void generate_cluster_limits_kernel(int delta,
                          has_nulls);
 }
 
+/**
+ * @brief Wrapper for the cluster computation kernel. Load balances the work between the CPU and the
+ * GPU as appropriate.
+ *
+ * This function expects that if use_cpu_for_cluster_computation() returns true, that the memory
+ * provided to it via group_cluster_wl, group_num_clusters and group_cluster_start are in pinned
+ * memory (accessible by both CPU and GPU)
+ *
+ * @param delta               tdigest compression level
+ * @param num_groups          Number of groups to be processed
+ * @param nearest_weight      A functor which returns the nearest weight in the input
+ * stream that falls before our current cluster limit
+ * @param group_info          A functor which returns the info for the specified group (total
+ * weight, size and start offset)
+ * @param cumulative_weight   A functor which returns the cumulative wright for a given value index
+ * @param group_cluster_wl    Output.  The set of cluster weight limits for each group.
+ * @param group_num_clusters  Output.  The number of output clusters for each input group.
+ * @param group_cluster_start Start pos per-group to the start of it's clusters
+ * @param has_nulls Whether or not the input contains nulls
+ * @param stream Stream to run kernels on
+ */
 template <typename GroupInfo, typename NearestWeightFunc, typename CumulativeWeight>
 void generate_cluster_limits(int delta,
                              size_type num_groups,
@@ -643,6 +671,10 @@ void generate_cluster_limits(int delta,
   }
 }
 
+/**
+ * @brief Computes the total number of clusters (one double each) for a worst-case allocation
+ * strategy that allows us to bypass calling the cluster computation kernel twice.
+ */
 template <typename GroupInfo>
 size_t compute_simple_cluster_count(int delta,
                                     GroupInfo group_info,
@@ -671,6 +703,11 @@ size_t compute_simple_cluster_count(int delta,
     rmm::exec_policy(stream), group_num_clusters.begin(), group_num_clusters.end());
 }
 
+/**
+ * @brief Computes starts positions in the weight-limit buffer of each cluster. We are using
+ * the terminology 'start' here instead of 'offsets' because our allocations strategy may
+ * cause us to overallocate buffers within each group.
+ */
 void compute_cluster_starts(cluster_info& cinfo, rmm::cuda_stream_view stream)
 {
   auto const num_groups = cinfo.num_clusters.size();
@@ -722,6 +759,8 @@ cluster_info generate_group_cluster_info(int delta,
 {
   CUDF_FUNC_RANGE();
 
+  bool const use_cpu = use_cpu_for_cluster_computation(num_groups);
+
   // use the CPU to process the largest of the groups, in certain circumstances.
   // For large groups (those which generate a lot of clusters) the CPU is significantly
   // faster per-group at computing the clustering. At about 8 groups, the GPU starts to become
@@ -730,9 +769,8 @@ cluster_info generate_group_cluster_info(int delta,
   // CPU.  This specifically addresses customer use cases with large inputs and small numbers of
   // groups, such as just 1. if we're going to be using the CPU, use pinned for a few of the temp
   // buffers
-  auto temp_mr = use_cpu_for_cluster_computation(num_groups)
-                   ? cudf::get_pinned_memory_resource()
-                   : cudf::get_current_device_resource_ref();
+  auto temp_mr =
+    use_cpu ? cudf::get_pinned_memory_resource() : cudf::get_current_device_resource_ref();
 
   // output from the function
   cluster_info cinfo;
@@ -794,6 +832,22 @@ cluster_info generate_group_cluster_info(int delta,
                           cinfo.cluster_start.begin(),
                           has_nulls,
                           stream);
+
+  // if we used the cpu to do the computation, bring it back to the GPU. for large inputs,
+  // leaving this info in pinned results in about a 1/3 increase in time do to the reduction.
+  // Note that the size of this data will tend to be very small compared to the size of the
+  // input columns themselves, so we are not doing huge memory transfers.
+  if (use_cpu) {
+    auto p_cluster_wl = std::move(cinfo.cluster_wl);
+    cinfo.cluster_wl =
+      rmm::device_uvector(p_cluster_wl, stream, cudf::get_current_device_resource_ref());
+    auto p_num_clusters = std::move(cinfo.num_clusters);
+    cinfo.num_clusters =
+      rmm::device_uvector(p_num_clusters, stream, cudf::get_current_device_resource_ref());
+    auto p_cluster_start = std::move(cinfo.cluster_start);
+    cinfo.cluster_start =
+      rmm::device_uvector(p_cluster_start, stream, cudf::get_current_device_resource_ref());
+  }
 
   // if we are in the simple case we need to recompute the total clusters. allocated_cluster count
   // will not be accurate.
