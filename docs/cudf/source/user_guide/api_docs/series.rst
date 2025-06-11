@@ -441,7 +441,7 @@ the ``Series.cat`` accessor.
 
    Series.cat
 
-.. currentmodule:: cudf.core.accessor.categorical.CategoricalAccessor
+.. currentmodule:: cudf.core.accessors.categorical.CategoricalAccessor
 .. autosummary::
    :toctree: api/
 
