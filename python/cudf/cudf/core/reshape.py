@@ -354,7 +354,7 @@ def concat(
                     result = obj.to_frame()
                 else:
                     result = obj.copy(deep=True)
-                result.columns = cudf.RangeIndex(len(result._data))
+                result.columns = cudf.RangeIndex(result._num_columns)
             else:
                 result = type(obj)._from_data(
                     data=obj._data.copy(deep=True),
@@ -1491,7 +1491,7 @@ def crosstab(
 
 
 def pivot_table(
-    data,
+    data: DataFrame,
     values=None,
     index=None,
     columns=None,
@@ -1575,7 +1575,7 @@ def pivot_table(
                     to_filter.append(x)
             except TypeError:
                 pass
-        if len(to_filter) < len(data._column_names):
+        if len(to_filter) < data._num_columns:
             data = data[to_filter]
 
     else:
