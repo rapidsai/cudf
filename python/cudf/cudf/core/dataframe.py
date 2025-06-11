@@ -206,10 +206,12 @@ class _DataFrameIndexer(_FrameIndexer):
                     arg[1], slice
                 ):
                     return True
-            dtypes = [dtype for _, dtype in df._dtypes]
-            all_numeric = all(is_dtype_obj_numeric(t) for t in dtypes)
-            if all_numeric or (
-                len(dtypes) and all(t == dtypes[0] for t in dtypes)
+            if df._num_columns == 0:
+                return True
+            first_dtype = df._columns[0].dtype
+            if all(
+                is_dtype_obj_numeric(dtype) or dtype == first_dtype
+                for _, dtype in df._dtypes
             ):
                 return True
             if isinstance(arg[1], tuple):
@@ -427,12 +429,12 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                 new_ser = Series._from_column(value, index=idx)
             else:
                 new_ser = Series(value, index=idx)
-            if len(self._frame.index) != 0:
+            if len(self._frame) != 0:
                 new_ser = new_ser._align_to_index(
                     self._frame.index, how="right"
                 )
 
-            if len(self._frame.index) == 0:
+            if len(self._frame) == 0:
                 self._frame.index = (
                     idx if idx is not None else cudf.RangeIndex(len(new_ser))
                 )
@@ -2086,7 +2088,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
 
         if len(self) <= nrows and self._num_columns <= ncols:
             output = self
-        elif self.empty and len(self.index) > 0:
+        elif self.empty and len(self) > 0:
             max_seq_items = pd.options.display.max_seq_items
             # In case of Empty DataFrame with index, Pandas prints
             # first `pd.options.display.max_seq_items` index values
@@ -2393,7 +2395,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 result.columns = (
                     columns
                     if columns is not None
-                    else range(len(result._data))
+                    else range(result._num_columns)
                 )
                 if dtype is not None:
                     result = result.astype(dtype)
@@ -2563,8 +2565,12 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
 
     @_performance_tracking
     def scatter_by_map(
-        self, map_index, map_size=None, keep_index=True, debug: bool = False
-    ):
+        self,
+        map_index,
+        map_size: int | None = None,
+        keep_index: bool = True,
+        debug: bool = False,
+    ) -> list[Self]:
         """Scatter to a list of dataframes.
 
         Uses map_index to determine the destination
@@ -2638,38 +2644,20 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 raise ValueError("Partition map has invalid values")
 
         with acquire_spill_lock():
-            plc_table, output_offsets = plc.partitioning.partition(
+            plc_table, offsets = plc.partitioning.partition(
                 plc.Table(
                     [col.to_pylibcudf(mode="read") for col in source_columns]
                 ),
                 map_index.to_pylibcudf(mode="read"),
                 map_size,
             )
-            partitioned_columns = [
-                ColumnBase.from_pylibcudf(col) for col in plc_table.columns()
-            ]
-
-        partitioned = self._from_columns_like_self(
-            partitioned_columns,
-            column_names=self._column_names,
-            index_names=list(self._index_names) if keep_index else None,
+        return self._wrap_from_partitions(
+            plc_table,
+            offsets,
+            keep_index=keep_index,
+            size=map_size,
+            by_hash=False,
         )
-
-        # due to the split limitation mentioned
-        # here: https://github.com/rapidsai/cudf/issues/4607
-        # we need to remove first & last elements in offsets.
-        # TODO: Remove this after the above issue is fixed.
-        output_offsets = output_offsets[1:-1]
-
-        result = partitioned._split(output_offsets, keep_index=keep_index)
-
-        if map_size:
-            result += [
-                self._empty_like(keep_index)
-                for _ in range(map_size - len(result))
-            ]
-
-        return result
 
     @_performance_tracking
     def update(
@@ -2876,7 +2864,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         * The possible .columns.dtype
         * The .columns.names/name (depending on if it's a MultiIndex)
         """
-        if self._num_columns != len(other.names):
+        if self._num_columns != len(other):
             raise ValueError(
                 f"Length mismatch: expected {len(other)} elements, "
                 f"got {len(self)} elements"
@@ -3246,7 +3234,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         if isinstance(cond, Series):
             cond = self._from_data(
                 self._data._from_columns_like_self(
-                    itertools.repeat(cond._column, len(self._column_names)),
+                    itertools.repeat(cond._column, self._num_columns),
                     verify=False,
                 )
             )
@@ -3277,7 +3265,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         if isinstance(other, DataFrame):
             other_cols = [other._data[col] for col in self._column_names]
         elif is_scalar(other):
-            other_cols = [other] * len(self._column_names)
+            other_cols = [other] * self._num_columns
         elif isinstance(other, Series):
             other_cols = other.to_pandas()
         else:
@@ -5166,8 +5154,8 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
 
     @_performance_tracking
     def partition_by_hash(
-        self, columns, nparts: int, keep_index: bool = True
-    ) -> list[DataFrame]:
+        self, columns: Sequence[Hashable], nparts: int, keep_index: bool = True
+    ) -> list[Self]:
         """Partition the dataframe by the hashed value of data in *columns*.
 
         Parameters
@@ -5189,7 +5177,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             cols: Iterable[ColumnBase] = itertools.chain(
                 self.index._columns, self._columns
             )
-            key_indices = [i + len(self.index._columns) for i in key_indices]
+            key_indices = [i + self.index._num_columns for i in key_indices]
         else:
             cols = self._columns
 
@@ -5199,23 +5187,40 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 key_indices,
                 nparts,
             )
-            output_columns = [
-                ColumnBase.from_pylibcudf(col) for col in plc_table.columns()
-            ]
-
-        outdf = self._from_columns_like_self(
-            output_columns,
-            self._column_names,
-            self._index_names if keep_index else None,  # type: ignore[arg-type]
+        return self._wrap_from_partitions(
+            plc_table,
+            offsets,
+            keep_index=keep_index,
+            size=nparts,
+            by_hash=True,
         )
-        # Slice into partitions. Notice, `hash_partition` returns the start
-        # offset of each partition thus we skip the first offset
-        ret = outdf._split(offsets[1:], keep_index=keep_index)
 
-        # Calling `_split()` on an empty dataframe returns an empty list
-        # so we add empty partitions here
-        ret += [self._empty_like(keep_index) for _ in range(nparts - len(ret))]
-        return ret
+    def _wrap_from_partitions(
+        self,
+        table: plc.Table,
+        offsets: list[int],
+        *,
+        keep_index: bool,
+        size: int,
+        by_hash: bool,
+    ) -> list[Self]:
+        # we need to remove first & last elements in offsets.
+        # TODO: Remove this after https://github.com/rapidsai/cudf/issues/4607 is fixed.
+        offsets = offsets[slice(1, None if by_hash else -1)]
+        output_columns = [
+            ColumnBase.from_pylibcudf(col) for col in table.columns()
+        ]
+        partitioned = self._from_columns_like_self(
+            output_columns,
+            column_names=self._column_names,
+            index_names=self._index_names if keep_index else None,  # type: ignore[arg-type]
+        )
+        result = partitioned._split(offsets, keep_index=keep_index)
+        if size:
+            result.extend(
+                self._empty_like(keep_index) for _ in range(size - len(result))
+            )
+        return result
 
     def info(
         self,
@@ -5363,13 +5368,11 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         lines = [str(type(self))]
 
         index_name = type(self.index).__name__
-        if len(self.index) > 0:
+        if len(self) > 0:
             entries_summary = f", {self.index[0]} to {self.index[-1]}"
         else:
             entries_summary = ""
-        index_summary = (
-            f"{index_name}: {len(self.index)} entries{entries_summary}"
-        )
+        index_summary = f"{index_name}: {len(self)} entries{entries_summary}"
         lines.append(index_summary)
 
         if self._num_columns == 0:
@@ -8033,7 +8036,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         columns: list[ColumnBase],
         column_names: Iterable[str] | None = None,
         index_names: list[str] | None = None,
-    ) -> DataFrame:
+    ) -> Self:
         result = super()._from_columns_like_self(
             columns,
             column_names,
@@ -8765,7 +8768,7 @@ def _setitem_with_dataframe(
     if input_cols is None:
         input_cols = input_df._column_names
 
-    if len(input_cols) != len(replace_df._column_names):
+    if len(input_cols) != replace_df._num_columns:
         raise ValueError(
             "Number of Input Columns must be same replacement Dataframe"
         )
@@ -8789,7 +8792,7 @@ def _setitem_with_dataframe(
             else:
                 # handle append case
                 input_df._insert(
-                    loc=len(input_df._data),
+                    loc=input_df._num_columns,
                     name=col_1,
                     value=replace_df[col_2],
                 )
