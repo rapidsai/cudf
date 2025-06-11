@@ -73,7 +73,7 @@ pip install cudf-cu12
 cuDF can be installed with conda (via [miniforge](https://github.com/conda-forge/miniforge)) from the `rapidsai` channel:
 
 ```bash
-conda install -c rapidsai -c conda-forge -c nvidia \
+conda install -c rapidsai -c conda-forge \
     cudf=25.08 python=3.12 cuda-version=12.8
 ```
 
