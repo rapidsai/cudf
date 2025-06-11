@@ -1,14 +1,11 @@
 name: pr
-
 on:
   push:
     branches:
       - "pull-request/[0-9]+"
-
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
-
 jobs:
   # Please keep pr-builder as the top job here
   pr-builder:
@@ -362,9 +359,9 @@ jobs:
     needs: pandas-tests
     uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@branch-25.08
     with:
-        node_type: "cpu4"
-        build_type: pull-request
-        script: "ci/cudf_pandas_scripts/pandas-tests/diff.sh"
+      node_type: "cpu4"
+      build_type: pull-request
+      script: "ci/cudf_pandas_scripts/pandas-tests/diff.sh"
   narwhals-tests:
     needs: [conda-python-build, changed-files]
     secrets: inherit
@@ -382,7 +379,6 @@ jobs:
     needs: changed-files
     uses: ./.github/workflows/spark-rapids-jni.yaml
     if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_java
-
   telemetry-summarize:
     # This job must use a self-hosted runner to record telemetry traces.
     runs-on: linux-amd64-cpu4
@@ -392,3 +388,5 @@ jobs:
     steps:
       - name: Telemetry summarize
         uses: rapidsai/shared-actions/telemetry-dispatch-summarize@main
+    env:
+      GH_TOKEN: ${{ github.token }}
