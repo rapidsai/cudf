@@ -35,6 +35,7 @@
 #include <rmm/exec_policy.hpp>
 #include <rmm/mr/device/polymorphic_allocator.hpp>
 
+#include <cuco/extent.cuh>
 #include <cuco/static_set.cuh>
 #include <thrust/iterator/counting_iterator.h>
 
@@ -59,11 +60,12 @@ auto constexpr DECODE_BLOCK_SIZE = 4 * cudf::detail::warp_size;
 auto constexpr MAX_INLINE_LITERALS = 2;
 
 // cuCollections static set parameters
-using key_type = cudf::size_type;                  ///< Using column indices (size_type) as set keys
-auto constexpr EMPTY_KEY_SENTINEL = key_type{-1};  ///< We will never encounter a -1 index.
-auto constexpr SET_CG_SIZE        = 1;             ///< Cooperative group size for cuco::static_set
-auto constexpr BUCKET_SIZE        = 1;             ///< Number of buckets per set slot
-auto constexpr OCCUPANCY_FACTOR = 70;  ///< cuCollections suggests targeting a 70% occupancy factor
+using key_type  = cudf::size_type;  ///< Using column indices (size_type) as set keys
+using slot_type = key_type;         ///< Hash set slot type is the same as the key type
+auto constexpr EMPTY_KEY_SENTINEL = key_type{-1};  ///< We will never encounter a -1 row index
+auto constexpr SET_CG_SIZE        = 1;  ///< Cooperative group size for cuco::static_set_ref
+auto constexpr BUCKET_SIZE        = 1;  ///< Number of concurrent slots handled by each thread
+auto constexpr OCCUPANCY_FACTOR = 0.7;  ///< cuCollections suggests targeting a 70% occupancy factor
 
 /// Supported fixed width types for row group pruning using dictionaries
 template <typename T>
@@ -80,12 +82,11 @@ template <typename T>
 using hasher_type = cudf::hashing::detail::MurmurHash3_x86_32<T>;
 
 /// cuco::static_set_ref storage type
-using storage_type     = cuco::bucket_storage<key_type,
-                                          BUCKET_SIZE,
-                                          cuco::extent<std::size_t>,
-                                          cudf::detail::cuco_allocator<char>>;
+using storage_type     = cuco::bucket_storage<slot_type,
+                                              BUCKET_SIZE,
+                                              cuco::extent<std::size_t>,
+                                              cudf::detail::cuco_allocator<char>>;
 using storage_ref_type = typename storage_type::ref_type;
-using bucket_type      = typename storage_type::bucket_type;
 
 /**
  * @brief Hash functor for inserting values into a `cuco::static_set`
@@ -308,7 +309,7 @@ __device__ __forceinline__ int64_t convert_to_timestamp64(int64_t const value,
  * @param results Span of device vector start pointers to store query results, one per predicate
  * @param scalars Pointer to scalar device views, one per predicate
  * @param operators Pointer to corresponding (in)equality operators, one per predicate
- * @param set_storage Pointer to the start of the bulk storage for cuco hash sets
+ * @param set_storage Pointer to the start of the bulk cuco hash set slots
  * @param set_offsets Pointer to offsets into the bulk set storage for each dictionary
  * @param value_offsets Pointer to offsets into running sum of values in each dictionary
  * @param total_row_groups Total number of row groups
@@ -320,7 +321,7 @@ CUDF_KERNEL cuda::std::enable_if_t<is_supported_dictionary_type<T>, void> query_
   cudf::device_span<bool*> results,
   ast::generic_scalar_device_view const* scalars,
   ast::ast_operator const* operators,
-  bucket_type* const set_storage,
+  slot_type* const set_storage,
   cudf::size_type const* set_offsets,
   cudf::size_type const* value_offsets,
   cudf::size_type total_row_groups,
@@ -619,7 +620,7 @@ __device__ cudf::string_view decode_string_value(uint8_t const* page_data,
  *
  * @param pages Column chunk dictionary page headers
  * @param decoded_data Span of storage for decoded values from all dictionaries
- * @param set_storage Pointer to the start of the bulk storage for cuco hash sets
+ * @param set_storage Pointer to the start of the bulk cuco hash set slots
  * @param set_offsets Pointer to offsets into the bulk set storage for each dictionary
  * @param value_offsets Pointer to offsets into running sum of values in each dictionary
  * @param num_dictionary_columns Total number of columns with dictionaries
@@ -629,7 +630,7 @@ __device__ cudf::string_view decode_string_value(uint8_t const* page_data,
 CUDF_KERNEL void __launch_bounds__(DECODE_BLOCK_SIZE)
   build_string_dictionaries(PageInfo const* pages,
                             cudf::device_span<cudf::string_view> decoded_data,
-                            bucket_type* const set_storage,
+                            slot_type* const set_storage,
                             cudf::size_type const* set_offsets,
                             cudf::size_type const* value_offsets,
                             cudf::size_type total_row_groups,
@@ -712,7 +713,7 @@ CUDF_KERNEL void __launch_bounds__(DECODE_BLOCK_SIZE)
  * @param pages Column chunk dictionary page headers
  * @param chunks Column chunk descriptors
  * @param decoded_data Span of storage for decoded values from all dictionaries
- * @param set_storage Pointer to the start of the bulk storage for cuco hash sets
+ * @param set_storage Pointer to the start of the bulk cuco hash set slots
  * @param set_offsets Pointer to offsets into the bulk set storage for each dictionary
  * @param value_offsets Pointer to offsets into running sum of values in each dictionary
  * @param physical_type Parquet physical type of the column
@@ -725,7 +726,7 @@ CUDF_KERNEL cuda::std::enable_if_t<is_supported_fixed_width_type<T>, void> __lau
   DECODE_BLOCK_SIZE) build_fixed_width_dictionaries(PageInfo const* pages,
                                                     ColumnChunkDesc const* chunks,
                                                     cudf::device_span<T> decoded_data,
-                                                    bucket_type* const set_storage,
+                                                    slot_type* const set_storage,
                                                     cudf::size_type const* set_offsets,
                                                     cudf::size_type const* value_offsets,
                                                     parquet::Type physical_type,
@@ -1055,6 +1056,11 @@ struct dictionary_caster {
     host_set_offsets.emplace_back(0);
     host_value_offsets.emplace_back(0);
 
+    // Define the probing scheme type with either (insert or query) hash functor to use it in
+    // `cuco::make_valid_extent`
+    using hash_fn_type        = insert_hash_functor<T>;
+    using probing_scheme_type = cuco::linear_probing<SET_CG_SIZE, hash_fn_type>;
+
     // Compute the running number of hash set slots and decoded values for all dictionaries
     std::for_each(
       thrust::counting_iterator<size_t>(0),
@@ -1065,9 +1071,10 @@ struct dictionary_caster {
         // Update the running number of values in this dictionary
         host_value_offsets.emplace_back(host_value_offsets.back() + num_input_values);
         // Compute the number of hash set slots needed to target the desired occupancy factor
-        host_set_offsets.emplace_back(host_set_offsets.back() +
-                                      static_cast<cudf::size_type>(compute_hash_table_size(
-                                        num_input_values, OCCUPANCY_FACTOR)));
+        host_set_offsets.emplace_back(
+          host_set_offsets.back() +
+          static_cast<cudf::size_type>(cuco::make_valid_extent<probing_scheme_type, storage_type>(
+            num_input_values, OCCUPANCY_FACTOR)));
       });
 
     // Device vectors to store the running number of hash set slots and decoded values for all
@@ -1403,11 +1410,9 @@ class dictionary_expression_converter : public equality_literals_collector {
           _dictionary_expr.push(ast::operation{ast_operator::IDENTITY, value});
         }
       }
-      // For all other expressions, push an always true expression
+      // For all other expressions, push the `always true` expression
       else {
-        _dictionary_expr.push(
-          ast::operation{ast_operator::NOT,
-                         _dictionary_expr.push(ast::operation{ast_operator::NOT, _always_true})});
+        _dictionary_expr.push(ast::operation{ast_operator::IDENTITY, _always_true});
       }
     } else {
       auto new_operands = visit_operands(operands);
