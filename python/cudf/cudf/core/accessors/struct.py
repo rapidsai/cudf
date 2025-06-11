@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from cudf.core.column.methods import ColumnMethods
+from cudf.core.accessors.base_accessor import BaseAccessor
 from cudf.core.dtypes import StructDtype
 from cudf.utils.dtypes import get_dtype_of_same_kind, is_dtype_obj_struct
 
@@ -15,7 +15,7 @@ if TYPE_CHECKING:
     from cudf.core.series import Series
 
 
-class StructMethods(ColumnMethods):
+class StructMethods(BaseAccessor):
     """
     Struct methods for Series
     """

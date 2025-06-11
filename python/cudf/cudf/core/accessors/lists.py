@@ -8,8 +8,8 @@ import pandas as pd
 import pyarrow as pa
 
 from cudf.api.types import is_scalar
+from cudf.core.accessors.base_accessor import BaseAccessor
 from cudf.core.column.column import as_column
-from cudf.core.column.methods import ColumnMethods
 from cudf.core.dtypes import ListDtype, dtype as cudf_dtype
 from cudf.utils.dtypes import is_dtype_obj_list, is_dtype_obj_numeric
 from cudf.utils.scalar import pa_scalar_to_plc_scalar
@@ -21,7 +21,7 @@ if TYPE_CHECKING:
     from cudf.core.series import Series
 
 
-class ListMethods(ColumnMethods):
+class ListMethods(BaseAccessor):
     """
     List methods for Series
     """

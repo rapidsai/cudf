@@ -18,10 +18,10 @@ import pylibcudf as plc
 import cudf
 from cudf.api.types import is_integer, is_scalar
 from cudf.core._internals import binaryop
+from cudf.core.accessors.base_accessor import BaseAccessor
 from cudf.core.buffer import Buffer, acquire_spill_lock
 from cudf.core.column.column import ColumnBase, as_column, column_empty
 from cudf.core.column.lists import ListColumn
-from cudf.core.column.methods import ColumnMethods
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
@@ -64,7 +64,7 @@ def _is_supported_regex_flags(flags: int) -> bool:
     )
 
 
-class StringMethods(ColumnMethods):
+class StringMethods(BaseAccessor):
     """
     Vectorized string functions for Series and Index.
 

@@ -334,7 +334,7 @@ String handling
 
    Series.str
 
-.. currentmodule:: cudf.core.column.string.StringMethods
+.. currentmodule:: cudf.core.accessors.string.StringMethods
 .. autosummary::
    :toctree: api/
 

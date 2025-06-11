@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from cudf.core.column.methods import ColumnMethods
+from cudf.core.accessors.base_accessor import BaseAccessor
 from cudf.core.dtypes import CategoricalDtype
 
 if TYPE_CHECKING:
@@ -13,7 +13,7 @@ if TYPE_CHECKING:
     from cudf.core.series import Series
 
 
-class CategoricalAccessor(ColumnMethods):
+class CategoricalAccessor(BaseAccessor):
     """
     Accessor object for categorical properties of the Series values.
     Be aware that assigning to `categories` is a inplace operation,

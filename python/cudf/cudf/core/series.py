@@ -30,6 +30,7 @@ from cudf.core._compat import PANDAS_LT_300
 from cudf.core.accessors import (
     CategoricalAccessor,
     ListMethods,
+    StringMethods,
     StructMethods,
 )
 from cudf.core.column import (
@@ -38,7 +39,6 @@ from cudf.core.column import (
     as_column,
 )
 from cudf.core.column.column import concat_columns
-from cudf.core.column.string import StringMethods
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.groupby.groupby import SeriesGroupBy, groupby_doc_template
 from cudf.core.index import (
