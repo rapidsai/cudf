@@ -48,7 +48,6 @@ using storage_type     = cuco::bucket_storage<slot_type,
                                               cuco::extent<std::size_t>,
                                               cudf::detail::cuco_allocator<char>>;
 using storage_ref_type = typename storage_type::ref_type;
-using bucket_type      = typename storage_type::bucket_type;
 
 /**
  * @brief Return the byte length of parquet dtypes that are physically represented by INT32
@@ -100,7 +99,7 @@ inline size_type __device__ row_to_value_idx(size_type idx,
  * @param frags Column fragments
  * @param stream CUDA stream to use
  */
-void populate_chunk_hash_maps(device_span<bucket_type> const map_storage,
+void populate_chunk_hash_maps(device_span<slot_type> const map_storage,
                               cudf::detail::device_2dspan<PageFragment const> frags,
                               rmm::cuda_stream_view stream);
 
@@ -111,7 +110,7 @@ void populate_chunk_hash_maps(device_span<bucket_type> const map_storage,
  * @param chunks Flat span of chunks to compact hash maps for
  * @param stream CUDA stream to use
  */
-void collect_map_entries(device_span<bucket_type> const map_storage,
+void collect_map_entries(device_span<slot_type> const map_storage,
                          device_span<EncColumnChunk> chunks,
                          rmm::cuda_stream_view stream);
 
@@ -128,7 +127,7 @@ void collect_map_entries(device_span<bucket_type> const map_storage,
  * @param frags Column fragments
  * @param stream CUDA stream to use
  */
-void get_dictionary_indices(device_span<bucket_type> const map_storage,
+void get_dictionary_indices(device_span<slot_type> const map_storage,
                             cudf::detail::device_2dspan<PageFragment const> frags,
                             rmm::cuda_stream_view stream);
 
