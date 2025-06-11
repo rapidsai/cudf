@@ -281,7 +281,8 @@ struct page_stats_caster : public stats_caster_base {
     cudf::host_span<size_type const> page_row_offsets,
     cudf::data_type dtype,
     rmm::cuda_stream_view stream,
-    rmm::device_async_resource_ref mr) const requires(not cudf::is_compound<T>())
+    rmm::device_async_resource_ref mr) const
+    requires(not cudf::is_compound<T>())
   {
     // Total number of pages in the column
     size_type const total_pages = page_row_offsets.size() - 1;
