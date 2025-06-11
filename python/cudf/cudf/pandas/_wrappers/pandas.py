@@ -232,18 +232,18 @@ StringMethods = make_intermediate_proxy_type(
 
 ListMethods = make_intermediate_proxy_type(
     "ListMethods",
-    cudf.core.column.lists.ListMethods,
+    cudf.core.accessors.lists.ListMethods,
     pd_ListAccessor,
 )
 
 StructAccessor = make_intermediate_proxy_type(
     "StructAccessor",
-    cudf.core.column.struct.StructMethods,
+    cudf.core.accessors.struct.StructMethods,
     pd_StructAccessor,
 )
 _CategoricalAccessor = make_intermediate_proxy_type(
     "CategoricalAccessor",
-    cudf.core.column.categorical.CategoricalAccessor,
+    cudf.core.accessors.categorical.CategoricalAccessor,
     pd.core.arrays.categorical.CategoricalAccessor,
 )
 
