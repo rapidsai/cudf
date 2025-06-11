@@ -416,7 +416,7 @@ struct column_type_dispatcher {
                                          std::optional<std::reference_wrapper<scalar const>> init,
                                          rmm::cuda_stream_view stream,
                                          rmm::device_async_resource_ref mr)
-    requires std::is_floating_point<ElementType>::value
+    requires(std::is_floating_point<ElementType>::value)
   {
     // Floats are computed in double precision and then cast to the output type
     auto result = simple_segmented_reduction<ElementType, double, Op>(
@@ -443,7 +443,7 @@ struct column_type_dispatcher {
                                          std::optional<std::reference_wrapper<scalar const>> init,
                                          rmm::cuda_stream_view stream,
                                          rmm::device_async_resource_ref mr)
-    requires std::is_integral<ElementType>::value
+    requires(std::is_integral<ElementType>::value)
   {
     // Integers are computed in int64 precision and then cast to the output type.
     auto result = simple_segmented_reduction<ElementType, int64_t, Op>(

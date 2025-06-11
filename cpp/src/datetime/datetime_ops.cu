@@ -293,7 +293,7 @@ struct launch_functor {
 
   template <typename Timestamp>
   void operator()(rmm::cuda_stream_view stream) const
-    requires cudf::is_timestamp_t<Timestamp>::value
+    requires(cudf::is_timestamp_t<Timestamp>::value)
   {
     thrust::transform(rmm::exec_policy(stream),
                       input.begin<Timestamp>(),
@@ -343,7 +343,7 @@ struct add_calendrical_months_functor {
                                      MonthIterator months_begin,
                                      rmm::cuda_stream_view stream,
                                      rmm::device_async_resource_ref mr) const
-    requires cudf::is_timestamp_t<Timestamp>::value
+    requires(cudf::is_timestamp_t<Timestamp>::value)
   {
     auto size            = timestamp_column.size();
     auto output_col_type = timestamp_column.type();

@@ -74,7 +74,7 @@ struct calculate_group_statistics_functor {
 
   template <typename T>
   __device__ void operator()(stats_state_s&, uint32_t)
-    requires detail::statistics_type_category<T, IO>::ignore
+    requires(detail::statistics_type_category<T, IO>::ignore)
   {
     // No-op for unsupported aggregation types
   }
@@ -189,7 +189,7 @@ struct merge_group_statistics_functor {
                              statistics_chunk const* chunks,
                              uint32_t const num_chunks,
                              uint32_t t)
-    requires detail::statistics_type_category<T, IO>::ignore
+    requires(detail::statistics_type_category<T, IO>::ignore)
   {
     // No-op for unsupported aggregation types
   }

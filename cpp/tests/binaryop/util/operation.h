@@ -81,7 +81,7 @@ struct Mul {
 
   template <typename OutT = TypeOut>
   TypeOut operator()(TypeLhs x, TypeRhs y) const
-    requires cudf::is_duration_t<OutT>::value
+    requires(cudf::is_duration_t<OutT>::value)
   {
     return DurationProduct<TypeOut>(x, y);
   }
@@ -107,7 +107,7 @@ struct Div {
 
   template <typename LhsT = TypeLhs>
   TypeOut operator()(TypeLhs x, TypeRhs y) const
-    requires cudf::is_duration_t<LhsT>::value
+    requires(cudf::is_duration_t<LhsT>::value)
   {
     return DurationDivide<TypeOut>(x, y);
   }

@@ -518,7 +518,7 @@ struct scalar_representation_pair_accessor : public scalar_value_accessor<Elemen
 
   template <typename DeviceScalar>
   __device__ inline rep_type get_rep(DeviceScalar const& dscalar) const
-    requires has_rep_member<DeviceScalar>::value
+    requires(has_rep_member<DeviceScalar>::value)
   {
     return dscalar.rep();
   }
