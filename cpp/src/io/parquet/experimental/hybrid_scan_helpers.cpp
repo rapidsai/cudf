@@ -269,17 +269,9 @@ aggregate_reader_metadata::select_row_groups(
   int64_t row_start,
   std::optional<cudf::size_type> const& row_count)
 {
-  // Compute the number of rows to read and skip
-  auto [rows_to_skip, rows_to_read] = [&]() {
-    if (not row_group_indices.empty()) { return std::pair<int64_t, cudf::size_type>{}; }
-    auto const from_opts =
-      cudf::io::detail::skip_rows_num_rows_from_options(row_start, row_count, get_num_rows());
-    CUDF_EXPECTS(
-      from_opts.second <= static_cast<int64_t>(std::numeric_limits<cudf::size_type>::max()),
-      "Number of reading rows exceeds cudf's column size limit.");
-    return std::pair{static_cast<int64_t>(from_opts.first),
-                     static_cast<cudf::size_type>(from_opts.second)};
-  }();
+  // Hybrid scan reader does not support skip rows
+  auto constexpr rows_to_skip = int64_t{0};
+  auto rows_to_read           = cudf::size_type{0};
 
   // Vector to hold the `row_group_info` of selected row groups
   std::vector<row_group_info> selection;
@@ -295,14 +287,16 @@ aggregate_reader_metadata::select_row_groups(
     for (auto const& rowgroup_idx : row_group_indices[src_idx]) {
       CUDF_EXPECTS(
         rowgroup_idx >= 0 && rowgroup_idx < static_cast<cudf::size_type>(fmd.row_groups.size()),
-        "Invalid rowgroup index");
-      total_row_groups++;
+        "Invalid rowgroup index",
+        std::invalid_argument);
+      auto const chunk_start_row  = rows_to_read;
+      auto const num_rows_this_rg = get_row_group(rowgroup_idx, src_idx).num_rows;
+      rows_to_read += num_rows_this_rg;
+      num_rows_per_source[src_idx] += num_rows_this_rg;
       selection.emplace_back(rowgroup_idx, rows_to_read, src_idx);
       // if page-level indexes are present, then collect extra chunk and page info.
-      column_info_for_row_group(selection.back(), 0);
-      auto const rows_this_rg = get_row_group(rowgroup_idx, src_idx).num_rows;
-      rows_to_read += rows_this_rg;
-      num_rows_per_source[src_idx] += rows_this_rg;
+      column_info_for_row_group(selection.back(), chunk_start_row);
+      total_row_groups++;
     }
   }
 
