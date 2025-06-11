@@ -403,7 +403,6 @@ channels:
   - rapidsai-nightly
   - dask/label/dev
   - conda-forge
-  - nvidia
 dependencies:
   build_base:
     common:
