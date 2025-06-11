@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include "jit/accessors.cuh"
 #include "jit/span.cuh"
 
 #include <cudf/column/column_device_view_base.cuh>
@@ -37,87 +38,6 @@
 namespace cudf {
 namespace transformation {
 namespace jit {
-
-template <typename T, int32_t Index>
-struct column_accessor {
-  using type                     = T;
-  static constexpr int32_t index = Index;
-
-  static __device__ decltype(auto) element(cudf::mutable_column_device_view_core const* outputs,
-                                           cudf::size_type row)
-  {
-    return outputs[index].element<T>(row);
-  }
-
-  static __device__ decltype(auto) element(cudf::column_device_view_core const* inputs,
-                                           cudf::size_type row)
-  {
-    return inputs[index].element<T>(row);
-  }
-
-  static __device__ void assign(cudf::mutable_column_device_view_core const* outputs,
-                                cudf::size_type row,
-                                T value)
-  {
-    outputs[index].assign<T>(row, value);
-  }
-
-  static __device__ bool is_null(cudf::mutable_column_device_view_core const* inputs,
-                                 cudf::size_type row)
-  {
-    return inputs[index].is_null(row);
-  }
-};
-
-template <typename T, int32_t Index>
-struct span_accessor {
-  using type                     = T;
-  static constexpr int32_t index = Index;
-
-  static __device__ type& element(cudf::jit::device_optional_span<T> const* spans,
-                                  cudf::size_type row)
-  {
-    return spans[index][row];
-  }
-
-  static __device__ void assign(cudf::jit::device_optional_span<T> const* outputs,
-                                cudf::size_type row,
-                                T value)
-  {
-    outputs[index][row] = value;
-  }
-
-  static __device__ bool is_null(cudf::jit::device_optional_span<T> const* inputs,
-                                 cudf::size_type row)
-  {
-    return inputs[index].is_null(row);
-  }
-};
-
-template <typename Accessor>
-struct scalar {
-  using type                     = typename Accessor::type;
-  static constexpr int32_t index = Accessor::index;
-
-  static __device__ decltype(auto) element(cudf::mutable_column_device_view_core const* outputs,
-                                           cudf::size_type)
-  {
-    return Accessor::element(outputs, 0);
-  }
-
-  static __device__ decltype(auto) element(cudf::column_device_view_core const* inputs,
-                                           cudf::size_type)
-  {
-    return Accessor::element(inputs, 0);
-  }
-
-  static __device__ void assign(cudf::mutable_column_device_view_core const* outputs,
-                                cudf::size_type,
-                                type value)
-  {
-    return Accessor::assign(outputs, 0, value);
-  }
-};
 
 template <bool has_user_data, typename Out, typename... In>
 CUDF_KERNEL void kernel(cudf::mutable_column_device_view_core const* outputs,
@@ -143,14 +63,6 @@ CUDF_KERNEL void kernel(cudf::mutable_column_device_view_core const* outputs,
       GENERIC_TRANSFORM_OP(&Out::element(outputs, i), In::element(inputs, i)...);
     }
   }
-}
-
-template <bool has_user_data, typename Out, typename... In>
-CUDF_KERNEL void filter_kernel(cudf::jit::device_optional_span<typename Out::type> const* outputs,
-                               cudf::column_device_view_core const* inputs,
-                               void* user_data)
-{
-  // TODO:
 }
 
 template <bool has_user_data, typename Out, typename... In>

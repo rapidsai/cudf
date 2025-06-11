@@ -1,0 +1,188 @@
+/*
+ * Copyright (c) 2025, NVIDIA CORPORATION.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+#include "jit/cache.hpp"
+#include "jit/parser.hpp"
+#include "jit/span.cuh"
+#include "jit/util.hpp"
+
+// [ ] rename this file and namespace
+
+#include <cudf/column/column.hpp>
+#include <cudf/column/column_device_view.cuh>
+#include <cudf/column/column_factories.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/transform.hpp>
+#include <cudf/jit/runtime_support.hpp>
+#include <cudf/null_mask.hpp>
+#include <cudf/stream_compaction.hpp>
+#include <cudf/utilities/traits.hpp>
+#include <cudf/utilities/type_dispatcher.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
+
+#include <jit_preprocessed_files/transform/jit/kernel.cu.jit.hpp>
+
+namespace cudf {
+namespace transformation {
+namespace {
+
+constexpr bool is_scalar(cudf::size_type base_column_size, cudf::size_type column_size)
+{
+  return column_size == 1 && column_size != base_column_size;
+}
+
+struct input_column_reflection {
+  std::string type_name;
+  bool is_scalar = false;
+
+  [[nodiscard]] std::string accessor(int32_t index) const
+  {
+    auto column_accessor =
+      jitify2::reflection::Template("cudf::jit::column_accessor").instantiate(type_name, index);
+
+    return is_scalar ? jitify2::reflection::Template("cudf::jit::scalar_accessor")
+                         .instantiate(column_accessor)
+                     : column_accessor;
+  }
+};
+
+jitify2::StringVec build_jit_template_params(
+  bool has_user_data,
+  std::vector<std::string> const& span_outputs,
+  std::vector<std::string> const& column_outputs,
+  std::vector<input_column_reflection> const& column_inputs)
+{
+  jitify2::StringVec tparams;
+
+  tparams.emplace_back(jitify2::reflection::reflect(has_user_data));
+
+  std::transform(thrust::make_counting_iterator<size_t>(0),
+                 thrust::make_counting_iterator(span_outputs.size()),
+                 std::back_inserter(tparams),
+                 [&](auto i) {
+                   return jitify2::reflection::Template("cudf::transformation::jit::span_accessor")
+                     .instantiate(span_outputs[i], i);
+                 });
+
+  std::transform(
+    thrust::make_counting_iterator<size_t>(0),
+    thrust::make_counting_iterator(column_outputs.size()),
+    std::back_inserter(tparams),
+    [&](auto i) {
+      return jitify2::reflection::Template("cudf::transformation::jit::column_accessor")
+        .instantiate(column_outputs[i], i);
+    });
+
+  std::transform(thrust::make_counting_iterator<size_t>(0),
+                 thrust::make_counting_iterator(column_inputs.size()),
+                 std::back_inserter(tparams),
+                 [&](auto i) { return column_inputs[i].accessor(i); });
+
+  return tparams;
+}
+
+std::map<uint32_t, std::string> build_ptx_params(std::vector<std::string> const& output_typenames,
+                                                 std::vector<std::string> const& input_typenames,
+                                                 bool has_user_data)
+{
+  std::map<uint32_t, std::string> params;
+  uint32_t index = 0;
+
+  if (has_user_data) {
+    params.emplace(index++, "void *");
+    params.emplace(index++, jitify2::reflection::reflect<cudf::size_type>());
+  }
+
+  for (auto& name : output_typenames) {
+    params.emplace(index++, name + "*");
+  }
+
+  for (auto& name : input_typenames) {
+    params.emplace(index++, name);
+  }
+
+  return params;
+}
+
+template <typename T>
+rmm::device_uvector<T> to_device_vector(std::vector<T> const& host,
+                                        rmm::cuda_stream_view stream,
+                                        rmm::device_async_resource_ref mr)
+{
+  rmm::device_uvector<T> device{host.size(), stream, mr};
+  detail::cuda_memcpy_async(device_span<T>{device}, host_span<T const>{host}, stream);
+  return device;
+}
+
+template <typename DeviceView, typename ColumnView>
+std::tuple<std::vector<std::unique_ptr<DeviceView, std::function<void(DeviceView*)>>>,
+           rmm::device_uvector<DeviceView>>
+column_views_to_device(std::vector<ColumnView> const& views,
+                       rmm::cuda_stream_view stream,
+                       rmm::device_async_resource_ref mr)
+{
+  std::vector<std::unique_ptr<DeviceView, std::function<void(DeviceView*)>>> handles;
+
+  std::transform(views.begin(), views.end(), std::back_inserter(handles), [&](auto const& view) {
+    return DeviceView::create(view, stream);
+  });
+
+  std::vector<DeviceView> host_array;
+
+  std::transform(
+    handles.begin(), handles.end(), std::back_inserter(host_array), [](auto const& handle) {
+      return *handle;
+    });
+
+  auto device_array = to_device_vector(host_array, stream, mr);
+
+  return std::make_tuple(std::move(handles), std::move(device_array));
+}
+
+input_column_reflection reflect_input_column(size_type base_column_size, column_view column)
+{
+  return input_column_reflection{type_to_name(column.type()),
+                                 is_scalar(base_column_size, column.size())};
+}
+
+std::vector<input_column_reflection> reflect_input_columns(size_type base_column_size,
+                                                           std::vector<column_view> const& inputs)
+{
+  std::vector<input_column_reflection> reflections;
+  std::transform(
+    inputs.begin(), inputs.end(), std::back_inserter(reflections), [&](auto const& view) {
+      return reflect_input_column(base_column_size, view);
+    });
+
+  return reflections;
+}
+
+template <typename ColumnView>
+std::vector<std::string> column_type_names(std::vector<ColumnView> const& views)
+{
+  std::vector<std::string> names;
+
+  std::transform(views.begin(), views.end(), std::back_inserter(names), [](auto const& view) {
+    return type_to_name(view.type());
+  });
+
+  return names;
+}
+
+}  // namespace
+}  // namespace transformation
+}  // namespace cudf
