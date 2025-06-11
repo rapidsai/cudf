@@ -479,7 +479,7 @@ class Index(SingleColumnFrame):  # type: ignore[misc]
         """
         Number of levels.
         """
-        return len(self._data)
+        return self._num_columns
 
     @property
     def names(self) -> pd.core.indexes.frozen.FrozenList:

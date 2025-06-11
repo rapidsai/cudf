@@ -132,7 +132,7 @@ def _plc_write_parquet(
             tbl_meta.column_metadata[level].set_name(
                 ioutils._index_level_name(idx_name, level, table._column_names)
             )
-        num_index_cols_meta = len(table.index.names)
+        num_index_cols_meta = table.index.nlevels
     else:
         plc_table = plc.Table(
             [col.to_pylibcudf(mode="read") for col in table._columns]

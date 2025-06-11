@@ -113,6 +113,7 @@ class StringFunction(Expr):
             StringFunction.Name.ConcatVertical,
             StringFunction.Name.Contains,
             StringFunction.Name.EndsWith,
+            StringFunction.Name.Head,
             StringFunction.Name.Lowercase,
             StringFunction.Name.Replace,
             StringFunction.Name.ReplaceMany,
@@ -124,6 +125,8 @@ class StringFunction(Expr):
             StringFunction.Name.StripCharsEnd,
             StringFunction.Name.Uppercase,
             StringFunction.Name.Reverse,
+            StringFunction.Name.Tail,
+            StringFunction.Name.Titlecase,
         ):
             raise NotImplementedError(f"String function {self.name!r}")
         if self.name is StringFunction.Name.Contains:
@@ -284,6 +287,60 @@ class StringFunction(Expr):
                 side = plc.strings.SideType.BOTH
             return Column(plc.strings.strip.strip(column.obj, side, chars.obj_scalar))
 
+        elif self.name is StringFunction.Name.Tail:
+            column = self.children[0].evaluate(df, context=context)
+
+            assert isinstance(self.children[1], Literal)
+            if self.children[1].value is None:
+                return Column(
+                    plc.Column.from_scalar(
+                        plc.Scalar.from_py(None, plc.DataType(plc.TypeId.STRING)),
+                        column.size,
+                    )
+                )
+            elif self.children[1].value == 0:
+                result = plc.Column.from_scalar(
+                    plc.Scalar.from_py("", plc.DataType(plc.TypeId.STRING)),
+                    column.size,
+                )
+                if column.obj.null_mask():
+                    result = result.with_mask(
+                        column.obj.null_mask(), column.obj.null_count()
+                    )
+                return Column(result)
+
+            else:
+                start = -(self.children[1].value)
+                end = 2**31 - 1
+                return Column(
+                    plc.strings.slice.slice_strings(
+                        column.obj,
+                        plc.Scalar.from_py(start, plc.DataType(plc.TypeId.INT32)),
+                        plc.Scalar.from_py(end, plc.DataType(plc.TypeId.INT32)),
+                        None,
+                    )
+                )
+        elif self.name is StringFunction.Name.Head:
+            column = self.children[0].evaluate(df, context=context)
+
+            assert isinstance(self.children[1], Literal)
+
+            end = self.children[1].value
+            if end is None:
+                return Column(
+                    plc.Column.from_scalar(
+                        plc.Scalar.from_py(None, plc.DataType(plc.TypeId.STRING)),
+                        column.size,
+                    )
+                )
+            return Column(
+                plc.strings.slice.slice_strings(
+                    column.obj,
+                    plc.Scalar.from_py(0, plc.DataType(plc.TypeId.INT32)),
+                    plc.Scalar.from_py(end, plc.DataType(plc.TypeId.INT32)),
+                )
+            )
+
         columns = [child.evaluate(df, context=context) for child in self.children]
         if self.name is StringFunction.Name.Lowercase:
             (column,) = columns
@@ -356,6 +413,9 @@ class StringFunction(Expr):
         elif self.name is StringFunction.Name.Reverse:
             (column,) = columns
             return Column(plc.strings.reverse.reverse(column.obj))
+        elif self.name is StringFunction.Name.Titlecase:
+            (column,) = columns
+            return Column(plc.strings.capitalize.title(column.obj))
         raise NotImplementedError(
             f"StringFunction {self.name}"
         )  # pragma: no cover; handled by init raising
