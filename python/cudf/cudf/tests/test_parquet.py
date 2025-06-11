@@ -32,8 +32,6 @@ from cudf.io.parquet import (
 from cudf.testing import assert_eq, dataset_generator as dg
 from cudf.testing._utils import TIMEDELTA_TYPES, set_random_null_mask_inplace
 
-pytestmark = pytest.mark.skip("foo")
-
 
 @contextmanager
 def _hide_pyarrow_parquet_cpu_warnings(engine):
