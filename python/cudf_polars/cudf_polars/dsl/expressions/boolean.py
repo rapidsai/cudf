@@ -10,16 +10,16 @@ from enum import IntEnum, auto
 from functools import partial, reduce
 from typing import TYPE_CHECKING, Any, ClassVar
 
-import pyarrow as pa
+import polars as pl
 
 import pylibcudf as plc
 
 from cudf_polars.containers import Column
 from cudf_polars.dsl.expressions.base import (
+    Col,
     ExecutionContext,
     Expr,
 )
-from cudf_polars.dsl.expressions.literal import LiteralColumn
 from cudf_polars.utils.versions import POLARS_VERSION_LT_128
 
 if TYPE_CHECKING:
@@ -101,13 +101,10 @@ class BooleanFunction(Expr):
             raise NotImplementedError("IsIn doesn't support supertype casting")
         if self.name is BooleanFunction.Name.IsIn:
             _, haystack = self.children
-            # TODO: Use pl.List isinstance check once we have https://github.com/rapidsai/cudf/pull/18564
-            if isinstance(haystack, LiteralColumn) and isinstance(
-                haystack.value, pa.ListArray
-            ):
+            if isinstance(haystack, Col) and isinstance(haystack.dtype.polars, pl.List):
                 raise NotImplementedError(
                     "IsIn does not support nested list column input"
-                )  # pragma: no cover
+                )
 
     @staticmethod
     def _distinct(
@@ -286,9 +283,6 @@ class BooleanFunction(Expr):
             )
         elif self.name is BooleanFunction.Name.IsIn:
             needles, haystack = columns
-            if haystack.obj.type().id() == plc.TypeId.LIST:
-                # Unwrap values from the list column
-                haystack = Column(haystack.obj.children()[1]).astype(needles.obj.type())
             if haystack.size:
                 return Column(plc.search.contains(haystack.obj, needles.obj))
             return Column(
