@@ -1188,7 +1188,8 @@ struct dictionary_caster {
     // hash sets of this column per thread block
     auto query_block_size = [&]() {
       auto query_block_size = std::max<cudf::size_type>(cudf::detail::warp_size, total_row_groups);
-      query_block_size      = cudf::size_type{1} << (31 - __builtin_clz(query_block_size));
+      query_block_size      = cudf::size_type{1}
+                         << (31 - cuda::std::countl_zero(static_cast<uint32_t>(query_block_size)));
       return std::min<cudf::size_type>(query_block_size, 128);
     }();
 
