@@ -297,7 +297,7 @@ std::vector<std::unique_ptr<column>> superimpose_nulls_no_sanitize_opt(
 {
   CUDF_FUNC_RANGE();
 
-  std::printf("null_masks.size() = %lu, inputs.size() = %lu\n", null_masks.size(), inputs.size());
+  //std::printf("null_masks.size() = %lu, inputs.size() = %lu\n", null_masks.size(), inputs.size());
 
   std::vector<bitmask_type const*> sources;
   std::vector<size_type> segment_offsets;
@@ -315,14 +315,14 @@ std::vector<std::unique_ptr<column>> superimpose_nulls_no_sanitize_opt(
       // EMPTY columns should not have a null mask,
       // so don't superimpose null mask on empty columns.
       if (input.nullable()) {
-        std::printf("nullable column\n");
+        //std::printf("nullable column\n");
         path.push_back(input.mutable_view().null_mask());
       }
-      std::printf("path.size() = %lu\n", path.size());
+      //std::printf("path.size() = %lu\n", path.size());
       sources.insert(sources.end(), path.begin(), path.end());
       segment_offsets.push_back(path.size());
       if (input.type().id() == cudf::type_id::STRUCT) {
-        std::printf("input.num_children() = %d\n", input.num_children());
+        //std::printf("input.num_children() = %d\n", input.num_children());
         for (int i = 0; i < input.num_children(); i++) {
           populate_segmented_sources(path, input.child(i), sources, segment_offsets);
         }
@@ -337,7 +337,7 @@ std::vector<std::unique_ptr<column>> superimpose_nulls_no_sanitize_opt(
     path.push_back(null_masks[c]);
     populate_segmented_sources(path, *(inputs[c]), sources, segment_offsets);
     path.pop_back();
-    std::printf("path.size() = %lu\n", path.size());
+    //std::printf("path.size() = %lu\n", path.size());
     markers.push_back(segment_offsets.size());
   }
   {
@@ -349,12 +349,14 @@ std::vector<std::unique_ptr<column>> superimpose_nulls_no_sanitize_opt(
 
   auto const num_rows  = inputs[0]->size();
 
+  /*
   std::printf("num_rows = %d\n", num_rows);
   std::printf("sources.size() = %lu, segment_offsets.size() = %lu\n", sources.size(), segment_offsets.size()); 
   std::printf("segment_offsets = "); 
   for(size_t i = 0; i < segment_offsets.size(); i++) 
     std::printf("%d ", segment_offsets[i]); 
   std::printf("\n");
+  */
 
   auto [result_null_masks, result_null_counts] = cudf::detail::segmented_bitmask_binop(
     [] __device__(bitmask_type left, bitmask_type right) { return left & right; },
@@ -365,6 +367,7 @@ std::vector<std::unique_ptr<column>> superimpose_nulls_no_sanitize_opt(
     stream,
     mr);
 
+  /*
   std::printf("result_null_counts = ");
   for(auto nc : result_null_counts)
     std::printf("%d ", nc);
@@ -372,6 +375,7 @@ std::vector<std::unique_ptr<column>> superimpose_nulls_no_sanitize_opt(
   for(size_t i = 0; i < result_null_masks.size(); i++)
     std::printf("%lu ", result_null_masks[i]->size());
   std::printf("\n");
+  */
 
   // Create new struct column and its descendants with updated null masks
   std::function<int(std::vector<std::unique_ptr<rmm::device_buffer>> const& h_destination_masks,
@@ -400,10 +404,12 @@ std::vector<std::unique_ptr<column>> superimpose_nulls_no_sanitize_opt(
     return marker;
   };
 
+  /*
   std::printf("markers = ");
   for(size_t i = 0; i < markers.size(); i++)
     std::printf("%d ", markers[i]);
   std::printf("\n");
+  */
 
   for (size_t c = 0; c < inputs.size(); c++) {
     create_updated_column(result_null_masks, result_null_counts, markers[c], *(inputs[c]));

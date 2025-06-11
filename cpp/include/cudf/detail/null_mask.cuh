@@ -135,6 +135,7 @@ CUDF_KERNEL void segmented_offset_bitmask_binop(Binop op,
     auto const last_bit_index  = source_size_bits - 1;
     auto const last_word_index = cudf::word_index(last_bit_index);
 
+    /*
     if(lane == 0) {
       std::printf("warp_id = %d, segment_id = %d, segment_offsets[%d] = %d\n", warp_id, segment_id, segment_id, segment_offsets[segment_id]);
       std::printf("warp_id = %d, sources.size() = %lu\n", warp_id, sources.size());
@@ -142,6 +143,7 @@ CUDF_KERNEL void segmented_offset_bitmask_binop(Binop op,
       std::printf("warp_id = %d, segment_id = %d, segment_offsets[%d] = %d, source_begin_bits[%d] = %d\n", warp_id, segment_id, segment_id, segment_offsets[segment_id], segment_offsets[segment_id], source_begin_bits[segment_offsets[segment_id]]);
       std::printf("warp_id = %d, last_bit_index = %d, last_word_index = %d\n", warp_id, last_bit_index, last_word_index);
     }
+    */
 
     for (size_type destination_word_index = lane; destination_word_index < destination_size;
          destination_word_index += warp_size) {
@@ -180,13 +182,13 @@ CUDF_KERNEL void segmented_offset_bitmask_binop(Binop op,
     }
   }
 
-  if(lane == 0) std::printf("warp_id = %d, thread_count = %d\n", warp_id, thread_count);
+  //if(segment_id < num_segments) std::printf("warp_id = %d, lane = %d, thread_count = %d\n", warp_id, lane, thread_count);
   using WarpReduce = cub::WarpReduce<size_type, warp_size>;
   __shared__ typename WarpReduce::TempStorage temp_storage;
   size_type warp_count = WarpReduce(temp_storage).Sum(thread_count);
 
   if (lane == 0 && segment_id < num_segments) { 
-    std::printf("warp_id = %d, warp_count = %d\n", warp_id, warp_count);
+    //std::printf("warp_id = %d, warp_count = %d\n", warp_id, warp_count);
     null_counts[segment_id] = warp_count;
   }
 }
@@ -229,20 +231,23 @@ std::pair<std::vector<std::unique_ptr<rmm::device_buffer>>, std::vector<size_typ
                                                        rmm::device_async_resource_ref mr)
 {
   auto const num_bytes = bitmask_allocation_size_bytes(mask_size_bits);
-  std::printf("num_bytes = %lu\n", num_bytes);
+  //std::printf("num_bytes = %lu\n", num_bytes);
   std::vector<std::unique_ptr<rmm::device_buffer>> h_destination_masks;
   std::vector<bitmask_type*> h_destination_masks_ptrs;
   for (size_t i = 0; i < segment_offsets.size() - 1; i++) {
     h_destination_masks.push_back(
-      std::make_unique<rmm::device_buffer>(bitmask_allocation_size_bytes(num_bytes), stream, mr));
+      std::make_unique<rmm::device_buffer>(num_bytes, stream, mr));
     h_destination_masks_ptrs.push_back(static_cast<bitmask_type*>(h_destination_masks.back()->data()));
+    //std::printf("h_destination_masks[%lu]->size() = %lu\n", i, h_destination_masks[0]->size());
   }
   auto destination_masks = cudf::detail::make_device_uvector<bitmask_type*>(h_destination_masks_ptrs, stream, cudf::get_current_device_resource_ref());
 
+  /*
   std::cout << "mask_size_bits = " << mask_size_bits << std::endl;
-  std::cout << "destination_size = " << num_bitmask_words(mask_size_bits) << std::endl;
+  std::cout << "destination_size = " << num_bitmask_words(num_bytes * 8) << std::endl;
+  */
   // for destination size, pass number of words in each destination buffer instead of number of bits
-  auto null_counts = inplace_segmented_bitmask_binop(op, destination_masks, num_bitmask_words(mask_size_bits), masks, masks_begin_bits, mask_size_bits, segment_offsets, stream, cudf::get_current_device_resource_ref());
+  auto null_counts = inplace_segmented_bitmask_binop(op, destination_masks, num_bitmask_words(num_bytes * 8), masks, masks_begin_bits, mask_size_bits, segment_offsets, stream, cudf::get_current_device_resource_ref());
 
   auto h_null_counts = cudf::detail::make_std_vector<size_type>(null_counts, stream);
   return std::pair(std::move(h_destination_masks), std::move(h_null_counts));
@@ -321,7 +326,7 @@ rmm::device_uvector<size_type> inplace_segmented_bitmask_binop(
     util::div_rounding_up_safe<int>(block_size, cudf::detail::warp_size);
   auto const num_blocks =
     util::div_rounding_up_safe<int>(segment_offsets.size() - 1, warps_per_block);
-  std::printf("num_blocks = %d, block_size = %d\n", num_blocks, block_size);
+  //std::printf("num_blocks = %d, block_size = %d\n", num_blocks, block_size);
   segmented_offset_bitmask_binop<<<num_blocks, block_size, 0, stream.value()>>>(
     op,
     dest_masks,
