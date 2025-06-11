@@ -18,15 +18,13 @@ import numpy as np
 import pylibcudf as plc
 
 from cudf_polars.dsl.ir import IR, DataFrameScan, Scan, Sink, Union, broadcast
-from cudf_polars.experimental.base import PartitionInfo, get_key_name
-from cudf_polars.experimental.dispatch import generate_ir_tasks, lower_ir_node
-from cudf_polars.experimental.statistics import (
+from cudf_polars.experimental.base import (
     ColumnSourceStats,
-    ColumnStats,
+    PartitionInfo,
     StatsCollector,
-    TableSourceStats,
-    add_source_stats,
+    get_key_name,
 )
+from cudf_polars.experimental.dispatch import generate_ir_tasks, lower_ir_node
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
@@ -35,6 +33,7 @@ if TYPE_CHECKING:
 
     from cudf_polars.containers import DataFrame
     from cudf_polars.dsl.expr import NamedExpr
+    from cudf_polars.experimental.base import ColumnStats
     from cudf_polars.experimental.dispatch import LowerIRTransformer
     from cudf_polars.typing import Schema
     from cudf_polars.utils.config import ConfigOptions
@@ -146,9 +145,8 @@ class ScanPartitionPlan:
                     and cs.source_stats.file_size is not None
                 ):
                     column_sizes.append(cs.source_stats.file_size)
-            file_size = sum(column_sizes) if column_sizes else 0
 
-            if file_size > 0:
+            if (file_size := sum(column_sizes)) > 0:
                 if file_size > blocksize:
                     # Split large files
                     return ScanPartitionPlan(
@@ -409,22 +407,17 @@ def _sample_pq_statistics(ir: Scan) -> dict[str, ColumnSourceStats]:
         # user. This allows us to avoid collecting stats for
         # columns that are know to be problematic.
         user_fractions = ir.config_options.executor.unique_fraction
-
+        cardinality = num_rows_total
         if source_stats_cached:
-            table_source = next(iter(source_stats_cached.values())).table_source
-            assert table_source.cardinality == num_rows_total, (
-                "Unexpected cardinality in cache."
-            )
-        else:
-            table_source = TableSourceStats(
-                paths=tuple(ir.paths),
-                cardinality=num_rows_total,
-            )
+            assert (
+                cardinality == next(iter(source_stats_cached.values())).cardinality
+            ), "Unexpected cardinality in cache."
 
         # Construct estimated column statistics
         source_stats = {
             name: ColumnSourceStats(
-                table_source,
+                cardinality=cardinality,
+                file_size=total_uncompressed_size[name],
                 unique_count=(
                     unique_count_estimates.get(name)
                     if name not in user_fractions
@@ -435,7 +428,6 @@ def _sample_pq_statistics(ir: Scan) -> dict[str, ColumnSourceStats]:
                     if name not in user_fractions
                     else None
                 ),
-                file_size=total_uncompressed_size[name],
             )
             for name in need_columns
         }
@@ -594,37 +586,3 @@ def _(
     }
     graph[setup_name] = (_prepare_sink, ir.path)
     return graph
-
-
-@add_source_stats.register(Scan)
-def _(ir: Scan, stats: StatsCollector) -> None:
-    if ir.typ == "parquet":
-        stats.column_statistics[ir] = {
-            name: ColumnStats(
-                name=name,
-                source_stats=css,
-            )
-            for name, css in _sample_pq_statistics(ir).items()
-        }
-        if (
-            stats.column_statistics[ir]
-            and (
-                (
-                    source_stats := next(
-                        iter(stats.column_statistics[ir].values())
-                    ).source_stats
-                )
-                is not None
-            )
-            and source_stats.table_source.cardinality
-        ):
-            stats.cardinality[ir] = source_stats.table_source.cardinality
-    else:
-        table_source = TableSourceStats(paths=tuple(ir.paths))
-        stats.column_statistics[ir] = {
-            name: ColumnStats(
-                name=name,
-                source_stats=ColumnSourceStats(table_source),
-            )
-            for name in ir.schema
-        }

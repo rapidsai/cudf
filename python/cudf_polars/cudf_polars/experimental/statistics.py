@@ -16,6 +16,7 @@ from cudf_polars.dsl.ir import (
     HConcat,
     HStack,
     Join,
+    Scan,
     Select,
     Union,
 )
@@ -24,9 +25,9 @@ from cudf_polars.experimental.base import (
     ColumnSourceStats,
     ColumnStats,
     StatsCollector,
-    TableSourceStats,
 )
 from cudf_polars.experimental.dispatch import add_source_stats
+from cudf_polars.experimental.io import _sample_pq_statistics
 
 
 def collect_source_statistics(root: IR) -> StatsCollector:
@@ -53,14 +54,46 @@ def _(ir: IR, stats: StatsCollector) -> None:
         )
 
 
+@add_source_stats.register(Scan)
+def _(ir: Scan, stats: StatsCollector) -> None:
+    if ir.typ == "parquet":
+        stats.column_statistics[ir] = {
+            name: ColumnStats(
+                name=name,
+                source_stats=css,
+            )
+            for name, css in _sample_pq_statistics(ir).items()
+        }
+        if (
+            stats.column_statistics[ir]
+            and (
+                (
+                    source_stats := next(
+                        iter(stats.column_statistics[ir].values())
+                    ).source_stats
+                )
+                is not None
+            )
+            and source_stats.cardinality
+        ):
+            stats.cardinality[ir] = source_stats.cardinality
+    else:
+        stats.column_statistics[ir] = {
+            name: ColumnStats(
+                name=name,
+                source_stats=ColumnSourceStats(),
+            )
+            for name in ir.schema
+        }
+
+
 @add_source_stats.register(DataFrameScan)
 def _(ir: DataFrameScan, stats: StatsCollector) -> None:
     nrows = ir.df.height()
-    table_source = TableSourceStats(cardinality=nrows)
     stats.column_statistics[ir] = {
         name: ColumnStats(
             name=name,
-            source_stats=ColumnSourceStats(table_source),
+            source_stats=ColumnSourceStats(cardinality=nrows),
         )
         for name in ir.schema
     }

@@ -42,66 +42,38 @@ def get_key_name(node: Node) -> str:
     return f"{type(node).__name__.lower()}-{hash(node)}"
 
 
-class TableSourceStats:
-    """
-    Table source statistics.
-
-    Parameters
-    ----------
-    paths
-        Storage path names. If None, the data originated
-        from an in-memory source.
-    cardinality
-        Cardinality (row count) of the data source. This
-        value corresponds to the cardinality before any
-        filtering or slicing has occurred. If None, the
-        cardinality is unknown.
-    """
-
-    __slots__ = ("cardinality", "paths")
-
-    def __init__(
-        self,
-        *,
-        paths: tuple[str, ...] = (),
-        cardinality: int | None = None,
-    ):
-        self.paths = paths
-        self.cardinality = cardinality
-
-
 class ColumnSourceStats:
     """
     Column source statistics.
 
     Parameters
     ----------
-    table_source
-        Table-source information.
-    unique_count
-        Unique-count estimate.
-    unique_fraction
-        Unique-fraction estimate.
+    cardinality
+        Cardinality estimate.
     file_size
         Estimated un-compressed storage size for this
         column in a single file. This value is used to
         calculate the partition count for an IR node.
+    unique_count
+        Unique-count estimate.
+    unique_fraction
+        Unique-fraction estimate.
     """
 
-    __slots__ = ("file_size", "table_source", "unique_count", "unique_fraction")
+    __slots__ = ("cardinality", "file_size", "unique_count", "unique_fraction")
 
     def __init__(
         self,
-        table_source: TableSourceStats,
         *,
+        cardinality: int | None = None,
+        file_size: int | None = None,
         unique_count: int | None = None,
         unique_fraction: float | None = None,
-        file_size: int | None = None,
     ):
-        self.table_source = table_source
+        self.cardinality = cardinality
+        self.file_size = file_size
         self.unique_count = unique_count
         self.unique_fraction = unique_fraction
-        self.file_size = file_size
 
 
 class ColumnStats:
