@@ -2652,7 +2652,11 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 map_size,
             )
         return self._wrap_from_partitions(
-            plc_table, offsets, keep_index=keep_index, size=map_size
+            plc_table,
+            offsets,
+            keep_index=keep_index,
+            size=map_size,
+            by_hash=False,
         )
 
     @_performance_tracking
@@ -5198,15 +5202,11 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         *,
         keep_index: bool,
         size: int,
-        by_hash: bool = False,
+        by_hash: bool,
     ) -> list[Self]:
         # we need to remove first & last elements in offsets.
         # TODO: Remove this after https://github.com/rapidsai/cudf/issues/4607 is fixed.
-        if by_hash:
-            slc = slice(1, None)
-        else:
-            slc = slice(1, -1)
-        offsets = offsets[slc]
+        offsets = offsets[slice(1, None if by_hash else -1)]
         output_columns = [
             ColumnBase.from_pylibcudf(col) for col in table.columns()
         ]
