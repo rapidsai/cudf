@@ -102,7 +102,6 @@ filterwarnings = [
     "ignore:Deprecated call to `pkg_resources.declare_namespace:DeprecationWarning",
     # Ignore numba PEP 456 warning specific to arm machines
     "ignore:FNV hashing is not implemented in Numba.*:UserWarning",
-    "ignore:Benchmarks are automatically disabled because xdist plugin is active*:pytest_benchmark.logger.PytestBenchmarkWarning",
     "ignore:pkg_resources is deprecated as an API:DeprecationWarning",
 ]
 xfail_strict = true
