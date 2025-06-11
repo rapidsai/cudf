@@ -69,6 +69,7 @@ empty_parameter_set_mark = "fail_at_collect"
 filterwarnings = [
     "error",
     "ignore:Port .* is already in use.:UserWarning",
+    "ignore:Benchmarks are automatically disabled because xdist plugin is active*:pytest_benchmark.logger.PytestBenchmarkWarning",
 ]
 xfail_strict = true
 
