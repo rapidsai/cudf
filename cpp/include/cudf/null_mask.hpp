@@ -191,12 +191,27 @@ std::pair<rmm::device_buffer, size_type> bitmask_and(
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
-// ensure that you pass only nullable columns
-std::pair<std::vector<std::unique_ptr<rmm::device_buffer>>, std::vector<size_type>> segmented_bitmask_and(
-  host_span<column_view const> colviews,
-  host_span<size_type const> segment_offsets,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+/**
+ * @brief Performs segmented bitwise AND operations on the null masks  of the input columns based on
+ * defined segments. For each segment, it computes the bitwise AND of the bitmasks of all columns
+ * within that segment. Returns a pair containing (i) a vector of unique pointers to device buffers,
+ * with each buffer containing the resulting bitmask for a segment, and (ii) a vector of integers
+ * representing the count of null (unset) bits for each segment
+ *
+ * The function assumes all the input columns passed are nullable.
+ *
+ * @param colviews A span containing column views whose bitmasks will be ANDed within their
+ * respective segments
+ * @param segment_offsets A span containing the starting positions of each segment
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned device_buffer
+ * @return A pair of vectors containing resulting bitmask and count of unset bits for each segment
+ */
+std::pair<std::vector<std::unique_ptr<rmm::device_buffer>>, std::vector<size_type>>
+segmented_bitmask_and(host_span<column_view const> colviews,
+                      host_span<size_type const> segment_offsets,
+                      rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+                      rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Performs bitwise OR of the bitmasks of columns of a table. Returns

@@ -625,16 +625,17 @@ std::pair<rmm::device_buffer, size_type> bitmask_and(table_view const& view,
 }
 
 // Returns the bitwise AND of the null masks of all columns in the same segment of the input masks
-std::pair<std::vector<std::unique_ptr<rmm::device_buffer>>, std::vector<size_type>> segmented_bitmask_and(
-    host_span<column_view const> colviews,
-    host_span<size_type const> segment_offsets,
-    rmm::cuda_stream_view stream,
-    rmm::device_async_resource_ref mr)
+std::pair<std::vector<std::unique_ptr<rmm::device_buffer>>, std::vector<size_type>>
+segmented_bitmask_and(host_span<column_view const> colviews,
+                      host_span<size_type const> segment_offsets,
+                      rmm::cuda_stream_view stream,
+                      rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
 
-  CUDF_EXPECTS(std::all_of(colviews.begin(), colviews.end(), 
-                [&](auto const& view) { return view.size() == colviews[0].size(); }),
+  CUDF_EXPECTS(std::all_of(colviews.begin(),
+                           colviews.end(),
+                           [&](auto const& view) { return view.size() == colviews[0].size(); }),
                "All column views must have the same number of elements");
 
   rmm::device_buffer null_mask{0, stream, mr};
@@ -736,12 +737,12 @@ std::pair<rmm::device_buffer, size_type> bitmask_and(table_view const& view,
   return detail::bitmask_and(view, stream, mr);
 }
 
-std::pair<std::vector<std::unique_ptr<rmm::device_buffer>>, std::vector<size_type>> segmented_bitmask_and(
-  host_span<column_view const> colviews,
-  host_span<size_type const> segment_offsets,
-  rmm::cuda_stream_view stream, 
-  rmm::device_async_resource_ref mr) {
-
+std::pair<std::vector<std::unique_ptr<rmm::device_buffer>>, std::vector<size_type>>
+segmented_bitmask_and(host_span<column_view const> colviews,
+                      host_span<size_type const> segment_offsets,
+                      rmm::cuda_stream_view stream,
+                      rmm::device_async_resource_ref mr)
+{
   return detail::segmented_bitmask_and(colviews, segment_offsets, stream, mr);
 }
 
