@@ -13,222 +13,41 @@ and may be modified or removed at any time.
 
 from __future__ import annotations
 
-import argparse
 import dataclasses
-import importlib
 import json
 import os
-import sys
 import time
 from collections import defaultdict
-from datetime import date, datetime, timezone
+from datetime import date
 from typing import TYPE_CHECKING, Any
 
-import numpy as np
+import nvtx
 
 import polars as pl
 
 try:
-    import pynvml
-except ImportError:
-    pynvml = None
-
-try:
     from cudf_polars.dsl.translate import Translator
+    from cudf_polars.experimental.benchmarks.utils import (
+        Record,
+        RunConfig,
+        get_data,
+        parse_args,
+    )
     from cudf_polars.experimental.explain import explain_query
     from cudf_polars.experimental.parallel import evaluate_streaming
+    from cudf_polars.testing.asserts import assert_gpu_result_equal
 
     CUDF_POLARS_AVAILABLE = True
 except ImportError:
     CUDF_POLARS_AVAILABLE = False
 
 if TYPE_CHECKING:
-    import pathlib
     from collections.abc import Sequence
-
 
 # Without this setting, the first IO task to run
 # on each worker takes ~15 sec extra
 os.environ["KVIKIO_COMPAT_MODE"] = os.environ.get("KVIKIO_COMPAT_MODE", "on")
 os.environ["KVIKIO_NTHREADS"] = os.environ.get("KVIKIO_NTHREADS", "8")
-
-
-@dataclasses.dataclass
-class Record:
-    """Results for a single run of a single PDS-H query."""
-
-    query: int
-    duration: float
-
-
-@dataclasses.dataclass
-class PackageVersions:
-    """Information about the versions of the software used to run the query."""
-
-    cudf_polars: str
-    polars: str
-    python: str
-    rapidsmpf: str | None
-
-    @classmethod
-    def collect(cls) -> PackageVersions:
-        """Collect the versions of the software used to run the query."""
-        packages = [
-            "cudf_polars",
-            "polars",
-            "rapidsmpf",
-        ]
-        versions = {}
-        for name in packages:
-            try:
-                package = importlib.import_module(name)
-                versions[name] = package.__version__
-            except (AttributeError, ImportError):  # noqa: PERF203
-                versions[name] = None
-        versions["python"] = ".".join(str(v) for v in sys.version_info[:3])
-        return cls(**versions)
-
-
-@dataclasses.dataclass
-class GPUInfo:
-    """Information about a specific GPU."""
-
-    name: str
-    index: int
-    free_memory: int
-    used_memory: int
-    total_memory: int
-
-    @classmethod
-    def from_index(cls, index: int) -> GPUInfo:
-        """Create a GPUInfo from an index."""
-        pynvml.nvmlInit()
-        handle = pynvml.nvmlDeviceGetHandleByIndex(index)
-        memory = pynvml.nvmlDeviceGetMemoryInfo(handle)
-        return cls(
-            name=pynvml.nvmlDeviceGetName(handle),
-            index=index,
-            free_memory=memory.free,
-            used_memory=memory.used,
-            total_memory=memory.total,
-        )
-
-
-@dataclasses.dataclass
-class HardwareInfo:
-    """Information about the hardware used to run the query."""
-
-    gpus: list[GPUInfo]
-    # TODO: ucx
-
-    @classmethod
-    def collect(cls) -> HardwareInfo:
-        """Collect the hardware information."""
-        if pynvml is not None:
-            pynvml.nvmlInit()
-            gpus = [GPUInfo.from_index(i) for i in range(pynvml.nvmlDeviceGetCount())]
-        else:
-            # No GPUs -- probably running in CPU mode
-            gpus = []
-        return cls(gpus=gpus)
-
-
-@dataclasses.dataclass(kw_only=True)
-class RunConfig:
-    """Results for a PDS-H query run."""
-
-    queries: list[int]
-    suffix: str
-    executor: str
-    scheduler: str
-    n_workers: int
-    versions: PackageVersions = dataclasses.field(
-        default_factory=PackageVersions.collect
-    )
-    records: dict[int, list[Record]] = dataclasses.field(default_factory=dict)
-    dataset_path: pathlib.Path
-    shuffle: str | None = None
-    broadcast_join_limit: int | None = None
-    blocksize: int | None = None
-    threads: int
-    iterations: int
-    timestamp: str = dataclasses.field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
-    )
-    hardware: HardwareInfo = dataclasses.field(default_factory=HardwareInfo.collect)
-    rmm_async: bool
-    rapidsmpf_oom_protection: bool
-    rapidsmpf_spill: bool
-    spill_device: float
-
-    @classmethod
-    def from_args(cls, args: argparse.Namespace) -> RunConfig:
-        """Create a RunConfig from command line arguments."""
-        executor = args.executor
-        scheduler = args.scheduler
-
-        if executor == "in-memory" or executor == "cpu":
-            scheduler = None
-
-        return cls(
-            queries=args.query,
-            executor=executor,
-            scheduler=scheduler,
-            n_workers=args.n_workers,
-            shuffle=args.shuffle,
-            broadcast_join_limit=args.broadcast_join_limit,
-            dataset_path=args.path,
-            blocksize=args.blocksize,
-            threads=args.threads,
-            iterations=args.iterations,
-            suffix=args.suffix,
-            rmm_async=args.rmm_async,
-            rapidsmpf_oom_protection=args.rapidsmpf_oom_protection,
-            spill_device=args.spill_device,
-            rapidsmpf_spill=args.rapidsmpf_spill,
-        )
-
-    def serialize(self) -> dict:
-        """Serialize the run config to a dictionary."""
-        return dataclasses.asdict(self)
-
-    def summarize(self) -> None:
-        """Print a summary of the results."""
-        print("Iteration Summary")
-        print("=======================================")
-
-        for query, records in self.records.items():
-            print(f"query: {query}")
-            print(f"path: {self.dataset_path}")
-            print(f"executor: {self.executor}")
-            if self.executor == "streaming":
-                print(f"scheduler: {self.scheduler}")
-                print(f"blocksize: {self.blocksize}")
-                print(f"shuffle_method: {self.shuffle}")
-                print(f"broadcast_join_limit: {self.broadcast_join_limit}")
-                if self.scheduler == "distributed":
-                    print(f"n_workers: {self.n_workers}")
-                    print(f"threads: {self.threads}")
-                    print(f"rmm_async: {self.rmm_async}")
-                    print(f"rapidsmpf_oom_protection: {self.rapidsmpf_oom_protection}")
-                    print(f"spill_device: {self.spill_device}")
-                    print(f"rapidsmpf_spill: {self.rapidsmpf_spill}")
-            if len(records) > 0:
-                print(f"iterations: {self.iterations}")
-                print("---------------------------------------")
-                print(f"min time : {min([record.duration for record in records]):0.4f}")
-                print(f"max time : {max(record.duration for record in records):0.4f}")
-                print(
-                    f"mean time: {np.mean([record.duration for record in records]):0.4f}"
-                )
-                print("=======================================")
-
-
-def get_data(
-    path: str | pathlib.Path, table_name: str, suffix: str = ""
-) -> pl.LazyFrame:
-    """Get table from dataset."""
-    return pl.scan_parquet(f"{path}/{table_name}{suffix}")
 
 
 class PDSHQueries:
@@ -1003,173 +822,12 @@ class PDSHQueries:
         )
 
 
-def _query_type(query: int | str) -> list[int]:
-    if isinstance(query, int):
-        return [query]
-    elif query == "all":
-        return list(range(1, 23))
-    else:
-        return [int(q) for q in query.split(",")]
-
-
-def parse_args(args: Sequence[str] | None = None) -> argparse.Namespace:
-    """Parse command line arguments."""
-    parser = argparse.ArgumentParser(
-        prog="Cudf-Polars PDS-H Benchmarks",
-        description="Experimental streaming-executor benchmarks.",
-    )
-    parser.add_argument(
-        "query",
-        type=_query_type,
-        help="Query number.",
-    )
-    parser.add_argument(
-        "--path",
-        type=str,
-        default=os.environ.get("PDSH_DATASET_PATH"),
-        help="Root PDS-H dataset directory path.",
-    )
-    parser.add_argument(
-        "--suffix",
-        type=str,
-        default=".parquet",
-        help="Table file suffix.",
-    )
-    parser.add_argument(
-        "-e",
-        "--executor",
-        default="streaming",
-        type=str,
-        choices=["in-memory", "streaming", "cpu"],
-        help="Executor.",
-    )
-    parser.add_argument(
-        "-s",
-        "--scheduler",
-        default="synchronous",
-        type=str,
-        choices=["synchronous", "distributed"],
-        help="Scheduler to use with the 'streaming' executor.",
-    )
-    parser.add_argument(
-        "--n-workers",
-        default=1,
-        type=int,
-        help="Number of Dask-CUDA workers (requires 'distributed' scheduler).",
-    )
-    parser.add_argument(
-        "--blocksize",
-        default=None,
-        type=int,
-        help="Approx. partition size.",
-    )
-    parser.add_argument(
-        "--iterations",
-        default=1,
-        type=int,
-        help="Number of times to run the same query.",
-    )
-    parser.add_argument(
-        "--debug",
-        default=False,
-        action="store_true",
-        help="Debug run.",
-    )
-    parser.add_argument(
-        "--protocol",
-        default="ucx",
-        type=str,
-        choices=["ucx", "ucxx"],
-        help="Communication protocol to use for Dask: ucx (UCX-Py) or ucxx)",
-    )
-    parser.add_argument(
-        "--shuffle",
-        default=None,
-        type=str,
-        choices=[None, "rapidsmpf", "tasks"],
-        help="Shuffle method to use for distributed execution.",
-    )
-    parser.add_argument(
-        "--broadcast-join-limit",
-        default=None,
-        type=int,
-        help="Set an explicit `broadcast_join_limit` option.",
-    )
-    parser.add_argument(
-        "--threads",
-        default=1,
-        type=int,
-        help="Number of threads to use on each GPU.",
-    )
-    parser.add_argument(
-        "--rmm-pool-size",
-        default=0.5,
-        type=float,
-        help="RMM pool size (fractional).",
-    )
-    parser.add_argument(
-        "--rmm-async",
-        action=argparse.BooleanOptionalAction,
-        default=False,
-        help="Use RMM async memory resource.",
-    )
-    parser.add_argument(
-        "--rapidsmpf-oom-protection",
-        action=argparse.BooleanOptionalAction,
-        default=False,
-        help="Use rapidsmpf CUDA managed memory-based OOM protection.",
-    )
-    parser.add_argument(
-        "--rapidsmpf-spill",
-        action=argparse.BooleanOptionalAction,
-        default=False,
-        help="Use rapidsmpf for general spilling.",
-    )
-    parser.add_argument(
-        "--spill-device",
-        default=0.5,
-        type=float,
-        help="Rapidsmpf device spill threshold.",
-    )
-    parser.add_argument(
-        "-o",
-        "--output",
-        type=argparse.FileType("at"),
-        default="pdsh_results.jsonl",
-        help="Output file path.",
-    )
-    parser.add_argument(
-        "--summarize",
-        action=argparse.BooleanOptionalAction,
-        help="Summarize the results.",
-        default=True,
-    )
-    parser.add_argument(
-        "--print-results",
-        action=argparse.BooleanOptionalAction,
-        help="Print the query results",
-        default=True,
-    )
-    parser.add_argument(
-        "--explain",
-        action=argparse.BooleanOptionalAction,
-        help="Print an outline of the physical plan",
-        default=False,
-    )
-    parser.add_argument(
-        "--explain-logical",
-        action=argparse.BooleanOptionalAction,
-        help="Print an outline of the logical plan",
-        default=False,
-    )
-    return parser.parse_args(args)
-
-
 def run(options: Sequence[str] | None = None) -> None:
     """Run the benchmark."""
     args = parse_args(options)
     client = None
     run_config = RunConfig.from_args(args)
+    validation_failures: list[int] = []
 
     if run_config.scheduler == "distributed":
         from dask_cuda import LocalCUDACluster
@@ -1265,34 +923,53 @@ def run(options: Sequence[str] | None = None) -> None:
 
         records[q_id] = []
 
-        for _ in range(args.iterations):
+        for i in range(args.iterations):
             t0 = time.monotonic()
 
-            if run_config.executor == "cpu":
-                result = q.collect(new_streaming=True)
-            elif CUDF_POLARS_AVAILABLE:
-                assert isinstance(engine, pl.GPUEngine)
-                if args.debug:
-                    translator = Translator(q._ldf.visit(), engine)
-                    ir = translator.translate_ir()
-                    if run_config.executor == "in-memory":
-                        result = ir.evaluate(cache={}, timer=None).to_polars()
-                    elif run_config.executor == "streaming":
-                        result = evaluate_streaming(
-                            ir, translator.config_options
-                        ).to_polars()
+            with nvtx.annotate(
+                message=f"Query {q_id} - Iteration {i}",
+                domain="cudf_polars",
+                color="green",
+            ):
+                if run_config.executor == "cpu":
+                    result = q.collect(new_streaming=True)
+                elif CUDF_POLARS_AVAILABLE:
+                    assert isinstance(engine, pl.GPUEngine)
+                    if args.debug:
+                        translator = Translator(q._ldf.visit(), engine)
+                        ir = translator.translate_ir()
+                        if run_config.executor == "in-memory":
+                            result = ir.evaluate(cache={}, timer=None).to_polars()
+                        elif run_config.executor == "streaming":
+                            result = evaluate_streaming(
+                                ir, translator.config_options
+                            ).to_polars()
+                    else:
+                        result = q.collect(engine=engine)
                 else:
-                    result = q.collect(engine=engine)
-            else:
-                raise RuntimeError(
-                    "Cannot provide debug information because cudf_polars is not installed."
-                )
+                    raise RuntimeError(
+                        "Cannot provide debug information because cudf_polars is not installed."
+                    )
+
+                if args.validate and run_config.executor != "cpu":
+                    try:
+                        assert_gpu_result_equal(
+                            q,
+                            engine=engine,
+                            executor=run_config.executor,
+                            check_exact=False,
+                        )
+                        print(f"✅ Query {q_id} passed validation!")
+                    except AssertionError as e:
+                        validation_failures.append(q_id)
+                        print(f"❌ Query {q_id} failed validation!\n{e}")
 
             t1 = time.monotonic()
             record = Record(query=q_id, duration=t1 - t0)
             if args.print_results:
                 print(result)
-            print(f"Ran query={q_id} in {record.duration:0.4f}s", flush=True)
+
+            print(f"Query {q_id} - Iteration {i} finished in {record.duration:0.4f}s")
             records[q_id].append(record)
 
     run_config = dataclasses.replace(run_config, records=dict(records))
@@ -1303,6 +980,15 @@ def run(options: Sequence[str] | None = None) -> None:
     if client is not None:
         client.close(timeout=60)
 
+    if args.validate and run_config.executor != "cpu":
+        print("\nValidation Summary")
+        print("==================")
+        if validation_failures:
+            print(
+                f"{len(validation_failures)} queries failed validation: {sorted(set(validation_failures))}"
+            )
+        else:
+            print("All validated queries passed.")
     args.output.write(json.dumps(run_config.serialize()))
     args.output.write("\n")
 
