@@ -502,7 +502,6 @@ struct page_stats_caster : public stats_caster_base {
 
             auto const& colchunk               = *colchunk_iter;
             auto const& column_index           = colchunk.column_index.value();
-            auto const& offset_index           = colchunk.offset_index.value();
             auto const num_pages_in_colchunk   = column_index.min_values.size();
             auto const page_offset_in_colchunk = col_chunk_page_offsets[page_offset_idx++];
 
