@@ -52,6 +52,24 @@ namespace {
 
 namespace cg = cooperative_groups;
 
+/// Supported fixed width types for row group pruning using dictionaries
+template <typename T>
+auto constexpr is_supported_fixed_width_type =
+  not cuda::std::is_same_v<T, bool> and not cudf::is_compound<T>();
+
+/// Concept for supported fixed width types for row group pruning using dictionaries
+template <typename T>
+concept SupportedFixedWidthType = is_supported_fixed_width_type<T>;
+
+/// All supported types for row group pruning using dictionaries
+template <typename T>
+auto constexpr is_supported_dictionary_type =
+  is_supported_fixed_width_type<T> or cuda::std::is_same_v<T, cudf::string_view>;
+
+/// Concept for supported types for row group pruning using dictionaries
+template <typename T>
+concept SupportedDictionaryType = is_supported_dictionary_type<T>;
+
 /// Size of INT96 physical type
 auto constexpr INT96_SIZE = 12;
 /// Decode kernel block size. Must be a multiple of warp_size
@@ -67,18 +85,8 @@ auto constexpr SET_CG_SIZE        = 1;  ///< Cooperative group size for cuco::st
 auto constexpr BUCKET_SIZE        = 1;  ///< Number of concurrent slots handled by each thread
 auto constexpr OCCUPANCY_FACTOR = 0.7;  ///< cuCollections suggests targeting a 70% occupancy factor
 
-/// Supported fixed width types for row group pruning using dictionaries
-template <typename T>
-auto constexpr is_supported_fixed_width_type =
-  not cuda::std::is_same_v<T, bool> and not cudf::is_compound<T>();
-
-/// All supported types for row group pruning using dictionaries
-template <typename T>
-auto constexpr is_supported_dictionary_type =
-  is_supported_fixed_width_type<T> or cuda::std::is_same_v<T, cudf::string_view>;
-
 /// Hash function for cuco::static_set_ref
-template <typename T>
+template <SupportedDictionaryType T>
 using hasher_type = cudf::hashing::detail::MurmurHash3_x86_32<T>;
 
 /// cuco::static_set_ref storage type
@@ -91,9 +99,9 @@ using storage_ref_type = typename storage_type::ref_type;
 /**
  * @brief Hash functor for inserting values into a `cuco::static_set`
  *
- * @tparam T Underlying data type of the cudf column
+ * @tparam T Supported underlying data type of the cudf column
  */
-template <typename T>
+template <SupportedDictionaryType T>
 struct insert_hash_functor {
   cudf::device_span<T const> const decoded_data;
   uint32_t const seed{DEFAULT_HASH_SEED};
@@ -107,9 +115,9 @@ struct insert_hash_functor {
 /**
  * @brief Hash functor for querying values from a `cuco::static_set`
  *
- * @tparam T Underlying data type of the cudf column
+ * @tparam T Supported underlying data type of the cudf column
  */
-template <typename T>
+template <SupportedDictionaryType T>
 struct query_hash_functor {
   uint32_t const seed{DEFAULT_HASH_SEED};
   constexpr __device__ __forceinline__ typename hasher_type<T>::result_type operator()(
@@ -122,9 +130,9 @@ struct query_hash_functor {
 /**
  * @brief Equality functor for inserting values into a `cuco::static_set`
  *
- * @tparam T Underlying data type of the cudf column
+ * @tparam T Supported underlying data type of the cudf column
  */
-template <typename T>
+template <SupportedDictionaryType T>
 struct insert_equality_functor {
   cudf::device_span<T const> const decoded_data;
   constexpr __device__ __forceinline__ bool operator()(key_type lhs_key,
@@ -137,9 +145,9 @@ struct insert_equality_functor {
 /**
  * @brief Equality functor for querying values from a `cuco::static_set`
  *
- * @tparam T Underlying data type of the cudf column
+ * @tparam T Supported underlying data type of the cudf column
  */
-template <typename T>
+template <SupportedDictionaryType T>
 struct query_equality_functor {
   cudf::device_span<T const> const decoded_data;
   constexpr __device__ __forceinline__ bool operator()(T const& value, key_type key) const noexcept
@@ -305,6 +313,7 @@ __device__ __forceinline__ int64_t convert_to_timestamp64(int64_t const value,
 /**
  * @brief Query `cuco::static_set`s to evaluate (many) input (in)equality predicates
  *
+ * @tparam Supported underlying data type of the cudf column
  * @param decoded_data Span of storage for decoded values from all dictionaries
  * @param results Span of device vector start pointers to store query results, one per predicate
  * @param scalars Pointer to scalar device views, one per predicate
@@ -315,17 +324,16 @@ __device__ __forceinline__ int64_t convert_to_timestamp64(int64_t const value,
  * @param total_row_groups Total number of row groups
  * @param physical_type Parquet physical type of the column
  */
-template <typename T>
-CUDF_KERNEL cuda::std::enable_if_t<is_supported_dictionary_type<T>, void> query_dictionaries(
-  cudf::device_span<T> decoded_data,
-  cudf::device_span<bool*> results,
-  ast::generic_scalar_device_view const* scalars,
-  ast::ast_operator const* operators,
-  slot_type* const set_storage,
-  cudf::size_type const* set_offsets,
-  cudf::size_type const* value_offsets,
-  cudf::size_type total_row_groups,
-  parquet::Type physical_type)
+template <SupportedDictionaryType T>
+CUDF_KERNEL void query_dictionaries(cudf::device_span<T> decoded_data,
+                                    cudf::device_span<bool*> results,
+                                    ast::generic_scalar_device_view const* scalars,
+                                    ast::ast_operator const* operators,
+                                    slot_type* const set_storage,
+                                    cudf::size_type const* set_offsets,
+                                    cudf::size_type const* value_offsets,
+                                    cudf::size_type total_row_groups,
+                                    parquet::Type physical_type)
 {
   // Each thread block (cg) evaluates one scalar against all column chunk dictionaries (cuco hash
   // sets) of this column
@@ -383,7 +391,7 @@ CUDF_KERNEL cuda::std::enable_if_t<is_supported_dictionary_type<T>, void> query_
 /**
  * @brief Decode a fixed width value from a page data buffer
  *
- * @tparam T Underlying data type of the cudf column
+ * @tparam Supported underlying (fixed width) data type of the cudf column
  * @param page Dictionary page header information
  * @param chunk Column chunk descriptor
  * @param value_idx Index of the value to decode from page data buffer
@@ -391,7 +399,7 @@ CUDF_KERNEL cuda::std::enable_if_t<is_supported_dictionary_type<T>, void> query_
  * @param error Pointer to the kernel error code
  * @return Decoded value
  */
-template <typename T, CUDF_ENABLE_IF(is_supported_fixed_width_type<T>)>
+template <SupportedFixedWidthType T>
 __device__ T decode_fixed_width_value(PageInfo const& page,
                                       ColumnChunkDesc const& chunk,
                                       int32_t value_idx,
@@ -709,7 +717,7 @@ CUDF_KERNEL void __launch_bounds__(DECODE_BLOCK_SIZE)
  * @brief Decode fixed width column chunk dictionaries and build `cuco::static_set`s from them,
  * one hash set per dictionary
  *
- * @tparam Underlying data type of the cudf column
+ * @tparam Supported underlying (fixed width) data type of the cudf column
  * @param pages Column chunk dictionary page headers
  * @param chunks Column chunk descriptors
  * @param decoded_data Span of storage for decoded values from all dictionaries
@@ -721,18 +729,18 @@ CUDF_KERNEL void __launch_bounds__(DECODE_BLOCK_SIZE)
  * @param dictionary_col_idx Index of the current dictionary column
  * @param error Pointer to the kernel error code
  */
-template <typename T>
-CUDF_KERNEL cuda::std::enable_if_t<is_supported_fixed_width_type<T>, void> __launch_bounds__(
-  DECODE_BLOCK_SIZE) build_fixed_width_dictionaries(PageInfo const* pages,
-                                                    ColumnChunkDesc const* chunks,
-                                                    cudf::device_span<T> decoded_data,
-                                                    slot_type* const set_storage,
-                                                    cudf::size_type const* set_offsets,
-                                                    cudf::size_type const* value_offsets,
-                                                    parquet::Type physical_type,
-                                                    cudf::size_type num_dictionary_columns,
-                                                    cudf::size_type dictionary_col_idx,
-                                                    kernel_error::pointer error)
+template <SupportedFixedWidthType T>
+CUDF_KERNEL void __launch_bounds__(DECODE_BLOCK_SIZE)
+  build_fixed_width_dictionaries(PageInfo const* pages,
+                                 ColumnChunkDesc const* chunks,
+                                 cudf::device_span<T> decoded_data,
+                                 slot_type* const set_storage,
+                                 cudf::size_type const* set_offsets,
+                                 cudf::size_type const* value_offsets,
+                                 parquet::Type physical_type,
+                                 cudf::size_type num_dictionary_columns,
+                                 cudf::size_type dictionary_col_idx,
+                                 kernel_error::pointer error)
 {
   // Each thread block (cg) decodes values from one dictionary page and inserts into the
   // corresponding cuco hash set
@@ -903,7 +911,7 @@ CUDF_KERNEL void __launch_bounds__(DECODE_BLOCK_SIZE)
  * @brief Decode fixed width column chunk dictionaries and evaluate (few) input predicates against
  * decoded values
  *
- * @tparam Underlying data type of the cudf column
+ * @tparam Supported underlying (fixed width) data type of the cudf column
  * @param pages Column chunk dictionary page headers
  * @param chunks Column chunk descriptors
  * @param results Span of device vector start pointers to store query results, one per predicate
@@ -915,9 +923,8 @@ CUDF_KERNEL void __launch_bounds__(DECODE_BLOCK_SIZE)
  * @param dictionary_col_idx Index of the current dictionary column
  * @param error Pointer to the kernel error code
  */
-template <typename T>
-CUDF_KERNEL cuda::std::enable_if_t<is_supported_fixed_width_type<T>, void> __launch_bounds__(
-  DECODE_BLOCK_SIZE)
+template <SupportedFixedWidthType T>
+CUDF_KERNEL void __launch_bounds__(DECODE_BLOCK_SIZE)
   evaluate_some_fixed_width_literals(PageInfo const* pages,
                                      ColumnChunkDesc const* chunks,
                                      cudf::device_span<bool*> results,
@@ -1037,12 +1044,13 @@ struct dictionary_caster {
    * @brief Build `cuco::static_set`s from decoded column chunk dictionaries and evaluate (many)
    * input predicates using the built hash sets.
    *
+   * @tparam Supported underlying data type of the cudf column
    * @param literals List of literals
    * @param operators List of operators
    *
    * @return A vector of BOOL8 columns containing dictionary membership results, one per predicate
    */
-  template <typename T, CUDF_ENABLE_IF(is_supported_dictionary_type<T>)>
+  template <SupportedDictionaryType T>
   std::vector<std::unique_ptr<cudf::column>> evaluate_many_literals(
     cudf::host_span<ast::literal* const> literals,
     cudf::host_span<ast::ast_operator const> operators)
@@ -1203,12 +1211,13 @@ struct dictionary_caster {
   /**
    * @brief Decode column chunk dictionaries and evaluate (few) input predicates while decoding
    *
+   * @tparam Supported underlying data type of the cudf column
    * @param literals List of literals
    * @param operators List of operators
    *
    * @return A vector of BOOL8 columns containing dictionary membership results, one per predicate
    */
-  template <typename T, CUDF_ENABLE_IF(is_supported_dictionary_type<T>)>
+  template <SupportedDictionaryType T>
   std::vector<std::unique_ptr<cudf::column>> evaluate_some_literals(
     cudf::host_span<ast::literal* const> literals,
     cudf::host_span<ast::ast_operator const> operators)
