@@ -22,7 +22,7 @@
 
 #include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/detail/timezone.cuh>
-#include <cudf/io/codec.hpp>
+#include <cudf/io/detail/codec.hpp>
 #include <cudf/io/orc_types.hpp>
 #include <cudf/io/types.hpp>
 #include <cudf/table/table_device_view.cuh>

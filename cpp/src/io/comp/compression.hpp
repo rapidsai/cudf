@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include <cudf/io/codec.hpp>
+#include <cudf/io/detail/codec.hpp>
 #include <cudf/io/types.hpp>
 #include <cudf/utilities/span.hpp>
 

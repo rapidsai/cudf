@@ -30,7 +30,7 @@
 #include <vector>
 
 namespace CUDF_EXPORT cudf {
-namespace io {
+namespace io::detail {
 /**
  * @addtogroup io_codec
  * @{
@@ -169,5 +169,5 @@ void decompress(compression_type compression,
                 rmm::cuda_stream_view stream);
 
 /** @} */  // end of group
-}  // namespace io
+}  // namespace io::detail
 }  // namespace CUDF_EXPORT cudf

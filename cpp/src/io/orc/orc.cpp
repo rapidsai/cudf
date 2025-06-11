@@ -20,7 +20,7 @@
 #include "orc_field_reader.hpp"
 #include "orc_field_writer.hpp"
 
-#include <cudf/io/codec.hpp>
+#include <cudf/io/detail/codec.hpp>
 #include <cudf/io/orc.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 

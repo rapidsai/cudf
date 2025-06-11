@@ -24,7 +24,7 @@
 #include <cudf_test/testing_main.hpp>
 
 #include <cudf/detail/iterator.cuh>
-#include <cudf/io/codec.hpp>
+#include <cudf/io/detail/codec.hpp>
 #include <cudf/io/json.hpp>
 #include <cudf/io/types.hpp>
 #include <cudf/types.hpp>
