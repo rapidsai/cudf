@@ -43,8 +43,9 @@ def _(ir: IR, stats: StatsCollector) -> None:
     # Default `add_source_stats` implementation.
     if len(ir.children) == 1:
         (child,) = ir.children
+        child_column_statistics = stats.column_statistics.get(child, {})
         stats.column_statistics[ir] = {
-            name: stats.column_statistics[child].get(name, ColumnStats(name=name))
+            name: child_column_statistics.get(name, ColumnStats(name=name))
             for name in ir.schema
         }
     else:  # pragma: no cover
@@ -106,20 +107,22 @@ def _(ir: DataFrameScan, stats: StatsCollector) -> None:
 @add_source_stats.register(Join)
 def _(ir: Join, stats: StatsCollector) -> None:
     left, right = ir.children
+    left_column_statistics = stats.column_statistics.get(left, {})
+    right_column_statistics = stats.column_statistics.get(right, {})
     kstats = {
-        n.name: stats.column_statistics[left].get(n.name, ColumnStats(name=n.name))
+        n.name: left_column_statistics.get(n.name, ColumnStats(name=n.name))
         for n in ir.left_on
     }
     jstats = {
-        name: stats.column_statistics[left].get(name, ColumnStats(name=name))
+        name: left_column_statistics.get(name, ColumnStats(name=name))
         for name in left.schema
         if name not in kstats
     }
     suffix = ir.options[3]
     jstats |= {
-        name if name not in jstats else f"{name}{suffix}": stats.column_statistics[
-            right
-        ].get(name, ColumnStats(name=name))
+        name if name not in jstats else f"{name}{suffix}": right_column_statistics.get(
+            name, ColumnStats(name=name)
+        )
         for name in right.schema
         if name not in kstats
     }
@@ -135,30 +138,33 @@ def _(ir: Join, stats: StatsCollector) -> None:
 @add_source_stats.register(GroupBy)
 def _(ir: GroupBy, stats: StatsCollector) -> None:
     (child,) = ir.children
+    child_column_statistics = stats.column_statistics.get(child, {})
     stats.column_statistics[ir] = {
-        n.name: stats.column_statistics[child][n.name]
+        n.name: child_column_statistics[n.name]
         for n in ir.keys
-        if n.name in stats.column_statistics[child]
+        if n.name in child_column_statistics
     } | {n.name: ColumnStats(name=n.name) for n in ir.agg_requests}
 
 
 @add_source_stats.register(HStack)
 def _(ir: HStack, stats: StatsCollector) -> None:
     (child,) = ir.children
+    child_column_statistics = stats.column_statistics.get(child, {})
     new_cols = {
-        n.name: stats.column_statistics[child][n.value.name]
+        n.name: child_column_statistics[n.value.name]
         if isinstance(n.value, expr.Col)
         else ColumnStats(name=n.name)
         for n in ir.columns
     }
-    stats.column_statistics[ir] = stats.column_statistics[child] | new_cols
+    stats.column_statistics[ir] = child_column_statistics | new_cols
 
 
 @add_source_stats.register(Select)
 def _(ir: Select, stats: StatsCollector) -> None:
     (child,) = ir.children
+    child_column_statistics = stats.column_statistics.get(child, {})
     stats.column_statistics[ir] = {
-        n.name: stats.column_statistics[child][n.value.name]
+        n.name: child_column_statistics[n.value.name]
         if isinstance(n.value, expr.Col)
         else ColumnStats(name=n.name)
         for n in ir.exprs
@@ -169,7 +175,7 @@ def _(ir: Select, stats: StatsCollector) -> None:
 def _(ir: HConcat, stats: StatsCollector) -> None:
     stats.column_statistics[ir] = dict(
         itertools.chain.from_iterable(
-            stats.column_statistics[c].items() for c in ir.children
+            stats.column_statistics.get(c, {}).items() for c in ir.children
         )
     )
 
