@@ -51,8 +51,8 @@ enum class codec_status : uint8_t {
  * @brief Summary of a compression/decompression operation.
  */
 struct codec_exec_result {
-  uint64_t bytes_written;
-  codec_status status;
+  uint64_t bytes_written;  ///< Number of bytes written to the output buffer
+  codec_status status;     ///< Status of the operation
 };
 
 /**
