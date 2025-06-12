@@ -2,7 +2,7 @@
 # Copyright (c) 2022-2025, NVIDIA CORPORATION.
 
 # Support invoking test_python_cudf.sh outside the script directory
-cd "$(dirname "$(realpath "${BASH_SOURCE[0]}")")"/../;
+cd "$(dirname "$(realpath "${BASH_SOURCE[0]}")")"/../ || exit 1
 
 # Common setup steps shared by Python test jobs
 source ./ci/test_python_common.sh test_python_pylibcudf test_python_cudf
@@ -19,7 +19,7 @@ rapids-logger "pytest pylibcudf"
   --junitxml="${RAPIDS_TESTS_DIR}/junit-pylibcudf.xml" \
   --numprocesses=8 \
   --dist=worksteal \
-  --cov-config=../.coveragerc \
+  --cov-config=.coveragerc \
   --cov=pylibcudf \
   --cov-report=xml:"${RAPIDS_COVERAGE_DIR}/pylibcudf-coverage.xml" \
   --cov-report=term
