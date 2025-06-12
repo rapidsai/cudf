@@ -130,7 +130,6 @@ channels:
   - rapidsai-nightly
   - rapidsai
   - conda-forge
-  - nvidia
 
 dependencies:
   develop:
@@ -142,14 +141,6 @@ dependencies:
     specific:
       - output_types: conda
         matrices:
-          - matrix:
-              cuda: "11"
-            packages:
-              - cuda-version=11.8
-          - matrix:
-              cuda: "11.8"
-            packages:
-              - cuda-version=11.8
           - matrix:
               cuda: "12.0"
             packages:
