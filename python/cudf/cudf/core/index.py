@@ -27,6 +27,7 @@ from cudf.api.types import (
 )
 from cudf.core._compat import PANDAS_LT_300
 from cudf.core._internals import copying, search, stream_compaction
+from cudf.core.accessors import StringMethods
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import (
     CategoricalColumn,
@@ -39,7 +40,6 @@ from cudf.core.column import (
     TimeDeltaColumn,
 )
 from cudf.core.column.column import as_column, column_empty, concat_columns
-from cudf.core.column.string import StringMethods as StringMethods
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.copy_types import GatherMap
 from cudf.core.dtypes import IntervalDtype, dtype as cudf_dtype
