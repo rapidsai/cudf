@@ -2,18 +2,20 @@
 
 from __future__ import annotations
 
-from typing import Literal, Union, overload
+from typing import TYPE_CHECKING, Literal, overload
 
 import cudf
 from cudf.core.mixins import NotIterable
 
-ParentType = Union["cudf.Series", "cudf.core.index.Index"]
+if TYPE_CHECKING:
+    from cudf.core.index import Index
+    from cudf.core.series import Series
 
 
-class ColumnMethods(NotIterable):
-    _parent: ParentType
+class BaseAccessor(NotIterable):
+    _parent: Series | Index
 
-    def __init__(self, parent: ParentType):
+    def __init__(self, parent: Series | Index):
         self._parent = parent
         self._column = self._parent._column
 
@@ -33,7 +35,7 @@ class ColumnMethods(NotIterable):
         inplace: Literal[False],
         expand: bool = False,
         retain_index: bool = True,
-    ) -> ParentType: ...
+    ) -> Series | Index: ...
 
     @overload
     def _return_or_inplace(
@@ -41,7 +43,7 @@ class ColumnMethods(NotIterable):
         new_col,
         expand: bool = False,
         retain_index: bool = True,
-    ) -> ParentType: ...
+    ) -> Series | Index: ...
 
     @overload
     def _return_or_inplace(
@@ -50,7 +52,7 @@ class ColumnMethods(NotIterable):
         inplace: bool = False,
         expand: bool = False,
         retain_index: bool = True,
-    ) -> ParentType | None: ...
+    ) -> Series | Index | None: ...
 
     def _return_or_inplace(
         self, new_col, inplace=False, expand=False, retain_index=True
