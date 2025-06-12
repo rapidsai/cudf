@@ -10363,8 +10363,6 @@ NODEIDS_THAT_FAIL_WITH_CUDF_PANDAS = {
     "tests/indexes/test_setops.py::test_setop_with_categorical[nullable_int-None-intersection]",
     "tests/indexes/test_setops.py::test_setop_with_categorical[nullable_uint-False-intersection]",
     "tests/indexes/test_setops.py::test_setop_with_categorical[nullable_uint-None-intersection]",
-    "tests/indexes/test_setops.py::test_setop_with_categorical[range-False-intersection]",
-    "tests/indexes/test_setops.py::test_setop_with_categorical[range-None-intersection]",
     "tests/indexes/test_setops.py::test_setop_with_categorical[repeats-False-intersection]",
     "tests/indexes/test_setops.py::test_setop_with_categorical[repeats-None-intersection]",
     "tests/indexes/test_setops.py::test_setop_with_categorical[string-pyarrow-False-symmetric_difference]",
