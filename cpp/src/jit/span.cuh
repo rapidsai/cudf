@@ -152,5 +152,11 @@ struct device_optional_span : device_span<T> {
 #endif
 };
 
+template <typename IndexType>
+struct filter_output {
+  cudf::jit::device_span<IndexType> indices = {};
+  cudf::size_type* not_applied_count        = nullptr;
+};
+
 }  // namespace jit
 }  // namespace cudf
