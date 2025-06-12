@@ -37,7 +37,7 @@ mkdir -p "${RAPIDS_TESTS_DIR}"
 
 
 rapids-logger "pytest pylibcudf"
-pushd python/pylibcudf/pylibcudf/tests
+pushd python/pylibcudf/tests
 python -m pytest \
   --cache-clear \
   --numprocesses=8 \
