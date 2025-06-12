@@ -115,25 +115,29 @@ CUDF_KERNEL void offset_bitmask_binop(Binop op,
 /**
  * @brief Performs a segmented binary operation on bitmasks with configurable bit offsets
  *
- * This kernel applies a binary operation across multiple segments of bitmasks. Each segment is processed 
- * by a separate warp, with threads in the warp collaboratively processing words of the bitmask. The results are written directly to the specified destination mask.
+ * This kernel applies a binary operation across multiple segments of bitmasks. Each segment is
+ * processed by a separate warp, with threads in the warp collaboratively processing words of the
+ * bitmask. The results are written directly to the specified destination mask.
  *
  * The kernel performs the following operations:
  * 1. Maps each warp to a segment defined by segment_offsets
  * 2. For each segment, performs the binary operation on corresponding words of source bitmasks
  * 4. Counts the number of unset bits (nulls) in the resulting bitmask for each segment
  * 5. Writes the results to the destination mask and null counts array
- * 
- * @tparam Binop           Type of binary operator 
+ *
+ * @tparam Binop           Type of binary operator
  *
  * @param op               The binary operator to apply to the bitmasks
- * @param destinations     Device span of pointers to destination bitmasks where results will be written
+ * @param destinations     Device span of pointers to destination bitmasks where results will be
+ * written
  * @param destination_size Size of each destination mask in bitmask words (not bits)
  * @param sources          Device span of pointers to source bitmasks to be operated on
- * @param source_begin_bits Device span of bit offsets from which each source mask is to be processed
+ * @param source_begin_bits Device span of bit offsets from which each source mask is to be
+ * processed
  * @param source_size_bits The number of bits to process in each mask
  * @param segment_offsets  Device span of indices defining the segments in the sources array
- * @param null_counts      Device span where the count of unset bits for each segment will be written
+ * @param null_counts      Device span where the count of unset bits for each segment will be
+ * written
  *
  */
 template <typename Binop>
@@ -153,42 +157,40 @@ CUDF_KERNEL void segmented_offset_bitmask_binop(Binop op,
 
   // Create warp-level group
   auto const warp_size = cudf::detail::warp_size;
-  auto const warp = cg::tiled_partition<warp_size>(block);
-  auto const warp_id = block.thread_index().x / cudf::detail::warp_size;
-  auto const lane = warp.thread_rank();
+  auto const warp      = cg::tiled_partition<warp_size>(block);
+  auto const warp_id   = block.thread_index().x / cudf::detail::warp_size;
+  auto const lane      = warp.thread_rank();
 
   // Assume one segment per warp.
-  auto const num_segments = segment_offsets.size() - 1;
-  auto const segment_id   = blockIdx.x * (blockDim.x / warp_size) + warp_id;
+  auto const num_segments  = segment_offsets.size() - 1;
+  auto const segment_id    = blockIdx.x * (blockDim.x / warp_size) + warp_id;
   auto const segment_start = segment_offsets[segment_id];
-  auto const segment_end = segment_offsets[segment_id + 1];
-  auto const destination = destinations[segment_id];
+  auto const segment_end   = segment_offsets[segment_id + 1];
+  auto const destination   = destinations[segment_id];
 
   // Exit early if this warp doesn't have a valid segment
-  if(segment_id >= num_segments) return;
+  if (segment_id >= num_segments) return;
 
   // Calculate bit range information
-  auto const last_bit_index  = source_size_bits - 1;
-  auto const last_word_index = cudf::word_index(last_bit_index);
+  auto const last_bit_index    = source_size_bits - 1;
+  auto const last_word_index   = cudf::word_index(last_bit_index);
   auto const bitmask_type_size = static_cast<size_type>(detail::size_in_bits<bitmask_type>());
 
   // Track null count (count of unset bits)
-  size_type thread_null_count  = 0;
+  size_type thread_null_count = 0;
 
   // Process the mask such that each thread in warp handles different words
   for (size_type destination_word_index = lane; destination_word_index < destination_size;
        destination_word_index += warp_size) {
-
     // Get the first mask word
-    bitmask_type destination_word = detail::get_mask_offset_word(
-      sources[segment_start],
-      destination_word_index,
-      source_begin_bits[segment_start],
-      source_begin_bits[segment_start] + source_size_bits);
+    bitmask_type destination_word =
+      detail::get_mask_offset_word(sources[segment_start],
+                                   destination_word_index,
+                                   source_begin_bits[segment_start],
+                                   source_begin_bits[segment_start] + source_size_bits);
 
     // Apply the binary operation with each source mask in the segment
-    for (size_type mask_pos = segment_start + 1; mask_pos < segment_end;
-         mask_pos++) {
+    for (size_type mask_pos = segment_start + 1; mask_pos < segment_end; mask_pos++) {
       destination_word =
         op(destination_word,
            detail::get_mask_offset_word(sources[mask_pos],
@@ -205,7 +207,6 @@ CUDF_KERNEL void segmented_offset_bitmask_binop(Binop op,
       // Count nulls in the partial last word
       thread_null_count += num_bits_in_last_word + 1 - __popc(destination_word);
     } else {
-
       // Count nulls in complete words
       thread_null_count += bitmask_type_size - __popc(destination_word);
     }
@@ -218,9 +219,7 @@ CUDF_KERNEL void segmented_offset_bitmask_binop(Binop op,
   size_type warp_count = cg::reduce(warp, thread_null_count, cg::plus<size_type>());
 
   // Only the first lane in the warp writes the result
-  if (lane == 0) {
-    null_counts[segment_id] = warp_count;
-  }
+  if (lane == 0) { null_counts[segment_id] = warp_count; }
 }
 
 /**
@@ -330,8 +329,8 @@ size_type inplace_bitmask_binop(Binop op,
 }
 
 /**
- * @brief Performs a segmented bitwise operation `op` across multiple bitmasks and writes the results
- * in-place to destination masks.
+ * @brief Performs a segmented bitwise operation `op` across multiple bitmasks and writes the
+ * results in-place to destination masks.
  *
  * This function performs bitwise operations on segments of bitmasks defined by segment_offsets,
  * writing the results directly to the specified destination masks.
