@@ -549,6 +549,7 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadWithStructs)
 
       return structs_col{{child1, child2, child3}}.release();
     }());
+
     return write_file(input_columns,
                       "chunked_read_with_structs",
                       nullable,
@@ -567,7 +568,6 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadWithStructs)
     EXPECT_EQ(num_chunks, 1);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected_no_null, *result);
   }
-
   {
     auto const [result, num_chunks] = chunked_read(filepath_with_nulls, 0);
     // EXPECT_EQ(num_chunks, 1);
