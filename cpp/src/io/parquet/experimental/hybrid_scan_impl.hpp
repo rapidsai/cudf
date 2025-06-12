@@ -275,21 +275,6 @@ class hybrid_scan_reader_impl {
                        rmm::cuda_stream_view stream);
 
   /**
-   * @brief Decompress dictionary pages
-   *
-   * @param chunks Host device span of column chunk descriptors
-   * @param pages Host device span of page information
-   * @param stream CUDA stream
-   * @param mr Device memory resource to allocate decompressed dictionary page data
-   * @return A buffer containing decompressed dictionary page data
-   */
-  rmm::device_buffer decompress_dictionary_page_data(
-    cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
-    cudf::detail::hostdevice_span<PageInfo> pages,
-    rmm::cuda_stream_view stream,
-    rmm::device_async_resource_ref mr);
-
-  /**
    * @brief Prepares the select input row groups and associated chunk information
    *
    * @param row_group_indices Row group indices to read

@@ -18,6 +18,7 @@
 
 #include "cudf/io/text/byte_range_info.hpp"
 #include "hybrid_scan_helpers.hpp"
+#include "io/parquet/reader_impl_chunking_utils.cuh"
 
 #include <cudf/detail/stream_compaction.hpp>
 #include <cudf/detail/transform.hpp>
@@ -232,7 +233,7 @@ hybrid_scan_reader_impl::filter_row_groups_with_dictionary_pages(
                "Columns names in filter expression must be convertible to index references");
   auto output_dtypes = get_output_types(_output_buffers_template);
 
-  // Collect literals and operators for dictionary page filtering for each input table column
+  // Collect literal and operator pairs for each input column with an (in)equality predicate
   auto const [literals, operators] =
     dictionary_literals_collector{expr_conv.get_converted_expr().value().get(),
                                   static_cast<cudf::size_type>(output_dtypes.size())}
@@ -245,7 +246,7 @@ hybrid_scan_reader_impl::filter_row_groups_with_dictionary_pages(
     return std::vector<std::vector<size_type>>(row_group_indices.begin(), row_group_indices.end());
   }
 
-  // Collect schema indices of columns with an (in)equality predicate
+  // Collect schema indices of input columns with a non-empty (in)equality literal/operator vector
   std::vector<cudf::size_type> dictionary_col_schemas;
   thrust::copy_if(thrust::host,
                   _output_column_schemas.begin(),
@@ -262,7 +263,9 @@ hybrid_scan_reader_impl::filter_row_groups_with_dictionary_pages(
   auto const mr                          = cudf::get_current_device_resource_ref();
   auto decompressed_dictionary_page_data = std::optional<rmm::device_buffer>{};
   if (has_compressed_data) {
-    decompressed_dictionary_page_data = decompress_dictionary_page_data(chunks, pages, stream, mr);
+    // Use the `decompress_page_data` utility to decompress dictionary pages (passed as pass_pages)
+    decompressed_dictionary_page_data =
+      std::get<0>(parquet::detail::decompress_page_data(chunks, pages, {}, {}, stream, mr));
     pages.host_to_device_async(stream);
   }
 
