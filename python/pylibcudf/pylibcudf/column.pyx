@@ -837,13 +837,15 @@ cdef class Column:
 
         data_ptr, nbytes, shape, _, dtype = _prepare_array_metadata(iface)
 
-        dbuf = DeviceBuffer.to_device(
-            # Converts the uintptr_t integer to a memoryview.
-            # We need two additional casts: first to a pointer type,
-            # then to a typed memoryview. This allows us to reinterpret
-            # the raw memory as a 1D array of bytes.
-            <const unsigned char[:nbytes:1]><const unsigned char*><uintptr_t>data_ptr
-        )
+        cdef const unsigned char* ptr
+        cdef const unsigned char[:] view
+
+        if nbytes > 0:
+            ptr = <const unsigned char*><uintptr_t>data_ptr
+            view = (<const unsigned char[:nbytes]> ptr)[:nbytes]
+            dbuf = DeviceBuffer.to_device(view)
+        else:
+            dbuf = DeviceBuffer(size=0)
 
         return Column._wrap_nested_list_column(gpumemoryview(dbuf), shape, dtype)
 
