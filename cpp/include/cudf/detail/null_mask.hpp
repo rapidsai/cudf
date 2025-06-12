@@ -243,6 +243,10 @@ std::pair<rmm::device_buffer, size_type> bitmask_and(table_view const& view,
                                                      rmm::cuda_stream_view stream,
                                                      rmm::device_async_resource_ref mr);
 
+/**
+ * @copydoc cudf::segmented_bitmask_and
+ *
+ */
 std::pair<std::vector<std::unique_ptr<rmm::device_buffer>>, std::vector<size_type>>
 segmented_bitmask_and(host_span<column_view const> colviews,
                       host_span<size_type const> segment_offsets,
@@ -275,6 +279,25 @@ cudf::size_type inplace_bitmask_and(device_span<bitmask_type> dest_mask,
                                     size_type mask_size_bits,
                                     rmm::cuda_stream_view stream);
 
+/**
+ * @brief Performs a segmented bitwise AND operation across multiple bitmasks and writes the results
+ * in-place to destination masks.
+ *
+ * This function performs bitwise AND operations on segments of bitmasks defined by segment_offsets,
+ * writing the results directly to the specified destination masks.
+ *
+ * @param[out] dest_masks Device span of pointers to destination bitmasks where results will be
+ * written
+ * @param[in] dest_mask_size The size of each destination mask in bitmask words
+ * @param[in] masks Host span of pointers to source bitmasks to be ANDed
+ * @param[in] masks_begin_bits The bit offsets from which each source mask is to be ANDed
+ * @param[in] mask_size_bits The number of bits to be ANDed in each mask
+ * @param[in] segment_offsets Host span of offsets defining the segments for the operation
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches
+ * @param[in] mr Device memory resource used to allocate temporary device memory
+ * @return A device vector containing the counts of unset bits in the destination mask corresponding
+ * to each segment after the AND operation
+ */
 rmm::device_uvector<size_type> inplace_segmented_bitmask_and(
   device_span<bitmask_type*> dest_masks,
   size_type dest_mask_size,
