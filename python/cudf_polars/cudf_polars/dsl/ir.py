@@ -29,7 +29,7 @@ import polars as pl
 import pylibcudf as plc
 
 import cudf_polars.dsl.expr as expr
-from cudf_polars.containers import Column, DataFrame
+from cudf_polars.containers import Column, DataFrame, DataType
 from cudf_polars.dsl.expressions import rolling
 from cudf_polars.dsl.expressions.base import ExecutionContext
 from cudf_polars.dsl.nodebase import Node
@@ -139,6 +139,7 @@ def broadcast(*columns: Column, target_length: int | None = None) -> list[Column
             order=plc.types.Order.ASCENDING,
             null_order=plc.types.NullOrder.BEFORE,
             name=column.name,
+            dtype=column.dtype,
         )
         for column in columns
     ]
@@ -483,7 +484,8 @@ class Scan(IR):
             plc.Table([plc.interop.from_arrow(pa.array(map(str, paths)))]),
             plc.interop.from_arrow(pa.array(rows_per_path, type=pa.int32())),
         ).columns()
-        return df.with_columns([Column(filepaths, name=name)])
+        dtype = DataType(pl.String())
+        return df.with_columns([Column(filepaths, name=name, dtype=dtype)])
 
     def fast_count(self) -> int:  # pragma: no cover
         """Get the number of rows in a Parquet Scan."""
@@ -706,15 +708,16 @@ class Scan(IR):
         if row_index is not None:
             name, offset = row_index
             offset += skip_rows
-            dtype = schema[name].plc
-            step = plc.Scalar.from_py(1, dtype)
-            init = plc.Scalar.from_py(offset, dtype)
+            dtype = schema[name]
+            step = plc.Scalar.from_py(1, dtype.plc)
+            init = plc.Scalar.from_py(offset, dtype.plc)
             index_col = Column(
                 plc.filling.sequence(df.num_rows, init, step),
                 is_sorted=plc.types.Sorted.YES,
                 order=plc.types.Order.ASCENDING,
                 null_order=plc.types.NullOrder.AFTER,
                 name=name,
+                dtype=dtype,
             )
             df = DataFrame([index_col, *df.columns])
             if next(iter(schema)) != name:
@@ -1142,15 +1145,14 @@ class Select(IR):
         ):
             scan = self.children[0]  # pragma: no cover
             effective_rows = scan.fast_count()  # pragma: no cover
+            dtype = DataType(pl.UInt32())  # pragma: no cover
             col = Column(
                 plc.Column.from_scalar(
-                    plc.Scalar.from_py(
-                        effective_rows,
-                        plc.DataType(plc.TypeId.UINT32),
-                    ),
+                    plc.Scalar.from_py(effective_rows, dtype.plc),
                     1,
                 ),
                 name=self.exprs[0].name or "len",
+                dtype=dtype,
             )  # pragma: no cover
             return DataFrame([col])  # pragma: no cover
 
@@ -1333,12 +1335,8 @@ class Rolling(IR):
                 keys,
                 [orderby],
                 (
-                    Column(col, name=name)
-                    for col, name in zip(
-                        values.columns(),
-                        (request.name for request in aggs),
-                        strict=True,
-                    )
+                    Column(col, name=request.name, dtype=request.value.dtype)
+                    for col, request in zip(values.columns(), aggs, strict=True)
                 ),
             )
         ).slice(zlice)
@@ -1442,15 +1440,16 @@ class GroupBy(IR):
             names.append(name)
         group_keys, raw_tables = grouper.aggregate(requests)
         results = [
-            Column(column, name=name)
-            for name, column in zip(
+            Column(column, name=name, dtype=request.value.dtype)
+            for name, column, request in zip(
                 names,
                 itertools.chain.from_iterable(t.columns() for t in raw_tables),
+                agg_requests,
                 strict=True,
             )
         ]
         result_keys = [
-            Column(grouped_key, name=key.name)
+            Column(grouped_key, name=key.name, dtype=key.dtype)
             for key, grouped_key in zip(keys, group_keys.columns(), strict=True)
         ]
         broadcasted = broadcast(*result_keys, *results)
@@ -1490,7 +1489,7 @@ class GroupBy(IR):
                 plc.copying.OutOfBoundsPolicy.DONT_CHECK,
             )
             broadcasted = [
-                Column(reordered, name=old.name)
+                Column(reordered, name=old.name, dtype=old.dtype)
                 for reordered, old in zip(
                     ordered_table.columns(), broadcasted, strict=True
                 )
@@ -1764,7 +1763,7 @@ class Join(IR):
             # result, not the gather maps
             columns = plc.join.cross_join(left.table, right.table).columns()
             left_cols = [
-                Column(new, name=old.name).sorted_like(old)
+                Column(new, name=old.name, dtype=old.dtype).sorted_like(old)
                 for new, old in zip(
                     columns[: left.num_columns], left.columns, strict=True
                 )
@@ -1775,9 +1774,13 @@ class Join(IR):
                     name=name
                     if name not in left.column_names_set
                     else f"{name}{suffix}",
+                    dtype=old.dtype,
                 )
-                for new, name in zip(
-                    columns[left.num_columns :], right.column_names, strict=True
+                for new, name, old in zip(
+                    columns[left.num_columns :],
+                    right.column_names,
+                    right.columns,
+                    strict=True,
                 )
             ]
             return DataFrame([*left_cols, *right_cols]).slice(zlice)
@@ -1827,6 +1830,7 @@ class Join(IR):
                         Column(
                             plc.replace.replace_nulls(left_col.obj, right_col.obj),
                             name=left_col.name,
+                            dtype=left_col.dtype,
                         )
                         for left_col, right_col in zip(
                             left.select_columns(left_on.column_names_set),
@@ -1977,7 +1981,7 @@ class Distinct(IR):
         # TODO: Is this sortedness setting correct
         result = DataFrame(
             [
-                Column(new, name=old.name).sorted_like(old)
+                Column(new, name=old.name, dtype=old.dtype).sorted_like(old)
                 for new, old in zip(table.columns(), df.columns, strict=True)
             ]
         )
@@ -2260,6 +2264,7 @@ class MapFunction(IR):
             self.name,
             json.dumps(self.options),
             tuple(self.schema.items()),
+            self._ctor_arguments(self.children)[1:],
         )
 
     @classmethod
@@ -2292,11 +2297,13 @@ class MapFunction(IR):
                 value_name,
             ) = options
             npiv = len(pivotees)
+            selected = df.select(indices)
             index_columns = [
-                Column(col, name=name)
-                for col, name in zip(
-                    plc.reshape.tile(df.select(indices).table, npiv).columns(),
+                Column(tiled, name=name, dtype=old.dtype)
+                for tiled, name, old in zip(
+                    plc.reshape.tile(selected.table, npiv).columns(),
                     indices,
+                    selected.columns,
                     strict=True,
                 )
             ]
@@ -2315,28 +2322,31 @@ class MapFunction(IR):
             ).columns()
             value_column = plc.concatenate.concatenate(
                 [
-                    df.column_map[pivotee].astype(schema[value_name].plc).obj
+                    df.column_map[pivotee].astype(schema[value_name]).obj
                     for pivotee in pivotees
                 ]
             )
             return DataFrame(
                 [
                     *index_columns,
-                    Column(variable_column, name=variable_name),
-                    Column(value_column, name=value_name),
+                    Column(
+                        variable_column, name=variable_name, dtype=schema[variable_name]
+                    ),
+                    Column(value_column, name=value_name, dtype=schema[value_name]),
                 ]
             )
         elif name == "row_index":
             col_name, offset = options
-            dtype = schema[col_name].plc
-            step = plc.Scalar.from_py(1, dtype)
-            init = plc.Scalar.from_py(offset, dtype)
+            dtype = schema[col_name]
+            step = plc.Scalar.from_py(1, dtype.plc)
+            init = plc.Scalar.from_py(offset, dtype.plc)
             index_col = Column(
                 plc.filling.sequence(df.num_rows, init, step),
                 is_sorted=plc.types.Sorted.YES,
                 order=plc.types.Order.ASCENDING,
                 null_order=plc.types.NullOrder.AFTER,
                 name=col_name,
+                dtype=dtype,
             )
             return DataFrame([index_col, *df.columns])
         else:
