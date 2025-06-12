@@ -200,12 +200,12 @@ std::unique_ptr<column> scan_inclusive(column_view const& input,
     std::for_each(content.children.begin(),
                   content.children.end(),
                   [null_mask, null_count, stream, mr](auto& child) {
-                    child = structs::detail::superimpose_nulls(
+                    child = structs::detail::superimpose_and_sanitize_nulls(
                       null_mask, null_count, std::move(child), stream, mr);
                   });
 
     // Replace the children columns.
-    output = cudf::make_structs_column(
+    output = cudf::create_structs_hierarchy(
       num_rows, std::move(content.children), null_count, std::move(*content.null_mask), stream, mr);
   }
 
