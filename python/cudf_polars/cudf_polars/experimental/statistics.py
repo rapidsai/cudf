@@ -93,7 +93,10 @@ def _(ir: DataFrameScan, stats: StatsCollector) -> None:
     stats.column_statistics[ir] = {
         name: ColumnStats(
             name=name,
-            source_stats=ColumnSourceStats(cardinality=nrows),
+            source_stats=ColumnSourceStats(
+                cardinality=nrows,
+                exact=("cardinality",),
+            ),
         )
         for name in ir.schema
     }

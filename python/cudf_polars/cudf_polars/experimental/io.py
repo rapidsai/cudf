@@ -43,6 +43,7 @@ if TYPE_CHECKING:
 
 # Cache source stats for each tuple of path names
 _SOURCE_STATS_CACHE: dict[tuple[str, ...], dict[str, ColumnSourceStats]] = {}
+_SOURCE_STATS_CACHE_KEYS: list[tuple[str, ...]] = []
 _SOURCE_STATS_CACHE_MAX_ITEMS: int = 10
 
 
@@ -50,12 +51,16 @@ def _update_source_stats_cache(
     key: tuple[str, ...],
     value: dict[str, ColumnSourceStats],
 ) -> None:
-    """Update _SOURCE_STATS_CACHE with FIFO eviction."""
+    """Update _SOURCE_STATS_CACHE with LRU eviction."""
+    if key in _SOURCE_STATS_CACHE_KEYS:
+        _SOURCE_STATS_CACHE_KEYS.remove(key)
+
     if key not in _SOURCE_STATS_CACHE and (
         len(_SOURCE_STATS_CACHE) >= _SOURCE_STATS_CACHE_MAX_ITEMS
     ):
-        first_key = next(iter(_SOURCE_STATS_CACHE))
-        del _SOURCE_STATS_CACHE[first_key]
+        del _SOURCE_STATS_CACHE[_SOURCE_STATS_CACHE_KEYS.pop(0)]
+
+    _SOURCE_STATS_CACHE_KEYS.append(key)
     _SOURCE_STATS_CACHE[key] = value
 
 
@@ -142,9 +147,9 @@ class ScanPartitionPlan:
                 if (
                     name in ir.schema
                     and cs.source_stats is not None
-                    and cs.source_stats.file_size is not None
+                    and cs.source_stats.storage_size_per_file is not None
                 ):
-                    column_sizes.append(cs.source_stats.file_size)
+                    column_sizes.append(cs.source_stats.storage_size_per_file)
 
             if (file_size := sum(column_sizes)) > 0:
                 if file_size > blocksize:
@@ -421,7 +426,7 @@ def _sample_pq_statistics(ir: Scan) -> dict[str, ColumnSourceStats]:
         source_stats = {
             name: ColumnSourceStats(
                 cardinality=cardinality,
-                file_size=mean_uncompressed_size_per_file[name],
+                storage_size_per_file=mean_uncompressed_size_per_file[name],
                 unique_count=unique_count_estimates.get(name),
                 unique_fraction=unique_fraction_estimates.get(name),
                 exact=exact_statistics,
