@@ -1249,7 +1249,7 @@ class MultiIndex(Index):
         # TODO: Could implement as Index of ListDtype?
         raise NotImplementedError("to_flat_index is not currently supported.")
 
-    @property  # type: ignore
+    @property
     @_performance_tracking
     def values_host(self) -> np.ndarray:
         """
@@ -1277,7 +1277,7 @@ class MultiIndex(Index):
         """
         return self.to_pandas().values
 
-    @property  # type: ignore
+    @property
     @_performance_tracking
     def values(self) -> cp.ndarray:
         """
@@ -1311,7 +1311,7 @@ class MultiIndex(Index):
             raise NotImplementedError(
                 "Unable to create a cupy array with tuples."
             )
-        return self.to_frame(index=False).values
+        return Frame.to_cupy(self)
 
     @classmethod
     @_performance_tracking
