@@ -68,6 +68,7 @@ def broadcast(*columns: Column, target_length: int | None = None) -> list[Column
             order=plc.types.Order.ASCENDING,
             null_order=plc.types.NullOrder.BEFORE,
             name=column.name,
+            dtype=column.dtype,
         )
         for column in columns
     ]
