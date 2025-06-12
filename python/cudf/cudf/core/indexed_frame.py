@@ -65,6 +65,7 @@ from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
     SIZE_TYPE_DTYPE,
     can_convert_to_column,
+    get_dtype_of_same_kind,
     is_column_like,
     is_dtype_obj_numeric,
 )
@@ -447,7 +448,13 @@ class IndexedFrame(Frame):
             if cast_to_int and result_col.dtype.kind in "uib":
                 # For reductions that accumulate a value (e.g. sum, not max)
                 # pandas returns an int64 dtype for all int or bool dtypes.
-                result_col = result_col.astype(np.dtype(np.int64))
+                if cudf.get_option("mode.pandas_compatible"):
+                    dtype = get_dtype_of_same_kind(
+                        result_col.dtype, np.dtype(np.int64)
+                    )
+                else:
+                    dtype = np.dtype(np.int64)
+                result_col = result_col.astype(dtype)
             results.append(getattr(result_col, op)())
         return self._from_data_like_self(
             self._data._from_columns_like_self(results)
@@ -1050,7 +1057,7 @@ class IndexedFrame(Frame):
             other, (cudf.Series, cudf.DataFrame)
         ):
             common = self.index.union(other.index)
-            if len(common) > len(self.index) or len(common) > len(other.index):
+            if len(common) > max(len(self), len(other)):
                 raise ValueError("matrices are not aligned")
 
             lhs = self.reindex(index=common, copy=False).values
@@ -1061,9 +1068,7 @@ class IndexedFrame(Frame):
             other, (cudf.Series, cudf.DataFrame)
         ):
             common = self._data.to_pandas_index.union(other.index.to_pandas())
-            if len(common) > self._num_columns or len(common) > len(
-                other.index
-            ):
+            if len(common) > max(self._num_columns, len(other)):
                 raise ValueError("matrices are not aligned")
 
             lhs = self.reindex(columns=common, copy=False)
@@ -1094,12 +1099,12 @@ class IndexedFrame(Frame):
             lhs, rhs = rhs, lhs
 
         result = lhs.dot(rhs)
-        if len(result.shape) == 1:
+        if result.ndim == 1:
             return cudf.Series(
                 result,
                 index=self.index if result_index is None else result_index,
             )
-        if len(result.shape) == 2:
+        if result.ndim == 2:
             return cudf.DataFrame(
                 result,
                 index=self.index if result_index is None else result_index,
@@ -2481,7 +2486,7 @@ class IndexedFrame(Frame):
         1
         """
         axes = (
-            range(len(self.axes))
+            range(self.ndim)
             if axis is None
             else (self._get_axis_from_axis_arg(axis),)
         )
@@ -2702,65 +2707,6 @@ class IndexedFrame(Frame):
             out = self._from_data_like_self(ca)
 
         return self._mimic_inplace(out, inplace=inplace)
-
-    def memory_usage(self, index: bool = True, deep: bool = False) -> int:  # type: ignore[override]
-        """Return the memory usage of an object.
-
-        Parameters
-        ----------
-        index : bool, default True
-            Specifies whether to include the memory usage of the index.
-        deep : bool, default False
-            The deep parameter is ignored and is only included for pandas
-            compatibility.
-
-        Returns
-        -------
-        Series or scalar
-            For DataFrame, a Series whose index is the original column names
-            and whose values is the memory usage of each column in bytes. For a
-            Series the total memory usage.
-
-        Examples
-        --------
-        **DataFrame**
-
-        >>> dtypes = ['int64', 'float64', 'object', 'bool']
-        >>> data = dict([(t, np.ones(shape=5000).astype(t))
-        ...              for t in dtypes])
-        >>> df = cudf.DataFrame(data)
-        >>> df.head()
-           int64  float64  object  bool
-        0      1      1.0     1.0  True
-        1      1      1.0     1.0  True
-        2      1      1.0     1.0  True
-        3      1      1.0     1.0  True
-        4      1      1.0     1.0  True
-        >>> df.memory_usage(index=False)
-        int64      40000
-        float64    40000
-        object     40000
-        bool        5000
-        dtype: int64
-
-        Use a Categorical for efficient storage of an object-dtype column with
-        many repeated values.
-
-        >>> df['object'].astype('category').memory_usage(deep=True)
-        5008
-
-        **Series**
-        >>> s = cudf.Series(range(3), index=['a','b','c'])
-        >>> s.memory_usage()
-        43
-
-        Not including the index gives the size of the rest of the data, which
-        is necessarily smaller:
-
-        >>> s.memory_usage(index=False)
-        24
-        """
-        raise NotImplementedError
 
     def hash_values(
         self,
@@ -3240,7 +3186,7 @@ class IndexedFrame(Frame):
         result._data.rangeindex = self._data.rangeindex
         return result
 
-    def _split(self, splits, keep_index: bool = True) -> list[Self]:
+    def _split(self, splits: list[int], keep_index: bool = True) -> list[Self]:
         if self._num_rows == 0:
             return []
 
@@ -5357,17 +5303,48 @@ class IndexedFrame(Frame):
         element_type = cast(
             ListDtype, self._columns[column_index].dtype
         ).element_type
+
+        column_index += len(idx_cols)
         exploded = [
-            column._with_type_metadata(element_type)
+            new_column._with_type_metadata(
+                element_type,
+            )
             if i == column_index
-            else column
-            for i, column in enumerate(exploded, start=-len(idx_cols))
+            else new_column._with_type_metadata(old_column.dtype)
+            for i, (new_column, old_column) in enumerate(
+                zip(exploded, itertools.chain(idx_cols, self._columns))
+            )
         ]
-        return self._from_columns_like_self(
-            exploded,
-            self._column_names,
-            self.index.names if not ignore_index else None,
+
+        data = type(self._data)(
+            dict(zip(self._column_names, exploded[len(idx_cols) :])),
+            multiindex=self._data.multiindex,
+            level_names=self._data.level_names,
+            rangeindex=self._data.rangeindex,
+            label_dtype=self._data.label_dtype,
+            verify=False,
         )
+        if len(idx_cols):
+            index = _index_from_data(
+                dict(enumerate(exploded[: len(idx_cols)]))
+            )._copy_type_metadata(self.index)
+            if (
+                isinstance(self.index, cudf.CategoricalIndex)
+                and not isinstance(index, cudf.CategoricalIndex)
+            ) or (
+                isinstance(self.index, cudf.MultiIndex)
+                and not isinstance(index, cudf.MultiIndex)
+            ):
+                index = type(self.index)._from_data(index._data)
+            if isinstance(self.index, cudf.MultiIndex):
+                index.names = self.index.names
+            else:
+                index.name = self.index.name
+        else:
+            index = None
+
+        result = type(self)._from_data(data, index)
+        return result
 
     @_performance_tracking
     def tile(self, count: int):
@@ -6774,6 +6751,7 @@ def _drop_rows_by_labels(
             )
 
     else:
+        orig_index_type = obj.index.dtype
         if errors == "raise" and not labels.isin(obj.index).all():  # type: ignore[union-attr]
             raise KeyError("One or more values not found in axis")
 
@@ -6790,7 +6768,7 @@ def _drop_rows_by_labels(
         # Join changes the index to common type,
         # but we need to preserve the type of
         # index being returned, Hence this type-cast.
-        res.index = res.index.astype(obj.index.dtype)
+        res.index = res.index.astype(orig_index_type)
         return res
 
 

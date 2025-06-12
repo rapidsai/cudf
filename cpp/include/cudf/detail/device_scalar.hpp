@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -54,7 +54,7 @@ class device_scalar : public rmm::device_scalar<T> {
   explicit device_scalar(
     rmm::cuda_stream_view stream,
     rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
-    : rmm::device_scalar<T>(stream, mr), bounce_buffer{make_host_vector<T>(1, stream)}
+    : rmm::device_scalar<T>(stream, mr), bounce_buffer{make_pinned_vector<T>(1, stream)}
   {
   }
 
@@ -62,7 +62,7 @@ class device_scalar : public rmm::device_scalar<T> {
     T const& initial_value,
     rmm::cuda_stream_view stream,
     rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
-    : rmm::device_scalar<T>(stream, mr), bounce_buffer{make_host_vector<T>(1, stream)}
+    : rmm::device_scalar<T>(stream, mr), bounce_buffer{make_pinned_vector<T>(1, stream)}
   {
     bounce_buffer[0] = initial_value;
     cuda_memcpy_async<T>(device_span<T>{this->data(), 1}, bounce_buffer, stream);
@@ -71,7 +71,7 @@ class device_scalar : public rmm::device_scalar<T> {
   device_scalar(device_scalar const& other,
                 rmm::cuda_stream_view stream,
                 rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
-    : rmm::device_scalar<T>(other, stream, mr), bounce_buffer{make_host_vector<T>(1, stream)}
+    : rmm::device_scalar<T>(other, stream, mr), bounce_buffer{make_pinned_vector<T>(1, stream)}
   {
   }
 

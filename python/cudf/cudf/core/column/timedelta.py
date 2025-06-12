@@ -96,7 +96,10 @@ class TimeDeltaColumn(TemporalBaseColumn):
         null_count: int | None = None,
         children: tuple = (),
     ):
-        if not (isinstance(dtype, np.dtype) and dtype.kind == "m"):
+        if cudf.get_option("mode.pandas_compatible"):
+            if not dtype.kind == "m":
+                raise ValueError("dtype must be a timedelta numpy dtype.")
+        elif not (isinstance(dtype, np.dtype) and dtype.kind == "m"):
             raise ValueError("dtype must be a timedelta numpy dtype.")
         super().__init__(
             data=data,
@@ -247,7 +250,7 @@ class TimeDeltaColumn(TemporalBaseColumn):
                     )
                 )
 
-    def as_string_column(self) -> StringColumn:
+    def as_string_column(self, dtype) -> StringColumn:
         return self.strftime("%D days %H:%M:%S")
 
     def as_timedelta_column(self, dtype: np.dtype) -> TimeDeltaColumn:

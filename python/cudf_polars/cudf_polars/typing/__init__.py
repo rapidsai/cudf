@@ -17,13 +17,12 @@ from typing import (
     Union,
 )
 
+import polars as pl
 from polars.polars import _expr_nodes as pl_expr, _ir_nodes as pl_ir
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
     from typing import TypeAlias
-
-    import polars as pl
 
     import pylibcudf as plc
 
@@ -82,6 +81,7 @@ PolarsExpr: TypeAlias = Union[
     pl_expr.PyExprIR,
 ]
 
+PolarsSchema: TypeAlias = dict[str, pl.DataType]
 Schema: TypeAlias = dict[str, "DataType"]
 
 Slice: TypeAlias = tuple[int, int | None]
@@ -108,7 +108,7 @@ class NodeTraverser(Protocol):
         """Convert current plan node to python rep."""
         ...
 
-    def get_schema(self) -> Schema:
+    def get_schema(self) -> PolarsSchema:
         """Get the schema of the current plan node."""
         ...
 
@@ -178,6 +178,22 @@ class ColumnOptions(TypedDict):
     Notes
     -----
     Used to serialize Column and DataFrame containers.
+    """
+
+    is_sorted: plc.types.Sorted
+    order: plc.types.Order
+    null_order: plc.types.NullOrder
+    name: str | None
+    dtype: str | None
+
+
+class DeserializedColumnOptions(TypedDict):
+    """
+    Deserialized Column constructor options.
+
+    Notes
+    -----
+    Used to deserialize Column and DataFrame containers.
     """
 
     is_sorted: plc.types.Sorted
