@@ -833,6 +833,12 @@ dependencies:
       - output_types: [conda, requirements, pyproject]
         packages:
           - polars>=1.25,<1.31
+    specific:
+      - output_types: [requirements, pyproject]
+        matrices:
+          - matrix: null
+            packages:
+              - "typing-extensions; python_version < '3.11'"
   run_cudf_polars_experimental:
     common:
       - output_types: [conda, requirements, pyproject]
