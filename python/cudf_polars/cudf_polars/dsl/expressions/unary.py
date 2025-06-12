@@ -274,7 +274,7 @@ class UnaryFunction(Expr):
                 counts_col = plc.unary.cast(counts_col, plc.DataType(plc.TypeId.UINT32))
 
             plc_column = plc.Column(
-                plc.DataType(plc.TypeId.STRUCT),
+                self.dtype.plc,
                 counts_col.size(),
                 None,
                 None,
