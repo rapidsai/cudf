@@ -563,10 +563,13 @@ std::unique_ptr<cudf::column> make_structs_column(
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
- * @brief Construct a STRUCT column using specified child columns as members.
+ * @brief Construct a STRUCT column using specified child columns as members
  *
  * Specified child/member columns and null_mask are adopted by resultant
- * struct column.
+ * struct column i.e. the struct column hierarchy is created with the specified child
+ * columns as its children. This function does not ensure null consistency with the
+ * child columns or the descendant columns i.e. there are no guarantees that if a row of a struct
+ * column is null, then the corresponding rows of the descendant columns would also be null.
  *
  * A struct column requires that all specified child columns have the same
  * number of rows. A struct column's row count equals that of any/all
@@ -577,9 +580,6 @@ std::unique_ptr<cudf::column> make_structs_column(
  * The specified null mask governs which struct row has a null value. This
  * is orthogonal to the null values of individual child columns.
  *
- * This function will not recurse through struct descendants to superimpose
- * the parent null mask i.e. the struct column is not sanitized.
- *
  * @param[in] num_rows The number of struct values in the struct column.
  * @param[in] child_columns The list of child/members that the struct is comprised of.
  * @param[in] null_count The number of null values in the struct column.
@@ -588,7 +588,7 @@ std::unique_ptr<cudf::column> make_structs_column(
  * @param[in] mr Optional resource to use for device memory allocation.
  * @return Constructed structs column
  */
-std::unique_ptr<cudf::column> make_structs_column_unsanitized(
+std::unique_ptr<cudf::column> create_structs_hierarchy(
   size_type num_rows,
   std::vector<std::unique_ptr<column>>&& child_columns,
   size_type null_count,

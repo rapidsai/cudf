@@ -46,11 +46,12 @@ std::unique_ptr<cudf::column> make_structs_column(
 
   if (!null_mask.is_empty()) {
     for (auto& child : child_columns) {
-      child = structs::detail::superimpose_nulls(static_cast<bitmask_type const*>(null_mask.data()),
-                                                 null_count,
-                                                 std::move(child),
-                                                 stream,
-                                                 mr);
+      child = structs::detail::superimpose_and_sanitize_nulls(
+        static_cast<bitmask_type const*>(null_mask.data()),
+        null_count,
+        std::move(child),
+        stream,
+        mr);
     }
   }
 
@@ -62,8 +63,8 @@ std::unique_ptr<cudf::column> make_structs_column(
                                   std::move(child_columns));
 }
 
-/// Column factory that adopts child columns without null sanitization.
-std::unique_ptr<cudf::column> make_structs_column_unsanitized(
+/// Column factory that adopts child columns and constructs struct hierarchy
+std::unique_ptr<cudf::column> create_structs_hierarchy(
   size_type num_rows,
   std::vector<std::unique_ptr<column>>&& child_columns,
   size_type null_count,
@@ -73,6 +74,9 @@ std::unique_ptr<cudf::column> make_structs_column_unsanitized(
 {
   CUDF_EXPECTS(null_count <= 0 || !null_mask.is_empty(),
                "Struct column with nulls must be nullable.");
+
+  CUDF_EXPECTS(null_mask.is_empty() || null_mask.size() == bitmask_allocation_size_bytes(num_rows),
+               "Number of bits in null_mask should equal number of rows in input columns");
 
   CUDF_EXPECTS(std::all_of(child_columns.begin(),
                            child_columns.end(),

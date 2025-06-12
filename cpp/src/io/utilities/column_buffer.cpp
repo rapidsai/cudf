@@ -185,13 +185,12 @@ std::unique_ptr<column> make_column(column_buffer_base<string_policy>& buffer,
 {
   std::function<std::unique_ptr<column>(column_buffer_base<string_policy> & buffer,
                                         column_name_info * schema_info,
-                                        std::optional<reader_column_schema> const& schema)>
-    construct_column;
-  construct_column =
-    [&construct_column, stream](
-      column_buffer_base<string_policy>& buffer,
-      column_name_info* schema_info,
-      std::optional<reader_column_schema> const& schema) -> std::unique_ptr<column> {
+                                        std::optional<reader_column_schema> const& schema)> const
+    construct_column =
+      [&construct_column, stream](
+        column_buffer_base<string_policy>& buffer,
+        column_name_info* schema_info,
+        std::optional<reader_column_schema> const& schema) -> std::unique_ptr<column> {
     if (schema_info != nullptr) {
       schema_info->name        = buffer.name;
       schema_info->is_nullable = buffer.is_nullable;
@@ -296,12 +295,12 @@ std::unique_ptr<column> make_column(column_buffer_base<string_policy>& buffer,
             construct_column(buffer.children[i], child_info, child_schema));
         }
 
-        return make_structs_column_unsanitized(buffer.size,
-                                               std::move(output_children),
-                                               buffer._null_count,
-                                               std::move(buffer._null_mask),
-                                               stream,
-                                               buffer._mr);
+        return create_structs_hierarchy(buffer.size,
+                                        std::move(output_children),
+                                        buffer._null_count,
+                                        std::move(buffer._null_mask),
+                                        stream,
+                                        buffer._mr);
       } break;
 
       default: {
@@ -314,60 +313,7 @@ std::unique_ptr<column> make_column(column_buffer_base<string_policy>& buffer,
     }
   };
 
-  auto col = construct_column(buffer, schema_info, schema);
-#if 0
-  nvtxRangePushA("naive superimpose nulls");
-  if (buffer.type.id() == type_id::STRUCT) {
-    if (col->nullable()) {
-      auto col_contents = col->release();
-      auto masks = std::vector<bitmask_type const*>(col_contents.children.size(), static_cast<bitmask_type const*>(col_contents.null_mask->data()));
-      std::vector<std::unique_ptr<column>> cols;
-      for (auto &child : col_contents.children)
-        cols.push_back(std::move(child));
-      auto updated_cols = structs::detail::superimpose_nulls_opt(
-        masks,
-        std::move(cols),
-        stream,
-        buffer._mr);
-      for (size_t i = 0; i < col_contents.children.size(); i++)
-        col_contents.children[i] = std::move(updated_cols[i]);
-      return std::make_unique<column>(
-        cudf::data_type{type_id::STRUCT},
-        buffer.size,
-        rmm::device_buffer{},  // Empty data buffer. Structs hold no data.
-        std::move(*col_contents.null_mask),
-        buffer._null_count,
-        std::move(col_contents.children));
-    }
-  }
-  nvtxRangePop();
-#endif
-
-#if 0
-  if (buffer.type.id() == type_id::STRUCT) {
-    if (col->nullable()) {
-      auto col_contents = col->release();
-      for (auto& child : col_contents.children) {
-        child = std::move(structs::detail::superimpose_nulls(
-          static_cast<bitmask_type const*>(col_contents.null_mask->data()),
-          buffer._null_count,
-          std::move(child),
-          stream,
-          buffer._mr));
-      }
-
-      return std::make_unique<column>(
-        cudf::data_type{type_id::STRUCT},
-        buffer.size,
-        rmm::device_buffer{},  // Empty data buffer. Structs hold no data.
-        std::move(*col_contents.null_mask),
-        buffer._null_count,
-        std::move(col_contents.children));
-    }
-  }
-#endif
-
-  return std::move(col);
+  return construct_column(buffer, schema_info, schema);
 }
 
 /**

@@ -181,12 +181,11 @@ class flattened_table {
 
 /**
  * @brief Superimpose nulls from a given null mask into the input column, using bitwise AND.
+ * Any null strings/lists in the input (if any) will also be sanitized to make sure nulls in the
+ * output always have their sizes equal to 0.
  *
  * This function will recurse through all struct descendants. It is expected that the size of
  * the given null mask in bits is the same as size of the input column.
- *
- * Any null strings/lists in the input (if any) will also be sanitized to make sure nulls in the
- * output always have their sizes equal to 0.
  *
  * @param null_mask Null mask to be applied to the input column
  * @param null_count Null count in the given null mask
@@ -195,11 +194,12 @@ class flattened_table {
  * @param mr Device memory resource used to allocate new device memory
  * @return A new column with potentially new null mask
  */
-[[nodiscard]] std::unique_ptr<cudf::column> superimpose_nulls(bitmask_type const* null_mask,
-                                                              cudf::size_type null_count,
-                                                              std::unique_ptr<cudf::column>&& input,
-                                                              rmm::cuda_stream_view stream,
-                                                              rmm::device_async_resource_ref mr);
+[[nodiscard]] std::unique_ptr<cudf::column> superimpose_and_sanitize_nulls(
+  bitmask_type const* null_mask,
+  cudf::size_type null_count,
+  std::unique_ptr<cudf::column>&& input,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr);
 
 [[nodiscard]] std::vector<std::unique_ptr<column>> superimpose_nulls_opt(
   std::vector<bitmask_type const*> null_masks,

@@ -222,16 +222,22 @@ std::unique_ptr<flattened_table> flatten_nested_columns(
 namespace {
 
 /**
- * @brief Superimpose the given null mask into the input column without any sanitization for
- * non-empty nulls.
+ * @brief Superimpose the given null mask into the input column and its descendants. This function
+ * does not enforce null consistency of the null masks of the descendant columns i.e. non-empty
+ * nulls that appear in the descendant columns due to the null mask update are not purged.
  *
- * @copydoc cudf::structs::detail::superimpose_nulls
+ * @param null_mask Null mask to be applied to the input column
+ * @param null_count Null count in the given null mask
+ * @param input Column to apply the null mask to
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate new device memory
+ * @return A new column with potentially new null mask
  */
-std::unique_ptr<column> superimpose_nulls_no_sanitize(bitmask_type const* null_mask,
-                                                      size_type null_count,
-                                                      std::unique_ptr<column>&& input,
-                                                      rmm::cuda_stream_view stream,
-                                                      rmm::device_async_resource_ref mr)
+std::unique_ptr<column> superimpose_nulls(bitmask_type const* null_mask,
+                                          size_type null_count,
+                                          std::unique_ptr<column>&& input,
+                                          rmm::cuda_stream_view stream,
+                                          rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   if (input->type().id() == cudf::type_id::EMPTY) {
@@ -266,20 +272,19 @@ std::unique_ptr<column> superimpose_nulls_no_sanitize(bitmask_type const* null_m
   auto const new_null_count = input->null_count();  // this was just computed in the step above
   auto content              = input->release();
 
-  // Replace the children columns.
-  // make_structs_column recursively calls superimpose_nulls
+  // Recursively replace the children columns with new struct columns that have the updated null
+  // mask
   CUDF_EXPECTS(std::all_of(content.children.begin(),
                            content.children.end(),
                            [&](auto const& child_col) { return num_rows == child_col->size(); }),
                "Child columns must have the same number of rows as the Struct column.");
 
   for (auto& child : content.children) {
-    child =
-      superimpose_nulls_no_sanitize(static_cast<bitmask_type const*>(content.null_mask->data()),
-                                    new_null_count,
-                                    std::move(child),
-                                    stream,
-                                    mr);
+    child = superimpose_nulls(static_cast<bitmask_type const*>(content.null_mask->data()),
+                              new_null_count,
+                              std::move(child),
+                              stream,
+                              mr);
   }
   return std::make_unique<column>(cudf::data_type{type_id::STRUCT},
                                   num_rows,
@@ -510,14 +515,17 @@ void temporary_nullable_data::emplace_back(temporary_nullable_data&& other)
   move_append(new_columns, other.new_columns);
 }
 
-std::unique_ptr<column> superimpose_nulls(bitmask_type const* null_mask,
-                                          size_type null_count,
-                                          std::unique_ptr<column>&& input,
-                                          rmm::cuda_stream_view stream,
-                                          rmm::device_async_resource_ref mr)
+/*
+ * @copydoc cudf::structs::detail::superimpose_and_sanitize_nulls
+ */
+std::unique_ptr<column> superimpose_and_sanitize_nulls(bitmask_type const* null_mask,
+                                                       size_type null_count,
+                                                       std::unique_ptr<column>&& input,
+                                                       rmm::cuda_stream_view stream,
+                                                       rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  input = superimpose_nulls_no_sanitize(null_mask, null_count, std::move(input), stream, mr);
+  input = superimpose_nulls(null_mask, null_count, std::move(input), stream, mr);
 
   nvtxRangePushA("purging");
   if (auto const input_view = input->view(); cudf::detail::has_nonempty_nulls(input_view, stream)) {
