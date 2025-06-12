@@ -19,6 +19,7 @@ import pylibcudf as plc
 from cudf_polars.containers import Column
 from cudf_polars.dsl.expressions.base import ExecutionContext, Expr
 from cudf_polars.dsl.expressions.literal import Literal, LiteralColumn
+from cudf_polars.dsl.utils.reshape import broadcast
 
 if TYPE_CHECKING:
     from typing_extensions import Self
@@ -215,17 +216,22 @@ class StringFunction(Expr):
         """Evaluate this expression given a dataframe for context."""
         if self.name is StringFunction.Name.ConcatHorizontal:
             columns = [
-                child.evaluate(df, context=context).obj for child in self.children
+                Column(child.evaluate(df, context=context).obj).astype(
+                    plc.DataType(plc.TypeId.STRING)
+                )
+                for child in self.children
             ]
-            delimiter, ignore_nulls = self.options
 
-            sep = plc.Scalar.from_py(delimiter, plc.DataType(plc.TypeId.STRING))
-            table = plc.Table(columns)
+            broadcasted = broadcast(
+                *columns, target_length=max(col.size for col in columns)
+            )
+
+            delimiter, ignore_nulls = self.options
 
             return Column(
                 plc.strings.combine.concatenate(
-                    table,
-                    sep,
+                    plc.Table([col.obj for col in broadcasted]),
+                    plc.Scalar.from_py(delimiter, plc.DataType(plc.TypeId.STRING)),
                     None
                     if ignore_nulls
                     else plc.Scalar.from_py(None, plc.DataType(plc.TypeId.STRING)),
