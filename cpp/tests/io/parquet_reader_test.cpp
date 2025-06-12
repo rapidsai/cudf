@@ -231,7 +231,6 @@ TEST_F(ParquetReaderTest, UserBoundsWithNullsMixedTypes)
   std::vector<std::pair<int, int>> params{
     {-1, -1}, {0, num_rows}, {1, num_rows - 1}, {num_rows - 1, 1}, {517, 22000}};
   for (auto p : params) {
-    std::cout << p.first << " " << p.second << std::endl;
     cudf::io::parquet_reader_options read_args =
       cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath});
     if (p.first >= 0) { read_args.set_skip_rows(p.first); }
