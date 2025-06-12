@@ -11,17 +11,19 @@ from polars.testing.asserts import assert_frame_equal
 
 import pylibcudf as plc
 
-from cudf_polars.containers import Column, DataFrame
+from cudf_polars.containers import Column, DataFrame, DataType
 from cudf_polars.testing.asserts import assert_gpu_result_equal
 
 
 def test_select_missing_raises():
+    dtype = DataType(pl.Int8())
     df = DataFrame(
         [
             Column(
                 plc.column_factories.make_numeric_column(
-                    plc.DataType(plc.TypeId.INT8), 2, plc.MaskState.ALL_VALID
+                    dtype.plc, 2, plc.MaskState.ALL_VALID
                 ),
+                dtype=dtype,
                 name="a",
             )
         ]
@@ -31,12 +33,14 @@ def test_select_missing_raises():
 
 
 def test_replace_missing_raises():
+    dtype = DataType(pl.Int8())
     df = DataFrame(
         [
             Column(
                 plc.column_factories.make_numeric_column(
-                    plc.DataType(plc.TypeId.INT8), 2, plc.MaskState.ALL_VALID
+                    dtype.plc, 2, plc.MaskState.ALL_VALID
                 ),
+                dtype=dtype,
                 name="a",
             )
         ]
@@ -59,21 +63,26 @@ def test_from_table_wrong_names():
 
 
 def test_unnamed_column_raise():
+    dtype = DataType(pl.Int8())
     payload = plc.column_factories.make_numeric_column(
-        plc.DataType(plc.TypeId.INT8), 0, plc.MaskState.ALL_VALID
+        dtype.plc, 0, plc.MaskState.ALL_VALID
     )
 
     with pytest.raises(ValueError):
-        DataFrame([Column(payload, name="a"), Column(payload)])
+        DataFrame(
+            [Column(payload, name="a", dtype=dtype), Column(payload, dtype=dtype)]
+        )
 
 
 def test_sorted_like_raises_mismatching_names():
+    dtype = DataType(pl.Int8())
     df = DataFrame(
         [
             Column(
                 plc.column_factories.make_numeric_column(
-                    plc.DataType(plc.TypeId.INT8), 2, plc.MaskState.ALL_VALID
+                    dtype.plc, 2, plc.MaskState.ALL_VALID
                 ),
+                dtype=dtype,
                 name="a",
             )
         ]
@@ -84,10 +93,10 @@ def test_sorted_like_raises_mismatching_names():
 
 
 def test_shallow_copy():
+    dtype = DataType(pl.Int8())
     column = Column(
-        plc.column_factories.make_numeric_column(
-            plc.DataType(plc.TypeId.INT8), 2, plc.MaskState.ALL_VALID
-        ),
+        plc.column_factories.make_numeric_column(dtype.plc, 2, plc.MaskState.ALL_VALID),
+        dtype=dtype,
         name="a",
     )
     column.set_sorted(
