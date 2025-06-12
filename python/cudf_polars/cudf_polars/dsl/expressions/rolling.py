@@ -124,7 +124,7 @@ class RollingWindow(Expr):
             following,
             [to_request(agg, orderby, df)],
         ).columns()
-        return Column(result)
+        return Column(result, dtype=self.dtype)
 
 
 class GroupedRollingWindow(Expr):
