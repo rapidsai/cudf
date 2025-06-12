@@ -39,8 +39,7 @@
 #include <numeric>
 #include <sstream>
 
-namespace cudf::io {
-namespace detail {
+namespace cudf::io::detail {
 
 namespace {
 
@@ -611,8 +610,8 @@ enum class host_engine_state : uint8_t { ON, OFF, AUTO };
 
 [[nodiscard]] host_engine_state get_host_engine_state(compression_type compression)
 {
-  auto const has_host_support   = io::is_host_decompression_supported(compression);
-  auto const has_device_support = io::is_device_decompression_supported(compression);
+  auto const has_host_support   = is_host_decompression_supported(compression);
+  auto const has_device_support = is_device_decompression_supported(compression);
   CUDF_EXPECTS(has_host_support or has_device_support,
                "Unsupported compression type: " + compression_type_name(compression));
   if (not has_host_support) { return host_engine_state::OFF; }
@@ -671,8 +670,6 @@ size_t get_uncompressed_size(compression_type compression, host_span<uint8_t con
   // only Brotli kernel requires scratch memory
   return 0;
 }
-
-}  // namespace detail
 
 size_t decompress(compression_type compression,
                   host_span<uint8_t const> src,
@@ -763,7 +760,7 @@ std::vector<uint8_t> decompress(compression_type compression, host_span<uint8_t 
 void decompress(compression_type compression,
                 device_span<device_span<uint8_t const> const> inputs,
                 device_span<device_span<uint8_t> const> outputs,
-                device_span<codec_exec_result> results,
+                device_span<detail::codec_exec_result> results,
                 size_t max_uncomp_chunk_size,
                 size_t max_total_uncomp_size,
                 rmm::cuda_stream_view stream)
@@ -813,4 +810,4 @@ void decompress(compression_type compression,
          is_device_decompression_supported(compression);
 }
 
-}  // namespace cudf::io
+}  // namespace cudf::io::detail

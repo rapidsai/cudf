@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-#include "io/comp/compression.hpp"
-#include "io/comp/decompression.hpp"
 #include "io/orc/orc.hpp"
 #include "io/utilities/getenv_or.hpp"
 
@@ -27,6 +25,7 @@
 #include <cudf/io/data_sink.hpp>
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/detail/avro.hpp>
+#include <cudf/io/detail/codec.hpp>
 #include <cudf/io/detail/csv.hpp>
 #include <cudf/io/detail/json.hpp>
 #include <cudf/io/detail/orc.hpp>
@@ -306,7 +305,7 @@ bool is_supported_read_orc(compression_type compression)
 
   return ((compression == compression_type::ZLIB or compression == compression_type::SNAPPY or
            compression == compression_type::ZSTD or compression == compression_type::LZ4) and
-          is_decompression_supported(compression));
+          detail::is_decompression_supported(compression));
 }
 
 bool is_supported_write_orc(compression_type compression)
@@ -317,7 +316,7 @@ bool is_supported_write_orc(compression_type compression)
 
   return ((compression == compression_type::ZLIB or compression == compression_type::SNAPPY or
            compression == compression_type::ZSTD or compression == compression_type::LZ4) and
-          is_compression_supported(compression));
+          detail::is_compression_supported(compression));
 }
 
 raw_orc_statistics read_raw_orc_statistics(source_info const& src_info,
@@ -603,7 +602,7 @@ bool is_supported_read_parquet(compression_type compression)
   return ((compression == compression_type::BROTLI or compression == compression_type::GZIP or
            compression == compression_type::LZ4 or compression == compression_type::SNAPPY or
            compression == compression_type::ZSTD) and
-          is_decompression_supported(compression));
+          detail::is_decompression_supported(compression));
 }
 
 bool is_supported_write_parquet(compression_type compression)
@@ -614,7 +613,7 @@ bool is_supported_write_parquet(compression_type compression)
 
   return ((compression == compression_type::LZ4 or compression == compression_type::SNAPPY or
            compression == compression_type::ZSTD) and
-          is_compression_supported(compression));
+          detail::is_compression_supported(compression));
 }
 
 table_with_metadata read_parquet(parquet_reader_options const& options,

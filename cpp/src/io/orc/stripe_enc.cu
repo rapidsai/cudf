@@ -43,8 +43,8 @@
 namespace cudf::io::orc::detail {
 
 using cudf::detail::device_2dspan;
-using cudf::io::codec_exec_result;
-using cudf::io::codec_status;
+using cudf::io::detail::codec_exec_result;
+using cudf::io::detail::codec_status;
 
 constexpr int scratch_buffer_size        = 512 * 4;
 constexpr int compact_streams_block_size = 1024;
@@ -1151,7 +1151,7 @@ CUDF_KERNEL void __launch_bounds__(256)
                                  device_2dspan<encoder_chunk_streams const> streams,
                                  device_span<device_span<uint8_t const>> inputs,
                                  device_span<device_span<uint8_t>> outputs,
-                                 device_span<codec_exec_result> results,
+                                 device_span<cudf::io::detail::codec_exec_result> results,
                                  device_span<uint8_t> compressed_bfr,
                                  uint32_t comp_blk_size,
                                  uint32_t max_comp_blk_size,
@@ -1368,7 +1368,7 @@ std::optional<writer_compression_statistics> compress_orc_data_streams(
   bool collect_statistics,
   device_2dspan<stripe_stream> strm_desc,
   device_2dspan<encoder_chunk_streams> enc_streams,
-  device_span<codec_exec_result> comp_res,
+  device_span<cudf::io::detail::codec_exec_result> comp_res,
   rmm::cuda_stream_view stream)
 {
   rmm::device_uvector<device_span<uint8_t const>> comp_in(num_compressed_blocks, stream);
@@ -1385,7 +1385,7 @@ std::optional<writer_compression_statistics> compress_orc_data_streams(
                                                                          max_comp_blk_size,
                                                                          comp_block_align);
 
-  cudf::io::compress(compression, comp_in, comp_out, comp_res, stream);
+  cudf::io::detail::compress(compression, comp_in, comp_out, comp_res, stream);
 
   compact_compressed_blocks_kernel<<<num_blocks, 1024, 0, stream.value()>>>(
     strm_desc, comp_in, comp_out, comp_res, compressed_data, comp_blk_size, max_comp_blk_size);

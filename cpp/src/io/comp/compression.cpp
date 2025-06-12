@@ -38,8 +38,7 @@
 
 #include <numeric>
 
-namespace cudf::io {
-namespace detail {
+namespace cudf::io::detail {
 
 namespace {
 /**
@@ -427,8 +426,6 @@ std::optional<size_t> compress_max_allowed_chunk_size(compression_type compressi
   CUDF_FAIL("Unsupported compression type: " + compression_type_name(compression));
 }
 
-}  // namespace detail
-
 std::vector<std::uint8_t> compress(compression_type compression, host_span<uint8_t const> src)
 {
   CUDF_FUNC_RANGE();
@@ -487,4 +484,4 @@ void compress(compression_type compression,
   return is_host_compression_supported(compression) or is_device_compression_supported(compression);
 }
 
-}  // namespace cudf::io
+}  // namespace cudf::io::detail
