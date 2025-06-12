@@ -256,8 +256,10 @@ merge<LargerIterator, SmallerIterator>::operator()(rmm::cuda_stream_view stream,
                   nonzero_matches.begin(),
                   cuda::std::identity{});
 
-  thrust::exclusive_scan(
-    rmm::exec_policy(stream), match_counts->begin(), match_counts->end(), match_counts->begin());
+  thrust::exclusive_scan(rmm::exec_policy_nosync(stream),
+                         match_counts->begin(),
+                         match_counts->end(),
+                         match_counts->begin());
   auto const total_matches = match_counts->back_element(stream);
 
   // populate larger indices
