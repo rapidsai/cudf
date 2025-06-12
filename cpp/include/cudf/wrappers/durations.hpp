@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -65,6 +65,29 @@ static_assert(sizeof(duration_s) == sizeof(typename duration_s::rep));
 static_assert(sizeof(duration_ms) == sizeof(typename duration_ms::rep));
 static_assert(sizeof(duration_us) == sizeof(typename duration_us::rep));
 static_assert(sizeof(duration_ns) == sizeof(typename duration_ns::rep));
+
+/**
+ * @brief Maps the duration type to its rep type
+ *
+ * Use this "type function" with the `using` type alias:
+ * @code
+ * using Type = duration_rep_type_t<ElementType>;
+ * @endcode
+ *
+ * @tparam T The literal duration type
+ * @tparam N The default type to return if T is not a duration type
+ */
+// clang-format off
+template <typename T, typename N=T>
+using duration_rep_type_t =
+  std::conditional_t<std::is_same_v<cudf::duration_D, T>,  cudf::duration_D::rep,
+  std::conditional_t<std::is_same_v<cudf::duration_h, T>,  cudf::duration_h::rep,
+  std::conditional_t<std::is_same_v<cudf::duration_m, T>,  cudf::duration_m::rep,
+  std::conditional_t<std::is_same_v<cudf::duration_s, T>,  cudf::duration_s::rep,
+  std::conditional_t<std::is_same_v<cudf::duration_ms, T>, cudf::duration_ms::rep,
+  std::conditional_t<std::is_same_v<cudf::duration_us, T>, cudf::duration_us::rep,
+  std::conditional_t<std::is_same_v<cudf::duration_ns, T>, cudf::duration_ns::rep, N>>>>>>>;
+// clang-format on
 
 /** @} */  // end of group
 }  // namespace CUDF_EXPORT cudf
