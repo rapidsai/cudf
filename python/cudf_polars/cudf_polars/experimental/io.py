@@ -302,39 +302,49 @@ def _sample_pq_statistics(ir: Scan) -> dict[str, ColumnSourceStats]:
         "'in-memory' executor not supported in '_sample_pq_statistics"
     )
 
-    num_file_samples = ir.config_options.executor.parquet_metadata_samples
-    num_rg_samples = ir.config_options.executor.parquet_rowgroup_samples
-    file_count = len(ir.paths)
-    stride = max(1, int(file_count / num_file_samples))
-    paths = ir.paths[: stride * num_file_samples : stride]
-    tuple_paths = tuple(ir.paths)
+    max_file_samples = ir.config_options.executor.parquet_metadata_samples
+    max_rg_samples = ir.config_options.executor.parquet_rowgroup_samples
+
+    total_file_count = len(ir.paths)
+    stride = max(1, int(total_file_count / max_file_samples))
+    sample_paths = ir.paths[: stride * max_file_samples : stride]
+    sampled_file_count = len(sample_paths)
+    exact_statistics: tuple[str, ...] = ()
 
     # Check table-stats cache
     source_stats_cached: MutableMapping[str, ColumnSourceStats]
     try:
-        source_stats_cached = _SOURCE_STATS_CACHE[tuple_paths]
+        source_stats_cached = _SOURCE_STATS_CACHE[tuple(ir.paths)]
     except KeyError:
         source_stats_cached = {}
     finally:
         source_stats = source_stats_cached
 
     if need_columns := (set(ir.schema) - source_stats_cached.keys()):
-        # Still need un-cached columns
-        metadata = plc.io.parquet_metadata.read_parquet_metadata(
-            plc.io.SourceInfo(paths)
-        )
-        num_rows_per_file = int(metadata.num_rows() / len(paths))
-        num_rows_total = num_rows_per_file * file_count
-        num_row_groups_per_file_samples = metadata.num_rowgroups_per_file()
-        rowgroup_offsets_per_file = np.insert(
-            np.cumsum(num_row_groups_per_file_samples), 0, 0
+        # Still need columns missing from the cache
+        sample_metadata = plc.io.parquet_metadata.read_parquet_metadata(
+            plc.io.SourceInfo(sample_paths)
         )
 
+        if total_file_count == sampled_file_count:
+            # We know the "exact" cardinality from our sample
+            cardinality = sample_metadata.num_rows()
+            exact_statistics = ("cardinality",)
+        else:
+            # We must estimate/extrapolate the cardinality from our sample
+            num_rows_per_sampled_file = int(
+                sample_metadata.num_rows() / sampled_file_count
+            )
+            cardinality = num_rows_per_sampled_file * total_file_count
+
+        num_row_groups_per_sampled_file = sample_metadata.num_rowgroups_per_file()
+        rowgroup_offsets_per_file = np.cumsum([0, *num_row_groups_per_sampled_file])
+
         # For each column, calculate the `mean_uncompressed_size` for a file
-        column_sizes = {}
-        for name, uncompressed_sizes in metadata.columnchunk_metadata().items():
+        column_sizes_per_file = {}
+        for name, uncompressed_sizes in sample_metadata.columnchunk_metadata().items():
             if name in need_columns:
-                column_sizes[name] = np.array(
+                column_sizes_per_file[name] = np.array(
                     [
                         np.sum(uncompressed_sizes[start:end])
                         for (start, end) in itertools.pairwise(
@@ -344,31 +354,31 @@ def _sample_pq_statistics(ir: Scan) -> dict[str, ColumnSourceStats]:
                     dtype="int64",
                 )
         # Revise need_columns, since some columns may not be in the file
-        need_columns = need_columns.intersection(column_sizes)
+        need_columns = need_columns.intersection(column_sizes_per_file)
 
     if need_columns:
         # We have un-cached column metadata to process
 
-        # Calculate the per-file `mean_uncompressed_size` for each column
-        mean_uncompressed_size = {
-            name: np.mean(sizes) for name, sizes in column_sizes.items()
+        # Calculate the `mean_uncompressed_size_per_file` for each column
+        mean_uncompressed_size_per_file = {
+            name: np.mean(sizes) for name, sizes in column_sizes_per_file.items()
         }
 
         # Collect real unique-count of first row-group
         unique_count_estimates: dict[str, int] = {}
         unique_fraction_estimates: dict[str, float] = {}
-        if num_rg_samples > 0:
+        if max_rg_samples > 0:
             n = 0
             samples: defaultdict[str, list[int]] = defaultdict(list)
             for path, num_rgs in zip(
-                paths, num_row_groups_per_file_samples, strict=True
+                sample_paths, num_row_groups_per_sampled_file, strict=True
             ):
                 for rg_id in range(num_rgs):
                     n += 1
                     samples[path].append(rg_id)
-                    if n == num_rg_samples:
+                    if n == max_rg_samples:
                         break
-                if n == num_rg_samples:
+                if n == max_rg_samples:
                     break
             options = plc.io.parquet.ParquetReaderOptions.builder(
                 plc.io.SourceInfo(list(samples))
@@ -399,21 +409,22 @@ def _sample_pq_statistics(ir: Scan) -> dict[str, ColumnSourceStats]:
                     # necessarily deduce that that means that the unique
                     # count is 100 / num_rows_in_group * num_rows_in_file
                     if row_group_unique_count == row_group_num_rows:
-                        unique_count_estimates[name] = num_rows_total
+                        unique_count_estimates[name] = cardinality
 
         # Check that the cached stats have the same row-count estimate
         if source_stats_cached:
             assert (
-                num_rows_total == next(iter(source_stats_cached.values())).cardinality
+                cardinality == next(iter(source_stats_cached.values())).cardinality
             ), "Unexpected cardinality in cache."
 
         # Construct estimated column statistics
         source_stats = {
             name: ColumnSourceStats(
-                cardinality=num_rows_total,
-                file_size=mean_uncompressed_size[name],
+                cardinality=cardinality,
+                file_size=mean_uncompressed_size_per_file[name],
                 unique_count=unique_count_estimates.get(name),
                 unique_fraction=unique_fraction_estimates.get(name),
+                exact=exact_statistics,
             )
             for name in need_columns
         }
@@ -424,7 +435,7 @@ def _sample_pq_statistics(ir: Scan) -> dict[str, ColumnSourceStats]:
 
     if source_stats:
         # Update the cache
-        _update_source_stats_cache(tuple_paths, source_stats)
+        _update_source_stats_cache(tuple(ir.paths), source_stats)
 
     # Return relevant source stats
     return {name: css for name, css in source_stats.items() if name in ir.schema}

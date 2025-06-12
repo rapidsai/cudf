@@ -49,18 +49,32 @@ class ColumnSourceStats:
     Parameters
     ----------
     cardinality
-        Cardinality estimate.
+        Cardinality (row count).
     file_size
-        Estimated un-compressed storage size for this
+        Average un-compressed storage size for this
         column in a single file. This value is used to
         calculate the partition count for an IR node.
     unique_count
-        Unique-count estimate.
+        Unique-value count.
     unique_fraction
-        Unique-fraction estimate.
+        Unique-value fraction.
+    exact
+        Tuple of attributes that have not been estimated
+        by partial sampling, and are known exactly,
+
+    Notes
+    -----
+    Source statistics are statistics coming from "source"
+    nodes like ``Scan` and ``DataFrameScan``.
     """
 
-    __slots__ = ("cardinality", "file_size", "unique_count", "unique_fraction")
+    __slots__ = (
+        "cardinality",
+        "exact",
+        "file_size",
+        "unique_count",
+        "unique_fraction",
+    )
 
     def __init__(
         self,
@@ -69,11 +83,13 @@ class ColumnSourceStats:
         file_size: int | None = None,
         unique_count: int | None = None,
         unique_fraction: float | None = None,
+        exact: tuple[str, ...] = (),
     ):
         self.cardinality = cardinality
         self.file_size = file_size
         self.unique_count = unique_count
         self.unique_fraction = unique_fraction
+        self.exact = exact
 
 
 class ColumnStats:

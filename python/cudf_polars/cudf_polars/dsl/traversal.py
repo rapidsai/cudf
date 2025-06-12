@@ -18,7 +18,6 @@ if TYPE_CHECKING:
 __all__: list[str] = [
     "CachingVisitor",
     "make_recursive",
-    "post_traversal",
     "reuse_if_unchanged",
     "traversal",
 ]
@@ -48,40 +47,6 @@ def traversal(nodes: Sequence[NodeT]) -> Generator[NodeT, None, None]:
             if child not in seen:
                 seen.add(child)
                 lifo.append(child)
-
-
-def post_traversal(nodes: Sequence[NodeT]) -> Generator[NodeT, None, None]:
-    """
-    Post-order traversal of nodes in an expression.
-
-    Parameters
-    ----------
-    nodes
-        Roots of expressions to traverse.
-
-    Yields
-    ------
-    Unique nodes in the expressions, child before parent, children
-    in-order from left to right.
-    """
-    seen = set()
-    lifo = []
-
-    for node in nodes:
-        if node not in seen:
-            lifo.append(node)
-            seen.add(node)
-
-    while lifo:
-        node = lifo[-1]
-        for child in node.children:
-            if child not in seen:
-                lifo.append(child)
-                seen.add(child)
-                break
-        else:
-            yield node
-            lifo.pop()
 
 
 def reuse_if_unchanged(node: NodeT, fn: GenericTransformer[NodeT, NodeT]) -> NodeT:

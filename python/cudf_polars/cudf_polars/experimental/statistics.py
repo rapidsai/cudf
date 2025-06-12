@@ -20,7 +20,7 @@ from cudf_polars.dsl.ir import (
     Select,
     Union,
 )
-from cudf_polars.dsl.traversal import post_traversal
+from cudf_polars.dsl.traversal import traversal
 from cudf_polars.experimental.base import (
     ColumnSourceStats,
     ColumnStats,
@@ -33,7 +33,7 @@ from cudf_polars.experimental.io import _sample_pq_statistics
 def collect_source_statistics(root: IR) -> StatsCollector:
     """Collect basic source statistics."""
     stats: StatsCollector = StatsCollector()
-    for node in post_traversal([root]):
+    for node in list(traversal([root]))[::-1]:
         add_source_stats(node, stats)
     return stats
 
