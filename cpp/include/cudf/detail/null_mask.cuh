@@ -29,6 +29,8 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cooperative_groups.h>
+#include <cooperative_groups/reduce.h>
 #include <cub/block/block_reduce.cuh>
 #include <cub/device/device_segmented_reduce.cuh>
 #include <cuda/functional>
@@ -110,7 +112,30 @@ CUDF_KERNEL void offset_bitmask_binop(Binop op,
   if (threadIdx.x == 0) { atomicAdd(count_ptr, block_count); }
 }
 
-// warp per segment
+/**
+ * @brief Performs a segmented binary operation on bitmasks with configurable bit offsets
+ *
+ * This kernel applies a binary operation across multiple segments of bitmasks. Each segment is processed 
+ * by a separate warp, with threads in the warp collaboratively processing words of the bitmask. The results are written directly to the specified destination mask.
+ *
+ * The kernel performs the following operations:
+ * 1. Maps each warp to a segment defined by segment_offsets
+ * 2. For each segment, performs the binary operation on corresponding words of source bitmasks
+ * 4. Counts the number of unset bits (nulls) in the resulting bitmask for each segment
+ * 5. Writes the results to the destination mask and null counts array
+ * 
+ * @tparam Binop           Type of binary operator 
+ *
+ * @param op               The binary operator to apply to the bitmasks
+ * @param destinations     Device span of pointers to destination bitmasks where results will be written
+ * @param destination_size Size of each destination mask in bitmask words (not bits)
+ * @param sources          Device span of pointers to source bitmasks to be operated on
+ * @param source_begin_bits Device span of bit offsets from which each source mask is to be processed
+ * @param source_size_bits The number of bits to process in each mask
+ * @param segment_offsets  Device span of indices defining the segments in the sources array
+ * @param null_counts      Device span where the count of unset bits for each segment will be written
+ *
+ */
 template <typename Binop>
 CUDF_KERNEL void segmented_offset_bitmask_binop(Binop op,
                                                 device_span<bitmask_type*> destinations,
@@ -121,76 +146,79 @@ CUDF_KERNEL void segmented_offset_bitmask_binop(Binop op,
                                                 device_span<size_type const> segment_offsets,
                                                 device_span<size_type> null_counts)
 {
-  auto const warp_size = cudf::detail::warp_size;
-  auto const lane      = threadIdx.x % warp_size;
-  auto const warp_id   = threadIdx.x / warp_size;
+  namespace cg = cooperative_groups;
 
-  // assume one segment per warp.
+  // Create block level group
+  auto const block = cg::this_thread_block();
+
+  // Create warp-level group
+  auto const warp_size = cudf::detail::warp_size;
+  auto const warp = cg::tiled_partition<warp_size>(block);
+  auto const warp_id = block.thread_index().x / cudf::detail::warp_size;
+  auto const lane = warp.thread_rank();
+
+  // Assume one segment per warp.
   auto const num_segments = segment_offsets.size() - 1;
   auto const segment_id   = blockIdx.x * (blockDim.x / warp_size) + warp_id;
-  size_type thread_count  = 0;
-  if (segment_id < num_segments) {
-    auto const destination = destinations[segment_id];
+  auto const segment_start = segment_offsets[segment_id];
+  auto const segment_end = segment_offsets[segment_id + 1];
+  auto const destination = destinations[segment_id];
 
-    auto const last_bit_index  = source_size_bits - 1;
-    auto const last_word_index = cudf::word_index(last_bit_index);
+  // Exit early if this warp doesn't have a valid segment
+  if(segment_id >= num_segments) return;
 
-    /*
-    if(lane == 0) {
-      std::printf("warp_id = %d, segment_id = %d, segment_offsets[%d] = %d\n", warp_id, segment_id,
-    segment_id, segment_offsets[segment_id]); std::printf("warp_id = %d, sources.size() = %lu\n",
-    warp_id, sources.size()); std::printf("warp_id = %d, destinations.size() = %lu\n", warp_id,
-    destinations.size()); std::printf("warp_id = %d, segment_id = %d, segment_offsets[%d] = %d,
-    source_begin_bits[%d] = %d\n", warp_id, segment_id, segment_id, segment_offsets[segment_id],
-    segment_offsets[segment_id], source_begin_bits[segment_offsets[segment_id]]);
-      std::printf("warp_id = %d, last_bit_index = %d, last_word_index = %d\n", warp_id,
-    last_bit_index, last_word_index);
+  // Calculate bit range information
+  auto const last_bit_index  = source_size_bits - 1;
+  auto const last_word_index = cudf::word_index(last_bit_index);
+  auto const bitmask_type_size = static_cast<size_type>(detail::size_in_bits<bitmask_type>());
+
+  // Track null count (count of unset bits)
+  size_type thread_null_count  = 0;
+
+  // Process the mask such that each thread in warp handles different words
+  for (size_type destination_word_index = lane; destination_word_index < destination_size;
+       destination_word_index += warp_size) {
+
+    // Get the first mask word
+    bitmask_type destination_word = detail::get_mask_offset_word(
+      sources[segment_start],
+      destination_word_index,
+      source_begin_bits[segment_start],
+      source_begin_bits[segment_start] + source_size_bits);
+
+    // Apply the binary operation with each source mask in the segment
+    for (size_type mask_pos = segment_start + 1; mask_pos < segment_end;
+         mask_pos++) {
+      destination_word =
+        op(destination_word,
+           detail::get_mask_offset_word(sources[mask_pos],
+                                        destination_word_index,
+                                        source_begin_bits[mask_pos],
+                                        source_begin_bits[mask_pos] + source_size_bits));
     }
-    */
 
-    for (size_type destination_word_index = lane; destination_word_index < destination_size;
-         destination_word_index += warp_size) {
-      bitmask_type destination_word = detail::get_mask_offset_word(
-        sources[segment_offsets[segment_id]],
-        destination_word_index,
-        source_begin_bits[segment_offsets[segment_id]],
-        source_begin_bits[segment_offsets[segment_id]] + source_size_bits);
-      for (size_type i = segment_offsets[segment_id] + 1; i < segment_offsets[segment_id + 1];
-           i++) {
-        destination_word =
-          op(destination_word,
-             detail::get_mask_offset_word(sources[i],
-                                          destination_word_index,
-                                          source_begin_bits[i],
-                                          source_begin_bits[i] + source_size_bits));
-      }
+    // Handle the last word specially to mask out bits beyond the range
+    if (destination_word_index == last_word_index) {
+      auto const num_bits_in_last_word = intra_word_index(last_bit_index);
+      destination_word &= set_least_significant_bits(num_bits_in_last_word + 1);
 
-      auto bitmask_type_size = static_cast<size_type>(detail::size_in_bits<bitmask_type>());
-      if (destination_word_index == last_word_index) {
-        // mask out any bits not part of this word
-        auto const num_bits_in_last_word = intra_word_index(last_bit_index);
-        if (num_bits_in_last_word < bitmask_type_size - 1) {
-          destination_word &= set_least_significant_bits(num_bits_in_last_word + 1);
-          thread_count += num_bits_in_last_word + 1 - __popc(destination_word);
-        } else {
-          thread_count += bitmask_type_size - __popc(destination_word);
-        }
-      } else {
-        thread_count += bitmask_type_size - __popc(destination_word);
-      }
+      // Count nulls in the partial last word
+      thread_null_count += num_bits_in_last_word + 1 - __popc(destination_word);
+    } else {
 
-      destination[destination_word_index] = destination_word;
+      // Count nulls in complete words
+      thread_null_count += bitmask_type_size - __popc(destination_word);
     }
+
+    // Write result to destination
+    destination[destination_word_index] = destination_word;
   }
 
-  // if(segment_id < num_segments) std::printf("warp_id = %d, lane = %d, thread_count = %d\n",
-  // warp_id, lane, thread_count);
-  using WarpReduce = cub::WarpReduce<size_type, warp_size>;
-  __shared__ typename WarpReduce::TempStorage temp_storage;
-  size_type warp_count = WarpReduce(temp_storage).Sum(thread_count);
+  // Reduce the null counts across the warp
+  size_type warp_count = cg::reduce(warp, thread_null_count, cg::plus<size_type>());
 
-  if (lane == 0 && segment_id < num_segments) {
-    // std::printf("warp_id = %d, warp_count = %d\n", warp_id, warp_count);
+  // Only the first lane in the warp writes the result
+  if (lane == 0) {
     null_counts[segment_id] = warp_count;
   }
 }
@@ -234,26 +262,20 @@ segmented_bitmask_binop(Binop op,
                         rmm::device_async_resource_ref mr)
 {
   auto const num_bytes = bitmask_allocation_size_bytes(mask_size_bits);
-  // std::printf("num_bytes = %lu\n", num_bytes);
   std::vector<std::unique_ptr<rmm::device_buffer>> h_destination_masks;
   std::vector<bitmask_type*> h_destination_masks_ptrs;
   for (size_t i = 0; i < segment_offsets.size() - 1; i++) {
     h_destination_masks.push_back(std::make_unique<rmm::device_buffer>(num_bytes, stream, mr));
     h_destination_masks_ptrs.push_back(
       static_cast<bitmask_type*>(h_destination_masks.back()->data()));
-    // std::printf("h_destination_masks[%lu]->size() = %lu\n", i, h_destination_masks[0]->size());
   }
   auto destination_masks = cudf::detail::make_device_uvector<bitmask_type*>(
     h_destination_masks_ptrs, stream, cudf::get_current_device_resource_ref());
 
-  /*
-  std::cout << "mask_size_bits = " << mask_size_bits << std::endl;
-  std::cout << "destination_size = " << num_bitmask_words(num_bytes * 8) << std::endl;
-  */
   // for destination size, pass number of words in each destination buffer instead of number of bits
   auto null_counts = inplace_segmented_bitmask_binop(op,
                                                      destination_masks,
-                                                     num_bitmask_words(num_bytes * 8),
+                                                     num_bitmask_words(mask_size_bits),
                                                      masks,
                                                      masks_begin_bits,
                                                      mask_size_bits,
@@ -307,6 +329,25 @@ size_type inplace_bitmask_binop(Binop op,
   return d_counter.value(stream);
 }
 
+/**
+ * @brief Performs a segmented bitwise operation `op` across multiple bitmasks and writes the results
+ * in-place to destination masks.
+ *
+ * This function performs bitwise operations on segments of bitmasks defined by segment_offsets,
+ * writing the results directly to the specified destination masks.
+ *
+ * @param[out] dest_masks Device span of pointers to destination bitmasks where results will be
+ * written
+ * @param[in] dest_mask_size The size of each destination mask in bitmask words
+ * @param[in] masks Host span of pointers to source bitmasks to be operated on
+ * @param[in] masks_begin_bits The bit offsets from which each source mask is to be operated on
+ * @param[in] mask_size_bits The number of bits to be operated on in each mask
+ * @param[in] segment_offsets Host span of offsets defining the segments for the operation
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches
+ * @param[in] mr Device memory resource used to allocate temporary device memory
+ * @return A device vector containing the counts of unset bits in the destination mask corresponding
+ * to each segment after the AND operation
+ */
 template <typename Binop>
 rmm::device_uvector<size_type> inplace_segmented_bitmask_binop(
   Binop op,
@@ -339,7 +380,6 @@ rmm::device_uvector<size_type> inplace_segmented_bitmask_binop(
     util::div_rounding_up_safe<int>(block_size, cudf::detail::warp_size);
   auto const num_blocks =
     util::div_rounding_up_safe<int>(segment_offsets.size() - 1, warps_per_block);
-  // std::printf("num_blocks = %d, block_size = %d\n", num_blocks, block_size);
   segmented_offset_bitmask_binop<<<num_blocks, block_size, 0, stream.value()>>>(
     op,
     dest_masks,

@@ -553,28 +553,6 @@ cudf::size_type inplace_bitmask_and(device_span<bitmask_type> dest_mask,
     stream);
 }
 
-rmm::device_uvector<size_type> inplace_segmented_bitmask_and(
-  device_span<bitmask_type*> dest_masks,
-  size_type dest_mask_size,
-  host_span<bitmask_type const* const> masks,
-  host_span<size_type const> masks_begin_bits,
-  size_type mask_size_bits,
-  host_span<size_type const> segment_offsets,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
-{
-  return inplace_segmented_bitmask_binop(
-    [] __device__(bitmask_type left, bitmask_type right) { return left & right; },
-    dest_masks,
-    dest_mask_size,
-    masks,
-    masks_begin_bits,
-    mask_size_bits,
-    segment_offsets,
-    stream,
-    mr);
-}
-
 // Bitwise AND of the masks
 std::pair<rmm::device_buffer, size_type> bitmask_and(host_span<bitmask_type const* const> masks,
                                                      host_span<size_type const> begin_bits,
