@@ -658,7 +658,6 @@ std::unique_ptr<table> gather(table_view const& source_table,
 
   // TODO: Could be beneficial to use streams internally here
 
-  nvtxRangePushA("gather dispatch");
   for (auto const& source_column : source_table) {
     // The data gather for n columns will be put on the first n streams
     destination_columns.push_back(
@@ -671,7 +670,6 @@ std::unique_ptr<table> gather(table_view const& source_table,
                                                    stream,
                                                    mr));
   }
-  nvtxRangePop();
 
   auto needs_new_bitmask = bounds_policy == out_of_bounds_policy::NULLIFY ||
                            cudf::has_nested_nullable_columns(source_table);
@@ -681,15 +679,11 @@ std::unique_ptr<table> gather(table_view const& source_table,
       auto const op = bounds_policy == out_of_bounds_policy::NULLIFY
                         ? gather_bitmask_op::NULLIFY
                         : gather_bitmask_op::DONT_CHECK;
-      nvtxRangePushA("gather bitmask");
       gather_bitmask(source_table, gather_map_begin, destination_columns, op, stream, mr);
-      nvtxRangePop();
     } else {
-      nvtxRangePushA("gather set nullmasks");
       for (size_type i = 0; i < source_table.num_columns(); ++i) {
         set_all_valid_null_masks(source_table.column(i), *destination_columns[i], stream, mr);
       }
-      nvtxRangePop();
     }
   }
 

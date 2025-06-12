@@ -137,8 +137,6 @@ mutable_column_view column::mutable_view()
 void column::set_null_mask(rmm::device_buffer&& new_null_mask, size_type new_null_count)
 {
   if (new_null_count > 0) {
-    // std::printf("new_null_mask.size() = %lu, bitmask_alloc_size = %lu\n", new_null_mask.size(),
-    // cudf::bitmask_allocation_size_bytes(this->size()));
     CUDF_EXPECTS(new_null_mask.size() >= cudf::bitmask_allocation_size_bytes(this->size()),
                  "Column with null values must be nullable and the null mask \
                   buffer size should match the size of the column.");

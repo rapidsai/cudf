@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -92,19 +92,15 @@ std::unique_ptr<column> purge_nonempty_nulls(column_view const& input,
                                              rmm::device_async_resource_ref mr)
 {
   // If not compound types (LIST/STRING/STRUCT/DICTIONARY) then just copy the input into output.
-  nvtxRangePushA("purge copy");
   if (!cudf::is_compound(input.type())) { return std::make_unique<column>(input, stream, mr); }
-  nvtxRangePop();
 
   // Implement via identity gather.
-  nvtxRangePushA("purge gather");
   auto gathered_table = cudf::detail::gather(table_view{{input}},
                                              thrust::make_counting_iterator(0),
                                              thrust::make_counting_iterator(input.size()),
                                              out_of_bounds_policy::DONT_CHECK,
                                              stream,
                                              mr);
-  nvtxRangePop();
   return std::move(gathered_table->release().front());
 }
 
