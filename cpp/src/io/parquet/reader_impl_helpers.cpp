@@ -55,7 +55,8 @@ namespace {
 
   // Check if we have less than 2B total row groups.
   CUDF_EXPECTS(total_row_groups <= std::numeric_limits<size_type>::max(),
-               "Total number of row groups exceed the cudf::size_type's limit");
+               "Total number of row groups exceed the column size limit",
+               std::overflow_error);
   return static_cast<size_type>(total_row_groups);
 }
 
