@@ -5439,7 +5439,7 @@ class StringMethods(BaseAccessor):
                 f"Expecting a Series with dtype uint32, got {type(b)}"
             )
         return self._return_or_inplace(
-            self._column.minhash_ngrams(ngrams, seed, a_column, b_column)  # type: ignore[arg-type]
+            self._column.minhash_ngrams(ngrams, seed, a_column, b_column)  # type: ignore[attr-defined]
         )
 
     def minhash64_ngrams(
@@ -5490,7 +5490,7 @@ class StringMethods(BaseAccessor):
                 f"Expecting a Series with dtype uint64, got {type(b)}"
             )
         return self._return_or_inplace(
-            self._column.minhash64_ngrams(ngrams, seed, a_column, b_column)  # type: ignore[arg-type]
+            self._column.minhash64_ngrams(ngrams, seed, a_column, b_column)  # type: ignore[attr-defined]
         )
 
     def jaccard_index(self, input: Series, width: int) -> Series | Index:

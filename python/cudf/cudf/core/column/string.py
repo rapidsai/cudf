@@ -635,42 +635,6 @@ class StringColumn(ColumnBase):
         )
 
     @acquire_spill_lock()
-    def minhash_ngrams(
-        self,
-        width: int,
-        seed: np.uint32,
-        a: NumericalColumn,
-        b: NumericalColumn,
-    ) -> ListColumn:
-        return type(self).from_pylibcudf(  # type: ignore[return-value]
-            plc.nvtext.minhash.minhash_ngrams(
-                self.to_pylibcudf(mode="read"),
-                width,
-                seed,
-                a.to_pylibcudf(mode="read"),
-                b.to_pylibcudf(mode="read"),
-            )
-        )
-
-    @acquire_spill_lock()
-    def minhash64_ngrams(
-        self,
-        width: int,
-        seed: np.uint64,
-        a: NumericalColumn,
-        b: NumericalColumn,
-    ) -> ListColumn:
-        return type(self).from_pylibcudf(  # type: ignore[return-value]
-            plc.nvtext.minhash.minhash64_ngrams(
-                self.to_pylibcudf(mode="read"),
-                width,
-                seed,
-                a.to_pylibcudf(mode="read"),
-                b.to_pylibcudf(mode="read"),
-            )
-        )
-
-    @acquire_spill_lock()
     def jaccard_index(self, other: Self, width: int) -> NumericalColumn:
         result = plc.nvtext.jaccard.jaccard_index(
             self.to_pylibcudf(mode="read"),
