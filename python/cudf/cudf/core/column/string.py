@@ -1264,7 +1264,7 @@ class StringColumn(ColumnBase):
             pattern = pa_scalar_to_plc_scalar(pa.scalar(pattern))
         else:
             pattern = pattern.to_pylibcudf(mode="read")
-        plc_column = plc.strings.contains.contains(
+        plc_column = plc.strings.find.contains(
             self.to_pylibcudf(mode="read"),
             pattern,
         )

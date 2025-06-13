@@ -748,12 +748,12 @@ class StringMethods(BaseAccessor):
                 result_col = self._column.contains_re(pat, flags)  # type: ignore[arg-type]
             else:
                 if case is False:
-                    input_column = self.lower()._column  # type: ignore[union-attr]
+                    input_column = self._column.to_lower()  # type: ignore[union-attr]
                     pat_normed = pat.lower()  # type: ignore[union-attr]
                 else:
                     input_column = self._column
                     pat_normed = pat
-                result_col = self._column.str_contains(pat_normed)
+                result_col = input_column.str_contains(pat_normed)
         else:
             # TODO: we silently ignore the `regex=` flag here
             col_pat = as_column(pat, dtype=CUDF_STRING_DTYPE)
