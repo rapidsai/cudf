@@ -191,6 +191,9 @@ struct copy_page_info {
   }
 };
 
+/**
+ * @brief Functor to set the string dictionary index counts for a given data page
+ */
 struct set_str_dict_index_count {
   device_span<size_t> str_dict_index_count;
   device_span<ColumnChunkDesc const> chunks;
@@ -206,6 +209,9 @@ struct set_str_dict_index_count {
   }
 };
 
+/**
+ * @brief Functor to set the str_dict_index pointer offsets in the ColumnChunkDesc struct
+ */
 struct set_str_dict_index_ptr {
   string_index_pair* const base;
   device_span<size_t const> str_dict_index_offsets;
@@ -288,20 +294,23 @@ struct compute_page_num_rows_from_chunk_rows {
   }
 };
 
-struct cumulative_row_info {
-  size_t row_count;   ///< cumulative row count
-  size_t size_bytes;  ///< cumulative size in bytes
-  int key;            ///< schema index
-};
-
+/**
+ * @brief Functor to return the column chunk index of a given page
+ */
 struct get_page_chunk_idx {
   __device__ constexpr inline size_type operator()(PageInfo const& page) { return page.chunk_idx; }
 };
 
+/**
+ * @brief Functor to return the number of rows in a given page
+ */
 struct get_page_num_rows {
   __device__ constexpr inline size_type operator()(PageInfo const& page) { return page.num_rows; }
 };
 
+/**
+ * @brief Struct to hold information about the input columns
+ */
 struct input_col_info {
   int schema_idx;
   size_type nesting_depth;
@@ -353,6 +362,9 @@ struct get_page_nesting_size {
   }
 };
 
+/**
+ * @brief Functor to compute and return the reduction key for a given page
+ */
 struct get_reduction_key {
   size_t const num_pages;
   __device__ constexpr inline size_t operator()(size_t index) const { return index / num_pages; }
@@ -435,6 +447,11 @@ struct start_offset_output_iterator {
   }
 };
 
+/**
+ * @brief Functor to return the number of bytes in a string page
+ *
+ * Note: This functor returns 0 for non-string columns and dictionary pages.
+ */
 struct page_to_string_size {
   ColumnChunkDesc const* chunks;
 
@@ -447,6 +464,9 @@ struct page_to_string_size {
   }
 };
 
+/**
+ * @brief Functor to access and update the str_offset field of the PageInfo struct
+ */
 struct page_offset_output_iter {
   PageInfo* p;
 
