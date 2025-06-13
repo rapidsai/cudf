@@ -1280,8 +1280,8 @@ class StringColumn(ColumnBase):
         return type(self).from_pylibcudf(plc_column)  # type: ignore[return-value]
 
     @acquire_spill_lock()
-    def repeat_strings(self, repeats: int | Self) -> Self:
-        if isinstance(repeats, type(self)):
+    def repeat_strings(self, repeats: int | ColumnBase) -> Self:
+        if isinstance(repeats, ColumnBase):
             repeats = repeats.to_pylibcudf(mode="read")
         plc_column = plc.strings.repeat.repeat_strings(
             self.to_pylibcudf(mode="read"),
