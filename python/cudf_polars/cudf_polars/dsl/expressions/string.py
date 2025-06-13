@@ -17,7 +17,7 @@ from polars.exceptions import InvalidOperationError
 
 import pylibcudf as plc
 
-from cudf_polars.containers import Column
+from cudf_polars.containers import Column, DataType
 from cudf_polars.dsl.expressions.base import ExecutionContext, Expr
 from cudf_polars.dsl.expressions.literal import Literal, LiteralColumn
 from cudf_polars.dsl.utils.reshape import broadcast
@@ -27,7 +27,7 @@ if TYPE_CHECKING:
 
     from polars.polars import _expr_nodes as pl_expr
 
-    from cudf_polars.containers import DataFrame, DataType
+    from cudf_polars.containers import DataFrame
 
 __all__ = ["StringFunction"]
 
@@ -217,7 +217,9 @@ class StringFunction(Expr):
         """Evaluate this expression given a dataframe for context."""
         if self.name is StringFunction.Name.ConcatHorizontal:
             columns = [
-                Column(child.evaluate(df, context=context).obj).astype(pl.String())
+                Column(child.evaluate(df, context=context).obj).astype(
+                    DataType(pl.String())
+                )
                 for child in self.children
             ]
 
