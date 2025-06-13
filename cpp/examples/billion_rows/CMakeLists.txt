@@ -22,12 +22,14 @@ list(APPEND CUDF_CUDA_FLAGS --expt-extended-lambda --expt-relaxed-constexpr)
 
 add_library(groupby_results OBJECT groupby_results.cpp)
 target_link_libraries(groupby_results PRIVATE cudf::cudf)
+target_compile_features(groupby_results PRIVATE cxx_std_20)
 
 add_executable(brc brc.cpp)
 target_link_libraries(
   brc PRIVATE cudf::cudf $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp>
               $<TARGET_OBJECTS:groupby_results>
 )
+target_compile_features(brc PRIVATE cxx_std_20)
 install(TARGETS brc DESTINATION bin/examples/libcudf)
 
 add_executable(brc_chunks brc_chunks.cpp)
@@ -35,6 +37,7 @@ target_link_libraries(
   brc_chunks PRIVATE cudf::cudf $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp>
                      $<TARGET_OBJECTS:groupby_results>
 )
+target_compile_features(brc_chunks PRIVATE cxx_std_20)
 install(TARGETS brc_chunks DESTINATION bin/examples/libcudf)
 
 add_executable(brc_pipeline brc_pipeline.cpp)
@@ -42,4 +45,5 @@ target_link_libraries(
   brc_pipeline PRIVATE cudf::cudf $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp>
                        $<TARGET_OBJECTS:groupby_results>
 )
+target_compile_features(brc_pipeline PRIVATE cxx_std_20)
 install(TARGETS brc_pipeline DESTINATION bin/examples/libcudf)

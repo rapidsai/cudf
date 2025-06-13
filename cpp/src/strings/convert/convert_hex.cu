@@ -94,11 +94,11 @@ struct hex_to_integer_fn {
  * The output_column is expected to be one of the integer types only.
  */
 struct dispatch_hex_to_integers_fn {
-  template <typename IntegerType,
-            std::enable_if_t<cudf::is_integral_not_bool<IntegerType>()>* = nullptr>
+  template <typename IntegerType>
   void operator()(column_device_view const& strings_column,
                   mutable_column_view& output_column,
                   rmm::cuda_stream_view stream) const
+    requires(cudf::is_integral_not_bool<IntegerType>())
   {
     auto d_results = output_column.data<IntegerType>();
     thrust::transform(rmm::exec_policy(stream),
@@ -109,7 +109,8 @@ struct dispatch_hex_to_integers_fn {
   }
   // non-integer types throw an exception
   template <typename T, typename... Args>
-  std::enable_if_t<not cudf::is_integral_not_bool<T>(), void> operator()(Args&&...) const
+  void operator()(Args&&...) const
+    requires(not cudf::is_integral_not_bool<T>())
   {
     CUDF_FAIL("Output for hex_to_integers must be an integer type.");
   }
@@ -174,11 +175,11 @@ struct integer_to_hex_fn {
 };
 
 struct dispatch_integers_to_hex_fn {
-  template <typename IntegerType,
-            std::enable_if_t<cudf::is_integral_not_bool<IntegerType>()>* = nullptr>
+  template <typename IntegerType>
   std::unique_ptr<column> operator()(column_view const& input,
                                      rmm::cuda_stream_view stream,
                                      rmm::device_async_resource_ref mr) const
+    requires(cudf::is_integral_not_bool<IntegerType>())
   {
     auto const d_column = column_device_view::create(input, stream);
 
@@ -193,8 +194,8 @@ struct dispatch_integers_to_hex_fn {
   }
   // non-integer types throw an exception
   template <typename T, typename... Args>
-  std::enable_if_t<not cudf::is_integral_not_bool<T>(), std::unique_ptr<column>> operator()(
-    Args...) const
+  std::unique_ptr<column> operator()(Args...) const
+    requires(not cudf::is_integral_not_bool<T>())
   {
     CUDF_FAIL("integers_to_hex only supports integer type columns");
   }
