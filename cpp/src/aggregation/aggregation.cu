@@ -59,15 +59,16 @@ struct identity_initializer {
   }
 
   template <typename T, aggregation::Kind k>
-  std::enable_if_t<not std::is_same_v<corresponding_operator_t<k>, void>, T>
-  identity_from_operator()
+  T identity_from_operator()
+    requires(not std::is_same_v<corresponding_operator_t<k>, void>)
   {
     using DeviceType = device_storage_type_t<T>;
     return corresponding_operator_t<k>::template identity<DeviceType>();
   }
 
   template <typename T, aggregation::Kind k>
-  std::enable_if_t<std::is_same_v<corresponding_operator_t<k>, void>, T> identity_from_operator()
+  T identity_from_operator()
+    requires(std::is_same_v<corresponding_operator_t<k>, void>)
   {
     CUDF_FAIL("Unable to get identity/sentinel from device operator");
   }
@@ -90,8 +91,8 @@ struct identity_initializer {
 
  public:
   template <typename T, aggregation::Kind k>
-  std::enable_if_t<is_supported<T, k>(), void> operator()(mutable_column_view const& col,
-                                                          rmm::cuda_stream_view stream)
+  void operator()(mutable_column_view const& col, rmm::cuda_stream_view stream)
+    requires(is_supported<T, k>())
   {
     using DeviceType = device_storage_type_t<T>;
     thrust::fill(rmm::exec_policy(stream),
@@ -101,8 +102,8 @@ struct identity_initializer {
   }
 
   template <typename T, aggregation::Kind k>
-  std::enable_if_t<not is_supported<T, k>(), void> operator()(mutable_column_view const& col,
-                                                              rmm::cuda_stream_view stream)
+  void operator()(mutable_column_view const& col, rmm::cuda_stream_view stream)
+    requires(not is_supported<T, k>())
   {
     CUDF_FAIL("Unsupported aggregation for initializing values");
   }
