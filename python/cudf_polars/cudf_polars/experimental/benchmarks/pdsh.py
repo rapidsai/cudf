@@ -881,6 +881,10 @@ def run(options: Sequence[str] | None = None) -> None:
             }
             if run_config.blocksize:
                 executor_options["target_partition_size"] = run_config.blocksize
+            if run_config.max_rows_per_partition:
+                executor_options["max_rows_per_partition"] = (
+                    run_config.max_rows_per_partition
+                )
             if run_config.shuffle:
                 executor_options["shuffle_method"] = run_config.shuffle
             if run_config.broadcast_join_limit:
