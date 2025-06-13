@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -509,16 +509,16 @@ struct scalar_representation_pair_accessor : public scalar_value_accessor<Elemen
   }
 
  private:
-  template <typename DeviceScalar,
-            std::enable_if_t<!has_rep_member<DeviceScalar>::value, void>* = nullptr>
+  template <typename DeviceScalar>
   __device__ inline rep_type get_rep(DeviceScalar const& dscalar) const
+    requires(!has_rep_member<DeviceScalar>::value)
   {
     return dscalar.value();
   }
 
-  template <typename DeviceScalar,
-            std::enable_if_t<has_rep_member<DeviceScalar>::value, void>* = nullptr>
+  template <typename DeviceScalar>
   __device__ inline rep_type get_rep(DeviceScalar const& dscalar) const
+    requires(has_rep_member<DeviceScalar>::value)
   {
     return dscalar.rep();
   }
