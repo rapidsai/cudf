@@ -21,7 +21,8 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
-std::unique_ptr<cudf::column> transform(cudf::table_view const& table)
+std::tuple<std::unique_ptr<cudf::column>, std::vector<int32_t>> transform(
+  cudf::table_view const& table)
 {
   auto stream = rmm::cuda_stream_default;
   auto mr     = cudf::get_current_device_resource_ref();
@@ -60,13 +61,11 @@ __device__ void email_provider(cudf::string_view* out,
   auto alt = cudf::make_column_from_scalar(
     cudf::string_scalar(cudf::string_view{"(unknown)", 9}, true, stream, mr), 1, stream, mr);
 
-  auto providers = cudf::transform({table.column(1), *alt},
-                                   udf,
-                                   cudf::data_type{cudf::type_id::STRING},
-                                   false,
-                                   std::nullopt,
-                                   stream,
-                                   mr);
+  auto transformed = std::vector<int32_t>{1};
+  auto emails      = table.column(1);
 
-  return providers;
+  auto providers = cudf::transform(
+    {emails, *alt}, udf, cudf::data_type{cudf::type_id::STRING}, false, std::nullopt, stream, mr);
+
+  return std::make_tuple(std::move(providers), transformed);
 }

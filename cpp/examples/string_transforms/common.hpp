@@ -34,6 +34,7 @@
 #include <chrono>
 #include <iostream>
 #include <memory>
+#include <numeric>
 #include <string>
 #include <vector>
 
@@ -43,7 +44,8 @@
  * @param table Table to be transformed
  * @return Transformed result
  */
-std::unique_ptr<cudf::column> transform(cudf::table_view const& table);
+std::tuple<std::unique_ptr<cudf::column>, std::vector<int32_t>> transform(
+  cudf::table_view const& table);
 
 /**
  * @brief Create CUDA memory resource
@@ -131,8 +133,8 @@ int main(int argc, char const** argv)
 
   stream.synchronize();
 
-  auto start  = std::chrono::steady_clock::now();
-  auto result = transform(table_view);
+  auto start                   = std::chrono::steady_clock::now();
+  auto [result, input_indices] = transform(table_view);
 
   // ensure transform operation completes and the wall-time is only for the transform computation
   stream.synchronize();
@@ -147,9 +149,18 @@ int main(int argc, char const** argv)
 
   write_csv(table, out_csv);
 
-  std::cout << "Wall time: " << elapsed.count() << " seconds\n"
-            << "Table: " << table_view.num_rows() << " rows " << table_view.num_columns()
-            << " columns\n\n";
+  auto const transformed_size =
+    std::transform_reduce(input_indices.begin(),
+                          input_indices.end(),
+                          static_cast<size_t>(0),
+                          std::plus<>{},
+                          [&](auto index) { return input->get_column(index).alloc_size(); });
+
+  std::cout << "Wall Time: " << elapsed.count() << " seconds\n"
+            << "Input Table: " << table_view.num_rows() << " rows x " << table_view.num_columns()
+            << " columns, " << input->alloc_size() << " bytes\n"
+            << "Transformed: " << table_view.num_rows() << " rows x " << input_indices.size()
+            << " columns, " << transformed_size << " bytes\n\n";
 
   if (enable_stats) {
     auto bytes  = stats_adaptor.get_bytes_counter();

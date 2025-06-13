@@ -23,7 +23,8 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 
-std::unique_ptr<cudf::column> transform(cudf::table_view const& table)
+std::tuple<std::unique_ptr<cudf::column>, std::vector<int32_t>> transform(
+  cudf::table_view const& table)
 {
   auto stream = rmm::cuda_stream_default;
   auto mr     = cudf::get_current_device_resource_ref();
@@ -156,11 +157,18 @@ __device__ void format_phone(void* scratch,
   auto size = cudf::make_column_from_scalar(
     cudf::numeric_scalar<int32_t>(MAX_ENTRY_LENGTH, true, stream, mr), 1, stream, mr);
 
-  return cudf::transform({table.column(2), table.column(3), table.column(4), *size},
-                         udf,
-                         cudf::data_type{cudf::type_id::STRING},
-                         false,
-                         scratch.data(),
-                         stream,
-                         mr);
+  auto country_code = table.column(2);
+  auto area_code    = table.column(3);
+  auto phone_number = table.column(4);
+  auto transformed  = std::vector<int32_t>{2, 3, 4};
+
+  auto result = cudf::transform({country_code, area_code, phone_number, *size},
+                                udf,
+                                cudf::data_type{cudf::type_id::STRING},
+                                false,
+                                scratch.data(),
+                                stream,
+                                mr);
+
+  return std::make_tuple(std::move(result), transformed);
 }

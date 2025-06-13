@@ -31,7 +31,8 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 
-std::unique_ptr<cudf::column> transform(cudf::table_view const& table)
+std::tuple<std::unique_ptr<cudf::column>, std::vector<int32_t>> transform(
+  cudf::table_view const& table)
 {
   auto stream = rmm::cuda_stream_default;
   auto mr     = cudf::get_current_device_resource_ref();
@@ -39,6 +40,7 @@ std::unique_ptr<cudf::column> transform(cudf::table_view const& table)
   auto country_code   = table.column(2);
   auto area_code      = table.column(3);
   auto phone_number   = table.column(4);
+  auto transformed    = std::vector<int32_t>{2, 3, 4};
   auto const num_rows = country_code.size();
 
   // create "n/a" column for unrecognised numbers
@@ -142,5 +144,6 @@ std::unique_ptr<cudf::column> transform(cudf::table_view const& table)
   auto uk_or_na_or_ca = cudf::copy_if_else(*uk_formatted, *na_column, *uk_ie_nz_mask, stream, mr);
 
   // then, select between US format and the result of UK/n/a based on US mask
-  return cudf::copy_if_else(*us_formatted, *uk_or_na_or_ca, *us_mask, stream, mr);
+  return std::make_tuple(cudf::copy_if_else(*us_formatted, *uk_or_na_or_ca, *us_mask, stream, mr),
+                         transformed);
 }

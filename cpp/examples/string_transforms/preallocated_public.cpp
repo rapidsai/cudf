@@ -27,7 +27,8 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 
-std::unique_ptr<cudf::column> transform(cudf::table_view const& table)
+std::tuple<std::unique_ptr<cudf::column>, std::vector<int32_t>> transform(
+  cudf::table_view const& table)
 {
   auto stream = rmm::cuda_stream_default;
   auto mr     = cudf::get_current_device_resource_ref();
@@ -35,6 +36,7 @@ std::unique_ptr<cudf::column> transform(cudf::table_view const& table)
   auto country_code   = table.column(2);
   auto area_code      = table.column(3);
   auto phone_number   = table.column(4);
+  auto transformed    = std::vector<int32_t>{2, 3, 4};
   auto const num_rows = country_code.size();
 
   // remove all leading zeros from country code and any dashes
@@ -72,5 +74,5 @@ std::unique_ptr<cudf::column> transform(cudf::table_view const& table)
                                               stream,
                                               mr);
 
-  return formatted;
+  return std::make_tuple(std::move(formatted), transformed);
 }

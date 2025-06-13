@@ -27,12 +27,14 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
-std::unique_ptr<cudf::column> transform(cudf::table_view const& table)
+std::tuple<std::unique_ptr<cudf::column>, std::vector<int32_t>> transform(
+  cudf::table_view const& table)
 {
   auto stream = rmm::cuda_stream_default;
   auto mr     = cudf::get_current_device_resource_ref();
 
-  auto emails = table.column(1);
+  auto emails      = table.column(1);
+  auto transformed = std::vector<int32_t>{1};
 
   auto const index_max =
     cudf::numeric_scalar<cudf::size_type>{std::numeric_limits<cudf::size_type>::max(), stream, mr};
@@ -102,5 +104,5 @@ std::unique_ptr<cudf::column> transform(cudf::table_view const& table)
 
   providers = cudf::copy_if_else(*providers, alt, *is_valid, stream, mr);
 
-  return providers;
+  return std::make_tuple(std::move(providers), transformed);
 }
