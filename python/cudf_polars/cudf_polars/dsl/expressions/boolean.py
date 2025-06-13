@@ -302,8 +302,10 @@ class BooleanFunction(Expr):
             needles, haystack = columns
             if haystack.obj.type().id() == plc.TypeId.LIST:
                 # Unwrap values from the list column
-                # TODO: Remove type: ignore once Column's require dtype
-                haystack = Column(haystack.obj.children()[1]).astype(needles.dtype)  # type: ignore[arg-type]
+                haystack = Column(haystack.obj.children()[1])
+                # TODO: Remove check once Column's require dtype
+                if needles.dtype is not None:
+                    haystack = haystack.astype(needles.dtype)
             if haystack.size:
                 return Column(
                     plc.search.contains(haystack.obj, needles.obj), dtype=self.dtype
