@@ -170,17 +170,17 @@ struct create_column_from_view {
   rmm::cuda_stream_view stream{cudf::get_default_stream()};
   rmm::device_async_resource_ref mr;
 
-  template <typename ColumnType,
-            std::enable_if_t<std::is_same_v<ColumnType, cudf::string_view>>* = nullptr>
+  template <typename ColumnType>
   std::unique_ptr<column> operator()()
+    requires(std::is_same_v<ColumnType, cudf::string_view>)
   {
     cudf::strings_column_view sview(view);
     return cudf::strings::detail::copy_slice(sview, 0, view.size(), stream, mr);
   }
 
-  template <typename ColumnType,
-            std::enable_if_t<std::is_same_v<ColumnType, cudf::dictionary32>>* = nullptr>
+  template <typename ColumnType>
   std::unique_ptr<column> operator()()
+    requires(std::is_same_v<ColumnType, cudf::dictionary32>)
   {
     std::vector<std::unique_ptr<column>> children;
     if (view.num_children()) {
@@ -202,8 +202,9 @@ struct create_column_from_view {
                                     std::move(children));
   }
 
-  template <typename ColumnType, std::enable_if_t<cudf::is_fixed_width<ColumnType>()>* = nullptr>
+  template <typename ColumnType>
   std::unique_ptr<column> operator()()
+    requires(cudf::is_fixed_width<ColumnType>())
   {
     auto op       = [&](auto const& child) { return std::make_unique<column>(child, stream, mr); };
     auto begin    = thrust::make_transform_iterator(view.child_begin(), op);
@@ -222,17 +223,17 @@ struct create_column_from_view {
       std::move(children));
   }
 
-  template <typename ColumnType,
-            std::enable_if_t<std::is_same_v<ColumnType, cudf::list_view>>* = nullptr>
+  template <typename ColumnType>
   std::unique_ptr<column> operator()()
+    requires(std::is_same_v<ColumnType, cudf::list_view>)
   {
     auto lists_view = lists_column_view(view);
     return cudf::lists::detail::copy_slice(lists_view, 0, view.size(), stream, mr);
   }
 
-  template <typename ColumnType,
-            std::enable_if_t<std::is_same_v<ColumnType, cudf::struct_view>>* = nullptr>
+  template <typename ColumnType>
   std::unique_ptr<column> operator()()
+    requires(std::is_same_v<ColumnType, cudf::struct_view>)
   {
     if (view.is_empty()) { return cudf::empty_like(view); }
 

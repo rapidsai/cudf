@@ -75,91 +75,104 @@ struct dispatch_to_flatbuf {
   std::vector<FieldOffset>& children;
 
   template <typename T>
-  std::enable_if_t<std::is_same_v<T, bool>, void> operator()()
+  void operator()()
+    requires(std::is_same_v<T, bool>)
   {
     field_type_id = flatbuf::Type_Bool;
     field_offset  = flatbuf::CreateBool(fbb).Union();
   }
 
   template <typename T>
-  std::enable_if_t<std::is_same_v<T, int8_t>, void> operator()()
+  void operator()()
+    requires(std::is_same_v<T, int8_t>)
   {
     field_type_id = flatbuf::Type_Int;
     field_offset  = flatbuf::CreateInt(fbb, 8, std::numeric_limits<T>::is_signed).Union();
   }
 
   template <typename T>
-  std::enable_if_t<std::is_same_v<T, int16_t>, void> operator()()
+  void operator()()
+    requires(std::is_same_v<T, int16_t>)
   {
     field_type_id = flatbuf::Type_Int;
     field_offset  = flatbuf::CreateInt(fbb, 16, std::numeric_limits<T>::is_signed).Union();
   }
 
   template <typename T>
-  std::enable_if_t<std::is_same_v<T, int32_t>, void> operator()()
+  void operator()()
+    requires(std::is_same_v<T, int32_t>)
   {
     field_type_id = flatbuf::Type_Int;
     field_offset  = flatbuf::CreateInt(fbb, 32, std::numeric_limits<T>::is_signed).Union();
   }
 
   template <typename T>
-  std::enable_if_t<std::is_same_v<T, int64_t>, void> operator()()
+  void operator()()
+    requires(std::is_same_v<T, int64_t>)
   {
     field_type_id = flatbuf::Type_Int;
     field_offset  = flatbuf::CreateInt(fbb, 64, std::numeric_limits<T>::is_signed).Union();
   }
 
   template <typename T>
-  std::enable_if_t<std::is_same_v<T, uint8_t>, void> operator()()
+  void operator()()
+    requires(std::is_same_v<T, uint8_t>)
   {
     field_type_id = flatbuf::Type_Int;
     field_offset  = flatbuf::CreateInt(fbb, 8, std::numeric_limits<T>::is_signed).Union();
   }
 
   template <typename T>
-  std::enable_if_t<std::is_same_v<T, uint16_t>, void> operator()()
+  void operator()()
+    requires(std::is_same_v<T, uint16_t>)
   {
     field_type_id = flatbuf::Type_Int;
     field_offset  = flatbuf::CreateInt(fbb, 16, std::numeric_limits<T>::is_signed).Union();
   }
 
   template <typename T>
-  std::enable_if_t<std::is_same_v<T, uint32_t>, void> operator()()
+  void operator()()
+    requires(std::is_same_v<T, uint32_t>)
   {
     field_type_id = flatbuf::Type_Int;
     field_offset  = flatbuf::CreateInt(fbb, 32, std::numeric_limits<T>::is_signed).Union();
   }
 
   template <typename T>
-  std::enable_if_t<std::is_same_v<T, uint64_t>, void> operator()()
+  void operator()()
+    requires(std::is_same_v<T, uint64_t>)
   {
     field_type_id = flatbuf::Type_Int;
     field_offset  = flatbuf::CreateInt(fbb, 64, std::numeric_limits<T>::is_signed).Union();
   }
 
   template <typename T>
-  std::enable_if_t<std::is_same_v<T, float>, void> operator()()
+  void operator()()
+    requires(std::is_same_v<T, float>)
   {
     field_type_id = flatbuf::Type_FloatingPoint;
     field_offset  = flatbuf::CreateFloatingPoint(fbb, flatbuf::Precision::Precision_SINGLE).Union();
   }
 
   template <typename T>
-  std::enable_if_t<std::is_same_v<T, double>, void> operator()()
+  void operator()()
+    requires(std::is_same_v<T, double>)
   {
     field_type_id = flatbuf::Type_FloatingPoint;
     field_offset  = flatbuf::CreateFloatingPoint(fbb, flatbuf::Precision::Precision_DOUBLE).Union();
   }
 
   template <typename T>
-  std::enable_if_t<std::is_same_v<T, cudf::string_view>, void> operator()()
+  void operator()()
+    requires(std::is_same_v<T, cudf::string_view>)
   {
     field_type_id = flatbuf::Type_Utf8View;
     field_offset  = flatbuf::CreateUtf8View(fbb).Union();
   }
 
   template <typename T>
-  std::enable_if_t<std::is_same_v<T, cudf::timestamp_D>, void> operator()()
+  void operator()()
+    requires(std::is_same_v<T, cudf::timestamp_D>)
   {
     field_type_id = flatbuf::Type_Date;
     // Date type (Set unit type to DAY for arrows's Date32)
@@ -167,7 +180,8 @@ struct dispatch_to_flatbuf {
   }
 
   template <typename T>
-  std::enable_if_t<std::is_same_v<T, cudf::timestamp_s>, void> operator()()
+  void operator()()
+    requires(std::is_same_v<T, cudf::timestamp_s>)
   {
     field_type_id = flatbuf::Type_Timestamp;
     // Use one of the strings: "UTC", "Etc/UTC" or "+00:00" to indicate a native UTC timestamp
@@ -177,7 +191,8 @@ struct dispatch_to_flatbuf {
   }
 
   template <typename T>
-  std::enable_if_t<std::is_same_v<T, cudf::timestamp_ms>, void> operator()()
+  void operator()()
+    requires(std::is_same_v<T, cudf::timestamp_ms>)
   {
     field_type_id = flatbuf::Type_Timestamp;
     // Use one of the strings: "UTC", "Etc/UTC" or "+00:00" to indicate a native UTC timestamp
@@ -188,7 +203,8 @@ struct dispatch_to_flatbuf {
   }
 
   template <typename T>
-  std::enable_if_t<std::is_same_v<T, cudf::timestamp_us>, void> operator()()
+  void operator()()
+    requires(std::is_same_v<T, cudf::timestamp_us>)
   {
     field_type_id = flatbuf::Type_Timestamp;
     // Use one of the strings: "UTC", "Etc/UTC" or "+00:00" to indicate a native UTC timestamp
@@ -199,7 +215,8 @@ struct dispatch_to_flatbuf {
   }
 
   template <typename T>
-  std::enable_if_t<std::is_same_v<T, cudf::timestamp_ns>, void> operator()()
+  void operator()()
+    requires(std::is_same_v<T, cudf::timestamp_ns>)
   {
     field_type_id = flatbuf::Type_Timestamp;
     // Use one of the strings: "UTC", "Etc/UTC" or "+00:00" to indicate a native UTC timestamp
@@ -210,7 +227,8 @@ struct dispatch_to_flatbuf {
   }
 
   template <typename T>
-  std::enable_if_t<std::is_same_v<T, cudf::duration_D>, void> operator()()
+  void operator()()
+    requires(std::is_same_v<T, cudf::duration_D>)
   {
     // `duration_D` is written as TimeType as `duration_D` is not a valid arrow type.
     //  This also allows for easy and faithful roundtripping with cudf.
@@ -219,35 +237,40 @@ struct dispatch_to_flatbuf {
   }
 
   template <typename T>
-  std::enable_if_t<std::is_same_v<T, cudf::duration_s>, void> operator()()
+  void operator()()
+    requires(std::is_same_v<T, cudf::duration_s>)
   {
     field_type_id = flatbuf::Type_Duration;
     field_offset  = flatbuf::CreateDuration(fbb, flatbuf::TimeUnit_SECOND).Union();
   }
 
   template <typename T>
-  std::enable_if_t<std::is_same_v<T, cudf::duration_ms>, void> operator()()
+  void operator()()
+    requires(std::is_same_v<T, cudf::duration_ms>)
   {
     field_type_id = flatbuf::Type_Duration;
     field_offset  = flatbuf::CreateDuration(fbb, flatbuf::TimeUnit_MILLISECOND).Union();
   }
 
   template <typename T>
-  std::enable_if_t<std::is_same_v<T, cudf::duration_us>, void> operator()()
+  void operator()()
+    requires(std::is_same_v<T, cudf::duration_us>)
   {
     field_type_id = flatbuf::Type_Duration;
     field_offset  = flatbuf::CreateDuration(fbb, flatbuf::TimeUnit_MICROSECOND).Union();
   }
 
   template <typename T>
-  std::enable_if_t<std::is_same_v<T, cudf::duration_ns>, void> operator()()
+  void operator()()
+    requires(std::is_same_v<T, cudf::duration_ns>)
   {
     field_type_id = flatbuf::Type_Duration;
     field_offset  = flatbuf::CreateDuration(fbb, flatbuf::TimeUnit_NANOSECOND).Union();
   }
 
   template <typename T>
-  std::enable_if_t<cudf::is_fixed_point<T>(), void> operator()()
+  void operator()()
+    requires(cudf::is_fixed_point<T>())
   {
     field_type_id = flatbuf::Type_Decimal;
 
@@ -273,7 +296,8 @@ struct dispatch_to_flatbuf {
   }
 
   template <typename T>
-  std::enable_if_t<cudf::is_nested<T>(), void> operator()()
+  void operator()()
+    requires(cudf::is_nested<T>())
   {
     // Lists are represented differently in arrow and cuDF.
     // cuDF representation: List<int>: "col_name" : { "list", "element:int" } (2 children)
@@ -301,7 +325,8 @@ struct dispatch_to_flatbuf {
   }
 
   template <typename T>
-  std::enable_if_t<cudf::is_dictionary<T>(), void> operator()()
+  void operator()()
+    requires(cudf::is_dictionary<T>())
   {
     // `dictionary32` columns are not written to parquet by cudf.
     CUDF_FAIL("Dictionary columns are not supported for writing");
