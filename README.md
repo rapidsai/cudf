@@ -55,8 +55,7 @@ and other RAPIDS packages.
 
 ### CUDA/GPU requirements
 
-* CUDA 11.2+
-* NVIDIA driver 450.80.02+
+* CUDA 12.0+ with a compatible NVIDIA driver
 * Volta architecture or better (Compute Capability >=7.0)
 
 ### Pip
@@ -64,14 +63,6 @@ and other RAPIDS packages.
 cuDF can be installed via `pip` from the NVIDIA Python Package Index.
 Be sure to select the appropriate cuDF package depending
 on the major version of CUDA available in your environment:
-
-For CUDA 11.x:
-
-```bash
-pip install --extra-index-url=https://pypi.nvidia.com cudf-cu11
-```
-
-For CUDA 12.x:
 
 ```bash
 pip install cudf-cu12
@@ -82,8 +73,7 @@ pip install cudf-cu12
 cuDF can be installed with conda (via [miniforge](https://github.com/conda-forge/miniforge)) from the `rapidsai` channel:
 
 ```bash
-conda install -c rapidsai -c conda-forge -c nvidia \
-    cudf=25.08 python=3.12 cuda-version=12.8
+conda install -c rapidsai -c conda-forge cudf=25.08
 ```
 
 We also provide [nightly Conda packages](https://anaconda.org/rapidsai-nightly) built from the HEAD
