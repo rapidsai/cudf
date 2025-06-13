@@ -106,23 +106,7 @@ def default_blocksize(scheduler: str) -> int:
     try:
         # Use PyNVML to find the worker device size.
         import pynvml
-
-        pynvml.nvmlInit()
-        index = os.environ.get("CUDA_VISIBLE_DEVICES", "0").split(",")[0]
-        if index and not index.isnumeric():  # pragma: no cover
-            # This means device_index is UUID.
-            # This works for both MIG and non-MIG device UUIDs.
-            handle = pynvml.nvmlDeviceGetHandleByUUID(str.encode(index))
-            if pynvml.nvmlDeviceIsMigDeviceHandle(handle):
-                # Additionally get parent device handle
-                # if the device itself is a MIG instance
-                handle = pynvml.nvmlDeviceGetDeviceHandleFromMigDeviceHandle(handle)
-        else:
-            handle = pynvml.nvmlDeviceGetHandleByIndex(int(index))
-
-        device_size = pynvml.nvmlDeviceGetMemoryInfo(handle).total
-
-    except (ImportError, ValueError, pynvml.NVMLError) as err:  # pragma: no cover
+    except (ImportError, ValueError) as err:  # pragma: no cover
         # Fall back to a conservative 12GiB default
         warnings.warn(
             "Failed to query the device size with NVML. Please "
@@ -131,6 +115,30 @@ def default_blocksize(scheduler: str) -> int:
             stacklevel=1,
         )
         device_size = 12 * 1024**3
+    else:
+        try:
+            pynvml.nvmlInit()
+            index = os.environ.get("CUDA_VISIBLE_DEVICES", "0").split(",")[0]
+            if index and not index.isnumeric():  # pragma: no cover
+                # This means device_index is UUID.
+                # This works for both MIG and non-MIG device UUIDs.
+                handle = pynvml.nvmlDeviceGetHandleByUUID(str.encode(index))
+                if pynvml.nvmlDeviceIsMigDeviceHandle(handle):
+                    # Additionally get parent device handle
+                    # if the device itself is a MIG instance
+                    handle = pynvml.nvmlDeviceGetDeviceHandleFromMigDeviceHandle(handle)
+            else:
+                handle = pynvml.nvmlDeviceGetHandleByIndex(int(index))
+
+            device_size = pynvml.nvmlDeviceGetMemoryInfo(handle).total
+        except pynvml.NVMLError as err:  # pragma: no cover
+            warnings.warn(
+                "Failed to query the device size with NVML. Please "
+                "set 'target_partition_size' to a literal byte size to "
+                f"silence this warning. Original error: {err}",
+                stacklevel=1,
+            )
+            device_size = 12 * 1024**3
 
     if scheduler == "distributed":
         # Distributed execution requires a conservative
