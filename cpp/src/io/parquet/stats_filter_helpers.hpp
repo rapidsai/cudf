@@ -206,15 +206,14 @@ class stats_caster_base {
 };
 
 /**
- * @brief Converts AST expression to StatsAST for comparing with column statistics
- *
- * This is used in row group filtering based on predicate.
- * statistics min value of a column is referenced by column_index*2
- * statistics max value of a column is referenced by column_index*2+1
+ * @brief Constructs a boolean mask indicating which input columns can participate in statistics
+ * (StatsAST) based filtering
  */
-class stats_expression_converter : public ast::detail::expression_transformer {
+class stats_columns_collector : public ast::detail::expression_transformer {
  public:
-  stats_expression_converter(ast::expression const& expr, size_type num_columns);
+  stats_columns_collector() = default;
+
+  stats_columns_collector(ast::expression const& expr, cudf::size_type num_columns);
 
   /**
    * @copydoc ast::detail::expression_transformer::visit(ast::literal const& )
@@ -238,6 +237,43 @@ class stats_expression_converter : public ast::detail::expression_transformer {
   std::reference_wrapper<ast::expression const> visit(ast::operation const& expr) override;
 
   /**
+   * @brief Return a boolean vector indicating input columns that can participate in stats based
+   * filtering
+   *
+   * @return Boolean vector indicating input columns that can participate in stats based filtering
+   */
+  thrust::host_vector<bool> get_stats_columns_mask() &&;
+
+ protected:
+  std::vector<std::reference_wrapper<ast::expression const>> visit_operands(
+    cudf::host_span<std::reference_wrapper<ast::expression const> const> operands);
+
+  size_type _num_columns;
+
+ private:
+  thrust::host_vector<bool> _columns_mask;
+};
+
+/**
+ * @brief Converts AST expression to StatsAST for comparing with column statistics
+ *
+ * This is used in row group filtering based on predicate.
+ * statistics min value of a column is referenced by column_index*2
+ * statistics max value of a column is referenced by column_index*2+1
+ */
+class stats_expression_converter : public stats_columns_collector {
+ public:
+  stats_expression_converter(ast::expression const& expr, size_type num_columns);
+
+  // Bring all overrides of `visit` from stats_columns_collector into scope
+  using stats_columns_collector::visit;
+
+  /**
+   * @copydoc ast::detail::expression_transformer::visit(ast::operation const& )
+   */
+  std::reference_wrapper<ast::expression const> visit(ast::operation const& expr) override;
+
+  /**
    * @brief Returns the AST to apply on Column chunk statistics.
    *
    * @return AST operation expression
@@ -245,11 +281,7 @@ class stats_expression_converter : public ast::detail::expression_transformer {
   [[nodiscard]] std::reference_wrapper<ast::expression const> get_stats_expr() const;
 
  private:
-  std::vector<std::reference_wrapper<ast::expression const>> visit_operands(
-    cudf::host_span<std::reference_wrapper<ast::expression const> const> operands);
-
   ast::tree _stats_expr;
-  size_type _num_columns;
 };
 
 }  // namespace cudf::io::parquet::detail
