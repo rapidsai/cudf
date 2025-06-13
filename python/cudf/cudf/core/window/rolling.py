@@ -261,36 +261,6 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
 
     def _apply_agg_column(self, source_column, agg_name) -> ColumnBase:
         min_periods = self.min_periods or 1
-        # if isinstance(self.window, int):
-        #     preceding_window = None
-        #     following_window = None
-        #     window = self.window
-        # elif isinstance(self.window, BaseIndexer):
-        #     start, end = self.window.get_window_bounds(
-        #         num_values=len(self.obj),
-        #         min_periods=self.min_periods,
-        #         center=self.center,
-        #         closed=None,
-        #         step=None,
-        #     )
-        #     start = as_column(start, dtype=SIZE_TYPE_DTYPE)
-        #     end = as_column(end, dtype=SIZE_TYPE_DTYPE)
-
-        #     idx = as_column(range(len(start)))
-        #     preceding_window = (idx - start + np.int32(1)).astype(
-        #         SIZE_TYPE_DTYPE
-        #     )
-        #     following_window = (end - idx - np.int32(1)).astype(
-        #         SIZE_TYPE_DTYPE
-        #     )
-        #     window = None
-        # else:
-        #     preceding_window = as_column(self.window)
-        #     following_window = as_column(
-        #         0, length=self.window.size, dtype=self.window.dtype
-        #     )
-        #     window = None
-
         if isinstance(self.window, int):
             if self.center:
                 pre = (self.window // 2) + 1
