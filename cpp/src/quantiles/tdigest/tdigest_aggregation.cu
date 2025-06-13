@@ -408,12 +408,11 @@ struct cluster_info {
 // a monotonically increasing scale function which produces a distribution
 // of centroids that is more densely packed in the middle of the input
 // than at the ends.
-CUDF_HOST_DEVICE double scale_func_k1(double quantile, double delta_norm)
+CUDF_HOST_DEVICE double scale_func_k1(double quantile, double sin_dn, double cos_dn)
 {
-  double k = delta_norm * asin(2.0 * quantile - 1.0);
-  k += 1.0;
-  double const q = (sin(k / delta_norm) + 1.0) / 2.0;
-  return q;
+  double x      = 2.0 * quantile - 1.0;
+  double result = x * cos_dn + sqrt(1.0 - x * x) * sin_dn;
+  return (result + 1.0) * 0.5;
 }
 
 // convert a single-row tdigest column to a scalar.
@@ -466,7 +465,6 @@ CUDF_HOST_DEVICE void generate_cluster_limit(int group_index,
                                              bool has_nulls)
 {
   // we will generate at most delta clusters.
-  double const delta_norm = static_cast<double>(delta) / (2.0 * M_PI);
   double total_weight;
   size_type group_size, group_start;
   thrust::tie(total_weight, group_size, group_start) = group_info(group_index);
@@ -491,6 +489,10 @@ CUDF_HOST_DEVICE void generate_cluster_limit(int group_index,
   double next_limit       = -1.0;
   int last_inserted_index = -1;  // group-relative index into the input stream
 
+  double const delta_norm = static_cast<double>(delta) / (2.0 * M_PI);
+  double sin_dn, cos_dn;
+  sincos(1.0 / delta_norm, &sin_dn, &cos_dn);
+
   // compute the first cluster limit
   double nearest_w;
   int nearest_w_index;  // group-relative index into the input stream
@@ -501,7 +503,7 @@ CUDF_HOST_DEVICE void generate_cluster_limit(int group_index,
     // based on where we are closing the cluster off (not including the incoming weight),
     // compute the next cluster limit
     double const quantile = cur_weight / total_weight;
-    next_limit            = total_weight * scale_func_k1(quantile, delta_norm);
+    next_limit            = total_weight * scale_func_k1(quantile, sin_dn, cos_dn);
 
     // if the next limit is < the cur limit, we're past the end of the distribution, so we're done.
     if (next_limit <= cur_limit) {
