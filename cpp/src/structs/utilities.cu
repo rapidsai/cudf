@@ -294,16 +294,24 @@ std::unique_ptr<column> superimpose_nulls(bitmask_type const* null_mask,
                                   std::move(content.children));
 }
 
-std::vector<std::unique_ptr<column>> superimpose_nulls_no_sanitize_opt(
-  std::vector<bitmask_type const*> null_masks,
-  std::vector<std::unique_ptr<column>> inputs,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
+/**
+ * @brief For each null mask in the input vector, superimpose the given null mask into the
+ * corresponding input column and its descendants. This function does not enforce null consistency
+ * of the null masks of the descendant columns i.e. non-empty nulls that appear in the descendant
+ * columns due to the null mask update are not purged.
+ *
+ * @param null_mask Vector of null masks to be applied to the input column
+ * @param input Vector of input column to apply the null mask to
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate new device memory
+ * @return A new column with potentially new null mask
+ */
+std::vector<std::unique_ptr<column>> superimpose_nulls(std::vector<bitmask_type const*> null_masks,
+                                                       std::vector<std::unique_ptr<column>> inputs,
+                                                       rmm::cuda_stream_view stream,
+                                                       rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-
-  // std::printf("null_masks.size() = %lu, inputs.size() = %lu\n", null_masks.size(),
-  // inputs.size());
 
   std::vector<bitmask_type const*> sources;
   std::vector<size_type> segment_offsets;
@@ -548,22 +556,18 @@ std::vector<std::unique_ptr<column>> superimpose_and_sanitize_nulls(
   rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  inputs = superimpose_nulls_no_sanitize_opt(null_masks, std::move(inputs), stream, mr);
+  inputs = superimpose_nulls(null_masks, std::move(inputs), stream, mr);
 
-  // std::printf("inputs.size() = %lu\n", inputs.size());
   nvtxRangePushA("purging nonempty nulls");
   std::vector<std::unique_ptr<column>> purged_columns;
   for (size_t i = 0; i < inputs.size(); i++) {
     auto const input_view = inputs[i]->view();
-    nvtxRangePushA("has non empty nulls");
-    auto nullbool = cudf::detail::has_nonempty_nulls(input_view, stream);
-    nvtxRangePop();
+    auto const nullbool   = cudf::detail::has_nonempty_nulls(input_view, stream);
     if (nullbool) {
-      nvtxRangePushA("purging");
       purged_columns.emplace_back(cudf::detail::purge_nonempty_nulls(input_view, stream, mr));
-      nvtxRangePop();
-    } else
+    } else {
       purged_columns.emplace_back(std::move(inputs[i]));
+    }
   }
   nvtxRangePop();
 
