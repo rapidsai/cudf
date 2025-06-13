@@ -371,6 +371,10 @@ def rename(e: Expr, mapping: Mapping[str, str]) -> Expr:
     return mapper(e)
 ```
 
+In practice, `state` is a `TypedDict` defined in `cudf_polars.typing`. To add a
+new field to the state, you'll need to update `CachingVisitorState` to include
+the key and type of that field.
+
 # Containers
 
 Containers should be constructed as relatively lightweight objects
