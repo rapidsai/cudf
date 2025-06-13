@@ -299,6 +299,12 @@ std::unique_ptr<column> superimpose_nulls(bitmask_type const* null_mask,
  * corresponding input column and its descendants. This function does not enforce null consistency
  * of the null masks of the descendant columns i.e. non-empty nulls that appear in the descendant
  * columns due to the null mask update are not purged.
+
+ * The vector version of superimpose_nulls applies null masks to multiple columns at once.
+ * It's designed to handle hierarchical data structures (like structs) by:
+ *  1. First gathering all null masks in a flattened structure
+ *  2. Applying the nulls in a segmented batch operation
+ *  3. Then updating all the columns with their new null masks
  *
  * @param null_mask Vector of null masks to be applied to the input column
  * @param input Vector of input column to apply the null mask to
@@ -313,9 +319,13 @@ std::vector<std::unique_ptr<column>> superimpose_nulls(std::vector<bitmask_type 
 {
   CUDF_FUNC_RANGE();
 
+  auto const num_rows = inputs[0]->size();
   std::vector<bitmask_type const*> sources;
   std::vector<size_type> segment_offsets;
   std::vector<bitmask_type const*> path;
+
+  // This recursive function navigates the column hierarchy and for each path in the tree, it
+  // collects all null masks that need to be combined for each column in the hierarchy
   std::function<void(std::vector<bitmask_type const*> & path,
                      column & input,
                      std::vector<bitmask_type const*> & sources,
@@ -329,47 +339,54 @@ std::vector<std::unique_ptr<column>> superimpose_nulls(std::vector<bitmask_type 
       // EMPTY columns should not have a null mask,
       // so don't superimpose null mask on empty columns.
       if (input.nullable()) {
-        // std::printf("nullable column\n");
+        // Add this column's null mask to the current path
         path.push_back(input.mutable_view().null_mask());
       }
-      // std::printf("path.size() = %lu\n", path.size());
+
+      // Add all null masks in current path to sources
       sources.insert(sources.end(), path.begin(), path.end());
       segment_offsets.push_back(path.size());
+
+      // For struct columns, recursively process all children
       if (input.type().id() == cudf::type_id::STRUCT) {
-        // std::printf("input.num_children() = %d\n", input.num_children());
         for (int i = 0; i < input.num_children(); i++) {
           populate_segmented_sources(path, input.child(i), sources, segment_offsets);
         }
       }
+
+      // Backtrack: remove this column's mask from path when done
       if (input.nullable()) path.pop_back();
     }
   };
 
-  std::vector<size_type> markers;
-  markers.push_back(0);
+  // Track/mark the starting position in segment_offsets for each top-level column
+  std::vector<size_type> column_markers;
+  column_markers.push_back(0);
+
+  // Process each top-level column in the inputs vector
   for (size_t c = 0; c < null_masks.size(); c++) {
+    // Start with the external null mask for this column
     path.push_back(null_masks[c]);
+
+    // Collect all null masks for this column and its descendants
     populate_segmented_sources(path, *(inputs[c]), sources, segment_offsets);
     path.pop_back();
-    // std::printf("path.size() = %lu\n", path.size());
-    markers.push_back(segment_offsets.size());
+
+    // Record where this column's segments end in the segment_offsets array
+    column_markers.push_back(segment_offsets.size());
   }
+
+  // Convert segment_offsets from segment sizes to cumulative offsets
   {
     auto total_sum = std::accumulate(segment_offsets.begin(), segment_offsets.end(), 0);
     std::exclusive_scan(segment_offsets.begin(), segment_offsets.end(), segment_offsets.begin(), 0);
     segment_offsets.push_back(total_sum);
   }
+
+  // All masks start at bit position 0
   std::vector<size_type> sources_begin_bits(sources.size(), 0);
 
-  auto const num_rows = inputs[0]->size();
-
-  /*
-  std::printf("num_rows = %d\n", num_rows);
-  std::printf("sources.size() = %lu, segment_offsets.size() = %lu\n", sources.size(),
-  segment_offsets.size()); std::printf("segment_offsets = "); for(size_t i = 0; i <
-  segment_offsets.size(); i++) std::printf("%d ", segment_offsets[i]); std::printf("\n");
-  */
-
+  // Perform the segmented bitwise AND operation across all collected masks
   auto [result_null_masks, result_null_counts] = cudf::detail::segmented_bitmask_binop(
     [] __device__(bitmask_type left, bitmask_type right) { return left & right; },
     sources,
@@ -379,17 +396,8 @@ std::vector<std::unique_ptr<column>> superimpose_nulls(std::vector<bitmask_type 
     stream,
     mr);
 
-  /*
-  std::printf("result_null_counts = ");
-  for(auto nc : result_null_counts)
-    std::printf("%d ", nc);
-  std::printf("\nresult_null_masks size = ");
-  for(size_t i = 0; i < result_null_masks.size(); i++)
-    std::printf("%lu ", result_null_masks[i]->size());
-  std::printf("\n");
-  */
-
   // Create new struct column and its descendants with updated null masks
+  // Recursively updates each column and its children with their new null masks
   std::function<int(std::vector<std::unique_ptr<rmm::device_buffer>> const& h_destination_masks,
                     std::vector<size_type> const& h_null_counts,
                     int marker,
@@ -403,9 +411,12 @@ std::vector<std::unique_ptr<column>> superimpose_nulls(std::vector<bitmask_type 
     if (input.type().id() != cudf::type_id::EMPTY) {
       // EMPTY columns should not have a null mask,
       // so don't superimpose null mask on empty columns.
-      // std::printf("marker = %d\n", marker);
+
+      // Update this column's null mask with the result from the batch operation
       input.set_null_mask(std::move(*(h_destination_masks[marker])), h_null_counts[marker]);
       marker++;
+
+      // For struct columns, recursively update all children
       if (input.type().id() == cudf::type_id::STRUCT) {
         for (int i = 0; i < input.num_children(); i++) {
           marker =
@@ -416,15 +427,9 @@ std::vector<std::unique_ptr<column>> superimpose_nulls(std::vector<bitmask_type 
     return marker;
   };
 
-  /*
-  std::printf("markers = ");
-  for(size_t i = 0; i < markers.size(); i++)
-    std::printf("%d ", markers[i]);
-  std::printf("\n");
-  */
-
+  // Apply the new null masks to all top-level columns
   for (size_t c = 0; c < inputs.size(); c++) {
-    create_updated_column(result_null_masks, result_null_counts, markers[c], *(inputs[c]));
+    create_updated_column(result_null_masks, result_null_counts, column_markers[c], *(inputs[c]));
   }
   return inputs;
 }
