@@ -1,5 +1,5 @@
 # =============================================================================
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License. You may obtain a copy of the License at
@@ -13,7 +13,7 @@
 # =============================================================================
 
 set(cython_sources avro.pyx csv.pyx datasource.pyx json.pyx orc.pyx parquet.pyx
-                   parquet_metadata.pyx text.pyx timezone.pyx types.pyx
+                   parquet_metadata.pyx text.pyx timezone.pyx thread.pyx types.pyx
 )
 
 set(linked_libraries cudf::cudf)
