@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * Copyright (c) 2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,25 +14,24 @@
  * limitations under the License.
  */
 
-#include "mixed_join_kernel.cuh"
-#include "mixed_join_kernel.hpp"
+#include "mixed_join_size_kernel.hpp"
+#include "mixed_join_size_kernel_primitive.cuh"
 
 namespace cudf::detail {
-template void launch_mixed_join<true>(
+template std::size_t launch_compute_mixed_join_output_size<true>(
   table_device_view left_table,
   table_device_view right_table,
   table_device_view probe,
   table_device_view build,
-  row_hash hash_probe,
-  row_equality equality_probe,
+  cudf::row::primitive::row_hasher<cudf::hashing::detail::default_hash> hash_probe,
+  cudf::row::primitive::row_equality_comparator equality_probe,
   join_kind const join_type,
   cudf::detail::mixed_multimap_type::device_view hash_table_view,
-  size_type* join_output_l,
-  size_type* join_output_r,
-  cudf::ast::detail::expression_device_view device_expression_data,
-  cudf::size_type const* join_result_offsets,
+  ast::detail::expression_device_view device_expression_data,
   bool const swap_tables,
+  cudf::device_span<cudf::size_type> matches_per_row,
   detail::grid_1d const config,
   int64_t shmem_size_per_block,
-  rmm::cuda_stream_view stream);
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr);
 }  // namespace cudf::detail

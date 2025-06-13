@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * Copyright (c) 2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,7 +18,7 @@
 
 #include "join_common_utils.cuh"
 #include "join_common_utils.hpp"
-#include "mixed_join_common_utils.cuh"
+#include "mixed_join_primitive_utils.cuh"
 
 #include <cudf/ast/detail/expression_evaluator.cuh>
 #include <cudf/ast/detail/expression_parser.hpp>
@@ -37,19 +37,19 @@ namespace cudf::detail {
 namespace cg = cooperative_groups;
 
 template <int block_size, bool has_nulls>
-CUDF_KERNEL void __launch_bounds__(block_size)
-  compute_mixed_join_output_size(table_device_view left_table,
-                                 table_device_view right_table,
-                                 table_device_view probe,
-                                 table_device_view build,
-                                 row_hash hash_probe,
-                                 row_equality equality_probe,
-                                 join_kind const join_type,
-                                 cudf::detail::mixed_multimap_type::device_view hash_table_view,
-                                 ast::detail::expression_device_view device_expression_data,
-                                 bool const swap_tables,
-                                 std::size_t* output_size,
-                                 cudf::device_span<cudf::size_type> matches_per_row)
+CUDF_KERNEL void __launch_bounds__(block_size) compute_mixed_join_output_size(
+  table_device_view left_table,
+  table_device_view right_table,
+  table_device_view probe,
+  table_device_view build,
+  cudf::row::primitive::row_hasher<cudf::hashing::detail::default_hash> hash_probe,
+  cudf::row::primitive::row_equality_comparator equality_probe,
+  join_kind const join_type,
+  cudf::detail::mixed_multimap_type::device_view hash_table_view,
+  ast::detail::expression_device_view device_expression_data,
+  bool const swap_tables,
+  std::size_t* output_size,
+  cudf::device_span<cudf::size_type> matches_per_row)
 {
   // The (required) extern storage of the shared memory array leads to
   // conflicting declarations between different templates. The easiest
@@ -77,7 +77,7 @@ CUDF_KERNEL void __launch_bounds__(block_size)
   // Figure out the number of elements for this key.
   cg::thread_block_tile<1> this_thread = cg::this_thread();
   // TODO: Address asymmetry in operator.
-  auto count_equality = pair_expression_equality<has_nulls>{
+  auto count_equality = primitive_pair_expression_equality<has_nulls>{
     evaluator, thread_intermediate_storage, swap_tables, equality_probe};
 
   for (auto outer_row_index = start_idx; outer_row_index < outer_num_rows;
@@ -110,8 +110,8 @@ std::size_t launch_compute_mixed_join_output_size(
   table_device_view right_table,
   table_device_view probe,
   table_device_view build,
-  row_hash hash_probe,
-  row_equality equality_probe,
+  cudf::row::primitive::row_hasher<cudf::hashing::detail::default_hash> hash_probe,
+  cudf::row::primitive::row_equality_comparator equality_probe,
   join_kind const join_type,
   cudf::detail::mixed_multimap_type::device_view hash_table_view,
   ast::detail::expression_device_view device_expression_data,
@@ -141,4 +141,5 @@ std::size_t launch_compute_mixed_join_output_size(
       matches_per_row);
   return size.value(stream);
 }
+
 }  // namespace cudf::detail
