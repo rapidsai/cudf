@@ -1306,7 +1306,7 @@ class StringColumn(ColumnBase):
             replacement = pa_scalar_to_plc_scalar(replacement)
         else:
             raise ValueError("Invalid pattern and replacement types")
-        plc_column = plc.strings.replace.replace_re(
+        plc_column = plc.strings.replace_re.replace_re(
             self.to_pylibcudf(mode="read"),
             pattern,
             replacement,
@@ -1325,7 +1325,7 @@ class StringColumn(ColumnBase):
 
     @acquire_spill_lock()
     def replace_with_backrefs(self, pattern: str, replacement: str) -> Self:
-        plc_result = plc.strings.replace.replace_with_backrefs(
+        plc_result = plc.strings.replace_re.replace_with_backrefs(
             self.to_pylibcudf(mode="read"),
             plc.strings.regex_program.RegexProgram.create(
                 pattern, plc.strings.regex_flags.RegexFlags.DEFAULT
@@ -1337,14 +1337,14 @@ class StringColumn(ColumnBase):
     @acquire_spill_lock()
     def slice_strings(
         self,
-        start: int | NumericalColumn,
-        stop: int | NumericalColumn,
+        start: int | None | NumericalColumn,
+        stop: int | None | NumericalColumn,
         step: int | None = None,
     ) -> Self:
         if isinstance(start, ColumnBase) and isinstance(stop, ColumnBase):
             start = start.to_pylibcudf(mode="read")
             stop = stop.to_pylibcudf(mode="read")
-        elif isinstance(start, int) and isinstance(stop, int):
+        elif all(isinstance(x, int) or x is None for x in (start, stop)):
             param_dtype = pa.int32()
             start = pa_scalar_to_plc_scalar(pa.scalar(start, type=param_dtype))
             stop = pa_scalar_to_plc_scalar(pa.scalar(stop, type=param_dtype))

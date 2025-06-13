@@ -497,7 +497,12 @@ class StringMethods(BaseAccessor):
                 f" of type : {type(string_na_rep)}"
             )
 
-        list_column = self._split_by_character()
+        if isinstance(self._column.dtype, ListDtype):
+            list_column: ListColumn = self._column  # type: ignore[assignment]
+        else:
+            # If self._column is not a ListColumn, we will have to
+            # split each row by character and create a ListColumn out of it.
+            list_column = self._split_by_character()  # type: ignore[assignment]
 
         if is_scalar(sep):
             data = list_column.join_list_elements(sep, string_na_rep, "")
