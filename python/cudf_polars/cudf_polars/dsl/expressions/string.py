@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any
 import pyarrow as pa
 import pyarrow.compute as pc
 
+import polars as pl
 from polars.exceptions import InvalidOperationError
 
 import pylibcudf as plc
@@ -216,9 +217,7 @@ class StringFunction(Expr):
         """Evaluate this expression given a dataframe for context."""
         if self.name is StringFunction.Name.ConcatHorizontal:
             columns = [
-                Column(child.evaluate(df, context=context).obj).astype(
-                    plc.DataType(plc.TypeId.STRING)
-                )
+                Column(child.evaluate(df, context=context).obj).astype(pl.String())
                 for child in self.children
             ]
 
