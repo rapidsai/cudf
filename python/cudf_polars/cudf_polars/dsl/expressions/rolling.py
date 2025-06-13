@@ -13,13 +13,11 @@ import pylibcudf as plc
 from cudf_polars.containers import Column
 from cudf_polars.dsl import expr
 from cudf_polars.dsl.expressions.base import ExecutionContext, Expr
-from cudf_polars.dsl.utils.windows import range_window_bounds
+from cudf_polars.dsl.utils.windows import offsets_to_windows, range_window_bounds
 
 if TYPE_CHECKING:
-    import pyarrow as pa
-
     from cudf_polars.containers import DataFrame, DataType
-    from cudf_polars.typing import ClosedInterval
+    from cudf_polars.typing import ClosedInterval, Duration
 
 __all__ = ["GroupedRollingWindow", "RollingWindow", "to_request"]
 
@@ -61,21 +59,21 @@ def to_request(
 
 
 class RollingWindow(Expr):
-    __slots__ = ("closed_window", "following", "orderby", "preceding")
-    _non_child = ("dtype", "preceding", "following", "closed_window", "orderby")
+    __slots__ = ("closed_window", "offset", "orderby", "period")
+    _non_child = ("dtype", "period", "offset", "closed_window", "orderby")
 
     def __init__(
         self,
         dtype: DataType,
-        preceding: pa.Scalar,
-        following: pa.Scalar,
+        offset: Duration,
+        period: Duration,
         closed_window: ClosedInterval,
         orderby: str,
         agg: Expr,
     ) -> None:
         self.dtype = dtype
-        self.preceding = preceding
-        self.following = following
+        self.offset = offset
+        self.period = period
         self.closed_window = closed_window
         self.orderby = orderby
         self.children = (agg,)
@@ -105,7 +103,8 @@ class RollingWindow(Expr):
         else:
             orderby_obj = orderby.obj
         preceding, following = range_window_bounds(
-            self.preceding, self.following, self.closed_window
+            *offsets_to_windows(orderby.obj.type(), self.offset, self.period),
+            self.closed_window,
         )
         if orderby.obj.null_count() != 0:
             raise RuntimeError(
