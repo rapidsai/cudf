@@ -189,7 +189,10 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
  * @param chunks List of column chunk descriptors
  * @param pass_pages List of page information for the pass
  * @param subpass_pages List of page information for the subpass
+ * @param subpass_page_mask Boolean page mask indicating which subpass pages to decompress. Empty
+ * span indicates all pages should be decompressed
  * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate buffers
  *
  * @return A pair of device buffers containing the decompressed data for dictionary and
  * non-dictionary pages, respectively.
@@ -198,7 +201,9 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
   host_span<ColumnChunkDesc const> chunks,
   host_span<PageInfo> pass_pages,
   host_span<PageInfo> subpass_pages,
-  rmm::cuda_stream_view stream);
+  host_span<bool const> subpass_page_mask,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr);
 
 /**
  * @brief Detect malformed parquet input data
@@ -353,7 +358,8 @@ struct codec_stats {
 
   void add_pages(host_span<ColumnChunkDesc const> chunks,
                  host_span<PageInfo> pages,
-                 page_selection selection);
+                 page_selection selection,
+                 host_span<bool const> page_mask);
 };
 
 /**
@@ -538,7 +544,7 @@ struct page_total_size {
   {
     // sum sizes for each input column at this row
     size_t sum = 0;
-    for (int idx = 0; idx < num_keys; idx++) {
+    for (auto idx = 0; std::cmp_less(idx, num_keys); idx++) {
       auto const start = key_offsets[idx];
       auto const end   = key_offsets[idx + 1];
       auto iter        = cudf::detail::make_counting_transform_iterator(
