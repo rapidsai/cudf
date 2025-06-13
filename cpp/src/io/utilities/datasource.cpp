@@ -15,7 +15,6 @@
  */
 
 #include "getenv_or.hpp"
-#include "kvikio/file_utils.hpp"
 
 #include <cudf/detail/utilities/stream_pool.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
@@ -26,6 +25,7 @@
 #include <cudf/utilities/span.hpp>
 
 #include <kvikio/file_handle.hpp>
+#include <kvikio/file_utils.hpp>
 #include <kvikio/mmap.hpp>
 
 #include <rmm/device_buffer.hpp>
