@@ -292,25 +292,27 @@ std::unique_ptr<column> fixed_point_segmented_reduction(
  */
 template <typename Op>
 struct bool_result_column_dispatcher {
-  template <typename ElementType, std::enable_if_t<cudf::is_numeric<ElementType>()>* = nullptr>
+  template <typename ElementType>
   std::unique_ptr<column> operator()(column_view const& col,
                                      device_span<size_type const> offsets,
                                      null_policy null_handling,
                                      std::optional<std::reference_wrapper<scalar const>> init,
                                      rmm::cuda_stream_view stream,
                                      rmm::device_async_resource_ref mr)
+    requires(cudf::is_numeric<ElementType>())
   {
     return simple_segmented_reduction<ElementType, bool, Op>(
       col, offsets, null_handling, init, stream, mr);
   }
 
-  template <typename ElementType, std::enable_if_t<not cudf::is_numeric<ElementType>()>* = nullptr>
+  template <typename ElementType>
   std::unique_ptr<column> operator()(column_view const&,
                                      device_span<size_type const>,
                                      null_policy,
                                      std::optional<std::reference_wrapper<scalar const>>,
                                      rmm::cuda_stream_view,
                                      rmm::device_async_resource_ref)
+    requires(not cudf::is_numeric<ElementType>())
   {
     CUDF_FAIL("Reduction operator not supported for this type");
   }
@@ -406,8 +408,7 @@ struct column_type_dispatcher {
    * The input values are promoted to double (via transform-iterator) for the
    * reduce calculation. The result is then cast to the specified output_type.
    */
-  template <typename ElementType,
-            typename std::enable_if_t<std::is_floating_point<ElementType>::value>* = nullptr>
+  template <typename ElementType>
   std::unique_ptr<column> reduce_numeric(column_view const& col,
                                          device_span<size_type const> offsets,
                                          data_type const output_type,
@@ -415,6 +416,7 @@ struct column_type_dispatcher {
                                          std::optional<std::reference_wrapper<scalar const>> init,
                                          rmm::cuda_stream_view stream,
                                          rmm::device_async_resource_ref mr)
+    requires(std::is_floating_point<ElementType>::value)
   {
     // Floats are computed in double precision and then cast to the output type
     auto result = simple_segmented_reduction<ElementType, double, Op>(
@@ -433,8 +435,7 @@ struct column_type_dispatcher {
    * For uint64_t case, the only reasonable output_type is also UINT64 and
    * this is not called when the input/output types match.
    */
-  template <typename ElementType,
-            typename std::enable_if_t<std::is_integral<ElementType>::value>* = nullptr>
+  template <typename ElementType>
   std::unique_ptr<column> reduce_numeric(column_view const& col,
                                          device_span<size_type const> offsets,
                                          data_type const output_type,
@@ -442,6 +443,7 @@ struct column_type_dispatcher {
                                          std::optional<std::reference_wrapper<scalar const>> init,
                                          rmm::cuda_stream_view stream,
                                          rmm::device_async_resource_ref mr)
+    requires(std::is_integral<ElementType>::value)
   {
     // Integers are computed in int64 precision and then cast to the output type.
     auto result = simple_segmented_reduction<ElementType, int64_t, Op>(
@@ -462,8 +464,7 @@ struct column_type_dispatcher {
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource used to allocate the returned scalar's device memory
    */
-  template <typename ElementType,
-            typename std::enable_if_t<cudf::is_numeric<ElementType>()>* = nullptr>
+  template <typename ElementType>
   std::unique_ptr<column> operator()(column_view const& col,
                                      device_span<size_type const> offsets,
                                      data_type const output_type,
@@ -471,6 +472,7 @@ struct column_type_dispatcher {
                                      std::optional<std::reference_wrapper<scalar const>> init,
                                      rmm::cuda_stream_view stream,
                                      rmm::device_async_resource_ref mr)
+    requires(cudf::is_numeric<ElementType>())
   {
     // If the output type matches the input type, then reduce using that type
     if (output_type.id() == cudf::type_to_id<ElementType>()) {
@@ -481,7 +483,7 @@ struct column_type_dispatcher {
     return reduce_numeric<ElementType>(col, offsets, output_type, null_handling, init, stream, mr);
   }
 
-  template <typename ElementType, std::enable_if_t<cudf::is_fixed_point<ElementType>()>* = nullptr>
+  template <typename ElementType>
   std::unique_ptr<column> operator()(column_view const& col,
                                      device_span<size_type const> offsets,
                                      data_type const output_type,
@@ -489,15 +491,14 @@ struct column_type_dispatcher {
                                      std::optional<std::reference_wrapper<scalar const>> init,
                                      rmm::cuda_stream_view stream,
                                      rmm::device_async_resource_ref mr)
+    requires(cudf::is_fixed_point<ElementType>())
   {
     CUDF_EXPECTS(output_type == col.type(), "Output type must be same as input column type.");
     return fixed_point_segmented_reduction<ElementType, Op>(
       col, offsets, null_handling, init, stream, mr);
   }
 
-  template <typename ElementType,
-            std::enable_if_t<not cudf::is_numeric<ElementType>() and
-                             not cudf::is_fixed_point<ElementType>()>* = nullptr>
+  template <typename ElementType>
   std::unique_ptr<column> operator()(column_view const&,
                                      device_span<size_type const>,
                                      data_type const,
@@ -505,6 +506,7 @@ struct column_type_dispatcher {
                                      std::optional<std::reference_wrapper<scalar const>>,
                                      rmm::cuda_stream_view,
                                      rmm::device_async_resource_ref)
+    requires(not cudf::is_numeric<ElementType>() and not cudf::is_fixed_point<ElementType>())
   {
     CUDF_FAIL("Reduction operator not supported for this type");
   }
