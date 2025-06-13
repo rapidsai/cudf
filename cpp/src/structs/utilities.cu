@@ -541,7 +541,7 @@ std::unique_ptr<column> superimpose_and_sanitize_nulls(bitmask_type const* null_
   return std::move(input);
 }
 
-std::vector<std::unique_ptr<column>> superimpose_nulls_opt(
+std::vector<std::unique_ptr<column>> superimpose_and_sanitize_nulls(
   std::vector<bitmask_type const*> null_masks,
   std::vector<std::unique_ptr<column>> inputs,
   rmm::cuda_stream_view stream,

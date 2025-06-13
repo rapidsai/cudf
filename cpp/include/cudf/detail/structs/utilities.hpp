@@ -201,7 +201,24 @@ class flattened_table {
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr);
 
-[[nodiscard]] std::vector<std::unique_ptr<column>> superimpose_nulls_opt(
+/**
+ * @brief Superimpose nulls from multiple null masks into corresponding input columns
+ *
+ * This function applies each null mask to its corresponding input column using bitwise AND
+ * operations. For each column, nulls are propagated from the mask to the column and its
+ * descendants, and any null strings/lists in the descendant columns are sanitized to ensure nulls
+ * always have their sizes equal to 0.
+ *
+ * The function recursively processes struct descendants in each column. Each null mask is
+ * expected to have the same size in bits as its corresponding input column.
+ *
+ * @param null_masks Vector of null mask pointers to be applied to the input columns
+ * @param inputs Vector of input columns to apply the null masks to
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate new device memory
+ * @return A vector of new columns with the null masks applied and nulls sanitized
+ */
+[[nodiscard]] std::vector<std::unique_ptr<column>> superimpose_and_sanitize_nulls(
   std::vector<bitmask_type const*> null_masks,
   std::vector<std::unique_ptr<column>> inputs,
   rmm::cuda_stream_view stream,
