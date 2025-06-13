@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -106,22 +106,24 @@ struct result_type_dispatcher {
   }
 
  public:
-  template <typename ResultType, std::enable_if_t<is_supported_v<ResultType>()>* = nullptr>
+  template <typename ResultType>
   std::unique_ptr<scalar> operator()(column_view const& col,
                                      cudf::data_type const output_dtype,
                                      size_type ddof,
                                      rmm::cuda_stream_view stream,
                                      rmm::device_async_resource_ref mr)
+    requires(is_supported_v<ResultType>())
   {
     return compound_reduction<ElementType, ResultType, Op>(col, output_dtype, ddof, stream, mr);
   }
 
-  template <typename ResultType, std::enable_if_t<not is_supported_v<ResultType>()>* = nullptr>
+  template <typename ResultType>
   std::unique_ptr<scalar> operator()(column_view const& col,
                                      cudf::data_type const output_dtype,
                                      size_type ddof,
                                      rmm::cuda_stream_view stream,
                                      rmm::device_async_resource_ref mr)
+    requires(not is_supported_v<ResultType>())
   {
     CUDF_FAIL("Unsupported output data type");
   }
@@ -139,24 +141,26 @@ struct element_type_dispatcher {
   }
 
  public:
-  template <typename ElementType, std::enable_if_t<is_supported_v<ElementType>()>* = nullptr>
+  template <typename ElementType>
   std::unique_ptr<scalar> operator()(column_view const& col,
                                      cudf::data_type const output_dtype,
                                      size_type ddof,
                                      rmm::cuda_stream_view stream,
                                      rmm::device_async_resource_ref mr)
+    requires(is_supported_v<ElementType>())
   {
     CUDF_EXPECTS(ddof >= 0, "ddof must be non-negative", std::domain_error);
     return cudf::type_dispatcher(
       output_dtype, result_type_dispatcher<ElementType, Op>(), col, output_dtype, ddof, stream, mr);
   }
 
-  template <typename ElementType, std::enable_if_t<not is_supported_v<ElementType>()>* = nullptr>
+  template <typename ElementType>
   std::unique_ptr<scalar> operator()(column_view const& col,
                                      cudf::data_type const output_dtype,
                                      size_type ddof,
                                      rmm::cuda_stream_view stream,
                                      rmm::device_async_resource_ref mr)
+    requires(not is_supported_v<ElementType>())
   {
     CUDF_FAIL(
       "Reduction operators other than `min` and `max`"
