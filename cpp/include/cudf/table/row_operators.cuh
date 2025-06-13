@@ -76,8 +76,9 @@ __device__ weak_ordering compare_elements(Element lhs, Element rhs)
  * `[null, -Inf, -ve, 0, -0, +ve, +Inf, NaN, NaN] (for null_order::BEFORE)`
  *
  */
-template <typename Element, std::enable_if_t<std::is_floating_point_v<Element>>* = nullptr>
+template <typename Element>
 __device__ weak_ordering relational_compare(Element lhs, Element rhs)
+  requires(std::is_floating_point_v<Element>)
 {
   if (isnan(lhs) and isnan(rhs)) {
     return weak_ordering::EQUIVALENT;
@@ -118,8 +119,9 @@ inline __device__ auto null_compare(bool lhs_is_null, bool rhs_is_null, null_ord
  * @param rhs The second element
  * @return Indicates the relationship between the elements in the `lhs` and `rhs` columns
  */
-template <typename Element, std::enable_if_t<not std::is_floating_point_v<Element>>* = nullptr>
+template <typename Element>
 __device__ weak_ordering relational_compare(Element lhs, Element rhs)
+  requires(not std::is_floating_point_v<Element>)
 {
   return detail::compare_elements(lhs, rhs);
 }
@@ -132,8 +134,9 @@ __device__ weak_ordering relational_compare(Element lhs, Element rhs)
  * @param rhs second element
  * @return `true` if `lhs` == `rhs` else `false`.
  */
-template <typename Element, std::enable_if_t<std::is_floating_point_v<Element>>* = nullptr>
+template <typename Element>
 __device__ bool equality_compare(Element lhs, Element rhs)
+  requires(std::is_floating_point_v<Element>)
 {
   if (isnan(lhs) and isnan(rhs)) { return true; }
   return lhs == rhs;
@@ -147,8 +150,9 @@ __device__ bool equality_compare(Element lhs, Element rhs)
  * @param rhs second element
  * @return `true` if `lhs` == `rhs` else `false`.
  */
-template <typename Element, std::enable_if_t<not std::is_floating_point_v<Element>>* = nullptr>
+template <typename Element>
 __device__ bool equality_compare(Element const lhs, Element const rhs)
+  requires(not std::is_floating_point_v<Element>)
 {
   return lhs == rhs;
 }
@@ -188,10 +192,10 @@ class element_equality_comparator {
    * @param rhs_element_index The index of the second element
    * @return True if both lhs and rhs element are both nulls and `nulls_are_equal` is true, or equal
    */
-  template <typename Element,
-            std::enable_if_t<cudf::is_equality_comparable<Element, Element>()>* = nullptr>
+  template <typename Element>
   __device__ bool operator()(size_type lhs_element_index,
                              size_type rhs_element_index) const noexcept
+    requires(cudf::is_equality_comparable<Element, Element>())
   {
     if (nulls) {
       bool const lhs_is_null{lhs.is_null(lhs_element_index)};
@@ -208,9 +212,9 @@ class element_equality_comparator {
   }
 
   // @cond
-  template <typename Element,
-            std::enable_if_t<not cudf::is_equality_comparable<Element, Element>()>* = nullptr>
+  template <typename Element>
   __device__ bool operator()(size_type lhs_element_index, size_type rhs_element_index)
+    requires(not cudf::is_equality_comparable<Element, Element>())
   {
     CUDF_UNREACHABLE("Attempted to compare elements of uncomparable types.");
   }
@@ -325,10 +329,10 @@ class element_relational_comparator {
    * @return Indicates the relationship between the elements in
    * the `lhs` and `rhs` columns.
    */
-  template <typename Element,
-            std::enable_if_t<cudf::is_relationally_comparable<Element, Element>()>* = nullptr>
+  template <typename Element>
   __device__ weak_ordering operator()(size_type lhs_element_index,
                                       size_type rhs_element_index) const noexcept
+    requires(cudf::is_relationally_comparable<Element, Element>())
   {
     if (nulls) {
       bool const lhs_is_null{lhs.is_null(lhs_element_index)};
@@ -344,9 +348,9 @@ class element_relational_comparator {
   }
 
   // @cond
-  template <typename Element,
-            std::enable_if_t<not cudf::is_relationally_comparable<Element, Element>()>* = nullptr>
+  template <typename Element>
   __device__ weak_ordering operator()(size_type lhs_element_index, size_type rhs_element_index)
+    requires(not cudf::is_relationally_comparable<Element, Element>())
   {
     CUDF_UNREACHABLE("Attempted to compare elements of uncomparable types.");
   }
