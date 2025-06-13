@@ -15,6 +15,7 @@
  */
 
 #include "getenv_or.hpp"
+#include "kvikio/file_utils.hpp"
 
 #include <cudf/detail/utilities/stream_pool.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
@@ -184,12 +185,15 @@ class memory_mapped_source : public kvikio_source<kvikio::MmapHandle> {
   explicit memory_mapped_source(char const* filepath, size_t offset, size_t max_size_estimate)
     : kvikio_source{kvikio::MmapHandle()}
   {
-    if (this->size() != 0) {
-      CUDF_EXPECTS(offset < this->size(), "Offset is past end of file", std::overflow_error);
-      if (max_size_estimate == 0 || (offset + max_size_estimate) > this->size()) {
-        max_size_estimate = this->size() - offset;
+    // Since the superclass kvikio_source is initialized with an empty mmap handle, `this->size()`
+    // returns 0 at this point. Use `kvikio::get_file_size()` instead.
+    auto const file_size = kvikio::get_file_size(filepath);
+    if (file_size != 0) {
+      CUDF_EXPECTS(offset < file_size, "Offset is past end of file", std::overflow_error);
+      if (max_size_estimate == 0 || (offset + max_size_estimate) > file_size) {
+        max_size_estimate = file_size - offset;
       }
-      _kvikio_handle = kvikio::MmapHandle(filepath, "r", offset, max_size_estimate);
+      _kvikio_handle = kvikio::MmapHandle(filepath, "r", max_size_estimate, offset);
     }
   }
 };
