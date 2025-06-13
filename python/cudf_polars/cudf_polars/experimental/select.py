@@ -4,18 +4,18 @@
 
 from __future__ import annotations
 
-from itertools import chain
 from typing import TYPE_CHECKING
 
 import pylibcudf as plc
 
 from cudf_polars.dsl import expr
+from cudf_polars.dsl.expr import Col, Len
 from cudf_polars.dsl.ir import Empty, HConcat, Scan, Select, Union
 from cudf_polars.dsl.traversal import traversal
 from cudf_polars.experimental.base import PartitionInfo
 from cudf_polars.experimental.dispatch import lower_ir_node
 from cudf_polars.experimental.expressions import decompose_expr_graph
-from cudf_polars.experimental.utils import _leaf_column_names, _lower_ir_fallback
+from cudf_polars.experimental.utils import _lower_ir_fallback
 from cudf_polars.utils.versions import POLARS_VERSION_LT_128
 
 if TYPE_CHECKING:
@@ -137,12 +137,12 @@ def _(
         partition_info[new_node] = PartitionInfo(count=1)
         return new_node, partition_info
 
-    if not tuple(
-        chain.from_iterable(_leaf_column_names(expr.value) for expr in ir.exprs)
+    if not any(
+        isinstance(expr, (Col, Len)) for expr in traversal([e.value for e in ir.exprs])
     ):
         # Special Case: Selection does not depend on any columns.
         new_node = ir.reconstruct([input_ir := Empty()])
-        partition_info[new_node] = partition_info[input_ir] = PartitionInfo(count=1)
+        partition_info[input_ir] = partition_info[new_node] = PartitionInfo(count=1)
         return new_node, partition_info
 
     if pi.count > 1 and not all(
