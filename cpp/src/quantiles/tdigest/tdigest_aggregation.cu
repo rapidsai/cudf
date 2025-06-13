@@ -1137,8 +1137,7 @@ struct get_scalar_minmax {
 };
 
 struct typed_group_tdigest {
-  template <typename T,
-            std::enable_if_t<cudf::is_numeric<T>() || cudf::is_fixed_point<T>()>* = nullptr>
+  template <typename T>
   std::unique_ptr<column> operator()(column_view const& col,
                                      cudf::device_span<size_type const> group_offsets,
                                      cudf::device_span<size_type const> group_labels,
@@ -1147,6 +1146,7 @@ struct typed_group_tdigest {
                                      int delta,
                                      rmm::cuda_stream_view stream,
                                      rmm::device_async_resource_ref mr)
+    requires(cudf::is_numeric<T>() || cudf::is_fixed_point<T>())
   {
     // first, generate cluster weight information for each input group
     auto cinfo = [&]() {
@@ -1215,10 +1215,9 @@ struct typed_group_tdigest {
                             mr);
   }
 
-  template <typename T,
-            typename... Args,
-            std::enable_if_t<!cudf::is_numeric<T>() && !cudf::is_fixed_point<T>()>* = nullptr>
+  template <typename T, typename... Args>
   std::unique_ptr<column> operator()(Args&&...)
+    requires(!cudf::is_numeric<T>() && !cudf::is_fixed_point<T>())
   {
     CUDF_FAIL("Non-numeric type in group_tdigest");
   }
@@ -1226,13 +1225,12 @@ struct typed_group_tdigest {
 
 struct typed_reduce_tdigest {
   // this function assumes col is sorted in ascending order with nulls at the end
-  template <
-    typename T,
-    typename std::enable_if_t<cudf::is_numeric<T>() || cudf::is_fixed_point<T>()>* = nullptr>
+  template <typename T>
   std::unique_ptr<scalar> operator()(column_view const& col,
                                      int delta,
                                      rmm::cuda_stream_view stream,
                                      rmm::device_async_resource_ref mr)
+    requires(cudf::is_numeric<T>() || cudf::is_fixed_point<T>())
   {
     CUDF_FUNC_RANGE();
 
@@ -1297,11 +1295,9 @@ struct typed_reduce_tdigest {
                              mr);
   }
 
-  template <
-    typename T,
-    typename... Args,
-    typename std::enable_if_t<!cudf::is_numeric<T>() && !cudf::is_fixed_point<T>()>* = nullptr>
+  template <typename T, typename... Args>
   std::unique_ptr<scalar> operator()(Args&&...)
+    requires(!cudf::is_numeric<T>() && !cudf::is_fixed_point<T>())
   {
     CUDF_FAIL("Non-numeric type in group_tdigest");
   }

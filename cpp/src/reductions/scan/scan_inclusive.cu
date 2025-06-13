@@ -148,17 +148,19 @@ struct scan_dispatcher {
    *
    * @tparam T type of input column
    */
-  template <typename T, std::enable_if_t<is_supported<T>()>* = nullptr>
+  template <typename T>
   std::unique_ptr<column> operator()(column_view const& input,
                                      bitmask_type const* output_mask,
                                      rmm::cuda_stream_view stream,
                                      rmm::device_async_resource_ref mr)
+    requires(is_supported<T>())
   {
     return scan_functor<Op, T>::invoke(input, output_mask, stream, mr);
   }
 
   template <typename T, typename... Args>
-  std::enable_if_t<!is_supported<T>(), std::unique_ptr<column>> operator()(Args&&...)
+  std::unique_ptr<column> operator()(Args&&...)
+    requires(!is_supported<T>())
   {
     CUDF_FAIL("Unsupported type for inclusive scan operation");
   }
@@ -198,12 +200,12 @@ std::unique_ptr<column> scan_inclusive(column_view const& input,
     std::for_each(content.children.begin(),
                   content.children.end(),
                   [null_mask, null_count, stream, mr](auto& child) {
-                    child = structs::detail::superimpose_nulls(
+                    child = structs::detail::superimpose_and_sanitize_nulls(
                       null_mask, null_count, std::move(child), stream, mr);
                   });
 
     // Replace the children columns.
-    output = cudf::make_structs_column(
+    output = cudf::create_structs_hierarchy(
       num_rows, std::move(content.children), null_count, std::move(*content.null_mask), stream, mr);
   }
 

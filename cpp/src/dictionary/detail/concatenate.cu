@@ -135,14 +135,14 @@ struct compute_children_offsets_fn {
  */
 struct dispatch_compute_indices {
   template <typename Element>
-  std::enable_if_t<cudf::is_relationally_comparable<Element, Element>(), std::unique_ptr<column>>
-  operator()(column_view const& all_keys,
-             column_view const& all_indices,
-             column_view const& new_keys,
-             offsets_pair const* d_offsets,
-             size_type const* d_map_to_keys,
-             rmm::cuda_stream_view stream,
-             rmm::device_async_resource_ref mr)
+  std::unique_ptr<column> operator()(column_view const& all_keys,
+                                     column_view const& all_indices,
+                                     column_view const& new_keys,
+                                     offsets_pair const* d_offsets,
+                                     size_type const* d_map_to_keys,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::device_async_resource_ref mr)
+    requires(cudf::is_relationally_comparable<Element, Element>())
   {
     auto keys_view     = column_device_view::create(all_keys, stream);
     auto indices_view  = column_device_view::create(all_indices, stream);
@@ -197,8 +197,8 @@ struct dispatch_compute_indices {
   }
 
   template <typename Element, typename... Args>
-  std::enable_if_t<!cudf::is_relationally_comparable<Element, Element>(), std::unique_ptr<column>>
-  operator()(Args&&...)
+  std::unique_ptr<column> operator()(Args&&...)
+    requires(!cudf::is_relationally_comparable<Element, Element>())
   {
     CUDF_FAIL("dictionary concatenate not supported for this column type");
   }
