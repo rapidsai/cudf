@@ -19,6 +19,7 @@
  * @brief cuDF-IO ORC writer class implementation
  */
 
+#include "io/comp/compression.hpp"
 #include "io/orc/orc_gpu.hpp"
 #include "io/statistics/column_statistics.cuh"
 #include "writer_impl.hpp"

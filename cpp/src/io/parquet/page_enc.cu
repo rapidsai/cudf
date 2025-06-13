@@ -1523,7 +1523,7 @@ __device__ void finish_page_encode(state_buf* s,
                                    device_span<EncPage> pages,
                                    device_span<device_span<uint8_t const>> comp_in,
                                    device_span<device_span<uint8_t>> comp_out,
-                                   device_span<cudf::io::detail::codec_exec_result> comp_results,
+                                   device_span<codec_exec_result> comp_results,
                                    bool write_v2_headers)
 {
   auto const t = threadIdx.x;
@@ -1881,7 +1881,7 @@ CUDF_KERNEL void __launch_bounds__(block_size, 8)
   gpuEncodeDictPages(device_span<EncPage> pages,
                      device_span<device_span<uint8_t const>> comp_in,
                      device_span<device_span<uint8_t>> comp_out,
-                     device_span<cudf::io::detail::codec_exec_result> comp_results,
+                     device_span<codec_exec_result> comp_results,
                      bool write_v2_headers)
 {
   __shared__ __align__(8) rle_page_enc_state_s state_g;
@@ -2008,7 +2008,7 @@ CUDF_KERNEL void __launch_bounds__(block_size, 8)
   gpuEncodeDeltaBinaryPages(device_span<EncPage> pages,
                             device_span<device_span<uint8_t const>> comp_in,
                             device_span<device_span<uint8_t>> comp_out,
-                            device_span<cudf::io::detail::codec_exec_result> comp_results)
+                            device_span<codec_exec_result> comp_results)
 {
   // block of shared memory for value storage and bit packing
   __shared__ uleb128_t delta_shared[delta::buffer_size + delta::block_size];
@@ -2111,7 +2111,7 @@ CUDF_KERNEL void __launch_bounds__(block_size, 8)
   gpuEncodeDeltaLengthByteArrayPages(device_span<EncPage> pages,
                                      device_span<device_span<uint8_t const>> comp_in,
                                      device_span<device_span<uint8_t>> comp_out,
-                                     device_span<cudf::io::detail::codec_exec_result> comp_results)
+                                     device_span<codec_exec_result> comp_results)
 {
   // block of shared memory for value storage and bit packing
   __shared__ uleb128_t delta_shared[delta::buffer_size + delta::block_size];

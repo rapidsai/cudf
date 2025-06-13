@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include "io/comp/compression.hpp"
 #include "io/utilities/block_utils.cuh"
 #include "io/utilities/time_utils.cuh"
 #include "orc_gpu.hpp"
@@ -1151,7 +1152,7 @@ CUDF_KERNEL void __launch_bounds__(256)
                                  device_2dspan<encoder_chunk_streams const> streams,
                                  device_span<device_span<uint8_t const>> inputs,
                                  device_span<device_span<uint8_t>> outputs,
-                                 device_span<cudf::io::detail::codec_exec_result> results,
+                                 device_span<codec_exec_result> results,
                                  device_span<uint8_t> compressed_bfr,
                                  uint32_t comp_blk_size,
                                  uint32_t max_comp_blk_size,
@@ -1368,7 +1369,7 @@ std::optional<writer_compression_statistics> compress_orc_data_streams(
   bool collect_statistics,
   device_2dspan<stripe_stream> strm_desc,
   device_2dspan<encoder_chunk_streams> enc_streams,
-  device_span<cudf::io::detail::codec_exec_result> comp_res,
+  device_span<codec_exec_result> comp_res,
   rmm::cuda_stream_view stream)
 {
   rmm::device_uvector<device_span<uint8_t const>> comp_in(num_compressed_blocks, stream);

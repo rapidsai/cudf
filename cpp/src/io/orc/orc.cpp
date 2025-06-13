@@ -16,7 +16,6 @@
 
 #include "orc.hpp"
 
-#include "io/comp/decompression.hpp"
 #include "orc_field_reader.hpp"
 #include "orc_field_writer.hpp"
 

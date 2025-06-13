@@ -92,7 +92,7 @@ struct DecompressTest
     inf_out[0] = dst;
     inf_out.host_to_device_async(stream);
 
-    cudf::detail::hostdevice_vector<cudf::io::detail::codec_exec_result> inf_stat(1, stream);
+    cudf::detail::hostdevice_vector<codec_exec_result> inf_stat(1, stream);
     inf_stat[0] = {};
     inf_stat.host_to_device_async(stream);
 
