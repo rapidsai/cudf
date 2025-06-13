@@ -10,6 +10,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterator
 
     from cudf_polars.dsl.expr import NamedExpr
+    from cudf_polars.dsl.ir import IR
     from cudf_polars.dsl.nodebase import Node
 
 
@@ -39,3 +40,91 @@ class PartitionInfo:
 def get_key_name(node: Node) -> str:
     """Generate the key name for a Node."""
     return f"{type(node).__name__.lower()}-{hash(node)}"
+
+
+class ColumnSourceStats:
+    """
+    Column source statistics.
+
+    Parameters
+    ----------
+    cardinality
+        Cardinality (row count).
+    unique_count
+        Unique-value count.
+    unique_fraction
+        Unique-value fraction.
+    storage_size_per_file
+        Average un-compressed storage size for this
+        column in a single file. This value is used to
+        calculate the partition count for an IR node.
+    exact
+        Tuple of attributes that have not been estimated
+        by partial sampling, and are known exactly,
+
+    Notes
+    -----
+    Source statistics are statistics coming from "source"
+    nodes like ``Scan` and ``DataFrameScan``.
+    """
+
+    __slots__ = (
+        "cardinality",
+        "exact",
+        "storage_size_per_file",
+        "unique_count",
+        "unique_fraction",
+    )
+
+    def __init__(
+        self,
+        *,
+        cardinality: int | None = None,
+        storage_size_per_file: int | None = None,
+        unique_count: int | None = None,
+        unique_fraction: float | None = None,
+        exact: tuple[str, ...] = (),
+    ):
+        self.cardinality = cardinality
+        self.storage_size_per_file = storage_size_per_file
+        self.unique_count = unique_count
+        self.unique_fraction = unique_fraction
+        self.exact = exact
+
+
+class ColumnStats:
+    """
+    Column statistics.
+
+    Parameters
+    ----------
+    name
+        Column name.
+    unique_count
+        Unique-count estimate.
+    source_stats
+        Column-source statistics.
+    """
+
+    __slots__ = ("name", "source_stats", "unique_count")
+
+    def __init__(
+        self,
+        *,
+        name: str | None = None,
+        unique_count: int | None = None,
+        source_stats: ColumnSourceStats | None = None,
+    ) -> None:
+        self.name = name
+        self.unique_count = unique_count
+        self.source_stats = source_stats
+
+
+class StatsCollector:
+    """Column statistics collector."""
+
+    __slots__ = ("cardinality", "column_statistics")
+
+    def __init__(self) -> None:
+        self.cardinality: dict[IR, int] = {}
+        self.column_statistics: dict[IR, dict[str, ColumnStats]] = {}
