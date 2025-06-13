@@ -280,6 +280,11 @@ class stats_expression_converter : public stats_columns_collector {
    */
   [[nodiscard]] std::reference_wrapper<ast::expression const> get_stats_expr() const;
 
+  /**
+   * @brief Delete stats columns mask getter as it's not needed in the derived class
+   */
+  thrust::host_vector<bool> get_stats_columns_mask() && = delete;
+
  private:
   ast::tree _stats_expr;
 };
