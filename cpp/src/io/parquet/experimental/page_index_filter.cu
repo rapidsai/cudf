@@ -661,6 +661,12 @@ std::unique_ptr<cudf::column> aggregate_reader_metadata::filter_data_pages_with_
 
   auto const num_columns = output_dtypes.size();
 
+  // Get a boolean mask indicating which columns will participate in stats based filtering
+  auto const stats_columns_mask =
+    parquet::detail::stats_columns_collector{filter.get(),
+                                             static_cast<size_type>(output_dtypes.size())}
+      .get_stats_columns_mask();
+
   // Convert page statistics to a table
   // where min(col[i]) = columns[i*2], max(col[i])=columns[i*2+1]
   // For each column, it contains total number of rows from all row groups.
@@ -674,9 +680,10 @@ std::unique_ptr<cudf::column> aggregate_reader_metadata::filter_data_pages_with_
     [&](auto col_idx) {
       auto const schema_idx = output_column_schemas[col_idx];
       auto const& dtype     = output_dtypes[col_idx];
-      // Only comparable types except fixed point are supported.
-      if (cudf::is_compound(dtype) && dtype.id() != cudf::type_id::STRING) {
-        // placeholder only for unsupported types.
+      // Only participating columns and comparable types except fixed point are supported
+      if (not stats_columns_mask[col_idx] or
+          (cudf::is_compound(dtype) && dtype.id() != cudf::type_id::STRING)) {
+        // Placeholder for unsupported types and non-participating columns
         columns.push_back(cudf::make_numeric_column(
           data_type{cudf::type_id::BOOL8}, total_rows, rmm::device_buffer{}, 0, stream, mr));
         columns.push_back(cudf::make_numeric_column(
