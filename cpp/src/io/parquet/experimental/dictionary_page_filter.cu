@@ -1451,8 +1451,7 @@ class dictionary_expression_converter : public equality_literals_collector {
   std::vector<cudf::size_type> _col_literals_offsets;
   cudf::host_span<std::vector<ast::literal*> const> _literals;
   ast::tree _dictionary_expr;
-  cudf::numeric_scalar<bool> _always_true_scalar{true};
-  ast::literal const _always_true{_always_true_scalar};
+  ast::literal const _always_true{cudf::numeric_scalar<bool>{true}};
 };
 
 }  // namespace
