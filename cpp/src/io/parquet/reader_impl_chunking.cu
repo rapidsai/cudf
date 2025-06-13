@@ -340,8 +340,15 @@ void reader::impl::setup_next_subpass(read_mode mode)
   // decompress the data pages in this subpass; also decompress the dictionary pages in this pass,
   // if this is the first subpass in the pass
   if (pass.has_compressed_data) {
-    auto [pass_data, subpass_data] = decompress_page_data(
-      pass.chunks, is_first_subpass ? pass.pages : host_span<PageInfo>{}, subpass.pages, _stream);
+    // Empty page mask indicates all pages must be decompressed
+    auto const empty_page_mask = cudf::host_span<bool>{};
+    auto [pass_data, subpass_data] =
+      decompress_page_data(pass.chunks,
+                           is_first_subpass ? pass.pages : host_span<PageInfo>{},
+                           subpass.pages,
+                           empty_page_mask,
+                           _stream,
+                           _mr);
 
     if (is_first_subpass) {
       pass.decomp_dict_data = std::move(pass_data);
