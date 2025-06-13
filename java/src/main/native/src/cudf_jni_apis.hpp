@@ -13,15 +13,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 #pragma once
 
 #include "jni_utils.hpp"
 
 #include <cudf/contiguous_split.hpp>
-#include <cudf/detail/aggregation/aggregation.hpp>
 
-namespace cudf {
-namespace jni {
+namespace cudf::jni {
 
 /**
  * @brief Detach all columns from the specified table, and pointers to them as an array.
@@ -147,5 +146,4 @@ bool cache_data_source_jni(JNIEnv* env);
 
 void release_data_source_jni(JNIEnv* env);
 
-}  // namespace jni
-}  // namespace cudf
+}  // namespace cudf::jni
