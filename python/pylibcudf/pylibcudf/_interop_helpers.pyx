@@ -38,6 +38,7 @@ class ColumnMetadata:
     This is the Python representation of :cpp:class:`cudf::column_metadata`.
     """
     name: str = ""
+    timezone: str = ""
     children_meta: list[ColumnMetadata] = field(default_factory=list)
 
 
@@ -76,6 +77,7 @@ cdef column_metadata _metadata_to_libcudf(metadata):
     """
     cdef column_metadata c_metadata
     c_metadata.name = metadata.name.encode()
+    c_metadata.timezone = metadata.timezone.encode()
     for child_meta in metadata.children_meta:
         c_metadata.children_meta.push_back(_metadata_to_libcudf(child_meta))
     return c_metadata

@@ -118,6 +118,7 @@ DLManagedTensor* to_dlpack(
  */
 struct column_metadata {
   std::string name;                            ///< Name of the column
+  std::string timezone;                        ///< Timezone of the column
   std::vector<column_metadata> children_meta;  ///< Metadata of children of the column
 
   /**
