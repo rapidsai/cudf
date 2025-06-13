@@ -497,28 +497,23 @@ class StringMethods(BaseAccessor):
                 f" of type : {type(string_na_rep)}"
             )
 
-        if isinstance(self._column.dtype, ListDtype):
-            strings_column = self._column
-        else:
-            # If self._column is not a ListColumn, we will have to
-            # split each row by character and create a ListColumn out of it.
-            strings_column = self._split_by_character()  # type: ignore[assignment]
+        list_column = self._split_by_character()
 
         if is_scalar(sep):
-            data = strings_column.join_list_elements(sep, string_na_rep, "")
+            data = list_column.join_list_elements(sep, string_na_rep, "")
         elif can_convert_to_column(sep):
             sep_column = as_column(sep)
-            if len(sep_column) != len(strings_column):
+            if len(sep_column) != len(list_column):
                 raise ValueError(
                     f"sep should be of similar size to the series, "
-                    f"got: {len(sep_column)}, expected: {len(strings_column)}"
+                    f"got: {len(sep_column)}, expected: {len(list_column)}"
                 )
             if not is_scalar(sep_na_rep):
                 raise TypeError(
                     f"sep_na_rep should be a string scalar, got {sep_na_rep} "
                     f"of type: {type(sep_na_rep)}"
                 )
-            data = strings_column.join_list_elements(
+            data = list_column.join_list_elements(
                 sep_column,  # type: ignore[arg-type]
                 sep_na_rep,
                 string_na_rep,  # type: ignore[arg-type]

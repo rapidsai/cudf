@@ -491,3 +491,24 @@ class ListColumn(ColumnBase):
                 gather_map.to_pylibcudf(mode="read"),
             )
         )
+
+    @acquire_spill_lock()
+    def join_list_elements(
+        self,
+        separator: str | StringColumn,
+        sep_na_rep: str,
+        string_na_rep: str,
+    ) -> StringColumn:
+        if isinstance(separator, str):
+            sep = pa_scalar_to_plc_scalar(pa.scalar(separator))
+        else:
+            sep = separator.to_pylibcudf(mode="read")
+        plc_column = plc.strings.combine.join_list_elements(
+            self.to_pylibcudf(mode="read"),
+            sep,
+            pa_scalar_to_plc_scalar(pa.scalar(sep_na_rep)),
+            pa_scalar_to_plc_scalar(pa.scalar(string_na_rep)),
+            plc.strings.combine.SeparatorOnNulls.YES,
+            plc.strings.combine.OutputIfEmptyList.NULL_ELEMENT,
+        )
+        return type(self).from_pylibcudf(plc_column)  # type: ignore[return-value]

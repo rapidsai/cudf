@@ -1239,27 +1239,6 @@ class StringColumn(ColumnBase):
         return type(self).from_pylibcudf(plc_column)  # type: ignore[return-value]
 
     @acquire_spill_lock()
-    def join_list_elements(
-        self,
-        separator: str | Self,
-        sep_na_rep: str,
-        string_na_rep: str,
-    ) -> Self:
-        if isinstance(separator, type(self)):
-            sep = separator.to_pylibcudf(mode="read")
-        else:
-            sep = pa_scalar_to_plc_scalar(pa.scalar(separator))
-        plc_column = plc.strings.combine.join_list_elements(
-            self.to_pylibcudf(mode="read"),
-            sep,
-            pa_scalar_to_plc_scalar(pa.scalar(sep_na_rep)),
-            pa_scalar_to_plc_scalar(pa.scalar(string_na_rep)),
-            plc.strings.combine.SeparatorOnNulls.YES,
-            plc.strings.combine.OutputIfEmptyList.NULL_ELEMENT,
-        )
-        return type(self).from_pylibcudf(plc_column)  # type: ignore[return-value]
-
-    @acquire_spill_lock()
     def extract(self, pattern: str, flags: int) -> dict[int, Self]:
         plc_table = plc.strings.extract.extract(
             self.to_pylibcudf(mode="read"),
