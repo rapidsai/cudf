@@ -1014,7 +1014,6 @@ struct dictionary_caster {
   cudf::size_type type_length;
   cudf::size_type num_dictionary_columns;
   cudf::size_type dictionary_col_idx;
-  rmm::cuda_stream_view stream;
 
   /**
    * @brief Build BOOL8 columns from dictionary membership results device buffers
@@ -1049,13 +1048,17 @@ struct dictionary_caster {
    * @tparam Supported underlying data type of the cudf column
    * @param literals List of literals
    * @param operators List of operators
+   * @param stream CUDA stream to use for the kernel launches
+   * @param mr Device memory resource used to allocate the returned columns' device memory
    *
    * @return A vector of BOOL8 columns containing dictionary membership results, one per predicate
    */
   template <SupportedDictionaryType T>
   std::vector<std::unique_ptr<cudf::column>> evaluate_many_literals(
     cudf::host_span<ast::literal* const> literals,
-    cudf::host_span<ast::ast_operator const> operators)
+    cudf::host_span<ast::ast_operator const> operators,
+    rmm::cuda_stream_view stream,
+    rmm::device_async_resource_ref mr)
   {
     // Host vectors to store the running number of hash set slots and decoded values for all
     // dictionaries
@@ -1087,12 +1090,15 @@ struct dictionary_caster {
             num_input_values, OCCUPANCY_FACTOR)));
       });
 
+    // Get the default device resource ref for temporary memory allocations
+    auto const default_mr = cudf::get_current_device_resource_ref();
+
     // Device vectors to store the running number of hash set slots and decoded values for all
     // dictionaries
-    auto const set_offsets = cudf::detail::make_device_uvector_async(
-      host_set_offsets, stream, cudf::get_current_device_resource_ref());
-    auto const value_offsets = cudf::detail::make_device_uvector_async(
-      host_value_offsets, stream, cudf::get_current_device_resource_ref());
+    auto const set_offsets =
+      cudf::detail::make_device_uvector_async(host_set_offsets, stream, default_mr);
+    auto const value_offsets =
+      cudf::detail::make_device_uvector_async(host_value_offsets, stream, default_mr);
 
     auto const total_set_storage_size = static_cast<size_t>(host_set_offsets.back());
     auto const total_num_values       = static_cast<size_t>(host_value_offsets.back());
@@ -1107,8 +1113,7 @@ struct dictionary_caster {
     set_storage.initialize_async(EMPTY_KEY_SENTINEL, {stream.value()});
 
     // Device vector to store the decoded values for all dictionaries
-    rmm::device_uvector<T> decoded_data{
-      total_num_values, stream, cudf::get_current_device_resource_ref()};
+    rmm::device_uvector<T> decoded_data{total_num_values, stream, default_mr};
     kernel_error error_code(stream);
 
     // Host vector of scalar device views from all literals
@@ -1118,12 +1123,10 @@ struct dictionary_caster {
       host_scalars.push_back(literal->get_value());
     });
     // Device vector of all scalars device views
-    auto const scalars = cudf::detail::make_device_uvector_async(
-      host_scalars, stream, cudf::get_current_device_resource_ref());
+    auto const scalars = cudf::detail::make_device_uvector_async(host_scalars, stream, default_mr);
 
     // Device vector of all operators
-    auto const d_operators = cudf::detail::make_device_uvector_async(
-      operators, stream, cudf::get_current_device_resource_ref());
+    auto const d_operators = cudf::detail::make_device_uvector_async(operators, stream, default_mr);
 
     // Device buffers to store the dictionary membership results for all predicates
     std::vector<rmm::device_buffer> results_buffers(total_num_literals);
@@ -1131,13 +1134,13 @@ struct dictionary_caster {
     std::vector<bool*> host_results_ptrs(total_num_literals);
     std::for_each(
       thrust::counting_iterator(0), thrust::counting_iterator(total_num_literals), [&](auto i) {
-        results_buffers[i] =
-          rmm::device_buffer(total_row_groups, stream, cudf::get_current_device_resource_ref());
+        // Allocate the results buffer using the user-provided memory resource (output memory)
+        results_buffers[i]   = rmm::device_buffer(total_row_groups, stream, mr);
         host_results_ptrs[i] = static_cast<bool*>(results_buffers[i].data());
       });
     // Device vector of pointers to the result buffers
-    auto results_ptrs = cudf::detail::make_device_uvector_async(
-      host_results_ptrs, stream, cudf::get_current_device_resource_ref());
+    auto results_ptrs =
+      cudf::detail::make_device_uvector_async(host_results_ptrs, stream, default_mr);
 
     if constexpr (not cuda::std::is_same_v<T, cudf::string_view>) {
       // Decode fixed width dictionaries and insert them to cuco hash sets, one dictionary per
@@ -1217,16 +1220,23 @@ struct dictionary_caster {
    * @tparam Supported underlying data type of the cudf column
    * @param literals List of literals
    * @param operators List of operators
+   * @param stream CUDA stream to use for the kernel launches
+   * @param mr Device memory resource used to allocate the returned columns' device memory
    *
    * @return A vector of BOOL8 columns containing dictionary membership results, one per predicate
    */
   template <SupportedDictionaryType T>
   std::vector<std::unique_ptr<cudf::column>> evaluate_some_literals(
     cudf::host_span<ast::literal* const> literals,
-    cudf::host_span<ast::ast_operator const> operators)
+    cudf::host_span<ast::ast_operator const> operators,
+    rmm::cuda_stream_view stream,
+    rmm::device_async_resource_ref mr)
   {
     // Get the total number of scalars and literals
     auto const total_num_literals = static_cast<cudf::size_type>(literals.size());
+
+    // Get the default device resource ref for temporary memory allocations
+    auto const default_mr = cudf::get_current_device_resource_ref();
 
     // Host vector of scalar device views from all literals
     std::vector<ast::generic_scalar_device_view> host_scalars;
@@ -1235,12 +1245,10 @@ struct dictionary_caster {
       host_scalars.push_back(literal->get_value());
     });
     // Device vector of all scalars device views
-    auto const scalars = cudf::detail::make_device_uvector_async(
-      host_scalars, stream, cudf::get_current_device_resource_ref());
+    auto const scalars = cudf::detail::make_device_uvector_async(host_scalars, stream, default_mr);
 
     // Device vector of all operators
-    auto const d_operators = cudf::detail::make_device_uvector_async(
-      operators, stream, cudf::get_current_device_resource_ref());
+    auto const d_operators = cudf::detail::make_device_uvector_async(operators, stream, default_mr);
 
     // Device buffers to store the dictionary membership results for all predicates
     std::vector<rmm::device_buffer> results_buffers(total_num_literals);
@@ -1248,14 +1256,14 @@ struct dictionary_caster {
     std::vector<bool*> host_results_ptrs(total_num_literals);
     std::for_each(
       thrust::counting_iterator(0), thrust::counting_iterator(total_num_literals), [&](auto i) {
-        results_buffers[i] =
-          rmm::device_buffer(total_row_groups, stream, cudf::get_current_device_resource_ref());
+        // Allocate the results buffer using the user-provided memory resource (output memory)
+        results_buffers[i]   = rmm::device_buffer(total_row_groups, stream, mr);
         host_results_ptrs[i] = static_cast<bool*>(results_buffers[i].data());
       });
 
     // Device vector of pointers to the result buffers
-    auto results_ptrs = cudf::detail::make_device_uvector_async(
-      host_results_ptrs, stream, cudf::get_current_device_resource_ref());
+    auto results_ptrs =
+      cudf::detail::make_device_uvector_async(host_results_ptrs, stream, default_mr);
 
     // Error code for the dictionary decode kernel
     kernel_error error_code(stream);
@@ -1312,7 +1320,9 @@ struct dictionary_caster {
   std::vector<std::unique_ptr<cudf::column>> operator()(
     cudf::data_type dtype,
     cudf::host_span<ast::literal* const> literals,
-    cudf::host_span<ast::ast_operator const> operators)
+    cudf::host_span<ast::ast_operator const> operators,
+    rmm::cuda_stream_view stream,
+    rmm::device_async_resource_ref mr)
   {
     // Boolean, List, Struct, Dictionary types are not supported
     if constexpr (not is_supported_dictionary_type<T>) {
@@ -1331,10 +1341,10 @@ struct dictionary_caster {
 
       // If there is only one literal, just evaluate expression while decoding dictionary data
       if (literals.size() <= MAX_INLINE_LITERALS) {
-        return evaluate_some_literals<T>(literals, operators);
+        return evaluate_some_literals<T>(literals, operators, stream, mr);
       } else {
         // Else, decode dictionaries to `cudf::static_set`s and evaluate all expressions
-        return evaluate_many_literals<T>(literals, operators);
+        return evaluate_many_literals<T>(literals, operators, stream, mr);
       }
     }
   }
@@ -1451,7 +1461,8 @@ class dictionary_expression_converter : public equality_literals_collector {
   std::vector<cudf::size_type> _col_literals_offsets;
   cudf::host_span<std::vector<ast::literal*> const> _literals;
   ast::tree _dictionary_expr;
-  ast::literal const _always_true{cudf::numeric_scalar<bool>{true}};
+  cudf::numeric_scalar<bool> _always_true_scalar{true};
+  ast::literal const _always_true{_always_true_scalar};
 };
 
 }  // namespace
@@ -1481,6 +1492,9 @@ aggregate_reader_metadata::apply_dictionary_filter(
   // to be evaluated. The table contains #sources * #column_chunks_per_src rows.
   std::vector<std::unique_ptr<cudf::column>> dictionary_membership_columns;
 
+  // Memory resource to allocate dictionary membership columns with
+  auto const mr = cudf::get_current_device_resource_ref();
+
   // Dictionary column index currently being processed
   cudf::size_type dictionary_col_idx = 0;
 
@@ -1504,13 +1518,17 @@ aggregate_reader_metadata::apply_dictionary_filter(
                                              parquet_types[dictionary_col_idx],
                                              chunks[dictionary_col_idx].type_length,
                                              num_dictionary_columns,
-                                             dictionary_col_idx,
-                                             stream};
+                                             dictionary_col_idx};
 
       // Process all predicates associated with the current column and build a BOOL8 column per
       // predicate
-      auto dict_columns = cudf::type_dispatcher<dispatch_storage_type>(
-        dtype, dictionary_col, dtype, literals[input_col_idx], operators[input_col_idx]);
+      auto dict_columns = cudf::type_dispatcher<dispatch_storage_type>(dtype,
+                                                                       dictionary_col,
+                                                                       dtype,
+                                                                       literals[input_col_idx],
+                                                                       operators[input_col_idx],
+                                                                       stream,
+                                                                       mr);
 
       // Add the built columns to the vector of columns
       dictionary_membership_columns.insert(dictionary_membership_columns.end(),
