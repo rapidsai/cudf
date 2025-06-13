@@ -23,6 +23,7 @@ from cudf.utils.dtypes import SIZE_TYPE_DTYPE
 
 if TYPE_CHECKING:
     from cudf.core.dataframe import DataFrame
+    from cudf.core.index import Index
     from cudf.core.series import Series
 
 
@@ -32,6 +33,7 @@ class _RollingBase:
     """
 
     obj: DataFrame | Series
+    _group_keys: Index | None = None
 
     def _apply_agg_column(
         self, source_column: ColumnBase, agg_name: str
@@ -194,6 +196,7 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
     _PROTECTED_KEYS = frozenset(("obj",))
 
     _time_window = False
+    _group_keys = None
 
     _VALID_REDUCTIONS = {
         "sum",
@@ -279,9 +282,17 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
                 ).plc_obj,
             )
             orderby_obj = as_column(range(len(source_column)))
+            if self._group_keys is not None:
+                group_cols: list[plc.Column] = [
+                    col.to_pylibcudf(mode="read")
+                    for col in self._group_keys._columns
+                ]
+            else:
+                group_cols = []
+            group_keys = plc.Table(group_cols)
             with acquire_spill_lock():
                 (plc_result,) = plc.rolling.grouped_range_rolling_window(
-                    plc.Table([]),
+                    group_keys,
                     orderby_obj.to_pylibcudf(mode="read"),
                     plc.types.Order.ASCENDING,
                     plc.types.NullOrder.BEFORE,
@@ -574,27 +585,24 @@ class RollingGroupby(Rolling):
             sort_order
         )
 
-        gb_size = groupby.size().sort_index()
-        self._group_starts = (
-            gb_size.cumsum().shift(1).fillna(0).repeat(gb_size)
-        )
+        if not is_integer(window):
+            gb_size = groupby.size().sort_index()
+            self._group_starts = (
+                gb_size.cumsum().shift(1).fillna(0).repeat(gb_size)
+            )
 
         super().__init__(obj, window, min_periods=min_periods, center=center)
 
-    @acquire_spill_lock()
     def _window_to_window_sizes(self, window):
         if is_integer(window):
-            return cudautils.grouped_window_sizes_from_offset(
-                as_column(range(len(self.obj))).data_array_view(mode="read"),
-                self._group_starts,
-                window,
-            )
+            return super()._window_to_window_sizes(window)
         else:
-            return cudautils.grouped_window_sizes_from_offset(
-                self.obj.index._column.data_array_view(mode="read"),
-                self._group_starts,
-                window,
-            )
+            with acquire_spill_lock():
+                return cudautils.grouped_window_sizes_from_offset(
+                    self.obj.index._column.data_array_view(mode="read"),
+                    self._group_starts,
+                    window,
+                )
 
     def _apply_agg(self, agg_name):
         index = MultiIndex._from_data(
