@@ -712,7 +712,7 @@ table_with_metadata reader::impl::read_chunk_internal(read_mode mode)
       struct_column_positions.push_back(i);  // Record position of this struct column
 
       // Store the struct's properties
-      struct_contents.emplace_back(contents(
+      struct_contents.push_back(contents(
         out_columns[i]->null_count(), out_columns[i]->num_children(), out_columns[i]->size()));
 
       auto col_contents = out_columns[i]->release();
