@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,11 +30,11 @@ namespace cudf {
 namespace detail {
 struct nan_dispatcher {
   template <typename T, typename Predicate>
-  std::enable_if_t<std::is_floating_point_v<T>, std::unique_ptr<column>> operator()(
-    cudf::column_view const& input,
-    Predicate predicate,
-    rmm::cuda_stream_view stream,
-    rmm::device_async_resource_ref mr)
+  std::unique_ptr<column> operator()(cudf::column_view const& input,
+                                     Predicate predicate,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::device_async_resource_ref mr)
+    requires(std::is_floating_point_v<T>)
   {
     auto input_device_view = column_device_view::create(input, stream);
 
@@ -58,11 +58,11 @@ struct nan_dispatcher {
   }
 
   template <typename T, typename Predicate>
-  std::enable_if_t<!std::is_floating_point_v<T>, std::unique_ptr<column>> operator()(
-    cudf::column_view const& input,
-    Predicate predicate,
-    rmm::cuda_stream_view stream,
-    rmm::device_async_resource_ref mr)
+  std::unique_ptr<column> operator()(cudf::column_view const& input,
+                                     Predicate predicate,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::device_async_resource_ref mr)
+    requires(!std::is_floating_point_v<T>)
   {
     CUDF_FAIL("NAN is not supported in a Non-floating point type column");
   }

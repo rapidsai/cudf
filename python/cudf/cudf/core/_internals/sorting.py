@@ -1,7 +1,6 @@
 # Copyright (c) 2020-2025, NVIDIA CORPORATION.
 from __future__ import annotations
 
-import itertools
 from typing import TYPE_CHECKING, Literal
 
 import pylibcudf as plc
@@ -16,24 +15,24 @@ if TYPE_CHECKING:
 
 @acquire_spill_lock()
 def is_sorted(
-    source_columns: list[ColumnBase],
-    ascending: list[bool] | None = None,
-    null_position: list[bool] | None = None,
+    source_columns: Iterable[ColumnBase],
+    ascending: Iterable[bool],
+    na_position: Iterable[Literal["first", "last"]],
 ) -> bool:
     """
     Checks whether the rows of a `table` are sorted in lexicographical order.
 
     Parameters
     ----------
-    source_columns : list of columns
+    source_columns : iterable of columns
         columns to be checked for sort order
-    ascending : None or list-like of booleans
-        None or list-like of boolean values indicating expected sort order of
+    ascending : list-like of booleans
+        list-like of boolean values indicating expected sort order of
         each column. If list-like, size of list-like must be len(columns). If
         None, all columns expected sort order is set to ascending. False (0) -
         descending, True (1) - ascending.
-    null_position : None or list-like of booleans
-        None or list-like of boolean values indicating desired order of nulls
+    na_position : list-like of booleans
+        list-like of boolean values indicating desired order of nulls
         compared to other elements. If list-like, size of list-like must be
         len(columns). If None, null order is set to before. False (0) - after,
         True (1) - before.
@@ -44,32 +43,7 @@ def is_sorted(
         Returns True, if sorted as expected by ``ascending`` and
         ``null_position``, False otherwise.
     """
-    if ascending is None:
-        column_order = [plc.types.Order.ASCENDING] * len(source_columns)
-    else:
-        if len(ascending) != len(source_columns):
-            raise ValueError(
-                f"Expected a list-like of length {len(source_columns)}, "
-                f"got length {len(ascending)} for `ascending`"
-            )
-        column_order = [
-            plc.types.Order.ASCENDING if asc else plc.types.Order.DESCENDING
-            for asc in ascending
-        ]
-
-    if null_position is None:
-        null_precedence = [plc.types.NullOrder.AFTER] * len(source_columns)
-    else:
-        if len(null_position) != len(source_columns):
-            raise ValueError(
-                f"Expected a list-like of length {len(source_columns)}, "
-                f"got length {len(null_position)} for `null_position`"
-            )
-        null_precedence = [
-            plc.types.NullOrder.BEFORE if null else plc.types.NullOrder.AFTER
-            for null in null_position
-        ]
-
+    column_order, null_precedence = ordering(ascending, na_position)
     return plc.sorting.is_sorted(
         plc.Table([col.to_pylibcudf(mode="read") for col in source_columns]),
         column_order,
@@ -78,20 +52,21 @@ def is_sorted(
 
 
 def ordering(
-    column_order: list[bool],
-    null_precedence: Iterable[Literal["first", "last"]],
+    ascending: Iterable[bool],
+    na_position: Iterable[Literal["first", "last"]],
 ) -> tuple[list[plc.types.Order], list[plc.types.NullOrder]]:
     """
-    Construct order and null order vectors
+    Convert bool ascending and string na_position to
+    plc.types.Order and plc.types.NullOrder, respectively.
 
     Parameters
     ----------
-    column_order
+    ascending
         Iterable of bool (True for ascending order, False for descending)
-    null_precedence
+    na_position
         Iterable string for null positions ("first" for start, "last" for end)
 
-    Both iterables must be the same length (not checked)
+    Both iterables must be the same length
 
     Returns
     -------
@@ -99,7 +74,7 @@ def ordering(
     """
     c_column_order = []
     c_null_precedence = []
-    for asc, null in zip(column_order, null_precedence):
+    for asc, null in zip(ascending, na_position, strict=True):
         c_column_order.append(
             plc.types.Order.ASCENDING if asc else plc.types.Order.DESCENDING
         )
@@ -114,9 +89,9 @@ def ordering(
 
 @acquire_spill_lock()
 def order_by(
-    columns_from_table: list[ColumnBase],
-    ascending: list[bool],
-    na_position: Literal["first", "last"],
+    columns_from_table: Iterable[ColumnBase],
+    ascending: Iterable[bool],
+    na_position: Iterable[Literal["first", "last"]],
     *,
     stable: bool,
 ) -> plc.Column:
@@ -125,7 +100,7 @@ def order_by(
 
     Parameters
     ----------
-    columns_from_table : list[Column]
+    columns_from_table : Iterable[Column]
         Columns from the table which will be sorted
     ascending : sequence[bool]
          Sequence of boolean values which correspond to each column
@@ -141,7 +116,7 @@ def order_by(
     -------
     Column of indices that sorts the table
     """
-    order = ordering(ascending, itertools.repeat(na_position))
+    column_order, null_precedence = ordering(ascending, na_position)
     func = (
         plc.sorting.stable_sorted_order if stable else plc.sorting.sorted_order
     )
@@ -149,17 +124,17 @@ def order_by(
         plc.Table(
             [col.to_pylibcudf(mode="read") for col in columns_from_table],
         ),
-        order[0],
-        order[1],
+        column_order,
+        null_precedence,
     )
 
 
 @acquire_spill_lock()
 def sort_by_key(
-    values: list[ColumnBase],
-    keys: list[ColumnBase],
-    ascending: list[bool],
-    na_position: list[Literal["first", "last"]],
+    values: Iterable[ColumnBase],
+    keys: Iterable[ColumnBase],
+    ascending: Iterable[bool],
+    na_position: Iterable[Literal["first", "last"]],
     *,
     stable: bool,
 ) -> list[plc.Column]:
@@ -168,15 +143,15 @@ def sort_by_key(
 
     Parameters
     ----------
-    values : list[Column]
+    values : Iterable[Column]
         Columns of the table which will be sorted
-    keys : list[Column]
+    keys : Iterable[Column]
         Columns making up the sort key
-    ascending : list[bool]
+    ascending : Iterable[bool]
         Sequence of boolean values which correspond to each column
         in the table to be sorted signifying the order of each column
         True - Ascending and False - Descending
-    na_position : list[str]
+    na_position : Iterable[str]
         Sequence of "first" or "last" values (default "first")
         indicating the position of null values when sorting the keys.
     stable : bool
@@ -187,13 +162,52 @@ def sort_by_key(
     list[Column]
         list of value columns sorted by keys
     """
-    order = ordering(ascending, na_position)
+    column_order, null_precedence = ordering(ascending, na_position)
     func = (
         plc.sorting.stable_sort_by_key if stable else plc.sorting.sort_by_key
     )
     return func(
         plc.Table([col.to_pylibcudf(mode="read") for col in values]),
         plc.Table([col.to_pylibcudf(mode="read") for col in keys]),
-        order[0],
-        order[1],
+        column_order,
+        null_precedence,
     ).columns()
+
+
+@acquire_spill_lock()
+def search_sorted(
+    source: Iterable[ColumnBase],
+    values: Iterable[ColumnBase],
+    side: Literal["left", "right"],
+    ascending: Iterable[bool],
+    na_position: Iterable[Literal["first", "last"]],
+) -> plc.Column:
+    """Find indices where elements should be inserted to maintain order
+
+    Parameters
+    ----------
+    source : Iterable of columns
+        Iterable of columns to search in
+    values : Iterable of columns
+        Iterable of value columns to search for
+    side : str {'left', 'right'} optional
+        If 'left', the index of the first suitable location is given.
+        If 'right', return the last such index
+    ascending : Iterable[bool]
+        Iterable of bools which correspond to each column's
+        sort order.
+    na_position : Iterable[str]
+        Iterable of strings which correspond to each column's
+        null position.
+    """
+    column_order, null_precedence = ordering(ascending, na_position)
+    func = getattr(
+        plc.search,
+        "lower_bound" if side == "left" else "upper_bound",
+    )
+    return func(
+        plc.Table([col.to_pylibcudf(mode="read") for col in source]),
+        plc.Table([col.to_pylibcudf(mode="read") for col in values]),
+        column_order,
+        null_precedence,
+    )
