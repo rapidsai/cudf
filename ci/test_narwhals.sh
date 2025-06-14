@@ -25,7 +25,24 @@ rapids-pip-retry install -U -e .
 rapids-logger "Check narwhals versions"
 python -c "import narwhals; print(narwhals.show_versions())"
 
-TESTS_TO_ALWAYS_SKIP_CUDF="test_date_lit[cudf]" # pa.date32() is not supported in cudf
+# test_rolling_mean_expr_lazy_grouped: xpassing in Narwhals
+# test_rolling_std_expr_lazy_grouped: xpassing in Narwhals
+# test_rolling_sum_expr_lazy_grouped: xpassing in Narwhals
+# test_rolling_var_expr_lazy_grouped: xpassing in Narwhals
+TESTS_THAT_NEED_NARWHALS_FIX_FOR_CUDF="\
+test_rolling_mean_expr_lazy_grouped[cudf-expected_a4-3-1-True] or \
+test_rolling_mean_expr_lazy_grouped[cudf-expected_a5-4-1-True] or \
+test_rolling_mean_expr_lazy_grouped[cudf-expected_a6-5-1-True] or \
+test_rolling_std_expr_lazy_grouped[cudf-expected_a4-3-1-True-1] or \
+test_rolling_std_expr_lazy_grouped[cudf-expected_a5-4-1-True-1] or \
+test_rolling_std_expr_lazy_grouped[cudf-expected_a6-5-1-True-0] or \
+test_rolling_sum_expr_lazy_grouped[cudf-expected_a4-3-1-True] or \
+test_rolling_sum_expr_lazy_grouped[cudf-expected_a5-4-1-True] or \
+test_rolling_sum_expr_lazy_grouped[cudf-expected_a6-5-1-True] or \
+test_rolling_var_expr_lazy_grouped[cudf-expected_a4-3-1-True-1] or \
+test_rolling_var_expr_lazy_grouped[cudf-expected_a5-4-1-True-1] or \
+test_rolling_var_expr_lazy_grouped[cudf-expected_a6-5-1-True-0]
+"
 
 rapids-logger "Run narwhals tests for cuDF"
 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest \
@@ -36,7 +53,7 @@ PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest \
     -p no:pytest_benchmark \
     -p cudf.testing.narwhals_test_plugin \
     -k "not ( \
-        ${TESTS_TO_ALWAYS_SKIP_CUDF} \
+        ${TESTS_THAT_NEED_NARWHALS_FIX_FOR_CUDF} \
     )" \
     --numprocesses=8 \
     --dist=worksteal \
