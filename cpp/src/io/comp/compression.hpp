@@ -16,33 +16,12 @@
 
 #pragma once
 
-#include "common.hpp"
-
+#include <cudf/io/detail/codec.hpp>
 #include <cudf/io/types.hpp>
 #include <cudf/utilities/span.hpp>
 
-#include <vector>
-
 namespace CUDF_EXPORT cudf {
 namespace io::detail {
-
-/**
- * @brief Check if compression is supported for the given compression type.
- *
- * @param compression Compression type
- * @return Boolean indicating if the compression type is supported
- */
-[[nodiscard]] bool is_compression_supported(compression_type compression);
-
-/**
- * @brief Compresses a system memory buffer.
- *
- * @param compression Type of compression of the input data
- * @param src         Decompressed host buffer
- *
- * @return Vector containing the Compressed output
- */
-std::vector<uint8_t> compress(compression_type compression, host_span<uint8_t const> src);
 
 /**
  * @brief Maximum size of uncompressed chunks that can be compressed.
@@ -69,21 +48,6 @@ std::vector<uint8_t> compress(compression_type compression, host_span<uint8_t co
 [[nodiscard]] size_t max_compressed_size(compression_type compression, uint32_t uncompressed_size);
 
 /**
- * @brief Compresses device memory buffers.
- *
- * @param compression Type of compression of the input data
- * @param inputs      Device memory buffers to compress
- * @param outputs     Device memory buffers to store the compressed output
- * @param results     Compression results
- * @param stream      CUDA stream used for device memory operations and kernel launches
- */
-void compress(compression_type compression,
-              device_span<device_span<uint8_t const> const> inputs,
-              device_span<device_span<uint8_t> const> outputs,
-              device_span<compression_result> results,
-              rmm::cuda_stream_view stream);
-
-/**
  * @brief Aggregate results of compression into a single statistics object.
  *
  * @param inputs List of uncompressed input buffers
@@ -93,7 +57,7 @@ void compress(compression_type compression,
  */
 [[nodiscard]] writer_compression_statistics collect_compression_statistics(
   device_span<device_span<uint8_t const> const> inputs,
-  device_span<compression_result const> results,
+  device_span<codec_exec_result const> results,
   rmm::cuda_stream_view stream);
 
 }  // namespace io::detail
