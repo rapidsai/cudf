@@ -117,7 +117,7 @@ def decompose(
                 ),
                 decompose(
                     f"{next(names)}__mean_count",
-                    Agg(DataType(pl.Int32()), "count", None, child),
+                    Agg(DataType(pl.Int32()), "count", False, child),  # noqa: FBT003
                     names=names,
                 ),
             )
