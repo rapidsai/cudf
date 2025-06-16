@@ -1246,9 +1246,9 @@ struct page_offset_output_iter {
   using reference         = size_t&;
   using iterator_category = thrust::output_device_iterator_tag;
 
-  CUDF_HOST_DEVICE page_offset_output_iter operator+(int i) { return {p + i}; }
+  __host__ __device__ page_offset_output_iter operator+(int i) { return {p + i}; }
 
-  CUDF_HOST_DEVICE page_offset_output_iter& operator++()
+  __host__ __device__ page_offset_output_iter& operator++()
   {
     p++;
     return *this;
