@@ -6,31 +6,62 @@ from __future__ import annotations
 
 import dataclasses
 import enum
+import itertools
 import math
-import random
+from collections import defaultdict
 from enum import IntEnum
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, TypeVar
 
+import numpy as np
+
 import pylibcudf as plc
 
 from cudf_polars.dsl.ir import IR, DataFrameScan, Scan, Sink, Union, broadcast
-from cudf_polars.experimental.base import PartitionInfo, get_key_name
+from cudf_polars.experimental.base import (
+    ColumnSourceStats,
+    PartitionInfo,
+    StatsCollector,
+    get_key_name,
+)
 from cudf_polars.experimental.dispatch import generate_ir_tasks, lower_ir_node
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
 
-    import numpy as np
     import numpy.typing as npt
 
     from cudf_polars.containers import DataFrame
     from cudf_polars.dsl.expr import NamedExpr
+    from cudf_polars.experimental.base import ColumnStats
     from cudf_polars.experimental.dispatch import LowerIRTransformer
     from cudf_polars.typing import Schema
     from cudf_polars.utils.config import ConfigOptions
 
     T = TypeVar("T", bound=npt.NBitBase)
+
+
+# Cache source stats for each tuple of path names
+_SOURCE_STATS_CACHE: dict[tuple[str, ...], dict[str, ColumnSourceStats]] = {}
+_SOURCE_STATS_CACHE_KEYS: list[tuple[str, ...]] = []
+_SOURCE_STATS_CACHE_MAX_ITEMS: int = 10
+
+
+def _update_source_stats_cache(
+    key: tuple[str, ...],
+    value: dict[str, ColumnSourceStats],
+) -> None:
+    """Update _SOURCE_STATS_CACHE with LRU eviction."""
+    if key in _SOURCE_STATS_CACHE_KEYS:
+        _SOURCE_STATS_CACHE_KEYS.remove(key)
+
+    if key not in _SOURCE_STATS_CACHE and (
+        len(_SOURCE_STATS_CACHE) >= _SOURCE_STATS_CACHE_MAX_ITEMS
+    ):
+        del _SOURCE_STATS_CACHE[_SOURCE_STATS_CACHE_KEYS.pop(0)]
+
+    _SOURCE_STATS_CACHE_KEYS.append(key)
+    _SOURCE_STATS_CACHE[key] = value
 
 
 @lower_ir_node.register(DataFrameScan)
@@ -98,7 +129,11 @@ class ScanPartitionPlan:
         self.flavor = flavor
 
     @staticmethod
-    def from_scan(ir: Scan) -> ScanPartitionPlan:
+    def from_scan(
+        ir: Scan,
+        *,
+        column_statistics: dict[str, ColumnStats],
+    ) -> ScanPartitionPlan:
         """Extract the partitioning plan of a Scan operation."""
         if ir.typ == "parquet":
             # TODO: Use system info to set default blocksize
@@ -107,14 +142,16 @@ class ScanPartitionPlan:
             )
 
             blocksize: int = ir.config_options.executor.target_partition_size
-            # _sample_pq_statistics is generic over the bit-width of the array
-            # We don't care about that here, so we ignore it.
-            stats = _sample_pq_statistics(ir)  # type: ignore[var-annotated]
-            # Some columns (e.g., "include_file_paths") may be present in the schema
-            # but not in the Parquet statistics dict. We use stats.get(column, 0)
-            # to safely fall back to 0 in those cases.
-            file_size = sum(float(stats.get(column, 0)) for column in ir.schema)
-            if file_size > 0:
+            column_sizes = []
+            for name, cs in column_statistics.items():
+                if (
+                    name in ir.schema
+                    and cs.source_stats is not None
+                    and cs.source_stats.storage_size_per_file is not None
+                ):
+                    column_sizes.append(cs.source_stats.storage_size_per_file)
+
+            if (file_size := sum(column_sizes)) > 0:
                 if file_size > blocksize:
                     # Split large files
                     return ScanPartitionPlan(
@@ -265,33 +302,148 @@ class SplitScan(IR):
         return df
 
 
-def _sample_pq_statistics(ir: Scan) -> dict[str, np.floating[T]]:
-    import itertools
-
-    import numpy as np
-
-    # Use average total_uncompressed_size of three files
-    n_sample = min(3, len(ir.paths))
-    metadata = plc.io.parquet_metadata.read_parquet_metadata(
-        plc.io.SourceInfo(random.sample(ir.paths, n_sample))
-    )
-    column_sizes = {}
-    rowgroup_offsets_per_file = np.insert(
-        np.cumsum(metadata.num_rowgroups_per_file()), 0, 0
+def _sample_pq_statistics(ir: Scan) -> dict[str, ColumnSourceStats]:
+    assert ir.config_options.executor.name == "streaming", (
+        "'in-memory' executor not supported in '_sample_pq_statistics"
     )
 
-    # For each column, calculate the `total_uncompressed_size` for each file
-    for name, uncompressed_sizes in metadata.columnchunk_metadata().items():
-        column_sizes[name] = np.array(
-            [
-                np.sum(uncompressed_sizes[start:end])
-                for (start, end) in itertools.pairwise(rowgroup_offsets_per_file)
-            ],
-            dtype="int64",
+    max_file_samples = ir.config_options.executor.parquet_metadata_samples
+    max_rg_samples = ir.config_options.executor.parquet_rowgroup_samples
+
+    total_file_count = len(ir.paths)
+    stride = max(1, int(total_file_count / max_file_samples))
+    sample_paths = ir.paths[: stride * max_file_samples : stride]
+    sampled_file_count = len(sample_paths)
+    exact_statistics: tuple[str, ...] = ()
+
+    # Check table-stats cache
+    source_stats_cached: MutableMapping[str, ColumnSourceStats]
+    try:
+        source_stats_cached = _SOURCE_STATS_CACHE[tuple(ir.paths)]
+    except KeyError:
+        source_stats_cached = {}
+    finally:
+        source_stats = source_stats_cached
+
+    if need_columns := (set(ir.schema) - source_stats_cached.keys()):
+        # Still need columns missing from the cache
+        sample_metadata = plc.io.parquet_metadata.read_parquet_metadata(
+            plc.io.SourceInfo(sample_paths)
         )
 
-    # Return the mean per-file `total_uncompressed_size` for each column
-    return {name: np.mean(sizes) for name, sizes in column_sizes.items()}
+        if total_file_count == sampled_file_count:
+            # We know the "exact" cardinality from our sample
+            cardinality = sample_metadata.num_rows()
+            exact_statistics = ("cardinality",)
+        else:
+            # We must estimate/extrapolate the cardinality from our sample
+            num_rows_per_sampled_file = int(
+                sample_metadata.num_rows() / sampled_file_count
+            )
+            cardinality = num_rows_per_sampled_file * total_file_count
+
+        num_row_groups_per_sampled_file = sample_metadata.num_rowgroups_per_file()
+        rowgroup_offsets_per_file = np.cumsum([0, *num_row_groups_per_sampled_file])
+
+        # For each column, calculate the `mean_uncompressed_size` for a file
+        column_sizes_per_file = {}
+        for name, uncompressed_sizes in sample_metadata.columnchunk_metadata().items():
+            if name in need_columns:
+                column_sizes_per_file[name] = np.array(
+                    [
+                        np.sum(uncompressed_sizes[start:end])
+                        for (start, end) in itertools.pairwise(
+                            rowgroup_offsets_per_file
+                        )
+                    ],
+                    dtype="int64",
+                )
+        # Revise need_columns, since some columns may not be in the file
+        need_columns = need_columns.intersection(column_sizes_per_file)
+
+    if need_columns:
+        # We have un-cached column metadata to process
+
+        # Calculate the `mean_uncompressed_size_per_file` for each column
+        mean_uncompressed_size_per_file = {
+            name: np.mean(sizes) for name, sizes in column_sizes_per_file.items()
+        }
+
+        # Collect real unique-count of first row-group
+        unique_count_estimates: dict[str, int] = {}
+        unique_fraction_estimates: dict[str, float] = {}
+        if max_rg_samples > 0:
+            n = 0
+            samples: defaultdict[str, list[int]] = defaultdict(list)
+            for path, num_rgs in zip(
+                sample_paths, num_row_groups_per_sampled_file, strict=True
+            ):
+                for rg_id in range(num_rgs):
+                    n += 1
+                    samples[path].append(rg_id)
+                    if n == max_rg_samples:
+                        break
+                if n == max_rg_samples:
+                    break
+            options = plc.io.parquet.ParquetReaderOptions.builder(
+                plc.io.SourceInfo(list(samples))
+            ).build()
+            options.set_columns([c for c in ir.schema if c in need_columns])
+            options.set_row_groups(list(samples.values()))
+            tbl_w_meta = plc.io.parquet.read_parquet(options)
+            row_group_num_rows = tbl_w_meta.tbl.num_rows()
+            for name, column in zip(
+                tbl_w_meta.column_names(), tbl_w_meta.columns, strict=True
+            ):
+                if name in need_columns:
+                    row_group_unique_count = plc.stream_compaction.distinct_count(
+                        column,
+                        plc.types.NullPolicy.INCLUDE,
+                        plc.types.NanPolicy.NAN_IS_NULL,
+                    )
+                    unique_fraction_estimates[name] = max(
+                        min(1.0, row_group_unique_count / row_group_num_rows),
+                        0.00001,
+                    )
+                    # Assume that if every row is unique then this is a
+                    # primary key otherwise it's a foreign key and we
+                    # can't use the single row group count estimate
+                    # Example, consider a "foreign" key that has 100
+                    # unique values. If we sample from a single row group,
+                    # we likely obtain a unique count of 100. But we can't
+                    # necessarily deduce that that means that the unique
+                    # count is 100 / num_rows_in_group * num_rows_in_file
+                    if row_group_unique_count == row_group_num_rows:
+                        unique_count_estimates[name] = cardinality
+
+        # Check that the cached stats have the same row-count estimate
+        if source_stats_cached:
+            assert (
+                cardinality == next(iter(source_stats_cached.values())).cardinality
+            ), "Unexpected cardinality in cache."
+
+        # Construct estimated column statistics
+        source_stats = {
+            name: ColumnSourceStats(
+                cardinality=cardinality,
+                storage_size_per_file=mean_uncompressed_size_per_file[name],
+                unique_count=unique_count_estimates.get(name),
+                unique_fraction=unique_fraction_estimates.get(name),
+                exact=exact_statistics,
+            )
+            for name in need_columns
+        }
+
+        if source_stats_cached:
+            # Combine new and cached column stats
+            source_stats = source_stats_cached | source_stats
+
+    if source_stats:
+        # Update the cache
+        _update_source_stats_cache(tuple(ir.paths), source_stats)
+
+    # Return relevant source stats
+    return {name: css for name, css in source_stats.items() if name in ir.schema}
 
 
 @lower_ir_node.register(Scan)
@@ -300,7 +452,14 @@ def _(
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     partition_info: MutableMapping[IR, PartitionInfo]
     if ir.typ in ("csv", "parquet", "ndjson") and ir.n_rows == -1 and ir.skip_rows == 0:
-        plan = ScanPartitionPlan.from_scan(ir)
+        statistics = rec.state.get("statistics")
+        assert isinstance(statistics, StatsCollector), (
+            f"Expected StatsCollector, got {type(statistics)}"
+        )
+        plan = ScanPartitionPlan.from_scan(
+            ir,
+            column_statistics=statistics.column_statistics.get(ir, {}),
+        )
         paths = list(ir.paths)
         if plan.flavor == ScanPartitionFlavor.SPLIT_FILES:
             # Disable chunked reader when splitting files
