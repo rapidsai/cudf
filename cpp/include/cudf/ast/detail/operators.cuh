@@ -21,12 +21,10 @@
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
+#include <cuda/std/cmath>
 #include <cuda/std/optional>
 #include <cuda/std/type_traits>
 
-#include <cmath>
-#include <type_traits>
-#include <utility>
 #include <vector>
 
 namespace CUDF_EXPORT cudf {
@@ -75,105 +73,105 @@ CUDF_HOST_DEVICE inline constexpr decltype(auto) ast_operator_dispatcher(ast_ope
 {
   switch (op) {
     case ast_operator::ADD:
-      return f.template operator()<ast_operator::ADD>(std::forward<Ts>(args)...);
+      return f.template operator()<ast_operator::ADD>(cuda::std::forward<Ts>(args)...);
     case ast_operator::SUB:
-      return f.template operator()<ast_operator::SUB>(std::forward<Ts>(args)...);
+      return f.template operator()<ast_operator::SUB>(cuda::std::forward<Ts>(args)...);
     case ast_operator::MUL:
-      return f.template operator()<ast_operator::MUL>(std::forward<Ts>(args)...);
+      return f.template operator()<ast_operator::MUL>(cuda::std::forward<Ts>(args)...);
     case ast_operator::DIV:
-      return f.template operator()<ast_operator::DIV>(std::forward<Ts>(args)...);
+      return f.template operator()<ast_operator::DIV>(cuda::std::forward<Ts>(args)...);
     case ast_operator::TRUE_DIV:
-      return f.template operator()<ast_operator::TRUE_DIV>(std::forward<Ts>(args)...);
+      return f.template operator()<ast_operator::TRUE_DIV>(cuda::std::forward<Ts>(args)...);
     case ast_operator::FLOOR_DIV:
-      return f.template operator()<ast_operator::FLOOR_DIV>(std::forward<Ts>(args)...);
+      return f.template operator()<ast_operator::FLOOR_DIV>(cuda::std::forward<Ts>(args)...);
     case ast_operator::MOD:
-      return f.template operator()<ast_operator::MOD>(std::forward<Ts>(args)...);
+      return f.template operator()<ast_operator::MOD>(cuda::std::forward<Ts>(args)...);
     case ast_operator::PYMOD:
-      return f.template operator()<ast_operator::PYMOD>(std::forward<Ts>(args)...);
+      return f.template operator()<ast_operator::PYMOD>(cuda::std::forward<Ts>(args)...);
     case ast_operator::POW:
-      return f.template operator()<ast_operator::POW>(std::forward<Ts>(args)...);
+      return f.template operator()<ast_operator::POW>(cuda::std::forward<Ts>(args)...);
     case ast_operator::EQUAL:
-      return f.template operator()<ast_operator::EQUAL>(std::forward<Ts>(args)...);
+      return f.template operator()<ast_operator::EQUAL>(cuda::std::forward<Ts>(args)...);
     case ast_operator::NULL_EQUAL:
-      return f.template operator()<ast_operator::NULL_EQUAL>(std::forward<Ts>(args)...);
+      return f.template operator()<ast_operator::NULL_EQUAL>(cuda::std::forward<Ts>(args)...);
     case ast_operator::NOT_EQUAL:
-      return f.template operator()<ast_operator::NOT_EQUAL>(std::forward<Ts>(args)...);
+      return f.template operator()<ast_operator::NOT_EQUAL>(cuda::std::forward<Ts>(args)...);
     case ast_operator::LESS:
-      return f.template operator()<ast_operator::LESS>(std::forward<Ts>(args)...);
+      return f.template operator()<ast_operator::LESS>(cuda::std::forward<Ts>(args)...);
     case ast_operator::GREATER:
-      return f.template operator()<ast_operator::GREATER>(std::forward<Ts>(args)...);
+      return f.template operator()<ast_operator::GREATER>(cuda::std::forward<Ts>(args)...);
     case ast_operator::LESS_EQUAL:
-      return f.template operator()<ast_operator::LESS_EQUAL>(std::forward<Ts>(args)...);
+      return f.template operator()<ast_operator::LESS_EQUAL>(cuda::std::forward<Ts>(args)...);
     case ast_operator::GREATER_EQUAL:
-      return f.template operator()<ast_operator::GREATER_EQUAL>(std::forward<Ts>(args)...);
+      return f.template operator()<ast_operator::GREATER_EQUAL>(cuda::std::forward<Ts>(args)...);
     case ast_operator::BITWISE_AND:
-      return f.template operator()<ast_operator::BITWISE_AND>(std::forward<Ts>(args)...);
+      return f.template operator()<ast_operator::BITWISE_AND>(cuda::std::forward<Ts>(args)...);
     case ast_operator::BITWISE_OR:
-      return f.template operator()<ast_operator::BITWISE_OR>(std::forward<Ts>(args)...);
+      return f.template operator()<ast_operator::BITWISE_OR>(cuda::std::forward<Ts>(args)...);
     case ast_operator::BITWISE_XOR:
-      return f.template operator()<ast_operator::BITWISE_XOR>(std::forward<Ts>(args)...);
+      return f.template operator()<ast_operator::BITWISE_XOR>(cuda::std::forward<Ts>(args)...);
     case ast_operator::LOGICAL_AND:
-      return f.template operator()<ast_operator::LOGICAL_AND>(std::forward<Ts>(args)...);
+      return f.template operator()<ast_operator::LOGICAL_AND>(cuda::std::forward<Ts>(args)...);
     case ast_operator::NULL_LOGICAL_AND:
-      return f.template operator()<ast_operator::NULL_LOGICAL_AND>(std::forward<Ts>(args)...);
+      return f.template operator()<ast_operator::NULL_LOGICAL_AND>(cuda::std::forward<Ts>(args)...);
     case ast_operator::LOGICAL_OR:
-      return f.template operator()<ast_operator::LOGICAL_OR>(std::forward<Ts>(args)...);
+      return f.template operator()<ast_operator::LOGICAL_OR>(cuda::std::forward<Ts>(args)...);
     case ast_operator::NULL_LOGICAL_OR:
-      return f.template operator()<ast_operator::NULL_LOGICAL_OR>(std::forward<Ts>(args)...);
+      return f.template operator()<ast_operator::NULL_LOGICAL_OR>(cuda::std::forward<Ts>(args)...);
     case ast_operator::IDENTITY:
-      return f.template operator()<ast_operator::IDENTITY>(std::forward<Ts>(args)...);
+      return f.template operator()<ast_operator::IDENTITY>(cuda::std::forward<Ts>(args)...);
     case ast_operator::IS_NULL:
-      return f.template operator()<ast_operator::IS_NULL>(std::forward<Ts>(args)...);
+      return f.template operator()<ast_operator::IS_NULL>(cuda::std::forward<Ts>(args)...);
     case ast_operator::SIN:
-      return f.template operator()<ast_operator::SIN>(std::forward<Ts>(args)...);
+      return f.template operator()<ast_operator::SIN>(cuda::std::forward<Ts>(args)...);
     case ast_operator::COS:
-      return f.template operator()<ast_operator::COS>(std::forward<Ts>(args)...);
+      return f.template operator()<ast_operator::COS>(cuda::std::forward<Ts>(args)...);
     case ast_operator::TAN:
-      return f.template operator()<ast_operator::TAN>(std::forward<Ts>(args)...);
+      return f.template operator()<ast_operator::TAN>(cuda::std::forward<Ts>(args)...);
     case ast_operator::ARCSIN:
-      return f.template operator()<ast_operator::ARCSIN>(std::forward<Ts>(args)...);
+      return f.template operator()<ast_operator::ARCSIN>(cuda::std::forward<Ts>(args)...);
     case ast_operator::ARCCOS:
-      return f.template operator()<ast_operator::ARCCOS>(std::forward<Ts>(args)...);
+      return f.template operator()<ast_operator::ARCCOS>(cuda::std::forward<Ts>(args)...);
     case ast_operator::ARCTAN:
-      return f.template operator()<ast_operator::ARCTAN>(std::forward<Ts>(args)...);
+      return f.template operator()<ast_operator::ARCTAN>(cuda::std::forward<Ts>(args)...);
     case ast_operator::SINH:
-      return f.template operator()<ast_operator::SINH>(std::forward<Ts>(args)...);
+      return f.template operator()<ast_operator::SINH>(cuda::std::forward<Ts>(args)...);
     case ast_operator::COSH:
-      return f.template operator()<ast_operator::COSH>(std::forward<Ts>(args)...);
+      return f.template operator()<ast_operator::COSH>(cuda::std::forward<Ts>(args)...);
     case ast_operator::TANH:
-      return f.template operator()<ast_operator::TANH>(std::forward<Ts>(args)...);
+      return f.template operator()<ast_operator::TANH>(cuda::std::forward<Ts>(args)...);
     case ast_operator::ARCSINH:
-      return f.template operator()<ast_operator::ARCSINH>(std::forward<Ts>(args)...);
+      return f.template operator()<ast_operator::ARCSINH>(cuda::std::forward<Ts>(args)...);
     case ast_operator::ARCCOSH:
-      return f.template operator()<ast_operator::ARCCOSH>(std::forward<Ts>(args)...);
+      return f.template operator()<ast_operator::ARCCOSH>(cuda::std::forward<Ts>(args)...);
     case ast_operator::ARCTANH:
-      return f.template operator()<ast_operator::ARCTANH>(std::forward<Ts>(args)...);
+      return f.template operator()<ast_operator::ARCTANH>(cuda::std::forward<Ts>(args)...);
     case ast_operator::EXP:
-      return f.template operator()<ast_operator::EXP>(std::forward<Ts>(args)...);
+      return f.template operator()<ast_operator::EXP>(cuda::std::forward<Ts>(args)...);
     case ast_operator::LOG:
-      return f.template operator()<ast_operator::LOG>(std::forward<Ts>(args)...);
+      return f.template operator()<ast_operator::LOG>(cuda::std::forward<Ts>(args)...);
     case ast_operator::SQRT:
-      return f.template operator()<ast_operator::SQRT>(std::forward<Ts>(args)...);
+      return f.template operator()<ast_operator::SQRT>(cuda::std::forward<Ts>(args)...);
     case ast_operator::CBRT:
-      return f.template operator()<ast_operator::CBRT>(std::forward<Ts>(args)...);
+      return f.template operator()<ast_operator::CBRT>(cuda::std::forward<Ts>(args)...);
     case ast_operator::CEIL:
-      return f.template operator()<ast_operator::CEIL>(std::forward<Ts>(args)...);
+      return f.template operator()<ast_operator::CEIL>(cuda::std::forward<Ts>(args)...);
     case ast_operator::FLOOR:
-      return f.template operator()<ast_operator::FLOOR>(std::forward<Ts>(args)...);
+      return f.template operator()<ast_operator::FLOOR>(cuda::std::forward<Ts>(args)...);
     case ast_operator::ABS:
-      return f.template operator()<ast_operator::ABS>(std::forward<Ts>(args)...);
+      return f.template operator()<ast_operator::ABS>(cuda::std::forward<Ts>(args)...);
     case ast_operator::RINT:
-      return f.template operator()<ast_operator::RINT>(std::forward<Ts>(args)...);
+      return f.template operator()<ast_operator::RINT>(cuda::std::forward<Ts>(args)...);
     case ast_operator::BIT_INVERT:
-      return f.template operator()<ast_operator::BIT_INVERT>(std::forward<Ts>(args)...);
+      return f.template operator()<ast_operator::BIT_INVERT>(cuda::std::forward<Ts>(args)...);
     case ast_operator::NOT:
-      return f.template operator()<ast_operator::NOT>(std::forward<Ts>(args)...);
+      return f.template operator()<ast_operator::NOT>(cuda::std::forward<Ts>(args)...);
     case ast_operator::CAST_TO_INT64:
-      return f.template operator()<ast_operator::CAST_TO_INT64>(std::forward<Ts>(args)...);
+      return f.template operator()<ast_operator::CAST_TO_INT64>(cuda::std::forward<Ts>(args)...);
     case ast_operator::CAST_TO_UINT64:
-      return f.template operator()<ast_operator::CAST_TO_UINT64>(std::forward<Ts>(args)...);
+      return f.template operator()<ast_operator::CAST_TO_UINT64>(cuda::std::forward<Ts>(args)...);
     case ast_operator::CAST_TO_FLOAT64:
-      return f.template operator()<ast_operator::CAST_TO_FLOAT64>(std::forward<Ts>(args)...);
+      return f.template operator()<ast_operator::CAST_TO_FLOAT64>(cuda::std::forward<Ts>(args)...);
     default: {
 #ifndef __CUDA_ARCH__
       CUDF_FAIL("Invalid operator.");
@@ -273,26 +271,26 @@ template <>
 struct operator_functor<ast_operator::MOD, false> {
   static constexpr auto arity{2};
 
-  template <typename LHS, typename RHS, typename CommonType = std::common_type_t<LHS, RHS>>
+  template <typename LHS, typename RHS, typename CommonType = cuda::std::common_type_t<LHS, RHS>>
   __device__ inline auto operator()(LHS lhs, RHS rhs)
     -> decltype(static_cast<CommonType>(lhs) % static_cast<CommonType>(rhs))
-    requires(std::is_integral_v<CommonType>)
+    requires(cuda::std::is_integral_v<CommonType>)
   {
     return static_cast<CommonType>(lhs) % static_cast<CommonType>(rhs);
   }
 
-  template <typename LHS, typename RHS, typename CommonType = std::common_type_t<LHS, RHS>>
+  template <typename LHS, typename RHS, typename CommonType = cuda::std::common_type_t<LHS, RHS>>
   __device__ inline auto operator()(LHS lhs, RHS rhs)
     -> decltype(fmodf(static_cast<CommonType>(lhs), static_cast<CommonType>(rhs)))
-    requires(std::is_same_v<CommonType, float>)
+    requires(cuda::std::is_same_v<CommonType, float>)
   {
     return fmodf(static_cast<CommonType>(lhs), static_cast<CommonType>(rhs));
   }
 
-  template <typename LHS, typename RHS, typename CommonType = std::common_type_t<LHS, RHS>>
+  template <typename LHS, typename RHS, typename CommonType = cuda::std::common_type_t<LHS, RHS>>
   __device__ inline auto operator()(LHS lhs, RHS rhs)
     -> decltype(fmod(static_cast<CommonType>(lhs), static_cast<CommonType>(rhs)))
-    requires(std::is_same_v<CommonType, double>)
+    requires(cuda::std::is_same_v<CommonType, double>)
   {
     return fmod(static_cast<CommonType>(lhs), static_cast<CommonType>(rhs));
   }
@@ -302,36 +300,36 @@ template <>
 struct operator_functor<ast_operator::PYMOD, false> {
   static constexpr auto arity{2};
 
-  template <typename LHS, typename RHS, typename CommonType = std::common_type_t<LHS, RHS>>
+  template <typename LHS, typename RHS, typename CommonType = cuda::std::common_type_t<LHS, RHS>>
   __device__ inline auto operator()(LHS lhs, RHS rhs)
     -> decltype(((static_cast<CommonType>(lhs) % static_cast<CommonType>(rhs)) +
                  static_cast<CommonType>(rhs)) %
                 static_cast<CommonType>(rhs))
-    requires(std::is_integral_v<CommonType>)
+    requires(cuda::std::is_integral_v<CommonType>)
   {
     return ((static_cast<CommonType>(lhs) % static_cast<CommonType>(rhs)) +
             static_cast<CommonType>(rhs)) %
            static_cast<CommonType>(rhs);
   }
 
-  template <typename LHS, typename RHS, typename CommonType = std::common_type_t<LHS, RHS>>
+  template <typename LHS, typename RHS, typename CommonType = cuda::std::common_type_t<LHS, RHS>>
   __device__ inline auto operator()(LHS lhs, RHS rhs)
     -> decltype(fmodf(fmodf(static_cast<CommonType>(lhs), static_cast<CommonType>(rhs)) +
                         static_cast<CommonType>(rhs),
                       static_cast<CommonType>(rhs)))
-    requires(std::is_same_v<CommonType, float>)
+    requires(cuda::std::is_same_v<CommonType, float>)
   {
     return fmodf(fmodf(static_cast<CommonType>(lhs), static_cast<CommonType>(rhs)) +
                    static_cast<CommonType>(rhs),
                  static_cast<CommonType>(rhs));
   }
 
-  template <typename LHS, typename RHS, typename CommonType = std::common_type_t<LHS, RHS>>
+  template <typename LHS, typename RHS, typename CommonType = cuda::std::common_type_t<LHS, RHS>>
   __device__ inline auto operator()(LHS lhs, RHS rhs)
     -> decltype(fmod(fmod(static_cast<CommonType>(lhs), static_cast<CommonType>(rhs)) +
                        static_cast<CommonType>(rhs),
                      static_cast<CommonType>(rhs)))
-    requires(std::is_same_v<CommonType, double>)
+    requires(cuda::std::is_same_v<CommonType, double>)
   {
     return fmod(fmod(static_cast<CommonType>(lhs), static_cast<CommonType>(rhs)) +
                   static_cast<CommonType>(rhs),
@@ -344,9 +342,9 @@ struct operator_functor<ast_operator::POW, false> {
   static constexpr auto arity{2};
 
   template <typename LHS, typename RHS>
-  __device__ inline auto operator()(LHS lhs, RHS rhs) -> decltype(std::pow(lhs, rhs))
+  __device__ inline auto operator()(LHS lhs, RHS rhs) -> decltype(cuda::std::pow(lhs, rhs))
   {
-    return std::pow(lhs, rhs);
+    return cuda::std::pow(lhs, rhs);
   }
 };
 
@@ -513,10 +511,10 @@ struct operator_functor<ast_operator::SIN, false> {
   static constexpr auto arity{1};
 
   template <typename InputT>
-  __device__ inline auto operator()(InputT input) -> decltype(std::sin(input))
-    requires(std::is_floating_point_v<InputT>)
+  __device__ inline auto operator()(InputT input) -> decltype(cuda::std::sin(input))
+    requires(cuda::std::is_floating_point_v<InputT>)
   {
-    return std::sin(input);
+    return cuda::std::sin(input);
   }
 };
 
@@ -525,10 +523,10 @@ struct operator_functor<ast_operator::COS, false> {
   static constexpr auto arity{1};
 
   template <typename InputT>
-  __device__ inline auto operator()(InputT input) -> decltype(std::cos(input))
-    requires(std::is_floating_point_v<InputT>)
+  __device__ inline auto operator()(InputT input) -> decltype(cuda::std::cos(input))
+    requires(cuda::std::is_floating_point_v<InputT>)
   {
-    return std::cos(input);
+    return cuda::std::cos(input);
   }
 };
 
@@ -537,10 +535,10 @@ struct operator_functor<ast_operator::TAN, false> {
   static constexpr auto arity{1};
 
   template <typename InputT>
-  __device__ inline auto operator()(InputT input) -> decltype(std::tan(input))
-    requires(std::is_floating_point_v<InputT>)
+  __device__ inline auto operator()(InputT input) -> decltype(cuda::std::tan(input))
+    requires(cuda::std::is_floating_point_v<InputT>)
   {
-    return std::tan(input);
+    return cuda::std::tan(input);
   }
 };
 
@@ -549,10 +547,10 @@ struct operator_functor<ast_operator::ARCSIN, false> {
   static constexpr auto arity{1};
 
   template <typename InputT>
-  __device__ inline auto operator()(InputT input) -> decltype(std::asin(input))
-    requires(std::is_floating_point_v<InputT>)
+  __device__ inline auto operator()(InputT input) -> decltype(cuda::std::asin(input))
+    requires(cuda::std::is_floating_point_v<InputT>)
   {
-    return std::asin(input);
+    return cuda::std::asin(input);
   }
 };
 
@@ -561,10 +559,10 @@ struct operator_functor<ast_operator::ARCCOS, false> {
   static constexpr auto arity{1};
 
   template <typename InputT>
-  __device__ inline auto operator()(InputT input) -> decltype(std::acos(input))
-    requires(std::is_floating_point_v<InputT>)
+  __device__ inline auto operator()(InputT input) -> decltype(cuda::std::acos(input))
+    requires(cuda::std::is_floating_point_v<InputT>)
   {
-    return std::acos(input);
+    return cuda::std::acos(input);
   }
 };
 
@@ -573,10 +571,10 @@ struct operator_functor<ast_operator::ARCTAN, false> {
   static constexpr auto arity{1};
 
   template <typename InputT>
-  __device__ inline auto operator()(InputT input) -> decltype(std::atan(input))
-    requires(std::is_floating_point_v<InputT>)
+  __device__ inline auto operator()(InputT input) -> decltype(cuda::std::atan(input))
+    requires(cuda::std::is_floating_point_v<InputT>)
   {
-    return std::atan(input);
+    return cuda::std::atan(input);
   }
 };
 
@@ -585,10 +583,10 @@ struct operator_functor<ast_operator::SINH, false> {
   static constexpr auto arity{1};
 
   template <typename InputT>
-  __device__ inline auto operator()(InputT input) -> decltype(std::sinh(input))
-    requires(std::is_floating_point_v<InputT>)
+  __device__ inline auto operator()(InputT input) -> decltype(cuda::std::sinh(input))
+    requires(cuda::std::is_floating_point_v<InputT>)
   {
-    return std::sinh(input);
+    return cuda::std::sinh(input);
   }
 };
 
@@ -597,10 +595,10 @@ struct operator_functor<ast_operator::COSH, false> {
   static constexpr auto arity{1};
 
   template <typename InputT>
-  __device__ inline auto operator()(InputT input) -> decltype(std::cosh(input))
-    requires(std::is_floating_point_v<InputT>)
+  __device__ inline auto operator()(InputT input) -> decltype(cuda::std::cosh(input))
+    requires(cuda::std::is_floating_point_v<InputT>)
   {
-    return std::cosh(input);
+    return cuda::std::cosh(input);
   }
 };
 
@@ -609,10 +607,10 @@ struct operator_functor<ast_operator::TANH, false> {
   static constexpr auto arity{1};
 
   template <typename InputT>
-  __device__ inline auto operator()(InputT input) -> decltype(std::tanh(input))
-    requires(std::is_floating_point_v<InputT>)
+  __device__ inline auto operator()(InputT input) -> decltype(cuda::std::tanh(input))
+    requires(cuda::std::is_floating_point_v<InputT>)
   {
-    return std::tanh(input);
+    return cuda::std::tanh(input);
   }
 };
 
@@ -621,10 +619,10 @@ struct operator_functor<ast_operator::ARCSINH, false> {
   static constexpr auto arity{1};
 
   template <typename InputT>
-  __device__ inline auto operator()(InputT input) -> decltype(std::asinh(input))
-    requires(std::is_floating_point_v<InputT>)
+  __device__ inline auto operator()(InputT input) -> decltype(cuda::std::asinh(input))
+    requires(cuda::std::is_floating_point_v<InputT>)
   {
-    return std::asinh(input);
+    return cuda::std::asinh(input);
   }
 };
 
@@ -633,10 +631,10 @@ struct operator_functor<ast_operator::ARCCOSH, false> {
   static constexpr auto arity{1};
 
   template <typename InputT>
-  __device__ inline auto operator()(InputT input) -> decltype(std::acosh(input))
-    requires(std::is_floating_point_v<InputT>)
+  __device__ inline auto operator()(InputT input) -> decltype(cuda::std::acosh(input))
+    requires(cuda::std::is_floating_point_v<InputT>)
   {
-    return std::acosh(input);
+    return cuda::std::acosh(input);
   }
 };
 
@@ -645,10 +643,10 @@ struct operator_functor<ast_operator::ARCTANH, false> {
   static constexpr auto arity{1};
 
   template <typename InputT>
-  __device__ inline auto operator()(InputT input) -> decltype(std::atanh(input))
-    requires(std::is_floating_point_v<InputT>)
+  __device__ inline auto operator()(InputT input) -> decltype(cuda::std::atanh(input))
+    requires(cuda::std::is_floating_point_v<InputT>)
   {
-    return std::atanh(input);
+    return cuda::std::atanh(input);
   }
 };
 
@@ -657,9 +655,9 @@ struct operator_functor<ast_operator::EXP, false> {
   static constexpr auto arity{1};
 
   template <typename InputT>
-  __device__ inline auto operator()(InputT input) -> decltype(std::exp(input))
+  __device__ inline auto operator()(InputT input) -> decltype(cuda::std::exp(input))
   {
-    return std::exp(input);
+    return cuda::std::exp(input);
   }
 };
 
@@ -668,9 +666,9 @@ struct operator_functor<ast_operator::LOG, false> {
   static constexpr auto arity{1};
 
   template <typename InputT>
-  __device__ inline auto operator()(InputT input) -> decltype(std::log(input))
+  __device__ inline auto operator()(InputT input) -> decltype(cuda::std::log(input))
   {
-    return std::log(input);
+    return cuda::std::log(input);
   }
 };
 
@@ -679,9 +677,9 @@ struct operator_functor<ast_operator::SQRT, false> {
   static constexpr auto arity{1};
 
   template <typename InputT>
-  __device__ inline auto operator()(InputT input) -> decltype(std::sqrt(input))
+  __device__ inline auto operator()(InputT input) -> decltype(cuda::std::sqrt(input))
   {
-    return std::sqrt(input);
+    return cuda::std::sqrt(input);
   }
 };
 
@@ -690,9 +688,9 @@ struct operator_functor<ast_operator::CBRT, false> {
   static constexpr auto arity{1};
 
   template <typename InputT>
-  __device__ inline auto operator()(InputT input) -> decltype(std::cbrt(input))
+  __device__ inline auto operator()(InputT input) -> decltype(cuda::std::cbrt(input))
   {
-    return std::cbrt(input);
+    return cuda::std::cbrt(input);
   }
 };
 
@@ -701,9 +699,9 @@ struct operator_functor<ast_operator::CEIL, false> {
   static constexpr auto arity{1};
 
   template <typename InputT>
-  __device__ inline auto operator()(InputT input) -> decltype(std::ceil(input))
+  __device__ inline auto operator()(InputT input) -> decltype(cuda::std::ceil(input))
   {
-    return std::ceil(input);
+    return cuda::std::ceil(input);
   }
 };
 
@@ -712,9 +710,9 @@ struct operator_functor<ast_operator::FLOOR, false> {
   static constexpr auto arity{1};
 
   template <typename InputT>
-  __device__ inline auto operator()(InputT input) -> decltype(std::floor(input))
+  __device__ inline auto operator()(InputT input) -> decltype(cuda::std::floor(input))
   {
-    return std::floor(input);
+    return cuda::std::floor(input);
   }
 };
 
@@ -724,15 +722,15 @@ struct operator_functor<ast_operator::ABS, false> {
 
   // Only accept signed or unsigned types (both require is_arithmetic<T> to be true)
   template <typename InputT>
-  __device__ inline auto operator()(InputT input) -> decltype(std::abs(input))
-    requires(std::is_signed_v<InputT>)
+  __device__ inline auto operator()(InputT input) -> decltype(cuda::std::abs(input))
+    requires(cuda::std::is_signed_v<InputT>)
   {
-    return std::abs(input);
+    return cuda::std::abs(input);
   }
 
   template <typename InputT>
   __device__ inline auto operator()(InputT input) -> decltype(input)
-    requires(std::is_unsigned_v<InputT>)
+    requires(cuda::std::is_unsigned_v<InputT>)
   {
     return input;
   }
@@ -743,9 +741,9 @@ struct operator_functor<ast_operator::RINT, false> {
   static constexpr auto arity{1};
 
   template <typename InputT>
-  __device__ inline auto operator()(InputT input) -> decltype(std::rint(input))
+  __device__ inline auto operator()(InputT input) -> decltype(cuda::std::rint(input))
   {
-    return std::rint(input);
+    return cuda::std::rint(input);
   }
 };
 
