@@ -59,12 +59,28 @@ def to_request(
 
 
 class RollingWindow(Expr):
-    __slots__ = ("closed_window", "offset", "orderby", "period")
-    _non_child = ("dtype", "period", "offset", "closed_window", "orderby")
+    __slots__ = (
+        "closed_window",
+        "following",
+        "offset",
+        "orderby",
+        "orderby_dtype",
+        "period",
+        "preceding",
+    )
+    _non_child = (
+        "dtype",
+        "orderby_dtype",
+        "offset",
+        "period",
+        "closed_window",
+        "orderby",
+    )
 
     def __init__(
         self,
         dtype: DataType,
+        orderby_dtype: DataType,
         offset: Duration,
         period: Duration,
         closed_window: ClosedInterval,
@@ -72,8 +88,16 @@ class RollingWindow(Expr):
         agg: Expr,
     ) -> None:
         self.dtype = dtype
+        self.orderby_dtype = orderby_dtype
+        # NOTE: Save original `offset` and `period` args,
+        # because the `preceding` and `following` attributes
+        # cannot be serialized (and must be reconstructed
+        # within `__init__`).
         self.offset = offset
         self.period = period
+        self.preceding, self.following = offsets_to_windows(
+            orderby_dtype, offset, period
+        )
         self.closed_window = closed_window
         self.orderby = orderby
         self.children = (agg,)
@@ -103,7 +127,8 @@ class RollingWindow(Expr):
         else:
             orderby_obj = orderby.obj
         preceding, following = range_window_bounds(
-            *offsets_to_windows(orderby.obj.type(), self.offset, self.period),
+            self.preceding,
+            self.following,
             self.closed_window,
         )
         if orderby.obj.null_count() != 0:
