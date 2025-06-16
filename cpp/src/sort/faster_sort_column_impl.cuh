@@ -32,7 +32,7 @@ namespace detail {
 
 template <typename F>
 struct float_pair {
-  size_type bnan;
+  size_type s;
   F f;
 };
 
@@ -40,7 +40,7 @@ template <typename F>
 struct float_decomposer {
   __device__ cuda::std::tuple<size_type&, F&> operator()(float_pair<F>& key) const
   {
-    return {key.bnan, key.f};
+    return {key.s, key.f};
   }
 };
 
@@ -49,8 +49,8 @@ struct float_to_pair_and_seq {
   F* fs;
   __device__ cuda::std::pair<float_pair<F>, size_type> operator()(cudf::size_type idx)
   {
-    auto f = fs[idx];
-    auto s = (isnan(f) * idx);  // makes stable
+    auto const f = fs[idx];
+    auto const s = (isnan(f) * (idx + 1));  // multiplier helps keep the sort stable for NaNs
     return {float_pair<F>{s, f}, idx};
   }
 };
@@ -94,6 +94,8 @@ struct faster_sorted_order_fn {
     // For other fixed-width types, thrust may use merge-sort.
     // The API sorts inplace so it requires making a copy of the input data
     // and creating the input indices sequence.
+    thrust::sequence(
+      rmm::exec_policy_nosync(stream), indices.begin<size_type>(), indices.end<size_type>(), 0);
 
     auto const do_sort = [&](auto const comp) {
       if constexpr (method == sort_method::STABLE) {
@@ -118,11 +120,12 @@ struct faster_sorted_order_fn {
     }
   }
 
-  template <typename T, CUDF_ENABLE_IF(cudf::is_floating_point<T>())>
+  template <typename T>
   void operator()(mutable_column_view& input,
                   mutable_column_view& indices,  // no longer preload this
                   bool ascending,
                   rmm::cuda_stream_view stream)
+    requires(cudf::is_floating_point<T>())
   {
     auto pair_in  = rmm::device_uvector<float_pair<T>>(input.size(), stream);
     auto d_in     = pair_in.begin();
@@ -145,29 +148,34 @@ struct faster_sorted_order_fn {
     auto const n          = input.size();
     // cub radix sort implementation is always stable
     std::size_t tmp_bytes = 0;
-    cub::DeviceRadixSort::SortPairs(
-      nullptr, tmp_bytes, d_in, d_out, dv_in, dv_out, n, decomposer, 0, end_bit, sv);
-    auto tmp_stg = rmm::device_buffer(tmp_bytes, stream);
     if (ascending) {
+      cub::DeviceRadixSort::SortPairs(
+        nullptr, tmp_bytes, d_in, d_out, dv_in, dv_out, n, decomposer, 0, end_bit, sv);
+      auto tmp_stg = rmm::device_buffer(tmp_bytes, stream);
       cub::DeviceRadixSort::SortPairs(
         tmp_stg.data(), tmp_bytes, d_in, d_out, dv_in, dv_out, n, decomposer, 0, end_bit, sv);
     } else {
+      cub::DeviceRadixSort::SortPairsDescending(
+        nullptr, tmp_bytes, d_in, d_out, dv_in, dv_out, n, decomposer, 0, end_bit, sv);
+      auto tmp_stg = rmm::device_buffer(tmp_bytes, stream);
       cub::DeviceRadixSort::SortPairsDescending(
         tmp_stg.data(), tmp_bytes, d_in, d_out, dv_in, dv_out, n, decomposer, 0, end_bit, sv);
     }
   }
 
-  template <typename T, CUDF_ENABLE_IF(cudf::is_fixed_width<T>() && !cudf::is_floating_point<T>())>
+  template <typename T>
   void operator()(mutable_column_view& input,
                   mutable_column_view& indices,
                   bool ascending,
                   rmm::cuda_stream_view stream)
+    requires(cudf::is_fixed_width<T>() && !cudf::is_floating_point<T>())
   {
     faster_sort<T>(input, indices, ascending, stream);
   }
 
-  template <typename T, CUDF_ENABLE_IF(not cudf::is_fixed_width<T>())>
+  template <typename T>
   void operator()(mutable_column_view&, mutable_column_view&, bool, rmm::cuda_stream_view)
+    requires((not cudf::is_fixed_width<T>()))
   {
     CUDF_UNREACHABLE("invalid type for faster sort");
   }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1110,6 +1110,15 @@ TEST_F(SortDouble, InfinityAndNan)
     cudf::test::fixed_width_column_wrapper<cudf::size_type>(
       {5, 11, 0, 14, 7, 8, 6, 4, 10, 1, 2, 3, 9, 12, 13});
   auto results = cudf::sorted_order(cudf::table_view({input}));
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
+}
+
+TEST_F(SortDouble, Subnormal)
+{
+  auto input = cudf::test::fixed_width_column_wrapper<double>(
+    {4e-308, 3.3333333333e-320, 4.940656458412465441765688e-324, 0.0});
+  auto expected = cudf::test::fixed_width_column_wrapper<cudf::size_type>({3, 2, 1, 0});
+  auto results  = cudf::sorted_order(cudf::table_view({input}));
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
 }
 
