@@ -36,7 +36,8 @@ if TYPE_CHECKING:
 if sys.version_info >= (3, 11):
     from typing import TypedDict
 else:
-    from typing_extensions import TypedDict
+    # Inheriting from TypeDict + Generic added in python 3.11
+    from typing_extensions import TypedDict  # pragma: no cover
 
 
 __all__: list[str] = [
