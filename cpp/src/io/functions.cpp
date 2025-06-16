@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-#include "io/comp/comp.hpp"
-#include "io/comp/io_uncomp.hpp"
 #include "io/orc/orc.hpp"
 #include "io/utilities/getenv_or.hpp"
 
@@ -27,6 +25,7 @@
 #include <cudf/io/data_sink.hpp>
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/detail/avro.hpp>
+#include <cudf/io/detail/codec.hpp>
 #include <cudf/io/detail/csv.hpp>
 #include <cudf/io/detail/json.hpp>
 #include <cudf/io/detail/orc.hpp>
