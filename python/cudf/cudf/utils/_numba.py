@@ -3,26 +3,11 @@ from __future__ import annotations
 
 import glob
 import os
-from functools import lru_cache
 from importlib.util import find_spec
 
 import numba
 from numba import config as numba_config
 from packaging import version
-
-
-# Use an lru_cache with a single value to allow a delayed import of
-# strings_udf. This is the easiest way to break an otherwise circular import
-# loop of _lib.*->cudautils->_numba->_lib.strings_udf
-@lru_cache
-def _get_cuda_build_version():
-    from cudf._lib import strings_udf
-
-    # The version is an integer, parsed as 1000 * major + 10 * minor
-    cuda_build_version = strings_udf.get_cuda_build_version()
-    cuda_major_version = cuda_build_version // 1000
-    cuda_minor_version = (cuda_build_version % 1000) // 10
-    return (cuda_major_version, cuda_minor_version)
 
 
 def _get_best_ptx_file(archs, max_compute_capability):
