@@ -130,6 +130,6 @@ def test_sort_slice(df, engine, offset):
 
     with pytest.raises(
         exception,
-            match="sort does not support multiple partitions for slices with offset.",
-        ):
+        match="sort does not support multiple partitions for slices with offset.",
+    ):
         assert_gpu_result_equal(q, engine=engine)

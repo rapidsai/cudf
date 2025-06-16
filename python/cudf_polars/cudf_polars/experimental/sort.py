@@ -74,8 +74,12 @@ def find_sort_splits(
     sort_boundaries = plc.Table(sort_boundaries)
     # Now we find the first and last row in the local table corresponding to the split value
     # (first and last, because there may be multiple rows with the same split value)
-    split_first_col = plc.search.lower_bound(tbl, sort_boundaries, column_order, null_order)
-    split_last_col = plc.search.upper_bound(tbl, sort_boundaries, column_order, null_order)
+    split_first_col = plc.search.lower_bound(
+        tbl, sort_boundaries, column_order, null_order
+    )
+    split_last_col = plc.search.upper_bound(
+        tbl, sort_boundaries, column_order, null_order
+    )
     # And convert to arrow/CPU for final processing
     split_first_col = plc.interop.to_arrow(split_first_col).to_pylist()
     split_last_col = plc.interop.to_arrow(split_last_col).to_pylist()
@@ -142,7 +146,7 @@ def _get_final_sort_boundaries(
 
     Parameters
     ----------
-    split_candidates
+    sort_boundaries_candidates
         All gathered split candidates.
     column_order
         The order in which the split candidates are sorted.
@@ -177,7 +181,9 @@ def _get_final_sort_boundaries(
         sorted_candidates, selected_candidates, plc.copying.OutOfBoundsPolicy.DONT_CHECK
     )
 
-    return DataFrame.from_table(sort_boundaries, sort_boundaries_candidates.column_names)
+    return DataFrame.from_table(
+        sort_boundaries, sort_boundaries_candidates.column_names
+    )
 
 
 def _sort_boundaries_graph(
@@ -187,7 +193,7 @@ def _sort_boundaries_graph(
     null_order: Sequence[plc.types.NullOrder],
     count: int,
 ) -> tuple[tuple[str, int], MutableMapping[Any, Any]]:
-    """ Graph to get the boundaries from all partitions. """
+    """Graph to get the boundaries from all partitions."""
     local_boundaries_name = f"sort-boundaries_local-{name_in}"
     concat_boundaries_name = f"sort-boundaries-concat-{name_in}"
     global_boundaries_name = f"sort-boundaries-{name_in}"
@@ -206,7 +212,11 @@ def _sort_boundaries_graph(
 
     graph[(concat_boundaries_name, 0)] = (_concat, *_concat_list)
     graph[(global_boundaries_name, 0)] = (
-        _get_final_sort_boundaries, (concat_boundaries_name, 0), column_order, null_order, count
+        _get_final_sort_boundaries,
+        (concat_boundaries_name, 0),
+        column_order,
+        null_order,
+        count,
     )
     return (global_boundaries_name, 0), graph
 
@@ -337,9 +347,9 @@ class ShuffleSorted(IR):
     _non_child = ("schema", "by", "order", "null_order", "config_options")
     by: tuple[NamedExpr, ...]
     """Keys by which the data was sorted."""
-    order: tuple[plc.types.Order, ...] | None
+    order: tuple[plc.types.Order, ...]
     """Sort order if sorted."""
-    null_order: tuple[plc.types.NullOrder, ...] | None
+    null_order: tuple[plc.types.NullOrder, ...]
     """Null precedence if sorted."""
     config_options: ConfigOptions
     """Configuration options."""
@@ -471,7 +481,7 @@ def _(
         # We should not reach here as this is checked in the lower_ir_node
         raise NotImplementedError("Sorting columns must be column names.")
 
-    child, = ir.children
+    (child,) = ir.children
 
     sort_boundaries_name, graph = _sort_boundaries_graph(
         get_key_name(child),
