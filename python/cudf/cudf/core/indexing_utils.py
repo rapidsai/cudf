@@ -10,7 +10,6 @@ import numpy as np
 import pylibcudf as plc
 
 from cudf.api.types import _is_scalar_or_zero_d_array, is_integer
-from cudf.core._internals import copying, sorting
 from cudf.core.column.column import as_column
 from cudf.core.copy_types import BooleanMask, GatherMap
 from cudf.core.dtypes import CategoricalDtype
@@ -430,40 +429,39 @@ def ordered_find(needles: ColumnBase, haystack: ColumnBase) -> GatherMap:
         plc.Table([haystack.to_pylibcudf(mode="read")]),
         plc.types.NullEquality.EQUAL,
     )
-    rgather = (
-        type(haystack)
-        .from_pylibcudf(right_rows)
-        ._with_type_metadata(haystack.dtype)
-    )
-    (right_order_plc,) = copying.gather(
-        [as_column(range(len(haystack)), dtype=np.dtype(np.int32))],
-        rgather,  # type: ignore[arg-type]
-        nullify=True,
-    )
-    right_order = type(haystack).from_pylibcudf(right_order_plc)
-    if right_order.null_count > 0:
+    right_order = plc.copying.gather(
+        plc.Table(
+            [
+                plc.filling.sequence(
+                    len(haystack), plc.Scalar.from_py(0), plc.Scalar.from_py(1)
+                )
+            ]
+        ),
+        right_rows,
+        plc.copying.OutOfBoundsPolicy.NULLIFY,
+    ).columns()[0]
+    if right_order.null_count() > 0:
         raise KeyError("Not all keys in index")
-    lgather = (
-        type(needles)
-        .from_pylibcudf(left_rows)
-        ._with_type_metadata(needles.dtype)
-    )
-    (left_order_plc,) = copying.gather(
-        [as_column(range(len(needles)), dtype=np.dtype(np.int32))],
-        lgather,  # type: ignore[arg-type]
-        nullify=False,
-    )
-    left_order = type(needles).from_pylibcudf(left_order_plc)
-    (rgather_plc,) = sorting.sort_by_key(
-        [rgather],
-        [left_order, right_order],
-        [True, True],
-        ["last", "last"],
-        stable=True,
-    )
-    rgather = type(rgather).from_pylibcudf(rgather_plc)
+    left_order = plc.copying.gather(
+        plc.Table(
+            [
+                plc.filling.sequence(
+                    len(needles), plc.Scalar.from_py(0), plc.Scalar.from_py(1)
+                )
+            ]
+        ),
+        left_rows,
+        plc.copying.OutOfBoundsPolicy.DONT_CHECK,
+    ).columns()[0]
+
+    right_rows = plc.sorting.stable_sort_by_key(
+        plc.Table([right_rows]),
+        plc.Table([left_order, right_order]),
+        [plc.types.Order.ASCENDING] * 2,
+        [plc.types.NullOrder.AFTER] * 2,
+    ).columns()[0]
     return GatherMap.from_column_unchecked(
-        rgather,  # type: ignore[arg-type]
+        type(haystack).from_pylibcudf(right_rows),  # type: ignore[arg-type]
         len(haystack),
         nullify=False,
     )
