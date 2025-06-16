@@ -34,9 +34,9 @@ if TYPE_CHECKING:
 
 
 if sys.version_info >= (3, 11):
-    from typing import TypedDict
-else:
     # Inheriting from TypeDict + Generic added in python 3.11
+    from typing import TypedDict  # pragma: no cover
+else:
     from typing_extensions import TypedDict  # pragma: no cover
 
 
