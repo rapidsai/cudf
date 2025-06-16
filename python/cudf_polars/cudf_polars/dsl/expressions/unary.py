@@ -42,7 +42,7 @@ class Cast(Expr):
         """Evaluate this expression given a dataframe for context."""
         (child,) = self.children
         column = child.evaluate(df, context=context)
-        return column.astype(self.dtype.plc)
+        return column.astype(self.dtype)
 
 
 class Len(Expr):
@@ -61,7 +61,8 @@ class Len(Expr):
             plc.Column.from_scalar(
                 plc.Scalar.from_py(df.num_rows, self.dtype.plc),
                 1,
-            )
+            ),
+            dtype=self.dtype,
         )
 
     @property
@@ -173,7 +174,8 @@ class UnaryFunction(Expr):
                         if round_mode == "half_to_even"
                         else plc.round.RoundingMethod.HALF_UP
                     ),
-                )
+                ),
+                dtype=self.dtype,
             ).sorted_like(values)  # pragma: no cover
         elif self.name == "unique":
             (maintain_order,) = self.options
@@ -203,9 +205,10 @@ class UnaryFunction(Expr):
                     plc.types.NanEquality.ALL_EQUAL,
                 )
             (column,) = result.columns()
+            result = Column(column, dtype=self.dtype)
             if maintain_order:
-                return Column(column).sorted_like(values)
-            return Column(column)
+                result = result.sorted_like(values)
+            return result
         elif self.name == "set_sorted":
             (column,) = (child.evaluate(df, context=context) for child in self.children)
             (asc,) = self.options
@@ -237,7 +240,8 @@ class UnaryFunction(Expr):
             return Column(
                 plc.stream_compaction.drop_nulls(
                     plc.Table([column.obj]), [0], 1
-                ).columns()[0]
+                ).columns()[0],
+                dtype=self.dtype,
             )
         elif self.name == "fill_null":
             column = self.children[0].evaluate(df, context=context)
@@ -258,14 +262,17 @@ class UnaryFunction(Expr):
                 arg = plc.unary.cast(
                     plc.Column.from_scalar(arg, 1), column.obj.type()
                 ).to_scalar()
-            return Column(plc.replace.replace_nulls(column.obj, arg))
+            return Column(plc.replace.replace_nulls(column.obj, arg), dtype=self.dtype)
         elif self.name in self._OP_MAPPING:
             column = self.children[0].evaluate(df, context=context)
             if column.obj.type().id() != self.dtype.id():
                 arg = plc.unary.cast(column.obj, self.dtype.plc)
             else:
                 arg = column.obj
-            return Column(plc.unary.unary_operation(arg, self._OP_MAPPING[self.name]))
+            return Column(
+                plc.unary.unary_operation(arg, self._OP_MAPPING[self.name]),
+                dtype=self.dtype,
+            )
         elif self.name in UnaryFunction._supported_cum_aggs:
             column = self.children[0].evaluate(df, context=context)
             plc_col = column.obj
@@ -309,7 +316,10 @@ class UnaryFunction(Expr):
             elif self.name == "cum_max":
                 agg = plc.aggregation.max()
 
-            return Column(plc.reduce.scan(plc_col, agg, plc.reduce.ScanType.INCLUSIVE))
+            return Column(
+                plc.reduce.scan(plc_col, agg, plc.reduce.ScanType.INCLUSIVE),
+                dtype=self.dtype,
+            )
         raise NotImplementedError(
             f"Unimplemented unary function {self.name=}"
         )  # pragma: no cover; init trips first
