@@ -127,9 +127,7 @@ class RollingWindow(Expr):
         else:
             orderby_obj = orderby.obj
         preceding, following = range_window_bounds(
-            self.preceding,
-            self.following,
-            self.closed_window,
+            self.preceding, self.following, self.closed_window
         )
         if orderby.obj.null_count() != 0:
             raise RuntimeError(
