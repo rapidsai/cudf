@@ -47,21 +47,17 @@ struct return_type_functor {
    * @tparam RHS Right input type.
    * @param result Pointer whose value is assigned to the result data type.
    */
-  template <typename OperatorFunctor,
-            typename LHS,
-            typename RHS,
-            std::enable_if_t<is_valid_binary_op<OperatorFunctor, LHS, RHS>>* = nullptr>
+  template <typename OperatorFunctor, typename LHS, typename RHS>
   void operator()(cudf::data_type& result)
+    requires(is_valid_binary_op<OperatorFunctor, LHS, RHS>)
   {
     using Out = cuda::std::invoke_result_t<OperatorFunctor, LHS, RHS>;
     result    = cudf::data_type{cudf::type_to_id<Out>()};
   }
 
-  template <typename OperatorFunctor,
-            typename LHS,
-            typename RHS,
-            std::enable_if_t<!is_valid_binary_op<OperatorFunctor, LHS, RHS>>* = nullptr>
+  template <typename OperatorFunctor, typename LHS, typename RHS>
   void operator()(cudf::data_type& result)
+    requires(!is_valid_binary_op<OperatorFunctor, LHS, RHS>)
   {
 #ifndef __CUDA_ARCH__
     CUDF_FAIL("Invalid binary operation. Return type cannot be determined.");
@@ -78,19 +74,17 @@ struct return_type_functor {
    * @tparam T Input type.
    * @param result Pointer whose value is assigned to the result data type.
    */
-  template <typename OperatorFunctor,
-            typename T,
-            std::enable_if_t<is_valid_unary_op<OperatorFunctor, T>>* = nullptr>
+  template <typename OperatorFunctor, typename T>
   void operator()(cudf::data_type& result)
+    requires(is_valid_unary_op<OperatorFunctor, T>)
   {
     using Out = cuda::std::invoke_result_t<OperatorFunctor, T>;
     result    = cudf::data_type{cudf::type_to_id<Out>()};
   }
 
-  template <typename OperatorFunctor,
-            typename T,
-            std::enable_if_t<!is_valid_unary_op<OperatorFunctor, T>>* = nullptr>
+  template <typename OperatorFunctor, typename T>
   void operator()(cudf::data_type& result)
+    requires(!is_valid_unary_op<OperatorFunctor, T>)
   {
 #ifndef __CUDA_ARCH__
     CUDF_FAIL("Invalid unary operation. Return type cannot be determined.");
@@ -112,20 +106,16 @@ struct return_type_functor {
  */
 template <typename OperatorFunctor>
 struct single_dispatch_binary_operator_types {
-  template <typename LHS,
-            typename F,
-            typename... Ts,
-            std::enable_if_t<is_valid_binary_op<OperatorFunctor, LHS, LHS>>* = nullptr>
+  template <typename LHS, typename F, typename... Ts>
   inline void operator()(F&& f, Ts&&... args)
+    requires(is_valid_binary_op<OperatorFunctor, LHS, LHS>)
   {
     f.template operator()<OperatorFunctor, LHS, LHS>(std::forward<Ts>(args)...);
   }
 
-  template <typename LHS,
-            typename F,
-            typename... Ts,
-            std::enable_if_t<!is_valid_binary_op<OperatorFunctor, LHS, LHS>>* = nullptr>
+  template <typename LHS, typename F, typename... Ts>
   inline void operator()(F&& f, Ts&&... args)
+    requires(!is_valid_binary_op<OperatorFunctor, LHS, LHS>)
   {
 #ifndef __CUDA_ARCH__
     CUDF_FAIL("Invalid binary operation.");
@@ -198,20 +188,16 @@ inline constexpr void binary_operator_dispatcher(
  */
 template <typename OperatorFunctor>
 struct dispatch_unary_operator_types {
-  template <typename InputT,
-            typename F,
-            typename... Ts,
-            std::enable_if_t<is_valid_unary_op<OperatorFunctor, InputT>>* = nullptr>
+  template <typename InputT, typename F, typename... Ts>
   inline void operator()(F&& f, Ts&&... args)
+    requires(is_valid_unary_op<OperatorFunctor, InputT>)
   {
     f.template operator()<OperatorFunctor, InputT>(std::forward<Ts>(args)...);
   }
 
-  template <typename InputT,
-            typename F,
-            typename... Ts,
-            std::enable_if_t<!is_valid_unary_op<OperatorFunctor, InputT>>* = nullptr>
+  template <typename InputT, typename F, typename... Ts>
   inline void operator()(F&& f, Ts&&... args)
+    requires(!is_valid_unary_op<OperatorFunctor, InputT>)
   {
 #ifndef __CUDA_ARCH__
     CUDF_FAIL("Invalid unary operation.");
