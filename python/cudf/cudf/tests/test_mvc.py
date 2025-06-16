@@ -5,9 +5,7 @@ import sys
 TEST_SCRIPT = """
 import numba.cuda
 import cudf
-from cudf.utils._numba import _CUDFNumbaConfig, _setup_numba
-
-_setup_numba()
+from cudf.utils._numba import _CUDFNumbaConfig
 
 @numba.cuda.jit
 def test_kernel(x):
