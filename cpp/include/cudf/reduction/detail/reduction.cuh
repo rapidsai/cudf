@@ -55,15 +55,14 @@ namespace detail {
  */
 template <typename Op,
           typename InputIterator,
-          typename OutputType = cuda::std::iter_value_t<InputIterator>,
-          std::enable_if_t<is_fixed_width<OutputType>() &&
-                           not cudf::is_fixed_point<OutputType>()>* = nullptr>
+          typename OutputType = cuda::std::iter_value_t<InputIterator>>
 std::unique_ptr<scalar> reduce(InputIterator d_in,
                                cudf::size_type num_items,
                                op::simple_op<Op> op,
                                std::optional<OutputType> init,
                                rmm::cuda_stream_view stream,
                                rmm::device_async_resource_ref mr)
+  requires(is_fixed_width<OutputType>() && not cudf::is_fixed_point<OutputType>())
 {
   auto const binary_op     = cudf::detail::cast_functor<OutputType>(op.get_binary_op());
   auto const initial_value = init.value_or(op.template get_identity<OutputType>());
@@ -99,14 +98,14 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
 
 template <typename Op,
           typename InputIterator,
-          typename OutputType                             = cuda::std::iter_value_t<InputIterator>,
-          std::enable_if_t<is_fixed_point<OutputType>()>* = nullptr>
+          typename OutputType = cuda::std::iter_value_t<InputIterator>>
 std::unique_ptr<scalar> reduce(InputIterator d_in,
                                cudf::size_type num_items,
                                op::simple_op<Op> op,
                                std::optional<OutputType> init,
                                rmm::cuda_stream_view stream,
                                rmm::device_async_resource_ref mr)
+  requires(is_fixed_point<OutputType>())
 {
   CUDF_FAIL(
     "This function should never be called. fixed_point reduce should always go through the reduce "
@@ -116,14 +115,14 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
 // @brief string_view specialization of simple reduction
 template <typename Op,
           typename InputIterator,
-          typename OutputType = cuda::std::iter_value_t<InputIterator>,
-          std::enable_if_t<std::is_same_v<OutputType, string_view>>* = nullptr>
+          typename OutputType = cuda::std::iter_value_t<InputIterator>>
 std::unique_ptr<scalar> reduce(InputIterator d_in,
                                cudf::size_type num_items,
                                op::simple_op<Op> op,
                                std::optional<OutputType> init,
                                rmm::cuda_stream_view stream,
                                rmm::device_async_resource_ref mr)
+  requires(std::is_same_v<OutputType, string_view>)
 {
   auto const binary_op     = cudf::detail::cast_functor<OutputType>(op.get_binary_op());
   auto const initial_value = init.value_or(op.template get_identity<OutputType>());
