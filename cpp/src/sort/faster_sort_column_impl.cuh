@@ -109,27 +109,30 @@ struct faster_sorted_order_fn {
     }
   }
 
-  template <typename T, CUDF_ENABLE_IF(is_supported<T>() and !cudf::is_chrono<T>())>
+  template <typename T>
   void operator()(mutable_column_view& input,
                   mutable_column_view& indices,
                   bool ascending,
                   rmm::cuda_stream_view stream)
+    requires(is_supported<T>() and !cudf::is_chrono<T>())
   {
     faster_sort<T>(input, indices, ascending, stream);
   }
 
-  template <typename T, CUDF_ENABLE_IF(cudf::is_chrono<T>())>
+  template <typename T>
   void operator()(mutable_column_view& input,
                   mutable_column_view& indices,
                   bool ascending,
                   rmm::cuda_stream_view stream)
+    requires(cudf::is_chrono<T>())
   {
     using rep_type = typename T::rep;
     faster_sort<rep_type>(input, indices, ascending, stream);
   }
 
-  template <typename T, CUDF_ENABLE_IF(not is_supported<T>())>
+  template <typename T>
   void operator()(mutable_column_view&, mutable_column_view&, bool, rmm::cuda_stream_view)
+    requires(not is_supported<T>())
   {
     CUDF_UNREACHABLE("invalid type for faster sort");
   }
