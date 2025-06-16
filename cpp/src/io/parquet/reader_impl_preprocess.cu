@@ -1156,9 +1156,9 @@ struct chunk_row_output_iter {
   using reference         = size_type&;
   using iterator_category = thrust::output_device_iterator_tag;
 
-  CUDF_HOST_DEVICE chunk_row_output_iter operator+(int i) { return {p + i}; }
+  __host__ __device__ chunk_row_output_iter operator+(int i) { return {p + i}; }
 
-  CUDF_HOST_DEVICE chunk_row_output_iter& operator++()
+  __host__ __device__ chunk_row_output_iter& operator++()
   {
     p++;
     return *this;
