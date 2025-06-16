@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import glob
 import os
-import sys
 from functools import lru_cache
 from importlib.util import find_spec
 
@@ -79,25 +78,6 @@ def _get_ptx_file(path, prefix):
         return regular_result[1]
 
 
-def patch_numba_linker_cuda_11():
-    # Enable the config option for minor version compatibility
-    numba_config.CUDA_ENABLE_MINOR_VERSION_COMPATIBILITY = 1
-
-    if "numba.cuda" in sys.modules:
-        # Patch numba for version 0.57.0 MVC support, which must know the
-        # config value at import time. We cannot guarantee the order of imports
-        # between cudf and numba.cuda so we patch numba to ensure it has these
-        # names available.
-        # See https://github.com/numba/numba/issues/8977 for details.
-        import numba.cuda
-        from cubinlinker import CubinLinker, CubinLinkerError
-        from ptxcompiler import compile_ptx
-
-        numba.cuda.cudadrv.driver.compile_ptx = compile_ptx
-        numba.cuda.cudadrv.driver.CubinLinker = CubinLinker
-        numba.cuda.cudadrv.driver.CubinLinkerError = CubinLinkerError
-
-
 def _setup_numba():
     """
     Configure the numba linker for use with cuDF. This consists of
@@ -108,7 +88,6 @@ def _setup_numba():
     """
 
     # In CUDA 12+, pynvjitlink is used to provide minor version compatibility.
-    # In CUDA 11, ptxcompiler is used to provide minor version compatibility.
     if find_spec("pynvjitlink") is not None:
         # Assume CUDA 12+ if pynvjitlink is available and unconditionally
         # enable pynvjitlink.
@@ -117,31 +96,6 @@ def _setup_numba():
         # will fail with an error: "Enabling pynvjitlink requires CUDA 12."
         # This is not a supported use case.
         numba_config.CUDA_ENABLE_PYNVJITLINK = True
-    else:
-        # Both pynvjitlink and ptxcompiler are hard dependencies on CUDA 12+ /
-        # CUDA 11, respectively, so at least one of them must be present. In
-        # this path, we assume the user has CUDA 11 and ptxcompiler.
-        from ptxcompiler.patch import NO_DRIVER, safe_get_versions
-
-        versions = safe_get_versions()
-        if versions != NO_DRIVER:
-            driver_version, runtime_version = versions
-
-            # If ptxcompiler (CUDA 11) is running on a CUDA 12 driver, no patch
-            # is needed.
-            if driver_version >= (12, 0):
-                return
-
-            shim_ptx_cuda_version = _get_cuda_build_version()
-
-            # MVC is required whenever any PTX is newer than the driver
-            # This could be the shipped shim PTX file (determined by the CUDA
-            # version used at build time) or the PTX emitted by the version of NVVM
-            # on the user system (determined by the user's CUDA runtime version)
-            if (driver_version < shim_ptx_cuda_version) or (
-                driver_version < runtime_version
-            ):
-                patch_numba_linker_cuda_11()
 
 
 # Avoids using contextlib.contextmanager due to additional overhead
