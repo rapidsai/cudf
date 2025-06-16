@@ -28,6 +28,7 @@
 #include <thrust/iterator/counting_iterator.h>
 
 #include <optional>
+#include <variant>
 
 namespace CUDF_EXPORT cudf {
 
@@ -42,6 +43,15 @@ namespace CUDF_EXPORT cudf {
  */
 class sort_merge_join {
  public:
+   struct match_context {
+     table_view _left_table;
+     std::unique_ptr<rmm::device_uvector<size_type>> _match_counts;
+   };
+   struct partition_context {
+     match_context left_table_context;
+     size_type left_start_idx;
+     size_type left_end_idx;
+   };
   /**
    * @brief Construct a sort-merge join object that pre-processes the right table
    * on creation, and can be used on subsequent join operations with multiple
@@ -100,7 +110,7 @@ class sort_merge_join {
    * for each row in the left table. The vector's size equals the number of rows in
    * the left table.
    */
-  std::unique_ptr<rmm::device_uvector<size_type>> inner_join_size_per_row(
+  match_context inner_join_match_context(
     table_view const& left,
     sorted is_left_sorted,
     rmm::cuda_stream_view stream      = cudf::get_default_stream(),
@@ -146,8 +156,7 @@ class sort_merge_join {
   std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
             std::unique_ptr<rmm::device_uvector<size_type>>>
   partitioned_inner_join(
-    size_type left_partition_begin,
-    size_type left_partition_end,
+    partition_context context,
     rmm::cuda_stream_view stream      = cudf::get_default_stream(),
     rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
@@ -172,6 +181,23 @@ class sort_merge_join {
 
     std::optional<std::unique_ptr<column>> _null_processed_table_sorted_order =
       std::nullopt;  ///< Optional sort ordering for pre-sorted tables
+    
+    template<typename SortedOrderFunc, typename PresortedFunc>
+    auto get_iterator(SortedOrderFunc &&sorted_order_iterator, PresortedFunc &&presorted_iterator) -> std::variant<std::decay_t<decltype(sorted_order_iterator())>, std::decay_t<decltype(presorted_iterator())>> {
+      if (_null_processed_table_sorted_order.has_value()) {
+        return sorted_order_iterator();
+      } else {
+        return presorted_iterator();
+      }
+    }
+
+    auto begin() {
+      return get_iterator([this]() { return _null_processed_table_sorted_order.value()->view().begin<size_type>(); }, [this](){ return thrust::counting_iterator(0); });
+    }
+
+    auto end() {
+      return get_iterator([this]() { return _null_processed_table_sorted_order.value()->view().end<size_type>(); }, [this](){ return thrust::counting_iterator(_null_processed_table_view.num_rows()); });
+    }
 
     /**
      * @brief Mark rows in unprocessed table with nulls at root or child levels by populating the

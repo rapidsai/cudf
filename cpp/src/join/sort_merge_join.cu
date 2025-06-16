@@ -498,6 +498,20 @@ sort_merge_join::inner_join(table_view const& left,
   if (is_left_sorted == cudf::sorted::NO) { preprocessed_left.get_sorted_order(stream); }
 
   // Neither table was pre-sorted
+  auto right_begin = preprocessed_right.begin();
+  auto right_end = preprocessed_right.end();
+  auto left_begin = preprocessed_left.begin();
+  auto left_end = preprocessed_left.end();
+
+  return std::visit([stream, mr, this](auto &&rbegin, auto &&rend, auto &&lbegin, auto &&lend) {
+      merge obj(preprocessed_right._null_processed_table_view, rbegin, rend, preprocessed_left._null_processed_table_view, lbegin, lend);
+      auto [preprocessed_right_indices, preprocessed_left_indices] = obj(stream, mr);
+      postprocess_indices(*preprocessed_right_indices, *preprocessed_left_indices, stream);
+      stream.synchronize();
+      return std::pair{std::move(preprocessed_left_indices), std::move(preprocessed_right_indices)};
+  }, right_begin, right_end, left_begin, left_end);
+
+  /*
   if (preprocessed_right._null_processed_table_sorted_order.has_value() &&
       preprocessed_left._null_processed_table_sorted_order.has_value()) {
     auto preprocessed_right_sorted_order =
@@ -558,13 +572,14 @@ sort_merge_join::inner_join(table_view const& left,
   postprocess_indices(*preprocessed_right_indices, *preprocessed_left_indices, stream);
   stream.synchronize();
   return {std::move(preprocessed_left_indices), std::move(preprocessed_right_indices)};
+  */
 }
 
 // The motivation for this API is to partition the left table in the case of exploding joins.
 // Note that this function needs to return the size per row of the left table, not the larger table
 // which is what the merge operation does. So when workflows adopt the estimation-then-join
 // approach, we need to fix the larger table to be the left table.
-std::unique_ptr<rmm::device_uvector<size_type>> sort_merge_join::inner_join_size_per_row(
+sort_merge_join::match_context sort_merge_join::inner_join_match_context(
   table_view const& left,
   sorted is_left_sorted,
   rmm::cuda_stream_view stream,
@@ -618,10 +633,10 @@ std::unique_ptr<rmm::device_uvector<size_type>> sort_merge_join::inner_join_size
                       matches_per_row->end(),
                       mapping.begin(),
                       unprocessed_matches_per_row.begin());
-      return std::make_unique<rmm::device_uvector<size_type>>(
-        std::move(unprocessed_matches_per_row));
+      return {left, std::make_unique<rmm::device_uvector<size_type>>(
+        std::move(unprocessed_matches_per_row))};
     }
-    return matches_per_row;
+    return {left, std::move(matches_per_row)};
   }
   // Only the preprocessed_left table was pre-sorted
   if (preprocessed_right._null_processed_table_sorted_order.has_value() &&
@@ -647,10 +662,10 @@ std::unique_ptr<rmm::device_uvector<size_type>> sort_merge_join::inner_join_size
                       matches_per_row->end(),
                       mapping.begin(),
                       unprocessed_matches_per_row.begin());
-      return std::make_unique<rmm::device_uvector<size_type>>(
-        std::move(unprocessed_matches_per_row));
+      return {left, std::make_unique<rmm::device_uvector<size_type>>(
+        std::move(unprocessed_matches_per_row))};
     }
-    return matches_per_row;
+    return {left, std::move(matches_per_row)};
   }
   // Only the preprocessed_right table was pre-sorted
   if (!preprocessed_right._null_processed_table_sorted_order.has_value() &&
@@ -676,10 +691,10 @@ std::unique_ptr<rmm::device_uvector<size_type>> sort_merge_join::inner_join_size
                       matches_per_row->end(),
                       mapping.begin(),
                       unprocessed_matches_per_row.begin());
-      return std::make_unique<rmm::device_uvector<size_type>>(
-        std::move(unprocessed_matches_per_row));
+      return {left, std::make_unique<rmm::device_uvector<size_type>>(
+        std::move(unprocessed_matches_per_row))};
     }
-    return matches_per_row;
+    return {left, std::move(matches_per_row)};
   }
   // Both tables were pre-sorted
   merge obj(preprocessed_right._null_processed_table_view,
@@ -700,19 +715,20 @@ std::unique_ptr<rmm::device_uvector<size_type>> sort_merge_join::inner_join_size
                     matches_per_row->end(),
                     mapping.begin(),
                     unprocessed_matches_per_row.begin());
-    return std::make_unique<rmm::device_uvector<size_type>>(std::move(unprocessed_matches_per_row));
+    return {left, std::make_unique<rmm::device_uvector<size_type>>(std::move(unprocessed_matches_per_row))};
   }
-  return matches_per_row;
+  return {left, std::move(matches_per_row)};
 }
 
 // left_partition_end exclusive
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
-sort_merge_join::partitioned_inner_join(size_type left_partition_begin,
-                                        size_type left_partition_end,
+sort_merge_join::partitioned_inner_join(sort_merge_join::partition_context context,
                                         rmm::cuda_stream_view stream,
                                         rmm::device_async_resource_ref mr)
 {
+  auto left_partition_begin = context.left_start_idx;
+  auto left_partition_end = context.left_end_idx;
   auto null_processed_table_begin = left_partition_begin;
   auto null_processed_table_end   = left_partition_end;
   if (compare_nulls == null_equality::UNEQUAL && has_nested_nulls(preprocessed_left._table_view)) {
