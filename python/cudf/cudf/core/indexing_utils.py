@@ -557,7 +557,7 @@ def parse_single_row_loc_key(
             if key.dtype.kind == "b":
                 if is_scalar and index.dtype.kind != "b":
                     raise KeyError(
-                        "boolean label can not be used without a boolean index"
+                        "boolean label cannot be used without a boolean index"
                     )
                 else:
                     return MaskIndexer(BooleanMask(key, n))
