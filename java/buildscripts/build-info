@@ -21,11 +21,11 @@
 #   version - The current version of cudf java code
 
 echo_build_properties() {
-  echo version=$1
-  echo user=$USER
-  echo revision=$(git rev-parse HEAD)
-  echo branch=$(git rev-parse --abbrev-ref HEAD)
-  echo date=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+  echo version="$1"
+  echo user="$USER"
+  echo revision="$(git rev-parse HEAD)"
+  echo branch="$(git rev-parse --abbrev-ref HEAD)"
+  echo date="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 }
 
-echo_build_properties $1
+echo_build_properties "$1"

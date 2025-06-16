@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import itertools
 import operator
 import warnings
 from collections.abc import Hashable, MutableMapping
@@ -20,14 +21,14 @@ import pylibcudf as plc
 import cudf
 from cudf.api.extensions import no_default
 from cudf.api.types import (
-    is_dtype_equal,
     is_hashable,
     is_integer,
     is_list_like,
     is_scalar,
 )
 from cudf.core._compat import PANDAS_LT_300
-from cudf.core._internals import copying, search, stream_compaction
+from cudf.core._internals import copying, sorting, stream_compaction
+from cudf.core.accessors import StringMethods
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import (
     CategoricalColumn,
@@ -40,12 +41,10 @@ from cudf.core.column import (
     TimeDeltaColumn,
 )
 from cudf.core.column.column import as_column, column_empty, concat_columns
-from cudf.core.column.string import StringMethods as StringMethods
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.copy_types import GatherMap
-from cudf.core.dtypes import IntervalDtype
+from cudf.core.dtypes import IntervalDtype, dtype as cudf_dtype
 from cudf.core.join._join_helpers import _match_join_keys
-from cudf.core.mixins import BinaryOperand
 from cudf.core.single_column_frame import SingleColumnFrame
 from cudf.errors import MixedTypeError
 from cudf.utils.docutils import copy_docstring
@@ -108,20 +107,28 @@ def _lexsorted_equal_range(
     else:
         sort_inds = None
         sort_vals = idx
+    sources = sort_vals._columns
+    len_sources = len(sources)
     lower_bound = ColumnBase.from_pylibcudf(
-        search.search_sorted(
-            list(sort_vals._columns),
+        sorting.search_sorted(
+            sort_vals._columns,
             keys,
             side="left",
-            ascending=sort_vals.is_monotonic_increasing,
+            ascending=itertools.repeat(
+                sort_vals.is_monotonic_increasing, times=len_sources
+            ),
+            na_position=itertools.repeat("last", times=len_sources),
         )
     ).element_indexing(0)
     upper_bound = ColumnBase.from_pylibcudf(
-        search.search_sorted(
-            list(sort_vals._columns),
+        sorting.search_sorted(
+            sources,
             keys,
             side="right",
-            ascending=sort_vals.is_monotonic_increasing,
+            ascending=itertools.repeat(
+                sort_vals.is_monotonic_increasing, times=len_sources
+            ),
+            na_position=itertools.repeat("last", times=len_sources),
         )
     ).element_indexing(0)
 
@@ -2257,10 +2264,6 @@ class Index(SingleColumnFrame):  # type: ignore[misc]
         result = result._with_type_metadata(self.dtype)
         return type(self)._from_column(result, name=self.name)
 
-    @property
-    def values(self) -> cupy.ndarray:
-        return self._column.values
-
     def __contains__(self, item) -> bool:
         hash(item)
         return item in self._column
@@ -2542,8 +2545,6 @@ class RangeIndex(Index):
     RangeIndex(start=1, stop=10, step=1, name='a')
     """
 
-    _VALID_BINARY_OPERATIONS = BinaryOperand._SUPPORTED_BINARY_OPERATIONS
-
     _range: range
 
     @_performance_tracking
@@ -2629,7 +2630,9 @@ class RangeIndex(Index):
         return ColumnAccessor({self.name: self._column}, verify=False)
 
     @property
-    def _column_labels_and_values(self) -> Iterable:
+    def _column_labels_and_values(
+        self,
+    ) -> Iterable[tuple[Hashable, ColumnBase]]:
         return zip(self._column_names, self._columns)
 
     @_performance_tracking
@@ -2733,9 +2736,10 @@ class RangeIndex(Index):
         return RangeIndex(self._range, name=name)
 
     @_performance_tracking
-    def astype(self, dtype, copy: bool = True):
-        if is_dtype_equal(dtype, self.dtype):
-            return self
+    def astype(self, dtype: Dtype, copy: bool = True) -> Self:
+        dtype = cudf_dtype(dtype)
+        if self.dtype == dtype:
+            return self if not copy else self.copy()
         return self._as_int_index().astype(dtype, copy=copy)
 
     def fillna(self, value, downcast=None) -> Self:
@@ -3293,14 +3297,6 @@ class RangeIndex(Index):
     def where(self, cond, other=None, inplace: bool = False) -> Self | None:
         return self._as_int_index().where(cond, other, inplace)
 
-    def __array__(self, dtype=None):
-        raise TypeError(
-            "Implicit conversion to a host NumPy array via __array__ is not "
-            "allowed, To explicitly construct a GPU matrix, consider using "
-            ".to_cupy()\nTo explicitly construct a host matrix, consider "
-            "using .to_numpy()."
-        )
-
     @_performance_tracking
     def nunique(self, dropna: bool = True) -> int:
         return len(self)
@@ -3384,6 +3380,12 @@ class RangeIndex(Index):
             return -self
         else:
             return abs(self._as_int_index())
+
+    def __invert__(self) -> Self:
+        if len(self) == 0:
+            return self.copy()
+        rng = range(~self.start, ~self.stop, -self.step)
+        return type(self)(rng, name=self.name)
 
     def _columns_for_reset_index(
         self, levels: tuple | None

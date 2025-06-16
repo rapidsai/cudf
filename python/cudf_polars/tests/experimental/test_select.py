@@ -124,3 +124,10 @@ def test_select_parquet_fast_count(request, tmp_path, df, engine):
     df.collect().write_parquet(file)
     q = pl.scan_parquet(file).select(pl.len())
     assert_gpu_result_equal(q, engine=engine)
+
+
+def test_select_literal(engine):
+    # See: https://github.com/rapidsai/cudf/issues/19147
+    ldf = pl.LazyFrame({"a": list(range(10))})
+    q = ldf.select(pl.lit(2).pow(pl.lit(-3, dtype=pl.Float32)))
+    assert_gpu_result_equal(q, engine=engine)
