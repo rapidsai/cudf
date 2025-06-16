@@ -37,7 +37,7 @@ void faster_sorted_order<sort_method::STABLE>(column_view const& input,
   thrust::sequence(
     rmm::exec_policy_nosync(stream), indices.begin<size_type>(), indices.end<size_type>(), 0);
   auto dispatch_fn = faster_sorted_order_fn<sort_method::STABLE>{};
-  cudf::type_dispatcher<dispatch_underlying_type>(
+  cudf::type_dispatcher<dispatch_storage_type>(
     input.type(), dispatch_fn, d_col, indices, ascending, stream);
 }
 

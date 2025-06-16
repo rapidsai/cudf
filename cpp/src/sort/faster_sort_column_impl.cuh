@@ -30,17 +30,6 @@
 namespace cudf {
 namespace detail {
 
-// clang-format off
-template <typename T>
-using underlying_storage_type_t =
-  timestamp_rep_type_t<T, duration_rep_type_t<T, device_storage_type_t<T>>>;
-// clang-format on
-
-template <cudf::type_id Id>
-struct dispatch_underlying_type {
-  using type = underlying_storage_type_t<id_to_type<Id>>;
-};
-
 /**
  * @brief Sort indices of a single column.
  *
@@ -120,13 +109,23 @@ struct faster_sorted_order_fn {
     }
   }
 
-  template <typename T, CUDF_ENABLE_IF(is_supported<T>())>
+  template <typename T, CUDF_ENABLE_IF(is_supported<T>() and !cudf::is_chrono<T>())>
   void operator()(mutable_column_view& input,
                   mutable_column_view& indices,
                   bool ascending,
                   rmm::cuda_stream_view stream)
   {
     faster_sort<T>(input, indices, ascending, stream);
+  }
+
+  template <typename T, CUDF_ENABLE_IF(cudf::is_chrono<T>())>
+  void operator()(mutable_column_view& input,
+                  mutable_column_view& indices,
+                  bool ascending,
+                  rmm::cuda_stream_view stream)
+  {
+    using rep_type = typename T::rep;
+    faster_sort<rep_type>(input, indices, ascending, stream);
   }
 
   template <typename T, CUDF_ENABLE_IF(not is_supported<T>())>
