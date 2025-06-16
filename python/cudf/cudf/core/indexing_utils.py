@@ -471,7 +471,7 @@ def ordered_find(needles: ColumnBase, haystack: ColumnBase) -> GatherMap:
 
 def find_label_range_or_mask(
     key: slice, index: Index
-) -> EmptyIndexer | MapIndexer | MaskIndexer | SliceIndexer:
+) -> EmptyIndexer | SliceIndexer:
     """
     Convert a slice of labels into a slice of positions
 
