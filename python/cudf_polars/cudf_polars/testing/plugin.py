@@ -158,6 +158,13 @@ EXPECTED_FAILURES: Mapping[str, str | tuple[str, bool]] = {
     "tests/unit/io/test_scan.py::test_async_read_21945[scan_type2]": "Debug output on stderr doesn't match",
     "tests/unit/io/test_scan.py::test_async_read_21945[scan_type3]": "Debug output on stderr doesn't match",
     "tests/unit/io/test_multiscan.py::test_multiscan_row_index[scan_csv-write_csv-csv]": "Debug output on stderr doesn't match",
+    "tests/unit/io/test_lazy_parquet.py::test_io_struct_async_12500": "Polars types not preserved in DataFrame.from_table",
+    "tests/unit/sql/test_miscellaneous.py::test_boolean_where_clauses[data2-schema2]": "Polars types not preserved in DataFrame.from_table",
+    "tests/unit/datatypes/test_struct.py::test_struct_agg_all": "Polars types not preserved in DataFrame.from_table",
+    "tests/unit/constructors/test_structs.py::test_constructor_non_strict_schema_17956": "Polars types not preserved in DataFrame.from_table",
+    "tests/unit/io/test_delta.py::test_read_delta_arrow_map_type": "Polars types not preserved in DataFrame.from_table",
+    "tests/unit/lazyframe/test_collect_schema.py::test_collect_schema_parametric": "https://github.com/rapidsai/cudf/issues/19185",
+    "tests/unit/datatypes/test_struct.py::test_struct_null_cast": "pylibcudf.Scalar does not support struct scalars",
 }
 
 
