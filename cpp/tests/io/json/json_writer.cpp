@@ -14,17 +14,15 @@
  * limitations under the License.
  */
 
-#include "io/comp/io_uncomp.hpp"
-
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/debug_utilities.hpp>
 #include <cudf_test/default_stream.hpp>
 #include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/table_utilities.hpp>
 #include <cudf_test/testing_main.hpp>
 
 #include <cudf/detail/iterator.cuh>
+#include <cudf/io/detail/codec.hpp>
 #include <cudf/io/json.hpp>
 #include <cudf/io/types.hpp>
 #include <cudf/types.hpp>

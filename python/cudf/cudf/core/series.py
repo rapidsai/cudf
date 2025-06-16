@@ -27,18 +27,18 @@ from cudf.api.types import (
 )
 from cudf.core import indexing_utils
 from cudf.core._compat import PANDAS_LT_300
+from cudf.core.accessors import (
+    CategoricalAccessor,
+    ListMethods,
+    StringMethods,
+    StructMethods,
+)
 from cudf.core.column import (
     ColumnBase,
     IntervalColumn,
     as_column,
 )
-from cudf.core.column.categorical import (
-    CategoricalAccessor,
-)
 from cudf.core.column.column import concat_columns
-from cudf.core.column.lists import ListMethods
-from cudf.core.column.string import StringMethods
-from cudf.core.column.struct import StructMethods
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.dtypes import CategoricalDtype
 from cudf.core.groupby.groupby import SeriesGroupBy, groupby_doc_template
@@ -1034,7 +1034,36 @@ class Series(SingleColumnFrame, IndexedFrame):
         return self._to_frame(name=name, index=self.index)
 
     @_performance_tracking
-    def memory_usage(self, index: bool = True, deep: bool = False) -> int:
+    def memory_usage(self, index: bool = True, deep: bool = False) -> int:  # type: ignore[override]
+        """
+        Return the memory usage of the Series.
+
+        Parameters
+        ----------
+        index : bool, default True
+            Specifies whether to include the memory usage of the index.
+        deep : bool, default False
+            The deep parameter is ignored and is only included for pandas
+            compatibility.
+
+        Returns
+        -------
+        int
+            The total memory usage in bytes.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series(range(3), index=['a','b','c'])
+        >>> s.memory_usage()
+        43
+
+        Not including the index gives the size of the rest of the data, which
+        is necessarily smaller:
+
+        >>> s.memory_usage(index=False)
+        24
+        """
         return self._column.memory_usage + (
             self.index.memory_usage() if index else 0
         )
@@ -3143,7 +3172,7 @@ class Series(SingleColumnFrame, IndexedFrame):
                 np_array_q = np.asarray(q)
             except TypeError:
                 try:
-                    np_array_q = as_column(q).values_host
+                    np_array_q = cupy.asarray(q).get()
                 except TypeError:
                     raise TypeError(
                         f"q must be a scalar or array-like, got {type(q)}"
