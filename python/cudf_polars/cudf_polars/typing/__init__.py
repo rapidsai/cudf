@@ -194,6 +194,23 @@ class ColumnOptions(TypedDict):
     order: plc.types.Order
     null_order: plc.types.NullOrder
     name: str | None
+    dtype: str | None
+
+
+class DeserializedColumnOptions(TypedDict):
+    """
+    Deserialized Column constructor options.
+
+    Notes
+    -----
+    Used to deserialize Column and DataFrame containers.
+    """
+
+    is_sorted: plc.types.Sorted
+    order: plc.types.Order
+    null_order: plc.types.NullOrder
+    name: str | None
+    dtype: DataType | None
 
 
 class ColumnHeader(TypedDict):

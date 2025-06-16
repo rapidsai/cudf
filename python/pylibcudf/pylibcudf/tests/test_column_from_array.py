@@ -180,3 +180,18 @@ def test_from_zero_dimensional_array():
         match="shape must be a non-empty tuple",
     ):
         plc.Column.from_array(arr)
+
+
+@pytest.mark.parametrize("np_or_cp_array", [np.array, cp.array])
+@pytest.mark.parametrize(
+    "arr, dtype, expect",
+    [
+        ([], np.int64, pa.array([], type=pa.int64())),
+        ([[], []], np.int32, pa.array([[], []], type=pa.list_(pa.int32()))),
+    ],
+)
+def test_empty_array(np_or_cp_array, arr, dtype, expect):
+    arr = np_or_cp_array(arr, dtype=dtype)
+    col = plc.Column.from_array(arr)
+
+    assert_column_eq(expect, col)

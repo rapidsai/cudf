@@ -51,7 +51,7 @@ class Gather(Expr):
             bounds_policy = plc.copying.OutOfBoundsPolicy.DONT_CHECK
             obj = indices.obj
         table = plc.copying.gather(plc.Table([values.obj]), obj, bounds_policy)
-        return Column(table.columns()[0])
+        return Column(table.columns()[0], dtype=self.dtype)
 
 
 class Filter(Expr):
@@ -71,4 +71,4 @@ class Filter(Expr):
         table = plc.stream_compaction.apply_boolean_mask(
             plc.Table([values.obj]), mask.obj
         )
-        return Column(table.columns()[0]).sorted_like(values)
+        return Column(table.columns()[0], dtype=self.dtype).sorted_like(values)
