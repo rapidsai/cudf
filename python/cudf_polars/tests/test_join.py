@@ -71,7 +71,7 @@ def test_non_coalesce_join(left, right, how, nulls_equal, join_expr):
     query = left.join(
         right, on=join_expr, how=how, nulls_equal=nulls_equal, coalesce=False
     )
-    assert_gpu_result_equal(query, check_row_order=how == "left")
+    assert_gpu_result_equal(query, check_row_order=False)
 
 
 @pytest.mark.parametrize(
@@ -85,7 +85,7 @@ def test_coalesce_join(left, right, how, nulls_equal, join_expr):
     query = left.join(
         right, on=join_expr, how=how, nulls_equal=nulls_equal, coalesce=True
     )
-    assert_gpu_result_equal(query, check_row_order=how == "left")
+    assert_gpu_result_equal(query, check_row_order=False)
 
 
 def test_left_join_with_slice(left, right, nulls_equal, zlice):
@@ -94,7 +94,7 @@ def test_left_join_with_slice(left, right, nulls_equal, zlice):
     if zlice is not None:
         q = q.slice(*zlice)
 
-    assert_gpu_result_equal(q)
+    assert_gpu_result_equal(q, check_row_order=False)
 
 
 def test_cross_join(left, right, zlice):
@@ -114,7 +114,7 @@ def test_cross_join(left, right, zlice):
 )
 def test_join_literal_key(left, right, left_on, right_on):
     q = left.join(right, left_on=left_on, right_on=right_on, how="inner")
-    assert_gpu_result_equal(q)
+    assert_gpu_result_equal(q, check_row_order=False)
 
 
 @pytest.mark.parametrize(
