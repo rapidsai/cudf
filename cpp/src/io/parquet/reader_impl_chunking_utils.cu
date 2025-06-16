@@ -437,7 +437,7 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
 
   size_t total_pass_decomp_size = 0;
   for (auto& codec : codecs) {
-    // Use empty span as pass page mask as we don't want to filter out dictionary pages
+    // Use an empty span as pass page mask as we don't want to filter out dictionary pages
     codec.add_pages(chunks, pass_pages, codec_stats::page_selection::DICT_PAGES, {});
     total_pass_decomp_size += codec.total_decomp_size;
   }
@@ -524,7 +524,7 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
   size_t subpass_decomp_offset = 0;
   for (auto& codec : codecs) {
     if (codec.num_pages == 0) { continue; }
-    // Use an empty span as pass page mask as we don't want to filter out dictionary pages
+    // Use empty span as pass page mask as we don't want to filter out dictionary pages
     set_parameters(codec, pass_pages, {}, pass_decomp_pages.data(), true, pass_decomp_offset);
     set_parameters(codec,
                    subpass_pages,
