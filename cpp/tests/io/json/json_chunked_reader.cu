@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "io/comp/comp.hpp"
+#include "io/comp/compression.hpp"
 #include "json_utils.cuh"
 
 #include <cudf_test/base_fixture.hpp>
