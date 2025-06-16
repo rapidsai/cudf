@@ -152,8 +152,10 @@ std::unique_ptr<column> from_arrow_stringview(ArrowSchemaView* schema,
   // first copy stringview array to device
   auto items   = view.buffer_views[stringview_vector_idx].data.as_binary_view;
   auto d_items = rmm::device_uvector<ArrowBinaryView>(input->length, stream, mr);
+  // offset should not be > input->length which caller insures is < max size_type
+  auto const offset = static_cast<cudf::size_type>(input->offset);
   CUDF_CUDA_TRY(cudaMemcpyAsync(d_items.data(),
-                                items + input->offset,
+                                items + offset,
                                 input->length * sizeof(ArrowBinaryView),
                                 cudaMemcpyDefault,
                                 stream.value()));
@@ -181,8 +183,10 @@ std::unique_ptr<column> from_arrow_stringview(ArrowSchemaView* schema,
     thrust::counting_iterator<cudf::size_type>(0),
     thrust::counting_iterator<cudf::size_type>(input->length),
     d_indices.begin(),
-    [d_items = d_items.data(), d_ptrs, d_mask] __device__(auto idx) -> string_index_pair {
-      if (d_mask && !cudf::bit_is_set(d_mask, idx)) { return string_index_pair{nullptr, 0}; }
+    [d_items = d_items.data(), d_ptrs, d_mask, offset] __device__(auto idx) -> string_index_pair {
+      if (d_mask && !cudf::bit_is_set(d_mask, idx + offset)) {
+        return string_index_pair{nullptr, 0};
+      }
       auto const& item = d_items[idx];
       auto const size  = static_cast<cudf::size_type>(item.inlined.size);
       auto const data  = (size <= NANOARROW_BINARY_VIEW_INLINE_SIZE)
