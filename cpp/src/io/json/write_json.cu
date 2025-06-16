@@ -19,7 +19,7 @@
  * @brief cuDF-IO JSON writer implementation
  */
 
-#include "io/comp/comp.hpp"
+#include "io/comp/compression.hpp"
 #include "io/csv/durations.hpp"
 #include "io/utilities/parsing_utils.cuh"
 #include "lists/utilities.hpp"

@@ -18,7 +18,7 @@
 
 #include "compact_protocol_reader.hpp"
 #include "cudf/types.hpp"
-#include "io/comp/io_uncomp.hpp"
+#include "io/comp/decompression.hpp"
 #include "reader_impl_chunking.hpp"
 
 #include <cudf/detail/iterator.cuh>
@@ -29,8 +29,8 @@
 
 namespace cudf::io::parquet::detail {
 
-using cudf::io::detail::compression_result;
-using cudf::io::detail::compression_status;
+using cudf::io::detail::codec_exec_result;
+using cudf::io::detail::codec_status;
 using cudf::io::detail::decompression_info;
 
 // Forward declarations

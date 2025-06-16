@@ -22,7 +22,8 @@
 #include "arrow_schema_writer.hpp"
 #include "compact_protocol_reader.hpp"
 #include "compact_protocol_writer.hpp"
-#include "io/comp/comp.hpp"
+#include "io/comp/common.hpp"
+#include "io/comp/compression.hpp"
 #include "io/parquet/parquet_gpu.hpp"
 #include "io/statistics/column_statistics.cuh"
 #include "io/utilities/column_utils.cuh"
@@ -37,6 +38,7 @@
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/linked_column.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/io/detail/codec.hpp>
 #include <cudf/io/parquet_schema.hpp>
 #include <cudf/lists/detail/dremel.hpp>
 #include <cudf/lists/lists_column_view.hpp>
@@ -1522,11 +1524,11 @@ void encode_pages(hostdevice_2dvector<EncColumnChunk>& chunks,
 
   rmm::device_uvector<device_span<uint8_t const>> comp_in(max_comp_pages, stream);
   rmm::device_uvector<device_span<uint8_t>> comp_out(max_comp_pages, stream);
-  rmm::device_uvector<compression_result> comp_res(max_comp_pages, stream);
+  rmm::device_uvector<codec_exec_result> comp_res(max_comp_pages, stream);
   thrust::fill(rmm::exec_policy(stream),
                comp_res.begin(),
                comp_res.end(),
-               compression_result{0, compression_status::FAILURE});
+               codec_exec_result{0, codec_status::FAILURE});
 
   EncodePages(pages, write_v2_headers, comp_in, comp_out, comp_res, stream);
   compress(compression, comp_in, comp_out, comp_res, stream);
