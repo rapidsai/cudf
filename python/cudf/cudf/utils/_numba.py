@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import glob
 import os
-from importlib.util import find_spec
 
 import numba
 from numba import config as numba_config
@@ -61,26 +60,6 @@ def _get_ptx_file(path, prefix):
         )
     else:
         return regular_result[1]
-
-
-def _setup_numba():
-    """
-    Configure the numba linker for use with cuDF. This consists of
-    potentially putting numba into enhanced compatibility mode
-    based on the user driver and runtime versions as well as the
-    version of the CUDA Toolkit used to build the PTX files shipped
-    with the user cuDF package.
-    """
-
-    # In CUDA 12+, pynvjitlink is used to provide minor version compatibility.
-    if find_spec("pynvjitlink") is not None:
-        # Assume CUDA 12+ if pynvjitlink is available and unconditionally
-        # enable pynvjitlink.
-        #
-        # If somehow pynvjitlink is available on a CUDA 11 installation, numba
-        # will fail with an error: "Enabling pynvjitlink requires CUDA 12."
-        # This is not a supported use case.
-        numba_config.CUDA_ENABLE_PYNVJITLINK = True
 
 
 # Avoids using contextlib.contextmanager due to additional overhead
