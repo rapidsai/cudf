@@ -96,4 +96,5 @@ class BinOp(Expr):
                 rop = right.obj_scalar
         return Column(
             plc.binaryop.binary_operation(lop, rop, self.op, self.dtype.plc),
+            dtype=self.dtype,
         )

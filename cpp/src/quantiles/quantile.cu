@@ -58,16 +58,15 @@ struct quantile_functor {
   rmm::device_async_resource_ref mr;
 
   template <typename T>
-  std::enable_if_t<not std::is_arithmetic_v<T> and not cudf::is_fixed_point<T>(),
-                   std::unique_ptr<column>>
-  operator()(column_view const& input)
+  std::unique_ptr<column> operator()(column_view const& input)
+    requires(not std::is_arithmetic_v<T> and not cudf::is_fixed_point<T>())
   {
     CUDF_FAIL("quantile does not support non-numeric types");
   }
 
   template <typename T>
-  std::enable_if_t<std::is_arithmetic_v<T> or cudf::is_fixed_point<T>(), std::unique_ptr<column>>
-  operator()(column_view const& input)
+  std::unique_ptr<column> operator()(column_view const& input)
+    requires(std::is_arithmetic_v<T> or cudf::is_fixed_point<T>())
   {
     using StorageType   = cudf::device_storage_type_t<T>;
     using ExactResult   = std::conditional_t<exact and not cudf::is_fixed_point<T>(), double, T>;
