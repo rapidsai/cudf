@@ -152,7 +152,7 @@ std::unique_ptr<column> from_arrow_stringview(ArrowSchemaView* schema,
   // first copy stringview array to device
   auto items   = view.buffer_views[stringview_vector_idx].data.as_binary_view;
   auto d_items = rmm::device_uvector<ArrowBinaryView>(input->length, stream, mr);
-  // caller insures that input->offset is < max size_type
+  // caller ensures that input->offset is < max size_type
   auto const offset = static_cast<cudf::size_type>(input->offset);
   CUDF_CUDA_TRY(cudaMemcpyAsync(d_items.data(),
                                 items + offset,
