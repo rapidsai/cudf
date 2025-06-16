@@ -1,6 +1,7 @@
 # Copyright (c) 2020-2025, NVIDIA CORPORATION
 from __future__ import annotations
 
+import itertools
 import warnings
 from typing import TYPE_CHECKING
 
@@ -606,7 +607,18 @@ class RollingGroupby(Rolling):
 
     def _apply_agg(self, agg_name):
         index = MultiIndex._from_data(
-            {**self._group_keys._data, **self.obj.index._data}
+            dict(
+                enumerate(
+                    itertools.chain(
+                        self._group_keys._columns, self.obj.index._columns
+                    )
+                )
+            )
+        )
+        index.names = list(
+            itertools.chain(
+                self._group_keys._column_names, self.obj.index._column_names
+            )
         )
         result = super()._apply_agg(agg_name)
         result.index = index
