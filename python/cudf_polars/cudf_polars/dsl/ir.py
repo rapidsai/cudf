@@ -30,7 +30,7 @@ import pylibcudf as plc
 
 import cudf_polars.dsl.expr as expr
 from cudf_polars.containers import Column, DataFrame, DataType
-from cudf_polars.dsl.expressions import rolling
+from cudf_polars.dsl.expressions import rolling, unary
 from cudf_polars.dsl.expressions.base import ExecutionContext
 from cudf_polars.dsl.nodebase import Node
 from cudf_polars.dsl.to_ast import to_ast, to_parquet_filter
@@ -1383,6 +1383,12 @@ class GroupBy(IR):
     ):
         self.schema = schema
         self.keys = tuple(keys)
+        if any(
+            isinstance(child, unary.UnaryFunction) and child.name == "value_counts"
+            for request in agg_requests
+            for child in request.value.children
+        ):
+            raise NotImplementedError("value_counts is not supported in groupby")
         self.agg_requests = tuple(agg_requests)
         self.maintain_order = maintain_order
         self.zlice = zlice
