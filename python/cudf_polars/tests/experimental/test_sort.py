@@ -123,4 +123,13 @@ def test_sort_tail(df, engine):
 def test_sort_slice(df, engine, offset):
     # Slice in the middle, which distributed sorts need to be careful with
     q = df.sort(by=["y", "z"]).slice(offset, 2)
-    assert_gpu_result_equal(q, engine=engine)
+    if POLARS_VERSION_LT_130:
+        exception = pl.exceptions.ComputeError
+    else:
+        exception = NotImplementedError
+
+    with pytest.raises(
+        exception,
+            match="sort does not support multiple partitions for slices with offset.",
+        ):
+        assert_gpu_result_equal(q, engine=engine)

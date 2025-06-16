@@ -34,14 +34,13 @@ if TYPE_CHECKING:
 
 def find_sort_splits(
     tbl: plc.Table,
-    split_candidates_unordered: plc.Table,
+    sort_boundaries: plc.Table,
     my_part_id: int,
-    num_partitions: int,
     column_order: Sequence[plc.types.Order],
     null_order: Sequence[plc.types.NullOrder],
 ) -> list[int]:
     """
-    Find the local sort splits given all (global) split candidates.
+    Find local sort splits given all (global) split candidates.
 
     The reason for much of the complexity is to get the result sizes as
     precise as possible even when e.g. all values are equal.
@@ -51,14 +50,12 @@ def find_sort_splits(
     Parameters
     ----------
     tbl
-        Local sorted table only containing sort columns.
-    split_candidates_unordered
-        Table containing all global split candidates.  Compared to `tbl`
+        Locally sorted table only containing sort columns.
+    sort_boundaries
+        Sorted table containing the global sort/split boundaries.  Compared to `tbl`
         must contain additional partition_id and local_row_number columns.
     my_part_id
         The partition id of the local node (as the `split_candidates` column).
-    num_partitions
-        Number of output partitions to shuffle to.
     column_order
         The order in which tbl is sorted.
     null_order
@@ -71,38 +68,14 @@ def find_sort_splits(
     column_order = list(column_order)
     null_order = list(null_order)
 
-    # The global split candidates need to be stable sorted to find the correct
-    # final split points.
-    # NOTE: This could be a merge if done earlier (but it should be small data).
-    split_candidates = plc.sorting.sort(
-        split_candidates_unordered,
-        # split candidates has the additional partition_id and row_number columns
-        column_order + [plc.types.Order.ASCENDING] * 2,
-        null_order + [plc.types.NullOrder.AFTER] * 2,
-    )
-    global_split_points = plc.Column.from_arrow(
-        pa.array(
-            [
-                i * split_candidates.num_rows() // num_partitions
-                for i in range(1, num_partitions)
-            ]
-        )
-    )
-    # Get the actual values at which we will split the data
-    split_values = plc.copying.gather(
-        split_candidates, global_split_points, plc.copying.OutOfBoundsPolicy.DONT_CHECK
-    )
-
     # We now need to find the local split points.  To do this, first split out
     # the partition id and the local row number of the final split values
-    *split_values, split_part_id, split_local_row = split_values.columns()
-    split_values = plc.Table(split_values)
+    *sort_boundaries, split_part_id, split_local_row = sort_boundaries.columns()
+    sort_boundaries = plc.Table(sort_boundaries)
     # Now we find the first and last row in the local table corresponding to the split value
     # (first and last, because there may be multiple rows with the same split value)
-    split_first_col = plc.search.lower_bound(
-        tbl, split_values, column_order, null_order
-    )
-    split_last_col = plc.search.upper_bound(tbl, split_values, column_order, null_order)
+    split_first_col = plc.search.lower_bound(tbl, sort_boundaries, column_order, null_order)
+    split_last_col = plc.search.upper_bound(tbl, sort_boundaries, column_order, null_order)
     # And convert to arrow/CPU for final processing
     split_first_col = plc.interop.to_arrow(split_first_col).to_pylist()
     split_last_col = plc.interop.to_arrow(split_last_col).to_pylist()
@@ -158,13 +131,65 @@ def _select_local_split_candidates(
     )
 
 
+def _get_final_sort_boundaries(
+    sort_boundaries_candidates: DataFrame,
+    column_order: Sequence[plc.types.Order],
+    null_order: Sequence[plc.types.NullOrder],
+    num_partitions: int,
+) -> plc.Table:
+    """
+    Find the global sort split boundaries from all gathered split candidates.
+
+    Parameters
+    ----------
+    split_candidates
+        All gathered split candidates.
+    column_order
+        The order in which the split candidates are sorted.
+    null_order
+        The null order in which the split candidates are sorted.
+    num_partitions
+        The number of partitions to split the data into.
+
+    """
+    column_order = list(column_order)
+    null_order = list(null_order)
+
+    # The global split candidates need to be stable sorted to find the correct
+    # final split points.
+    # NOTE: This could be a merge if done earlier (but it should be small data).
+    sorted_candidates = plc.sorting.sort(
+        sort_boundaries_candidates.table,
+        # split candidates has the additional partition_id and row_number columns
+        column_order + [plc.types.Order.ASCENDING] * 2,
+        null_order + [plc.types.NullOrder.AFTER] * 2,
+    )
+    selected_candidates = plc.Column.from_arrow(
+        pa.array(
+            [
+                i * sorted_candidates.num_rows() // num_partitions
+                for i in range(1, num_partitions)
+            ]
+        )
+    )
+    # Get the actual values at which we will split the data
+    sort_boundaries = plc.copying.gather(
+        sorted_candidates, selected_candidates, plc.copying.OutOfBoundsPolicy.DONT_CHECK
+    )
+
+    return DataFrame.from_table(sort_boundaries, sort_boundaries_candidates.column_names)
+
+
 def _sort_boundaries_graph(
     name_in: str,
     by: Sequence[str],
+    column_order: Sequence[plc.types.Order],
+    null_order: Sequence[plc.types.NullOrder],
     count: int,
 ) -> tuple[tuple[str, int], MutableMapping[Any, Any]]:
-    """Graph to get all sort boundary candidates from all partitions."""
+    """ Graph to get the boundaries from all partitions. """
     local_boundaries_name = f"sort-boundaries_local-{name_in}"
+    concat_boundaries_name = f"sort-boundaries-concat-{name_in}"
     global_boundaries_name = f"sort-boundaries-{name_in}"
     graph: MutableMapping[Any, Any] = {}
 
@@ -179,7 +204,10 @@ def _sort_boundaries_graph(
         )
         _concat_list.append((local_boundaries_name, part_id))
 
-    graph[(global_boundaries_name, 0)] = (_concat, *_concat_list)
+    graph[(concat_boundaries_name, 0)] = (_concat, *_concat_list)
+    graph[(global_boundaries_name, 0)] = (
+        _get_final_sort_boundaries, (concat_boundaries_name, 0), column_order, null_order, count
+    )
     return (global_boundaries_name, 0), graph
 
 
@@ -206,7 +234,7 @@ class RMPFIntegrationSortedShuffle:  # pragma: no cover
         sort_boundaries: DataFrame,
     ) -> None:
         """Add cudf-polars DataFrame chunks to an RMP shuffler."""
-        from rapidsmpf.shuffler import split_and_pack
+        from rapidsmpf.integrations.cudf.partition import split_and_pack
 
         by = options["by"]
 
@@ -214,14 +242,12 @@ class RMPFIntegrationSortedShuffle:  # pragma: no cover
             df.select(by).table,
             sort_boundaries.table,
             partition_id,
-            partition_count,
             options["order"],
             options["null_order"],
         )
         packed_inputs = split_and_pack(
             df.table,
             splits=splits,
-            num_partitions=partition_count,
             stream=DEFAULT_STREAM,
             device_mr=rmm.mr.get_current_device_resource(),
         )
@@ -234,7 +260,7 @@ class RMPFIntegrationSortedShuffle:  # pragma: no cover
         options: SortedShuffleOptions,
     ) -> DataFrame:
         """Extract a finished partition from the RMP shuffler."""
-        from rapidsmpf.shuffler import unpack_and_concat
+        from rapidsmpf.integrations.cudf.partition import unpack_and_concat
 
         shuffler.wait_on(partition_id)
         column_names = options["column_names"]
@@ -282,7 +308,6 @@ def _sort_partition_dataframe(
         df.select(options["by"]).table,
         sort_boundaries.table,
         partition_id,
-        partition_count,
         options["order"],
         options["null_order"],
     )
@@ -299,12 +324,13 @@ def _sort_partition_dataframe(
 
 class ShuffleSorted(IR):
     """
-    Shuffle sorted multi-partition data.
+    Shuffle already locally sorted multi-partition data.
 
     Shuffling is performed by extracting sort boundary candidates from all partitions,
     sharing them all-to-all and then exchanging data accordingly.
-    The sorting information is required to be passed in identically
-    to the initial sort.
+    The sorting information is required to be passed in identically to the already
+    performed local sort and as of now the final result needs to be sorted again to
+    merge the partitions.
     """
 
     __slots__ = ("by", "config_options", "null_order", "order")
@@ -441,14 +467,18 @@ def _(
     shuffle_method = ir.config_options.executor.shuffle_method
 
     by = [ne.value.name for ne in ir.by if isinstance(ne.value, Col)]
-    if len(by) != len(ir.by):
+    if len(by) != len(ir.by):  # pragma: no cover
         # We should not reach here as this is checked in the lower_ir_node
         raise NotImplementedError("Sorting columns must be column names.")
 
+    child, = ir.children
+
     sort_boundaries_name, graph = _sort_boundaries_graph(
-        get_key_name(ir.children[0]),
+        get_key_name(child),
         by,
-        partition_info[ir.children[0]].count,
+        ir.order,
+        ir.null_order,
+        partition_info[child].count,
     )
 
     options = {
@@ -466,9 +496,9 @@ def _(
 
             graph.update(
                 rapidsmpf_shuffle_graph(
-                    get_key_name(ir.children[0]),
+                    get_key_name(child),
                     get_key_name(ir),
-                    partition_info[ir.children[0]].count,
+                    partition_info[child].count,
                     partition_info[ir].count,
                     RMPFIntegrationSortedShuffle,
                     options,
@@ -478,7 +508,7 @@ def _(
         except (ImportError, ValueError) as err:
             # ImportError: rapidsmpf is not installed
             # ValueError: rapidsmpf couldn't find a distributed client
-            if shuffle_method == "rapidsmpf":
+            if shuffle_method == "rapidsmpf":  # pragma: no cover
                 # Only raise an error if the user specifically
                 # set the shuffle method to "rapidsmpf"
                 raise ValueError(
@@ -491,9 +521,9 @@ def _(
     # Simple task-based fall-back
     graph.update(
         _simple_shuffle_graph(
-            get_key_name(ir.children[0]),
+            get_key_name(child),
             get_key_name(ir),
-            partition_info[ir.children[0]].count,
+            partition_info[child].count,
             partition_info[ir].count,
             _sort_partition_dataframe,
             options,
