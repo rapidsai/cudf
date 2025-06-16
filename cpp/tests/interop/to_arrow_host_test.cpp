@@ -37,12 +37,12 @@ using vector_of_columns = std::vector<std::unique_ptr<cudf::column>>;
 
 struct BaseToArrowHostFixture : public cudf::test::BaseFixture {
   template <typename T>
-  std::enable_if_t<cudf::is_fixed_width<T>() and !std::is_same_v<T, bool>, void> compare_subset(
-    ArrowArrayView const* expected,
-    int64_t start_offset_expected,
-    ArrowArrayView const* actual,
-    int64_t start_offset_actual,
-    int64_t length)
+  void compare_subset(ArrowArrayView const* expected,
+                      int64_t start_offset_expected,
+                      ArrowArrayView const* actual,
+                      int64_t start_offset_actual,
+                      int64_t length)
+    requires(cudf::is_fixed_width<T>() and !std::is_same_v<T, bool>)
   {
     for (int64_t i = 0; i < length; ++i) {
       const bool is_null = ArrowArrayViewIsNull(expected, start_offset_expected + i);
@@ -57,12 +57,12 @@ struct BaseToArrowHostFixture : public cudf::test::BaseFixture {
   }
 
   template <typename T>
-  std::enable_if_t<std::is_same_v<T, cudf::string_view>, void> compare_subset(
-    ArrowArrayView const* expected,
-    int64_t start_offset_expected,
-    ArrowArrayView const* actual,
-    int64_t start_offset_actual,
-    int64_t length)
+  void compare_subset(ArrowArrayView const* expected,
+                      int64_t start_offset_expected,
+                      ArrowArrayView const* actual,
+                      int64_t start_offset_actual,
+                      int64_t length)
+    requires(std::is_same_v<T, cudf::string_view>)
   {
     for (int64_t i = 0; i < length; ++i) {
       const bool is_null = ArrowArrayViewIsNull(expected, start_offset_expected + i);
