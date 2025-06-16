@@ -9,7 +9,8 @@ from typing import TYPE_CHECKING
 import pylibcudf as plc
 
 from cudf_polars.dsl import expr
-from cudf_polars.dsl.ir import HConcat, Scan, Select, Union
+from cudf_polars.dsl.expr import Col, Len
+from cudf_polars.dsl.ir import Empty, HConcat, Scan, Select, Union
 from cudf_polars.dsl.traversal import traversal
 from cudf_polars.experimental.base import PartitionInfo
 from cudf_polars.experimental.dispatch import lower_ir_node
@@ -116,6 +117,7 @@ def _(
         and isinstance(child.children[0], Scan)
         and child.children[0].predicate is None
     ):
+        # Special Case: Fast count.
         scan = child.children[0]
         count = scan.fast_count()
         dtype = ir.exprs[0].value.dtype
@@ -135,9 +137,18 @@ def _(
         partition_info[new_node] = PartitionInfo(count=1)
         return new_node, partition_info
 
+    if not any(
+        isinstance(expr, (Col, Len)) for expr in traversal([e.value for e in ir.exprs])
+    ):
+        # Special Case: Selection does not depend on any columns.
+        new_node = ir.reconstruct([input_ir := Empty()])
+        partition_info[input_ir] = partition_info[new_node] = PartitionInfo(count=1)
+        return new_node, partition_info
+
     if pi.count > 1 and not all(
         expr.is_pointwise for expr in traversal([e.value for e in ir.exprs])
     ):
+        # Special Case: Multiple partitions with 1+ non-pointwise expressions.
         try:
             # Try decomposing the underlying expressions
             return decompose_select(
