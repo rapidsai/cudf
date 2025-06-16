@@ -26,6 +26,7 @@ from cudf.utils.dtypes import (
     cudf_dtype_to_pa_type,
     dtype_to_pylibcudf_type,
     find_common_type,
+    get_dtype_of_same_kind,
     get_dtype_of_same_type,
     min_signed_type,
     min_unsigned_type,
@@ -276,7 +277,12 @@ class NumericalColumn(NumericalBaseColumn):
                     f"{other_cudf_dtype.type.__name__}"
                 )
             if self.dtype.kind == "b" or other_cudf_dtype.kind == "b":
-                out_dtype = np.dtype(np.bool_)
+                if cudf.get_option("mode.pandas_compatible"):
+                    out_dtype = get_dtype_of_same_kind(
+                        out_dtype, np.dtype(np.bool_)
+                    )
+                else:
+                    out_dtype = np.dtype(np.bool_)
 
         elif (
             op == "__pow__"
