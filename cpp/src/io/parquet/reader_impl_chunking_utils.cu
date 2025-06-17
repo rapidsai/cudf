@@ -79,9 +79,9 @@ void print_cumulative_page_info(device_span<PageInfo const> d_pages,
   }
 }
 
-void print_cumulative_row_info(host_span<cumulative_page_info const> sizes,
-                               std::string const& label,
-                               std::optional<std::vector<row_range>> splits = std::nullopt)
+void print_cumulative_page_info(host_span<cumulative_page_info const> sizes,
+                                std::string const& label,
+                                std::optional<std::vector<row_range>> splits = std::nullopt)
 {
   if (splits.has_value()) {
     std::cout << "------------\nSplits (skip_rows, num_rows)\n";
@@ -329,7 +329,10 @@ std::tuple<rmm::device_uvector<page_span>, size_t, size_t> compute_next_subpass(
 
   // bring back to the cpu
   auto const h_aggregated_info = cudf::detail::make_host_vector(aggregated_info, stream);
-  // print_cumulative_row_info(h_aggregated_info, "adjusted");
+
+#if defined(CHUNKING_DEBUG)
+  print_cumulative_page_info(h_aggregated_info, "adjusted");
+#endif  // CHUNKING_DEBUG
 
   // TODO: if the user has explicitly specified skip_rows/num_rows we could be more intelligent
   // about skipping subpasses/pages that do not fall within the range of values, but only if the
@@ -378,7 +381,10 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
 
   // bring back to the cpu
   auto const h_aggregated_info = cudf::detail::make_host_vector(aggregated_info, stream);
-  // print_cumulative_row_info(h_aggregated_info, "adjusted");
+
+#if defined(CHUNKING_DEBUG)
+  print_cumulative_page_info(h_aggregated_info, "adjusted");
+#endif  // CHUNKING_DEBUG
 
   std::vector<row_range> splits;
   // note: we are working with absolute row indices so skip_rows represents the absolute min row
@@ -397,7 +403,10 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
     cur_pos             = split_pos;
     cur_cumulative_size = h_aggregated_info[split_pos].size_bytes;
   }
-  // print_cumulative_row_info(h_aggregated_info, "adjusted w/splits", splits);
+
+#if defined(CHUNKING_DEBUG)
+  print_cumulative_page_info(h_aggregated_info, "adjusted w/splits", splits);
+#endif  // CHUNKING_DEBUG
 
   return splits;
 }
