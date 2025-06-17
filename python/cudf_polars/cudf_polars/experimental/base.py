@@ -35,7 +35,7 @@ class PartitionInfo:
         name = get_key_name(node)
         yield from ((name, i) for i in range(self.count))
 
-    def __rich_repr__(self) -> Generator[Any, None, None]:
+    def __rich_repr__(self) -> Generator[Any, None, None]:  # pragma: no cover
         """Formatting for rich.pretty.pprint."""
         yield "count", self.count
         yield "partitioned_on", self.partitioned_on
