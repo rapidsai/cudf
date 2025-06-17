@@ -68,15 +68,15 @@ class primitive_equality {
 };
 
 /**
- * @brief Builds the hash table based on the given `build` table.
+ * @brief Builds the hash table based on the given `build` table
  *
  * @param build Table of columns used to build join hash
- * @param preprocessed_build Preprocessed build table for row operations
+ * @param preprocessed_build Preprocessed build table for optimized row operations
  * @param hash_table Hash table to build into
- * @param has_nested_nulls Whether build or probe tables contain nested nulls
- * @param nulls_equal Whether null values should be considered equal during join
- * @param bitmask Bitmask indicating valid rows
- * @param stream CUDA stream for device operations
+ * @param has_nested_nulls Flag indicating if build table has nested null values
+ * @param nulls_equal Controls whether null join-key values should match or not
+ * @param bitmask Validity bitmask for build table rows
+ * @param stream CUDA stream used for device memory operations and kernel launches
  */
 void build_hash_join(
   cudf::table_view const& build,
@@ -185,6 +185,8 @@ std::size_t compute_join_output_size(
     }
   };
 
+  // Use primitive row operator logic if build table is compatible. Otherwise, use non-primitive row
+  // operator logic.
   if (cudf::is_primitive_row_op_compatible(build_table)) {
     auto const d_hasher = cudf::row::primitive::row_hasher{probe_nulls, preprocessed_probe};
     auto const d_equal  = cudf::row::primitive::row_equality_comparator{
