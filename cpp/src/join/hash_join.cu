@@ -68,6 +68,62 @@ class primitive_equality {
 };
 
 /**
+ * @brief Builds the hash table based on the given `build_table`.
+ *
+ * @param build Table of columns used to build join hash.
+ * @param preprocessed_build shared_ptr to cudf::experimental::row::equality::preprocessed_table
+ * for build
+ * @param hash_table Build hash table.
+ * @param has_nulls Flag to denote if build or probe tables have nested nulls
+ * @param nulls_equal Flag to denote nulls are equal or not.
+ * @param bitmask Bitmask to denote whether a row is valid.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ */
+void build_hash_join(
+  cudf::table_view const& build,
+  std::shared_ptr<experimental::row::equality::preprocessed_table> const& preprocessed_build,
+  cudf::detail::multimap_type& hash_table,
+  bool has_nulls,
+  null_equality nulls_equal,
+  [[maybe_unused]] bitmask_type const* bitmask,
+  rmm::cuda_stream_view stream)
+{
+  CUDF_EXPECTS(0 != build.num_columns(), "Selected build dataset is empty");
+  CUDF_EXPECTS(0 != build.num_rows(), "Build side table has no rows");
+
+  auto const empty_key_sentinel = hash_table.get_empty_key_sentinel();
+  auto const nulls              = nullate::DYNAMIC{has_nulls};
+
+  // Lambda to insert rows into hash table
+  auto insert_rows = [&](auto const& build, auto const& d_hasher) {
+    auto const pair_func = make_pair_function{d_hasher, empty_key_sentinel};
+    auto const iter      = cudf::detail::make_counting_transform_iterator(0, pair_func);
+
+    if (nulls_equal == cudf::null_equality::EQUAL or not nullable(build)) {
+      hash_table.insert(iter, iter + build.num_rows(), stream.value());
+    } else {
+      auto const stencil = thrust::counting_iterator<size_type>{0};
+      auto const pred    = row_is_valid{bitmask};
+
+      // insert valid rows
+      hash_table.insert_if(iter, iter + build.num_rows(), stencil, pred, stream.value());
+    }
+  };
+
+  // Insert rows into hash table
+  if (cudf::is_primitive_row_op_compatible(build)) {
+    auto const d_hasher = cudf::row::primitive::row_hasher{nulls, preprocessed_build};
+
+    insert_rows(build, d_hasher);
+  } else {
+    auto const row_hash = experimental::row::hash::row_hasher{preprocessed_build};
+    auto const d_hasher = row_hash.device_hasher(nulls);
+
+    insert_rows(build, d_hasher);
+  }
+}
+
+/**
  * @brief Calculates the exact size of the join output produced when
  * joining two tables together.
  *
@@ -260,15 +316,13 @@ probe_join_hash_table(
       probe_nulls, preprocessed_probe, preprocessed_build, compare_nulls};
     auto const iter = cudf::detail::make_counting_transform_iterator(
       0, make_pair_function{d_hasher, empty_key_sentinel});
-    auto const equality = primitive_equality{d_equal};
 
-    retrieve_results(equality, iter);
+    retrieve_results(primitive_equality{d_equal}, iter);
   } else {
     auto const d_hasher =
       cudf::experimental::row::hash::row_hasher{preprocessed_probe}.device_hasher(probe_nulls);
     auto const iter = cudf::detail::make_counting_transform_iterator(
       0, make_pair_function{d_hasher, empty_key_sentinel});
-
     auto const row_comparator = cudf::experimental::row::equality::two_table_comparator{
       preprocessed_probe, preprocessed_build};
 
@@ -449,13 +503,13 @@ hash_join<Hasher>::hash_join(cudf::table_view const& build,
 
   auto const row_bitmask =
     cudf::detail::bitmask_and(build, stream, cudf::get_current_device_resource_ref()).first;
-  cudf::detail::build_join_hash_table(_build,
-                                      _preprocessed_build,
-                                      _hash_table,
-                                      _has_nulls,
-                                      _nulls_equal,
-                                      reinterpret_cast<bitmask_type const*>(row_bitmask.data()),
-                                      stream);
+  cudf::detail::build_hash_join(_build,
+                                _preprocessed_build,
+                                _hash_table,
+                                _has_nulls,
+                                _nulls_equal,
+                                reinterpret_cast<bitmask_type const*>(row_bitmask.data()),
+                                stream);
 }
 
 template <typename Hasher>
