@@ -97,6 +97,11 @@ fi
 cd "$WORKSPACE/java"
 CUDF_INSTALL_DIR="$INSTALL_PREFIX" mvn -B clean package $BUILD_ARG
 
+# Generate javadoc with JDK 17
+yum install -y java-17-openjdk-devel
+export JDK17_HOME=/usr/lib/jvm/java-17-openjdk
+CUDF_INSTALL_DIR="$INSTALL_PREFIX" mvn -B javadoc:jar -P javadoc
+
 ###### Stash Jar files ######
 rm -rf $OUT_PATH
 mkdir -p $OUT_PATH
