@@ -185,3 +185,17 @@ def test_groupby_agg_duplicate(
 def test_groupby_agg_empty(df: pl.LazyFrame, engine: pl.GPUEngine) -> None:
     q = df.group_by("y").agg()
     assert_gpu_result_equal(q, engine=engine, check_row_order=False)
+
+
+@pytest.mark.parametrize("zlice", [(0, 2), (2, 2), (-2, None)])
+def test_groupby_then_slice(
+    df: pl.LazyFrame, engine: pl.GPUEngine, zlice: tuple[int, int]
+) -> None:
+    df = pl.LazyFrame(
+        {
+            "x": [0, 1, 2, 3] * 2,
+            "y": [1, 2, 1, 2] * 2,
+        }
+    )
+    q = df.group_by("y", maintain_order=True).max().slice(*zlice)
+    assert_gpu_result_equal(q, engine=engine)
