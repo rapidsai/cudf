@@ -63,6 +63,7 @@ struct replace_regex_fn {
                             : nullptr;
     auto itr      = d_str.begin();
     auto last_pos = itr;
+    auto const repl_size_bytes = d_repl.size_bytes();
 
     // copy input to output replacing strings as we go
     while (mxn-- > 0 && itr.position() <= nchars && !prog.is_empty()) {
@@ -70,7 +71,7 @@ struct replace_regex_fn {
       if (!match) { break; }  // no more matches
 
       auto const [start_pos, end_pos] = match_positions_to_bytes(*match, d_str, last_pos);
-      nbytes += d_repl.size_bytes() - (end_pos - start_pos);  // add new size
+      nbytes += repl_size_bytes - (end_pos - start_pos);  // add new size
 
       if (out_ptr) {                                                       // replace:
                                                                            // i:bbbbsssseeee
