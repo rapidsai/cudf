@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Any, TypeVar
 
 import pylibcudf as plc
 
-from cudf_polars.dsl.ir import IR, DataFrameScan, Scan, Sink, Union, broadcast
+from cudf_polars.dsl.ir import IR, DataFrameScan, Scan, Sink, Union
 from cudf_polars.experimental.base import PartitionInfo, get_key_name
 from cudf_polars.experimental.dispatch import generate_ir_tasks, lower_ir_node
 
@@ -243,7 +243,7 @@ class SplitScan(IR):
             n_rows = -1
 
         # Perform the partial read
-        df = Scan.do_evaluate(
+        return Scan.do_evaluate(
             schema,
             typ,
             reader_options,
@@ -254,15 +254,8 @@ class SplitScan(IR):
             n_rows,
             row_index,
             include_file_paths,
-            None,
+            predicate,
         )
-
-        if predicate is not None:
-            # TODO: Cannot pass both predicate and n_rows yet
-            # https://github.com/rapidsai/cudf/issues/19064
-            (mask,) = broadcast(predicate.evaluate(df), target_length=df.num_rows)
-            return df.filter(mask)
-        return df
 
 
 def _sample_pq_statistics(ir: Scan) -> dict[str, np.floating[T]]:

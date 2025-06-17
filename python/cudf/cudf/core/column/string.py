@@ -23,6 +23,7 @@ from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
     SIZE_TYPE_DTYPE,
     dtype_to_pylibcudf_type,
+    get_dtype_of_same_kind,
     is_dtype_obj_string,
     is_pandas_nullable_extension_dtype,
 )
@@ -545,7 +546,9 @@ class StringColumn(ColumnBase):
                     return as_column(
                         op == "__ne__",
                         length=len(self),
-                        dtype=np.dtype(np.bool_),
+                        dtype=get_dtype_of_same_kind(
+                            self.dtype, np.dtype(np.bool_)
+                        ),
                     ).set_mask(self.mask)
                 else:
                     return NotImplemented
@@ -557,7 +560,9 @@ class StringColumn(ColumnBase):
                         as_column(other, length=len(self)),
                     )
                 lhs, rhs = (other, self) if reflect else (self, other)
-                return lhs.concatenate([rhs], "", None)
+                return lhs.concatenate([rhs], "", None)._with_type_metadata(
+                    self.dtype
+                )
             elif op in {
                 "__eq__",
                 "__ne__",
@@ -572,7 +577,12 @@ class StringColumn(ColumnBase):
                     other = pa_scalar_to_plc_scalar(other)
                 lhs, rhs = (other, self) if reflect else (self, other)
                 return binaryop.binaryop(
-                    lhs=lhs, rhs=rhs, op=op, dtype=np.dtype(np.bool_)
+                    lhs=lhs,
+                    rhs=rhs,
+                    op=op,
+                    dtype=get_dtype_of_same_kind(
+                        self.dtype, np.dtype(np.bool_)
+                    ),
                 )
         return NotImplemented
 
