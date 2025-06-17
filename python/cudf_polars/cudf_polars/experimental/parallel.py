@@ -335,7 +335,6 @@ _lower_ir_pwise_preserve = partial(_lower_ir_pwise, preserve_partitioning=True)
 lower_ir_node.register(Projection, _lower_ir_pwise_preserve)
 lower_ir_node.register(Filter, _lower_ir_pwise_preserve)
 lower_ir_node.register(Cache, _lower_ir_pwise)
-lower_ir_node.register(HStack, _lower_ir_pwise)
 lower_ir_node.register(HConcat, _lower_ir_pwise)
 
 
@@ -360,3 +359,19 @@ def _(
     return _lower_ir_fallback(
         ir, rec, msg="This slice not supported for multiple partitions."
     )
+
+
+@lower_ir_node.register(HStack)
+def _(
+    ir: HStack, rec: LowerIRTransformer
+) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+    if not all(expr.is_pointwise for expr in traversal([e.value for e in ir.columns])):
+        # TODO: Avoid fallback if/when possible
+        return _lower_ir_fallback(
+            ir, rec, msg="This HStack not supported for multiple partitions."
+        )
+
+    child, partition_info = rec(ir.children[0])
+    new_node = ir.reconstruct([child])
+    partition_info[new_node] = partition_info[child]
+    return new_node, partition_info
