@@ -30,10 +30,10 @@
 
 #include <cooperative_groups.h>
 #include <cub/cub.cuh>
-#include <cuda/atomic>
 #include <thrust/iterator/discard_iterator.h>
 
-namespace cudf::detail {
+namespace cudf {
+namespace detail {
 namespace cg = cooperative_groups;
 
 template <int block_size, bool has_nulls>
@@ -42,8 +42,8 @@ CUDF_KERNEL void __launch_bounds__(block_size)
                                  table_device_view right_table,
                                  table_device_view probe,
                                  table_device_view build,
-                                 row_hash hash_probe,
-                                 row_equality equality_probe,
+                                 row_hash const hash_probe,
+                                 row_equality const equality_probe,
                                  join_kind const join_type,
                                  cudf::detail::mixed_multimap_type::device_view hash_table_view,
                                  ast::detail::expression_device_view device_expression_data,
@@ -110,8 +110,8 @@ std::size_t launch_compute_mixed_join_output_size(
   table_device_view right_table,
   table_device_view probe,
   table_device_view build,
-  row_hash hash_probe,
-  row_equality equality_probe,
+  row_hash const hash_probe,
+  row_equality const equality_probe,
   join_kind const join_type,
   cudf::detail::mixed_multimap_type::device_view hash_table_view,
   ast::detail::expression_device_view device_expression_data,
@@ -141,4 +141,6 @@ std::size_t launch_compute_mixed_join_output_size(
       matches_per_row);
   return size.value(stream);
 }
-}  // namespace cudf::detail
+
+}  // namespace detail
+}  // namespace cudf

@@ -32,7 +32,7 @@
 #include <cub/cub.cuh>
 #include <thrust/iterator/discard_iterator.h>
 
-namespace CUDF_EXPORT cudf {
+namespace cudf {
 namespace detail {
 
 namespace cg = cooperative_groups;
@@ -43,8 +43,8 @@ CUDF_KERNEL void __launch_bounds__(block_size)
              table_device_view right_table,
              table_device_view probe,
              table_device_view build,
-             row_hash hash_probe,
-             row_equality equality_probe,
+             row_hash const hash_probe,
+             row_equality const equality_probe,
              join_kind const join_type,
              cudf::detail::mixed_multimap_type::device_view hash_table_view,
              size_type* join_output_l,
@@ -73,7 +73,7 @@ CUDF_KERNEL void __launch_bounds__(block_size)
     left_table, right_table, device_expression_data);
 
   auto const empty_key_sentinel = hash_table_view.get_empty_key_sentinel();
-  make_pair_function<row_hash> pair_func{hash_probe, empty_key_sentinel};
+  make_pair_function pair_func{hash_probe, empty_key_sentinel};
 
   if (outer_row_index < outer_num_rows) {
     // Figure out the number of elements for this key.
@@ -115,8 +115,8 @@ void launch_mixed_join(table_device_view left_table,
                        table_device_view right_table,
                        table_device_view probe,
                        table_device_view build,
-                       row_hash hash_probe,
-                       row_equality equality_probe,
+                       row_hash const hash_probe,
+                       row_equality const equality_probe,
                        join_kind const join_type,
                        cudf::detail::mixed_multimap_type::device_view hash_table_view,
                        size_type* join_output_l,
@@ -146,4 +146,5 @@ void launch_mixed_join(table_device_view left_table,
 }
 
 }  // namespace detail
-}  // namespace CUDF_EXPORT cudf
+
+}  // namespace cudf
