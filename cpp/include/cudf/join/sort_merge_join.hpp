@@ -252,6 +252,10 @@ class sort_merge_join {
   void postprocess_indices(device_span<size_type> smaller_indices,
                            device_span<size_type> larger_indices,
                            rmm::cuda_stream_view stream);
+
+
+  template <typename MergeOperation>
+  auto invoke_merge(table_view right_view, table_view left_view, MergeOperation &&op, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr);
 };
 
 /**
