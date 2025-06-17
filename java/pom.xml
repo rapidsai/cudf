@@ -367,7 +367,7 @@
                         <artifactId>maven-javadoc-plugin</artifactId>
                         <version>3.6.3</version>
                         <configuration>
-                            <finalName>jdk17-javadoc.jar</finalName>
+                            <classifier>javadoc-jdk17</classifier>
                             <additionalJOptions>
                                 <additionalJOption>-Xdoclint:none</additionalJOption>
                             </additionalJOptions>
