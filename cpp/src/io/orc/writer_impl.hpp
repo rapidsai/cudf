@@ -283,7 +283,7 @@ class writer::impl {
                               file_segmentation const& segmentation,
                               orc_table_view const& orc_table,
                               device_span<uint8_t const> compressed_data,
-                              host_span<compression_result const> comp_results,
+                              host_span<codec_exec_result const> comp_results,
                               host_2dspan<stripe_stream const> strm_descs,
                               host_span<col_stats_blob const> rg_stats,
                               orc_streams& streams,
