@@ -75,7 +75,7 @@ auto constexpr INT96_SIZE = 12;
 /// Decode kernel block size. Must be a multiple of warp_size
 auto constexpr DECODE_BLOCK_SIZE = 4 * cudf::detail::warp_size;
 /// Maximum query block size. Must be a multiple of warp_size
-auto constexpr MAX_QUERY_BLOCK_SIZE = 4 * cudf::detail::warp_size;
+auto constexpr MAX_QUERY_BLOCK_SIZE = 8 * cudf::detail::warp_size;
 /// Maximum number of literals to evaluate while decoding column dictionaries
 auto constexpr MAX_INLINE_LITERALS = 2;
 
@@ -93,9 +93,9 @@ using hasher_type = cudf::hashing::detail::MurmurHash3_x86_32<T>;
 
 /// cuco::static_set_ref storage type
 using storage_type     = cuco::bucket_storage<slot_type,
-                                              BUCKET_SIZE,
-                                              cuco::extent<std::size_t>,
-                                              cudf::detail::cuco_allocator<char>>;
+                                          BUCKET_SIZE,
+                                          cuco::extent<std::size_t>,
+                                          cudf::detail::cuco_allocator<char>>;
 using storage_ref_type = typename storage_type::ref_type;
 
 /**
@@ -811,15 +811,15 @@ CUDF_KERNEL void __launch_bounds__(DECODE_BLOCK_SIZE)
  * @param error Pointer to the kernel error code
  */
 CUDF_KERNEL void __launch_bounds__(DECODE_BLOCK_SIZE)
-  evaluate_some_string_literals(PageInfo const* pages,
-                                cudf::device_span<bool*> results,
-                                ast::generic_scalar_device_view const* scalars,
-                                ast::ast_operator const* operators,
-                                cudf::size_type total_num_scalars,
-                                cudf::size_type total_row_groups,
-                                cudf::size_type num_dictionary_columns,
-                                cudf::size_type dictionary_col_idx,
-                                kernel_error::pointer error)
+  evaluate_few_string_literals(PageInfo const* pages,
+                               cudf::device_span<bool*> results,
+                               ast::generic_scalar_device_view const* scalars,
+                               ast::ast_operator const* operators,
+                               cudf::size_type total_num_scalars,
+                               cudf::size_type total_row_groups,
+                               cudf::size_type num_dictionary_columns,
+                               cudf::size_type dictionary_col_idx,
+                               kernel_error::pointer error)
 {
   // Single thread from each warp decodes values from one dictionary page and evaluates all input
   // predicates against them
@@ -891,17 +891,17 @@ CUDF_KERNEL void __launch_bounds__(DECODE_BLOCK_SIZE)
         }
       }
 
-      // If operator is NOT_EQUAL, check if we have more than one values in the dictionary (will
-      // never evaluate to true so we can easily break) or if the decoded value was a match with
-      // the literal value. Otherwise, check if all literal values have been found and break early
+      // If operator is EQUAL, check if all literal values have been found and break early.
+      // Otherwise, check if we have more than one values in the dictionary (will never evaluate to
+      // true so we can easily break) or if the decoded value was a match with the literal value.
       if (thrust::all_of(thrust::seq,
                          thrust::counting_iterator(0),
                          thrust::counting_iterator(total_num_scalars),
                          [&](auto scalar_idx) {
-                           return operators[scalar_idx] == ast::ast_operator::NOT_EQUAL
-                                    ? page.num_input_values > 1 or
-                                        results[scalar_idx][row_group_idx]
-                                    : results[scalar_idx][row_group_idx];
+                           return operators[scalar_idx] == ast::ast_operator::EQUAL
+                                    ? results[scalar_idx][row_group_idx]
+                                    : page.num_input_values > 1 or
+                                        results[scalar_idx][row_group_idx];
                          })) {
         break;
       }
@@ -927,16 +927,16 @@ CUDF_KERNEL void __launch_bounds__(DECODE_BLOCK_SIZE)
  */
 template <SupportedFixedWidthType T>
 CUDF_KERNEL void __launch_bounds__(DECODE_BLOCK_SIZE)
-  evaluate_some_fixed_width_literals(PageInfo const* pages,
-                                     ColumnChunkDesc const* chunks,
-                                     cudf::device_span<bool*> results,
-                                     ast::generic_scalar_device_view const* scalars,
-                                     ast::ast_operator const* operators,
-                                     parquet::Type physical_type,
-                                     cudf::size_type total_num_scalars,
-                                     cudf::size_type num_dictionary_columns,
-                                     cudf::size_type dictionary_col_idx,
-                                     kernel_error::pointer error)
+  evaluate_few_fixed_width_literals(PageInfo const* pages,
+                                    ColumnChunkDesc const* chunks,
+                                    cudf::device_span<bool*> results,
+                                    ast::generic_scalar_device_view const* scalars,
+                                    ast::ast_operator const* operators,
+                                    parquet::Type physical_type,
+                                    cudf::size_type total_num_scalars,
+                                    cudf::size_type num_dictionary_columns,
+                                    cudf::size_type dictionary_col_idx,
+                                    kernel_error::pointer error)
 {
   // Each thread block decodes values from one dictionary page and evaluates all input predicates
   // against them
@@ -978,24 +978,24 @@ CUDF_KERNEL void __launch_bounds__(DECODE_BLOCK_SIZE)
     for (auto scalar_idx = 0; scalar_idx < total_num_scalars; ++scalar_idx) {
       // Check if the literal value is equal to the decoded value
       if (decoded_value == scalars[scalar_idx].value<T>()) {
-        // If the operator is NOT_EQUAL, set the result to true (row group to be pruned) if and
-        // only if this is the only value in the dictionary page (all values are unique).
-        // Otherwise set it to true (row group to be kept)
+        // If the operator is EQUAL, set the result to true (row group to be kept). Otherwise, set
+        // the result to true (row group to be pruned) if and only if this is the only value in the
+        // dictionary page (all values are unique)
         results[scalar_idx][row_group_idx] =
-          operators[scalar_idx] == ast::ast_operator::NOT_EQUAL ? page.num_input_values == 1 : true;
+          operators[scalar_idx] == ast::ast_operator::EQUAL or page.num_input_values == 1;
       }
     }
 
-    // If operator is NOT_EQUAL, check if we have more than one values in the dictionary (will
-    // never evaluate to true so we can easily break) or if the decoded value was a match with the
-    // literal value. Otherwise, check if all literal values have been found and break early
+    // If the operator is EQUAL, check if all literal values have been found and break early.
+    // Otherwise, check if we have more than one values in the dictionary (will never evaluate to
+    // true so we can easily break) or if the decoded value was a match with the literal value.
     if (thrust::all_of(thrust::seq,
                        thrust::counting_iterator(0),
                        thrust::counting_iterator(total_num_scalars),
                        [&](auto scalar_idx) {
-                         return operators[scalar_idx] == ast::ast_operator::NOT_EQUAL
-                                  ? page.num_input_values > 1 or results[scalar_idx][row_group_idx]
-                                  : results[scalar_idx][row_group_idx];
+                         return operators[scalar_idx] == ast::ast_operator::EQUAL
+                                  ? results[scalar_idx][row_group_idx]
+                                  : page.num_input_values > 1 or results[scalar_idx][row_group_idx];
                        })) {
       return;
     }
@@ -1189,12 +1189,21 @@ struct dictionary_caster {
       CUDF_FAIL("Dictionary decode failed with code(s) " + kernel_error::to_string(error));
     }
 
+    static_assert(MAX_QUERY_BLOCK_SIZE % cudf::detail::warp_size == 0,
+                  "MAX_QUERY_BLOCK_SIZE must be a multiple of warp_size");
+
     // Compute an optimal thread block size for the query kernel so that we can query all cuco
     // hash sets of this column per thread block
+    // Cap the query block size at MAX_QUERY_BLOCK_SIZE
     auto query_block_size = [&]() {
+      // Check if we have less than warp_size row groups. If so, use warp_size
       auto query_block_size = std::max<cudf::size_type>(cudf::detail::warp_size, total_row_groups);
-      query_block_size      = cudf::size_type{1}
-                         << (31 - cuda::std::countl_zero(static_cast<uint32_t>(query_block_size)));
+      // Check if the query block size is a multiple of warp_size. If not, round up to the next
+      // power of 2
+      if (query_block_size % cudf::detail::warp_size != 0) {
+        query_block_size = cudf::size_type{1} << (32 - cuda::std::countl_zero(
+                                                         static_cast<uint32_t>(query_block_size)));
+      }
       return std::min<cudf::size_type>(query_block_size, MAX_QUERY_BLOCK_SIZE);
     }();
 
@@ -1226,7 +1235,7 @@ struct dictionary_caster {
    * @return A vector of BOOL8 columns containing dictionary membership results, one per predicate
    */
   template <SupportedDictionaryType T>
-  std::vector<std::unique_ptr<cudf::column>> evaluate_some_literals(
+  std::vector<std::unique_ptr<cudf::column>> evaluate_few_literals(
     cudf::host_span<ast::literal* const> literals,
     cudf::host_span<ast::ast_operator const> operators,
     rmm::cuda_stream_view stream,
@@ -1271,7 +1280,7 @@ struct dictionary_caster {
     if constexpr (not cuda::std::is_same_v<T, cudf::string_view>) {
       // Decode fixed width dictionaries and evaluate literals against them, one dictionary per
       // thread block
-      evaluate_some_fixed_width_literals<T>
+      evaluate_few_fixed_width_literals<T>
         <<<total_row_groups, DECODE_BLOCK_SIZE, 0, stream.value()>>>(pages.device_begin(),
                                                                      chunks.device_begin(),
                                                                      results_ptrs,
@@ -1295,7 +1304,7 @@ struct dictionary_caster {
 
       // Decode string dictionaries and evaluate all literals against them, one dictionary per
       // warp
-      evaluate_some_string_literals<<<num_blocks, DECODE_BLOCK_SIZE, 0, stream.value()>>>(
+      evaluate_few_string_literals<<<num_blocks, DECODE_BLOCK_SIZE, 0, stream.value()>>>(
         pages.device_begin(),
         results_ptrs,
         scalars.data(),
@@ -1339,9 +1348,9 @@ struct dictionary_caster {
           "Mismatched predicate column and literal types");
       });
 
-      // If there is only one literal, just evaluate expression while decoding dictionary data
+      // If there are only a few literals, just evaluate expression while decoding dictionary data
       if (literals.size() <= MAX_INLINE_LITERALS) {
-        return evaluate_some_literals<T>(literals, operators, stream, mr);
+        return evaluate_few_literals<T>(literals, operators, stream, mr);
       } else {
         // Else, decode dictionaries to `cudf::static_set`s and evaluate all expressions
         return evaluate_many_literals<T>(literals, operators, stream, mr);

@@ -135,8 +135,7 @@ hybrid_scan_reader_impl::prepare_dictionaries(
   rmm::cuda_stream_view stream)
 {
   // Create row group information for the input row group indices
-  auto const row_groups_info =
-    std::get<2>(_metadata->select_row_groups(row_group_indices, 0, std::nullopt));
+  auto const row_groups_info = std::get<1>(_metadata->select_row_groups(row_group_indices));
 
   CUDF_EXPECTS(row_groups_info.size() * _input_columns.size() == dictionary_page_data.size(),
                "Dictionary page data size must match the number of row groups times the number of "

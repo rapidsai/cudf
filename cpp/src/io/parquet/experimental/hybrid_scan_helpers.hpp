@@ -141,21 +141,12 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
   /**
    * @brief Filters and reduces down to a selection of row groups
    *
-   * The input `row_start` and `row_count` parameters will be recomputed and output as the valid
-   * values based on the input row group list.
-   *
    * @param row_group_indices Lists of row groups to read, one per source
-   * @param row_start Starting row of the selection
-   * @param row_count Total number of rows selected
    *
-   * @return A tuple of corrected row_start, row_count, list of row group indexes and its
-   *         starting row, list of number of rows per source, number of input row groups, and a
-   *         struct containing the number of row groups surviving each predicate pushdown filter
+   * @return A tuple of total number of rows to read and list of row group info
    */
-  [[nodiscard]] std::tuple<int64_t, size_type, std::vector<row_group_info>> select_row_groups(
-    host_span<std::vector<size_type> const> row_group_indices,
-    int64_t row_start,
-    std::optional<size_type> const& row_count);
+  [[nodiscard]] std::tuple<size_type, std::vector<row_group_info>> select_row_groups(
+    host_span<std::vector<size_type> const> row_group_indices);
 
   /**
    * @brief Filter the row groups with statistics based on predicate filter

@@ -262,15 +262,12 @@ aggregate_reader_metadata::select_payload_columns(
     valid_payload_columns, {}, include_index, strings_to_categorical, timestamp_type_id);
 }
 
-std::tuple<int64_t, cudf::size_type, std::vector<row_group_info>>
+std::tuple<cudf::size_type, std::vector<row_group_info>>
 aggregate_reader_metadata::select_row_groups(
-  host_span<std::vector<cudf::size_type> const> row_group_indices,
-  int64_t row_start,
-  std::optional<cudf::size_type> const& row_count)
+  host_span<std::vector<cudf::size_type> const> row_group_indices)
 {
-  // Hybrid scan reader does not support skip rows
-  auto constexpr rows_to_skip = int64_t{0};
-  auto rows_to_read           = cudf::size_type{0};
+  // Hybrid scan reader does not support skip rows or num rows
+  auto rows_to_read = cudf::size_type{0};
 
   // Vector to hold the `row_group_info` of selected row groups
   std::vector<row_group_info> selection;
@@ -300,7 +297,7 @@ aggregate_reader_metadata::select_row_groups(
 
   CUDF_EXPECTS(total_row_groups > 0, "No row groups added");
 
-  return {rows_to_skip, rows_to_read, std::move(selection)};
+  return {rows_to_read, std::move(selection)};
 }
 
 std::vector<std::vector<cudf::size_type>> aggregate_reader_metadata::filter_row_groups_with_stats(
