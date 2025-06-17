@@ -470,7 +470,7 @@ void sort_merge_join::postprocess_indices(device_span<size_type> smaller_indices
 }
 
 template <typename MergeOperation>
-auto sort_merge_join::invoke_merge(table_view right_view, table_view left_view, MergeOperation &&op, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr) {
+auto sort_merge_join::invoke_merge(table_view right_view, table_view left_view, MergeOperation &&op) {
   auto has_right_sorting_order = preprocessed_right._null_processed_table_sorted_order.has_value();
   auto has_left_sorting_order = preprocessed_left._null_processed_table_sorted_order.has_value();
   if (has_right_sorting_order && has_left_sorting_order) {
@@ -478,41 +478,41 @@ auto sort_merge_join::invoke_merge(table_view right_view, table_view left_view, 
     auto r_view = preprocessed_right._null_processed_table_sorted_order.value()->view();
     auto l_view = preprocessed_left._null_processed_table_sorted_order.value()->view();
     merge obj(
-        preprocessed_right._null_processed_table_view,
+        right_view,
         r_view.begin<size_type>(), r_view.end<size_type>(),
-        preprocessed_left._null_processed_table_view,
+        left_view,
         l_view.begin<size_type>(), l_view.end<size_type>()
     );
-    return op(obj, stream, mr);
+    return op(obj);
   } else if (has_right_sorting_order && !has_left_sorting_order) {
     // preprocessed_right sorted, preprocessed_left unsorted
     auto r_view = preprocessed_right._null_processed_table_sorted_order.value()->view();
     merge obj(
-        preprocessed_right._null_processed_table_view,
+        right_view,
         r_view.begin<size_type>(), r_view.end<size_type>(),
-        preprocessed_left._null_processed_table_view,
-        thrust::counting_iterator(0), thrust::counting_iterator(preprocessed_left._null_processed_table_view.num_rows())
+        left_view,
+        thrust::counting_iterator(0), thrust::counting_iterator(left_view.num_rows())
     );
-    return op(obj, stream, mr);
+    return op(obj);
   } else if (!has_right_sorting_order && has_left_sorting_order) {
     // preprocessed_right sorted, preprocessed_left unsorted
     auto l_view = preprocessed_left._null_processed_table_sorted_order.value()->view();
     merge obj(
-        preprocessed_right._null_processed_table_view,
+        right_view,
         thrust::counting_iterator(0), thrust::counting_iterator(preprocessed_right._null_processed_table_view.num_rows()),
-        preprocessed_left._null_processed_table_view,
+        left_view,
         l_view.begin<size_type>(), l_view.end<size_type>()
     );
-    return op(obj, stream, mr);
+    return op(obj);
   }
   // Both unsorted
   merge obj(
-    preprocessed_right._null_processed_table_view,
+    right_view,
     thrust::counting_iterator(0), thrust::counting_iterator(preprocessed_right._null_processed_table_view.num_rows()),
-    preprocessed_left._null_processed_table_view,
-    thrust::counting_iterator(0), thrust::counting_iterator(preprocessed_left._null_processed_table_view.num_rows())
+    left_view,
+    thrust::counting_iterator(0), thrust::counting_iterator(left_view.num_rows())
   );
-  return op(obj, stream, mr);
+  return op(obj);
 }
 
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
@@ -546,14 +546,12 @@ sort_merge_join::inner_join(table_view const& left,
   return invoke_merge(
       preprocessed_right._null_processed_table_view, 
       preprocessed_left._null_processed_table_view, 
-      [this](auto &obj, auto stream, auto mr) {
+      [this, stream, mr](auto &obj) {
         auto [preprocessed_right_indices, preprocessed_left_indices] = obj(stream, mr);
         postprocess_indices(*preprocessed_right_indices, *preprocessed_left_indices, stream);
         stream.synchronize();
         return std::pair{std::move(preprocessed_left_indices), std::move(preprocessed_right_indices)};
-      }, 
-      stream, 
-      mr);
+      });
 }
 
 // The motivation for this API is to partition the left table in the case of exploding joins.
@@ -590,7 +588,7 @@ sort_merge_join::match_context sort_merge_join::inner_join_match_context(
   return invoke_merge(
       preprocessed_right._null_processed_table_view, 
       preprocessed_left._null_processed_table_view, 
-      [this, left](auto &obj, auto stream, auto mr) {
+      [this, left, stream, mr](auto &obj) {
         auto matches_per_row = obj.matches_per_row(stream, cudf::get_current_device_resource_ref());
         matches_per_row->resize(matches_per_row->size() - 1, stream);
         if (compare_nulls == null_equality::UNEQUAL &&
@@ -608,15 +606,13 @@ sort_merge_join::match_context sort_merge_join::inner_join_match_context(
             std::move(unprocessed_matches_per_row))};
         }
         return match_context{left, std::move(matches_per_row)};
-      }, 
-      stream, 
-      mr);
+      });
 }
 
 // left_partition_end exclusive
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
-sort_merge_join::partitioned_inner_join(sort_merge_join::partition_context context,
+sort_merge_join::partitioned_inner_join(sort_merge_join::partition_context const &context,
                                         rmm::cuda_stream_view stream,
                                         rmm::device_async_resource_ref mr)
 {
@@ -637,28 +633,26 @@ sort_merge_join::partitioned_inner_join(sort_merge_join::partition_context conte
                                                                     left_partition_end - 1));
   }
   auto null_processed_left_partition = cudf::slice(preprocessed_left._null_processed_table_view,
-                                                      {left_partition_begin, left_partition_end},
+                                                      {null_processed_table_begin, null_processed_table_end},
                                                       stream)[0];
 
-  return invoke_merge(
+  auto [preprocessed_right_indices, preprocessed_left_indices] = invoke_merge(
       preprocessed_right._null_processed_table_view, 
       null_processed_left_partition, 
-      [this, left_partition_begin](auto &obj, auto stream, auto mr) {
-        auto [preprocessed_right_indices, preprocessed_left_indices] = obj(stream, mr);
-        // Map from slice to total null processed table
-        thrust::transform(
-          rmm::exec_policy_nosync(stream),
-          preprocessed_left_indices->begin(),
-          preprocessed_left_indices->end(),
-          preprocessed_left_indices->begin(),
-          [left_partition_begin] __device__(auto idx) { return left_partition_begin + idx; });
-        // Map from total null processed table to unprocessed table
-        postprocess_indices(*preprocessed_right_indices, *preprocessed_left_indices, stream);
-        stream.synchronize();
-        return std::pair{std::move(preprocessed_left_indices), std::move(preprocessed_right_indices)};
-      }, 
-      stream, 
-      mr);
+      [this, left_partition_begin, stream, mr](auto &obj) {
+        return obj(stream, mr);
+      });
+  // Map from slice to total null processed table
+  thrust::transform(
+    rmm::exec_policy_nosync(stream),
+    preprocessed_left_indices->begin(),
+    preprocessed_left_indices->end(),
+    preprocessed_left_indices->begin(),
+    [left_partition_begin] __device__(auto idx) { return left_partition_begin + idx; });
+  // Map from total null processed table to unprocessed table
+  postprocess_indices(*preprocessed_right_indices, *preprocessed_left_indices, stream);
+  stream.synchronize();
+  return std::pair{std::move(preprocessed_left_indices), std::move(preprocessed_right_indices)};
 }
 
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,

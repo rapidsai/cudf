@@ -126,10 +126,10 @@ std::vector<cudf::size_type> inner_join_size_per_row(
   auto right_selected = right_input.select(right_on);
   auto stream         = cudf::get_default_stream();
   cudf::sort_merge_join obj(right_selected, cudf::sorted::NO, compare_nulls, stream);
-  auto per_row_counts = obj.inner_join_size_per_row(
+  auto per_row_counts = obj.inner_join_match_context(
     left_selected, cudf::sorted::NO, stream, cudf::get_current_device_resource_ref());
 
-  return cudf::detail::make_std_vector<cudf::size_type>(*per_row_counts, stream);
+  return cudf::detail::make_std_vector<cudf::size_type>(*per_row_counts._match_counts, stream);
 }
 
 std::unique_ptr<cudf::table> left_join(
@@ -949,13 +949,46 @@ TEST_F(JoinTest, PartitionedInnerJoinWithNulls)
   auto expected_sorted_result = cudf::gather(expected_result->view(), *expected_result_sort_order);
 
   auto stream = cudf::get_default_stream();
+
   cudf::sort_merge_join obj(t1.select(right_on), cudf::sorted::NO, compare_nulls, stream);
-  obj.inner_join_size_per_row(
+  auto match_context = obj.inner_join_match_context(
     t0.select(left_on), cudf::sorted::NO, stream, cudf::get_current_device_resource_ref());
-  auto join_and_gather = [&t0, &t1, &obj, stream](cudf::size_type partition_begin,
-                                                  cudf::size_type partition_end) {
+
+  auto match_counts = cudf::detail::make_std_vector<cudf::size_type>(*match_context._match_counts, stream);
+  std::cout << "Match counts size: " << match_counts.size() << std::endl;
+  // Print first few match counts and calculate statistics
+  const size_t max_print = std::min(static_cast<size_t>(20), match_counts.size());
+  std::cout << "First " << max_print << " match counts: ";
+  for (size_t i = 0; i < max_print; ++i) {
+      std::cout << match_counts[i] << " ";
+  }
+  std::cout << std::endl;
+  auto partition_context = cudf::sort_merge_join::partition_context{std::move(match_context), 0, 0};
+
+  auto join_and_gather = [&t0, &t1, &obj, stream](cudf::sort_merge_join::partition_context const &cxt) {
     auto const [left_join_indices, right_join_indices] = obj.partitioned_inner_join(
-      partition_begin, partition_end, stream, cudf::get_current_device_resource_ref());
+      cxt, stream, cudf::get_current_device_resource_ref());
+
+
+    // Print to stdout how many indices we have in each vector
+    std::cout << "Left join indices size: " << left_join_indices->size() << std::endl;
+    std::cout << "Right join indices size: " << right_join_indices->size() << std::endl;
+
+    // Print the first few values of each (up to 10 elements)
+    const size_t max_print = std::min(static_cast<size_t>(10), left_join_indices->size());
+    std::cout << "Left join indices: ";
+    auto left_host = cudf::detail::make_std_vector<cudf::size_type>(*left_join_indices, stream);
+    for (size_t i = 0; i < max_print; ++i) {
+      std::cout << left_host[i] << " ";
+    }
+    std::cout << std::endl;
+
+    std::cout << "Right join indices: ";
+    auto right_host = cudf::detail::make_std_vector<cudf::size_type>(*right_join_indices, stream);
+    for (size_t i = 0; i < max_print; ++i) {
+      std::cout << right_host[i] << " ";
+    }
+    std::cout << std::endl;
 
     auto left_indices_span  = cudf::device_span<cudf::size_type const>{*left_join_indices};
     auto right_indices_span = cudf::device_span<cudf::size_type const>{*right_join_indices};
@@ -973,14 +1006,16 @@ TEST_F(JoinTest, PartitionedInnerJoinWithNulls)
                        std::make_move_iterator(right_cols.end()));
     return std::make_unique<cudf::table>(std::move(joined_cols));
   };
+
   std::vector<std::unique_ptr<cudf::table>> partial_tables;
-  for (cudf::size_type i = 0; i < t0.num_rows(); i++) {
-    partial_tables.push_back(join_and_gather(i, i + 1));
-  }
   std::vector<cudf::table_view> partial_table_views;
-  for (auto const& tbl : partial_tables) {
-    partial_table_views.push_back(tbl->view());
+  for (cudf::size_type i = 0; i < t0.num_rows(); i++) {
+    partition_context.left_start_idx = i;
+    partition_context.left_end_idx = i + 1;
+    partial_tables.push_back(join_and_gather(partition_context));
+    partial_table_views.push_back(partial_tables.back()->view());
   }
+
   auto concatenated_result =
     cudf::concatenate(partial_table_views, stream, cudf::get_current_device_resource_ref());
   auto concatenated_result_sort_order = cudf::sorted_order(concatenated_result->view());
