@@ -856,7 +856,7 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadWithStructsOfLists)
 
   // for these tests, different columns get written to different numbers of pages so it's a
   // little tricky to describe the expected results by page counts. To get an idea of how
-  // these values are chosen, see the debug output from the call to print_cumulative_row_info() in
+  // these values are chosen, see the debug output from the call to print_cumulative_page_info() in
   // reader_impl_preprocess.cu -> find_splits()
 
   {
@@ -995,7 +995,7 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadWithListsOfStructs)
 
   // for these tests, different columns get written to different numbers of pages so it's a
   // little tricky to describe the expected results by page counts. To get an idea of how
-  // these values are chosen, see the debug output from the call to print_cumulative_row_info() in
+  // these values are chosen, see the debug output from the call to print_cumulative_page_info() in
   // reader_impl_preprocess.cu -> find_splits()
   {
     auto const [result, num_chunks] = chunked_read(filepath_no_null, 1'000'000);
