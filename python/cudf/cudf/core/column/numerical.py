@@ -26,6 +26,7 @@ from cudf.utils.dtypes import (
     cudf_dtype_to_pa_type,
     dtype_to_pylibcudf_type,
     find_common_type,
+    get_dtype_of_same_kind,
     get_dtype_of_same_type,
     min_signed_type,
     min_unsigned_type,
@@ -223,7 +224,7 @@ class NumericalColumn(NumericalBaseColumn):
             "__eq__",
             "__ne__",
         }:
-            out_dtype = np.dtype(np.bool_)
+            out_dtype = get_dtype_of_same_kind(self.dtype, np.dtype(np.bool_))
 
             # If `other` is a Python integer and it is out-of-bounds
             # promotion could fail but we can trivially define the result
@@ -245,7 +246,7 @@ class NumericalColumn(NumericalBaseColumn):
                     op = "__lt__"
 
         elif op in {"NULL_EQUALS", "NULL_NOT_EQUALS"}:
-            out_dtype = np.dtype(np.bool_)
+            out_dtype = get_dtype_of_same_kind(self.dtype, np.dtype(np.bool_))
 
         reflect, op = self._check_reflected_op(op)
         if (other := self._normalize_binop_operand(other)) is NotImplemented:
@@ -266,7 +267,9 @@ class NumericalColumn(NumericalBaseColumn):
                     (isinstance(tmp, NumericalColumn) and 0 in tmp)
                     or (isinstance(tmp, pa.Scalar) and tmp.as_py() == 0)
                 ):
-                    out_dtype = np.dtype(np.float64)
+                    out_dtype = get_dtype_of_same_kind(
+                        out_dtype, np.dtype(np.float64)
+                    )
 
         if op in {"__and__", "__or__", "__xor__"}:
             if self.dtype.kind == "f" or other_cudf_dtype.kind == "f":
@@ -276,7 +279,9 @@ class NumericalColumn(NumericalBaseColumn):
                     f"{other_cudf_dtype.type.__name__}"
                 )
             if self.dtype.kind == "b" or other_cudf_dtype.kind == "b":
-                out_dtype = np.dtype(np.bool_)
+                out_dtype = get_dtype_of_same_kind(
+                    out_dtype, np.dtype(np.bool_)
+                )
 
         elif (
             op == "__pow__"
