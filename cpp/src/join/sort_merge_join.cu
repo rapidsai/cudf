@@ -555,10 +555,6 @@ sort_merge_join::inner_join(table_view const& left,
     });
 }
 
-// The motivation for this API is to partition the left table in the case of exploding joins.
-// Note that this function needs to return the size per row of the left table, not the larger table
-// which is what the merge operation does. So when workflows adopt the estimation-then-join
-// approach, we need to fix the larger table to be the left table.
 sort_merge_join::match_context sort_merge_join::inner_join_match_context(
   table_view const& left,
   sorted is_left_sorted,
