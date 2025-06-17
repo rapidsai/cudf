@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -54,10 +54,11 @@ struct all_fn {
     int32_t* d_result;
   };
 
-  template <typename T, std::enable_if_t<std::is_arithmetic_v<T>>* = nullptr>
+  template <typename T>
   std::unique_ptr<scalar> operator()(column_view const& input,
                                      rmm::cuda_stream_view stream,
                                      rmm::device_async_resource_ref mr)
+    requires(std::is_arithmetic_v<T>)
   {
     auto const d_dict = cudf::column_device_view::create(input, stream);
     auto const iter   = [&] {
@@ -74,10 +75,11 @@ struct all_fn {
                        all_true_fn<decltype(iter)>{iter, d_result.data()});
     return std::make_unique<numeric_scalar<bool>>(d_result.value(stream), true, stream, mr);
   }
-  template <typename T, std::enable_if_t<!std::is_arithmetic_v<T>>* = nullptr>
+  template <typename T>
   std::unique_ptr<scalar> operator()(column_view const&,
                                      rmm::cuda_stream_view,
                                      rmm::device_async_resource_ref)
+    requires(!std::is_arithmetic_v<T>)
   {
     CUDF_FAIL("Unexpected key type for dictionary in reduction all()");
   }

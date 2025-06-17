@@ -25,5 +25,5 @@ include(../../cmake/thirdparty/get_arrow.cmake)
 
 add_executable(interop interop.cpp)
 target_link_libraries(interop PRIVATE cudf::cudf)
-target_compile_features(interop PRIVATE cxx_std_17)
+target_compile_features(interop PRIVATE cxx_std_20)
 target_link_libraries(interop PRIVATE ${ARROW_LIBRARIES})

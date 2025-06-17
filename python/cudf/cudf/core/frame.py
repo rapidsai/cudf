@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import itertools
 import operator
 import warnings
 from collections.abc import Mapping
@@ -21,7 +22,7 @@ import cudf
 # only, need to figure out why the `np` alias is insufficient then remove.
 from cudf.api.types import is_dtype_equal, is_scalar
 from cudf.core._compat import PANDAS_LT_300
-from cudf.core._internals import copying, search, sorting
+from cudf.core._internals import copying, sorting
 from cudf.core.abc import Serializable
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import (
@@ -1196,10 +1197,15 @@ class Frame(BinaryOperand, Scannable, Serializable):
 
         See `ColumnBase._with_type_metadata` for more information.
         """
-        for (name, col), (_, dtype) in zip(
-            self._column_labels_and_values, other._dtypes
+        for (name, self_col), (_, other_col) in zip(
+            self._column_labels_and_values, other._column_labels_and_values
         ):
-            self._data.set_by_label(name, col._with_type_metadata(dtype))
+            self._data.set_by_label(
+                name,
+                self_col._with_type_metadata(
+                    other_col.dtype,
+                ),
+            )
 
         return self
 
@@ -1448,7 +1454,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
             values = [as_column(values)]
         else:
             values = [*values._columns]
-        if len(values) != len(self._data):
+        if len(values) != self._num_columns:
             raise ValueError("Mismatch number of columns to search for.")
 
         # TODO: Change behavior based on the decision in
@@ -1471,12 +1477,12 @@ class Frame(BinaryOperand, Scannable, Serializable):
         ]
 
         outcol = ColumnBase.from_pylibcudf(
-            search.search_sorted(
+            sorting.search_sorted(
                 sources,
                 values,
                 side,
-                ascending=ascending,
-                na_position=na_position,
+                ascending=itertools.repeat(ascending, times=len(sources)),
+                na_position=itertools.repeat(na_position, times=len(sources)),
             )
         )
 
@@ -1579,7 +1585,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
     def _get_sorted_inds(
         self,
         by=None,
-        ascending=True,
+        ascending: bool | Iterable[bool] = True,
         na_position: Literal["first", "last"] = "last",
     ) -> ColumnBase:
         """
@@ -1591,25 +1597,33 @@ class Frame(BinaryOperand, Scannable, Serializable):
         else:
             to_sort = self._get_columns_by_label(list(by))._columns
 
-        if is_scalar(ascending):
-            ascending_lst = [ascending] * len(to_sort)
+        if isinstance(ascending, bool):
+            ascending_iter: Iterable[bool] = itertools.repeat(
+                ascending, times=len(to_sort)
+            )
         else:
-            ascending_lst = list(ascending)
-
+            ascending_iter = ascending
         return ColumnBase.from_pylibcudf(
             sorting.order_by(
-                list(to_sort),
-                ascending_lst,
-                na_position,
+                to_sort,
+                ascending_iter,
+                itertools.repeat(na_position, times=len(to_sort)),
                 stable=True,
             )
         )
 
     @_performance_tracking
     def _split(self, splits: list[int]) -> list[Self]:
-        """Split a frame with split points in ``splits``. Returns a list of
-        Frames of length `len(splits) + 1`.
         """
+        Split a frame with split points in ``splits``.
+
+        Returns
+        -------
+        list[Self]
+            Returns a list of Self of length len(splits) + 1.
+        """
+        if self._num_rows == 0:
+            return []
         return [
             self._from_columns_like_self(
                 [ColumnBase.from_pylibcudf(col) for col in split],
@@ -2028,26 +2042,6 @@ class Frame(BinaryOperand, Scannable, Serializable):
         """Bitwise invert (~) for integral dtypes, logical NOT for bools."""
         return self._from_data_like_self(
             self._data._from_columns_like_self((~col for col in self._columns))
-        )
-
-    @_performance_tracking
-    def nunique(self, dropna: bool = True):
-        """
-        Returns a per column mapping with counts of unique values for
-        each column.
-
-        Parameters
-        ----------
-        dropna : bool, default True
-            Don't include NaN in the counts.
-
-        Returns
-        -------
-        dict
-            Name and unique value counts of each column in frame.
-        """
-        raise NotImplementedError(
-            f"{type(self).__name__} does not implement nunique"
         )
 
     @staticmethod
