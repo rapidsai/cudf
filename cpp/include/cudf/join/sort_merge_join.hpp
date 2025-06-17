@@ -218,32 +218,6 @@ class sort_merge_join {
     std::optional<std::unique_ptr<column>> _null_processed_table_sorted_order =
       std::nullopt;  ///< Optional sort ordering for pre-sorted tables
 
-    template <typename SortedOrderFunc, typename PresortedFunc>
-    auto get_iterator(SortedOrderFunc&& sorted_order_iterator, PresortedFunc&& presorted_iterator)
-      -> std::variant<std::decay_t<decltype(sorted_order_iterator())>,
-                      std::decay_t<decltype(presorted_iterator())>>
-    {
-      if (_null_processed_table_sorted_order.has_value()) {
-        return sorted_order_iterator();
-      } else {
-        return presorted_iterator();
-      }
-    }
-
-    auto begin()
-    {
-      return get_iterator(
-        [this]() { return _null_processed_table_sorted_order.value()->view().begin<size_type>(); },
-        [this]() { return thrust::counting_iterator(0); });
-    }
-
-    auto end()
-    {
-      return get_iterator(
-        [this]() { return _null_processed_table_sorted_order.value()->view().end<size_type>(); },
-        [this]() { return thrust::counting_iterator(_null_processed_table_view.num_rows()); });
-    }
-
     /**
      * @brief Mark rows in unprocessed table with nulls at root or child levels by populating the
      * _validity_mask
