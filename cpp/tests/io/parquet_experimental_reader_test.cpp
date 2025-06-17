@@ -713,13 +713,16 @@ using DictionaryTestTypes =
 
 TYPED_TEST_SUITE(RowGroupFilteringWithDictTest, DictionaryTestTypes);
 
-TYPED_TEST(RowGroupFilteringWithDictTest, FilterSomeLiteralsTyped)
+TYPED_TEST(RowGroupFilteringWithDictTest, FilterFewLiteralsTyped)
 {
   srand(0xace);
   using T = TypeParam;
 
   auto constexpr num_concat = 1;
-  auto const buffer         = std::get<1>(create_parquet_with_stats<T, num_concat>());
+
+  // Specifying ZSTD compression to explicitly test decompression of dictionary pages
+  auto const buffer =
+    std::get<1>(create_parquet_with_stats<T, num_concat>(100, cudf::io::compression_type::ZSTD));
 
   // For string tests use `col2` containing constant "0100" and for temporal types use `col1`
   // containing low cardinality descending values. For all other types use `col0`
@@ -822,7 +825,9 @@ TYPED_TEST(RowGroupFilteringWithDictTest, FilterManyLiteralsTyped)
   using T = TypeParam;
 
   auto constexpr num_concat = 1;
-  auto const buffer         = std::get<1>(create_parquet_with_stats<T, num_concat>());
+  // Specifying no compression to explicitly test uncompressed dictionary pages
+  auto const buffer =
+    std::get<1>(create_parquet_with_stats<T, num_concat>(100, cudf::io::compression_type::NONE));
 
   // For string tests use `col2` containing constant "0100" and for temporal types use `col1`
   // containing low cardinality descending values. For all other types use `col0`
