@@ -699,11 +699,11 @@ TEST_F(ParquetChunkedWriterTest, ReadRowGroupsError)
 
   cudf::io::parquet_reader_options read_opts =
     cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath}).row_groups({{0, 1}});
-  EXPECT_THROW(cudf::io::read_parquet(read_opts), cudf::logic_error);
+  EXPECT_THROW(cudf::io::read_parquet(read_opts), std::invalid_argument);
   read_opts.set_row_groups({{-1}});
-  EXPECT_THROW(cudf::io::read_parquet(read_opts), cudf::logic_error);
+  EXPECT_THROW(cudf::io::read_parquet(read_opts), std::invalid_argument);
   read_opts.set_row_groups({{0}, {0}});
-  EXPECT_THROW(cudf::io::read_parquet(read_opts), cudf::logic_error);
+  EXPECT_THROW(cudf::io::read_parquet(read_opts), std::invalid_argument);
 }
 
 TEST_F(ParquetChunkedWriterTest, RowGroupPageSizeMatch)

@@ -502,8 +502,8 @@ add_library(
   src/io/avro/avro_gpu.cu
   src/io/avro/reader_impl.cu
   src/io/comp/brotli_dict.cpp
-  src/io/comp/comp.cpp
-  src/io/comp/comp.cu
+  src/io/comp/compression.cpp
+  src/io/comp/compression.cu
   src/io/comp/common.cpp
   src/io/comp/cpu_unbz2.cpp
   src/io/comp/debrotli.cu
@@ -511,7 +511,7 @@ add_library(
   src/io/comp/nvcomp_adapter.cpp
   src/io/comp/nvcomp_adapter.cu
   src/io/comp/snap.cu
-  src/io/comp/uncomp.cpp
+  src/io/comp/decompression.cpp
   src/io/comp/unsnap.cu
   src/io/csv/csv_gpu.cu
   src/io/csv/durations.cu
@@ -560,8 +560,10 @@ add_library(
   src/io/parquet/reader.cpp
   src/io/parquet/reader_impl.cpp
   src/io/parquet/reader_impl_chunking.cu
+  src/io/parquet/reader_impl_chunking_utils.cu
   src/io/parquet/reader_impl_helpers.cpp
   src/io/parquet/reader_impl_preprocess.cu
+  src/io/parquet/reader_impl_preprocess_utils.cu
   src/io/parquet/stats_filter_helpers.cpp
   src/io/parquet/writer_impl.cu
   src/io/parquet/writer_impl_helpers.cpp
@@ -696,6 +698,8 @@ add_library(
   src/search/contains_scalar.cu
   src/search/contains_table.cu
   src/search/search_ordered.cu
+  src/sort/faster_sort_column.cu
+  src/sort/faster_stable_sort_column.cu
   src/sort/is_sorted.cu
   src/sort/rank.cu
   src/sort/segmented_sort.cu
