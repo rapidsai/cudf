@@ -33,6 +33,7 @@ from cudf_polars.experimental.dispatch import (
     lower_ir_node,
 )
 from cudf_polars.experimental.utils import _concat, _lower_ir_fallback
+from cudf_polars.typing import LowerIRState
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
@@ -81,7 +82,9 @@ def lower_ir_graph(
     --------
     lower_ir_node
     """
-    mapper = CachingVisitor(lower_ir_node, state={"config_options": config_options})
+    mapper = CachingVisitor(
+        lower_ir_node, state=LowerIRState(config_options=config_options)
+    )
     return mapper(ir)
 
 

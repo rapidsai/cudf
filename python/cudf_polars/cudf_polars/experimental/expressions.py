@@ -50,20 +50,18 @@ from cudf_polars.dsl.utils.naming import unique_names
 from cudf_polars.experimental.base import PartitionInfo
 from cudf_polars.experimental.repartition import Repartition
 from cudf_polars.experimental.utils import _leaf_column_names
+from cudf_polars.typing import ExprDecomposerState
 
 if TYPE_CHECKING:
     from collections.abc import Generator, MutableMapping, Sequence
-    from typing import TypeAlias
 
     from cudf_polars.dsl.expressions.base import Expr
     from cudf_polars.dsl.ir import IR
-    from cudf_polars.typing import CachingVisitorState, GenericTransformer, Schema
+    from cudf_polars.typing import (
+        Schema,
+        ExprDecomposer,
+    )
     from cudf_polars.utils.config import ConfigOptions
-
-
-ExprDecomposer: TypeAlias = (
-    "GenericTransformer[Expr, tuple[Expr, IR, MutableMapping[IR, PartitionInfo]]]"
-)
 
 
 def select(
@@ -510,12 +508,12 @@ def decompose_expr_graph(
     This function recursively decomposes ``named_expr.value`` and
     ``input_ir`` into multiple partition-wise stages.
     """
-    state: CachingVisitorState = {
-        "input_ir": input_ir,
-        "input_partition_info": partition_info[input_ir],
-        "config_options": config_options,
-        "unique_names": unique_names((named_expr.name, *input_ir.schema.keys())),
-    }
+    state = ExprDecomposerState(
+        input_ir=input_ir,
+        input_partition_info=partition_info[input_ir],
+        config_options=config_options,
+        unique_names=unique_names((named_expr.name, *input_ir.schema.keys())),
+    )
     mapper = CachingVisitor(_decompose, state=state)
     expr, input_ir, partition_info = mapper(named_expr.value)
     return named_expr.reconstruct(expr), input_ir, partition_info

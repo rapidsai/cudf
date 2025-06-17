@@ -13,7 +13,7 @@ from pylibcudf import expressions as plc_expr
 
 from cudf_polars.dsl import expr
 from cudf_polars.dsl.traversal import CachingVisitor, reuse_if_unchanged
-from cudf_polars.typing import GenericTransformer
+from cudf_polars.typing import ASTTransformer, ExprExprState, GenericTransformer
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -91,7 +91,9 @@ REVERSED_COMPARISON = {
 }
 
 
-Transformer: TypeAlias = GenericTransformer[expr.Expr, plc_expr.Expression]
+Transformer: TypeAlias = GenericTransformer[
+    expr.Expr, plc_expr.Expression, ASTTransformer
+]
 
 
 @singledispatch
@@ -240,7 +242,7 @@ def to_parquet_filter(node: expr.Expr) -> plc_expr.Expression | None:
     -------
     pylibcudf Expression if conversion is possible, otherwise None.
     """
-    mapper = CachingVisitor(_to_ast, state={"for_parquet": True})
+    mapper = CachingVisitor(_to_ast, state=ASTTransformer(for_parquet=True))
     try:
         return mapper(node)
     except (KeyError, NotImplementedError):
@@ -266,7 +268,7 @@ def to_ast(node: expr.Expr) -> plc_expr.Expression | None:
     -------
     pylibcudf Expression if conversion is possible, otherwise None.
     """
-    mapper = CachingVisitor(_to_ast, state={"for_parquet": False})
+    mapper = CachingVisitor(_to_ast, state=ASTTransformer(for_parquet=False))
     try:
         return mapper(node)
     except (KeyError, NotImplementedError):
@@ -315,6 +317,6 @@ def insert_colrefs(
     New expression with column references inserted.
     """
     mapper = CachingVisitor(
-        _insert_colrefs, state={"table_ref": table_ref, "name_to_index": name_to_index}
+        _insert_colrefs, state=ExprExprState(name_to_index=name_to_index, table_ref=table_ref)
     )
     return mapper(node)

@@ -13,13 +13,8 @@ if TYPE_CHECKING:
 
     from cudf_polars.dsl.ir import IR
     from cudf_polars.experimental.base import PartitionInfo
-    from cudf_polars.typing import GenericTransformer
+    from cudf_polars.typing import LowerIRTransformer
 
-
-LowerIRTransformer: TypeAlias = (
-    "GenericTransformer[IR, tuple[IR, MutableMapping[IR, PartitionInfo]]]"
-)
-"""Protocol for Lowering IR nodes."""
 
 
 @singledispatch

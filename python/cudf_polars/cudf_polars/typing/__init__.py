@@ -159,9 +159,14 @@ OptimizationArgs: TypeAlias = Literal[
 U_contra = TypeVar("U_contra", bound=Hashable, contravariant=True)
 V_co = TypeVar("V_co", covariant=True)
 NodeT = TypeVar("NodeT", bound="nodebase.Node[Any]")
+StateT_co = TypeVar(
+    "StateT_co",
+    bound="CachingVisitorState",
+    covariant=True,
+)
 
 
-class GenericTransformer(Protocol[U_contra, V_co]):
+class GenericTransformer(Protocol[U_contra, V_co, StateT_co]):
     """Abstract protocol for recursive visitors."""
 
     def __call__(self, __value: U_contra) -> V_co:
@@ -169,17 +174,70 @@ class GenericTransformer(Protocol[U_contra, V_co]):
         ...
 
     @property
-    def state(self) -> CachingVisitorState:
+    def state(self) -> StateT_co:
         """Arbitrary immutable state."""
         ...
 
 
+class ASTTransformer(TypedDict):
+    for_parquet: bool
+
+
+class GenericState(Generic[NodeT], TypedDict):
+    replacements: Mapping[NodeT, NodeT]
+
+
+class ExprExprState(TypedDict):
+    name_to_index: Mapping[str, int]
+    table_ref: plc.expressions.TableReference
+
+
+class ExprDecomposerState(TypedDict):
+    """State for ExprDecomposer."""
+
+    input_ir: ir.IR
+    input_partition_info: PartitionInfo
+    config_options: ConfigOptions
+    unique_names: Generator[str, None, None]
+
+
+class LowerIRState(TypedDict):
+    # input_ir: ir.IR
+    # input_partition_info: PartitionInfo
+    config_options: ConfigOptions
+
+
+CachingVisitorState: TypeAlias = (
+    ExprExprState | ExprDecomposerState | LowerIRState | GenericState | ASTTransformer
+)
+
+# class CachingVisitorState(Generic[NodeT], TypedDict, total=False):
+#     """State for CachingVisitor."""
+
+#     config_options: ConfigOptions
+#     for_parquet: bool
+#     input_ir: ir.IR
+#     input_partition_info: PartitionInfo
+#     name_to_index: Mapping[str, int]
+#     replacements: Mapping[NodeT, NodeT]
+#     table_ref: plc.expressions.TableReference
+#     unique_names: Generator[str, None, None]
+
+
 # Quotes to avoid circular import
-ExprTransformer: TypeAlias = GenericTransformer["expr.Expr", "expr.Expr"]
+ExprTransformer: TypeAlias = GenericTransformer["expr.Expr", "expr.Expr", ExprExprState]
 """Protocol for transformation of Expr nodes."""
 
-IRTransformer: TypeAlias = GenericTransformer["ir.IR", "ir.IR"]
+IRTransformer: TypeAlias = GenericTransformer["ir.IR", "ir.IR", CachingVisitorState]
 """Protocol for transformation of IR nodes."""
+
+LowerIRTransformer: TypeAlias = GenericTransformer[
+    "ir.IR", "tuple[ir.IR, MutableMapping[ir.IR, PartitionInfo]]", LowerIRState
+]
+"""Protocol for Lowering IR nodes."""
+
+ExprDecomposer: TypeAlias = "GenericTransformer[expr.Expr, tuple[expr.Expr, ir.IR, MutableMapping[ir.IR, PartitionInfo]], ExprDecomposerState]"
+"""Protocol for decomposing expressions."""
 
 
 class ColumnOptions(TypedDict):
@@ -226,16 +284,3 @@ class DataFrameHeader(TypedDict):
 
     columns_kwargs: list[ColumnOptions]
     frame_count: int
-
-
-class CachingVisitorState(Generic[NodeT], TypedDict, total=False):
-    """State for CachingVisitor."""
-
-    config_options: ConfigOptions
-    for_parquet: bool
-    input_ir: ir.IR
-    input_partition_info: PartitionInfo
-    name_to_index: Mapping[str, int]
-    replacements: Mapping[NodeT, NodeT]
-    table_ref: plc.expressions.TableReference
-    unique_names: Generator[str, None, None]

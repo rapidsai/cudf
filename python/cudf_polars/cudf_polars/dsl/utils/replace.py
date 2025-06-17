@@ -12,7 +12,7 @@ from cudf_polars.dsl.traversal import CachingVisitor, reuse_if_unchanged
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
-    from cudf_polars.typing import GenericTransformer, NodeT
+    from cudf_polars.typing import GenericTransformer, NodeT, StateT_co
 
 __all__ = ["replace"]
 
