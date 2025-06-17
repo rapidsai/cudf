@@ -58,6 +58,7 @@ class DataFrame:
         if any(c.name is None for c in columns):
             raise ValueError("All columns must have a name")
         self.columns = [cast(NamedColumn, c) for c in columns]
+        self.dtypes = [c.dtype for c in self.columns]
         self.column_map = {c.name: c for c in self.columns}
         self.table = plc.Table([c.obj for c in self.columns])
 
@@ -134,7 +135,9 @@ class DataFrame:
         )
 
     @classmethod
-    def from_table(cls, table: plc.Table, names: Sequence[str]) -> Self:
+    def from_table(
+        cls, table: plc.Table, names: Sequence[str], dtypes: Sequence[DataType]
+    ) -> Self:
         """
         Create from a pylibcudf table.
 
@@ -144,6 +147,8 @@ class DataFrame:
             Pylibcudf table to obtain columns from
         names
             Names for the columns
+        dtypes
+            Dtypes for the columns
 
         Returns
         -------
@@ -158,9 +163,8 @@ class DataFrame:
         if table.num_columns() != len(names):
             raise ValueError("Mismatching name and table length.")
         return cls(
-            # TODO: Pass along dtypes here
-            Column(c, name=name)
-            for c, name in zip(table.columns(), names, strict=True)
+            Column(c, name=name, dtype=dtype)
+            for c, name, dtype in zip(table.columns(), names, dtypes, strict=True)
         )
 
     @classmethod
@@ -303,7 +307,11 @@ class DataFrame:
     def filter(self, mask: Column) -> Self:
         """Return a filtered table given a mask."""
         table = plc.stream_compaction.apply_boolean_mask(self.table, mask.obj)
-        return type(self).from_table(table, self.column_names).sorted_like(self)
+        return (
+            type(self)
+            .from_table(table, self.column_names, self.dtypes)
+            .sorted_like(self)
+        )
 
     def slice(self, zlice: Slice | None) -> Self:
         """
@@ -324,4 +332,8 @@ class DataFrame:
         (table,) = plc.copying.slice(
             self.table, conversion.from_polars_slice(zlice, num_rows=self.num_rows)
         )
-        return type(self).from_table(table, self.column_names).sorted_like(self)
+        return (
+            type(self)
+            .from_table(table, self.column_names, self.dtypes)
+            .sorted_like(self)
+        )

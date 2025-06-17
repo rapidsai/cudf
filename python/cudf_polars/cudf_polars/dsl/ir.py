@@ -604,7 +604,7 @@ class Scan(IR):
                     n_rows -= tbl_w_meta.tbl.num_rows()
                     if n_rows <= 0:
                         break
-            tables, colnames = zip(
+            tables, (colnames, *_) = zip(
                 *(
                     (piece.tbl, piece.column_names(include_children=False))
                     for piece in pieces
@@ -613,7 +613,8 @@ class Scan(IR):
             )
             df = DataFrame.from_table(
                 plc.concatenate.concatenate(list(tables)),
-                colnames[0],
+                colnames,
+                [schema[colname] for colname in colnames],
             )
             if include_file_paths is not None:
                 df = Scan.add_file_paths(
@@ -661,6 +662,7 @@ class Scan(IR):
                 df = DataFrame.from_table(
                     plc.Table(concatenated_columns),
                     names=names,
+                    dtypes=[schema[name] for name in names],
                 )
                 if include_file_paths is not None:
                     df = Scan.add_file_paths(
@@ -668,10 +670,12 @@ class Scan(IR):
                     )
             else:
                 tbl_w_meta = plc.io.parquet.read_parquet(options)
+                # TODO: consider nested column names?
+                col_names = tbl_w_meta.column_names(include_children=False)
                 df = DataFrame.from_table(
                     tbl_w_meta.tbl,
-                    # TODO: consider nested column names?
-                    tbl_w_meta.column_names(include_children=False),
+                    col_names,
+                    [schema[name] for name in col_names],
                 )
                 if include_file_paths is not None:
                     df = Scan.add_file_paths(
@@ -694,8 +698,11 @@ class Scan(IR):
             )
             # TODO: I don't think cudf-polars supports nested types in general right now
             # (but when it does, we should pass child column names from nested columns in)
+            col_names = plc_tbl_w_meta.column_names(include_children=False)
             df = DataFrame.from_table(
-                plc_tbl_w_meta.tbl, plc_tbl_w_meta.column_names(include_children=False)
+                plc_tbl_w_meta.tbl,
+                col_names,
+                [schema[name] for name in col_names],
             )
             col_order = list(schema.keys())
             if row_index is not None:
@@ -1580,12 +1587,14 @@ class ConditionalJoin(IR):
                 left.table, lg, plc.copying.OutOfBoundsPolicy.DONT_CHECK
             ),
             left.column_names,
+            left.dtypes,
         )
         right = DataFrame.from_table(
             plc.copying.gather(
                 right.table, rg, plc.copying.OutOfBoundsPolicy.DONT_CHECK
             ),
             right.column_names,
+            right.dtypes,
         )
         right = right.rename_columns(
             {
@@ -1797,7 +1806,7 @@ class Join(IR):
             # Semi join
             lg = join_fn(left_on.table, right_on.table, null_equality)
             table = plc.copying.gather(left.table, lg, left_policy)
-            result = DataFrame.from_table(table, left.column_names)
+            result = DataFrame.from_table(table, left.column_names, left.dtypes)
         else:
             if how == "Right":
                 # Right join is a left join with the tables swapped
@@ -1819,10 +1828,14 @@ class Join(IR):
                 else:
                     right = right.discard_columns(right_on.column_names_set)
             left = DataFrame.from_table(
-                plc.copying.gather(left.table, lg, left_policy), left.column_names
+                plc.copying.gather(left.table, lg, left_policy),
+                left.column_names,
+                left.dtypes,
             )
             right = DataFrame.from_table(
-                plc.copying.gather(right.table, rg, right_policy), right.column_names
+                plc.copying.gather(right.table, rg, right_policy),
+                right.column_names,
+                right.dtypes,
             )
             if coalesce and how == "Full":
                 left = left.with_columns(
@@ -2051,7 +2064,7 @@ class Sort(IR):
             list(order),
             list(null_order),
         )
-        result = DataFrame.from_table(table, df.column_names)
+        result = DataFrame.from_table(table, df.column_names, df.dtypes)
         first_key = sort_keys[0]
         name = by[0].name
         first_key_in_result = (
@@ -2166,6 +2179,7 @@ class MergeSorted(IR):
                 [on_col_left.null_order, on_col_right.null_order],
             ),
             left.column_names,
+            left.dtypes,
         )
 
 
@@ -2287,7 +2301,7 @@ class MapFunction(IR):
             index = df.column_names.index(to_explode)
             subset = df.column_names_set - {to_explode}
             return DataFrame.from_table(
-                plc.lists.explode_outer(df.table, index), df.column_names
+                plc.lists.explode_outer(df.table, index), df.column_names, df.dtypes
             ).sorted_like(df, subset=subset)
         elif name == "unpivot":
             (
@@ -2376,6 +2390,7 @@ class Union(IR):
         return DataFrame.from_table(
             plc.concatenate.concatenate([df.table for df in dfs]),
             dfs[0].column_names,
+            dfs[0].dtypes,
         ).slice(zlice)
 
 
@@ -2450,6 +2465,7 @@ class HConcat(IR):
                     else DataFrame.from_table(
                         cls._extend_with_nulls(df.table, nrows=max_rows - df.num_rows),
                         df.column_names,
+                        df.dtypes,
                     )
                     for df in dfs
                 )

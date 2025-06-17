@@ -8,13 +8,14 @@ import pyarrow as pa
 import pytest
 from distributed.protocol import deserialize, serialize
 
+import polars as pl
 from polars.testing.asserts import assert_frame_equal
 
 import pylibcudf as plc
 import rmm
 from rmm.pylibrmm.stream import DEFAULT_STREAM
 
-from cudf_polars.containers import DataFrame
+from cudf_polars.containers import DataFrame, DataType
 from cudf_polars.experimental.dask_registers import register
 
 # Must register serializers before running tests
@@ -58,7 +59,8 @@ def convert_to_rmm(frame):
 )
 def test_dask_serialization_roundtrip(arrow_tbl, protocol, context):
     plc_tbl = plc.Table.from_arrow(arrow_tbl)
-    df = DataFrame.from_table(plc_tbl, names=arrow_tbl.column_names)
+    dtypes = [DataType(pl_type) for pl_type in pl.from_arrow(arrow_tbl).dtypes]
+    df = DataFrame.from_table(plc_tbl, names=arrow_tbl.column_names, dtypes=dtypes)
 
     cuda_rmm = protocol == "cuda_rmm"
     protocol = "cuda" if protocol == "cuda_rmm" else protocol
@@ -91,7 +93,8 @@ def test_dask_serialization_roundtrip(arrow_tbl, protocol, context):
 def test_dask_serialization_error():
     arrow_tbl = pa.table({"a": [1, 2, 3]})
     plc_tbl = plc.Table.from_arrow(arrow_tbl)
-    df = DataFrame.from_table(plc_tbl, names=arrow_tbl.column_names)
+    dtypes = [DataType(pl_type) for pl_type in pl.from_arrow(arrow_tbl).dtypes]
+    df = DataFrame.from_table(plc_tbl, names=arrow_tbl.column_names, dtypes=dtypes)
 
     header, frames = serialize(
         df,

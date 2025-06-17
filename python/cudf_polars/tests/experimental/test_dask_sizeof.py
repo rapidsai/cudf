@@ -7,9 +7,11 @@ import pyarrow as pa
 import pytest
 from dask.sizeof import sizeof
 
+import polars as pl
+
 import pylibcudf as plc
 
-from cudf_polars.containers import DataFrame
+from cudf_polars.containers import DataFrame, DataType
 from cudf_polars.experimental.dask_registers import register
 
 # Must register sizeof dispatch before running tests
@@ -28,6 +30,7 @@ register()
 )
 def test_dask_sizeof(arrow_tbl, size):
     plc_tbl = plc.Table.from_arrow(arrow_tbl)
-    df = DataFrame.from_table(plc_tbl, names=arrow_tbl.column_names)
+    dtypes = [DataType(pl_type) for pl_type in pl.from_arrow(arrow_tbl).dtypes]
+    df = DataFrame.from_table(plc_tbl, names=arrow_tbl.column_names, dtypes=dtypes)
     assert sizeof(df) == size
     assert sum(sizeof(c) for c in df.columns) == size
