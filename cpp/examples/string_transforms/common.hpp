@@ -25,6 +25,7 @@
 #include <cudf/table/table_view.hpp>
 
 #include <rmm/cuda_device.hpp>
+#include <rmm/mr/device/cuda_async_memory_resource.hpp>
 #include <rmm/mr/device/cuda_memory_resource.hpp>
 #include <rmm/mr/device/device_memory_resource.hpp>
 #include <rmm/mr/device/owning_wrapper.hpp>
@@ -61,6 +62,8 @@ auto make_pool_mr()
     make_cuda_mr(), rmm::percent_of_free_device_memory(50));
 }
 
+auto make_async_mr() { return std::make_shared<rmm::mr::cuda_async_memory_resource>(); }
+
 /**
  * @brief Create memory resource for libcudf functions
  */
@@ -68,6 +71,8 @@ std::shared_ptr<rmm::mr::device_memory_resource> create_memory_resource(std::str
 {
   if (name == "pool" || name == "pool-stats") {
     return make_pool_mr();
+  } else if (name == "async" || name == "async-stats") {
+    return make_async_mr();
   } else if (name == "cuda" || name == "cuda-stats") {
     return make_cuda_mr();
   }
@@ -107,7 +112,8 @@ int main(int argc, char const** argv)
   auto const memory_resource_name =
     std::string{argc > 4 ? std::string(argv[4]) : std::string("cuda")};
   auto const enable_stats =
-    (memory_resource_name == "cuda-stats" || memory_resource_name == "pool-stats");
+    ((memory_resource_name == "cuda-stats") || (memory_resource_name == "async-stats") ||
+     (memory_resource_name == "pool-stats"));
 
   auto resource = create_memory_resource(memory_resource_name);
   auto stream   = cudf::get_default_stream();
