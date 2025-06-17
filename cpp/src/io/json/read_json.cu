@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "io/comp/io_uncomp.hpp"
+#include "io/comp/decompression.hpp"
 #include "io/json/nested_json.hpp"
 #include "io/utilities/getenv_or.hpp"
 #include "read_json.hpp"
@@ -26,6 +26,7 @@
 #include <cudf/detail/utilities/stream_pool.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/datasource.hpp>
+#include <cudf/io/detail/codec.hpp>
 #include <cudf/io/detail/json.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/memory_resource.hpp>
