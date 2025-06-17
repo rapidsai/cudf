@@ -432,13 +432,13 @@ dependencies:
               arch: x86_64
               cuda: "12.*"
             packages:
-              - gcc_linux-64=13.*
+              - gcc_linux-64=14.*
               - sysroot_linux-64==2.28
           - matrix:
               arch: aarch64
               cuda: "12.*"
             packages:
-              - gcc_linux-aarch64=13.*
+              - gcc_linux-aarch64=14.*
               - sysroot_linux-aarch64==2.28
       - output_types: conda
         matrices:
