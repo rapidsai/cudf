@@ -17,7 +17,7 @@
 #include "stats_filter_helpers.hpp"
 
 #include <cudf/ast/detail/expression_transformer.hpp>
-#include <cudf/ast/detail/operators.cuh>
+#include <cudf/ast/detail/operators.hpp>
 #include <cudf/ast/expressions.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/iterator.cuh>

@@ -18,7 +18,7 @@
 
 #include "io/parquet/parquet_common.hpp"
 
-#include <cudf/ast/detail/operators.cuh>
+#include <cudf/ast/detail/operators.hpp>
 #include <cudf/ast/expressions.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>

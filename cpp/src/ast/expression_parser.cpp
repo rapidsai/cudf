@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 #include <cudf/ast/detail/expression_parser.hpp>
-#include <cudf/ast/detail/operators.cuh>
+#include <cudf/ast/detail/operators.hpp>
 #include <cudf/ast/expressions.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
