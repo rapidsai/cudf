@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ def op(request):
 
 
 @pytest.fixture
-def df(with_nulls):
+def df(*, with_nulls: bool) -> pl.LazyFrame:
     values: list[int | None] = [1, 2, 3, 1, 1, 7, 3, 2, 7, 8, 1]
     if with_nulls:
         values[1] = None
