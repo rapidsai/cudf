@@ -8,8 +8,11 @@ import itertools
 import math
 from typing import TYPE_CHECKING
 
+import polars as pl
+
 import pylibcudf as plc
 
+from cudf_polars.containers import DataType
 from cudf_polars.dsl.expr import Agg, BinOp, Col, Len, NamedExpr
 from cudf_polars.dsl.ir import GroupBy, Select
 from cudf_polars.dsl.traversal import traversal
@@ -112,7 +115,11 @@ def decompose(
                     Agg(dtype, "sum", None, child),
                     names=names,
                 ),
-                decompose(f"{next(names)}__mean_count", Len(dtype), names=names),
+                decompose(
+                    f"{next(names)}__mean_count",
+                    Agg(DataType(pl.Int32()), "count", False, child),  # noqa: FBT003
+                    names=names,
+                ),
             )
             selection = NamedExpr(
                 name,
