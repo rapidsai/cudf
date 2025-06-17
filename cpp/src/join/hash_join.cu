@@ -68,15 +68,15 @@ class primitive_equality {
 };
 
 /**
- * @brief Builds the hash table based on the given `build_table`.
+ * @brief Builds the hash table based on the given `build` table
  *
  * @param build Table of columns used to build join hash.
  * @param preprocessed_build shared_ptr to cudf::experimental::row::equality::preprocessed_table
  * for build
  * @param hash_table Build hash table.
  * @param has_nulls Flag to denote if build or probe tables have nested nulls
- * @param nulls_equal Flag to denote nulls are equal or not.
- * @param bitmask Bitmask to denote whether a row is valid.
+ * @param nulls_equal Flag to denote if nulls are equal.
+ * @param bitmask Bitmask to denote if a row is valid.
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 void build_hash_join(
