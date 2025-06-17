@@ -369,6 +369,7 @@ class Scan(IR):
             row_index,
             include_file_paths,
             predicate,
+            parquet_options,
         )
         self.children = ()
         self.parquet_options = parquet_options
