@@ -37,11 +37,10 @@ if TYPE_CHECKING:
 def _(
     ir: DataFrameScan, rec: LowerIRTransformer
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
-    assert ir.config_options.executor.name == "streaming", (
-        "'in-memory' executor not supported in 'generate_ir_tasks'"
+    rows_per_partition = ir.max_rows_per_partition
+    assert rows_per_partition is not None, (
+        "max_rows_per_partition must be set for streaming executor"
     )
-
-    rows_per_partition = ir.config_options.executor.max_rows_per_partition
 
     nrows = max(ir.df.shape()[0], 1)
     count = math.ceil(nrows / rows_per_partition)
@@ -53,7 +52,7 @@ def _(
                 ir.schema,
                 ir.df.slice(offset, length),
                 ir.projection,
-                ir.config_options,
+                ir.max_rows_per_partition,
             )
             for offset in range(0, nrows, length)
         ]

@@ -120,7 +120,7 @@ def test_rewrite_ir_node():
                 node.schema,
                 new_df._df,
                 node.projection,
-                node.config_options,
+                node.max_rows_per_partition,
             )
         return reuse_if_unchanged(node, rec)
 

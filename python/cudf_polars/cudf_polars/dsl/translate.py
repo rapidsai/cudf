@@ -262,11 +262,18 @@ def _(node: pl_ir.Cache, translator: Translator, schema: Schema) -> ir.IR:
 
 @_translate_ir.register
 def _(node: pl_ir.DataFrameScan, translator: Translator, schema: Schema) -> ir.IR:
+    if translator.config_options.executor.name == "streaming":
+        max_rows_per_partition = (
+            translator.config_options.executor.max_rows_per_partition
+        )
+    else:
+        max_rows_per_partition = None
+
     return ir.DataFrameScan(
         schema,
         node.df,
         node.projection,
-        translator.config_options,
+        max_rows_per_partition,
     )
 
 

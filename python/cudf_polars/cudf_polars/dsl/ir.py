@@ -990,26 +990,26 @@ class DataFrameScan(IR):
     This typically arises from ``q.collect().lazy()``
     """
 
-    __slots__ = ("_id_for_hash", "config_options", "df", "projection")
-    _non_child = ("schema", "df", "projection", "config_options")
+    __slots__ = ("_id_for_hash", "df", "max_rows_per_partition", "projection")
+    _non_child = ("schema", "df", "projection", "max_rows_per_partition")
     df: Any
     """Polars internal PyDataFrame object."""
     projection: tuple[str, ...] | None
     """List of columns to project out."""
-    config_options: ConfigOptions
-    """GPU-specific configuration options"""
+    max_rows_per_partition: int | None
+    """Maximum number of rows to process per partition. Only used for streaming executor."""
 
     def __init__(
         self,
         schema: Schema,
         df: Any,
         projection: Sequence[str] | None,
-        config_options: ConfigOptions,
+        max_rows_per_partition: int | None,
     ):
         self.schema = schema
         self.df = df
         self.projection = tuple(projection) if projection is not None else None
-        self.config_options = config_options
+        self.max_rows_per_partition = max_rows_per_partition
         self._non_child_args = (
             schema,
             pl.DataFrame._from_pydf(df),
@@ -1032,7 +1032,7 @@ class DataFrameScan(IR):
             schema_hash,
             self._id_for_hash,
             self.projection,
-            self.config_options,
+            self.max_rows_per_partition,
         )
 
     @classmethod
