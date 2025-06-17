@@ -8,16 +8,17 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from cudf_polars.dsl.traversal import CachingVisitor, reuse_if_unchanged
+from cudf_polars.typing import GenericState
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
-    from cudf_polars.typing import GenericTransformer, NodeT, StateT_co
+    from cudf_polars.typing import GenericTransformer, NodeT
 
 __all__ = ["replace"]
 
 
-def _replace(node: NodeT, fn: GenericTransformer[NodeT, NodeT]) -> NodeT:
+def _replace(node: NodeT, fn: GenericTransformer[NodeT, NodeT, GenericState]) -> NodeT:
     try:
         return fn.state["replacements"][node]
     except KeyError:
@@ -40,7 +41,7 @@ def replace(nodes: Sequence[NodeT], replacements: Mapping[NodeT, NodeT]) -> list
     list
         Of nodes with replacements performed.
     """
-    mapper: GenericTransformer[NodeT, NodeT] = CachingVisitor(
-        _replace, state={"replacements": replacements}
+    mapper: GenericTransformer[NodeT, NodeT, GenericState] = CachingVisitor(
+        _replace, state=GenericState({"replacements": replacements})
     )
     return [mapper(node) for node in nodes]

@@ -202,26 +202,12 @@ class ExprDecomposerState(TypedDict):
 
 
 class LowerIRState(TypedDict):
-    # input_ir: ir.IR
-    # input_partition_info: PartitionInfo
     config_options: ConfigOptions
 
 
 CachingVisitorState: TypeAlias = (
     ExprExprState | ExprDecomposerState | LowerIRState | GenericState | ASTTransformer
 )
-
-# class CachingVisitorState(Generic[NodeT], TypedDict, total=False):
-#     """State for CachingVisitor."""
-
-#     config_options: ConfigOptions
-#     for_parquet: bool
-#     input_ir: ir.IR
-#     input_partition_info: PartitionInfo
-#     name_to_index: Mapping[str, int]
-#     replacements: Mapping[NodeT, NodeT]
-#     table_ref: plc.expressions.TableReference
-#     unique_names: Generator[str, None, None]
 
 
 # Quotes to avoid circular import
