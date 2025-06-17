@@ -93,9 +93,9 @@ using hasher_type = cudf::hashing::detail::MurmurHash3_x86_32<T>;
 
 /// cuco::static_set_ref storage type
 using storage_type     = cuco::bucket_storage<slot_type,
-                                          BUCKET_SIZE,
-                                          cuco::extent<std::size_t>,
-                                          cudf::detail::cuco_allocator<char>>;
+                                              BUCKET_SIZE,
+                                              cuco::extent<std::size_t>,
+                                              cudf::detail::cuco_allocator<char>>;
 using storage_ref_type = typename storage_type::ref_type;
 
 /**
