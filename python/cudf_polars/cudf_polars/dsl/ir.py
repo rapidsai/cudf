@@ -1388,7 +1388,9 @@ class GroupBy(IR):
             for request in agg_requests
             for child in request.value.children
         ):
-            raise NotImplementedError("value_counts is not supported in groupby")
+            raise NotImplementedError(
+                "value_counts is not supported in groupby"
+            )  # pragma: no cover
         self.agg_requests = tuple(agg_requests)
         self.maintain_order = maintain_order
         self.zlice = zlice
