@@ -227,6 +227,8 @@ def _(node: pl_ir.Scan, translator: Translator, schema: Schema) -> ir.IR:
     with_columns = file_options.with_columns
     row_index = file_options.row_index
     include_file_paths = file_options.include_file_paths
+    config_options = translator.config_options
+    parquet_options = config_options.parquet_options
 
     pre_slice = file_options.n_rows
     if pre_slice is None:
@@ -240,7 +242,6 @@ def _(node: pl_ir.Scan, translator: Translator, schema: Schema) -> ir.IR:
         typ,
         reader_options,
         cloud_options,
-        translator.config_options,
         node.paths,
         with_columns,
         skip_rows,
@@ -250,6 +251,7 @@ def _(node: pl_ir.Scan, translator: Translator, schema: Schema) -> ir.IR:
         translate_named_expr(translator, n=node.predicate, schema=schema)
         if node.predicate is not None
         else None,
+        parquet_options,
     )
 
 

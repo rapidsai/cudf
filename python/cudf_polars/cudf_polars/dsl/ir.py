@@ -48,7 +48,7 @@ if TYPE_CHECKING:
     from polars.polars import _expr_nodes as pl_expr
 
     from cudf_polars.typing import CSECache, ClosedInterval, Schema, Slice as Zlice
-    from cudf_polars.utils.config import ConfigOptions
+    from cudf_polars.utils.config import ParquetOptions
     from cudf_polars.utils.timer import Timer
 
 
@@ -281,9 +281,9 @@ class Scan(IR):
 
     __slots__ = (
         "cloud_options",
-        "config_options",
         "include_file_paths",
         "n_rows",
+        "parquet_options",
         "paths",
         "predicate",
         "reader_options",
@@ -297,7 +297,6 @@ class Scan(IR):
         "typ",
         "reader_options",
         "cloud_options",
-        "config_options",
         "paths",
         "with_columns",
         "skip_rows",
@@ -305,6 +304,7 @@ class Scan(IR):
         "row_index",
         "include_file_paths",
         "predicate",
+        "parquet_options",
     )
     typ: str
     """What type of file are we reading? Parquet, CSV, etc..."""
@@ -312,8 +312,6 @@ class Scan(IR):
     """Reader-specific options, as dictionary."""
     cloud_options: dict[str, Any] | None
     """Cloud-related authentication options, currently ignored."""
-    config_options: ConfigOptions
-    """GPU-specific configuration options"""
     paths: list[str]
     """List of paths to read from."""
     with_columns: list[str] | None
@@ -328,6 +326,8 @@ class Scan(IR):
     """Include the path of the source file(s) as a column with this name."""
     predicate: expr.NamedExpr | None
     """Mask to apply to the read dataframe."""
+    parquet_options: ParquetOptions | None
+    """Parquet-specific options."""
 
     PARQUET_DEFAULT_CHUNK_SIZE: int = 0  # unlimited
     PARQUET_DEFAULT_PASS_LIMIT: int = 16 * 1024**3  # 16GiB
@@ -338,7 +338,6 @@ class Scan(IR):
         typ: str,
         reader_options: dict[str, Any],
         cloud_options: dict[str, Any] | None,
-        config_options: ConfigOptions,
         paths: list[str],
         with_columns: list[str] | None,
         skip_rows: int,
@@ -346,12 +345,12 @@ class Scan(IR):
         row_index: tuple[str, int] | None,
         include_file_paths: str | None,
         predicate: expr.NamedExpr | None,
+        parquet_options: ParquetOptions | None,
     ):
         self.schema = schema
         self.typ = typ
         self.reader_options = reader_options
         self.cloud_options = cloud_options
-        self.config_options = config_options
         self.paths = paths
         self.with_columns = with_columns
         self.skip_rows = skip_rows
@@ -363,7 +362,6 @@ class Scan(IR):
             schema,
             typ,
             reader_options,
-            config_options,
             paths,
             with_columns,
             skip_rows,
@@ -373,6 +371,7 @@ class Scan(IR):
             predicate,
         )
         self.children = ()
+        self.parquet_options = parquet_options
         if self.typ not in ("csv", "parquet", "ndjson"):  # pragma: no cover
             # This line is unhittable ATM since IPC/Anonymous scan raise
             # on the polars side
@@ -460,7 +459,6 @@ class Scan(IR):
             self.typ,
             json.dumps(self.reader_options),
             json.dumps(self.cloud_options),
-            self.config_options,
             tuple(self.paths),
             tuple(self.with_columns) if self.with_columns is not None else None,
             self.skip_rows,
@@ -468,6 +466,7 @@ class Scan(IR):
             self.row_index,
             self.include_file_paths,
             self.predicate,
+            self.parquet_options,
         )
 
     @staticmethod
@@ -504,7 +503,6 @@ class Scan(IR):
         schema: Schema,
         typ: str,
         reader_options: dict[str, Any],
-        config_options: ConfigOptions,
         paths: list[str],
         with_columns: list[str] | None,
         skip_rows: int,
@@ -512,6 +510,7 @@ class Scan(IR):
         row_index: tuple[str, int] | None,
         include_file_paths: str | None,
         predicate: expr.NamedExpr | None,
+        parquet_options: ParquetOptions | None,
     ) -> DataFrame:
         """Evaluate and return a dataframe."""
         if typ == "csv":
@@ -638,11 +637,11 @@ class Scan(IR):
                 options.set_num_rows(n_rows)
             if skip_rows != 0:
                 options.set_skip_rows(skip_rows)
-            if config_options.parquet_options.chunked:
+            if parquet_options is not None and parquet_options.chunked:
                 reader = plc.io.parquet.ChunkedParquetReader(
                     options,
-                    chunk_read_limit=config_options.parquet_options.chunk_read_limit,
-                    pass_read_limit=config_options.parquet_options.pass_read_limit,
+                    chunk_read_limit=parquet_options.chunk_read_limit,
+                    pass_read_limit=parquet_options.pass_read_limit,
                 )
                 chunk = reader.read_chunk()
                 tbl = chunk.tbl
