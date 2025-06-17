@@ -68,22 +68,21 @@ class primitive_equality {
 };
 
 /**
- * @brief Builds the hash table based on the given `build_table`.
+ * @brief Builds the hash table based on the given `build` table.
  *
- * @param build Table of columns used to build join hash.
- * @param preprocessed_build shared_ptr to cudf::experimental::row::equality::preprocessed_table
- * for build
- * @param hash_table Build hash table.
- * @param has_nulls Flag to denote if build or probe tables have nested nulls
- * @param nulls_equal Flag to denote nulls are equal or not.
- * @param bitmask Bitmask to denote whether a row is valid.
- * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param build Table of columns used to build join hash
+ * @param preprocessed_build Preprocessed build table for row operations
+ * @param hash_table Hash table to build into
+ * @param has_nested_nulls Whether build or probe tables contain nested nulls
+ * @param nulls_equal Whether null values should be considered equal during join
+ * @param bitmask Bitmask indicating valid rows
+ * @param stream CUDA stream for device operations
  */
 void build_hash_join(
   cudf::table_view const& build,
   std::shared_ptr<experimental::row::equality::preprocessed_table> const& preprocessed_build,
   cudf::detail::multimap_type& hash_table,
-  bool has_nulls,
+  bool has_nested_nulls,
   null_equality nulls_equal,
   [[maybe_unused]] bitmask_type const* bitmask,
   rmm::cuda_stream_view stream)
@@ -92,7 +91,7 @@ void build_hash_join(
   CUDF_EXPECTS(0 != build.num_rows(), "Build side table has no rows");
 
   auto const empty_key_sentinel = hash_table.get_empty_key_sentinel();
-  auto const nulls              = nullate::DYNAMIC{has_nulls};
+  auto const nulls              = nullate::DYNAMIC{has_nested_nulls};
 
   // Lambda to insert rows into hash table
   auto insert_rows = [&](auto const& build, auto const& d_hasher) {
