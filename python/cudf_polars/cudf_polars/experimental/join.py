@@ -59,20 +59,21 @@ def _make_hash_join(
     partition_info: MutableMapping[IR, PartitionInfo],
     left: IR,
     right: IR,
+    config_options: ConfigOptions,
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     # Shuffle left and right dataframes (if necessary)
     new_left = _maybe_shuffle_frame(
         left,
         ir.left_on,
         partition_info,
-        ir.config_options,
+        config_options,
         output_count,
     )
     new_right = _maybe_shuffle_frame(
         right,
         ir.right_on,
         partition_info,
-        ir.config_options,
+        config_options,
         output_count,
     )
     if left != new_left or right != new_right:
@@ -100,6 +101,7 @@ def _should_bcast_join(
     right: IR,
     partition_info: MutableMapping[IR, PartitionInfo],
     output_count: int,
+    config_options: ConfigOptions,
 ) -> bool:
     # Decide if a broadcast join is appropriate.
     if partition_info[left].count >= partition_info[right].count:
@@ -123,13 +125,13 @@ def _should_bcast_join(
     #    TODO: Make this value/heuristic configurable).
     #    We may want to account for the number of workers.
     # 3. The "kind" of join is compatible with a broadcast join
-    assert ir.config_options.executor.name == "streaming", (
+    assert config_options.executor.name == "streaming", (
         "'in-memory' executor not supported in 'generate_ir_tasks'"
     )
 
     return (
         not large_shuffled
-        and small_count <= ir.config_options.executor.broadcast_join_limit
+        and small_count <= config_options.executor.broadcast_join_limit
         and (
             ir.options[0] == "Inner"
             or (ir.options[0] in ("Left", "Semi", "Anti") and large == left)
@@ -144,6 +146,7 @@ def _make_bcast_join(
     partition_info: MutableMapping[IR, PartitionInfo],
     left: IR,
     right: IR,
+    config_options: ConfigOptions,
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     if ir.options[0] != "Inner":
         left_count = partition_info[left].count
@@ -167,7 +170,7 @@ def _make_bcast_join(
                 right,
                 ir.right_on,
                 partition_info,
-                ir.config_options,
+                config_options,
                 right_count,
             )
         else:
@@ -175,7 +178,7 @@ def _make_bcast_join(
                 left,
                 ir.left_on,
                 partition_info,
-                ir.config_options,
+                config_options,
                 left_count,
             )
 
@@ -241,7 +244,10 @@ def _(
             ir, rec, msg="Cross join not support for multiple partitions."
         )
 
-    if _should_bcast_join(ir, left, right, partition_info, output_count):
+    config_options = rec.state["config_options"]
+    if _should_bcast_join(
+        ir, left, right, partition_info, output_count, config_options
+    ):
         # Create a broadcast join
         return _make_bcast_join(
             ir,
@@ -249,6 +255,7 @@ def _(
             partition_info,
             left,
             right,
+            config_options,
         )
     else:
         # Create a hash join
@@ -258,6 +265,7 @@ def _(
             partition_info,
             left,
             right,
+            config_options,
         )
 
 

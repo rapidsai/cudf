@@ -1342,7 +1342,6 @@ class GroupBy(IR):
 
     __slots__ = (
         "agg_requests",
-        "config_options",
         "keys",
         "maintain_order",
         "zlice",
@@ -1353,7 +1352,6 @@ class GroupBy(IR):
         "agg_requests",
         "maintain_order",
         "zlice",
-        "config_options",
     )
     keys: tuple[expr.NamedExpr, ...]
     """Grouping keys."""
@@ -1363,8 +1361,6 @@ class GroupBy(IR):
     """Preserve order in groupby."""
     zlice: Zlice | None
     """Optional slice to apply after grouping."""
-    config_options: ConfigOptions
-    """GPU-specific configuration options"""
 
     def __init__(
         self,
@@ -1373,7 +1369,6 @@ class GroupBy(IR):
         agg_requests: Sequence[expr.NamedExpr],
         maintain_order: bool,  # noqa: FBT001
         zlice: Zlice | None,
-        config_options: ConfigOptions,
         df: IR,
     ):
         self.schema = schema
@@ -1381,7 +1376,6 @@ class GroupBy(IR):
         self.agg_requests = tuple(agg_requests)
         self.maintain_order = maintain_order
         self.zlice = zlice
-        self.config_options = config_options
         self.children = (df,)
         self._non_child_args = (
             self.keys,
@@ -1596,8 +1590,8 @@ class ConditionalJoin(IR):
 class Join(IR):
     """A join of two dataframes."""
 
-    __slots__ = ("config_options", "left_on", "options", "right_on")
-    _non_child = ("schema", "left_on", "right_on", "options", "config_options")
+    __slots__ = ("left_on", "options", "right_on")
+    _non_child = ("schema", "left_on", "right_on", "options")
     left_on: tuple[expr.NamedExpr, ...]
     """List of expressions used as keys in the left frame."""
     right_on: tuple[expr.NamedExpr, ...]
@@ -1619,8 +1613,6 @@ class Join(IR):
     - coalesce: should key columns be coalesced (only makes sense for outer joins)
     - maintain_order: which DataFrame row order to preserve, if any
     """
-    config_options: ConfigOptions
-    """GPU-specific configuration options"""
 
     def __init__(
         self,
@@ -1628,7 +1620,6 @@ class Join(IR):
         left_on: Sequence[expr.NamedExpr],
         right_on: Sequence[expr.NamedExpr],
         options: Any,
-        config_options: ConfigOptions,
         left: IR,
         right: IR,
     ):
@@ -1636,7 +1627,6 @@ class Join(IR):
         self.left_on = tuple(left_on)
         self.right_on = tuple(right_on)
         self.options = options
-        self.config_options = config_options
         self.children = (left, right)
         self._non_child_args = (self.left_on, self.right_on, self.options)
         # TODO: Implement maintain_order

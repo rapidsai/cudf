@@ -160,14 +160,15 @@ def _(
     groupby_key_columns = [ne.name for ne in ir.keys]
     shuffled = partition_info[child].partitioned_on == ir.keys
 
-    assert ir.config_options.executor.name == "streaming", (
+    config_options = rec.state["config_options"]
+    assert config_options.executor.name == "streaming", (
         "'in-memory' executor not supported in 'generate_ir_tasks'"
     )
 
     child_count = partition_info[child].count
     cardinality_factor = {
         c: min(f, 1.0)
-        for c, f in ir.config_options.executor.cardinality_factor.items()
+        for c, f in config_options.executor.cardinality_factor.items()
         if c in groupby_key_columns
     }
     if cardinality_factor:
@@ -207,7 +208,7 @@ def _(
         child = Shuffle(
             child.schema,
             ir.keys,
-            ir.config_options,
+            config_options,
             child,
         )
         partition_info[child] = PartitionInfo(
@@ -226,7 +227,6 @@ def _(
         piecewise_exprs,
         ir.maintain_order,
         None,
-        ir.config_options,
         child,
     )
     child_count = partition_info[child].count
@@ -249,17 +249,17 @@ def _(
         gb_inter = Shuffle(
             gb_pwise.schema,
             ir.keys,
-            ir.config_options,
+            config_options,
             gb_pwise,
         )
         partition_info[gb_inter] = PartitionInfo(count=post_aggregation_count)
     else:
         # N-ary tree reduction
-        assert ir.config_options.executor.name == "streaming", (
+        assert config_options.executor.name == "streaming", (
             "'in-memory' executor not supported in 'generate_ir_tasks'"
         )
 
-        n_ary = ir.config_options.executor.groupby_n_ary
+        n_ary = config_options.executor.groupby_n_ary
         count = child_count
         gb_inter = gb_pwise
         while count > post_aggregation_count:
@@ -273,7 +273,6 @@ def _(
                     reduction_exprs,
                     ir.maintain_order,
                     None,
-                    ir.config_options,
                     gb_inter,
                 )
                 partition_info[gb_inter] = PartitionInfo(count=count)
@@ -285,7 +284,6 @@ def _(
         reduction_exprs,
         ir.maintain_order,
         ir.zlice,
-        ir.config_options,
         gb_inter,
     )
     partition_info[gb_reduce] = PartitionInfo(count=post_aggregation_count)

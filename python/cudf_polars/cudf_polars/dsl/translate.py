@@ -298,9 +298,7 @@ def _(node: pl_ir.GroupBy, translator: Translator, schema: Schema) -> ir.IR:
             node.options, schema, keys, original_aggs, translator.config_options, inp
         )
     else:
-        return rewrite_groupby(
-            node, schema, keys, original_aggs, translator.config_options, inp
-        )
+        return rewrite_groupby(node, schema, keys, original_aggs, inp)
 
 
 @_translate_ir.register
@@ -335,7 +333,6 @@ def _(node: pl_ir.Join, translator: Translator, schema: Schema) -> ir.IR:
             left_on,
             right_on,
             node.options,
-            translator.config_options,
             inp_left,
             inp_right,
         )
