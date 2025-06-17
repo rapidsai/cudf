@@ -27,7 +27,7 @@ __all__: list[str] = ["DataFrame"]
 
 
 def _create_polars_column_metadata(
-    name: str | None, dtype: pl.DataType | None
+    name: str | None, dtype: pl.DataType
 ) -> plc.interop.ColumnMetadata:
     """Create ColumnMetadata preserving pl.Struct field names."""
     if isinstance(dtype, pl.Struct):
@@ -76,12 +76,8 @@ class DataFrame:
         # serialise with names we control and rename with that map.
         name_map = {f"column_{i}": name for i, name in enumerate(self.column_map)}
         metadata = [
-            _create_polars_column_metadata(
-                name,
-                # Can remove the getattr if we ever consistently set Column.dtype
-                getattr(col.dtype, "polars", None),
-            )
-            for name, col in zip(name_map, self.columns, strict=True)
+            _create_polars_column_metadata(name, dtype.polars)
+            for name, dtype in zip(name_map, self.dtypes, strict=True)
         ]
         table = plc.interop.to_arrow(self.table, metadata=metadata)
         df: pl.DataFrame = pl.from_arrow(table)
