@@ -30,6 +30,7 @@ def df():
     return pl.LazyFrame(
         {
             "x": range(150),
+            "xx": list(range(75)) * 2,
             "y": [1, 2, 3] * 50,
             "z": [1.0, 2.0, 3.0, 4.0, 5.0] * 30,
         }
@@ -70,6 +71,12 @@ def test_groupby_agg(df, engine, op, keys):
     if op == "n_unique":
         agg = agg.cast(pl.Int64)
     q = df.group_by(*keys).agg(agg)
+    assert_gpu_result_equal(q, engine=engine, check_row_order=False)
+
+
+@pytest.mark.parametrize("keys", [("y",), ("y", "z")])
+def test_groupby_n_unique(df, engine, keys):
+    q = df.group_by(*keys).agg(pl.col("xx").n_unique().cast(pl.Int64))
     assert_gpu_result_equal(q, engine=engine, check_row_order=False)
 
 
@@ -178,3 +185,28 @@ def test_groupby_agg_duplicate(
 def test_groupby_agg_empty(df: pl.LazyFrame, engine: pl.GPUEngine) -> None:
     q = df.group_by("y").agg()
     assert_gpu_result_equal(q, engine=engine, check_row_order=False)
+
+
+@pytest.mark.parametrize(
+    "values",
+    [
+        [1, None, 2, None],
+        [1, None, None, None],
+    ],
+)
+def test_mean_partitioned(values: list[int | None]) -> None:
+    df = pl.LazyFrame(
+        {
+            "key1": [1, 1, 2, 2],
+            "uint16_with_null": pl.Series(values, dtype=pl.UInt16()),
+        }
+    )
+
+    q = df.group_by("key1").agg(pl.col("uint16_with_null").mean())
+    assert_gpu_result_equal(
+        q,
+        engine=pl.GPUEngine(
+            executor="streaming", executor_options={"max_rows_per_partition": 2}
+        ),
+        check_row_order=False,
+    )

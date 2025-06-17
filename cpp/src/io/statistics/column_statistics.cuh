@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -72,9 +72,9 @@ struct calculate_group_statistics_functor {
   {
   }
 
-  template <typename T,
-            std::enable_if_t<detail::statistics_type_category<T, IO>::ignore>* = nullptr>
+  template <typename T>
   __device__ void operator()(stats_state_s&, uint32_t)
+    requires(detail::statistics_type_category<T, IO>::ignore)
   {
     // No-op for unsupported aggregation types
   }
@@ -93,11 +93,10 @@ struct calculate_group_statistics_functor {
    * the results will be stored into
    * @param t thread id
    */
-  template <typename T,
-            std::enable_if_t<detail::statistics_type_category<T, IO>::include_extrema and
-                             (IO != detail::io_file_format::PARQUET or
-                              !std::is_same_v<T, list_view>)>* = nullptr>
+  template <typename T>
   __device__ void operator()(stats_state_s& s, uint32_t t)
+    requires(detail::statistics_type_category<T, IO>::include_extrema and
+             (IO != detail::io_file_format::PARQUET or !std::is_same_v<T, list_view>))
   {
     // Temporarily disable stats writing for int96 timestamps
     // TODO: https://github.com/rapidsai/cudf/issues/10438
@@ -136,20 +135,18 @@ struct calculate_group_statistics_functor {
     }
   }
 
-  template <typename T,
-            std::enable_if_t<detail::statistics_type_category<T, IO>::include_extrema and
-                             IO == detail::io_file_format::PARQUET and
-                             std::is_same_v<T, list_view>>* = nullptr>
+  template <typename T>
   __device__ void operator()(stats_state_s& s, uint32_t t)
+    requires(detail::statistics_type_category<T, IO>::include_extrema and
+             IO == detail::io_file_format::PARQUET and std::is_same_v<T, list_view>)
   {
     operator()<statistics::byte_array_view>(s, t);
   }
 
-  template <
-    typename T,
-    std::enable_if_t<detail::statistics_type_category<T, IO>::include_count and
-                     not detail::statistics_type_category<T, IO>::include_extrema>* = nullptr>
+  template <typename T>
   __device__ void operator()(stats_state_s& s, uint32_t t)
+    requires(detail::statistics_type_category<T, IO>::include_count and
+             not detail::statistics_type_category<T, IO>::include_extrema)
   {
     detail::storage_wrapper<block_size> storage(temp_storage);
     typed_statistics_chunk<uint32_t, false> chunk;
@@ -187,24 +184,23 @@ struct merge_group_statistics_functor {
   {
   }
 
-  template <typename T,
-            std::enable_if_t<detail::statistics_type_category<T, IO>::ignore>* = nullptr>
+  template <typename T>
   __device__ void operator()(merge_state_s& s,
                              statistics_chunk const* chunks,
                              uint32_t const num_chunks,
                              uint32_t t)
+    requires(detail::statistics_type_category<T, IO>::ignore)
   {
     // No-op for unsupported aggregation types
   }
 
-  template <typename T,
-            std::enable_if_t<detail::statistics_type_category<T, IO>::include_extrema and
-                             (IO == detail::io_file_format::ORC or
-                              !std::is_same_v<T, list_view>)>* = nullptr>
+  template <typename T>
   __device__ void operator()(merge_state_s& s,
                              statistics_chunk const* chunks,
                              uint32_t const num_chunks,
                              uint32_t t)
+    requires(detail::statistics_type_category<T, IO>::include_extrema and
+             (IO == detail::io_file_format::ORC or !std::is_same_v<T, list_view>))
   {
     detail::storage_wrapper<block_size> storage(temp_storage);
 
@@ -220,26 +216,24 @@ struct merge_group_statistics_functor {
     if (t == 0) { s.ck = get_untyped_chunk(chunk); }
   }
 
-  template <typename T,
-            std::enable_if_t<detail::statistics_type_category<T, IO>::include_extrema and
-                             IO == detail::io_file_format::PARQUET and
-                             std::is_same_v<T, list_view>>* = nullptr>
+  template <typename T>
   __device__ void operator()(merge_state_s& s,
                              statistics_chunk const* chunks,
                              uint32_t const num_chunks,
                              uint32_t t)
+    requires(detail::statistics_type_category<T, IO>::include_extrema and
+             IO == detail::io_file_format::PARQUET and std::is_same_v<T, list_view>)
   {
     operator()<statistics::byte_array_view>(s, chunks, num_chunks, t);
   }
 
-  template <
-    typename T,
-    std::enable_if_t<detail::statistics_type_category<T, IO>::include_count and
-                     not detail::statistics_type_category<T, IO>::include_extrema>* = nullptr>
+  template <typename T>
   __device__ void operator()(merge_state_s& s,
                              statistics_chunk const* chunks,
                              uint32_t const num_chunks,
                              uint32_t t)
+    requires(detail::statistics_type_category<T, IO>::include_count and
+             not detail::statistics_type_category<T, IO>::include_extrema)
   {
     detail::storage_wrapper<block_size> storage(temp_storage);
     typed_statistics_chunk<uint32_t, false> chunk;

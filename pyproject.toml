@@ -16,6 +16,12 @@ exclude = [
 module = ["cudf_polars.*"]
 disallow_untyped_defs = true
 
+[[tool.mypy.overrides]]
+module = ["polars.*"]
+# override the global "skip" above so that types from polars
+# aren't skipped and assumed to be `Any`.
+follow_imports = "normal"
+
 [tool.codespell]
 # note: pre-commit passes explicit lists of files here, which this skip file list doesn't override -
 # this is only to allow you to run codespell interactively

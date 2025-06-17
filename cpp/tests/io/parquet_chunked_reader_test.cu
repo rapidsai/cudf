@@ -77,7 +77,7 @@ auto write_file(std::vector<std::unique_ptr<cudf::column>>& input_columns,
     for (auto& col : input_columns) {
       auto const [null_mask, null_count] =
         cudf::test::detail::make_null_mask(valid_iter + offset, valid_iter + col->size() + offset);
-      col = cudf::structs::detail::superimpose_nulls(
+      col = cudf::structs::detail::superimpose_and_sanitize_nulls(
         static_cast<cudf::bitmask_type const*>(null_mask.data()),
         null_count,
         std::move(col),
@@ -856,7 +856,7 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadWithStructsOfLists)
 
   // for these tests, different columns get written to different numbers of pages so it's a
   // little tricky to describe the expected results by page counts. To get an idea of how
-  // these values are chosen, see the debug output from the call to print_cumulative_row_info() in
+  // these values are chosen, see the debug output from the call to print_cumulative_page_info() in
   // reader_impl_preprocess.cu -> find_splits()
 
   {
@@ -995,7 +995,7 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadWithListsOfStructs)
 
   // for these tests, different columns get written to different numbers of pages so it's a
   // little tricky to describe the expected results by page counts. To get an idea of how
-  // these values are chosen, see the debug output from the call to print_cumulative_row_info() in
+  // these values are chosen, see the debug output from the call to print_cumulative_page_info() in
   // reader_impl_preprocess.cu -> find_splits()
   {
     auto const [result, num_chunks] = chunked_read(filepath_no_null, 1'000'000);

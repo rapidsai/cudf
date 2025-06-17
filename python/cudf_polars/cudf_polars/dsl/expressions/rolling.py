@@ -13,13 +13,11 @@ import pylibcudf as plc
 from cudf_polars.containers import Column
 from cudf_polars.dsl import expr
 from cudf_polars.dsl.expressions.base import ExecutionContext, Expr
-from cudf_polars.dsl.utils.windows import range_window_bounds
+from cudf_polars.dsl.utils.windows import offsets_to_windows, range_window_bounds
 
 if TYPE_CHECKING:
-    import pyarrow as pa
-
     from cudf_polars.containers import DataFrame, DataType
-    from cudf_polars.typing import ClosedInterval
+    from cudf_polars.typing import ClosedInterval, Duration
 
 __all__ = ["GroupedRollingWindow", "RollingWindow", "to_request"]
 
@@ -61,21 +59,45 @@ def to_request(
 
 
 class RollingWindow(Expr):
-    __slots__ = ("closed_window", "following", "orderby", "preceding")
-    _non_child = ("dtype", "preceding", "following", "closed_window", "orderby")
+    __slots__ = (
+        "closed_window",
+        "following",
+        "offset",
+        "orderby",
+        "orderby_dtype",
+        "period",
+        "preceding",
+    )
+    _non_child = (
+        "dtype",
+        "orderby_dtype",
+        "offset",
+        "period",
+        "closed_window",
+        "orderby",
+    )
 
     def __init__(
         self,
         dtype: DataType,
-        preceding: pa.Scalar,
-        following: pa.Scalar,
+        orderby_dtype: DataType,
+        offset: Duration,
+        period: Duration,
         closed_window: ClosedInterval,
         orderby: str,
         agg: Expr,
     ) -> None:
         self.dtype = dtype
-        self.preceding = preceding
-        self.following = following
+        self.orderby_dtype = orderby_dtype
+        # NOTE: Save original `offset` and `period` args,
+        # because the `preceding` and `following` attributes
+        # cannot be serialized (and must be reconstructed
+        # within `__init__`).
+        self.offset = offset
+        self.period = period
+        self.preceding, self.following = offsets_to_windows(
+            orderby_dtype, offset, period
+        )
         self.closed_window = closed_window
         self.orderby = orderby
         self.children = (agg,)
@@ -126,7 +148,7 @@ class RollingWindow(Expr):
             following,
             [to_request(agg, orderby, df)],
         ).columns()
-        return Column(result)
+        return Column(result, dtype=self.dtype)
 
 
 class GroupedRollingWindow(Expr):
