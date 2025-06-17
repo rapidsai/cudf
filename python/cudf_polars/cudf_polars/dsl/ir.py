@@ -326,7 +326,7 @@ class Scan(IR):
     """Include the path of the source file(s) as a column with this name."""
     predicate: expr.NamedExpr | None
     """Mask to apply to the read dataframe."""
-    parquet_options: ParquetOptions | None
+    parquet_options: ParquetOptions
     """Parquet-specific options."""
 
     PARQUET_DEFAULT_CHUNK_SIZE: int = 0  # unlimited
@@ -345,7 +345,7 @@ class Scan(IR):
         row_index: tuple[str, int] | None,
         include_file_paths: str | None,
         predicate: expr.NamedExpr | None,
-        parquet_options: ParquetOptions | None,
+        parquet_options: ParquetOptions,
     ):
         self.schema = schema
         self.typ = typ
@@ -511,7 +511,7 @@ class Scan(IR):
         row_index: tuple[str, int] | None,
         include_file_paths: str | None,
         predicate: expr.NamedExpr | None,
-        parquet_options: ParquetOptions | None,
+        parquet_options: ParquetOptions,
     ) -> DataFrame:
         """Evaluate and return a dataframe."""
         if typ == "csv":
@@ -638,7 +638,7 @@ class Scan(IR):
                 options.set_num_rows(n_rows)
             if skip_rows != 0:
                 options.set_skip_rows(skip_rows)
-            if parquet_options is not None and parquet_options.chunked:
+            if parquet_options.chunked:
                 reader = plc.io.parquet.ChunkedParquetReader(
                     options,
                     chunk_read_limit=parquet_options.chunk_read_limit,
