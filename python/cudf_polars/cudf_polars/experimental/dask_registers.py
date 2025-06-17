@@ -8,6 +8,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, ClassVar, overload
 
 from dask.sizeof import sizeof as sizeof_dispatch
+from dask.tokenize import normalize_token
 from distributed.protocol import dask_deserialize, dask_serialize
 from distributed.protocol.cuda import cuda_deserialize, cuda_serialize
 from distributed.utils import log_errors
@@ -15,10 +16,11 @@ from distributed.utils import log_errors
 import pylibcudf as plc
 import rmm
 
-from cudf_polars.containers import Column, DataFrame
+from cudf_polars.containers import Column, DataFrame, DataType
+from cudf_polars.dsl.expressions.base import NamedExpr
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Hashable, Mapping
 
     from distributed import Client
 
@@ -141,13 +143,7 @@ def register() -> None:
         with log_errors():
             # Keyword arguments for `Column.__init__`.
             columns_kwargs: list[ColumnOptions] = [
-                {
-                    "is_sorted": col.is_sorted,
-                    "order": col.order,
-                    "null_order": col.null_order,
-                    "name": col.name,
-                }
-                for col in x.columns
+                col.serialize_ctor_kwargs() for col in x.columns
             ]
             header: DataFrameHeader = {
                 "columns_kwargs": columns_kwargs,
@@ -194,3 +190,11 @@ def register() -> None:
         register_dask_serialize()  # pragma: no cover; rapidsmpf dependency not included yet
     except ImportError:
         pass
+
+    # Register the tokenizer for NamedExpr and DataType. This is a performance
+    # optimization that speeds up tokenization for the most common types seen in
+    # the Dask task graph.
+    @normalize_token.register(NamedExpr)
+    @normalize_token.register(DataType)
+    def _(x: NamedExpr | DataType) -> Hashable:
+        return hash(x)

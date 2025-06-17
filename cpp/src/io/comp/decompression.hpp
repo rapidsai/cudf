@@ -16,66 +16,11 @@
 
 #pragma once
 
-#include "common.hpp"
-
 #include <cudf/io/types.hpp>
 #include <cudf/utilities/span.hpp>
 
-#include <vector>
-
 namespace CUDF_EXPORT cudf {
 namespace io::detail {
-
-/**
- * @brief Check if decompression is supported for the given compression type.
- *
- * @param compression Compression type
- * @return Boolean indicating if the compression type is supported
- */
-[[nodiscard]] bool is_decompression_supported(compression_type compression);
-
-/**
- * @brief Decompresses a system memory buffer.
- *
- * @param compression Type of compression of the input data
- * @param src Compressed host buffer
- *
- * @return Vector containing the Decompressed output
- */
-[[nodiscard]] std::vector<uint8_t> decompress(compression_type compression,
-                                              host_span<uint8_t const> src);
-
-/**
- * @brief Decompresses a system memory buffer.
- *
- * @param compression Type of compression of the input data
- * @param src         Compressed host buffer
- * @param dst         Destination host span to place decompressed buffer
- *
- * @return Size of decompressed output
- */
-size_t decompress(compression_type compression,
-                  host_span<uint8_t const> src,
-                  host_span<uint8_t> dst);
-
-/**
- * @brief Decompresses device memory buffers.
- *
- * @param compression Type of compression of the output data
- * @param inputs      Device memory buffers to decompress
- * @param outputs     Device memory buffers to store the decompressed output
- * @param results     Compression results
- * @param max_uncomp_chunk_size Maximum size of any single uncompressed chunk
- * @param max_total_uncomp_size Maximum size of the total uncompressed data
- * @param stream      CUDA stream used for device memory operations and kernel launches
- */
-void decompress(compression_type compression,
-                device_span<device_span<uint8_t const> const> inputs,
-                device_span<device_span<uint8_t> const> outputs,
-                device_span<compression_result> results,
-                size_t max_uncomp_chunk_size,
-                size_t max_total_uncomp_size,
-                rmm::cuda_stream_view stream);
 
 /**
  * @brief Without actually decompressing the compressed input buffer passed, return the size of
@@ -107,8 +52,7 @@ struct decompression_info {
  * data.
  *
  */
-[[nodiscard]] size_t get_decompression_scratch_size(decompression_info const& di,
-                                                    size_t num_buffers);
+[[nodiscard]] size_t get_decompression_scratch_size(decompression_info const& di);
 
 /**
  * @brief Computes the uncompressed sizes of Snappy-compressed input data.

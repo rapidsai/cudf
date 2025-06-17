@@ -13,10 +13,10 @@ from cudf_polars.containers import Column
 from cudf_polars.dsl.expressions.base import ExecutionContext, Expr
 from cudf_polars.dsl.expressions.literal import Literal
 from cudf_polars.utils import dtypes
-from cudf_polars.utils.versions import POLARS_VERSION_LT_128
+from cudf_polars.utils.versions import POLARS_VERSION_LT_128, POLARS_VERSION_LT_129
 
 if TYPE_CHECKING:
-    from cudf_polars.containers import DataFrame
+    from cudf_polars.containers import DataFrame, DataType
 
 __all__ = ["Cast", "Len", "UnaryFunction"]
 
@@ -27,11 +27,11 @@ class Cast(Expr):
     __slots__ = ()
     _non_child = ("dtype",)
 
-    def __init__(self, dtype: plc.DataType, value: Expr) -> None:
+    def __init__(self, dtype: DataType, value: Expr) -> None:
         self.dtype = dtype
         self.children = (value,)
         self.is_pointwise = True
-        if not dtypes.can_cast(value.dtype, self.dtype):
+        if not dtypes.can_cast(value.dtype.plc, self.dtype.plc):
             raise NotImplementedError(
                 f"Can't cast {value.dtype.id().name} to {self.dtype.id().name}"
             )
@@ -48,7 +48,7 @@ class Cast(Expr):
 class Len(Expr):
     """Class representing the length of an expression."""
 
-    def __init__(self, dtype: plc.DataType) -> None:
+    def __init__(self, dtype: DataType) -> None:
         self.dtype = dtype
         self.children = ()
         self.is_pointwise = False
@@ -59,9 +59,10 @@ class Len(Expr):
         """Evaluate this expression given a dataframe for context."""
         return Column(
             plc.Column.from_scalar(
-                plc.Scalar.from_py(df.num_rows, self.dtype),
+                plc.Scalar.from_py(df.num_rows, self.dtype.plc),
                 1,
-            )
+            ),
+            dtype=self.dtype,
         )
 
     @property
@@ -122,7 +123,7 @@ class UnaryFunction(Expr):
     )
 
     def __init__(
-        self, dtype: plc.DataType, name: str, options: tuple[Any, ...], *children: Expr
+        self, dtype: DataType, name: str, options: tuple[Any, ...], *children: Expr
     ) -> None:
         self.dtype = dtype
         self.name = name
@@ -154,13 +155,28 @@ class UnaryFunction(Expr):
             (child,) = self.children
             return child.evaluate(df, context=context).mask_nans()
         if self.name == "round":
-            (decimal_places,) = self.options
+            round_mode = "half_away_from_zero"
+            if POLARS_VERSION_LT_129:
+                (decimal_places,) = self.options  # pragma: no cover
+            else:
+                # pragma: no cover
+                (
+                    decimal_places,
+                    round_mode,
+                ) = self.options
             (values,) = (child.evaluate(df, context=context) for child in self.children)
             return Column(
                 plc.round.round(
-                    values.obj, decimal_places, plc.round.RoundingMethod.HALF_UP
-                )
-            ).sorted_like(values)
+                    values.obj,
+                    decimal_places,
+                    (
+                        plc.round.RoundingMethod.HALF_EVEN
+                        if round_mode == "half_to_even"
+                        else plc.round.RoundingMethod.HALF_UP
+                    ),
+                ),
+                dtype=self.dtype,
+            ).sorted_like(values)  # pragma: no cover
         elif self.name == "unique":
             (maintain_order,) = self.options
             (values,) = (child.evaluate(df, context=context) for child in self.children)
@@ -189,9 +205,10 @@ class UnaryFunction(Expr):
                     plc.types.NanEquality.ALL_EQUAL,
                 )
             (column,) = result.columns()
+            result = Column(column, dtype=self.dtype)
             if maintain_order:
-                return Column(column).sorted_like(values)
-            return Column(column)
+                result = result.sorted_like(values)
+            return result
         elif self.name == "set_sorted":
             (column,) = (child.evaluate(df, context=context) for child in self.children)
             (asc,) = self.options
@@ -223,14 +240,17 @@ class UnaryFunction(Expr):
             return Column(
                 plc.stream_compaction.drop_nulls(
                     plc.Table([column.obj]), [0], 1
-                ).columns()[0]
+                ).columns()[0],
+                dtype=self.dtype,
             )
         elif self.name == "fill_null":
             column = self.children[0].evaluate(df, context=context)
             if column.null_count == 0:
                 return column
             if isinstance(self.children[1], Literal):
-                arg = plc.Scalar.from_py(self.children[1].value, self.children[1].dtype)
+                arg = plc.Scalar.from_py(
+                    self.children[1].value, self.children[1].dtype.plc
+                )
             else:
                 evaluated = self.children[1].evaluate(df, context=context)
                 arg = evaluated.obj_scalar if evaluated.is_scalar else evaluated.obj
@@ -242,14 +262,17 @@ class UnaryFunction(Expr):
                 arg = plc.unary.cast(
                     plc.Column.from_scalar(arg, 1), column.obj.type()
                 ).to_scalar()
-            return Column(plc.replace.replace_nulls(column.obj, arg))
+            return Column(plc.replace.replace_nulls(column.obj, arg), dtype=self.dtype)
         elif self.name in self._OP_MAPPING:
             column = self.children[0].evaluate(df, context=context)
             if column.obj.type().id() != self.dtype.id():
-                arg = plc.unary.cast(column.obj, self.dtype)
+                arg = plc.unary.cast(column.obj, self.dtype.plc)
             else:
                 arg = column.obj
-            return Column(plc.unary.unary_operation(arg, self._OP_MAPPING[self.name]))
+            return Column(
+                plc.unary.unary_operation(arg, self._OP_MAPPING[self.name]),
+                dtype=self.dtype,
+            )
         elif self.name in UnaryFunction._supported_cum_aggs:
             column = self.children[0].evaluate(df, context=context)
             plc_col = column.obj
@@ -293,7 +316,10 @@ class UnaryFunction(Expr):
             elif self.name == "cum_max":
                 agg = plc.aggregation.max()
 
-            return Column(plc.reduce.scan(plc_col, agg, plc.reduce.ScanType.INCLUSIVE))
+            return Column(
+                plc.reduce.scan(plc_col, agg, plc.reduce.ScanType.INCLUSIVE),
+                dtype=self.dtype,
+            )
         raise NotImplementedError(
             f"Unimplemented unary function {self.name=}"
         )  # pragma: no cover; init trips first

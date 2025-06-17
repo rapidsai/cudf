@@ -2315,6 +2315,7 @@ def test_dataframe_transpose(nulls, num_cols, num_rows, dtype):
 
     expect = pdf.transpose()
     nullable = dtype not in DATETIME_TYPES
+
     assert_eq(expect, got_function.to_pandas(nullable=nullable))
     assert_eq(expect, got_property.to_pandas(nullable=nullable))
 
@@ -7189,12 +7190,6 @@ def test_dataframe_info_null_counts():
     df.info(buf=buffer, null_counts=True)
     actual_string = buffer.getvalue()
     assert str_cmp == actual_string
-
-
-def test_is_close_deprecation():
-    ser = cudf.Series([1])
-    with pytest.warns(FutureWarning):
-        cudf.isclose(ser, ser)
 
 
 @pytest.mark.parametrize(

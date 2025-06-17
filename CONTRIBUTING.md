@@ -89,12 +89,12 @@ for a minimal build of libcudf without using conda are also listed below.
 Compilers:
 
 * `gcc` version 11.4+
-* `nvcc` version 11.8+
+* `nvcc` version 12.0+
 * `cmake` version 3.29.6+
 
 CUDA/GPU Runtime:
 
-* CUDA 11.4+
+* CUDA 12.0+
 * Volta architecture or better ([Compute Capability](https://docs.nvidia.com/deploy/cuda-compatibility/) >=7.0)
 
 You can obtain CUDA from
@@ -174,7 +174,7 @@ To build C++ tests, you can also request that build.sh build the `tests` target.
 To build all libraries and tests, with Python packages in development mode, simply run
 
 ```bash
-./build.sh --pydevelop libcudf libcudf_kafka cudf dask_cudf cudf_kafka custreamz
+./build.sh --pydevelop libcudf libcudf_kafka pylibcudf cudf dask_cudf cudf_kafka custreamz
 ```
 
 - **Note**: if Cython files (`*.pyx` or `*.pxd`) have changed, the Python build must be rerun.

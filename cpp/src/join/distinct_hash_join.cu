@@ -415,13 +415,6 @@ distinct_hash_join::~distinct_hash_join() = default;
 
 distinct_hash_join::distinct_hash_join(cudf::table_view const& build,
                                        null_equality compare_nulls,
-                                       rmm::cuda_stream_view stream)
-  : _impl{std::make_unique<impl_type>(build, compare_nulls, stream)}
-{
-}
-
-distinct_hash_join::distinct_hash_join(cudf::table_view const& build,
-                                       null_equality compare_nulls,
                                        double load_factor,
                                        rmm::cuda_stream_view stream)
   : _impl{std::make_unique<impl_type>(build, compare_nulls, load_factor, stream)}

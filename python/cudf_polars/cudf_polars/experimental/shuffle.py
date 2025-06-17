@@ -14,6 +14,7 @@ from rmm.pylibrmm.stream import DEFAULT_STREAM
 from cudf_polars.containers import DataFrame
 from cudf_polars.dsl.expr import Col
 from cudf_polars.dsl.ir import IR
+from cudf_polars.dsl.tracing import nvtx_annotate_cudf_polars
 from cudf_polars.experimental.base import get_key_name
 from cudf_polars.experimental.dispatch import generate_ir_tasks, lower_ir_node
 from cudf_polars.experimental.utils import _concat
@@ -44,6 +45,7 @@ class RMPFIntegration:  # pragma: no cover
     """cuDF-Polars protocol for rapidsmpf shuffler."""
 
     @staticmethod
+    @nvtx_annotate_cudf_polars(message="RMPFIntegration.insert_partition")
     def insert_partition(
         df: DataFrame,
         partition_id: int,  # Not currently used
@@ -53,7 +55,7 @@ class RMPFIntegration:  # pragma: no cover
         *other: Any,
     ) -> None:
         """Add cudf-polars DataFrame chunks to an RMP shuffler."""
-        from rapidsmpf.shuffler import partition_and_pack
+        from rapidsmpf.integrations.cudf.partition import partition_and_pack
 
         on = options["on"]
         assert not other, f"Unexpected arguments: {other}"
@@ -68,13 +70,14 @@ class RMPFIntegration:  # pragma: no cover
         shuffler.insert_chunks(packed_inputs)
 
     @staticmethod
+    @nvtx_annotate_cudf_polars(message="RMPFIntegration.extract_partition")
     def extract_partition(
         partition_id: int,
         shuffler: Any,
         options: ShuffleOptions,
     ) -> DataFrame:
         """Extract a finished partition from the RMP shuffler."""
-        from rapidsmpf.shuffler import unpack_and_concat
+        from rapidsmpf.integrations.cudf.partition import unpack_and_concat
 
         shuffler.wait_on(partition_id)
         column_names = options["column_names"]

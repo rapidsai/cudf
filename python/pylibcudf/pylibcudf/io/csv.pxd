@@ -67,6 +67,7 @@ cdef class CsvReaderOptionsBuilder:
     cpdef CsvReaderOptionsBuilder keep_default_na(self, bool keep_default_na)
     cpdef CsvReaderOptionsBuilder na_filter(self, bool na_filter)
     cpdef CsvReaderOptionsBuilder dayfirst(self, bool dayfirst)
+    cpdef CsvReaderOptionsBuilder delimiter(self, str delimiter)
     cpdef CsvReaderOptions build(self)
 
 cpdef TableWithMetadata read_csv(CsvReaderOptions options, Stream stream = *)

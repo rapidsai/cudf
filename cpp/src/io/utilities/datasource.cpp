@@ -515,12 +515,6 @@ std::unique_ptr<datasource> datasource::create(std::string const& filepath,
   }
 }
 
-std::unique_ptr<datasource> datasource::create(host_buffer const& buffer)
-{
-  return create(
-    cudf::host_span<std::byte const>{reinterpret_cast<std::byte const*>(buffer.data), buffer.size});
-}
-
 std::unique_ptr<datasource> datasource::create(cudf::host_span<std::byte const> buffer)
 {
   return std::make_unique<host_buffer_source>(buffer);

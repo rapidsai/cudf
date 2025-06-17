@@ -12,7 +12,7 @@ import polars as pl
 
 import pylibcudf as plc
 
-from cudf_polars.containers import Column
+from cudf_polars.containers import Column, DataType
 from cudf_polars.utils import conversion
 
 if TYPE_CHECKING:
@@ -64,7 +64,9 @@ class DataFrame:
             self.table,
             [plc.interop.ColumnMetadata(name=name) for name in name_map],
         )
-        df: pl.DataFrame = pl.from_arrow(table)
+        # from_arrow returns DataFrame | Series, but we know that it's a
+        # DataFrame since the input was a Table.
+        df = cast(pl.DataFrame, pl.from_arrow(table))
         return df.rename(name_map).with_columns(
             pl.col(c.name).set_sorted(descending=c.order == plc.types.Order.DESCENDING)
             if c.is_sorted
@@ -106,9 +108,9 @@ class DataFrame:
         -------
         New dataframe representing the input.
         """
-        plc_table = plc.Table(df)
+        plc_table = plc.Table.from_arrow(df)
         return cls(
-            Column(d_col, name=name).copy_metadata(h_col)
+            Column(d_col, name=name, dtype=DataType(h_col.dtype)).copy_metadata(h_col)
             for d_col, h_col, name in zip(
                 plc_table.columns(), df.iter_columns(), df.columns, strict=True
             )
@@ -139,7 +141,9 @@ class DataFrame:
         if table.num_columns() != len(names):
             raise ValueError("Mismatching name and table length.")
         return cls(
-            Column(c, name=name) for c, name in zip(table.columns(), names, strict=True)
+            # TODO: Pass along dtypes here
+            Column(c, name=name)
+            for c, name in zip(table.columns(), names, strict=True)
         )
 
     @classmethod
@@ -166,7 +170,7 @@ class DataFrame:
             packed_metadata, packed_gpu_data
         )
         return cls(
-            Column(c, **kw)
+            Column(c, **Column.deserialize_ctor_kwargs(kw))
             for c, kw in zip(table.columns(), header["columns_kwargs"], strict=True)
         )
 
@@ -195,13 +199,7 @@ class DataFrame:
 
         # Keyword arguments for `Column.__init__`.
         columns_kwargs: list[ColumnOptions] = [
-            {
-                "is_sorted": col.is_sorted,
-                "order": col.order,
-                "null_order": col.null_order,
-                "name": col.name,
-            }
-            for col in self.columns
+            col.serialize_ctor_kwargs() for col in self.columns
         ]
         header: DataFrameHeader = {
             "columns_kwargs": columns_kwargs,

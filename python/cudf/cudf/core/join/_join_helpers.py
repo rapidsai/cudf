@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import warnings
-from collections import abc
+from collections.abc import Iterable
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
@@ -16,7 +16,12 @@ from cudf.core.dtypes import (
     Decimal128Dtype,
 )
 from cudf.core.reshape import concat
-from cudf.utils.dtypes import find_common_type, is_dtype_obj_numeric
+from cudf.options import get_option
+from cudf.utils.dtypes import (
+    find_common_type,
+    get_dtype_of_same_kind,
+    is_dtype_obj_numeric,
+)
 
 if TYPE_CHECKING:
     from cudf.core.column import ColumnBase
@@ -61,7 +66,6 @@ def _match_join_keys(
 ) -> tuple[ColumnBase, ColumnBase]:
     # Casts lcol and rcol to a common dtype for use as join keys. If no casting
     # is necessary, they are returned as is.
-
     common_type = None
 
     # cast the keys lcol and rcol to a common dtype
@@ -78,8 +82,12 @@ def _match_join_keys(
             if how in {"left", "leftsemi", "leftanti"}:
                 return lcol, rcol.astype(ltype)
             common_type = ltype.categories.dtype
+            if get_option("mode.pandas_compatible"):
+                common_type = get_dtype_of_same_kind(rtype, common_type)
         else:
             common_type = rtype.categories.dtype
+            if get_option("mode.pandas_compatible"):
+                common_type = get_dtype_of_same_kind(ltype, common_type)
         return lcol.astype(common_type), rcol.astype(common_type)
 
     if is_dtype_equal(ltype, rtype):
@@ -177,7 +185,7 @@ def _match_categorical_dtypes_both(
 
 
 def _coerce_to_tuple(obj):
-    if isinstance(obj, abc.Iterable) and not isinstance(obj, str):
+    if isinstance(obj, Iterable) and not isinstance(obj, str):
         return tuple(obj)
     else:
         return (obj,)
