@@ -954,21 +954,22 @@ TEST_F(JoinTest, PartitionedInnerJoinWithNulls)
   auto match_context = obj.inner_join_match_context(
     t0.select(left_on), cudf::sorted::NO, stream, cudf::get_current_device_resource_ref());
 
-  auto match_counts = cudf::detail::make_std_vector<cudf::size_type>(*match_context._match_counts, stream);
+  auto match_counts =
+    cudf::detail::make_std_vector<cudf::size_type>(*match_context._match_counts, stream);
   std::cout << "Match counts size: " << match_counts.size() << std::endl;
   // Print first few match counts and calculate statistics
   const size_t max_print = std::min(static_cast<size_t>(20), match_counts.size());
   std::cout << "First " << max_print << " match counts: ";
   for (size_t i = 0; i < max_print; ++i) {
-      std::cout << match_counts[i] << " ";
+    std::cout << match_counts[i] << " ";
   }
   std::cout << std::endl;
   auto partition_context = cudf::sort_merge_join::partition_context{std::move(match_context), 0, 0};
 
-  auto join_and_gather = [&t0, &t1, &obj, stream](cudf::sort_merge_join::partition_context const &cxt) {
-    auto const [left_join_indices, right_join_indices] = obj.partitioned_inner_join(
-      cxt, stream, cudf::get_current_device_resource_ref());
-
+  auto join_and_gather = [&t0, &t1, &obj, stream](
+                           cudf::sort_merge_join::partition_context const& cxt) {
+    auto const [left_join_indices, right_join_indices] =
+      obj.partitioned_inner_join(cxt, stream, cudf::get_current_device_resource_ref());
 
     // Print to stdout how many indices we have in each vector
     std::cout << "Left join indices size: " << left_join_indices->size() << std::endl;
@@ -1011,7 +1012,7 @@ TEST_F(JoinTest, PartitionedInnerJoinWithNulls)
   std::vector<cudf::table_view> partial_table_views;
   for (cudf::size_type i = 0; i < t0.num_rows(); i++) {
     partition_context.left_start_idx = i;
-    partition_context.left_end_idx = i + 1;
+    partition_context.left_end_idx   = i + 1;
     partial_tables.push_back(join_and_gather(partition_context));
     partial_table_views.push_back(partial_tables.back()->view());
   }
