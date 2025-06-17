@@ -494,8 +494,8 @@ CUDF_HOST_DEVICE void generate_cluster_limit(int group_index,
   sincos(1.0 / delta_norm, &sin_dn, &cos_dn);
 
   // compute the first cluster limit
-  double nearest_w;
-  int nearest_w_index;  // group-relative index into the input stream
+  double nearest_w = 0.0f;  // unnecessary, but compiler issues an incorrect warning otherwise
+  int nearest_w_index;      // group-relative index into the input stream
   while (true) {
     cur_weight = next_limit < 0 ? 0 : max(cur_weight + 1, nearest_w);
     if (cur_weight >= total_weight) { break; }
