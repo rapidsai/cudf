@@ -19,3 +19,9 @@ def ldf():
 def test_struct(ldf):
     query = ldf.select(pl.struct(pl.all()))
     assert_gpu_result_equal(query)
+
+
+def test_nested_struct():
+    ldf = pl.LazyFrame({"a": [{"x": {"i": 0, "j": 0}, "y": {"i": 0, "k": 1}}]})
+    query = ldf.select(pl.struct(pl.all()))
+    assert_gpu_result_equal(query)
