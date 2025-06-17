@@ -163,7 +163,7 @@ EXPECTED_FAILURES: Mapping[str, str | tuple[str, bool]] = {
     "tests/unit/datatypes/test_struct.py::test_struct_agg_all": "Polars types not preserved in DataFrame.from_table",
     "tests/unit/constructors/test_structs.py::test_constructor_non_strict_schema_17956": "Polars types not preserved in DataFrame.from_table",
     "tests/unit/io/test_delta.py::test_read_delta_arrow_map_type": "Polars types not preserved in DataFrame.from_table",
-    "tests/unit/lazyframe/test_collect_schema.py::test_collect_schema_parametric": "https://github.com/rapidsai/cudf/issues/19185",
+    "tests/unit/lazyframe/test_collect_schema.py::test_collect_schema_parametric": "https://github.com/pola-rs/polars/issues/23214",
     "tests/unit/datatypes/test_struct.py::test_struct_null_cast": "pylibcudf.Scalar does not support struct scalars",
     "tests/unit/datatypes/test_struct.py::test_struct_outer_nullability_zip_18119": "pylibcudf.Scalar does not support struct scalars",
 }
