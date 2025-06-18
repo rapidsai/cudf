@@ -18,7 +18,7 @@ from cudf_polars.utils import conversion
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping, Sequence, Set
 
-    from typing_extensions import Any, Self
+    from typing_extensions import Any, CapsuleType, Self
 
     from cudf_polars.typing import ColumnOptions, DataFrameHeader, Slice
 
@@ -48,7 +48,9 @@ class _ObjectWithArrowMetadata:
         self.obj = obj
         self.metadata = metadata
 
-    def __arrow_c_array__(self, requested_schema: None = None) -> tuple[Any, Any]:
+    def __arrow_c_array__(
+        self, requested_schema: None = None
+    ) -> tuple[CapsuleType, CapsuleType]:
         return self.obj._to_schema(self.metadata), self.obj._to_host_array()
 
 
