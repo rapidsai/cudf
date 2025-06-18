@@ -238,10 +238,11 @@ def _(
     )
     child_count = partition_info[child].count
     partition_info[gb_pwise] = PartitionInfo(count=child_count)
+    grouped_keys = tuple(NamedExpr(k.name, Col(k.value.dtype, k.name)) for k in ir.keys)
 
     # Reduction
     gb_inter: GroupBy | Repartition | Shuffle
-    reduction_schema = {k.name: k.value.dtype for k in ir.keys} | {
+    reduction_schema = {k.name: k.value.dtype for k in grouped_keys} | {
         k.name: k.value.dtype for k in reduction_exprs
     }
     if not shuffled and post_aggregation_count > 1:
@@ -255,7 +256,7 @@ def _(
 
         gb_inter = Shuffle(
             gb_pwise.schema,
-            ir.keys,
+            grouped_keys,
             config_options,
             gb_pwise,
         )
@@ -276,7 +277,7 @@ def _(
             if count > post_aggregation_count:
                 gb_inter = GroupBy(
                     reduction_schema,
-                    ir.keys,
+                    grouped_keys,
                     reduction_exprs,
                     ir.maintain_order,
                     None,
@@ -287,7 +288,7 @@ def _(
     # Final aggregation
     gb_reduce = GroupBy(
         reduction_schema,
-        ir.keys,
+        grouped_keys,
         reduction_exprs,
         ir.maintain_order,
         ir.zlice,
@@ -299,7 +300,7 @@ def _(
     new_node = Select(
         ir.schema,
         [
-            *(NamedExpr(k.name, Col(k.value.dtype, k.name)) for k in ir.keys),
+            *(NamedExpr(k.name, Col(k.value.dtype, k.name)) for k in grouped_keys),
             *selection_exprs,
         ],
         False,  # noqa: FBT003
@@ -307,6 +308,6 @@ def _(
     )
     partition_info[new_node] = PartitionInfo(
         count=post_aggregation_count,
-        partitioned_on=ir.keys,
+        partitioned_on=grouped_keys,
     )
     return new_node, partition_info

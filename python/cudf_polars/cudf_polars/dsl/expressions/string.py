@@ -12,20 +12,22 @@ from typing import TYPE_CHECKING, Any
 import pyarrow as pa
 import pyarrow.compute as pc
 
+import polars as pl
 from polars.exceptions import InvalidOperationError
 
 import pylibcudf as plc
 
-from cudf_polars.containers import Column
+from cudf_polars.containers import Column, DataType
 from cudf_polars.dsl.expressions.base import ExecutionContext, Expr
 from cudf_polars.dsl.expressions.literal import Literal, LiteralColumn
+from cudf_polars.dsl.utils.reshape import broadcast
 
 if TYPE_CHECKING:
     from typing_extensions import Self
 
     from polars.polars import _expr_nodes as pl_expr
 
-    from cudf_polars.containers import DataFrame, DataType
+    from cudf_polars.containers import DataFrame
 
 __all__ = ["StringFunction"]
 
@@ -110,6 +112,7 @@ class StringFunction(Expr):
 
     def _validate_input(self) -> None:
         if self.name not in (
+            StringFunction.Name.ConcatHorizontal,
             StringFunction.Name.ConcatVertical,
             StringFunction.Name.Contains,
             StringFunction.Name.EndsWith,
@@ -212,7 +215,32 @@ class StringFunction(Expr):
         self, df: DataFrame, *, context: ExecutionContext = ExecutionContext.FRAME
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
-        if self.name is StringFunction.Name.ConcatVertical:
+        if self.name is StringFunction.Name.ConcatHorizontal:
+            columns = [
+                Column(child.evaluate(df, context=context).obj).astype(
+                    DataType(pl.String())
+                )
+                for child in self.children
+            ]
+
+            broadcasted = broadcast(
+                *columns, target_length=max(col.size for col in columns)
+            )
+
+            delimiter, ignore_nulls = self.options
+
+            return Column(
+                plc.strings.combine.concatenate(
+                    plc.Table([col.obj for col in broadcasted]),
+                    plc.Scalar.from_py(delimiter, plc.DataType(plc.TypeId.STRING)),
+                    None
+                    if ignore_nulls
+                    else plc.Scalar.from_py(None, plc.DataType(plc.TypeId.STRING)),
+                    None,
+                    plc.strings.combine.SeparatorOnNulls.NO,
+                )
+            )
+        elif self.name is StringFunction.Name.ConcatVertical:
             (child,) = self.children
             column = child.evaluate(df, context=context)
             delimiter, ignore_nulls = self.options
