@@ -295,13 +295,11 @@ std::unique_ptr<column> superimpose_nulls(bitmask_type const* null_mask,
 }
 
 /**
- * @brief For each null mask in the input vector, superimpose the given null mask into the
- * corresponding input column and its descendants. This function does not enforce null consistency
- * of the null masks of the descendant columns i.e. non-empty nulls that appear in the descendant
- * columns due to the null mask update are not purged.
+ * @brief Superimpose each given null mask onto the corresponding input column and its descendants.
+ * This function does not enforce null consistency of the null masks of the descendant columns i.e.
+ * non-empty nulls that appear in descendant columns due to the null mask update are not purged
 
- * The vector version of superimpose_nulls applies null masks to multiple columns at once.
- * It's designed to handle hierarchical data structures (like structs) by:
+ * The vector version of superimpose_nulls applies null masks to multiple columns at once by:
  *  1. First gathering all null masks in a flattened structure
  *  2. Applying the nulls in a segmented batch operation
  *  3. Then updating all the columns with their new null masks
@@ -365,7 +363,7 @@ std::vector<std::unique_ptr<column>> superimpose_nulls(std::vector<bitmask_type 
     path.push_back(null_masks[c]);
 
     // Collect all null masks for this column and its descendants
-    populate_segmented_sources(path, *(inputs[c]), sources, segment_offsets);
+    populate_segmented_sources(*(inputs[c]));
     path.pop_back();
 
     // Record where this column's segments end in the segment_offsets array
