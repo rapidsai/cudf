@@ -107,3 +107,23 @@ def test_deserialize_ctor_kwargs_invalid_dtype():
     }
     with pytest.raises(ValueError):
         Column.deserialize_ctor_kwargs(column_kwargs)
+
+
+def test_deserialize_ctor_kwargs_list_dtype():
+    pl_type = pl.List(pl.Int64())
+    column_kwargs = {
+        "is_sorted": plc.types.Sorted.NO,
+        "order": plc.types.Order.ASCENDING,
+        "null_order": plc.types.NullOrder.AFTER,
+        "name": "test",
+        "dtype": pl.polars.dtype_str_repr(pl_type),
+    }
+    result = Column.deserialize_ctor_kwargs(column_kwargs)
+    expected = {
+        "is_sorted": plc.types.Sorted.NO,
+        "order": plc.types.Order.ASCENDING,
+        "null_order": plc.types.NullOrder.AFTER,
+        "name": "test",
+        "dtype": DataType(pl_type),
+    }
+    assert result == expected
