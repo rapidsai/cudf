@@ -29,11 +29,11 @@ from cudf_polars.dsl.ir import (
 from cudf_polars.dsl.traversal import CachingVisitor, traversal
 from cudf_polars.experimental.base import PartitionInfo, get_key_name
 from cudf_polars.experimental.dispatch import (
+    State,
     generate_ir_tasks,
     lower_ir_node,
 )
 from cudf_polars.experimental.utils import _concat, _lower_ir_fallback
-from cudf_polars.typing import LowerIRState
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
@@ -82,9 +82,7 @@ def lower_ir_graph(
     --------
     lower_ir_node
     """
-    mapper = CachingVisitor(
-        lower_ir_node, state=LowerIRState(config_options=config_options)
-    )
+    mapper = CachingVisitor(lower_ir_node, state=State(config_options=config_options))
     return mapper(ir)
 
 

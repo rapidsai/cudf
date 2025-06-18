@@ -6,19 +6,18 @@
 from __future__ import annotations
 
 from functools import partial, reduce, singledispatch
-from typing import TYPE_CHECKING, TypeAlias
+from typing import TYPE_CHECKING, TypeAlias, TypedDict
 
 import pylibcudf as plc
 from pylibcudf import expressions as plc_expr
 
 from cudf_polars.dsl import expr
 from cudf_polars.dsl.traversal import CachingVisitor, reuse_if_unchanged
-from cudf_polars.typing import ASTState, ExprExprState, GenericTransformer
+from cudf_polars.typing import GenericTransformer
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from cudf_polars.typing import ExprTransformer
 
 # Can't merge these op-mapping dictionaries because scoped enum values
 # are exposed by cython with equality/hash based one their underlying
@@ -91,7 +90,43 @@ REVERSED_COMPARISON = {
 }
 
 
+class ASTState(TypedDict):
+    """
+    State for AST transformation in :mod:`cudf_polars.dsl.to_ast`.
+
+    Parameters
+    ----------
+    for_parquet
+        Indicator for whether this transformation should provide an expression
+        suitable for use in parquet filters.
+    """
+
+    for_parquet: bool
+
+
+class ExprTransformerState(TypedDict):
+    """
+    State used for AST transformation when inserting column references.
+
+    Parameters
+    ----------
+    name_to_index
+        Mapping from column names to column indices in the table
+        eventually used for evaluation.
+    table_ref
+        pylibcudf `TableReference` indicating whether column
+        references are coming from the left or right table.
+    """
+
+    name_to_index: Mapping[str, int]
+    table_ref: plc.expressions.TableReference
+
+
 Transformer: TypeAlias = GenericTransformer[expr.Expr, plc_expr.Expression, ASTState]
+ExprTransformer: TypeAlias = GenericTransformer[
+    expr.Expr, expr.Expr, ExprTransformerState
+]
+"""Protocol for transformation of Expr nodes."""
 
 
 @singledispatch
@@ -310,6 +345,6 @@ def insert_colrefs(
     """
     mapper = CachingVisitor(
         _insert_colrefs,
-        state=ExprExprState(name_to_index=name_to_index, table_ref=table_ref),
+        state=ExprTransformerState(name_to_index=name_to_index, table_ref=table_ref),
     )
     return mapper(node)

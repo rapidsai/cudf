@@ -14,20 +14,21 @@ import pylibcudf as plc
 from cudf_polars import Translator
 from cudf_polars.containers import DataType
 from cudf_polars.dsl import expr, ir
+from cudf_polars.dsl.to_ast import ExprTransformer
 from cudf_polars.dsl.traversal import (
     CachingVisitor,
     make_recursive,
     reuse_if_unchanged,
     traversal,
 )
-from cudf_polars.typing import ExprTransformer, GenericTransformer
+from cudf_polars.typing import GenericTransformer
 
 
-class IRTransformerState(TypedDict):
+class State(TypedDict):
     expr_mapper: ExprTransformer
 
 
-IRTransformer: TypeAlias = GenericTransformer[ir.IR, ir.IR, IRTransformerState]
+IRTransformer: TypeAlias = GenericTransformer[ir.IR, ir.IR, State]
 
 
 def make_expr(dt, n1, n2):

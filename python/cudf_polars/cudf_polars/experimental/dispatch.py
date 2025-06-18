@@ -5,14 +5,36 @@
 from __future__ import annotations
 
 from functools import singledispatch
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, TypeAlias, TypedDict
+
+from cudf_polars.typing import GenericTransformer
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
 
+    from cudf_polars.dsl import ir
     from cudf_polars.dsl.ir import IR
     from cudf_polars.experimental.base import PartitionInfo
-    from cudf_polars.typing import LowerIRTransformer
+    from cudf_polars.utils.config import ConfigOptions
+
+
+class State(TypedDict):
+    """
+    State used for lowering IR nodes.
+
+    Parameters
+    ----------
+    config_options
+        GPUEngine configuration options.
+    """
+
+    config_options: ConfigOptions
+
+
+LowerIRTransformer: TypeAlias = GenericTransformer[
+    "ir.IR", "tuple[ir.IR, MutableMapping[ir.IR, PartitionInfo]]", State
+]
+"""Protocol for Lowering IR nodes."""
 
 
 @singledispatch

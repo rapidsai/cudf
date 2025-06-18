@@ -5,20 +5,34 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Generic, TypedDict
 
 from cudf_polars.dsl.traversal import CachingVisitor, reuse_if_unchanged
-from cudf_polars.typing import GenericState
+from cudf_polars.typing import NodeT
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
-    from cudf_polars.typing import GenericTransformer, NodeT
+    from cudf_polars.typing import GenericTransformer
 
 __all__ = ["replace"]
 
 
-def _replace(node: NodeT, fn: GenericTransformer[NodeT, NodeT, GenericState]) -> NodeT:
+class State(Generic[NodeT], TypedDict):
+    """
+    State used when replacing nodes in expressions.
+
+    Parameters
+    ----------
+    replacements
+        Mapping from nodes to be replaced to their replacements.
+        ``ReplaceState`` is generic over the type of these nodes.
+    """
+
+    replacements: Mapping[NodeT, NodeT]
+
+
+def _replace(node: NodeT, fn: GenericTransformer[NodeT, NodeT, State]) -> NodeT:
     try:
         return fn.state["replacements"][node]
     except KeyError:
@@ -41,7 +55,7 @@ def replace(nodes: Sequence[NodeT], replacements: Mapping[NodeT, NodeT]) -> list
     list
         Of nodes with replacements performed.
     """
-    mapper: GenericTransformer[NodeT, NodeT, GenericState] = CachingVisitor(
-        _replace, state=GenericState({"replacements": replacements})
+    mapper: GenericTransformer[NodeT, NodeT, State] = CachingVisitor(
+        _replace, state=State({"replacements": replacements})
     )
     return [mapper(node) for node in nodes]

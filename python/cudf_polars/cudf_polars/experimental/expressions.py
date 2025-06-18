@@ -33,7 +33,7 @@ from __future__ import annotations
 
 import operator
 from functools import reduce
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, TypeAlias, TypedDict
 
 import pylibcudf as plc
 
@@ -42,7 +42,7 @@ from cudf_polars.dsl.expressions.base import Col, Expr, NamedExpr
 from cudf_polars.dsl.expressions.binaryop import BinOp
 from cudf_polars.dsl.expressions.literal import Literal
 from cudf_polars.dsl.expressions.unary import Cast, UnaryFunction
-from cudf_polars.dsl.ir import Distinct, Empty, HConcat, Select
+from cudf_polars.dsl.ir import IR, Distinct, Empty, HConcat, Select
 from cudf_polars.dsl.traversal import (
     CachingVisitor,
 )
@@ -50,18 +50,36 @@ from cudf_polars.dsl.utils.naming import unique_names
 from cudf_polars.experimental.base import PartitionInfo
 from cudf_polars.experimental.repartition import Repartition
 from cudf_polars.experimental.utils import _leaf_column_names
-from cudf_polars.typing import ExprDecomposerState
 
 if TYPE_CHECKING:
     from collections.abc import Generator, MutableMapping, Sequence
 
     from cudf_polars.dsl.expressions.base import Expr
     from cudf_polars.dsl.ir import IR
-    from cudf_polars.typing import (
-        ExprDecomposer,
-        Schema,
-    )
+    from cudf_polars.typing import GenericTransformer, Schema
     from cudf_polars.utils.config import ConfigOptions
+
+
+class State(TypedDict):
+    """
+    State for decomposing expressions.
+
+    Parameters
+    ----------
+    input_ir
+        IR of the input expression.
+    input_partition_info
+        Partition info of the input expression.
+    """
+
+    input_ir: IR
+    input_partition_info: PartitionInfo
+    config_options: ConfigOptions
+    unique_names: Generator[str, None, None]
+
+
+ExprDecomposer: TypeAlias = "GenericTransformer[Expr, tuple[Expr, IR, MutableMapping[IR, PartitionInfo]], State]"
+"""Protocol for decomposing expressions."""
 
 
 def select(
@@ -509,9 +527,9 @@ def decompose_expr_graph(
     ``input_ir`` into multiple partition-wise stages.
 
     The state dictionary is an instance of
-    :class:`cudf_polars.typing.ExprDecomposerState`.
+    :class:`cudf_polars.experimental.expressions.State`.
     """
-    state = ExprDecomposerState(
+    state = State(
         input_ir=input_ir,
         input_partition_info=partition_info[input_ir],
         config_options=config_options,

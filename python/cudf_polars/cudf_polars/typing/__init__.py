@@ -10,7 +10,6 @@ from collections.abc import Hashable, MutableMapping
 from typing import (
     TYPE_CHECKING,
     Any,
-    Generic,
     Literal,
     NewType,
     Protocol,
@@ -22,15 +21,13 @@ import polars as pl
 from polars.polars import _expr_nodes as pl_expr, _ir_nodes as pl_ir
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Generator, Mapping
+    from collections.abc import Callable
     from typing import TypeAlias
 
     import pylibcudf as plc
 
     from cudf_polars.containers import DataFrame, DataType
-    from cudf_polars.dsl import expr, ir, nodebase
-    from cudf_polars.experimental.base import PartitionInfo
-    from cudf_polars.utils.config import ConfigOptions
+    from cudf_polars.dsl import nodebase
 
 
 if sys.version_info >= (3, 11):
@@ -45,7 +42,6 @@ __all__: list[str] = [
     "ColumnHeader",
     "ColumnOptions",
     "DataFrameHeader",
-    "ExprTransformer",
     "GenericTransformer",
     "NodeTraverser",
     "OptimizationArgs",
@@ -171,100 +167,8 @@ class GenericTransformer(Protocol[U_contra, V_co, StateT_co]):
 
     @property
     def state(self) -> StateT_co:
-        """Arbitrary immutable state."""
+        """Transform-specific immutable state."""
         ...
-
-
-class ASTState(TypedDict):
-    """
-    State for AST transformation in :mod:`cudf_polars.dsl.to_ast`.
-
-    Parameters
-    ----------
-    for_parquet
-        Indicator for whether this transformation should provide an expression
-        suitable for use in parquet filters.
-
-        If ``for_parquet`` is ``False``, the dictionary should contain a
-    """
-
-    for_parquet: bool
-
-
-class GenericState(Generic[NodeT], TypedDict):
-    """
-    State for :func:`cudf_polars.dsl.utils.replace.replace`.
-
-    Parameters
-    ----------
-    replacements
-        Mapping from nodes to be replaced to their replacements.
-        ``GenericState`` is generic over the type of these nodes.
-    """
-
-    replacements: Mapping[NodeT, NodeT]
-
-
-class ExprExprState(TypedDict):
-    """
-    State used for AST transformation in :mod:`cudf_polars.dsl.to_ast`.
-
-    Parameters
-    ----------
-    name_to_index
-        Mapping from column names to column indices in the table
-        eventually used for evaluation.
-    table_ref
-        pylibcudf `TableReference` indicating whether column
-        references are coming from the left or right table.
-    """
-
-    name_to_index: Mapping[str, int]
-    table_ref: plc.expressions.TableReference
-
-
-class ExprDecomposerState(TypedDict):
-    """
-    State for :func:`cudf_polars.experimental.expressions.decompose_expr_graph`.
-
-    Parameters
-    ----------
-    input_ir
-        IR of the input expression.
-    input_partition_info
-        Partition info of the input expression.
-    """
-
-    input_ir: ir.IR
-    input_partition_info: PartitionInfo
-    config_options: ConfigOptions
-    unique_names: Generator[str, None, None]
-
-
-class LowerIRState(TypedDict):
-    """
-    State used for transformations in :func:`cudf_polars.experimental.parallel.lower_ir_node`.
-
-    Parameters
-    ----------
-    config_options
-        GPUEngine configuration options.
-    """
-
-    config_options: ConfigOptions
-
-
-# Quotes to avoid circular import
-ExprTransformer: TypeAlias = GenericTransformer["expr.Expr", "expr.Expr", ExprExprState]
-"""Protocol for transformation of Expr nodes."""
-
-LowerIRTransformer: TypeAlias = GenericTransformer[
-    "ir.IR", "tuple[ir.IR, MutableMapping[ir.IR, PartitionInfo]]", LowerIRState
-]
-"""Protocol for Lowering IR nodes."""
-
-ExprDecomposer: TypeAlias = "GenericTransformer[expr.Expr, tuple[expr.Expr, ir.IR, MutableMapping[ir.IR, PartitionInfo]], ExprDecomposerState]"
-"""Protocol for decomposing expressions."""
 
 
 class ColumnOptions(TypedDict):

@@ -302,9 +302,10 @@ two utilities in `traversal.py`:
 These both implement the `GenericTransformer` protocol, and can be
 wrapped around a transformation function like `rewrite` to provide a
 function `Expr -> T`. They also allow us to attach arbitrary
-*immutable* state to our visitor by passing a `state` dictionary. This
-dictionary can then be inspected by the concrete transformation
-function. `make_recursive` is very simple, and provides no caching of
+*immutable* state to our visitor by passing a `state` dictionary. The
+`state` dictionary should be given as some `TypedDict` so that the
+transformation function knows which fields are available.
+`make_recursive` is very simple, and provides no caching of
 intermediate results (so any DAGs that are visited will be viewed as
 trees). `CachingVisitor` provides the same interface, but maintains a
 cache of intermediate results, and reuses them if the same expression
@@ -331,7 +332,7 @@ from cudf_polars.dsl.traversal import (
     CachingVisitor, make_recursive, reuse_if_unchanged
 )
 from cudf_polars.dsl.expr import Col, Expr
-from cudf_polars.typing import ExprTransformer
+from cudf_polars.dsl.to_ast import ExprTransformer
 
 
 @singledispatch
@@ -363,17 +364,19 @@ accidentally sent in an object of the incorrect type.
 Finally we tie everything together with a public function:
 
 ```python
+from typing import TypedDict
+
+class State(TypedDict):
+    mapping: Mapping[str, str]
+
+
 def rename(e: Expr, mapping: Mapping[str, str]) -> Expr:
     """Rename column references in an expression."""
-    mapper = CachingVisitor(_rename, state={"mapping": mapping})
+    mapper = CachingVisitor(_rename, state=State(mapping=mapping))
     # or
-    # mapper = make_recursive(_rename, state={"mapping": mapping})
+    # mapper = make_recursive(_rename, state=State(mapping=mapping))
     return mapper(e)
 ```
-
-In practice, `state` is some `TypedDict` that's specific to that
-`CachingVisitor`. To add a field to the state dict, add it to the
-`TypeDict` passed in as its `state` parameter.
 
 # Containers
 
