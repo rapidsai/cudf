@@ -146,8 +146,7 @@ class RunConfig:
             scheduler = None
 
         path = args.path
-        scale_factor = args.scale
-        if scale_factor is None:
+        if (scale_factor := args.scale) is None:
             if path is None:
                 raise ValueError(
                     "Must specify --root and --scale if --path is not specified."
@@ -156,12 +155,12 @@ class RunConfig:
             supplier = get_data(path, "supplier", args.suffix)
             num_rows = supplier.select(pl.len()).collect().item(0, 0)
             scale_factor = num_rows / 10_000
+        if path is None:
+            path = f"{args.root}/scale-{scale_factor}"
         try:
             scale_factor = int(scale_factor)
         except ValueError:
             scale_factor = float(scale_factor)
-        if path is None:
-            path = f"{args.root}/scale-{scale_factor}"
 
         return cls(
             queries=args.query,
@@ -255,7 +254,7 @@ def parse_args(args: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--root",
         type=str,
-        default=os.environ.get("PDSH_DATASET_PATH"),
+        default=os.environ.get("PDSH_DATASET_ROOT"),
         help="Root PDS-H dataset directory (ignored if --path is used).",
     )
     parser.add_argument(
