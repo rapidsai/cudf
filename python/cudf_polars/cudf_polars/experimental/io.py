@@ -162,7 +162,7 @@ class SplitScan(IR):
     """Index of the current split."""
     total_splits: int
     """Total number of splits."""
-    parquet_options: ParquetOptions | None
+    parquet_options: ParquetOptions
     """Parquet-specific options."""
 
     def __init__(
@@ -171,7 +171,7 @@ class SplitScan(IR):
         base_scan: Scan,
         split_index: int,
         total_splits: int,
-        parquet_options: ParquetOptions | None,
+        parquet_options: ParquetOptions,
     ):
         self.schema = schema
         self.base_scan = base_scan
