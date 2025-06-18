@@ -122,7 +122,7 @@ struct faster_sorted_order_fn {
 
   template <typename T>
   void operator()(mutable_column_view& input,
-                  mutable_column_view& indices,  // no longer preload this
+                  mutable_column_view& indices,
                   bool ascending,
                   rmm::cuda_stream_view stream)
     requires(cudf::is_floating_point<T>())
