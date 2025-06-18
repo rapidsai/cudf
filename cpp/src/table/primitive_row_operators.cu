@@ -23,8 +23,6 @@
 namespace cudf {
 bool is_primitive_row_op_compatible(cudf::table_view const& table)
 {
-  return table.num_columns() == 1 and std::all_of(table.begin(), table.end(), [](auto const& col) {
-           return cudf::is_numeric(col.type());
-         });
+  return table.num_columns() == 1 and cudf::is_numeric(table.column(0).type());
 }
 }  // namespace cudf
