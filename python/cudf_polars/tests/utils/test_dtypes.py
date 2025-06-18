@@ -28,7 +28,7 @@ FLOAT64 = plc.DataType(plc.TypeId.FLOAT64)
     "pltype",
     [
         pl.Time(),
-        pl.Struct({"a": pl.Int8, "b": pl.Float32}),
+        pl.Struct({"a": pl.Binary(), "b": pl.Float32}),
         pl.List(pl.Object()),
         pl.Array(pl.Int8, 2),
         pl.Binary(),
