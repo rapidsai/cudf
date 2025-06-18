@@ -248,7 +248,7 @@ def parse_args(args: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--path",
         type=str,
-        default=None,
+        default=os.environ.get("PDSH_DATASET_PATH"),
         help="Full PDS-H dataset directory path.",
     )
     parser.add_argument(
