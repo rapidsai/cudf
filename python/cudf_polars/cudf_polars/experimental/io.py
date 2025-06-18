@@ -204,7 +204,7 @@ class SplitScan(IR):
         row_index: tuple[str, int] | None,
         include_file_paths: str | None,
         predicate: NamedExpr | None,
-        parquet_options: ParquetOptions | None,
+        parquet_options: ParquetOptions,
     ) -> DataFrame:
         """Evaluate and return a dataframe."""
         if typ not in ("parquet",):  # pragma: no cover
@@ -315,7 +315,6 @@ def _(
 
             slices: list[SplitScan] = []
             for path in paths:
-                # this scan needs to not be chunked
                 base_scan = Scan(
                     ir.schema,
                     ir.typ,
