@@ -40,6 +40,18 @@ def _create_polars_column_metadata(
     return plc.interop.ColumnMetadata(name=name, children_meta=children_meta)
 
 
+# This is also defined in pylibcudf.interop
+class _ObjectWithArrowMetadata:
+    def __init__(
+        self, obj: plc.Table, metadata: list[plc.interop.ColumnMetadata]
+    ) -> None:
+        self.obj = obj
+        self.metadata = metadata
+
+    def __arrow_c_array__(self, requested_schema: None = None) -> tuple[Any, Any]:
+        return self.obj._to_schema(self.metadata), self.obj._to_host_array()
+
+
 # Pacify the type checker. DataFrame init asserts that all the columns
 # have a string name, so let's narrow the type.
 class NamedColumn(Column):
@@ -82,8 +94,8 @@ class DataFrame:
             )
             for name, col in zip(name_map, self.columns, strict=True)
         ]
-        table = plc.interop.to_arrow(self.table, metadata=metadata)
-        df: pl.DataFrame = pl.from_arrow(table)
+        table_with_metadata = _ObjectWithArrowMetadata(self.table, metadata)
+        df = pl.DataFrame(table_with_metadata)
         return df.rename(name_map).with_columns(
             pl.col(c.name).set_sorted(descending=c.order == plc.types.Order.DESCENDING)
             if c.is_sorted
