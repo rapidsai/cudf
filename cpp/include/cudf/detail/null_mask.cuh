@@ -156,14 +156,14 @@ CUDF_KERNEL void segmented_offset_bitmask_binop(Binop op,
   auto const block = cg::this_thread_block();
 
   // Create warp-level group
-  auto const warp_size = cudf::detail::warp_size;
-  auto const warp      = cg::tiled_partition<warp_size>(block);
-  auto const warp_id   = block.thread_index().x / cudf::detail::warp_size;
-  auto const lane      = warp.thread_rank();
+  auto const warp    = cg::tiled_partition<cudf::detail::warp_size>(block);
+  auto const warp_id = warp.meta_group_rank();
+  auto const lane    = warp.thread_rank();
 
   // Assume one segment per warp.
-  auto const num_segments  = segment_offsets.size() - 1;
-  auto const segment_id    = blockIdx.x * (blockDim.x / warp_size) + warp_id;
+  auto const num_segments = segment_offsets.size() - 1;
+  // auto const segment_id    = blockIdx.x * (blockDim.x / warp.size()) + warp_id;
+  auto const segment_id    = cudf::detail::grid_1d::global_thread_id() / warp.size();
   auto const segment_start = segment_offsets[segment_id];
   auto const segment_end   = segment_offsets[segment_id + 1];
   auto const destination   = destinations[segment_id];
@@ -181,7 +181,7 @@ CUDF_KERNEL void segmented_offset_bitmask_binop(Binop op,
 
   // Process the mask such that each thread in warp handles different words
   for (size_type destination_word_index = lane; destination_word_index < destination_size;
-       destination_word_index += warp_size) {
+       destination_word_index += warp.size()) {
     // Get the first mask word
     bitmask_type destination_word =
       detail::get_mask_offset_word(sources[segment_start],
@@ -205,10 +205,10 @@ CUDF_KERNEL void segmented_offset_bitmask_binop(Binop op,
       destination_word &= set_least_significant_bits(num_bits_in_last_word + 1);
 
       // Count nulls in the partial last word
-      thread_null_count += num_bits_in_last_word + 1 - __popc(destination_word);
+      thread_null_count += num_bits_in_last_word + 1 - cuda::std::popcount(destination_word);
     } else {
       // Count nulls in complete words
-      thread_null_count += bitmask_type_size - __popc(destination_word);
+      thread_null_count += bitmask_type_size - cuda::std::popcount(destination_word);
     }
 
     // Write result to destination
@@ -379,6 +379,8 @@ rmm::device_uvector<size_type> inplace_segmented_bitmask_binop(
     util::div_rounding_up_safe<int>(block_size, cudf::detail::warp_size);
   auto const num_blocks =
     util::div_rounding_up_safe<int>(segment_offsets.size() - 1, warps_per_block);
+  static_assert(block_size % cudf::detail::warp_size == 0,
+                "For segmented bitmask operations, block size must be a multiple of warp size");
   segmented_offset_bitmask_binop<<<num_blocks, block_size, 0, stream.value()>>>(
     op,
     dest_masks,

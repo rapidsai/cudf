@@ -616,9 +616,10 @@ segmented_bitmask_and(host_span<column_view const> colviews,
                            [&](auto const& view) { return view.size() == colviews[0].size(); }),
                "All column views must have the same number of elements");
 
-  rmm::device_buffer null_mask{0, stream, mr};
   if (colviews[0].size() == 0 or colviews.size() == 0) {
-    return std::pair(std::vector<std::unique_ptr<rmm::device_buffer>>(), std::vector<size_type>());
+    return {};
+    // return std::pair(std::vector<std::unique_ptr<rmm::device_buffer>>(),
+    // std::vector<size_type>());
   }
 
   std::vector<bitmask_type const*> masks;

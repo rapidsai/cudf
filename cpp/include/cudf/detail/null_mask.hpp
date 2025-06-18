@@ -245,7 +245,6 @@ std::pair<rmm::device_buffer, size_type> bitmask_and(table_view const& view,
 
 /**
  * @copydoc cudf::segmented_bitmask_and
- *
  */
 std::pair<std::vector<std::unique_ptr<rmm::device_buffer>>, std::vector<size_type>>
 segmented_bitmask_and(host_span<column_view const> colviews,
