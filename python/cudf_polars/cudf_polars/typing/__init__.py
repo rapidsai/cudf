@@ -196,6 +196,16 @@ class ASTState(TypedDict):
 
 
 class GenericState(Generic[NodeT], TypedDict):
+    """
+    State for :func:`cudf_polars.dsl.utils.replace.replace`.
+
+    Parameters
+    ----------
+    replacements
+        Mapping from nodes to be replaced to their replacements.
+        ``GenericState`` is generic over the type of these nodes.
+    """
+
     replacements: Mapping[NodeT, NodeT]
 
 
@@ -208,7 +218,6 @@ class ExprExprState(TypedDict):
     name_to_index
         Mapping from column names to column indices in the table
         eventually used for evaluation.
-
     table_ref
         pylibcudf `TableReference` indicating whether column
         references are coming from the left or right table.
@@ -219,7 +228,16 @@ class ExprExprState(TypedDict):
 
 
 class ExprDecomposerState(TypedDict):
-    """State for ExprDecomposer."""
+    """
+    State for :func:`cudf_polars.experimental.expressions.decompose_expr_graph`.
+
+    Parameters
+    ----------
+    input_ir
+        IR of the input expression.
+    input_partition_info
+        Partition info of the input expression.
+    """
 
     input_ir: ir.IR
     input_partition_info: PartitionInfo
@@ -228,6 +246,15 @@ class ExprDecomposerState(TypedDict):
 
 
 class LowerIRState(TypedDict):
+    """
+    State used for transformations in :func:`cudf_polars.experimental.parallel.lower_ir_node`.
+
+    Parameters
+    ----------
+    config_options
+        GPUEngine configuration options.
+    """
+
     config_options: ConfigOptions
 
 

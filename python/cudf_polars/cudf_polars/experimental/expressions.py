@@ -507,6 +507,9 @@ def decompose_expr_graph(
     -----
     This function recursively decomposes ``named_expr.value`` and
     ``input_ir`` into multiple partition-wise stages.
+
+    The state dictionary is an instance of
+    :class:`cudf_polars.typing.ExprDecomposerState`.
     """
     state = ExprDecomposerState(
         input_ir=input_ir,
