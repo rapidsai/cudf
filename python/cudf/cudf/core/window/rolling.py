@@ -1,6 +1,7 @@
 # Copyright (c) 2020-2025, NVIDIA CORPORATION
 from __future__ import annotations
 
+import itertools
 import warnings
 from typing import TYPE_CHECKING
 
@@ -23,6 +24,7 @@ from cudf.utils.dtypes import SIZE_TYPE_DTYPE
 
 if TYPE_CHECKING:
     from cudf.core.dataframe import DataFrame
+    from cudf.core.index import Index
     from cudf.core.series import Series
 
 
@@ -32,6 +34,7 @@ class _RollingBase:
     """
 
     obj: DataFrame | Series
+    _group_keys: Index | None = None
 
     def _apply_agg_column(
         self, source_column: ColumnBase, agg_name: str
@@ -194,6 +197,7 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
     _PROTECTED_KEYS = frozenset(("obj",))
 
     _time_window = False
+    _group_keys = None
 
     _VALID_REDUCTIONS = {
         "sum",
@@ -259,69 +263,91 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
             center=self.center,
         )
 
-    def _apply_agg_column(self, source_column, agg_name):
+    def _apply_agg_column(self, source_column, agg_name) -> ColumnBase:
         min_periods = self.min_periods or 1
         if isinstance(self.window, int):
-            preceding_window = None
-            following_window = None
-            window = self.window
-        elif isinstance(self.window, BaseIndexer):
-            start, end = self.window.get_window_bounds(
-                num_values=len(self.obj),
-                min_periods=self.min_periods,
-                center=self.center,
-                closed=None,
-                step=None,
+            if self.center:
+                pre = (self.window // 2) + 1
+                fwd = self.window - (pre)
+            else:
+                pre = self.window
+                fwd = 0
+            rolling_request = plc.rolling.RollingRequest(
+                source_column.to_pylibcudf(mode="read"),
+                min_periods,
+                aggregation.make_aggregation(
+                    agg_name,
+                    {"dtype": source_column.dtype}
+                    if callable(agg_name)
+                    else self.agg_params,
+                ).plc_obj,
             )
-            start = as_column(start, dtype=SIZE_TYPE_DTYPE)
-            end = as_column(end, dtype=SIZE_TYPE_DTYPE)
-
-            idx = as_column(range(len(start)))
-            preceding_window = (idx - start + np.int32(1)).astype(
-                SIZE_TYPE_DTYPE
-            )
-            following_window = (end - idx - np.int32(1)).astype(
-                SIZE_TYPE_DTYPE
-            )
-            window = None
+            orderby_obj = as_column(range(len(source_column)))
+            if self._group_keys is not None:
+                group_cols: list[plc.Column] = [
+                    col.to_pylibcudf(mode="read")
+                    for col in self._group_keys._columns
+                ]
+            else:
+                group_cols = []
+            group_keys = plc.Table(group_cols)
+            with acquire_spill_lock():
+                (plc_result,) = plc.rolling.grouped_range_rolling_window(
+                    group_keys,
+                    orderby_obj.to_pylibcudf(mode="read"),
+                    plc.types.Order.ASCENDING,
+                    plc.types.NullOrder.BEFORE,
+                    plc.rolling.BoundedOpen(plc.Scalar.from_py(pre)),
+                    plc.rolling.BoundedClosed(plc.Scalar.from_py(fwd)),
+                    [rolling_request],
+                ).columns()
+            return ColumnBase.from_pylibcudf(plc_result)
         else:
-            preceding_window = as_column(self.window)
-            following_window = as_column(
-                0, length=self.window.size, dtype=self.window.dtype
-            )
-            window = None
+            if isinstance(self.window, BaseIndexer):
+                start, end = self.window.get_window_bounds(
+                    num_values=len(self.obj),
+                    min_periods=self.min_periods,
+                    center=self.center,
+                    closed=None,
+                    step=None,
+                )
+                start = as_column(start, dtype=SIZE_TYPE_DTYPE)
+                end = as_column(end, dtype=SIZE_TYPE_DTYPE)
 
-        with acquire_spill_lock():
-            if window is None:
+                idx = as_column(range(len(start)))
+                preceding_window = (idx - start + np.int32(1)).astype(
+                    SIZE_TYPE_DTYPE
+                )
+                following_window = (end - idx - np.int32(1)).astype(
+                    SIZE_TYPE_DTYPE
+                )
+            else:
                 if self.center:
                     # TODO: we can support this even though Pandas currently does not
                     raise NotImplementedError(
                         "center is not implemented for offset-based windows"
                     )
-                pre = preceding_window.to_pylibcudf(mode="read")
-                fwd = following_window.to_pylibcudf(mode="read")
-            else:
-                if self.center:
-                    pre = (window // 2) + 1
-                    fwd = window - (pre)
-                else:
-                    pre = window
-                    fwd = 0
-
-            return ColumnBase.from_pylibcudf(
-                plc.rolling.rolling_window(
-                    source_column.to_pylibcudf(mode="read"),
-                    pre,
-                    fwd,
-                    min_periods,
-                    aggregation.make_aggregation(
-                        agg_name,
-                        {"dtype": source_column.dtype}
-                        if callable(agg_name)
-                        else self.agg_params,
-                    ).plc_obj,
+                preceding_window = as_column(self.window)
+                following_window = as_column(
+                    0, length=self.window.size, dtype=self.window.dtype
                 )
-            )
+            pre = preceding_window.to_pylibcudf(mode="read")
+            fwd = following_window.to_pylibcudf(mode="read")
+            with acquire_spill_lock():
+                return ColumnBase.from_pylibcudf(
+                    plc.rolling.rolling_window(
+                        source_column.to_pylibcudf(mode="read"),
+                        pre,
+                        fwd,
+                        min_periods,
+                        aggregation.make_aggregation(
+                            agg_name,
+                            {"dtype": source_column.dtype}
+                            if callable(agg_name)
+                            else self.agg_params,
+                        ).plc_obj,
+                    )
+                )
 
     def _reduce(
         self,
@@ -560,31 +586,39 @@ class RollingGroupby(Rolling):
             sort_order
         )
 
-        gb_size = groupby.size().sort_index()
-        self._group_starts = (
-            gb_size.cumsum().shift(1).fillna(0).repeat(gb_size)
-        )
+        if not is_integer(window):
+            gb_size = groupby.size().sort_index()
+            self._group_starts = (
+                gb_size.cumsum().shift(1).fillna(0).repeat(gb_size)
+            )
 
         super().__init__(obj, window, min_periods=min_periods, center=center)
 
-    @acquire_spill_lock()
     def _window_to_window_sizes(self, window):
         if is_integer(window):
-            return cudautils.grouped_window_sizes_from_offset(
-                as_column(range(len(self.obj))).data_array_view(mode="read"),
-                self._group_starts,
-                window,
-            )
+            return super()._window_to_window_sizes(window)
         else:
-            return cudautils.grouped_window_sizes_from_offset(
-                self.obj.index._column.data_array_view(mode="read"),
-                self._group_starts,
-                window,
-            )
+            with acquire_spill_lock():
+                return cudautils.grouped_window_sizes_from_offset(
+                    self.obj.index._column.data_array_view(mode="read"),
+                    self._group_starts,
+                    window,
+                )
 
     def _apply_agg(self, agg_name):
         index = MultiIndex._from_data(
-            {**self._group_keys._data, **self.obj.index._data}
+            dict(
+                enumerate(
+                    itertools.chain(
+                        self._group_keys._columns, self.obj.index._columns
+                    )
+                )
+            )
+        )
+        index.names = list(
+            itertools.chain(
+                self._group_keys._column_names, self.obj.index._column_names
+            )
         )
         result = super()._apply_agg(agg_name)
         result.index = index
