@@ -18,8 +18,6 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/traits.hpp>
 
-#include <algorithm>
-
 namespace cudf {
 bool is_primitive_row_op_compatible(cudf::table_view const& table)
 {
