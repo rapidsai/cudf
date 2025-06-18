@@ -22,6 +22,7 @@ from cudf_polars.experimental.utils import _concat
 if TYPE_CHECKING:
     from collections.abc import MutableMapping, Sequence
 
+    from cudf_polars.containers import DataType
     from cudf_polars.dsl.expr import NamedExpr
     from cudf_polars.experimental.dispatch import LowerIRTransformer
     from cudf_polars.experimental.parallel import PartitionInfo
@@ -38,6 +39,7 @@ class ShuffleOptions(TypedDict):
 
     on: Sequence[str]
     column_names: Sequence[str]
+    dtypes: Sequence[DataType]
 
 
 # Experimental rapidsmpf shuffler integration
@@ -81,6 +83,7 @@ class RMPFIntegration:  # pragma: no cover
 
         shuffler.wait_on(partition_id)
         column_names = options["column_names"]
+        dtypes = options["dtypes"]
         return DataFrame.from_table(
             unpack_and_concat(
                 shuffler.extract(partition_id),
@@ -88,6 +91,7 @@ class RMPFIntegration:  # pragma: no cover
                 device_mr=rmm.mr.get_current_device_resource(),
             ),
             column_names,
+            dtypes,
         )
 
 
@@ -186,6 +190,7 @@ def _partition_dataframe(
         i: DataFrame.from_table(
             split,
             df.column_names,
+            df.dtypes,
         )
         for i, split in enumerate(plc.copying.split(t, offsets[1:-1]))
     }
@@ -274,7 +279,11 @@ def _(
                 partition_info[ir.children[0]].count,
                 partition_info[ir].count,
                 RMPFIntegration,
-                {"on": shuffle_on, "column_names": list(ir.schema.keys())},
+                {
+                    "on": shuffle_on,
+                    "column_names": list(ir.schema.keys()),
+                    "dtypes": list(ir.schema.values()),
+                },
             )
         except (ImportError, ValueError) as err:
             # ImportError: rapidsmpf is not installed

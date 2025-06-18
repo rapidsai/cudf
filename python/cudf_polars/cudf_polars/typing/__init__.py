@@ -184,7 +184,7 @@ class ColumnOptions(TypedDict):
     order: plc.types.Order
     null_order: plc.types.NullOrder
     name: str | None
-    dtype: str | None
+    dtype: str
 
 
 class DeserializedColumnOptions(TypedDict):
@@ -200,7 +200,7 @@ class DeserializedColumnOptions(TypedDict):
     order: plc.types.Order
     null_order: plc.types.NullOrder
     name: str | None
-    dtype: DataType | None
+    dtype: DataType
 
 
 class ColumnHeader(TypedDict):

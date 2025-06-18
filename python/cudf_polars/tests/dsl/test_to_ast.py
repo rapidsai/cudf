@@ -77,7 +77,9 @@ def test_compute_column(expr, df):
         ast = to_ast(e_with_colrefs)
         if ast is not None:
             return NamedColumn(
-                plc.transform.compute_column(table.table, ast), name=e.name
+                plc.transform.compute_column(table.table, ast),
+                name=e.name,
+                dtype=e.value.dtype,
             )
         return e.evaluate(table)
 
