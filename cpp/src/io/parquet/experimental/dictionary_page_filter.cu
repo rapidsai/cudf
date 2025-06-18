@@ -638,11 +638,11 @@ __device__ cudf::string_view decode_string_value(uint8_t const* page_data,
  * @param error Pointer to the kernel error code
  */
 CUDF_KERNEL void __launch_bounds__(DECODE_BLOCK_SIZE)
-  build_string_dictionaries(PageInfo const* pages,
+  build_string_dictionaries(PageInfo const* const pages,
                             cudf::device_span<cudf::string_view> decoded_data,
                             slot_type* const set_storage,
-                            cudf::size_type const* set_offsets,
-                            cudf::size_type const* value_offsets,
+                            cudf::size_type const* const set_offsets,
+                            cudf::size_type const* const value_offsets,
                             cudf::size_type total_row_groups,
                             cudf::size_type num_dictionary_columns,
                             cudf::size_type dictionary_col_idx,
@@ -733,12 +733,12 @@ CUDF_KERNEL void __launch_bounds__(DECODE_BLOCK_SIZE)
  */
 template <SupportedFixedWidthType T>
 CUDF_KERNEL void __launch_bounds__(DECODE_BLOCK_SIZE)
-  build_fixed_width_dictionaries(PageInfo const* pages,
-                                 ColumnChunkDesc const* chunks,
+  build_fixed_width_dictionaries(PageInfo const* const pages,
+                                 ColumnChunkDesc const* const chunks,
                                  cudf::device_span<T> decoded_data,
                                  slot_type* const set_storage,
-                                 cudf::size_type const* set_offsets,
-                                 cudf::size_type const* value_offsets,
+                                 cudf::size_type const* const set_offsets,
+                                 cudf::size_type const* const value_offsets,
                                  parquet::Type physical_type,
                                  cudf::size_type num_dictionary_columns,
                                  cudf::size_type dictionary_col_idx,
@@ -1062,12 +1062,12 @@ struct dictionary_caster {
   {
     // Host vectors to store the running number of hash set slots and decoded values for all
     // dictionaries
-    auto host_set_offsets   = std::vector<cudf::size_type>{};
-    auto host_value_offsets = std::vector<cudf::size_type>{};
-    host_set_offsets.reserve(total_row_groups + 1);
-    host_value_offsets.reserve(total_row_groups + 1);
-    host_set_offsets.emplace_back(0);
-    host_value_offsets.emplace_back(0);
+    auto host_set_offsets =
+      cudf::detail::make_empty_host_vector<cudf::size_type>(total_row_groups + 1, stream);
+    auto host_value_offsets =
+      cudf::detail::make_empty_host_vector<cudf::size_type>(total_row_groups + 1, stream);
+    host_set_offsets.push_back(0);
+    host_value_offsets.push_back(0);
 
     // Define the probing scheme type with either (insert or query) hash functor to use it in
     // `cuco::make_valid_extent`
@@ -1082,9 +1082,9 @@ struct dictionary_caster {
         auto const chunk_idx        = dictionary_col_idx + (row_group_idx * num_dictionary_columns);
         auto const num_input_values = pages[chunk_idx].num_input_values;
         // Update the running number of values in this dictionary
-        host_value_offsets.emplace_back(host_value_offsets.back() + num_input_values);
+        host_value_offsets.push_back(host_value_offsets.back() + num_input_values);
         // Compute the number of hash set slots needed to target the desired occupancy factor
-        host_set_offsets.emplace_back(
+        host_set_offsets.push_back(
           host_set_offsets.back() +
           static_cast<cudf::size_type>(cuco::make_valid_extent<probing_scheme_type, storage_type>(
             num_input_values, OCCUPANCY_FACTOR)));
@@ -1131,17 +1131,13 @@ struct dictionary_caster {
     // Device buffers to store the dictionary membership results for all predicates
     std::vector<rmm::device_buffer> results_buffers(total_num_literals);
     // Host vector of pointers to the result buffers
-    std::vector<bool*> host_results_ptrs(total_num_literals);
+    auto host_results_ptrs = cudf::detail::make_host_vector<bool*>(total_num_literals, stream);
     std::for_each(
       thrust::counting_iterator(0), thrust::counting_iterator(total_num_literals), [&](auto i) {
         // Allocate the results buffer using the user-provided memory resource (output memory)
         results_buffers[i]   = rmm::device_buffer(total_row_groups, stream, mr);
         host_results_ptrs[i] = static_cast<bool*>(results_buffers[i].data());
       });
-    // Device vector of pointers to the result buffers
-    auto results_ptrs =
-      cudf::detail::make_device_uvector_async(host_results_ptrs, stream, default_mr);
-
     if constexpr (not cuda::std::is_same_v<T, cudf::string_view>) {
       // Decode fixed width dictionaries and insert them to cuco hash sets, one dictionary per
       // thread block
@@ -1207,6 +1203,10 @@ struct dictionary_caster {
       return std::min<cudf::size_type>(query_block_size, MAX_QUERY_BLOCK_SIZE);
     }();
 
+    // Device vector of pointers to the result buffers
+    auto results_ptrs =
+      cudf::detail::make_device_uvector_async(host_results_ptrs, stream, default_mr);
+
     // Query one predicate against all cuco hash sets of this column using a thread block
     query_dictionaries<T>
       <<<total_num_literals, query_block_size, 0, stream.value()>>>(decoded_data,
@@ -1262,7 +1262,7 @@ struct dictionary_caster {
     // Device buffers to store the dictionary membership results for all predicates
     std::vector<rmm::device_buffer> results_buffers(total_num_literals);
     // Host vector of pointers to the result buffers
-    std::vector<bool*> host_results_ptrs(total_num_literals);
+    auto host_results_ptrs = cudf::detail::make_host_vector<bool*>(total_num_literals, stream);
     std::for_each(
       thrust::counting_iterator(0), thrust::counting_iterator(total_num_literals), [&](auto i) {
         // Allocate the results buffer using the user-provided memory resource (output memory)
