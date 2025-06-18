@@ -100,7 +100,7 @@ class Column:
         """Deserialize the constructor kwargs for a Column."""
         if (serialized_dtype := column_kwargs.get("dtype", None)) is not None:
             dtype: DataType | None = DataType(  # pragma: no cover
-                pl.datatypes.convert.dtype_short_repr_to_dtype(serialized_dtype)  # type: ignore[arg-type]
+                pl.datatypes.convert.dtype_short_repr_to_dtype(serialized_dtype)
             )
         else:  # pragma: no cover
             dtype = None  # pragma: no cover
