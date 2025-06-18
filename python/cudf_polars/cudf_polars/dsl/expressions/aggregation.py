@@ -38,7 +38,9 @@ class Agg(Expr):
                 f"Unsupported aggregation {name=}"
             )  # pragma: no cover; all valid aggs are supported
         # TODO: nan handling in groupby case
-        if name == "min":
+        if name == "any":
+            req = plc.aggregation.any()
+        elif name == "min":
             req = plc.aggregation.min()
         elif name == "max":
             req = plc.aggregation.max()
@@ -98,6 +100,7 @@ class Agg(Expr):
 
     _SUPPORTED: ClassVar[frozenset[str]] = frozenset(
         [
+            "any",
             "min",
             "max",
             "median",
