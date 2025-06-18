@@ -9,6 +9,7 @@ import pylibcudf as plc
 from pylibcudf.traits import (
     is_floating_point,
     is_integral_not_bool,
+    is_nested,
     is_numeric_not_bool,
 )
 
@@ -36,6 +37,8 @@ def can_cast(from_: plc.DataType, to: plc.DataType) -> bool:
     to_is_empty = to.id() == plc.TypeId.EMPTY
     from_is_empty = from_.id() == plc.TypeId.EMPTY
     has_empty = to_is_empty or from_is_empty
+    if is_nested(from_) and is_nested(to):
+        return False
     return (
         (
             from_ == to
