@@ -179,7 +179,19 @@ class GenericTransformer(Protocol[U_contra, V_co, StateT_co]):
         ...
 
 
-class ASTTransformer(TypedDict):
+class ASTState(TypedDict):
+    """
+    State for AST transformation in :mod:`cudf_polars.dsl.to_ast`.
+
+    Parameters
+    ----------
+    for_parquet
+        Indicator for whether this transformation should provide an expression
+        suitable for use in parquet filters.
+
+        If ``for_parquet`` is ``False``, the dictionary should contain a
+    """
+
     for_parquet: bool
 
 
@@ -188,6 +200,20 @@ class GenericState(Generic[NodeT], TypedDict):
 
 
 class ExprExprState(TypedDict):
+    """
+    State used for AST transformation in :mod:`cudf_polars.dsl.to_ast`.
+
+    Parameters
+    ----------
+    name_to_index
+        Mapping from column names to column indices in the table
+        eventually used for evaluation.
+
+    table_ref
+        pylibcudf `TableReference` indicating whether column
+        references are coming from the left or right table.
+    """
+
     name_to_index: Mapping[str, int]
     table_ref: plc.expressions.TableReference
 
@@ -206,7 +232,7 @@ class LowerIRState(TypedDict):
 
 
 CachingVisitorState: TypeAlias = (
-    ExprExprState | ExprDecomposerState | LowerIRState | GenericState | ASTTransformer
+    ExprExprState | ExprDecomposerState | LowerIRState | GenericState | ASTState
 )
 
 

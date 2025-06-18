@@ -13,7 +13,7 @@ from pylibcudf import expressions as plc_expr
 
 from cudf_polars.dsl import expr
 from cudf_polars.dsl.traversal import CachingVisitor, reuse_if_unchanged
-from cudf_polars.typing import ASTTransformer, ExprExprState, GenericTransformer
+from cudf_polars.typing import ASTState, ExprExprState, GenericTransformer
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -91,9 +91,7 @@ REVERSED_COMPARISON = {
 }
 
 
-Transformer: TypeAlias = GenericTransformer[
-    expr.Expr, plc_expr.Expression, ASTTransformer
-]
+Transformer: TypeAlias = GenericTransformer[expr.Expr, plc_expr.Expression, ASTState]
 
 
 @singledispatch
@@ -106,14 +104,8 @@ def _to_ast(node: expr.Expr, self: Transformer) -> plc_expr.Expression:
     node
         Expression to translate.
     self
-        Recursive transformer. The state dictionary should contain a
-       `for_parquet` key indicating if this transformation should
-        provide an expression suitable for use in parquet filters.
-
-        If `for_parquet` is `False`, the dictionary should contain a
-        `name_to_index` mapping that maps column names to their
-        integer index in the table that will be used for evaluation of
-        the expression.
+        Recursive transformer. The state dictionary is an instance of
+        :class:`cudf_polars.typing.ASTState`.
 
     Returns
     -------
@@ -242,7 +234,7 @@ def to_parquet_filter(node: expr.Expr) -> plc_expr.Expression | None:
     -------
     pylibcudf Expression if conversion is possible, otherwise None.
     """
-    mapper = CachingVisitor(_to_ast, state=ASTTransformer(for_parquet=True))
+    mapper = CachingVisitor(_to_ast, state=ASTState(for_parquet=True))
     try:
         return mapper(node)
     except (KeyError, NotImplementedError):
@@ -268,7 +260,7 @@ def to_ast(node: expr.Expr) -> plc_expr.Expression | None:
     -------
     pylibcudf Expression if conversion is possible, otherwise None.
     """
-    mapper = CachingVisitor(_to_ast, state=ASTTransformer(for_parquet=False))
+    mapper = CachingVisitor(_to_ast, state=ASTState(for_parquet=False))
     try:
         return mapper(node)
     except (KeyError, NotImplementedError):
