@@ -28,6 +28,7 @@ ENABLE_NVTX=${ENABLE_NVTX:-ON}
 ENABLE_GDS=${ENABLE_GDS:-OFF}
 OUT=${OUT:-out}
 CMAKE_GENERATOR=${CMAKE_GENERATOR:-Ninja}
+BUILD_JAVADOC_JDK17=${BUILD_JAVADOC_JDK17:-false}
 
 SIGN_FILE=$1
 #Set absolute path for OUT_PATH
@@ -98,9 +99,11 @@ cd "$WORKSPACE/java"
 CUDF_INSTALL_DIR="$INSTALL_PREFIX" mvn -B clean package $BUILD_ARG
 
 # Generate javadoc with JDK 17
-yum install -y java-17-openjdk-devel
-export JDK17_HOME=/usr/lib/jvm/java-17-openjdk
-CUDF_INSTALL_DIR="$INSTALL_PREFIX" mvn -B javadoc:jar -P javadoc
+if [ $BUILD_JAVADOC_JDK17 == true ]; then
+    yum install -y java-17-openjdk-devel
+    export JDK17_HOME=/usr/lib/jvm/java-17-openjdk
+    CUDF_INSTALL_DIR="$INSTALL_PREFIX" mvn -B javadoc:jar -P javadoc
+fi
 
 ###### Stash Jar files ######
 rm -rf $OUT_PATH
