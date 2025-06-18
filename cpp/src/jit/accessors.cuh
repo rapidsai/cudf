@@ -53,6 +53,11 @@ struct column_accessor {
     outputs[index].assign<T>(row, value);
   }
 
+  static __device__ bool is_null(cudf::column_device_view_core const* inputs, cudf::size_type row)
+  {
+    return inputs[index].is_null(row);
+  }
+
   static __device__ bool is_null(cudf::mutable_column_device_view_core const* inputs,
                                  cudf::size_type row)
   {
@@ -107,6 +112,17 @@ struct scalar_accessor {
                                 type value)
   {
     return Accessor::assign(outputs, 0, value);
+  }
+
+  static __device__ bool is_null(cudf::column_device_view_core const* inputs, cudf::size_type row)
+  {
+    return Accessor::is_null(inputs, 0);
+  }
+
+  static __device__ bool is_null(cudf::mutable_column_device_view_core const* inputs,
+                                 cudf::size_type row)
+  {
+    return Accessor::is_null(inputs, 0);
   }
 };
 

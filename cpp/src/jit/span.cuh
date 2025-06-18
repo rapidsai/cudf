@@ -96,6 +96,11 @@ struct device_span {
    * @return An iterator to the element following the last element of the span
    */
   CUDF_HOST_DEVICE [[nodiscard]] constexpr element_type* end() const { return _data + _size; }
+
+  CUDF_HOST_DEVICE [[nodiscard]] constexpr device_span<T const> as_const() const
+  {
+    return device_span<T const>{_data, _size};
+  }
 };
 
 /**
@@ -149,13 +154,9 @@ struct device_optional_span : device_span<T> {
     return !is_valid(element_index);
   }
 
-#endif
-};
+  [[nodiscard]] __device__ base to_span() const { return static_cast<base const&>(*this); }
 
-template <typename IndexType>
-struct filter_output {
-  cudf::jit::device_span<IndexType> indices = {};
-  cudf::size_type* not_applied_count        = nullptr;
+#endif
 };
 
 }  // namespace jit

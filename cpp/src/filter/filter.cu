@@ -17,10 +17,10 @@
  */
 
 #include "jit/cache.hpp"
+#include "jit/helpers.hpp"
 #include "jit/parser.hpp"
 #include "jit/span.cuh"
 #include "jit/util.hpp"
-#include "transform/utils.hpp"
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
@@ -30,35 +30,160 @@
 #include <cudf/jit/runtime_support.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/stream_compaction.hpp>
+#include <cudf/utilities/span.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/exec_policy.hpp>
 
-#include <cub/device/device_select.cuh>
+#include <thrust/remove.h>
 
 #include <jit_preprocessed_files/filter/jit/kernel.cu.jit.hpp>
 
 namespace cudf {
 
+namespace detail {
+
+struct filter_stencil {
+  /// @brief -1 is ideal as an invalid flag value. It also has the benefit of being an invalid value
+  /// for unsigned indices.
+  static constexpr cudf::size_type NOT_APPLIED = -1;
+
+  constexpr __device__ bool operator()(cudf::size_type flag) const { return flag != NOT_APPLIED; }
+};
+
+struct filter_histogram {
+  constexpr __device__ cudf::size_type operator()(cudf::size_type flag) const
+  {
+    return (flag == filter_stencil::NOT_APPLIED) ? 0 : 1;
+  }
+};
+
+template <typename InputIterator>
+auto filter_by(InputIterator input,
+               cudf::size_type num_input_items,
+               cudf::size_type const* flag_iterator,
+               rmm::cuda_stream_view stream,
+               rmm::device_async_resource_ref mr)
+{
+  auto num_selected = thrust::transform_reduce(rmm::exec_policy(stream),
+                                               flag_iterator,
+                                               flag_iterator + num_input_items,
+                                               filter_histogram{},
+                                               cudf::size_type{0},
+                                               thrust::plus<cudf::size_type>{});
+
+  rmm::device_uvector<typename std::iterator_traits<InputIterator>::value_type> output(
+    static_cast<size_t>(num_selected), stream, mr);
+
+  auto output_size = std::distance(output.begin(),
+                                   thrust::copy_if(rmm::exec_policy(stream),
+                                                   input,
+                                                   input + num_input_items,
+                                                   flag_iterator,
+                                                   output.begin(),
+                                                   filter_stencil{}));
+
+  CUDF_EXPECTS(output_size == num_selected,
+               "The number of selected items does not match the expected count.",  // < This should
+                                                                                   // never happen
+               std::runtime_error);
+
+  return output;
+}
+
+template <bool result_has_nulls>
+struct filter_dispatcher;
+
+template <>
+struct filter_dispatcher<false> {
+  template <typename T>
+    requires(cudf::is_rep_layout_compatible<T>() && cudf::is_fixed_width<T>())
+  std::unique_ptr<cudf::column> operator()(cudf::column_device_view const& col,
+                                           cudf::size_type const* flag_iterator,
+                                           rmm::cuda_stream_view stream,
+                                           rmm::device_async_resource_ref mr) const
+  {
+    auto filtered      = filter_by(col.data<T>(), col.size(), flag_iterator, stream, mr);
+    auto filtered_size = filtered.size();
+    auto out =
+      cudf::column(col.type(), filtered_size, filtered.release(), rmm::device_buffer{}, 0, {});
+    return std::make_unique<cudf::column>(std::move(out));
+  }
+
+  template <typename T>
+    requires(cudf::is_fixed_point<T>())
+  std::unique_ptr<cudf::column> operator()(cudf::column_device_view const& col,
+                                           cudf::size_type const* flag_iterator,
+                                           rmm::cuda_stream_view stream,
+                                           rmm::device_async_resource_ref mr) const
+  {
+    auto filtered = filter_by(col.data<typename T::rep>(),  // actually uses the underlying rep type
+                              col.size(),
+                              flag_iterator,
+                              stream,
+                              mr);
+    auto filtered_size = filtered.size();
+    auto out =
+      cudf::column(col.type(), filtered_size, filtered.release(), rmm::device_buffer{}, 0, {});
+    return std::make_unique<cudf::column>(std::move(out));
+  }
+
+  template <typename T>
+    requires(std::is_same_v<T, cudf::string_view>)
+  std::unique_ptr<cudf::column> operator()(cudf::column_device_view const& col,
+                                           cudf::size_type const* flag_iterator,
+                                           rmm::cuda_stream_view stream,
+                                           rmm::device_async_resource_ref mr) const
+  {
+    auto filtered =
+      filter_by(col.begin<cudf::string_view>(), col.size(), flag_iterator, stream, mr);
+    return cudf::make_strings_column(filtered, {}, stream, mr);
+  }
+
+  template <typename T>
+  std::unique_ptr<cudf::column> operator()(cudf::column_device_view const& col,
+                                           cudf::size_type const* flag_iterator,
+                                           rmm::cuda_stream_view stream,
+                                           rmm::device_async_resource_ref mr) const
+  {
+    CUDF_FAIL("Unsupported column type for filter operation: " +
+                cudf::type_to_name(cudf::data_type{cudf::type_to_id<T>()}),
+              cudf::logic_error);
+  }
+};
+
+std::unique_ptr<cudf::column> filter_column(
+  cudf::column_device_view const& column,
+  cudf::jit::device_span<cudf::size_type const> filter_indices,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
+{
+  return cudf::type_dispatcher(
+    column.type(), filter_dispatcher<false>{}, column, filter_indices.begin(), stream, mr);
+}
+
+}  // namespace detail
+
 namespace {
 template <typename IndexType>
 void launch_filter_kernel(jitify2::ConfiguredKernel& kernel,
-                          cudf::jit::filter_output<IndexType> output,
+                          cudf::jit::device_span<IndexType> output,
                           std::vector<column_view> const& input_cols,
                           std::optional<void*> user_data,
                           rmm::cuda_stream_view stream,
                           rmm::device_async_resource_ref mr)
 {
-  auto outputs = to_device_vector(std::vector{output}, stream, mr);
+  auto outputs = cudf::jit::to_device_vector(
+    std::vector{cudf::jit::device_optional_span<IndexType>{output, nullptr}}, stream, mr);
 
   auto [input_handles, inputs] =
-    cudf::transformation::column_views_to_device<column_device_view, column_view>(
-      input_cols, stream, mr);
+    cudf::jit::column_views_to_device<column_device_view, column_view>(input_cols, stream, mr);
 
-  cudf::jit::filter_indices<IndexType> const* outputs_ptr = outputs.data();
-  column_device_view const* inputs_ptr                    = inputs.data();
-  void* p_user_data                                       = user_data.value_or(nullptr);
+  cudf::jit::device_optional_span<IndexType> const* outputs_ptr = outputs.data();
+  column_device_view const* inputs_ptr                          = inputs.data();
+  void* p_user_data                                             = user_data.value_or(nullptr);
 
   std::array<void*, 3> args{&outputs_ptr, &inputs_ptr, &p_user_data};
 
@@ -74,21 +199,38 @@ void perform_checks(column_view base_column,
   CUDF_EXPECTS(is_fixed_width(output_type) || output_type.id() == type_id::STRING,
                "Filters only support output of fixed-width or string types",
                std::invalid_argument);
-  CUDF_EXPECTS(std::all_of(inputs.begin(),
-                           inputs.end(),
+  CUDF_EXPECTS(std::all_of(predicate_columns.begin(),
+                           predicate_columns.end(),
                            [](auto& input) {
                              return is_fixed_width(input.type()) ||
                                     (input.type().id() == type_id::STRING);
                            }),
-               "Filters only support input of fixed-width or string types",
+               "Filters only support predicate inputs of fixed-width or string types",
                std::invalid_argument);
 
-  CUDF_EXPECTS(std::all_of(inputs.begin(),
-                           inputs.end(),
+  CUDF_EXPECTS(std::all_of(predicate_columns.begin(),
+                           predicate_columns.end(),
                            [&](auto const& input) {
                              return (input.size() == 1) || (input.size() == base_column.size());
                            }),
-               "All transform input columns must have the same size or be scalar (have size 1)",
+               "All filter predicate columns must have the same size or be scalar (have size 1)",
+               std::invalid_argument);
+
+  CUDF_EXPECTS(std::all_of(target_columns.begin(),
+                           target_columns.end(),
+                           [](auto& input) {
+                             return is_fixed_width(input.type()) ||
+                                    (input.type().id() == type_id::STRING);
+                           }),
+               "Filters only support filtering of fixed-width or string types",
+               std::invalid_argument);
+
+  CUDF_EXPECTS(std::all_of(target_columns.begin(),
+                           target_columns.end(),
+                           [&](auto const& input) {
+                             return (input.size() == 1) || (input.size() == base_column.size());
+                           }),
+               "All filter target columns must have the same size",
                std::invalid_argument);
 }
 
@@ -118,22 +260,20 @@ jitify2::ConfiguredKernel build_kernel(std::string const& kernel_name,
                                        rmm::device_async_resource_ref mr)
 {
   auto const cuda_source =
-    is_ptx
-      ? cudf::jit::parse_single_function_ptx(
-          udf,
-          "GENERIC_TRANSFORM_OP",
-          cudf::transformation::build_ptx_params(
-            span_outputs, cudf::transformation::column_type_names(input_columns), has_user_data))
-      : cudf::jit::parse_single_function_cuda(udf, "GENERIC_TRANSFORM_OP");
+    is_ptx ? cudf::jit::parse_single_function_ptx(
+               udf,
+               "GENERIC_FILTER_OP",
+               cudf::jit::build_ptx_params(
+                 span_outputs, cudf::jit::column_type_names(input_columns), has_user_data))
+           : cudf::jit::parse_single_function_cuda(udf, "GENERIC_FILTER_OP");
 
-  return get_kernel(
-           jitify2::reflection::Template(kernel_name)
-             .instantiate(build_jit_template_params(
-               has_user_data,
-               span_outputs,
-               {},
-               cudf::transformation::reflect_input_columns(base_column_size, input_columns))),
-           cuda_source)
+  return get_kernel(jitify2::reflection::Template(kernel_name)
+                      .instantiate(cudf::jit::build_jit_template_params(
+                        has_user_data,
+                        span_outputs,
+                        {},
+                        cudf::jit::reflect_input_columns(base_column_size, input_columns))),
+                    cuda_source)
     ->configure_1d_max_occupancy(0, 0, nullptr, stream.value());
 }
 
@@ -150,9 +290,8 @@ std::vector<std::unique_ptr<column>> filter_operation(
 {
   rmm::device_uvector<cudf::size_type> filter_indices{
     static_cast<size_t>(base_column.size()), stream, mr};
-  rmm::device_scalar<cudf::size_type> not_applied_count{0, stream, mr};
 
-  auto kernel = build_kernel("cudf::jit::filter_kernel",
+  auto kernel = build_kernel("cudf::filtering::jit::kernel",
                              base_column.size(),
                              {"cudf::size_type"},
                              predicate_columns,
@@ -162,26 +301,35 @@ std::vector<std::unique_ptr<column>> filter_operation(
                              stream,
                              mr);
 
-  cudf::jit::device_span<cudf::size_type> indices_view{filter_indices.data(),
-                                                       filter_indices.size()};
-
-  cudf::jit::filter_output<cudf::size_type> filter_output{indices_view, not_applied_count.data()};
+  cudf::jit::device_span<cudf::size_type> filter_indices_span{filter_indices.data(),
+                                                              filter_indices.size()};
 
   launch_filter_kernel<cudf::size_type>(
-    kernel, filter_output, predicate_columns, user_data, stream, mr);
+    kernel, filter_indices_span, predicate_columns, user_data, stream, mr);
 
-  // [ ] fixed-width flagged-if cub::deviceselect::flaggedif. fixed-width dispatchers. create size -
-  // na-sized column.
+  std::vector<std::unique_ptr<column>> filtered;
 
-  std::vector<std::unique_ptr<column>> output;
+  std::vector<std::unique_ptr<cudf::column_device_view, std::function<void(column_device_view*)>>>
+    target_device_column_views;
 
-  return output;
+  std::transform(target_columns.begin(),
+                 target_columns.end(),
+                 std::back_inserter(target_device_column_views),
+                 [&](auto const& col) { return cudf::column_device_view::create(col, stream); });
+
+  std::transform(target_device_column_views.begin(),
+                 target_device_column_views.end(),
+                 std::back_inserter(filtered),
+                 [&](auto const& col) {
+                   return detail::filter_column(*col, filter_indices_span.as_const(), stream, mr);
+                 });
+
+  return filtered;
 }
 
 }  // namespace
 
 namespace detail {
-
 std::vector<std::unique_ptr<column>> filter(std::vector<column_view> const& target_columns,
                                             std::vector<column_view> const& predicate_columns,
                                             std::string const& predicate_udf,

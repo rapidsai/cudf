@@ -13,31 +13,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#pragma once
 
-#include "jit/cache.hpp"
-#include "jit/parser.hpp"
 #include "jit/span.cuh"
-#include "jit/util.hpp"
-
-// [ ] rename this file and namespace
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
-#include <cudf/column/column_factories.hpp>
-#include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/detail/transform.hpp>
-#include <cudf/jit/runtime_support.hpp>
-#include <cudf/null_mask.hpp>
-#include <cudf/stream_compaction.hpp>
-#include <cudf/utilities/traits.hpp>
-#include <cudf/utilities/type_dispatcher.hpp>
-
-#include <rmm/cuda_stream_view.hpp>
+#include <cudf/detail/utilities/cuda_memcpy.hpp>
 
 #include <jit_preprocessed_files/transform/jit/kernel.cu.jit.hpp>
 
 namespace cudf {
-namespace transformation {
+namespace jit {
 namespace {
 
 constexpr bool is_scalar(cudf::size_type base_column_size, cudf::size_type column_size)
@@ -74,18 +61,17 @@ jitify2::StringVec build_jit_template_params(
                  thrust::make_counting_iterator(span_outputs.size()),
                  std::back_inserter(tparams),
                  [&](auto i) {
-                   return jitify2::reflection::Template("cudf::transformation::jit::span_accessor")
+                   return jitify2::reflection::Template("cudf::jit::span_accessor")
                      .instantiate(span_outputs[i], i);
                  });
 
-  std::transform(
-    thrust::make_counting_iterator<size_t>(0),
-    thrust::make_counting_iterator(column_outputs.size()),
-    std::back_inserter(tparams),
-    [&](auto i) {
-      return jitify2::reflection::Template("cudf::transformation::jit::column_accessor")
-        .instantiate(column_outputs[i], i);
-    });
+  std::transform(thrust::make_counting_iterator<size_t>(0),
+                 thrust::make_counting_iterator(column_outputs.size()),
+                 std::back_inserter(tparams),
+                 [&](auto i) {
+                   return jitify2::reflection::Template("cudf::jit::column_accessor")
+                     .instantiate(column_outputs[i], i);
+                 });
 
   std::transform(thrust::make_counting_iterator<size_t>(0),
                  thrust::make_counting_iterator(column_inputs.size()),
@@ -124,7 +110,8 @@ rmm::device_uvector<T> to_device_vector(std::vector<T> const& host,
                                         rmm::device_async_resource_ref mr)
 {
   rmm::device_uvector<T> device{host.size(), stream, mr};
-  detail::cuda_memcpy_async(device_span<T>{device}, host_span<T const>{host}, stream);
+  cudf::detail::cuda_memcpy_async(
+    cudf::device_span<T>{device}, cudf::host_span<T const>{host}, stream);
   return device;
 }
 
@@ -184,5 +171,5 @@ std::vector<std::string> column_type_names(std::vector<ColumnView> const& views)
 }
 
 }  // namespace
-}  // namespace transformation
+}  // namespace jit
 }  // namespace cudf

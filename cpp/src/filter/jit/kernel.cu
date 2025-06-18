@@ -16,8 +16,8 @@
  * limitations under the License.
  */
 
-#include "jit/span.cuh"
 #include "jit/accessors.cuh"
+#include "jit/span.cuh"
 
 #include <cudf/column/column_device_view_base.cuh>
 #include <cudf/strings/string_view.cuh>
@@ -38,20 +38,23 @@
 // clang-format on
 
 namespace cudf {
+namespace filtering {
 namespace jit {
 
 template <bool has_user_data, typename Out, typename... In>
-CUDF_KERNEL void filter_kernel(cudf::jit::filter_output<Out> const* outputs,
-                               cudf::column_device_view_core const* inputs,
-                               void* user_data)
+CUDF_KERNEL void kernel(cudf::jit::device_optional_span<typename Out::type> const* outputs,
+                        cudf::column_device_view_core const* inputs,
+                        void* __restrict__ user_data)
 {
+  static constexpr typename Out::type NOT_APPLIED = -1;
+
   // cannot use global_thread_id utility due to a JIT build issue by including
   // the `cudf/detail/utilities/cuda.cuh` header
-  auto const block_size           = static_cast<thread_index_type>(blockDim.x);
-  thread_index_type const start   = threadIdx.x + blockIdx.x * block_size;
-  thread_index_type const stride  = block_size * gridDim.x;
-  thread_index_type const size    = outputs[0].size();
-  cudf::size_type num_not_applied = 0;
+  auto const block_size          = static_cast<thread_index_type>(blockDim.x);
+  thread_index_type const start  = threadIdx.x + blockIdx.x * block_size;
+  thread_index_type const stride = block_size * gridDim.x;
+  auto output                    = outputs[0].to_span();
+  thread_index_type const size   = output.size();
 
   for (auto i = start; i < size; i += stride) {
     auto const any_null = (false || ... || In::is_null(inputs, i));
@@ -60,19 +63,16 @@ CUDF_KERNEL void filter_kernel(cudf::jit::filter_output<Out> const* outputs,
 
     if (!any_null) {
       if constexpr (has_user_data) {
-        GENERIC_TRANSFORM_OP(user_data, i, &applies, In::element(inputs, i)...);
+        GENERIC_FILTER_OP(user_data, i, &applies, In::element(inputs, i)...);
       } else {
-        GENERIC_TRANSFORM_OP(&applies, In::element(inputs, i)...);
+        GENERIC_FILTER_OP(&applies, In::element(inputs, i)...);
       }
     }
 
-    if (!applies) { num_not_applied++; }
-
-    outputs[i] = applies ? i : -1;
+    output[i] = applies ? static_cast<typename Out::type>(i) : NOT_APPLIED;
   }
-
-  atomicAdd(outputs->not_applied_count, num_not_applied);
 }
 
 }  // namespace jit
+}  // namespace filtering
 }  // namespace cudf
