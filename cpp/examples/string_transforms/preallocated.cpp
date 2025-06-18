@@ -105,5 +105,4 @@ __device__ void e164_format(void* scratch,
                                    mr);
 
   return std::make_tuple(std::move(formatted), transformed);
-  ;
 }

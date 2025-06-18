@@ -162,7 +162,8 @@ int main(int argc, char const** argv)
                           std::plus<>{},
                           [&](auto index) { return input->get_column(index).alloc_size(); });
 
-  std::cout << "Wall Time: " << elapsed.count() << " seconds\n"
+  std::cout << "Memory Resource: " << memory_resource_name << "\n"
+            << "Wall Time: " << elapsed.count() << " seconds\n"
             << "Input Table: " << table_view.num_rows() << " rows x " << table_view.num_columns()
             << " columns, " << input->alloc_size() << " bytes\n"
             << "Transformed: " << table_view.num_rows() << " rows x " << input_indices.size()
