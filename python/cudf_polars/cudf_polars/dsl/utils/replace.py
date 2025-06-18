@@ -5,10 +5,10 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Generic, TypedDict
+from typing import TYPE_CHECKING, Generic
 
 from cudf_polars.dsl.traversal import CachingVisitor, reuse_if_unchanged
-from cudf_polars.typing import NodeT
+from cudf_polars.typing import NodeT, TypedDict
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
