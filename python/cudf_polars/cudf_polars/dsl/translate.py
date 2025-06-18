@@ -226,6 +226,8 @@ def _(node: pl_ir.Scan, translator: Translator, schema: Schema) -> ir.IR:
     with_columns = file_options.with_columns
     row_index = file_options.row_index
     include_file_paths = file_options.include_file_paths
+    config_options = translator.config_options
+    parquet_options = config_options.parquet_options
 
     pre_slice = file_options.n_rows
     if pre_slice is None:
@@ -239,7 +241,6 @@ def _(node: pl_ir.Scan, translator: Translator, schema: Schema) -> ir.IR:
         typ,
         reader_options,
         cloud_options,
-        translator.config_options,
         node.paths,
         with_columns,
         skip_rows,
@@ -249,6 +250,7 @@ def _(node: pl_ir.Scan, translator: Translator, schema: Schema) -> ir.IR:
         translate_named_expr(translator, n=node.predicate, schema=schema)
         if node.predicate is not None
         else None,
+        parquet_options,
     )
 
 
@@ -265,7 +267,6 @@ def _(node: pl_ir.DataFrameScan, translator: Translator, schema: Schema) -> ir.I
         schema,
         node.df,
         node.projection,
-        translator.config_options,
     )
 
 
@@ -298,9 +299,7 @@ def _(node: pl_ir.GroupBy, translator: Translator, schema: Schema) -> ir.IR:
             node.options, schema, keys, original_aggs, translator.config_options, inp
         )
     else:
-        return rewrite_groupby(
-            node, schema, keys, original_aggs, translator.config_options, inp
-        )
+        return rewrite_groupby(node, schema, keys, original_aggs, inp)
 
 
 @_translate_ir.register
@@ -335,7 +334,6 @@ def _(node: pl_ir.Join, translator: Translator, schema: Schema) -> ir.IR:
             left_on,
             right_on,
             node.options,
-            translator.config_options,
             inp_left,
             inp_right,
         )

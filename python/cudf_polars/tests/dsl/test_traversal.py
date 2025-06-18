@@ -120,7 +120,6 @@ def test_rewrite_ir_node():
                 node.schema,
                 new_df._df,
                 node.projection,
-                node.config_options,
             )
         return reuse_if_unchanged(node, rec)
 
@@ -151,7 +150,6 @@ def test_rewrite_scan_node(tmp_path):
                 node.schema,
                 right._df,
                 node.with_columns,
-                node.config_options,
             )
         return reuse_if_unchanged(node, rec)
 
