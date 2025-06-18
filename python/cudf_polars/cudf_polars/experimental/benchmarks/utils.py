@@ -107,6 +107,13 @@ class HardwareInfo:
         return cls(gpus=gpus)
 
 
+def _infer_scale_factor(path: str | pathlib.Path, suffix: str) -> int | float:
+    # Use "supplier" table to infer the scale-factor
+    supplier = get_data(path, "supplier", suffix)
+    num_rows = supplier.select(pl.len()).collect().item(0, 0)
+    return num_rows / 10_000
+
+
 @dataclasses.dataclass(kw_only=True)
 class RunConfig:
     """Results for a PDS-H query run."""
@@ -151,16 +158,23 @@ class RunConfig:
                 raise ValueError(
                     "Must specify --root and --scale if --path is not specified."
                 )
-            # Use supplier table to estimate scale-factor
-            supplier = get_data(path, "supplier", args.suffix)
-            num_rows = supplier.select(pl.len()).collect().item(0, 0)
-            scale_factor = num_rows / 10_000
+            scale_factor = _infer_scale_factor(path, args.suffix)
         if path is None:
             path = f"{args.root}/scale-{scale_factor}"
         try:
             scale_factor = int(scale_factor)
         except ValueError:
             scale_factor = float(scale_factor)
+
+        if args.scale is not None:
+            # Validate the user-supplied scale factor
+            sf_inf = _infer_scale_factor(path, args.suffix)
+            rel_error = abs((scale_factor - sf_inf) / sf_inf)
+            if rel_error > 0.01:
+                raise ValueError(
+                    f"Specified scale factor is {args.scale}, "
+                    f"but the inferred scale factor is {sf_inf}."
+                )
 
         return cls(
             queries=args.query,
