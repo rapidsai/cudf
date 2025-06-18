@@ -113,7 +113,7 @@ TEST_F(ParquetTest, ChunkedOperations)
   auto filepath = temp_env->get_temp_filepath("MultiColumn.parquet");
   cudf::io::chunked_parquet_writer_options out_opts =
     cudf::io::chunked_parquet_writer_options::builder(cudf::io::sink_info{filepath});
-  cudf::io::parquet_chunked_writer(out_opts, cudf::test::get_default_stream()).write(tab);
+  cudf::io::chunked_parquet_writer(out_opts, cudf::test::get_default_stream()).write(tab);
 
   auto reader = cudf::io::chunked_parquet_reader(
     1L << 31,

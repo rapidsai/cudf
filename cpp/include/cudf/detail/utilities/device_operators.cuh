@@ -38,10 +38,9 @@ namespace detail {
 /**
  * @brief SFINAE enabled min function suitable for std::is_invocable
  */
-template <typename LHS,
-          typename RHS,
-          std::enable_if_t<cudf::is_relationally_comparable<LHS, RHS>()>* = nullptr>
+template <typename LHS, typename RHS>
 CUDF_HOST_DEVICE inline auto min(LHS const& lhs, RHS const& rhs)
+  requires(cudf::is_relationally_comparable<LHS, RHS>())
 {
   return cuda::std::min(lhs, rhs);
 }
@@ -49,10 +48,9 @@ CUDF_HOST_DEVICE inline auto min(LHS const& lhs, RHS const& rhs)
 /**
  * @brief SFINAE enabled max function suitable for std::is_invocable
  */
-template <typename LHS,
-          typename RHS,
-          std::enable_if_t<cudf::is_relationally_comparable<LHS, RHS>()>* = nullptr>
+template <typename LHS, typename RHS>
 CUDF_HOST_DEVICE inline auto max(LHS const& lhs, RHS const& rhs)
+  requires(cudf::is_relationally_comparable<LHS, RHS>())
 {
   return cuda::std::max(lhs, rhs);
 }
@@ -62,27 +60,30 @@ CUDF_HOST_DEVICE inline auto max(LHS const& lhs, RHS const& rhs)
  * @brief Binary `sum` operator
  */
 struct DeviceSum {
-  template <typename T, std::enable_if_t<!cudf::is_timestamp<T>()>* = nullptr>
+  template <typename T>
   CUDF_HOST_DEVICE inline auto operator()(T const& lhs, T const& rhs) -> decltype(lhs + rhs)
+    requires(!cudf::is_timestamp<T>())
   {
     return lhs + rhs;
   }
 
-  template <typename T, std::enable_if_t<cudf::is_timestamp<T>()>* = nullptr>
+  template <typename T>
   CUDF_HOST_DEVICE static constexpr T identity()
+    requires(cudf::is_timestamp<T>())
   {
     return T{typename T::duration{0}};
   }
 
-  template <typename T,
-            std::enable_if_t<!cudf::is_timestamp<T>() && !cudf::is_fixed_point<T>()>* = nullptr>
+  template <typename T>
   CUDF_HOST_DEVICE static constexpr T identity()
+    requires(!cudf::is_timestamp<T>() && !cudf::is_fixed_point<T>())
   {
     return T{0};
   }
 
-  template <typename T, std::enable_if_t<cudf::is_fixed_point<T>()>* = nullptr>
+  template <typename T>
   CUDF_HOST_DEVICE static constexpr T identity()
+    requires(cudf::is_fixed_point<T>())
   {
 #ifndef __CUDA_ARCH__
     CUDF_FAIL("fixed_point does not yet support device operator identity");
@@ -97,14 +98,16 @@ struct DeviceSum {
  * @brief `count` operator - used in rolling windows
  */
 struct DeviceCount {
-  template <typename T, std::enable_if_t<cudf::is_timestamp<T>()>* = nullptr>
+  template <typename T>
   CUDF_HOST_DEVICE inline T operator()(T const& lhs, T const& rhs)
+    requires(cudf::is_timestamp<T>())
   {
     return T{DeviceCount{}(lhs.time_since_epoch(), rhs.time_since_epoch())};
   }
 
-  template <typename T, std::enable_if_t<!cudf::is_timestamp<T>()>* = nullptr>
+  template <typename T>
   CUDF_HOST_DEVICE inline T operator()(T const&, T const& rhs)
+    requires(!cudf::is_timestamp<T>())
   {
     return rhs + T{1};
   }
@@ -218,20 +221,23 @@ struct DeviceMax {
  * @brief binary `product` operator
  */
 struct DeviceProduct {
-  template <typename T, std::enable_if_t<!cudf::is_timestamp<T>()>* = nullptr>
+  template <typename T>
   CUDF_HOST_DEVICE inline auto operator()(T const& lhs, T const& rhs) -> decltype(lhs * rhs)
+    requires(!cudf::is_timestamp<T>())
   {
     return lhs * rhs;
   }
 
-  template <typename T, std::enable_if_t<!cudf::is_fixed_point<T>()>* = nullptr>
+  template <typename T>
   CUDF_HOST_DEVICE static constexpr T identity()
+    requires(!cudf::is_fixed_point<T>())
   {
     return T{1};
   }
 
-  template <typename T, std::enable_if_t<cudf::is_fixed_point<T>()>* = nullptr>
+  template <typename T>
   CUDF_HOST_DEVICE static constexpr T identity()
+    requires(cudf::is_fixed_point<T>())
   {
 #ifndef __CUDA_ARCH__
     CUDF_FAIL("fixed_point does not yet support DeviceProduct identity");
@@ -255,14 +261,16 @@ struct DeviceLeadLag {
  * @brief Binary bitwise `AND` operator
  */
 struct DeviceBitAnd {
-  template <typename T, std::enable_if_t<std::is_integral_v<T>>* = nullptr>
+  template <typename T>
   CUDF_HOST_DEVICE inline T operator()(T const& lhs, T const& rhs) const
+    requires(std::is_integral_v<T>)
   {
     return lhs & rhs;
   }
 
-  template <typename T, std::enable_if_t<std::is_integral_v<T>>* = nullptr>
+  template <typename T>
   CUDF_HOST_DEVICE static constexpr T identity()
+    requires(std::is_integral_v<T>)
   {
     if constexpr (std::is_same_v<T, bool>) {
       return true;
@@ -271,8 +279,9 @@ struct DeviceBitAnd {
     }
   }
 
-  template <typename T, std::enable_if_t<!std::is_integral_v<T>>* = nullptr>
+  template <typename T>
   CUDF_HOST_DEVICE static constexpr T identity()
+    requires(!std::is_integral_v<T>)
   {
 #ifndef __CUDA_ARCH__
     CUDF_FAIL("Bitwise AND is only supported for integral types.");
@@ -287,20 +296,23 @@ struct DeviceBitAnd {
  * @brief Binary bitwise `OR` operator
  */
 struct DeviceBitOr {
-  template <typename T, std::enable_if_t<std::is_integral_v<T>>* = nullptr>
+  template <typename T>
   CUDF_HOST_DEVICE inline T operator()(T const& lhs, T const& rhs) const
+    requires(std::is_integral_v<T>)
   {
     return lhs | rhs;
   }
 
-  template <typename T, std::enable_if_t<std::is_integral_v<T>>* = nullptr>
+  template <typename T>
   CUDF_HOST_DEVICE static constexpr T identity()
+    requires(std::is_integral_v<T>)
   {
     return T{0};
   }
 
-  template <typename T, std::enable_if_t<!std::is_integral_v<T>>* = nullptr>
+  template <typename T>
   CUDF_HOST_DEVICE static constexpr T identity()
+    requires(!std::is_integral_v<T>)
   {
 #ifndef __CUDA_ARCH__
     CUDF_FAIL("Bitwise OR is only supported for integral types.");
@@ -315,20 +327,23 @@ struct DeviceBitOr {
  * @brief Binary bitwise `XOR` operator
  */
 struct DeviceBitXor {
-  template <typename T, std::enable_if_t<std::is_integral_v<T>>* = nullptr>
+  template <typename T>
   CUDF_HOST_DEVICE inline T operator()(T const& lhs, T const& rhs) const
+    requires(std::is_integral_v<T>)
   {
     return lhs ^ rhs;
   }
 
-  template <typename T, std::enable_if_t<std::is_integral_v<T>>* = nullptr>
+  template <typename T>
   CUDF_HOST_DEVICE static constexpr T identity()
+    requires(std::is_integral_v<T>)
   {
     return T{0};
   }
 
-  template <typename T, std::enable_if_t<!std::is_integral_v<T>>* = nullptr>
+  template <typename T>
   CUDF_HOST_DEVICE static constexpr T identity()
+    requires(!std::is_integral_v<T>)
   {
 #ifndef __CUDA_ARCH__
     CUDF_FAIL("Bitwise XOR is only supported for integral types.");

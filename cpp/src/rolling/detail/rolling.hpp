@@ -35,26 +35,24 @@ struct rolling_store_output_functor {
 // Specialization for MEAN
 template <typename _T>
 struct rolling_store_output_functor<_T, true> {
-  // SFINAE for non-bool types
-  template <typename T                                                             = _T,
-            std::enable_if_t<!(cudf::is_boolean<T>() || cudf::is_timestamp<T>())>* = nullptr>
-  CUDF_HOST_DEVICE inline void operator()(T& out, T& val, size_type count)
-  {
-    out = val / count;
-  }
+  // Don't store the output if count is zero since integral division by zero is
+  // undefined behaviour. The caller must ensure that the relevant row is
+  // marked as invalid with a null.
 
-  // SFINAE for bool type
-  template <typename T = _T, std::enable_if_t<cudf::is_boolean<T>()>* = nullptr>
+  // SFINAE for non-bool, non-timestamp types
+  template <typename T = _T>
   CUDF_HOST_DEVICE inline void operator()(T& out, T& val, size_type count)
+    requires(!(cudf::is_boolean<T>() || cudf::is_timestamp<T>()))
   {
-    out = static_cast<int32_t>(val) / count;
+    if (count > 0) { out = val / count; }
   }
 
   // SFINAE for timestamp types
-  template <typename T = _T, std::enable_if_t<cudf::is_timestamp<T>()>* = nullptr>
+  template <typename T = _T>
   CUDF_HOST_DEVICE inline void operator()(T& out, T& val, size_type count)
+    requires(cudf::is_timestamp<T>())
   {
-    out = static_cast<T>(val.time_since_epoch() / count);
+    if (count > 0) { out = static_cast<T>(val.time_since_epoch() / count); }
   }
 };
 

@@ -16,12 +16,12 @@
 
 #pragma once
 
-#include "io/comp/comp.hpp"
 #include "io/statistics/statistics.cuh"
 #include "orc.hpp"
 
 #include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/detail/timezone.cuh>
+#include <cudf/io/detail/codec.hpp>
 #include <cudf/io/orc_types.hpp>
 #include <cudf/io/types.hpp>
 #include <cudf/table/table_device_view.cuh>
@@ -52,8 +52,6 @@ using storage_type     = cuco::bucket_storage<slot_type,
                                               cuco::extent<std::size_t>,
                                               cudf::detail::cuco_allocator<char>>;
 using storage_ref_type = typename storage_type::ref_type;
-using bucket_type      = typename storage_type::bucket_type;
-using slot_type        = cuco::pair<key_type, mapped_type>;
 
 auto constexpr KEY_SENTINEL   = size_type{-1};
 auto constexpr VALUE_SENTINEL = size_type{-1};
@@ -71,9 +69,9 @@ struct compressed_stream_info {
   size_t compressed_data_size{};             // [in] compressed data size for this stream
   device_span<uint8_t const>* dec_in_ctl{};  // [in] input buffer to decompress
   device_span<uint8_t>* dec_out_ctl{};       // [in] output buffer to decompress into
-  device_span<cudf::io::detail::compression_result> dec_res{};  // [in] results of decompression
-  device_span<uint8_t const>* copy_in_ctl{};                    // [out] input buffer to copy
-  device_span<uint8_t>* copy_out_ctl{};                         // [out] output buffer to copy to
+  device_span<cudf::io::detail::codec_exec_result> dec_res{};  // [in] results of decompression
+  device_span<uint8_t const>* copy_in_ctl{};                   // [out] input buffer to copy
+  device_span<uint8_t>* copy_out_ctl{};                        // [out] output buffer to copy to
   uint32_t num_compressed_blocks{};    // [in,out] number of entries in decctl(in), number of
                                        // compressed blocks(out)
   uint32_t num_uncompressed_blocks{};  // [in,out] number of entries in dec_in_ctl(in), number of
@@ -188,11 +186,11 @@ struct stripe_stream {
  */
 struct stripe_dictionary {
   // input
-  device_span<bucket_type> map_slots;  // hash map (buckets) storage
-  uint32_t column_idx      = 0;        // column index
-  size_type start_row      = 0;        // first row in the stripe
-  size_type start_rowgroup = 0;        // first rowgroup in the stripe
-  size_type num_rows       = 0;        // number of rows in the stripe
+  device_span<slot_type> map_slots;  // hash map (slots) storage
+  uint32_t column_idx      = 0;      // column index
+  size_type start_row      = 0;      // first row in the stripe
+  size_type start_rowgroup = 0;      // first rowgroup in the stripe
+  size_type num_rows       = 0;      // number of rows in the stripe
 
   // output
   device_span<uint32_t> data;        // index of elements in the column to include in the dictionary
@@ -409,7 +407,7 @@ std::optional<writer_compression_statistics> compress_orc_data_streams(
   bool collect_statistics,
   device_2dspan<stripe_stream> strm_desc,
   device_2dspan<encoder_chunk_streams> enc_streams,
-  device_span<cudf::io::detail::compression_result> comp_res,
+  device_span<cudf::io::detail::codec_exec_result> comp_res,
   rmm::cuda_stream_view stream);
 
 /**

@@ -45,7 +45,17 @@ TEST_F(StringsTest, Pad)
 
   auto const side = cudf::strings::side_type::BOTH;
   cudf::strings::pad(view, 6, side, " ", cudf::test::get_default_stream());
+}
+
+TEST_F(StringsTest, Zfill)
+{
+  auto input = cudf::test::strings_column_wrapper({"333", "", "4444", "1"});
+  auto view  = cudf::strings_column_view(input);
+
   cudf::strings::zfill(view, 6, cudf::test::get_default_stream());
+
+  auto widths = cudf::test::fixed_width_column_wrapper<cudf::size_type>({6, 7, 8, 8});
+  cudf::strings::zfill_by_widths(view, widths, cudf::test::get_default_stream());
 }
 
 TEST_F(StringsTest, Wrap)
