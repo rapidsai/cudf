@@ -92,7 +92,7 @@ REVERSED_COMPARISON = {
 
 class ASTState(TypedDict):
     """
-    State for AST transformation in :mod:`cudf_polars.dsl.to_ast`.
+    State for AST transformations.
 
     Parameters
     ----------
@@ -140,7 +140,7 @@ def _to_ast(node: expr.Expr, self: Transformer) -> plc_expr.Expression:
         Expression to translate.
     self
         Recursive transformer. The state dictionary is an instance of
-        :class:`cudf_polars.typing.ASTState`.
+        :class:`ASTState`.
 
     Returns
     -------

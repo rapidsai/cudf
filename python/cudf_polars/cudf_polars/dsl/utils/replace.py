@@ -26,7 +26,7 @@ class State(Generic[NodeT], TypedDict):
     ----------
     replacements
         Mapping from nodes to be replaced to their replacements.
-        ``ReplaceState`` is generic over the type of these nodes.
+        This state is generic over the type of these nodes.
     """
 
     replacements: Mapping[NodeT, NodeT]
