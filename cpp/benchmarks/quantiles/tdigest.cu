@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,6 +24,7 @@
 #include <cuda/functional>
 #include <thrust/copy.h>
 #include <thrust/execution_policy.h>
+#include <thrust/sequence.h>
 
 #include <nvbench/nvbench.cuh>
 
@@ -108,16 +109,87 @@ void bm_tdigest_merge(nvbench::state& state)
              });
 }
 
+void bm_tdigest_reduce(nvbench::state& state)
+{
+  auto const rows_per_group = static_cast<cudf::size_type>(state.get_int64("rows_per_group"));
+  auto const num_groups     = static_cast<cudf::size_type>(state.get_int64("num_groups"));
+  auto const num_rows       = rows_per_group * num_groups;
+  auto const max_centroids  = static_cast<cudf::size_type>(state.get_int64("max_centroids"));
+
+  auto stream = cudf::get_default_stream();
+  auto mr     = rmm::mr::get_current_device_resource();
+
+  // construct input values
+  auto col = cudf::make_numeric_column(
+    cudf::data_type{cudf::type_id::INT32}, num_rows, cudf::mask_state::UNALLOCATED, stream, mr);
+  thrust::sequence(rmm::exec_policy_nosync(stream),
+                   col->mutable_view().begin<int>(),
+                   col->mutable_view().end<int>(),
+                   0);
+
+  // group offsets, labels, valid counts
+  auto iter = thrust::make_counting_iterator(0);
+  rmm::device_uvector<cudf::size_type> group_offsets(num_groups + 1, stream, mr);
+  thrust::transform(rmm::exec_policy_nosync(stream),
+                    iter,
+                    iter + group_offsets.size(),
+                    group_offsets.begin(),
+                    cuda::proclaim_return_type<int>(
+                      [rows_per_group] __device__(int i) { return i * rows_per_group; }));
+  rmm::device_uvector<cudf::size_type> group_labels(num_rows, stream, mr);
+  thrust::transform(rmm::exec_policy_nosync(stream),
+                    iter,
+                    iter + num_rows,
+                    group_labels.begin(),
+                    cuda::proclaim_return_type<int>(
+                      [rows_per_group] __device__(int i) { return i / rows_per_group; }));
+  rmm::device_uvector<cudf::size_type> group_valid_counts(num_groups, stream, mr);
+  auto valid_count_iter = thrust::make_constant_iterator(rows_per_group);
+  thrust::copy(rmm::exec_policy_nosync(stream),
+               valid_count_iter,
+               valid_count_iter + group_valid_counts.size(),
+               group_valid_counts.begin());
+
+  stream.synchronize();
+
+  state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
+  state.exec(nvbench::exec_tag::timer | nvbench::exec_tag::sync,
+             [&](nvbench::launch& launch, auto& timer) {
+               timer.start();
+               auto result = cudf::tdigest::detail::group_tdigest(*col,
+                                                                  group_offsets,
+                                                                  group_labels,
+                                                                  group_valid_counts,
+                                                                  num_groups,
+                                                                  max_centroids,
+                                                                  stream,
+                                                                  mr);
+               timer.stop();
+             });
+}
+
 NVBENCH_BENCH(bm_tdigest_merge)
-  .set_name("TDigest many tiny groups")
+  .set_name("TDigest merge many tiny groups")
   .add_int64_axis("num_tdigests", {500'000})
   .add_int64_axis("tdigest_size", {1, 1000})
   .add_int64_axis("tdigests_per_group", {1})
   .add_int64_axis("max_centroids", {10000, 1000});
 
 NVBENCH_BENCH(bm_tdigest_merge)
-  .set_name("TDigest many small groups")
+  .set_name("TDigest merge many small groups")
   .add_int64_axis("num_tdigests", {500'000})
   .add_int64_axis("tdigest_size", {1, 1000})
   .add_int64_axis("tdigests_per_group", {3})
+  .add_int64_axis("max_centroids", {10000, 1000});
+
+NVBENCH_BENCH(bm_tdigest_reduce)
+  .set_name("TDigest reduce many small groups")
+  .add_int64_axis("num_groups", {2000})
+  .add_int64_axis("rows_per_group", {1, 32, 100})
+  .add_int64_axis("max_centroids", {10000, 1000});
+
+NVBENCH_BENCH(bm_tdigest_reduce)
+  .set_name("TDigest reduce few large groups")
+  .add_int64_axis("num_groups", {1, 16, 64})
+  .add_int64_axis("rows_per_group", {5'000'000, 1'000'000})
   .add_int64_axis("max_centroids", {10000, 1000});
