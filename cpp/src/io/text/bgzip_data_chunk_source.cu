@@ -14,7 +14,8 @@
  * limitations under the License.
  */
 
-#include "io/comp/io_uncomp.hpp"
+#include "io/comp/common.hpp"
+#include "io/comp/decompression.hpp"
 #include "io/text/device_data_chunks.hpp"
 
 #include <cudf/detail/nvtx/ranges.hpp>
@@ -22,6 +23,7 @@
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/config_utils.hpp>
+#include <cudf/io/detail/codec.hpp>
 #include <cudf/io/text/data_chunk_source_factories.hpp>
 #include <cudf/io/text/detail/bgzip_utils.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -95,7 +97,7 @@ class bgzip_data_chunk_reader : public data_chunk_reader {
     rmm::device_uvector<std::size_t> d_decompressed_offsets;
     rmm::device_uvector<device_span<uint8_t const>> d_compressed_spans;
     rmm::device_uvector<device_span<uint8_t>> d_decompressed_spans;
-    rmm::device_uvector<cudf::io::detail::compression_result> d_decompression_results;
+    rmm::device_uvector<cudf::io::detail::codec_exec_result> d_decompression_results;
     std::size_t compressed_size_with_headers{};
     std::size_t max_decompressed_size{};
     // this is usually equal to decompressed_size()
