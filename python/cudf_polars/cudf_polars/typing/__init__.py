@@ -47,7 +47,6 @@ __all__: list[str] = [
     "DataFrameHeader",
     "ExprTransformer",
     "GenericTransformer",
-    "IRTransformer",
     "NodeTraverser",
     "OptimizationArgs",
     "PolarsExpr",
@@ -158,12 +157,9 @@ OptimizationArgs: TypeAlias = Literal[
 
 U_contra = TypeVar("U_contra", bound=Hashable, contravariant=True)
 V_co = TypeVar("V_co", covariant=True)
+StateT_co = TypeVar("StateT_co", covariant=True)
 NodeT = TypeVar("NodeT", bound="nodebase.Node[Any]")
-StateT_co = TypeVar(
-    "StateT_co",
-    bound="CachingVisitorState",
-    covariant=True,
-)
+StateT = TypeVar("StateT")
 
 
 class GenericTransformer(Protocol[U_contra, V_co, StateT_co]):
@@ -258,17 +254,9 @@ class LowerIRState(TypedDict):
     config_options: ConfigOptions
 
 
-CachingVisitorState: TypeAlias = (
-    ExprExprState | ExprDecomposerState | LowerIRState | GenericState | ASTState
-)
-
-
 # Quotes to avoid circular import
 ExprTransformer: TypeAlias = GenericTransformer["expr.Expr", "expr.Expr", ExprExprState]
 """Protocol for transformation of Expr nodes."""
-
-IRTransformer: TypeAlias = GenericTransformer["ir.IR", "ir.IR", CachingVisitorState]
-"""Protocol for transformation of IR nodes."""
 
 LowerIRTransformer: TypeAlias = GenericTransformer[
     "ir.IR", "tuple[ir.IR, MutableMapping[ir.IR, PartitionInfo]]", LowerIRState

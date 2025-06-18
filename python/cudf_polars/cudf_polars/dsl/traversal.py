@@ -16,7 +16,7 @@ from cudf_polars.typing import (
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator, Mapping, MutableMapping, Sequence
 
-    from cudf_polars.typing import CachingVisitorState, GenericTransformer, NodeT
+    from cudf_polars.typing import GenericTransformer, NodeT, StateT
 
 
 __all__: list[str] = [
@@ -54,7 +54,7 @@ def traversal(nodes: Sequence[NodeT]) -> Generator[NodeT, None, None]:
 
 
 def reuse_if_unchanged(
-    node: NodeT, fn: GenericTransformer[NodeT, NodeT, CachingVisitorState]
+    node: NodeT, fn: GenericTransformer[NodeT, NodeT, StateT]
 ) -> NodeT:
     """
     Recipe for transforming nodes that returns the old object if unchanged.

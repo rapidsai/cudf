@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 from functools import singledispatch
+from typing import TypeAlias, TypedDict
 
 import polars as pl
 from polars.testing import assert_frame_equal
@@ -19,7 +20,14 @@ from cudf_polars.dsl.traversal import (
     reuse_if_unchanged,
     traversal,
 )
-from cudf_polars.typing import ExprTransformer, IRTransformer
+from cudf_polars.typing import ExprTransformer, GenericTransformer
+
+
+class IRTransformerState(TypedDict):
+    expr_mapper: ExprTransformer
+
+
+IRTransformer: TypeAlias = GenericTransformer[ir.IR, ir.IR, IRTransformerState]
 
 
 def make_expr(dt, n1, n2):
@@ -128,7 +136,7 @@ def test_rewrite_ir_node():
             )
         return reuse_if_unchanged(node, rec)
 
-    mapper = CachingVisitor(replace_df)
+    mapper = CachingVisitor(replace_df, state={})
 
     new = mapper(orig)
 
@@ -159,7 +167,7 @@ def test_rewrite_scan_node(tmp_path):
             )
         return reuse_if_unchanged(node, rec)
 
-    mapper = CachingVisitor(replace_scan)
+    mapper = CachingVisitor(replace_scan, state={})
 
     orig = Translator(q._ldf.visit(), pl.GPUEngine()).translate_ir()
     new = mapper(orig)
