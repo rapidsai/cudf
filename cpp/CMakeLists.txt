@@ -419,6 +419,7 @@ add_library(
   src/filling/fill.cu
   src/filling/repeat.cu
   src/filling/sequence.cu
+  src/filter/filter.cu
   src/groupby/groupby.cu
   src/groupby/hash/compute_aggregations.cu
   src/groupby/hash/compute_aggregations_null.cu
