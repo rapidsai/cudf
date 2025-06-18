@@ -1158,6 +1158,7 @@ struct dictionary_caster {
       // Compute an optimal thread block size for the query kernel so that we can decode all string
       // dictionary pages, one per thread
       auto block_size = std::max<cudf::size_type>(cudf::detail::warp_size, total_row_groups);
+      // Round up to the next power of 2 if block size is not already a multiple of the warp size
       if (block_size % cudf::detail::warp_size != 0) {
         block_size = cudf::size_type{1}
                      << (32 - cuda::std::countl_zero(static_cast<uint32_t>(block_size)));
@@ -1197,8 +1198,7 @@ struct dictionary_caster {
     auto query_block_size = [&]() {
       // Check if we have less than warp_size row groups. If so, use warp_size
       auto query_block_size = std::max<cudf::size_type>(cudf::detail::warp_size, total_row_groups);
-      // Check if the query block size is a multiple of warp_size. If not, round up to the next
-      // power of 2
+      // Round up to the next power of 2 if block size is not already a multiple of the warp size
       if (query_block_size % cudf::detail::warp_size != 0) {
         query_block_size = cudf::size_type{1} << (32 - cuda::std::countl_zero(
                                                          static_cast<uint32_t>(query_block_size)));
