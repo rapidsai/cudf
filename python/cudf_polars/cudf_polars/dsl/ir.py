@@ -1390,14 +1390,15 @@ class GroupBy(IR):
     ):
         self.schema = schema
         self.keys = tuple(keys)
-        if any(
-            isinstance(child, unary.UnaryFunction) and child.name == "value_counts"
-            for request in agg_requests
-            for child in request.value.children
-        ):
-            raise NotImplementedError(
-                "value_counts is not supported in groupby"
-            )  # pragma: no cover
+        for request in agg_requests:
+            expr = request.value
+            if isinstance(expr, unary.UnaryFunction) and expr.name == "value_counts":
+                raise NotImplementedError("value_counts is not supported in groupby")
+            if any(
+                isinstance(child, unary.UnaryFunction) and child.name == "value_counts"
+                for child in expr.children
+            ):
+                raise NotImplementedError("value_counts is not supported in groupby")
         self.agg_requests = tuple(agg_requests)
         self.maintain_order = maintain_order
         self.zlice = zlice
