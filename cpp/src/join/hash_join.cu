@@ -68,15 +68,17 @@ class primitive_equality {
 };
 
 /**
- * @brief Builds the hash table based on the given `build` table
+ * @brief Builds a hash table from the input build table for performing hash joins
  *
- * @param build Table of columns used to build join hash
- * @param preprocessed_build Preprocessed build table for optimized row operations
- * @param hash_table Hash table to build into
- * @param has_nested_nulls Flag indicating if build table has nested null values
- * @param nulls_equal Controls whether null join-key values should match or not
- * @param bitmask Validity bitmask for build table rows
- * @param stream CUDA stream used for device memory operations and kernel launches
+ * @throw std::invalid_argument if build table is empty or has no columns
+ *
+ * @param build The build-side table containing columns to hash and join on
+ * @param preprocessed_build Pre-processed version of build table optimized for row operations
+ * @param hash_table The hash table to populate with build table rows
+ * @param has_nested_nulls Whether the build table contains any nested null values
+ * @param nulls_equal How to handle null values during join - EQUAL means nulls match other nulls
+ * @param bitmask Validity bitmask indicating which build table rows are valid/non-null
+ * @param stream CUDA stream to use for device operations
  */
 void build_hash_join(
   cudf::table_view const& build,
@@ -88,7 +90,7 @@ void build_hash_join(
   rmm::cuda_stream_view stream)
 {
   CUDF_EXPECTS(0 != build.num_columns(), "Selected build dataset is empty", std::invalid_argument);
-  CUDF_EXPECTS(0 != build.num_rows(), "Build side table has no rows". std::invalid_argument);
+  CUDF_EXPECTS(0 != build.num_rows(), "Build side table has no rows", std::invalid_argument);
 
   auto const empty_key_sentinel = hash_table.get_empty_key_sentinel();
   auto const nulls              = nullate::DYNAMIC{has_nested_nulls};
