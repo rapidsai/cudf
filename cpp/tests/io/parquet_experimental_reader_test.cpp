@@ -297,9 +297,9 @@ TEST_F(ParquetExperimentalReaderTest, TestFilterPagesWithPageIndexStats)
 
       // Calling `filter_data_pages_with_stats` before setting up the page index should raise an
       // error
-      // EXPECT_THROW(std::ignore = reader->filter_data_pages_with_stats(
-      //                current_row_group_indices, options, stream, mr),
-      //              std::runtime_error);
+      EXPECT_THROW(std::ignore = reader->filter_data_pages_with_stats(
+                     current_row_group_indices, options, stream, mr),
+                   std::runtime_error);
 
       // Set up the page index
       auto const page_index_byte_range = reader->page_index_byte_range();
