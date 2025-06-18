@@ -217,7 +217,7 @@ class StringFunction(Expr):
         if self.name is StringFunction.Name.ConcatHorizontal:
             columns = [
                 Column(
-                    child.evaluate(df, context=context).obj, dtype=self.dtype
+                    child.evaluate(df, context=context).obj, dtype=child.dtype
                 ).astype(self.dtype)
                 for child in self.children
             ]
@@ -231,10 +231,8 @@ class StringFunction(Expr):
             return Column(
                 plc.strings.combine.concatenate(
                     plc.Table([col.obj for col in broadcasted]),
-                    plc.Scalar.from_py(delimiter, plc.DataType(plc.TypeId.STRING)),
-                    None
-                    if ignore_nulls
-                    else plc.Scalar.from_py(None, plc.DataType(plc.TypeId.STRING)),
+                    plc.Scalar.from_py(delimiter, self.dtype.plc),
+                    None if ignore_nulls else plc.Scalar.from_py(None, self.dtype.plc),
                     None,
                     plc.strings.combine.SeparatorOnNulls.NO,
                 ),
