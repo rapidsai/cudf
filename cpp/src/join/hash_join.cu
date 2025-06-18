@@ -87,8 +87,8 @@ void build_hash_join(
   [[maybe_unused]] bitmask_type const* bitmask,
   rmm::cuda_stream_view stream)
 {
-  CUDF_EXPECTS(0 != build.num_columns(), "Selected build dataset is empty");
-  CUDF_EXPECTS(0 != build.num_rows(), "Build side table has no rows");
+  CUDF_EXPECTS(0 != build.num_columns(), "Selected build dataset is empty", std::invalid_argument);
+  CUDF_EXPECTS(0 != build.num_rows(), "Build side table has no rows". std::invalid_argument);
 
   auto const empty_key_sentinel = hash_table.get_empty_key_sentinel();
   auto const nulls              = nullate::DYNAMIC{has_nested_nulls};
