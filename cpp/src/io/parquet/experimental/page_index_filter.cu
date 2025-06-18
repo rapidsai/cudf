@@ -161,12 +161,11 @@ namespace {
 
           CUDF_EXPECTS(column_index.min_values.size() == column_index.max_values.size(),
                        "page min and max values should be of same size");
-          CUDF_EXPECTS(column_index.min_values.size() == offset_index.page_locations.size(),
+          CUDF_EXPECTS(column_index.min_values.size() == row_group_num_pages,
                        "mismatch between size of min/max page values and the size of page "
                        "locations");
           // Update the cumulative number of pages in this column chunk
-          col_chunk_page_offsets.push_back(col_chunk_page_offsets.back() +
-                                           offset_index.page_locations.size());
+          col_chunk_page_offsets.push_back(col_chunk_page_offsets.back() + row_group_num_pages);
 
           // For all pages in this column chunk, update page row counts and offsets.
           std::for_each(
@@ -264,7 +263,7 @@ struct page_stats_caster : public stats_caster_base {
    *
    * @tparam T The data type of the column - must be non-compound
    * @param column Mutable view of input page-level device column
-   * @param page_nullmask Nullmask of the input page-level column
+   * @param page_nullmask Host nullmask of the input page-level column
    * @param page_indices Device vector containing the page index for each row index
    * @param page_row_offsets Host vector row offsets of each page
    * @param dtype The data type of the column
@@ -320,6 +319,7 @@ struct page_stats_caster : public stats_caster_base {
    * @brief Transforms a page-level stats column to a row-level stats column for string type
    *
    * @param host_strings Host span of cudf::string_view values in the input page-level host column
+   * @param host_chars Host span of string data of the input page-level host column
    * @param host_nullmask Nullmask of the input page-level host column
    * @param page_indices Device vector containing the page index for each row index
    * @param page_row_offsets Host vector row offsets of each page
@@ -331,6 +331,7 @@ struct page_stats_caster : public stats_caster_base {
   [[nodiscard]] std::
     tuple<rmm::device_buffer, rmm::device_uvector<cudf::size_type>, rmm::device_buffer>
     build_string_data_and_nullmask(cudf::host_span<cudf::string_view const> host_strings,
+                                   cudf::host_span<char const> host_chars,
                                    bitmask_type const* host_page_nullmask,
                                    cudf::device_span<size_type const> page_indices,
                                    cudf::host_span<size_type const> page_row_offsets,
@@ -340,28 +341,9 @@ struct page_stats_caster : public stats_caster_base {
     // Total number of pages in the column
     size_type const total_pages = page_row_offsets.size() - 1;
 
-    // Construct device vectors containing page-level (input) string data, sizes, and offsets.
-    auto [page_str_chars, page_str_sizes, page_str_offsets] = [&]() {
-      auto const total_char_count = std::accumulate(
-        host_strings.begin(), host_strings.end(), size_t{0}, [](auto sum, auto const& str) {
-          return sum + str.size_bytes();
-        });
-
-      auto chars   = cudf::detail::make_empty_host_vector<char>(total_char_count, stream);
-      auto sizes   = cudf::detail::make_empty_host_vector<cudf::size_type>(total_pages, stream);
-      auto offsets = cudf::detail::make_empty_host_vector<cudf::size_type>(total_pages + 1, stream);
-      offsets.push_back(0);
-      for (auto const& str : host_strings) {
-        auto tmp =
-          str.empty() ? std::string_view{} : std::string_view(str.data(), str.size_bytes());
-        chars.insert(chars.end(), std::cbegin(tmp), std::cend(tmp));
-        sizes.push_back(tmp.length());
-        offsets.push_back(offsets.back() + tmp.length());
-      }
-      return std::tuple{cudf::detail::make_device_uvector_async(chars, stream, mr),
-                        cudf::detail::make_device_uvector_async(sizes, stream, mr),
-                        cudf::detail::make_device_uvector_async(offsets, stream, mr)};
-    }();
+    // Construct device vectors containing page-level (input) string data, and offsets and sizes
+    auto [page_str_chars, page_str_offsets, page_str_sizes] =
+      host_column<cudf::string_view>::make_strings_children(host_strings, host_chars, stream, mr);
 
     // Buffer for row-level string sizes (output).
     auto row_str_sizes = rmm::device_uvector<size_t>(total_rows, stream, mr);
@@ -373,14 +355,15 @@ struct page_stats_caster : public stats_caster_base {
                    row_str_sizes.begin());
 
     // Total bytes in the output chars buffer
-    auto const total_bytes = thrust::reduce(rmm::exec_policy_nosync(stream),
+    auto const total_bytes = thrust::reduce(rmm::exec_policy(stream),
                                             row_str_sizes.begin(),
                                             row_str_sizes.end(),
                                             size_t{0},
                                             cuda::std::plus<size_t>());
 
-    CUDF_EXPECTS(total_bytes <= cuda::std::numeric_limits<cudf::size_type>::max(),
-                 "Page statistics columns cannot be large strings");
+    CUDF_EXPECTS(
+      total_bytes <= cuda::std::numeric_limits<cudf::size_type>::max(),
+      "The strings child of the page statistics column cannot exceed the column size limit");
 
     // page-level strings nullmask (input)
     auto const input_nullmask = host_page_nullmask;
@@ -511,9 +494,8 @@ struct page_stats_caster : public stats_caster_base {
               thrust::counting_iterator<size_t>(0),
               thrust::counting_iterator(num_pages_in_colchunk),
               [&](auto page_idx) {
-                // To support deprecated min, max fields.
                 auto const& min_value = column_index.min_values[page_idx];
-                auto const& max_value = column_index.min_values[page_idx];
+                auto const& max_value = column_index.max_values[page_idx];
                 // Translate binary data to Type then to <T>
                 min.set_index(
                   page_offset_in_colchunk + page_idx, min_value, colchunk.meta_data.type);
@@ -544,7 +526,7 @@ struct page_stats_caster : public stats_caster_base {
                                                                   stream,
                                                                   mr);
         auto [max_data, max_bitmask] = build_data_and_nullmask<T>(maxcol->mutable_view(),
-                                                                  min.null_mask.data(),
+                                                                  max.null_mask.data(),
                                                                   page_indices,
                                                                   page_row_offsets,
                                                                   dtype,
@@ -567,9 +549,9 @@ struct page_stats_caster : public stats_caster_base {
       // directly and gather string chars using a batched memcpy.
       else {
         auto [min_data, min_offsets, min_nullmask] = build_string_data_and_nullmask(
-          min.val, min.null_mask.data(), page_indices, page_row_offsets, stream, mr);
+          min.val, min.chars, min.null_mask.data(), page_indices, page_row_offsets, stream, mr);
         auto [max_data, max_offsets, max_nullmask] = build_string_data_and_nullmask(
-          max.val, max.null_mask.data(), page_indices, page_row_offsets, stream, mr);
+          max.val, max.chars, max.null_mask.data(), page_indices, page_row_offsets, stream, mr);
 
         // Count nulls in min and max columns
         auto const min_nulls = cudf::detail::null_count(
@@ -751,7 +733,7 @@ std::vector<thrust::host_vector<bool>> aggregate_reader_metadata::compute_data_p
                   thrust::counting_iterator(num_columns),
                   [&](auto const col_idx) {
                     page_row_counts_and_offsets_tasks.emplace_back(
-                      cudf::detail::host_worker_pool().submit_task([&] {
+                      cudf::detail::host_worker_pool().submit_task([&, col_idx = col_idx] {
                         auto const schema_idx = output_column_schemas[col_idx];
                         return make_page_row_counts_and_offsets(
                           per_file_metadata, row_group_indices, schema_idx, streams[col_idx]);
@@ -787,7 +769,7 @@ std::vector<thrust::host_vector<bool>> aggregate_reader_metadata::compute_data_p
   auto data_page_mask = std::vector<thrust::host_vector<bool>>();
   data_page_mask.reserve(num_columns);
 
-  auto total_surviving_pages = size_t{0};
+  std::atomic<size_t> total_surviving_pages{0};
 
   // Tasks to compute data page mask for each column
   std::vector<std::future<thrust::host_vector<bool>>> data_page_mask_tasks;
@@ -801,51 +783,52 @@ std::vector<thrust::host_vector<bool>> aggregate_reader_metadata::compute_data_p
     thrust::counting_iterator<size_t>(0),
     thrust::counting_iterator(num_columns),
     [&](auto const col_idx) {
-      data_page_mask_tasks.emplace_back(cudf::detail::host_worker_pool().submit_task([&] {
-        // Construct a row indices mapping based on page row counts and offsets
-        auto const total_pages_in_this_column = page_row_counts[col_idx].size();
+      data_page_mask_tasks.emplace_back(
+        cudf::detail::host_worker_pool().submit_task([&, col_idx = col_idx] {
+          // Construct a row indices mapping based on page row counts and offsets
+          auto const total_pages_in_this_column = page_row_counts[col_idx].size();
 
-        auto const page_indices = make_page_indices_async(
-          page_row_counts[col_idx], page_row_offsets[col_idx], total_rows, streams[col_idx]);
+          auto const page_indices = make_page_indices_async(
+            page_row_counts[col_idx], page_row_offsets[col_idx], total_rows, streams[col_idx]);
 
-        // Device vector to hold page indices with at least one required row
-        rmm::device_uvector<size_type> select_page_indices(total_rows, streams[col_idx], mr);
+          // Device vector to hold page indices with at least one required row
+          rmm::device_uvector<size_type> select_page_indices(total_rows, streams[col_idx], mr);
 
-        // Copy page indices with at least one required row
-        auto const filtered_pages_end_iter = thrust::copy_if(
-          rmm::exec_policy_nosync(streams[col_idx]),
-          page_indices.begin(),
-          page_indices.end(),
-          thrust::counting_iterator<size_type>(0),
-          select_page_indices.begin(),
-          is_row_required_fn{row_mask.nullable(), row_mask.null_mask(), row_mask.data<bool>()});
+          // Copy page indices with at least one required row
+          auto const filtered_pages_end_iter = thrust::copy_if(
+            rmm::exec_policy_nosync(streams[col_idx]),
+            page_indices.begin(),
+            page_indices.end(),
+            thrust::counting_iterator<size_type>(0),
+            select_page_indices.begin(),
+            is_row_required_fn{row_mask.nullable(), row_mask.null_mask(), row_mask.data<bool>()});
 
-        // Remove duplicate page indices across (presorted) rows
-        auto const filtered_uniq_page_end_iter =
-          thrust::unique(rmm::exec_policy_nosync(streams[col_idx]),
-                         select_page_indices.begin(),
-                         filtered_pages_end_iter);
+          // Remove duplicate page indices across (presorted) rows
+          auto const filtered_uniq_page_end_iter =
+            thrust::unique(rmm::exec_policy_nosync(streams[col_idx]),
+                           select_page_indices.begin(),
+                           filtered_pages_end_iter);
 
-        // Number of final filtered pages for this column
-        size_t const num_surviving_pages_this_column =
-          thrust::distance(select_page_indices.begin(), filtered_uniq_page_end_iter);
+          // Number of final filtered pages for this column
+          size_t const num_surviving_pages_this_column =
+            thrust::distance(select_page_indices.begin(), filtered_uniq_page_end_iter);
 
-        total_surviving_pages += num_surviving_pages_this_column;
+          total_surviving_pages.fetch_add(num_surviving_pages_this_column);
 
-        // Copy the filtered page indices for this column to host
-        auto host_select_page_indices = cudf::detail::make_host_vector(
-          cudf::device_span<cudf::size_type const>{select_page_indices.data(),
-                                                   num_surviving_pages_this_column},
-          streams[col_idx]);
+          // Copy the filtered page indices for this column to host
+          auto host_select_page_indices = cudf::detail::make_host_vector(
+            cudf::device_span<cudf::size_type const>{select_page_indices.data(),
+                                                     num_surviving_pages_this_column},
+            streams[col_idx]);
 
-        // Vector to data page mask the this column
-        auto valid_pages = thrust::host_vector<bool>(total_pages_in_this_column, false);
-        std::for_each(host_select_page_indices.begin(),
-                      host_select_page_indices.end(),
-                      [&](auto const page_idx) { valid_pages[page_idx] = true; });
+          // Vector to data page mask the this column
+          auto valid_pages = thrust::host_vector<bool>(total_pages_in_this_column, false);
+          std::for_each(host_select_page_indices.begin(),
+                        host_select_page_indices.end(),
+                        [&](auto const page_idx) { valid_pages[page_idx] = true; });
 
-        return valid_pages;
-      }));
+          return valid_pages;
+        }));
     });
 
   // Collect results from all tasks
