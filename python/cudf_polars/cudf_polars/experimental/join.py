@@ -260,7 +260,7 @@ def _(
             partition_info,
             left,
             right,
-            config_options.executor.broadcast_join_limit,
+            config_options.executor.shuffle_method,
         )
     else:
         # Create a hash join
@@ -270,7 +270,7 @@ def _(
             partition_info,
             left,
             right,
-            config_options,
+            config_options.executor.shuffle_method,
         )
 
 
