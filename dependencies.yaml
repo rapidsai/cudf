@@ -881,6 +881,7 @@ dependencies:
         packages:
           - dask-cuda==25.8.*,>=0.0.0a0
           - *numpy
+          - rich
   test_python_narwhals:
     common:
       - output_types: [conda, requirements, pyproject]
