@@ -26,6 +26,12 @@ def test_value_counts(ldf, name, normalize):
     assert_gpu_result_equal(query)
 
 
+def test_value_counts_normalize_div_by_zero():
+    ldf = pl.LazyFrame({"a": []}, schema={"a": pl.Int64()})
+    query = ldf.select(pl.col("a").value_counts(normalize=True))
+    assert_gpu_result_equal(query)
+
+
 def test_struct(ldf):
     query = ldf.select(pl.struct(pl.all()))
     assert_gpu_result_equal(query)
