@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import functools
+import inspect
 from typing import TYPE_CHECKING
 
 import polars as pl
@@ -44,7 +45,8 @@ def _dtype_short_repr_to_dtype(dtype_str: str) -> pl.DataType:
     if dtype_str.startswith("list["):
         stripped = dtype_str.removeprefix("list[").removesuffix("]")
         return pl.List(_dtype_short_repr_to_dtype(stripped))
-    return pl.datatypes.convert.dtype_short_repr_to_dtype(dtype_str)
+    pl_type = pl.datatypes.convert.dtype_short_repr_to_dtype(dtype_str)
+    return pl_type() if inspect.isclass(pl_type) else pl_type
 
 
 class Column:
