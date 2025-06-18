@@ -30,6 +30,7 @@ from cudf.core.mixins import BinaryOperand
 from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
     cudf_dtype_to_pa_type,
+    get_dtype_of_same_kind,
     get_dtype_of_same_type,
     pyarrow_dtype_to_cudf_dtype,
 )
@@ -208,7 +209,12 @@ class DecimalBaseColumn(NumericalBaseColumn):
         }:
             if isinstance(rhs, (int, Decimal)):
                 rhs = _to_plc_scalar(rhs, self.dtype)
-            return binaryop.binaryop(lhs, rhs, op, np.dtype(np.bool_))
+            return binaryop.binaryop(
+                lhs,
+                rhs,
+                op,
+                get_dtype_of_same_kind(self.dtype, np.dtype(np.bool_)),
+            )
         else:
             raise TypeError(
                 f"{op} not supported for the following dtypes: "

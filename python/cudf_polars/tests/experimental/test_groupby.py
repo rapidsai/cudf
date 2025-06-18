@@ -185,3 +185,28 @@ def test_groupby_agg_duplicate(
 def test_groupby_agg_empty(df: pl.LazyFrame, engine: pl.GPUEngine) -> None:
     q = df.group_by("y").agg()
     assert_gpu_result_equal(q, engine=engine, check_row_order=False)
+
+
+@pytest.mark.parametrize(
+    "values",
+    [
+        [1, None, 2, None],
+        [1, None, None, None],
+    ],
+)
+def test_mean_partitioned(values: list[int | None]) -> None:
+    df = pl.LazyFrame(
+        {
+            "key1": [1, 1, 2, 2],
+            "uint16_with_null": pl.Series(values, dtype=pl.UInt16()),
+        }
+    )
+
+    q = df.group_by("key1").agg(pl.col("uint16_with_null").mean())
+    assert_gpu_result_equal(
+        q,
+        engine=pl.GPUEngine(
+            executor="streaming", executor_options={"max_rows_per_partition": 2}
+        ),
+        check_row_order=False,
+    )
