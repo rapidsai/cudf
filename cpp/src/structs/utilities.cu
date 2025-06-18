@@ -319,6 +319,9 @@ std::vector<std::unique_ptr<column>> superimpose_nulls(std::vector<bitmask_type 
 {
   CUDF_FUNC_RANGE();
 
+  CUDF_EXPECTS(null_masks.size() == inputs.size(),
+               "The number of null masks to apply must match the number of input columns");
+
   auto const num_rows = inputs[0]->size();
   std::vector<bitmask_type const*> sources;
   std::vector<size_type> segment_offsets;
@@ -326,15 +329,8 @@ std::vector<std::unique_ptr<column>> superimpose_nulls(std::vector<bitmask_type 
 
   // This recursive function navigates the column hierarchy and for each path in the tree, it
   // collects all null masks that need to be combined for each column in the hierarchy
-  std::function<void(std::vector<bitmask_type const*> & path,
-                     column & input,
-                     std::vector<bitmask_type const*> & sources,
-                     std::vector<size_type> & segment_offsets)>
-    populate_segmented_sources =
-      [&populate_segmented_sources](std::vector<bitmask_type const*>& path,
-                                    column& input,
-                                    std::vector<bitmask_type const*>& sources,
-                                    std::vector<size_type>& segment_offsets) -> void {
+  std::function<void(column & input)> populate_segmented_sources =
+    [&populate_segmented_sources, &path, &sources, &segment_offsets](column& input) -> void {
     if (input.type().id() != cudf::type_id::EMPTY) {
       // EMPTY columns should not have a null mask,
       // so don't superimpose null mask on empty columns.
@@ -350,7 +346,7 @@ std::vector<std::unique_ptr<column>> superimpose_nulls(std::vector<bitmask_type 
       // For struct columns, recursively process all children
       if (input.type().id() == cudf::type_id::STRUCT) {
         for (int i = 0; i < input.num_children(); i++) {
-          populate_segmented_sources(path, input.child(i), sources, segment_offsets);
+          populate_segmented_sources(input.child(i));
         }
       }
 
@@ -563,18 +559,16 @@ std::vector<std::unique_ptr<column>> superimpose_and_sanitize_nulls(
   CUDF_FUNC_RANGE();
   inputs = superimpose_nulls(null_masks, std::move(inputs), stream, mr);
 
-  nvtxRangePushA("purging nonempty nulls");
   std::vector<std::unique_ptr<column>> purged_columns;
-  for (size_t i = 0; i < inputs.size(); i++) {
-    auto const input_view = inputs[i]->view();
+  for (auto& input : inputs) {
+    auto const input_view = input->view();
     auto const nullbool   = cudf::detail::has_nonempty_nulls(input_view, stream);
     if (nullbool) {
       purged_columns.emplace_back(cudf::detail::purge_nonempty_nulls(input_view, stream, mr));
     } else {
-      purged_columns.emplace_back(std::move(inputs[i]));
+      purged_columns.emplace_back(std::move(input));
     }
   }
-  nvtxRangePop();
 
   return purged_columns;
 }
