@@ -127,8 +127,9 @@ struct faster_sorted_order_fn {
                   rmm::cuda_stream_view stream)
     requires(cudf::is_floating_point<T>())
   {
-    auto pair_in  = rmm::device_uvector<float_pair<T>>(input.size(), stream);
-    auto d_in     = pair_in.begin();
+    auto pair_in = rmm::device_uvector<float_pair<T>>(input.size(), stream);
+    auto d_in    = pair_in.begin();
+    // pair_out/d_out is not returned to the caller but used as an intermediate
     auto pair_out = rmm::device_uvector<float_pair<T>>(input.size(), stream);
     auto d_out    = pair_out.begin();
     auto vals     = rmm::device_uvector<size_type>(indices.size(), stream);
