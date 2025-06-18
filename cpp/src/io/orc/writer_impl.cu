@@ -19,6 +19,7 @@
  * @brief cuDF-IO ORC writer class implementation
  */
 
+#include "io/comp/compression.hpp"
 #include "io/orc/orc_gpu.hpp"
 #include "io/statistics/column_statistics.cuh"
 #include "writer_impl.hpp"
@@ -1463,7 +1464,7 @@ void write_index_stream(int32_t stripe_id,
                         file_segmentation const& segmentation,
                         host_2dspan<encoder_chunk_streams const> enc_streams,
                         host_2dspan<stripe_stream const> strm_desc,
-                        host_span<compression_result const> comp_res,
+                        host_span<codec_exec_result const> comp_res,
                         host_span<col_stats_blob const> rg_stats,
                         StripeInformation* stripe,
                         orc_streams* streams,
@@ -2340,8 +2341,8 @@ auto convert_table_to_orc_data(table_view const& input,
     return std::tuple{std::move(enc_data),
                       std::move(segmentation),
                       std::move(orc_table),
-                      rmm::device_uvector<uint8_t>{0, stream},                // compressed_data
-                      cudf::detail::hostdevice_vector<compression_result>{},  // comp_results
+                      rmm::device_uvector<uint8_t>{0, stream},               // compressed_data
+                      cudf::detail::hostdevice_vector<codec_exec_result>{},  // comp_results
                       std::move(strm_descs),
                       intermediate_statistics{orc_table, stream},
                       std::optional<writer_compression_statistics>{},
@@ -2380,12 +2381,12 @@ auto convert_table_to_orc_data(table_view const& input,
 
   // Compress the data streams
   rmm::device_uvector<uint8_t> compressed_data(compressed_bfr_size, stream);
-  cudf::detail::hostdevice_vector<compression_result> comp_results(num_compressed_blocks, stream);
+  cudf::detail::hostdevice_vector<codec_exec_result> comp_results(num_compressed_blocks, stream);
   std::optional<writer_compression_statistics> compression_stats;
   thrust::fill(rmm::exec_policy(stream),
                comp_results.d_begin(),
                comp_results.d_end(),
-               compression_result{0, compression_status::FAILURE});
+               codec_exec_result{0, codec_status::FAILURE});
   if (compression != compression_type::NONE) {
     strm_descs.host_to_device_async(stream);
     compression_stats = compress_orc_data_streams(compressed_data,
@@ -2573,7 +2574,7 @@ void writer::impl::write_orc_data_to_sink(encoded_data const& enc_data,
                                           file_segmentation const& segmentation,
                                           orc_table_view const& orc_table,
                                           device_span<uint8_t const> compressed_data,
-                                          host_span<compression_result const> comp_results,
+                                          host_span<codec_exec_result const> comp_results,
                                           host_2dspan<stripe_stream const> strm_descs,
                                           host_span<col_stats_blob const> rg_stats,
                                           orc_streams& streams,
