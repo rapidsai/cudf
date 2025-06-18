@@ -853,7 +853,7 @@ dependencies:
           - matrix:
               cuda: "12.*"
             packages:
-              - pytorch>=2.4.0
+              - pytorch-gpu>=2.4.0
           - matrix:
             packages:
   test_python_dask_cudf:

@@ -212,7 +212,7 @@ dependencies:
       - output_types: conda
         packages:
           - numpy
-          - pytorch>=2.4.0
+          - pytorch-gpu>=2.4.0
   test_seaborn:
     common:
       - output_types: conda
