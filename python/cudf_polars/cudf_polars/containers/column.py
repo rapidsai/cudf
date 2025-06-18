@@ -37,6 +37,16 @@ if TYPE_CHECKING:
 __all__: list[str] = ["Column"]
 
 
+def _dtype_short_repr_to_dtype(dtype_str: str) -> pl.DataType:
+    """Convert a Polars dtype short repr to a Polars dtype."""
+    # limitations of dtype_short_repr_to_dtype described in
+    # py-polars/polars/datatypes/convert.py#L299
+    if dtype_str.startswith("list["):
+        stripped = dtype_str.removeprefix("list[").removesuffix("]")
+        return pl.List(_dtype_short_repr_to_dtype(stripped))
+    return pl.datatypes.convert.dtype_short_repr_to_dtype(dtype_str)
+
+
 class Column:
     """An immutable column with sortedness metadata."""
 
@@ -97,7 +107,7 @@ class Column:
     ) -> DeserializedColumnOptions:
         """Deserialize the constructor kwargs for a Column."""
         dtype = DataType(  # pragma: no cover
-            pl.datatypes.convert.dtype_short_repr_to_dtype(column_kwargs["dtype"])
+            _dtype_short_repr_to_dtype(column_kwargs["dtype"])
         )
         return {
             "is_sorted": column_kwargs["is_sorted"],
