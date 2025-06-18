@@ -16,10 +16,12 @@
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/copy.hpp>
+#include <cudf/detail/null_mask.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/structs/utilities.hpp>
 #include <cudf/detail/unary.hpp>
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/structs/structs_column_view.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
@@ -28,6 +30,9 @@
 
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
+
+#include <functional>
+#include <numeric>
 
 namespace cudf::structs::detail {
 
@@ -290,6 +295,140 @@ std::unique_ptr<column> superimpose_nulls(bitmask_type const* null_mask,
 }
 
 /**
+ * @brief Superimpose each given null mask onto the corresponding input column and its descendants.
+ * This function does not enforce null consistency of the null masks of the descendant columns i.e.
+ * non-empty nulls that appear in descendant columns due to the null mask update are not purged
+
+ * The vector version of superimpose_nulls applies null masks to multiple columns at once by:
+ *  1. First gathering all null masks in a flattened structure
+ *  2. Applying the nulls in a segmented batch operation
+ *  3. Then updating all the columns with their new null masks
+ *
+ * @param null_mask Vector of null masks to be applied to the input column
+ * @param input Vector of input column to apply the null mask to
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate new device memory
+ * @return A new column with potentially new null mask
+ */
+std::vector<std::unique_ptr<column>> superimpose_nulls(std::vector<bitmask_type const*> null_masks,
+                                                       std::vector<std::unique_ptr<column>> inputs,
+                                                       rmm::cuda_stream_view stream,
+                                                       rmm::device_async_resource_ref mr)
+{
+  CUDF_FUNC_RANGE();
+
+  CUDF_EXPECTS(null_masks.size() == inputs.size(),
+               "The number of null masks to apply must match the number of input columns");
+
+  auto const num_rows = inputs[0]->size();
+  std::vector<bitmask_type const*> sources;
+  std::vector<size_type> segment_offsets;
+  std::vector<bitmask_type const*> path;
+
+  // This recursive function navigates the column hierarchy and for each path in the tree, it
+  // collects all null masks that need to be combined for each column in the hierarchy
+  std::function<void(column & input)> populate_segmented_sources =
+    [&populate_segmented_sources, &path, &sources, &segment_offsets](column& input) -> void {
+    if (input.type().id() != cudf::type_id::EMPTY) {
+      // EMPTY columns should not have a null mask,
+      // so don't superimpose null mask on empty columns.
+      if (input.nullable()) {
+        // Add this column's null mask to the current path
+        path.push_back(input.mutable_view().null_mask());
+      }
+
+      // Add all null masks in current path to sources
+      sources.insert(sources.end(), path.begin(), path.end());
+      segment_offsets.push_back(path.size());
+
+      // For struct columns, recursively process all children
+      if (input.type().id() == cudf::type_id::STRUCT) {
+        for (int i = 0; i < input.num_children(); i++) {
+          populate_segmented_sources(input.child(i));
+        }
+      }
+
+      // Backtrack: remove this column's mask from path when done
+      if (input.nullable()) path.pop_back();
+    }
+  };
+
+  // Track/mark the starting position in segment_offsets for each top-level column
+  std::vector<size_type> column_markers;
+  column_markers.push_back(0);
+
+  // Process each top-level column in the inputs vector
+  for (size_t c = 0; c < null_masks.size(); c++) {
+    // Start with the external null mask for this column
+    path.push_back(null_masks[c]);
+
+    // Collect all null masks for this column and its descendants
+    populate_segmented_sources(*(inputs[c]));
+    path.pop_back();
+
+    // Record where this column's segments end in the segment_offsets array
+    column_markers.push_back(segment_offsets.size());
+  }
+
+  // Convert segment_offsets from segment sizes to cumulative offsets
+  {
+    auto total_sum = std::accumulate(segment_offsets.begin(), segment_offsets.end(), 0);
+    std::exclusive_scan(segment_offsets.begin(), segment_offsets.end(), segment_offsets.begin(), 0);
+    segment_offsets.push_back(total_sum);
+  }
+
+  // All masks start at bit position 0
+  std::vector<size_type> sources_begin_bits(sources.size(), 0);
+
+  // Perform the segmented bitwise AND operation across all collected masks
+  auto [result_null_masks, result_null_counts] = cudf::detail::segmented_bitmask_binop(
+    [] __device__(bitmask_type left, bitmask_type right) { return left & right; },
+    sources,
+    sources_begin_bits,
+    num_rows,
+    segment_offsets,
+    stream,
+    mr);
+
+  // Create new struct column and its descendants with updated null masks
+  // Recursively updates each column and its children with their new null masks
+  std::function<int(std::vector<std::unique_ptr<rmm::device_buffer>> const& h_destination_masks,
+                    std::vector<size_type> const& h_null_counts,
+                    int marker,
+                    column& input)>
+    create_updated_column =
+      [&create_updated_column](
+        std::vector<std::unique_ptr<rmm::device_buffer>> const& h_destination_masks,
+        std::vector<size_type> const& h_null_counts,
+        int marker,
+        column& input) -> int {
+    if (input.type().id() != cudf::type_id::EMPTY) {
+      // EMPTY columns should not have a null mask,
+      // so don't superimpose null mask on empty columns.
+
+      // Update this column's null mask with the result from the batch operation
+      input.set_null_mask(std::move(*(h_destination_masks[marker])), h_null_counts[marker]);
+      marker++;
+
+      // For struct columns, recursively update all children
+      if (input.type().id() == cudf::type_id::STRUCT) {
+        for (int i = 0; i < input.num_children(); i++) {
+          marker =
+            create_updated_column(h_destination_masks, h_null_counts, marker, input.child(i));
+        }
+      }
+    }
+    return marker;
+  };
+
+  // Apply the new null masks to all top-level columns
+  for (size_t c = 0; c < inputs.size(); c++) {
+    create_updated_column(result_null_masks, result_null_counts, column_markers[c], *(inputs[c]));
+  }
+  return inputs;
+}
+
+/**
  * @brief Push down nulls from the given input column into its children columns without any
  * sanitization for non-empty nulls.
  *
@@ -395,6 +534,7 @@ std::unique_ptr<column> superimpose_and_sanitize_nulls(bitmask_type const* null_
   CUDF_FUNC_RANGE();
   input = superimpose_nulls(null_mask, null_count, std::move(input), stream, mr);
 
+  nvtxRangePushA("purging");
   if (auto const input_view = input->view(); cudf::detail::has_nonempty_nulls(input_view, stream)) {
     // We can't call `purge_nonempty_nulls` for individual child column(s) that need to be
     // sanitized. Instead, we have to call it from the top level column.
@@ -403,8 +543,32 @@ std::unique_ptr<column> superimpose_and_sanitize_nulls(bitmask_type const* null_
     // also different from the parent column, causing data corruption.
     return cudf::detail::purge_nonempty_nulls(input_view, stream, mr);
   }
+  nvtxRangePop();
 
   return std::move(input);
+}
+
+std::vector<std::unique_ptr<column>> superimpose_and_sanitize_nulls(
+  std::vector<bitmask_type const*> null_masks,
+  std::vector<std::unique_ptr<column>> inputs,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
+{
+  CUDF_FUNC_RANGE();
+  inputs = superimpose_nulls(null_masks, std::move(inputs), stream, mr);
+
+  std::vector<std::unique_ptr<column>> purged_columns;
+  for (auto& input : inputs) {
+    auto const input_view = input->view();
+    auto const nullbool   = cudf::detail::has_nonempty_nulls(input_view, stream);
+    if (nullbool) {
+      purged_columns.emplace_back(cudf::detail::purge_nonempty_nulls(input_view, stream, mr));
+    } else {
+      purged_columns.emplace_back(std::move(input));
+    }
+  }
+
+  return purged_columns;
 }
 
 std::pair<column_view, temporary_nullable_data> push_down_nulls(column_view const& input,
