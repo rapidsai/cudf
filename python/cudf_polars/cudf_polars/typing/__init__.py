@@ -155,7 +155,6 @@ U_contra = TypeVar("U_contra", bound=Hashable, contravariant=True)
 V_co = TypeVar("V_co", covariant=True)
 StateT_co = TypeVar("StateT_co", covariant=True)
 NodeT = TypeVar("NodeT", bound="nodebase.Node[Any]")
-StateT = TypeVar("StateT")
 
 
 class GenericTransformer(Protocol[U_contra, V_co, StateT_co]):
