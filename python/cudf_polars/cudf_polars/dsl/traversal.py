@@ -8,7 +8,6 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Generic
 
 from cudf_polars.typing import (
-    CachingVisitorState,
     StateT_co,
     U_contra,
     V_co,
@@ -17,7 +16,7 @@ from cudf_polars.typing import (
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator, Mapping, MutableMapping, Sequence
 
-    from cudf_polars.typing import GenericTransformer, NodeT
+    from cudf_polars.typing import CachingVisitorState, GenericTransformer, NodeT
 
 
 __all__: list[str] = [

@@ -58,8 +58,8 @@ if TYPE_CHECKING:
     from cudf_polars.dsl.expressions.base import Expr
     from cudf_polars.dsl.ir import IR
     from cudf_polars.typing import (
-        Schema,
         ExprDecomposer,
+        Schema,
     )
     from cudf_polars.utils.config import ConfigOptions
 

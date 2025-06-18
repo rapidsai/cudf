@@ -317,6 +317,7 @@ def insert_colrefs(
     New expression with column references inserted.
     """
     mapper = CachingVisitor(
-        _insert_colrefs, state=ExprExprState(name_to_index=name_to_index, table_ref=table_ref)
+        _insert_colrefs,
+        state=ExprExprState(name_to_index=name_to_index, table_ref=table_ref),
     )
     return mapper(node)
