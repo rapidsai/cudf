@@ -116,8 +116,8 @@ CUDF_KERNEL void offset_bitmask_binop(Binop op,
  * @brief Performs a segmented binary operation on bitmasks with configurable bit offsets
  *
  * This kernel applies a binary operation across multiple segments of bitmasks. Each segment is
- * processed by a separate warp, with threads in the warp collaboratively processing words of the
- * bitmask. The results are written directly to the specified destination mask.
+ * processed by a separate warp, and the result is written directly to the destination mask for
+ * that segment.
  *
  * The kernel performs the following operations:
  * 1. Maps each warp to a segment defined by segment_offsets
@@ -160,7 +160,7 @@ CUDF_KERNEL void segmented_offset_bitmask_binop(Binop op,
   auto const warp_id = warp.meta_group_rank();
   auto const lane    = warp.thread_rank();
 
-  // Assume one segment per warp.
+  // Process one segment per warp.
   auto const num_segments = segment_offsets.size() - 1;
   // auto const segment_id    = blockIdx.x * (blockDim.x / warp.size()) + warp_id;
   auto const segment_id    = cudf::detail::grid_1d::global_thread_id() / warp.size();
@@ -262,13 +262,15 @@ segmented_bitmask_binop(Binop op,
 {
   auto const num_bytes = bitmask_allocation_size_bytes(mask_size_bits);
   std::vector<std::unique_ptr<rmm::device_buffer>> h_destination_masks;
+  h_destination_masks.reserve(segment_offsets.size() - 1);
   std::vector<bitmask_type*> h_destination_masks_ptrs;
+  h_destination_masks_ptrs.reserve(segment_offsets.size() - 1);
   for (size_t i = 0; i < segment_offsets.size() - 1; i++) {
     h_destination_masks.push_back(std::make_unique<rmm::device_buffer>(num_bytes, stream, mr));
     h_destination_masks_ptrs.push_back(
       static_cast<bitmask_type*>(h_destination_masks.back()->data()));
   }
-  auto destination_masks = cudf::detail::make_device_uvector<bitmask_type*>(
+  auto destination_masks = cudf::detail::make_device_uvector(
     h_destination_masks_ptrs, stream, cudf::get_current_device_resource_ref());
 
   // for destination size, pass number of words in each destination buffer instead of number of bits
@@ -282,8 +284,8 @@ segmented_bitmask_binop(Binop op,
                                                      stream,
                                                      cudf::get_current_device_resource_ref());
 
-  auto h_null_counts = cudf::detail::make_std_vector<size_type>(null_counts, stream);
-  return std::pair(std::move(h_destination_masks), std::move(h_null_counts));
+  return std::pair(std::move(h_destination_masks),
+                   cudf::detail::make_std_vector<size_type>(null_counts, stream));
 }
 
 /**
@@ -343,7 +345,7 @@ size_type inplace_bitmask_binop(Binop op,
  * @param[in] mask_size_bits The number of bits to be operated on in each mask
  * @param[in] segment_offsets Host span of offsets defining the segments for the operation
  * @param[in] stream CUDA stream used for device memory operations and kernel launches
- * @param[in] mr Device memory resource used to allocate temporary device memory
+ * @param[in] mr Device memory resource used to allocate output device vector of null counts
  * @return A device vector containing the counts of unset bits in the destination mask corresponding
  * to each segment after the AND operation
  */
@@ -372,7 +374,6 @@ rmm::device_uvector<size_type> inplace_segmented_bitmask_binop(
   auto d_begin_bits = cudf::detail::make_device_uvector_async(masks_begin_bits, stream, temp_mr);
   auto d_segment_offsets =
     cudf::detail::make_device_uvector_async(segment_offsets, stream, temp_mr);
-  stream.synchronize();
 
   auto constexpr block_size = 256;
   auto constexpr warps_per_block =
