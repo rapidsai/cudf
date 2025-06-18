@@ -34,6 +34,13 @@
 
 namespace cudf::io::parquet::detail {
 
+namespace {
+
+/// Initial capacity for the chars host vector in host_column
+constexpr size_t initial_chars_capacity = 1024;
+
+}  // namespace
+
 /**
  * @brief Base utilities for converting and casting stats values
  *
@@ -132,16 +139,16 @@ class stats_caster_base {
   struct host_column {
     // using thrust::host_vector because std::vector<bool> uses bitmap instead of byte per bool.
     cudf::detail::host_vector<T> val;
+    cudf::detail::host_vector<char> chars;
     std::vector<bitmask_type> null_mask;
-    std::vector<char> chars;
     cudf::size_type null_count = 0;
 
     host_column(size_type total_row_groups, rmm::cuda_stream_view stream)
       : val{cudf::detail::make_host_vector<T>(total_row_groups, stream)},
+        chars{cudf::detail::make_empty_host_vector<char>(initial_chars_capacity, stream)},
         null_mask(cudf::util::div_rounding_up_safe<cudf::size_type>(
                     cudf::bitmask_allocation_size_bytes(total_row_groups), sizeof(bitmask_type)),
-                  ~bitmask_type{0}),
-        chars{}
+                  ~bitmask_type{0})
     {
     }
 
