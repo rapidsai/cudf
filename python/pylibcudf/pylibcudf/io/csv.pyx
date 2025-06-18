@@ -15,6 +15,7 @@ from pylibcudf.libcudf.io.csv cimport (
     csv_writer_options,
     read_csv as cpp_read_csv,
     write_csv as cpp_write_csv,
+    is_supported_write_csv as cpp_is_supported_write_csv,
 )
 
 from pylibcudf.libcudf.io.types cimport (
@@ -626,6 +627,22 @@ cdef class CsvReaderOptionsBuilder:
         self.c_obj.dayfirst(dayfirst)
         return self
 
+    cpdef CsvReaderOptionsBuilder delimiter(self, str delimiter):
+        """
+        Sets field delimiter.
+
+        Parameters
+        ----------
+        delimiter : str
+            A character to indicate delimiter
+
+        Returns
+        -------
+        CsvReaderOptionsBuilder
+        """
+        self.c_obj.delimiter(ord(delimiter))
+        return self
+
     cpdef CsvReaderOptions build(self):
         """Create a CsvReaderOptions object"""
         cdef CsvReaderOptions csv_options = CsvReaderOptions.__new__(
@@ -864,3 +881,11 @@ cpdef void write_csv(
     cdef Stream s = _get_stream(stream)
     with nogil:
         cpp_write_csv(move(options.c_obj), s.view())
+
+
+cpdef bool is_supported_write_csv(DataType type):
+    """Check if the dtype is supported for CSV writing
+
+    For details, see :cpp:func:`is_supported_write_type`.
+    """
+    return cpp_is_supported_write_csv(type.c_obj)

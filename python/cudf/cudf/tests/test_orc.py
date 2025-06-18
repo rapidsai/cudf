@@ -5,7 +5,7 @@ import decimal
 import os
 import random
 from io import BytesIO
-from string import ascii_lowercase
+from string import ascii_letters, ascii_lowercase
 
 import numpy as np
 import pandas as pd
@@ -63,6 +63,53 @@ def path_or_buf(datadir):
         raise ValueError("Invalid source type")
 
     yield _make_path_or_buf
+
+
+@pytest.fixture(scope="module")
+def non_nested_pdf():
+    rng = np.random.default_rng(seed=0)
+    types = [
+        "bool",
+        "int8",
+        "int16",
+        "int32",
+        "int64",
+        "float32",
+        "float64",
+        "datetime64[ns]",
+        "str",
+    ]
+    nrows = 12345
+
+    # Create a pandas dataframe with random data of mixed types
+    test_pdf = pd.DataFrame(
+        {
+            f"col_{typ}": rng.integers(0, nrows, nrows).astype(typ)
+            for typ in types
+        },
+    )
+
+    for t in [
+        {
+            "name": "datetime64[ns]",
+            "nsDivisor": 1000,
+            "dayModulus": 86400000000,
+        },
+    ]:
+        data = [
+            rng.integers(0, (0x7FFFFFFFFFFFFFFF / t["nsDivisor"]))
+            for i in range(nrows)
+        ]
+
+        test_pdf["col_" + t["name"]] = pd.Series(
+            np.asarray(data, dtype=t["name"])
+        )
+
+    # Create non-numeric str data
+    data = [ascii_letters[rng.integers(0, 52)] for i in range(nrows)]
+    test_pdf["col_str"] = pd.Series(data, dtype="str")
+
+    return test_pdf
 
 
 @pytest.mark.filterwarnings("ignore:Using CPU")
@@ -677,22 +724,20 @@ def test_orc_write_statistics(tmpdir, datadir, nrows, stats_freq):
 
 
 @pytest.mark.parametrize("stats_freq", ["STRIPE", "ROWGROUP"])
-@pytest.mark.parametrize("nrows", [2, 100, 200000])
+@pytest.mark.parametrize("nrows", [2, 100, 1024])
 def test_orc_chunked_write_statistics(tmpdir, datadir, nrows, stats_freq):
     from pyarrow import orc
 
     supported_stat_types = [*supported_numpy_dtypes, "str"]
     # Writing bool columns to multiple row groups is disabled
     # until #6763 is fixed
-    if nrows == 200000:
+    if nrows == 1024:
         supported_stat_types.remove("bool")
 
     gdf_fname = tmpdir.join("chunked_stats.orc")
-    writer = ORCWriter(
-        gdf_fname, statistics=stats_freq, stripe_size_rows=30000
-    )
+    writer = ORCWriter(gdf_fname, statistics=stats_freq, stripe_size_rows=512)
 
-    max_char_length = 100 if nrows < 10000 else 10
+    max_char_length = 100 if nrows < 1000 else 10
 
     # Make a dataframe
     gdf = cudf.DataFrame(
@@ -1995,3 +2040,15 @@ def test_orc_reader_desynced_timestamp(datadir, inputfile):
     got = cudf.read_orc(path)
 
     assert_frame_equal(cudf.from_pandas(expect), got)
+
+
+@pytest.mark.parametrize("compression", ["LZ4", "SNAPPY", "ZLIB", "ZSTD"])
+def test_orc_decompression(set_decomp_env_vars, compression, non_nested_pdf):
+    # Write the DataFrame to a Parquet file
+    buffer = BytesIO()
+    non_nested_pdf.to_orc(buffer, engine_kwargs={"compression": compression})
+
+    # Read the Parquet file back into a DataFrame
+    got = cudf.read_orc(buffer)
+
+    assert_eq(non_nested_pdf, got)

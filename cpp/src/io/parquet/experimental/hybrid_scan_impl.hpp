@@ -79,6 +79,12 @@ class hybrid_scan_reader_impl {
   [[nodiscard]] std::vector<size_type> all_row_groups(parquet_reader_options const& options) const;
 
   /**
+   * @copydoc cudf::io::experimental::hybrid_scan::total_rows_in_row_groups
+   */
+  [[nodiscard]] size_type total_rows_in_row_groups(
+    cudf::host_span<std::vector<size_type> const> row_group_indices) const;
+
+  /**
    * @copydoc cudf::io::experimental::hybrid_scan::filter_row_groups_with_stats
    */
   [[nodiscard]] std::vector<std::vector<size_type>> filter_row_groups_with_stats(
@@ -333,7 +339,7 @@ class hybrid_scan_reader_impl {
    * - The total sizes of all output columns at all nesting levels
    * - The starting output buffer offset for each page, for each nesting level
    *
-   * For flat schemas, these values are computed during header decoding (see gpuDecodePageHeaders).
+   * For flat schemas, these values are computed during header decoding (see decode_page_headers).
    *
    * @param chunk_read_limit Limit on total number of bytes to be returned per read,
    *        or `0` if there is no limit

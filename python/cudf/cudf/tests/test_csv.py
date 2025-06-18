@@ -887,10 +887,10 @@ def test_csv_reader_nrows(tmpdir):
     names = ["int1", "int2"]
     dtypes = ["int32", "int32"]
 
-    rows = 4000000
+    rows = 4000
     read_rows = (rows * 3) // 4
     skip_rows = (rows - read_rows) // 2
-    sample_skip = 1000
+    sample_skip = 100
 
     with open(str(fname), "w") as fp:
         fp.write(",".join(names) + "\n")
@@ -2298,3 +2298,15 @@ def test_read_empty_only_row(buffer):
 def test_read_empty_only_row_custom_terminator():
     gdf = cudf.read_csv(StringIO("*"), header=None, lineterminator="*")
     assert_eq(gdf.shape, (0, 0))
+
+
+def test_empty_file_pandas_compat_raises(tmp_path):
+    empty_file = tmp_path / "empty.csv"
+    empty_file.touch()
+    with cudf.option_context("mode.pandas_compatible", True):
+        with pytest.raises(pd.errors.EmptyDataError):
+            cudf.read_csv(StringIO())
+        with pytest.raises(pd.errors.EmptyDataError):
+            cudf.read_csv(empty_file)
+        with pytest.raises(pd.errors.EmptyDataError):
+            cudf.read_csv(str(empty_file))

@@ -71,7 +71,8 @@ abstract class Aggregation {
         TDIGEST(32), // This can take a delta argument for accuracy level
         MERGE_TDIGEST(33), // This can take a delta argument for accuracy level
         HISTOGRAM(34),
-        MERGE_HISTOGRAM(35);
+        MERGE_HISTOGRAM(35),
+        BITWISE_AGG(36);
 
         final int nativeId;
 
@@ -421,6 +422,69 @@ abstract class Aggregation {
                 return wrapper.equals(((HostUDFAggregation) other).wrapper);
             }
             return false;
+        }
+    }
+
+    static final class BitAndAggregation extends Aggregation {
+        private BitAndAggregation() {
+            super(Kind.BITWISE_AGG);
+        }
+
+        @Override
+        long createNativeInstance() {
+            return Aggregation.createBitAndAgg();
+        }
+
+        @Override
+        public int hashCode() {
+            return 31 * kind.hashCode() + ("AND").hashCode();
+        }
+
+        @Override
+        public boolean equals(Object other) {
+            return other instanceof BitAndAggregation;
+        }
+    }
+
+    static final class BitOrAggregation extends Aggregation {
+        private BitOrAggregation() {
+            super(Kind.BITWISE_AGG);
+        }
+
+        @Override
+        long createNativeInstance() {
+            return Aggregation.createBitOrAgg();
+        }
+
+        @Override
+        public int hashCode() {
+            return 31 * kind.hashCode() + ("OR").hashCode();
+        }
+
+        @Override
+        public boolean equals(Object other) {
+            return other instanceof BitAndAggregation;
+        }
+    }
+
+    static final class BitXorAggregation extends Aggregation {
+        private BitXorAggregation() {
+            super(Kind.BITWISE_AGG);
+        }
+
+        @Override
+        long createNativeInstance() {
+            return Aggregation.createBitXorAgg();
+        }
+
+        @Override
+        public int hashCode() {
+            return 31 * kind.hashCode() + ("XOR").hashCode();
+        }
+
+        @Override
+        public boolean equals(Object other) {
+            return other instanceof BitAndAggregation;
         }
     }
 
@@ -988,6 +1052,18 @@ abstract class Aggregation {
         return new MergeHistogramAggregation();
     }
 
+    static BitAndAggregation bitAnd() {
+        return new BitAndAggregation();
+    }
+
+    static BitOrAggregation bitOr() {
+        return new BitOrAggregation();
+    }
+
+    static BitXorAggregation bitXor() {
+        return new BitXorAggregation();
+    }
+
     /**
      * Create one of the aggregations that only needs a kind, no other parameters. This does not
      * work for all types and for code safety reasons each kind is added separately.
@@ -1043,4 +1119,19 @@ abstract class Aggregation {
      * Create a HOST_UDF aggregation.
      */
     private static native long createHostUDFAgg(long udfNativeHandle);
+
+    /**
+     * Create a bitwise AND aggregation.
+     */
+    private static native long createBitAndAgg();
+
+    /**
+     * Create a bitwise OR aggregation.
+     */
+    private static native long createBitOrAgg();
+
+    /**
+     * Create a bitwise XOR aggregation.
+     */
+    private static native long createBitXorAgg();
 }

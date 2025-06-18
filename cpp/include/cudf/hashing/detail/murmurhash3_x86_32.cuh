@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2017-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -79,8 +79,8 @@ MurmurHash3_x86_32<double>::result_type __device__ inline MurmurHash3_x86_32<dou
 
 template <>
 MurmurHash3_x86_32<cudf::string_view>::result_type
-  __device__ inline MurmurHash3_x86_32<cudf::string_view>::operator()(
-    cudf::string_view const& key) const
+  __device__ inline MurmurHash3_x86_32<cudf::string_view>::
+  operator()(cudf::string_view const& key) const
 {
   return this->compute_bytes(reinterpret_cast<cuda::std::byte const*>(key.data()),
                              key.size_bytes());
@@ -88,40 +88,40 @@ MurmurHash3_x86_32<cudf::string_view>::result_type
 
 template <>
 MurmurHash3_x86_32<numeric::decimal32>::result_type
-  __device__ inline MurmurHash3_x86_32<numeric::decimal32>::operator()(
-    numeric::decimal32 const& key) const
+  __device__ inline MurmurHash3_x86_32<numeric::decimal32>::
+  operator()(numeric::decimal32 const& key) const
 {
   return this->compute(key.value());
 }
 
 template <>
 MurmurHash3_x86_32<numeric::decimal64>::result_type
-  __device__ inline MurmurHash3_x86_32<numeric::decimal64>::operator()(
-    numeric::decimal64 const& key) const
+  __device__ inline MurmurHash3_x86_32<numeric::decimal64>::
+  operator()(numeric::decimal64 const& key) const
 {
   return this->compute(key.value());
 }
 
 template <>
 MurmurHash3_x86_32<numeric::decimal128>::result_type
-  __device__ inline MurmurHash3_x86_32<numeric::decimal128>::operator()(
-    numeric::decimal128 const& key) const
+  __device__ inline MurmurHash3_x86_32<numeric::decimal128>::
+  operator()(numeric::decimal128 const& key) const
 {
   return this->compute(key.value());
 }
 
 template <>
 MurmurHash3_x86_32<cudf::list_view>::result_type
-  __device__ inline MurmurHash3_x86_32<cudf::list_view>::operator()(
-    cudf::list_view const& key) const
+  __device__ inline MurmurHash3_x86_32<cudf::list_view>::
+  operator()(cudf::list_view const& key) const
 {
   CUDF_UNREACHABLE("List column hashing is not supported");
 }
 
 template <>
 MurmurHash3_x86_32<cudf::struct_view>::result_type
-  __device__ inline MurmurHash3_x86_32<cudf::struct_view>::operator()(
-    cudf::struct_view const& key) const
+  __device__ inline MurmurHash3_x86_32<cudf::struct_view>::
+  operator()(cudf::struct_view const& key) const
 {
   CUDF_UNREACHABLE("Direct hashing of struct_view is not supported");
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -42,9 +42,8 @@ TYPED_TEST(FixedPointCompiledTest, FixedPointBinaryOpAdd)
 
   auto const sz = std::size_t{1000};
 
-  auto begin      = cudf::detail::make_counting_transform_iterator(1, [](auto i) {
-    return decimalXX{i, scale_type{0}};
-  });
+  auto begin = cudf::detail::make_counting_transform_iterator(
+    1, [](auto i) { return decimalXX{i, scale_type{0}}; });
   auto const vec1 = std::vector<decimalXX>(begin, begin + sz);
   auto const vec2 = std::vector<decimalXX>(sz, decimalXX{2, scale_type{0}});
   auto expected   = std::vector<decimalXX>(sz);
@@ -75,9 +74,8 @@ TYPED_TEST(FixedPointCompiledTest, FixedPointBinaryOpMultiply)
 
   auto const sz = std::size_t{1000};
 
-  auto begin      = cudf::detail::make_counting_transform_iterator(1, [](auto i) {
-    return decimalXX{i, scale_type{0}};
-  });
+  auto begin = cudf::detail::make_counting_transform_iterator(
+    1, [](auto i) { return decimalXX{i, scale_type{0}}; });
   auto const vec1 = std::vector<decimalXX>(begin, begin + sz);
   auto const vec2 = std::vector<decimalXX>(sz, decimalXX{2, scale_type{0}});
   auto expected   = std::vector<decimalXX>(sz);

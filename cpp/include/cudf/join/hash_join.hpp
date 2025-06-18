@@ -102,19 +102,6 @@ class hash_join {
   /**
    * @copydoc hash_join(cudf::table_view const&, null_equality, rmm::cuda_stream_view)
    *
-   * @param has_nulls Flag to indicate if there exists any nulls in the `build` table or
-   *                  any `probe` table that will be used later for join
-   *
-   * @deprecated Deprecated constructor. Use the new load factor overload instead.
-   */
-  [[deprecated]] hash_join(cudf::table_view const& build,
-                           nullable_join has_nulls,
-                           null_equality compare_nulls,
-                           rmm::cuda_stream_view stream = cudf::get_default_stream());
-
-  /**
-   * @copydoc hash_join(cudf::table_view const&, null_equality, rmm::cuda_stream_view)
-   *
    * @throws std::invalid_argument if load_factor is not greater than 0 and less than or equal to 1
    *
    * @param has_nulls Flag to indicate if there exists any nulls in the `build` table or

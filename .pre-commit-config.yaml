@@ -39,10 +39,11 @@ repos:
                "python/custreamz/custreamz",
                "python/cudf_kafka/cudf_kafka",
                "python/cudf_polars/cudf_polars",
+               "python/cudf_polars/tests",
                "python/dask_cudf/dask_cudf"]
         pass_filenames: false
   - repo: https://github.com/pre-commit/mirrors-clang-format
-    rev: v16.0.6
+    rev: v20.1.4
     hooks:
       - id: clang-format
         types_or: [c, c++, cuda]
@@ -166,7 +167,6 @@ repos:
     hooks:
       - id: shellcheck
         args: ["--severity=warning"]
-        files: ^ci/
 
 default_language_version:
       python: python3

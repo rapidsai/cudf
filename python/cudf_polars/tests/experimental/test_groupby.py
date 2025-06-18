@@ -10,6 +10,7 @@ import pytest
 import polars as pl
 
 from cudf_polars.testing.asserts import DEFAULT_SCHEDULER, assert_gpu_result_equal
+from cudf_polars.utils.versions import POLARS_VERSION_LT_130
 
 
 @pytest.fixture(scope="module")
@@ -29,6 +30,7 @@ def df():
     return pl.LazyFrame(
         {
             "x": range(150),
+            "xx": list(range(75)) * 2,
             "y": [1, 2, 3] * 50,
             "z": [1.0, 2.0, 3.0, 4.0, 5.0] * 30,
         }
@@ -72,6 +74,12 @@ def test_groupby_agg(df, engine, op, keys):
     assert_gpu_result_equal(q, engine=engine, check_row_order=False)
 
 
+@pytest.mark.parametrize("keys", [("y",), ("y", "z")])
+def test_groupby_n_unique(df, engine, keys):
+    q = df.group_by(*keys).agg(pl.col("xx").n_unique().cast(pl.Int64))
+    assert_gpu_result_equal(q, engine=engine, check_row_order=False)
+
+
 @pytest.mark.parametrize("op", ["sum", "mean", "len", "count"])
 @pytest.mark.parametrize("keys", [("y",), ("y", "z")])
 def test_groupby_agg_config_options(df, op, keys):
@@ -90,6 +98,8 @@ def test_groupby_agg_config_options(df, op, keys):
     )
     agg = getattr(pl.col("x"), op)()
     if op in ("sum", "mean"):
+        if POLARS_VERSION_LT_130:
+            agg = agg.cast(pl.Float64)
         agg = agg.round(2)  # Unary test coverage
     q = df.group_by(*keys).agg(agg)
     assert_gpu_result_equal(q, engine=engine, check_row_order=False)
@@ -113,7 +123,12 @@ def test_groupby_fallback(df, engine, fallback_mode):
     if fallback_mode == "silent":
         ctx = contextlib.nullcontext()
     elif fallback_mode == "raise":
-        ctx = pytest.raises(pl.exceptions.ComputeError, match=match)
+        ctx = pytest.raises(
+            pl.exceptions.ComputeError
+            if POLARS_VERSION_LT_130
+            else NotImplementedError,
+            match=match,
+        )
     elif fallback_mode == "foo":
         ctx = pytest.raises(
             pl.exceptions.ComputeError,
@@ -170,3 +185,41 @@ def test_groupby_agg_duplicate(
 def test_groupby_agg_empty(df: pl.LazyFrame, engine: pl.GPUEngine) -> None:
     q = df.group_by("y").agg()
     assert_gpu_result_equal(q, engine=engine, check_row_order=False)
+
+
+def test_groupby_on_equality(df: pl.LazyFrame, engine: pl.GPUEngine) -> None:
+    # See: https://github.com/rapidsai/cudf/issues/19152
+    df = pl.LazyFrame(
+        {
+            "key1": [1, 1, 1, 2, 3, 1, 4, 6, 7],
+            "key2": [2, 2, 2, 2, 6, 1, 4, 6, 8],
+            "int32": pl.Series([1, 2, 3, 4, 5, 6, 7, 8, 9], dtype=pl.Int32()),
+        }
+    )
+    q = df.group_by(pl.col("key1") == pl.col("key2")).agg(pl.col("int32").sum())
+    assert_gpu_result_equal(q, engine=engine, check_row_order=False)
+
+
+@pytest.mark.parametrize(
+    "values",
+    [
+        [1, None, 2, None],
+        [1, None, None, None],
+    ],
+)
+def test_mean_partitioned(values: list[int | None]) -> None:
+    df = pl.LazyFrame(
+        {
+            "key1": [1, 1, 2, 2],
+            "uint16_with_null": pl.Series(values, dtype=pl.UInt16()),
+        }
+    )
+
+    q = df.group_by("key1").agg(pl.col("uint16_with_null").mean())
+    assert_gpu_result_equal(
+        q,
+        engine=pl.GPUEngine(
+            executor="streaming", executor_options={"max_rows_per_partition": 2}
+        ),
+        check_row_order=False,
+    )

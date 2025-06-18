@@ -113,7 +113,7 @@ CUDF_KERNEL void mapping_indices_kernel(cudf::size_type num_input_rows,
     global_set.key_eq(),
     probing_scheme_t{global_set.hash_function()},
     cuco::thread_scope_block,
-    cuco::flat_storage_ref<cudf::size_type, GROUPBY_BUCKET_SIZE, decltype(valid_extent)>{
+    cuco::bucket_storage_ref<cudf::size_type, GROUPBY_BUCKET_SIZE, decltype(valid_extent)>{
       valid_extent, slots}};
   auto shared_set = raw_set.rebind_operators(cuco::insert_and_find);
 

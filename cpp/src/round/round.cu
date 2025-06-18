@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -54,27 +54,31 @@ inline double __device__ generic_round_half_even(double d) { return rint(d); }
 inline float __device__ generic_modf(float a, float* b) { return modff(a, b); }
 inline double __device__ generic_modf(double a, double* b) { return modf(a, b); }
 
-template <typename T, std::enable_if_t<cuda::std::is_signed_v<T>>* = nullptr>
+template <typename T>
 T __device__ generic_abs(T value)
+  requires(cuda::std::is_signed_v<T>)
 {
   return numeric::detail::abs(value);
 }
 
-template <typename T, std::enable_if_t<not cuda::std::is_signed_v<T>>* = nullptr>
+template <typename T>
 T __device__ generic_abs(T value)
+  requires(not cuda::std::is_signed_v<T>)
 {
   return value;
 }
 
-template <typename T, std::enable_if_t<cuda::std::is_signed_v<T>>* = nullptr>
+template <typename T>
 int16_t __device__ generic_sign(T value)
+  requires(cuda::std::is_signed_v<T>)
 {
   return value < 0 ? -1 : 1;
 }
 
 // this is needed to suppress warning: pointless comparison of unsigned integer with zero
-template <typename T, std::enable_if_t<not cuda::std::is_signed_v<T>>* = nullptr>
+template <typename T>
 int16_t __device__ generic_sign(T)
+  requires(not cuda::std::is_signed_v<T>)
 {
   return 1;
 }
@@ -88,14 +92,16 @@ constexpr inline auto is_supported_round_type()
 template <typename T>
 struct half_up_zero {
   T n;  // unused in the decimal_places = 0 case
-  template <typename U = T, std::enable_if_t<cudf::is_floating_point<U>()>* = nullptr>
+  template <typename U = T>
   __device__ U operator()(U e)
+    requires(cudf::is_floating_point<U>())
   {
     return generic_round(e);
   }
 
-  template <typename U = T, std::enable_if_t<cuda::std::is_integral_v<U>>* = nullptr>
+  template <typename U = T>
   __device__ U operator()(U)
+    requires(cuda::std::is_integral_v<U>)
   {
     assert(false);  // Should never get here. Just for compilation
     return U{};
@@ -105,16 +111,18 @@ struct half_up_zero {
 template <typename T>
 struct half_up_positive {
   T n;
-  template <typename U = T, std::enable_if_t<cudf::is_floating_point<U>()>* = nullptr>
+  template <typename U = T>
   __device__ U operator()(U e)
+    requires(cudf::is_floating_point<U>())
   {
     T integer_part;
     T const fractional_part = generic_modf(e, &integer_part);
     return integer_part + generic_round(fractional_part * n) / n;
   }
 
-  template <typename U = T, std::enable_if_t<cuda::std::is_integral_v<U>>* = nullptr>
+  template <typename U = T>
   __device__ U operator()(U)
+    requires(cuda::std::is_integral_v<U>)
   {
     assert(false);  // Should never get here. Just for compilation
     return U{};
@@ -124,14 +132,16 @@ struct half_up_positive {
 template <typename T>
 struct half_up_negative {
   T n;
-  template <typename U = T, std::enable_if_t<cudf::is_floating_point<U>()>* = nullptr>
+  template <typename U = T>
   __device__ U operator()(U e)
+    requires(cudf::is_floating_point<U>())
   {
     return generic_round(e / n) * n;
   }
 
-  template <typename U = T, std::enable_if_t<cuda::std::is_integral_v<U>>* = nullptr>
+  template <typename U = T>
   __device__ U operator()(U e)
+    requires(cuda::std::is_integral_v<U>)
   {
     auto const down = (e / n) * n;  // result from rounding down
     return down + generic_sign(e) * (generic_abs(e - down) >= n / 2 ? n : 0);
@@ -141,14 +151,16 @@ struct half_up_negative {
 template <typename T>
 struct half_even_zero {
   T n;  // unused in the decimal_places = 0 case
-  template <typename U = T, std::enable_if_t<cudf::is_floating_point<U>()>* = nullptr>
+  template <typename U = T>
   __device__ U operator()(U e)
+    requires(cudf::is_floating_point<U>())
   {
     return generic_round_half_even(e);
   }
 
-  template <typename U = T, std::enable_if_t<cuda::std::is_integral_v<U>>* = nullptr>
+  template <typename U = T>
   __device__ U operator()(U)
+    requires(cuda::std::is_integral_v<U>)
   {
     assert(false);  // Should never get here. Just for compilation
     return U{};
@@ -158,16 +170,18 @@ struct half_even_zero {
 template <typename T>
 struct half_even_positive {
   T n;
-  template <typename U = T, std::enable_if_t<cudf::is_floating_point<U>()>* = nullptr>
+  template <typename U = T>
   __device__ U operator()(U e)
+    requires(cudf::is_floating_point<U>())
   {
     T integer_part;
     T const fractional_part = generic_modf(e, &integer_part);
     return integer_part + generic_round_half_even(fractional_part * n) / n;
   }
 
-  template <typename U = T, std::enable_if_t<cuda::std::is_integral_v<U>>* = nullptr>
+  template <typename U = T>
   __device__ U operator()(U)
+    requires(cuda::std::is_integral_v<U>)
   {
     assert(false);  // Should never get here. Just for compilation
     return U{};
@@ -177,14 +191,16 @@ struct half_even_positive {
 template <typename T>
 struct half_even_negative {
   T n;
-  template <typename U = T, std::enable_if_t<cudf::is_floating_point<U>()>* = nullptr>
+  template <typename U = T>
   __device__ U operator()(U e)
+    requires(cudf::is_floating_point<U>())
   {
     return generic_round_half_even(e / n) * n;
   }
 
-  template <typename U = T, std::enable_if_t<cuda::std::is_integral_v<U>>* = nullptr>
+  template <typename U = T>
   __device__ U operator()(U e)
+    requires(cuda::std::is_integral_v<U>)
   {
     auto const down_over_n = e / n;            // use this to determine HALF_EVEN case
     auto const down        = down_over_n * n;  // result from rounding down
@@ -207,14 +223,12 @@ struct half_even_fixed_point {
   __device__ T operator()(T e) { return half_even_negative<T>{n}(e) / n; }
 };
 
-template <typename T,
-          template <typename>
-          typename RoundFunctor,
-          std::enable_if_t<not cudf::is_fixed_point<T>()>* = nullptr>
+template <typename T, template <typename> typename RoundFunctor>
 std::unique_ptr<column> round_with(column_view const& input,
                                    int32_t decimal_places,
                                    rmm::cuda_stream_view stream,
                                    rmm::device_async_resource_ref mr)
+  requires(not cudf::is_fixed_point<T>())
 {
   using Functor = RoundFunctor<T>;
 
@@ -239,14 +253,12 @@ std::unique_ptr<column> round_with(column_view const& input,
   return result;
 }
 
-template <typename T,
-          template <typename>
-          typename RoundFunctor,
-          std::enable_if_t<cudf::is_fixed_point<T>()>* = nullptr>
+template <typename T, template <typename> typename RoundFunctor>
 std::unique_ptr<column> round_with(column_view const& input,
                                    int32_t decimal_places,
                                    rmm::cuda_stream_view stream,
                                    rmm::device_async_resource_ref mr)
+  requires(cudf::is_fixed_point<T>())
 {
   using namespace numeric;
   using Type                   = device_storage_type_t<T>;
@@ -299,18 +311,19 @@ std::unique_ptr<column> round_with(column_view const& input,
 
 struct round_type_dispatcher {
   template <typename T, typename... Args>
-  std::enable_if_t<not is_supported_round_type<T>(), std::unique_ptr<column>> operator()(Args&&...)
+  std::unique_ptr<column> operator()(Args&&...)
+    requires(not is_supported_round_type<T>())
   {
     CUDF_FAIL("Type not support for cudf::round");
   }
 
   template <typename T>
-  std::enable_if_t<is_supported_round_type<T>(), std::unique_ptr<column>> operator()(
-    column_view const& input,
-    int32_t decimal_places,
-    cudf::rounding_method method,
-    rmm::cuda_stream_view stream,
-    rmm::device_async_resource_ref mr)
+  std::unique_ptr<column> operator()(column_view const& input,
+                                     int32_t decimal_places,
+                                     cudf::rounding_method method,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::device_async_resource_ref mr)
+    requires(is_supported_round_type<T>())
   {
     // clang-format off
     switch (method) {

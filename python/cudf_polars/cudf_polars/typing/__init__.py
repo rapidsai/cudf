@@ -6,22 +6,31 @@
 from __future__ import annotations
 
 from collections.abc import Hashable, MutableMapping
-from typing import TYPE_CHECKING, Any, Literal, Protocol, TypeVar, TypedDict, Union
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Literal,
+    NewType,
+    Protocol,
+    TypeVar,
+    TypedDict,
+    Union,
+)
 
+import polars as pl
 from polars.polars import _expr_nodes as pl_expr, _ir_nodes as pl_ir
-
-import pylibcudf as plc
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
     from typing import TypeAlias
 
-    import polars as pl
+    import pylibcudf as plc
 
-    from cudf_polars.containers import DataFrame
+    from cudf_polars.containers import DataFrame, DataType
     from cudf_polars.dsl import expr, ir, nodebase
 
 __all__: list[str] = [
+    "ClosedInterval",
     "ColumnHeader",
     "ColumnOptions",
     "DataFrameHeader",
@@ -72,11 +81,16 @@ PolarsExpr: TypeAlias = Union[
     pl_expr.PyExprIR,
 ]
 
-Schema: TypeAlias = dict[str, plc.DataType]
+PolarsSchema: TypeAlias = dict[str, pl.DataType]
+Schema: TypeAlias = dict[str, "DataType"]
 
 Slice: TypeAlias = tuple[int, int | None]
 
 CSECache: TypeAlias = MutableMapping[int, tuple["DataFrame", int]]
+
+ClosedInterval: TypeAlias = Literal["left", "right", "both", "none"]
+
+Duration = NewType("Duration", tuple[int, int, int, int, bool, bool])
 
 
 class NodeTraverser(Protocol):
@@ -94,7 +108,7 @@ class NodeTraverser(Protocol):
         """Convert current plan node to python rep."""
         ...
 
-    def get_schema(self) -> Schema:
+    def get_schema(self) -> PolarsSchema:
         """Get the schema of the current plan node."""
         ...
 
@@ -170,6 +184,23 @@ class ColumnOptions(TypedDict):
     order: plc.types.Order
     null_order: plc.types.NullOrder
     name: str | None
+    dtype: str | None
+
+
+class DeserializedColumnOptions(TypedDict):
+    """
+    Deserialized Column constructor options.
+
+    Notes
+    -----
+    Used to deserialize Column and DataFrame containers.
+    """
+
+    is_sorted: plc.types.Sorted
+    order: plc.types.Order
+    null_order: plc.types.NullOrder
+    name: str | None
+    dtype: DataType | None
 
 
 class ColumnHeader(TypedDict):

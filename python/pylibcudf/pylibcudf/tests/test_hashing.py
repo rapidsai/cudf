@@ -66,20 +66,19 @@ def pa_scalar_input_column(scalar_type):
 
 @pytest.fixture
 def plc_scalar_input_tbl(pa_scalar_input_column):
-    return plc.interop.from_arrow(
+    return plc.Table.from_arrow(
         pa.Table.from_arrays([pa_scalar_input_column], names=["data"])
     )
 
 
 @pytest.fixture(scope="module")
 def list_struct_table():
-    data = pa.Table.from_pydict(
+    return pa.Table.from_pydict(
         {
             "list": [[1, 2, 3], [4, 5, 6], [7, 8, 9]],
             "struct": [{"a": 1, "b": 2}, {"a": 3, "b": 4}, {"a": 5, "b": 6}],
         }
     )
-    return data
 
 
 @pytest.mark.parametrize(
@@ -98,7 +97,7 @@ def test_hash_column_sha_md5(
         type=pa.string(),
     )
     got = plc_hasher(plc_scalar_input_tbl)
-    assert_column_eq(got, expect)
+    assert_column_eq(expect, got)
 
 
 def test_hash_column_xxhash32(pa_scalar_input_column, plc_scalar_input_tbl):
@@ -115,7 +114,7 @@ def test_hash_column_xxhash32(pa_scalar_input_column, plc_scalar_input_tbl):
         plc_scalar_input_tbl, plc.hashing.LIBCUDF_DEFAULT_HASH_SEED
     )
 
-    assert_column_eq(got, expect)
+    assert_column_eq(expect, got)
 
 
 def test_hash_column_xxhash64(pa_scalar_input_column, plc_scalar_input_tbl):
@@ -132,7 +131,7 @@ def test_hash_column_xxhash64(pa_scalar_input_column, plc_scalar_input_tbl):
         plc_scalar_input_tbl, plc.hashing.LIBCUDF_DEFAULT_HASH_SEED
     )
 
-    assert_column_eq(got, expect)
+    assert_column_eq(expect, got)
 
 
 @pytest.mark.parametrize(
@@ -141,7 +140,7 @@ def test_hash_column_xxhash64(pa_scalar_input_column, plc_scalar_input_tbl):
 @pytest.mark.parametrize("dtype", ["list", "struct"])
 def test_sha_list_struct_err(list_struct_table, dtype, method):
     err_types = list_struct_table.select([dtype])
-    plc_tbl = plc.interop.from_arrow(err_types)
+    plc_tbl = plc.Table.from_arrow(err_types)
     plc_hasher = getattr(plc.hashing, method)
 
     with pytest.raises(TypeError):
@@ -150,7 +149,7 @@ def test_sha_list_struct_err(list_struct_table, dtype, method):
 
 def test_md5_struct_err(list_struct_table):
     err_types = list_struct_table.select(["struct"])
-    plc_tbl = plc.interop.from_arrow(err_types)
+    plc_tbl = plc.Table.from_arrow(err_types)
 
     with pytest.raises(TypeError):
         plc.hashing.md5(plc_tbl)
@@ -166,7 +165,7 @@ def test_murmurhash3_x86_32(pa_scalar_input_column, plc_scalar_input_tbl):
         type=pa.uint32(),
     )
     got = plc.hashing.murmurhash3_x86_32(plc_scalar_input_tbl, 0)
-    assert_column_eq(got, expect)
+    assert_column_eq(expect, got)
 
 
 @pytest.mark.filterwarnings("ignore::RuntimeWarning")
@@ -178,7 +177,7 @@ def test_murmurhash3_x86_32_list():
             )
         }
     )
-    plc_tbl = plc.interop.from_arrow(pa_tbl)
+    plc_tbl = plc.Table.from_arrow(pa_tbl)
 
     def hash_list(list_):
         hash_value = uint_hash_combine_32(0, hash_single_uint32(len(list_)))
@@ -203,7 +202,7 @@ def test_murmurhash3_x86_32_list():
     got = plc.hashing.murmurhash3_x86_32(
         plc_tbl, plc.hashing.LIBCUDF_DEFAULT_HASH_SEED
     )
-    assert_column_eq(got, expect)
+    assert_column_eq(expect, got)
 
 
 @pytest.mark.filterwarnings("ignore::RuntimeWarning")
@@ -225,7 +224,7 @@ def test_murmurhash3_x86_32_struct():
             )
         }
     )
-    plc_tbl = plc.interop.from_arrow(pa_tbl)
+    plc_tbl = plc.Table.from_arrow(pa_tbl)
 
     def hash_struct(s):
         seed = plc.hashing.LIBCUDF_DEFAULT_HASH_SEED
@@ -249,7 +248,7 @@ def test_murmurhash3_x86_32_struct():
         [hash_struct(val) for val in pa_tbl["struct"].to_pylist()],
         type=pa.uint32(),
     )
-    assert_column_eq(got, expect)
+    assert_column_eq(expect, got)
 
 
 def test_murmurhash3_x64_128(pa_scalar_input_column, plc_scalar_input_tbl):

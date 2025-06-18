@@ -7,6 +7,7 @@ from libcpp.vector cimport vector
 
 from pylibcudf.libcudf.io.data_sink cimport data_sink
 from pylibcudf.libcudf.io.types cimport (
+    const_byte,
     column_encoding,
     column_in_metadata,
     column_name_info,
@@ -23,6 +24,8 @@ from pylibcudf.libcudf.io.types cimport (
     table_with_metadata,
 )
 from pylibcudf.libcudf.types cimport size_type
+from pylibcudf.libcudf.utilities.span cimport host_span
+
 from pylibcudf.table cimport Table
 
 from rmm.pylibrmm.stream cimport Stream
@@ -87,6 +90,7 @@ cdef class SourceInfo:
     # Keep the bytes converted from stringio alive
     # (otherwise we end up with a use after free when they get gc'ed)
     cdef list byte_sources
+    cdef vector[host_span[const_byte]] _hspans
     cdef list device_sources
 
 cdef class SinkInfo:

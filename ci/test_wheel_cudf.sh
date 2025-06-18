@@ -3,6 +3,8 @@
 
 set -eou pipefail
 
+source rapids-init-pip
+
 RAPIDS_PY_CUDA_SUFFIX="$(rapids-wheel-ctk-name-gen "${RAPIDS_CUDA_VERSION}")"
 
 # Download the cudf, libcudf, and pylibcudf built in the previous step
@@ -15,10 +17,16 @@ rapids-logger "Install cudf, pylibcudf, and test requirements"
 # generate constraints (possibly pinning to oldest support versions of dependencies)
 rapids-generate-pip-constraints py_test_cudf ./constraints.txt
 
-# echo to expand wildcard before adding `[extra]` requires for pip
+# notes:
+#
+#   * echo to expand wildcard before adding `[test]` requires for pip
+#   * need to provide --constraint="${PIP_CONSTRAINT}" because that environment variable is
+#     ignored if any other --constraint are passed via the CLI
+#
 rapids-pip-retry install \
     -v \
     --constraint ./constraints.txt \
+    --constraint "${PIP_CONSTRAINT}" \
     "$(echo "${CUDF_WHEELHOUSE}"/cudf_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)[test]" \
     "$(echo "${LIBCUDF_WHEELHOUSE}"/libcudf_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)" \
     "$(echo "${PYLIBCUDF_WHEELHOUSE}"/pylibcudf_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)[test]"

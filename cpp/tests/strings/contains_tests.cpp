@@ -541,7 +541,7 @@ TEST_F(StringsContainsTests, QuantifierErrors)
 TEST_F(StringsContainsTests, OverlappedClasses)
 {
   auto input = cudf::test::strings_column_wrapper({"abcdefg", "defghí", "", "éééééé", "ghijkl"});
-  auto sv = cudf::strings_column_view(input);
+  auto sv    = cudf::strings_column_view(input);
 
   {
     auto pattern = std::string("[e-gb-da-c]");
@@ -562,7 +562,7 @@ TEST_F(StringsContainsTests, OverlappedClasses)
 TEST_F(StringsContainsTests, NegatedClasses)
 {
   auto input = cudf::test::strings_column_wrapper({"abcdefg", "def\tghí", "", "éeé\néeé", "ABC"});
-  auto sv = cudf::strings_column_view(input);
+  auto sv    = cudf::strings_column_view(input);
 
   {
     auto pattern = std::string("[^a-f]");
@@ -788,7 +788,7 @@ TEST_F(StringsContainsTests, DotAll)
 TEST_F(StringsContainsTests, ASCII)
 {
   auto input = cudf::test::strings_column_wrapper({"abc \t\f\r 12", "áé 　❽❽", "aZ ❽4", "XYZ　8"});
-  auto view = cudf::strings_column_view(input);
+  auto view  = cudf::strings_column_view(input);
 
   std::array patterns = {R"(\w+[\s]+\d+)",
                          R"([^\W]+\s+[^\D]+)",

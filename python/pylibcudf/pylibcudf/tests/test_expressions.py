@@ -1,4 +1,4 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION.
 import pyarrow as pa
 import pyarrow.compute as pc
 import pytest
@@ -10,7 +10,7 @@ import pylibcudf as plc
 def test_literal_construction_invalid():
     with pytest.raises(ValueError):
         plc.expressions.Literal(
-            plc.interop.from_arrow(pa.scalar(None, type=pa.list_(pa.int64())))
+            plc.Scalar.from_arrow(pa.scalar(None, type=pa.list_(pa.int64())))
         )
 
 
@@ -52,7 +52,7 @@ def test_astoperation_construction(kwargs):
 def test_evaluation():
     table_h = pa.table({"a": [1, 2, 3], "b": [4, 5, 6], "c": [7, 8, 9]})
     lit = pa.scalar(42, type=pa.int64())
-    table = plc.interop.from_arrow(table_h)
+    table = plc.Table.from_arrow(table_h)
     # expr = abs(b * c - (a + 42))
     expr = plc.expressions.Operation(
         plc.expressions.ASTOperator.ABS,
@@ -66,7 +66,7 @@ def test_evaluation():
             plc.expressions.Operation(
                 plc.expressions.ASTOperator.ADD,
                 plc.expressions.ColumnReference(0),
-                plc.expressions.Literal(plc.interop.from_arrow(lit)),
+                plc.expressions.Literal(plc.Scalar.from_arrow(lit)),
             ),
         ),
     )

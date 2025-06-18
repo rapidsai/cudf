@@ -245,6 +245,24 @@ class aggregate_reader_metadata {
     host_span<int const> column_schemas) const;
 
   /**
+   * @brief Filters the row groups using row bounds (`skip_rows` and `num_rows`)
+   *
+   * @param rows_to_skip Number of rows to skip
+   * @param rows_to_read Number of rows to read
+   *
+   * @return A tuple of number of rows to skip from the first surviving row group's row offset,
+   * a vector of surviving row group indices, and two vectors of effective (trimmed) row counts and
+   * offsets across surviving row group indices respectively
+   */
+  [[nodiscard]] std::tuple<int64_t,
+                           std::vector<std::vector<size_type>>,
+                           std::vector<std::vector<size_type>>,
+                           std::vector<std::vector<size_type>>>
+  apply_row_bounds_filter(cudf::host_span<std::vector<size_type> const> input_row_group_indices,
+                          int64_t rows_to_skip,
+                          int64_t rows_to_read) const;
+
+  /**
    * @brief Filters the row groups using stats filter
    *
    * @param input_row_group_indices Lists of input row groups, one per source
@@ -272,7 +290,7 @@ class aggregate_reader_metadata {
    * @param literals Lists of equality literals, one per each input row group
    * @param total_row_groups Total number of row groups in `input_row_group_indices`
    * @param output_dtypes Datatypes of output columns
-   * @param equality_col_schemas schema indices of equality columns only
+   * @param bloom_filter_col_schemas Schema indices of bloom filter columns only
    * @param filter AST expression to filter row groups based on bloom filter membership
    * @param stream CUDA stream used for device memory operations and kernel launches
    *
@@ -284,7 +302,7 @@ class aggregate_reader_metadata {
     host_span<std::vector<ast::literal*> const> literals,
     size_type total_row_groups,
     host_span<data_type const> output_dtypes,
-    host_span<int const> equality_col_schemas,
+    host_span<int const> bloom_filter_col_schemas,
     std::reference_wrapper<ast::expression const> filter,
     rmm::cuda_stream_view stream) const;
 
@@ -323,9 +341,36 @@ class aggregate_reader_metadata {
    */
   [[nodiscard]] std::vector<std::unordered_map<std::string, int64_t>> get_rowgroup_metadata() const;
 
+  /**
+   * @brief Maps leaf column names to vectors of `total_uncompressed_size` fields from their all
+   *        column chunks
+   *
+   * @return Map of leaf column names to vectors of `total_uncompressed_size` fields from all their
+   *         column chunks
+   */
+  [[nodiscard]] std::unordered_map<std::string, std::vector<int64_t>> get_column_chunk_metadata()
+    const;
+
+  /**
+   * @brief Get total number of rows across all files
+   *
+   * @return Total number of rows across all files
+   */
   [[nodiscard]] auto get_num_rows() const { return num_rows; }
 
+  /**
+   * @brief Get total number of row groups across all files
+   *
+   * @return Total number of row groups across all files
+   */
   [[nodiscard]] auto get_num_row_groups() const { return num_row_groups; }
+
+  /**
+   * @brief Get the number of row groups per file
+   *
+   * @return Number of row groups per file
+   */
+  [[nodiscard]] std::vector<size_type> get_num_row_groups_per_file() const;
 
   /**
    * @brief Checks if a schema index from 0th source is mapped to the specified file index
@@ -359,7 +404,7 @@ class aggregate_reader_metadata {
   [[nodiscard]] auto const& get_schema(int schema_idx, int pfm_idx = 0) const
   {
     CUDF_EXPECTS(
-      schema_idx >= 0 and pfm_idx >= 0 and pfm_idx < static_cast<int>(per_file_metadata.size()),
+      schema_idx >= 0 and pfm_idx >= 0 and std::cmp_less(pfm_idx, per_file_metadata.size()),
       "Parquet reader encountered an invalid schema_idx or pfm_idx",
       std::out_of_range);
     return per_file_metadata[pfm_idx].schema[schema_idx];
@@ -547,7 +592,7 @@ class named_to_reference_converter : public ast::detail::expression_transformer 
  */
 class equality_literals_collector : public ast::detail::expression_transformer {
  public:
-  equality_literals_collector();
+  equality_literals_collector() = default;
 
   equality_literals_collector(ast::expression const& expr, cudf::size_type num_input_columns);
 

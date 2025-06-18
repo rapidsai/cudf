@@ -105,16 +105,6 @@ class datasource {
   /**
    * @brief Creates a source from a host memory buffer.
    *
-   # @deprecated Since 23.04
-   *
-   * @param[in] buffer Host buffer object
-   * @return Constructed datasource object
-   */
-  static std::unique_ptr<datasource> create(host_buffer const& buffer);
-
-  /**
-   * @brief Creates a source from a host memory buffer.
-   *
    * @param[in] buffer Host buffer object
    * @return Constructed datasource object
    */

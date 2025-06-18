@@ -6,6 +6,7 @@ import nanoarrow.device
 import numpy as np
 import pyarrow as pa
 import pytest
+from packaging.version import parse
 from utils import assert_column_eq, assert_table_eq
 
 import pylibcudf as plc
@@ -13,7 +14,7 @@ import pylibcudf as plc
 
 def test_list_dtype_roundtrip():
     list_type = pa.list_(pa.int32())
-    plc_type = plc.interop.from_arrow(list_type)
+    plc_type = plc.DataType.from_arrow(list_type)
 
     assert plc_type == plc.types.DataType(plc.types.TypeId.LIST)
 
@@ -28,7 +29,7 @@ def test_list_dtype_roundtrip():
 
 def test_struct_dtype_roundtrip():
     struct_type = pa.struct([("a", pa.int32()), ("b", pa.string())])
-    plc_type = plc.interop.from_arrow(struct_type)
+    plc_type = plc.DataType.from_arrow(struct_type)
 
     assert plc_type == plc.types.DataType(plc.types.TypeId.STRUCT)
 
@@ -44,7 +45,7 @@ def test_struct_dtype_roundtrip():
 
 def test_table_with_nested_dtype_to_arrow():
     pa_array = pa.array([[{"": 1}]])
-    plc_table = plc.Table([plc.interop.from_arrow(pa_array)])
+    plc_table = plc.Table([plc.Column.from_arrow(pa_array)])
     result = plc.interop.to_arrow(plc_table)
     expected_schema = pa.schema(
         [
@@ -66,7 +67,7 @@ def test_table_with_nested_dtype_to_arrow():
 
 def test_decimal128_roundtrip():
     decimal_type = pa.decimal128(10, 2)
-    plc_type = plc.interop.from_arrow(decimal_type)
+    plc_type = plc.DataType.from_arrow(decimal_type)
 
     assert plc_type.id() == plc.types.TypeId.DECIMAL128
 
@@ -98,7 +99,7 @@ def test_decimal_other(data_type):
 
 def test_round_trip_dlpack_plc_table():
     expected = pa.table({"a": [1, 2, 3], "b": [5, 6, 7]})
-    plc_table = plc.interop.from_arrow(expected)
+    plc_table = plc.Table.from_arrow(expected)
     result = plc.interop.from_dlpack(plc.interop.to_dlpack(plc_table))
     assert_table_eq(expected, result)
 
@@ -112,7 +113,7 @@ def test_round_trip_dlpack_array(array):
 
 
 def test_to_dlpack_error():
-    plc_table = plc.interop.from_arrow(
+    plc_table = plc.Table.from_arrow(
         pa.table({"a": [1, None, 3], "b": [5, 6, 7]})
     )
     with pytest.raises(ValueError, match="Cannot create a DLPack tensor"):
@@ -126,10 +127,10 @@ def test_from_dlpack_error():
 
 def test_device_interop_column():
     pa_arr = pa.array([{"a": [1, None]}, None, {"b": [None, 4]}])
-    plc_col = plc.Column(pa_arr)
+    plc_col = plc.Column.from_arrow(pa_arr)
 
     na_arr = nanoarrow.device.c_device_array(plc_col)
-    new_col = plc.Column(na_arr)
+    new_col = plc.Column.from_arrow(na_arr)
     assert_column_eq(pa_arr, new_col)
 
 
@@ -155,11 +156,30 @@ def test_device_interop_table():
         ],
         schema=schema,
     )
-    plc_table = plc.Table(pa_tbl)
+    plc_table = plc.Table.from_arrow(pa_tbl)
 
     na_arr = nanoarrow.device.c_device_array(plc_table)
     actual_schema = pa.schema(na_arr.schema)
     assert actual_schema.equals(pa_tbl.schema)
 
-    new_tbl = plc.Table(na_arr)
+    new_tbl = plc.Table.from_arrow(na_arr)
     assert_table_eq(pa_tbl, new_tbl)
+
+
+@pytest.mark.skipif(
+    parse(pa.__version__) < parse("16.0.0"),
+    reason="https://github.com/apache/arrow/pull/39985",
+)
+@pytest.mark.parametrize(
+    "data",
+    [
+        [[1, 2, 3], [4, 5, 6]],
+        [[1, 2, 3], [None, 5, 6]],
+        [[[1]], [[2]]],
+        [[{"a": 1}], [{"b": 2}]],
+    ],
+)
+def test_column_from_arrow_stream(data):
+    pa_arr = pa.chunked_array(data)
+    col = plc.Column.from_arrow(pa_arr)
+    assert_column_eq(pa_arr, col)

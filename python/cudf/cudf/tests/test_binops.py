@@ -653,7 +653,11 @@ def test_different_shapes_and_columns_with_unaligned_indices(binop):
     # cast x and y as float64 so it matches pandas dtype
     cd_frame["x"] = cd_frame["x"].astype(np.float64)
     cd_frame["y"] = cd_frame["y"].astype(np.float64)
-    assert_eq(cd_frame, pd_frame)
+
+    # Sort both frames by index and then by all columns to ensure consistent ordering
+    pd_sorted = pd_frame.sort_index().sort_values(list(pd_frame.columns))
+    cd_sorted = cd_frame.sort_index().sort_values(list(cd_frame.columns))
+    assert_eq(cd_sorted, pd_sorted)
 
     pdf1 = pd.DataFrame({"x": [1, 1]}, index=["a", "a"])
     pdf2 = pd.DataFrame({"x": [2]}, index=["a"])
@@ -661,7 +665,11 @@ def test_different_shapes_and_columns_with_unaligned_indices(binop):
     gdf2 = cudf.DataFrame.from_pandas(pdf2)
     pd_frame = binop(pdf1, pdf2)
     cd_frame = binop(gdf1, gdf2)
-    assert_eq(pd_frame, cd_frame)
+
+    # Sort both frames consistently for comparison
+    pd_sorted = pd_frame.sort_index().sort_values(list(pd_frame.columns))
+    cd_sorted = cd_frame.sort_index().sort_values(list(cd_frame.columns))
+    assert_eq(pd_sorted, cd_sorted)
 
 
 @pytest.mark.parametrize(
@@ -2287,7 +2295,6 @@ def test_binops_decimal_scalar_compare(args, reflected):
     Tested compare operations:
         eq, lt, gt, le, ge
     Each operation has 3 data setups: pyints, Decimal, and
-    decimal cudf.Scalar
     For each data setup, there is at least one row that lead to one of the
     following compare results: {True, False, None}.
     """
@@ -2644,3 +2651,26 @@ def test_cat_non_cat_compare_ops(comp_op, data_left, data_right, ordered):
         expected = comp_op(pd_non_cat, pd_cat)
         result = comp_op(cudf_non_cat, cudf_cat)
         assert_eq(result, expected)
+
+
+@pytest.mark.parametrize(
+    "left_data, right_data",
+    [[["a", "b"], [1, 2]], [[[1, 2, 3], [4, 5]], [{"a": 1}, {"a": 2}]]],
+)
+@pytest.mark.parametrize(
+    "op, expected_data",
+    [[operator.eq, [False, False]], [operator.ne, [True, True]]],
+)
+@pytest.mark.parametrize("with_na", [True, False])
+def test_eq_ne_non_comparable_types(
+    left_data, right_data, op, expected_data, with_na
+):
+    if with_na:
+        left_data[0] = None
+    left = cudf.Series(left_data)
+    right = cudf.Series(right_data)
+    result = op(left, right)
+    if with_na:
+        expected_data[0] = None
+    expected = cudf.Series(expected_data)
+    assert_eq(result, expected)

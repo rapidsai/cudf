@@ -524,8 +524,8 @@ struct buf_info_functor {
   }
 
   template <typename T, typename... Args>
-  std::enable_if_t<std::is_same_v<T, cudf::dictionary32>, std::pair<src_buf_info*, size_type>>
-  operator()(Args&&...)
+  std::pair<src_buf_info*, size_type> operator()(Args&&...)
+    requires(std::is_same_v<T, cudf::dictionary32>)
   {
     CUDF_FAIL("Unsupported type");
   }
@@ -972,21 +972,22 @@ struct dst_valid_count_output_iterator {
  */
 struct size_of_helper {
   template <typename T>
-  constexpr std::enable_if_t<!is_fixed_width<T>() && !std::is_same_v<T, cudf::string_view>, int>
-    __device__ operator()() const
+  constexpr int __device__ operator()() const
+    requires(!is_fixed_width<T>() && !std::is_same_v<T, cudf::string_view>)
   {
     return 0;
   }
 
   template <typename T>
-  constexpr std::enable_if_t<!is_fixed_width<T>() && std::is_same_v<T, cudf::string_view>, int>
-    __device__ operator()() const
+  constexpr int __device__ operator()() const
+    requires(!is_fixed_width<T>() && std::is_same_v<T, cudf::string_view>)
   {
     return sizeof(cudf::device_storage_type_t<int8_t>);
   }
 
   template <typename T>
-  constexpr std::enable_if_t<is_fixed_width<T>(), int> __device__ operator()() const noexcept
+  constexpr int __device__ operator()() const noexcept
+    requires(is_fixed_width<T>())
   {
     return sizeof(cudf::device_storage_type_t<T>);
   }
@@ -1974,9 +1975,7 @@ struct contiguous_split_state {
                      h_buf_sizes + num_partitions,
                      std::back_inserter(out_buffers),
                      [stream = stream, mr = mr.value_or(cudf::get_current_device_resource_ref())](
-                       std::size_t bytes) {
-                       return rmm::device_buffer{bytes, stream, mr};
-                     });
+                       std::size_t bytes) { return rmm::device_buffer{bytes, stream, mr}; });
     }
 
     src_and_dst_pointers = std::move(setup_src_and_dst_pointers(
