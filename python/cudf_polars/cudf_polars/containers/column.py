@@ -46,6 +46,8 @@ def _dtype_short_repr_to_dtype(dtype_str: str) -> pl.DataType:
         stripped = dtype_str.removeprefix("list[").removesuffix("]")
         return pl.List(_dtype_short_repr_to_dtype(stripped))
     pl_type = pl.datatypes.convert.dtype_short_repr_to_dtype(dtype_str)
+    if pl_type is None:
+        raise ValueError(f"{dtype_str} was not able to be parsed by Polars.")
     return pl_type() if inspect.isclass(pl_type) else pl_type
 
 

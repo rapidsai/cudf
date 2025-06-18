@@ -12,12 +12,11 @@ from typing import TYPE_CHECKING, Any
 import pyarrow as pa
 import pyarrow.compute as pc
 
-import polars as pl
 from polars.exceptions import InvalidOperationError
 
 import pylibcudf as plc
 
-from cudf_polars.containers import Column, DataType
+from cudf_polars.containers import Column
 from cudf_polars.dsl.expressions.base import ExecutionContext, Expr
 from cudf_polars.dsl.expressions.literal import Literal, LiteralColumn
 from cudf_polars.dsl.utils.reshape import broadcast
@@ -27,7 +26,7 @@ if TYPE_CHECKING:
 
     from polars.polars import _expr_nodes as pl_expr
 
-    from cudf_polars.containers import DataFrame
+    from cudf_polars.containers import DataFrame, DataType
 
 __all__ = ["StringFunction"]
 
@@ -217,9 +216,9 @@ class StringFunction(Expr):
         """Evaluate this expression given a dataframe for context."""
         if self.name is StringFunction.Name.ConcatHorizontal:
             columns = [
-                Column(child.evaluate(df, context=context).obj).astype(
-                    DataType(pl.String())
-                )
+                Column(
+                    child.evaluate(df, context=context).obj, dtype=self.dtype
+                ).astype(self.dtype)
                 for child in self.children
             ]
 
@@ -238,7 +237,8 @@ class StringFunction(Expr):
                     else plc.Scalar.from_py(None, plc.DataType(plc.TypeId.STRING)),
                     None,
                     plc.strings.combine.SeparatorOnNulls.NO,
-                )
+                ),
+                dtype=self.dtype,
             )
         elif self.name is StringFunction.Name.ConcatVertical:
             (child,) = self.children

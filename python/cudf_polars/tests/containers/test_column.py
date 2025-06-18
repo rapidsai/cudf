@@ -95,3 +95,15 @@ def test_slice_none_returns_self():
         dtype=dtype,
     )
     assert column.slice(None) is column
+
+
+def test_deserialize_ctor_kwargs_invalid_dtype():
+    column_kwargs = {
+        "is_sorted": plc.types.Sorted.NO,
+        "order": plc.types.Order.ASCENDING,
+        "null_order": plc.types.NullOrder.AFTER,
+        "name": "test",
+        "dtype": "in64",
+    }
+    with pytest.raises(ValueError):
+        Column.deserialize_ctor_kwargs(column_kwargs)
