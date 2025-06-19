@@ -17,6 +17,14 @@ compute-sanitizer --tool memcheck custom_optimized names.csv
 compute-sanitizer --tool memcheck custom_prealloc names.csv
 compute-sanitizer --tool memcheck custom_with_malloc names.csv
 
+compute-sanitizer --tool memcheck branching_public info.csv output.csv
+compute-sanitizer --tool memcheck branching info.csv output.csv
+compute-sanitizer --tool memcheck int_output info.csv output.csv
+compute-sanitizer --tool memcheck output_public info.csv output.csv
+compute-sanitizer --tool memcheck output info.csv output.csv
+compute-sanitizer --tool memcheck preallocated_public info.csv output.csv
+compute-sanitizer --tool memcheck preallocated info.csv output.csv
+
 compute-sanitizer --tool memcheck parquet_io example.parquet
 compute-sanitizer --tool memcheck parquet_io example.parquet output.parquet DELTA_BINARY_PACKED ZSTD TRUE
 
