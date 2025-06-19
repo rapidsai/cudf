@@ -199,6 +199,7 @@ class NumericalColumn(NumericalBaseColumn):
             return super().__invert__()
 
     def _binaryop(self, other: ColumnBinaryOperand, op: str) -> ColumnBase:
+        # import pdb;pdb.set_trace()
         int_float_dtype_mapping = {
             np.int8: np.float32,
             np.int16: np.float32,
@@ -210,12 +211,34 @@ class NumericalColumn(NumericalBaseColumn):
             np.uint64: np.float64,
             np.bool_: np.float32,
         }
+        if cudf.get_option("mode.pandas_compatible"):
+            int_float_dtype_mapping = {
+                np.int8: np.float64,
+                np.int16: np.float64,
+                np.int32: np.float64,
+                np.int64: np.float64,
+                np.uint8: np.float64,
+                np.uint16: np.float64,
+                np.uint32: np.float64,
+                np.uint64: np.float64,
+                np.bool_: np.float64,
+            }
 
+        # if self.dtype.kind == "b":
+        #     if op.strip("_").lstrip("r") in ["pow", "truediv", "floordiv"]:
+        #         # match behavior with non-masked bool dtype
+        #         raise NotImplementedError("Power and division not supported for boolean dtype")
+        #     elif op in ["__sub__", "__rsub__"]:
+        #         # exception message would include "numpy boolean subtract""
+        #         raise TypeError("Cannot subtract boolean dtype")
+        # return None
         out_dtype = None
         if op in {"__truediv__", "__rtruediv__"}:
             # Division with integer types results in a suitable float.
             if truediv_type := int_float_dtype_mapping.get(self.dtype.type):
-                return self.astype(np.dtype(truediv_type))._binaryop(other, op)
+                return self.astype(
+                    get_dtype_of_same_kind(self.dtype, np.dtype(truediv_type))
+                )._binaryop(other, op)
         elif op in {
             "__lt__",
             "__gt__",
@@ -258,6 +281,7 @@ class NumericalColumn(NumericalBaseColumn):
         )
 
         if out_dtype is None:
+            # import pdb;pdb.set_trace()
             out_dtype = find_common_type((self.dtype, other_cudf_dtype))
             if op in {"__mod__", "__floordiv__"}:
                 tmp = self if reflect else other
@@ -270,6 +294,10 @@ class NumericalColumn(NumericalBaseColumn):
                     out_dtype = get_dtype_of_same_kind(
                         out_dtype, np.dtype(np.float64)
                     )
+                # elif tmp_dtype.kind == "b":
+                #     out_dtype = get_dtype_of_same_kind(
+                #         out_dtype, np.dtype(np.int8)
+                #     )
 
         if op in {"__and__", "__or__", "__xor__"}:
             if self.dtype.kind == "f" or other_cudf_dtype.kind == "f":
@@ -296,7 +324,19 @@ class NumericalColumn(NumericalBaseColumn):
             lhs = pa_scalar_to_plc_scalar(lhs)
         elif isinstance(rhs, pa.Scalar):
             rhs = pa_scalar_to_plc_scalar(rhs)
-        return binaryop.binaryop(lhs, rhs, op, out_dtype)
+        res = binaryop.binaryop(lhs, rhs, op, out_dtype)
+        if op in {"__mod__", "__floordiv__"} and tmp_dtype.kind == "b":
+            res = res.astype(
+                get_dtype_of_same_kind(out_dtype, np.dtype(np.int8))
+            )
+        elif (
+            op == "INT_POW"
+            and res.null_count
+            and not isinstance(rhs, plc.Scalar)
+        ):
+            res = res.copy_if_else(lhs, res._get_mask_as_column())
+            pass
+        return res
 
     def nans_to_nulls(self: Self) -> Self:
         # Only floats can contain nan.
@@ -338,7 +378,10 @@ class NumericalColumn(NumericalBaseColumn):
             #   => np.int64
             # np.promote_types(np.asarray([0], dtype=np.int64).dtype, np.uint8)
             #   => np.int64
-            common_dtype = np.result_type(self.dtype, other)  # noqa: TID251
+
+            common_dtype = np.result_type(
+                getattr(self.dtype, "numpy_dtype", self.dtype), other
+            )
             if common_dtype.kind in {"b", "i", "u", "f"}:
                 if self.dtype.kind == "b" and not isinstance(other, bool):
                     common_dtype = min_signed_type(other)
@@ -405,16 +448,21 @@ class NumericalColumn(NumericalBaseColumn):
         return self.cast(dtype=dtype)  # type: ignore[return-value]
 
     def as_numerical_column(self, dtype: Dtype) -> NumericalColumn:
+        # import pdb;pdb.set_trace()
         if dtype == self.dtype:
             return self
         if cudf.get_option("mode.pandas_compatible"):
             if dtype_to_pylibcudf_type(dtype) == dtype_to_pylibcudf_type(
                 self.dtype
             ):
+                if self.dtype.kind == "f":
+                    res = self.nans_to_nulls()
+                else:
+                    res = self
                 # Short-circuit the cast if the dtypes are equivalent
                 # but not the same type object.
-                self._dtype = dtype
-                return self
+                res._dtype = dtype
+                return res
         return self.cast(dtype=dtype)  # type: ignore[return-value]
 
     def all(self, skipna: bool = True) -> bool:

@@ -11,7 +11,10 @@ import cudf
 from cudf.core.column import as_column
 from cudf.core.dtypes import CategoricalDtype
 from cudf.options import get_option
-from cudf.utils.dtypes import can_convert_to_column, cudf_dtype_to_pa_type
+from cudf.utils.dtypes import (
+    can_convert_to_column,
+    cudf_dtype_to_pa_type,
+)
 
 if TYPE_CHECKING:
     from cudf.core.index import Index

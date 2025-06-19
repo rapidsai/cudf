@@ -9786,8 +9786,9 @@ def test_diff_numeric_dtypes(data, periods):
     gdf = cudf.DataFrame(data)
     pdf = gdf.to_pandas()
 
-    actual = gdf.diff(periods=periods, axis=0)
     expected = pdf.diff(periods=periods, axis=0)
+
+    actual = gdf.diff(periods=periods, axis=0)
 
     assert_eq(
         expected,
