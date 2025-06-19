@@ -52,30 +52,30 @@ export CUDACXX=/usr/local/cuda/bin/nvcc
 export LIBCUDF_KERNEL_CACHE_PATH=/rapids
 
 ###### Build libcudf ######
-LIBCUDF_BUILD_PATH="$WORKSPACE/cpp/build"
-rm -rf "$LIBCUDF_BUILD_PATH"
-mkdir -p "$LIBCUDF_BUILD_PATH"
-cd "$LIBCUDF_BUILD_PATH"
-cmake .. -G"${CMAKE_GENERATOR}" \
-         -DCMAKE_INSTALL_PREFIX=$INSTALL_PREFIX \
-         -DCUDA_STATIC_RUNTIME="$ENABLE_CUDA_STATIC_RUNTIME" \
-         -DUSE_NVTX="$ENABLE_NVTX" \
-         -DCUDF_LARGE_STRINGS_DISABLED=ON \
-         -DCUDF_USE_ARROW_STATIC=ON \
-         -DCUDF_ENABLE_ARROW_S3=OFF \
-         -DBUILD_TESTS="$BUILD_CPP_TESTS" \
-         -DCUDF_USE_PER_THREAD_DEFAULT_STREAM="$ENABLE_PTDS" \
-         -DRMM_LOGGING_LEVEL="$RMM_LOGGING_LEVEL" \
-         -DBUILD_SHARED_LIBS=OFF \
-         -DCUDF_KVIKIO_REMOTE_IO=OFF \
-         -DCUDF_EXPORT_NVCOMP=ON
+# LIBCUDF_BUILD_PATH="$WORKSPACE/cpp/build"
+# rm -rf "$LIBCUDF_BUILD_PATH"
+# mkdir -p "$LIBCUDF_BUILD_PATH"
+# cd "$LIBCUDF_BUILD_PATH"
+# cmake .. -G"${CMAKE_GENERATOR}" \
+#          -DCMAKE_INSTALL_PREFIX=$INSTALL_PREFIX \
+#          -DCUDA_STATIC_RUNTIME="$ENABLE_CUDA_STATIC_RUNTIME" \
+#          -DUSE_NVTX="$ENABLE_NVTX" \
+#          -DCUDF_LARGE_STRINGS_DISABLED=ON \
+#          -DCUDF_USE_ARROW_STATIC=ON \
+#          -DCUDF_ENABLE_ARROW_S3=OFF \
+#          -DBUILD_TESTS="$BUILD_CPP_TESTS" \
+#          -DCUDF_USE_PER_THREAD_DEFAULT_STREAM="$ENABLE_PTDS" \
+#          -DRMM_LOGGING_LEVEL="$RMM_LOGGING_LEVEL" \
+#          -DBUILD_SHARED_LIBS=OFF \
+#          -DCUDF_KVIKIO_REMOTE_IO=OFF \
+#          -DCUDF_EXPORT_NVCOMP=ON
 
-if [[ -z "${PARALLEL_LEVEL}" ]]; then
-    cmake --build .
-else
-    cmake --build . --parallel "$PARALLEL_LEVEL"
-fi
-cmake --install .
+# if [[ -z "${PARALLEL_LEVEL}" ]]; then
+#     cmake --build .
+# else
+#     cmake --build . --parallel "$PARALLEL_LEVEL"
+# fi
+# cmake --install .
 
 ###### Build cudf jar ######
 BUILD_ARG=(
@@ -90,13 +90,14 @@ BUILD_ARG=(
 
 if [ "$SIGN_FILE" == true ]; then
     # Build javadoc and sources only when SIGN_FILE is true
-    if [ $BUILD_JAVADOC_JDK17 == true ]; then
-        # Generate javadoc with JDK 17
-        yum install -y java-17-openjdk-devel
-        export JDK17_HOME=/usr/lib/jvm/java-17-openjdk
-        BUILD_ARG+=("-Prelease,javadoc")
-    else
-        BUILD_ARG+=("-Prelease")
+    BUILD_ARG+=("-Prelease")
+fi
+
+# Generate javadoc with JDK 17
+if [ $BUILD_JAVADOC_JDK17 == true ]; then
+    yum install -y java-17-openjdk-devel
+    export JDK17_HOME=/usr/lib/jvm/java-17-openjdk
+    BUILD_ARG+=("-Pjavadoc-jdk17")
 fi
 
 if [ -f "$WORKSPACE/java/ci/settings.xml" ]; then
