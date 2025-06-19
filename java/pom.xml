@@ -359,7 +359,7 @@
             </build>
         </profile>
         <profile>
-            <id>javadoc</id>
+            <id>javadoc-jdk17</id>
             <build>
                 <plugins>
                     <plugin>
@@ -367,7 +367,7 @@
                         <artifactId>maven-javadoc-plugin</artifactId>
                         <version>3.6.3</version>
                         <configuration>
-                            <classifier>javadoc-jdk17</classifier>
+                            <classifier>javadoc</classifier>
                             <additionalJOptions>
                                 <additionalJOption>-Xdoclint:none</additionalJOption>
                             </additionalJOptions>

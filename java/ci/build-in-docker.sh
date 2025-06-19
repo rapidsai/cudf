@@ -90,7 +90,13 @@ BUILD_ARG=(
 
 if [ "$SIGN_FILE" == true ]; then
     # Build javadoc and sources only when SIGN_FILE is true
-    BUILD_ARG+=("-Prelease")
+    if [ $BUILD_JAVADOC_JDK17 == true ]; then
+        # Generate javadoc with JDK 17
+        yum install -y java-17-openjdk-devel
+        export JDK17_HOME=/usr/lib/jvm/java-17-openjdk
+        BUILD_ARG+=("-Prelease,javadoc")
+    else
+        BUILD_ARG+=("-Prelease")
 fi
 
 if [ -f "$WORKSPACE/java/ci/settings.xml" ]; then
@@ -101,12 +107,6 @@ fi
 cd "$WORKSPACE/java"
 CUDF_INSTALL_DIR="$INSTALL_PREFIX" mvn -B clean package "${BUILD_ARG[@]}"
 
-# Generate javadoc with JDK 17
-if [ $BUILD_JAVADOC_JDK17 == true ]; then
-    yum install -y java-17-openjdk-devel
-    export JDK17_HOME=/usr/lib/jvm/java-17-openjdk
-    CUDF_INSTALL_DIR="$INSTALL_PREFIX" mvn -B javadoc:jar -P javadoc
-fi
 
 ###### Stash Jar files ######
 rm -rf "$OUT_PATH"
