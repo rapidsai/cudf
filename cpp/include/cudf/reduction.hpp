@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -48,10 +48,8 @@ enum class scan_type : bool { INCLUSIVE, EXCLUSIVE };
  *
  * Any null values are skipped for the operation.
  *
- * If the column is empty or contains all null entries `col.size()==col.null_count()`,
- * the output scalar value will be `false` for reduction type `any` and `true`
- * for reduction type `all`. For all other reductions, the output scalar
- * returns with `is_valid()==false`.
+ * For empty or all-null input, the result is generally a null scalar except for specific
+ * aggregations where the aggregation has a well-defined output.
  *
  * If the input column is an arithmetic type, the `output_dtype` can be any arithmetic
  * type. If the input column is a non-arithmetic type (e.g. timestamp or string)
