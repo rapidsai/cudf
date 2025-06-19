@@ -107,6 +107,13 @@ class HardwareInfo:
         return cls(gpus=gpus)
 
 
+def _infer_scale_factor(path: str | pathlib.Path, suffix: str) -> int | float:
+    # Use "supplier" table to infer the scale-factor
+    supplier = get_data(path, "supplier", suffix)
+    num_rows = supplier.select(pl.len()).collect().item(0, 0)
+    return num_rows / 10_000
+
+
 @dataclasses.dataclass(kw_only=True)
 class RunConfig:
     """Results for a PDS-H query run."""
@@ -121,6 +128,7 @@ class RunConfig:
     )
     records: dict[int, list[Record]] = dataclasses.field(default_factory=dict)
     dataset_path: pathlib.Path
+    scale_factor: int | float
     shuffle: str | None = None
     broadcast_join_limit: int | None = None
     blocksize: int | None = None
@@ -144,6 +152,30 @@ class RunConfig:
         if executor == "in-memory" or executor == "cpu":
             scheduler = None
 
+        path = args.path
+        if (scale_factor := args.scale) is None:
+            if path is None:
+                raise ValueError(
+                    "Must specify --root and --scale if --path is not specified."
+                )
+            scale_factor = _infer_scale_factor(path, args.suffix)
+        if path is None:
+            path = f"{args.root}/scale-{scale_factor}"
+        try:
+            scale_factor = int(scale_factor)
+        except ValueError:
+            scale_factor = float(scale_factor)
+
+        if args.scale is not None:
+            # Validate the user-supplied scale factor
+            sf_inf = _infer_scale_factor(path, args.suffix)
+            rel_error = abs((scale_factor - sf_inf) / sf_inf)
+            if rel_error > 0.01:
+                raise ValueError(
+                    f"Specified scale factor is {args.scale}, "
+                    f"but the inferred scale factor is {sf_inf}."
+                )
+
         return cls(
             queries=args.query,
             executor=executor,
@@ -151,7 +183,8 @@ class RunConfig:
             n_workers=args.n_workers,
             shuffle=args.shuffle,
             broadcast_join_limit=args.broadcast_join_limit,
-            dataset_path=args.path,
+            dataset_path=path,
+            scale_factor=scale_factor,
             blocksize=args.blocksize,
             threads=args.threads,
             iterations=args.iterations,
@@ -174,6 +207,7 @@ class RunConfig:
         for query, records in self.records.items():
             print(f"query: {query}")
             print(f"path: {self.dataset_path}")
+            print(f"scale_factor: {self.scale_factor}")
             print(f"executor: {self.executor}")
             if self.executor == "streaming":
                 print(f"scheduler: {self.scheduler}")
@@ -229,7 +263,19 @@ def parse_args(args: Sequence[str] | None = None) -> argparse.Namespace:
         "--path",
         type=str,
         default=os.environ.get("PDSH_DATASET_PATH"),
-        help="Root PDS-H dataset directory path.",
+        help="Full PDS-H dataset directory path.",
+    )
+    parser.add_argument(
+        "--root",
+        type=str,
+        default=os.environ.get("PDSH_DATASET_ROOT"),
+        help="Root PDS-H dataset directory (ignored if --path is used).",
+    )
+    parser.add_argument(
+        "--scale",
+        type=str,
+        default=None,
+        help="Dataset scale factor.",
     )
     parser.add_argument(
         "--suffix",

@@ -28,7 +28,6 @@ from cudf_polars.dsl.utils.groupby import rewrite_groupby
 from cudf_polars.dsl.utils.naming import unique_names
 from cudf_polars.dsl.utils.replace import replace
 from cudf_polars.dsl.utils.rolling import rewrite_rolling
-from cudf_polars.dsl.utils.windows import offsets_to_windows
 from cudf_polars.typing import Schema
 from cudf_polars.utils import config, dtypes, sorting
 
@@ -700,18 +699,14 @@ def _(
         if plc.traits.is_integral(orderby_dtype):
             # Integer orderby column is cast in implementation to int64 in polars
             orderby_dtype = plc.DataType(plc.TypeId.INT64)
-        preceding, following = offsets_to_windows(
-            orderby_dtype,
-            node.options.offset,
-            node.options.period,
-        )
         closed_window = node.options.closed_window
         if isinstance(named_post_agg.value, expr.Col):
             (named_agg,) = named_aggs
             return expr.RollingWindow(
                 named_agg.value.dtype,
-                preceding,
-                following,
+                orderby_dtype,
+                node.options.offset,
+                node.options.period,
                 closed_window,
                 orderby,
                 named_agg.value,
@@ -719,8 +714,9 @@ def _(
         replacements: dict[expr.Expr, expr.Expr] = {
             expr.Col(agg.value.dtype, agg.name): expr.RollingWindow(
                 agg.value.dtype,
-                preceding,
-                following,
+                orderby_dtype,
+                node.options.offset,
+                node.options.period,
                 closed_window,
                 orderby,
                 agg.value,

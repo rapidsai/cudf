@@ -226,24 +226,24 @@ CombinedDatetimelikeProperties = make_intermediate_proxy_type(
 
 StringMethods = make_intermediate_proxy_type(
     "StringMethods",
-    cudf.core.column.string.StringMethods,
+    cudf.core.accessors.string.StringMethods,
     pd.core.strings.accessor.StringMethods,
 )
 
 ListMethods = make_intermediate_proxy_type(
     "ListMethods",
-    cudf.core.column.lists.ListMethods,
+    cudf.core.accessors.lists.ListMethods,
     pd_ListAccessor,
 )
 
 StructAccessor = make_intermediate_proxy_type(
     "StructAccessor",
-    cudf.core.column.struct.StructMethods,
+    cudf.core.accessors.struct.StructMethods,
     pd_StructAccessor,
 )
 _CategoricalAccessor = make_intermediate_proxy_type(
     "CategoricalAccessor",
-    cudf.core.column.categorical.CategoricalAccessor,
+    cudf.core.accessors.categorical.CategoricalAccessor,
     pd.core.arrays.categorical.CategoricalAccessor,
 )
 
@@ -1100,6 +1100,9 @@ register_proxy_func(pd.read_pickle)(
 )
 
 register_proxy_func(pd.to_pickle)(_FunctionProxy(_Unusable(), pd.to_pickle))
+register_proxy_func(pd.api.types.is_list_like)(  # noqa: TID251
+    _FunctionProxy(_Unusable(), pd.api.types.is_list_like)  # noqa: TID251
+)
 
 
 def _get_eval_locals_and_globals(level, local_dict=None, global_dict=None):
