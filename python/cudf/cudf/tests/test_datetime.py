@@ -1250,7 +1250,10 @@ def test_datetime_stats(data, dtype, stat):
     gsr = cudf.Series(data, dtype=dtype)
     psr = gsr.to_pandas()
 
-    expected = getattr(psr, stat)()
+    with expect_warning_if(
+        stat == "quantile" and len(data) == 0 and dtype != "datetime64[ns]"
+    ):
+        expected = getattr(psr, stat)()
     actual = getattr(gsr, stat)()
 
     if len(data) == 0:
