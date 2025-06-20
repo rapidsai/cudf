@@ -214,7 +214,7 @@ def test_ufunc_series(request, ufunc, has_nulls, indexed):
         for _ in range(ufunc.nin)
     ]
 
-    if has_nulls:
+    if has_nulls and "power" not in fname:
         # Converting nullable integer cudf.Series to pandas will produce a
         # float pd.Series, so instead we replace nulls with an arbitrary
         # integer value, precompute the mask, and then reapply it afterwards.
@@ -243,7 +243,7 @@ def test_ufunc_series(request, ufunc, has_nulls, indexed):
                 e[mask] = np.nan
             assert_eq(g, e, check_exact=False)
     else:
-        if has_nulls:
+        if has_nulls and "power" not in fname:
             with expect_warning_if(
                 fname
                 in (
@@ -421,7 +421,7 @@ def test_ufunc_dataframe(request, ufunc, has_nulls, indexed):
         for _ in range(ufunc.nin)
     ]
 
-    if has_nulls:
+    if has_nulls and "power" not in fname:
         # Converting nullable integer cudf.Series to pandas will produce a
         # float pd.Series, so instead we replace nulls with an arbitrary
         # integer value, precompute the mask, and then reapply it afterwards.
@@ -454,7 +454,7 @@ def test_ufunc_dataframe(request, ufunc, has_nulls, indexed):
                 e[mask] = np.nan
             assert_eq(g, e, check_exact=False)
     else:
-        if has_nulls:
+        if has_nulls and "power" not in fname:
             with expect_warning_if(
                 fname
                 in (

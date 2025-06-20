@@ -65,6 +65,7 @@ from cudf.utils.dtypes import (
     find_common_type,
     is_dtype_obj_numeric,
     is_mixed_with_object_dtype,
+    is_pandas_nullable_extension_dtype,
 )
 from cudf.utils.performance_tracking import _performance_tracking
 from cudf.utils.utils import _EQUALITY_OPS, _is_same_name
@@ -205,7 +206,9 @@ class _SeriesIlocIndexer(_FrameIndexer):
             # In contrast to Column.__setitem__ (which downcasts the value to
             # the dtype of the column) here we upcast the series to the
             # larger data type mimicking pandas
-            if not (value is None or value is cudf.NA or value is np.nan):
+            if not (value is None or value is cudf.NA or value is np.nan) and (
+                not is_pandas_nullable_extension_dtype(self._frame.dtype)
+            ):
                 tmp_value = as_column(value)
                 if tmp_value.dtype.kind in "uifb" and not (
                     self._frame.dtype.kind == "b"
@@ -1268,6 +1271,7 @@ class Series(SingleColumnFrame, IndexedFrame):
 
     @_performance_tracking
     def __setitem__(self, key, value):
+        # import pdb;pdb.set_trace()
         if isinstance(key, slice):
             self.iloc[key] = value
         else:
@@ -2926,6 +2930,8 @@ class Series(SingleColumnFrame, IndexedFrame):
         """
         res = self._column.unique()
         if cudf.get_option("mode.pandas_compatible"):
+            if is_pandas_nullable_extension_dtype(self.dtype):
+                raise NotImplementedError("cudf does not support arrays")
             return res.values
         return Series._from_column(res, name=self.name)
 

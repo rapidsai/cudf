@@ -684,7 +684,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 raise ValueError(f"Unsupported mode: {mode}")
         else:
             obj = None
-        return cuda.as_cuda_array(obj).view(self.dtype)
+        return cuda.as_cuda_array(obj).view(
+            getattr(self.dtype, "numpy_dtype", self.dtype)
+        )
 
     def mask_array_view(
         self, *, mode: Literal["write", "read"] = "write"
@@ -1227,6 +1229,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         If ``value`` and ``self`` are of different types, ``value`` is coerced
         to ``self.dtype``. Assumes ``self`` and ``value`` are index-aligned.
         """
+        # import pdb;pdb.set_trace()
         value_normalized = self._cast_setitem_value(value)
         if isinstance(key, slice):
             out: ColumnBase | None = self._scatter_by_slice(
@@ -1633,6 +1636,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         Skip bounds checking if check_bounds is False.
         Set rows to null for all out of bound indices if nullify is `True`.
         """
+        # import pdb;pdb.set_trace()
         # Handle zero size
         if indices.size == 0:
             return cast(Self, column_empty(row_count=0, dtype=self.dtype))
@@ -1791,6 +1795,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
 
     @acquire_spill_lock()
     def cast(self, dtype: Dtype) -> ColumnBase:
+        # import pdb;pdb.set_trace()
         result = type(self).from_pylibcudf(
             plc.unary.cast(
                 self.to_pylibcudf(mode="read"), dtype_to_pylibcudf_type(dtype)
@@ -1802,10 +1807,16 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         ):
             result.dtype.precision = dtype.precision  # type: ignore[union-attr]
         if cudf.get_option("mode.pandas_compatible") and result.dtype != dtype:
+            if self.dtype.kind == "f" and is_pandas_nullable_extension_dtype(
+                dtype
+            ):
+                result = result.set_mask(self.nans_to_nulls().mask)
+                # result = result.nans_to_nulls()
             result._dtype = dtype
         return result
 
     def astype(self, dtype: DtypeObj, copy: bool = False) -> ColumnBase:
+        # import pdb;pdb.set_trace()
         if self.dtype == dtype:
             result = self
         elif len(self) == 0:
@@ -2246,15 +2257,19 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     def copy_if_else(
         self, other: Self | plc.Scalar, boolean_mask: NumericalColumn
     ) -> Self:
-        return type(self).from_pylibcudf(  # type: ignore[return-value]
-            plc.copying.copy_if_else(
-                self.to_pylibcudf(mode="read"),
-                other
-                if isinstance(other, plc.Scalar)
-                else other.to_pylibcudf(mode="read"),
-                boolean_mask.to_pylibcudf(mode="read"),
+        return (
+            type(self)
+            .from_pylibcudf(  # type: ignore[return-value]
+                plc.copying.copy_if_else(
+                    self.to_pylibcudf(mode="read"),
+                    other
+                    if isinstance(other, plc.Scalar)
+                    else other.to_pylibcudf(mode="read"),
+                    boolean_mask.to_pylibcudf(mode="read"),
+                )
             )
-        )
+            ._with_type_metadata(self.dtype)
+        )  # type: ignore[return-value]
 
     def split_by_offsets(
         self, offsets: list[int]
@@ -2948,7 +2963,9 @@ def as_column(
             if isinstance(arbitrary, NumpyExtensionArray):
                 # infer_dtype does not handle NumpyExtensionArray
                 arbitrary = np.array(arbitrary, dtype=object)
-            inferred_dtype = infer_dtype(arbitrary)
+            inferred_dtype = infer_dtype(
+                arbitrary, skipna=not cudf.get_option("mode.pandas_compatible")
+            )
             if inferred_dtype in ("mixed-integer", "mixed-integer-float"):
                 raise MixedTypeError("Cannot create column with mixed types")
             elif dtype is None and inferred_dtype not in (
@@ -2984,6 +3001,14 @@ def as_column(
                 arbitrary,
                 from_pandas=True,
             )
+            if (
+                cudf.get_option("mode.pandas_compatible")
+                and inferred_dtype == "mixed"
+                and not isinstance(
+                    pyarrow_array.type, (pa.ListType, pa.StructType)
+                )
+            ):
+                raise MixedTypeError("Cannot create column with mixed types")
             return as_column(
                 pyarrow_array,
                 dtype=dtype,

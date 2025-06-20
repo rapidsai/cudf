@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 from pandas.api import types as pd_types  # noqa: TID251
+from pandas.core.computation.common import result_type_many
 
 import pylibcudf as plc
 
@@ -329,7 +330,11 @@ def find_common_type(dtypes: Iterable[DtypeObj]) -> DtypeObj | None:
             "not supported"
         )
 
-    common_dtype = np.result_type(*dtypes)  # noqa: TID251
+    try:
+        common_dtype = np.result_type(*dtypes)  # noqa: TID251
+    except TypeError:
+        common_dtype = result_type_many(*dtypes)
+
     if common_dtype == np.dtype(np.float16):
         return np.dtype(np.float32)
     return common_dtype
