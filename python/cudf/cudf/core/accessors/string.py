@@ -746,7 +746,7 @@ class StringMethods(BaseAccessor):
                 "and will raise in a future version.",
                 FutureWarning,
             )
-        if na is not np.nan:
+        if na not in {no_default, np.nan}:
             raise NotImplementedError("`na` parameter is not yet supported")
         if regex and isinstance(pat, re.Pattern):
             flags = pat.flags & ~re.U
