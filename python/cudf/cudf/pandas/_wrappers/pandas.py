@@ -659,7 +659,21 @@ if cudf.core._compat.PANDAS_GE_210:
         pd.core.arrays.string_arrow.ArrowStringArrayNumpySemantics,
         fast_to_slow=_Unusable(),
         slow_to_fast=_Unusable(),
+        additional_attributes={
+            "_pa_array": _FastSlowAttribute("_pa_array", private=True),
+        },
     )
+
+if cudf.core._compat.PANDAS_GE_230:
+    StringArrayNumpySemantics = make_final_proxy_type(
+        "StringArrayNumpySemantics",
+        _Unusable,
+        pd.core.arrays.string_.StringArrayNumpySemantics,
+        bases=(StringArray,),
+        fast_to_slow=_Unusable(),
+        slow_to_fast=_Unusable(),
+    )
+
 
 ArrowStringArray = make_final_proxy_type(
     "ArrowStringArray",
@@ -667,7 +681,18 @@ ArrowStringArray = make_final_proxy_type(
     pd.core.arrays.string_arrow.ArrowStringArray,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
+    additional_attributes={
+        "_pa_array": _FastSlowAttribute("_pa_array", private=True),
+    },
 )
+
+# ExtensionDtype = make_final_proxy_type(
+#     "ExtensionDtype",
+#     _Unusable,
+#     pd.core.dtypes.dtypes.ExtensionDtype,
+#     fast_to_slow=_Unusable(),
+#     slow_to_fast=_Unusable(),
+# )
 
 StringDtype = make_final_proxy_type(
     "StringDtype",
@@ -675,6 +700,7 @@ StringDtype = make_final_proxy_type(
     pd.StringDtype,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
+    # bases=(ExtensionDtype,),
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
         "storage": _FastSlowAttribute("storage"),
@@ -1851,6 +1877,9 @@ ArrowExtensionArray = make_final_proxy_type(
     pd.arrays.ArrowExtensionArray,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
+    additional_attributes={
+        "_pa_array": _FastSlowAttribute("_pa_array", private=True),
+    },
 )
 
 
