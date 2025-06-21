@@ -9,6 +9,7 @@ import pandas as pd
 import pytest
 
 import cudf
+from cudf.core._compat import PANDAS_GE_230
 from cudf.testing import _utils as utils, assert_eq
 from cudf.testing._utils import assert_exceptions_equal, expect_warning_if
 
@@ -542,7 +543,8 @@ def test_timedelta_reduction_ops(data, dtype, reduction_op):
             expected = getattr(psr, reduction_op)()
     else:
         with expect_warning_if(
-            reduction_op == "quantile"
+            PANDAS_GE_230
+            and reduction_op == "quantile"
             and len(data) == 0
             and dtype != "timedelta64[ns]"
         ):
