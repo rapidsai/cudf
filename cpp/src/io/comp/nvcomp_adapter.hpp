@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include "io/comp/comp.hpp"
+#include "io/comp/compression.hpp"
 
 #include <cudf/io/nvcomp_adapter.hpp>
 #include <cudf/utilities/span.hpp>
@@ -40,7 +40,7 @@ namespace cudf::io::detail::nvcomp {
 void batched_decompress(compression_type compression,
                         device_span<device_span<uint8_t const> const> inputs,
                         device_span<device_span<uint8_t> const> outputs,
-                        device_span<compression_result> results,
+                        device_span<codec_exec_result> results,
                         size_t max_uncomp_chunk_size,
                         size_t max_total_uncomp_size,
                         rmm::cuda_stream_view stream);
@@ -108,7 +108,7 @@ size_t batched_decompress_temp_size(compression_type compression,
 void batched_compress(compression_type compression,
                       device_span<device_span<uint8_t const> const> inputs,
                       device_span<device_span<uint8_t> const> outputs,
-                      device_span<compression_result> results,
+                      device_span<codec_exec_result> results,
                       rmm::cuda_stream_view stream);
 
 }  // namespace cudf::io::detail::nvcomp

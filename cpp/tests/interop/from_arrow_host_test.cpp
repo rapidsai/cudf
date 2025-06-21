@@ -750,6 +750,32 @@ TEST_F(FromArrowHostDeviceTest, DictionaryIndicesType)
   CUDF_TEST_EXPECT_TABLES_EQUAL(got_cudf_table->view(), from_struct);
 }
 
+void slice_host_nanoarrow(ArrowArray* arr, int64_t start, int64_t end)
+{
+  auto op = [&](ArrowArray* array) {
+    // slicing only needs to happen at the top level of an array
+    array->offset = start;
+    array->length = end - start;
+    if (array->null_count != 0) {
+      array->null_count =
+        array->length -
+        ArrowBitCountSet(ArrowArrayValidityBitmap(array)->buffer.data, start, end - start);
+    }
+  };
+
+  if (arr->n_children == 0) {
+    op(arr);
+    return;
+  }
+
+  // since we want to simulate a sliced table where the children are sliced,
+  // we slice each individual child of the record batch
+  arr->length = end - start;
+  for (int64_t i = 0; i < arr->n_children; ++i) {
+    op(arr->children[i]);
+  }
+}
+
 TEST_F(FromArrowHostDeviceTest, StringViewType)
 {
   auto data = std::vector<std::string>({"hello",
@@ -796,32 +822,13 @@ TEST_F(FromArrowHostDeviceTest, StringViewType)
 
   auto expected = cudf::test::strings_column_wrapper(data.begin(), data.end(), validity.begin());
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result->view(), expected);
-}
 
-void slice_host_nanoarrow(ArrowArray* arr, int64_t start, int64_t end)
-{
-  auto op = [&](ArrowArray* array) {
-    // slicing only needs to happen at the top level of an array
-    array->offset = start;
-    array->length = end - start;
-    if (array->null_count != 0) {
-      array->null_count =
-        array->length -
-        ArrowBitCountSet(ArrowArrayValidityBitmap(array)->buffer.data, start, end - start);
-    }
-  };
-
-  if (arr->n_children == 0) {
-    op(arr);
-    return;
-  }
-
-  // since we want to simulate a sliced table where the children are sliced,
-  // we slice each individual child of the record batch
-  arr->length = end - start;
-  for (int64_t i = 0; i < arr->n_children; ++i) {
-    op(arr->children[i]);
-  }
+  // test with sliced (and include a null row)
+  slice_host_nanoarrow(&input, 2, 4);
+  auto sliced_result = cudf::from_arrow_column(&schema, &input);
+  auto sliced_expected =
+    cudf::test::strings_column_wrapper(data.begin() + 2, data.begin() + 4, validity.begin() + 2);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(sliced_result->view(), sliced_expected);
 }
 
 struct FromArrowHostDeviceTestSlice
