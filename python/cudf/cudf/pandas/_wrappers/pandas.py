@@ -686,13 +686,13 @@ ArrowStringArray = make_final_proxy_type(
     },
 )
 
-ExtensionDtype = make_final_proxy_type(
-    "ExtensionDtype",
-    _Unusable,
-    pd.core.dtypes.dtypes.ExtensionDtype,
-    fast_to_slow=_Unusable(),
-    slow_to_fast=_Unusable(),
-)
+# ExtensionDtype = make_final_proxy_type(
+#     "ExtensionDtype",
+#     _Unusable,
+#     pd.core.dtypes.dtypes.ExtensionDtype,
+#     fast_to_slow=_Unusable(),
+#     slow_to_fast=_Unusable(),
+# )
 
 StringDtype = make_final_proxy_type(
     "StringDtype",
@@ -700,7 +700,7 @@ StringDtype = make_final_proxy_type(
     pd.StringDtype,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
-    bases=(ExtensionDtype,),
+    # bases=(ExtensionDtype,),
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
         "storage": _FastSlowAttribute("storage"),
