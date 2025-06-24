@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any, ClassVar
 
 import pylibcudf as plc
 
-from cudf_polars.containers import Column
+from cudf_polars.containers import Column, DataType
 from cudf_polars.dsl.expressions.base import ExecutionContext, Expr
 from cudf_polars.dsl.expressions.literal import Literal
 from cudf_polars.utils import dtypes
@@ -109,6 +109,7 @@ class UnaryFunction(Expr):
             "round",
             "set_sorted",
             "unique",
+            "value_counts",
         }
     )
     _supported_cum_aggs = frozenset(
@@ -235,6 +236,55 @@ class UnaryFunction(Expr):
                 order=order,
                 null_order=null_order,
             )
+        elif self.name == "value_counts":
+            (sort, parallel, name, normalize) = self.options
+            count_agg = [plc.aggregation.count(plc.types.NullPolicy.INCLUDE)]
+            gb_requests = [
+                plc.groupby.GroupByRequest(
+                    child.evaluate(df, context=context).obj, count_agg
+                )
+                for child in self.children
+            ]
+            (keys_table, (counts_table,)) = plc.groupby.GroupBy(df.table).aggregate(
+                gb_requests
+            )
+            if sort:
+                sort_indices = plc.sorting.stable_sorted_order(
+                    counts_table,
+                    [plc.types.Order.DESCENDING],
+                    [plc.types.NullOrder.BEFORE],
+                )
+                counts_table = plc.copying.gather(
+                    counts_table, sort_indices, plc.copying.OutOfBoundsPolicy.DONT_CHECK
+                )
+                keys_table = plc.copying.gather(
+                    keys_table, sort_indices, plc.copying.OutOfBoundsPolicy.DONT_CHECK
+                )
+            keys_col = keys_table.columns()[0]
+            counts_col = counts_table.columns()[0]
+            if normalize:
+                total_counts = plc.reduce.reduce(
+                    counts_col, plc.aggregation.sum(), plc.DataType(plc.TypeId.UINT64)
+                )
+                counts_col = plc.binaryop.binary_operation(
+                    counts_col,
+                    total_counts,
+                    plc.binaryop.BinaryOperator.DIV,
+                    plc.DataType(plc.TypeId.FLOAT64),
+                )
+            elif counts_col.type().id() == plc.TypeId.INT32:
+                counts_col = plc.unary.cast(counts_col, plc.DataType(plc.TypeId.UINT32))
+
+            plc_column = plc.Column(
+                self.dtype.plc,
+                counts_col.size(),
+                None,
+                None,
+                0,
+                0,
+                [keys_col, counts_col],
+            )
+            return Column(plc_column, dtype=self.dtype)
         elif self.name == "drop_nulls":
             (column,) = (child.evaluate(df, context=context) for child in self.children)
             if column.null_count == 0:
