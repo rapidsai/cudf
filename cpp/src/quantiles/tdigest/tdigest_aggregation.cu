@@ -89,7 +89,7 @@ constexpr size_t max_simple_cluster_usage = 256 * 1024 * 1024;
 // values. {mean, weight}
 // NOTE: Using a tuple here instead of a struct to take advantage of
 // thrust zip iterators for output.
-using centroid = thrust::tuple<double, double, bool>;
+using centroid = cuda::std::tuple<double, double, bool>;
 
 // make a centroid from a scalar with a weight of 1.
 template <typename T>
@@ -129,16 +129,16 @@ struct make_weighted_centroid {
 struct merge_centroids {
   centroid operator() CUDF_HOST_DEVICE(centroid const& lhs, centroid const& rhs) const
   {
-    bool const lhs_valid = thrust::get<2>(lhs);
-    bool const rhs_valid = thrust::get<2>(rhs);
+    bool const lhs_valid = cuda::std::get<2>(lhs);
+    bool const rhs_valid = cuda::std::get<2>(rhs);
     if (!lhs_valid && !rhs_valid) { return {0, 0, false}; }
     if (!lhs_valid) { return rhs; }
     if (!rhs_valid) { return lhs; }
 
-    double const lhs_mean   = thrust::get<0>(lhs);
-    double const rhs_mean   = thrust::get<0>(rhs);
-    double const lhs_weight = thrust::get<1>(lhs);
-    double const rhs_weight = thrust::get<1>(rhs);
+    double const lhs_mean   = cuda::std::get<0>(lhs);
+    double const rhs_mean   = cuda::std::get<0>(rhs);
+    double const lhs_weight = cuda::std::get<1>(lhs);
+    double const rhs_weight = cuda::std::get<1>(rhs);
     double const new_weight = lhs_weight + rhs_weight;
     return {(lhs_mean * lhs_weight + rhs_mean * rhs_weight) / new_weight, new_weight, true};
   }
@@ -156,7 +156,7 @@ struct merge_centroids {
 struct nearest_value_scalar_weights_grouped {
   size_type const* group_offsets;
 
-  thrust::pair<double, int> operator()
+  cuda::std::pair<double, int> operator()
     CUDF_HOST_DEVICE(double next_limit, size_type group_index) const
   {
     double const f                   = floor(next_limit);
@@ -178,7 +178,7 @@ struct nearest_value_scalar_weights_grouped {
 struct nearest_value_scalar_weights {
   size_type const input_size;
 
-  thrust::pair<double, int> operator() CUDF_HOST_DEVICE(double next_limit, size_type) const
+  cuda::std::pair<double, int> operator() CUDF_HOST_DEVICE(double next_limit, size_type) const
   {
     double const f                   = floor(next_limit);
     auto const relative_weight_index = max(0, static_cast<int>(next_limit) - 1);
@@ -207,7 +207,7 @@ struct nearest_value_centroid_weights {
   {
   }
 
-  thrust::pair<double, int> operator()
+  cuda::std::pair<double, int> operator()
     CUDF_HOST_DEVICE(double next_limit, size_type group_index) const
   {
     auto const tdigest_begin = group_offsets[group_index];
@@ -215,7 +215,7 @@ struct nearest_value_centroid_weights {
     auto const num_weights   = tdigest_offsets[tdigest_end] - tdigest_offsets[tdigest_begin];
     // NOTE: as it is today, this functor will never be called for any digests that are empty, but
     // I'll leave this check here for safety.
-    if (num_weights == 0) { return thrust::pair<double, int>{0, 0}; }
+    if (num_weights == 0) { return cuda::std::pair<double, int>{0, 0}; }
     double const* group_cumulative_weights = cumulative_weights + tdigest_offsets[tdigest_begin];
 
     auto const index = ((thrust::lower_bound(thrust::seq,
@@ -224,9 +224,9 @@ struct nearest_value_centroid_weights {
                                              next_limit)) -
                         group_cumulative_weights);
 
-    return index == 0 ? thrust::pair<double, int>{0, 0}
-                      : thrust::pair<double, int>{group_cumulative_weights[index - 1],
-                                                  static_cast<int>(index) - 1};
+    return index == 0 ? cuda::std::pair<double, int>{0, 0}
+                      : cuda::std::pair<double, int>{group_cumulative_weights[index - 1],
+                                                     static_cast<int>(index) - 1};
   }
 };
 
@@ -239,7 +239,8 @@ struct nearest_value_centroid_weights {
  */
 struct cumulative_scalar_weight_grouped {
   cudf::device_span<size_type const> group_offsets;
-  std::tuple<size_type, size_type, double> operator() CUDF_HOST_DEVICE(size_type value_index) const
+  cuda::std::tuple<size_type, size_type, double> operator()
+    CUDF_HOST_DEVICE(size_type value_index) const
   {
     auto const lb =
       thrust::lower_bound(thrust::seq, group_offsets.begin(), group_offsets.end(), value_index) -
@@ -258,7 +259,8 @@ struct cumulative_scalar_weight_grouped {
  * the cumulative weight for a given value index I is simply I+1.
  */
 struct cumulative_scalar_weight {
-  std::tuple<size_type, size_type, double> operator() CUDF_HOST_DEVICE(size_type value_index) const
+  cuda::std::tuple<size_type, size_type, double> operator()
+    CUDF_HOST_DEVICE(size_type value_index) const
   {
     return {0, value_index, value_index + 1};
   }
@@ -292,7 +294,8 @@ struct cumulative_centroid_weight {
    * @brief Returns the cumulative weight for a given value index. The index `n` is the index of
    * `n`-th non-empty cluster.
    */
-  std::tuple<size_type, size_type, double> operator() CUDF_HOST_DEVICE(size_type value_index) const
+  cuda::std::tuple<size_type, size_type, double> operator()
+    CUDF_HOST_DEVICE(size_type value_index) const
   {
     auto const tdigest_index =
       static_cast<size_type>(
@@ -315,7 +318,7 @@ struct scalar_group_info_grouped {
   size_type const* group_valid_counts;
   size_type const* group_offsets;
 
-  CUDF_HOST_DEVICE thrust::tuple<double, size_type, size_type> operator()(
+  CUDF_HOST_DEVICE cuda::std::tuple<double, size_type, size_type> operator()(
     size_type group_index) const
   {
     return {static_cast<double>(group_valid_counts[group_index]),
@@ -329,7 +332,7 @@ struct scalar_group_info {
   double const total_weight;
   size_type const size;
 
-  CUDF_HOST_DEVICE thrust::tuple<double, size_type, size_type> operator()(size_type) const
+  CUDF_HOST_DEVICE cuda::std::tuple<double, size_type, size_type> operator()(size_type) const
   {
     return {total_weight, size, 0};
   }
@@ -351,7 +354,7 @@ struct centroid_group_info {
   {
   }
 
-  CUDF_HOST_DEVICE thrust::tuple<double, size_type, size_type> operator()(
+  CUDF_HOST_DEVICE cuda::std::tuple<double, size_type, size_type> operator()(
     size_type group_index) const
   {
     // if there's no weights in this group of digests at all, return 0.
@@ -361,27 +364,27 @@ struct centroid_group_info {
     auto const last_weight_index = group_end - 1;
 
     return num_weights == 0
-             ? thrust::tuple<double, size_type, size_type>{0, num_weights, group_start}
-             : thrust::tuple<double, size_type, size_type>{
+             ? cuda::std::tuple<double, size_type, size_type>{0, num_weights, group_start}
+             : cuda::std::tuple<double, size_type, size_type>{
                  cumulative_weights[last_weight_index], num_weights, group_start};
   }
 };
 
 struct tdigest_min {
-  CUDF_HOST_DEVICE double operator()(thrust::tuple<double, size_type> const& t) const
+  CUDF_HOST_DEVICE double operator()(cuda::std::tuple<double, size_type> const& t) const
   {
-    auto const min  = thrust::get<0>(t);
-    auto const size = thrust::get<1>(t);
-    return size > 0 ? min : std::numeric_limits<double>::max();
+    auto const min  = cuda::std::get<0>(t);
+    auto const size = cuda::std::get<1>(t);
+    return size > 0 ? min : cuda::std::numeric_limits<double>::max();
   }
 };
 
 struct tdigest_max {
-  CUDF_HOST_DEVICE double operator()(thrust::tuple<double, size_type> const& t) const
+  CUDF_HOST_DEVICE double operator()(cuda::std::tuple<double, size_type> const& t) const
   {
-    auto const max  = thrust::get<0>(t);
-    auto const size = thrust::get<1>(t);
-    return size > 0 ? max : std::numeric_limits<double>::lowest();
+    auto const max  = cuda::std::get<0>(t);
+    auto const size = cuda::std::get<1>(t);
+    return size > 0 ? max : cuda::std::numeric_limits<double>::lowest();
   }
 };
 
@@ -697,7 +700,7 @@ size_t compute_simple_cluster_count(int delta,
       // delta is the largest number of clusters we'll ever generate for any given group.
       // but a group can be significantly smaller than delta as well, in which case we will never
       // generate more than the size of that group.
-      return std::min(delta, group_size);
+      return cuda::std::min(delta, group_size);
     }));
 
   // total size
@@ -1109,15 +1112,15 @@ struct get_scalar_minmax_grouped {
   device_span<size_type const> group_offsets;
   size_type const* group_valid_counts;
 
-  __device__ thrust::tuple<double, double> operator()(size_type group_index)
+  __device__ cuda::std::tuple<double, double> operator()(size_type group_index)
   {
     auto const valid_count = group_valid_counts[group_index];
     return valid_count > 0
-             ? thrust::make_tuple(
+             ? cuda::std::make_tuple(
                  convert_to_floating<double>(col.element<T>(group_offsets[group_index])),
                  convert_to_floating<double>(
                    col.element<T>(group_offsets[group_index] + valid_count - 1)))
-             : thrust::make_tuple(0.0, 0.0);
+             : cuda::std::make_tuple(0.0, 0.0);
   }
 };
 
@@ -1127,12 +1130,12 @@ struct get_scalar_minmax {
   column_device_view const col;
   size_type const valid_count;
 
-  __device__ thrust::tuple<double, double> operator()(size_type)
+  __device__ cuda::std::tuple<double, double> operator()(size_type)
   {
     return valid_count > 0
-             ? thrust::make_tuple(convert_to_floating<double>(col.element<T>(0)),
-                                  convert_to_floating<double>(col.element<T>(valid_count - 1)))
-             : thrust::make_tuple(0.0, 0.0);
+             ? cuda::std::make_tuple(convert_to_floating<double>(col.element<T>(0)),
+                                     convert_to_floating<double>(col.element<T>(valid_count - 1)))
+             : cuda::std::make_tuple(0.0, 0.0);
   }
 };
 
@@ -1194,8 +1197,8 @@ struct typed_group_tdigest {
       rmm::exec_policy(stream),
       thrust::make_counting_iterator(0),
       thrust::make_counting_iterator(0) + num_groups,
-      thrust::make_zip_iterator(thrust::make_tuple(min_col->mutable_view().begin<double>(),
-                                                   max_col->mutable_view().begin<double>())),
+      thrust::make_zip_iterator(cuda::std::make_tuple(min_col->mutable_view().begin<double>(),
+                                                      max_col->mutable_view().begin<double>())),
       get_scalar_minmax_grouped<T>{*d_col, group_offsets, group_valid_counts.begin()});
 
     // for simple input values, the "centroids" all have a weight of 1.
@@ -1272,8 +1275,8 @@ struct typed_reduce_tdigest {
       rmm::exec_policy(stream),
       thrust::make_counting_iterator(0),
       thrust::make_counting_iterator(0) + 1,
-      thrust::make_zip_iterator(thrust::make_tuple(min_col->mutable_view().begin<double>(),
-                                                   max_col->mutable_view().begin<double>())),
+      thrust::make_zip_iterator(cuda::std::make_tuple(min_col->mutable_view().begin<double>(),
+                                                      max_col->mutable_view().begin<double>())),
       get_scalar_minmax<T>{*d_col, valid_count});
 
     // for simple input values, the "centroids" all have a weight of 1.
@@ -1464,7 +1467,7 @@ std::unique_ptr<column> merge_tdigests(tdigest_column_view const& tdv,
   auto merged_min_col = cudf::make_numeric_column(
     data_type{type_id::FLOAT64}, num_groups, mask_state::UNALLOCATED, stream, mr);
   auto min_iter =
-    thrust::make_transform_iterator(thrust::make_zip_iterator(thrust::make_tuple(
+    thrust::make_transform_iterator(thrust::make_zip_iterator(cuda::std::make_tuple(
                                       tdv.min_begin(), cudf::tdigest::detail::size_begin(tdv))),
                                     tdigest_min{});
   thrust::reduce_by_key(rmm::exec_policy(stream),
@@ -1479,7 +1482,7 @@ std::unique_ptr<column> merge_tdigests(tdigest_column_view const& tdv,
   auto merged_max_col = cudf::make_numeric_column(
     data_type{type_id::FLOAT64}, num_groups, mask_state::UNALLOCATED, stream, mr);
   auto max_iter =
-    thrust::make_transform_iterator(thrust::make_zip_iterator(thrust::make_tuple(
+    thrust::make_transform_iterator(thrust::make_zip_iterator(cuda::std::make_tuple(
                                       tdv.max_begin(), cudf::tdigest::detail::size_begin(tdv))),
                                     tdigest_max{});
   thrust::reduce_by_key(rmm::exec_policy(stream),
