@@ -26,11 +26,12 @@
 template <typename DataType>
 static void bench_sort(nvbench::state& state, nvbench::type_list<DataType>)
 {
-  auto const stable    = static_cast<bool>(state.get_int64("stable"));
-  auto const num_rows  = static_cast<cudf::size_type>(state.get_int64("num_rows"));
-  auto const num_cols  = static_cast<cudf::size_type>(state.get_int64("num_cols"));
-  auto const nulls     = state.get_float64("nulls");
-  auto const data_type = cudf::type_to_id<DataType>();
+  auto const stable     = static_cast<bool>(state.get_int64("stable"));
+  auto const idx_result = static_cast<bool>(state.get_int64("idx_result"));
+  auto const num_rows   = static_cast<cudf::size_type>(state.get_int64("num_rows"));
+  auto const num_cols   = static_cast<cudf::size_type>(state.get_int64("num_cols"));
+  auto const nulls      = state.get_float64("nulls");
+  auto const data_type  = cudf::type_to_id<DataType>();
 
   data_profile const profile =
     data_profile_builder().cardinality(0).null_probability(nulls).distribution(
@@ -44,10 +45,17 @@ static void bench_sort(nvbench::state& state, nvbench::type_list<DataType>)
   state.add_global_memory_writes<nvbench::int32_t>(num_rows);
 
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
-    if (stable)
-      cudf::stable_sorted_order(input);
-    else
-      cudf::sorted_order(input);
+    if (stable) {
+      if (idx_result)
+        cudf::stable_sorted_order(input);
+      else
+        cudf::stable_sort(input);
+    } else {
+      if (idx_result)
+        cudf::sorted_order(input);
+      else
+        cudf::sort(input);
+    }
   });
 }
 
@@ -60,4 +68,5 @@ NVBENCH_BENCH_TYPES(bench_sort, NVBENCH_TYPE_AXES(Types))
   .add_int64_axis("stable", {0, 1})
   .add_float64_axis("nulls", {0, 0.1})
   .add_int64_axis("num_rows", {262144, 2097152, 16777216, 67108864})
-  .add_int64_axis("num_cols", {1, 8});
+  .add_int64_axis("num_cols", {1, 8})
+  .add_int64_axis("idx_result", {0, 1});
