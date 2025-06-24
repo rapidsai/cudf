@@ -503,3 +503,12 @@ def test_string_tail(ldf, tail):
 def test_string_head(ldf, head):
     q = ldf.select(pl.col("a").str.head(head))
     assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize("ignore_nulls", [True, False])
+@pytest.mark.parametrize("separator", ["*", ""])
+def test_concat_horizontal(ldf, ignore_nulls, separator):
+    q = ldf.select(
+        pl.concat_str(["a", "c"], separator=separator, ignore_nulls=ignore_nulls)
+    )
+    assert_gpu_result_equal(q)
