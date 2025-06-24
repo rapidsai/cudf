@@ -453,7 +453,7 @@ class StringFunction(Expr):
             )
         elif self.name is StringFunction.Name.Reverse:
             (column,) = columns
-            return Column(plc.strings.reverse.reverse(column.obj))
+            return Column(plc.strings.reverse.reverse(column.obj), dtype=self.dtype)
         elif self.name is StringFunction.Name.Titlecase:
             (column,) = columns
             return Column(plc.strings.capitalize.title(column.obj))
