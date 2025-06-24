@@ -4,8 +4,8 @@ import warnings
 
 from pandas.core.accessor import CachedAccessor
 
-from cudf.core._base_index import BaseIndex
 from cudf.core.dataframe import DataFrame
+from cudf.core.index import Index
 from cudf.core.series import Series
 from cudf.utils.docutils import docfmt_partial
 
@@ -154,7 +154,7 @@ def register_dataframe_accessor(name):
 @doc_register_index_accessor()
 def register_index_accessor(name):
     """{docstring}"""
-    return _register_accessor(name, BaseIndex)
+    return _register_accessor(name, Index)
 
 
 @doc_register_series_accessor()

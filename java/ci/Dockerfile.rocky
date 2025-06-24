@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2024, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2024-2025, NVIDIA CORPORATION. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,10 +17,10 @@
 ###
 # Build the image for cudf development environment.
 #
-# Arguments: CUDA_VERSION=[11.X.Y, 12.X.Y], OS_RELEASE=[8, 9], TARGETPLATFORM=[linux/amd64, linux/amd64]
+# Arguments: CUDA_VERSION=[12.X.Y], OS_RELEASE=[8, 9], TARGETPLATFORM=[linux/amd64, linux/arm64]
 #
 ###
-ARG CUDA_VERSION=11.8.0
+ARG CUDA_VERSION=12.8.0
 ARG OS_RELEASE=8
 ARG TARGETPLATFORM=linux/amd64
 # multi-platform build with: docker buildx build --platform linux/arm64,linux/amd64 <ARGS> on either amd64 or arm64 host

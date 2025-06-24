@@ -16,6 +16,6 @@ import pylibcudf as plc
     ],
 )
 def test_table_shape(arrow_tbl):
-    plc_tbl = plc.Table(arrow_tbl)
+    plc_tbl = plc.Table.from_arrow(arrow_tbl)
 
     assert plc_tbl.shape() == arrow_tbl.shape

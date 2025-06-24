@@ -2315,6 +2315,7 @@ def test_dataframe_transpose(nulls, num_cols, num_rows, dtype):
 
     expect = pdf.transpose()
     nullable = dtype not in DATETIME_TYPES
+
     assert_eq(expect, got_function.to_pandas(nullable=nullable))
     assert_eq(expect, got_property.to_pandas(nullable=nullable))
 
@@ -7191,12 +7192,6 @@ def test_dataframe_info_null_counts():
     assert str_cmp == actual_string
 
 
-def test_is_close_deprecation():
-    ser = cudf.Series([1])
-    with pytest.warns(FutureWarning):
-        cudf.isclose(ser, ser)
-
-
 @pytest.mark.parametrize(
     "orient", ["dict", "list", "split", "tight", "records", "index", "series"]
 )
@@ -8970,7 +8965,7 @@ def test_dataframe_constructor_columns(df, columns, index, request):
 
     gdf = cudf.from_pandas(df)
     host_columns = (
-        columns.to_pandas() if isinstance(columns, cudf.BaseIndex) else columns
+        columns.to_pandas() if isinstance(columns, cudf.Index) else columns
     )
 
     expected = pd.DataFrame(df, columns=host_columns, index=index)

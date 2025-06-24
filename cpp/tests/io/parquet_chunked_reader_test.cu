@@ -77,7 +77,7 @@ auto write_file(std::vector<std::unique_ptr<cudf::column>>& input_columns,
     for (auto& col : input_columns) {
       auto const [null_mask, null_count] =
         cudf::test::detail::make_null_mask(valid_iter + offset, valid_iter + col->size() + offset);
-      col = cudf::structs::detail::superimpose_nulls(
+      col = cudf::structs::detail::superimpose_and_sanitize_nulls(
         static_cast<cudf::bitmask_type const*>(null_mask.data()),
         null_count,
         std::move(col),
@@ -856,7 +856,7 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadWithStructsOfLists)
 
   // for these tests, different columns get written to different numbers of pages so it's a
   // little tricky to describe the expected results by page counts. To get an idea of how
-  // these values are chosen, see the debug output from the call to print_cumulative_row_info() in
+  // these values are chosen, see the debug output from the call to print_cumulative_page_info() in
   // reader_impl_preprocess.cu -> find_splits()
 
   {
@@ -995,7 +995,7 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadWithListsOfStructs)
 
   // for these tests, different columns get written to different numbers of pages so it's a
   // little tricky to describe the expected results by page counts. To get an idea of how
-  // these values are chosen, see the debug output from the call to print_cumulative_row_info() in
+  // these values are chosen, see the debug output from the call to print_cumulative_page_info() in
   // reader_impl_preprocess.cu -> find_splits()
   {
     auto const [result, num_chunks] = chunked_read(filepath_no_null, 1'000'000);
@@ -1544,6 +1544,30 @@ TEST_F(ParquetChunkedReaderTest, TestNumRowsPerSource)
                                                cudf::io::default_max_page_size_bytes,
                                                rows_in_row_group);
 
+  // Chunked-read single data source skipping all rows
+  {
+    auto const rows_to_skip          = num_rows + 1;
+    auto constexpr output_read_limit = 1'500;
+    auto constexpr pass_read_limit   = 3'500;
+
+    auto const options = cudf::io::parquet_reader_options_builder(cudf::io::source_info{filepath})
+                           .skip_rows(rows_to_skip)
+                           .build();
+    auto const reader = cudf::io::chunked_parquet_reader(
+      output_read_limit, pass_read_limit, options, cudf::get_default_stream());
+
+    auto const [result, num_chunks, num_rows_per_source] = read_table_and_nrows_per_source(reader);
+
+    auto int64_col_selected = int64s_col(int64_data.begin(), int64_data.begin()).release();
+    cudf::table_view const expected_selected({int64_col_selected->view()});
+
+    // Should read an empty table
+    CUDF_TEST_EXPECT_TABLES_EQUAL(expected_selected, result->view());
+    EXPECT_EQ(num_chunks, 1);
+    EXPECT_EQ(num_rows_per_source.size(), 1);
+    EXPECT_EQ(num_rows_per_source[0], 0);
+  }
+
   // Chunked-read single data source entirely
   {
     auto constexpr output_read_limit = 1'500;
@@ -1563,8 +1587,7 @@ TEST_F(ParquetChunkedReaderTest, TestNumRowsPerSource)
 
   // Chunked-read rows_to_read rows skipping rows_to_skip from single data source
   {
-    // TODO: rows_to_skip = 0 until https://github.com/rapidsai/cudf/issues/16186 is resolved
-    auto const rows_to_skip          = 0;  // 1'237
+    auto const rows_to_skip          = 1'237;
     auto const rows_to_read          = 7'232;
     auto constexpr output_read_limit = 1'500;
     auto constexpr pass_read_limit   = 3'500;
@@ -1591,8 +1614,7 @@ TEST_F(ParquetChunkedReaderTest, TestNumRowsPerSource)
 
   // Chunked-read two data sources skipping the first entire file completely
   {
-    // TODO: rows_to_skip = 0 until https://github.com/rapidsai/cudf/issues/16186 is resolved
-    auto constexpr rows_to_skip      = 0;  // 15'723;
+    auto constexpr rows_to_skip      = 15'723;
     auto constexpr output_read_limit = 1'024'000;
     auto constexpr pass_read_limit   = 1'024'000;
 
@@ -1609,25 +1631,21 @@ TEST_F(ParquetChunkedReaderTest, TestNumRowsPerSource)
 
     auto const [result, num_chunks, num_rows_per_source] = read_table_and_nrows_per_source(reader);
 
-    // TODO: Enable code inside /* */ when https://github.com/rapidsai/cudf/issues/16186 is resolved
     auto int64_col_selected =
-      int64s_col(int64_data.begin() /* + rows_to_skip - num_rows */, int64_data.end()).release();
+      int64s_col(int64_data.begin() + rows_to_skip - num_rows, int64_data.end()).release();
 
     cudf::table_view const expected_selected({int64_col_selected->view()});
 
-    // TODO: Enable the following check when https://github.com/rapidsai/cudf/issues/16186
-    // is resolved
-    // CUDF_TEST_EXPECT_TABLES_EQUAL(expected_selected, result->view());
+    CUDF_TEST_EXPECT_TABLES_EQUAL(expected_selected, result->view());
 
     EXPECT_EQ(num_rows_per_source.size(), 2);
-    EXPECT_EQ(num_rows_per_source[0], num_rows /* 0 */);
-    EXPECT_EQ(num_rows_per_source[1], num_rows /* nsources * num_rows - rows_to_skip */);
+    EXPECT_EQ(num_rows_per_source[0], 0);
+    EXPECT_EQ(num_rows_per_source[1], nsources * num_rows - rows_to_skip);
   }
 
   // Chunked-read from single data source skipping rows_to_skip
   {
-    // TODO: rows_to_skip = 0 until https://github.com/rapidsai/cudf/issues/16186 is resolved
-    auto const rows_to_skip          = 0;  // 1'237;
+    auto const rows_to_skip          = 1'237;
     auto constexpr output_read_limit = 1'500;
     auto constexpr pass_read_limit   = 1'800;
 
@@ -1762,9 +1780,8 @@ TEST_F(ParquetChunkedReaderTest, TestNumRowsPerSourceMultipleSources)
 
   // Chunked-read rows_to_read rows skipping rows_to_skip from eight data sources
   {
-    // TODO: rows_to_skip = 0 until https://github.com/rapidsai/cudf/issues/16186 is resolved
-    auto const rows_to_skip          = 0;  // 25'571;
-    auto const rows_to_read          = 41'232;
+    auto const rows_to_skip          = 25'571;
+    auto const rows_to_read          = 11'232;
     auto constexpr output_read_limit = 15'000;
     auto constexpr pass_read_limit   = 35'000;
     auto const nsources              = 8;
@@ -1809,9 +1826,8 @@ TEST_F(ParquetChunkedReaderTest, TestNumRowsPerSourceMultipleSources)
 
   // Chunked-read four data sources skipping three files completely
   {
-    auto const nsources = 4;
-    // TODO: rows_to_skip = 0 until https://github.com/rapidsai/cudf/issues/16186 is resolved
-    int constexpr rows_to_skip       = 0;  // num_rows * 3 + 1;
+    auto const nsources              = 4;
+    int constexpr rows_to_skip       = num_rows * 3 + 1;
     auto constexpr output_read_limit = 15'000;
     auto constexpr pass_read_limit   = 35'000;
     std::vector<int64_t> int64_selected_data{};

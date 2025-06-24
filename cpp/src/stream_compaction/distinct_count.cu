@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -95,8 +95,9 @@ struct has_nans {
    *
    * @returns bool true if `input` has `NaN` else false
    */
-  template <typename T, std::enable_if_t<std::is_floating_point_v<T>>* = nullptr>
+  template <typename T>
   bool operator()(column_view const& input, rmm::cuda_stream_view stream)
+    requires(std::is_floating_point_v<T>)
   {
     auto input_device_view = cudf::column_device_view::create(input, stream);
     auto device_view       = *input_device_view;
@@ -118,8 +119,9 @@ struct has_nans {
    *
    * @returns bool Always false as non-floating point columns can't have `NaN`
    */
-  template <typename T, std::enable_if_t<not std::is_floating_point_v<T>>* = nullptr>
+  template <typename T>
   bool operator()(column_view const&, rmm::cuda_stream_view)
+    requires(not std::is_floating_point_v<T>)
   {
     return false;
   }
