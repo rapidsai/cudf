@@ -5748,6 +5748,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         1  1  2
         2  3  4
         """
+        # import pdb;pdb.set_trace()
         if nan_as_null is no_default:
             nan_as_null = (
                 False if cudf.get_option("mode.pandas_compatible") else None
@@ -8708,6 +8709,7 @@ def from_pandas(obj, nan_as_null=no_default):
     >>> type(pmidx)
     <class 'pandas.core.indexes.multi.MultiIndex'>
     """
+    # import pdb;pdb.set_trace()
     if nan_as_null is no_default:
         nan_as_null = (
             False if cudf.get_option("mode.pandas_compatible") else None
