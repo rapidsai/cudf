@@ -280,6 +280,20 @@ class StringFunction(Expr):
                 col, col_width = [
                     child.evaluate(df, context=context) for child in self.children
                 ]
+                all_gt_0 = plc.binaryop.binary_operation(
+                    col_width.obj,
+                    plc.Scalar.from_py(0, plc.DataType(plc.TypeId.INT64)),
+                    plc.binaryop.BinaryOperator.GREATER_EQUAL,
+                    plc.DataType(plc.TypeId.BOOL8),
+                )
+
+                if not plc.reduce.reduce(
+                    all_gt_0,
+                    plc.aggregation.all(),
+                    plc.DataType(plc.TypeId.BOOL8),
+                ).to_py():
+                    raise InvalidOperationError("fill conversion failed.")
+
                 return Column(
                     plc.strings.padding.zfill_by_widths(col.obj, col_width.obj)
                 )
