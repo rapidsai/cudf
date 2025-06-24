@@ -15,7 +15,7 @@
  */
 #pragma once
 
-#include <cudf/ast/detail/operators.hpp>
+#include <cudf/ast/detail/operators.cuh>
 #include <cudf/ast/expressions.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/table/table_view.hpp>

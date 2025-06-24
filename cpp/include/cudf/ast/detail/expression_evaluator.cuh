@@ -16,7 +16,7 @@
 #pragma once
 
 #include <cudf/ast/detail/expression_parser.hpp>
-#include <cudf/ast/detail/operators.hpp>
+#include <cudf/ast/detail/operators.cuh>
 #include <cudf/ast/expressions.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
