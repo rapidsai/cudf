@@ -1,8 +1,10 @@
 #!/bin/bash
 # Copyright (c) 2025, NVIDIA CORPORATION.
 
+set -euo pipefail
+
 # Support invoking test_python_cudf.sh outside the script directory
-cd "$(dirname "$(realpath "${BASH_SOURCE[0]}")")"/../ || exit 1
+cd "$(dirname "$(realpath "${BASH_SOURCE[0]}")")"/../
 
 source rapids-init-pip
 
@@ -19,7 +21,7 @@ set +e
 rapids-logger "pytest narwhals"
 NARWHALS_VERSION=$(python -c "import narwhals; print(narwhals.__version__)")
 git clone https://github.com/narwhals-dev/narwhals.git --depth=1 -b "v${NARWHALS_VERSION}" narwhals
-pushd narwhals || exit 1
+pushd narwhals
 rapids-pip-retry install -U -e .
 
 rapids-logger "Check narwhals versions"
@@ -110,7 +112,7 @@ PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 NARWHALS_DEFAULT_CONSTRUCTORS=pandas python -m 
     --numprocesses=8 \
     --dist=worksteal
 
-popd || exit 1
+popd
 
 rapids-logger "Test script exiting with value: $EXITCODE"
 exit ${EXITCODE}
