@@ -102,7 +102,7 @@ int main(int argc, char const** argv)
 {
   if (argc < 3) {
     std::cout
-      << "insufficient argurments.\n\t\tin-csv-path out-csv-path [num_rows [memory_resource]]\n";
+      << "insufficient arguments.\n\t\tin-csv-path out-csv-path [num_rows [memory_resource]]\n";
     return 1;
   }
 
