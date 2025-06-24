@@ -34,7 +34,7 @@ constexpr uint8_t fhcrc    = 0x02;  // Header CRC present
 constexpr uint8_t fextra   = 0x04;  // Extra fields present
 constexpr uint8_t fname    = 0x08;  // Original file name present
 constexpr uint8_t fcomment = 0x10;  // Comment present
-};  // namespace GZIPHeaderFlag
+};                                  // namespace GZIPHeaderFlag
 
 // Threshold for buffer count where device compression is favored over host in AUTO mode
 constexpr size_t default_host_compression_auto_threshold = 128;
@@ -43,6 +43,9 @@ constexpr size_t default_host_decompression_auto_threshold = 128;
 // Estimated ratio between total CPU decompression throughput and decompression throughput of a
 // single GPU block; higher values lead to more host decompression in HYBRID mode
 constexpr double default_host_decompression_ratio = 100;
+// Estimated ratio between total CPU compression throughput and compression throughput of a
+// single GPU block; higher values lead to more host compression in HYBRID mode
+constexpr double default_host_compression_ratio = 100;
 
 [[nodiscard]] std::optional<nvcomp::compression_type> to_nvcomp_compression(
   compression_type compression);
