@@ -28,7 +28,6 @@ from cudf_polars.dsl.utils.groupby import rewrite_groupby
 from cudf_polars.dsl.utils.naming import unique_names
 from cudf_polars.dsl.utils.replace import replace
 from cudf_polars.dsl.utils.rolling import rewrite_rolling
-from cudf_polars.dsl.utils.windows import offsets_to_windows
 from cudf_polars.typing import Schema
 from cudf_polars.utils import config, dtypes, sorting
 
@@ -227,6 +226,8 @@ def _(node: pl_ir.Scan, translator: Translator, schema: Schema) -> ir.IR:
     with_columns = file_options.with_columns
     row_index = file_options.row_index
     include_file_paths = file_options.include_file_paths
+    config_options = translator.config_options
+    parquet_options = config_options.parquet_options
 
     pre_slice = file_options.n_rows
     if pre_slice is None:
@@ -240,7 +241,6 @@ def _(node: pl_ir.Scan, translator: Translator, schema: Schema) -> ir.IR:
         typ,
         reader_options,
         cloud_options,
-        translator.config_options,
         node.paths,
         with_columns,
         skip_rows,
@@ -250,6 +250,7 @@ def _(node: pl_ir.Scan, translator: Translator, schema: Schema) -> ir.IR:
         translate_named_expr(translator, n=node.predicate, schema=schema)
         if node.predicate is not None
         else None,
+        parquet_options,
     )
 
 
@@ -266,7 +267,6 @@ def _(node: pl_ir.DataFrameScan, translator: Translator, schema: Schema) -> ir.I
         schema,
         node.df,
         node.projection,
-        translator.config_options,
     )
 
 
@@ -299,9 +299,7 @@ def _(node: pl_ir.GroupBy, translator: Translator, schema: Schema) -> ir.IR:
             node.options, schema, keys, original_aggs, translator.config_options, inp
         )
     else:
-        return rewrite_groupby(
-            node, schema, keys, original_aggs, translator.config_options, inp
-        )
+        return rewrite_groupby(node, schema, keys, original_aggs, inp)
 
 
 @_translate_ir.register
@@ -336,7 +334,6 @@ def _(node: pl_ir.Join, translator: Translator, schema: Schema) -> ir.IR:
             left_on,
             right_on,
             node.options,
-            translator.config_options,
             inp_left,
             inp_right,
         )
@@ -700,18 +697,14 @@ def _(
         if plc.traits.is_integral(orderby_dtype):
             # Integer orderby column is cast in implementation to int64 in polars
             orderby_dtype = plc.DataType(plc.TypeId.INT64)
-        preceding, following = offsets_to_windows(
-            orderby_dtype,
-            node.options.offset,
-            node.options.period,
-        )
         closed_window = node.options.closed_window
         if isinstance(named_post_agg.value, expr.Col):
             (named_agg,) = named_aggs
             return expr.RollingWindow(
                 named_agg.value.dtype,
-                preceding,
-                following,
+                orderby_dtype,
+                node.options.offset,
+                node.options.period,
                 closed_window,
                 orderby,
                 named_agg.value,
@@ -719,8 +712,9 @@ def _(
         replacements: dict[expr.Expr, expr.Expr] = {
             expr.Col(agg.value.dtype, agg.name): expr.RollingWindow(
                 agg.value.dtype,
-                preceding,
-                following,
+                orderby_dtype,
+                node.options.offset,
+                node.options.period,
                 closed_window,
                 orderby,
                 agg.value,
