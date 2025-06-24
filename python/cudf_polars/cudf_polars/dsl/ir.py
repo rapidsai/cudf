@@ -853,7 +853,7 @@ class Sink(IR):
 
             if (
                 config_options.parquet_options.chunked
-                and config_options.parquet_options.num_chunks != 1
+                and config_options.parquet_options.n_output_chunks != 1
             ):
                 builder = plc.io.parquet.ChunkedParquetWriterOptions.builder(
                     target
@@ -866,12 +866,12 @@ class Sink(IR):
                     builder = builder.row_group_size_rows(row_group_size)
 
                 writer_options = builder.build()
-                writer = plc.io.parquet.ParquetChunkedWriter.from_options(
+                writer = plc.io.parquet.ChunkedParquetWriter.from_options(
                     writer_options
                 )
-
-                # TODO: Replace with smarter chunking logic
-                num_chunks = config_options.parquet_options.num_chunks
+                # TODO: Can be based on a heuristic that estimates chunk size
+                # from the input table size and available GPU memory.
+                num_chunks = config_options.parquet_options.n_output_chunks
                 table_chunks = plc.copying.split(
                     df.table,
                     [

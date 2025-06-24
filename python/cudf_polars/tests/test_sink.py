@@ -87,9 +87,16 @@ def test_sink_ndjson(request, df, tmp_path):
 @pytest.mark.parametrize("data_page_size", [None, 256_000])
 @pytest.mark.parametrize("row_group_size", [None, 1_000])
 @pytest.mark.parametrize("is_chunked", [False, True])
-@pytest.mark.parametrize("num_chunks", [1, 4, 8])
+@pytest.mark.parametrize("n_output_chunks", [1, 4, 8])
 def test_sink_parquet(
-    request, df, tmp_path, mkdir, data_page_size, row_group_size, is_chunked, num_chunks
+    request,
+    df,
+    tmp_path,
+    mkdir,
+    data_page_size,
+    row_group_size,
+    is_chunked,
+    n_output_chunks,
 ):
     request.applymarker(
         pytest.mark.xfail(
@@ -107,7 +114,7 @@ def test_sink_parquet(
         },
         engine=pl.GPUEngine(
             raise_on_fail=True,
-            parquet_options={"chunked": is_chunked, "num_chunks": num_chunks},
+            parquet_options={"chunked": is_chunked, "n_output_chunks": n_output_chunks},
         ),
     )
 

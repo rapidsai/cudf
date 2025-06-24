@@ -123,16 +123,16 @@ def test_parquet_options(executor: str) -> None:
         )
     )
     assert config.parquet_options.chunked is True
-    assert config.parquet_options.num_chunks == 1
+    assert config.parquet_options.n_output_chunks == 1
 
     config = ConfigOptions.from_polars_engine(
         pl.GPUEngine(
             executor=executor,
-            parquet_options={"chunked": False, "num_chunks": 16},
+            parquet_options={"chunked": False, "n_output_chunks": 16},
         )
     )
     assert config.parquet_options.chunked is False
-    assert config.parquet_options.num_chunks == 16
+    assert config.parquet_options.n_output_chunks == 16
 
 
 def test_validate_streaming_executor_shuffle_method() -> None:
@@ -257,7 +257,7 @@ def test_validate_max_rows_per_partition(option: str) -> None:
 
 
 @pytest.mark.parametrize(
-    "option", ["chunked", "num_chunks", "chunk_read_limit", "pass_read_limit"]
+    "option", ["chunked", "n_output_chunks", "chunk_read_limit", "pass_read_limit"]
 )
 def test_validate_parquet_options(option: str) -> None:
     with pytest.raises(TypeError, match=f"{option} must be"):

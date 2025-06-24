@@ -80,8 +80,8 @@ class ParquetOptions:
         Whether to use libcudf's ``ChunkedParquetReader`` or ``ChunkedParquetWriter``
         to read/write the parquet dataset in chunks. This is useful when reading/writing
         very large parquet files.
-    num_chunks
-        Split the dataframe in ``num_chunks`` when using libcudf's ``ChunkedParquetWriter``.
+    n_output_chunks
+        Split the dataframe in ``n_output_chunks`` when using libcudf's ``ChunkedParquetWriter``.
     chunk_read_limit
         Limit on total number of bytes to be returned per read, or 0 if
         there is no limit.
@@ -91,15 +91,17 @@ class ParquetOptions:
     """
 
     chunked: bool = True
-    num_chunks: int = 1
+    # TODO: Replace the current fixed n_output_chunks with the size of the chunk in
+    # bytes. See also: https://github.com/rapidsai/cudf/pull/19015/files#r2135759926
+    n_output_chunks: int = 1
     chunk_read_limit: int = 0
     pass_read_limit: int = 0
 
     def __post_init__(self) -> None:
         if not isinstance(self.chunked, bool):
             raise TypeError("chunked must be a bool")
-        if not isinstance(self.num_chunks, int):
-            raise TypeError("num_chunks must be an int")
+        if not isinstance(self.n_output_chunks, int):
+            raise TypeError("n_output_chunks must be an int")
         if not isinstance(self.chunk_read_limit, int):
             raise TypeError("chunk_read_limit must be an int")
         if not isinstance(self.pass_read_limit, int):

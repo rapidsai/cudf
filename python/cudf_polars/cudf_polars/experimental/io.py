@@ -381,12 +381,13 @@ def _sink_partition(
     schema: Schema,
     kind: str,
     path: str,
+    config_options: ConfigOptions,
     options: dict[str, Any],
     df: DataFrame,
     ready: None,
 ) -> DataFrame:
     """Sink a partition to disk."""
-    return Sink.do_evaluate(schema, kind, path, options, df)
+    return Sink.do_evaluate(schema, kind, path, config_options, options, df)
 
 
 @generate_ir_tasks.register(Sink)
@@ -414,6 +415,7 @@ def _(
             ir.schema,
             ir.kind,
             f"{ir.path}/part.{str(i).zfill(width)}.{suffix}",
+            ir.config_options,
             ir.options,
             (child_name, i),
             setup_name,
