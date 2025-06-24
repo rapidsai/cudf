@@ -157,6 +157,21 @@ template <template <typename> class Hash>
 class element_hasher {
  public:
   /**
+   * @brief Constructs an element_hasher object.
+   *
+   * @param nulls Indicates whether to check for nulls
+   * @param seed  The seed to use for the hash function
+   * @param null_hash The hash value to use for nulls
+   */
+  __device__ element_hasher(
+    cudf::nullate::DYNAMIC const& has_nulls,
+    uint32_t seed             = DEFAULT_HASH_SEED,
+    hash_value_type null_hash = cuda::std::numeric_limits<hash_value_type>::max()) noexcept
+    : _has_nulls(has_nulls), _seed(seed), _null_hash(null_hash)
+  {
+  }
+
+  /**
    * @brief Returns the hash value of the given element in the given column.
    *
    * @tparam T The type of the element to hash
@@ -166,27 +181,28 @@ class element_hasher {
    * @return The hash value of the given element
    */
   template <typename T, CUDF_ENABLE_IF(column_device_view::has_element_accessor<T>())>
-  __device__ hash_value_type operator()(cudf::nullate::DYNAMIC const& has_nulls,
-                                        hash_value_type seed,
-                                        column_device_view const& col,
+  __device__ hash_value_type operator()(column_device_view const& col,
                                         size_type row_index) const
   {
-    if (has_nulls && col.is_null(row_index)) {
-      return cuda::std::numeric_limits<hash_value_type>::max();
+    if (_has_nulls && col.is_null(row_index)) {
+      return _null_hash;
     }
-    return Hash<T>{seed}(col.element<T>(row_index));
+    return Hash<T>{_seed}(col.element<T>(row_index));
   }
 
   // @cond
   template <typename T, CUDF_ENABLE_IF(not column_device_view::has_element_accessor<T>())>
-  __device__ hash_value_type operator()(cudf::nullate::DYNAMIC const&,
-                                        hash_value_type,
-                                        column_device_view const&,
+  __device__ hash_value_type operator()(column_device_view const&,
                                         size_type) const
   {
     CUDF_UNREACHABLE("Unsupported type in hash.");
   }
   // @endcond
+
+
+  cudf::nullate::DYNAMIC _has_nulls;        ///< Whether to check for nulls
+  uint32_t _seed;              ///< The seed to use for hashing
+  hash_value_type _null_hash;  ///< Hash value to use for null elements
 };
 
 /**
@@ -242,7 +258,7 @@ class row_hasher {
       hash = cudf::hashing::detail::hash_combine(
         hash,
         cudf::type_dispatcher<dispatch_primitive_type>(
-          _table.column(i).type(), element_hasher<Hash>{}, _seed, _table.column(i), row_index));
+          _table.column(i).type(), element_hasher<Hash>{_has_nulls, _seed, _null_hash}, _table.column(i), row_index));
     }
     return hash;
   }
