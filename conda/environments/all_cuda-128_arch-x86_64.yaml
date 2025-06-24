@@ -5,7 +5,6 @@ channels:
 - rapidsai-nightly
 - dask/label/dev
 - conda-forge
-- nvidia
 dependencies:
 - aiobotocore>=2.2.0
 - boto3>=1.21.21
@@ -57,7 +56,7 @@ dependencies:
 - nbsphinx
 - ninja
 - notebook
-- numba-cuda>=0.11.0,<0.12.0a0
+- numba-cuda>=0.14.0,<0.15.0a0
 - numba>=0.59.1,<0.62.0a0
 - numpy>=1.23,<3.0a0
 - numpydoc
