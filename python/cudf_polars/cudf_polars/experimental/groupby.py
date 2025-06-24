@@ -158,7 +158,6 @@ def _(
             ir.agg_requests,
             ir.maintain_order,
             None,
-            ir.config_options,
             *ir.children,
         )
         return rec(Slice(ir.schema, offset, length, new_join))

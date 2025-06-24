@@ -240,7 +240,6 @@ def _(
             ir.left_on,
             ir.right_on,
             (*ir.options[:2], None, *ir.options[3:]),
-            ir.config_options,
             *ir.children,
         )
         return rec(Slice(ir.schema, offset, length, new_join))
