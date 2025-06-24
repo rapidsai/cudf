@@ -411,7 +411,9 @@ struct cluster_info {
 // a monotonically increasing scale function which produces a distribution
 // of centroids that is more densely packed in the middle of the input
 // than at the ends.
-CUDF_HOST_DEVICE double scale_func_k1(double quantile, double sin_dn, double cos_dn)
+CUDF_HOST_DEVICE constexpr inline double scale_func_k1(double quantile,
+                                                       double sin_dn,
+                                                       double cos_dn)
 {
   double x      = 2.0 * quantile - 1.0;
   double result = x * cos_dn + sqrt(1.0 - x * x) * sin_dn;
