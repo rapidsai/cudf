@@ -25,11 +25,19 @@ rapids-pip-retry install -U -e .
 rapids-logger "Check narwhals versions"
 python -c "import narwhals; print(narwhals.show_versions())"
 
+TESTS_TO_ALWAYS_SKIP_CUDF="test_date_lit[cudf]" # pa.date32() is not supported in cudf
+
 rapids-logger "Run narwhals tests for cuDF"
-python -m pytest \
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest \
     --cache-clear \
     --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf-narwhals.xml" \
+    -p xdist \
+    -p env \
+    -p no:pytest_benchmark \
     -p cudf.testing.narwhals_test_plugin \
+    -k "not ( \
+        ${TESTS_TO_ALWAYS_SKIP_CUDF} \
+    )" \
     --numprocesses=8 \
     --dist=worksteal \
     --constructors=cudf
@@ -44,9 +52,12 @@ test_nan \
 "
 
 rapids-logger "Run narwhals tests for cuDF Polars"
-NARWHALS_POLARS_GPU=1 python -m pytest \
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 NARWHALS_POLARS_GPU=1 python -m pytest \
     --cache-clear \
     --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf-polars-narwhals.xml" \
+    -p xdist \
+    -p env \
+    -p no:pytest_benchmark \
     -k "not ( \
         ${TESTS_THAT_NEED_NARWHALS_FIX_FOR_CUDF_POLARS} \
     )" \
@@ -84,10 +95,13 @@ TESTS_THAT_NEED_NARWHALS_FIX_FOR_CUDF_PANDAS=" \
 test_dtypes \
 "
 
-NARWHALS_DEFAULT_CONSTRUCTORS=pandas python -m pytest \
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 NARWHALS_DEFAULT_CONSTRUCTORS=pandas python -m pytest \
     -p cudf.pandas \
     --cache-clear \
     --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf-pandas-narwhals.xml" \
+    -p xdist \
+    -p env \
+    -p no:pytest_benchmark \
     -k "not ( \
         ${TESTS_THAT_NEED_CUDF_FIX} or \
         ${TESTS_TO_ALWAYS_SKIP} or \

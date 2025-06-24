@@ -172,7 +172,7 @@ def test_synchronous_scheduler():
     config_options = ConfigOptions.from_polars_engine(engine)
     ir = Translator(q._ldf.visit(), engine).translate_ir()
     ir, partition_info = lower_ir_graph(ir, config_options)
-    graph, key = task_graph(ir, partition_info)
+    graph, key = task_graph(ir, partition_info, config_options)
     scheduler = get_scheduler(config_options)
     cache = {}
     result = scheduler(graph, key, cache=cache)
@@ -180,3 +180,43 @@ def test_synchronous_scheduler():
 
     # The cache should only contain the final result
     assert set(cache) == {key}
+
+
+def test_task_graph_is_pickle_serializable(engine):
+    # Dask will fall back to using cloudpickle to serialize the task graph if
+    # necessary. We'd like to avoid that, since cloudpickle serialization /
+    # deserialization is typically slower than pickle.
+
+    left = pl.LazyFrame(
+        {
+            "a": [1, 2, 3, 1, None],
+            "b": [1, 2, 3, 4, 5],
+            "c": [2, 3, 4, 5, 6],
+        }
+    )
+    right = pl.LazyFrame(
+        {
+            "a": [1, 4, 3, 7, None, None, 1],
+            "c": [2, 3, 4, 5, 6, 7, 8],
+            "d": [6, None, 7, 8, -1, 2, 4],
+        }
+    )
+    q = left.join(right, on="a").group_by("a").agg(pl.col("c").sum())
+
+    config_options = ConfigOptions.from_polars_engine(engine)
+    ir = Translator(q._ldf.visit(), engine).translate_ir()
+    ir, partition_info = lower_ir_graph(ir, config_options)
+    graph, _ = task_graph(ir, partition_info, config_options)
+
+    pickle.loads(pickle.dumps(graph))  # no exception
+
+
+def test_rename_concat(engine: pl.GPUEngine) -> None:
+    # https://github.com/rapidsai/cudf/pull/19121#issuecomment-2959305678
+    q = pl.concat(
+        [
+            pl.LazyFrame({"a": [1, 2, 3]}).rename({"a": "A"}),
+            pl.LazyFrame({"a": [4, 5, 6]}).rename({"a": "A"}),
+        ]
+    )
+    assert_gpu_result_equal(q, engine=engine)
