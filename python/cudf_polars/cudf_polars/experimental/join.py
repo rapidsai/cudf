@@ -9,7 +9,6 @@ from functools import reduce
 from typing import TYPE_CHECKING, Any
 
 from cudf_polars.dsl.ir import ConditionalJoin, Join
-from cudf_polars.dsl.tracing import do_evaluate_with_tracing
 from cudf_polars.experimental.base import PartitionInfo, get_key_name
 from cudf_polars.experimental.dispatch import generate_ir_tasks, lower_ir_node
 from cudf_polars.experimental.repartition import Repartition
@@ -22,14 +21,14 @@ if TYPE_CHECKING:
     from cudf_polars.dsl.expr import NamedExpr
     from cudf_polars.dsl.ir import IR
     from cudf_polars.experimental.parallel import LowerIRTransformer
-    from cudf_polars.utils.config import ConfigOptions
+    from cudf_polars.utils.config import ShuffleMethod
 
 
 def _maybe_shuffle_frame(
     frame: IR,
     on: tuple[NamedExpr, ...],
     partition_info: MutableMapping[IR, PartitionInfo],
-    config_options: ConfigOptions,
+    shuffle_method: ShuffleMethod | None,
     output_count: int,
 ) -> IR:
     # Shuffle `frame` if it isn't already shuffled.
@@ -44,7 +43,7 @@ def _maybe_shuffle_frame(
         frame = Shuffle(
             frame.schema,
             on,
-            config_options,
+            shuffle_method,
             frame,
         )
         partition_info[frame] = PartitionInfo(
@@ -60,20 +59,21 @@ def _make_hash_join(
     partition_info: MutableMapping[IR, PartitionInfo],
     left: IR,
     right: IR,
+    shuffle_method: ShuffleMethod | None,
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     # Shuffle left and right dataframes (if necessary)
     new_left = _maybe_shuffle_frame(
         left,
         ir.left_on,
         partition_info,
-        ir.config_options,
+        shuffle_method,
         output_count,
     )
     new_right = _maybe_shuffle_frame(
         right,
         ir.right_on,
         partition_info,
-        ir.config_options,
+        shuffle_method,
         output_count,
     )
     if left != new_left or right != new_right:
@@ -101,6 +101,7 @@ def _should_bcast_join(
     right: IR,
     partition_info: MutableMapping[IR, PartitionInfo],
     output_count: int,
+    broadcast_join_limit: int,
 ) -> bool:
     # Decide if a broadcast join is appropriate.
     if partition_info[left].count >= partition_info[right].count:
@@ -124,13 +125,10 @@ def _should_bcast_join(
     #    TODO: Make this value/heuristic configurable).
     #    We may want to account for the number of workers.
     # 3. The "kind" of join is compatible with a broadcast join
-    assert ir.config_options.executor.name == "streaming", (
-        "'in-memory' executor not supported in 'generate_ir_tasks'"
-    )
 
     return (
         not large_shuffled
-        and small_count <= ir.config_options.executor.broadcast_join_limit
+        and small_count <= broadcast_join_limit
         and (
             ir.options[0] == "Inner"
             or (ir.options[0] in ("Left", "Semi", "Anti") and large == left)
@@ -145,6 +143,7 @@ def _make_bcast_join(
     partition_info: MutableMapping[IR, PartitionInfo],
     left: IR,
     right: IR,
+    shuffle_method: ShuffleMethod | None,
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     if ir.options[0] != "Inner":
         left_count = partition_info[left].count
@@ -168,7 +167,7 @@ def _make_bcast_join(
                 right,
                 ir.right_on,
                 partition_info,
-                ir.config_options,
+                shuffle_method,
                 right_count,
             )
         else:
@@ -176,7 +175,7 @@ def _make_bcast_join(
                 left,
                 ir.left_on,
                 partition_info,
-                ir.config_options,
+                shuffle_method,
                 left_count,
             )
 
@@ -242,7 +241,18 @@ def _(
             ir, rec, msg="Cross join not support for multiple partitions."
         )
 
-    if _should_bcast_join(ir, left, right, partition_info, output_count):
+    config_options = rec.state["config_options"]
+    assert config_options.executor.name == "streaming", (
+        "'in-memory' executor not supported in 'lower_join'"
+    )
+    if _should_bcast_join(
+        ir,
+        left,
+        right,
+        partition_info,
+        output_count,
+        config_options.executor.broadcast_join_limit,
+    ):
         # Create a broadcast join
         return _make_bcast_join(
             ir,
@@ -250,6 +260,7 @@ def _(
             partition_info,
             left,
             right,
+            config_options.executor.shuffle_method,
         )
     else:
         # Create a hash join
@@ -259,6 +270,7 @@ def _(
             partition_info,
             left,
             right,
+            config_options.executor.shuffle_method,
         )
 
 
@@ -284,8 +296,7 @@ def _(
         right_name = get_key_name(right)
         return {
             key: (
-                do_evaluate_with_tracing,
-                type(ir),
+                ir.do_evaluate,
                 *ir._non_child_args,
                 (left_name, i),
                 (right_name, i),
@@ -345,8 +356,7 @@ def _(
 
                 inter_key = (inter_name, part_out, j)
                 graph[(inter_name, part_out, j)] = (
-                    do_evaluate_with_tracing,
-                    type(ir),
+                    ir.do_evaluate,
                     ir.left_on,
                     ir.right_on,
                     ir.options,

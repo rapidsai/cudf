@@ -29,12 +29,13 @@ import polars as pl
 import pylibcudf as plc
 
 import cudf_polars.dsl.expr as expr
-from cudf_polars.containers import Column, DataFrame
-from cudf_polars.dsl.expressions import rolling
+from cudf_polars.containers import Column, DataFrame, DataType
+from cudf_polars.dsl.expressions import rolling, unary
 from cudf_polars.dsl.expressions.base import ExecutionContext
 from cudf_polars.dsl.nodebase import Node
 from cudf_polars.dsl.to_ast import to_ast, to_parquet_filter
-from cudf_polars.dsl.tracing import do_evaluate_with_tracing
+from cudf_polars.dsl.tracing import nvtx_annotate_cudf_polars
+from cudf_polars.dsl.utils.reshape import broadcast
 from cudf_polars.dsl.utils.windows import range_window_bounds
 from cudf_polars.utils import dtypes
 from cudf_polars.utils.versions import POLARS_VERSION_LT_128
@@ -48,7 +49,7 @@ if TYPE_CHECKING:
     from polars.polars import _expr_nodes as pl_expr
 
     from cudf_polars.typing import CSECache, ClosedInterval, Schema, Slice as Zlice
-    from cudf_polars.utils.config import ConfigOptions
+    from cudf_polars.utils.config import ParquetOptions
     from cudf_polars.utils.timer import Timer
 
 
@@ -78,70 +79,6 @@ __all__ = [
     "Sort",
     "Union",
 ]
-
-
-def broadcast(*columns: Column, target_length: int | None = None) -> list[Column]:
-    """
-    Broadcast a sequence of columns to a common length.
-
-    Parameters
-    ----------
-    columns
-        Columns to broadcast.
-    target_length
-        Optional length to broadcast to. If not provided, uses the
-        non-unit length of existing columns.
-
-    Returns
-    -------
-    List of broadcasted columns all of the same length.
-
-    Raises
-    ------
-    RuntimeError
-        If broadcasting is not possible.
-
-    Notes
-    -----
-    In evaluation of a set of expressions, polars type-puns length-1
-    columns with scalars. When we insert these into a DataFrame
-    object, we need to ensure they are of equal length. This function
-    takes some columns, some of which may be length-1 and ensures that
-    all length-1 columns are broadcast to the length of the others.
-
-    Broadcasting is only possible if the set of lengths of the input
-    columns is a subset of ``{1, n}`` for some (fixed) ``n``. If
-    ``target_length`` is provided and not all columns are length-1
-    (i.e. ``n != 1``), then ``target_length`` must be equal to ``n``.
-    """
-    if len(columns) == 0:
-        return []
-    lengths: set[int] = {column.size for column in columns}
-    if lengths == {1}:
-        if target_length is None:
-            return list(columns)
-        nrows = target_length
-    else:
-        try:
-            (nrows,) = lengths.difference([1])
-        except ValueError as e:
-            raise RuntimeError("Mismatching column lengths") from e
-        if target_length is not None and nrows != target_length:
-            raise RuntimeError(
-                f"Cannot broadcast columns of length {nrows=} to {target_length=}"
-            )
-    return [
-        column
-        if column.size != 1
-        else Column(
-            plc.Column.from_scalar(column.obj_scalar, nrows),
-            is_sorted=plc.types.Sorted.YES,
-            order=plc.types.Order.ASCENDING,
-            null_order=plc.types.NullOrder.BEFORE,
-            name=column.name,
-        )
-        for column in columns
-    ]
 
 
 class IR(Node["IR"]):
@@ -236,8 +173,7 @@ class IR(Node["IR"]):
             timer.store(start, end, type(self).__name__)
             return result
         else:
-            args = (*self._non_child_args, *children)
-            return do_evaluate_with_tracing(type(self), *args)
+            return self.do_evaluate(*self._non_child_args, *children)
 
 
 class ErrorNode(IR):
@@ -281,9 +217,9 @@ class Scan(IR):
 
     __slots__ = (
         "cloud_options",
-        "config_options",
         "include_file_paths",
         "n_rows",
+        "parquet_options",
         "paths",
         "predicate",
         "reader_options",
@@ -297,7 +233,6 @@ class Scan(IR):
         "typ",
         "reader_options",
         "cloud_options",
-        "config_options",
         "paths",
         "with_columns",
         "skip_rows",
@@ -305,6 +240,7 @@ class Scan(IR):
         "row_index",
         "include_file_paths",
         "predicate",
+        "parquet_options",
     )
     typ: str
     """What type of file are we reading? Parquet, CSV, etc..."""
@@ -312,8 +248,6 @@ class Scan(IR):
     """Reader-specific options, as dictionary."""
     cloud_options: dict[str, Any] | None
     """Cloud-related authentication options, currently ignored."""
-    config_options: ConfigOptions
-    """GPU-specific configuration options"""
     paths: list[str]
     """List of paths to read from."""
     with_columns: list[str] | None
@@ -328,6 +262,8 @@ class Scan(IR):
     """Include the path of the source file(s) as a column with this name."""
     predicate: expr.NamedExpr | None
     """Mask to apply to the read dataframe."""
+    parquet_options: ParquetOptions
+    """Parquet-specific options."""
 
     PARQUET_DEFAULT_CHUNK_SIZE: int = 0  # unlimited
     PARQUET_DEFAULT_PASS_LIMIT: int = 16 * 1024**3  # 16GiB
@@ -338,7 +274,6 @@ class Scan(IR):
         typ: str,
         reader_options: dict[str, Any],
         cloud_options: dict[str, Any] | None,
-        config_options: ConfigOptions,
         paths: list[str],
         with_columns: list[str] | None,
         skip_rows: int,
@@ -346,12 +281,12 @@ class Scan(IR):
         row_index: tuple[str, int] | None,
         include_file_paths: str | None,
         predicate: expr.NamedExpr | None,
+        parquet_options: ParquetOptions,
     ):
         self.schema = schema
         self.typ = typ
         self.reader_options = reader_options
         self.cloud_options = cloud_options
-        self.config_options = config_options
         self.paths = paths
         self.with_columns = with_columns
         self.skip_rows = skip_rows
@@ -363,7 +298,6 @@ class Scan(IR):
             schema,
             typ,
             reader_options,
-            config_options,
             paths,
             with_columns,
             skip_rows,
@@ -371,8 +305,10 @@ class Scan(IR):
             row_index,
             include_file_paths,
             predicate,
+            parquet_options,
         )
         self.children = ()
+        self.parquet_options = parquet_options
         if self.typ not in ("csv", "parquet", "ndjson"):  # pragma: no cover
             # This line is unhittable ATM since IPC/Anonymous scan raise
             # on the polars side
@@ -460,7 +396,6 @@ class Scan(IR):
             self.typ,
             json.dumps(self.reader_options),
             json.dumps(self.cloud_options),
-            self.config_options,
             tuple(self.paths),
             tuple(self.with_columns) if self.with_columns is not None else None,
             self.skip_rows,
@@ -468,6 +403,7 @@ class Scan(IR):
             self.row_index,
             self.include_file_paths,
             self.predicate,
+            self.parquet_options,
         )
 
     @staticmethod
@@ -484,7 +420,8 @@ class Scan(IR):
             plc.Table([plc.interop.from_arrow(pa.array(map(str, paths)))]),
             plc.interop.from_arrow(pa.array(rows_per_path, type=pa.int32())),
         ).columns()
-        return df.with_columns([Column(filepaths, name=name)])
+        dtype = DataType(pl.String())
+        return df.with_columns([Column(filepaths, name=name, dtype=dtype)])
 
     def fast_count(self) -> int:  # pragma: no cover
         """Get the number of rows in a Parquet Scan."""
@@ -497,12 +434,12 @@ class Scan(IR):
         return max(total_rows, 0)
 
     @classmethod
+    @nvtx_annotate_cudf_polars(message="Scan")
     def do_evaluate(
         cls,
         schema: Schema,
         typ: str,
         reader_options: dict[str, Any],
-        config_options: ConfigOptions,
         paths: list[str],
         with_columns: list[str] | None,
         skip_rows: int,
@@ -510,6 +447,7 @@ class Scan(IR):
         row_index: tuple[str, int] | None,
         include_file_paths: str | None,
         predicate: expr.NamedExpr | None,
+        parquet_options: ParquetOptions,
     ) -> DataFrame:
         """Evaluate and return a dataframe."""
         if typ == "csv":
@@ -636,11 +574,11 @@ class Scan(IR):
                 options.set_num_rows(n_rows)
             if skip_rows != 0:
                 options.set_skip_rows(skip_rows)
-            if config_options.parquet_options.chunked:
+            if parquet_options.chunked:
                 reader = plc.io.parquet.ChunkedParquetReader(
                     options,
-                    chunk_read_limit=config_options.parquet_options.chunk_read_limit,
-                    pass_read_limit=config_options.parquet_options.pass_read_limit,
+                    chunk_read_limit=parquet_options.chunk_read_limit,
+                    pass_read_limit=parquet_options.pass_read_limit,
                 )
                 chunk = reader.read_chunk()
                 tbl = chunk.tbl
@@ -706,15 +644,16 @@ class Scan(IR):
         if row_index is not None:
             name, offset = row_index
             offset += skip_rows
-            dtype = schema[name].plc
-            step = plc.Scalar.from_py(1, dtype)
-            init = plc.Scalar.from_py(offset, dtype)
+            dtype = schema[name]
+            step = plc.Scalar.from_py(1, dtype.plc)
+            init = plc.Scalar.from_py(offset, dtype.plc)
             index_col = Column(
                 plc.filling.sequence(df.num_rows, init, step),
                 is_sorted=plc.types.Sorted.YES,
                 order=plc.types.Order.ASCENDING,
                 null_order=plc.types.NullOrder.AFTER,
                 name=name,
+                dtype=dtype,
             )
             df = DataFrame([index_col, *df.columns])
             if next(iter(schema)) != name:
@@ -852,6 +791,7 @@ class Sink(IR):
         )  # pragma: no cover
 
     @classmethod
+    @nvtx_annotate_cudf_polars(message="Sink")
     def do_evaluate(
         cls,
         schema: Schema,
@@ -950,6 +890,7 @@ class Cache(IR):
         return False
 
     @classmethod
+    @nvtx_annotate_cudf_polars(message="Cache")
     def do_evaluate(
         cls, key: int, refcount: int, df: DataFrame
     ) -> DataFrame:  # pragma: no cover; basic evaluation never calls this
@@ -985,26 +926,22 @@ class DataFrameScan(IR):
     This typically arises from ``q.collect().lazy()``
     """
 
-    __slots__ = ("_id_for_hash", "config_options", "df", "projection")
-    _non_child = ("schema", "df", "projection", "config_options")
+    __slots__ = ("_id_for_hash", "df", "projection")
+    _non_child = ("schema", "df", "projection")
     df: Any
     """Polars internal PyDataFrame object."""
     projection: tuple[str, ...] | None
     """List of columns to project out."""
-    config_options: ConfigOptions
-    """GPU-specific configuration options"""
 
     def __init__(
         self,
         schema: Schema,
         df: Any,
         projection: Sequence[str] | None,
-        config_options: ConfigOptions,
     ):
         self.schema = schema
         self.df = df
         self.projection = tuple(projection) if projection is not None else None
-        self.config_options = config_options
         self._non_child_args = (
             schema,
             pl.DataFrame._from_pydf(df),
@@ -1027,10 +964,10 @@ class DataFrameScan(IR):
             schema_hash,
             self._id_for_hash,
             self.projection,
-            self.config_options,
         )
 
     @classmethod
+    @nvtx_annotate_cudf_polars(message="DataFrameScan")
     def do_evaluate(
         cls,
         schema: Schema,
@@ -1090,6 +1027,7 @@ class Select(IR):
         return False
 
     @classmethod
+    @nvtx_annotate_cudf_polars(message="Select")
     def do_evaluate(
         cls,
         exprs: tuple[expr.NamedExpr, ...],
@@ -1138,15 +1076,14 @@ class Select(IR):
         ):
             scan = self.children[0]  # pragma: no cover
             effective_rows = scan.fast_count()  # pragma: no cover
+            dtype = DataType(pl.UInt32())  # pragma: no cover
             col = Column(
                 plc.Column.from_scalar(
-                    plc.Scalar.from_py(
-                        effective_rows,
-                        plc.DataType(plc.TypeId.UINT32),
-                    ),
+                    plc.Scalar.from_py(effective_rows, dtype.plc),
                     1,
                 ),
                 name=self.exprs[0].name or "len",
+                dtype=dtype,
             )  # pragma: no cover
             return DataFrame([col])  # pragma: no cover
 
@@ -1174,6 +1111,7 @@ class Reduce(IR):
         self._non_child_args = (self.exprs,)
 
     @classmethod
+    @nvtx_annotate_cudf_polars(message="Reduce")
     def do_evaluate(
         cls,
         exprs: tuple[expr.NamedExpr, ...],
@@ -1269,6 +1207,7 @@ class Rolling(IR):
         )
 
     @classmethod
+    @nvtx_annotate_cudf_polars(message="Rolling")
     def do_evaluate(
         cls,
         index: expr.NamedExpr,
@@ -1327,12 +1266,8 @@ class Rolling(IR):
                 keys,
                 [orderby],
                 (
-                    Column(col, name=name)
-                    for col, name in zip(
-                        values.columns(),
-                        (request.name for request in aggs),
-                        strict=True,
-                    )
+                    Column(col, name=request.name, dtype=request.value.dtype)
+                    for col, request in zip(values.columns(), aggs, strict=True)
                 ),
             )
         ).slice(zlice)
@@ -1343,7 +1278,6 @@ class GroupBy(IR):
 
     __slots__ = (
         "agg_requests",
-        "config_options",
         "keys",
         "maintain_order",
         "zlice",
@@ -1354,7 +1288,6 @@ class GroupBy(IR):
         "agg_requests",
         "maintain_order",
         "zlice",
-        "config_options",
     )
     keys: tuple[expr.NamedExpr, ...]
     """Grouping keys."""
@@ -1364,8 +1297,6 @@ class GroupBy(IR):
     """Preserve order in groupby."""
     zlice: Zlice | None
     """Optional slice to apply after grouping."""
-    config_options: ConfigOptions
-    """GPU-specific configuration options"""
 
     def __init__(
         self,
@@ -1374,15 +1305,21 @@ class GroupBy(IR):
         agg_requests: Sequence[expr.NamedExpr],
         maintain_order: bool,  # noqa: FBT001
         zlice: Zlice | None,
-        config_options: ConfigOptions,
         df: IR,
     ):
         self.schema = schema
         self.keys = tuple(keys)
+        if any(
+            isinstance(child, unary.UnaryFunction) and child.name == "value_counts"
+            for request in agg_requests
+            for child in request.value.children
+        ):
+            raise NotImplementedError(
+                "value_counts is not supported in groupby"
+            )  # pragma: no cover
         self.agg_requests = tuple(agg_requests)
         self.maintain_order = maintain_order
         self.zlice = zlice
-        self.config_options = config_options
         self.children = (df,)
         self._non_child_args = (
             self.keys,
@@ -1392,6 +1329,7 @@ class GroupBy(IR):
         )
 
     @classmethod
+    @nvtx_annotate_cudf_polars(message="GroupBy")
     def do_evaluate(
         cls,
         keys_in: Sequence[expr.NamedExpr],
@@ -1435,15 +1373,16 @@ class GroupBy(IR):
             names.append(name)
         group_keys, raw_tables = grouper.aggregate(requests)
         results = [
-            Column(column, name=name)
-            for name, column in zip(
+            Column(column, name=name, dtype=request.value.dtype)
+            for name, column, request in zip(
                 names,
                 itertools.chain.from_iterable(t.columns() for t in raw_tables),
+                agg_requests,
                 strict=True,
             )
         ]
         result_keys = [
-            Column(grouped_key, name=key.name)
+            Column(grouped_key, name=key.name, dtype=key.dtype)
             for key, grouped_key in zip(keys, group_keys.columns(), strict=True)
         ]
         broadcasted = broadcast(*result_keys, *results)
@@ -1483,7 +1422,7 @@ class GroupBy(IR):
                 plc.copying.OutOfBoundsPolicy.DONT_CHECK,
             )
             broadcasted = [
-                Column(reordered, name=old.name)
+                Column(reordered, name=old.name, dtype=old.dtype)
                 for reordered, old in zip(
                     ordered_table.columns(), broadcasted, strict=True
                 )
@@ -1553,6 +1492,7 @@ class ConditionalJoin(IR):
         self._non_child_args = (predicate_wrapper, zlice, suffix, maintain_order)
 
     @classmethod
+    @nvtx_annotate_cudf_polars(message="ConditionalJoin")
     def do_evaluate(
         cls,
         predicate_wrapper: Predicate,
@@ -1594,8 +1534,8 @@ class ConditionalJoin(IR):
 class Join(IR):
     """A join of two dataframes."""
 
-    __slots__ = ("config_options", "left_on", "options", "right_on")
-    _non_child = ("schema", "left_on", "right_on", "options", "config_options")
+    __slots__ = ("left_on", "options", "right_on")
+    _non_child = ("schema", "left_on", "right_on", "options")
     left_on: tuple[expr.NamedExpr, ...]
     """List of expressions used as keys in the left frame."""
     right_on: tuple[expr.NamedExpr, ...]
@@ -1617,8 +1557,6 @@ class Join(IR):
     - coalesce: should key columns be coalesced (only makes sense for outer joins)
     - maintain_order: which DataFrame row order to preserve, if any
     """
-    config_options: ConfigOptions
-    """GPU-specific configuration options"""
 
     def __init__(
         self,
@@ -1626,7 +1564,6 @@ class Join(IR):
         left_on: Sequence[expr.NamedExpr],
         right_on: Sequence[expr.NamedExpr],
         options: Any,
-        config_options: ConfigOptions,
         left: IR,
         right: IR,
     ):
@@ -1634,7 +1571,6 @@ class Join(IR):
         self.left_on = tuple(left_on)
         self.right_on = tuple(right_on)
         self.options = options
-        self.config_options = config_options
         self.children = (left, right)
         self._non_child_args = (self.left_on, self.right_on, self.options)
         # TODO: Implement maintain_order
@@ -1733,6 +1669,7 @@ class Join(IR):
         ).columns()
 
     @classmethod
+    @nvtx_annotate_cudf_polars(message="Join")
     def do_evaluate(
         cls,
         left_on_exprs: Sequence[expr.NamedExpr],
@@ -1755,7 +1692,7 @@ class Join(IR):
             # result, not the gather maps
             columns = plc.join.cross_join(left.table, right.table).columns()
             left_cols = [
-                Column(new, name=old.name).sorted_like(old)
+                Column(new, name=old.name, dtype=old.dtype).sorted_like(old)
                 for new, old in zip(
                     columns[: left.num_columns], left.columns, strict=True
                 )
@@ -1766,9 +1703,13 @@ class Join(IR):
                     name=name
                     if name not in left.column_names_set
                     else f"{name}{suffix}",
+                    dtype=old.dtype,
                 )
-                for new, name in zip(
-                    columns[left.num_columns :], right.column_names, strict=True
+                for new, name, old in zip(
+                    columns[left.num_columns :],
+                    right.column_names,
+                    right.columns,
+                    strict=True,
                 )
             ]
             return DataFrame([*left_cols, *right_cols]).slice(zlice)
@@ -1818,6 +1759,7 @@ class Join(IR):
                         Column(
                             plc.replace.replace_nulls(left_col.obj, right_col.obj),
                             name=left_col.name,
+                            dtype=left_col.dtype,
                         )
                         for left_col, right_col in zip(
                             left.select_columns(left_on.column_names_set),
@@ -1864,6 +1806,7 @@ class HStack(IR):
         self.children = (df,)
 
     @classmethod
+    @nvtx_annotate_cudf_polars(message="HStack")
     def do_evaluate(
         cls,
         exprs: Sequence[expr.NamedExpr],
@@ -1928,6 +1871,7 @@ class Distinct(IR):
     }
 
     @classmethod
+    @nvtx_annotate_cudf_polars(message="Distinct")
     def do_evaluate(
         cls,
         keep: plc.stream_compaction.DuplicateKeepOption,
@@ -1966,7 +1910,7 @@ class Distinct(IR):
         # TODO: Is this sortedness setting correct
         result = DataFrame(
             [
-                Column(new, name=old.name).sorted_like(old)
+                Column(new, name=old.name, dtype=old.dtype).sorted_like(old)
                 for new, old in zip(table.columns(), df.columns, strict=True)
             ]
         )
@@ -2017,6 +1961,7 @@ class Sort(IR):
         self.children = (df,)
 
     @classmethod
+    @nvtx_annotate_cudf_polars(message="Sort")
     def do_evaluate(
         cls,
         by: Sequence[expr.NamedExpr],
@@ -2066,6 +2011,7 @@ class Slice(IR):
         self.children = (df,)
 
     @classmethod
+    @nvtx_annotate_cudf_polars(message="Slice")
     def do_evaluate(cls, offset: int, length: int, df: DataFrame) -> DataFrame:
         """Evaluate and return a dataframe."""
         return df.slice((offset, length))
@@ -2086,6 +2032,7 @@ class Filter(IR):
         self.children = (df,)
 
     @classmethod
+    @nvtx_annotate_cudf_polars(message="Filter")
     def do_evaluate(cls, mask_expr: expr.NamedExpr, df: DataFrame) -> DataFrame:
         """Evaluate and return a dataframe."""
         (mask,) = broadcast(mask_expr.evaluate(df), target_length=df.num_rows)
@@ -2104,6 +2051,7 @@ class Projection(IR):
         self.children = (df,)
 
     @classmethod
+    @nvtx_annotate_cudf_polars(message="Projection")
     def do_evaluate(cls, schema: Schema, df: DataFrame) -> DataFrame:
         """Evaluate and return a dataframe."""
         # This can reorder things.
@@ -2132,6 +2080,7 @@ class MergeSorted(IR):
         self._non_child_args = (key,)
 
     @classmethod
+    @nvtx_annotate_cudf_polars(message="MergeSorted")
     def do_evaluate(cls, key: str, *dfs: DataFrame) -> DataFrame:
         """Evaluate and return a dataframe."""
         left, right = dfs
@@ -2244,9 +2193,11 @@ class MapFunction(IR):
             self.name,
             json.dumps(self.options),
             tuple(self.schema.items()),
+            self._ctor_arguments(self.children)[1:],
         )
 
     @classmethod
+    @nvtx_annotate_cudf_polars(message="MapFunction")
     def do_evaluate(
         cls, schema: Schema, name: str, options: Any, df: DataFrame
     ) -> DataFrame:
@@ -2275,11 +2226,13 @@ class MapFunction(IR):
                 value_name,
             ) = options
             npiv = len(pivotees)
+            selected = df.select(indices)
             index_columns = [
-                Column(col, name=name)
-                for col, name in zip(
-                    plc.reshape.tile(df.select(indices).table, npiv).columns(),
+                Column(tiled, name=name, dtype=old.dtype)
+                for tiled, name, old in zip(
+                    plc.reshape.tile(selected.table, npiv).columns(),
                     indices,
+                    selected.columns,
                     strict=True,
                 )
             ]
@@ -2298,28 +2251,31 @@ class MapFunction(IR):
             ).columns()
             value_column = plc.concatenate.concatenate(
                 [
-                    df.column_map[pivotee].astype(schema[value_name].plc).obj
+                    df.column_map[pivotee].astype(schema[value_name]).obj
                     for pivotee in pivotees
                 ]
             )
             return DataFrame(
                 [
                     *index_columns,
-                    Column(variable_column, name=variable_name),
-                    Column(value_column, name=value_name),
+                    Column(
+                        variable_column, name=variable_name, dtype=schema[variable_name]
+                    ),
+                    Column(value_column, name=value_name, dtype=schema[value_name]),
                 ]
             )
         elif name == "row_index":
             col_name, offset = options
-            dtype = schema[col_name].plc
-            step = plc.Scalar.from_py(1, dtype)
-            init = plc.Scalar.from_py(offset, dtype)
+            dtype = schema[col_name]
+            step = plc.Scalar.from_py(1, dtype.plc)
+            init = plc.Scalar.from_py(offset, dtype.plc)
             index_col = Column(
                 plc.filling.sequence(df.num_rows, init, step),
                 is_sorted=plc.types.Sorted.YES,
                 order=plc.types.Order.ASCENDING,
                 null_order=plc.types.NullOrder.AFTER,
                 name=col_name,
+                dtype=dtype,
             )
             return DataFrame([index_col, *df.columns])
         else:
@@ -2342,6 +2298,7 @@ class Union(IR):
         schema = self.children[0].schema
 
     @classmethod
+    @nvtx_annotate_cudf_polars(message="Union")
     def do_evaluate(cls, zlice: Zlice | None, *dfs: DataFrame) -> DataFrame:
         """Evaluate and return a dataframe."""
         # TODO: only evaluate what we need if we have a slice?
@@ -2397,6 +2354,7 @@ class HConcat(IR):
         )
 
     @classmethod
+    @nvtx_annotate_cudf_polars(message="HConcat")
     def do_evaluate(
         cls,
         should_broadcast: bool,  # noqa: FBT001
@@ -2440,6 +2398,7 @@ class Empty(IR):
         self.children = ()
 
     @classmethod
+    @nvtx_annotate_cudf_polars(message="Empty")
     def do_evaluate(cls) -> DataFrame:  # pragma: no cover
         """Evaluate and return a dataframe."""
         return DataFrame([])

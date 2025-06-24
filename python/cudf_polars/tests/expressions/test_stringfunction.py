@@ -534,3 +534,40 @@ def test_string_pad_end(width, char):
     df = pl.LazyFrame({"a": ["abc", "defg", "hij"]})
     q = df.select(pl.col("a").str.pad_end(width, char))
     assert_gpu_result_equal(q)
+
+
+def test_string_to_titlecase():
+    df = pl.LazyFrame(
+        {
+            "quotes": [
+                "'e.t. phone home'",
+                "you talkin' to me?",
+                "to infinity,and BEYOND!",
+            ]
+        }
+    )
+    q = df.with_columns(
+        quotes_title=pl.col("quotes").str.to_titlecase(),
+    )
+    assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize("tail", [1, 2, 999, -1, 0, None])
+def test_string_tail(ldf, tail):
+    q = ldf.select(pl.col("a").str.tail(tail))
+    assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize("head", [1, 2, 999, -1, 0, None])
+def test_string_head(ldf, head):
+    q = ldf.select(pl.col("a").str.head(head))
+    assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize("ignore_nulls", [True, False])
+@pytest.mark.parametrize("separator", ["*", ""])
+def test_concat_horizontal(ldf, ignore_nulls, separator):
+    q = ldf.select(
+        pl.concat_str(["a", "c"], separator=separator, ignore_nulls=ignore_nulls)
+    )
+    assert_gpu_result_equal(q)

@@ -7,8 +7,6 @@ from __future__ import annotations
 import operator
 from typing import TYPE_CHECKING, Any, TypedDict
 
-import nvtx
-
 import pylibcudf as plc
 import rmm.mr
 from rmm.pylibrmm.stream import DEFAULT_STREAM
@@ -16,7 +14,7 @@ from rmm.pylibrmm.stream import DEFAULT_STREAM
 from cudf_polars.containers import DataFrame
 from cudf_polars.dsl.expr import Col
 from cudf_polars.dsl.ir import IR
-from cudf_polars.dsl.tracing import CUDF_POLARS_NVTX_DOMAIN
+from cudf_polars.dsl.tracing import nvtx_annotate_cudf_polars
 from cudf_polars.experimental.base import get_key_name
 from cudf_polars.experimental.dispatch import generate_ir_tasks, lower_ir_node
 from cudf_polars.experimental.utils import _concat
@@ -28,7 +26,7 @@ if TYPE_CHECKING:
     from cudf_polars.experimental.dispatch import LowerIRTransformer
     from cudf_polars.experimental.parallel import PartitionInfo
     from cudf_polars.typing import Schema
-    from cudf_polars.utils.config import ConfigOptions
+    from cudf_polars.utils.config import ShuffleMethod
 
 
 # Supported shuffle methods
@@ -47,9 +45,7 @@ class RMPFIntegration:  # pragma: no cover
     """cuDF-Polars protocol for rapidsmpf shuffler."""
 
     @staticmethod
-    @nvtx.annotate(
-        message="RMPFIntegration.insert_partition", domain=CUDF_POLARS_NVTX_DOMAIN
-    )
+    @nvtx_annotate_cudf_polars(message="RMPFIntegration.insert_partition")
     def insert_partition(
         df: DataFrame,
         partition_id: int,  # Not currently used
@@ -59,7 +55,7 @@ class RMPFIntegration:  # pragma: no cover
         *other: Any,
     ) -> None:
         """Add cudf-polars DataFrame chunks to an RMP shuffler."""
-        from rapidsmpf.shuffler import partition_and_pack
+        from rapidsmpf.integrations.cudf.partition import partition_and_pack
 
         on = options["on"]
         assert not other, f"Unexpected arguments: {other}"
@@ -74,16 +70,14 @@ class RMPFIntegration:  # pragma: no cover
         shuffler.insert_chunks(packed_inputs)
 
     @staticmethod
-    @nvtx.annotate(
-        message="RMPFIntegration.extract_partition", domain=CUDF_POLARS_NVTX_DOMAIN
-    )
+    @nvtx_annotate_cudf_polars(message="RMPFIntegration.extract_partition")
     def extract_partition(
         partition_id: int,
         shuffler: Any,
         options: ShuffleOptions,
     ) -> DataFrame:
         """Extract a finished partition from the RMP shuffler."""
-        from rapidsmpf.shuffler import unpack_and_concat
+        from rapidsmpf.integrations.cudf.partition import unpack_and_concat
 
         shuffler.wait_on(partition_id)
         column_names = options["column_names"]
@@ -106,24 +100,24 @@ class Shuffle(IR):
     Only hash-based partitioning is supported (for now).
     """
 
-    __slots__ = ("config_options", "keys")
-    _non_child = ("schema", "keys", "config_options")
+    __slots__ = ("keys", "shuffle_method")
+    _non_child = ("schema", "keys", "shuffle_method")
     keys: tuple[NamedExpr, ...]
     """Keys to shuffle on."""
-    config_options: ConfigOptions
-    """Configuration options."""
+    shuffle_method: ShuffleMethod | None
+    """Shuffle method to use."""
 
     def __init__(
         self,
         schema: Schema,
         keys: tuple[NamedExpr, ...],
-        config_options: ConfigOptions,
+        shuffle_method: ShuffleMethod | None,
         df: IR,
     ):
         self.schema = schema
         self.keys = keys
-        self.config_options = config_options
-        self._non_child_args = (schema, keys, config_options)
+        self.shuffle_method = shuffle_method
+        self._non_child_args = (schema, keys, shuffle_method)
         self.children = (df,)
 
     @classmethod
@@ -131,7 +125,7 @@ class Shuffle(IR):
         cls,
         schema: Schema,
         keys: tuple[NamedExpr, ...],
-        config_options: ConfigOptions,
+        shuffle_method: ShuffleMethod | None,
         df: DataFrame,
     ) -> DataFrame:  # pragma: no cover
         """Evaluate and return a dataframe."""
@@ -258,11 +252,7 @@ def _(
     ir: Shuffle, partition_info: MutableMapping[IR, PartitionInfo]
 ) -> MutableMapping[Any, Any]:
     # Extract "shuffle_method" configuration
-    assert ir.config_options.executor.name == "streaming", (
-        "'in-memory' executor not supported in 'generate_ir_tasks'"
-    )
-
-    shuffle_method = ir.config_options.executor.shuffle_method
+    shuffle_method = ir.shuffle_method
 
     # Try using rapidsmpf shuffler if we have "simple" shuffle
     # keys, and the "shuffle_method" config is set to "rapidsmpf"
