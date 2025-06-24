@@ -141,18 +141,19 @@ class row_equality_comparator {
    */
   __device__ bool operator()(size_type lhs_row_index, size_type rhs_row_index) const
   {
-    bool equal = true;
     for (size_type i = 0; i < _lhs.num_columns(); ++i) {
-      equal &= cudf::type_dispatcher<dispatch_primitive_type>(_lhs.column(i).type(),
-                                                              element_equality_comparator{},
-                                                              _has_nulls,
-                                                              _lhs.column(i),
-                                                              _rhs.column(i),
-                                                              _nulls_are_equal,
-                                                              lhs_row_index,
-                                                              rhs_row_index);
+      if (!cudf::type_dispatcher<dispatch_primitive_type>(_lhs.column(i).type(),
+                                                          element_equality_comparator{},
+                                                          _has_nulls,
+                                                          _lhs.column(i),
+                                                          _rhs.column(i),
+                                                          _nulls_are_equal,
+                                                          lhs_row_index,
+                                                          rhs_row_index)) {
+        return false;
+      }
     }
-    return equal;
+    return true;
   }
 
  private:

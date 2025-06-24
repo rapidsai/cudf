@@ -101,6 +101,31 @@ TEST_F(DistinctJoinTest, IntegerInnerJoin)
   this->compare_to_reference(build_table, probe_table, result, cudf::table_view{{gold->view()}});
 }
 
+TEST_F(DistinctJoinTest, MultiColumnIntegerInnerJoin)
+{
+  auto constexpr size = 2024;
+
+  auto const init = cudf::numeric_scalar<int32_t>{0};
+
+  auto build_col0 = cudf::sequence(size, init, cudf::numeric_scalar<int32_t>{1});
+  auto build_col1 = cudf::sequence(size, init, cudf::numeric_scalar<int32_t>{1});
+  auto probe_col0 = cudf::sequence(size, init, cudf::numeric_scalar<int32_t>{2});
+  auto probe_col1 = cudf::sequence(size, init, cudf::numeric_scalar<int32_t>{2});
+
+  auto build_table = cudf::table_view{{build_col0->view(), build_col1->view()}};
+  auto probe_table = cudf::table_view{{probe_col0->view(), probe_col1->view()}};
+
+  auto distinct_join = cudf::distinct_hash_join{build_table};
+
+  auto result = distinct_join.inner_join(probe_table);
+
+  auto constexpr gold_size = size / 2;
+  auto gold_col0           = cudf::sequence(gold_size, init, cudf::numeric_scalar<int32_t>{2});
+  auto gold_col1           = cudf::sequence(gold_size, init, cudf::numeric_scalar<int32_t>{2});
+  auto gold_table          = cudf::table_view{{gold_col0->view(), gold_col1->view()}};
+  this->compare_to_reference(build_table, probe_table, result, gold_table);
+}
+
 TEST_F(DistinctJoinTest, InnerJoinNoNulls)
 {
   column_wrapper<int32_t> col0_0{{1, 2, 3, 4, 5}};
