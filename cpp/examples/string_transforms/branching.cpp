@@ -50,6 +50,21 @@ __device__ void format_phone(void* scratch,
     it += size;
   };
 
+  auto push_phone_digits = [&](cudf::string_view str, cudf::size_type max) {
+    cudf::size_type digits_pushed = 0;
+    auto iter                     = str.data();
+    auto const end                = str.data() + str.size_bytes();
+    while (iter != end && digits_pushed < max) {
+      if (*iter != '-') {
+        push(cudf::string_view{iter, 1});
+        digits_pushed++;
+      }
+      iter++;
+    }
+
+    return iter;
+  };
+
   auto country_iter      = country_code.data();
   auto const country_end = country_iter + country_code.size_bytes();
   auto area_iter         = area_code.data();
@@ -73,30 +88,15 @@ __device__ void format_phone(void* scratch,
     push(cudf::string_view{") ", 2});
 
     // push first 3 non-dash digits from phone number
-    cudf::size_type digits_pushed = 0;
-
-    while (phone_iter != phone_end && digits_pushed < 3) {
-      if (*phone_iter != '-') {
-        push(cudf::string_view{phone_iter, 1});
-        digits_pushed++;
-      }
-      phone_iter++;
-    }
+    phone_iter = push_phone_digits(
+      cudf::string_view{phone_iter, static_cast<cudf::size_type>(phone_end - phone_iter)}, 3);
 
     // push "-"
     push(cudf::string_view{"-", 1});
 
     // push remaining 4 non-dash digits
-    digits_pushed = 0;
-
-    while (phone_iter != phone_end && digits_pushed < 4) {
-      if (*phone_iter != '-') {
-        push(cudf::string_view{phone_iter, 1});
-        digits_pushed++;
-      }
-      phone_iter++;
-    }
-
+    phone_iter = push_phone_digits(
+      cudf::string_view{phone_iter, static_cast<cudf::size_type>(phone_end - phone_iter)}, 4);
   }
   // check if it's a United Kingdom number (country code = 44) or Ireland number (country_code =
   // 353) or New-Zealand (country_code = 64)
@@ -117,36 +117,23 @@ __device__ void format_phone(void* scratch,
     }
 
     // push digits before the last 4
-    cudf::size_type digits_pushed = 0;
-
-    while (phone_iter != phone_end && digits_pushed < (total_digits - 4)) {
-      if (*phone_iter != '-') {
-        push(cudf::string_view{phone_iter, 1});
-        digits_pushed++;
-      }
-      phone_iter++;
-    }
+    phone_iter = push_phone_digits(
+      cudf::string_view{phone_iter, static_cast<cudf::size_type>(phone_end - phone_iter)},
+      total_digits - 4);
 
     // push space before last 4 digits
     push(cudf::string_view{" ", 1});
 
-    // push last 4 digits
-    digits_pushed = 0;
+    phone_iter = push_phone_digits(
+      cudf::string_view{phone_iter, static_cast<cudf::size_type>(phone_end - phone_iter)}, 4);
 
-    while (phone_iter != phone_end) {
-      if (*phone_iter != '-') {
-        push(cudf::string_view{phone_iter, 1});
-        digits_pushed++;
-      }
-      phone_iter++;
-    }
   } else {
     push(cudf::string_view{"n/a", 3});
   }
 
   *out = cudf::string_view{begin, static_cast<cudf::size_type>(it - begin)};
 }
-    )***";
+  )***";
 
   constexpr cudf::size_type MAX_ENTRY_LENGTH = 24;  // Enough space for "(123) 123-4567" or "n/a"
 

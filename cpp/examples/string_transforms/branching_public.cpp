@@ -86,7 +86,7 @@ std::tuple<std::unique_ptr<cudf::column>, std::vector<int32_t>> transform(
   // create boolean mask for New-Zealand numbers (country_code == "64")
   auto nz_scalar = cudf::string_scalar("64", true, stream, mr);
   auto nz_mask   = cudf::binary_operation(country_code,
-                                        ie_scalar,
+                                        nz_scalar,
                                         cudf::binary_operator::EQUAL,
                                         cudf::data_type{cudf::type_id::BOOL8},
                                         stream,
