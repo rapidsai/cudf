@@ -91,7 +91,7 @@ def assert_gpu_result_equal(
         uses the module level `Executor` attribute.
     blocksize_mode
         The "mode" to use for choosing the blocksize for the streaming executor.
-        If not specified, uses the module level `DEFAULT_BLOCKSIZE_MODE` attribute.
+        If not specified, uses the module level ``DEFAULT_BLOCKSIZE_MODE`` attribute.
         Set to "small" to configure small values for ``max_rows_per_partition``
         and ``target_partition_size``, which will typically cause many partitions
         to be created while executing the query.
@@ -114,7 +114,7 @@ def assert_gpu_result_equal(
             if blocksize_mode == "small":
                 executor_options["max_rows_per_partition"] = 5
                 executor_options["target_partition_size"] = 10
-                # We expect many tests to fallback
+                # We expect many tests to fall back, so silence the warnings
                 executor_options["fallback_mode"] = StreamingFallbackMode.SILENT
 
         engine = GPUEngine(

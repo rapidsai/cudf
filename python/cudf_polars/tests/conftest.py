@@ -36,7 +36,10 @@ def pytest_addoption(parser):
         action="store",
         default="default",
         choices=("small", "default"),
-        help="Blocksize to use for 'streaming' executor.",
+        help=(
+            "Blocksize to use for 'streaming' executor. Set to 'small' "
+            "to run most tests with multiple partitions."
+        ),
     )
 
 
