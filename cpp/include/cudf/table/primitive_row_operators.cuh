@@ -54,8 +54,10 @@ class element_equality_comparator {
   /**
    * @brief Compares the specified elements for equality.
    *
+   * @param has_nulls Indicates if either input column contains nulls
    * @param lhs The first column
    * @param rhs The second column
+   * @param nulls_are_equal Indicates if two null elements are treated as equivalent
    * @param lhs_element_index The index of the first element
    * @param rhs_element_index The index of the second element
    * @return True if lhs and rhs element are equal
@@ -159,15 +161,12 @@ class element_hasher {
   /**
    * @brief Constructs an element_hasher object.
    *
-   * @param nulls Indicates whether to check for nulls
+   * @param has_nulls Indicates whether to check for nulls
    * @param seed  The seed to use for the hash function
-   * @param null_hash The hash value to use for nulls
    */
-  __device__ element_hasher(
-    cudf::nullate::DYNAMIC const& has_nulls,
-    uint32_t seed             = DEFAULT_HASH_SEED,
-    hash_value_type null_hash = cuda::std::numeric_limits<hash_value_type>::max()) noexcept
-    : _has_nulls(has_nulls), _seed(seed), _null_hash(null_hash)
+  __device__ element_hasher(cudf::nullate::DYNAMIC const& has_nulls,
+                            uint32_t seed = DEFAULT_HASH_SEED) noexcept
+    : _has_nulls(has_nulls), _seed(seed)
   {
   }
 
@@ -175,34 +174,29 @@ class element_hasher {
    * @brief Returns the hash value of the given element in the given column.
    *
    * @tparam T The type of the element to hash
-   * @param seed The seed value to use for hashing
    * @param col The column to hash
    * @param row_index The index of the row to hash
    * @return The hash value of the given element
    */
   template <typename T, CUDF_ENABLE_IF(column_device_view::has_element_accessor<T>())>
-  __device__ hash_value_type operator()(column_device_view const& col,
-                                        size_type row_index) const
+  __device__ hash_value_type operator()(column_device_view const& col, size_type row_index) const
   {
     if (_has_nulls && col.is_null(row_index)) {
-      return _null_hash;
+      return cuda::std::numeric_limits<hash_value_type>::max();
     }
     return Hash<T>{_seed}(col.element<T>(row_index));
   }
 
   // @cond
   template <typename T, CUDF_ENABLE_IF(not column_device_view::has_element_accessor<T>())>
-  __device__ hash_value_type operator()(column_device_view const&,
-                                        size_type) const
+  __device__ hash_value_type operator()(column_device_view const&, size_type) const
   {
     CUDF_UNREACHABLE("Unsupported type in hash.");
   }
   // @endcond
 
-
-  cudf::nullate::DYNAMIC _has_nulls;        ///< Whether to check for nulls
-  uint32_t _seed;              ///< The seed to use for hashing
-  hash_value_type _null_hash;  ///< Hash value to use for null elements
+  cudf::nullate::DYNAMIC _has_nulls;  ///< Whether to check for nulls
+  uint32_t _seed;                     ///< The seed to use for hashing
 };
 
 /**
@@ -257,8 +251,10 @@ class row_hasher {
     for (size_type i = 0; i < _table.num_columns(); ++i) {
       hash = cudf::hashing::detail::hash_combine(
         hash,
-        cudf::type_dispatcher<dispatch_primitive_type>(
-          _table.column(i).type(), element_hasher<Hash>{_has_nulls, _seed, _null_hash}, _table.column(i), row_index));
+        cudf::type_dispatcher<dispatch_primitive_type>(_table.column(i).type(),
+                                                       element_hasher<Hash>{_has_nulls, _seed},
+                                                       _table.column(i),
+                                                       row_index));
     }
     return hash;
   }
