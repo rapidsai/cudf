@@ -149,7 +149,7 @@ class MultiIndex(Index):
         copy=False,
         name=None,
         verify_integrity=True,
-    ):
+    ) -> None:
         if isinstance(levels, (pd.MultiIndex, MultiIndex)):
             # TODO: Figure out why cudf.Index(pd.MultiIndex(...)) goes through here twice
             # Somehow due to from_pandas calling cls?
@@ -172,14 +172,14 @@ class MultiIndex(Index):
                 f"as codes ({len(codes)})."
             )
 
-        new_levels = []
+        new_levels: list[cudf.Index] = []
         for level in levels:
             new_level = ensure_index(level)
             if copy and new_level is level:
                 new_level = new_level.copy(deep=True)
             new_levels.append(new_level)
 
-        new_codes = []
+        new_codes: list[column.ColumnBase] = []
         for code in codes:
             if not (is_list_like(code) or is_column_like(code)):
                 raise TypeError("Each code must be list-like")
@@ -188,7 +188,7 @@ class MultiIndex(Index):
                 new_code = new_code.copy(deep=True)
             new_codes.append(new_code)
 
-        source_data = {}
+        source_data: dict[Hashable, column.ColumnBase] = {}
         for i, (code, level) in enumerate(zip(new_codes, new_levels)):
             if len(code):
                 lo, hi = code.minmax()
@@ -203,8 +203,8 @@ class MultiIndex(Index):
             source_data[i] = result_col._with_type_metadata(level.dtype)
 
         Frame.__init__(self, ColumnAccessor(source_data))
-        self._levels: None | list[cudf.Index] = new_levels
-        self._codes: None | list[column.ColumnBase] = new_codes
+        self._levels = new_levels
+        self._codes = new_codes
         self._name = None
         self.names = names
 
@@ -375,8 +375,8 @@ class MultiIndex(Index):
         """
         return cls._simple_new(
             data=ColumnAccessor(data),
-            levels=None,
-            codes=None,
+            levels=[],
+            codes=[],
             names=pd.core.indexes.frozen.FrozenList(data.keys()),
             name=name,
         )
@@ -396,8 +396,8 @@ class MultiIndex(Index):
     def _simple_new(
         cls,
         data: ColumnAccessor,
-        levels: None | list[cudf.Index],
-        codes: None | list[column.ColumnBase],
+        levels: list[cudf.Index],
+        codes: list[column.ColumnBase],
         names: pd.core.indexes.frozen.FrozenList,
         name: Any = None,
     ) -> Self:
@@ -483,15 +483,11 @@ class MultiIndex(Index):
         else:
             names = self.names
         if self._levels is not None:
-            levels: None | list[cudf.Index] = [
-                idx.copy(deep=deep) for idx in self._levels
-            ]
+            levels = [idx.copy(deep=deep) for idx in self._levels]
         else:
             levels = self._levels
         if self._codes is not None:
-            codes: None | list[column.ColumnBase] = [
-                code.copy(deep=deep) for code in self._codes
-            ]
+            codes = [code.copy(deep=deep) for code in self._codes]
         else:
             codes = self._codes
         return type(self)._simple_new(
