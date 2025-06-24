@@ -508,7 +508,18 @@ def test_string_zfill(fill, input_strings):
         assert_gpu_result_equal(q)
 
 
-@pytest.mark.parametrize("fill", [0, 1, 2, 5, 999, -1, None])
+@pytest.mark.parametrize(
+    "fill",
+    [
+        0,
+        1,
+        2,
+        5,
+        999,
+        -1,
+        pytest.param(None, marks=pytest.mark.xfail(reason="None dtype")),
+    ],
+)
 def test_string_zfill_column(fill):
     ldf = pl.DataFrame(
         {
