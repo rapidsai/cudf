@@ -694,6 +694,14 @@ ArrowStringArray = make_final_proxy_type(
 #     slow_to_fast=_Unusable(),
 # )
 
+StorageExtensionDtype = make_final_proxy_type(
+    "StorageExtensionDtype",
+    _Unusable,
+    pd.core.dtypes.base.StorageExtensionDtype,
+    fast_to_slow=_Unusable(),
+    slow_to_fast=_Unusable(),
+)
+
 StringDtype = make_final_proxy_type(
     "StringDtype",
     _Unusable,
