@@ -106,20 +106,11 @@ pr_df["CPU Usage"] = pr_df["CPU Usage"].astype(str) + "%"
 pr_df["GPU Usage"] = pr_df["GPU Usage"].astype(str) + "%"
 
 # Select relevant columns
-pr_df = pr_df[
-    ["total", "passed", "failed", "skipped", "CPU Usage", "GPU Usage"]
-]
-diff_df = diff_df[
-    ["total", "passed", "failed", "skipped", "CPU Usage", "GPU Usage"]
-]
+pr_df = pr_df[["total", "CPU Usage", "GPU Usage"]]
+diff_df = diff_df[["total", "CPU Usage", "GPU Usage"]]
 
 # Rename diff columns to indicate they are differences
 diff_df.columns = diff_df.columns + "_diff"
-
-# Apply emoji formatting to difference columns
-diff_df["passed_diff"] = diff_df["passed_diff"].map(emoji_passed)
-diff_df["failed_diff"] = diff_df["failed_diff"].map(emoji_failed)
-diff_df["skipped_diff"] = diff_df["skipped_diff"].map(emoji_failed)
 
 # Combine PR results with differences
 df = pd.concat([pr_df, diff_df], axis=1)
@@ -129,13 +120,7 @@ df = df.rename_axis("Test module")
 df = df.rename(
     columns={
         "total": "Total tests",
-        "passed": "Passed tests",
-        "failed": "Failed tests",
-        "skipped": "Skipped tests",
         "total_diff": "Total delta",
-        "passed_diff": "Passed delta",
-        "failed_diff": "Failed delta",
-        "skipped_diff": "Skipped delta",
         "CPU Usage_diff": "CPU Usage delta",
         "GPU Usage_diff": "GPU Usage delta",
     }
