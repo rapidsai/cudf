@@ -33,15 +33,11 @@ with open(pr_json) as f:
 pr_total, pr_passed = get_total_and_passed(pr_results)
 
 passing_percentage = pr_passed / pr_total * 100
-pass_rate_change = abs(pr_passed - main_passed) / main_passed * 100
-rate_change_type = "a decrease" if pr_passed < main_passed else "an increase"
 
 comment = (
     "Merging this PR would result in "
     f"{pr_passed}/{pr_total} ({passing_percentage:.2f}%) "
     "Pandas tests passing, "
-    f"{rate_change_type} by "
-    f"{pass_rate_change:.2f}%. "
     f"Trunk stats: {main_passed}/{main_total}."
 )
 
@@ -138,15 +134,9 @@ df = df[
         "Total tests",
         "CPU Usage delta",
         "GPU Usage delta",
-        "Passed tests",
-        "Failed tests",
-        "Skipped tests",
         "CPU Usage",
         "GPU Usage",
         "Total delta",
-        "Passed delta",
-        "Failed delta",
-        "Skipped delta",
     ]
 ]
 print(comment)
