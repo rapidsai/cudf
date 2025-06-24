@@ -142,6 +142,7 @@ def test_validate_streaming_executor_shuffle_method() -> None:
             executor_options={"shuffle_method": "tasks"},
         )
     )
+    assert config.executor.name == "streaming"
     assert config.executor.shuffle_method == "tasks"
 
     config = ConfigOptions.from_polars_engine(
@@ -153,6 +154,7 @@ def test_validate_streaming_executor_shuffle_method() -> None:
             },
         )
     )
+    assert config.executor.name == "streaming"
     assert config.executor.shuffle_method == "rapidsmpf"
 
     # rapidsmpf with sync is not allowed
@@ -203,6 +205,7 @@ def test_validate_scheduler() -> None:
             executor="streaming",
         )
     )
+    assert config.executor.name == "streaming"
     assert config.executor.scheduler == "synchronous"
 
     with pytest.raises(ValueError, match="'foo' is not a valid Scheduler"):
@@ -220,6 +223,7 @@ def test_validate_shuffle_method() -> None:
             executor="streaming",
         )
     )
+    assert config.executor.name == "streaming"
     assert config.executor.shuffle_method is None
 
     with pytest.raises(ValueError, match="'foo' is not a valid ShuffleMethod"):
@@ -268,7 +272,7 @@ def test_validate_parquet_options(option: str) -> None:
 def test_validate_raise_on_fail() -> None:
     with pytest.raises(TypeError, match="'raise_on_fail' must be"):
         ConfigOptions.from_polars_engine(
-            pl.GPUEngine(executor="streaming", raise_on_fail=object())
+            pl.GPUEngine(executor="streaming", raise_on_fail=object())  # type: ignore[arg-type]
         )
 
 
