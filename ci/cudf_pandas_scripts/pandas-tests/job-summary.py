@@ -43,6 +43,7 @@ comment = (
 
 
 def emoji_passed(x):
+    """Format number with emoji: positive -> ✅, negative -> ❌"""
     if x > 0:
         return f"{x}✅"
     elif x < 0:
@@ -52,6 +53,7 @@ def emoji_passed(x):
 
 
 def emoji_failed(x):
+    """Format number with emoji: positive -> ❌, negative -> ✅ (inverse of emoji_passed)"""
     if x > 0:
         return f"{x}❌"
     elif x < 0:
@@ -63,6 +65,7 @@ def emoji_failed(x):
 # convert pr_results to a pandas DataFrame and then a markdown table
 pr_df = pd.DataFrame.from_dict(pr_results, orient="index").sort_index()
 main_df = pd.DataFrame.from_dict(main_results, orient="index").sort_index()
+# Calculate CPU and GPU usage percentages for main branch
 total_usage = main_df["_slow_function_call"] + main_df["_fast_function_call"]
 main_df["CPU Usage"] = (
     (main_df["_slow_function_call"] / total_usage) * 100.0
@@ -71,6 +74,7 @@ main_df["GPU Usage"] = (
     (main_df["_fast_function_call"] / total_usage) * 100.0
 ).round(1)
 
+# Calculate CPU and GPU usage percentages for PR
 total_usage = pr_df["_slow_function_call"] + pr_df["_fast_function_call"]
 pr_df["CPU Usage"] = (
     (pr_df["_slow_function_call"] / total_usage) * 100.0
@@ -79,17 +83,20 @@ pr_df["GPU Usage"] = (
     (pr_df["_fast_function_call"] / total_usage) * 100.0
 ).round(1)
 
+# Calculate average usages
 cpu_usage_mean = pr_df["CPU Usage"].mean().round(2)
 gpu_usage_mean = pr_df["GPU Usage"].mean().round(2)
-
 gpu_usage_rate_change = abs(
     pr_df["GPU Usage"].mean() - main_df["GPU Usage"].mean()
-)
+).round(2)
+
+# Handle NaN values
 pr_df["CPU Usage"] = pr_df["CPU Usage"].fillna(0)
 pr_df["GPU Usage"] = pr_df["GPU Usage"].fillna(0)
 main_df["CPU Usage"] = main_df["CPU Usage"].fillna(0)
 main_df["GPU Usage"] = main_df["GPU Usage"].fillna(0)
 
+# Calculate differences between PR and main
 diff_df = pr_df - main_df
 diff_df["CPU Usage"] = diff_df["CPU Usage"].round(1).fillna(0)
 diff_df["GPU Usage"] = diff_df["GPU Usage"].round(1).fillna(0)
@@ -98,20 +105,27 @@ diff_df["GPU Usage"] = diff_df["GPU Usage"].round(1).fillna(0)
 pr_df["CPU Usage"] = pr_df["CPU Usage"].astype(str) + "%"
 pr_df["GPU Usage"] = pr_df["GPU Usage"].astype(str) + "%"
 
+# Select relevant columns
 pr_df = pr_df[
     ["total", "passed", "failed", "skipped", "CPU Usage", "GPU Usage"]
 ]
 diff_df = diff_df[
     ["total", "passed", "failed", "skipped", "CPU Usage", "GPU Usage"]
 ]
+
+# Rename diff columns to indicate they are differences
 diff_df.columns = diff_df.columns + "_diff"
+
+# Apply emoji formatting to difference columns
 diff_df["passed_diff"] = diff_df["passed_diff"].map(emoji_passed)
 diff_df["failed_diff"] = diff_df["failed_diff"].map(emoji_failed)
 diff_df["skipped_diff"] = diff_df["skipped_diff"].map(emoji_failed)
 
+# Combine PR results with differences
 df = pd.concat([pr_df, diff_df], axis=1)
 df = df.rename_axis("Test module")
 
+# Rename columns for better readability
 df = df.rename(
     columns={
         "total": "Total tests",
@@ -126,9 +140,15 @@ df = df.rename(
         "GPU Usage_diff": "GPU Usage delta",
     }
 )
+
+# Sort by CPU usage delta and total tests
 df = df.sort_values(by=["CPU Usage delta", "Total tests"], ascending=False)
+
+# Apply emoji formatting to usage deltas
 df["CPU Usage delta"] = df["CPU Usage delta"].map(emoji_failed)
 df["GPU Usage delta"] = df["GPU Usage delta"].map(emoji_passed)
+
+# Select final columns to display
 df = df[
     [
         "Total tests",
@@ -139,12 +159,12 @@ df = df[
         "Total delta",
     ]
 ]
+# Print summary and results
 print(comment)
 print()
 print(
-    f"Average GPU usage: {gpu_usage_mean}% {'an increase' if gpu_usage_rate_change > 0 else 'a decrease'} by {gpu_usage_rate_change}%"
+    f"Average GPU usage: {gpu_usage_mean}% ({gpu_usage_rate_change:+.2f}% change from trunk)"
 )
-print()
 print(f"Average CPU usage: {cpu_usage_mean}%")
 print()
 print("Here are the results of running the Pandas tests against this PR:")
