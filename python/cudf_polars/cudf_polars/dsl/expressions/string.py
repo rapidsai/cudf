@@ -257,24 +257,33 @@ class StringFunction(Expr):
                 dtype=self.dtype,
             )
         elif self.name is StringFunction.Name.ZFill:
-            child, width = self.children
-            assert isinstance(width, Literal)
-            if width.value is not None and width.value < 0:
-                dtypestr = dtype_str_repr(width.dtype.polars)
-                raise InvalidOperationError(
-                    f"conversion from `{dtypestr}` to `u64` "
-                    f"failed in column 'literal' for 1 out of "
-                    f"1 values: [{width.value}]"
-                ) from None
-            column = child.evaluate(df, context=context)
-            if width.value is None:
-                return Column(
-                    plc.Column.from_scalar(
-                        plc.Scalar.from_py(None, plc.DataType(plc.TypeId.STRING)),
-                        column.size,
+            if isinstance(self.children[1], Literal):
+                child, width = self.children
+                assert isinstance(width, Literal)
+                if width.value is not None and width.value < 0:
+                    dtypestr = dtype_str_repr(width.dtype.polars)
+                    raise InvalidOperationError(
+                        f"conversion from `{dtypestr}` to `u64` "
+                        f"failed in column 'literal' for 1 out of "
+                        f"1 values: [{width.value}]"
+                    ) from None
+                column = child.evaluate(df, context=context)
+                if width.value is None:
+                    return Column(
+                        plc.Column.from_scalar(
+                            plc.Scalar.from_py(None, plc.DataType(plc.TypeId.STRING)),
+                            column.size,
+                        )
                     )
+                return Column(plc.strings.padding.zfill(column.obj, width.value))
+            else:
+                col, col_width = [
+                    child.evaluate(df, context=context) for child in self.children
+                ]
+                return Column(
+                    plc.strings.padding.zfill_by_widths(col.obj, col_width.obj)
                 )
-            return Column(plc.strings.padding.zfill(column.obj, width.value))
+
         elif self.name is StringFunction.Name.Contains:
             child, arg = self.children
             column = child.evaluate(df, context=context)
