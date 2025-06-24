@@ -336,6 +336,7 @@ void host_compress(compression_type compression,
   stream.synchronize();
 
   auto h_results = cudf::detail::make_pinned_vector<codec_exec_result>(num_chunks, stream);
+  cudf::detail::cuda_memcpy<codec_exec_result>(h_results, results, stream);
 
   std::vector<std::future<std::pair<size_t, size_t>>> tasks;
   auto const num_streams =
