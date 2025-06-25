@@ -472,6 +472,11 @@ def test_string_join(ldf, ignore_nulls, delimiter):
     assert_gpu_result_equal(q)
 
 
+def test_string_reverse(ldf):
+    q = ldf.select(pl.col("a").str.reverse())
+    assert_gpu_result_equal(q)
+
+
 def test_string_to_titlecase():
     df = pl.LazyFrame(
         {
