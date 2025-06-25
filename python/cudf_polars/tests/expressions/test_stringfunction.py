@@ -472,6 +472,72 @@ def test_string_join(ldf, ignore_nulls, delimiter):
     assert_gpu_result_equal(q)
 
 
+@pytest.mark.parametrize(
+    "fill",
+    [
+        0,
+        1,
+        2,
+        5,
+        999,
+        -1,
+        None,
+    ],
+)
+@pytest.mark.parametrize(
+    "input_strings",
+    [
+        ["1", "0"],
+        ["123", "45"],
+        ["", "0"],
+        ["-1", "+2"],
+        ["abc", "def"],
+    ],
+)
+def test_string_zfill(fill, input_strings):
+    ldf = pl.LazyFrame({"a": input_strings})
+    q = ldf.select(pl.col("a").str.zfill(fill))
+
+    if fill is not None and fill < 0:
+        assert_collect_raises(
+            q,
+            polars_except=pl.exceptions.InvalidOperationError,
+            cudf_except=pl.exceptions.InvalidOperationError,
+        )
+    else:
+        assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize(
+    "fill",
+    [
+        0,
+        1,
+        2,
+        5,
+        999,
+        -1,
+        pytest.param(None, marks=pytest.mark.xfail(reason="None dtype")),
+    ],
+)
+def test_string_zfill_column(fill):
+    ldf = pl.DataFrame(
+        {
+            "input_strings": ["1", "0", "123", "45", "", "0", "-1", "+2", "abc", "def"],
+            "fill": [fill] * 10,
+        }
+    ).lazy()
+    q = ldf.select(pl.col("input_strings").str.zfill(pl.col("fill")))
+    if fill is not None and fill < 0:
+        assert_collect_raises(
+            q,
+            polars_except=pl.exceptions.InvalidOperationError,
+            cudf_except=pl.exceptions.InvalidOperationError,
+        )
+    else:
+        assert_gpu_result_equal(q)
+
+
 def test_string_to_titlecase():
     df = pl.LazyFrame(
         {

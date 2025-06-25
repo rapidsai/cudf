@@ -14,6 +14,7 @@ import pyarrow.compute as pc
 
 import polars as pl
 from polars.exceptions import InvalidOperationError
+from polars.polars import dtype_str_repr
 
 import pylibcudf as plc
 
@@ -129,6 +130,7 @@ class StringFunction(Expr):
             StringFunction.Name.Uppercase,
             StringFunction.Name.Tail,
             StringFunction.Name.Titlecase,
+            StringFunction.Name.ZFill,
         ):
             raise NotImplementedError(f"String function {self.name!r}")
         if self.name is StringFunction.Name.Contains:
@@ -254,6 +256,48 @@ class StringFunction(Expr):
                 ),
                 dtype=self.dtype,
             )
+        elif self.name is StringFunction.Name.ZFill:
+            if isinstance(self.children[1], Literal):
+                child, width = self.children
+                assert isinstance(width, Literal)
+                if width.value is not None and width.value < 0:
+                    dtypestr = dtype_str_repr(width.dtype.polars)
+                    raise InvalidOperationError(
+                        f"conversion from `{dtypestr}` to `u64` "
+                        f"failed in column 'literal' for 1 out of "
+                        f"1 values: [{width.value}]"
+                    ) from None
+                column = child.evaluate(df, context=context)
+                if width.value is None:
+                    return Column(
+                        plc.Column.from_scalar(
+                            plc.Scalar.from_py(None, plc.DataType(plc.TypeId.STRING)),
+                            column.size,
+                        )
+                    )
+                return Column(plc.strings.padding.zfill(column.obj, width.value))
+            else:
+                col, col_width = [
+                    child.evaluate(df, context=context) for child in self.children
+                ]
+                all_gt_0 = plc.binaryop.binary_operation(
+                    col_width.obj,
+                    plc.Scalar.from_py(0, plc.DataType(plc.TypeId.INT64)),
+                    plc.binaryop.BinaryOperator.GREATER_EQUAL,
+                    plc.DataType(plc.TypeId.BOOL8),
+                )
+
+                if not plc.reduce.reduce(
+                    all_gt_0,
+                    plc.aggregation.all(),
+                    plc.DataType(plc.TypeId.BOOL8),
+                ).to_py():
+                    raise InvalidOperationError("fill conversion failed.")
+
+                return Column(
+                    plc.strings.padding.zfill_by_widths(col.obj, col_width.obj)
+                )
+
         elif self.name is StringFunction.Name.Contains:
             child, arg = self.children
             column = child.evaluate(df, context=context)
