@@ -59,7 +59,7 @@ def test_from_table_wrong_names():
         ]
     )
     with pytest.raises(ValueError):
-        DataFrame.from_table(table, ["a", "b"])
+        DataFrame.from_table(table, ["a", "b"], [DataType(pl.Int8())])
 
 
 def test_unnamed_column_raise():
@@ -187,7 +187,8 @@ def test_empty_name_roundtrips_no_overlap():
 )
 def test_serialization_roundtrip(arrow_tbl):
     plc_tbl = plc.Table.from_arrow(arrow_tbl)
-    df = DataFrame.from_table(plc_tbl, names=arrow_tbl.column_names)
+    dtypes = [DataType(pl_type) for pl_type in pl.from_arrow(arrow_tbl).dtypes]
+    df = DataFrame.from_table(plc_tbl, names=arrow_tbl.column_names, dtypes=dtypes)
 
     header, frames = df.serialize()
     res = DataFrame.deserialize(header, frames)
