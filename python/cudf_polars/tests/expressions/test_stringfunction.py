@@ -473,8 +473,8 @@ def test_string_join(ldf, ignore_nulls, delimiter):
 
 
 def test_string_reverse(ldf):
-    query = ldf.select(pl.col("a").str.reverse())
-    assert_gpu_result_equal(query)
+    q = ldf.select(pl.col("a").str.reverse())
+    assert_gpu_result_equal(q)
 
 
 def test_string_to_titlecase():
