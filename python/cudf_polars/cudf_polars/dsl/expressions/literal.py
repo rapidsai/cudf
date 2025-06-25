@@ -18,8 +18,6 @@ from cudf_polars.dsl.expressions.base import ExecutionContext, Expr
 if TYPE_CHECKING:
     from collections.abc import Hashable
 
-    import pyarrow as pa
-
     from cudf_polars.containers import DataFrame
 
 __all__ = ["Literal", "LiteralColumn"]
@@ -71,9 +69,9 @@ class Literal(Expr):
 class LiteralColumn(Expr):
     __slots__ = ("value",)
     _non_child = ("dtype", "value")
-    value: pa.Array[Any]
+    value: pl.Series
 
-    def __init__(self, dtype: DataType, value: pa.Array) -> None:
+    def __init__(self, dtype: DataType, value: pl.Series) -> None:
         self.dtype = dtype
         self.value = value
         self.children = ()
@@ -90,8 +88,7 @@ class LiteralColumn(Expr):
         self, df: DataFrame, *, context: ExecutionContext = ExecutionContext.FRAME
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
-        # datatype of pyarrow array is correct by construction.
-        return Column(plc.interop.from_arrow(self.value), dtype=self.dtype)
+        return Column(plc.Column.from_arrow(self.value), dtype=self.dtype)
 
     @property
     def agg_request(self) -> NoReturn:  # noqa: D102
