@@ -28,6 +28,7 @@ set +e
 # of Pandas installed.
 PANDAS_VERSION=$(python -c "import pandas; print(pandas.__version__)")
 
+echo "Running Pandas tests for version ${PANDAS_VERSION}"
 mkdir -p pandas-testing
 cd pandas-testing
 
