@@ -737,7 +737,7 @@ table_with_metadata reader::impl::read_chunk_internal(read_mode mode)
     for (size_t i = 0; i < struct_column_positions.size(); i++) {
       // Collect children for this specific struct
       std::vector<std::unique_ptr<column>> children;
-      for (size_t j = 0; j < struct_contents[i].num_children; j++) {
+      for (auto j = 0; j < struct_contents[i].num_children; j++) {
         children.emplace_back(std::move(struct_child_cols[offset + j]));
       }
       offset += struct_contents[i].num_children;
