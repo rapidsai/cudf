@@ -5059,6 +5059,11 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         pessimistic_nulls=True,
         cache_key=None,
     ):
+        warnings.warn(
+            "The `apply_rows` method is deprecated and will be removed in the next release. "
+            "Please use the `DataFrame.apply` method instead.",
+            FutureWarning,
+        )
         """
         Apply a row-wise user defined function.
 
