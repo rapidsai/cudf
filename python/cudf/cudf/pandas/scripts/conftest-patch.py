@@ -11042,7 +11042,6 @@ NODEIDS_THAT_FAIL_WITH_CUDF_PANDAS = {
     "tests/indexing/test_loc.py::test_loc_getitem_multiindex_tuple_level",
     "tests/indexing/test_loc.py::test_loc_setitem_uint8_upcast[300]",
     "tests/indexing/test_loc.py::test_loc_setitem_using_datetimelike_str_as_index[fill_val0-datetime64[ns]]",
-    "tests/indexing/test_loc.py::test_loc_slice_disallows_positional",
     "tests/indexing/test_loc.py::test_loc_with_positional_slice_raises",
     "tests/indexing/test_na_indexing.py::test_series_mask_boolean[False-Series-mask0-values0-object]",
     "tests/indexing/test_na_indexing.py::test_series_mask_boolean[False-Series-mask0-values1-int64]",
