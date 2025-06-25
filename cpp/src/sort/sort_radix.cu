@@ -23,6 +23,7 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cub/device/device_radix_sort.cuh>
+#include <thrust/transform.h>
 
 namespace cudf {
 namespace detail {
@@ -30,8 +31,8 @@ namespace {
 
 template <typename F>
 struct float_pair {
-  size_type s;
-  F f;
+  size_type s;  // index bias for sorting nan
+  F f;          // actual float value to sort
 };
 
 template <typename F>
