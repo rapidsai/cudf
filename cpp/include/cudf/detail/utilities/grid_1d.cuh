@@ -18,7 +18,7 @@
 
 #include <cudf/types.hpp>
 
-namespace cudf {
+namespace CUDF_EXPORT cudf {
 namespace detail {
 
 /**
@@ -42,9 +42,9 @@ class grid_1d {
    * than a single element; this affects the number of threads the grid must
    * contain
    */
-  inline grid_1d(thread_index_type overall_num_elements,
-                 thread_index_type num_threads_per_block,
-                 thread_index_type elements_per_thread = 1);
+  grid_1d(thread_index_type overall_num_elements,
+          thread_index_type num_threads_per_block,
+          thread_index_type elements_per_thread = 1);
 
   /**
    * @brief Returns the global thread index in a 1D grid.

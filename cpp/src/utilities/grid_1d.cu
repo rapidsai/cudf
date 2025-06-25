@@ -14,15 +14,12 @@
  * limitations under the License.
  */
 
-#pragma once
-
 #include <cudf/detail/utilities/grid_1d.cuh>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 
-namespace cudf {
-namespace detail {
+namespace cudf::detail {
 
 grid_1d::grid_1d(thread_index_type overall_num_elements,
                  thread_index_type num_threads_per_block,
@@ -35,5 +32,4 @@ grid_1d::grid_1d(thread_index_type overall_num_elements,
   CUDF_EXPECTS(num_blocks > 0, "num_blocks must be > 0");
 }
 
-}  // namespace detail
-}  // namespace cudf
+}  // namespace cudf::detail
