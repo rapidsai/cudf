@@ -133,7 +133,7 @@ def offsets_to_windows(
 
     Returns
     -------
-    tuple of preceding and following windows as pyarrow scalars.
+    tuple of preceding and following windows as pylibcudf scalars.
     """
     offset_i = duration_to_int(dtype, *offset)
     period_i = duration_to_int(dtype, *period)
