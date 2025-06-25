@@ -37,6 +37,8 @@ __device__ void e164_format(void* scratch,
                             cudf::string_view const country_code,
                             cudf::string_view const area_code,
                             cudf::string_view const phone_number,
+                            int32_t age,
+                            int32_t min_visible_age,
                             int32_t scratch_size)
 {
   auto const begin = static_cast<char*>(scratch) +
@@ -53,10 +55,33 @@ __device__ void e164_format(void* scratch,
     it += size;
   };
 
+  auto push_digits = [&](cudf::string_view str) {
+    auto iter      = str.data();
+    auto const end = str.data() + str.size_bytes();
+    while (iter != end) {
+      if (*iter != '-') { push(cudf::string_view{iter, 1}); }
+      iter++;
+    }
+
+    return iter;
+  };
+
+  auto push_hidden_digits = [&](cudf::string_view str) {
+    auto iter      = str.data();
+    auto const end = str.data() + str.size_bytes();
+    while (iter != end) {
+      if (*iter != '-') { push(cudf::string_view{"*", 1}); }
+      iter++;
+    }
+
+    return iter;
+  };
+
   auto country_iter      = country_code.data();
   auto const country_end = country_iter + country_code.size_bytes();
   auto phone_iter        = phone_number.data();
   auto const phone_end   = phone_iter + phone_number.size_bytes();
+  auto const should_hide = age < min_visible_age;
 
   push(cudf::string_view{"+", 1});
 
@@ -65,17 +90,19 @@ __device__ void e164_format(void* scratch,
     country_iter++;
   }
 
-  while (country_iter != country_end) {
-    if (*country_iter != '-') { push(cudf::string_view{country_iter, 1}); }
-    country_iter++;
-  }
+  push_digits(
+    cudf::string_view{country_iter, static_cast<cudf::size_type>(country_end - country_iter)});
 
   push(area_code);
 
-  // push non-dash digits from phone number
-  while (phone_iter != phone_end) {
-    if (*phone_iter != '-') { push(cudf::string_view{phone_iter, 1}); }
-    phone_iter++;
+  // push non-dash digits from phone number if the age is above the minimum visible age
+
+  if (should_hide) {
+    push_hidden_digits(
+      cudf::string_view{phone_iter, static_cast<cudf::size_type>(phone_end - phone_iter)});
+  } else {
+    push_digits(
+      cudf::string_view{phone_iter, static_cast<cudf::size_type>(phone_end - phone_iter)});
   }
 
   *out = cudf::string_view{begin, static_cast<cudf::size_type>(it - static_cast<char*>(begin))};
@@ -91,18 +118,22 @@ __device__ void e164_format(void* scratch,
   auto size = cudf::make_column_from_scalar(
     cudf::numeric_scalar<int32_t>(maximum_size, true, stream, mr), 1, stream, mr);
 
-  auto country_code = table.column(2);
-  auto area_code    = table.column(3);
-  auto phone_code   = table.column(4);
-  auto transformed  = std::vector<int32_t>{2, 3, 4};
+  auto country_code    = table.column(2);
+  auto area_code       = table.column(3);
+  auto phone_code      = table.column(4);
+  auto age             = table.column(5);
+  auto transformed     = std::vector<int32_t>{2, 3, 4, 5};
+  auto min_visible_age = cudf::make_column_from_scalar(
+    cudf::numeric_scalar<int32_t>(21, true, stream, mr), 1, stream, mr);
 
-  auto formatted = cudf::transform({country_code, area_code, phone_code, *size},
-                                   udf,
-                                   cudf::data_type{cudf::type_id::STRING},
-                                   false,
-                                   scratch.data(),
-                                   stream,
-                                   mr);
+  auto formatted =
+    cudf::transform({country_code, area_code, phone_code, age, *min_visible_age, *size},
+                    udf,
+                    cudf::data_type{cudf::type_id::STRING},
+                    false,
+                    scratch.data(),
+                    stream,
+                    mr);
 
   return std::make_tuple(std::move(formatted), transformed);
 }
