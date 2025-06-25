@@ -157,5 +157,5 @@ __device__ void format_phone(void* scratch,
                                 stream,
                                 mr);
 
-  return std::make_tuple(std::move(result), transformed);
+  return {std::move(result), std::move(transformed)};
 }

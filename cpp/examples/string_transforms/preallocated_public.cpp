@@ -102,5 +102,5 @@ std::tuple<std::unique_ptr<cudf::column>, std::vector<int32_t>> transform(
                                               stream,
                                               mr);
 
-  return std::make_tuple(std::move(formatted), transformed);
+  return {std::move(formatted), std::move(transformed)};
 }
