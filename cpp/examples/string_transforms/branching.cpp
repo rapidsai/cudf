@@ -36,7 +36,7 @@ __device__ void format_phone(void* scratch,
                              cudf::string_view const country_code,
                              cudf::string_view const area_code,
                              cudf::string_view const phone_number,
-                             [[maybe_unused]] int32_t scratch_size)
+                             int32_t scratch_size)
 {
   auto const begin = static_cast<char*>(scratch) +
                      static_cast<ptrdiff_t>(row) * static_cast<ptrdiff_t>(scratch_size);
