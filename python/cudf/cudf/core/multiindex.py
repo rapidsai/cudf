@@ -138,6 +138,9 @@ class MultiIndex(Index):
                )
     """
 
+    _levels: list[cudf.Index] | None
+    _codes: list[column.ColumnBase] | None
+
     @_performance_tracking
     def __init__(
         self,
@@ -375,8 +378,8 @@ class MultiIndex(Index):
         """
         return cls._simple_new(
             data=ColumnAccessor(data),
-            levels=[],
-            codes=[],
+            levels=None,
+            codes=None,
             names=pd.core.indexes.frozen.FrozenList(data.keys()),
             name=name,
         )
@@ -396,8 +399,8 @@ class MultiIndex(Index):
     def _simple_new(
         cls,
         data: ColumnAccessor,
-        levels: list[cudf.Index],
-        codes: list[column.ColumnBase],
+        levels: list[cudf.Index] | None,
+        codes: list[column.ColumnBase] | None,
         names: pd.core.indexes.frozen.FrozenList,
         name: Any = None,
     ) -> Self:
@@ -483,11 +486,15 @@ class MultiIndex(Index):
         else:
             names = self.names
         if self._levels is not None:
-            levels = [idx.copy(deep=deep) for idx in self._levels]
+            levels: list[cudf.Index] | None = [
+                idx.copy(deep=deep) for idx in self._levels
+            ]
         else:
             levels = self._levels
         if self._codes is not None:
-            codes = [code.copy(deep=deep) for code in self._codes]
+            codes: list[column.ColumnBase] | None = [
+                code.copy(deep=deep) for code in self._codes
+            ]
         else:
             codes = self._codes
         return type(self)._simple_new(
