@@ -44,9 +44,9 @@ class grid_1d {
    * than a single element; this affects the number of threads the grid must
    * contain
    */
-  grid_1d(thread_index_type overall_num_elements,
-          thread_index_type num_threads_per_block,
-          thread_index_type elements_per_thread = 1);
+  inline grid_1d(thread_index_type overall_num_elements,
+                 thread_index_type num_threads_per_block,
+                 thread_index_type elements_per_thread = 1);
 
   /**
    * @brief Returns the global thread index in a 1D grid.
