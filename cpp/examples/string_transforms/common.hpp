@@ -79,11 +79,13 @@ std::shared_ptr<rmm::mr::device_memory_resource> create_memory_resource(std::str
   CUDF_FAIL("Unrecognized memory resource name", std::invalid_argument);
 }
 
-void write_csv(cudf::table_view const& tbl_view, std::string const& file_path)
+void write_csv(cudf::table_view const& tbl_view,
+               std::string const& file_path,
+               std::vector<std::string> const& names)
 {
   auto sink_info = cudf::io::sink_info(file_path);
-  auto builder   = cudf::io::csv_writer_options::builder(sink_info, tbl_view).include_header(false);
-  auto options   = builder.build();
+  auto builder   = cudf::io::csv_writer_options::builder(sink_info, tbl_view);
+  auto options   = builder.include_header(true).names(names).build();
   cudf::io::write_csv(options);
 }
 
@@ -127,7 +129,9 @@ int main(int argc, char const** argv)
 
   cudf::io::csv_reader_options in_opts =
     cudf::io::csv_reader_options::builder(cudf::io::source_info{in_csv}).header(0);
-  auto input = cudf::io::read_csv(in_opts).tbl;
+
+  auto in_csv_table = cudf::io::read_csv(in_opts);
+  auto& input       = in_csv_table.tbl;
 
   if (num_rows.has_value() && input->get_column(0).size() != num_rows.value()) {
     input = cudf::sample(*input, num_rows.value(), cudf::sample_with_replacement::TRUE);
@@ -151,7 +155,14 @@ int main(int argc, char const** argv)
 
   cudf::table_view table{out_columns};
 
-  write_csv(table, out_csv);
+  std::vector<std::string> output_column_names;
+  std::transform(in_csv_table.metadata.schema_info.begin(),
+                 in_csv_table.metadata.schema_info.end(),
+                 std::back_inserter(output_column_names),
+                 [](auto const& col) { return col.name; });
+  output_column_names.emplace_back("Transformed");
+
+  write_csv(table, out_csv, output_column_names);
 
   auto const transformed_size =
     std::transform_reduce(input_indices.begin(),
