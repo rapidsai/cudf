@@ -14,7 +14,7 @@ import pylibcudf as plc
 
 from cudf_polars.containers import DataType
 from cudf_polars.dsl.expr import Agg, BinOp, Col, Len, NamedExpr
-from cudf_polars.dsl.ir import GroupBy, Select
+from cudf_polars.dsl.ir import GroupBy, Select, Slice
 from cudf_polars.dsl.traversal import traversal
 from cudf_polars.dsl.utils.naming import unique_names
 from cudf_polars.experimental.base import PartitionInfo
@@ -143,6 +143,25 @@ def decompose(
 def _(
     ir: GroupBy, rec: LowerIRTransformer
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+    # Pull slice operations out of the GroupBy before lowering
+    if ir.zlice is not None:
+        offset, length = ir.zlice
+        if length is None:  # pragma: no cover
+            return _lower_ir_fallback(
+                ir,
+                rec,
+                msg="This slice not supported for multiple partitions.",
+            )
+        new_join = GroupBy(
+            ir.schema,
+            ir.keys,
+            ir.agg_requests,
+            ir.maintain_order,
+            None,
+            *ir.children,
+        )
+        return rec(Slice(ir.schema, offset, length, new_join))
+
     # Extract child partitioning
     child, partition_info = rec(ir.children[0])
 
