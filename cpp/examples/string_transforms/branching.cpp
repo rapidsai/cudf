@@ -50,7 +50,7 @@ __device__ void format_phone(void* scratch,
     it += size;
   };
 
-  auto push_phone_digits = [&](cudf::string_view str, cudf::size_type max) {
+  auto push_digits = [&](cudf::string_view str, cudf::size_type max) {
     cudf::size_type digits_pushed = 0;
     auto iter                     = str.data();
     auto const end                = str.data() + str.size_bytes();
@@ -88,14 +88,14 @@ __device__ void format_phone(void* scratch,
     push(cudf::string_view{") ", 2});
 
     // push first 3 non-dash digits from phone number
-    phone_iter = push_phone_digits(
+    phone_iter = push_digits(
       cudf::string_view{phone_iter, static_cast<cudf::size_type>(phone_end - phone_iter)}, 3);
 
     // push "-"
     push(cudf::string_view{"-", 1});
 
     // push remaining 4 non-dash digits
-    phone_iter = push_phone_digits(
+    phone_iter = push_digits(
       cudf::string_view{phone_iter, static_cast<cudf::size_type>(phone_end - phone_iter)}, 4);
   }
   // check if it's a United Kingdom number (country code = 44) or Ireland number (country_code =
@@ -117,14 +117,14 @@ __device__ void format_phone(void* scratch,
     }
 
     // push digits before the last 4
-    phone_iter = push_phone_digits(
+    phone_iter = push_digits(
       cudf::string_view{phone_iter, static_cast<cudf::size_type>(phone_end - phone_iter)},
       total_digits - 4);
 
     // push space before last 4 digits
     push(cudf::string_view{" ", 1});
 
-    phone_iter = push_phone_digits(
+    phone_iter = push_digits(
       cudf::string_view{phone_iter, static_cast<cudf::size_type>(phone_end - phone_iter)}, 4);
 
   } else {
