@@ -9,9 +9,6 @@ from __future__ import annotations
 from enum import IntEnum, auto
 from typing import TYPE_CHECKING, Any
 
-import pyarrow as pa
-import pyarrow.compute as pc
-
 from polars.exceptions import InvalidOperationError
 
 import pylibcudf as plc
@@ -178,10 +175,7 @@ class StringFunction(Expr):
             # Above, we raise NotImplementedError if the target is not a Literal,
             # so we can safely access .value here.
             if (isinstance(target, Literal) and target.value == "") or (
-                isinstance(target, LiteralColumn)
-                and pc.any(
-                    pc.equal(target.value.cast(pa.string()), "")  # type: ignore[attr-defined]
-                ).as_py()
+                isinstance(target, LiteralColumn) and (target.value == "").any()
             ):
                 raise NotImplementedError(
                     "libcudf replace_many is implemented differently from polars "

@@ -27,7 +27,7 @@ if TYPE_CHECKING:
     from cudf_polars.experimental.dispatch import LowerIRTransformer
     from cudf_polars.experimental.parallel import PartitionInfo
     from cudf_polars.typing import Schema
-    from cudf_polars.utils.config import ConfigOptions
+    from cudf_polars.utils.config import ShuffleMethod
 
 
 # Supported shuffle methods
@@ -104,24 +104,24 @@ class Shuffle(IR):
     Only hash-based partitioning is supported (for now).
     """
 
-    __slots__ = ("config_options", "keys")
-    _non_child = ("schema", "keys", "config_options")
+    __slots__ = ("keys", "shuffle_method")
+    _non_child = ("schema", "keys", "shuffle_method")
     keys: tuple[NamedExpr, ...]
     """Keys to shuffle on."""
-    config_options: ConfigOptions
-    """Configuration options."""
+    shuffle_method: ShuffleMethod | None
+    """Shuffle method to use."""
 
     def __init__(
         self,
         schema: Schema,
         keys: tuple[NamedExpr, ...],
-        config_options: ConfigOptions,
+        shuffle_method: ShuffleMethod | None,
         df: IR,
     ):
         self.schema = schema
         self.keys = keys
-        self.config_options = config_options
-        self._non_child_args = (schema, keys, config_options)
+        self.shuffle_method = shuffle_method
+        self._non_child_args = (schema, keys, shuffle_method)
         self.children = (df,)
 
     @classmethod
@@ -129,7 +129,7 @@ class Shuffle(IR):
         cls,
         schema: Schema,
         keys: tuple[NamedExpr, ...],
-        config_options: ConfigOptions,
+        shuffle_method: ShuffleMethod | None,
         df: DataFrame,
     ) -> DataFrame:  # pragma: no cover
         """Evaluate and return a dataframe."""
@@ -257,11 +257,7 @@ def _(
     ir: Shuffle, partition_info: MutableMapping[IR, PartitionInfo]
 ) -> MutableMapping[Any, Any]:
     # Extract "shuffle_method" configuration
-    assert ir.config_options.executor.name == "streaming", (
-        "'in-memory' executor not supported in 'generate_ir_tasks'"
-    )
-
-    shuffle_method = ir.config_options.executor.shuffle_method
+    shuffle_method = ir.shuffle_method
 
     # Try using rapidsmpf shuffler if we have "simple" shuffle
     # keys, and the "shuffle_method" config is set to "rapidsmpf"
