@@ -258,12 +258,13 @@ class row_hasher {
    */
   __device__ auto operator()(size_type row_index) const
   {
-    if (_has_nulls && _table.column(0).is_null(row_index)) {
-      return cuda::std::numeric_limits<hash_value_type>::max();
-    }
-    auto hash = hash_value_type{0};
+    auto hash =
+      cudf::type_dispatcher<dispatch_primitive_type>(_table.column(0).type(),
+                                                     element_hasher<Hash>{_has_nulls, _seed},
+                                                     _table.column(0),
+                                                     row_index);
 
-    for (size_type i = 0; i < _table.num_columns(); ++i) {
+    for (size_type i = 1; i < _table.num_columns(); ++i) {
       hash = cudf::hashing::detail::hash_combine(
         hash,
         cudf::type_dispatcher<dispatch_primitive_type>(_table.column(i).type(),
