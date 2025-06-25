@@ -328,7 +328,8 @@ std::vector<std::unique_ptr<column>> superimpose_nulls(std::vector<bitmask_type 
   // This recursive function navigates the column hierarchy and for each path in the tree, it
   // collects all null masks that need to be combined for each column in the hierarchy
   std::function<void(mutable_column_view input)> populate_segmented_sources =
-    [&populate_segmented_sources, &path, &sources, &segment_offsets](mutable_column_view input) -> void {
+    [&populate_segmented_sources, &path, &sources, &segment_offsets](
+      mutable_column_view input) -> void {
     if (input.type().id() != cudf::type_id::EMPTY) {
       // EMPTY columns should not have a null mask,
       // so don't superimpose null mask on empty columns.
@@ -349,9 +350,7 @@ std::vector<std::unique_ptr<column>> superimpose_nulls(std::vector<bitmask_type 
       }
 
       // Backtrack: remove this column's mask from path when done
-      if (input.nullable()) {
-        path.pop_back();
-      }
+      if (input.nullable()) { path.pop_back(); }
     }
   };
 
@@ -394,13 +393,9 @@ std::vector<std::unique_ptr<column>> superimpose_nulls(std::vector<bitmask_type 
 
   // Create new struct column and its descendants with updated null masks
   // Recursively updates each column and its children with their new null masks
-  std::function<int(
-                    int marker,
-                    column& input)>
-    create_updated_column =
-      [&create_updated_column, &result_null_masks, &result_null_counts](
-        int marker,
-        column& input) -> int {
+  std::function<int(int marker, column& input)> create_updated_column =
+    [&create_updated_column, &result_null_masks, &result_null_counts](int marker,
+                                                                      column& input) -> int {
     if (input.type().id() != cudf::type_id::EMPTY) {
       // EMPTY columns should not have a null mask,
       // so don't superimpose null mask on empty columns.
@@ -412,8 +407,7 @@ std::vector<std::unique_ptr<column>> superimpose_nulls(std::vector<bitmask_type 
       // For struct columns, recursively update all children
       if (input.type().id() == cudf::type_id::STRUCT) {
         for (int i = 0; i < input.num_children(); i++) {
-          marker =
-            create_updated_column(marker, input.child(i));
+          marker = create_updated_column(marker, input.child(i));
         }
       }
     }
@@ -423,7 +417,7 @@ std::vector<std::unique_ptr<column>> superimpose_nulls(std::vector<bitmask_type 
   // Apply the new null masks to all top-level columns
   auto marker = 0;
   for (size_t c = 0; c < inputs.size(); c++) {
-    //create_updated_column(column_markers[c], *(inputs[c]));
+    // create_updated_column(column_markers[c], *(inputs[c]));
     marker = create_updated_column(marker, *(inputs[c]));
   }
   return inputs;
