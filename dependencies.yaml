@@ -776,7 +776,7 @@ dependencies:
             packages:
               - *numba-cuda-dep
               - *numba-dep
-              - pandas==2.2.3
+              - pandas==2.3.0
           - matrix:
             packages:
       - output_types: conda
