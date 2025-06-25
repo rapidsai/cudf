@@ -28,7 +28,7 @@ if TYPE_CHECKING:
     from cudf_polars.dsl.expr import NamedExpr
     from cudf_polars.experimental.dispatch import LowerIRTransformer
     from cudf_polars.typing import Schema
-    from cudf_polars.utils.config import ConfigOptions
+    from cudf_polars.utils.config import ConfigOptions, ParquetOptions
 
     T = TypeVar("T", bound=npt.NBitBase)
 
@@ -37,12 +37,13 @@ if TYPE_CHECKING:
 def _(
     ir: DataFrameScan, rec: LowerIRTransformer
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
-    assert ir.config_options.executor.name == "streaming", (
+    config_options = rec.state["config_options"]
+
+    assert config_options.executor.name == "streaming", (
         "'in-memory' executor not supported in 'generate_ir_tasks'"
     )
 
-    rows_per_partition = ir.config_options.executor.max_rows_per_partition
-
+    rows_per_partition = config_options.executor.max_rows_per_partition
     nrows = max(ir.df.shape()[0], 1)
     count = math.ceil(nrows / rows_per_partition)
 
@@ -53,7 +54,6 @@ def _(
                 ir.schema,
                 ir.df.slice(offset, length),
                 ir.projection,
-                ir.config_options,
             )
             for offset in range(0, nrows, length)
         ]
@@ -98,15 +98,15 @@ class ScanPartitionPlan:
         self.flavor = flavor
 
     @staticmethod
-    def from_scan(ir: Scan) -> ScanPartitionPlan:
+    def from_scan(ir: Scan, config_options: ConfigOptions) -> ScanPartitionPlan:
         """Extract the partitioning plan of a Scan operation."""
         if ir.typ == "parquet":
             # TODO: Use system info to set default blocksize
-            assert ir.config_options.executor.name == "streaming", (
+            assert config_options.executor.name == "streaming", (
                 "'in-memory' executor not supported in 'generate_ir_tasks'"
             )
 
-            blocksize: int = ir.config_options.executor.target_partition_size
+            blocksize: int = config_options.executor.target_partition_size
             # _sample_pq_statistics is generic over the bit-width of the array
             # We don't care about that here, so we ignore it.
             stats = _sample_pq_statistics(ir)  # type: ignore[var-annotated]
@@ -144,6 +144,7 @@ class SplitScan(IR):
 
     __slots__ = (
         "base_scan",
+        "parquet_options",
         "schema",
         "split_index",
         "total_splits",
@@ -153,6 +154,7 @@ class SplitScan(IR):
         "base_scan",
         "split_index",
         "total_splits",
+        "parquet_options",
     )
     base_scan: Scan
     """Scan operation this node is based on."""
@@ -160,9 +162,16 @@ class SplitScan(IR):
     """Index of the current split."""
     total_splits: int
     """Total number of splits."""
+    parquet_options: ParquetOptions
+    """Parquet-specific options."""
 
     def __init__(
-        self, schema: Schema, base_scan: Scan, split_index: int, total_splits: int
+        self,
+        schema: Schema,
+        base_scan: Scan,
+        split_index: int,
+        total_splits: int,
+        parquet_options: ParquetOptions,
     ):
         self.schema = schema
         self.base_scan = base_scan
@@ -173,6 +182,7 @@ class SplitScan(IR):
             total_splits,
             *base_scan._non_child_args,
         )
+        self.parquet_options = parquet_options
         self.children = ()
         if base_scan.typ not in ("parquet",):  # pragma: no cover
             raise NotImplementedError(
@@ -187,7 +197,6 @@ class SplitScan(IR):
         schema: Schema,
         typ: str,
         reader_options: dict[str, Any],
-        config_options: ConfigOptions,
         paths: list[str],
         with_columns: list[str] | None,
         skip_rows: int,
@@ -195,6 +204,7 @@ class SplitScan(IR):
         row_index: tuple[str, int] | None,
         include_file_paths: str | None,
         predicate: NamedExpr | None,
+        parquet_options: ParquetOptions,
     ) -> DataFrame:
         """Evaluate and return a dataframe."""
         if typ not in ("parquet",):  # pragma: no cover
@@ -247,7 +257,6 @@ class SplitScan(IR):
             schema,
             typ,
             reader_options,
-            config_options,
             paths,
             with_columns,
             skip_rows,
@@ -255,6 +264,7 @@ class SplitScan(IR):
             row_index,
             include_file_paths,
             predicate,
+            parquet_options,
         )
 
 
@@ -292,16 +302,15 @@ def _(
     ir: Scan, rec: LowerIRTransformer
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     partition_info: MutableMapping[IR, PartitionInfo]
+    config_options = rec.state["config_options"]
     if ir.typ in ("csv", "parquet", "ndjson") and ir.n_rows == -1 and ir.skip_rows == 0:
-        plan = ScanPartitionPlan.from_scan(ir)
+        plan = ScanPartitionPlan.from_scan(ir, config_options)
         paths = list(ir.paths)
         if plan.flavor == ScanPartitionFlavor.SPLIT_FILES:
             # Disable chunked reader when splitting files
-            config_options = dataclasses.replace(
-                ir.config_options,
-                parquet_options=dataclasses.replace(
-                    ir.config_options.parquet_options, chunked=False
-                ),
+            parquet_options = dataclasses.replace(
+                config_options.parquet_options,
+                chunked=False,
             )
 
             slices: list[SplitScan] = []
@@ -311,7 +320,6 @@ def _(
                     ir.typ,
                     ir.reader_options,
                     ir.cloud_options,
-                    config_options,
                     [path],
                     ir.with_columns,
                     ir.skip_rows,
@@ -319,9 +327,12 @@ def _(
                     ir.row_index,
                     ir.include_file_paths,
                     ir.predicate,
+                    parquet_options,
                 )
                 slices.extend(
-                    SplitScan(ir.schema, base_scan, sindex, plan.factor)
+                    SplitScan(
+                        ir.schema, base_scan, sindex, plan.factor, parquet_options
+                    )
                     for sindex in range(plan.factor)
                 )
             new_node = Union(ir.schema, None, *slices)
@@ -335,7 +346,6 @@ def _(
                     ir.typ,
                     ir.reader_options,
                     ir.cloud_options,
-                    ir.config_options,
                     paths[i : i + plan.factor],
                     ir.with_columns,
                     ir.skip_rows,
@@ -343,6 +353,7 @@ def _(
                     ir.row_index,
                     ir.include_file_paths,
                     ir.predicate,
+                    config_options.parquet_options,
                 )
                 for i in range(0, len(paths), plan.factor)
             ]
