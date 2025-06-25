@@ -58,7 +58,7 @@ def test_from_table_wrong_names():
         ]
     )
     with pytest.raises(ValueError):
-        DataFrame.from_table(table, ["a", "b"])
+        DataFrame.from_table(table, ["a", "b"], [DataType(pl.Int8())])
 
 
 def test_unnamed_column_raise():
