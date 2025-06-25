@@ -8,8 +8,11 @@ from __future__ import annotations
 import argparse
 import dataclasses
 import importlib
+import json
 import os
 import sys
+import time
+from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, assert_never
@@ -28,6 +31,7 @@ try:
     from cudf_polars.dsl.translate import Translator
     from cudf_polars.experimental.explain import explain_query
     from cudf_polars.experimental.parallel import evaluate_streaming
+    from cudf_polars.testing.asserts import assert_gpu_result_equal
 
     CUDF_POLARS_AVAILABLE = True
 except ImportError:
@@ -262,8 +266,10 @@ def get_data(path: str | Path, table_name: str, suffix: str = "") -> pl.LazyFram
     return pl.scan_parquet(f"{path}/{table_name}{suffix}")
 
 
-def get_executor_options(run_config: RunConfig) -> dict[str, Any]:
-    """Generate executor_options for GPUEngine based on RunConfig."""
+def get_executor_options(
+    run_config: RunConfig, benchmark: Any = None
+) -> dict[str, Any]:
+    """Generate executor_options for GPUEngine."""
     executor_options: dict[str, Any] = {}
 
     if run_config.blocksize:
@@ -276,6 +282,18 @@ def get_executor_options(run_config: RunConfig) -> dict[str, Any]:
         executor_options["rapidsmpf_spill"] = run_config.rapidsmpf_spill
     if run_config.scheduler == "distributed":
         executor_options["scheduler"] = "distributed"
+
+    if (
+        benchmark
+        and benchmark.__name__ == "PDSHQueries"
+        and run_config.executor == "streaming"
+    ):
+        executor_options["cardinality_factor"] = {
+            "c_custkey": 0.05,
+            "l_orderkey": 1.0,
+            "l_partkey": 0.1,
+            "o_custkey": 0.25,
+        }
 
     return executor_options
 
@@ -292,6 +310,9 @@ def print_query_plan(
         if args.explain_logical:
             print(f"\nQuery {q_id} - Logical plan\n")
             print(q.explain())
+        elif args.explain:
+            print(f"\nQuery {q_id} - Physical plan\n")
+            print(q.show_graph(engine="streaming", plan_stage="physical"))
     elif CUDF_POLARS_AVAILABLE:
         assert isinstance(engine, pl.GPUEngine)
         if args.explain_logical:
@@ -365,7 +386,7 @@ def execute_query(
         color="green",
     ):
         if run_config.executor == "cpu":
-            return q.collect(new_streaming=True)
+            return q.collect(engine="streaming")
 
         elif CUDF_POLARS_AVAILABLE:
             assert isinstance(engine, pl.GPUEngine)
@@ -381,9 +402,7 @@ def execute_query(
                 return q.collect(engine=engine)
 
         else:
-            raise RuntimeError(
-                "Cannot provide debug information because cudf_polars is not installed."
-            )
+            raise RuntimeError("The requested engine is not supported.")
 
 
 def _query_type(num_queries: int) -> Callable[[str | int], list[int]]:
@@ -575,3 +594,83 @@ def parse_args(
         help="Which engine to use as the baseline for validation.",
     )
     return parser.parse_args(args)
+
+
+def run_polars(
+    benchmark: Any,
+    options: Sequence[str] | None = None,
+    num_queries: int = 22,
+) -> None:
+    """Run the queries using the given benchmark and executor options."""
+    args = parse_args(options, num_queries=num_queries)
+    run_config = RunConfig.from_args(args)
+    validation_failures: list[int] = []
+
+    client = initialize_dask_cluster(run_config, args)  # type: ignore
+
+    records: defaultdict[int, list[Record]] = defaultdict(list)
+    engine: pl.GPUEngine | None = None
+
+    if run_config.executor != "cpu":
+        executor_options = get_executor_options(run_config, benchmark=benchmark)
+        engine = pl.GPUEngine(
+            raise_on_fail=True,
+            executor=run_config.executor,
+            executor_options=executor_options,
+        )
+
+    for q_id in run_config.queries:
+        try:
+            q = getattr(benchmark, f"q{q_id}")(run_config)
+        except AttributeError as err:
+            raise NotImplementedError(f"Query {q_id} not implemented.") from err
+
+        print_query_plan(q_id, q, args, run_config, engine)
+
+        records[q_id] = []
+
+        for i in range(args.iterations):
+            t0 = time.monotonic()
+
+            result = execute_query(q_id, i, q, run_config, args, engine)
+
+            if args.validate and run_config.executor != "cpu":
+                try:
+                    assert_gpu_result_equal(
+                        q,
+                        engine=engine,
+                        executor=run_config.executor,
+                        check_exact=False,
+                    )
+                    print(f"✅ Query {q_id} passed validation!")
+                except AssertionError as e:
+                    validation_failures.append(q_id)
+                    print(f"❌ Query {q_id} failed validation!\n{e}")
+
+            t1 = time.monotonic()
+            record = Record(query=q_id, duration=t1 - t0)
+            if args.print_results:
+                print(result)
+
+            print(f"Query {q_id} - Iteration {i} finished in {record.duration:0.4f}s")
+            records[q_id].append(record)
+
+    run_config = dataclasses.replace(run_config, records=dict(records))
+
+    if args.summarize:
+        run_config.summarize()
+
+    if client is not None:
+        client.close(timeout=60)
+
+    if args.validate and run_config.executor != "cpu":
+        print("\nValidation Summary")
+        print("==================")
+        if validation_failures:
+            print(
+                f"{len(validation_failures)} queries failed validation: {sorted(set(validation_failures))}"
+            )
+        else:
+            print("All validated queries passed.")
+    args.output.write(json.dumps(run_config.serialize()))
+    args.output.write("\n")

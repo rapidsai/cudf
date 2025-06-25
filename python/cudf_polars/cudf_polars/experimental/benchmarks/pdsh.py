@@ -13,33 +13,22 @@ and may be modified or removed at any time.
 
 from __future__ import annotations
 
-import dataclasses
-import json
+import contextlib
 import os
-import time
-from collections import defaultdict
 from datetime import date
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 import polars as pl
 
-try:
+with contextlib.suppress(ImportError):
     from cudf_polars.experimental.benchmarks.utils import (
-        Record,
-        RunConfig,
-        execute_query,
         get_data,
-        get_executor_options,
-        initialize_dask_cluster,
-        parse_args,
-        print_query_plan,
+        run_polars,
     )
-    from cudf_polars.testing.asserts import assert_gpu_result_equal
-except ImportError:
-    pass
+
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from cudf_polars.experimental.benchmarks.utils import RunConfig
 
 # Without this setting, the first IO task to run
 # on each worker takes ~15 sec extra
@@ -819,89 +808,5 @@ class PDSHQueries:
         )
 
 
-def run(options: Sequence[str] | None = None) -> None:
-    """Run the benchmark."""
-    args = parse_args(options)
-    run_config = RunConfig.from_args(args)
-    validation_failures: list[int] = []
-
-    client = initialize_dask_cluster(run_config, args)  # type: ignore
-
-    records: defaultdict[int, list[Record]] = defaultdict(list)
-    engine: pl.GPUEngine | None = None
-
-    if run_config.executor != "cpu":
-        executor_options: dict[str, Any] = {}
-        if run_config.executor == "streaming":
-            executor_options = get_executor_options(run_config)
-            executor_options["cardinality_factor"] = {
-                "c_custkey": 0.05,  # Q10
-                "l_orderkey": 1.0,  # Q18
-                "l_partkey": 0.1,  # Q20
-                "o_custkey": 0.25,  # Q22
-            }
-        engine = pl.GPUEngine(
-            raise_on_fail=True,
-            executor=run_config.executor,
-            executor_options=executor_options,
-        )
-
-    for q_id in run_config.queries:
-        try:
-            q = getattr(PDSHQueries, f"q{q_id}")(run_config)
-        except AttributeError as err:
-            raise NotImplementedError(f"Query {q_id} not implemented.") from err
-
-        print_query_plan(q_id, q, args, run_config, engine)
-
-        records[q_id] = []
-
-        for i in range(args.iterations):
-            t0 = time.monotonic()
-
-            result = execute_query(q_id, i, q, run_config, args, engine)
-
-            if args.validate and run_config.executor != "cpu":
-                try:
-                    assert_gpu_result_equal(
-                        q,
-                        engine=engine,
-                        executor=run_config.executor,
-                        check_exact=False,
-                    )
-                    print(f"✅ Query {q_id} passed validation!")
-                except AssertionError as e:
-                    validation_failures.append(q_id)
-                    print(f"❌ Query {q_id} failed validation!\n{e}")
-
-            t1 = time.monotonic()
-            record = Record(query=q_id, duration=t1 - t0)
-            if args.print_results:
-                print(result)
-
-            print(f"Query {q_id} - Iteration {i} finished in {record.duration:0.4f}s")
-            records[q_id].append(record)
-
-    run_config = dataclasses.replace(run_config, records=dict(records))
-
-    if args.summarize:
-        run_config.summarize()
-
-    if client is not None:
-        client.close(timeout=60)
-
-    if args.validate and run_config.executor != "cpu":
-        print("\nValidation Summary")
-        print("==================")
-        if validation_failures:
-            print(
-                f"{len(validation_failures)} queries failed validation: {sorted(set(validation_failures))}"
-            )
-        else:
-            print("All validated queries passed.")
-    args.output.write(json.dumps(run_config.serialize()))
-    args.output.write("\n")
-
-
 if __name__ == "__main__":
-    run()
+    run_polars(PDSHQueries)
