@@ -103,9 +103,9 @@ void write_csv(cudf::table_view const& tbl_view,
 int main(int argc, char const** argv)
 {
   if (argc < 3) {
-    std::cout
+    std::cerr
       << "insufficient arguments.\n\t\tin-csv-path out-csv-path [num_rows [memory_resource]]\n";
-    return 1;
+    return EXIT_FAILURE;
   }
 
   auto const in_csv   = std::string{argv[1]};
@@ -191,5 +191,5 @@ int main(int argc, char const** argv)
 
   std::cout.flush();
 
-  return 0;
+  return EXIT_SUCCESS;
 }
