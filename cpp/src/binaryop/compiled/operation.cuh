@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -57,8 +57,9 @@ struct Mul {
            (is_fixed_point<TypeLhs>() and is_numeric<TypeRhs>()) or
            (is_numeric<TypeLhs>() and is_fixed_point<TypeRhs>());
   }
-  template <typename T1, typename T2, std::enable_if_t<is_supported<T1, T2>()>* = nullptr>
+  template <typename T1, typename T2>
   __device__ inline auto operator()(T1 const& lhs, T2 const& rhs) -> decltype(lhs * rhs)
+    requires(is_supported<T1, T2>())
   {
     return lhs * rhs;
   }
@@ -74,8 +75,9 @@ struct Div {
            (is_fixed_point<TypeLhs>() and is_numeric<TypeRhs>()) or
            (is_numeric<TypeLhs>() and is_fixed_point<TypeRhs>());
   }
-  template <typename T1, typename T2, std::enable_if_t<is_supported<T1, T2>()>* = nullptr>
+  template <typename T1, typename T2>
   __device__ inline auto operator()(T1 const& lhs, T2 const& rhs) -> decltype(lhs / rhs)
+    requires(is_supported<T1, T2>())
   {
     return lhs / rhs;
   }
@@ -91,11 +93,10 @@ struct TrueDiv {
 };
 
 struct FloorDiv {
-  template <typename TypeLhs,
-            typename TypeRhs,
-            std::enable_if_t<(std::is_integral_v<std::common_type_t<TypeLhs, TypeRhs>> and
-                              std::is_signed_v<std::common_type_t<TypeLhs, TypeRhs>>)>* = nullptr>
+  template <typename TypeLhs, typename TypeRhs>
   __device__ inline auto operator()(TypeLhs x, TypeRhs y) -> decltype(x / y)
+    requires(std::is_integral_v<std::common_type_t<TypeLhs, TypeRhs>> and
+             std::is_signed_v<std::common_type_t<TypeLhs, TypeRhs>>)
   {
     auto const quotient          = x / y;
     auto const nonzero_remainder = (x % y) != 0;
@@ -103,29 +104,24 @@ struct FloorDiv {
     return quotient - mixed_sign * nonzero_remainder;
   }
 
-  template <typename TypeLhs,
-            typename TypeRhs,
-            std::enable_if_t<(std::is_integral_v<std::common_type_t<TypeLhs, TypeRhs>> and
-                              !std::is_signed_v<std::common_type_t<TypeLhs, TypeRhs>>)>* = nullptr>
+  template <typename TypeLhs, typename TypeRhs>
   __device__ inline auto operator()(TypeLhs x, TypeRhs y) -> decltype(x / y)
+    requires(std::is_integral_v<std::common_type_t<TypeLhs, TypeRhs>> and
+             !std::is_signed_v<std::common_type_t<TypeLhs, TypeRhs>>)
   {
     return x / y;
   }
 
-  template <
-    typename TypeLhs,
-    typename TypeRhs,
-    std::enable_if_t<(std::is_same_v<std::common_type_t<TypeLhs, TypeRhs>, float>)>* = nullptr>
+  template <typename TypeLhs, typename TypeRhs>
   __device__ inline auto operator()(TypeLhs x, TypeRhs y) -> float
+    requires(std::is_same_v<std::common_type_t<TypeLhs, TypeRhs>, float>)
   {
     return floorf(x / y);
   }
 
-  template <
-    typename TypeLhs,
-    typename TypeRhs,
-    std::enable_if_t<(std::is_same_v<std::common_type_t<TypeLhs, TypeRhs>, double>)>* = nullptr>
+  template <typename TypeLhs, typename TypeRhs>
   __device__ inline auto operator()(TypeLhs x, TypeRhs y) -> double
+    requires(std::is_same_v<std::common_type_t<TypeLhs, TypeRhs>, double>)
   {
     return floor(x / y);
   }
@@ -141,22 +137,21 @@ struct Mod {
            // error : expression must have integral or unscoped enum type
            (is_duration<TypeLhs>() and (std::is_integral<TypeRhs>() or is_duration<TypeRhs>()));
   }
-  template <typename T1, typename T2, std::enable_if_t<is_supported<T1, T2>()>* = nullptr>
+  template <typename T1, typename T2>
   __device__ inline auto operator()(T1 const& lhs, T2 const& rhs) -> decltype(lhs % rhs)
+    requires(is_supported<T1, T2>())
   {
     return lhs % rhs;
   }
-  template <typename T1,
-            typename T2,
-            std::enable_if_t<(std::is_same_v<float, std::common_type_t<T1, T2>>)>* = nullptr>
+  template <typename T1, typename T2>
   __device__ inline auto operator()(T1 const& lhs, T2 const& rhs) -> float
+    requires(std::is_same_v<float, std::common_type_t<T1, T2>>)
   {
     return fmodf(static_cast<float>(lhs), static_cast<float>(rhs));
   }
-  template <typename T1,
-            typename T2,
-            std::enable_if_t<(std::is_same_v<double, std::common_type_t<T1, T2>>)>* = nullptr>
+  template <typename T1, typename T2>
   __device__ inline auto operator()(T1 const& lhs, T2 const& rhs) -> double
+    requires(std::is_same_v<double, std::common_type_t<T1, T2>>)
   {
     return fmod(static_cast<double>(lhs), static_cast<double>(rhs));
   }
@@ -167,10 +162,9 @@ struct PMod {
   // types shouldn't be required, as std::fmod should promote integral types automatically
   // to double and call the std::fmod overload for doubles. Sadly, doing this in jitified
   // code does not work - it is having trouble deciding between float/double overloads
-  template <typename TypeLhs,
-            typename TypeRhs,
-            std::enable_if_t<(std::is_integral_v<std::common_type_t<TypeLhs, TypeRhs>>)>* = nullptr>
+  template <typename TypeLhs, typename TypeRhs>
   __device__ inline auto operator()(TypeLhs x, TypeRhs y)
+    requires(std::is_integral_v<std::common_type_t<TypeLhs, TypeRhs>>)
   {
     using common_t = std::common_type_t<TypeLhs, TypeRhs>;
     auto xconv     = static_cast<common_t>(x);
@@ -181,11 +175,9 @@ struct PMod {
     return rem;
   }
 
-  template <
-    typename TypeLhs,
-    typename TypeRhs,
-    std::enable_if_t<(std::is_floating_point_v<std::common_type_t<TypeLhs, TypeRhs>>)>* = nullptr>
+  template <typename TypeLhs, typename TypeRhs>
   __device__ inline auto operator()(TypeLhs x, TypeRhs y)
+    requires(std::is_floating_point_v<std::common_type_t<TypeLhs, TypeRhs>>)
   {
     using common_t = std::common_type_t<TypeLhs, TypeRhs>;
     auto xconv     = static_cast<common_t>(x);
@@ -195,11 +187,9 @@ struct PMod {
     return rem;
   }
 
-  template <typename TypeLhs,
-            typename TypeRhs,
-            std::enable_if_t<cudf::is_fixed_point<TypeLhs>() and
-                             std::is_same_v<TypeLhs, TypeRhs>>* = nullptr>
+  template <typename TypeLhs, typename TypeRhs>
   __device__ inline auto operator()(TypeLhs x, TypeRhs y)
+    requires(cudf::is_fixed_point<TypeLhs>() and std::is_same_v<TypeLhs, TypeRhs>)
   {
     auto const remainder = x % y;
     return remainder.value() < 0 ? (remainder + y) % y : remainder;
@@ -207,53 +197,44 @@ struct PMod {
 };
 
 struct PyMod {
-  template <typename TypeLhs,
-            typename TypeRhs,
-            std::enable_if_t<(std::is_integral_v<std::common_type_t<TypeLhs, TypeRhs>> or
-                              (cudf::is_fixed_point<TypeLhs>() and
-                               std::is_same_v<TypeLhs, TypeRhs>))>* = nullptr>
+  template <typename TypeLhs, typename TypeRhs>
   __device__ inline auto operator()(TypeLhs x, TypeRhs y) -> decltype(((x % y) + y) % y)
+    requires(std::is_integral_v<std::common_type_t<TypeLhs, TypeRhs>> or
+             (cudf::is_fixed_point<TypeLhs>() and std::is_same_v<TypeLhs, TypeRhs>))
   {
     return ((x % y) + y) % y;
   }
 
-  template <
-    typename TypeLhs,
-    typename TypeRhs,
-    std::enable_if_t<(std::is_floating_point_v<std::common_type_t<TypeLhs, TypeRhs>>)>* = nullptr>
+  template <typename TypeLhs, typename TypeRhs>
   __device__ inline auto operator()(TypeLhs x, TypeRhs y) -> double
+    requires(std::is_floating_point_v<std::common_type_t<TypeLhs, TypeRhs>>)
   {
     auto x1 = static_cast<double>(x);
     auto y1 = static_cast<double>(y);
     return fmod(fmod(x1, y1) + y1, y1);
   }
 
-  template <typename TypeLhs,
-            typename TypeRhs,
-            std::enable_if_t<(is_duration<TypeLhs>())>* = nullptr>
+  template <typename TypeLhs, typename TypeRhs>
   __device__ inline auto operator()(TypeLhs x, TypeRhs y) -> decltype(((x % y) + y) % y)
+    requires(is_duration<TypeLhs>())
   {
     return ((x % y) + y) % y;
   }
 };
 
 struct Pow {
-  template <typename TypeLhs,
-            typename TypeRhs,
-            std::enable_if_t<(std::is_convertible_v<TypeLhs, double> and
-                              std::is_convertible_v<TypeRhs, double>)>* = nullptr>
+  template <typename TypeLhs, typename TypeRhs>
   __device__ inline auto operator()(TypeLhs x, TypeRhs y) -> double
+    requires(std::is_convertible_v<TypeLhs, double> and std::is_convertible_v<TypeRhs, double>)
   {
     return pow(static_cast<double>(x), static_cast<double>(y));
   }
 };
 
 struct IntPow {
-  template <
-    typename TypeLhs,
-    typename TypeRhs,
-    std::enable_if_t<(std::is_integral_v<TypeLhs> and std::is_integral_v<TypeRhs>)>* = nullptr>
+  template <typename TypeLhs, typename TypeRhs>
   __device__ inline auto operator()(TypeLhs x, TypeRhs y) -> TypeLhs
+    requires(std::is_integral_v<TypeLhs> and std::is_integral_v<TypeRhs>)
   {
     if constexpr (std::is_signed_v<TypeRhs>) {
       if (y < 0) {
@@ -279,22 +260,18 @@ struct IntPow {
 };
 
 struct LogBase {
-  template <typename TypeLhs,
-            typename TypeRhs,
-            std::enable_if_t<(std::is_convertible_v<TypeLhs, double> and
-                              std::is_convertible_v<TypeRhs, double>)>* = nullptr>
+  template <typename TypeLhs, typename TypeRhs>
   __device__ inline auto operator()(TypeLhs x, TypeRhs y) -> double
+    requires(std::is_convertible_v<TypeLhs, double> and std::is_convertible_v<TypeRhs, double>)
   {
     return (std::log(static_cast<double>(x)) / std::log(static_cast<double>(y)));
   }
 };
 
 struct ATan2 {
-  template <typename TypeLhs,
-            typename TypeRhs,
-            std::enable_if_t<(std::is_convertible_v<TypeLhs, double> and
-                              std::is_convertible_v<TypeRhs, double>)>* = nullptr>
+  template <typename TypeLhs, typename TypeRhs>
   __device__ inline auto operator()(TypeLhs x, TypeRhs y) -> double
+    requires(std::is_convertible_v<TypeLhs, double> and std::is_convertible_v<TypeRhs, double>)
   {
     return std::atan2(static_cast<double>(x), static_cast<double>(y));
   }
@@ -317,14 +294,12 @@ struct ShiftRight {
 };
 
 struct ShiftRightUnsigned {
-  template <
-    typename TypeLhs,
-    typename TypeRhs,
-    std::enable_if_t<(std::is_integral_v<TypeLhs> and not is_boolean<TypeLhs>())>* = nullptr>
+  template <typename TypeLhs, typename TypeRhs>
   __device__ inline auto operator()(TypeLhs x, TypeRhs y)
-    -> decltype(static_cast<std::make_unsigned_t<TypeLhs>>(x) >> y)
+    -> decltype(static_cast<cuda::std::make_unsigned_t<TypeLhs>>(x) >> y)
+    requires(cuda::std::is_integral_v<TypeLhs> and not is_boolean<TypeLhs>())
   {
-    return (static_cast<std::make_unsigned_t<TypeLhs>>(x) >> y);
+    return (static_cast<cuda::std::make_unsigned_t<TypeLhs>>(x) >> y);
   }
 };
 
