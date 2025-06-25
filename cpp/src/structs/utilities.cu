@@ -354,10 +354,6 @@ std::vector<std::unique_ptr<column>> superimpose_nulls(std::vector<bitmask_type 
     }
   };
 
-  // Track/mark the starting position in segment_offsets for each top-level column
-  std::vector<size_type> column_markers;
-  column_markers.push_back(0);
-
   // Process each top-level column in the inputs vector
   for (size_t c = 0; c < null_masks.size(); c++) {
     // Start with the external null mask for this column
@@ -366,9 +362,6 @@ std::vector<std::unique_ptr<column>> superimpose_nulls(std::vector<bitmask_type 
     // Collect all null masks for this column and its descendants
     populate_segmented_sources(inputs[c]->mutable_view());
     path.pop_back();
-
-    // Record where this column's segments end in the segment_offsets array
-    column_markers.push_back(segment_offsets.size());
   }
 
   // Convert segment_offsets from segment sizes to cumulative offsets
@@ -417,7 +410,6 @@ std::vector<std::unique_ptr<column>> superimpose_nulls(std::vector<bitmask_type 
   // Apply the new null masks to all top-level columns
   auto marker = 0;
   for (size_t c = 0; c < inputs.size(); c++) {
-    // create_updated_column(column_markers[c], *(inputs[c]));
     marker = create_updated_column(marker, *(inputs[c]));
   }
   return inputs;
