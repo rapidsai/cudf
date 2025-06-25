@@ -23,6 +23,25 @@ def test_non_scalar_access_raises():
         _ = column.obj_scalar
 
 
+def test_check_sorted():
+    dtype = DataType(pl.Int8())
+    column = Column(
+        plc.Column.from_iterable_of_py([0, 1, 2], dtype.plc),
+        dtype=dtype,
+    )
+    assert column.check_sorted(
+        order=plc.types.Order.ASCENDING, null_order=plc.types.NullOrder.AFTER
+    )
+    column.set_sorted(
+        is_sorted=plc.types.Sorted.YES,
+        order=plc.types.Order.ASCENDING,
+        null_order=plc.types.NullOrder.AFTER,
+    )
+    assert column.check_sorted(
+        order=plc.types.Order.ASCENDING, null_order=plc.types.NullOrder.AFTER
+    )
+
+
 @pytest.mark.parametrize("length", [0, 1])
 def test_length_leq_one_always_sorted(length):
     dtype = DataType(pl.Int8())
