@@ -2447,3 +2447,17 @@ def test_loc_categorical_no_integer_fallback_issue_13653():
     actual = s.loc[3]
     expect = s.to_pandas().loc[3]
     assert_eq(actual, expect)
+
+
+def test_loc_wrong_type_slice_datetimeindex():
+    ser_cudf = cudf.Series(
+        range(3), index=cudf.date_range("2020-01-01", periods=3, freq="D")
+    )
+    with pytest.raises(TypeError):
+        ser_cudf.loc[2:]
+
+    ser_pd = pd.Series(
+        range(3), index=pd.date_range("2020-01-01", periods=3, freq="D")
+    )
+    with pytest.raises(TypeError):
+        ser_pd.loc[2:]

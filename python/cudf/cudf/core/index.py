@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import datetime
 import itertools
 import operator
 import warnings
@@ -3576,6 +3577,13 @@ class DatetimeIndex(Index):
 
     def find_label_range(self, loc: slice) -> slice:
         # For indexing, try to interpret slice arguments as datetime-convertible
+        if any(
+            not (val is None or isinstance(val, (str, datetime.datetime)))
+            for val in (loc.start, loc.stop)
+        ):
+            raise TypeError(
+                "Can only slice DatetimeIndex with a string or datetime objects"
+            )
         new_slice = slice(
             pd.to_datetime(loc.start) if loc.start is not None else None,
             pd.to_datetime(loc.stop) if loc.stop is not None else None,
