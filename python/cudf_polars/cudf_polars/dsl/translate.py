@@ -11,7 +11,6 @@ from contextlib import AbstractContextManager, nullcontext
 from functools import singledispatch
 from typing import TYPE_CHECKING, Any
 
-import pyarrow as pa
 from typing_extensions import assert_never
 
 import polars as pl
@@ -29,7 +28,7 @@ from cudf_polars.dsl.utils.naming import unique_names
 from cudf_polars.dsl.utils.replace import replace
 from cudf_polars.dsl.utils.rolling import rewrite_rolling
 from cudf_polars.typing import Schema
-from cudf_polars.utils import config, dtypes, sorting
+from cudf_polars.utils import config, sorting
 
 if TYPE_CHECKING:
     from polars import GPUEngine
@@ -585,7 +584,7 @@ def _(
             )
             if isinstance(chars, expr.Literal):
                 # We check for null first because we want to use the
-                # chars pyarrow type, but it is invalid to try and
+                # chars type, but it is invalid to try and
                 # produce a string scalar with a null dtype.
                 if chars.value is None:
                     # Polars uses None to mean "strip all whitespace"
@@ -738,16 +737,10 @@ def _(
     node: pl_expr.Literal, translator: Translator, dtype: DataType, schema: Schema
 ) -> expr.Expr:
     if isinstance(node.value, plrs.PySeries):
-        data = pl.Series._from_pyseries(node.value).to_arrow(
-            compat_level=dtypes.TO_ARROW_COMPAT_LEVEL
-        )
-        return expr.LiteralColumn(
-            dtype, data.cast(dtypes.downcast_arrow_lists(data.type))
-        )
+        return expr.LiteralColumn(dtype, pl.Series._from_pyseries(node.value))
     if dtype.id() == plc.TypeId.LIST:  # pragma: no cover
-        # TODO: Find an alternative to pa.infer_type
-        data = pa.array(node.value, type=pa.infer_type(node.value))
-        return expr.LiteralColumn(dtype, data)
+        # TODO: Remove once pylibcudf.Scalar supports lists
+        return expr.LiteralColumn(dtype, pl.Series(node.value))
     return expr.Literal(dtype, node.value)
 
 

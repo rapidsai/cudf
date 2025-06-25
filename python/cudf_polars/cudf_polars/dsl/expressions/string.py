@@ -9,9 +9,6 @@ from __future__ import annotations
 from enum import IntEnum, auto
 from typing import TYPE_CHECKING, Any
 
-import pyarrow as pa
-import pyarrow.compute as pc
-
 import polars as pl
 from polars.exceptions import InvalidOperationError
 
@@ -127,6 +124,7 @@ class StringFunction(Expr):
             StringFunction.Name.StripCharsStart,
             StringFunction.Name.StripCharsEnd,
             StringFunction.Name.Uppercase,
+            StringFunction.Name.Reverse,
             StringFunction.Name.Tail,
             StringFunction.Name.Titlecase,
         ):
@@ -179,10 +177,7 @@ class StringFunction(Expr):
             # Above, we raise NotImplementedError if the target is not a Literal,
             # so we can safely access .value here.
             if (isinstance(target, Literal) and target.value == "") or (
-                isinstance(target, LiteralColumn)
-                and pc.any(
-                    pc.equal(target.value.cast(pa.string()), "")  # type: ignore[attr-defined]
-                ).as_py()
+                isinstance(target, LiteralColumn) and (target.value == "").any()
             ):
                 raise NotImplementedError(
                     "libcudf replace_many is implemented differently from polars "
@@ -450,6 +445,9 @@ class StringFunction(Expr):
                 plc.strings.replace.replace_multiple(column.obj, target.obj, repl.obj),
                 dtype=self.dtype,
             )
+        elif self.name is StringFunction.Name.Reverse:
+            (column,) = columns
+            return Column(plc.strings.reverse.reverse(column.obj), dtype=self.dtype)
         elif self.name is StringFunction.Name.Titlecase:
             (column,) = columns
             return Column(plc.strings.capitalize.title(column.obj))
