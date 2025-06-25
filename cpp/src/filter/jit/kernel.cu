@@ -44,7 +44,7 @@ namespace jit {
 template <bool has_user_data, typename Out, typename... In>
 CUDF_KERNEL void kernel(cudf::jit::device_optional_span<typename Out::type> const* outputs,
                         cudf::column_device_view_core const* inputs,
-                        void* __restrict__ user_data)
+                        void* user_data)
 {
   static constexpr typename Out::type NOT_APPLIED = -1;
 

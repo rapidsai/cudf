@@ -42,7 +42,7 @@ namespace jit {
 template <bool has_user_data, typename Out, typename... In>
 CUDF_KERNEL void kernel(cudf::mutable_column_device_view_core const* outputs,
                         cudf::column_device_view_core const* inputs,
-                        void* __restrict__ user_data)
+                        void* user_data)
 {
   // inputs to JITIFY kernels have to be either sized-integral types or pointers. Structs or
   // references can't be passed directly/correctly as they will be crossing an ABI boundary
@@ -68,7 +68,7 @@ CUDF_KERNEL void kernel(cudf::mutable_column_device_view_core const* outputs,
 template <bool has_user_data, typename Out, typename... In>
 CUDF_KERNEL void fixed_point_kernel(cudf::mutable_column_device_view_core const* outputs,
                                     cudf::column_device_view_core const* inputs,
-                                    void* __restrict__ user_data)
+                                    void* user_data)
 {
   // cannot use global_thread_id utility due to a JIT build issue by including
   // the `cudf/detail/utilities/cuda.cuh` header
@@ -96,7 +96,7 @@ CUDF_KERNEL void fixed_point_kernel(cudf::mutable_column_device_view_core const*
 template <bool has_user_data, typename Out, typename... In>
 CUDF_KERNEL void span_kernel(cudf::jit::device_optional_span<typename Out::type> const* outputs,
                              cudf::column_device_view_core const* inputs,
-                             void* __restrict__ user_data)
+                             void* user_data)
 {
   // cannot use global_thread_id utility due to a JIT build issue by including
   // the `cudf/detail/utilities/cuda.cuh` header
