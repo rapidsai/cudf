@@ -54,22 +54,19 @@ struct float_to_pair_fn {
   }
 };
 
+/**
+ * @brief Sorts fixed-width columns using cub radix sort
+ *
+ * Should not be used if `input.has_nulls()==true`
+ */
 struct sort_radix_fn {
-  /**
-   * @brief Sorts fixed-width columns using cub radix sort
-   *
-   * Should not be called if `input.has_nulls()==true`
-   *
-   * @param input Column to sort
-   * @param output Output sorted column
-   * @param ascending True if sort order is ascending
-   * @param stream CUDA stream used for device memory operations and kernel launches
-   */
+  column_view const input;       // input column to sort
+  mutable_column_view output;    // output sorted
+  bool ascending;                // true if ascending sort
+  rmm::cuda_stream_view stream;  // stream for allocations and kernel launches
+
   template <typename T>
-  void sort_radix(column_view const& input,
-                  mutable_column_view& output,
-                  bool ascending,
-                  rmm::cuda_stream_view stream)
+  void sort_radix()
   {
     auto d_in          = input.data<T>();
     auto d_out         = output.data<T>();
@@ -91,10 +88,7 @@ struct sort_radix_fn {
   }
 
   template <typename T>
-  void operator()(column_view const& input,
-                  mutable_column_view& output,
-                  bool ascending,
-                  rmm::cuda_stream_view stream)
+  void operator()()
     requires(cudf::is_floating_point<T>())
   {
     auto pair_in  = rmm::device_uvector<float_pair<T>>(input.size(), stream);
@@ -135,28 +129,22 @@ struct sort_radix_fn {
   }
 
   template <typename T>
-  void operator()(column_view const& input,
-                  mutable_column_view& output,
-                  bool ascending,
-                  rmm::cuda_stream_view stream)
+  void operator()()
     requires(cudf::is_chrono<T>())
   {
     using rep_type = typename T::rep;
-    sort_radix<rep_type>(input, output, ascending, stream);
+    sort_radix<rep_type>();
   }
 
   template <typename T>
-  void operator()(column_view const& input,
-                  mutable_column_view& output,
-                  bool ascending,
-                  rmm::cuda_stream_view stream)
+  void operator()()
     requires(cudf::is_fixed_width<T>() and !cudf::is_chrono<T>() and !cudf::is_floating_point<T>())
   {
-    sort_radix<T>(input, output, ascending, stream);
+    sort_radix<T>();
   }
 
   template <typename T>
-  void operator()(column_view const&, mutable_column_view&, bool, rmm::cuda_stream_view)
+  void operator()()
     requires(not cudf::is_fixed_width<T>())
   {
     CUDF_UNREACHABLE("invalid type for faster sort");
@@ -177,8 +165,8 @@ std::unique_ptr<column> sort_radix(column_view const& input,
 {
   auto result   = std::make_unique<column>(input, stream, mr);
   auto out_view = result->mutable_view();
-  cudf::type_dispatcher<dispatch_storage_type>(
-    input.type(), sort_radix_fn{}, input, out_view, ascending, stream);
+  cudf::type_dispatcher<dispatch_storage_type>(input.type(),
+                                               sort_radix_fn{input, out_view, ascending, stream});
   return result;
 }
 
