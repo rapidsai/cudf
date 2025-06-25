@@ -17,6 +17,7 @@ from cudf import DataFrame, Series
 from cudf.core._compat import (
     PANDAS_CURRENT_SUPPORTED_VERSION,
     PANDAS_GE_220,
+    PANDAS_GE_230,
     PANDAS_VERSION,
 )
 from cudf.core.index import DatetimeIndex
@@ -1250,7 +1251,13 @@ def test_datetime_stats(data, dtype, stat):
     gsr = cudf.Series(data, dtype=dtype)
     psr = gsr.to_pandas()
 
-    expected = getattr(psr, stat)()
+    with expect_warning_if(
+        PANDAS_GE_230
+        and stat == "quantile"
+        and len(data) == 0
+        and dtype != "datetime64[ns]"
+    ):
+        expected = getattr(psr, stat)()
     actual = getattr(gsr, stat)()
 
     if len(data) == 0:
