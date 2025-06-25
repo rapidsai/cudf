@@ -187,6 +187,19 @@ def test_groupby_agg_empty(df: pl.LazyFrame, engine: pl.GPUEngine) -> None:
     assert_gpu_result_equal(q, engine=engine, check_row_order=False)
 
 
+def test_groupby_on_equality(df: pl.LazyFrame, engine: pl.GPUEngine) -> None:
+    # See: https://github.com/rapidsai/cudf/issues/19152
+    df = pl.LazyFrame(
+        {
+            "key1": [1, 1, 1, 2, 3, 1, 4, 6, 7],
+            "key2": [2, 2, 2, 2, 6, 1, 4, 6, 8],
+            "int32": pl.Series([1, 2, 3, 4, 5, 6, 7, 8, 9], dtype=pl.Int32()),
+        }
+    )
+    q = df.group_by(pl.col("key1") == pl.col("key2")).agg(pl.col("int32").sum())
+    assert_gpu_result_equal(q, engine=engine, check_row_order=False)
+
+
 @pytest.mark.parametrize(
     "values",
     [
