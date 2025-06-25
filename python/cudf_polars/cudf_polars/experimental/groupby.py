@@ -14,7 +14,7 @@ import pylibcudf as plc
 
 from cudf_polars.containers import DataType
 from cudf_polars.dsl.expr import Agg, BinOp, Col, Len, NamedExpr
-from cudf_polars.dsl.ir import GroupBy, Select
+from cudf_polars.dsl.ir import GroupBy, Select, Slice
 from cudf_polars.dsl.traversal import traversal
 from cudf_polars.dsl.utils.naming import unique_names
 from cudf_polars.experimental.base import PartitionInfo
@@ -143,6 +143,25 @@ def decompose(
 def _(
     ir: GroupBy, rec: LowerIRTransformer
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+    # Pull slice operations out of the GroupBy before lowering
+    if ir.zlice is not None:
+        offset, length = ir.zlice
+        if length is None:  # pragma: no cover
+            return _lower_ir_fallback(
+                ir,
+                rec,
+                msg="This slice not supported for multiple partitions.",
+            )
+        new_join = GroupBy(
+            ir.schema,
+            ir.keys,
+            ir.agg_requests,
+            ir.maintain_order,
+            None,
+            *ir.children,
+        )
+        return rec(Slice(ir.schema, offset, length, new_join))
+
     # Extract child partitioning
     child, partition_info = rec(ir.children[0])
 
@@ -167,14 +186,15 @@ def _(
     groupby_key_columns = [ne.name for ne in ir.keys]
     shuffled = partition_info[child].partitioned_on == ir.keys
 
-    assert ir.config_options.executor.name == "streaming", (
+    config_options = rec.state["config_options"]
+    assert config_options.executor.name == "streaming", (
         "'in-memory' executor not supported in 'generate_ir_tasks'"
     )
 
     child_count = partition_info[child].count
     cardinality_factor = {
         c: min(f, 1.0)
-        for c, f in ir.config_options.executor.cardinality_factor.items()
+        for c, f in config_options.executor.cardinality_factor.items()
         if c in groupby_key_columns
     }
     if cardinality_factor:
@@ -214,7 +234,7 @@ def _(
         child = Shuffle(
             child.schema,
             ir.keys,
-            ir.config_options,
+            config_options.executor.shuffle_method,
             child,
         )
         partition_info[child] = PartitionInfo(
@@ -233,15 +253,15 @@ def _(
         piecewise_exprs,
         ir.maintain_order,
         None,
-        ir.config_options,
         child,
     )
     child_count = partition_info[child].count
     partition_info[gb_pwise] = PartitionInfo(count=child_count)
+    grouped_keys = tuple(NamedExpr(k.name, Col(k.value.dtype, k.name)) for k in ir.keys)
 
     # Reduction
     gb_inter: GroupBy | Repartition | Shuffle
-    reduction_schema = {k.name: k.value.dtype for k in ir.keys} | {
+    reduction_schema = {k.name: k.value.dtype for k in grouped_keys} | {
         k.name: k.value.dtype for k in reduction_exprs
     }
     if not shuffled and post_aggregation_count > 1:
@@ -255,18 +275,18 @@ def _(
 
         gb_inter = Shuffle(
             gb_pwise.schema,
-            ir.keys,
-            ir.config_options,
+            grouped_keys,
+            config_options.executor.shuffle_method,
             gb_pwise,
         )
         partition_info[gb_inter] = PartitionInfo(count=post_aggregation_count)
     else:
         # N-ary tree reduction
-        assert ir.config_options.executor.name == "streaming", (
+        assert config_options.executor.name == "streaming", (
             "'in-memory' executor not supported in 'generate_ir_tasks'"
         )
 
-        n_ary = ir.config_options.executor.groupby_n_ary
+        n_ary = config_options.executor.groupby_n_ary
         count = child_count
         gb_inter = gb_pwise
         while count > post_aggregation_count:
@@ -276,11 +296,10 @@ def _(
             if count > post_aggregation_count:
                 gb_inter = GroupBy(
                     reduction_schema,
-                    ir.keys,
+                    grouped_keys,
                     reduction_exprs,
                     ir.maintain_order,
                     None,
-                    ir.config_options,
                     gb_inter,
                 )
                 partition_info[gb_inter] = PartitionInfo(count=count)
@@ -288,11 +307,10 @@ def _(
     # Final aggregation
     gb_reduce = GroupBy(
         reduction_schema,
-        ir.keys,
+        grouped_keys,
         reduction_exprs,
         ir.maintain_order,
         ir.zlice,
-        ir.config_options,
         gb_inter,
     )
     partition_info[gb_reduce] = PartitionInfo(count=post_aggregation_count)
@@ -301,7 +319,7 @@ def _(
     new_node = Select(
         ir.schema,
         [
-            *(NamedExpr(k.name, Col(k.value.dtype, k.name)) for k in ir.keys),
+            *(NamedExpr(k.name, Col(k.value.dtype, k.name)) for k in grouped_keys),
             *selection_exprs,
         ],
         False,  # noqa: FBT003
@@ -309,6 +327,6 @@ def _(
     )
     partition_info[new_node] = PartitionInfo(
         count=post_aggregation_count,
-        partitioned_on=ir.keys,
+        partitioned_on=grouped_keys,
     )
     return new_node, partition_info
