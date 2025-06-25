@@ -1281,6 +1281,10 @@ class Series(SingleColumnFrame, IndexedFrame):
             )
             or self.index.dtype.kind in {"i", "u", "f"}
         ):
+            # Do not remove until pandas 3.0 support is added.
+            assert PANDAS_LT_300, (
+                "Need to drop after pandas-3.0 support is added."
+            )
             warnings.warn(
                 "Series.__getitem__ treating keys as positions is deprecated "
                 "In a future version, integer keys will always be treated as labels "
