@@ -27,7 +27,6 @@
 #include <cudf/detail/transform.hpp>
 #include <cudf/jit/runtime_support.hpp>
 #include <cudf/null_mask.hpp>
-#include <cudf/stream_compaction.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
