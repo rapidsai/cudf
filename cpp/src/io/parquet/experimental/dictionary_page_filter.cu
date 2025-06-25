@@ -308,7 +308,7 @@ __device__ __forceinline__ int64_t convert_to_timestamp64(int64_t const value,
     int32_t const sign = (value < 0);
     return ((value + sign) / -timestamp_scale) + sign;
   }
- return value * timestamp_scale;
+  return value * timestamp_scale;
 }
 
 /**
