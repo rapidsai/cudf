@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#include "faster_sort.hpp"
 #include "sort_impl.cuh"
+#include "sort_radix.hpp"
 
 #include <cudf/column/column.hpp>
 #include <cudf/detail/gather.hpp>

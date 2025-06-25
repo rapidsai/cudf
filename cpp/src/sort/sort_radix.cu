@@ -53,7 +53,7 @@ struct float_to_pair_fn {
   }
 };
 
-struct faster_sort_fn {
+struct sort_radix_fn {
   /**
    * @brief Sorts fixed-width columns using cub radix sort
    *
@@ -65,10 +65,10 @@ struct faster_sort_fn {
    * @param stream CUDA stream used for device memory operations and kernel launches
    */
   template <typename T>
-  void faster_sort(column_view const& input,
-                   mutable_column_view& output,
-                   bool ascending,
-                   rmm::cuda_stream_view stream)
+  void sort_radix(column_view const& input,
+                  mutable_column_view& output,
+                  bool ascending,
+                  rmm::cuda_stream_view stream)
   {
     auto d_in          = input.data<T>();
     auto d_out         = output.data<T>();
@@ -141,7 +141,7 @@ struct faster_sort_fn {
     requires(cudf::is_chrono<T>())
   {
     using rep_type = typename T::rep;
-    faster_sort<rep_type>(input, output, ascending, stream);
+    sort_radix<rep_type>(input, output, ascending, stream);
   }
 
   template <typename T>
@@ -151,7 +151,7 @@ struct faster_sort_fn {
                   rmm::cuda_stream_view stream)
     requires(cudf::is_fixed_width<T>() and !cudf::is_chrono<T>() and !cudf::is_floating_point<T>())
   {
-    faster_sort<T>(input, output, ascending, stream);
+    sort_radix<T>(input, output, ascending, stream);
   }
 
   template <typename T>
@@ -177,7 +177,7 @@ std::unique_ptr<column> sort_radix(column_view const& input,
   auto result   = std::make_unique<column>(input, stream, mr);
   auto out_view = result->mutable_view();
   cudf::type_dispatcher<dispatch_storage_type>(
-    input.type(), faster_sort_fn{}, input, out_view, ascending, stream);
+    input.type(), sort_radix_fn{}, input, out_view, ascending, stream);
   return result;
 }
 
