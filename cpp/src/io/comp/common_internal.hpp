@@ -78,8 +78,8 @@ sorted_codec_parameters sort_tasks(device_span<device_span<uint8_t const> const>
  * This function restores the results to their original positions in the output
  * array using the ordering information created by sort_tasks().
  *
- * @param src Source results in sorted order
- * @param dst Destination array where results will be placed in original order
+ * @param sorted_results Source results in sorted order
+ * @param original_results Destination array where results will be placed in original order
  * @param order Mapping from sorted position to original position
  * @param stream CUDA stream for asynchronous execution
  */

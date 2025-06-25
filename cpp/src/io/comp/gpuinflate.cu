@@ -1254,15 +1254,16 @@ sorted_codec_parameters sort_tasks(device_span<device_span<uint8_t const> const>
   return {std::move(sorted_inputs), std::move(sorted_outputs), std::move(order)};
 }
 
-void copy_results_to_original_order(device_span<codec_exec_result const> src,
-                                    device_span<codec_exec_result> dst,
+void copy_results_to_original_order(device_span<codec_exec_result const> sorted_results,
+                                    device_span<codec_exec_result> original_results,
                                     device_span<std::size_t const> order,
                                     rmm::cuda_stream_view stream)
 {
-  thrust::for_each_n(rmm::exec_policy_nosync(stream),
-                     thrust::counting_iterator<std::size_t>(0),
-                     order.size(),
-                     [=] __device__(std::size_t i) { dst[order[i]] = src[i]; });
+  thrust::for_each_n(
+    rmm::exec_policy_nosync(stream),
+    thrust::counting_iterator<std::size_t>(0),
+    order.size(),
+    [=] __device__(std::size_t i) { original_results[order[i]] = sorted_results[i]; });
 }
 
 }  // namespace cudf::io::detail
