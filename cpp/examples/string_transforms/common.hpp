@@ -111,9 +111,7 @@ int main(int argc, char const** argv)
   auto const num_rows = argc > 3 ? std::optional{std::stoi(std::string(argv[3]))} : std::nullopt;
   auto const memory_resource_name =
     std::string{argc > 4 ? std::string(argv[4]) : std::string("cuda")};
-  auto const enable_stats =
-    ((memory_resource_name == "cuda-stats") || (memory_resource_name == "async-stats") ||
-     (memory_resource_name == "pool-stats"));
+  auto const enable_stats = memory_resource_name.ends_with("-stats");
 
   auto resource = create_memory_resource(memory_resource_name);
   auto stream   = cudf::get_default_stream();
