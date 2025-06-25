@@ -21,7 +21,6 @@ from functools import cache
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar
 
-import pyarrow as pa
 from typing_extensions import assert_never
 
 import polars as pl
@@ -416,9 +415,10 @@ class Scan(IR):
         Each path is repeated according to the number of rows read from it.
         """
         (filepaths,) = plc.filling.repeat(
-            # TODO: Remove call from_arrow when we support python list to Column
-            plc.Table([plc.interop.from_arrow(pa.array(map(str, paths)))]),
-            plc.interop.from_arrow(pa.array(rows_per_path, type=pa.int32())),
+            plc.Table([plc.Column.from_arrow(pl.Series(values=map(str, paths)))]),
+            plc.Column.from_arrow(
+                pl.Series(values=rows_per_path, dtype=pl.datatypes.Int32())
+            ),
         ).columns()
         dtype = DataType(pl.String())
         return df.with_columns([Column(filepaths, name=name, dtype=dtype)])
@@ -2239,11 +2239,10 @@ class MapFunction(IR):
             (variable_column,) = plc.filling.repeat(
                 plc.Table(
                     [
-                        plc.interop.from_arrow(
-                            pa.array(
-                                pivotees,
-                                type=plc.interop.to_arrow(schema[variable_name].plc),
-                            ),
+                        plc.Column.from_arrow(
+                            pl.Series(
+                                values=pivotees, dtype=schema[variable_name].polars
+                            )
                         )
                     ]
                 ),
