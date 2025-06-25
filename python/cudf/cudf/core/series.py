@@ -328,12 +328,6 @@ class _SeriesLocIndexer(_FrameIndexer):
             arg = arg[0]
         if _is_scalar_or_zero_d_array(arg):
             index_dtype = self._frame.index.dtype
-            warn_msg = (
-                "Series.__getitem__ treating keys as positions is deprecated. "
-                "In a future version, integer keys will always be treated "
-                "as labels (consistent with DataFrame behavior). To access "
-                "a value by position, use `ser.iloc[pos]`"
-            )
             if not is_dtype_obj_numeric(
                 index_dtype, include_decimal=False
             ) and not (
@@ -345,6 +339,12 @@ class _SeriesLocIndexer(_FrameIndexer):
                     # Do not remove until pandas 3.0 support is added.
                     assert PANDAS_LT_300, (
                         "Need to drop after pandas-3.0 support is added."
+                    )
+                    warn_msg = (
+                        "Series.__getitem__ treating keys as positions is deprecated. "
+                        "In a future version, integer keys will always be treated "
+                        "as labels (consistent with DataFrame behavior). To access "
+                        "a value by position, use `ser.iloc[pos]`"
                     )
                     warnings.warn(warn_msg, FutureWarning)
                     return arg

@@ -257,7 +257,7 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
     def __getitem__(self, arg):
         if isinstance(self._frame.index, MultiIndex):
             # This try/except block allows the use of pandas-like
-            # tuple arguments into MultiIndex dataframes.
+            # tuple arguments to index into MultiIndex dataframes.
             try:
                 return self._getitem_tuple_arg(arg)
             except (TypeError, KeyError, IndexError, ValueError):
