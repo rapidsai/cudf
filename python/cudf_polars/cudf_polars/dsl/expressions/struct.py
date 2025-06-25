@@ -85,10 +85,13 @@ class StructFunction(Expr):
         columns = [child.evaluate(df, context=context) for child in self.children]
         (column,) = columns
         if self.name == StructFunction.Name.FieldByIndex:
-            return Column(column.obj.children()[self.options[0]])
+            return Column(column.obj.children()[self.options[0]], dtype=self.dtype)
         elif self.name == StructFunction.Name.FieldByName:
             field_names = [field.name for field in self.children[0].dtype.polars.fields]
-            return Column(column.obj.children()[field_names.index(self.options[0])])
+            return Column(
+                column.obj.children()[field_names.index(self.options[0])],
+                dtype=self.dtype,
+            )
         elif self.name == StructFunction.Name.JsonEncode:
             buff = StringIO()
             target = plc.io.SinkInfo([buff])
@@ -107,7 +110,10 @@ class StructFunction(Expr):
                 .build()
             )
             plc.io.json.write_json(options)
-            return Column(plc.Column.from_iterable_of_py(buff.getvalue().split()))
+            return Column(
+                plc.Column.from_iterable_of_py(buff.getvalue().split()),
+                dtype=self.dtype,
+            )
         elif self.name in {
             StructFunction.Name.RenameFields,
             StructFunction.Name.PrefixFields,

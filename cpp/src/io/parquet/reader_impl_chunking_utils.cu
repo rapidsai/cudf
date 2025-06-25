@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
+#include "io/comp/decompression.hpp"
 #include "io/comp/gpuinflate.hpp"
-#include "io/comp/io_uncomp.hpp"
 #include "io/utilities/time_utils.cuh"
 #include "reader_impl_chunking.hpp"
 #include "reader_impl_chunking_utils.cuh"
@@ -23,7 +23,6 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
-#include <cudf/io/config_utils.hpp>
 #include <cudf/io/parquet.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
@@ -42,8 +41,8 @@
 
 namespace cudf::io::parquet::detail {
 
-using cudf::io::detail::compression_result;
-using cudf::io::detail::compression_status;
+using cudf::io::detail::codec_exec_result;
+using cudf::io::detail::codec_status;
 using cudf::io::detail::decompression_info;
 
 #if defined(CHUNKING_DEBUG)
@@ -80,9 +79,9 @@ void print_cumulative_page_info(device_span<PageInfo const> d_pages,
   }
 }
 
-void print_cumulative_row_info(host_span<cumulative_page_info const> sizes,
-                               std::string const& label,
-                               std::optional<std::vector<row_range>> splits = std::nullopt)
+void print_cumulative_page_info(host_span<cumulative_page_info const> sizes,
+                                std::string const& label,
+                                std::optional<std::vector<row_range>> splits = std::nullopt)
 {
   if (splits.has_value()) {
     std::cout << "------------\nSplits (skip_rows, num_rows)\n";
@@ -330,7 +329,10 @@ std::tuple<rmm::device_uvector<page_span>, size_t, size_t> compute_next_subpass(
 
   // bring back to the cpu
   auto const h_aggregated_info = cudf::detail::make_host_vector(aggregated_info, stream);
-  // print_cumulative_row_info(h_aggregated_info, "adjusted");
+
+#if defined(CHUNKING_DEBUG)
+  print_cumulative_page_info(h_aggregated_info, "adjusted");
+#endif  // CHUNKING_DEBUG
 
   // TODO: if the user has explicitly specified skip_rows/num_rows we could be more intelligent
   // about skipping subpasses/pages that do not fall within the range of values, but only if the
@@ -379,7 +381,10 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
 
   // bring back to the cpu
   auto const h_aggregated_info = cudf::detail::make_host_vector(aggregated_info, stream);
-  // print_cumulative_row_info(h_aggregated_info, "adjusted");
+
+#if defined(CHUNKING_DEBUG)
+  print_cumulative_page_info(h_aggregated_info, "adjusted");
+#endif  // CHUNKING_DEBUG
 
   std::vector<row_range> splits;
   // note: we are working with absolute row indices so skip_rows represents the absolute min row
@@ -398,7 +403,10 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
     cur_pos             = split_pos;
     cur_cumulative_size = h_aggregated_info[split_pos].size_bytes;
   }
-  // print_cumulative_row_info(h_aggregated_info, "adjusted w/splits", splits);
+
+#if defined(CHUNKING_DEBUG)
+  print_cumulative_page_info(h_aggregated_info, "adjusted w/splits", splits);
+#endif  // CHUNKING_DEBUG
 
   return splits;
 }
@@ -539,11 +547,11 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
     comp_in, stream, cudf::get_current_device_resource_ref());
   auto const d_comp_out = cudf::detail::make_device_uvector_async(
     comp_out, stream, cudf::get_current_device_resource_ref());
-  rmm::device_uvector<compression_result> comp_res(num_comp_pages, stream);
+  rmm::device_uvector<codec_exec_result> comp_res(num_comp_pages, stream);
   thrust::uninitialized_fill(rmm::exec_policy_nosync(stream),
                              comp_res.begin(),
                              comp_res.end(),
-                             compression_result{0, compression_status::FAILURE});
+                             codec_exec_result{0, codec_status::FAILURE});
 
   int32_t start_pos = 0;
   for (auto const& codec : codecs) {
@@ -555,7 +563,7 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
                                                                  codec.num_pages};
     device_span<device_span<uint8_t> const> d_comp_out_view(d_comp_out.data() + start_pos,
                                                             codec.num_pages);
-    device_span<compression_result> d_comp_res_view(comp_res.data() + start_pos, codec.num_pages);
+    device_span<codec_exec_result> d_comp_res_view(comp_res.data() + start_pos, codec.num_pages);
     cudf::io::detail::decompress(from_parquet_compression(codec.compression_type),
                                  d_comp_in_view,
                                  d_comp_out_view,
@@ -576,13 +584,12 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
     cudf::io::detail::gpu_copy_uncompressed_blocks(d_copy_in, d_copy_out, stream);
   }
 
-  CUDF_EXPECTS(thrust::all_of(rmm::exec_policy(stream),
-                              comp_res.begin(),
-                              comp_res.end(),
-                              [] __device__(auto const& res) {
-                                return res.status == compression_status::SUCCESS;
-                              }),
-               "Error during decompression");
+  CUDF_EXPECTS(
+    thrust::all_of(rmm::exec_policy(stream),
+                   comp_res.begin(),
+                   comp_res.end(),
+                   [] __device__(auto const& res) { return res.status == codec_status::SUCCESS; }),
+    "Error during decompression");
 
   return {std::move(pass_decomp_pages), std::move(subpass_decomp_pages)};
 }
