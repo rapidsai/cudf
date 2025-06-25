@@ -101,31 +101,6 @@ TEST_F(DistinctJoinTest, IntegerInnerJoin)
   this->compare_to_reference(build_table, probe_table, result, cudf::table_view{{gold->view()}});
 }
 
-TEST_F(DistinctJoinTest, MultiColumnIntegerInnerJoin)
-{
-  auto constexpr size = 2024;
-
-  auto const init = cudf::numeric_scalar<int32_t>{0};
-
-  auto build_col0 = cudf::sequence(size, init, cudf::numeric_scalar<int32_t>{1});
-  auto build_col1 = cudf::sequence(size, init, cudf::numeric_scalar<int32_t>{1});
-  auto probe_col0 = cudf::sequence(size, init, cudf::numeric_scalar<int32_t>{2});
-  auto probe_col1 = cudf::sequence(size, init, cudf::numeric_scalar<int32_t>{2});
-
-  auto build_table = cudf::table_view{{build_col0->view(), build_col1->view()}};
-  auto probe_table = cudf::table_view{{probe_col0->view(), probe_col1->view()}};
-
-  auto distinct_join = cudf::distinct_hash_join{build_table};
-
-  auto result = distinct_join.inner_join(probe_table);
-
-  auto constexpr gold_size = size / 2;
-  auto gold_col0           = cudf::sequence(gold_size, init, cudf::numeric_scalar<int32_t>{2});
-  auto gold_col1           = cudf::sequence(gold_size, init, cudf::numeric_scalar<int32_t>{2});
-  auto gold_table          = cudf::table_view{{gold_col0->view(), gold_col1->view()}};
-  this->compare_to_reference(build_table, probe_table, result, gold_table);
-}
-
 TEST_F(DistinctJoinTest, InnerJoinNoNulls)
 {
   column_wrapper<int32_t> col0_0{{1, 2, 3, 4, 5}};
@@ -168,6 +143,48 @@ TEST_F(DistinctJoinTest, InnerJoinNoNulls)
   this->compare_to_reference(build.view(), probe.view(), result, gold.view());
 }
 
+TEST_F(DistinctJoinTest, PrimitiveInnerJoinNoNulls)
+{
+  column_wrapper<int32_t> col0_0{{1, 2, 3, 4, 5}};
+  column_wrapper<int32_t> col0_1({0, 0, 3, 4, 5});
+  column_wrapper<int32_t> col0_2({9, 9, 9, 9, 9});
+
+  column_wrapper<int32_t> col1_0{{1, 2, 3, 4, 9}};
+  column_wrapper<int32_t> col1_1({0, 0, 0, 4, 4});
+  column_wrapper<int32_t> col1_2({9, 9, 9, 0, 9});
+
+  CVector cols0, cols1;
+  cols0.push_back(col0_0.release());
+  cols0.push_back(col0_1.release());
+  cols0.push_back(col0_2.release());
+  cols1.push_back(col1_0.release());
+  cols1.push_back(col1_1.release());
+  cols1.push_back(col1_2.release());
+
+  Table build(std::move(cols0));
+  Table probe(std::move(cols1));
+
+  auto distinct_join = cudf::distinct_hash_join{build.view()};
+  auto result        = distinct_join.inner_join(probe.view());
+
+  column_wrapper<int32_t> col_gold_0{{1, 2}};
+  column_wrapper<int32_t> col_gold_1({0, 0});
+  column_wrapper<int32_t> col_gold_2{{9, 9}};
+  column_wrapper<int32_t> col_gold_3{{1, 2}};
+  column_wrapper<int32_t> col_gold_4({0, 0});
+  column_wrapper<int32_t> col_gold_5{{9, 9}};
+  CVector cols_gold;
+  cols_gold.push_back(col_gold_0.release());
+  cols_gold.push_back(col_gold_1.release());
+  cols_gold.push_back(col_gold_2.release());
+  cols_gold.push_back(col_gold_3.release());
+  cols_gold.push_back(col_gold_4.release());
+  cols_gold.push_back(col_gold_5.release());
+  Table gold(std::move(cols_gold));
+
+  this->compare_to_reference(build.view(), probe.view(), result, gold.view());
+}
+
 TEST_F(DistinctJoinTest, InnerJoinWithNulls)
 {
   column_wrapper<int32_t> col0_0{{3, 1, 2, 0, 2}};
@@ -195,6 +212,55 @@ TEST_F(DistinctJoinTest, InnerJoinWithNulls)
   column_wrapper<int32_t> col_gold_2{{1, 1}};
   column_wrapper<int32_t> col_gold_3{{3, 2}};
   strcol_wrapper col_gold_4({"s1", "s0"}, {true, true});
+  column_wrapper<int32_t> col_gold_5{{1, 1}};
+  CVector cols_gold;
+  cols_gold.push_back(col_gold_0.release());
+  cols_gold.push_back(col_gold_1.release());
+  cols_gold.push_back(col_gold_2.release());
+  cols_gold.push_back(col_gold_3.release());
+  cols_gold.push_back(col_gold_4.release());
+  cols_gold.push_back(col_gold_5.release());
+  Table gold(std::move(cols_gold));
+
+  // Test with different load factors
+  std::vector<double> load_factors = {0.5, 1.0};
+
+  for (auto load_factor : load_factors) {
+    auto distinct_join =
+      cudf::distinct_hash_join{build.view(), cudf::null_equality::EQUAL, load_factor};
+    auto result = distinct_join.inner_join(probe.view());
+
+    this->compare_to_reference(build.view(), probe.view(), result, gold.view());
+  }
+}
+
+TEST_F(DistinctJoinTest, PrimitiveInnerJoinWithNulls)
+{
+  column_wrapper<int32_t> col0_0{{3, 1, 2, 0, 2}};
+  column_wrapper<int32_t> col0_1({1, 1, 0, 4, 0}, {true, true, false, true, true});
+  column_wrapper<int32_t> col0_2{{1, 1, 2, 4, 1}};
+
+  column_wrapper<int32_t> col1_0{{1, 2, 0, 2, 3}};
+  column_wrapper<int32_t> col1_1({1, 0, 1, 0, 1});
+  column_wrapper<int32_t> col1_2{{1, 1, 1, 1, 1}, {false, true, true, false, true}};
+
+  CVector cols0, cols1;
+  cols0.push_back(col0_0.release());
+  cols0.push_back(col0_1.release());
+  cols0.push_back(col0_2.release());
+  cols1.push_back(col1_0.release());
+  cols1.push_back(col1_1.release());
+  cols1.push_back(col1_2.release());
+
+  Table build(std::move(cols0));
+  Table probe(std::move(cols1));
+
+  // Create gold table once
+  column_wrapper<int32_t> col_gold_0{{3, 2}};
+  column_wrapper<int32_t> col_gold_1({1, 0}, {true, true});
+  column_wrapper<int32_t> col_gold_2{{1, 1}};
+  column_wrapper<int32_t> col_gold_3{{3, 2}};
+  column_wrapper<int32_t> col_gold_4({1, 0}, {true, true});
   column_wrapper<int32_t> col_gold_5{{1, 1}};
   CVector cols_gold;
   cols_gold.push_back(col_gold_0.release());
@@ -433,6 +499,42 @@ TEST_F(DistinctJoinTest, LeftJoinNoNulls)
     build.view(), probe.view(), gather_map, gold.view(), cudf::out_of_bounds_policy::NULLIFY);
 }
 
+TEST_F(DistinctJoinTest, PrimitiveLeftJoinNoNulls)
+{
+  column_wrapper<int32_t> col0_0({3, 1, 2, 0, 3});
+  column_wrapper<int32_t> col0_1({0, 1, 2, 4, 1});
+
+  column_wrapper<int32_t> col1_0({2, 2, 0, 4, 3});
+  column_wrapper<int32_t> col1_1({1, 0, 1, 2, 1});
+
+  CVector cols0, cols1;
+  cols0.push_back(col0_0.release());
+  cols0.push_back(col0_1.release());
+  cols1.push_back(col1_0.release());
+  cols1.push_back(col1_1.release());
+
+  Table probe(std::move(cols0));
+  Table build(std::move(cols1));
+
+  column_wrapper<int32_t> col_gold_0({3, 1, 2, 0, 3});
+  column_wrapper<int32_t> col_gold_1({0, 1, 2, 4, 1});
+  column_wrapper<int32_t> col_gold_2{{-1, -1, -1, -1, 3}, {false, false, false, false, true}};
+  column_wrapper<int32_t> col_gold_3{{-1, -1, -1, -1, 1}, {false, false, false, false, true}};
+  CVector cols_gold;
+  cols_gold.push_back(col_gold_0.release());
+  cols_gold.push_back(col_gold_1.release());
+  cols_gold.push_back(col_gold_2.release());
+  cols_gold.push_back(col_gold_3.release());
+  Table gold(std::move(cols_gold));
+
+  auto distinct_join = cudf::distinct_hash_join{build.view()};
+  auto result        = distinct_join.left_join(probe.view());
+  auto gather_map    = std::pair{get_left_indices(result->size()), std::move(result)};
+
+  this->compare_to_reference(
+    build.view(), probe.view(), gather_map, gold.view(), cudf::out_of_bounds_policy::NULLIFY);
+}
+
 TEST_F(DistinctJoinTest, LeftJoinWithNulls)
 {
   column_wrapper<int32_t> col0_0{{3, 1, 2, 0, 2}};
@@ -458,6 +560,43 @@ TEST_F(DistinctJoinTest, LeftJoinWithNulls)
   strcol_wrapper col_gold_1({"s1", "s1", "", "s4", "s0"}, {true, true, false, true, true});
   column_wrapper<int32_t> col_gold_2{{3, -1, -1, -1, 2}, {true, false, false, false, true}};
   strcol_wrapper col_gold_3{{"s1", "", "", "", "s0"}, {true, false, false, false, true}};
+
+  CVector cols_gold;
+  cols_gold.push_back(col_gold_0.release());
+  cols_gold.push_back(col_gold_1.release());
+  cols_gold.push_back(col_gold_2.release());
+  cols_gold.push_back(col_gold_3.release());
+  Table gold(std::move(cols_gold));
+
+  this->compare_to_reference(
+    build.view(), probe.view(), gather_map, gold.view(), cudf::out_of_bounds_policy::NULLIFY);
+}
+
+TEST_F(DistinctJoinTest, PrimitiveLeftJoinWithNulls)
+{
+  column_wrapper<int32_t> col0_0{{3, 1, 2, 0, 2}};
+  column_wrapper<int32_t> col0_1({1, 1, -1, 4, 0}, {true, true, false, true, true});
+
+  column_wrapper<int32_t> col1_0{{2, 2, 0, 4, 3}};
+  column_wrapper<int32_t> col1_1({1, 0, 1, 2, 1});
+
+  CVector cols0, cols1;
+  cols0.push_back(col0_0.release());
+  cols0.push_back(col0_1.release());
+  cols1.push_back(col1_0.release());
+  cols1.push_back(col1_1.release());
+
+  Table probe(std::move(cols0));
+  Table build(std::move(cols1));
+
+  auto distinct_join = cudf::distinct_hash_join{build.view()};
+  auto result        = distinct_join.left_join(probe.view());
+  auto gather_map    = std::pair{get_left_indices(result->size()), std::move(result)};
+
+  column_wrapper<int32_t> col_gold_0{{3, 1, 2, 0, 2}, {true, true, true, true, true}};
+  column_wrapper<int32_t> col_gold_1({1, 1, -1, 4, 0}, {true, true, false, true, true});
+  column_wrapper<int32_t> col_gold_2{{3, -1, -1, -1, 2}, {true, false, false, false, true}};
+  column_wrapper<int32_t> col_gold_3({1, -1, -1, -1, 0}, {true, false, false, false, true});
 
   CVector cols_gold;
   cols_gold.push_back(col_gold_0.release());
