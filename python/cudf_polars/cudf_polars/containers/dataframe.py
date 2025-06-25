@@ -18,12 +18,40 @@ from cudf_polars.utils import conversion
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping, Sequence, Set
 
-    from typing_extensions import Any, Self
+    from typing_extensions import Any, CapsuleType, Self
 
     from cudf_polars.typing import ColumnOptions, DataFrameHeader, Slice
 
 
 __all__: list[str] = ["DataFrame"]
+
+
+def _create_polars_column_metadata(
+    name: str | None, dtype: pl.DataType | None
+) -> plc.interop.ColumnMetadata:
+    """Create ColumnMetadata preserving pl.Struct field names."""
+    if isinstance(dtype, pl.Struct):
+        children_meta = [
+            _create_polars_column_metadata(field.name, field.dtype)
+            for field in dtype.fields
+        ]
+    else:
+        children_meta = []
+    return plc.interop.ColumnMetadata(name=name, children_meta=children_meta)
+
+
+# This is also defined in pylibcudf.interop
+class _ObjectWithArrowMetadata:
+    def __init__(
+        self, obj: plc.Table, metadata: list[plc.interop.ColumnMetadata]
+    ) -> None:
+        self.obj = obj
+        self.metadata = metadata
+
+    def __arrow_c_array__(
+        self, requested_schema: None = None
+    ) -> tuple[CapsuleType, CapsuleType]:
+        return self.obj._to_schema(self.metadata), self.obj._to_host_array()
 
 
 # Pacify the type checker. DataFrame init asserts that all the columns
@@ -60,13 +88,16 @@ class DataFrame:
         # To guarantee we produce correct names, we therefore
         # serialise with names we control and rename with that map.
         name_map = {f"column_{i}": name for i, name in enumerate(self.column_map)}
-        table = plc.interop.to_arrow(
-            self.table,
-            [plc.interop.ColumnMetadata(name=name) for name in name_map],
-        )
-        # from_arrow returns DataFrame | Series, but we know that it's a
-        # DataFrame since the input was a Table.
-        df = cast(pl.DataFrame, pl.from_arrow(table))
+        metadata = [
+            _create_polars_column_metadata(
+                name,
+                # Can remove the getattr if we ever consistently set Column.dtype
+                getattr(col.dtype, "polars", None),
+            )
+            for name, col in zip(name_map, self.columns, strict=True)
+        ]
+        table_with_metadata = _ObjectWithArrowMetadata(self.table, metadata)
+        df = pl.DataFrame(table_with_metadata)
         return df.rename(name_map).with_columns(
             pl.col(c.name).set_sorted(descending=c.order == plc.types.Order.DESCENDING)
             if c.is_sorted

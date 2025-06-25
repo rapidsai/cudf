@@ -24,6 +24,8 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/utilities/integer_utils.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+
 #include <cuda/functional>
 #include <thrust/binary_search.h>
 
