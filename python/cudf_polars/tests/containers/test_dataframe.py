@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 
-import pyarrow as pa
 import pytest
 
 import polars as pl
@@ -175,19 +174,18 @@ def test_empty_name_roundtrips_no_overlap():
 
 
 @pytest.mark.parametrize(
-    "arrow_tbl",
+    "polars_tbl",
     [
-        pa.table([]),
-        pa.table({"a": [1, 2, 3], "b": [4, 5, 6], "c": [7, 8, 9]}),
-        pa.table({"a": [1, 2, 3]}),
-        pa.table({"a": [1], "b": [2], "c": [3]}),
-        pa.table({"a": ["a", "bb", "ccc"]}),
-        pa.table({"a": [1, 2, None], "b": [None, 3, 4]}),
+        pl.DataFrame(),
+        pl.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6], "c": [7, 8, 9]}),
+        pl.DataFrame({"a": [1, 2, 3]}),
+        pl.DataFrame({"a": [1], "b": [2], "c": [3]}),
+        pl.DataFrame({"a": ["a", "bb", "ccc"]}),
+        pl.DataFrame({"a": [1, 2, None], "b": [None, 3, 4]}),
     ],
 )
-def test_serialization_roundtrip(arrow_tbl):
-    plc_tbl = plc.Table.from_arrow(arrow_tbl)
-    df = DataFrame.from_table(plc_tbl, names=arrow_tbl.column_names)
+def test_serialization_roundtrip(polars_tbl):
+    df = DataFrame.from_polars(polars_tbl)
 
     header, frames = df.serialize()
     res = DataFrame.deserialize(header, frames)

@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 
-import pyarrow
 import pytest
 
 import polars as pl
@@ -71,21 +70,23 @@ def test_shallow_copy():
 @pytest.mark.parametrize("typeid", [pl.Int8(), pl.Float32()])
 def test_mask_nans(typeid):
     dtype = DataType(typeid)
-    values = pyarrow.array([0, 0, 0], type=plc.interop.to_arrow(dtype.plc))
-    column = Column(plc.Column.from_arrow(values), dtype=dtype)
+    column = Column(
+        plc.Column.from_iterable_of_py([0, 0, 0], dtype=dtype.plc), dtype=dtype
+    )
     masked = column.mask_nans()
     assert column.null_count == masked.null_count
 
 
 def test_mask_nans_float():
     dtype = DataType(pl.Float32())
-    values = pyarrow.array([0, 0, float("nan")], type=plc.interop.to_arrow(dtype.plc))
-    column = Column(plc.Column.from_arrow(values), dtype=dtype)
+    column = Column(
+        plc.Column.from_iterable_of_py([0, 0, float("nan")], dtype=dtype.plc),
+        dtype=dtype,
+    )
     masked = column.mask_nans()
-    expect = pyarrow.array([0, 0, None], type=plc.interop.to_arrow(dtype.plc))
-    got = pyarrow.array(plc.interop.to_arrow(masked.obj))
-
-    assert expect == got
+    assert masked.nan_count == 0
+    assert masked.slice((0, 2)).null_count == 0
+    assert masked.slice((2, 1)).null_count == 1
 
 
 def test_slice_none_returns_self():
