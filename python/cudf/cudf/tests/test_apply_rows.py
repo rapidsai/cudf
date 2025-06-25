@@ -1,4 +1,6 @@
 # Copyright (c) 2019-2025, NVIDIA CORPORATION.
+import warnings
+
 import numpy as np
 import pytest
 
@@ -48,12 +50,14 @@ def test_dataframe_apply_rows(dtype, has_nulls, pessimistic):
         {"a": gdf_series_a, "b": gdf_series_b, "c": gdf_series_c}
     )
 
-    df_actual = df_original.apply_rows(
-        _kernel_multiply,
-        ["a", "b"],
-        {"out": dtype},
-        {},
-        pessimistic_nulls=pessimistic,
-    )
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", FutureWarning)
+        df_actual = df_original.apply_rows(
+            _kernel_multiply,
+            ["a", "b"],
+            {"out": dtype},
+            {},
+            pessimistic_nulls=pessimistic,
+        )
 
     assert_eq(df_expected, df_actual)
