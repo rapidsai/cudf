@@ -14,6 +14,7 @@ if TYPE_CHECKING:
     from cudf_polars.dsl.ir import IR
     from cudf_polars.experimental.base import PartitionInfo, StatsCollector
     from cudf_polars.typing import GenericTransformer
+    from cudf_polars.utils.config import ConfigOptions
 
 
 LowerIRTransformer: TypeAlias = (
@@ -85,7 +86,9 @@ def generate_ir_tasks(
 
 
 @singledispatch
-def add_source_stats(ir: IR, stats: StatsCollector) -> None:
+def add_source_stats(
+    ir: IR, stats: StatsCollector, config_options: ConfigOptions
+) -> None:
     """
     Add basic source statistics for an IR node.
 
@@ -96,5 +99,7 @@ def add_source_stats(ir: IR, stats: StatsCollector) -> None:
     stats
         The `StatsCollector` object to update with new
         source statistics.
+    config_options
+        GPUEngine configuration options.
     """
     raise AssertionError(f"Unhandled type {type(ir)}")  # pragma: no cover

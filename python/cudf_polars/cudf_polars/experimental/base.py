@@ -12,7 +12,6 @@ if TYPE_CHECKING:
     from cudf_polars.dsl.expr import NamedExpr
     from cudf_polars.dsl.ir import IR
     from cudf_polars.dsl.nodebase import Node
-    from cudf_polars.utils.config import ConfigOptions
 
 
 class PartitionInfo:
@@ -129,9 +128,8 @@ class ColumnStats:
 class StatsCollector:
     """Column statistics collector."""
 
-    __slots__ = ("cardinality", "column_stats", "config_options")
+    __slots__ = ("cardinality", "column_stats")
 
-    def __init__(self, config_options: ConfigOptions) -> None:
-        self.config_options = config_options
+    def __init__(self) -> None:
         self.cardinality: dict[IR, int] = {}
         self.column_stats: dict[IR, dict[str, ColumnStats]] = {}
