@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from datetime import timedelta
 
-import numpy as np
 import pytest
 
 import polars as pl
@@ -53,9 +52,8 @@ def ldf(with_nulls, dtype):
         values.append(float("nan"))
         values.append(float("inf"))
     elif dtype == pl.Int32:
-        iinfo = np.iinfo("int32")
-        values.append(iinfo.min)
-        values.append(iinfo.max)
+        values.append(-2_147_483_648)
+        values.append(2_147_483_647)
     return pl.LazyFrame(
         {
             "a": pl.Series(values, dtype=dtype),
