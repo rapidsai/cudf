@@ -86,7 +86,7 @@ pr_df["GPU Usage"] = (
 # Calculate average usages
 cpu_usage_mean = pr_df["CPU Usage"].mean().round(2)
 gpu_usage_mean = pr_df["GPU Usage"].mean().round(2)
-gpu_usage_rate_change = abs(
+gpu_usage_rate_change = (
     pr_df["GPU Usage"].mean() - main_df["GPU Usage"].mean()
 ).round(2)
 
