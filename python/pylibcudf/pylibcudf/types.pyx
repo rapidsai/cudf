@@ -67,6 +67,8 @@ try:
 except ImportError as e:
     pa = None
     pa_err = e
+    ARROW_TO_PYLIBCUDF_TYPES = {}
+    LIBCUDF_TO_ARROW_TYPES = {}
 
 
 __all__ = [
