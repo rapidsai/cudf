@@ -15,6 +15,7 @@
  */
 
 #include <benchmarks/common/generate_input.hpp>
+#include <benchmarks/common/nvbench_utilities.hpp>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
 
 #include <cudf/detail/null_mask.cuh>
@@ -36,7 +37,7 @@ struct anding {
   }
 };
 
-void BM_segmented_bitmask_and(nvbench::state& state)
+auto setup_masks(nvbench::state& state)
 {
   unsigned seed = 12345;
 
@@ -46,6 +47,7 @@ void BM_segmented_bitmask_and(nvbench::state& state)
     static_cast<size_t>(state.get_int64("expected_masks_per_segment"));
   auto const mask_size_bits = static_cast<size_t>(state.get_int64("mask_size_bits"));
 
+  // Create segments
   std::mt19937 generator(seed);
   std::normal_distribution normal_dist(static_cast<double>(expected_masks_per_segment), 1.0);
   std::vector<cudf::size_type> segments(num_segments + 1);
@@ -57,6 +59,7 @@ void BM_segmented_bitmask_and(nvbench::state& state)
   });
   std::exclusive_scan(segments.begin(), segments.end(), segments.begin(), 0);
 
+  // Create masks
   std::vector<rmm::device_buffer> masks;
   std::vector<cudf::bitmask_type*> mask_pointers;
   masks.reserve(num_masks);
@@ -66,34 +69,78 @@ void BM_segmented_bitmask_and(nvbench::state& state)
     return std::move(mask_pair.first);
   });
 
+  // Create mask offsets
   std::vector<cudf::size_type> mask_begin_bits(num_masks, 0);
 
+  // Total bytes processed
   auto const data_bytes = num_masks * std::ceil(static_cast<double>(mask_size_bits) / 8) +
                           (sizeof(cudf::size_type) * (num_masks + num_segments));
+
+  return std::tuple{std::move(segments),
+                    std::move(masks),
+                    std::move(mask_pointers),
+                    std::move(mask_begin_bits),
+                    data_bytes};
+}
+
+void BM_segmented_bitmask_and(nvbench::state& state)
+{
+  auto const mask_size_bits = static_cast<size_t>(state.get_int64("mask_size_bits"));
+
+  auto [segments, masks, mask_pointers, mask_begin_bits, data_bytes] = setup_masks(state);
+
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
   state.add_element_count(data_bytes, "input size");
   state.template add_global_memory_reads<nvbench::int8_t>(data_bytes);
-  state.exec(
-    nvbench::exec_tag::sync | nvbench::exec_tag::timer, [&](nvbench::launch& launch, auto& timer) {
-      timer.start();
-      auto result = cudf::detail::segmented_bitmask_binop(anding{},
-                                                          mask_pointers,
-                                                          mask_begin_bits,
-                                                          mask_size_bits,
-                                                          segments,
-                                                          cudf::get_default_stream(),
-                                                          cudf::get_current_device_resource_ref());
-      timer.stop();
-    });
-  auto const time = state.get_summary("nv/cold/time/gpu/mean").get_float64("value");
-  state.add_element_count((static_cast<double>(data_bytes) / (1024 * 1024)) / time,
-                          "Mbytes_per_second");
+  state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
+    auto result = cudf::detail::segmented_bitmask_binop(anding{},
+                                                        mask_pointers,
+                                                        mask_begin_bits,
+                                                        mask_size_bits,
+                                                        segments,
+                                                        cudf::get_default_stream(),
+                                                        cudf::get_current_device_resource_ref());
+  });
+  set_throughputs(state);
+}
+
+void BM_multi_segment_bitmask_and(nvbench::state& state)
+{
+  auto const mask_size_bits = static_cast<size_t>(state.get_int64("mask_size_bits"));
+  auto const num_segments   = static_cast<size_t>(state.get_int64("num_segments"));
+
+  auto [segments, masks, mask_pointers, mask_begin_bits, data_bytes] = setup_masks(state);
+
+  state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
+  state.add_element_count(data_bytes, "input size");
+  state.template add_global_memory_reads<nvbench::int8_t>(data_bytes);
+  state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
+    for (size_t i = 0; i < num_segments; i++) {
+      auto segment_size = segments[i + 1] - segments[i];
+      if (segment_size) {
+        auto result = cudf::detail::bitmask_binop(
+          anding{},
+          cudf::host_span<cudf::bitmask_type*>(mask_pointers.data() + segments[i], segment_size),
+          cudf::host_span<cudf::size_type>(mask_begin_bits.data() + segments[i], segment_size),
+          mask_size_bits,
+          cudf::get_default_stream(),
+          cudf::get_current_device_resource_ref());
+      }
+    }
+  });
+  set_throughputs(state);
 }
 
 }  // anonymous namespace
 
 NVBENCH_BENCH(BM_segmented_bitmask_and)
   .set_name("segmented_bitmask_and")
-  .add_int64_axis("num_segments", {10, 100, 1000, 10000})
-  .add_int64_axis("expected_masks_per_segment", {4, 8})
-  .add_int64_axis("mask_size_bits", {64, 128, 512, 1024});
+  .add_int64_axis("num_segments", {100, 1000, 10000})
+  .add_int64_axis("expected_masks_per_segment", {4, 8, 16})
+  .add_int64_axis("mask_size_bits", {32, 64, 128});
+
+NVBENCH_BENCH(BM_multi_segment_bitmask_and)
+  .set_name("multi_segment_bitmask_and")
+  .add_int64_axis("num_segments", {100, 1000, 10000})
+  .add_int64_axis("expected_masks_per_segment", {4, 8, 16})
+  .add_int64_axis("mask_size_bits", {32, 64, 128});
