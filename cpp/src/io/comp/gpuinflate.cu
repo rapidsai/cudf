@@ -1245,11 +1245,18 @@ sorted_codec_parameters sort_tasks(device_span<device_span<uint8_t const> const>
                });
 
   auto sorted_inputs = rmm::device_uvector<device_span<uint8_t const>>(inputs.size(), stream);
-  thrust::gather(
-    rmm::exec_policy(stream), order.begin(), order.end(), inputs.begin(), sorted_inputs.begin());
+  thrust::gather(rmm::exec_policy_nosync(stream),
+                 order.begin(),
+                 order.end(),
+                 inputs.begin(),
+                 sorted_inputs.begin());
+
   auto sorted_outputs = rmm::device_uvector<device_span<uint8_t>>(outputs.size(), stream);
-  thrust::gather(
-    rmm::exec_policy(stream), order.begin(), order.end(), outputs.begin(), sorted_outputs.begin());
+  thrust::gather(rmm::exec_policy_nosync(stream),
+                 order.begin(),
+                 order.end(),
+                 outputs.begin(),
+                 sorted_outputs.begin());
 
   return {std::move(sorted_inputs), std::move(sorted_outputs), std::move(order)};
 }
@@ -1259,11 +1266,11 @@ void copy_results_to_original_order(device_span<codec_exec_result const> sorted_
                                     device_span<std::size_t const> order,
                                     rmm::cuda_stream_view stream)
 {
-  thrust::for_each_n(
-    rmm::exec_policy_nosync(stream),
-    thrust::counting_iterator<std::size_t>(0),
-    order.size(),
-    [=] __device__(std::size_t i) { original_results[order[i]] = sorted_results[i]; });
+  thrust::scatter(rmm::exec_policy_nosync(stream),
+                  sorted_results.begin(),
+                  sorted_results.end(),
+                  order.begin(),
+                  original_results.begin());
 }
 
 }  // namespace cudf::io::detail
