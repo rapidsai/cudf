@@ -9,8 +9,9 @@ import pandas as pd
 import pytest
 
 import cudf
+from cudf.core._compat import PANDAS_GE_230
 from cudf.testing import _utils as utils, assert_eq
-from cudf.testing._utils import assert_exceptions_equal
+from cudf.testing._utils import assert_exceptions_equal, expect_warning_if
 
 _TIMEDELTA_DATA = [
     [1000000, 200000, 3000000],
@@ -541,7 +542,13 @@ def test_timedelta_reduction_ops(data, dtype, reduction_op):
         with pytest.warns(RuntimeWarning, match="Mean of empty slice"):
             expected = getattr(psr, reduction_op)()
     else:
-        expected = getattr(psr, reduction_op)()
+        with expect_warning_if(
+            PANDAS_GE_230
+            and reduction_op == "quantile"
+            and len(data) == 0
+            and dtype != "timedelta64[ns]"
+        ):
+            expected = getattr(psr, reduction_op)()
     actual = getattr(gsr, reduction_op)()
     if pd.isna(expected) and pd.isna(actual):
         pass
