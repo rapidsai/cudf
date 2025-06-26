@@ -42,14 +42,15 @@ class _RollingBase:
 
     def _apply_agg(self, agg_name: str, **agg_kwargs) -> DataFrame | Series:
         applied = (
-            self._apply_agg_column(col, agg_name) for col in self.obj._columns
+            self._apply_agg_column(col, agg_name, **agg_kwargs)
+            for col in self.obj._columns
         )
         return self.obj._from_data_like_self(
             self.obj._data._from_columns_like_self(applied)
         )
 
 
-class Rolling(GetAttrGetItemMixin, Reducible):
+class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
     """
     Rolling window calculations.
 
@@ -259,15 +260,6 @@ class Rolling(GetAttrGetItemMixin, Reducible):
             window=self.window,
             min_periods=self.min_periods,
             center=self.center,
-        )
-
-    def _apply_agg(self, agg_name: str, **agg_kwargs) -> DataFrame | Series:
-        applied = (
-            self._apply_agg_column(col, agg_name, **agg_kwargs)
-            for col in self.obj._columns
-        )
-        return self.obj._from_data_like_self(
-            self.obj._data._from_columns_like_self(applied)
         )
 
     def _apply_agg_column(
@@ -584,6 +576,6 @@ class RollingGroupby(Rolling):
                 self.obj.index._column_names,
             )
         )
-        result = super()._apply_agg(agg_name)
+        result = super()._apply_agg(agg_name, **agg_kwargs)
         result.index = index
         return result
