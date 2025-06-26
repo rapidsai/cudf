@@ -8,7 +8,7 @@ import operator
 from functools import reduce
 from typing import TYPE_CHECKING, Any
 
-from cudf_polars.dsl.ir import ConditionalJoin, Join
+from cudf_polars.dsl.ir import ConditionalJoin, Join, Slice
 from cudf_polars.experimental.base import PartitionInfo, get_key_name
 from cudf_polars.experimental.dispatch import generate_ir_tasks, lower_ir_node
 from cudf_polars.experimental.repartition import Repartition
@@ -226,6 +226,24 @@ def _(
 def _(
     ir: Join, rec: LowerIRTransformer
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+    # Pull slice operations out of the Join before lowering
+    if (zlice := ir.options[2]) is not None:
+        offset, length = zlice
+        if length is None:  # pragma: no cover
+            return _lower_ir_fallback(
+                ir,
+                rec,
+                msg="This slice not supported for multiple partitions.",
+            )
+        new_join = Join(
+            ir.schema,
+            ir.left_on,
+            ir.right_on,
+            (*ir.options[:2], None, *ir.options[3:]),
+            *ir.children,
+        )
+        return rec(Slice(ir.schema, offset, length, new_join))
+
     # Lower children
     children, _partition_info = zip(*(rec(c) for c in ir.children), strict=True)
     partition_info = reduce(operator.or_, _partition_info)
