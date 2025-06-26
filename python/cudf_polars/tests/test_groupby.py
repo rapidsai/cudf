@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import itertools
+import random
 from datetime import date
 
-import numpy as np
 import pytest
 
 import polars as pl
@@ -243,8 +243,9 @@ def test_groupby_agg_broadcast_raises(df):
 @pytest.mark.parametrize("nkeys", [1, 2, 4])
 def test_groupby_maintain_order_random(nrows, nkeys, with_nulls):
     key_names = [f"key{key}" for key in range(nkeys)]
-    key_values = [np.random.randint(100, size=nrows) for _ in key_names]
-    value = np.random.randint(-100, 100, size=nrows)
+    rng = random.Random(2)
+    key_values = [rng.choices(range(100), k=nrows) for _ in key_names]
+    value = rng.choices(range(-100, 100), k=nrows)
     df = pl.DataFrame(dict(zip(key_names, key_values, strict=True), value=value))
     if with_nulls:
         df = df.with_columns(

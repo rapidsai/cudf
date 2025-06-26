@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 
-import pyarrow
 import pytest
 
 import polars as pl
@@ -90,21 +89,23 @@ def test_shallow_copy():
 @pytest.mark.parametrize("typeid", [pl.Int8(), pl.Float32()])
 def test_mask_nans(typeid):
     dtype = DataType(typeid)
-    values = pyarrow.array([0, 0, 0], type=plc.interop.to_arrow(dtype.plc))
-    column = Column(plc.Column.from_arrow(values), dtype=dtype)
+    column = Column(
+        plc.Column.from_iterable_of_py([0, 0, 0], dtype=dtype.plc), dtype=dtype
+    )
     masked = column.mask_nans()
     assert column.null_count == masked.null_count
 
 
 def test_mask_nans_float():
     dtype = DataType(pl.Float32())
-    values = pyarrow.array([0, 0, float("nan")], type=plc.interop.to_arrow(dtype.plc))
-    column = Column(plc.Column.from_arrow(values), dtype=dtype)
+    column = Column(
+        plc.Column.from_iterable_of_py([0, 0, float("nan")], dtype=dtype.plc),
+        dtype=dtype,
+    )
     masked = column.mask_nans()
-    expect = pyarrow.array([0, 0, None], type=plc.interop.to_arrow(dtype.plc))
-    got = pyarrow.array(plc.interop.to_arrow(masked.obj))
-
-    assert expect == got
+    assert masked.nan_count == 0
+    assert masked.slice((0, 2)).null_count == 0
+    assert masked.slice((2, 1)).null_count == 1
 
 
 def test_slice_none_returns_self():
@@ -114,3 +115,35 @@ def test_slice_none_returns_self():
         dtype=dtype,
     )
     assert column.slice(None) is column
+
+
+def test_deserialize_ctor_kwargs_invalid_dtype():
+    column_kwargs = {
+        "is_sorted": plc.types.Sorted.NO,
+        "order": plc.types.Order.ASCENDING,
+        "null_order": plc.types.NullOrder.AFTER,
+        "name": "test",
+        "dtype": "in64",
+    }
+    with pytest.raises(ValueError):
+        Column.deserialize_ctor_kwargs(column_kwargs)
+
+
+def test_deserialize_ctor_kwargs_list_dtype():
+    pl_type = pl.List(pl.Int64())
+    column_kwargs = {
+        "is_sorted": plc.types.Sorted.NO,
+        "order": plc.types.Order.ASCENDING,
+        "null_order": plc.types.NullOrder.AFTER,
+        "name": "test",
+        "dtype": pl.polars.dtype_str_repr(pl_type),
+    }
+    result = Column.deserialize_ctor_kwargs(column_kwargs)
+    expected = {
+        "is_sorted": plc.types.Sorted.NO,
+        "order": plc.types.Order.ASCENDING,
+        "null_order": plc.types.NullOrder.AFTER,
+        "name": "test",
+        "dtype": DataType(pl_type),
+    }
+    assert result == expected
