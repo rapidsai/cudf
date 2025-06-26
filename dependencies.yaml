@@ -242,7 +242,6 @@ files:
     includes:
       - depends_on_libcudf
       - depends_on_rmm
-      - pyarrow_run
       - run_pylibcudf
   py_test_pylibcudf:
     output: pyproject
@@ -251,6 +250,7 @@ files:
       table: project.optional-dependencies
       key: test
     includes:
+      - pyarrow_run
       - test_python_common
       - test_python_cudf_common
       - test_python_pylibcudf
