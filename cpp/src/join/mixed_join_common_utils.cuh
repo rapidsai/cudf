@@ -27,8 +27,7 @@
 #include <cub/cub.cuh>
 #include <cuco/static_set.cuh>
 
-namespace cudf {
-namespace detail {
+namespace cudf::detail {
 
 using row_hash =
   cudf::experimental::row::hash::device_row_hasher<cudf::hashing::detail::default_hash,
@@ -140,7 +139,7 @@ struct primitive_expression_equality {
  * @brief Equality comparator for cuco::static_map queries using primitive row operators.
  */
 template <bool has_nulls>
-struct single_primitive_expression_equality : primitive_expression_equality<has_nulls> {
+struct primitive_single_expression_equality : primitive_expression_equality<has_nulls> {
   using primitive_expression_equality<has_nulls>::primitive_expression_equality;
 
   __device__ __forceinline__ bool operator()(hash_value_type const build_row_index,
@@ -233,6 +232,20 @@ struct double_row_equality_comparator {
   }
 };
 
+/**
+ * @brief Primitive equality comparator that composes two primitive row_equality comparators.
+ */
+struct primitive_double_row_equality_comparator {
+  cudf::row::primitive::row_equality_comparator const equality_comparator;
+  cudf::row::primitive::row_equality_comparator const conditional_comparator;
+
+  __device__ bool operator()(size_type lhs_row_index, size_type rhs_row_index) const noexcept
+  {
+    return equality_comparator(lhs_row_index, rhs_row_index) &&
+           conditional_comparator(lhs_row_index, rhs_row_index);
+  }
+};
+
 // A CUDA Cooperative Group of 1 thread for the hash set for mixed semi.
 auto constexpr DEFAULT_MIXED_SEMI_JOIN_CG_SIZE = 1;
 
@@ -249,6 +262,4 @@ using hash_set_type =
 // The hash_set_ref_type used by mixed_semi_join kerenels for probing.
 using hash_set_ref_type = hash_set_type::ref_type<cuco::contains_tag>;
 
-}  // namespace detail
-
-}  // namespace cudf
+}  // namespace cudf::detail

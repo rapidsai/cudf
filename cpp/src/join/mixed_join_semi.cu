@@ -168,10 +168,11 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
   auto const& probe_table = left_equality;
 
   auto const probe_num_rows = probe_table.num_rows();
-  detail::grid_1d const config(probe_num_rows * hash_set_type::cg_size, DEFAULT_JOIN_BLOCK_SIZE);
+  detail::grid_1d const config(probe_num_rows * DEFAULT_MIXED_SEMI_JOIN_CG_SIZE,
+                               DEFAULT_JOIN_BLOCK_SIZE);
   auto const shmem_size_per_block =
     parser.shmem_per_thread *
-    cuco::detail::int_div_ceil(config.num_threads_per_block, hash_set_type::cg_size);
+    cuco::detail::int_div_ceil(config.num_threads_per_block, DEFAULT_MIXED_SEMI_JOIN_CG_SIZE);
 
   auto const preprocessed_probe =
     cudf::experimental::row::equality::preprocessed_table::create(probe_table, stream);

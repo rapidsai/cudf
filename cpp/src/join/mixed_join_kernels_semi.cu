@@ -61,7 +61,7 @@ CUDF_KERNEL void __launch_bounds__(DEFAULT_JOIN_BLOCK_SIZE)
   auto constexpr swap_tables = true;
   auto const equality        = [&]() {
     if constexpr (std::is_same_v<Equality, cudf::row::primitive::row_equality_comparator>) {
-      return single_primitive_expression_equality<has_nulls>{
+      return primitive_single_expression_equality<has_nulls>{
         evaluator, thread_intermediate_storage, swap_tables, equality_probe};
     } else {
       return single_expression_equality<has_nulls>{
