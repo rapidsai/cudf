@@ -37,7 +37,7 @@ from cudf_polars.dsl.tracing import nvtx_annotate_cudf_polars
 from cudf_polars.dsl.utils.reshape import broadcast
 from cudf_polars.dsl.utils.windows import range_window_bounds
 from cudf_polars.utils import dtypes
-from cudf_polars.utils.versions import POLARS_VERSION_LT_128
+from cudf_polars.utils.versions import POLARS_VERSION_LT_128, POLARS_VERSION_LT_131
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Hashable, Iterable, Sequence
@@ -2153,14 +2153,16 @@ class MapFunction(IR):
                 # same sub-shapes
                 raise NotImplementedError("Explode with more than one column")
             self.options = (tuple(to_explode),)
-        elif self.name == "rename":
-            old, new, strict = self.options
-            # TODO: perhaps polars should validate renaming in the IR?
-            if len(new) != len(set(new)) or (
+        elif POLARS_VERSION_LT_131 and self.name == "rename":
+            # As of 1.31, polars validates renaming in the IR
+            old, new, strict = self.options  # pragma: no cover
+            if len(new) != len(set(new)) or (  # pragma: no cover
                 set(new) & (set(df.schema.keys()) - set(old))
             ):
-                raise NotImplementedError("Duplicate new names in rename.")
-            self.options = (tuple(old), tuple(new), strict)
+                raise NotImplementedError(
+                    "Duplicate new names in rename."
+                )  # pragma: no cover
+            self.options = (tuple(old), tuple(new), strict)  # pragma: no cover
         elif self.name == "unpivot":
             indices, pivotees, variable_name, value_name = self.options
             value_name = "value" if value_name is None else value_name
