@@ -243,6 +243,14 @@ files:
       - depends_on_libcudf
       - depends_on_rmm
       - run_pylibcudf
+  py_run_pylibcudf_pyarrow:
+    output: pyproject
+    pyproject_dir: python/pylibcudf
+    extras:
+      table: project.optional-dependencies
+      key: pyarrow
+    includes:
+      - pyarrow_run
   py_test_pylibcudf:
     output: pyproject
     pyproject_dir: python/pylibcudf
