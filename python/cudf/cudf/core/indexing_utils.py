@@ -65,9 +65,31 @@ IndexingSpec: TypeAlias = (
 
 
 # Helpers for code-sharing between loc and iloc paths
-def expand_key(key: Any, frame: DataFrame | Series) -> tuple:
-    """Slice-expand key into a tuple of length frame.dim
-    Also apply callables on each piece.
+def expand_key(key: Any, frame: DataFrame | Series) -> tuple[Any, ...]:
+    """Slice-expand key to match dimension of the frame being indexed.
+
+    Parameters
+    ----------
+    key
+        Key to expand
+    frame
+        DataFrame or Series to expand to the dimension of.
+
+    Returns
+    -------
+    tuple
+        New key of length equal to the dimension of the frame.
+
+    Raises
+    ------
+    IndexError
+        If the provided key is a tuple and has more entries than the frame dimension.
+
+    Notes
+    -----
+    If any individual entry in the key is a callable, it is called
+    with the provided frame as argument and is required to be converted
+    into a supported indexing type.
     """
     dim = len(frame.shape)
     if isinstance(key, tuple):
@@ -87,10 +109,41 @@ def expand_key(key: Any, frame: DataFrame | Series) -> tuple:
 def destructure_dataframe_indexer(
     key: Any,
     frame: DataFrame,
-    destructure: Callable[[Any, DataFrame], tuple[Any, ...]],
+    destructure: Callable[[Any, DataFrame], tuple[Any, Any]],
     is_scalar: Callable[[Any, ColumnAccessor], bool],
     get_ca: str,
 ):
+    """
+    Pick apart an indexing key for a DataFrame into constituent pieces.
+
+    Parameters
+    ----------
+    key
+        The key to unpick.
+    frame
+        The DataFrame being indexed.
+    destructure
+        Callable to split the key into a two-tuple of row keys and
+        column keys.
+    is_scalar
+        Callable to report if the column indexer produces a single
+        column.
+    get_ca
+        Method name to obtain the column accessor from the frame.
+
+    Returns
+    -------
+    rows
+        Indexing expression for the rows
+    tuple
+        Two-tuple indicating if the column indexer produces a scalar and
+        a subsetted ColumnAccessor.
+
+    Raises
+    ------
+    TypeError
+        If the column indexer is invalid.
+    """
     rows, cols = destructure(key, frame)
 
     from cudf.core.series import Series
@@ -348,7 +401,7 @@ def destructure_dataframe_loc_indexer(
         If the requested column indexer repeats columns
     """
 
-    def is_scalar(name, ca):
+    def is_scalar(name: Any, ca: ColumnAccessor) -> bool:
         try:
             return name in ca
         except TypeError:
