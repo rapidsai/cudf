@@ -1,7 +1,7 @@
 #!/bin/bash
 # Copyright (c) 2023-2025, NVIDIA CORPORATION.
 
-set -eou pipefail
+set -euo pipefail
 
 source rapids-init-pip
 
@@ -37,7 +37,7 @@ mkdir -p "${RAPIDS_TESTS_DIR}"
 
 
 rapids-logger "pytest pylibcudf"
-pushd python/pylibcudf/pylibcudf/tests
+pushd python/pylibcudf/tests
 python -m pytest \
   --cache-clear \
   --numprocesses=8 \
