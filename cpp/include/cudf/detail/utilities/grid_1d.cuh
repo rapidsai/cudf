@@ -125,4 +125,4 @@ class grid_1d {
 };
 
 }  // namespace detail
-}  // namespace cudf
+}  // namespace CUDF_EXPORT cudf

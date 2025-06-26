@@ -16,7 +16,6 @@
 
 #pragma once
 
-#include <cudf/detail/utilities/grid_1d.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
