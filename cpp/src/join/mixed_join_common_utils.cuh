@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -97,7 +97,62 @@ struct single_expression_equality : expression_equality<has_nulls> {
     // 1. The contents of the columns involved in the equality condition are equal.
     // 2. The predicate evaluated on the relevant columns (already encoded in the evaluator)
     // evaluates to true.
-    if (this->equality_probe(lhs_index_type{probe_row_index}, rhs_index_type{build_row_index})) {
+    if (this->equality_probe(lhs_index_type{static_cast<size_type>(probe_row_index)},
+                             rhs_index_type{static_cast<size_type>(build_row_index)})) {
+      auto const lrow_idx = this->swap_tables ? build_row_index : probe_row_index;
+      auto const rrow_idx = this->swap_tables ? probe_row_index : build_row_index;
+      this->evaluator.evaluate(output_dest,
+                               static_cast<size_type>(lrow_idx),
+                               static_cast<size_type>(rrow_idx),
+                               0,
+                               this->thread_intermediate_storage);
+      return (output_dest.is_valid() && output_dest.value());
+    }
+    return false;
+  }
+};
+
+/**
+ * @brief Equality comparator for use with cuco map methods that require expression evaluation
+ * using primitive row operators.
+ */
+template <bool has_nulls>
+struct primitive_expression_equality {
+  __device__ primitive_expression_equality(
+    cudf::ast::detail::expression_evaluator<has_nulls> const& evaluator,
+    cudf::ast::detail::IntermediateDataType<has_nulls>* thread_intermediate_storage,
+    bool const swap_tables,
+    cudf::row::primitive::row_equality_comparator const& equality_probe)
+    : evaluator{evaluator},
+      thread_intermediate_storage{thread_intermediate_storage},
+      swap_tables{swap_tables},
+      equality_probe{equality_probe}
+  {
+  }
+
+  cudf::ast::detail::IntermediateDataType<has_nulls>* thread_intermediate_storage;
+  cudf::ast::detail::expression_evaluator<has_nulls> const& evaluator;
+  bool const swap_tables;
+  cudf::row::primitive::row_equality_comparator const& equality_probe;
+};
+
+/**
+ * @brief Equality comparator for cuco::static_map queries using primitive row operators.
+ */
+template <bool has_nulls>
+struct single_primitive_expression_equality : primitive_expression_equality<has_nulls> {
+  using primitive_expression_equality<has_nulls>::primitive_expression_equality;
+
+  __device__ __forceinline__ bool operator()(hash_value_type const build_row_index,
+                                             hash_value_type const probe_row_index) const noexcept
+  {
+    auto output_dest = cudf::ast::detail::value_expression_result<bool, has_nulls>();
+    // Two levels of checks:
+    // 1. The contents of the columns involved in the equality condition are equal.
+    // 2. The predicate evaluated on the relevant columns (already encoded in the evaluator)
+    // evaluates to true.
+    if (this->equality_probe(static_cast<size_type>(probe_row_index),
+                             static_cast<size_type>(build_row_index))) {
       auto const lrow_idx = this->swap_tables ? build_row_index : probe_row_index;
       auto const rrow_idx = this->swap_tables ? probe_row_index : build_row_index;
       this->evaluator.evaluate(output_dest,

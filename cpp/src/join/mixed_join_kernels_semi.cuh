@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2025, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,8 +24,7 @@
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/span.hpp>
 
-namespace cudf {
-namespace detail {
+namespace cudf::detail {
 
 /**
  * @brief Performs a semi join using the combination of a hash lookup to
@@ -39,6 +38,7 @@ namespace detail {
  *
  * @tparam block_size The number of threads per block for this kernel
  * @tparam has_nulls Whether or not the inputs may contain nulls.
+ * @tparam Equality The type of the equality comparator used when probing the hash table.
  *
  * @param[in] has_nulls If the input has nulls
  * @param[in] left_table The left table
@@ -52,12 +52,13 @@ namespace detail {
  * @param[in] device_expression_data Container of device data required to evaluate the desired
  * expression.
  */
+template <typename Equality>
 void launch_mixed_join_semi(bool has_nulls,
                             table_device_view left_table,
                             table_device_view right_table,
                             table_device_view probe,
                             table_device_view build,
-                            row_equality const equality_probe,
+                            Equality equality_probe,
                             hash_set_ref_type set_ref,
                             cudf::device_span<bool> left_table_keep_mask,
                             cudf::ast::detail::expression_device_view device_expression_data,
@@ -65,6 +66,4 @@ void launch_mixed_join_semi(bool has_nulls,
                             int64_t shmem_size_per_block,
                             rmm::cuda_stream_view stream);
 
-}  // namespace detail
-
-}  // namespace cudf
+}  // namespace cudf::detail
