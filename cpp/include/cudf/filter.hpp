@@ -32,9 +32,10 @@ namespace CUDF_EXPORT cudf {
 /**
  * @brief Creates a new column by applying a filter function against every
  * element of the input columns.
+ * Null values in the input columns are considered as not matching the filter.
  *
  * Computes:
- * `out[i]... = predicate(predicate_columns[i]... ) ? F(table[i]...) : not-applied`.
+ * `out[i]... = predicate(columns[i]... ) ? (columns[i]...): not-applied`.
  *
  * Note that for every scalar in `predicate_columns` (columns of size 1), `predicate_columns[i] ==
  * input[0]`
@@ -46,25 +47,27 @@ namespace CUDF_EXPORT cudf {
  * types
  * @throws std::invalid_argument if any of the input columns have nulls
  * @throws std::logic_error if JIT is not supported by the runtime
+ * @throws std::logic_error if the size of the copy_mask does not match the size of the input
  *
  * The size of the resulting column is the size of the largest column.
  *
- * @param target_columns        Immutable views of the columns to filter
- * @param predicate_columns        Immutable views of the columns to use as predicates for filtering
+ * @param columns        Immutable views of the columns to filter
  * @param predicate_udf The PTX/CUDA string of the transform function to apply
  * @param is_ptx        true: the UDF is treated as PTX code; false: the UDF is treated as CUDA code
  * @param user_data     User-defined device data to pass to the UDF.
+ * @param copy_mask  Optional vector of booleans indicating which columns to copy from the input
+ *                   columns to the output. If not provided, all columns are copied.
  * @param stream        CUDA stream used for device memory operations and kernel launches
  * @param mr            Device memory resource used to allocate the returned column's device memory
  * @return              The filtered target columns
  */
 std::vector<std::unique_ptr<column>> filter(
-  std::vector<column_view> const& target_columns,
-  std::vector<column_view> const& predicate_columns,
+  std::vector<column_view> const& columns,
   std::string const& predicate_udf,
   bool is_ptx,
-  std::optional<void*> user_data    = std::nullopt,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+  std::optional<void*> user_data             = std::nullopt,
+  std::optional<std::vector<bool>> copy_mask = std::nullopt,
+  rmm::cuda_stream_view stream               = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr          = cudf::get_current_device_resource_ref());
 
 }  // namespace CUDF_EXPORT cudf

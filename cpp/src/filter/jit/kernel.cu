@@ -20,6 +20,7 @@
 #include "jit/span.cuh"
 
 #include <cudf/column/column_device_view_base.cuh>
+#include <cudf/detail/utilities/grid_1d.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/traits.hpp>
@@ -46,15 +47,14 @@ CUDF_KERNEL void kernel(cudf::jit::device_optional_span<typename Out::type> cons
                         cudf::column_device_view_core const* inputs,
                         void* user_data)
 {
-  static constexpr typename Out::type NOT_APPLIED = -1;
+  using index_type = typename Out::type;
 
-  // cannot use global_thread_id utility due to a JIT build issue by including
-  // the `cudf/detail/utilities/cuda.cuh` header
-  auto const block_size          = static_cast<thread_index_type>(blockDim.x);
-  thread_index_type const start  = threadIdx.x + blockIdx.x * block_size;
-  thread_index_type const stride = block_size * gridDim.x;
-  auto output                    = outputs[0].to_span();
-  thread_index_type const size   = output.size();
+  static constexpr index_type NOT_APPLIED = -1;
+
+  auto const start  = cudf::detail::grid_1d::global_thread_id();
+  auto const stride = cudf::detail::grid_1d::grid_stride();
+  auto const output = outputs[0].to_span();
+  auto const size   = output.size();
 
   for (auto i = start; i < size; i += stride) {
     auto const any_null = (false || ... || In::is_null(inputs, i));
@@ -69,7 +69,7 @@ CUDF_KERNEL void kernel(cudf::jit::device_optional_span<typename Out::type> cons
       }
     }
 
-    output[i] = applies ? static_cast<typename Out::type>(i) : NOT_APPLIED;
+    output[i] = applies ? static_cast<index_type>(i) : NOT_APPLIED;
   }
 }
 

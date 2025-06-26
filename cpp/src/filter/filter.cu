@@ -29,6 +29,7 @@
 #include <cudf/filter.hpp>
 #include <cudf/jit/runtime_support.hpp>
 #include <cudf/null_mask.hpp>
+#include <cudf/reshape.hpp>
 #include <cudf/stream_compaction.hpp>
 #include <cudf/utilities/span.hpp>
 #include <cudf/utilities/traits.hpp>
@@ -43,16 +44,15 @@
 
 namespace cudf {
 
-namespace detail {
+namespace {
 
 struct filter_stencil {
-  /// @brief -1 is ideal as an invalid flag value. It also has the benefit of being an invalid value
-  /// for unsigned indices.
   static constexpr cudf::size_type NOT_APPLIED = -1;
 
   constexpr __device__ bool operator()(cudf::size_type flag) const { return flag != NOT_APPLIED; }
 };
 
+/// @brief counts the number of items that are not marked as NOT_APPLIED
 struct filter_histogram {
   constexpr __device__ cudf::size_type operator()(cudf::size_type flag) const
   {
@@ -61,29 +61,20 @@ struct filter_histogram {
 };
 
 template <typename InputIterator>
-auto filter_by(InputIterator input,
-               cudf::size_type num_input_items,
-               cudf::size_type const* flag_iterator,
+auto filter_by(InputIterator input_begin,
+               InputIterator input_end,
+               cudf::size_type num_selected,
+               cudf::size_type const* flag,
                rmm::cuda_stream_view stream,
                rmm::device_async_resource_ref mr)
 {
-  auto num_selected = thrust::transform_reduce(rmm::exec_policy(stream),
-                                               flag_iterator,
-                                               flag_iterator + num_input_items,
-                                               filter_histogram{},
-                                               cudf::size_type{0},
-                                               thrust::plus<cudf::size_type>{});
-
   rmm::device_uvector<typename std::iterator_traits<InputIterator>::value_type> output(
     static_cast<size_t>(num_selected), stream, mr);
 
-  auto output_size = std::distance(output.begin(),
-                                   thrust::copy_if(rmm::exec_policy(stream),
-                                                   input,
-                                                   input + num_input_items,
-                                                   flag_iterator,
-                                                   output.begin(),
-                                                   filter_stencil{}));
+  auto output_size = std::distance(
+    output.begin(),
+    thrust::copy_if(
+      rmm::exec_policy(stream), input_begin, input_end, flag, output.begin(), filter_stencil{}));
 
   CUDF_EXPECTS(output_size == num_selected,
                "The number of selected items does not match the expected count.",  // < This should
@@ -99,13 +90,16 @@ struct filter_dispatcher;
 template <>
 struct filter_dispatcher<false> {
   template <typename T>
-    requires(cudf::is_rep_layout_compatible<T>() && cudf::is_fixed_width<T>())
-  std::unique_ptr<cudf::column> operator()(cudf::column_device_view const& col,
-                                           cudf::size_type const* flag_iterator,
-                                           rmm::cuda_stream_view stream,
-                                           rmm::device_async_resource_ref mr) const
+  requires(cudf::is_rep_layout_compatible<T>() &&
+           cudf::is_fixed_width<T>()) std::unique_ptr<cudf::column>
+  operator()(cudf::column_device_view const& col,
+             cudf::size_type num_selected,
+             cudf::size_type const* flag_iterator,
+             rmm::cuda_stream_view stream,
+             rmm::device_async_resource_ref mr) const
   {
-    auto filtered      = filter_by(col.data<T>(), col.size(), flag_iterator, stream, mr);
+    auto filtered =
+      filter_by(col.data<T>(), col.data<T>() + col.size(), num_selected, flag_iterator, stream, mr);
     auto filtered_size = filtered.size();
     auto out =
       cudf::column(col.type(), filtered_size, filtered.release(), rmm::device_buffer{}, 0, {});
@@ -113,14 +107,16 @@ struct filter_dispatcher<false> {
   }
 
   template <typename T>
-    requires(cudf::is_fixed_point<T>())
-  std::unique_ptr<cudf::column> operator()(cudf::column_device_view const& col,
-                                           cudf::size_type const* flag_iterator,
-                                           rmm::cuda_stream_view stream,
-                                           rmm::device_async_resource_ref mr) const
+  requires(cudf::is_fixed_point<T>()) std::unique_ptr<cudf::column>
+  operator()(cudf::column_device_view const& col,
+             cudf::size_type num_selected,
+             cudf::size_type const* flag_iterator,
+             rmm::cuda_stream_view stream,
+             rmm::device_async_resource_ref mr) const
   {
     auto filtered = filter_by(col.data<typename T::rep>(),  // actually uses the underlying rep type
-                              col.size(),
+                              col.data<typename T::rep>() + col.size(),
+                              num_selected,
                               flag_iterator,
                               stream,
                               mr);
@@ -131,19 +127,25 @@ struct filter_dispatcher<false> {
   }
 
   template <typename T>
-    requires(std::is_same_v<T, cudf::string_view>)
-  std::unique_ptr<cudf::column> operator()(cudf::column_device_view const& col,
-                                           cudf::size_type const* flag_iterator,
-                                           rmm::cuda_stream_view stream,
-                                           rmm::device_async_resource_ref mr) const
+  requires(std::is_same_v<T, cudf::string_view>) std::unique_ptr<cudf::column>
+  operator()(cudf::column_device_view const& col,
+             cudf::size_type num_selected,
+             cudf::size_type const* flag_iterator,
+             rmm::cuda_stream_view stream,
+             rmm::device_async_resource_ref mr) const
   {
-    auto filtered =
-      filter_by(col.begin<cudf::string_view>(), col.size(), flag_iterator, stream, mr);
+    auto filtered = filter_by(col.begin<cudf::string_view>(),
+                              col.begin<cudf::string_view>() + col.size(),
+                              num_selected,
+                              flag_iterator,
+                              stream,
+                              mr);
     return cudf::make_strings_column(filtered, {}, stream, mr);
   }
 
   template <typename T>
   std::unique_ptr<cudf::column> operator()(cudf::column_device_view const& col,
+                                           cudf::size_type num_selected,
                                            cudf::size_type const* flag_iterator,
                                            rmm::cuda_stream_view stream,
                                            rmm::device_async_resource_ref mr) const
@@ -156,34 +158,36 @@ struct filter_dispatcher<false> {
 
 std::unique_ptr<cudf::column> filter_column(
   cudf::column_device_view const& column,
+  cudf::size_type num_selected,
   cudf::jit::device_span<cudf::size_type const> filter_indices,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
-  return cudf::type_dispatcher(
-    column.type(), filter_dispatcher<false>{}, column, filter_indices.begin(), stream, mr);
+  return cudf::type_dispatcher(column.type(),
+                               filter_dispatcher<false>{},
+                               column,
+                               num_selected,
+                               filter_indices.begin(),
+                               stream,
+                               mr);
 }
 
-}  // namespace detail
-
-namespace {
-template <typename IndexType>
 void launch_filter_kernel(jitify2::ConfiguredKernel& kernel,
-                          cudf::jit::device_span<IndexType> output,
-                          std::vector<column_view> const& input_cols,
+                          cudf::jit::device_span<cudf::size_type> output,
+                          std::vector<column_view> const& input_columns,
                           std::optional<void*> user_data,
                           rmm::cuda_stream_view stream,
                           rmm::device_async_resource_ref mr)
 {
   auto outputs = cudf::jit::to_device_vector(
-    std::vector{cudf::jit::device_optional_span<IndexType>{output, nullptr}}, stream, mr);
+    std::vector{cudf::jit::device_optional_span<cudf::size_type>{output, nullptr}}, stream, mr);
 
   auto [input_handles, inputs] =
-    cudf::jit::column_views_to_device<column_device_view, column_view>(input_cols, stream, mr);
+    cudf::jit::column_views_to_device<column_device_view, column_view>(input_columns, stream, mr);
 
-  cudf::jit::device_optional_span<IndexType> const* outputs_ptr = outputs.data();
-  column_device_view const* inputs_ptr                          = inputs.data();
-  void* p_user_data                                             = user_data.value_or(nullptr);
+  cudf::jit::device_optional_span<cudf::size_type> const* outputs_ptr = outputs.data();
+  column_device_view const* inputs_ptr                                = inputs.data();
+  void* p_user_data                                                   = user_data.value_or(nullptr);
 
   std::array<void*, 3> args{&outputs_ptr, &inputs_ptr, &p_user_data};
 
@@ -191,46 +195,30 @@ void launch_filter_kernel(jitify2::ConfiguredKernel& kernel,
 }
 
 void perform_checks(column_view base_column,
-                    data_type output_type,
-                    std::vector<column_view> const& target_columns,
-                    std::vector<column_view> const& predicate_columns)
+                    std::vector<column_view> const& columns,
+                    std::optional<std::vector<bool>> copy_mask)
 {
   CUDF_EXPECTS(is_runtime_jit_supported(), "Runtime JIT is only supported on CUDA Runtime 11.5+");
-  CUDF_EXPECTS(is_fixed_width(output_type) || output_type.id() == type_id::STRING,
-               "Filters only support output of fixed-width or string types",
-               std::invalid_argument);
-  CUDF_EXPECTS(std::all_of(predicate_columns.begin(),
-                           predicate_columns.end(),
+  CUDF_EXPECTS(std::all_of(columns.begin(),
+                           columns.end(),
                            [](auto& input) {
                              return is_fixed_width(input.type()) ||
                                     (input.type().id() == type_id::STRING);
                            }),
-               "Filters only support predicate inputs of fixed-width or string types",
+               "Filters only support fixed-width and string types",
                std::invalid_argument);
 
-  CUDF_EXPECTS(std::all_of(predicate_columns.begin(),
-                           predicate_columns.end(),
-                           [&](auto const& input) {
-                             return (input.size() == 1) || (input.size() == base_column.size());
+  CUDF_EXPECTS(std::all_of(columns.begin(),
+                           columns.end(),
+                           [&](auto& input) {
+                             return cudf::jit::is_scalar(base_column.size(), input.size()) ||
+                                    (input.size() == base_column.size());
                            }),
-               "All filter predicate columns must have the same size or be scalar (have size 1)",
+               "All filter columns must have the same size or be scalar (have size 1)",
                std::invalid_argument);
 
-  CUDF_EXPECTS(std::all_of(target_columns.begin(),
-                           target_columns.end(),
-                           [](auto& input) {
-                             return is_fixed_width(input.type()) ||
-                                    (input.type().id() == type_id::STRING);
-                           }),
-               "Filters only support filtering of fixed-width or string types",
-               std::invalid_argument);
-
-  CUDF_EXPECTS(std::all_of(target_columns.begin(),
-                           target_columns.end(),
-                           [&](auto const& input) {
-                             return (input.size() == 1) || (input.size() == base_column.size());
-                           }),
-               "All filter target columns must have the same size",
+  CUDF_EXPECTS(!copy_mask.has_value() || (copy_mask->size() == columns.size()),
+               "The size of the copy mask must match the number of input columns",
                std::invalid_argument);
 }
 
@@ -277,16 +265,14 @@ jitify2::ConfiguredKernel build_kernel(std::string const& kernel_name,
     ->configure_1d_max_occupancy(0, 0, nullptr, stream.value());
 }
 
-std::vector<std::unique_ptr<column>> filter_operation(
-  column_view base_column,
-  data_type output_type,
-  std::vector<column_view> const& target_columns,
-  std::vector<column_view> const& predicate_columns,
-  std::string const& udf,
-  bool is_ptx,
-  std::optional<void*> user_data,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
+std::vector<std::unique_ptr<column>> filter_operation(column_view base_column,
+                                                      std::vector<column_view> const& columns,
+                                                      std::string const& predicate_udf,
+                                                      bool is_ptx,
+                                                      std::optional<void*> user_data,
+                                                      std::optional<std::vector<bool>> copy_mask,
+                                                      rmm::cuda_stream_view stream,
+                                                      rmm::device_async_resource_ref mr)
 {
   rmm::device_uvector<cudf::size_type> filter_indices{
     static_cast<size_t>(base_column.size()), stream, mr};
@@ -294,35 +280,47 @@ std::vector<std::unique_ptr<column>> filter_operation(
   auto kernel = build_kernel("cudf::filtering::jit::kernel",
                              base_column.size(),
                              {"cudf::size_type"},
-                             predicate_columns,
+                             columns,
                              user_data.has_value(),
-                             udf,
+                             predicate_udf,
                              is_ptx,
                              stream,
                              mr);
 
-  cudf::jit::device_span<cudf::size_type> filter_indices_span{filter_indices.data(),
-                                                              filter_indices.size()};
+  cudf::jit::device_span<cudf::size_type> const filter_indices_span{filter_indices.data(),
+                                                                    filter_indices.size()};
 
-  launch_filter_kernel<cudf::size_type>(
-    kernel, filter_indices_span, predicate_columns, user_data, stream, mr);
+  launch_filter_kernel(kernel, filter_indices_span, columns, user_data, stream, mr);
+
+  auto num_selected = thrust::transform_reduce(rmm::exec_policy(stream),
+                                               filter_indices.begin(),
+                                               filter_indices.end(),
+                                               filter_histogram{},
+                                               cudf::size_type{0},
+                                               std::plus<cudf::size_type>{});
 
   std::vector<std::unique_ptr<column>> filtered;
 
-  std::vector<std::unique_ptr<cudf::column_device_view, std::function<void(column_device_view*)>>>
-    target_device_column_views;
+  std::for_each(thrust::counting_iterator<size_t>(0),
+                thrust::counting_iterator<size_t>(columns.size()),
+                [&](auto i) {
+                  auto column      = columns[i];
+                  auto should_copy = !copy_mask.has_value() || (*copy_mask)[i];
 
-  std::transform(target_columns.begin(),
-                 target_columns.end(),
-                 std::back_inserter(target_device_column_views),
-                 [&](auto const& col) { return cudf::column_device_view::create(col, stream); });
-
-  std::transform(target_device_column_views.begin(),
-                 target_device_column_views.end(),
-                 std::back_inserter(filtered),
-                 [&](auto const& col) {
-                   return detail::filter_column(*col, filter_indices_span.as_const(), stream, mr);
-                 });
+                  if (should_copy) {
+                    if (cudf::jit::is_scalar(base_column.size(), column.size())) {
+                      // broadcast scalar columns
+                      auto tiled = cudf::tile(cudf::table_view{{column}}, num_selected, stream, mr);
+                      auto tiled_columns = tiled->release();
+                      filtered.push_back(std::move(tiled_columns[0]));
+                    } else {
+                      auto d_column        = cudf::column_device_view::create(column, stream);
+                      auto filtered_column = filter_column(
+                        *d_column, num_selected, filter_indices_span.as_const(), stream, mr);
+                      filtered.push_back(std::move(filtered_column));
+                    }
+                  }
+                });
 
   return filtered;
 }
@@ -330,62 +328,39 @@ std::vector<std::unique_ptr<column>> filter_operation(
 }  // namespace
 
 namespace detail {
-std::vector<std::unique_ptr<column>> filter(std::vector<column_view> const& target_columns,
-                                            std::vector<column_view> const& predicate_columns,
+std::vector<std::unique_ptr<column>> filter(std::vector<column_view> const& columns,
                                             std::string const& predicate_udf,
                                             bool is_ptx,
                                             std::optional<void*> user_data,
+                                            std::optional<std::vector<bool>> copy_mask,
                                             rmm::cuda_stream_view stream,
                                             rmm::device_async_resource_ref mr)
 {
-  CUDF_EXPECTS(
-    !target_columns.empty(), "Filters must have at least 1 target column", std::invalid_argument);
-  CUDF_EXPECTS(!predicate_columns.empty(),
-               "Filters must have at least 1 predicate column",
-               std::invalid_argument);
+  CUDF_EXPECTS(!columns.empty(), "Filters must have at least 1 column", std::invalid_argument);
 
-  auto const base_column = std::max_element(predicate_columns.begin(),
-                                            predicate_columns.end(),
-                                            [](auto& a, auto& b) { return a.size() < b.size(); });
+  auto const base_column = std::max_element(
+    columns.begin(), columns.end(), [](auto& a, auto& b) { return a.size() < b.size(); });
 
-  CUDF_EXPECTS(
-    std::all_of(target_columns.begin(),
-                target_columns.end(),
-                [&](column_view const& col) { return col.size() == base_column->size(); }),
-    "Filter's target columns must have the same size as the predicate base column",
-    std::invalid_argument);
+  perform_checks(*base_column, columns, copy_mask);
 
-  auto const scatter_type = cudf::data_type{cudf::type_to_id<cudf::size_type>()};
-  rmm::device_scalar<cudf::size_type> not_applied_count{0, stream, mr};
-
-  perform_checks(*base_column, scatter_type, target_columns, predicate_columns);
-
-  auto filtered = filter_operation(*base_column,
-                                   scatter_type,
-                                   target_columns,
-                                   predicate_columns,
-                                   predicate_udf,
-                                   is_ptx,
-                                   user_data,
-                                   stream,
-                                   mr);
+  auto filtered = filter_operation(
+    *base_column, columns, predicate_udf, is_ptx, user_data, copy_mask, stream, mr);
 
   return filtered;
 }
 
 }  // namespace detail
 
-std::vector<std::unique_ptr<column>> filter(std::vector<column_view> const& target_columns,
-                                            std::vector<column_view> const& predicate_columns,
+std::vector<std::unique_ptr<column>> filter(std::vector<column_view> const& columns,
                                             std::string const& predicate_udf,
                                             bool is_ptx,
                                             std::optional<void*> user_data,
+                                            std::optional<std::vector<bool>> copy_mask,
                                             rmm::cuda_stream_view stream,
                                             rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::filter(
-    target_columns, predicate_columns, predicate_udf, is_ptx, user_data, stream, mr);
+  return detail::filter(columns, predicate_udf, is_ptx, user_data, copy_mask, stream, mr);
 }
 
 }  // namespace cudf
