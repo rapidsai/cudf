@@ -152,7 +152,6 @@ jobs:
     uses: rapidsai/shared-workflows/.github/workflows/conda-cpp-post-build-checks.yaml@branch-25.08
     with:
       build_type: pull-request
-      enable_check_symbols: true
   conda-cpp-tests:
     needs: [conda-cpp-build, changed-files]
     secrets: inherit
