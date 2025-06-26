@@ -5,7 +5,6 @@ import itertools
 import warnings
 from typing import TYPE_CHECKING
 
-import numba
 import numpy as np
 import pandas as pd
 from pandas.api.indexers import BaseIndexer
@@ -19,7 +18,6 @@ from cudf.core.column.column import ColumnBase, as_column
 from cudf.core.mixins import GetAttrGetItemMixin, Reducible
 from cudf.core.multiindex import MultiIndex
 from cudf.options import get_option
-from cudf.utils import cudautils
 from cudf.utils.dtypes import SIZE_TYPE_DTYPE
 
 if TYPE_CHECKING:
@@ -196,7 +194,6 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
 
     _PROTECTED_KEYS = frozenset(("obj",))
 
-    _time_window = False
     _group_keys = None
 
     _VALID_REDUCTIONS = {
@@ -523,21 +520,15 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
                 raise ValueError("window cannot be zero or negative")
             if self.min_periods is None:
                 min_periods = window
+        elif isinstance(window, BaseIndexer):
+            self.window = window
+            self.min_periods = min_periods
+            return
         else:
-            if isinstance(
-                window, (numba.cuda.devicearray.DeviceNDArray, BaseIndexer)
-            ):
-                # window is a device_array of window sizes or BaseIndexer
-                self.window = window
-                self.min_periods = min_periods
-                return
-
             if self.obj.index.dtype.kind != "M":
                 raise ValueError(
                     "window must be an integer for non datetime index"
                 )
-
-            self._time_window = True
 
             try:
                 window = pd.to_timedelta(window)
@@ -551,22 +542,8 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
             if self.min_periods is None:
                 min_periods = 1
 
-        self.window = self._window_to_window_sizes(window)
+        self.window = window
         self.min_periods = min_periods
-
-    def _window_to_window_sizes(self, window):
-        """
-        For non-fixed width windows,
-        convert the window argument into window sizes.
-        """
-        if is_integer(window) or isinstance(window, pd.Timedelta):
-            return window
-        else:
-            with acquire_spill_lock():
-                return cudautils.window_sizes_from_offset(
-                    self.obj.index._column.data_array_view(mode="write"),
-                    window,
-                )
 
     def __repr__(self):
         return "{} [window={},min_periods={},center={}]".format(
@@ -603,17 +580,6 @@ class RollingGroupby(Rolling):
             self._group_starts = (
                 gb_size.cumsum().shift(1).fillna(0).repeat(gb_size)
             )
-
-    def _window_to_window_sizes(self, window):
-        if is_integer(window) or isinstance(window, pd.Timedelta):
-            return super()._window_to_window_sizes(window)
-        else:
-            with acquire_spill_lock():
-                return cudautils.grouped_window_sizes_from_offset(
-                    self.obj.index._column.data_array_view(mode="read"),
-                    self._group_starts,
-                    window,
-                )
 
     def _apply_agg(self, agg_name):
         index = MultiIndex._from_data(
