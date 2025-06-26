@@ -59,12 +59,12 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         )
         .filter(pl.col("d_year") == 2001)
         .group_by(["sr_customer_sk", "sr_store_sk"])
-        .agg(
-            [
-                pl.col("sr_customer_sk").first().alias("ctr_customer_sk"),
-                pl.col("sr_store_sk").first().alias("ctr_store_sk"),
-                pl.col("sr_return_amt").sum().alias("ctr_total_return"),
-            ]
+        .agg(pl.col("sr_return_amt").sum().alias("ctr_total_return"))
+        .rename(
+            {
+                "sr_customer_sk": "ctr_customer_sk",
+                "sr_store_sk": "ctr_store_sk",
+            }
         )
     )
 

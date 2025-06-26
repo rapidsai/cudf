@@ -82,9 +82,7 @@ exclude_also = [
 # it from coverage checks.
 omit = [
   "cudf_polars/testing/plugin.py",
-  "cudf_polars/experimental/benchmarks/pdsh.py",
-  "cudf_polars/experimental/benchmarks/pdsds.py",
-  "cudf_polars/experimental/benchmarks/utils.py",
+  "cudf_polars/experimental/benchmarks/**",
   "cudf_polars/experimental/spilling.py",
   ]
 

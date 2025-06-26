@@ -64,8 +64,7 @@ class PDSDSQueriesMeta(type):
             module: ModuleType = importlib.import_module(
                 f"cudf_polars.experimental.benchmarks.pdsds_queries.q{q_num}"
             )
-            q_impl = getattr(module, cls.q_impl)
-            return lambda run_config: q_impl(run_config)
+            return getattr(module, cls.q_impl)
         raise AttributeError(f"{name} is not a valid query name")
 
 
