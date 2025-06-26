@@ -11,7 +11,7 @@ from pandas.api.indexers import BaseIndexer
 
 import pylibcudf as plc
 
-from cudf.api.types import is_integer, is_number
+from cudf.api.types import is_integer, is_number, is_scalar
 from cudf.core._internals import aggregation
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column.column import ColumnBase, as_column
@@ -218,13 +218,7 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
         step: int | None = None,
         method: str = "single",
     ):
-        if get_option("mode.pandas_compatible"):
-            obj = obj.nans_to_nulls()
-        self.obj = obj  # type: ignore[assignment]
-        self.window = window
-        self.min_periods = min_periods
         self.center = center
-        self._normalize()
         # for var & std only?
         self.agg_params: dict[str, int] = {}
         if axis != 0:
@@ -250,6 +244,14 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
             raise NotImplementedError("step is currently not supported")
         if method != "single":
             raise NotImplementedError("method is currently not supported")
+
+        if get_option("mode.pandas_compatible"):
+            obj = obj.nans_to_nulls()
+        self.obj = obj  # type: ignore[assignment]
+
+        self.window, self.min_periods = self._normalize_window_and_min_periods(
+            window, min_periods
+        )
 
     def __getitem__(self, arg):
         if isinstance(arg, tuple):
@@ -496,7 +498,9 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
             )
         return self._apply_agg(func)
 
-    def _normalize(self):
+    def _normalize_window_and_min_periods(
+        self, window, min_periods
+    ) -> tuple[int | pd.Timedelta | BaseIndexer, int | None]:
         """
         Normalize the *window* and *min_periods* args
 
@@ -511,39 +515,37 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
           If *min_periods* is unspecified, it is set to 1.
           Only valid for datetime index.
         """
-        window, min_periods = self.window, self.min_periods
         if is_number(window):
             # only allow integers
             if not is_integer(window):
                 raise ValueError("window must be an integer")
             if window <= 0:
                 raise ValueError("window cannot be zero or negative")
-            if self.min_periods is None:
-                min_periods = window
+            if min_periods is None:
+                return window, window
+            else:
+                return window, min_periods
         elif isinstance(window, BaseIndexer):
-            self.window = window
-            self.min_periods = min_periods
-            return
-        else:
-            if self.obj.index.dtype.kind != "M":
-                raise ValueError(
-                    "window must be an integer for non datetime index"
-                )
-
+            return window, min_periods
+        elif is_scalar(window):
             try:
                 window = pd.to_timedelta(window)
-                # to_timedelta will also convert np.arrays etc.,
-                if not isinstance(window, pd.Timedelta):
-                    raise ValueError
             except ValueError as e:
                 raise ValueError(
-                    "window must be integer or convertible to a timedelta"
+                    "window must be integer, BaseIndexer, or convertible to a timedelta"
                 ) from e
-            if self.min_periods is None:
-                min_periods = 1
-
-        self.window = window
-        self.min_periods = min_periods
+            if self.obj.index.dtype.kind != "M":
+                raise ValueError(
+                    "index must be a DatetimeIndex for a frequency-based window"
+                )
+            if min_periods is None:
+                return window, 1
+            else:
+                return window, min_periods
+        else:
+            raise ValueError(
+                "window must be integer, BaseIndexer, or convertible to a timedelta"
+            )
 
     def __repr__(self):
         return "{} [window={},min_periods={},center={}]".format(
