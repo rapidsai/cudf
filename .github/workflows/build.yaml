@@ -10,20 +10,20 @@ on:
     inputs:
       branch:
         description: |
-          Git branch the workflow run targets.
+          branch: git branch the workflow run targets.
           Required even when 'sha' is provided because it is also used for organizing artifacts.
         required: true
         type: string
       date:
-        description: "Date (YYYY-MM-DD) this run is for. Used to organize artifacts produced by nightly builds"
+        description: "date: Date (YYYY-MM-DD) this run is for. Used to organize artifacts produced by nightly builds"
         required: true
         type: string
       sha:
-        description: "Full git commit SHA to check out"
+        description: "sha: full git commit SHA to check out"
         required: true
         type: string
       build_type:
-        description: "One of: [branch, nightly, pull-request]"
+        description: "build_type: one of [branch, nightly, pull-request]"
         type: string
         default: nightly
 
