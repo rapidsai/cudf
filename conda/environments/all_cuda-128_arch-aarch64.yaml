@@ -3,7 +3,6 @@
 channels:
 - rapidsai
 - rapidsai-nightly
-- dask/label/dev
 - conda-forge
 dependencies:
 - aiobotocore>=2.2.0
@@ -64,7 +63,7 @@ dependencies:
 - openpyxl
 - packaging
 - pandas
-- pandas>=2.0,<2.2.4dev0
+- pandas>=2.0,<2.4.0dev0
 - pandoc
 - polars>=1.25,<1.31
 - pre-commit

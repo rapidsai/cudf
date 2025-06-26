@@ -158,6 +158,16 @@ EXPECTED_FAILURES: Mapping[str, str | tuple[str, bool]] = {
     "tests/unit/io/test_scan.py::test_async_read_21945[scan_type2]": "Debug output on stderr doesn't match",
     "tests/unit/io/test_scan.py::test_async_read_21945[scan_type3]": "Debug output on stderr doesn't match",
     "tests/unit/io/test_multiscan.py::test_multiscan_row_index[scan_csv-write_csv-csv]": "Debug output on stderr doesn't match",
+    "tests/unit/functions/range/test_linear_space.py::test_linear_space_date": "Needs https://github.com/pola-rs/polars/issues/23020",
+    "tests/unit/sql/test_temporal.py::test_implicit_temporal_strings[dt IN ('1960-01-07','2077-01-01','2222-02-22')-expected15]": "Needs https://github.com/pola-rs/polars/issues/23020",
+    "tests/unit/sql/test_operators.py::test_in_not_in[dt NOT IN ('1950-12-24', '1997-07-05')]": "Needs https://github.com/pola-rs/polars/issues/23020",
+    "tests/unit/sql/test_operators.py::test_in_not_in[dt IN ('2020-10-10', '2077-03-18')]": "Needs https://github.com/pola-rs/polars/issues/23020",
+    "tests/unit/datatypes/test_struct.py::test_struct_agg_all": "Needs nested list[struct] support",
+    "tests/unit/constructors/test_structs.py::test_constructor_non_strict_schema_17956": "Needs nested list[struct] support",
+    "tests/unit/io/test_delta.py::test_read_delta_arrow_map_type": "Needs nested list[struct] support",
+    "tests/unit/lazyframe/test_collect_schema.py::test_collect_schema_parametric": "https://github.com/pola-rs/polars/issues/23214",
+    "tests/unit/datatypes/test_struct.py::test_struct_null_cast": "pylibcudf.Scalar does not support struct scalars",
+    "tests/unit/datatypes/test_struct.py::test_struct_outer_nullability_zip_18119": "pylibcudf.Scalar does not support struct scalars",
 }
 
 
