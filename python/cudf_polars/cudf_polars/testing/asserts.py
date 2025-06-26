@@ -111,7 +111,7 @@ def assert_gpu_result_equal(
 
             blocksize_mode = blocksize_mode or DEFAULT_BLOCKSIZE_MODE
 
-            if blocksize_mode == "small":
+            if blocksize_mode == "small":  # pragma: no cover
                 executor_options["max_rows_per_partition"] = 4
                 executor_options["target_partition_size"] = 10
                 # We expect many tests to fall back, so silence the warnings
