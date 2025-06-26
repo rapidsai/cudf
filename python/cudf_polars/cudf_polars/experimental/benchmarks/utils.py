@@ -9,11 +9,10 @@ import argparse
 import dataclasses
 import importlib
 import os
+import statistics
 import sys
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING
-
-import numpy as np
 
 import polars as pl
 
@@ -195,11 +194,11 @@ class RunConfig:
                 print(f"min time : {min([record.duration for record in records]):0.4f}")
                 print(f"max time : {max(record.duration for record in records):0.4f}")
                 print(
-                    f"mean time: {np.mean([record.duration for record in records]):0.4f}"
+                    f"mean time: {statistics.mean([record.duration for record in records]):0.4f}"
                 )
                 print("=======================================")
         total_mean_time = sum(
-            np.mean([record.duration for record in records])
+            statistics.mean([record.duration for record in records])
             for records in self.records.values()
             if records
         )
