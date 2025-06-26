@@ -396,7 +396,6 @@ def test_loc_setitem_extend_empty_12504():
     assert_eq(df, cdf)
 
 
-@pytest.mark.xfail(reason="https://github.com/rapidsai/cudf/issues/12505")
 def test_loc_setitem_extend_existing_12505():
     df = pd.DataFrame({"a": [0]})
     cdf = cudf.from_pandas(df)
