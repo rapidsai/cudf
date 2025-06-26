@@ -6,11 +6,13 @@ from __future__ import annotations
 
 import dataclasses
 import enum
+import itertools
 import math
 import random
+import statistics
 from enum import IntEnum
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, TypeVar
+from typing import TYPE_CHECKING, Any
 
 import pylibcudf as plc
 
@@ -21,16 +23,11 @@ from cudf_polars.experimental.dispatch import generate_ir_tasks, lower_ir_node
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
 
-    import numpy as np
-    import numpy.typing as npt
-
     from cudf_polars.containers import DataFrame
     from cudf_polars.dsl.expr import NamedExpr
     from cudf_polars.experimental.dispatch import LowerIRTransformer
     from cudf_polars.typing import Schema
     from cudf_polars.utils.config import ConfigOptions, ParquetOptions
-
-    T = TypeVar("T", bound=npt.NBitBase)
 
 
 @lower_ir_node.register(DataFrameScan)
@@ -268,33 +265,24 @@ class SplitScan(IR):
         )
 
 
-def _sample_pq_statistics(ir: Scan) -> dict[str, np.floating[T]]:
-    import itertools
-
-    import numpy as np
-
+def _sample_pq_statistics(ir: Scan) -> dict[str, float]:
     # Use average total_uncompressed_size of three files
     n_sample = min(3, len(ir.paths))
     metadata = plc.io.parquet_metadata.read_parquet_metadata(
         plc.io.SourceInfo(random.sample(ir.paths, n_sample))
     )
-    column_sizes = {}
-    rowgroup_offsets_per_file = np.insert(
-        np.cumsum(metadata.num_rowgroups_per_file()), 0, 0
+    rowgroup_offsets_per_file = tuple(
+        itertools.accumulate(metadata.num_rowgroups_per_file(), initial=0)
     )
 
-    # For each column, calculate the `total_uncompressed_size` for each file
-    for name, uncompressed_sizes in metadata.columnchunk_metadata().items():
-        column_sizes[name] = np.array(
-            [
-                np.sum(uncompressed_sizes[start:end])
-                for (start, end) in itertools.pairwise(rowgroup_offsets_per_file)
-            ],
-            dtype="int64",
-        )
-
     # Return the mean per-file `total_uncompressed_size` for each column
-    return {name: np.mean(sizes) for name, sizes in column_sizes.items()}
+    return {
+        name: statistics.mean(
+            sum(uncompressed_sizes[start:end])
+            for (start, end) in itertools.pairwise(rowgroup_offsets_per_file)
+        )
+        for name, uncompressed_sizes in metadata.columnchunk_metadata().items()
+    }
 
 
 @lower_ir_node.register(Scan)
