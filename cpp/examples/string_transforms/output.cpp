@@ -67,5 +67,5 @@ __device__ void email_provider(cudf::string_view* out,
   auto providers = cudf::transform(
     {emails, *alt}, udf, cudf::data_type{cudf::type_id::STRING}, false, std::nullopt, stream, mr);
 
-  return std::make_tuple(std::move(providers), transformed);
+  return {std::move(providers), std::move(transformed)};
 }
