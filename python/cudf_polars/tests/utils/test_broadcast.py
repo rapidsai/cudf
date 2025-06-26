@@ -21,6 +21,7 @@ def test_broadcast_all_scalar(target):
                 plc.DataType(plc.TypeId.INT8), 1, plc.MaskState.ALL_VALID
             ),
             name=f"col{i}",
+            dtype=DataType(pl.Int8()),
         )
         for i in range(3)
     ]
