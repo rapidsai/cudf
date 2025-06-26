@@ -57,7 +57,10 @@ def from_arrow(pyarrow_object, *, DataType data_type=None):
         The converted object of type corresponding to the input type in cudf.
     """
     if pa_err is not None:
-        raise pa_err
+        raise RuntimeError(
+            "pyarrow was not found on your system. Please "
+            "`pip install pylibcudf[pyarrow]` for a compatible pyarrow version."
+        ) from pa_err
     raise TypeError(
         f"Unsupported type {type(pyarrow_object)} for conversion from arrow"
     )
@@ -80,7 +83,10 @@ def to_arrow(plc_object, metadata=None):
         The converted object of type corresponding to the input type in PyArrow.
     """
     if pa_err is not None:
-        raise pa_err
+        raise RuntimeError(
+            "pyarrow was not found on your system. Please "
+            "`pip install pylibcudf[pyarrow]` for a compatible pyarrow version."
+        ) from pa_err
     raise TypeError(f"Unsupported type {type(plc_object)} for conversion to arrow")
 
 

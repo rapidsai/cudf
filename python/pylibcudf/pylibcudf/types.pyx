@@ -270,7 +270,10 @@ cpdef size_t size_of(DataType t):
 @cache
 def _from_arrow(obj: pa.DataType) -> DataType:
     if pa_err is not None:
-        raise pa_err
+        raise RuntimeError(
+            "pyarrow was not found on your system. Please "
+            "`pip install pylibcudf[pyarrow]` for a compatible pyarrow version."
+        ) from pa_err
     if (
         getattr(pa, "Decimal32Type", None) is not None
         and isinstance(obj, pa.Decimal32Type)

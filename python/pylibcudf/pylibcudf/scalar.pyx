@@ -746,7 +746,10 @@ if np is not None:
 
 def _from_arrow(obj: pa.Scalar, dtype: DataType | None = None) -> Scalar:
     if pa_err is not None:
-        raise pa_err
+        raise RuntimeError(
+            "pyarrow was not found on your system. Please "
+            "`pip install pylibcudf[pyarrow]` for a compatible pyarrow version."
+        ) from pa_err
     if isinstance(obj.type, pa.ListType) and obj.as_py() is None:
         # pyarrow doesn't correctly handle None values for list types, so
         # we have to create this one manually.
