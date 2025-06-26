@@ -265,13 +265,23 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
 
     def _apply_agg_column(self, source_column, agg_name) -> ColumnBase:
         min_periods = self.min_periods or 1
-        if isinstance(self.window, int):
-            if self.center:
-                pre = (self.window // 2) + 1
-                fwd = self.window - (pre)
-            else:
-                pre = self.window
+        if isinstance(self.window, (int, pd.Timedelta)):
+            if isinstance(self.window, pd.Timedelta):
+                if self.center:
+                    raise NotImplementedError(
+                        "center is not implemented for frequency-based windows"
+                    )
+                pre = self.window.value
                 fwd = 0
+                orderby_obj = self.obj.index._column.astype(np.dtype(np.int64))
+            else:
+                if self.center:
+                    pre = (self.window // 2) + 1
+                    fwd = self.window - (pre)
+                else:
+                    pre = self.window
+                    fwd = 0
+                orderby_obj = as_column(range(len(source_column)))
             rolling_request = plc.rolling.RollingRequest(
                 source_column.to_pylibcudf(mode="read"),
                 min_periods,
@@ -282,7 +292,6 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
                     else self.agg_params,
                 ).plc_obj,
             )
-            orderby_obj = as_column(range(len(source_column)))
             if self._group_keys is not None:
                 group_cols: list[plc.Column] = [
                     col.to_pylibcudf(mode="read")
@@ -535,7 +544,6 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
                 # to_timedelta will also convert np.arrays etc.,
                 if not isinstance(window, pd.Timedelta):
                     raise ValueError
-                window = window.to_timedelta64()
             except ValueError as e:
                 raise ValueError(
                     "window must be integer or convertible to a timedelta"
@@ -551,7 +559,7 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
         For non-fixed width windows,
         convert the window argument into window sizes.
         """
-        if is_integer(window):
+        if is_integer(window) or isinstance(window, pd.Timedelta):
             return window
         else:
             with acquire_spill_lock():
@@ -586,16 +594,18 @@ class RollingGroupby(Rolling):
             sort_order
         )
 
-        if not is_integer(window):
+        super().__init__(obj, window, min_periods=min_periods, center=center)
+
+        if not (
+            is_integer(self.window) or isinstance(self.window, pd.Timedelta)
+        ):
             gb_size = groupby.size().sort_index()
             self._group_starts = (
                 gb_size.cumsum().shift(1).fillna(0).repeat(gb_size)
             )
 
-        super().__init__(obj, window, min_periods=min_periods, center=center)
-
     def _window_to_window_sizes(self, window):
-        if is_integer(window):
+        if is_integer(window) or isinstance(window, pd.Timedelta):
             return super()._window_to_window_sizes(window)
         else:
             with acquire_spill_lock():
