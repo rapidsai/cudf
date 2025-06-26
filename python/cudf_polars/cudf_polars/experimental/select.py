@@ -32,7 +32,7 @@ def decompose_select(
     input_ir: IR,
     partition_info: MutableMapping[IR, PartitionInfo],
     config_options: ConfigOptions,
-    column_statistics: MutableMapping[str, ColumnStats],
+    column_stats: MutableMapping[str, ColumnStats],
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     """
     Decompose a multi-partition Select operation.
@@ -52,7 +52,7 @@ def decompose_select(
         associated partitioning information.
     config_options
         GPUEngine configuration options.
-    column_statistics
+    column_stats
         Column statistics.
 
     Returns
@@ -76,7 +76,7 @@ def decompose_select(
     for ne in select_ir.exprs:
         # Decompose this partial expression
         new_ne, partial_input_ir, _partition_info = decompose_expr_graph(
-            ne, input_ir, partition_info, config_options, column_statistics
+            ne, input_ir, partition_info, config_options, column_stats
         )
         pi = _partition_info[partial_input_ir]
         partial_input_ir = Select(
@@ -160,7 +160,7 @@ def _(
                 child,
                 partition_info,
                 rec.state["config_options"],
-                rec.state["statistics"].column_statistics.get(ir.children[0], {}),
+                rec.state["statistics"].column_stats.get(ir.children[0], {}),
             )
         except NotImplementedError:
             return _lower_ir_fallback(

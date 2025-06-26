@@ -128,7 +128,7 @@ class ScanPartitionPlan:
         ir: Scan,
         *,
         config_options: ConfigOptions,
-        column_statistics: dict[str, ColumnStats],
+        column_stats: dict[str, ColumnStats],
     ) -> ScanPartitionPlan:
         """Extract the partitioning plan of a Scan operation."""
         if ir.typ == "parquet":
@@ -138,7 +138,7 @@ class ScanPartitionPlan:
 
             blocksize: int = config_options.executor.target_partition_size
             column_sizes = []
-            for name, cs in column_statistics.items():
+            for name, cs in column_stats.items():
                 if (
                     name in ir.schema
                     and cs.source_stats is not None
@@ -458,7 +458,7 @@ def _(
         plan = ScanPartitionPlan.from_scan(
             ir,
             config_options=config_options,
-            column_statistics=statistics.column_statistics.get(ir, {}),
+            column_stats=statistics.column_stats.get(ir, {}),
         )
         paths = list(ir.paths)
         if plan.flavor == ScanPartitionFlavor.SPLIT_FILES:

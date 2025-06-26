@@ -106,7 +106,7 @@ def _get_unique_fractions(
     column_names: Sequence[str],
     partition_info: MutableMapping[IR, PartitionInfo],
     config_options: ConfigOptions,
-    column_statistics: MutableMapping[str, ColumnStats],
+    column_stats: MutableMapping[str, ColumnStats],
 ) -> dict[str, float]:
     assert config_options.executor.name == "streaming", (
         "'in-memory' executor not supported in '_get_unique_fractions'"
@@ -114,7 +114,7 @@ def _get_unique_fractions(
 
     # Start with table statistics
     unique_fractions: dict[str, float] = {}
-    for c, stats in column_statistics.items():
+    for c, stats in column_stats.items():
         if (
             c in column_names
             and (source_stats := stats.source_stats) is not None

@@ -111,7 +111,7 @@ def test_column_source_statistics(
     q1 = q.select(pl.col("y"))
     qir1 = Translator(q1._ldf.visit(), engine).translate_ir()
     stats = collect_source_statistics(qir1, ConfigOptions.from_polars_engine(engine))
-    source_stats_y = stats.column_statistics[qir1]["y"].source_stats
+    source_stats_y = stats.column_stats[qir1]["y"].source_stats
     assert source_stats_y.unique_fraction < 1.0
     assert source_stats_y.unique_fraction > 0.0
     if parquet_metadata_samples >= n_files:

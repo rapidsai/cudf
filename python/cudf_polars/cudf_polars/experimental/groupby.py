@@ -197,7 +197,7 @@ def _(
         groupby_key_columns,
         partition_info,
         config_options,
-        rec.state["statistics"].column_statistics.get(ir.children[0], {}),
+        rec.state["statistics"].column_stats.get(ir.children[0], {}),
     ):
         # Use unique_fraction to determine output partitioning
         unique_fraction = max(unique_fraction_dict.values())

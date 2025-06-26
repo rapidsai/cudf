@@ -129,7 +129,7 @@ def _decompose_unique(
     input_ir: IR,
     partition_info: MutableMapping[IR, PartitionInfo],
     config_options: ConfigOptions,
-    column_statistics: MutableMapping[str, ColumnStats],
+    column_stats: MutableMapping[str, ColumnStats],
     *,
     names: Generator[str, None, None],
 ) -> tuple[Expr, IR, MutableMapping[IR, PartitionInfo]]:
@@ -147,7 +147,7 @@ def _decompose_unique(
         associated partitioning information.
     config_options
         GPUEngine configuration options.
-    column_statistics
+    column_stats
         Column statistics.
     names
         Generator of unique names for temporaries.
@@ -179,7 +179,7 @@ def _decompose_unique(
         _leaf_column_names(child),
         partition_info,
         config_options,
-        column_statistics,
+        column_stats,
     )
 
     unique_fraction = (
@@ -372,7 +372,7 @@ def _decompose_expr_node(
     input_ir: IR,
     partition_info: MutableMapping[IR, PartitionInfo],
     config_options: ConfigOptions,
-    column_statistics: MutableMapping[str, ColumnStats],
+    column_stats: MutableMapping[str, ColumnStats],
     *,
     names: Generator[str, None, None],
 ) -> tuple[Expr, IR, MutableMapping[IR, PartitionInfo]]:
@@ -390,7 +390,7 @@ def _decompose_expr_node(
         associated partitioning information.
     config_options
         GPUEngine configuration options.
-    column_statistics
+    column_stats
         Column statistics.
     names
         Generator of unique names for temporaries.
@@ -427,7 +427,7 @@ def _decompose_expr_node(
             input_ir,
             partition_info,
             config_options,
-            column_statistics,
+            column_stats,
             names=names,
         )
     else:
@@ -449,7 +449,7 @@ def _decompose(
             rec.state["input_ir"],
             {rec.state["input_ir"]: rec.state["input_partition_info"]},
             rec.state["config_options"],
-            rec.state["column_statistics"],
+            rec.state["column_stats"],
             names=rec.state["unique_names"],
         )
 
@@ -487,7 +487,7 @@ def _decompose(
         input_ir,
         partition_info,
         rec.state["config_options"],
-        rec.state["column_statistics"],
+        rec.state["column_stats"],
         names=rec.state["unique_names"],
     )
 
@@ -497,7 +497,7 @@ def decompose_expr_graph(
     input_ir: IR,
     partition_info: MutableMapping[IR, PartitionInfo],
     config_options: ConfigOptions,
-    column_statistics: MutableMapping[str, ColumnStats],
+    column_stats: MutableMapping[str, ColumnStats],
 ) -> tuple[NamedExpr, IR, MutableMapping[IR, PartitionInfo]]:
     """
     Decompose a NamedExpr into stages.
@@ -514,7 +514,7 @@ def decompose_expr_graph(
         associated partitioning information.
     config_options
         GPUEngine configuration options.
-    column_statistics
+    column_stats
         Column statistics.
 
     Returns
@@ -536,7 +536,7 @@ def decompose_expr_graph(
         "input_ir": input_ir,
         "input_partition_info": partition_info[input_ir],
         "config_options": config_options,
-        "column_statistics": column_statistics,
+        "column_stats": column_stats,
         "unique_names": unique_names((named_expr.name, *input_ir.schema.keys())),
     }
     mapper = CachingVisitor(_decompose, state=state)

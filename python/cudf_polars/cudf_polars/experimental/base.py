@@ -129,9 +129,9 @@ class ColumnStats:
 class StatsCollector:
     """Column statistics collector."""
 
-    __slots__ = ("cardinality", "column_statistics", "config_options")
+    __slots__ = ("cardinality", "column_stats", "config_options")
 
     def __init__(self, config_options: ConfigOptions) -> None:
         self.config_options = config_options
         self.cardinality: dict[IR, int] = {}
-        self.column_statistics: dict[IR, dict[str, ColumnStats]] = {}
+        self.column_stats: dict[IR, dict[str, ColumnStats]] = {}
