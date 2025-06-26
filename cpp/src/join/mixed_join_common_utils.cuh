@@ -112,60 +112,6 @@ struct single_expression_equality : expression_equality<has_nulls> {
 };
 
 /**
- * @brief Equality comparator for use with cuco map methods that require expression evaluation
- * using primitive row operators.
- */
-template <bool has_nulls>
-struct primitive_expression_equality {
-  __device__ primitive_expression_equality(
-    cudf::ast::detail::expression_evaluator<has_nulls> const& evaluator,
-    cudf::ast::detail::IntermediateDataType<has_nulls>* thread_intermediate_storage,
-    bool const swap_tables,
-    cudf::row::primitive::row_equality_comparator const& equality_probe)
-    : evaluator{evaluator},
-      thread_intermediate_storage{thread_intermediate_storage},
-      swap_tables{swap_tables},
-      equality_probe{equality_probe}
-  {
-  }
-
-  cudf::ast::detail::IntermediateDataType<has_nulls>* thread_intermediate_storage;
-  cudf::ast::detail::expression_evaluator<has_nulls> const& evaluator;
-  bool const swap_tables;
-  cudf::row::primitive::row_equality_comparator const& equality_probe;
-};
-
-/**
- * @brief Equality comparator for cuco::static_map queries using primitive row operators.
- */
-template <bool has_nulls>
-struct primitive_single_expression_equality : primitive_expression_equality<has_nulls> {
-  using primitive_expression_equality<has_nulls>::primitive_expression_equality;
-
-  __device__ __forceinline__ bool operator()(hash_value_type const build_row_index,
-                                             hash_value_type const probe_row_index) const noexcept
-  {
-    auto output_dest = cudf::ast::detail::value_expression_result<bool, has_nulls>();
-    // Two levels of checks:
-    // 1. The contents of the columns involved in the equality condition are equal.
-    // 2. The predicate evaluated on the relevant columns (already encoded in the evaluator)
-    // evaluates to true.
-    if (this->equality_probe(static_cast<size_type>(probe_row_index),
-                             static_cast<size_type>(build_row_index))) {
-      auto const lrow_idx = this->swap_tables ? build_row_index : probe_row_index;
-      auto const rrow_idx = this->swap_tables ? probe_row_index : build_row_index;
-      this->evaluator.evaluate(output_dest,
-                               static_cast<size_type>(lrow_idx),
-                               static_cast<size_type>(rrow_idx),
-                               0,
-                               this->thread_intermediate_storage);
-      return (output_dest.is_valid() && output_dest.value());
-    }
-    return false;
-  }
-};
-
-/**
  * @brief Equality comparator for cuco::static_multimap queries.
  *
  * This equality comparator is designed for use with cuco::static_multimap's
@@ -232,34 +178,22 @@ struct double_row_equality_comparator {
   }
 };
 
-/**
- * @brief Primitive equality comparator that composes two primitive row_equality comparators.
- */
-struct primitive_double_row_equality_comparator {
-  cudf::row::primitive::row_equality_comparator const equality_comparator;
-  cudf::row::primitive::row_equality_comparator const conditional_comparator;
-
-  __device__ bool operator()(size_type lhs_row_index, size_type rhs_row_index) const noexcept
-  {
-    return equality_comparator(lhs_row_index, rhs_row_index) &&
-           conditional_comparator(lhs_row_index, rhs_row_index);
-  }
-};
-
 // A CUDA Cooperative Group of 1 thread for the hash set for mixed semi.
 auto constexpr DEFAULT_MIXED_SEMI_JOIN_CG_SIZE = 1;
 
 // The hash set type used by mixed_semi_join with the build_table.
-using hash_set_type =
-  cuco::static_set<size_type,
-                   cuco::extent<size_t>,
-                   cuda::thread_scope_device,
-                   double_row_equality_comparator,
-                   cuco::linear_probing<DEFAULT_MIXED_SEMI_JOIN_CG_SIZE, row_hash>,
-                   cudf::detail::cuco_allocator<char>,
-                   cuco::storage<1>>;
+template <typename Equality = double_row_equality_comparator, typename Hash = row_hash>
+using hash_set_type = cuco::static_set<size_type,
+                                       cuco::extent<size_t>,
+                                       cuda::thread_scope_device,
+                                       Equality,
+                                       cuco::linear_probing<DEFAULT_MIXED_SEMI_JOIN_CG_SIZE, Hash>,
+                                       cudf::detail::cuco_allocator<char>,
+                                       cuco::storage<1>>;
 
 // The hash_set_ref_type used by mixed_semi_join kerenels for probing.
-using hash_set_ref_type = hash_set_type::ref_type<cuco::contains_tag>;
+template <typename Equality = double_row_equality_comparator, typename Hash = row_hash>
+using hash_set_ref_type =
+  typename hash_set_type<Equality, Hash>::template ref_type<cuco::contains_tag>;
 
 }  // namespace cudf::detail

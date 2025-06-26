@@ -19,6 +19,7 @@
 #include "join_common_utils.cuh"
 #include "join_common_utils.hpp"
 #include "mixed_join_common_utils.cuh"
+#include "mixed_join_primitive_utils.cuh"
 
 #include <cudf/ast/detail/expression_parser.hpp>
 #include <cudf/table/table_device_view.cuh>
@@ -53,17 +54,19 @@ namespace cudf::detail {
  * expression.
  */
 template <typename Equality>
-void launch_mixed_join_semi(bool has_nulls,
-                            table_device_view left_table,
-                            table_device_view right_table,
-                            table_device_view probe,
-                            table_device_view build,
-                            Equality equality_probe,
-                            hash_set_ref_type set_ref,
-                            cudf::device_span<bool> left_table_keep_mask,
-                            cudf::ast::detail::expression_device_view device_expression_data,
-                            detail::grid_1d const config,
-                            int64_t shmem_size_per_block,
-                            rmm::cuda_stream_view stream);
+void launch_mixed_join_semi(
+  bool has_nulls,
+  table_device_view left_table,
+  table_device_view right_table,
+  table_device_view probe,
+  table_device_view build,
+  Equality equality_probe,
+  typename hash_set_type<double_row_equality_comparator,
+                         row_hash>::template ref_type<cuco::contains_tag> set_ref,
+  cudf::device_span<bool> left_table_keep_mask,
+  cudf::ast::detail::expression_device_view device_expression_data,
+  detail::grid_1d const config,
+  int64_t shmem_size_per_block,
+  rmm::cuda_stream_view stream);
 
 }  // namespace cudf::detail

@@ -18,6 +18,7 @@
 #include "join_common_utils.hpp"
 #include "mixed_join_common_utils.cuh"
 #include "mixed_join_kernels_semi.cuh"
+#include "mixed_join_primitive_utils.cuh"
 
 #include <cudf/ast/detail/expression_parser.hpp>
 #include <cudf/ast/expressions.hpp>
@@ -182,7 +183,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
   auto const row_hash_probe = cudf::experimental::row::hash::row_hasher{preprocessed_probe};
   auto const hash_probe     = row_hash_probe.device_hasher(has_nulls);
 
-  hash_set_ref_type const row_set_ref =
+  hash_set_ref_type<double_row_equality_comparator, row_hash> const row_set_ref =
     row_set.ref(cuco::contains).rebind_hash_function(hash_probe);
 
   // Vector used to indicate indices from left/probe table which are present in output

@@ -19,7 +19,6 @@
 #include <cudf/ast/detail/expression_evaluator.cuh>
 #include <cudf/ast/detail/expression_parser.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
-#include <cudf/table/primitive_row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/export.hpp>
 #include <cudf/utilities/span.hpp>
@@ -35,11 +34,12 @@ CUDF_KERNEL void __launch_bounds__(DEFAULT_JOIN_BLOCK_SIZE)
                   table_device_view probe,
                   table_device_view build,
                   Equality equality_probe,
-                  hash_set_ref_type set_ref,
+                  typename hash_set_type<double_row_equality_comparator,
+                                         row_hash>::template ref_type<cuco::contains_tag> set_ref,
                   cudf::device_span<bool> left_table_keep_mask,
                   cudf::ast::detail::expression_device_view device_expression_data)
 {
-  auto constexpr cg_size = hash_set_ref_type::cg_size;
+  auto constexpr cg_size = hash_set_type<double_row_equality_comparator, row_hash>::cg_size;
 
   auto const tile = cg::tiled_partition<cg_size>(cg::this_thread_block());
 
@@ -89,18 +89,20 @@ CUDF_KERNEL void __launch_bounds__(DEFAULT_JOIN_BLOCK_SIZE)
 }
 
 template <typename Equality>
-void launch_mixed_join_semi(bool has_nulls,
-                            table_device_view left_table,
-                            table_device_view right_table,
-                            table_device_view probe,
-                            table_device_view build,
-                            Equality equality_probe,
-                            hash_set_ref_type set_ref,
-                            cudf::device_span<bool> left_table_keep_mask,
-                            cudf::ast::detail::expression_device_view device_expression_data,
-                            detail::grid_1d const config,
-                            int64_t shmem_size_per_block,
-                            rmm::cuda_stream_view stream)
+void launch_mixed_join_semi(
+  bool has_nulls,
+  table_device_view left_table,
+  table_device_view right_table,
+  table_device_view probe,
+  table_device_view build,
+  Equality equality_probe,
+  typename hash_set_type<double_row_equality_comparator,
+                         row_hash>::template ref_type<cuco::contains_tag> set_ref,
+  cudf::device_span<bool> left_table_keep_mask,
+  cudf::ast::detail::expression_device_view device_expression_data,
+  detail::grid_1d const config,
+  int64_t shmem_size_per_block,
+  rmm::cuda_stream_view stream)
 {
   if (has_nulls) {
     mixed_join_semi<true>
@@ -135,7 +137,8 @@ template void launch_mixed_join_semi<row_equality>(
   table_device_view probe,
   table_device_view build,
   row_equality equality_probe,
-  hash_set_ref_type set_ref,
+  typename hash_set_type<double_row_equality_comparator,
+                         row_hash>::template ref_type<cuco::contains_tag> set_ref,
   cudf::device_span<bool> left_table_keep_mask,
   cudf::ast::detail::expression_device_view device_expression_data,
   detail::grid_1d const config,
@@ -149,7 +152,8 @@ template void launch_mixed_join_semi<cudf::row::primitive::row_equality_comparat
   table_device_view probe,
   table_device_view build,
   cudf::row::primitive::row_equality_comparator equality_probe,
-  hash_set_ref_type set_ref,
+  typename hash_set_type<double_row_equality_comparator,
+                         row_hash>::template ref_type<cuco::contains_tag> set_ref,
   cudf::device_span<bool> left_table_keep_mask,
   cudf::ast::detail::expression_device_view device_expression_data,
   detail::grid_1d const config,
