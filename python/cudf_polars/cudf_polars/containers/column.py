@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import functools
+import inspect
 from typing import TYPE_CHECKING
 
 import polars as pl
@@ -37,6 +38,19 @@ if TYPE_CHECKING:
 __all__: list[str] = ["Column"]
 
 
+def _dtype_short_repr_to_dtype(dtype_str: str) -> pl.DataType:
+    """Convert a Polars dtype short repr to a Polars dtype."""
+    # limitations of dtype_short_repr_to_dtype described in
+    # py-polars/polars/datatypes/convert.py#L299
+    if dtype_str.startswith("list["):
+        stripped = dtype_str.removeprefix("list[").removesuffix("]")
+        return pl.List(_dtype_short_repr_to_dtype(stripped))
+    pl_type = pl.datatypes.convert.dtype_short_repr_to_dtype(dtype_str)
+    if pl_type is None:
+        raise ValueError(f"{dtype_str} was not able to be parsed by Polars.")
+    return pl_type() if inspect.isclass(pl_type) else pl_type
+
+
 class Column:
     """An immutable column with sortedness metadata."""
 
@@ -48,19 +62,17 @@ class Column:
     # Optional name, only ever set by evaluation of NamedExpr nodes
     # The internal evaluation should not care about the name.
     name: str | None
-    # Optional dtype, used for preserving dtype metadata like
-    # struct fields
-    dtype: DataType | None
+    dtype: DataType
 
     def __init__(
         self,
         column: plc.Column,
+        dtype: DataType,
         *,
         is_sorted: plc.types.Sorted = plc.types.Sorted.NO,
         order: plc.types.Order = plc.types.Order.ASCENDING,
         null_order: plc.types.NullOrder = plc.types.NullOrder.BEFORE,
         name: str | None = None,
-        dtype: DataType | None = None,
     ):
         self.obj = column
         self.is_scalar = self.size == 1
@@ -98,12 +110,9 @@ class Column:
         column_kwargs: ColumnOptions,
     ) -> DeserializedColumnOptions:
         """Deserialize the constructor kwargs for a Column."""
-        if (serialized_dtype := column_kwargs.get("dtype", None)) is not None:
-            dtype: DataType | None = DataType(  # pragma: no cover
-                pl.datatypes.convert.dtype_short_repr_to_dtype(serialized_dtype)
-            )
-        else:  # pragma: no cover
-            dtype = None  # pragma: no cover
+        dtype = DataType(  # pragma: no cover
+            _dtype_short_repr_to_dtype(column_kwargs["dtype"])
+        )
         return {
             "is_sorted": column_kwargs["is_sorted"],
             "order": column_kwargs["order"],
@@ -142,15 +151,12 @@ class Column:
 
     def serialize_ctor_kwargs(self) -> ColumnOptions:
         """Serialize the constructor kwargs for self."""
-        serialized_dtype = (
-            None if self.dtype is None else pl.polars.dtype_str_repr(self.dtype.polars)
-        )
         return {
             "is_sorted": self.is_sorted,
             "order": self.order,
             "null_order": self.null_order,
             "name": self.name,
-            "dtype": serialized_dtype,
+            "dtype": pl.polars.dtype_str_repr(self.dtype.polars),
         }
 
     @functools.cached_property
@@ -406,7 +412,7 @@ class Column:
         if plc.traits.is_floating_point(self.obj.type()):
             old_count = self.null_count
             mask, new_count = plc.transform.nans_to_nulls(self.obj)
-            result = type(self)(self.obj.with_mask(mask, new_count))
+            result = type(self)(self.obj.with_mask(mask, new_count), self.dtype)
             if old_count == new_count:
                 return result.sorted_like(self)
             return result
@@ -454,4 +460,4 @@ class Column:
             conversion.from_polars_slice(zlice, num_rows=self.size),
         )
         (column,) = table.columns()
-        return type(self)(column, name=self.name).sorted_like(self)
+        return type(self)(column, name=self.name, dtype=self.dtype).sorted_like(self)
