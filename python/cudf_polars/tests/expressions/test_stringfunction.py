@@ -512,3 +512,13 @@ def test_concat_horizontal(ldf, ignore_nulls, separator):
         pl.concat_str(["a", "c"], separator=separator, ignore_nulls=ignore_nulls)
     )
     assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize("ascii_case_insensitive", [True, False])
+def test_contains_any(ldf, ascii_case_insensitive):
+    q = ldf.select(
+        pl.col("a").str.contains_any(
+            ["a", "b", "c"], ascii_case_insensitive=ascii_case_insensitive
+        )
+    )
+    assert_gpu_result_equal(q)
