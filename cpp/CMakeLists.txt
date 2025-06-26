@@ -133,6 +133,9 @@ set(CUDF_CUDA_FLAGS "")
 set(CUDF_CXX_DEFINITIONS "")
 set(CUDF_CUDA_DEFINITIONS "")
 
+# For now, disable CMake's automatic module scanning for C++ files.
+set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
+
 # Set logging level
 set(LIBCUDF_LOGGING_LEVEL
     "INFO"
