@@ -21,6 +21,8 @@ from cudf.options import get_option
 from cudf.utils.dtypes import SIZE_TYPE_DTYPE
 
 if TYPE_CHECKING:
+    from typing_extensions import Self
+
     from cudf.core.dataframe import DataFrame
     from cudf.core.index import Index
     from cudf.core.series import Series
@@ -32,14 +34,13 @@ class _RollingBase:
     """
 
     obj: DataFrame | Series
-    _group_keys: Index | None = None
 
     def _apply_agg_column(
         self, source_column: ColumnBase, agg_name: str
     ) -> ColumnBase:
         raise NotImplementedError
 
-    def _apply_agg(self, agg_name: str) -> DataFrame | Series:
+    def _apply_agg(self, agg_name: str, **agg_kwargs) -> DataFrame | Series:
         applied = (
             self._apply_agg_column(col, agg_name) for col in self.obj._columns
         )
@@ -48,7 +49,7 @@ class _RollingBase:
         )
 
 
-class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
+class Rolling(GetAttrGetItemMixin, Reducible):
     """
     Rolling window calculations.
 
@@ -194,7 +195,7 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
 
     _PROTECTED_KEYS = frozenset(("obj",))
 
-    _group_keys = None
+    _group_keys: Index | None = None
 
     _VALID_REDUCTIONS = {
         "sum",
@@ -217,10 +218,8 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
         closed: str | None = None,
         step: int | None = None,
         method: str = "single",
-    ):
+    ) -> None:
         self.center = center
-        # for var & std only?
-        self.agg_params: dict[str, int] = {}
         if axis != 0:
             warnings.warn(
                 "axis is deprecated with will be removed in a future version. "
@@ -253,7 +252,7 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
             window, min_periods
         )
 
-    def __getitem__(self, arg):
+    def __getitem__(self, arg) -> Self:
         if isinstance(arg, tuple):
             arg = list(arg)
         return self.obj[arg].rolling(
@@ -262,7 +261,18 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
             center=self.center,
         )
 
-    def _apply_agg_column(self, source_column, agg_name) -> ColumnBase:
+    def _apply_agg(self, agg_name: str, **agg_kwargs) -> DataFrame | Series:
+        applied = (
+            self._apply_agg_column(col, agg_name, **agg_kwargs)
+            for col in self.obj._columns
+        )
+        return self.obj._from_data_like_self(
+            self.obj._data._from_columns_like_self(applied)
+        )
+
+    def _apply_agg_column(
+        self, source_column: ColumnBase, agg_name: str, **agg_kwargs
+    ) -> ColumnBase:
         min_periods = self.min_periods or 1
         if isinstance(self.window, (int, pd.Timedelta)):
             if isinstance(self.window, pd.Timedelta):
@@ -288,7 +298,7 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
                     agg_name,
                     {"dtype": source_column.dtype}
                     if callable(agg_name)
-                    else self.agg_params,
+                    else agg_kwargs,
                 ).plc_obj,
             )
             if self._group_keys is not None:
@@ -352,7 +362,7 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
                             agg_name,
                             {"dtype": source_column.dtype}
                             if callable(agg_name)
-                            else self.agg_params,
+                            else agg_kwargs,
                         ).plc_obj,
                     )
                 )
@@ -362,7 +372,7 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
         op: str,
         *args,
         **kwargs,
-    ):
+    ) -> DataFrame | Series:
         """Calculate the rolling {op}.
 
         Returns
@@ -372,7 +382,7 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
         """
         return self._apply_agg(op)
 
-    def var(self, ddof=1):
+    def var(self, ddof: int = 1) -> DataFrame | Series:
         """Calculate the rolling variance.
 
         Parameters
@@ -387,10 +397,9 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
         Series or DataFrame
             Return type is the same as the original object.
         """
-        self.agg_params["ddof"] = ddof
-        return self._apply_agg("var")
+        return self._apply_agg("var", ddof=ddof)
 
-    def std(self, ddof=1):
+    def std(self, ddof: int = 1) -> DataFrame | Series:
         """Calculate the rolling standard deviation.
 
         Parameters
@@ -405,10 +414,9 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
         Series or DataFrame
             Return type is the same as the original object.
         """
-        self.agg_params["ddof"] = ddof
-        return self._apply_agg("std")
+        return self._apply_agg("std", ddof=ddof)
 
-    def count(self):
+    def count(self) -> DataFrame | Series:
         """Calculate the rolling count of non NaN observations.
 
         Returns
@@ -418,7 +426,7 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
         """
         return self._apply_agg("count")
 
-    def apply(self, func, *args, **kwargs):
+    def apply(self, func, *args, **kwargs) -> DataFrame | Series:
         """
         Calculate the rolling custom aggregation function.
 
@@ -484,15 +492,7 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
         6    1
         dtype: int64
         """
-        has_nulls = False
-        if self.obj.ndim == 1:
-            if self.obj._column.has_nulls():
-                has_nulls = True
-        else:
-            for col in self.obj._data:
-                if self.obj[col].has_nulls:
-                    has_nulls = True
-        if has_nulls:
+        if any(col.has_nulls() for col in self.obj._columns):
             raise NotImplementedError(
                 "Handling UDF with null values is not yet supported"
             )
@@ -547,10 +547,8 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
                 "window must be integer, BaseIndexer, or convertible to a timedelta"
             )
 
-    def __repr__(self):
-        return "{} [window={},min_periods={},center={}]".format(
-            self.__class__.__name__, self.window, self.min_periods, self.center
-        )
+    def __repr__(self) -> str:
+        return f"{type(self).__name__} [window={self.window},min_periods={self.min_periods},center={self.center}]"
 
 
 class RollingGroupby(Rolling):
@@ -583,19 +581,21 @@ class RollingGroupby(Rolling):
                 gb_size.cumsum().shift(1).fillna(0).repeat(gb_size)
             )
 
-    def _apply_agg(self, agg_name):
+    def _apply_agg(self, agg_name: str, **agg_kwargs) -> DataFrame | Series:
         index = MultiIndex._from_data(
             dict(
                 enumerate(
                     itertools.chain(
-                        self._group_keys._columns, self.obj.index._columns
+                        self._group_keys._columns,  # type: ignore[union-attr]
+                        self.obj.index._columns,
                     )
                 )
             )
         )
         index.names = list(
             itertools.chain(
-                self._group_keys._column_names, self.obj.index._column_names
+                self._group_keys._column_names,  # type: ignore[union-attr]
+                self.obj.index._column_names,
             )
         )
         result = super()._apply_agg(agg_name)
