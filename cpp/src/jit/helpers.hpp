@@ -57,7 +57,7 @@ jitify2::StringVec build_jit_template_params(
 
   tparams.emplace_back(jitify2::reflection::reflect(has_user_data));
 
-  std::transform(thrust::make_counting_iterator<size_t>(0),
+  std::transform(thrust::counting_iterator<size_t>(0),
                  thrust::make_counting_iterator(span_outputs.size()),
                  std::back_inserter(tparams),
                  [&](auto i) {
