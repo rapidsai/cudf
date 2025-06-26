@@ -102,16 +102,10 @@ def _leaf_column_names(expr: Expr) -> tuple[str, ...]:
 
 
 def _get_unique_fractions(
-    ir: IR,
     column_names: Sequence[str],
-    partition_info: MutableMapping[IR, PartitionInfo],
-    config_options: ConfigOptions,
+    user_unique_fractions: dict[str, float],
     column_stats: MutableMapping[str, ColumnStats],
 ) -> dict[str, float]:
-    assert config_options.executor.name == "streaming", (
-        "'in-memory' executor not supported in '_get_unique_fractions'"
-    )
-
     # Start with table statistics
     unique_fractions: dict[str, float] = {}
     for c, stats in column_stats.items():
@@ -126,7 +120,7 @@ def _get_unique_fractions(
     unique_fractions.update(
         {
             c: max(min(f, 1.0), 0.00001)
-            for c, f in config_options.executor.unique_fraction.items()
+            for c, f in user_unique_fractions.items()
             if c in column_names
         }
     )

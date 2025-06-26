@@ -174,11 +174,13 @@ def _decompose_unique(
     )
     (column,) = columns
 
+    assert config_options.executor.name == "streaming", (
+        "'in-memory' executor not supported in '_decompose_unique'"
+    )
+
     unique_fraction_dict = _get_unique_fractions(
-        input_ir,
         _leaf_column_names(child),
-        partition_info,
-        config_options,
+        config_options.executor.unique_fraction,
         column_stats,
     )
 

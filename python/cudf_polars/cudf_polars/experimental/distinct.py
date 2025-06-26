@@ -170,12 +170,14 @@ def _(
     config_options = rec.state["config_options"]
     column_stats = rec.state["stats"].column_stats.get(ir.children[0], {})
 
+    assert config_options.executor.name == "streaming", (
+        "'in-memory' executor not supported in 'lower_ir_node'"
+    )
+
     subset: frozenset[str] = ir.subset or frozenset(ir.schema)
     unique_fraction_dict = _get_unique_fractions(
-        child,
         tuple(subset),
-        partition_info,
-        config_options,
+        config_options.executor.unique_fraction,
         column_stats,
     )
 

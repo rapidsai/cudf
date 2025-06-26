@@ -193,10 +193,8 @@ def _(
 
     child_count = partition_info[child].count
     if unique_fraction_dict := _get_unique_fractions(
-        child,
         groupby_key_columns,
-        partition_info,
-        config_options,
+        config_options.executor.unique_fraction,
         rec.state["stats"].column_stats.get(ir.children[0], {}),
     ):
         # Use unique_fraction to determine output partitioning
