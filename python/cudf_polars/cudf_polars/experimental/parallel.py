@@ -34,7 +34,7 @@ from cudf_polars.experimental.dispatch import (
     lower_ir_node,
 )
 from cudf_polars.experimental.repartition import Repartition
-from cudf_polars.experimental.statistics import collect_source_statistics
+from cudf_polars.experimental.statistics import collect_source_stats
 from cudf_polars.experimental.utils import _concat, _lower_ir_fallback
 
 if TYPE_CHECKING:
@@ -88,8 +88,7 @@ def lower_ir_graph(
         lower_ir_node,
         state={
             "config_options": config_options,
-            # TODO: Collect/attach "full" statistics
-            "statistics": collect_source_statistics(ir, config_options),
+            "stats": collect_source_stats(ir, config_options),
         },
     )
     return mapper(ir)

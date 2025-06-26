@@ -28,15 +28,13 @@ from cudf_polars.experimental.base import (
     StatsCollector,
 )
 from cudf_polars.experimental.dispatch import add_source_stats
-from cudf_polars.experimental.io import _sample_pq_statistics
+from cudf_polars.experimental.io import _sample_pq_stats
 
 if TYPE_CHECKING:
     from cudf_polars.utils.config import ConfigOptions
 
 
-def collect_source_statistics(
-    root: IR, config_options: ConfigOptions
-) -> StatsCollector:
+def collect_source_stats(root: IR, config_options: ConfigOptions) -> StatsCollector:
     """Collect basic source statistics."""
     stats: StatsCollector = StatsCollector(config_options)
     for node in list(traversal([root]))[::-1]:
@@ -69,7 +67,7 @@ def _(ir: Scan, stats: StatsCollector) -> None:
                 name=name,
                 source_stats=css,
             )
-            for name, css in _sample_pq_statistics(ir, stats.config_options).items()
+            for name, css in _sample_pq_stats(ir, stats.config_options).items()
         }
         if (
             stats.column_stats[ir]

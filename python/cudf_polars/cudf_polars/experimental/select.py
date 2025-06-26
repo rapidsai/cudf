@@ -160,7 +160,7 @@ def _(
                 child,
                 partition_info,
                 rec.state["config_options"],
-                rec.state["statistics"].column_stats.get(ir.children[0], {}),
+                rec.state["stats"].column_stats.get(ir.children[0], {}),
             )
         except NotImplementedError:
             return _lower_ir_fallback(

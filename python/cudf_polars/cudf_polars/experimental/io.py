@@ -8,7 +8,7 @@ import dataclasses
 import enum
 import itertools
 import math
-import statistics as py_statistics
+import statistics
 from collections import defaultdict
 from enum import IntEnum
 from pathlib import Path
@@ -300,11 +300,11 @@ class SplitScan(IR):
         )
 
 
-def _sample_pq_statistics(
+def _sample_pq_stats(
     ir: Scan, config_options: ConfigOptions
 ) -> dict[str, ColumnSourceStats]:
     assert config_options.executor.name == "streaming", (
-        "'in-memory' executor not supported in '_sample_pq_statistics"
+        "'in-memory' executor not supported in '_sample_pq_stats"
     )
 
     max_file_samples = config_options.executor.parquet_metadata_samples
@@ -314,7 +314,7 @@ def _sample_pq_statistics(
     stride = max(1, int(total_file_count / max_file_samples))
     sample_paths = ir.paths[: stride * max_file_samples : stride]
     sampled_file_count = len(sample_paths)
-    exact_statistics: tuple[str, ...] = ()
+    exact_stats: tuple[str, ...] = ()
 
     # Check table-stats cache
     source_stats_cached: MutableMapping[str, ColumnSourceStats]
@@ -334,7 +334,7 @@ def _sample_pq_statistics(
         if total_file_count == sampled_file_count:
             # We know the "exact" cardinality from our sample
             cardinality = sample_metadata.num_rows()
-            exact_statistics = ("cardinality",)
+            exact_stats = ("cardinality",)
         else:
             # We must estimate/extrapolate the cardinality from our sample
             num_rows_per_sampled_file = int(
@@ -363,7 +363,7 @@ def _sample_pq_statistics(
 
         # Calculate the `mean_uncompressed_size_per_file` for each column
         mean_uncompressed_size_per_file = {
-            name: py_statistics.mean(sizes)
+            name: statistics.mean(sizes)
             for name, sizes in column_sizes_per_file.items()
         }
 
@@ -427,7 +427,7 @@ def _sample_pq_statistics(
                 storage_size_per_file=mean_uncompressed_size_per_file[name],
                 unique_count=unique_count_estimates.get(name),
                 unique_fraction=unique_fraction_estimates.get(name),
-                exact=exact_statistics,
+                exact=exact_stats,
             )
             for name in need_columns
         }
@@ -451,14 +451,14 @@ def _(
     partition_info: MutableMapping[IR, PartitionInfo]
     config_options = rec.state["config_options"]
     if ir.typ in ("csv", "parquet", "ndjson") and ir.n_rows == -1 and ir.skip_rows == 0:
-        statistics = rec.state.get("statistics")
-        assert isinstance(statistics, StatsCollector), (
-            f"Expected StatsCollector, got {type(statistics)}"
+        stats_collector = rec.state.get("stats")
+        assert isinstance(stats_collector, StatsCollector), (
+            f"Expected StatsCollector, got {type(stats_collector)}"
         )
         plan = ScanPartitionPlan.from_scan(
             ir,
             config_options=config_options,
-            column_stats=statistics.column_stats.get(ir, {}),
+            column_stats=stats_collector.column_stats.get(ir, {}),
         )
         paths = list(ir.paths)
         if plan.flavor == ScanPartitionFlavor.SPLIT_FILES:

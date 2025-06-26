@@ -9,7 +9,7 @@ import polars as pl
 
 from cudf_polars import Translator
 from cudf_polars.experimental.parallel import lower_ir_graph
-from cudf_polars.experimental.statistics import collect_source_statistics
+from cudf_polars.experimental.statistics import collect_source_stats
 from cudf_polars.testing.asserts import DEFAULT_SCHEDULER, assert_gpu_result_equal
 from cudf_polars.testing.io import make_partitioned_source
 from cudf_polars.utils.config import ConfigOptions
@@ -110,7 +110,7 @@ def test_column_source_statistics(
     )
     q1 = q.select(pl.col("y"))
     qir1 = Translator(q1._ldf.visit(), engine).translate_ir()
-    stats = collect_source_statistics(qir1, ConfigOptions.from_polars_engine(engine))
+    stats = collect_source_stats(qir1, ConfigOptions.from_polars_engine(engine))
     source_stats_y = stats.column_stats[qir1]["y"].source_stats
     assert source_stats_y.unique_fraction < 1.0
     assert source_stats_y.unique_fraction > 0.0

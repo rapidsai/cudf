@@ -168,7 +168,7 @@ def _(
     # Extract child partitioning
     child, partition_info = rec(ir.children[0])
     config_options = rec.state["config_options"]
-    column_stats = rec.state["statistics"].column_stats.get(ir.children[0], {})
+    column_stats = rec.state["stats"].column_stats.get(ir.children[0], {})
 
     subset: frozenset[str] = ir.subset or frozenset(ir.schema)
     unique_fraction_dict = _get_unique_fractions(
