@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include "sort.hpp"
 #include "sort_column_impl.cuh"
 #include "sort_radix.hpp"
 

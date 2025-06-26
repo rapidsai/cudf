@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include "sort_radix.hpp"
+
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/utilities/error.hpp>
@@ -165,11 +167,6 @@ struct sorted_order_radix_fn {
   }
 };
 }  // namespace
-
-bool is_radix_sortable(column_view const& column)
-{
-  return !column.has_nulls() && cudf::is_fixed_width(column.type());
-}
 
 /**
  * @brief Sort indices of a single column.
