@@ -148,12 +148,6 @@ def test_supported_stringfunction_expression(ldf):
     assert_gpu_result_equal(query)
 
 
-def test_unsupported_stringfunction(ldf):
-    q = ldf.select(pl.col("a").str.count_matches("e", literal=True))
-
-    assert_ir_translation_raises(q, NotImplementedError)
-
-
 def test_contains_re_non_strict_raises(ldf):
     q = ldf.select(pl.col("a").str.contains(".", strict=False))
 
@@ -522,3 +516,13 @@ def test_contains_any(ldf, ascii_case_insensitive):
         )
     )
     assert_gpu_result_equal(q)
+
+
+def test_count_matches(ldf):
+    q = ldf.select(pl.col("a").str.count_matches("a"))
+    assert_gpu_result_equal(q)
+
+
+def test_count_matches_literal_unsupported(ldf):
+    q = ldf.select(pl.col("a").str.count_matches("a", literal=True))
+    assert_ir_translation_raises(q, NotImplementedError)

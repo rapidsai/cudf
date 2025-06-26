@@ -95,6 +95,7 @@ class StringFunction(Expr):
         Name.ConcatVertical,
         Name.ContainsAny,
         Name.Contains,
+        Name.CountMatches,
         Name.EndsWith,
         Name.Head,
         Name.Lowercase,
@@ -131,6 +132,24 @@ class StringFunction(Expr):
     def _validate_input(self) -> None:
         if self.name not in self._valid_ops:
             raise NotImplementedError(f"String function {self.name!r}")
+        if self.name is StringFunction.Name.CountMatches:
+            (literal,) = self.options
+            if literal:
+                raise NotImplementedError(
+                    f"{literal=} is not supported for count_matches"
+                )
+            literal_expr = self.children[1]
+            assert isinstance(literal_expr, Literal)
+            pattern = literal_expr.value
+            try:
+                self._regex_program = plc.strings.regex_program.RegexProgram.create(
+                    pattern,
+                    flags=plc.strings.regex_flags.RegexFlags.DEFAULT,
+                )
+            except RuntimeError as e:
+                raise NotImplementedError(
+                    f"Unsupported regex {pattern} for GPU engine."
+                ) from e
         if self.name is StringFunction.Name.Contains:
             literal, strict = self.options
             if not literal:
@@ -289,6 +308,16 @@ class StringFunction(Expr):
             )
             return Column(
                 functools.reduce(binary_or, contains.columns()),
+                dtype=self.dtype,
+            )
+        elif self.name is StringFunction.Name.CountMatches:
+            child, pattern = self.children
+            column = child.evaluate(df, context=context).obj
+            return Column(
+                plc.unary.cast(
+                    plc.strings.contains.count_re(column, self._regex_program),
+                    self.dtype.plc,
+                ),
                 dtype=self.dtype,
             )
         elif self.name is StringFunction.Name.Slice:
