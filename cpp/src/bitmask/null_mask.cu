@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/device_scalar.hpp>
 #include <cudf/detail/null_mask.cuh>
 #include <cudf/detail/null_mask.hpp>
