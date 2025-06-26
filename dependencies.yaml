@@ -401,7 +401,6 @@ files:
 channels:
   - rapidsai
   - rapidsai-nightly
-  - dask/label/dev
   - conda-forge
 dependencies:
   build_base:
@@ -735,7 +734,7 @@ dependencies:
               cuda: "12.*"
             packages:
               - cuda-sanitizer-api
-          - matrix:  # Fallback for CUDA 12 or no matrix
+          - matrix: # Fallback for CUDA 12 or no matrix
             packages:
   # packages we want in the 'test_cpp' group in 'files', for CI, but which
   # shouldn't be added to 'all' for building a development environment
@@ -783,7 +782,7 @@ dependencies:
         matrices:
           - matrix: {dependencies: "oldest", arch: "aarch64", cuda: "12.*"}
             packages:
-              - cupy==12.2.0  # cupy 12.2.0 is the earliest with CUDA 12 ARM packages.
+              - cupy==12.2.0 # cupy 12.2.0 is the earliest with CUDA 12 ARM packages.
           - matrix: {dependencies: "oldest"}
             packages:
               - cupy==12.0.0
