@@ -178,7 +178,7 @@ class StreamingExecutor:
     parquet_metadata_samples
         The number of files to sample Parquet metadata from for each dataset. This
         metadata will be used to estimate the average file size and the total number
-        of rows in the dataset. Default is ``5``.
+        of rows in the dataset. Default is ``3``.
     parquet_rowgroup_samples
         The number of Parquet row-groups to sample ahead of time for each dataset.
         This data will be used to estimate global unique-value statistics. Default
