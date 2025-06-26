@@ -616,38 +616,41 @@ sort_merge_join::partitioned_inner_join(sort_merge_join::partition_context const
                                         rmm::cuda_stream_view stream,
                                         rmm::device_async_resource_ref mr)
 {
-  auto left_partition_begin       = context.left_start_idx;
-  auto left_partition_end         = context.left_end_idx;
-  auto null_processed_table_begin = left_partition_begin;
-  auto null_processed_table_end   = left_partition_end;
+  auto const left_partition_start_idx = context.left_start_idx;
+  auto const left_partition_end_idx   = context.left_end_idx;
+  auto null_processed_table_start_idx = left_partition_start_idx;
+  auto null_processed_table_end_idx   = left_partition_end_idx;
   if (compare_nulls == null_equality::UNEQUAL && has_nested_nulls(preprocessed_left._table_view)) {
-    auto left_mapping          = preprocessed_left.map_table_to_unprocessed(stream);
-    null_processed_table_begin = thrust::distance(
-      left_mapping.begin(),
-      thrust::lower_bound(
-        rmm::exec_policy(stream), left_mapping.begin(), left_mapping.end(), left_partition_begin));
-    null_processed_table_end = thrust::distance(left_mapping.begin(),
-                                                thrust::upper_bound(rmm::exec_policy(stream),
-                                                                    left_mapping.begin(),
-                                                                    left_mapping.end(),
-                                                                    left_partition_end - 1));
+    auto left_mapping = preprocessed_left.map_table_to_unprocessed(stream);
+    null_processed_table_start_idx =
+      cuda::std::distance(left_mapping.begin(),
+                          thrust::lower_bound(rmm::exec_policy(stream),
+                                              left_mapping.begin(),
+                                              left_mapping.end(),
+                                              left_partition_start_idx));
+    null_processed_table_end_idx =
+      cuda::std::distance(left_mapping.begin(),
+                          thrust::upper_bound(rmm::exec_policy(stream),
+                                              left_mapping.begin(),
+                                              left_mapping.end(),
+                                              left_partition_end_idx - 1));
   }
   auto null_processed_left_partition =
     cudf::slice(preprocessed_left._null_processed_table_view,
-                {null_processed_table_begin, null_processed_table_end},
+                {null_processed_table_start_idx, null_processed_table_end_idx},
                 stream)[0];
 
-  auto [preprocessed_right_indices, preprocessed_left_indices] =
-    invoke_merge(preprocessed_right._null_processed_table_view,
-                 null_processed_left_partition,
-                 [this, left_partition_begin, stream, mr](auto& obj) { return obj(stream, mr); });
+  auto [preprocessed_right_indices, preprocessed_left_indices] = invoke_merge(
+    preprocessed_right._null_processed_table_view,
+    null_processed_left_partition,
+    [this, left_partition_start_idx, stream, mr](auto& obj) { return obj(stream, mr); });
   // Map from slice to total null processed table
   thrust::transform(
     rmm::exec_policy_nosync(stream),
     preprocessed_left_indices->begin(),
     preprocessed_left_indices->end(),
     preprocessed_left_indices->begin(),
-    [left_partition_begin] __device__(auto idx) { return left_partition_begin + idx; });
+    [left_partition_start_idx] __device__(auto idx) { return left_partition_start_idx + idx; });
   // Map from total null processed table to unprocessed table
   postprocess_indices(*preprocessed_right_indices, *preprocessed_left_indices, stream);
   stream.synchronize();
