@@ -66,6 +66,9 @@ def lower_distinct(
 
     # Extract child partitioning
     child_count = partition_info[child].count
+    assert config_options.executor.name == "streaming", (
+        "'in-memory' executor not supported in 'lower_distinct'"
+    )
 
     # Assume shuffle is not stable for now. Therefore, we
     # require a tree reduction if row order matters.
@@ -89,7 +92,12 @@ def lower_distinct(
                 "Unsupported unique options for multiple partitions."
             )
         if not shuffled:
-            child = Shuffle(child.schema, shuffle_keys, config_options, child)
+            child = Shuffle(
+                child.schema,
+                shuffle_keys,
+                config_options.executor.shuffle_method,
+                child,
+            )
             partition_info[child] = PartitionInfo(
                 count=child_count,
                 partitioned_on=shuffle_keys,
@@ -137,7 +145,12 @@ def lower_distinct(
             partition_info[new_node] = PartitionInfo(count=count)
     else:
         # Shuffle
-        new_node = Shuffle(new_node.schema, shuffle_keys, config_options, new_node)
+        new_node = Shuffle(
+            new_node.schema,
+            shuffle_keys,
+            config_options.executor.shuffle_method,
+            new_node,
+        )
         partition_info[new_node] = PartitionInfo(count=output_count)
         new_node = ir.reconstruct([new_node])
         partition_info[new_node] = PartitionInfo(

@@ -4,14 +4,15 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Generator, Iterator
 
     from cudf_polars.dsl.expr import NamedExpr
     from cudf_polars.dsl.ir import IR
     from cudf_polars.dsl.nodebase import Node
+    from cudf_polars.utils.config import ConfigOptions
 
 
 class PartitionInfo:
@@ -35,6 +36,11 @@ class PartitionInfo:
         """Return the partitioned keys for a given node."""
         name = get_key_name(node)
         yield from ((name, i) for i in range(self.count))
+
+    def __rich_repr__(self) -> Generator[Any, None, None]:
+        """Formatting for rich.pretty.pprint."""
+        yield "count", self.count
+        yield "partitioned_on", self.partitioned_on
 
 
 def get_key_name(node: Node) -> str:
@@ -123,8 +129,9 @@ class ColumnStats:
 class StatsCollector:
     """Column statistics collector."""
 
-    __slots__ = ("cardinality", "column_statistics")
+    __slots__ = ("cardinality", "column_statistics", "config_options")
 
-    def __init__(self) -> None:
+    def __init__(self, config_options: ConfigOptions) -> None:
+        self.config_options = config_options
         self.cardinality: dict[IR, int] = {}
         self.column_statistics: dict[IR, dict[str, ColumnStats]] = {}

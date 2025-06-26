@@ -326,10 +326,10 @@ std::unique_ptr<column> get_column_copy(ArrowSchemaView* schema,
                                         rmm::cuda_stream_view stream,
                                         rmm::device_async_resource_ref mr)
 {
-  CUDF_EXPECTS(
-    input->length <= static_cast<std::int64_t>(std::numeric_limits<cudf::size_type>::max()),
-    "Total number of rows in Arrow column exceeds the column size limit.",
-    std::overflow_error);
+  CUDF_EXPECTS((input->length + input->offset) <=
+                 static_cast<std::int64_t>(std::numeric_limits<cudf::size_type>::max()),
+               "Total number of rows in Arrow column exceeds the column size limit.",
+               std::overflow_error);
 
   return type.id() != type_id::EMPTY
            ? std::move(type_dispatcher(

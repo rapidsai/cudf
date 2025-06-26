@@ -62,7 +62,7 @@ def test_target_partition_size(tmp_path, df, blocksize, n_files):
 
     # Check partitioning
     qir = Translator(q._ldf.visit(), engine).translate_ir()
-    ir, info = lower_ir_graph(qir, ConfigOptions(engine.config))
+    ir, info = lower_ir_graph(qir, ConfigOptions.from_polars_engine(engine))
     count = info[ir].count
     if blocksize <= 12_000:
         assert count > n_files
@@ -110,7 +110,7 @@ def test_column_source_statistics(
     )
     q1 = q.select(pl.col("y"))
     qir1 = Translator(q1._ldf.visit(), engine).translate_ir()
-    stats = collect_source_statistics(qir1)
+    stats = collect_source_statistics(qir1, ConfigOptions.from_polars_engine(engine))
     source_stats_y = stats.column_statistics[qir1]["y"].source_stats
     assert source_stats_y.unique_fraction < 1.0
     assert source_stats_y.unique_fraction > 0.0

@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import itertools
+from typing import TYPE_CHECKING
 
 from cudf_polars.dsl import expr
 from cudf_polars.dsl.ir import (
@@ -29,10 +30,15 @@ from cudf_polars.experimental.base import (
 from cudf_polars.experimental.dispatch import add_source_stats
 from cudf_polars.experimental.io import _sample_pq_statistics
 
+if TYPE_CHECKING:
+    from cudf_polars.utils.config import ConfigOptions
 
-def collect_source_statistics(root: IR) -> StatsCollector:
+
+def collect_source_statistics(
+    root: IR, config_options: ConfigOptions
+) -> StatsCollector:
     """Collect basic source statistics."""
-    stats: StatsCollector = StatsCollector()
+    stats: StatsCollector = StatsCollector(config_options)
     for node in list(traversal([root]))[::-1]:
         add_source_stats(node, stats)
     return stats
@@ -63,7 +69,7 @@ def _(ir: Scan, stats: StatsCollector) -> None:
                 name=name,
                 source_stats=css,
             )
-            for name, css in _sample_pq_statistics(ir).items()
+            for name, css in _sample_pq_statistics(ir, stats.config_options).items()
         }
         if (
             stats.column_statistics[ir]

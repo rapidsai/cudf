@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import datetime
+import itertools
 import operator
 import warnings
 from collections.abc import Hashable, MutableMapping
@@ -26,7 +28,7 @@ from cudf.api.types import (
     is_scalar,
 )
 from cudf.core._compat import PANDAS_LT_300
-from cudf.core._internals import copying, search, stream_compaction
+from cudf.core._internals import copying, sorting, stream_compaction
 from cudf.core.accessors import StringMethods
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import (
@@ -106,20 +108,28 @@ def _lexsorted_equal_range(
     else:
         sort_inds = None
         sort_vals = idx
+    sources = sort_vals._columns
+    len_sources = len(sources)
     lower_bound = ColumnBase.from_pylibcudf(
-        search.search_sorted(
-            list(sort_vals._columns),
+        sorting.search_sorted(
+            sort_vals._columns,
             keys,
             side="left",
-            ascending=sort_vals.is_monotonic_increasing,
+            ascending=itertools.repeat(
+                sort_vals.is_monotonic_increasing, times=len_sources
+            ),
+            na_position=itertools.repeat("last", times=len_sources),
         )
     ).element_indexing(0)
     upper_bound = ColumnBase.from_pylibcudf(
-        search.search_sorted(
-            list(sort_vals._columns),
+        sorting.search_sorted(
+            sources,
             keys,
             side="right",
-            ascending=sort_vals.is_monotonic_increasing,
+            ascending=itertools.repeat(
+                sort_vals.is_monotonic_increasing, times=len_sources
+            ),
+            na_position=itertools.repeat("last", times=len_sources),
         )
     ).element_indexing(0)
 
@@ -3565,22 +3575,26 @@ class DatetimeIndex(Index):
             return pd.Timestamp(value)
         return value
 
+    def find_label_range(self, loc: slice) -> slice:
+        # For indexing, try to interpret slice arguments as datetime-convertible
+        if any(
+            not (val is None or isinstance(val, (str, datetime.datetime)))
+            for val in (loc.start, loc.stop)
+        ):
+            raise TypeError(
+                "Can only slice DatetimeIndex with a string or datetime objects"
+            )
+        new_slice = slice(
+            pd.to_datetime(loc.start) if loc.start is not None else None,
+            pd.to_datetime(loc.stop) if loc.stop is not None else None,
+            loc.step,
+        )
+        return super().find_label_range(new_slice)
+
     @_performance_tracking
     def copy(self, name=None, deep=False):
         idx_copy = super().copy(name=name, deep=deep)
         return idx_copy._copy_type_metadata(self)
-
-    def searchsorted(
-        self,
-        value,
-        side: Literal["left", "right"] = "left",
-        ascending: bool = True,
-        na_position: Literal["first", "last"] = "last",
-    ):
-        value = self.dtype.type(value)
-        return super().searchsorted(
-            value, side=side, ascending=ascending, na_position=na_position
-        )
 
     def as_unit(self, unit: str, round_ok: bool = True) -> Self:
         """
