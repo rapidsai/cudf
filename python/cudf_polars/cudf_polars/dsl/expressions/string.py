@@ -311,7 +311,7 @@ class StringFunction(Expr):
                 dtype=self.dtype,
             )
         elif self.name is StringFunction.Name.CountMatches:
-            child, pattern = self.children
+            (child, _) = self.children
             column = child.evaluate(df, context=context).obj
             return Column(
                 plc.unary.cast(
