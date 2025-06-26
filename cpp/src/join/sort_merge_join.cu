@@ -596,11 +596,12 @@ sort_merge_join::match_context sort_merge_join::inner_join_match_context(
           cudf::detail::make_zeroed_device_uvector_async<size_type>(
             preprocessed_left._table_view.num_rows(), stream, mr);
         auto mapping = preprocessed_left.map_table_to_unprocessed(stream);
-        thrust::scatter(rmm::exec_policy(stream),
+        thrust::scatter(rmm::exec_policy_nosync(stream),
                         matches_per_row->begin(),
                         matches_per_row->end(),
                         mapping.begin(),
                         unprocessed_matches_per_row.begin());
+        stream.synchronize();
         return match_context{
           left,
           std::make_unique<rmm::device_uvector<size_type>>(std::move(unprocessed_matches_per_row))};
